@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Build
+dist/
+build/
+.next/
+out/
+.turbo/
+.expo/
+
+# Testing
+coverage/
+playwright-report/
+test-results/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+
+# Local databases
+*.sqlite
+*.sqlite3
+*.db
+
+# Certificates / credentials
+*.pem
+*.key
+*.p12
+*.pfx
+credentials/
+secrets/
+
+# Temporary
+tmp/
+temp/
+.cache/
+
+# Mobile
+android/.gradle/
+ios/Pods/
+
+# Local Claude settings
+.claude/settings.local.json
