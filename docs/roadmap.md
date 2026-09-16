@@ -15,14 +15,14 @@
 | Decision rounds | Rounds 1, 2 and 3 closed 2026-09-16 (U-08 deferred to the Phase 1 gate; providers, final PostgreSQL major, pg-boss provider compatibility and Drizzle versions NEEDS VALIDATION); Round 4 open; Rounds 5–7 not started (`decisions.md` §0) |
 | Documentation and Claude Code configuration | Drafted 2026-09-16; statuses corrected; batches 2 and 3 recorded 2026-09-16 |
 | Repository | `main` at `05ccc63` (stable); design work on `design/blueprint` |
-| Visual blueprint (`docs/blueprint.html`) | Not started — scheduled for step 3 below, after the foundational rounds are sufficiently closed; inputs tracked in §1.2 |
+| Visual blueprint (`docs/blueprint.html`) | **Draft v0.1** published 2026-09-16, brought forward by owner instruction before Rounds 4–7 close. Not an approved specification: every block carries its decision status; screens, mockups, flow sequences and the import, sync-command and outbox state names are proposals; gaps found while drawing are listed as `BP-01…BP-17` in its open-decisions section (not yet recorded in `decisions.md`). Version increments (v0.2, v0.3, …) as decision batches are approved; v1.0 with Specification v1.0 |
 | Specification v1.0 | UNDECIDED timing — published after the blocking decision rounds close (GOV-1) |
 
 ### 1.1 Design-phase steps
 
 1. Git state verified; `design/blueprint` created and pushed — done 2026-09-16.
 2. Decision rounds 1–7 closed with the owner, each batch committed.
-3. Complete visual blueprint.
+3. Complete visual blueprint — Draft v0.1 started early (2026-09-16, owner instruction); completed as rounds close.
 4. Full design audit.
 5. Red Team review (architecture, security, sync).
 6. Resolve resulting issues with the owner.
@@ -44,7 +44,7 @@ Each round keeps enough structured information for the blueprint to be generated
 | Offline sync and mobile flows | `sync-protocol.md` | partial — PROPOSED | Rounds 5, 6 |
 | Sankhya integration | `sankhya-spike.md`; SNK-3, SNK-4 | partial — facts NEEDS VALIDATION | Round 7 + spikes |
 | Error flows | `project-spec.md`; `security-model.md` | missing | Error-experience pass |
-| Screen inventory (`SCR-*`) with `RF-*` traceability | `project-spec.md` §5 | missing | Screen inventory pass before the blueprint |
+| Screen inventory (`SCR-*`) with `RF-*` traceability | `project-spec.md` §5; proposed catalog of 98 screens in `blueprint.html` Annex A (v0.1) | partial — proposed inventory, not approved (BP-16) | Owner review of the inventory |
 | Testing blueprint | `.claude/rules/testing.md`; `sync-protocol.md` §11 | partial — tooling PROPOSED | Round 6 |
 | Operations (backups, recovery, environments, costs) | OPS-6, OPS-1, OPS-2; provider comparison and quote checklist (`architecture.md` §10.2–§10.3) | partial — providers NEEDS VALIDATION | V-04, V-05, V-16, Round 7 |
 | Background jobs and integration outbox (job catalog, outbox states, operator reprocessing) | STACK-6; `architecture.md` §5.3, §7.2; `sync-protocol.md` §6.2.1 | partial — mechanism approved, job catalog and outbox state machine missing | Round 7 + entity pass |
