@@ -21,7 +21,7 @@ Every decision carries exactly one of these statuses.
 | **UNDECIDED** | Known open question; no recommendation has been accepted. |
 | **REJECTED** | Considered and explicitly rejected by the project owner. |
 
-"Supersedes" / "would supersede" is a relationship, not a status: content replaced by an APPROVED decision is listed in §4; content that a PROPOSED decision would replace stays in force as spec draft until that decision is approved.
+"Supersedes" / "would supersede" is a relationship, not a status: content replaced by an APPROVED decision is named in that decision's "Supersedes" line (spec decisions D1–D21 are summarized in §4); content that a PROPOSED decision would replace stays in force as spec draft until that decision is approved.
 
 ### Precedence
 
@@ -39,9 +39,9 @@ Phase 0 blocking decisions are taken in rounds. A round closes only when the pro
 
 | Round | Items | Status |
 |---|---|---|
-| 1 | GOV-1, baseline principles, SNK-3, SNK-4, MOB-3 | **Closed 2026-09-16** — open clarifications U-01…U-09 (§5.1) |
-| 2 | OPS-1, DATA-1, STACK-7, OPS-2 | Open — presented 2026-09-16, awaiting owner inputs |
-| 3 | STACK-2, STACK-3, STACK-6, DATA-2 | Not started |
+| 1 | GOV-1, baseline principles, SNK-3, SNK-4, MOB-3 | **Closed 2026-09-16**; clarifications U-01…U-09 closed 2026-09-16 (batch 2), U-08 deferred to the Phase 1 gate |
+| 2 | OPS-6 (constraints), OPS-1, DATA-1, STACK-7, OPS-2 | **Closed 2026-09-16** (batch 2) — providers and final PostgreSQL major NEEDS VALIDATION |
+| 3 | STACK-2, STACK-3, STACK-6, DATA-2 | Open — to be presented next |
 | 4 | AUTH-4, AUTH-3, AUTH-2, AUTH-1 | Not started |
 | 5 | SYNC-1, SYNC-2, SYNC-3, DATA-3 | Not started |
 | 6 | STACK-5, STACK-4, MOB-1, MOB-2, STACK-1 | Not started |
@@ -88,14 +88,27 @@ Phase 0 blocking decisions are taken in rounds. A round closes only when the pro
 | P-13 | Out of scope: multi-tenant/SaaS, billing, route planning, GPS check-in, field surveys, point-of-sale photos, returns/exchanges, stock queries or blocking, independent goal/commission calculation, B2B portal, unofficial WhatsApp integration. | spec §3, D5, D6 | APPROVED (Round 1) |
 | P-14 | Critical business rules are deterministic. AI runs only through backend-controlled interfaces, receives minimal data, uses read-only tools in Phase 3, and never replaces pricing, credit, permissions, totals, state transitions or idempotency. | spec D18 | APPROVED (Round 1) |
 | P-15 | Production and staging are isolated: credentials, databases, job queues, object storage and Sankhya environments. | spec §11, §14 | APPROVED (Round 1) |
-| P-16 | Schema evolution follows expand → migrate → contract. When it is mandatory is open (U-09). | spec §14 | APPROVED (Round 1) |
+| P-16 | Schema evolution follows expand → migrate → contract; mandatory from the first environment holding real data (pilot) and whenever a released mobile app version depends on the old shape (U-09). | spec §14 | APPROVED (Round 1; scope batch 2) |
 | P-17 | Files/blobs live in object storage; metadata stays in PostgreSQL. | spec §9.2 | APPROVED (Round 1) |
-| P-18 | A new customer passes backoffice approval before becoming a Sankhya partner. | spec D7 | **PROPOSED** (U-01) |
-| P-19 | One account table across the lifecycle `lead → prospect → cliente_pendente → cliente` (alternates `rejeitado`, `inativo`). | spec D8 | **PROPOSED** (U-01) |
-| P-20a | External representatives never receive product cost, margin or general export capability. Restricted information is not sent to their client at all; hiding a field in the interface is insufficient. | spec D12, §6.2 | APPROVED (owner instruction 2026-09-16) |
-| P-20b | Cost and margin never reach the mobile app for **any** user, and are never sent to AI providers. | spec D12, RF-CAT-4, §6.2 | **PROPOSED** |
+| P-18 | A new customer passes backoffice approval before becoming a Sankhya partner. | spec D7 | APPROVED (batch 2, U-01) |
+| P-19 | One account table across the lifecycle `lead → prospect → cliente_pendente → cliente` (alternates `rejeitado`, `inativo`). | spec D8 | APPROVED (batch 2, U-01) |
+| P-20 | External representatives never receive product cost, margin or general export capability. Restricted information is not sent to their client at all; hiding a field in the interface is insufficient. | spec D12, §6.2 | APPROVED (owner instruction 2026-09-16) |
 | P-21 | Authorization is enforced server-side; synchronization, AI tools and dashboards use the same scope rules. (Mechanism: AUTH-4, PROPOSED.) | owner instruction 2026-09-16 | APPROVED (owner instruction 2026-09-16) |
 | P-22 | Secrets are never committed, never exposed to web or mobile clients, never written into documentation or the visual blueprint. | owner instruction 2026-09-16 | APPROVED (owner instruction 2026-09-16) |
+| P-23 | Cost and margin never reach the mobile app for **any** user, and are never sent to AI providers. | spec D12, RF-CAT-4, §6.2 | **PROPOSED** (decide in Round 4) |
+
+**Count:** 22 APPROVED (P-01…P-22), 1 PROPOSED (P-23). An earlier working note mentioned "17" principles approved in Round 1; the register content is authoritative (16 in Round 1 + P-06 and P-20…P-22 by owner instruction + P-18, P-19 in batch 2). No principle was added to reconcile the old count.
+
+**P-18 scope note:** P-18 is only the sentence above. Whether a pending customer may receive quotations, and what blocks order submission before approval, are Phase 1 business rules still to be written and approved (RF-ACC-3, RF-ACC-4).
+
+#### Principle ID traceability
+
+| Old ID (commit `4c10bb3`) | New ID (batch 2) | Change |
+|---|---|---|
+| P-20 (original draft, combined) | P-20 + P-23 | Split on 2026-09-16: representative part approved, all-users/AI part proposed |
+| P-20a | P-20 | Renumbered, text unchanged |
+| P-20b | P-23 | Renumbered, text unchanged, still PROPOSED |
+| P-01…P-19, P-21, P-22 | unchanged | P-16 text extended with the U-09 scope; P-18, P-19 status changed to APPROVED |
 
 ---
 
@@ -110,11 +123,24 @@ Each entry: status · decision or proposal · rationale · consequences · valid
 - **Decision:**
   - Staging uses Sankhya homologation if it exists.
   - If it does not exist, staging and local development use the fake `SankhyaGateway` with sanitized recorded fixtures. CI always uses the fake gateway.
-  - If an isolated real (non-production) Sankhya test environment can be obtained, it is added before the pilot. Whether it is mandatory for the pilot is open (U-04).
-  - Staging never writes to Sankhya production.
+  - If an isolated real (non-production) Sankhya test environment can be obtained, it is added before the pilot.
+  - **Pilot gate (U-04, batch 2):** before the pilot, at least one real order write and one real partner write are validated end-to-end in a non-production Sankhya environment (homologation or an isolated test environment). If no such environment can be obtained, a new decision is required before the pilot. A read-only production inspection (below) never substitutes for this validation. Reversible; availability of the environment NEEDS VALIDATION (V-11).
+  - Staging never connects to Sankhya production (reads or writes).
   - No production data in staging without an approved sanitization process.
-- **REJECTED:** using Sankhya production as staging, **including read-only use**.
-- **Open:** U-03 — later owner instruction mentions strictly read-only production inspection "only if explicitly authorized"; how that relates to the rejection above is undecided.
+- **REJECTED:** Sankhya production as an environment strategy for development, CI or staging — including read-only use as a staging data source.
+- **Exception — read-only diagnostic inspection of Sankhya production during a spike (U-03, batch 2, amends the Round 1 wording):** allowed only when **all** of these are true:
+  1. the project owner explicitly authorizes that specific occasion;
+  2. there is no adequate homologation/test environment for the question being investigated;
+  3. no write operation is performed;
+  4. credentials are read-only where technically possible;
+  5. only the minimum required information is inspected;
+  6. real customer/business data is not copied unnecessarily;
+  7. any fixture or response persisted in the repository is sanitized first;
+  8. credentials and tokens are never written to Git;
+  9. staging is never connected to Sankhya production;
+  10. the inspection is recorded in `docs/sankhya-spike.md` (§8 inspection log).
+  
+  It is an exceptional diagnostic mechanism, **not** an environment strategy. Reversible. Whether Sankhya supports read-only API credentials NEEDS VALIDATION (S0.7).
 - **Refines:** P-15; spec §14 ("staging connected to Sankhya homologation") (R22).
 
 #### SNK-4 · Duplicate-proof Sankhya writes
@@ -123,7 +149,10 @@ Each entry: status · decision or proposal · rationale · consequences · valid
   - **Required (B):** custom Sankhya field(s) holding the Sales Force origin identifier, filled at insert and checked before any retry. Field names, types and indexing are defined with the Sankhya partner.
   - **In addition (D):** native Sankhya idempotency, if spike S0 confirms it exists.
   - Heuristic matching (e.g. by customer, date and total) is **REJECTED** as the primary duplicate check.
-  - An identifier in an observation field is only an emergency fallback. Who authorizes it, what it covers and which identifier is written are open (U-05, U-06, U-07).
+  - An identifier in an observation field is only an emergency fallback:
+    - **Authority (U-05, batch 2):** each use requires explicit authorization by the project owner for that incident, recorded in this register (date, scope, reason). Reversible.
+    - **Scope (U-06, batch 2):** only order headers and partner records created while the custom origin-id field is unavailable; the fallback ends when the field is available again. Reversible. Whether suitable observation fields exist on order header and partner NEEDS VALIDATION (S0.8).
+    - **Identifier (U-07, batch 2):** the value written — in the custom field or in the fallback — is the Sales Force entity UUID of the order or account, stable across retries; never an attempt or job id. Cheap to change before the first real write, foundational afterwards. Whether the Sankhya field type/length can hold a UUID NEEDS VALIDATION (S0.4, S0.8, S5.4).
   - Validated in S0 before any real order write. If the custom field is not feasible, a new decision is required before Sankhya writes.
 - **Supersedes:** RF-SNK-4 identifier in an observation field as the primary mechanism (R23).
 
@@ -133,37 +162,79 @@ Each entry: status · decision or proposal · rationale · consequences · valid
   - **Android:** prefer normal Google Play distribution with in-app authentication if Managed Google Play would require managing personal devices; check unlisted/private distribution options.
   - **iOS:** Unlisted App Store distribution preferred; Apple Business Manager custom app as fallback; TestFlight only for beta testing.
   - Start the organizational Apple and Google developer accounts early.
-- **Open:** U-08 — demo environment for store review.
+- **Deferred (U-08, batch 2):** the demo environment and demo account for Apple/Google store review stay UNDECIDED until the Phase 1 gate; they depend on device approval (AUTH-2) and on which API environment the store build targets.
 - **Supersedes:** spec §14 Managed Google Play / "ABM or TestFlight" (R46, R47).
 
-### 3.2 PROPOSED — Round 2 (infrastructure) — under discussion
+### 3.2 APPROVED — Round 2 (infrastructure), batch 2
 
-#### OPS-1 · Hosting and environments
-- **Status:** PROPOSED (Round 2) · depends on V-04
-- **Proposal:** staging and production on separate hosts (staging smaller); application tier on a Linux VPS with Docker Compose and Caddy; PostgreSQL as a managed service with point-in-time recovery (preferred), or self-hosted in Compose if the budget does not allow it; Brazil region, application and database preferably at the same provider/region; database never publicly exposed.
-- **Alternatives presented:** everything self-hosted on the VPS (spec D19) with separate staging; managed container platform; on-premise.
-- **Inputs needed:** budget ceiling, existing cloud accounts, whether Brazilian data residency is a legal/contractual requirement, who operates the servers.
-- **Would amend:** spec D19 (R62).
+#### OPS-6 · Infrastructure planning constraints
+- **Status:** APPROVED 2026-09-16 (Round 2 inputs)
+- **Budget (planning target, not an approved ceiling):**
+  - Target R$ 300–600/month for the initial **production** architecture.
+  - Above R$ 600/month requires a clear justification.
+  - Above R$ 800/month must return to the project owner before being treated as the recommended architecture.
+  - The budget never justifies sacrificing backups, security, environment isolation, data integrity or recoverability. If the safest reasonable architecture costs more, show the cost and why.
+  - Estimates must itemize: production, staging, managed database, object storage, backup, monitoring, likely growth. Do not optimize for hyperscale; scale remains ~20–100 users.
+- **Existing accounts:** the company already uses a Hostinger VPS. AWS, Azure, GCP, Oracle Cloud, Magalu Cloud and paid Cloudflare are **not** assumed. Hostinger is an available option, not a mandatory choice. Sales Force production is never placed on an unrelated existing production server merely because it exists.
+- **Data residency:** keeping production data in Brazil is a **strong preference**, not currently an absolute legal requirement. The primary production PostgreSQL database preferentially stays in Brazil. An external region/provider may be recommended only with explicit justification that it still satisfies LGPD, adequate contractual/privacy protections, encryption, acceptable latency, security and operational reliability.
+- **Operations:** run internally by a small technical team / project maintainer with AI-assisted operations. Minimize infrastructure components; prefer managed services where they materially reduce operational risk; no architecture that requires a dedicated DevOps team; every operational procedure has a documented runbook; recovery never depends on undocumented knowledge.
 
-#### DATA-1 · PostgreSQL version
-- **Status:** PROPOSED (Round 2) · depends on V-04
-- **Proposal:** PostgreSQL 18 in every environment; if the chosen managed provider does not offer 18, its highest supported major ≥ 16; UUIDv7 generation in application code allowed in all cases.
-- **Would supersede:** spec §7.3 "PostgreSQL 16+" (R39).
+#### OPS-1 · Hosting, environments and database placement
+- **Status:** APPROVED 2026-09-16 (direction) · provider and exact topology NEEDS VALIDATION (V-04)
+- **Decision:**
+  - Production and staging are isolated environments; production does not share a failure domain with staging.
+  - PostgreSQL preferably managed, with point-in-time recovery (PITR).
+  - Application compute may run on VPS/VM infrastructure.
+  - The database never exposes a public unrestricted endpoint.
+  - Production and staging credentials are separate.
+  - No lock-in to AWS, Azure or GCP at this stage.
+- **Provider selection criteria (in order):** reliability; managed PostgreSQL; PITR; Brazil/São Paulo region when possible; private networking/security; predictable cost; operational simplicity; fit for the initial scale (OPS-6).
+- **Fallback:** if this direction cannot fit reasonably within OPS-6, the best "self-hosted PostgreSQL on VPS" design (continuous WAL archiving to external storage) is **presented** to the owner as a fallback — PROPOSED only, never adopted silently, and production recovery targets (OPS-2) are never downgraded without telling the owner.
+- **Label note:** the owner approved this as "Option C"; the content approved is the one listed above, which corresponds to option A of the 2026-09-16 presentation (VPS/VM compute + managed PostgreSQL with PITR). The managed container platform (presented as C) and on-premise (D) were not selected.
+- **Amends:** spec D19 (R62).
 
-#### STACK-7 · Object storage
-- **Status:** PROPOSED (Round 2) · depends on V-05
-- **Proposal:** managed S3-compatible object storage external to the application servers; private buckets; short-lived pre-signed URLs; separate bucket and credentials per environment; versioning in production; code uses only the S3 API. Alternative: self-hosted Garage or SeaweedFS.
-- **Evidence for dropping MinIO:** MinIO community edition repository archived (2026) and official images no longer published (R57). Rejecting MinIO itself is part of this proposal (not yet an owner rejection).
-- **Would supersede:** spec §7.1/§7.3/§14 MinIO.
+#### DATA-1 · PostgreSQL version policy
+- **Status:** APPROVED 2026-09-16 (policy) · final major version NEEDS VALIDATION (V-15, after V-04)
+- **Decision:**
+  - Minimum PostgreSQL 16 (compatibility floor).
+  - Local, CI, staging and production use the same major version.
+  - Choose the newest mature major version normally supported by the selected production provider and the required tooling.
+  - Prefer PostgreSQL 18 if the selected provider, Drizzle, backup tooling, extensions and operational ecosystem support it cleanly; otherwise PostgreSQL 17 is acceptable.
+  - UUIDv7 must be generatable outside PostgreSQL; the project never depends on PostgreSQL 18 solely for UUIDv7.
+- **Supersedes:** spec §7.3 "PostgreSQL 16+" (R39).
+
+#### STACK-7 · File / object storage
+- **Status:** APPROVED 2026-09-16 · provider NEEDS VALIDATION (V-05, together with V-04)
+- **Decision:** managed S3-compatible object storage with:
+  - private buckets;
+  - separate production and staging buckets and credentials;
+  - encryption;
+  - short-lived pre-signed URLs;
+  - object metadata in PostgreSQL, blob content in object storage (P-17);
+  - versioning where useful and lifecycle/retention rules where appropriate;
+  - a standard S3-compatible abstraction in the application architecture.
+- Prefer a Brazil-region provider for production files when practical; AWS S3 São Paulo is included in the comparison.
+- A lightweight S3-compatible emulator for local development may be selected later; it does not define the production provider.
+- **REJECTED:** MinIO Community in the new design (repository archived, official images no longer published — R57). Self-hosted object storage (Garage, SeaweedFS) is not selected.
+- **Supersedes:** spec §7.1/§7.3/§14 MinIO.
 
 #### OPS-2 · Backups and recovery
-- **Status:** PROPOSED (Round 2)
-- **Proposal:**
-  - Targets: RPO ≤ 15 min, RTO ≤ 4 h. Alternatives presented: RPO ≤ 24 h / RTO 4 h (spec); RPO ≤ 1 min / RTO ≤ 1 h (high availability).
-  - Managed branch: provider point-in-time recovery + weekly logical dump to storage at a separate provider.
-  - Self-hosted branch: continuous WAL archiving (pgBackRest or WAL-G) to encrypted external S3.
-  - Backups encrypted, retained 30 days; automated monthly restore test with report; object storage versioning in production; secrets backed up in an encrypted store outside the servers; reproducible provisioning and a runbook tested once before the pilot.
-- **Would supersede:** spec §12.3 daily dump and §13 RPO ≤ 24 h (R63, R64).
+- **Status:** APPROVED 2026-09-16 · retention window and cost per provider NEEDS VALIDATION (V-04)
+- **Production targets:** RPO ≤ 15 minutes; RTO ≤ 4 hours. For orders, approvals, CRM interactions, customer changes and sync commands, 24 hours of potential data loss is not acceptable.
+- **Strategy when managed PostgreSQL is selected:**
+  - provider PITR;
+  - encrypted automatic backups;
+  - ≥ 30 days recovery retention where economically reasonable;
+  - independent periodic logical dump;
+  - secondary backup copy outside the primary failure domain;
+  - backup monitoring;
+  - documented recovery runbook;
+  - monthly restore test.
+- A backup is not valid merely because a backup job reports success; recovery must be tested.
+- **Before pilot/production:** recovery procedure documented; backups monitored; at least one restore test succeeded.
+- **Staging:** lower retention and a less aggressive RPO are acceptable; staging is never the only copy of valuable production/business information.
+- **Still PROPOSED (not part of this approval):** self-hosted WAL-archiving branch (only if the OPS-1 fallback is later approved); encrypted secrets backup outside the servers and reproducible provisioning scripts (to be decided with OPS-3 in Round 7, subject to the OPS-6 runbook rule).
+- **Supersedes:** spec §12.3 daily dump and §13 RPO ≤ 24 h (R63, R64).
 
 ### 3.3 PROPOSED — Round 3 (server structure) — not yet presented for approval
 
@@ -316,19 +387,19 @@ The spec is a draft. Its decisions are binding only where an APPROVED entry abov
 | D4 | APPROVED | P-09 |
 | D5 | APPROVED | P-13 |
 | D6 | APPROVED | P-13; source of positivization NEEDS VALIDATION (S6, R28) |
-| D7 | PROPOSED | P-18 (U-01); partner mandatory fields NEEDS VALIDATION (S5) |
-| D8 | PROPOSED | P-19 (U-01) |
+| D7 | APPROVED | P-18; partner mandatory fields NEEDS VALIDATION (S5) |
+| D8 | APPROVED | P-19 |
 | D9 | PROPOSED | Phase 2 scope; details decided in Phase 2 |
 | D10 | PROPOSED | Phase 2 scope; details decided in Phase 2 |
 | D11 | PROPOSED | AUTH-4 would replace it (Round 4) |
-| D12 | APPROVED in part | P-20a APPROVED; P-20b PROPOSED; AUTH-2/AUTH-3 extensions PROPOSED |
+| D12 | APPROVED in part | P-20 APPROVED; P-23 PROPOSED; AUTH-2/AUTH-3 extensions PROPOSED |
 | D13 | PROPOSED | wa.me link + manual registration (Phase 2); official API Phase 4. The ban on unofficial WhatsApp integration is APPROVED (P-13) |
 | D14 | APPROVED | P-12 |
 | D15 | APPROVED in part | Modular monolith (P-04) and strict TypeScript (P-06) APPROVED; stack choices PROPOSED (STACK-1…7, SYNC-1) |
 | D16 | APPROVED | P-11; compensating controls (AUTH-1, AUTH-2) PROPOSED |
 | D17 | APPROVED | P-09; detection details UNDECIDED (R33) |
 | D18 | APPROVED | P-14 |
-| D19 | PROPOSED | OPS-1 would amend it (Round 2) |
+| D19 | AMENDED | OPS-1 (VPS/VM compute kept; managed PostgreSQL with PITR preferred; isolated staging) |
 | D20 | PROPOSED | CI blocks merge; no global coverage target; high coverage in domain, sync and permissions |
 | D21 | APPROVED | P-10; calculation base and routing UNDECIDED (R35, R36) |
 
@@ -338,19 +409,21 @@ The spec is a draft. Its decisions are binding only where an APPROVED entry abov
 
 Not decided. Never implement behavior that depends on them.
 
-### 5.1 Round 1 clarifications — UNDECIDED
+### 5.1 Round 1 clarifications — closed 2026-09-16 (batch 2)
 
-| ID | Question | Recommendation presented 2026-09-16 |
-|---|---|---|
-| U-01 | Approve P-18 (backoffice customer approval) and P-19 (single account table)? | — (owner to confirm) |
-| U-02 | Change control after v1.0 | Resolved by owner instruction → recorded in GOV-1 (kept for traceability) |
-| U-03 | SNK-3 rejects read-only use of Sankhya production; a later owner instruction allows strictly read-only production inspection if explicitly authorized. Which rule applies? | Production-as-staging stays REJECTED; a one-off read-only inspection during S0/S1 only with written per-occasion owner authorization, from a controlled workstation (never staging servers), captures sanitized before entering the repository |
-| U-04 | Is an isolated real (non-production) Sankhya environment mandatory before the pilot? | Yes: at least one real order and partner write validated end-to-end outside production; otherwise a new decision before the pilot |
-| U-05 | SNK-4 emergency fallback: who authorizes it? | Project owner, per incident, recorded here |
-| U-06 | SNK-4 emergency fallback: which records? | Only order headers and partners created while the custom field was unavailable |
-| U-07 | SNK-4: which identifier is written? | The Sales Force entity UUID (order or account), never an attempt or job id |
-| U-08 | Demo environment for Apple/Google store review | Keep UNDECIDED until the Phase 1 gate (depends on AUTH-2 and the store build's API target) |
-| U-09 | When is expand → migrate → contract (P-16) mandatory? | From the first environment holding real data (pilot), and whenever a released mobile version depends on the old shape |
+Kept for traceability. The binding text lives in the entry named in "Recorded in".
+
+| ID | Question | Outcome | Final status | Recorded in |
+|---|---|---|---|---|
+| U-01 | Approve P-18 and P-19? | Approved with the exact wording shown in §2 | APPROVED | §2 P-18, P-19 |
+| U-02 | Change control after v1.0 | Explicit change decision + new spec version | APPROVED | GOV-1 |
+| U-03 | Read-only access to Sankhya production during spikes | Production as an environment stays REJECTED; exceptional read-only diagnostic inspection under 10 owner conditions | APPROVED (read-only credential support NEEDS VALIDATION) | SNK-3 |
+| U-04 | Real non-production Sankhya environment before the pilot | Mandatory: one real order write and one real partner write validated outside production; otherwise new decision | APPROVED (availability NEEDS VALIDATION, V-11) | SNK-3 |
+| U-05 | SNK-4 fallback authority | Project owner, per incident, recorded here | APPROVED | SNK-4 |
+| U-06 | SNK-4 fallback scope | Only order headers and partners created while the custom field is unavailable | APPROVED (observation fields NEEDS VALIDATION) | SNK-4 |
+| U-07 | SNK-4 identifier | Sales Force entity UUID of the order or account, never an attempt or job id | APPROVED (field capacity NEEDS VALIDATION) | SNK-4 |
+| U-08 | Store review demo environment | Deferred to the Phase 1 gate | UNDECIDED (scheduled) | MOB-3, §5.2 |
+| U-09 | When expand → migrate → contract is mandatory | From the first environment with real data (pilot) and whenever a released mobile version depends on the old shape | APPROVED | P-16 |
 
 ### 5.2 Phase 1 gate — UNDECIDED
 
@@ -406,14 +479,15 @@ Not decided. Never implement behavior that depends on them.
 | V-01 | Expo + pnpm isolated installs work in the skeleton (fallback `nodeLinker: hoisted`)? | STACK-1 | Phase 0 skeleton |
 | V-02 | Which Zod → OpenAPI library and which typed client generator? | STACK-4 | Phase 0 first endpoint |
 | V-03 | Which Drizzle version line to pin? | DATA-2 | Phase 0 skeleton |
-| V-04 | Budget; provider offering VMs + managed PostgreSQL (18) with point-in-time recovery in the required region | OPS-1, DATA-1 | Before provisioning environments |
-| V-05 | Object storage provider/region; S3-compatible emulator for local development | STACK-7 | Before provisioning environments |
+| V-04 | Provider combination under OPS-6: VPS/VM compute + managed PostgreSQL with PITR (retention and cost), private networking, Brazil region preferred; itemized monthly cost (production, staging, database, storage, backup, monitoring, growth); secondary backup location | OPS-1, OPS-2 | Before provisioning environments |
+| V-05 | Object storage provider/region (Brazil preferred; AWS S3 São Paulo compared), versioning and lifecycle support, cost; local S3-compatible emulator chosen separately | STACK-7 | Before provisioning environments |
 | V-06 | Does the company use Google Workspace? | OPS-5 | Before password reset |
 | V-07 | Commit-safe watermark proven by concurrent-transaction test | SYNC-2 | With the first synchronizable table |
 | V-08 | Sentry data region; processor registration | OPS-4 | Before real personal data (pilot) |
 | V-09 | Spike S7: SQLCipher library, Android 16 KB pages, FTS5, Drizzle, performance | MOB-2 | Phase 1 gate |
 | V-10 | Spike S8: organizational accounts, D-U-N-S, Google Play private/unlisted options and Managed Play device-management requirements, Apple unlisted distribution acceptance, Android developer verification | MOB-3 | Before the pilot |
-| V-11 | Spike S0: homologation existence; availability of an isolated real test environment; request limits; integration cost; authorization and feasibility of custom origin-id fields | SNK-3, SNK-4 | Before any real Sankhya connection |
+| V-11 | Spike S0: homologation existence; availability of an isolated real test environment; whether read-only API credentials exist (for U-03 inspections); request limits; integration cost; authorization and feasibility of custom origin-id fields | SNK-3, SNK-4 | Before any real Sankhya connection |
 | V-12 | Spike S1: API per operation, incremental reads, deletion detection | SNK-2 | Before the Phase 0 mirror |
 | V-13 | Native Sankhya idempotency support | SNK-4 (D) | Before real order writes |
 | V-14 | Real data volumes: portfolio size per representative, prices per customer, item history (R12) | SYNC-3 sizing, spec §13 targets | Phase 1 gate (with S7) |
+| V-15 | Final PostgreSQL major: newest mature version supported cleanly by the selected provider, Drizzle, backup tooling and required extensions (18 preferred, 17 acceptable, 16 floor) | DATA-1 | After V-04, before the Phase 0 skeleton |

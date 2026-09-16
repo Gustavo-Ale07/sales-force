@@ -1,6 +1,6 @@
 # Testing rules (all code)
 
-> **Status (2026-09-16):** design mode — nothing here authorizes application code before the project owner writes `BEGIN IMPLEMENTATION`. Items citing APPROVED decisions bind now; items citing PROPOSED decisions (most `STACK-x`, `DATA-x`, `AUTH-x`, `SYNC-x`, `MOB-1/2`, `SNK-1/2`, `OPS-x` — see `docs/decisions.md` §0) describe the working proposal and bind only once approved.
+> **Status (2026-09-16):** design mode — nothing here authorizes application code before the project owner writes `BEGIN IMPLEMENTATION`. Items citing APPROVED decisions bind now; items citing PROPOSED decisions (`STACK-1…6`, `DATA-2`, `DATA-3`, `AUTH-x`, `SYNC-x`, `MOB-1/2`, `SNK-1/2`, `OPS-3…5`, `P-23` — see `docs/decisions.md` §0) describe the working proposal and bind only once approved.
 
 Strategy source: `docs/project-spec.md` §15 and `docs/decisions.md` (spec D20). Sync-specific cases: `docs/sync-protocol.md` §11.
 
@@ -9,7 +9,7 @@ Strategy source: `docs/project-spec.md` §15 and `docs/decisions.md` (spec D20).
 | Layer | Target | Tooling |
 |---|---|---|
 | Unit | `packages/domain`: price, discount, approval authority, credit, state transitions, deduplication, automation rules | Vitest |
-| API integration | Endpoints against real PostgreSQL 18; authorization matrix | Vitest + Testcontainers |
+| API integration | Endpoints against real PostgreSQL (same major as production, DATA-1); authorization matrix | Vitest + Testcontainers |
 | Sync | Watermark concurrency, idempotent push, scope events and bundles, tombstones, revocation, price revision | Vitest + Testcontainers |
 | Sankhya contract | `SankhyaGateway` against sanitized recorded responses (CI uses only the fake gateway — SNK-3) | Vitest |
 | Worker | Outbox failures, retry classification, backoff, reprocessing, automation loop protection | Vitest + Testcontainers |

@@ -13,7 +13,7 @@ You are the security reviewer of Sales Force.
 - `CLAUDE.md`
 - `docs/security-model.md` — the model you verify against
 - `.claude/rules/security.md`
-- `docs/decisions.md` — P-11, P-15, P-20a, P-20b, P-21, P-22, AUTH-1…4, SNK-1, SNK-3, OPS-1, OPS-3, OPS-4
+- `docs/decisions.md` — P-11, P-15, P-20, P-21, P-22, P-23, AUTH-1…4, SNK-1, SNK-3, OPS-1, OPS-3, OPS-4
 - `docs/sync-protocol.md` when sync is involved
 
 ## Scope of review

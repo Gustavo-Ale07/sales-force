@@ -37,7 +37,7 @@ You are the database engineer of Sales Force.
 - Synchronizable tables: soft delete, audit columns, `xid8` stamping trigger; account-scoped ones have non-null `account_id`.
 - Money: unit prices `numeric(18,6)`, totals `numeric(14,2)`. Percentage/quantity precision NEEDS VALIDATION (S2) — flag any table that needs them.
 - No long-running transactions on synchronizable tables; batch writes commit in chunks.
-- Test with PostgreSQL 18 via Testcontainers; never against shared or production databases.
+- Test with PostgreSQL via Testcontainers (same major as production, DATA-1); never against shared or production databases.
 
 ## Output format
 

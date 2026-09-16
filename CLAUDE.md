@@ -55,17 +55,26 @@ Breaking any of these requires a new approved decision.
 4. **Pure domain (P-05).** `packages/domain` holds portable, deterministic business rules with no infrastructure dependencies, portable between server and mobile runtime where required.
 5. **Strict TypeScript (P-06).**
 6. **Server-side authorization (P-21).** Enforced on the server; synchronization, AI tools and dashboards use the same scope rules. Hidden UI and local filters are never authorization.
-7. **Representatives (P-20a).** External representatives never receive product cost, margin or general export capability. Restricted information is not sent to their client at all — hiding a field in the UI is insufficient.
+7. **Representatives (P-20).** External representatives never receive product cost, margin or general export capability. Restricted information is not sent to their client at all — hiding a field in the UI is insufficient.
 8. **Offline-first mobile (P-07). Offline commands (P-08):** idempotent; the server revalidates authorization, price, discount authority, credit, state and invariants of every command.
 9. **Price integrity (P-09).** Prices come from Sankhya-derived data; a changed price during offline operation uses the `revisao_preco` flow; prices are never silently replaced.
 10. **Discount authority (P-10).** Seller → manager → director limits configured in Sales Force, enforced server-side. Calculation base and routing UNDECIDED (R35, R36).
 11. **Deterministic rules and AI (P-14).** Pricing, credit, permissions, totals, state transitions and idempotency are deterministic, never delegated to AI. AI runs only through backend-controlled interfaces.
-12. **Environments (P-15, SNK-3).** Production and staging are isolated. Staging never writes to Sankhya production; using production as staging — even read-only — is REJECTED (see U-03). No production data in staging without approved sanitization.
+12. **Environments (P-15, SNK-3).** Production and staging are isolated. Staging never connects to Sankhya production; Sankhya production is never an environment for development, CI or staging. The only exception is a **read-only diagnostic inspection during a spike**, explicitly authorized by the owner for that occasion and meeting every SNK-3 condition (no writes, minimum data, sanitized persistence, no credentials in Git, logged in `docs/sankhya-spike.md`). No production data in staging without approved sanitization. Before the pilot, real order and partner writes are validated in a non-production Sankhya environment.
 13. **No duplicate Sankhya writes (SNK-4).** Custom origin-id field checked before any retry; native idempotency in addition if confirmed; no heuristic primary matching; no real order write before S0 validation.
 14. **Files (P-17).** Blobs in object storage; metadata in PostgreSQL.
 15. **Secrets (P-22).** Never committed, never exposed to web/mobile, never in documentation or the blueprint.
 16. **Scope (P-01, P-13).** Internal, single tenant, not SaaS. Out of scope: multi-tenant/SaaS, billing, route planning, GPS check-in, field surveys, point-of-sale photos, returns/exchanges, stock queries or blocking, independent goal/commission calculation, B2B portal, unofficial WhatsApp integration.
 17. **Authentication (P-11).** Email + strong password, Argon2id; no 2FA (accepted risk).
+18. **Accounts (P-18, P-19).** A new customer passes backoffice approval before becoming a Sankhya partner. One account table across `lead → prospect → cliente_pendente → cliente` (alternates `rejeitado`, `inativo`).
+19. **Schema evolution (P-16).** Expand → migrate → contract, mandatory from the first environment with real data and whenever a released mobile version depends on the old shape.
+20. **Infrastructure (OPS-6, OPS-1, DATA-1, STACK-7, OPS-2).**
+    - Isolated production and staging (separate failure domains and credentials); managed PostgreSQL with PITR preferred, never a public unrestricted endpoint; VPS/VM compute allowed.
+    - PostgreSQL ≥ 16, same major in every environment, 18 preferred if cleanly supported; UUIDv7 generated outside PostgreSQL.
+    - Managed S3-compatible private storage, separate buckets/credentials per environment; no MinIO Community.
+    - Production RPO ≤ 15 min, RTO ≤ 4 h; a backup counts only once a restore has been tested.
+    - Budget target R$ 300–600/month for production (> R$ 600 justify, > R$ 800 back to the owner) — never at the cost of backups, security, isolation, integrity or recoverability. Brazil strongly preferred for production data. Small internal team: minimal components, documented runbooks.
+    - Providers and final PostgreSQL major: NEEDS VALIDATION (V-04, V-05, V-15).
 
 ---
 
@@ -73,9 +82,8 @@ Breaking any of these requires a new approved decision.
 
 These appear throughout `docs/` and `.claude/` as the working proposal. They are **not approved** until their decision round closes (`docs/decisions.md` §0). Do not cite them as rules.
 
-- **Account lifecycle and customer approval:** single account table; backoffice approval before Sankhya creation (P-18, P-19 — U-01).
-- **Cost/margin for all mobile users and AI:** never on mobile for any user, never to AI (P-20b).
-- **Infrastructure (Round 2):** VPS + Docker Compose + Caddy, managed PostgreSQL 18, external S3-compatible storage (no MinIO), RPO ≤ 15 min / RTO ≤ 4 h.
+- **Cost/margin for all mobile users and AI:** never on mobile for any user, never to AI (P-23).
+- **Deployment details:** Docker Compose + Caddy on the VPS/VM hosts (with Round 7, OPS-3).
 - **Server (Round 3):** NestJS `apps/server` with `api` and `worker`; pg-boss (no Redis/BullMQ); Drizzle migrations.
 - **Access (Round 4):** opaque sessions, device approval, representatives mobile-only, per-permission scope with one central policy module.
 - **Sync and data (Round 5):** custom protocol, `xid8` commit-safe watermark, scope events and bundles, UUIDv7, `numeric(18,6)` unit prices / `numeric(14,2)` totals.

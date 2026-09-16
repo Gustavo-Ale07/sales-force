@@ -20,7 +20,7 @@ Each section or item is marked **APPROVED** (backed by an APPROVED decision in `
 4. Data mirrored from Sankhya is read-only on the device (P-02, APPROVED).
 5. Every offline write is an idempotent command; replaying it never duplicates effects (P-08, APPROVED). Key naming UNDECIDED (R09).
 6. The server revalidates authorization, prices, discount authority, credit, current state and invariants for every command (P-08, APPROVED).
-7. Cost and margin never reach representatives (P-20a, APPROVED) and are never part of any synchronized dataset for any user (P-20b, PROPOSED).
+7. Cost and margin never reach representatives (P-20, APPROVED) and are never part of any synchronized dataset for any user (P-23, PROPOSED).
 8. `pending` or `revoked` devices receive no business data (AUTH-2, PROPOSED).
 9. The protocol is custom; no third-party sync engine (SYNC-1, PROPOSED).
 

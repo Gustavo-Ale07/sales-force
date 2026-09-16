@@ -5,7 +5,7 @@ paths:
 
 # Domain rules (packages/domain)
 
-> **Status (2026-09-16):** design mode — nothing here authorizes application code before the project owner writes `BEGIN IMPLEMENTATION`. Items citing APPROVED decisions bind now; items citing PROPOSED decisions (most `STACK-x`, `DATA-x`, `AUTH-x`, `SYNC-x`, `MOB-1/2`, `SNK-1/2`, `OPS-x` — see `docs/decisions.md` §0) describe the working proposal and bind only once approved.
+> **Status (2026-09-16):** design mode — nothing here authorizes application code before the project owner writes `BEGIN IMPLEMENTATION`. Items citing APPROVED decisions bind now; items citing PROPOSED decisions (`STACK-1…6`, `DATA-2`, `DATA-3`, `AUTH-x`, `SYNC-x`, `MOB-1/2`, `SNK-1/2`, `OPS-3…5`, `P-23` — see `docs/decisions.md` §0) describe the working proposal and bind only once approved.
 
 Decisions: P-05, P-08, P-09, P-10, DATA-3. Invariants summary: `CLAUDE.md`.
 

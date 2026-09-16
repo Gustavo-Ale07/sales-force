@@ -31,9 +31,9 @@ Project decisions about the integration are not Sankhya facts; their status (APP
 | Ref | Status | Topic | Detail |
 |---|---|---|---|
 | P-03 | APPROVED | Boundary | Web and mobile never communicate with Sankhya; Sankhya-specific implementation isolated behind `packages/sankhya` / `SankhyaGateway` |
-| SNK-3 | APPROVED | Staging and development environment | Homologation if it exists; otherwise staging and local development use the fake gateway with sanitized fixtures (CI always fake); isolated real non-production environment added before the pilot if available (mandatory? U-04); staging never writes to production; no production data in staging without approved sanitization; production as staging — including read-only — **REJECTED** |
-| SNK-4 | APPROVED | Write idempotency | Custom origin-id field(s) holding the Sales Force identifier, checked before any retry (required); native idempotency in addition if S0 confirms it; heuristic primary matching **REJECTED**; observation field only as emergency fallback (U-05…U-07); validated in S0 before any real order write |
-| U-03 | UNDECIDED | Read-only production inspection during spikes | SNK-3 rejects read-only production use; a later owner instruction allows strictly read-only inspection only if explicitly authorized. **Until resolved, no production access of any kind.** |
+| SNK-3 | APPROVED | Staging and development environment | Homologation if it exists; otherwise staging and local development use the fake gateway with sanitized fixtures (CI always fake); isolated real non-production environment added before the pilot if available; **pilot gate:** one real order write and one real partner write validated end-to-end outside production, otherwise a new decision (U-04); staging never connects to production; no production data in staging without approved sanitization; production as an environment strategy — including read-only — **REJECTED** |
+| SNK-3 exception | APPROVED | Read-only production diagnostic inspection during a spike (U-03) | Only with owner authorization for that occasion and all conditions in `security-model.md` §10.1 (no adequate test environment, no writes, read-only credentials where possible, minimum data, no unnecessary copies, sanitized persistence, no credentials in Git, staging never connected, logged in §8). Exceptional diagnostic mechanism, not an environment strategy; never a substitute for the pilot write validation |
+| SNK-4 | APPROVED | Write idempotency | Custom origin-id field(s) holding the Sales Force entity UUID of the order or account, checked before any retry (required); native idempotency in addition if S0 confirms it; heuristic primary matching **REJECTED**; observation field only as emergency fallback — owner authorization per incident, only records created while the custom field is unavailable (U-05…U-07); validated in S0 before any real order write |
 | SNK-1 | PROPOSED | Integration boundary detail | Writes only via `integration_outbox` + worker; user reads from the mirror; synchronous API calls only from an allowlist (empty); Sankhya formats stay in `packages/sankhya` |
 | SNK-2 | PROPOSED | Authentication | OAuth 2.0 client credentials + `X-Token` (F-01, docs level); legacy appkey/token not implemented; API per operation chosen by S1 |
 | DATA-3 | PROPOSED | Mirror identifiers | Deterministic UUIDv5 from the Sankhya natural key; unique constraint on the natural key |
@@ -67,6 +67,8 @@ All spikes are **NEEDS VALIDATION**. Each has questions, an exit criterion and w
 | S0.4 | Is the company authorized to create custom additional fields on the order header and partner records, and can the partner support it? | NEEDS VALIDATION |
 | S0.5 | Does Sankhya offer native idempotency for document or partner insertion? | NEEDS VALIDATION |
 | S0.6 | Maintenance windows and support channel for integration incidents | NEEDS VALIDATION |
+| S0.7 | Can API credentials be restricted to read-only access (per user, profile or gateway configuration)? Needed for SNK-3 read-only inspections. | NEEDS VALIDATION |
+| S0.8 | Do order header and partner records have observation/free-text fields usable for the SNK-4 emergency fallback, and can the custom origin-id field hold a 36-character UUID? | NEEDS VALIDATION |
 
 - **Exit criterion:** written answers from the partner/executive recorded in §7.
 - **Blocks:** S1–S6; SNK-3 (staging environment); SNK-4 (Sankhya writes).
@@ -176,7 +178,7 @@ Until measured, the worker serializes Sankhya requests and backs off on rate-lim
 
 ## 6. Fixture policy
 
-1. Raw responses are captured only into `.sankhya-raw/` (git-ignored), from a non-production environment. Production access of any kind, including read-only inspection, is UNDECIDED (U-03) and not performed until resolved.
+1. Raw responses are captured only into `.sankhya-raw/` (git-ignored), normally from a non-production environment. Captures from Sankhya production happen only inside an authorized read-only diagnostic inspection (SNK-3 exception, `security-model.md` §10.1), are limited to the minimum needed, are not copied elsewhere, and are logged in §8.
 2. Before committing, fixtures are sanitized: CNPJ/CPF, names, trade names, addresses, emails, phones and free-text notes replaced with synthetic values; identifiers remapped consistently; monetary values kept only when needed by a test.
 3. Committed fixtures live in `packages/sankhya` with provenance: spike, operation, date, environment type.
 4. Credentials, tokens and `X-Token` values never appear in fixtures, logs or this document.
@@ -190,3 +192,13 @@ Append-only. One row per finding, with evidence.
 | Date | Spike | Finding | Evidence | Recorded by |
 |---|---|---|---|---|
 | 2026-09-16 | — | F-01 authentication model from official documentation | Links in §2 | Decision session |
+
+---
+
+## 8. Production diagnostic inspection log
+
+Append-only. Every read-only inspection of Sankhya production (SNK-3 exception) is recorded here **before** it starts (authorization) and completed after it ends. No credentials, tokens or real customer data in this table.
+
+| Date | Authorized by / reference | Spike question | Why no test environment suffices | Credentials read-only? | Data inspected (categories only) | Raw captures kept (location, deletion date) | Outcome / finding ID |
+|---|---|---|---|---|---|---|---|
+| — | — | No inspection performed yet | — | — | — | — | — |

@@ -6,9 +6,9 @@ paths:
 
 # Web frontend rules (apps/web, packages/ui)
 
-> **Status (2026-09-16):** design mode — nothing here authorizes application code before the project owner writes `BEGIN IMPLEMENTATION`. Items citing APPROVED decisions bind now; items citing PROPOSED decisions (most `STACK-x`, `DATA-x`, `AUTH-x`, `SYNC-x`, `MOB-1/2`, `SNK-1/2`, `OPS-x` — see `docs/decisions.md` §0) describe the working proposal and bind only once approved.
+> **Status (2026-09-16):** design mode — nothing here authorizes application code before the project owner writes `BEGIN IMPLEMENTATION`. Items citing APPROVED decisions bind now; items citing PROPOSED decisions (`STACK-1…6`, `DATA-2`, `DATA-3`, `AUTH-x`, `SYNC-x`, `MOB-1/2`, `SNK-1/2`, `OPS-3…5`, `P-23` — see `docs/decisions.md` §0) describe the working proposal and bind only once approved.
 
-Decisions: STACK-4, STACK-5, AUTH-1, AUTH-3, P-20a, P-20b. Structure: `docs/architecture.md` §8.
+Decisions: STACK-4, STACK-5, AUTH-1, AUTH-3, P-20, P-23. Structure: `docs/architecture.md` §8.
 
 ## Stack
 

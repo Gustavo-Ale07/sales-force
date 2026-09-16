@@ -9,8 +9,8 @@
 ### Status markers used below
 
 - **No marker:** the statement has the status of the decision or requirement it cites. As of 2026-09-16:
-  - **APPROVED:** P-01…P-17, P-20a (representatives never receive cost, margin or general export capability), P-21 (server-side authorization applied to sync, AI and dashboards), P-22 (secrets), SNK-3, SNK-4, MOB-3.
-  - **PROPOSED (not binding):** AUTH-1…AUTH-4 (Round 4), SYNC-1…SYNC-3 (Round 5), MOB-1, MOB-2, STACK-5 (Round 6), SNK-1, OPS-1…OPS-5 (Rounds 2 and 7), P-18, P-19, P-20b (cost/margin never on mobile for any user, never to AI).
+  - **APPROVED:** P-01…P-22 (including P-18 customer approval, P-19 single account table, P-20 representatives never receive cost, margin or general export capability, P-21 server-side authorization applied to sync, AI and dashboards, P-22 secrets), SNK-3 (including the read-only production inspection exception), SNK-4, MOB-3, OPS-6, OPS-1, DATA-1, STACK-7, OPS-2.
+  - **PROPOSED (not binding):** AUTH-1…AUTH-4 (Round 4), SYNC-1…SYNC-3 (Round 5), MOB-1, MOB-2, STACK-5 (Round 6), SNK-1, OPS-3…OPS-5 (Round 7), P-23 (cost/margin never on mobile for any user, never to AI).
   - Requirements cited as `spec §x` / `RF-*` are draft until Specification v1.0.
 - **[PROPOSED]**: additional baseline control recommended here, to be confirmed in the security decision round. Not binding.
 - **[UNDECIDED …]**: open question listed in `decisions.md` §5.
@@ -28,7 +28,7 @@ This model is therefore largely a **proposal**: most sections describe the contr
 | Customer portfolio (accounts, contacts, purchase history) | Core commercial asset; exfiltration to competitors |
 | Financial titles, credit limits | Confidential customer financial data |
 | Prices, discount limits, approval rules | Commercial strategy |
-| Cost and margin | Most sensitive commercial data (P-20a APPROVED; P-20b PROPOSED) |
+| Cost and margin | Most sensitive commercial data (P-20 APPROVED; P-23 PROPOSED) |
 | Personal data of contacts and users | LGPD obligations |
 | Sankhya credentials | Full ERP access |
 | Sessions, refresh tokens, device keys | Account takeover |
@@ -37,7 +37,7 @@ This model is therefore largely a **proposal**: most sections describe the contr
 
 | Threat | Primary controls |
 |---|---|
-| External representative copying the portfolio to a competitor | Mobile-only (AUTH-3), device approval (AUTH-2), no general export capability (P-20a), scope (AUTH-4), audit |
+| External representative copying the portfolio to a competitor | Mobile-only (AUTH-3), device approval (AUTH-2), no general export capability (P-20), scope (AUTH-4), audit |
 | Lost or stolen phone | Encrypted local database (MOB-2), revocation + wipe, max offline period |
 | Password reuse / credential stuffing | Strong password policy, breached-password check, lockout, rate limiting, device approval |
 | User seeing another portfolio | Central policy (AUTH-4), scope-aware sync (SYNC-3), matrix tests |
@@ -136,12 +136,12 @@ Defined in `project-spec.md` §2: Admin, Diretoria, Gerente, Vendedor interno, R
 
 ---
 
-## 6. Sensitive data exposure (P-20a APPROVED; P-20b PROPOSED)
+## 6. Sensitive data exposure (P-20 APPROVED; P-23 PROPOSED)
 
 | Data | Rule |
 |---|---|
-| Cost and margin | Never sent to representatives on any channel (P-20a, APPROVED). Never sent to the mobile app for any user and never sent to AI providers (P-20b, PROPOSED). On the web, only for profiles with explicit permission (Admin, Diretoria; Gerente configurable — spec §8.2). |
-| Exports (CSV/XLSX, bulk downloads) | Representatives never receive general export capability (P-20a, APPROVED). Proposed enforcement: no export permission is grantable to the profile and no bulk-download endpoint serves it. Every export is audited. |
+| Cost and margin | Never sent to representatives on any channel (P-20, APPROVED). Never sent to the mobile app for any user and never sent to AI providers (P-23, PROPOSED). On the web, only for profiles with explicit permission (Admin, Diretoria; Gerente configurable — spec §8.2). |
+| Exports (CSV/XLSX, bulk downloads) | Representatives never receive general export capability (P-20, APPROVED). Proposed enforcement: no export permission is grantable to the profile and no bulk-download endpoint serves it. Every export is audited. |
 | Representative sharing | Limited to the PDF of a quotation or proposal for their own customer (spec §12.2). |
 | Cross-portfolio data | Never delivered outside scope, including in sync bundles, error messages and deduplication responses. |
 
@@ -188,8 +188,8 @@ Defined in `project-spec.md` §2: Admin, Diretoria, Gerente, Vendedor interno, R
   - provided per environment through environment configuration outside the repository;
   - never in client bundles, logs, fixtures or error reports;
   - Sankhya credentials only in the worker container while the synchronous allowlist is empty (SNK-1);
-  - backed up in an encrypted store outside the servers (OPS-2).
-- The database is never publicly exposed (OPS-1).
+  - backed up in an encrypted store outside the servers ([PROPOSED], with OPS-3 in Round 7).
+- The database never exposes a public unrestricted endpoint (OPS-1); production and staging credentials are separate (OPS-1, P-15).
 - **[PROPOSED]** The migration job uses a database role with DDL rights; the application role has none.
 - **[PROPOSED]** The application role cannot update or delete audit log rows.
 - **CI/CD (OPS-3):**
@@ -198,9 +198,35 @@ Defined in `project-spec.md` §2: Admin, Diretoria, Gerente, Vendedor interno, R
   - the deploy user on hosts has only the rights needed to pull images, run the migration job and restart services;
   - dependency update automation and vulnerability scanning in CI.
 - **Environment separation (P-15, SNK-3):**
-  - no production data or credentials in development, CI or staging;
+  - no production data or credentials in development, CI or staging — the only exception is an owner-authorized read-only Sankhya production diagnostic inspection during a spike (SNK-3, §10.1), which is never an environment;
   - staging never connects to Sankhya production;
   - test fixtures are synthetic or sanitized.
+
+### 10.1 Read-only Sankhya production diagnostic inspection — APPROVED (SNK-3, batch 2)
+
+An exceptional diagnostic mechanism during a technical spike, **not** an environment strategy. Allowed only when all conditions hold:
+
+| # | Control |
+|---|---|
+| 1 | The project owner explicitly authorizes that specific occasion (recorded before the inspection) |
+| 2 | No adequate homologation/test environment exists for the question being investigated |
+| 3 | No write operation is performed |
+| 4 | Credentials are read-only where technically possible (support NEEDS VALIDATION, S0.7) |
+| 5 | Only the minimum required information is inspected |
+| 6 | Real customer/business data is not copied unnecessarily; raw captures stay in git-ignored `.sankhya-raw/` |
+| 7 | Anything persisted in the repository is sanitized first (`sankhya-spike.md` §6) |
+| 8 | Credentials and tokens are never written to Git |
+| 9 | Staging is never connected to Sankhya production |
+| 10 | The inspection is logged in `sankhya-spike.md` §8 (date, authorization, question, data touched, outcome) |
+
+Claude Code and agents never perform or prepare such an inspection without the recorded authorization of condition 1.
+
+### 10.2 Backups and recovery — APPROVED (OPS-2)
+
+- Backups are encrypted; the secondary copy lives outside the primary failure domain. **[PROPOSED]** The secondary location uses credentials separate from the primary provider.
+- **[PROPOSED]** Backups contain personal data: access restricted to named operators; restore tests use temporary instances destroyed after the test report.
+- Backup failures and stale dumps raise alerts (backup monitoring).
+- A backup counts only after a restore test succeeds; at least one before the pilot, then monthly.
 
 ---
 
@@ -209,8 +235,9 @@ Defined in `project-spec.md` §2: Admin, Diretoria, Gerente, Vendedor interno, R
 | Processor | Data | Phase | Status |
 |---|---|---|---|
 | Sankhya (ERP) | all ERP data | 0 | existing contract |
-| Hosting / managed PostgreSQL provider | all application data | 0 | V-04 |
-| Object storage provider | files (PDFs, spreadsheets) | 0/1 | V-05 |
+| Hosting / managed PostgreSQL provider | all application data | 0 | V-04 (Brazil strongly preferred for the primary database; external region only with LGPD/contract/encryption justification — OPS-6) |
+| Object storage provider | files (PDFs, spreadsheets) | 0/1 | V-05 (Brazil region preferred — STACK-7) |
+| Secondary backup location | encrypted database dumps | before pilot | V-04 (outside the primary failure domain — OPS-2) |
 | Email provider | recipient addresses, email content | 0 | V-06 |
 | Sentry | error events (scrubbed) | 0 | V-08 (region) |
 | HIBP range API | 5-character password hash prefix (not personal data) | 0 | PROPOSED (AUTH-1) |

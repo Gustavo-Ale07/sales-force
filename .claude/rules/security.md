@@ -1,6 +1,6 @@
 # Security rules (all code and configuration)
 
-> **Status (2026-09-16):** design mode — nothing here authorizes application code before the project owner writes `BEGIN IMPLEMENTATION`. Items citing APPROVED decisions bind now; items citing PROPOSED decisions (most `STACK-x`, `DATA-x`, `AUTH-x`, `SYNC-x`, `MOB-1/2`, `SNK-1/2`, `OPS-x` — see `docs/decisions.md` §0) describe the working proposal and bind only once approved.
+> **Status (2026-09-16):** design mode — nothing here authorizes application code before the project owner writes `BEGIN IMPLEMENTATION`. Items citing APPROVED decisions bind now; items citing PROPOSED decisions (`STACK-1…6`, `DATA-2`, `DATA-3`, `AUTH-x`, `SYNC-x`, `MOB-1/2`, `SNK-1/2`, `OPS-3…5`, `P-23` — see `docs/decisions.md` §0) describe the working proposal and bind only once approved.
 
 Model and rationale: `docs/security-model.md`. These are the working rules.
 
@@ -9,7 +9,7 @@ Model and rationale: `docs/security-model.md`. These are the working rules.
 - Commit, print, log or put in fixtures: passwords, tokens, cookies, session ids, API keys, `client_secret`, `X-Token`, private keys, `.env` contents.
 - Send server credentials or third-party keys to web or mobile clients, including via build-time variables.
 - Bypass or weaken authorization, validation, rate limits or lockout to fix a bug or make a test pass.
-- Use production credentials or production data in development, CI or staging.
+- Use production credentials or production data in development, CI or staging. Sole exception: an owner-authorized read-only Sankhya production diagnostic inspection during a spike (`docs/security-model.md` §10.1) — never in staging or CI, credentials never in Git.
 - Try to work around `.claude/settings.json` deny rules. They are a safety net, not the security boundary; if one blocks legitimate work, ask the owner.
 
 ## Authorization
@@ -19,7 +19,7 @@ Model and rationale: `docs/security-model.md`. These are the working rules.
 - UI hiding, disabled buttons, route guards and local mobile filters are never authorization.
 - The external representative profile cannot use the web app (AUTH-3) — enforce server-side.
 
-## Sensitive data (P-20a APPROVED; P-20b PROPOSED)
+## Sensitive data (P-20 APPROVED; P-23 PROPOSED)
 
 - Responses are built from explicit DTOs. Never serialize database rows or ORM entities directly.
 - Cost and margin: never in mobile payloads or local schema, never to representatives, never to AI; web only for permitted profiles.

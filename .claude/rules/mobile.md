@@ -6,9 +6,9 @@ paths:
 
 # Mobile rules (apps/mobile, packages/mobile-db)
 
-> **Status (2026-09-16):** design mode — nothing here authorizes application code before the project owner writes `BEGIN IMPLEMENTATION`. Items citing APPROVED decisions bind now; items citing PROPOSED decisions (most `STACK-x`, `DATA-x`, `AUTH-x`, `SYNC-x`, `MOB-1/2`, `SNK-1/2`, `OPS-x` — see `docs/decisions.md` §0) describe the working proposal and bind only once approved.
+> **Status (2026-09-16):** design mode — nothing here authorizes application code before the project owner writes `BEGIN IMPLEMENTATION`. Items citing APPROVED decisions bind now; items citing PROPOSED decisions (`STACK-1…6`, `DATA-2`, `DATA-3`, `AUTH-x`, `SYNC-x`, `MOB-1/2`, `SNK-1/2`, `OPS-3…5`, `P-23` — see `docs/decisions.md` §0) describe the working proposal and bind only once approved.
 
-Decisions: MOB-1, MOB-2, MOB-3, AUTH-1, AUTH-2, SYNC-1…3, P-07, P-08, P-20a, P-20b. Protocol: `docs/sync-protocol.md`.
+Decisions: MOB-1, MOB-2, MOB-3, AUTH-1, AUTH-2, SYNC-1…3, P-07, P-08, P-20, P-23. Protocol: `docs/sync-protocol.md`.
 
 ## Platform
 
@@ -35,7 +35,7 @@ Decisions: MOB-1, MOB-2, MOB-3, AUTH-1, AUTH-2, SYNC-1…3, P-07, P-08, P-20a, P
 
 - Local database encrypted (MOB-2). The SQLCipher-capable library is chosen by spike S7 — do not choose it earlier.
 - Database key and tokens only in the device secure store; never AsyncStorage or plain files.
-- No cost or margin fields in the local schema or UI; no export features for representatives (P-20a APPROVED; P-20b PROPOSED).
+- No cost or margin fields in the local schema or UI; no export features for representatives (P-20 APPROVED; P-23 PROPOSED).
 - On revocation: delete the local database and cached files. A `pending` device shows its approval state and holds no business data.
 - Generated files (e.g. quotation PDFs) are temporary; OS backup exclusion UNDECIDED R19.
 

@@ -14,20 +14,20 @@
 
 ### Document status
 
-This document describes the **working architecture proposal**. Most of it depends on decisions that are still **PROPOSED** (`decisions.md` Rounds 2–7). Only content backed by an APPROVED decision is binding.
+This document describes the **working architecture proposal**. Most of it depends on decisions that are still **PROPOSED** (`decisions.md` Rounds 3–7). Only content backed by an APPROVED decision is binding.
 
 | Section | Status | Backed by |
 |---|---|---|
-| §1 System context | PROPOSED topology; "clients never call Sankhya" is APPROVED | P-03; STACK-2, SNK-1, OPS-1 PROPOSED |
+| §1 System context | "Clients never call Sankhya", isolated environments, VPS/VM compute, managed PostgreSQL and external object storage APPROVED; process split and worker-only Sankhya access PROPOSED | P-03, OPS-1, STACK-7; STACK-2, SNK-1 PROPOSED |
 | §2 Principles | APPROVED (the policy-module mechanism is PROPOSED) | P-02…P-05, P-08, P-21; AUTH-4 PROPOSED |
-| §3 Data ownership | Sankhya vs Sales Force split APPROVED; per-row write paths PROPOSED; pending-customer and lead rows depend on P-18/P-19 (PROPOSED) | P-02 |
+| §3 Data ownership | Sankhya vs Sales Force split APPROVED; per-row write paths PROPOSED; account lifecycle and customer approval APPROVED | P-02, P-18, P-19 |
 | §4 Repository layout | PROPOSED, except the isolation of `packages/domain` and `packages/sankhya` (APPROVED) | P-03, P-05; STACK-1…5, MOB-1, DATA-2 PROPOSED |
 | §5 Server application | PROPOSED | STACK-2, STACK-3, STACK-6 |
-| §6 Data storage | PROPOSED, except files in object storage (APPROVED) | P-17; DATA-1, STACK-7, MOB-2 PROPOSED |
+| §6 Data storage | PostgreSQL version policy and object storage APPROVED; mobile storage PROPOSED | P-17, DATA-1, STACK-7; MOB-2 PROPOSED |
 | §7 Sankhya boundary | Duplicate-proof writes APPROVED; outbox, allowlist and authentication PROPOSED | SNK-4; SNK-1, SNK-2 PROPOSED |
 | §8–§9 Web and mobile | PROPOSED | STACK-5, MOB-1, MOB-2, AUTH-1, AUTH-2 |
-| §10 Environments | Isolation APPROVED; hosts and tools PROPOSED | P-15, SNK-3; OPS-1 PROPOSED |
-| §11–§13 Delivery, operations, observability | PROPOSED | OPS-1…OPS-5 |
+| §10 Environments | Isolation, hosting direction and recovery targets APPROVED; providers NEEDS VALIDATION; local/CI tooling PROPOSED | P-15, SNK-3, OPS-1, OPS-2, OPS-6; V-04, V-05, V-15 |
+| §11–§13 Delivery, operations, observability | Backups/recovery APPROVED (OPS-2); delivery pipeline, Compose/Caddy details and observability PROPOSED | OPS-2; OPS-3, OPS-4, OPS-5 PROPOSED |
 
 ---
 
@@ -39,8 +39,8 @@ This document describes the **working architecture proposal**. Most of it depend
   (web SPA)            │   └──── /    ──► static web build  │                                        │
                        │                                    ▼                                        │
  Mobile app ──HTTPS───►│ Caddy ── /api ──► server:api ──► PostgreSQL ◄── server:worker ──► Sankhya API │
-  (Expo, encrypted     │                                  (managed or        │   (OAuth 2.0,         │
-   SQLite)             │                                   self-hosted)      │    via SankhyaGateway)│
+  (Expo, encrypted     │                                  (managed, PITR;    │   (OAuth 2.0,         │
+   SQLite)             │                                   OPS-1)            │    via SankhyaGateway)│
                        └─────────────────────────────────────────────────────┼───────────────────────┘
                                                                              ├──► Object storage (S3-compatible, external)
                                                                              ├──► SMTP provider
@@ -171,8 +171,8 @@ Rules:
 
 | Store | Content | Decision |
 |---|---|---|
-| PostgreSQL 18 (conditional on provider support, V-04) | application data, Sankhya mirror, pg-boss queues, audit log, scope events | DATA-1 |
-| Object storage (S3-compatible, external) | generated PDFs, uploaded spreadsheets, import error reports, product images | STACK-7 |
+| PostgreSQL (major per DATA-1: ≥ 16, same in every environment, 18 preferred; final NEEDS VALIDATION V-15) | application data, Sankhya mirror, pg-boss queues, audit log, scope events | DATA-1 |
+| Managed S3-compatible object storage (private, per-environment buckets; provider NEEDS VALIDATION V-05) | generated PDFs, uploaded spreadsheets, import error reports, product images | STACK-7 |
 | Mobile encrypted SQLite | per-user authorized subset + local outbox | MOB-2, `sync-protocol.md` |
 
 Conventions (identifiers, money, time, soft delete, audit columns, change tracking) are defined in DATA-3 and SYNC-2 and operationalized in `.claude/rules/database.md`.
@@ -256,12 +256,42 @@ Operations the `api` process may call synchronously (read-only, with timeout and
 
 | Environment | Host | PostgreSQL | Sankhya | Object storage | Email |
 |---|---|---|---|---|---|
-| Local development | developer machine (Windows + Docker Desktop/WSL2) | PostgreSQL 18 container | fake gateway + sanitized fixtures | S3-compatible emulator (V-05) | local capture (tool chosen in Phase 0) |
-| CI | GitHub Actions runners | PostgreSQL 18 via Testcontainers | fake gateway + sanitized fixtures | emulator or none | none |
-| Staging | separate smaller host (OPS-1) | managed or self-hosted per V-04 | homologation if it exists, otherwise fake gateway (SNK-3) — **never production** | staging bucket + credentials | provider, staging configuration |
-| Production | production host (OPS-1) | managed (preferred) or self-hosted | Sankhya production | production bucket + credentials, versioned | provider |
+| Local development | developer machine (Windows + Docker Desktop/WSL2) | PostgreSQL container, same major as production (DATA-1) | fake gateway + sanitized fixtures | S3-compatible emulator (V-05) | local capture (tool chosen in Phase 0) |
+| CI | GitHub Actions runners | PostgreSQL via Testcontainers, same major as production (DATA-1) | fake gateway + sanitized fixtures | emulator or none | none |
+| Staging | separate smaller VPS/VM, different failure domain from production (OPS-1) | separate PostgreSQL instance; managed or containerized on the staging host is UNDECIDED (cost comparison, V-04); lower retention and RPO acceptable (OPS-2) | homologation if it exists, otherwise fake gateway (SNK-3) — **never production** | staging bucket + credentials | provider, staging configuration |
+| Production | VPS/VM (OPS-1); provider V-04 | managed PostgreSQL with PITR, no public unrestricted endpoint (OPS-1); self-hosted only if the fallback is approved | Sankhya production | production bucket + credentials, versioned | provider |
 
 No environment shares credentials, databases, queues, buckets or Sankhya environments with another (P-15).
+
+The existing company Hostinger VPS is not used for Sales Force production merely because it exists (OPS-6); a new, dedicated Hostinger VPS remains a candidate in V-04.
+
+### 10.1 Backup and recovery topology — APPROVED (OPS-2); providers NEEDS VALIDATION
+
+```text
+                      primary failure domain (production provider/region)
+  production PostgreSQL ── provider PITR + encrypted automatic backups (≥ 30 days where economically reasonable)
+          │
+          └─ scheduled logical dump job ──► secondary backup location OUTSIDE the primary failure domain
+                                                          (different provider or region; encrypted; retention per runbook)
+  production object storage ── versioning where useful + lifecycle rules
+
+  monitoring: backup job results + PITR status + dump freshness ──► alert
+  verification: monthly restore test into a temporary instance ──► restore report (a backup counts only after a successful restore)
+```
+
+| Item | Production | Staging |
+|---|---|---|
+| RPO / RTO | ≤ 15 min / ≤ 4 h | relaxed; never the only copy of business data |
+| PITR retention | ≥ 30 days where economically reasonable (V-04) | lower acceptable |
+| Independent logical dump + off-domain copy | required | optional [PROPOSED] |
+| Restore test | before pilot/production, then monthly | as needed [PROPOSED] |
+| Runbook | recovery runbook documented and followed in each restore test (OPS-6) | same runbook |
+
+Selecting providers, the dump frequency and the secondary location is part of V-04.
+
+### 10.2 Provider comparison — NEEDS VALIDATION (V-04, V-05, V-15)
+
+Research started 2026-09-16 against the OPS-1 criteria and OPS-6 budget. Results are recorded here as a comparison with sources and dates; no provider is selected until the owner approves one after confirming prices and contracts. Not yet filled.
 
 ---
 
@@ -276,7 +306,7 @@ version tag ──► manual approval (GitHub Environment) ──► same steps 
 mobile ──► EAS Build / EAS Update channels: staging, production
 ```
 
-- Compose services per host: `caddy` (serves web build, reverse proxy), `api`, `worker`, and `postgres` only in the self-hosted branch of OPS-1.
+- Compose services per host: `caddy` (serves web build, reverse proxy), `api`, `worker`, and `postgres` only if the self-hosted fallback of OPS-1 is ever approved.
 - Rollback: redeploy the previous image tag; schema changes stay backward compatible (P-16).
 - Backups and recovery: OPS-2.
 

@@ -12,7 +12,7 @@ You are the frontend engineer of Sales Force's web application.
 
 - `CLAUDE.md`
 - `.claude/rules/frontend.md`, `.claude/rules/security.md`, `.claude/rules/testing.md`
-- `docs/decisions.md` — STACK-4, STACK-5, AUTH-1, AUTH-3, P-20a, P-20b
+- `docs/decisions.md` — STACK-4, STACK-5, AUTH-1, AUTH-3, P-20, P-23
 - `docs/architecture.md` §8
 - The relevant `RF-*` requirements and UX flows in `docs/project-spec.md`
 

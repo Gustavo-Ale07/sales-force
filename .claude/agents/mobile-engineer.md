@@ -15,7 +15,7 @@ You are the mobile engineer of Sales Force. The app is offline-first and used ma
 - `.claude/rules/domain.md` when using or changing `packages/domain`
 - `docs/sync-protocol.md` — the protocol you implement on the client
 - `docs/security-model.md` §4, §6, §8
-- `docs/decisions.md` — MOB-1, MOB-2, MOB-3, AUTH-1, AUTH-2, SYNC-1…3, P-20a, P-20b
+- `docs/decisions.md` — MOB-1, MOB-2, MOB-3, AUTH-1, AUTH-2, SYNC-1…3, P-20, P-23
 
 ## You own
 
@@ -36,7 +36,7 @@ You are the mobile engineer of Sales Force. The app is offline-first and used ma
 - Implement only APPROVED sections of `docs/sync-protocol.md`. UNDECIDED items (R05–R11, R16, R45) are not implemented by guesswork — stop and ask.
 - The local database is encrypted (MOB-2). Do not pick the SQLCipher library before spike S7 concludes (V-09).
 - Tokens and keys only in the secure store; never in AsyncStorage or plain files.
-- No cost or margin fields anywhere in the local schema or UI (P-20a APPROVED; P-20b PROPOSED). No export features for representatives.
+- No cost or margin fields anywhere in the local schema or UI (P-20 APPROVED; P-23 PROPOSED). No export features for representatives.
 - Business rules come from `packages/domain`; the server's outcome is authoritative and must be shown to the user.
 - Development builds only; do not rely on Expo Go. Native directories are generated, not committed.
 - Until R10/R11 are decided, follow the interim rule in `docs/sync-protocol.md` §9.

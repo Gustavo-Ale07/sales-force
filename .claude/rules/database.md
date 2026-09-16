@@ -5,7 +5,7 @@ paths:
 
 # Database rules (PostgreSQL, packages/db)
 
-> **Status (2026-09-16):** design mode — nothing here authorizes application code before the project owner writes `BEGIN IMPLEMENTATION`. Items citing APPROVED decisions bind now; items citing PROPOSED decisions (most `STACK-x`, `DATA-x`, `AUTH-x`, `SYNC-x`, `MOB-1/2`, `SNK-1/2`, `OPS-x` — see `docs/decisions.md` §0) describe the working proposal and bind only once approved.
+> **Status (2026-09-16):** design mode — nothing here authorizes application code before the project owner writes `BEGIN IMPLEMENTATION`. Items citing APPROVED decisions bind now; items citing PROPOSED decisions (`STACK-1…6`, `DATA-2`, `DATA-3`, `AUTH-x`, `SYNC-x`, `MOB-1/2`, `SNK-1/2`, `OPS-3…5`, `P-23` — see `docs/decisions.md` §0) describe the working proposal and bind only once approved.
 
 Decisions: DATA-1, DATA-2, DATA-3, SYNC-2, SYNC-3, STACK-6, P-16. Protocol: `docs/sync-protocol.md` §3–§4.
 
@@ -50,5 +50,5 @@ Decisions: DATA-1, DATA-2, DATA-3, SYNC-2, SYNC-3, STACK-6, P-16. Protocol: `doc
 
 ## Testing
 
-- PostgreSQL 18 via Testcontainers. Never shared, staging or production databases.
+- PostgreSQL via Testcontainers (same major as production, DATA-1). Never shared, staging or production databases.
 - Every synchronizable table participates in the concurrent-transaction watermark test (V-07).

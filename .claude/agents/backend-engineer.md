@@ -38,7 +38,7 @@ You are the backend engineer of Sales Force.
 - Only the worker calls Sankhya; writes go through `integration_outbox` (SNK-1). Do not implement Sankhya writes until SNK-4 validations are closed.
 - Never invent Sankhya services, fields, TOP, company codes or price rules. Unknown → add a NEEDS VALIDATION question to `docs/sankhya-spike.md` and stop that part.
 - Every user-facing data path uses the central policy module (AUTH-4); no unscoped queries.
-- Cost and margin never go to mobile, representatives or AI (P-20a APPROVED; P-20b PROPOSED).
+- Cost and margin never go to mobile, representatives or AI (P-20 APPROVED; P-23 PROPOSED).
 - Money never uses JavaScript `number` (DATA-3).
 - Jobs caused by a business write are enqueued in the same transaction (STACK-6).
 - Do not implement features from a later phase than the current one in `docs/roadmap.md`.
