@@ -55,3 +55,44 @@ ios/Pods/
 
 # Local Claude settings
 .claude/settings.local.json
+
+# --- Added 2026-09-16 (Phase 0 configuration) ---
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# Additional signing material
+*.jks
+*.keystore
+*.mobileprovision
+
+# Sankhya raw captures — may contain real data; never commit (docs/sankhya-spike.md §6)
+.sankhya-raw/
+
+# Database dumps and backups
+*.dump
+*.backup
+*.sql.gz
+
+# Expo generated native projects (MOB-1) and build artifacts
+apps/mobile/android/
+apps/mobile/ios/
+*.apk
+*.aab
+*.ipa
+
+# Additional test artifacts
+blob-report/
+
+# Personal Claude instructions
+CLAUDE.local.md
+
+# Skill workspaces and git worktrees
+.superpowers/
+.worktrees/
+worktrees/
+
+# Windows folder metadata and editor settings
+desktop.ini
+.vscode/*
+!.vscode/extensions.json

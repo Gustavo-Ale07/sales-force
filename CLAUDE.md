@@ -1,1282 +1,192 @@
 # Sales Force — Claude Code Project Instructions
 
-## 1. Project Mission
-
-This repository contains **Sales Force**, an internal, single-tenant commercial platform for an industrial company.
-
-The system has two primary goals:
-
-1. Replace **Vidya Force** with an integrated sales-force application connected to Sankhya ERP.
-2. Replace **Agendor** with an internal CRM integrated with the same commercial, financial and customer data.
-
-The final platform combines:
-
-- sales force;
-- customer portfolio;
-- customers and contacts;
-- quotations and orders;
-- commercial approvals;
-- financial information;
-- goals, positivization and commissions;
-- CRM;
-- leads;
-- opportunities;
-- pipelines;
-- proposals;
-- activities and follow-ups;
-- automations;
-- dashboards;
-- integrations;
-- offline mobile operation;
-- AI-assisted workflows.
-
-This is a real production-oriented business system.
-
-It is not a prototype, demo, disposable MVP, tutorial project or generic CRM template.
+Internal, single-tenant commercial platform for an industrial company. It replaces **Vidya Force** (sales force integrated with Sankhya ERP) and then **Agendor** (CRM). A production business system — not a prototype, demo or generic template.
 
 ---
 
-# 2. Authoritative Documentation
+## 0. Project mode — DESIGN
 
-The following files define the project and MUST be treated as authoritative:
+**The project is in DESIGN / SPECIFICATION / ARCHITECTURE mode until the project owner explicitly writes `BEGIN IMPLEMENTATION`.** A commit, a push, an approved decision or a "design ready" report does not authorize implementation.
 
-- `docs/project-spec.md`
-- `docs/architecture.md`
-- `docs/decisions.md`
-- `docs/roadmap.md`
-- `docs/sankhya-spike.md`
-- `docs/security-model.md`
-- `docs/sync-protocol.md`
+- **Allowed:** analysis, business questions, alternatives, documentation under `docs/` (including the standalone design blueprint `docs/blueprint.html`), `CLAUDE.md`, `.claude/rules/`, `.claude/agents/`, diagrams, conceptual models, visual mockups as documentation.
+- **Forbidden:** scaffolding, application source code, dependency installs or package-manager runs for app setup, real schemas or migrations, endpoints, services, UI components, auth/sync/Sankhya/worker/queue/import/dashboard/AI implementation, Docker infrastructure for running the app, provisioning, deploys.
+- **Workflow:** design work on branch `design/blueprint`. Per approved decision batch: update documents → consistency validation → HTML validation (when the blueprint changes) → inspect diff → one focused commit → push to `origin/design/blueprint` (GOV-1).
 
-Do not silently contradict these documents.
-
-When working on a feature, load only the relevant documents necessary for the task.
-
-## Required context by subject
-
-### Architecture
-
-Before making architectural changes, read:
-
-- `docs/architecture.md`
-- `docs/decisions.md`
-
-### Sankhya
-
-Before implementing or modifying Sankhya integration, read:
-
-- `docs/sankhya-spike.md`
-- `docs/architecture.md`
-- relevant sections of `docs/project-spec.md`
-
-### Offline synchronization
-
-Before changing synchronization behavior, read:
-
-- `docs/sync-protocol.md`
-- `docs/security-model.md`
-- relevant domain rules
-
-### Security, authentication and authorization
-
-Read:
-
-- `docs/security-model.md`
-- `.claude/rules/security.md`
-- relevant permission requirements in `docs/project-spec.md`
-
-### Database
-
-Read:
-
-- `docs/architecture.md`
-- `.claude/rules/database.md`
-- `docs/sync-protocol.md` when synchronized entities are involved
-
-### Frontend
-
-Read:
-
-- `.claude/rules/frontend.md`
-- relevant feature requirements
-- relevant UX flows
-
-### Backend
-
-Read:
-
-- `.claude/rules/backend.md`
-- architecture boundaries
-- relevant feature requirements
-
-### Testing
-
-Read:
-
-- `.claude/rules/testing.md`
-- the testing strategy in `docs/project-spec.md`
+Current implementation phase once authorized: **Phase 0 — Foundation** (`docs/roadmap.md`).
 
 ---
 
-# 3. Conflict Resolution
+## 1. Documents and precedence
 
-If project instructions conflict, follow this order:
+| Document | Responsibility |
+|---|---|
+| `docs/decisions.md` | Decision register: statuses, rounds, rationale, open items (`U-xx`, `Rxx`), validations (`V-xx`) |
+| `docs/project-spec.md` | Functional requirements (`RF-*`). Draft until Specification v1.0 (GOV-1) |
+| `docs/architecture.md` | Structure, boundaries, dependency rules, ownership, topology (mostly PROPOSED — see its status table) |
+| `docs/security-model.md` | Authentication, devices, authorization, data exposure, processors, accepted risks |
+| `docs/sync-protocol.md` | Offline synchronization protocol (per-section status) |
+| `docs/sankhya-spike.md` | Sankhya facts, spike questions and validation results |
+| `docs/roadmap.md` | Design rounds status, phases, Phase 0 work packages, gates, open scope questions |
+| `docs/spec-review.md` | Review record only — its recommendations bind only when APPROVED in `decisions.md` |
+| `docs/blueprint.html` | Visual product blueprint (design documentation, not application code) |
+| `.claude/rules/*.md` | Working rules; most load automatically for matching paths |
 
-1. explicit instruction from the user for the current task;
-2. approved decisions in `docs/decisions.md`;
-3. project specification in `docs/project-spec.md`;
-4. architecture documents;
-5. security and synchronization documents;
-6. `.claude/rules/*`;
-7. implementation conventions already established in the repository.
+**Precedence when instructions conflict:**
+1. The project owner's explicit instruction for the current task.
+2. APPROVED entries in `docs/decisions.md`.
+3. `docs/project-spec.md`.
+4. Architecture, security and sync documents.
+5. `.claude/rules/*`.
+6. Conventions already established in the code.
 
-If two authoritative project documents contradict each other:
+If two documents contradict each other, **do not choose silently**. Report the documents, the exact contradiction, the impact and a recommended resolution. Wait for a decision when it affects architecture, business rules, security, data integrity or user-visible behavior.
 
-DO NOT silently choose one.
-
-Report:
-
-- the conflicting documents;
-- the exact contradiction;
-- expected impact;
-- recommended resolution.
-
-Wait for a decision when the conflict affects architecture, business rules, security, data integrity or user-visible behavior.
-
----
-
-# 4. Approved Product Boundaries
-
-The application is:
-
-- internal;
-- single-tenant;
-- designed for approximately 20–100 users initially;
-- designed for an industrial company;
-- integrated with Sankhya Cloud;
-- web + mobile;
-- fully offline-capable for field representatives.
-
-The project is NOT:
-
-- a SaaS product;
-- multi-tenant;
-- a replacement ERP;
-- an inventory management system;
-- a route/check-in system;
-- a B2B self-service portal.
-
-Do not expand the scope without explicit approval.
+**Status model:** APPROVED · PROPOSED · NEEDS VALIDATION · UNDECIDED · REJECTED. Only APPROVED binds. Never promote PROPOSED silently, never present NEEDS VALIDATION as fact, never turn a recommendation into a rule without owner approval.
 
 ---
 
-# 5. System Ownership
+## 2. Hard invariants — APPROVED
 
-## Sankhya is the system of record for ERP data
+Breaking any of these requires a new approved decision.
 
-Sankhya remains authoritative for:
-
-- customers/partners after approval;
-- sellers;
-- products;
-- price tables;
-- payment terms;
-- operation types/TOP;
-- orders and invoices;
-- financial titles;
-- goals;
-- positivization;
-- commissions.
-
-## Sales Force is authoritative for CRM data
-
-Sales Force owns:
-
-- leads;
-- prospects;
-- CRM accounts before becoming Sankhya customers;
-- opportunities;
-- pipelines;
-- proposals;
-- activities;
-- follow-ups;
-- CRM interactions;
-- automation rules;
-- internal CRM metadata;
-- CRM custom fields;
-- AI metadata and usage records.
-
-Never create competing sources of truth without an approved architectural decision.
+1. **Ownership (P-02).** Sankhya is the system of record for ERP data; Sales Force owns CRM-specific data.
+2. **Sankhya boundary (P-03).** Web and mobile never communicate with Sankhya. Sankhya-specific implementation is isolated behind `packages/sankhya` / `SankhyaGateway`.
+3. **Modular monolith (P-04).** No microservices unless explicitly approved later.
+4. **Pure domain (P-05).** `packages/domain` holds portable, deterministic business rules with no infrastructure dependencies, portable between server and mobile runtime where required.
+5. **Strict TypeScript (P-06).**
+6. **Server-side authorization (P-21).** Enforced on the server; synchronization, AI tools and dashboards use the same scope rules. Hidden UI and local filters are never authorization.
+7. **Representatives (P-20a).** External representatives never receive product cost, margin or general export capability. Restricted information is not sent to their client at all — hiding a field in the UI is insufficient.
+8. **Offline-first mobile (P-07). Offline commands (P-08):** idempotent; the server revalidates authorization, price, discount authority, credit, state and invariants of every command.
+9. **Price integrity (P-09).** Prices come from Sankhya-derived data; a changed price during offline operation uses the `revisao_preco` flow; prices are never silently replaced.
+10. **Discount authority (P-10).** Seller → manager → director limits configured in Sales Force, enforced server-side. Calculation base and routing UNDECIDED (R35, R36).
+11. **Deterministic rules and AI (P-14).** Pricing, credit, permissions, totals, state transitions and idempotency are deterministic, never delegated to AI. AI runs only through backend-controlled interfaces.
+12. **Environments (P-15, SNK-3).** Production and staging are isolated. Staging never writes to Sankhya production; using production as staging — even read-only — is REJECTED (see U-03). No production data in staging without approved sanitization.
+13. **No duplicate Sankhya writes (SNK-4).** Custom origin-id field checked before any retry; native idempotency in addition if confirmed; no heuristic primary matching; no real order write before S0 validation.
+14. **Files (P-17).** Blobs in object storage; metadata in PostgreSQL.
+15. **Secrets (P-22).** Never committed, never exposed to web/mobile, never in documentation or the blueprint.
+16. **Scope (P-01, P-13).** Internal, single tenant, not SaaS. Out of scope: multi-tenant/SaaS, billing, route planning, GPS check-in, field surveys, point-of-sale photos, returns/exchanges, stock queries or blocking, independent goal/commission calculation, B2B portal, unofficial WhatsApp integration.
+17. **Authentication (P-11).** Email + strong password, Argon2id; no 2FA (accepted risk).
 
 ---
 
-# 6. Critical Architectural Rule
+## 3. Design direction — PROPOSED, not binding
 
-The mobile application and web frontend MUST NEVER communicate directly with Sankhya.
+These appear throughout `docs/` and `.claude/` as the working proposal. They are **not approved** until their decision round closes (`docs/decisions.md` §0). Do not cite them as rules.
 
-All Sankhya communication goes through:
-
-Sales Force API / Worker
-→ `SankhyaGateway`
-→ Sankhya API
-
-The package responsible for knowing Sankhya-specific formats, services and behavior is:
-
-`packages/sankhya`
-
-Do not spread Sankhya-specific implementation details throughout the codebase.
+- **Account lifecycle and customer approval:** single account table; backoffice approval before Sankhya creation (P-18, P-19 — U-01).
+- **Cost/margin for all mobile users and AI:** never on mobile for any user, never to AI (P-20b).
+- **Infrastructure (Round 2):** VPS + Docker Compose + Caddy, managed PostgreSQL 18, external S3-compatible storage (no MinIO), RPO ≤ 15 min / RTO ≤ 4 h.
+- **Server (Round 3):** NestJS `apps/server` with `api` and `worker`; pg-boss (no Redis/BullMQ); Drizzle migrations.
+- **Access (Round 4):** opaque sessions, device approval, representatives mobile-only, per-permission scope with one central policy module.
+- **Sync and data (Round 5):** custom protocol, `xid8` commit-safe watermark, scope events and bundles, UUIDv7, `numeric(18,6)` unit prices / `numeric(14,2)` totals.
+- **Clients (Round 6):** Vite + React SPA (not Next.js), Zod → OpenAPI clients, Expo development builds, encrypted SQLite, pnpm + Turborepo.
+- **Sankhya and operations (Round 7):** outbox-only writes from the worker, OAuth 2.0 + `X-Token`, GitHub Actions → GHCR → SSH deploy, Sentry with scrubbing, SMTP email.
 
 ---
 
-# 7. Approved Architecture
+## 4. Phase discipline
 
-The system uses a **modular monolith**.
+- No implementation before `BEGIN IMPLEMENTATION` (§0).
+- Once authorized: implement only what `docs/roadmap.md` places in the current phase; do not pull Phase 1–4 functionality forward without approval.
+- Apply YAGNI within the phase, but never violate approved boundaries in its name.
 
-Do not introduce microservices unless an approved architectural decision explicitly changes this.
+---
 
-Expected monorepo structure:
+## 5. Stop conditions
 
-```text
-apps/
-  api/
-  worker/
-  web/
-  mobile/
-
-packages/
-  domain/
-  db/
-  mobile-db/
-  contracts/
-  sankhya/
-  ui/
-  config/
-Responsibilities
-apps/api
-NestJS application responsible for:
-- REST API;
-- authentication;
-- authorization;
-- business orchestration;
-- synchronization endpoints;
-- inbound webhooks;
-- OpenAPI.
-apps/worker
-Responsible for asynchronous and scheduled work:
-- Sankhya synchronization;
-- integration outbox;
-- imports;
-- automation execution;
-- notifications;
-- emails;
-- PDF generation;
-- batch AI operations;
-- scheduled jobs.
-apps/web
-Next.js web application for:
-- internal sellers;
-- managers;
-- directors;
-- backoffice;
-- administrators.
-apps/mobile
-Expo / React Native application focused primarily on field representatives and offline operation.
-packages/domain
-Contains pure business rules.
-Examples:
-- price calculations;
-- discounts;
-- approval authority;
-- credit rules;
-- order state transitions;
-- proposal state transitions;
-- opportunity state transitions;
-- deduplication;
-- automation domain rules.
-packages/domain MUST NOT depend on:
-- NestJS;
-- Next.js;
-- React;
-- database drivers;
-- Drizzle;
-- Redis;
-- HTTP;
-- Sankhya;
-- external APIs;
-- infrastructure.
-Domain logic must remain portable and testable.
-packages/db
-Contains:
-- PostgreSQL Drizzle schema;
-- migrations;
-- database infrastructure shared by server applications.
-packages/mobile-db
-Contains:
-- local SQLite schema;
-- local migrations;
-- offline persistence logic.
-packages/contracts
-Contains shared typed contracts:
-- Zod schemas;
-- DTO definitions;
-- API contracts;
-- synchronization protocol types.
-packages/sankhya
-Contains:
-- SankhyaGateway;
-- real implementation;
-- fake implementation;
-- fixtures and contract support;
-- Sankhya-specific mapping.
-packages/ui
-Contains reusable web UI components.
-packages/config
-Contains shared configuration for:
-- TypeScript;
-- ESLint;
-- formatting;
-- build conventions.
-8. Approved Technology Stack
-Use the approved stack unless an explicit decision changes it.
-Language
-TypeScript with strict type checking.
-Avoid any unless there is a documented and unavoidable reason.
-Monorepo
-- pnpm workspaces
-- Turborepo
-API
-- NestJS
-- REST
-- Zod
-- generated OpenAPI
-Database
-- PostgreSQL 16+
-- Drizzle ORM
-Queue / jobs
-- Redis
-- BullMQ
-Web
-- Next.js App Router
-- React
-- TanStack Query
-- Tailwind CSS
-- shadcn/ui
-Mobile
-- Expo
-- React Native
-- Expo Router
-- SQLite
-- SQLCipher where technically validated and supported
-- SecureStore
-- EAS Build / EAS Update
-Do not assume SQLCipher integration details before the technical validation is complete.
-Files
-- MinIO
-- S3-compatible API
-PDF generation
-HTML → PDF through Playwright/Chromium executed by the worker.
-AI
-- official Anthropic SDK
-- backend only
-API keys MUST NEVER reach web or mobile clients.
-Observability
-- structured JSON logs
-- pino
-- Sentry
-- health checks
-Infrastructure
-- Docker Compose
-- Caddy
-- GitHub Actions
-9. Phase Discipline
-Development is divided into phases.
-Do not prematurely implement functionality from later phases.
-Phase 0 — Foundation
-Includes:
-- monorepo;
-- CI;
-- environments;
-- authentication;
-- roles;
-- teams;
-- basic auditing;
-- Sankhya API client;
-- incremental ERP mirror;
-- Sankhya technical spike.
-Phase 1 — Sales Force
-Primary objective:
-replace Vidya Force safely.
-Includes:
-- offline mobile;
-- customer portfolio;
-- financial information;
-- product catalogue;
-- prices;
-- quotations;
-- orders;
-- customer approval;
-- discounts;
-- commercial approvals;
-- goals;
-- positivization;
-- commissions;
-- basic tasks;
-- imports;
-- integration health.
-Phase 2 — CRM
-Primary objective:
-replace Agendor.
-Includes:
-- leads;
-- pipelines;
-- opportunities;
-- proposals;
-- interactions;
-- follow-ups;
-- automation;
-- dashboards;
-- migration from Agendor;
-- Google integration.
-Phase 3 — Intelligence and channels
-Includes:
-- configurable automation builder;
-- internal AI assistant;
-- summaries;
-- next-action suggestions;
-- product mix suggestions;
-- churn indicators;
-- AI-assisted imports;
-- lead capture;
-- ads integrations;
-- telephony.
-Phase 4 — Future scope
-Includes:
-- official WhatsApp Cloud API conversations;
-- external customer chatbot.
-Do not pull Phase 2–4 functionality into Phase 0/1 unless explicitly approved.
-10. Mandatory Sankhya Spike
-Do not invent Sankhya behavior.
-Before implementing features that depend on Sankhya details, validate them through the Phase 0 spike.
-The spike must establish:
-- actual services/endpoints used;
-- relevant Sankhya entities;
-- price table resolution;
-- mandatory order fields;
-- TOP;
-- company;
-- payment terms;
-- change detection;
-- deletion detection;
-- request limits;
-- error behavior;
-- homologation behavior;
-- real response samples for tests.
-Important expected tables include, but are not limited to:
-- TGFPAR
-- TGFVEN
-- TGFPRO
-- TGFTAB
-- TGFEXC
-- TGFCAB
-- TGFITE
-- TGFFIN
-Do not assume that a table name alone defines the correct business API behavior.
-Do not invent:
-- TOP;
-- company code;
-- price rules;
-- integration service names;
-- mandatory fields;
-- commission tables;
-- goal tables.
-When unknown, mark them as a spike dependency.
-11. Offline-First Design
-Offline operation is a core requirement, not an enhancement.
-Field representatives must be able to work with unreliable or absent connectivity.
-The local application stores only the subset of data authorized for that user.
-Expected local data includes:
-- portfolio accounts;
-- contacts;
-- applicable products;
-- applicable prices;
-- payment terms;
-- operation types;
-- financial summaries;
-- recent sales history;
-- goals;
-- commissions;
-- orders;
-- tasks;
-- future precomputed suggestions.
-Sensitive server-side-only information must not be synchronized unnecessarily.
-12. Synchronization Protocol
-The synchronization protocol is a critical part of the architecture.
-Consult:
-docs/sync-protocol.md
-before modifying it.
-Pull
-Expected conceptual endpoint:
-GET /sync/pull
-Synchronization is cursor-based using change_seq.
-The server returns:
-- upserts;
-- deletes/tombstones;
-- a new cursor.
-Results MUST be filtered using the authenticated user's data scope.
-A user must never receive records they are not authorized to access.
-Records leaving the user's scope must eventually be removed from the local database.
-Push
-Expected conceptual endpoint:
-POST /sync/push
-Offline commands are stored in a local outbox.
-Commands include a unique:
-command_id
-Commands MUST be idempotent.
-Retrying the same command must not create duplicate effects.
-The server MUST revalidate:
-- authorization;
-- prices;
-- discount authority;
-- credit;
-- current state;
-- business invariants.
-Never trust decisions made only by the offline client.
-13. Idempotency
-Idempotency is mandatory for important write flows.
-Especially:
-- offline synchronization commands;
-- Sankhya order creation;
-- approved customer creation;
-- integration retries.
-A retry must never create duplicate orders or duplicate partners.
-Do not rely only on HTTP retries or UI state to prevent duplication.
-14. Price Integrity
-Price comes from Sankhya-derived data.
-Do not create an independent pricing engine unless an approved decision changes the architecture.
-When an offline order was created with an older price and the server detects that the applicable price changed:
-DO NOT silently replace it.
-The order enters:
-revisao_preco
-The seller must see:
-- previous price;
-- current price;
-- affected items.
-After seller confirmation, commercial approval rules must be evaluated again.
-15. Discount Approval
-Discount authority is configured in Sales Force.
-There are conceptually:
-- seller limit;
-- manager limit;
-- director authority above manager limit.
-Rules may have:
-- defaults by profile;
-- overrides per user.
-Approval rules must be enforced server-side.
-Never trust discount validation performed exclusively in web or mobile clients.
-16. Credit Rules
-Credit restrictions may be evaluated offline using the last synchronized data.
-They MUST be revalidated by the server before final processing.
-Potential blockers include:
-- overdue financial titles;
-- insufficient available credit.
-Do not allow stale mobile information to override current server-side commercial rules.
-17. Order State Integrity
-Order states are domain rules.
-Do not mutate order statuses arbitrarily.
-Important conceptual states include:
-- rascunho
-- aguardando_aprovacao
-- aprovado
-- na_fila
-- enviado
-- faturado
-- reprovado
-- erro_integracao
-- revisao_preco
-- cancelado
-State transitions belong in domain logic and must be tested.
-Do not duplicate transition rules independently in multiple applications.
-18. Account Lifecycle
-A commercial account can move through:
-lead
-→ prospect
-→ cliente_pendente
-→ cliente
-Possible alternate outcomes include:
-- rejeitado
-- inativo
-Do not create separate competing company/customer tables without revisiting the approved account model.
-Existing Sankhya customers have a Sankhya partner identifier.
-CRM-only accounts may exist without one.
-19. New Customer Approval
-A seller may create a new customer request.
-Before becoming a Sankhya partner, the customer must pass through the approved backoffice process.
-Conceptual sequence:
-seller creates account
-→ cliente_pendente
-→ backoffice/finance review
-→ approved
-→ Sankhya creation through integration outbox
-→ cliente
-A pending customer may have quotations.
-A final Sankhya order must not be submitted before customer approval.
-20. Permissions and Data Scope
-Authorization uses:
-- RBAC;
-- data scope.
-Expected scope types:
-- proprio
-- equipe
-- tudo
-Authorization is enforced SERVER-SIDE.
-Never rely solely on:
-- hidden UI;
-- disabled buttons;
-- frontend route guards;
-- local mobile filters.
-Synchronization endpoints MUST apply the same data-scope rules as normal API endpoints.
-21. External Representative Restrictions
-External representatives are autonomous/PJ users and require stronger restrictions.
-They must never receive unauthorized:
-- product cost;
-- margin information;
-- unrestricted data exports;
-- data belonging to unrelated portfolios.
-Do not merely hide these fields in the interface.
-Do not send restricted fields to the client.
-Representatives are explicitly prohibited from exporting general data.
-22. Device Security
-Mobile devices are security boundaries.
-The system includes:
-- device registration;
-- server-side revocation;
-- local data deletion after revocation when the device reconnects;
-- maximum offline period;
-- encrypted local storage.
-The current maximum offline period is configurable, initially 7 days.
-After exceeding it, the application must require synchronization before continued use.
-23. Authentication
-Current approved decision:
-email + strong password.
-Do not silently add, remove or redesign authentication mechanisms.
-The absence of 2FA is an explicitly accepted project risk.
-If security requirements materially change, propose revisiting the decision instead of silently changing it.
-Web
-Use secure session behavior consistent with the security specification.
-Mobile
-Use short-lived access tokens and rotating refresh tokens according to the security model.
-Passwords must be hashed using Argon2id.
-Never store plaintext passwords.
-24. Security Rules
-Security requirements are non-negotiable.
-Always follow:
-.claude/rules/security.md
-Never:
-- commit secrets;
-- expose credentials;
-- hardcode passwords;
-- expose third-party tokens;
-- log authentication tokens;
-- send server credentials to clients;
-- bypass authorization to fix a bug;
-- weaken security controls for convenience.
-Treat all external input as untrusted.
-Validate all external data.
-Use parameterized database access.
-Apply least privilege.
-25. Environment Separation
-Staging and production must remain separate.
-Staging connects to Sankhya homologation.
-Production connects to Sankhya production.
-Never mix:
-- credentials;
-- databases;
-- queues;
-- object storage;
-- Sankhya environments.
-Never use production credentials for tests or local development.
-26. Database Rules
-Follow:
-.claude/rules/database.md
-Primary database:
-PostgreSQL.
-Use Drizzle migrations for schema evolution.
-Important conventions include:
-- UUIDv7 identifiers where specified;
-- logical deletion where defined;
-- audit timestamps;
-- actor fields;
-- synchronization metadata;
-- Sankhya source identifiers.
-Use:
-- numeric for monetary values;
-- appropriate precision for quantities and percentages.
-Never represent business-critical money using floating-point arithmetic.
-27. Database Destructive Operations
-Do not perform destructive database operations without explicit user approval.
-This includes:
-- DROP TABLE;
-- TRUNCATE;
-- irreversible column removal;
-- bulk deletion;
-- destructive production migrations;
-- resetting production data.
-If a migration could cause data loss, stop and explain the risk.
-28. Migration Strategy
-Production migrations must be compatible with rolling application changes whenever possible.
-Prefer:
-expand
-→ migrate
-→ contract
-Do not introduce a migration that requires application and database changes to become valid at exactly the same instant unless unavoidable and explicitly reviewed.
-29. Module Boundaries
-API modules may interact through public application services.
-Do not casually access another module's persistence internals.
-Avoid cross-module database coupling that bypasses defined module boundaries.
-If a new dependency between modules is needed:
-1. determine ownership;
-2. expose a public service or domain contract;
-3. avoid direct internal table manipulation from unrelated modules.
-30. Backend Rules
-Follow:
-.claude/rules/backend.md
-General expectations:
-- thin HTTP controllers;
-- explicit validation;
-- business logic outside transport code;
-- clear application services;
-- infrastructure separated from domain rules;
-- explicit error handling;
-- typed contracts;
-- no silent failure.
-Do not place core business logic directly in controllers.
-31. Frontend Rules
-Follow:
-.claude/rules/frontend.md
-The UI must look and behave like a professional B2B business application.
-Avoid:
-- generic AI-generated dashboards;
-- decorative clutter;
-- excessive gradients;
-- unnecessary animations;
-- inconsistent spacing;
-- inaccessible custom controls.
-Prefer:
-- strong hierarchy;
-- information density appropriate for business software;
-- reusable components;
-- keyboard usability;
-- responsive design;
-- clear filters;
-- explicit loading states;
-- explicit empty states;
-- useful error states;
-- accessible form controls.
-Use the installed frontend-design skill for important UI design work.
-Use web-design-guidelines when auditing interface quality.
-32. Mobile Rules
-The mobile application is offline-first.
-Do not design it as a web application wrapped in a mobile shell.
-Account for:
-- intermittent connectivity;
-- retries;
-- synchronization indicators;
-- pending operations;
-- conflicts;
-- local database migrations;
-- constrained storage;
-- device revocation;
-- stale data;
-- background/foreground transitions.
-Never assume network availability.
-33. Imports
-Spreadsheet import must not directly write uncontrolled data into final business tables.
-Imports follow a controlled workflow:
-upload
-→ mapping
-→ validation
-→ preview
-→ confirmation
-→ asynchronous processing
-→ result report
-Rows with errors must be identifiable.
-Partial failures must not silently corrupt the import.
-Supported formats include:
-- XLSX
-- CSV
-Do not assume arbitrary spreadsheet layouts.
-34. Files
-Files are stored through MinIO / S3-compatible storage.
-Do not store large generated files directly in relational database columns unless explicitly justified.
-Store metadata in the database and object data in object storage.
-35. Queue and Worker Responsibilities
-Long-running or retryable work belongs in the worker.
-Examples:
-- Sankhya synchronization;
-- Sankhya outbox;
-- imports;
-- email;
-- PDF generation;
-- scheduled automation;
-- AI batches;
-- notifications;
-- reconciliation.
-Do not hold API requests open for work that should be asynchronous.
-36. Retry Behavior
-Retries must be intentional.
-Use exponential backoff where specified.
-Differentiate between:
-- transient failures;
-- permanent validation failures;
-- authentication failures;
-- authorization failures;
-- provider rate limits;
-- malformed requests.
-Do not blindly retry permanent failures.
-37. Observability
-Important operations must be observable.
-Use:
-- structured logs;
-- correlation/request IDs;
-- Sentry;
-- health endpoints;
-- integration status;
-- queue monitoring.
-Do not log secrets or unnecessary personal data.
-Integration failures should be diagnosable without requiring direct database archaeology.
-38. Auditability
-Important administrative and commercial actions require audit trails.
-Examples include:
-- login failures;
-- account lockouts;
-- user changes;
-- permission changes;
-- device revocation;
-- order approvals;
-- customer approvals;
-- discount-limit changes;
-- imports;
-- exports;
-- automation changes;
-- administrative actions.
-Do not make sensitive state-changing actions invisible.
-39. AI Features
-AI is Phase 3 unless explicitly approved earlier.
-Use AI to assist users, not silently make irreversible business decisions.
-AI calls:
-- originate from the backend;
-- use minimal necessary data;
-- respect the current user's permissions;
-- must not receive unrelated users' data;
-- must not receive passwords, secrets or tokens;
-- must not receive cost/margin when the current user is not authorized.
-In Phase 3, the assistant uses READ-ONLY tools.
-Do not add write tools to the assistant without a new approved decision.
-40. No AI as Deterministic Business Logic
-Do not use a language model to calculate rules that should be deterministic.
-Examples:
-- discounts;
-- credit;
-- pricing;
-- permissions;
-- order transitions;
-- commissions;
-- totals;
-- idempotency.
-These belong in normal application/domain code.
-AI may explain or suggest.
-It must not replace deterministic commercial rules.
-41. External Integrations
-Use official APIs whenever required by the specification.
-Do not introduce unofficial WhatsApp integrations.
-Current WhatsApp behavior before Phase 4 is:
-- generated wa.me link;
-- optional manual interaction registration.
-Official WhatsApp Cloud API is future scope.
-42. Testing Strategy
-Follow:
-.claude/rules/testing.md
-The project uses a testing pyramid focused on business risk.
-Unit tests
-High priority for packages/domain.
-Especially:
-- pricing;
-- discounts;
-- approval authority;
-- credit;
-- state transitions;
-- deduplication;
-- automation rules.
-API integration tests
-Use a real PostgreSQL environment through test containers where appropriate.
-Test authorization aggressively.
-Examples:
-- seller cannot see another portfolio;
-- representative cannot export;
-- representative does not receive cost;
-- manager sees correct team scope.
-Sync tests
-Must cover:
-- idempotent push;
-- cursor advancement;
-- tombstones;
-- portfolio reassignment;
-- revocation;
-- price revision;
-- conflict handling.
-Sankhya contract tests
-Use sanitized real response fixtures from the Phase 0 spike.
-Do not use real customer data in fixtures.
-Worker tests
-Cover:
-- retries;
-- outbox;
-- failures;
-- backoff;
-- reprocessing;
-- automation loop protection.
-Web E2E
-Use Playwright for important flows.
-Mobile E2E
-Use Maestro for important mobile flows.
-43. TDD
-Use the installed test-driven-development skill when the problem is appropriate for TDD.
-TDD is particularly valuable for:
-- domain rules;
-- bug fixes;
-- synchronization;
-- pricing;
-- discounts;
-- credit;
-- permissions;
-- state transitions.
-Do not force TDD onto trivial visual-only changes when it adds no meaningful value.
-44. Debugging
-For non-trivial bugs, use the installed:
-systematic-debugging
-workflow.
-Do not jump directly to speculative fixes.
-Preferred sequence:
-1. reproduce;
-2. isolate;
-3. inspect evidence;
-4. identify root cause;
-5. fix the root cause;
-6. add regression coverage when appropriate;
-7. verify.
-Never repeatedly apply random fixes without understanding the failure.
-45. Planning
-For meaningful multi-file or architectural work:
-use writing-plans before implementation.
-Use executing-plans after a plan is accepted.
-When requirements are unclear, use brainstorming rather than immediately writing code.
-If the user explicitly invokes grill-me, perform the structured requirement interrogation before implementation.
-46. Parallel Agents
-Use parallel agents only for genuinely independent work.
-Good examples:
-- one agent researches Sankhya behavior while another audits existing tests;
-- frontend and backend analysis when they do not edit overlapping files;
-- security review after implementation.
-Bad examples:
-- multiple agents editing the same module;
-- several agents independently implementing the same feature;
-- agents making conflicting architectural decisions.
-Avoid parallel edits to the same files.
-47. Project Agents
-Specialized agents live under:
-.claude/agents/
-Use them when appropriate.
-architect
-Responsible for:
-- architecture;
-- boundaries;
-- large technical decisions;
-- integration design;
-- architectural review.
-backend-engineer
-Responsible for:
-- NestJS;
-- APIs;
-- application services;
-- backend integrations;
-- workers when backend-specific.
-frontend-engineer
-Responsible for:
-- Next.js;
-- React;
-- web UX;
-- accessibility;
-- frontend architecture.
-database-engineer
-Responsible for:
-- PostgreSQL;
-- Drizzle;
-- schemas;
-- indexes;
-- migrations;
-- query performance;
-- data integrity.
-qa-engineer
-Responsible for:
-- test planning;
-- validation;
-- E2E;
-- regression analysis;
-- edge cases.
-security-reviewer
-Responsible for:
-- authentication review;
-- authorization review;
-- data exposure;
-- secrets;
-- attack surface;
-- dependency and integration risks.
-The security reviewer SHOULD review high-risk changes but SHOULD NOT rewrite working implementation without reason.
-code-reviewer
-Responsible for:
-- correctness;
-- maintainability;
-- architecture adherence;
-- regressions;
-- unnecessary complexity;
-- missing tests.
-48. Agent Context
-Before delegating work, give the agent:
-- objective;
-- relevant file paths;
-- relevant documentation;
-- constraints;
-- expected output.
-Do not dump the entire repository context into every agent unnecessarily.
-Each agent should read the project documents relevant to its responsibility.
-49. Code Review
-Use requesting-code-review for substantial completed work when appropriate.
-Address valid review findings before completion.
-Use receiving-code-review thoughtfully.
-Do not blindly accept review suggestions that contradict:
-- requirements;
-- architecture;
-- domain rules;
-- security;
-- established project decisions.
-50. Verification Before Completion
-For non-trivial implementation work, use:
-verification-before-completion
-Never claim a task is complete only because files were edited.
-Completion requires evidence.
-51. Definition of Done
-A task is complete only when applicable conditions are satisfied:
-1. requested behavior is implemented;
-2. architecture boundaries are respected;
-3. business rules are correctly enforced;
-4. security implications were considered;
-5. relevant tests pass;
-6. type checking passes;
-7. lint passes;
-8. build passes where relevant;
-9. user-visible behavior was verified;
-10. no known regression was introduced;
-11. important edge cases were considered;
-12. documentation was updated if necessary;
-13. the final implementation was reviewed.
-Do not say "done", "fixed" or "working" before verification.
-52. Commands and Scripts
-Use the repository's actual scripts.
-Before running commands, inspect:
-- package.json;
-- workspace configuration;
-- Turborepo configuration;
-- package-level scripts.
-Do not invent commands that do not exist.
-Do not install a dependency simply because you remember it exists.
-First confirm:
-- current dependency;
-- current version constraints;
-- whether an existing package already solves the problem.
-53. Dependency Discipline
-Before adding a dependency:
-1. determine whether it is actually needed;
-2. prefer already approved libraries;
-3. evaluate maintenance and security implications;
-4. avoid overlapping libraries that solve the same problem;
-5. keep dependency scope minimal.
-Do not add frameworks casually.
-54. Security of Third-Party Skills and Scripts
-Third-party skills and scripts may execute commands.
-Before running unknown bundled scripts:
-- inspect them;
-- understand their behavior;
-- avoid exposing secrets;
-- avoid piping unknown remote scripts directly to a shell.
-Do not assume a skill is safe merely because it is installed.
-55. Git Safety
-Do not perform irreversible Git actions without explicit approval.
-Never automatically:
-- force push;
-- rewrite published history;
-- delete remote branches;
-- reset destructive changes;
-- merge into protected branches;
-- deploy production.
-Do not discard unrelated uncommitted user work.
-Before modifying files with existing user changes:
-inspect the diff.
-Preserve unrelated changes.
-56. Commit Scope
-When commits are requested:
-- keep commits focused;
-- do not combine unrelated work;
-- use meaningful messages;
-- do not commit secrets;
-- do not commit temporary debug artifacts.
-Do not commit automatically unless requested or explicitly allowed by the active workflow.
-57. Documentation Discipline
-Documentation should reflect actual behavior.
-When implementation changes an approved behavior:
-determine whether the relevant documentation needs updating.
-Architecture-changing work should update:
-- docs/architecture.md
-- and/or docs/decisions.md
-Synchronization changes should update:
-- docs/sync-protocol.md
-Security-model changes should update:
-- docs/security-model.md
-Sankhya discoveries should update:
-- docs/sankhya-spike.md
-Do not silently alter approved product requirements to match an implementation shortcut.
-58. Architectural Decisions
-If a meaningful new architectural decision is required:
-1. explain the problem;
-2. list realistic alternatives;
-3. explain trade-offs;
-4. recommend one;
-5. obtain approval when material;
-6. record the decision in docs/decisions.md.
-Do not hide architecture decisions inside implementation code.
-59. YAGNI
-The project has a large scope.
-Strictly apply YAGNI within the current phase.
-Do not build infrastructure for imagined future requirements merely because they may eventually exist.
-However, do not violate already approved architectural boundaries in the name of YAGNI.
-60. Simplicity
-Prefer the smallest design that correctly satisfies:
-- current requirements;
-- approved architecture;
-- security;
-- expected scale.
-Avoid premature abstraction.
-Avoid "enterprise architecture" for its own sake.
-Do not split a module into services merely to create more files.
-61. Performance
-Do not prematurely optimize without evidence.
-However, respect explicitly defined non-functional targets.
-Pay special attention to:
-- mobile local queries;
-- synchronization payload size;
-- pagination;
-- bulk operations;
-- database indexes;
-- dashboard queries;
-- Sankhya API rate limits;
-- queue throughput.
-Measure before making complex optimizations.
-62. User Scale
-Initial expected scale:
-- approximately 20–100 users;
-- medium-sized customer base;
-- medium-sized product catalogue.
-Architecture should have reasonable headroom but must not be designed as hyperscale infrastructure.
-63. Error Handling
-Errors must be actionable.
-Avoid exposing raw implementation errors to end users.
-For integrations, distinguish:
-- provider unavailable;
-- authentication failure;
-- validation error;
-- rate limit;
-- temporary failure;
-- permanent business rejection.
-User-facing integration errors should be translated into understandable status when possible.
-Technical detail should remain available in logs.
-64. Business Data Integrity
-When forced to choose between:
-- convenience;
-- speed;
-- data integrity;
-prefer data integrity for:
-- orders;
-- financial information;
-- prices;
-- approvals;
-- synchronization;
-- permissions;
-- Sankhya writes.
-Do not silently "best guess" critical commercial data.
-65. Unknown Business Rules
-When a required business rule is not documented:
-DO NOT invent it.
-Check:
-1. relevant project documentation;
-2. existing implementation;
-3. Sankhya behavior if applicable.
-If still unknown:
-ask the user or register it as a pending validation.
-66. Current Explicit Out-of-Scope Items
-Unless a later approved decision changes them, do not implement:
-- multi-tenant SaaS;
-- billing/subscriptions;
-- route planning;
-- GPS check-in;
-- field surveys;
-- point-of-sale photos;
-- returns/exchanges;
-- stock blocking;
-- stock availability rules;
-- independent goal calculation;
-- independent commission calculation;
-- B2B customer portal;
-- unofficial WhatsApp integration.
-67. Communication During Work
-Before substantial implementation, summarize:
-- what will change;
-- what modules are affected;
-- important risks;
-- whether an architectural decision is involved.
-During long tasks, keep the plan current.
-At completion report:
-- what changed;
-- important files;
-- tests executed;
-- validation performed;
-- unresolved risks or pending items.
-Do not produce long celebratory summaries.
-Prefer concrete technical evidence.
-68. Stop Conditions
-Stop and request clarification or approval when:
-- an approved architectural decision must change;
-- a business-critical rule is unknown;
-- a destructive database action is required;
-- production credentials would be needed;
-- production deployment is required;
+Stop and ask the project owner when:
+- an approved decision would have to change;
+- a business rule is undocumented, PROPOSED or UNDECIDED (never invent it — register it as open);
+- a Sankhya detail is not validated in `docs/sankhya-spike.md`;
+- a destructive database operation or data-loss migration is needed;
+- production credentials, production data or a production deployment would be involved;
 - existing user work would be overwritten;
-- a security rule must be weakened;
-- a Sankhya integration detail is unknown and not yet validated;
-- the implementation would materially expand project scope.
-69. Core Principle
-The objective is not to generate the most code.
-The objective is to build a reliable commercial system that:
-- preserves business data;
-- works offline;
-- integrates safely with Sankhya;
-- enforces commercial rules;
-- protects customer information;
-- remains maintainable by a small team;
-- can gradually replace Vidya Force and Agendor without operational disruption.
-When uncertain, prefer:
-correctness
-→ data integrity
-→ security
-→ maintainability
-→ simplicity
-→ performance optimization
-→ implementation speed.
+- a security control would be weakened;
+- scope would materially expand;
+- two authoritative documents contradict each other;
+- work would cross from design into implementation.
+
+---
+
+## 6. How to work
+
+### Before and during work
+
+- **Before substantial work, summarize:** what will change; affected documents or modules; risks; whether a decision is involved.
+- Keep the plan current during long tasks.
+- Read only the documents relevant to the task (§1). Rules for the paths you touch load automatically; also read the rules an agent file lists.
+- Once implementation is authorized: use the repository's real scripts (inspect `package.json`, workspace and Turborepo configuration first; never invent commands). Dependencies: confirm the need, prefer approved libraries, check maintenance and security, avoid overlap. Never add a framework casually.
+
+### Decisions and documentation
+
+- **Decision rounds:** present decisions and alternatives → wait for the owner → repeat back the owner's decisions → detect contradictions → on explicit approval, record in `docs/decisions.md` and update the affected documents. Never hide decisions in code or documentation prose.
+- **Keep documentation true:** architecture → `architecture.md`; sync → `sync-protocol.md`; security → `security-model.md`; Sankhya discoveries → `sankhya-spike.md`; scope/phase → `roadmap.md`. Never change requirements to fit a shortcut.
+- **Traceability:** link design material to `RF-*` and decision IDs where practical.
+
+### Quality and integrity
+
+- **Errors:** actionable for users, detailed in logs. Integration errors distinguish provider unavailable, authentication, validation, rate limit, temporary and permanent rejection. Never retry permanent failures blindly.
+- **Priority when uncertain:** correctness → data integrity → security → maintainability → simplicity → performance → speed.
+- **Audit** sensitive actions: logins and failures, lockouts, user/permission/device changes, approvals, discount-limit changes, imports, exports, automation changes, administrative actions.
+
+### Definition of done
+
+- **Design batch:** owner approval recorded; documents consistent; no PROPOSED/NEEDS VALIDATION item presented as fact; no secrets; no implementation code; blueprint validated when changed; diff inspected; committed and pushed to `design/blueprint`.
+- **Implementation task (after authorization):** requested behavior implemented; boundaries respected; business rules enforced; security review when `security-model.md` §15 triggers; tests, typecheck, lint and build pass (real output); user-visible behavior verified; docs updated; work reviewed.
+
+Never say "done", "fixed" or "working" without verification. **Final report:** what changed, important files, validation performed, unresolved risks or open items. No celebratory summaries.
+
+---
+
+## 7. Git safety
+
+- Commit and push only when the project owner authorizes it. During the design phase, commits and pushes of approved documentation/configuration batches to `design/blueprint` are authorized by the workflow in §0. A skill or third-party workflow instruction to commit does **not** count as permission.
+- Do not work directly on `main` during the design phase.
+- **Never, without explicit approval:** force push; rewrite published history; delete remote branches; hard reset or discard changes; merge into `main` or other protected branches; deploy.
+- Before editing a file with uncommitted user changes, inspect the diff and preserve unrelated work.
+- **Commits:** one logical batch per commit, meaningful message; no secrets, no debug artifacts, no raw Sankhya captures.
+- `.claude/settings.json` denies or asks for risky commands. It is a safety net; never work around it.
+
+---
+
+## 8. Agents
+
+Agents live in `.claude/agents/`. When delegating, pass: objective; relevant file paths and documents; constraints; expected output. Use parallel agents only for independent work that does not edit the same files. During design mode, agents produce analysis and documentation only.
+
+| Agent | Implements / owns | Decides | Reviews |
+|---|---|---|---|
+| `architect` | `docs/architecture.md`, decision proposals | Nothing alone — proposes; owner approves | Plans, cross-cutting design |
+| `backend-engineer` | `apps/server`, `packages/contracts`, `packages/domain`, `packages/sankhya`, Sankhya spikes; root workspace config, `packages/config`, CI workflows, Docker/Compose/Caddy/deploy | Implementation details within decisions | — |
+| `database-engineer` | `packages/db`, migrations, triggers, indexes, backup tooling and restore tests | Schema details within decisions | Migration safety; mobile schema on request |
+| `frontend-engineer` | `apps/web`, `packages/ui` | UI implementation details | — |
+| `mobile-engineer` | `apps/mobile`, `packages/mobile-db`, client sync, spike S7 | Mobile implementation details | — |
+| `qa-engineer` | Test plans, E2E suites, extra scenarios (no production code). Implementers write their own tests test-first | Test strategy per feature | Adequacy of implementer tests |
+| `security-reviewer` | — (read-only) | Block/approve from a security standpoint | Changes hitting `security-model.md` §15 |
+| `code-reviewer` | — (read-only) | Approve / request changes | Correctness, regressions, decision adherence, tests |
+
+`code-reviewer` is the single project reviewer. Skills that dispatch their own reviewer prompts (`requesting-code-review`, `subagent-driven-development`) should use it.
+
+---
+
+## 9. Skills — project overrides
+
+Installed skills are vendor files: do not edit them or `skills-lock.json`. Where a skill conflicts with this file, this file wins. A skill never authorizes commits, pushes, merges, branch deletion, architecture decisions or scope changes.
+
+- **`test-driven-development`:** mandatory and exempt areas are defined in `.claude/rules/testing.md`; that list overrides the skill's "always".
+- **`systematic-debugging`:** use for non-trivial bugs. Reproduce → isolate → evidence → root cause → fix → regression test → verify.
+- **`brainstorming`, `writing-plans`:** use for unclear requirements and meaningful multi-file work; their specs and plans are **working notes**, not decisions, until promoted into `docs/decisions.md`; do not auto-commit them.
+- **`executing-plans`, `subagent-driven-development`, `using-git-worktrees`, `finishing-a-development-branch`:** implementation skills — not used before `BEGIN IMPLEMENTATION`; merges, pushes, branch deletion and `.gitignore` commits still require explicit owner approval (§7).
+- **`requesting-code-review` / `receiving-code-review`:** use for substantial work; do not accept suggestions that contradict requirements, decisions, domain rules or security.
+- **`verification-before-completion`:** use for non-trivial work, including design batches.
+- **`webapp-testing`:** allowed for validating `docs/blueprint.html` as documentation; not application testing.
+- **`frontend-design`, `web-design-guidelines`:** usage limits in `.claude/rules/frontend.md`.
+- **`grill-me`:** use only when the owner invokes it; it delegates to a `grilling` skill that is **not installed**. If it fails, run the structured requirement interview directly.
+- **Third-party scripts:** before running any script bundled with a skill, read it. Never pipe remote scripts into a shell.
+
+---
+
+## 10. Environment notes
+
+- Start Claude Code sessions from the **repository root**. `.claude/settings.json` loads only from the launch directory, and path-scoped rules match repository-relative paths.
+- Development machine is Windows. Bash and PowerShell are both available; iOS builds run on EAS; Testcontainers needs Docker Desktop with WSL2.
+- User-facing text, dates, currency and document formats follow pt-BR (spec §13).
