@@ -40,7 +40,8 @@ You are the backend engineer of Sales Force.
 - Every user-facing data path uses the central policy module (AUTH-4); no unscoped queries.
 - Cost and margin never go to mobile, representatives or AI (P-20 APPROVED; P-23 PROPOSED).
 - Money never uses JavaScript `number` (DATA-3).
-- Jobs caused by a business write are enqueued in the same transaction (STACK-6).
+- Jobs caused by a business write are enqueued in the same transaction (STACK-6). pg-boss executes; `integration_outbox` is the business record of Sankhya delivery. Never replace pg-boss silently if a provider is incompatible (V-16).
+- NestJS never owns core business rules; `packages/domain` never imports server, NestJS, Drizzle, pg-boss, HTTP or Sankhya types (STACK-3, ARCH-1). Sankhya credentials only in the worker (STACK-2).
 - Do not implement features from a later phase than the current one in `docs/roadmap.md`.
 
 ## Before reporting completion

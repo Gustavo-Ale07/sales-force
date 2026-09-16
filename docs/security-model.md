@@ -9,7 +9,7 @@
 ### Status markers used below
 
 - **No marker:** the statement has the status of the decision or requirement it cites. As of 2026-09-16:
-  - **APPROVED:** P-01…P-22 (including P-18 customer approval, P-19 single account table, P-20 representatives never receive cost, margin or general export capability, P-21 server-side authorization applied to sync, AI and dashboards, P-22 secrets), SNK-3 (including the read-only production inspection exception), SNK-4, MOB-3, OPS-6, OPS-1, DATA-1, STACK-7, OPS-2.
+  - **APPROVED:** P-01…P-22 (including P-18 customer approval, P-19 single account table, P-20 representatives never receive cost, margin or general export capability, P-21 server-side authorization applied to sync, AI and dashboards, P-22 secrets), SNK-3 (including the read-only production inspection exception), SNK-4, MOB-3, OPS-6, OPS-1 (including database network access), DATA-1, STACK-7, OPS-2, STACK-2 (worker-only Sankhya credentials), STACK-3, STACK-6 (outbox as business record), DATA-2 (migration policy), ARCH-1.
   - **PROPOSED (not binding):** AUTH-1…AUTH-4 (Round 4), SYNC-1…SYNC-3 (Round 5), MOB-1, MOB-2, STACK-5 (Round 6), SNK-1, OPS-3…OPS-5 (Round 7), P-23 (cost/margin never on mobile for any user, never to AI).
   - Requirements cited as `spec §x` / `RF-*` are draft until Specification v1.0.
 - **[PROPOSED]**: additional baseline control recommended here, to be confirmed in the security decision round. Not binding.
@@ -187,9 +187,10 @@ Defined in `project-spec.md` §2: Admin, Diretoria, Gerente, Vendedor interno, R
 - **Secrets:**
   - provided per environment through environment configuration outside the repository;
   - never in client bundles, logs, fixtures or error reports;
-  - Sankhya credentials only in the worker container while the synchronous allowlist is empty (SNK-1);
+  - Sankhya credentials exist only in the worker runtime unless a later explicitly approved use case requires API-side access (STACK-2);
   - backed up in an encrypted store outside the servers ([PROPOSED], with OPS-3 in Round 7).
-- The database never exposes a public unrestricted endpoint (OPS-1); production and staging credentials are separate (OPS-1, P-15).
+- **Database network access (OPS-1, batch 3):** private networking between production compute and PostgreSQL is preferred; an IP-allow-listed TLS endpoint is only a fallback when the provider offers no appropriate private networking, with firewall limited to fixed application IPs, mandatory TLS certificate verification, strong unique rotated credentials, all other sources rejected, and security-review approval. PostgreSQL openly exposed to the internet (e.g. `0.0.0.0/0` + password) is REJECTED. Production and staging credentials are separate (OPS-1, P-15).
+- **Schema changes (DATA-2):** migrations run only through the controlled, concurrency-protected migration step; direct schema synchronization (`drizzle-kit push` or equivalent) never touches staging with valuable data, pilot or production.
 - **[PROPOSED]** The migration job uses a database role with DDL rights; the application role has none.
 - **[PROPOSED]** The application role cannot update or delete audit log rows.
 - **CI/CD (OPS-3):**
@@ -299,4 +300,6 @@ Changes in these areas require a `security-reviewer` pass before completion:
 - any response that could include cost, margin, exports or cross-portfolio data;
 - secrets handling, environment configuration, CI/CD and deploy;
 - Sankhya credentials or gateway authentication;
-- new third-party processors or data sent to them.
+- new third-party processors or data sent to them;
+- database network topology (private networking, any allow-listed endpoint fallback), hosting provider selection and backup locations;
+- worker/API secret placement and job payloads that could carry personal or Sankhya data.

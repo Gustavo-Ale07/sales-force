@@ -12,8 +12,8 @@
 |---|---|
 | Project mode | **DESIGN** — no implementation until the owner writes `BEGIN IMPLEMENTATION` (GOV-1) |
 | Implementation phase | Phase 0 — Foundation, **not started and not authorized** |
-| Decision rounds | Rounds 1 and 2 closed 2026-09-16 (U-08 deferred to the Phase 1 gate; providers and final PostgreSQL major NEEDS VALIDATION); Round 3 open; Rounds 4–7 not started (`decisions.md` §0) |
-| Documentation and Claude Code configuration | Drafted 2026-09-16; statuses corrected 2026-09-16; batch 2 recorded 2026-09-16 |
+| Decision rounds | Rounds 1, 2 and 3 closed 2026-09-16 (U-08 deferred to the Phase 1 gate; providers, final PostgreSQL major, pg-boss provider compatibility and Drizzle versions NEEDS VALIDATION); Round 4 open; Rounds 5–7 not started (`decisions.md` §0) |
+| Documentation and Claude Code configuration | Drafted 2026-09-16; statuses corrected; batches 2 and 3 recorded 2026-09-16 |
 | Repository | `main` at `05ccc63` (stable); design work on `design/blueprint` |
 | Visual blueprint (`docs/blueprint.html`) | Not started — scheduled for step 3 below, after the foundational rounds are sufficiently closed; inputs tracked in §1.2 |
 | Specification v1.0 | UNDECIDED timing — published after the blocking decision rounds close (GOV-1) |
@@ -35,8 +35,8 @@ Each round keeps enough structured information for the blueprint to be generated
 
 | Blueprint content | Source today | Readiness | Filled by |
 |---|---|---|---|
-| Architecture diagrams (system context, environments, backup/recovery) | `architecture.md` §1, §10, §10.1 | partial — infrastructure approved, application topology PROPOSED | Rounds 3, 6, 7 |
-| Modules, submodules, functions | `project-spec.md` §3, §5 (`RF-*`); `architecture.md` §5.2 | partial | Round 3 + module catalog pass |
+| Architecture diagrams (system context, processes, dependency direction, jobs/outbox, migrations, environments, database network, backup/recovery) | `architecture.md` §1, §4.1, §5, §7.2, §10 | partial — server, persistence and infrastructure approved; clients and delivery PROPOSED | Rounds 6, 7 |
+| Modules, submodules, functions | `project-spec.md` §3, §5 (`RF-*`); `architecture.md` §5.2 (module map PROPOSED) | partial | Module catalog pass |
 | Actors, roles, permissions, data visibility | `project-spec.md` §2, §8; `security-model.md` §5 | partial — AUTH-4 PROPOSED | Round 4 |
 | User journeys and business processes | `project-spec.md` §5 flows | missing (structured journeys) | Journey pass after Round 5 |
 | State machines (account, order, proposal, opportunity, task, import, outbox, sync command) | P-19 lifecycle (approved); `project-spec.md` | partial | Rounds 5, 7 + Phase 1 business rules |
@@ -45,8 +45,10 @@ Each round keeps enough structured information for the blueprint to be generated
 | Sankhya integration | `sankhya-spike.md`; SNK-3, SNK-4 | partial — facts NEEDS VALIDATION | Round 7 + spikes |
 | Error flows | `project-spec.md`; `security-model.md` | missing | Error-experience pass |
 | Screen inventory (`SCR-*`) with `RF-*` traceability | `project-spec.md` §5 | missing | Screen inventory pass before the blueprint |
-| Testing blueprint | `.claude/rules/testing.md`; `sync-protocol.md` §11 | partial — tooling PROPOSED | Rounds 3, 6 |
-| Operations (backups, recovery, environments, costs) | OPS-6, OPS-1, OPS-2; provider comparison (V-04) | partial — providers NEEDS VALIDATION | V-04, V-05, Round 7 |
+| Testing blueprint | `.claude/rules/testing.md`; `sync-protocol.md` §11 | partial — tooling PROPOSED | Round 6 |
+| Operations (backups, recovery, environments, costs) | OPS-6, OPS-1, OPS-2; provider comparison and quote checklist (`architecture.md` §10.2–§10.3) | partial — providers NEEDS VALIDATION | V-04, V-05, V-16, Round 7 |
+| Background jobs and integration outbox (job catalog, outbox states, operator reprocessing) | STACK-6; `architecture.md` §5.3, §7.2; `sync-protocol.md` §6.2.1 | partial — mechanism approved, job catalog and outbox state machine missing | Round 7 + entity pass |
+| API boundaries (API vs worker responsibilities, conceptual endpoints) | STACK-2; `architecture.md` §5.1 | partial — process boundary approved, endpoint catalog missing | Rounds 4–6 + API catalog pass |
 
 ---
 
@@ -56,7 +58,7 @@ Each round keeps enough structured information for the blueprint to be generated
 |---|---|---|---|---|
 | T1 | Send S0 questions to the Sankhya partner/executive (`sankhya-spike.md` §3 S0) — can start now (SNK-3, SNK-4 APPROVED) | V-11, V-13 | Project owner | Before any real Sankhya connection |
 | T2 | Start organizational Apple and Google developer accounts and the D-U-N-S number (S8) — can start now (MOB-3 APPROVED) | V-10 | Project owner | Before the Phase 1 pilot |
-| T3 | Review the provider comparison (`architecture.md` §10.2) and confirm prices/contracts with candidate providers (Brazil preferred, OPS-6 budget); choose providers for compute, managed PostgreSQL with PITR, object storage and the secondary backup location; then fix the PostgreSQL major | V-04, V-05, V-15 | Project owner (research assisted) | Before work package 0.6 |
+| T3 | Send the quote checklist (`architecture.md` §10.3) to AWS, Magalu and Azure; compare formal BRL quotes (production ≤ ~R$ 700 candidate, > R$ 800 owner review; staging separately); then approve providers for compute, managed PostgreSQL with PITR and private networking, S3-compatible storage and the secondary backup location; then fix the PostgreSQL major and confirm pg-boss compatibility | V-04, V-05, V-15, V-16 | Project owner (research assisted) | Before work package 0.6 |
 | T4 | Confirm whether the company uses Google Workspace; prepare sending domain (SPF, DKIM, DMARC) | V-06 | Project owner | Before password reset in 0.5 |
 | T5 | Legal review of processors and international transfers (LGPD) | R67 | Project owner + legal | Before the Phase 1 pilot |
 
@@ -68,14 +70,14 @@ Each round keeps enough structured information for the blueprint to be generated
 
 ### 3.1 Work packages (in order) — PROPOSED
 
-The work packages below assume the PROPOSED decisions of Rounds 3–7; they are re-planned when those rounds close. None starts before `BEGIN IMPLEMENTATION`.
+The work packages below assume the PROPOSED decisions of Rounds 4–7; they are re-planned when those rounds close. None starts before `BEGIN IMPLEMENTATION`.
 
 | WP | Content | Decisions / requirements | Depends on |
 |---|---|---|---|
 | 0.1 | Repository: ~~branch `main`, first commit, GitHub remote~~ (done); merge the approved design from `design/blueprint`; branch protection on `main` (PR + passing CI required) | GOV-1, OPS-3 | owner approval to merge |
 | 0.2 | Monorepo skeleton: `apps/server`, `apps/web`, `apps/mobile` shells; all `packages/*`; lint, typecheck, test, build scripts; dependency boundary lint | STACK-1…5, MOB-1, DATA-3, `architecture.md` §4 | 0.1; resolves V-01, V-02, V-03 |
 | 0.3 | CI pipeline: lint, typecheck, test (Testcontainers PostgreSQL, same major as production — DATA-1), build; actions pinned; dependency scanning | OPS-3, spec D20 | 0.2 |
-| 0.4 | Database foundation: Drizzle setup; migration job with lock; conventions; change-tracking trigger and commit-safe watermark with the concurrent-transaction test | DATA-1…3, SYNC-2 | 0.2; resolves V-07 |
+| 0.4 | Database foundation: Drizzle setup; one-shot migration step protected against concurrent execution (DATA-2); conventions; change-tracking trigger and commit-safe watermark with the concurrent-transaction test | DATA-1, DATA-2 (APPROVED); DATA-3, SYNC-2 (PROPOSED) | 0.2; resolves V-07 |
 | 0.5 | Identity and access: users, teams (tree), roles, permissions with per-permission scope, central policy module, login, password policy, lockout, password reset, sessions with device identity and session version, representative web block, audit log; authorization matrix tests; security review | RF-IAM-1…6, RF-IAM-9, AUTH-1…4, `security-model.md` | 0.4; V-06 for reset email |
 | 0.6 | Environments: staging then production hosts; database; buckets; email domain; Caddy; secrets; deploy pipeline with migration job; Sentry with scrubbing; `/health`; uptime monitor | OPS-6, OPS-1, OPS-2, OPS-3, OPS-4, OPS-5, STACK-7, P-15 | 0.3; V-04, V-05, V-06, V-08, V-15 |
 | 0.7 | Web shell: login, password reset, user/team/role administration | RF-IAM-4, RF-IAM-6, STACK-5 | 0.5 |

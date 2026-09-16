@@ -14,19 +14,19 @@
 
 ### Document status
 
-This document describes the **working architecture proposal**. Most of it depends on decisions that are still **PROPOSED** (`decisions.md` Rounds 3–7). Only content backed by an APPROVED decision is binding.
+This document describes the **working architecture proposal**. Most of it depends on decisions that are still **PROPOSED** (`decisions.md` Rounds 4–7). Only content backed by an APPROVED decision is binding.
 
 | Section | Status | Backed by |
 |---|---|---|
-| §1 System context | "Clients never call Sankhya", isolated environments, VPS/VM compute, managed PostgreSQL and external object storage APPROVED; process split and worker-only Sankhya access PROPOSED | P-03, OPS-1, STACK-7; STACK-2, SNK-1 PROPOSED |
+| §1 System context | "Clients never call Sankhya", isolated environments, VPS/VM compute, managed PostgreSQL, external object storage, API/worker process split and worker-only Sankhya credentials APPROVED; Caddy/Compose, Sentry and SMTP details PROPOSED | P-03, OPS-1, STACK-7, STACK-2, STACK-6; OPS-3…5 PROPOSED |
 | §2 Principles | APPROVED (the policy-module mechanism is PROPOSED) | P-02…P-05, P-08, P-21; AUTH-4 PROPOSED |
 | §3 Data ownership | Sankhya vs Sales Force split APPROVED; per-row write paths PROPOSED; account lifecycle and customer approval APPROVED | P-02, P-18, P-19 |
-| §4 Repository layout | PROPOSED, except the isolation of `packages/domain` and `packages/sankhya` (APPROVED) | P-03, P-05; STACK-1…5, MOB-1, DATA-2 PROPOSED |
-| §5 Server application | PROPOSED | STACK-2, STACK-3, STACK-6 |
+| §4 Repository layout | `apps/server`, `packages/domain`, `packages/db`, `packages/sankhya` roles and the ARCH-1 dependency direction APPROVED; web, mobile, contracts, UI, tooling and the full dependency table PROPOSED | P-03, P-05, STACK-2, STACK-3, DATA-2, ARCH-1; STACK-1, STACK-4, STACK-5, MOB-1 PROPOSED |
+| §5 Server application | Processes, framework constraint, jobs and outbox rule APPROVED; module map PROPOSED (refined in the Phase 0 plan) | STACK-2, STACK-3, STACK-6; V-16 |
 | §6 Data storage | PostgreSQL version policy and object storage APPROVED; mobile storage PROPOSED | P-17, DATA-1, STACK-7; MOB-2 PROPOSED |
-| §7 Sankhya boundary | Duplicate-proof writes APPROVED; outbox, allowlist and authentication PROPOSED | SNK-4; SNK-1, SNK-2 PROPOSED |
+| §7 Sankhya boundary | Duplicate-proof writes and the outbox write path APPROVED; mirror reads, allowlist and authentication PROPOSED | SNK-4, STACK-6; SNK-1, SNK-2 PROPOSED |
 | §8–§9 Web and mobile | PROPOSED | STACK-5, MOB-1, MOB-2, AUTH-1, AUTH-2 |
-| §10 Environments | Isolation, hosting direction and recovery targets APPROVED; providers NEEDS VALIDATION; local/CI tooling PROPOSED | P-15, SNK-3, OPS-1, OPS-2, OPS-6; V-04, V-05, V-15 |
+| §10 Environments | Isolation, hosting direction, database network access and recovery targets APPROVED; providers NEEDS VALIDATION (comparison §10.2, quote checklist §10.3); staging database optimization and local/CI tooling PROPOSED | P-15, SNK-3, OPS-1, OPS-2, OPS-6; V-04, V-05, V-15, V-16 |
 | §11–§13 Delivery, operations, observability | Backups/recovery APPROVED (OPS-2); delivery pipeline, Compose/Caddy details and observability PROPOSED | OPS-2; OPS-3, OPS-4, OPS-5 PROPOSED |
 
 ---
@@ -49,7 +49,7 @@ This document describes the **working architecture proposal**. Most of it depend
 ```
 
 - The web app and the mobile app talk **only** to `server:api` (P-03).
-- Sankhya is reached only by `server:worker` in Phase 0 (SNK-1).
+- Sankhya credentials exist only in the worker runtime (STACK-2); API-side access requires a later approved use case (synchronous allowlist, SNK-1 PROPOSED).
 - PostgreSQL holds application data, the Sankhya mirror, job queues (pg-boss) and the audit log.
 
 ---
@@ -61,7 +61,7 @@ Principles and their statuses are listed in `decisions.md` §2. The ones that sh
 | Principle | Structural consequence |
 |---|---|
 | P-02 ownership | Mirror tables are read-only for application code; CRM tables are owned by Sales Force modules |
-| P-03 Sankhya boundary | Only `packages/sankhya` knows Sankhya formats; only the worker calls it (worker-only: SNK-1, PROPOSED) |
+| P-03 Sankhya boundary | Only `packages/sankhya` knows Sankhya formats; Sankhya credentials exist only in the worker (STACK-2) |
 | P-04 modular monolith | One server codebase with explicit modules; no network hops between modules |
 | P-05 pure domain | `packages/domain` has no framework or I/O; used by server and mobile |
 | P-08 server authority | Clients may pre-validate; the server decides |
@@ -94,13 +94,13 @@ A table has exactly one owning module. Other modules never write to it.
 
 ```text
 apps/
-  server/      NestJS; entry points `api` and `worker` (STACK-2, STACK-3)
+  server/      NestJS; API and Worker entry points (STACK-2, STACK-3 — APPROVED)
   web/         Vite single-page app (STACK-5)
   mobile/      Expo app (MOB-1)
 packages/
-  domain/      pure business rules; runs in Node and in the mobile JavaScript runtime (Hermes)
-  db/          Drizzle PostgreSQL schema organized per module + SQL migrations (DATA-2)
-  mobile-db/   Drizzle SQLite schema + local migrations (MOB-2)
+  domain/      pure deterministic business rules; runs in Node and in the mobile JavaScript runtime (P-05, ARCH-1 — APPROVED)
+  db/          persistence: Drizzle PostgreSQL schema per module + versioned SQL migrations (DATA-2 — APPROVED)
+  mobile-db/   Drizzle SQLite schema + local migrations (DATA-2 direction; encrypted library per MOB-2/V-09)
   contracts/   Zod schemas: API contracts and sync protocol types; OpenAPI source (STACK-4)
   sankhya/     SankhyaGateway interface, real client, fake, Sankhya mapping, sanitized fixtures
   ui/          web UI components (shadcn/ui based)
@@ -109,7 +109,21 @@ packages/
 
 Workspace tooling: pnpm workspaces + Turborepo, no remote cache (STACK-1).
 
-### 4.1 Package dependency rules
+### 4.1 Dependency direction — APPROVED (ARCH-1)
+
+```text
+apps/server ──depends on──► packages/domain      (never the reverse)
+apps/server ──depends on──► packages/db          (persistence mechanisms)
+packages/domain ──never──► apps/server, NestJS, Drizzle, PostgreSQL clients, HTTP, pg-boss,
+                           Sankhya SDK/API types, Node-only APIs (when the rule must also run on mobile)
+```
+
+- NestJS orchestrates; it never owns core business rules (STACK-3). Rules are not tied to decorators, HTTP, request objects, controllers or infrastructure services.
+- Business rules receive plain data and return plain results; persistence, jobs and integrations stay in `apps/server` and `packages/db`.
+
+### 4.2 Full package dependency table — PROPOSED
+
+The table below refines ARCH-1 for every package. It is still a proposal (web, mobile, contracts and UI are decided in Round 6), including the stricter rule that `packages/domain` uses no Node built-ins at all.
 
 | Package | May depend on (internal) | Must never depend on |
 |---|---|---|
@@ -130,14 +144,16 @@ These rules are enforced by a dependency lint rule in CI (DATA-3).
 
 ## 5. Server application (`apps/server`)
 
-### 5.1 Processes
+### 5.1 Processes — APPROVED (STACK-2, STACK-3)
 
-| Process | Responsibilities |
-|---|---|
-| `api` | REST endpoints, authentication, authorization, business orchestration, sync endpoints, inbound webhooks (later phases), OpenAPI generation |
-| `worker` | pg-boss job handlers and schedules: Sankhya mirror, integration outbox, reconciliation, email, imports, PDF generation, notifications; AI batches (Phase 3) |
+One modular codebase, two independent runtime entry points, run as separate processes/containers. NestJS is the framework; business rules stay in `packages/domain`.
 
-Both processes load the same modules; each module registers only what its process needs.
+| Process | Responsibilities | Secrets |
+|---|---|---|
+| API | HTTP endpoints, authentication, authorization, business orchestration, sync endpoints, inbound webhooks (later phases), OpenAPI generation (exact responsibilities per later rounds) | No Sankhya credentials (STACK-2) |
+| Worker | pg-boss job handlers and schedules: Sankhya mirror, integration outbox delivery, reconciliation, email, imports, PDF generation, notifications; AI batches (Phase 3) | Sankhya credentials (only here) |
+
+Shared across both: application modules, domain orchestration, contracts, database access, authorization policies, observability infrastructure. Each module registers only what its process needs. Background processing never blocks HTTP requests.
 
 ### 5.2 Modules
 
@@ -158,12 +174,26 @@ Rules:
 - Each module's schema lives in its own file group in `packages/db`.
 - Cross-module reporting (Phase 2 dashboards) reads through read-only SQL views owned by a reporting module.
 
-### 5.3 Jobs
+### 5.3 Jobs — APPROVED (STACK-6); connection details NEEDS VALIDATION (V-16)
 
-- Queue: pg-boss in PostgreSQL (STACK-6).
+- Engine: pg-boss in PostgreSQL. No Redis/BullMQ; rate limiting and caches do not assume Redis.
 - A job caused by a business write is enqueued **in the same transaction** as that write.
-- Handlers are idempotent and classify failures as transient, rate-limited, authentication, authorization, validation or permanent. Only transient and rate-limited failures retry, with exponential backoff.
+- pg-boss is the **execution mechanism**, never the business record. Where work has business meaning (Sankhya delivery), the record is a business table (`integration_outbox`) written in the same transaction.
+- **Connection gate:** the selected managed PostgreSQL must support pg-boss safely (V-16). If a generic pooler is incompatible, the worker uses a dedicated direct connection for pg-boss while API traffic uses the application pool. A fundamental incompatibility returns to the owner; pg-boss is never replaced silently.
+- **[PROPOSED]** Handlers are idempotent and classify failures as transient, rate-limited, authentication, authorization, validation or permanent. Only transient and rate-limited failures retry, with exponential backoff.
 - Long-running work never runs inside an HTTP request.
+
+### 5.4 Migrations — APPROVED (DATA-2)
+
+```text
+merge ─► reviewed SQL migration files (generated + hand-written, all tracked)
+deploy ─► one-shot migration step (protected against concurrent execution) ─► new application version becomes active
+data migrations ─► separate, tracked, run as their own controlled step
+```
+
+- `drizzle-kit push` (or any direct schema sync) only against disposable local development databases — never staging with valuable data, pilot or production.
+- Expand → migrate → contract per P-16; contract waits while released mobile clients still depend on the old shape (version policy UNDECIDED, R11).
+- The locking mechanism for concurrent-execution protection is chosen in the Phase 0 plan.
 
 ---
 
@@ -191,12 +221,15 @@ worker schedule → SankhyaGateway (packages/sankhya) → Sankhya API
 
 Read method, cursor and deletion detection per entity: NEEDS VALIDATION (spike S1) (`sankhya-spike.md`).
 
-### 7.2 Writes (Phase 1)
+### 7.2 Writes (Phase 1) — APPROVED path (STACK-6, SNK-4)
 
 ```text
-business action (api) ──same transaction──► integration_outbox row + pg-boss job
-worker ──► check idempotency field in Sankhya (SNK-4) ──► insert via gateway ──► record result/status
+business transaction (API) ─► integration_outbox record + pg-boss job   (same transaction)
+pg-boss ─► worker ─► check origin-id field in Sankhya (SNK-4) ─► insert via SankhyaGateway ─► Sankhya
+worker ─► update integration_outbox: state, attempts, error details, result identifiers
 ```
+
+`integration_outbox` holds, per delivery: state; attempts; origin identifier (Sales Force entity UUID, SNK-4); idempotency data; error details; operator visibility; retry/reprocessing controls; audit trail. Field-level design is done with the data model (Round 5 / entity pass).
 
 Sankhya writes are not implemented until SNK-4 validations close (V-11, V-13).
 
@@ -209,7 +242,7 @@ Sankhya writes are not implemented until SNK-4 validations close (V-11, V-13).
 
 ### 7.4 Synchronous call allowlist
 
-Operations the `api` process may call synchronously (read-only, with timeout and graceful degradation). Adding an entry requires a decision in `decisions.md`; while this list is empty, Sankhya credentials exist only in the worker container.
+Operations the `api` process may call synchronously (read-only, with timeout and graceful degradation). Adding an entry requires a decision in `decisions.md`; Sankhya credentials exist only in the worker runtime (STACK-2, APPROVED); adding an entry here is exactly the kind of later approved use case that could require API-side access.
 
 | Operation | Decision | Status |
 |---|---|---|
@@ -258,12 +291,24 @@ Operations the `api` process may call synchronously (read-only, with timeout and
 |---|---|---|---|---|---|
 | Local development | developer machine (Windows + Docker Desktop/WSL2) | PostgreSQL container, same major as production (DATA-1) | fake gateway + sanitized fixtures | S3-compatible emulator (V-05) | local capture (tool chosen in Phase 0) |
 | CI | GitHub Actions runners | PostgreSQL via Testcontainers, same major as production (DATA-1) | fake gateway + sanitized fixtures | emulator or none | none |
-| Staging | separate smaller VPS/VM, different failure domain from production (OPS-1) | separate PostgreSQL instance; managed or containerized on the staging host is UNDECIDED (cost comparison, V-04); lower retention and RPO acceptable (OPS-2) | homologation if it exists, otherwise fake gateway (SNK-3) — **never production** | staging bucket + credentials | provider, staging configuration |
-| Production | VPS/VM (OPS-1); provider V-04 | managed PostgreSQL with PITR, no public unrestricted endpoint (OPS-1); self-hosted only if the fallback is approved | Sankhya production | production bucket + credentials, versioned | provider |
+| Staging | separate smaller VPS/VM, different failure domain from production (OPS-1) | separate PostgreSQL instance. **PROPOSED cost optimization:** PostgreSQL running on the staging host (isolated from production, completely different credentials, no unsanitized production data, never the only copy of business data); decided with provider selection. Lower retention and RPO acceptable (OPS-2) | homologation if it exists, otherwise fake gateway (SNK-3) — **never production** | staging bucket + credentials | provider, staging configuration |
+| Production | VPS/VM (OPS-1); provider V-04 | managed PostgreSQL with PITR, reached over **private networking** (allow-listed TLS endpoint only as the approved fallback, §10.0); self-hosted only if the fallback is approved | Sankhya production | production bucket + credentials, versioned | provider |
 
 No environment shares credentials, databases, queues, buckets or Sankhya environments with another (P-15).
 
 The existing company Hostinger VPS is not used for Sales Force production merely because it exists (OPS-6); a new, dedicated Hostinger VPS remains a candidate in V-04.
+
+Staging is optimized separately and should cost materially less than production; production and staging are never combined into one failure domain to save cost (OPS-6).
+
+### 10.0 Database network access — APPROVED (OPS-1, batch 3)
+
+| Topology | Status | Conditions |
+|---|---|---|
+| Private networking between production compute and PostgreSQL (VPC/VNet/private IP) | **Preferred** | — |
+| IP-allow-listed endpoint with TLS | **Fallback only** | Provider offers no appropriate private networking; firewall limited to fixed application IPs; TLS certificate verification mandatory; strong unique credentials; rotated credentials; database rejects every other source; **security review approves the topology** |
+| PostgreSQL openly reachable from the internet (e.g. `0.0.0.0/0` + password) | **REJECTED** | — |
+
+A combination that splits compute and database across providers when a private-network option exists at one provider does not meet the first fallback condition by choice; it needs explicit owner and security review.
 
 ### 10.1 Backup and recovery topology — APPROVED (OPS-2); providers NEEDS VALIDATION
 
@@ -291,9 +336,17 @@ Selecting providers, the dump frequency and the secondary location is part of V-
 
 ### 10.2 Provider comparison — NEEDS VALIDATION (V-04, V-05, V-15)
 
-Desk research of 2026-09-16 against the OPS-1 criteria and the OPS-6 budget. **No provider is selected.** Every figure is an estimate from public pricing pages (some via third-party mirrors) and must be confirmed with a formal quote in BRL including taxes before any decision. Items marked UNVERIFIED could not be confirmed from an official source.
+Desk research of 2026-09-16 against the OPS-1 criteria and the OPS-6 budget. **No provider is selected** and none may be selected from these indicative numbers. Shortlist (candidates only): AWS São Paulo, Magalu Cloud, Azure Brazil South, and other providers that satisfy the architecture.
 
-**Basis:** US$ 1 = R$ 5.15 (BCB PTAX 15/09/2026, rounded; varies). Taxes on USD invoices (IOF, ISS/PIS/COFINS) not included — UNVERIFIED. Sizing assumption: production database 30–64 GB, files ~50 GB, nightly compressed dump ~5 GB kept 30 days. Monitoring line assumes Sentry Team + a paid uptime monitor (US$ 35); OPS-4 itself is still PROPOSED, so this line is indicative.
+**Price labels**
+
+| Label | Meaning |
+|---|---|
+| VERIFIED | Read on 2026-09-16 from the provider's own price page or price API (list price, before taxes and discounts). Still not a commitment. |
+| UNVERIFIED | Third-party mirror, search snippet, estimate or allowance; not confirmed from an official source. Third-party mirrors are never authoritative. |
+| NEEDS FORMAL QUOTE | Required before OPS-1 provider approval. **Applies to every total in this section.** |
+
+**Basis:** US$ 1 = R$ 5.15 (BCB PTAX 15/09/2026, rounded; varies). Taxes on USD invoices (IOF, ISS/PIS/COFINS) not included — UNVERIFIED. Sizing assumption: production database 30–64 GB, files ~50 GB, nightly compressed dump ~5 GB kept 30 days. **Observability is a separate optional line** (e.g. Sentry Team + paid uptime monitor ≈ US$ 35 ≈ R$ 180, VERIFIED list price); it is not part of the base infrastructure because OPS-4 is still PROPOSED.
 
 #### 10.2.1 Managed PostgreSQL candidates (Brazil)
 
@@ -332,29 +385,49 @@ Desk research of 2026-09-16 against the OPS-1 criteria and the OPS-6 budget. **N
 | Azure Blob Brazil South | Yes | **No native S3 API** | US$ 0.0326/GB-month | Conflicts with STACK-7 unless a gateway or another provider is used |
 | Cloudflare R2, Backblaze B2 | No Brazil region | Yes | B2 US$ 6.95/TB-month | Candidates only for the off-domain backup copy (data outside Brazil — OPS-6 justification needed) |
 
-#### 10.2.4 Indicative combinations (production / staging, R$ per month)
+#### 10.2.4 Indicative combinations (R$ per month, before taxes — NEEDS FORMAL QUOTE)
 
-| Combination | Production | Staging | Budget fit (OPS-6) | Main trade-offs |
-|---|---|---|---|---|
-| **D1-lean — all AWS São Paulo** (Lightsail 4 GB + RDS 2 GB class + S3 + off-site copy) | ≈ R$ 665 (≈ R$ 485 without paid monitoring) | ≈ R$ 354 | Above R$ 600 → needs justification | Meets every technical criterion (PG 18, 35-day PITR, private networking, native S3, Brazil); storage price UNVERIFIED |
-| D1-standard (RDS 4 GB class) | ≈ R$ 922 | ≈ R$ 354 | **Above R$ 800 → owner review** | More headroom |
-| **D2-lean — Azure Brazil South** (VM + Flexible Server B1ms on VNet + Blob) | ≈ R$ 651 (≈ R$ 471 without paid monitoring) | ≈ R$ 320 | Above R$ 600 | Blob has no S3 API (STACK-7 conflict); burstable DB without HA; zone-redundant HA blocked for new deployments |
-| D3 — new Hostinger VPS + Azure B1ms DB over allow-listed TLS public endpoint + S3 sa-east-1 | ≈ R$ 467 (R$ 501 at renewal) | ≈ R$ 201 | Fits | No private network (endpoint restricted, not private); two providers in series; cross-provider latency and Hostinger SLA UNVERIFIED |
-| D4 — Magalu Cloud (all Brazil, BRL) | UNVERIFIED | UNVERIFIED | Unknown | Could rank first if PITR, PG 17/18 and lifecycle rules are confirmed by quote |
-| E — OPS-1 fallback: self-hosted PostgreSQL on Hostinger VPS + WAL archiving to S3 + second dump copy | ≈ R$ 263 (R$ 297 at renewal) | ≈ R$ 30–60 | Fits | App and DB in one failure domain; no failover; team owns patching, upgrades, WAL-archive monitoring and restore proof; backup credentials on the production host |
+Base infrastructure excludes the optional observability line (≈ R$ 180). Staging figures assume a managed staging database; the PROPOSED staging optimization (PostgreSQL on the staging host) would reduce them.
 
-**Growth:** enabling HA (Multi-AZ or equivalent) roughly doubles database cost; D1 with 2× data and HA ≈ R$ 1,545/month.
+| Combination | Production base | + optional observability | Staging | Price label | Fit (OPS-6, batch 3) | Main trade-offs |
+|---|---|---|---|---|---|---|
+| **D1-lean — all AWS São Paulo** (Lightsail 4 GB + RDS 2 GB class + S3 + off-site copy) | ≈ R$ 485 | ≈ R$ 665 | ≈ R$ 354 | UNVERIFIED (RDS instance prices from a third-party mirror; gp3 storage allowance) | Candidate (≤ R$ 700) | Meets the technical criteria (PG 18, 35-day PITR, private networking, native S3, Brazil) |
+| D1-standard (RDS 4 GB class) | ≈ R$ 742 | ≈ R$ 922 | ≈ R$ 354 | UNVERIFIED | Above R$ 700; with observability above R$ 800 → owner review | More database headroom |
+| **D2-lean — Azure Brazil South** (VM + Flexible Server B1ms on VNet) | ≈ R$ 471 (Blob) — files must move to an S3-compatible provider (e.g. AWS S3 ≈ R$ 21 + cross-provider transfer) | ≈ R$ 651+ | ≈ R$ 320 | VERIFIED list prices (Azure retail price API); B2s anomaly and public IP UNVERIFIED | Candidate (≤ R$ 700) | Azure Blob does not satisfy STACK-7 → second provider for files; burstable DB without HA; zone-redundant HA blocked for new deployments in Brazil South |
+| D3 — new Hostinger VPS + Azure B1ms DB over allow-listed TLS endpoint + S3 sa-east-1 | ≈ R$ 287 (≈ R$ 321 at renewal) | ≈ R$ 467 | ≈ R$ 201 | VERIFIED list prices; cross-provider egress estimated (UNVERIFIED) | Cost fits, **topology does not meet §10.0 preference** | Public allow-listed endpoint although private networking exists at Azure; two providers in series; latency and Hostinger SLA UNVERIFIED |
+| D4 — Magalu Cloud (all Brazil, BRL) | UNVERIFIED | UNVERIFIED | UNVERIFIED | NEEDS FORMAL QUOTE (prices not readable) | Unknown | Could rank first if PITR, PG 17/18 and lifecycle rules are confirmed |
+| E — OPS-1 fallback: self-hosted PostgreSQL on Hostinger VPS + WAL archiving to S3 + second dump copy | ≈ R$ 83 (≈ R$ 117 at renewal) | ≈ R$ 263 | ≈ R$ 30–60 | VERIFIED list prices; backup volumes estimated | Cost fits; architecture fallback only (PROPOSED) | App and DB in one failure domain; no failover; team owns patching, upgrades, WAL-archive monitoring and restore proof; backup credentials on the production host |
 
-**Research conclusion (not a decision):** no combination verified so far meets all criteria (managed PostgreSQL, ≥ 30-day PITR, Brazil, private networking, PG 18, paid monitoring) within R$ 300–600 for production. The closest are D1-lean and D2-lean at ≈ R$ 650–665 (under R$ 500 if free monitoring tiers were acceptable — their terms restrict commercial use and must be checked). Staging cost can be reduced if the staging PostgreSQL runs in a container on the staging host (UNDECIDED, OPS-2 allows relaxed staging recovery).
+**Growth (2× current sizing, UNVERIFIED):** database storage and dump volume roughly double; enabling HA (Multi-AZ or equivalent) roughly doubles database compute. D1 with 2× data and HA ≈ R$ 1,365 base (≈ R$ 1,545 with observability).
+
+**Research conclusion (not a decision):** under the batch 3 interpretation, D1-lean (AWS São Paulo) and D2-lean (Azure Brazil South, with S3-compatible files elsewhere) are reasonable production candidates at ≈ R$ 470–500 base; Magalu needs a quote before it can be compared; D3 conflicts with the private-networking preference; E remains only the documented fallback. Final pricing depends on formal quotes (§10.3).
 
 **LGPD notes:** AWS and Microsoft publish DPAs covering Brazil/LGPD; DPAs for Magalu, Hostinger, Neon, Supabase, Backblaze and Sentry UNVERIFIED. Sentry data regions are US or EU only, and a Backblaze/R2 off-site copy places data outside Brazil — both need OPS-6 justification.
 
-**Questions to confirm before choosing (T3):**
-- AWS: calculator quote for sa-east-1 — RDS PostgreSQL 18 small/medium, gp3 50 GB, 35-day retention, single vs Multi-AZ; BRL invoicing and taxes; VPC-peering transfer charges.
-- Azure: Brazil South Flexible Server prices (B1ms, B2s, D2ds_v5); timeline for zone-redundant HA; invoicing entity and taxes.
-- Magalu: continuous PITR granularity and window; PostgreSQL 17/18; VM, DBaaS and object storage quote; lifecycle API, encryption, DPA.
-- Hostinger: contract terms for a new São Paulo VPS, SLA, private networking, DPA.
-- Sentry and uptime monitor: DPA, data region, whether free tiers are contractually acceptable for company use.
+### 10.3 Provider quote checklist — AWS, Magalu, Azure (before OPS-1 provider approval)
+
+Send the same request to each shortlisted provider and record answers with date and source. Sizing to quote: production app 2 vCPU / 4 GB; production PostgreSQL 2 vCPU / 2–4 GB, 50 GB storage; staging app 1–2 vCPU / 2 GB; staging PostgreSQL smallest tier (or on the staging host); object storage 50 GB production + 10 GB staging; ~150 GB/month backup transfer.
+
+| Item | AWS São Paulo | Magalu Cloud | Azure Brazil South |
+|---|---|---|---|
+| Compute (prod + staging), region | Lightsail or EC2 in sa-east-1 | VM BV2-4 / BV1-2 in br-se1 (city?) | B-series VM |
+| Managed PostgreSQL tier and price | RDS db.t4g.small / medium | DBaaS BV2-4 (single, Multi-AZ) | Flexible Server B1ms / B2s / D2ds_v5 |
+| PostgreSQL major versions available (18? 17?) | ask | ask (only 16 documented) | ask |
+| PITR: continuous? granularity, maximum window | ask (docs: up to 35 days) | ask (docs: snapshots 1–30 days) | ask (docs: 7–35 days) |
+| Backup retention cost beyond free allowance | ask | ask | ask |
+| Private networking between compute and database; cost | VPC / Lightsail peering | private IP | VNet integration |
+| pg-boss compatibility: direct endpoint available, pooler behavior (V-16) | ask | ask | ask |
+| Object storage: S3 API, versioning, lifecycle, encryption, price | S3 sa-east-1 | Object Storage (lifecycle?) | not S3-compatible → which S3 provider? |
+| Egress/transfer: internet, cross-zone, to backup location | ask | ask | ask |
+| Taxes (IOF, ISS/PIS/COFINS) and **BRL billing** entity | ask | BRL (confirm) | ask |
+| SLA (compute, database, storage) | ask | ask | ask (HA restrictions in Brazil South) |
+| Support plan and cost | ask | ask | ask |
+| LGPD / DPA | published DPA — confirm applicability | ask | published DPA — confirm applicability |
+| **Expected production cost / month** | quote | quote | quote |
+| **Expected staging cost / month** | quote | quote | quote |
+| **Cost at 2× current sizing** | quote | quote | quote |
+
+Also confirm for any other candidate that satisfies the architecture (e.g. a new Hostinger VPS): contract terms, SLA, private networking, DPA. Observability vendors (if OPS-4 is later approved): DPA, data region, whether free tiers are contractually acceptable for company use.
 
 Sources (accessed 2026-09-16): AWS RDS release calendar and backup docs; AWS price-list CSVs (S3, data transfer, sa-east-1); Bytebase RDS price mirror; Azure retail prices API (brazilsouth) and Flexible Server docs (backup, HA, overview); Google Cloud SQL PITR docs; Magalu Cloud DBaaS and object storage docs; Oracle OCI PostgreSQL docs; Neon plans/pricing/regions; Supabase pricing and PITR docs; Hostinger BR VPS page; AWS Lightsail pricing and DB FAQ; Vultr plans API; Backblaze B2 pricing; Cloudflare R2 data-location docs; Sentry and UptimeRobot pricing; AWS Brazil data privacy page; Microsoft DPA.
 

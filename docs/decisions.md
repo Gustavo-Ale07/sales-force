@@ -40,9 +40,9 @@ Phase 0 blocking decisions are taken in rounds. A round closes only when the pro
 | Round | Items | Status |
 |---|---|---|
 | 1 | GOV-1, baseline principles, SNK-3, SNK-4, MOB-3 | **Closed 2026-09-16**; clarifications U-01…U-09 closed 2026-09-16 (batch 2), U-08 deferred to the Phase 1 gate |
-| 2 | OPS-6 (constraints), OPS-1, DATA-1, STACK-7, OPS-2 | **Closed 2026-09-16** (batch 2) — providers and final PostgreSQL major NEEDS VALIDATION |
-| 3 | STACK-2, STACK-3, STACK-6, DATA-2 | Open — to be presented next |
-| 4 | AUTH-4, AUTH-3, AUTH-2, AUTH-1 | Not started |
+| 2 | OPS-6 (constraints), OPS-1, DATA-1, STACK-7, OPS-2 | **Closed 2026-09-16** (batch 2; amended batch 3) — providers and final PostgreSQL major NEEDS VALIDATION |
+| 3 | STACK-2, STACK-3, STACK-6, DATA-2, ARCH-1 | **Closed 2026-09-16** (batch 3) — pg-boss provider compatibility and Drizzle versions NEEDS VALIDATION |
+| 4 | AUTH-4, AUTH-3, AUTH-2, AUTH-1, P-23 | Open — to be presented next |
 | 5 | SYNC-1, SYNC-2, SYNC-3, DATA-3 | Not started |
 | 6 | STACK-5, STACK-4, MOB-1, MOB-2, STACK-1 | Not started |
 | 7 | SNK-1, SNK-2, OPS-3, OPS-4, OPS-5 | Not started |
@@ -236,29 +236,85 @@ Each entry: status · decision or proposal · rationale · consequences · valid
 - **Still PROPOSED (not part of this approval):** self-hosted WAL-archiving branch (only if the OPS-1 fallback is later approved); encrypted secrets backup outside the servers and reproducible provisioning scripts (to be decided with OPS-3 in Round 7, subject to the OPS-6 runbook rule).
 - **Supersedes:** spec §12.3 daily dump and §13 RPO ≤ 24 h (R63, R64).
 
-### 3.3 PROPOSED — Round 3 (server structure) — not yet presented for approval
+#### Batch 3 amendments to Round 2 (APPROVED 2026-09-16)
 
-#### STACK-2 · Server application topology
-- **Status:** PROPOSED (Round 3)
-- **Proposal:** one NestJS application `apps/server` with two entry points — `api` and `worker` — built into one image and run as two containers.
-- **Rationale:** avoids duplicated module wiring between two apps (R54). Sankhya credentials would be given only to the worker container (see SNK-1).
-- **Would supersede:** spec §7.2 `apps/api` + `apps/worker`.
+- **OPS-6 budget interpretation:** R$ 300–600/month remains the target, not a reason to weaken the architecture. For planning, a technically sound **production** environment up to approximately **R$ 700/month** may be presented as a reasonable candidate without redesigning the architecture; above **R$ 800/month** requires explicit owner review. Staging is optimized separately and should cost materially less than production. Production and staging are never combined into one failure domain to reduce cost. No provider is chosen from indicative numbers.
+- **OPS-1 database network access:**
+  - Preferred: **private networking** between production application compute and PostgreSQL. A publicly routable database endpoint is not the preferred production design.
+  - Fallback only: an IP-allow-listed TLS endpoint, and only if all hold — the provider offers no appropriate private networking; firewall access limited to fixed application IPs; TLS certificate verification mandatory; strong unique credentials; credentials rotated; the database rejects all other network sources; a security review approves the topology.
+  - **REJECTED:** PostgreSQL openly exposed to the internet (e.g. `0.0.0.0/0` + password).
+- **OPS-1 staging topology — PROPOSED cost optimization (until provider selection):** a separate small staging VPS with PostgreSQL running on the staging host, provided staging stays isolated from production, is never the only copy of important business data, never receives unsanitized production data, uses completely different credentials, and does not alter the production architecture.
+- **OPS-1 provider shortlist (candidates, not decisions):** AWS São Paulo, Magalu Cloud, Azure Brazil South, and other providers that satisfy the architecture. The comparison labels every figure VERIFIED, UNVERIFIED or NEEDS FORMAL QUOTE; third-party price mirrors are never authoritative. A quote checklist for AWS, Magalu and Azure precedes the final provider approval (`architecture.md` §10.3).
+- **STACK-7 with other providers:** if Azure is later chosen for compute/database, Azure Blob does **not** replace the S3-compatible abstraction. Files would use AWS S3, a validated Magalu S3-compatible service or another approved S3-compatible provider; avoid unnecessary multi-provider complexity, but never change STACK-7 silently.
+- **Observability cost:** Sentry Team or paid uptime monitoring is not an approved dependency. OPS-4 remains PROPOSED (Round 7); comparisons show observability as a separate optional cost line.
 
-#### STACK-3 · API framework
-- **Status:** PROPOSED (Round 3) · expensive to reverse
-- **Proposal:** NestJS for `apps/server` (as in the spec draft).
-- **Rationale:** modules and dependency injection fit the modular monolith; guards/interceptors fit authorization and audit; worker reuses the same modules. Business rules stay in `packages/domain`.
+### 3.3 APPROVED — Round 3 (server and persistence), batch 3
 
-#### STACK-6 · Job queue and scheduling
-- **Status:** PROPOSED (Round 3)
-- **Proposal:** pg-boss on PostgreSQL; jobs enqueued in the same database transaction as the business write that causes them; Redis and BullMQ removed. `integration_outbox` remains the business record of Sankhya writes; pg-boss jobs only trigger processing. Rate limiting and caches must not assume Redis.
-- **Rationale:** removes the database/queue double write and one operated service (R56). pg-boss transactional enqueue with a Drizzle adapter checked 2026-09-16.
-- **Would supersede:** spec §7.1/§7.3 Redis + BullMQ.
+#### STACK-2 · Server process topology
+- **Status:** APPROVED 2026-09-16 · reversibility: cheap before implementation, moderate after
+- **Decision:** one modular server codebase with two independent runtime entry points — **API** and **Worker** — running as separate processes/containers.
 
-#### DATA-2 · ORM and migration policy
-- **Status:** PROPOSED (Round 3) · expensive to reverse · depends on V-03
-- **Proposal:** Drizzle ORM for PostgreSQL (`packages/db`) and mobile SQLite (`packages/mobile-db`). SQL migrations generated, reviewed and committed; `drizzle-kit push` never used outside a disposable local database; hand-written SQL as its own migration; migrations run in a single one-shot locked job before the new version starts; data migrations separate from schema migrations; the contract step waits until no active device depends on the old shape (tracking mechanism UNDECIDED, R11).
-- **Would supersede:** spec §14 "migrations executed automatically on deploy" (R61).
+  ```text
+  apps/server
+      ├── API entry point
+      └── Worker entry point
+  ```
+
+  They may share application modules, domain orchestration, contracts, database access, authorization policies and observability infrastructure.
+- **Security rule:** Sankhya credentials exist only in the worker runtime unless a later explicitly approved use case requires API-side access.
+- **Rationale:** one codebase; one architectural module graph; less duplicated wiring (R54); background processing cannot block HTTP requests; worker-specific secrets stay unavailable to the API process; easier maintenance for a small team.
+- Architecture documentation only — the `apps/server` structure is not created before `BEGIN IMPLEMENTATION`.
+- **Supersedes:** spec §7.2 `apps/api` + `apps/worker`.
+
+#### STACK-3 · API / server framework
+- **Status:** APPROVED 2026-09-16 · expensive to reverse after implementation
+- **Decision:** NestJS.
+- **Constraint:** NestJS never owns core business rules. Core deterministic rules stay in `packages/domain`; the framework layer orchestrates them. Business logic is never tied to decorators, HTTP, NestJS request objects, controllers or infrastructure services.
+- The HTTP adapter is an implementation detail, decided in the Phase 0 plan unless it materially affects the architecture.
+- **Rationale:** fits the modular monolith; clear module boundaries; dependency injection; guards/interceptors for authorization, audit and observability; worker and API reuse modules; well-understood TypeScript ecosystem; maintainable for an AI-assisted small team.
+
+#### STACK-6 · Background job engine
+- **Status:** APPROVED 2026-09-16 · provider compatibility NEEDS VALIDATION (V-16)
+- **Decision:** pg-boss on PostgreSQL. Redis + BullMQ are not part of the initial architecture; rate limiting and caches do not assume Redis.
+- **Outbox rule:** `integration_outbox` is the **business/integration record** of Sankhya delivery; pg-boss is only the execution mechanism and is never the sole source of truth.
+
+  ```text
+  business transaction ─► integration_outbox record (+ pg-boss job, same transaction)
+                            ─► worker ─► SankhyaGateway ─► Sankhya
+  ```
+
+  `integration_outbox` retains: state; attempts; origin identifier; idempotency data (SNK-4); error details; operator visibility; retry/reprocessing; auditability.
+- **Validation gate:** some managed PostgreSQL providers or connection poolers can affect connection behavior pg-boss relies on; provider selection verifies this (V-16). Preferred mitigation: the worker uses a dedicated direct PostgreSQL connection for pg-boss while API traffic uses the normal application pool. The architecture is not abandoned because a generic external pooler is incompatible when the provider exposes a safe direct endpoint. If the chosen platform fundamentally cannot support pg-boss safely, the issue returns to the owner as an architecture decision — pg-boss is never replaced silently.
+- **Rationale:** no additional infrastructure service; lower operational burden (OPS-6); transactional enqueue with business data; retries and schedules supported (R56).
+- **Effect on SNK-1:** the Sankhya **write path** (outbox record → worker → gateway) is approved here; the rest of SNK-1 stays PROPOSED.
+- **Supersedes:** spec §7.1/§7.3 Redis + BullMQ.
+
+#### DATA-2 · Database access and migrations
+- **Status:** APPROVED 2026-09-16 · expensive to reverse · Drizzle version NEEDS VALIDATION (V-03, V-15)
+- **Decision:**
+  - **PostgreSQL:** Drizzle ORM — APPROVED.
+  - **Mobile SQLite:** Drizzle — APPROVED direction; adapter/library compatibility depends on the mobile database encryption spike (S7, V-09). The ORM choice never weakens the requirement that the mobile database is encrypted: if the selected encrypted SQLite implementation cannot work safely with Drizzle, the conflict returns to the owner. Encryption is never silently downgraded. (MOB-2 itself is decided in Round 6.)
+- **Migration policy:**
+  1. Schema migrations are versioned SQL migration files.
+  2. Generated migrations are reviewed before being committed.
+  3. Hand-written SQL is allowed when required for triggers, functions, specialized indexes, views, constraints or PostgreSQL-specific behavior.
+  4. Hand-written SQL still exists as a tracked migration.
+  5. `drizzle-kit push` or equivalent direct schema synchronization is used only against disposable local development databases — never as the deployment mechanism for staging with valuable data, pilot or production.
+  6. Deployment runs migrations through a controlled one-shot migration step before the new application version becomes active.
+  7. Migration execution is protected against concurrent execution.
+  8. Data migrations are separate from schema migrations (e.g. schema: add `account_status`; data: transform imported accounts to the new lifecycle).
+  9. Expand → migrate → contract follows P-16.
+  10. Once released mobile clients depend on an old schema/protocol shape, the contract/removal step waits until compatibility rules permit it (version policy UNDECIDED, R11).
+- **Supersedes:** spec §14 "migrations executed automatically on deploy" (R61).
+
+#### ARCH-1 · Dependency direction between server, domain and persistence
+- **Status:** APPROVED 2026-09-16
+- **Decision:**
+  - `apps/server` may depend on `packages/domain`.
+  - `packages/domain` never depends on `apps/server` or NestJS.
+  - `packages/db` provides persistence mechanisms.
+  - Domain business rules never import Drizzle, PostgreSQL clients, NestJS, HTTP, pg-boss, Sankhya SDK/API types, or Node-only APIs when the rule must also run on mobile.
+- **Still PROPOSED:** the stricter full package dependency table in `architecture.md` §4.1, including "no Node built-ins anywhere in `packages/domain`".
 
 ### 3.4 PROPOSED — Round 4 (security and access) — not yet presented for approval
 
@@ -342,7 +398,7 @@ Each entry: status · decision or proposal · rationale · consequences · valid
 
 #### MOB-2 · Offline database and encryption
 - **Status:** PROPOSED (Round 6) · library NEEDS VALIDATION (V-09)
-- **Proposal:** encrypted SQLite through Drizzle; unencrypted local storage rejected; library chosen by spike S7 between expo-sqlite + SQLCipher and op-sqlite + SQLCipher.
+- **Proposal:** encrypted SQLite through Drizzle (Drizzle direction APPROVED in DATA-2, which never allows encryption to be weakened); unencrypted local storage rejected; library chosen by spike S7 between expo-sqlite + SQLCipher and op-sqlite + SQLCipher.
 
 #### STACK-1 · Monorepo tooling
 - **Status:** PROPOSED (Round 6) · depends on V-01
@@ -351,7 +407,7 @@ Each entry: status · decision or proposal · rationale · consequences · valid
 ### 3.7 PROPOSED — Round 7 (Sankhya boundary and operations) — not yet presented for approval
 
 #### SNK-1 · Integration boundary
-- **Status:** PROPOSED (Round 7)
+- **Status:** PROPOSED (Round 7) — except the write path through `integration_outbox` and the worker, APPROVED under STACK-6
 - **Proposal:** all writes to Sankhya through `integration_outbox`, processed by the worker; user-facing reads from the PostgreSQL mirror; synchronous read-only API calls only from an allowlist (`architecture.md` §7.4, empty; additions require a decision); gateway exposes Sales Force-shaped types; Sankhya credentials only in the worker container while the allowlist is empty.
 - **Refines:** P-03.
 
@@ -395,7 +451,7 @@ The spec is a draft. Its decisions are binding only where an APPROVED entry abov
 | D12 | APPROVED in part | P-20 APPROVED; P-23 PROPOSED; AUTH-2/AUTH-3 extensions PROPOSED |
 | D13 | PROPOSED | wa.me link + manual registration (Phase 2); official API Phase 4. The ban on unofficial WhatsApp integration is APPROVED (P-13) |
 | D14 | APPROVED | P-12 |
-| D15 | APPROVED in part | Modular monolith (P-04) and strict TypeScript (P-06) APPROVED; stack choices PROPOSED (STACK-1…7, SYNC-1) |
+| D15 | APPROVED in part | Modular monolith (P-04), strict TypeScript (P-06), NestJS (STACK-3), Drizzle (DATA-2) APPROVED; BullMQ/Redis and MinIO superseded (STACK-6, STACK-7); Next.js, sync engine and remaining stack choices PROPOSED (STACK-1, STACK-4, STACK-5, SYNC-1) |
 | D16 | APPROVED | P-11; compensating controls (AUTH-1, AUTH-2) PROPOSED |
 | D17 | APPROVED | P-09; detection details UNDECIDED (R33) |
 | D18 | APPROVED | P-14 |
@@ -478,16 +534,17 @@ Kept for traceability. The binding text lives in the entry named in "Recorded in
 |---|---|---|---|
 | V-01 | Expo + pnpm isolated installs work in the skeleton (fallback `nodeLinker: hoisted`)? | STACK-1 | Phase 0 skeleton |
 | V-02 | Which Zod → OpenAPI library and which typed client generator? | STACK-4 | Phase 0 first endpoint |
-| V-03 | Which Drizzle version line to pin? | DATA-2 | Phase 0 skeleton |
+| V-03 | Which Drizzle version line to pin (server and mobile)? | DATA-2 | Phase 0 skeleton |
 | V-04 | Provider combination under OPS-6: VPS/VM compute + managed PostgreSQL with PITR (retention and cost), private networking, Brazil region preferred; itemized monthly cost (production, staging, database, storage, backup, monitoring, growth); secondary backup location | OPS-1, OPS-2 | Before provisioning environments |
 | V-05 | Object storage provider/region (Brazil preferred; AWS S3 São Paulo compared), versioning and lifecycle support, cost; local S3-compatible emulator chosen separately | STACK-7 | Before provisioning environments |
 | V-06 | Does the company use Google Workspace? | OPS-5 | Before password reset |
 | V-07 | Commit-safe watermark proven by concurrent-transaction test | SYNC-2 | With the first synchronizable table |
 | V-08 | Sentry data region; processor registration | OPS-4 | Before real personal data (pilot) |
-| V-09 | Spike S7: SQLCipher library, Android 16 KB pages, FTS5, Drizzle, performance | MOB-2 | Phase 1 gate |
+| V-09 | Spike S7: SQLCipher library, Android 16 KB pages, FTS5, safe Drizzle compatibility with the encrypted library (conflict returns to the owner), performance | MOB-2, DATA-2 (mobile) | Phase 1 gate |
 | V-10 | Spike S8: organizational accounts, D-U-N-S, Google Play private/unlisted options and Managed Play device-management requirements, Apple unlisted distribution acceptance, Android developer verification | MOB-3 | Before the pilot |
 | V-11 | Spike S0: homologation existence; availability of an isolated real test environment; whether read-only API credentials exist (for U-03 inspections); request limits; integration cost; authorization and feasibility of custom origin-id fields | SNK-3, SNK-4 | Before any real Sankhya connection |
 | V-12 | Spike S1: API per operation, incremental reads, deletion detection | SNK-2 | Before the Phase 0 mirror |
 | V-13 | Native Sankhya idempotency support | SNK-4 (D) | Before real order writes |
 | V-14 | Real data volumes: portfolio size per representative, prices per customer, item history (R12) | SYNC-3 sizing, spec §13 targets | Phase 1 gate (with S7) |
 | V-15 | Final PostgreSQL major: newest mature version supported cleanly by the selected provider, Drizzle, backup tooling and required extensions (18 preferred, 17 acceptable, 16 floor) | DATA-1 | After V-04, before the Phase 0 skeleton |
+| V-16 | pg-boss compatibility with the selected managed PostgreSQL (connection poolers, direct endpoint availability for the worker, required privileges) | STACK-6, OPS-1 | With provider selection (V-04) |

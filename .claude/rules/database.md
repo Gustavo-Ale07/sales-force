@@ -5,17 +5,20 @@ paths:
 
 # Database rules (PostgreSQL, packages/db)
 
-> **Status (2026-09-16):** design mode — nothing here authorizes application code before the project owner writes `BEGIN IMPLEMENTATION`. Items citing APPROVED decisions bind now; items citing PROPOSED decisions (`STACK-1…6`, `DATA-2`, `DATA-3`, `AUTH-x`, `SYNC-x`, `MOB-1/2`, `SNK-1/2`, `OPS-3…5`, `P-23` — see `docs/decisions.md` §0) describe the working proposal and bind only once approved.
+> **Status (2026-09-16):** design mode — nothing here authorizes application code before the project owner writes `BEGIN IMPLEMENTATION`. Items citing APPROVED decisions bind now; items citing PROPOSED decisions (`STACK-1`, `STACK-4`, `STACK-5`, `DATA-3`, `AUTH-x`, `SYNC-x`, `MOB-1/2`, `SNK-1/2` (except the approved outbox write path), `OPS-3…5`, `P-23` — see `docs/decisions.md` §0) describe the working proposal and bind only once approved.
 
 Decisions: DATA-1, DATA-2, DATA-3, SYNC-2, SYNC-3, STACK-6, P-16. Protocol: `docs/sync-protocol.md` §3–§4.
 
 ## Migrations
 
-- Generate with Drizzle, **read the generated SQL**, commit it. Never `drizzle-kit push` outside a disposable local database. Claude Code settings deny `drizzle-kit push` entirely as a safety net; if a disposable local push is needed, the owner runs it.
+Policy: DATA-2 (APPROVED).
+
+- Schema migrations are versioned SQL files. Generate with Drizzle, **read and review the generated SQL**, then commit it.
+- Never `drizzle-kit push` (or any direct schema sync) outside a disposable local development database — never staging with valuable data, pilot or production. Claude Code settings deny `drizzle-kit push` entirely as a safety net; if a disposable local push is needed, the owner runs it.
 - This file covers server PostgreSQL only. The mobile SQLite schema follows `.claude/rules/mobile.md`.
-- Hand-written SQL (triggers, functions, views) goes in its own migration.
-- Expand → migrate → contract. A migration must keep the previous application version working. The contract step waits until no active device depends on the old shape.
-- Migrations run in the one-shot, lock-protected migration job, never at application startup.
+- Hand-written SQL (triggers, functions, specialized indexes, views, constraints, PostgreSQL-specific behavior) is allowed and is always a tracked migration.
+- Expand → migrate → contract (P-16): a migration keeps the previous application version working; the contract step waits until released mobile clients no longer depend on the old schema/protocol shape.
+- Migrations run in the controlled one-shot migration step, protected against concurrent execution, before the new application version becomes active — never at application startup.
 - Data migrations are separate from schema migrations.
 - **Stop and ask the owner** before any DROP, TRUNCATE, irreversible column removal, bulk delete, data reset or migration that can lose data. Explain the risk.
 

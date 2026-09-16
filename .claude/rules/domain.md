@@ -5,14 +5,15 @@ paths:
 
 # Domain rules (packages/domain)
 
-> **Status (2026-09-16):** design mode — nothing here authorizes application code before the project owner writes `BEGIN IMPLEMENTATION`. Items citing APPROVED decisions bind now; items citing PROPOSED decisions (`STACK-1…6`, `DATA-2`, `DATA-3`, `AUTH-x`, `SYNC-x`, `MOB-1/2`, `SNK-1/2`, `OPS-3…5`, `P-23` — see `docs/decisions.md` §0) describe the working proposal and bind only once approved.
+> **Status (2026-09-16):** design mode — nothing here authorizes application code before the project owner writes `BEGIN IMPLEMENTATION`. Items citing APPROVED decisions bind now; items citing PROPOSED decisions (`STACK-1`, `STACK-4`, `STACK-5`, `DATA-3`, `AUTH-x`, `SYNC-x`, `MOB-1/2`, `SNK-1/2` (except the approved outbox write path), `OPS-3…5`, `P-23` — see `docs/decisions.md` §0) describe the working proposal and bind only once approved.
 
-Decisions: P-05, P-08, P-09, P-10, DATA-3. Invariants summary: `CLAUDE.md`.
+Decisions: P-05, P-08, P-09, P-10, ARCH-1, STACK-3, DATA-3. Invariants summary: `CLAUDE.md`.
 
 ## Purity and portability
 
+- **APPROVED (ARCH-1):** never import from `apps/server`, NestJS, Drizzle, PostgreSQL clients, HTTP, pg-boss or Sankhya SDK/API types; never use Node-only APIs in a rule that must also run on mobile. Rules are never tied to decorators, request objects or controllers (STACK-3).
 - No framework, database, HTTP, file system, environment, logging or Sankhya dependencies.
-- Must run unchanged in Node and in Hermes (mobile): no `node:` built-ins, no DOM APIs.
+- **PROPOSED (stricter, `architecture.md` §4.2):** no `node:` built-ins anywhere in the package, so every rule runs unchanged in Node and Hermes; no DOM APIs.
 - Third-party libraries only when pure and portable (e.g. exact decimal arithmetic), added under dependency discipline.
 - Time and randomness are injected; functions are deterministic.
 

@@ -6,15 +6,16 @@ paths:
 
 # Backend rules (apps/server, packages/contracts)
 
-> **Status (2026-09-16):** design mode — nothing here authorizes application code before the project owner writes `BEGIN IMPLEMENTATION`. Items citing APPROVED decisions bind now; items citing PROPOSED decisions (`STACK-1…6`, `DATA-2`, `DATA-3`, `AUTH-x`, `SYNC-x`, `MOB-1/2`, `SNK-1/2`, `OPS-3…5`, `P-23` — see `docs/decisions.md` §0) describe the working proposal and bind only once approved.
+> **Status (2026-09-16):** design mode — nothing here authorizes application code before the project owner writes `BEGIN IMPLEMENTATION`. Items citing APPROVED decisions bind now; items citing PROPOSED decisions (`STACK-1`, `STACK-4`, `STACK-5`, `DATA-3`, `AUTH-x`, `SYNC-x`, `MOB-1/2`, `SNK-1/2` (except the approved outbox write path), `OPS-3…5`, `P-23` — see `docs/decisions.md` §0) describe the working proposal and bind only once approved.
 
 Structure: `docs/architecture.md` §5. Decisions: STACK-2, STACK-3, STACK-4, STACK-6, SNK-1, AUTH-4.
 
 ## Structure
 
-- One NestJS app with `api` and `worker` entry points. A module registers in each process only what that process needs.
+- One modular NestJS codebase with separate API and Worker entry points, run as separate processes (STACK-2, APPROVED). A module registers in each process only what that process needs.
 - Controllers are thin: parse/validate, call an application service, map to a response DTO.
-- Business rules live in `packages/domain`. Application services orchestrate; they do not reimplement domain rules.
+- NestJS orchestrates; it never owns core business rules (STACK-3). Business rules live in `packages/domain`, never tied to decorators, HTTP, request objects, controllers or infrastructure services. Application services orchestrate; they do not reimplement domain rules.
+- `packages/domain` never imports from `apps/server`, NestJS, Drizzle, PostgreSQL clients, HTTP, pg-boss or Sankhya types (ARCH-1).
 - A module owns its tables. Other modules use its exported services, never its tables.
 
 ## Contracts
@@ -31,14 +32,16 @@ Structure: `docs/architecture.md` §5. Decisions: STACK-2, STACK-3, STACK-4, STA
 ## Transactions and jobs
 
 - Keep transactions short; never call external services inside a database transaction.
-- Enqueue pg-boss jobs caused by a business write in the same transaction as that write.
+- Enqueue pg-boss jobs caused by a business write in the same transaction as that write (STACK-6, APPROVED). No Redis/BullMQ.
+- pg-boss is the execution mechanism, never the business record. Sankhya delivery state lives in `integration_outbox` (state, attempts, origin identifier, idempotency, error details, operator visibility, reprocessing, audit).
+- If pg-boss cannot work with the selected PostgreSQL provider or pooler, use a dedicated direct connection for the worker if one is safely available; otherwise stop and bring it to the owner (V-16). Never replace pg-boss silently.
 - Job handlers are idempotent. Classify failures: transient, rate limit, authentication, authorization, validation, permanent (same classes as `docs/architecture.md` §5.3). Retry only transient and rate-limit failures, with exponential backoff; surface permanent failures.
 - No long-running work inside HTTP requests.
 - Record audit events in the same transaction as the audited change.
 
 ## Sankhya
 
-- Only the worker uses `SankhyaGateway`; writes only through `integration_outbox` (SNK-1). See `.claude/rules/sankhya.md`.
+- Sankhya credentials exist only in the worker runtime (STACK-2); only the worker uses `SankhyaGateway`; writes only through `integration_outbox` (STACK-6). See `.claude/rules/sankhya.md`.
 
 ## Money, time, identifiers
 

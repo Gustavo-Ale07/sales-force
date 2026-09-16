@@ -160,6 +160,12 @@ Headers: protocol version, device identity (session per AUTH-1)
 - UUIDv7 identifiers timestamped more than 1 day in the future are rejected (DATA-3).
 - Business logic never orders by identifier (DATA-3).
 
+### 6.2.1 Background work caused by pushed commands — APPROVED (STACK-6)
+
+- Work that must happen after a command is accepted (e.g. submitting an order to Sankhya) is recorded in a business table in the same transaction as the command's effect — for Sankhya, an `integration_outbox` record — together with its pg-boss job.
+- pg-boss jobs are execution triggers only. The command outcome (keyed by `command_id`, P-08) and the outbox record are the durable records. A replayed job is harmless because delivery checks the SNK-4 origin identifier first; **[PROPOSED]** a periodic sweep re-creates jobs for outbox records left pending without a job.
+- Later Sankhya results (accepted, rejected, integration error) change the business record and reach the device through normal pull (mechanics PROPOSED, §3–§5).
+
 ### 6.3 Outcomes — PROPOSED (spec §10.2)
 
 | Outcome | Meaning |

@@ -69,12 +69,20 @@ Breaking any of these requires a new approved decision.
 18. **Accounts (P-18, P-19).** A new customer passes backoffice approval before becoming a Sankhya partner. One account table across `lead → prospect → cliente_pendente → cliente` (alternates `rejeitado`, `inativo`).
 19. **Schema evolution (P-16).** Expand → migrate → contract, mandatory from the first environment with real data and whenever a released mobile version depends on the old shape.
 20. **Infrastructure (OPS-6, OPS-1, DATA-1, STACK-7, OPS-2).**
-    - Isolated production and staging (separate failure domains and credentials); managed PostgreSQL with PITR preferred, never a public unrestricted endpoint; VPS/VM compute allowed.
+    - Isolated production and staging (separate failure domains and credentials); managed PostgreSQL with PITR preferred; VPS/VM compute allowed.
+    - Database over private networking; IP-allow-listed TLS endpoint only as a security-reviewed fallback when no private networking exists; never open to the internet (`0.0.0.0/0` + password REJECTED).
     - PostgreSQL ≥ 16, same major in every environment, 18 preferred if cleanly supported; UUIDv7 generated outside PostgreSQL.
     - Managed S3-compatible private storage, separate buckets/credentials per environment; no MinIO Community.
     - Production RPO ≤ 15 min, RTO ≤ 4 h; a backup counts only once a restore has been tested.
-    - Budget target R$ 300–600/month for production (> R$ 600 justify, > R$ 800 back to the owner) — never at the cost of backups, security, isolation, integrity or recoverability. Brazil strongly preferred for production data. Small internal team: minimal components, documented runbooks.
-    - Providers and final PostgreSQL major: NEEDS VALIDATION (V-04, V-05, V-15).
+    - Budget target R$ 300–600/month for production; up to ~R$ 700 may be presented without redesign; > R$ 800 back to the owner; staging optimized separately and materially cheaper — never at the cost of backups, security, isolation, integrity or recoverability. Brazil strongly preferred for production data. Small internal team: minimal components, documented runbooks.
+    - Azure Blob or any non-S3 store never silently replaces the S3-compatible abstraction.
+    - Providers and final PostgreSQL major: NEEDS VALIDATION (V-04, V-05, V-15). Never select a provider from indicative prices; observability is an optional cost line until OPS-4.
+21. **Server and persistence (STACK-2, STACK-3, STACK-6, DATA-2, ARCH-1).**
+    - One modular `apps/server` codebase with separate API and Worker processes. Sankhya credentials exist only in the worker unless a later approved use case needs them in the API.
+    - NestJS orchestrates; it never owns core business rules. `packages/domain` never depends on `apps/server`, NestJS, Drizzle, PostgreSQL clients, HTTP, pg-boss, Sankhya types, or Node-only APIs when the rule must run on mobile.
+    - pg-boss executes jobs (no Redis/BullMQ); `integration_outbox` is the business record of every Sankhya delivery (state, attempts, origin id, idempotency, errors, reprocessing, audit). pg-boss/provider incompatibility returns to the owner — never replace pg-boss silently (V-16).
+    - Drizzle for PostgreSQL; Drizzle for mobile SQLite only if it works safely with the encrypted library (never weaken encryption).
+    - Migrations: reviewed, versioned SQL files (hand-written SQL tracked too); one-shot, concurrency-protected migration step before the new version is active; data migrations separate; `drizzle-kit push` only on disposable local databases.
 
 ---
 
@@ -84,7 +92,7 @@ These appear throughout `docs/` and `.claude/` as the working proposal. They are
 
 - **Cost/margin for all mobile users and AI:** never on mobile for any user, never to AI (P-23).
 - **Deployment details:** Docker Compose + Caddy on the VPS/VM hosts (with Round 7, OPS-3).
-- **Server (Round 3):** NestJS `apps/server` with `api` and `worker`; pg-boss (no Redis/BullMQ); Drizzle migrations.
+- **Staging database on the staging host:** cost optimization, decided with provider selection.
 - **Access (Round 4):** opaque sessions, device approval, representatives mobile-only, per-permission scope with one central policy module.
 - **Sync and data (Round 5):** custom protocol, `xid8` commit-safe watermark, scope events and bundles, UUIDv7, `numeric(18,6)` unit prices / `numeric(14,2)` totals.
 - **Clients (Round 6):** Vite + React SPA (not Next.js), Zod → OpenAPI clients, Expo development builds, encrypted SQLite, pnpm + Turborepo.
