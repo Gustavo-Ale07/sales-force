@@ -291,7 +291,72 @@ Selecting providers, the dump frequency and the secondary location is part of V-
 
 ### 10.2 Provider comparison — NEEDS VALIDATION (V-04, V-05, V-15)
 
-Research started 2026-09-16 against the OPS-1 criteria and OPS-6 budget. Results are recorded here as a comparison with sources and dates; no provider is selected until the owner approves one after confirming prices and contracts. Not yet filled.
+Desk research of 2026-09-16 against the OPS-1 criteria and the OPS-6 budget. **No provider is selected.** Every figure is an estimate from public pricing pages (some via third-party mirrors) and must be confirmed with a formal quote in BRL including taxes before any decision. Items marked UNVERIFIED could not be confirmed from an official source.
+
+**Basis:** US$ 1 = R$ 5.15 (BCB PTAX 15/09/2026, rounded; varies). Taxes on USD invoices (IOF, ISS/PIS/COFINS) not included — UNVERIFIED. Sizing assumption: production database 30–64 GB, files ~50 GB, nightly compressed dump ~5 GB kept 30 days. Monitoring line assumes Sentry Team + a paid uptime monitor (US$ 35); OPS-4 itself is still PROPOSED, so this line is indicative.
+
+#### 10.2.1 Managed PostgreSQL candidates (Brazil)
+
+| Provider / region | PG 18 | PITR retention | Private networking | Est. production DB / month | Notes |
+|---|---|---|---|---|---|
+| AWS RDS, sa-east-1 | Yes (RDS since 2025-11; sa-east-1 availability UNVERIFIED) | 0–35 days, ~5 min restore point | VPC / security groups; Lightsail via VPC peering | 2 GB class ~US$ 65 (R$ 335); 4 GB class ~US$ 115 (R$ 592) — instance prices from a third-party mirror, gp3 storage price UNVERIFIED | Multi-AZ ≈ 2× |
+| Azure Flexible Server, Brazil South | Yes | 7–35 days; geo-redundant backup **not available** in Brazil South | VNet integration (no public endpoint) | B1ms 1 vCore/2 GiB + 32 GiB ≈ US$ 32.5 (R$ 168); B2s + 64 GiB ≈ US$ 116 (R$ 598; price anomaly to confirm) | New zone-redundant HA temporarily blocked in Brazil South (docs 2026-09-05); burstable tier has no HA |
+| Google Cloud SQL, southamerica-east1 | Yes | Enterprise 1–7 days; Enterprise Plus up to 35 | UNVERIFIED | UNVERIFIED | Enterprise edition fails the ≥ 30-day preference |
+| Magalu Cloud DBaaS, br-se1/br-ne1 | 16 documented; 17/18 UNVERIFIED | Snapshots 1–30 days; true PITR UNVERIFIED | Private IP only | UNVERIFIED (pricing pages not readable) | All-Brazil, BRL billing; needs a quote |
+| Oracle OCI PostgreSQL, São Paulo | 17 (Apr 2026); 18 not found | Backups up to 35 days; PITR UNVERIFIED | Private endpoint only | UNVERIFIED | Service availability in São Paulo UNVERIFIED |
+| Neon, aws-sa-east-1 | Yes | Scale plan up to 30 days | IP allow list; PrivateLink only from AWS VPC | Always-on 0.5 CU ≈ US$ 94 (R$ 482) | Compute-hour pricing; HA model UNVERIFIED |
+| Supabase, sa-east-1 | UNVERIFIED | PITR add-on: 7 d ~US$ 100, 28 d ~US$ 400 | IP restrictions; PrivateLink on Team plan | 28-day PITR ≈ US$ 480 (R$ 2,473) | Out of budget with ≥ 30-day PITR |
+| AWS Lightsail managed DB | No (old majors) | 7 days | Private by default | — | Fails DATA-1 preference and retention |
+| Huawei, Aiven, Vultr (São Paulo) | UNVERIFIED | Varies / UNVERIFIED | UNVERIFIED | UNVERIFIED | Not comparable without quotes |
+| DigitalOcean, Hetzner, Contabo | — | — | — | — | No Brazil location |
+| Locaweb | — | — | — | — | No managed PostgreSQL with PITR found |
+
+#### 10.2.2 Compute candidates (São Paulo)
+
+| Provider | ~2 vCPU / 4 GB+ | ~1–2 vCPU / 2 GB | Private link to managed PG |
+|---|---|---|---|
+| Hostinger VPS (new server) | KVM 2 (2 vCPU/8 GB) R$ 43,99 on 24-month prepay, renews R$ 77,99 | KVM 1 (1 vCPU/4 GB) R$ 29,99, renews R$ 59,99 | No managed PG; private networking and SLA UNVERIFIED |
+| AWS Lightsail | 4 GB US$ 24 | 2 GB US$ 12 | VPC peering to RDS (price parity in São Paulo to confirm) |
+| Azure VM, Brazil South | B2als_v2 ≈ US$ 44 + disk | B1ms ≈ US$ 25 | VNet to Flexible Server |
+| Vultr São Paulo | US$ 20 | US$ 10–15 | UNVERIFIED |
+| GCP e2, southamerica-east1 | ≈ US$ 39 | ≈ US$ 19 | UNVERIFIED |
+| Magalu Cloud VMs | exists, price UNVERIFIED | exists, price UNVERIFIED | Yes (private-IP DBaaS) |
+
+#### 10.2.3 Object storage candidates
+
+| Provider | Brazil | S3 API | Indicative price | Notes |
+|---|---|---|---|---|
+| AWS S3 sa-east-1 | Yes | Native | US$ 0.0405/GB-month; egress US$ 0.15/GB | 50 GB ≈ R$ 21/month with light traffic |
+| Magalu Object Storage | Yes | S3-compatible (versioning, pre-signed URLs documented) | UNVERIFIED | Lifecycle rules UNVERIFIED |
+| OCI Object Storage São Paulo | Yes | UNVERIFIED | US$ 0.0255/GB-month; generous free egress | S3 compatibility/versioning UNVERIFIED |
+| Azure Blob Brazil South | Yes | **No native S3 API** | US$ 0.0326/GB-month | Conflicts with STACK-7 unless a gateway or another provider is used |
+| Cloudflare R2, Backblaze B2 | No Brazil region | Yes | B2 US$ 6.95/TB-month | Candidates only for the off-domain backup copy (data outside Brazil — OPS-6 justification needed) |
+
+#### 10.2.4 Indicative combinations (production / staging, R$ per month)
+
+| Combination | Production | Staging | Budget fit (OPS-6) | Main trade-offs |
+|---|---|---|---|---|
+| **D1-lean — all AWS São Paulo** (Lightsail 4 GB + RDS 2 GB class + S3 + off-site copy) | ≈ R$ 665 (≈ R$ 485 without paid monitoring) | ≈ R$ 354 | Above R$ 600 → needs justification | Meets every technical criterion (PG 18, 35-day PITR, private networking, native S3, Brazil); storage price UNVERIFIED |
+| D1-standard (RDS 4 GB class) | ≈ R$ 922 | ≈ R$ 354 | **Above R$ 800 → owner review** | More headroom |
+| **D2-lean — Azure Brazil South** (VM + Flexible Server B1ms on VNet + Blob) | ≈ R$ 651 (≈ R$ 471 without paid monitoring) | ≈ R$ 320 | Above R$ 600 | Blob has no S3 API (STACK-7 conflict); burstable DB without HA; zone-redundant HA blocked for new deployments |
+| D3 — new Hostinger VPS + Azure B1ms DB over allow-listed TLS public endpoint + S3 sa-east-1 | ≈ R$ 467 (R$ 501 at renewal) | ≈ R$ 201 | Fits | No private network (endpoint restricted, not private); two providers in series; cross-provider latency and Hostinger SLA UNVERIFIED |
+| D4 — Magalu Cloud (all Brazil, BRL) | UNVERIFIED | UNVERIFIED | Unknown | Could rank first if PITR, PG 17/18 and lifecycle rules are confirmed by quote |
+| E — OPS-1 fallback: self-hosted PostgreSQL on Hostinger VPS + WAL archiving to S3 + second dump copy | ≈ R$ 263 (R$ 297 at renewal) | ≈ R$ 30–60 | Fits | App and DB in one failure domain; no failover; team owns patching, upgrades, WAL-archive monitoring and restore proof; backup credentials on the production host |
+
+**Growth:** enabling HA (Multi-AZ or equivalent) roughly doubles database cost; D1 with 2× data and HA ≈ R$ 1,545/month.
+
+**Research conclusion (not a decision):** no combination verified so far meets all criteria (managed PostgreSQL, ≥ 30-day PITR, Brazil, private networking, PG 18, paid monitoring) within R$ 300–600 for production. The closest are D1-lean and D2-lean at ≈ R$ 650–665 (under R$ 500 if free monitoring tiers were acceptable — their terms restrict commercial use and must be checked). Staging cost can be reduced if the staging PostgreSQL runs in a container on the staging host (UNDECIDED, OPS-2 allows relaxed staging recovery).
+
+**LGPD notes:** AWS and Microsoft publish DPAs covering Brazil/LGPD; DPAs for Magalu, Hostinger, Neon, Supabase, Backblaze and Sentry UNVERIFIED. Sentry data regions are US or EU only, and a Backblaze/R2 off-site copy places data outside Brazil — both need OPS-6 justification.
+
+**Questions to confirm before choosing (T3):**
+- AWS: calculator quote for sa-east-1 — RDS PostgreSQL 18 small/medium, gp3 50 GB, 35-day retention, single vs Multi-AZ; BRL invoicing and taxes; VPC-peering transfer charges.
+- Azure: Brazil South Flexible Server prices (B1ms, B2s, D2ds_v5); timeline for zone-redundant HA; invoicing entity and taxes.
+- Magalu: continuous PITR granularity and window; PostgreSQL 17/18; VM, DBaaS and object storage quote; lifecycle API, encryption, DPA.
+- Hostinger: contract terms for a new São Paulo VPS, SLA, private networking, DPA.
+- Sentry and uptime monitor: DPA, data region, whether free tiers are contractually acceptable for company use.
+
+Sources (accessed 2026-09-16): AWS RDS release calendar and backup docs; AWS price-list CSVs (S3, data transfer, sa-east-1); Bytebase RDS price mirror; Azure retail prices API (brazilsouth) and Flexible Server docs (backup, HA, overview); Google Cloud SQL PITR docs; Magalu Cloud DBaaS and object storage docs; Oracle OCI PostgreSQL docs; Neon plans/pricing/regions; Supabase pricing and PITR docs; Hostinger BR VPS page; AWS Lightsail pricing and DB FAQ; Vultr plans API; Backblaze B2 pricing; Cloudflare R2 data-location docs; Sentry and UptimeRobot pricing; AWS Brazil data privacy page; Microsoft DPA.
 
 ---
 
