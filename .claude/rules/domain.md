@@ -5,7 +5,7 @@ paths:
 
 # Domain rules (packages/domain)
 
-> **Status (2026-09-16):** design mode — nothing here authorizes application code before the project owner writes `BEGIN IMPLEMENTATION`. Items citing APPROVED decisions bind now; items citing PROPOSED decisions (`STACK-1`, `STACK-4`, `STACK-5`, `DATA-3`, `AUTH-x`, `SYNC-x`, `MOB-1/2`, `SNK-1/2` (except the approved outbox write path), `OPS-3…5`, `P-23` — see `docs/decisions.md` §0) describe the working proposal and bind only once approved.
+> **Status (2026-09-18):** `BEGIN IMPLEMENTATION` issued by the owner — implementation only within the current roadmap phase (Phase 0). Items citing APPROVED decisions bind now (including Round 6: `STACK-1/4/5`, `MOB-1/2`; the `MOB-2` library NEEDS VALIDATION, V-09); items citing PROPOSED decisions (`DATA-3`, `AUTH-x`, `SYNC-x`, `SNK-1/2` (except the approved outbox write path), `OPS-3…5`, `P-23` — see `docs/decisions.md` §0) describe the working proposal and bind only once approved.
 
 Decisions: P-05, P-08, P-09, P-10, ARCH-1, STACK-3, DATA-3. Invariants summary: `CLAUDE.md`.
 
@@ -34,3 +34,7 @@ Decisions: P-05, P-08, P-09, P-10, ARCH-1, STACK-3, DATA-3. Invariants summary: 
 
 - Test-first for every rule. Exhaustive transition tests (allowed and forbidden transitions).
 - Spike S2 recorded price cases become acceptance tests when available.
+
+## Configuration
+
+- Installation-specific commercial values arrive as typed configuration input (CFG-1…6), for example `configuration.product.sellableUsageValues`. The domain holds no customer-specific literals and never reads configuration from Sankhya or the database.

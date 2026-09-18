@@ -8,9 +8,10 @@
 
 ### Status markers used below
 
-- **No marker:** the statement has the status of the decision or requirement it cites. As of 2026-09-16:
+- **No marker:** the statement has the status of the decision or requirement it cites. As of 2026-09-18:
   - **APPROVED:** P-01…P-22 (including P-18 customer approval, P-19 single account table, P-20 representatives never receive cost, margin or general export capability, P-21 server-side authorization applied to sync, AI and dashboards, P-22 secrets), SNK-3 (including the read-only production inspection exception), SNK-4, MOB-3, OPS-6, OPS-1 (including database network access), DATA-1, STACK-7, OPS-2, STACK-2 (worker-only Sankhya credentials), STACK-3, STACK-6 (outbox as business record), DATA-2 (migration policy), ARCH-1.
-  - **PROPOSED (not binding):** AUTH-1…AUTH-4 (Round 4), SYNC-1…SYNC-3 (Round 5), MOB-1, MOB-2, STACK-5 (Round 6), SNK-1, OPS-3…OPS-5 (Round 7), P-23 (cost/margin never on mobile for any user, never to AI).
+  - **APPROVED 2026-09-18:** STACK-5 (same-origin SPA); approved in direction: MOB-1 (Expo development builds; the architecture stays compatible with encrypted local storage, EAS Update and update code signing) and MOB-2 (encrypted local database; library NEEDS VALIDATION, V-09); SEC-1 (spike credentials are exposed: rotated before runtime use, never committed or wired into the runnable application), SNK-6 (no production authentication or data probe without explicit owner authorization).
+  - **PROPOSED (not binding):** AUTH-1…AUTH-4 (Round 4), SYNC-1…SYNC-3 (Round 5), SNK-1, OPS-3…OPS-5 (Round 7), P-23 (cost/margin never on mobile for any user, never to AI).
   - Requirements cited as `spec §x` / `RF-*` are draft until Specification v1.0.
 - **[PROPOSED]**: additional baseline control recommended here, to be confirmed in the security decision round. Not binding.
 - **[UNDECIDED …]**: open question listed in `decisions.md` §5.
@@ -164,7 +165,7 @@ Defined in `project-spec.md` §2: Admin, Diretoria, Gerente, Vendedor interno, R
 
 - Local database encrypted (MOB-2); the key is kept in the device secure store.
 - Tokens only in the secure store.
-- EAS updates are code-signed (MOB-1).
+- EAS updates are code-signed (MOB-1, approved in direction: the architecture stays compatible with update code signing).
 - Local schema contains no cost or margin fields.
 - **[UNDECIDED R19]** exclusion of app data from OS backups; temporary handling of generated PDFs.
 - **[UNDECIDED R45]** behavior when the local encryption key is lost.

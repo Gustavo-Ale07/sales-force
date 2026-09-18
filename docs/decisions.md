@@ -3,7 +3,7 @@
 **Responsibility of this file:** the single register of project decisions — what was decided, why, what is only proposed, and what remains open.
 How decisions are applied lives in `architecture.md`, `security-model.md`, `sync-protocol.md` and `roadmap.md`.
 
-**Last updated:** 2026-09-16 · **Project mode:** DESIGN (no implementation until the project owner writes `BEGIN IMPLEMENTATION`)
+**Last updated:** 2026-09-18 · **Project mode:** IMPLEMENTATION, Phase 0 only (`BEGIN IMPLEMENTATION` issued by the project owner 2026-09-18; anything outside the current roadmap phase still needs its own authorization)
 
 ---
 
@@ -44,8 +44,9 @@ Phase 0 blocking decisions are taken in rounds. A round closes only when the pro
 | 3 | STACK-2, STACK-3, STACK-6, DATA-2, ARCH-1 | **Closed 2026-09-16** (batch 3) — pg-boss provider compatibility and Drizzle versions NEEDS VALIDATION |
 | 4 | AUTH-4, AUTH-3, AUTH-2, AUTH-1, P-23 | Open — to be presented next |
 | 5 | SYNC-1, SYNC-2, SYNC-3, DATA-3 | Not started |
-| 6 | STACK-5, STACK-4, MOB-1, MOB-2, STACK-1 | Not started |
+| 6 | STACK-5, STACK-4, MOB-1, MOB-2, STACK-1 | **Closed 2026-09-18** — STACK-1, STACK-5 APPROVED; STACK-4, MOB-1, MOB-2 APPROVED in direction; V-01 and V-03 to be resolved during WP 0.2, V-02 with the first real endpoint, V-09 (MOB-2 library) NEEDS VALIDATION |
 | 7 | SNK-1, SNK-2, OPS-3, OPS-4, OPS-5 | Not started |
+| Owner rulings | PROD-1, CFG-1…CFG-6, SNK-5, SNK-6, SEC-1, DOC-1 (§3.8) | **Closed 2026-09-18** — taken after Sandbox spikes S1–S3; physical Sankhya configuration model, origin-id field definition and configuration bootstrap remain open (U-10…U-12) |
 
 > **Correction 2026-09-16.** An earlier uncommitted draft of this file marked every Round 2–7 item as APPROVED. That was wrong: only Round 1 was closed. Those items are recorded below as PROPOSED, with their content kept as the proposal to be discussed in their rounds.
 
@@ -62,7 +63,7 @@ Phase 0 blocking decisions are taken in rounds. A round closes only when the pro
   - `project-spec.md` is consolidated into **Sales Force Specification v1.0** once the blocking decisions close.
   - After v1.0, material product changes are recorded as explicit change decisions here (with the reason) and, when necessary, published as a new specification version (v1.1, v1.2, …). Previously approved behavior is never rewritten silently.
 - **Design workflow:**
-  - The project stays in design mode until the owner writes `BEGIN IMPLEMENTATION`. Commits and pushes do not authorize implementation.
+  - The project stays in design mode until the owner writes `BEGIN IMPLEMENTATION` (satisfied 2026-09-18, Phase 0 only). Commits and pushes do not authorize implementation.
   - Design work happens on branch `design/blueprint` (created from `main` at `05ccc63`); `main` is the stable branch.
   - Each approved decision batch: update documents → consistency validation → HTML validation (when `docs/blueprint.html` changes) → diff inspection → one focused commit → push to `origin/design/blueprint`.
   - No force push, history rewrite, hard reset or remote branch deletion.
@@ -109,6 +110,7 @@ Phase 0 blocking decisions are taken in rounds. A round closes only when the pro
 | P-20a | P-20 | Renumbered, text unchanged |
 | P-20b | P-23 | Renumbered, text unchanged, still PROPOSED |
 | P-01…P-19, P-21, P-22 | unchanged | P-16 text extended with the U-09 scope; P-18, P-19 status changed to APPROVED |
+| P-01 | unchanged | Scope amended 2026-09-18 by PROD-1 (reusable product, one isolated installation per customer); text unchanged |
 
 ---
 
@@ -380,29 +382,31 @@ Each entry: status · decision or proposal · rationale · consequences · valid
   - Precision of percentages and quantities and the rounding rule: NEEDS VALIDATION (spike S2).
 - **Would supersede:** spec §9.1 `numeric(14,2)` for unit prices (R32); adopts R40, R41, R43, R55.
 
-### 3.6 PROPOSED — Round 6 (clients and tooling) — not yet presented for approval
+### 3.6 APPROVED — Round 6 (clients and tooling), 2026-09-18
 
-#### STACK-5 · Web framework
-- **Status:** PROPOSED (Round 6) · expensive to reverse
-- **Proposal:** Vite + React SPA with TanStack Router, TanStack Query, Tailwind CSS, shadcn/ui; static files served by Caddy on the same origin as the API (`/api`); runtime configuration file; no server-side rendering.
-- **Rationale:** internal authenticated app with no SEO/SSR need; same-origin cookie sessions; one fewer server process; smaller attack surface (R58).
-- **Would supersede:** spec §7.3 Next.js App Router.
-
-#### STACK-4 · API contracts
-- **Status:** PROPOSED (Round 6) · depends on V-02
-- **Proposal:** Zod schemas in `packages/contracts` as the source of truth; server validates with them; OpenAPI generated from them; typed web/mobile clients generated from OpenAPI.
-
-#### MOB-1 · Mobile architecture
-- **Status:** PROPOSED (Round 6) · expensive to reverse
-- **Proposal:** Expo with continuous native generation and development builds (no Expo Go); EAS Build and EAS Update with update code signing; iOS builds on EAS. Over-the-air update rules for local schema and protocol changes UNDECIDED (R10, R11).
-
-#### MOB-2 · Offline database and encryption
-- **Status:** PROPOSED (Round 6) · library NEEDS VALIDATION (V-09)
-- **Proposal:** encrypted SQLite through Drizzle (Drizzle direction APPROVED in DATA-2, which never allows encryption to be weakened); unencrypted local storage rejected; library chosen by spike S7 between expo-sqlite + SQLCipher and op-sqlite + SQLCipher.
+Approved by the project owner on 2026-09-18. Library and generator choices that depend on the skeleton or on a spike stay open as validations (V-01, V-02, V-03, V-09).
 
 #### STACK-1 · Monorepo tooling
-- **Status:** PROPOSED (Round 6) · depends on V-01
-- **Proposal:** pnpm workspaces + Turborepo, no remote cache. Fallback for Expo with isolated installs: `nodeLinker: hoisted`.
+- **Status:** APPROVED 2026-09-18 (Round 6) · V-01 to be resolved during WP 0.2
+- **Decision:** pnpm workspaces + Turborepo, no remote cache initially. `nodeLinker: hoisted` is a fallback used only if V-01 proves it necessary for Expo.
+
+#### STACK-4 · API contracts
+- **Status:** APPROVED IN DIRECTION 2026-09-18 (Round 6) · exact Zod → OpenAPI library and client generator NEEDS VALIDATION (V-02), decided with the first real endpoint
+- **Decision:** Zod schemas in `packages/contracts` are the source of truth. The server validates against them; OpenAPI is generated from them; typed web and mobile clients are generated from the OpenAPI. No hand-maintained duplicate DTO or type definitions.
+
+#### STACK-5 · Web framework
+- **Status:** APPROVED 2026-09-18 (Round 6) · expensive to reverse
+- **Decision:** Vite + React single-page app with TanStack Router, TanStack Query, Tailwind CSS and shadcn/ui; static files served by Caddy on the same origin as the API (`/api`); runtime configuration file; no server-side rendering (authenticated internal application, no SEO/SSR need, same-origin cookie sessions, one fewer server process — R58).
+- **Supersedes:** spec §7.3 Next.js App Router (spec updated 2026-09-18).
+
+#### MOB-1 · Mobile architecture
+- **Status:** APPROVED IN DIRECTION 2026-09-18 (Round 6) · expensive to reverse
+- **Decision:** Expo development builds, never Expo Go; the architecture stays compatible with encrypted local storage, EAS Build, EAS Update and update code signing (details in `architecture.md` §9). Over-the-air update rules for local schema and protocol changes remain UNDECIDED (R10, R11).
+- **Delivery priority (owner, 2026-09-18):** mobile is not on the critical path of the first implementation slice and must not delay the web application. Phase 0 creates only the mobile foundation required by the approved monorepo and architecture (the shell that validates the toolchain, V-01).
+
+#### MOB-2 · Offline database and encryption
+- **Status:** APPROVED IN DIRECTION ONLY 2026-09-18 (Round 6) · library NEEDS VALIDATION (S7, V-09)
+- **Decision:** offline mobile data must be encrypted; unencrypted local storage is rejected. Drizzle remains the intended local data-access abstraction (DATA-2). The encrypted SQLite implementation/library is not selected: do not select or implement an unvalidated library before S7. The web application never waits on V-09.
 
 ### 3.7 PROPOSED — Round 7 (Sankhya boundary and operations) — not yet presented for approval
 
@@ -429,6 +433,67 @@ Each entry: status · decision or proposal · rationale · consequences · valid
 - **Status:** PROPOSED (Round 7) · depends on V-06
 - **Proposal:** SMTP; Google Workspace SMTP relay if the company uses Google Workspace, otherwise Amazon SES (São Paulo); SPF, DKIM and DMARC; no sensitive business data in email bodies (R59).
 
+### 3.8 APPROVED — Owner rulings after spikes S1–S3 (2026-09-18)
+
+Recorded from the project owner's instructions of 2026-09-18, after the Sandbox spikes S1–S3 (evidence in `docs/sankhya-spike.md` §9). Where a proposal in the spike document conflicts with an entry below, the entry wins. What is still PROPOSED is labelled per entry.
+
+#### PROD-1 · Reusable product, one isolated installation per customer
+- **Status:** APPROVED 2026-09-18
+- **Decision:** Sales Force is a reusable product. The first customer (PLAC) is the first installation, not the product. Each customer receives an isolated installation with its own PostgreSQL database, Sankhya environment, secrets, business data and Sales Force configuration, running the same application source, migrations, Docker images and application version. Commercial configuration is governed from Sankhya and mirrored locally (CFG-1). Secrets stay outside the Sankhya business configuration.
+- **Amends the scope of P-01 (owner ruling 2026-09-18); P-13 unchanged:** P-01's wording "internal … for an industrial company" now describes the first installation, not the product. It is still not multi-tenancy or SaaS — installations share no runtime, database or secrets, and each installation is single-tenant. A shared multi-customer runtime or a hosted multi-customer offering would need a new decision. P-01's text is kept as written and read together with this entry.
+- **Open impact:** the OPS-1/OPS-6/STACK-7 infrastructure, cost and operations model was set for one production environment; the per-installation model is not decided (U-13).
+- **Consequence:** no customer-specific value (company code, TOP, table, seller mapping, product-use values, custom-field names) is hardcoded in application code, migrations or fixtures presented as product behavior; such values are installation configuration.
+
+#### CFG-1 · Customer-specific commercial configuration governed from Sankhya
+- **Status:** APPROVED IN DIRECTION 2026-09-18 · physical Sankhya configuration model (table/screen) PROPOSED, not designed (U-10) · configuration source before that model exists UNDECIDED (U-11)
+- **Decision:** target flow: Sankhya "Configuração Sales Force" → configuration synchronization (worker and `SankhyaGateway`, P-03) → local PostgreSQL configuration mirror/cache → Sales Force. Application code consumes the effective configuration; it never embeds the values.
+- **Covers at least:** account → seller mapping (CFG-2), allowed product-use values (CFG-3), customer-without-price-table policy (CFG-4), missing-price visibility and orderability (CFG-5), company, order TOP, quotation TOP if used, default negotiation/payment type and related commercial defaults (CFG-6).
+- **Does not cover:** secrets (SEC-1; P-22). Discount authority stays configured in Sales Force (P-10; R35, R36 unchanged). Authorization stays server-side (P-21); configuration never replaces it.
+
+#### CFG-2 · Account → seller (`CODVEND`) mapping
+- **Status:** APPROVED 2026-09-18 · supersedes the spike proposal "Option A: Sales Force-owned mapping" (NOT approved) · physical model PROPOSED (U-10)
+- **Decision:** the rule linking a Sales Force account to a Sankhya seller is ultimately configured from the customer's Sankhya-side Sales Force configuration (CFG-1) and mirrored locally. `TSIUSU.CODVEND` is not hardcoded as the universal rule. The validated `TSIUSU.CODVEND → TGFVEN.CODVEND` relationship (`sankhya-spike.md` F-33, F-34) remains evidence and may support or default the configuration. Sales Force account ownership is a product-configuration concern.
+- **Affects:** RF-IAM-4 (revised 2026-09-18).
+- **Security (P-21), proposed guard-rails — NOT approved:** the mapping drives the portfolio scope, so the mirrored configuration is versioned and audited, a configuration change never widens a user's scope without a recorded audit event, and server-side authorization stays the only policy. `security-reviewer` reviews the design when U-10 is designed (`security-model.md` §15).
+
+#### CFG-3 · Sellable product-use values (`USOPROD`)
+- **Status:** APPROVED 2026-09-18
+- **Decision:** the allowed `USOPROD` values are installation configuration ("Product settings → Allowed product-use values for Sales Force"). The PLAC Sandbox evidence makes `V` and `R` strong candidates but not a universal rule (not approved). The product catalog consumes `configuration.product.sellableUsageValues` (or the equivalent approved domain model); literal `V`/`R` checks must not appear in product, domain or UI code. The unexplained values `S` and `3` stay NEEDS VALIDATION.
+
+#### CFG-4 · Customer without a price table (`CODTAB` null)
+- **Status:** APPROVED 2026-09-18
+- **Decision:** no hardcoded fallback. The policy is installation pricing configuration, set in the Sankhya-side configuration, conceptually one of: no fallback / no price; a configured default table; another approved strategy. Until a fallback is explicitly configured, **`CODTAB` null = no resolved price table**. Table 5 is never assumed silently.
+
+#### CFG-5 · Missing price
+- **Status:** APPROVED 2026-09-18 (first implementation)
+- **Decision:** a missing price is not zero. It is shown explicitly as "Sem preço" (or an equivalent localized status), never as R$ 0,00. By default an item without a resolved price is not added to an ERP-submittable order. Whether such items are visible or orderable (catalog browsing, diagnostics) is configurable per installation. ERP submission is disabled in the first slice (SNK-6). Handling the S2 finding that REST returns `valor 0` for both a missing and an explicit-zero price belongs to the mirror design and is not decided here.
+
+#### CFG-6 · Company, TOP and payment type
+- **Status:** APPROVED 2026-09-18
+- **Decision:** the PLAC Sandbox values used in S3 (company, TOP, negotiation) are test evidence only, never application constants. They become required installation configuration coming from the Sankhya-side model (CFG-1): enabled/default company, order TOP, quotation TOP if used, default negotiation/payment type and related commercial defaults where required. Because real ERP submission is disabled, they need not be fixed before UI implementation and do not block Phase 0.
+
+#### SNK-5 · Dedicated Sales Force origin-id field
+- **Status:** APPROVED IN DIRECTION 2026-09-18 · name (`AD_SFORIGINID` or equivalent) and physical definition PROPOSED · not created · needs its own Sankhya configuration implementation and validation (V-11, V-13, U-12)
+- **Decision:** `AD_VDYORIG` and `AD_NUVIDYA` are not reused as the permanent Sales Force origin-id field, because Vidya Force and Sales Force may coexist and the fields may collide semantically. A dedicated Sales Force field is created later in Sankhya. Requirements: UUID-compatible; dedicated to Sales Force; efficiently searchable; uniquely constrained/indexed where supported and safe; accepted by the supported `incluirNota` path. The field is NOT created now.
+- **Application side:** the outbox and idempotency design expects a dedicated external origin id (SNK-4; identifier per U-07 remains the Sales Force entity UUID).
+- **Refines:** SNK-4 ("field names, types and indexing are defined with the Sankhya partner"). SNK-4 stays gated by V-11 and V-13.
+
+#### SNK-6 · Scope of the Sandbox write validation and remaining write gates
+- **Status:** APPROVED 2026-09-18
+- **Decision:**
+  - SNK-4 and V-11/V-13 gate the Sales Force integration write path. They did not prohibit the explicitly authorized, controlled, one-order Sandbox validation S3, which was authorized only to validate behavior needed before implementation. That authorization is not approval of the production or user-facing order-write path.
+  - The user-facing ERP order submission path stays disabled until its write-safety gates close (SNK-4, SNK-5, V-11, V-13, and duplicate-prevention validation).
+  - A second controlled Sandbox write is NOT authorized now. It may be authorized only after the dedicated origin-id approach is designed, the intended Sankhya configuration contract is clearer, and a specific unresolved write behavior is worth validating — preferably: writing the dedicated origin id, duplicate prevention/retry, and discount/write semantics if still needed. Each such test needs its own owner authorization.
+  - The earlier production authentication attempt with Sandbox credentials stays in `sankhya-spike.md` as historical evidence. It was not authorization for production access. No further production authentication or data probe without explicit owner authorization (SNK-3).
+
+#### SEC-1 · Exposed spike credentials
+- **Status:** APPROVED 2026-09-18
+- **Decision:** the credentials used during the spikes are considered exposed and must be rotated before the implemented Sales Force runtime uses them. No current or replacement credential is stored in the repository. Exposed credentials are never wired into the runnable application. Rotation does not block UI or scaffolding work.
+
+#### DOC-1 · ERP identifiers in documentation
+- **Status:** APPROVED 2026-09-18
+- **Decision:** technical ERP identifiers and codes (for example `CODPARC`, `CODPROD`, `CODVEND`, `NUNOTA`, TOP, `CODTAB`/`NUTAB`) may remain in spike documentation for reproducibility, provided names, CPF/CNPJ and other legal identifiers and personal employee/customer names are sanitized and no credentials or secrets are present. This refines the identifier-remapping wording of `sankhya-spike.md` §6 rule 2 for documentation (committed fixtures keep the stricter rule).
+
 ---
 
 ## 4. Status of the specification's decisions (spec §4)
@@ -437,7 +502,7 @@ The spec is a draft. Its decisions are binding only where an APPROVED entry abov
 
 | Spec | Status | Notes |
 |---|---|---|
-| D1 | APPROVED | P-01 |
+| D1 | APPROVED | P-01 (scope amended by PROD-1) |
 | D2 | APPROVED | P-02 |
 | D3 | APPROVED | P-07. Representatives mobile-only (AUTH-3) is PROPOSED |
 | D4 | APPROVED | P-09 |
@@ -451,7 +516,7 @@ The spec is a draft. Its decisions are binding only where an APPROVED entry abov
 | D12 | APPROVED in part | P-20 APPROVED; P-23 PROPOSED; AUTH-2/AUTH-3 extensions PROPOSED |
 | D13 | PROPOSED | wa.me link + manual registration (Phase 2); official API Phase 4. The ban on unofficial WhatsApp integration is APPROVED (P-13) |
 | D14 | APPROVED | P-12 |
-| D15 | APPROVED in part | Modular monolith (P-04), strict TypeScript (P-06), NestJS (STACK-3), Drizzle (DATA-2) APPROVED; BullMQ/Redis and MinIO superseded (STACK-6, STACK-7); Next.js, sync engine and remaining stack choices PROPOSED (STACK-1, STACK-4, STACK-5, SYNC-1) |
+| D15 | APPROVED in part | Modular monolith (P-04), strict TypeScript (P-06), NestJS (STACK-3), Drizzle (DATA-2), pnpm + Turborepo (STACK-1), Zod contracts direction (STACK-4) and the Vite + React SPA replacing Next.js (STACK-5) APPROVED; BullMQ/Redis and MinIO superseded (STACK-6, STACK-7); sync engine and remaining stack choices PROPOSED (SYNC-1) |
 | D16 | APPROVED | P-11; compensating controls (AUTH-1, AUTH-2) PROPOSED |
 | D17 | APPROVED | P-09; detection details UNDECIDED (R33) |
 | D18 | APPROVED | P-14 |
@@ -526,13 +591,22 @@ Kept for traceability. The binding text lives in the entry named in "Recorded in
 |---|---|
 | R67 | LGPD international data transfer — legal review before the pilot |
 
+### 5.5 Follow-ups from the 2026-09-18 owner rulings — UNDECIDED
+
+| ID | Topic | Depends on | Status |
+|---|---|---|---|
+| U-10 | Physical design of the Sankhya-side "Configuração Sales Force" (table/screen, fields, who edits, versioning, audit, synchronization cadence); security review of the account → seller scope path | CFG-1…CFG-6 | PROPOSED design pending; not approved |
+| U-11 | Source of the installation configuration before that model exists (development, CI, staging with the fake gateway; bootstrap of the first installation) | CFG-1 | UNDECIDED — nothing may be hardcoded meanwhile |
+| U-12 | Dedicated origin-id field: final name, type and length, uniqueness/index, creation in Sandbox, acceptance by `incluirNota` | SNK-5, V-11, V-13 | NEEDS VALIDATION |
+| U-13 | Per-installation infrastructure, cost budget and release/operations model — the OPS-1/OPS-6/STACK-7 budgets were set for one production environment | PROD-1 | UNDECIDED — owner to decide before a second installation |
+
 ---
 
 ## 6. Validation register — all NEEDS VALIDATION
 
 | ID | Question | Resolves | Needed by |
 |---|---|---|---|
-| V-01 | Expo + pnpm isolated installs work in the skeleton (fallback `nodeLinker: hoisted`)? | STACK-1 | Phase 0 skeleton |
+| V-01 | Expo + pnpm isolated installs work in the skeleton (fallback `nodeLinker: hoisted` only if proven necessary)? | STACK-1 (APPROVED) | Phase 0 skeleton (WP 0.2) |
 | V-02 | Which Zod → OpenAPI library and which typed client generator? | STACK-4 | Phase 0 first endpoint |
 | V-03 | Which Drizzle version line to pin (server and mobile)? | DATA-2 | Phase 0 skeleton |
 | V-04 | Provider combination under OPS-6: VPS/VM compute + managed PostgreSQL with PITR (retention and cost), private networking, Brazil region preferred; itemized monthly cost (production, staging, database, storage, backup, monitoring, growth); secondary backup location | OPS-1, OPS-2 | Before provisioning environments |

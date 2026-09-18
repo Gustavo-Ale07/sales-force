@@ -7,7 +7,7 @@ model: sonnet
 
 You are the architect of Sales Force, an internal single-tenant sales-force + CRM platform integrated with Sankhya ERP.
 
-**Project mode:** design. Until the project owner writes `BEGIN IMPLEMENTATION`, produce analysis and documentation only — no application code, scaffolding, installs, migrations or infrastructure. Many decisions cited below are still PROPOSED; check their status in `docs/decisions.md` before relying on them.
+**Project mode:** implementation, Phase 0 only (`BEGIN IMPLEMENTATION` issued by the owner 2026-09-18). Implement only what `docs/roadmap.md` places in the current phase; anything outside it, or that depends on a PROPOSED/UNDECIDED decision, stops and goes back to the owner (CLAUDE.md §4). Design-mode limits (analysis and documentation only) still apply outside Phase 0. Check decision status in `docs/decisions.md` before relying on anything PROPOSED.
 
 ## Read first
 

@@ -8,7 +8,7 @@ paths:
 
 # Sankhya integration rules
 
-> **Status (2026-09-16):** design mode — nothing here authorizes application code before the project owner writes `BEGIN IMPLEMENTATION`. Items citing APPROVED decisions bind now; items citing PROPOSED decisions (`STACK-1`, `STACK-4`, `STACK-5`, `DATA-3`, `AUTH-x`, `SYNC-x`, `MOB-1/2`, `SNK-1/2` (except the approved outbox write path), `OPS-3…5`, `P-23` — see `docs/decisions.md` §0) describe the working proposal and bind only once approved.
+> **Status (2026-09-18):** `BEGIN IMPLEMENTATION` issued by the owner — implementation only within the current roadmap phase (Phase 0). Items citing APPROVED decisions bind now (including Round 6: `STACK-1/4/5`, `MOB-1/2`; the `MOB-2` library NEEDS VALIDATION, V-09); items citing PROPOSED decisions (`DATA-3`, `AUTH-x`, `SYNC-x`, `SNK-1/2` (except the approved outbox write path), `OPS-3…5`, `P-23` — see `docs/decisions.md` §0) describe the working proposal and bind only once approved.
 
 Decisions: P-02, P-03, SNK-1…4, DATA-3, SYNC-2. Facts and open questions: `docs/sankhya-spike.md` (read it first).
 
@@ -53,3 +53,10 @@ Decisions: P-02, P-03, SNK-1…4, DATA-3, SYNC-2. Facts and open questions: `doc
 
 - Raw captures only in `.sankhya-raw/` (git-ignored), normally from non-production environments. Sankhya production may be read only inside an owner-authorized read-only diagnostic inspection meeting every condition of `docs/security-model.md` §10.1 and logged in `docs/sankhya-spike.md` §8 — never prepare or perform one without that recorded authorization.
 - Commit only sanitized fixtures with provenance (spike, operation, date, environment type). No real CNPJ/CPF, names, addresses, emails, phones, notes, tokens.
+
+## Installation configuration and origin id
+
+- Customer-specific commercial values (account → seller mapping, sellable `USOPROD` values, price-table fallback for a null `CODTAB`, company, order/quotation TOP, payment type) are installation configuration governed from Sankhya and mirrored locally (CFG-1…6). Never literals; `CODTAB` null = no resolved price table until a fallback is configured.
+- The Sales Force origin id lives in a dedicated Sankhya field (SNK-5). Never reuse `AD_VDYORIG` / `AD_NUVIDYA`.
+- User-facing ERP order submission stays disabled until its write-safety gates close (SNK-6). No Sandbox write and no production authentication or data probe without explicit owner authorization.
+- The spike credentials are exposed (SEC-1): never wire them into the runnable application; never commit any credential.

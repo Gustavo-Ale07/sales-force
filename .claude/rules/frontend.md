@@ -6,7 +6,7 @@ paths:
 
 # Web frontend rules (apps/web, packages/ui)
 
-> **Status (2026-09-16):** design mode — nothing here authorizes application code before the project owner writes `BEGIN IMPLEMENTATION`. Items citing APPROVED decisions bind now; items citing PROPOSED decisions (`STACK-1`, `STACK-4`, `STACK-5`, `DATA-3`, `AUTH-x`, `SYNC-x`, `MOB-1/2`, `SNK-1/2` (except the approved outbox write path), `OPS-3…5`, `P-23` — see `docs/decisions.md` §0) describe the working proposal and bind only once approved.
+> **Status (2026-09-18):** `BEGIN IMPLEMENTATION` issued by the owner — implementation only within the current roadmap phase (Phase 0). Items citing APPROVED decisions bind now (including Round 6: `STACK-1/4/5`, `MOB-1/2`; the `MOB-2` library NEEDS VALIDATION, V-09); items citing PROPOSED decisions (`DATA-3`, `AUTH-x`, `SYNC-x`, `SNK-1/2` (except the approved outbox write path), `OPS-3…5`, `P-23` — see `docs/decisions.md` §0) describe the working proposal and bind only once approved.
 
 Decisions: STACK-4, STACK-5, AUTH-1, AUTH-3, P-20, P-23. Structure: `docs/architecture.md` §8.
 
@@ -46,3 +46,8 @@ Decisions: STACK-4, STACK-5, AUTH-1, AUTH-3, P-20, P-23. Structure: `docs/archit
 
 - Playwright E2E for critical flows (login, approvals, imports as they arrive by phase).
 - Verify user-visible changes in a browser before claiming completion.
+
+## Prices and configuration
+
+- A missing price is never shown as zero: show "Sem preço" (CFG-5). Whether such items are visible or orderable is installation configuration.
+- No literal product-use codes (`V`/`R`), TOP or company values in UI code (CFG-3, CFG-6).

@@ -11,7 +11,7 @@ paths:
 
 # Offline synchronization rules
 
-> **Status (2026-09-16):** design mode — nothing here authorizes application code before the project owner writes `BEGIN IMPLEMENTATION`. APPROVED items bind; `SYNC-1…3`, `AUTH-1…4`, `DATA-3`, `MOB-1/2`, P-23 and unresolved `R*` items remain PROPOSED/UNDECIDED where `docs/decisions.md` says so. The per-section status in `docs/sync-protocol.md` is authoritative.
+> **Status (2026-09-18):** `BEGIN IMPLEMENTATION` issued by the owner (current roadmap phase only). APPROVED items bind (including `MOB-1/2` in direction); `SYNC-1…3`, `AUTH-1…4`, `DATA-3`, P-23 and unresolved `R*` items remain PROPOSED/UNDECIDED where `docs/decisions.md` says so. The per-section status in `docs/sync-protocol.md` is authoritative.
 
 Decisions: P-07, P-08, P-09, P-20, P-21, AUTH-1…4, SYNC-1…3, DATA-3. Protocol: `docs/sync-protocol.md`. Open items include R05…R11, R16, R45; validations include V-07, V-09, V-14.
 
@@ -45,7 +45,7 @@ Decisions: P-07, P-08, P-09, P-20, P-21, AUTH-1…4, SYNC-1…3, DATA-3. Protoco
 
 ## Local security and lifecycle
 
-- Local business data must be encrypted (MOB-2 proposal; library choice V-09). Keys/tokens live only in secure storage.
+- Local business data must be encrypted (MOB-2; library choice V-09). Keys/tokens live only in secure storage.
 - Enforce the configured max-offline policy and device approval/revocation semantics from AUTH-2 / `docs/security-model.md`; do not weaken them to improve UX.
 - Protocol/schema migrations with pending outbox commands remain UNDECIDED under R10/R11; do not guess a migration or compatibility policy.
 - Lost local encryption key behavior remains R45 until decided.

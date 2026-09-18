@@ -143,7 +143,7 @@ Convenção: `RF-<MÓDULO>-<n>`. A fase aparece entre colchetes.
 - **RF-IAM-1 [F0]** Login por e-mail e senha. Senha com no mínimo 12 caracteres, verificada contra lista de senhas vazadas/comuns.
 - **RF-IAM-2 [F0]** Bloqueio progressivo após tentativas falhas: 5 falhas → 15 min de bloqueio; bloqueios repetidos → admin desbloqueia.
 - **RF-IAM-3 [F0]** Redefinição de senha por e-mail com link de uso único, válido por 30 min.
-- **RF-IAM-4 [F0]** Admin cria, edita, desativa usuários e atribui perfil, gerente e código de vendedor no Sankhya (`CODVEND`).
+- **RF-IAM-4 [F0]** Admin cria, edita, desativa usuários e atribui perfil e gerente. O vínculo da conta com o vendedor do Sankhya (`CODVEND`) segue a configuração da instalação, governada a partir do Sankhya (RF-CFG-2, CFG-2); `TSIUSU.CODVEND` não é regra fixa.
 - **RF-IAM-5 [F0]** Hierarquia: cada usuário pertence a uma equipe; cada equipe tem um gerente.
 - **RF-IAM-6 [F0]** Permissões por perfil, com ajuste fino configurável pelo admin (ver matriz §8).
 - **RF-IAM-7 [F1]** Registro de aparelhos por usuário do app. Admin pode **revogar** um usuário ou aparelho: invalida a sessão imediatamente e, na próxima conexão, o app **apaga o banco local**.
@@ -165,7 +165,7 @@ Convenção: `RF-<MÓDULO>-<n>`. A fase aparece entre colchetes.
 
 - **RF-SNK-2 [F0]** Reconciliação completa diária (madrugada) para corrigir diferenças e detectar exclusões.
 - **RF-SNK-3 [F1]** Fila de saída (outbox) para escritas no Sankhya: pedidos e clientes aprovados. Tentativas com backoff exponencial, até 8 tentativas.
-- **RF-SNK-4 [F1]** Toda escrita tem **chave de idempotência**: antes de reenviar, o worker verifica se o registro já existe no Sankhya (pelo identificador do Sales Force gravado em campo de observação/adicional).
+- **RF-SNK-4 [F1]** Toda escrita tem **chave de idempotência**: antes de reenviar, o worker verifica se o registro já existe no Sankhya (pelo identificador do Sales Force gravado em campo de origem dedicado ao Sales Force no Sankhya, SNK-4/SNK-5; nunca em campos do Vidya Force).
 - **RF-SNK-5 [F1]** Erros de integração ficam visíveis ao vendedor (status do pedido) e ao admin (painel), com mensagem traduzida e botão **reprocessar**.
 - **RF-SNK-6 [F0]** Painel de saúde: último sucesso por entidade, atraso, erros nas últimas 24 h, tamanho da fila.
 - **RF-SNK-7 [F0]** Alerta (e-mail ao admin) se a sincronização de alguma entidade ficar mais de 1 h sem sucesso ou se a fila de saída tiver itens em erro.
@@ -173,7 +173,7 @@ Convenção: `RF-<MÓDULO>-<n>`. A fase aparece entre colchetes.
 
 ### 5.3 Catálogo e preços (CAT)
 - **RF-CAT-1 [F1]** Lista e busca de produtos (código, descrição, grupo, unidade, imagem quando houver), disponível offline.
-- **RF-CAT-2 [F1]** Preço resolvido pela tabela de preço vigente aplicável ao cliente, conforme a regra do Sankhya mapeada no spike da Fase 0.
+- **RF-CAT-2 [F1]** Preço resolvido pela tabela de preço vigente aplicável ao cliente, conforme a regra do Sankhya mapeada no spike da Fase 0. Cliente sem tabela de preço: política da instalação (RF-CFG-4). Preço ausente nunca é zero (RF-CFG-5).
 - **RF-CAT-3 [F1]** Limites de desconto (D21):
   - **limite do vendedor**: % máximo sem aprovação;
   - **limite do gerente**: % máximo que o gerente pode aprovar;
@@ -382,6 +382,15 @@ Todos com filtros de período, equipe, vendedor e respeitando a visibilidade.
   - registro automático da ligação (duração, resultado) e link da gravação;
   - provedor escolhido no início da F3, atrás da interface `TelephonyProvider`.
 
+### 5.16 Configuração da instalação (CFG)
+Sales Force é um produto reutilizável; cada cliente recebe uma instalação isolada (banco, ambiente Sankhya, segredos e dados próprios; mesmo código, migrações, imagens e versão — PROD-1). A configuração comercial específica do cliente é governada a partir do Sankhya ("Configuração Sales Force", CFG-1) e espelhada no PostgreSQL local. O modelo físico no Sankhya é PROPOSTO (U-10), não aprovado.
+- **RF-CFG-1 [F0]** A configuração efetiva da instalação é sincronizada do Sankhya para um espelho/cache local no PostgreSQL. O código não contém valores específicos de cliente. Segredos nunca fazem parte dessa configuração.
+- **RF-CFG-2 [F0]** A regra que liga uma conta do Sales Force a um vendedor (`CODVEND`) vem da configuração (CFG-2); `TSIUSU.CODVEND` pode apoiar ou preencher o padrão, mas não é regra universal.
+- **RF-CFG-3 [F1]** Os valores de `USOPROD` que tornam um produto vendável são configuração da instalação (nome ilustrativo: `configuration.product.sellableUsageValues`); não há testes literais `V`/`R` no código (CFG-3).
+- **RF-CFG-4 [F1]** A política para cliente sem tabela de preço (`CODTAB` nulo) é configuração: sem fallback, tabela padrão configurada ou outra estratégia aprovada. Até haver fallback configurado, `CODTAB` nulo = nenhuma tabela de preço resolvida; a tabela 5 nunca é assumida (CFG-4).
+- **RF-CFG-5 [F1]** Preço ausente não é zero: a interface mostra "Sem preço" e nunca R$ 0,00. Por padrão, item sem preço resolvido não entra em pedido enviável ao ERP; a visibilidade e a possibilidade de pedir são configuráveis (CFG-5).
+- **RF-CFG-6 [F1]** Empresa habilitada/padrão, TOP de pedido, TOP de cotação (se usada), condição de negociação/pagamento padrão e padrões comerciais correlatos são configuração obrigatória da instalação, vinda do modelo do Sankhya; valores do Sandbox são apenas evidência de teste (CFG-6).
+
 ---
 
 ## 6. IA (IA)
@@ -436,7 +445,7 @@ Todos com filtros de período, equipe, vendedor e respeitando a visibilidade.
 
 ```
                 ┌───────────────── VPS (Docker Compose) ─────────────────┐
- Web (Next.js) ─┤  Caddy (HTTPS) ─► api (NestJS) ─► PostgreSQL           │
+ Web (SPA Vite)─┤  Caddy (HTTPS) ─► api (NestJS) ─► PostgreSQL           │
                 │                      │   ▲                             │
  App (Expo) ────┤                      ▼   │                             │
   SQLite local  │                    Redis (BullMQ)                      │
@@ -450,7 +459,7 @@ Todos com filtros de período, equipe, vendedor e respeitando a visibilidade.
 
 - **api**: REST + OpenAPI; autenticação, regras de negócio, endpoints de sincronização, webhooks de entrada.
 - **worker**: jobs agendados e filas (espelho Sankhya, outbox, automações, importações, IA em lote, e-mails, PDFs).
-- **web**: Next.js (vendedores internos, gestores, backoffice, admin).
+- **web**: SPA Vite + React (STACK-5; vendedores internos, gestores, backoffice, admin).
 - **mobile**: Expo/React Native com SQLite criptografado (representantes; também usável por internos).
 - O **app nunca fala com o Sankhya**: tudo passa pelo espelho e pela outbox da api/worker.
 
@@ -459,7 +468,7 @@ Todos com filtros de período, equipe, vendedor e respeitando a visibilidade.
 apps/
   api/          NestJS
   worker/       processadores BullMQ + agendamentos
-  web/          Next.js
+  web/          Vite + React (SPA)
   mobile/       Expo
 packages/
   domain/       regras puras: preço, desconto, alçada, crédito, estados de pedido/proposta/oportunidade
@@ -485,14 +494,16 @@ packages/
 | ORM | Drizzle ORM (Postgres e SQLite) |
 | Banco | PostgreSQL 16+ |
 | Filas/jobs | BullMQ + Redis |
-| Web | Next.js (App Router), React, TanStack Query, Tailwind CSS, componentes shadcn/ui |
-| Mobile | Expo (React Native), expo-sqlite com SQLCipher, Expo Router, expo-secure-store, EAS Build/Update |
+| Web | SPA Vite + React (STACK-5), TanStack Router, TanStack Query, Tailwind CSS, componentes shadcn/ui; sem SSR |
+| Mobile | Expo (React Native) com development builds (MOB-1), SQLite criptografado via Drizzle (biblioteca a validar: S7/V-09), Expo Router, expo-secure-store, EAS Build/Update |
 | Arquivos | MinIO (API S3) |
 | PDF | Renderização HTML → PDF no worker (Playwright/Chromium) |
 | IA | `@anthropic-ai/sdk` |
 | Observabilidade | Logs JSON (pino), Sentry (api, worker, web, mobile), healthchecks |
 | Proxy/HTTPS | Caddy |
 | CI/CD | GitHub Actions |
+
+> **Nota (2026-09-18):** as linhas Web e Mobile refletem STACK-5, MOB-1 e MOB-2 (aprovados). Onde outras linhas divergirem de `docs/decisions.md` (ex.: BullMQ/Redis → pg-boss, STACK-6; MinIO → armazenamento S3 gerenciado, STACK-7), vale o registro de decisões.
 
 ---
 
@@ -617,7 +628,7 @@ packages/
   - tarefas (abertas + últimos 30 dias);
   - sugestões de mix (F3).
 - Tabelas locais extras: `sync_state` (cursor) e `outbox` (comandos pendentes).
-- Criptografado com SQLCipher; a chave fica no armazenamento seguro do aparelho.
+- Criptografado (biblioteca a validar no spike S7/V-09); a chave fica no armazenamento seguro do aparelho.
 
 ---
 
@@ -693,7 +704,7 @@ packages/
 - **Risco aceito:** sem 2FA. A decisão é reavaliada se ocorrer incidente de acesso indevido ou mudança no perfil dos usuários.
 
 ### 12.2 Proteção de dados no aparelho
-- SQLite criptografado (SQLCipher).
+- Banco local criptografado (biblioteca conforme S7/V-09).
 - Revogação apaga o banco local (RF-IAM-7).
 - Bloqueio após 7 dias sem sincronizar (RF-IAM-8).
 - Sem exportação para representantes PJ. Compartilhamento limitado a PDF de orçamento/proposta do próprio cliente.

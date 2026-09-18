@@ -247,7 +247,7 @@ Until measured, the worker serializes Sankhya requests and backs off on rate-lim
 ## 6. Fixture policy
 
 1. Raw responses are captured only into `.sankhya-raw/` (git-ignored), normally from a non-production environment. Captures from Sankhya production happen only inside an authorized read-only diagnostic inspection (SNK-3 exception, `security-model.md` §10.1), are limited to the minimum needed, are not copied elsewhere, and are logged in §8.
-2. Before committing, fixtures are sanitized: CNPJ/CPF, names, trade names, addresses, emails, phones and free-text notes replaced with synthetic values; identifiers remapped consistently; monetary values kept only when needed by a test.
+2. Before committing, fixtures are sanitized: CNPJ/CPF, names, trade names, addresses, emails, phones and free-text notes replaced with synthetic values; identifiers remapped consistently; monetary values kept only when needed by a test. **Documentation exception (DOC-1, 2026-09-18):** technical ERP identifiers and codes (e.g. `CODPARC`, `CODPROD`, `CODVEND`, `NUNOTA`, TOP, `CODTAB`/`NUTAB`) may stay in this document for reproducibility; names, legal identifiers and credentials remain sanitized. Committed fixtures keep the rule above.
 3. Committed fixtures live in `packages/sankhya` with provenance: spike, operation, date, environment type.
 4. Credentials, tokens and `X-Token` values never appear in fixtures, logs or this document.
 
@@ -274,7 +274,8 @@ Append-only. Every read-only inspection of Sankhya production (SNK-3 exception) 
 
 | Date | Authorized by / reference | Spike question | Why no test environment suffices | Credentials read-only? | Data inspected (categories only) | Raw captures kept (location, deletion date) | Outcome / finding ID |
 |---|---|---|---|---|---|---|---|
-| — | — | No inspection performed yet | — | — | — | — | — |
+| — | — | No authorized inspection performed | — | — | — | — | — |
+| not recorded (earlier spike session) | **Not an authorized inspection** — historical evidence only; owner ruling 2026-09-18 (SNK-6): it was not authorization for production access | Credential-only authentication attempt with Sandbox credentials against the production authentication endpoint (rejected) | n/a | n/a | none — no data requested | none | F-02, §9.1 |
 
 ---
 
@@ -290,10 +291,10 @@ Status: VALIDATED (env)
 - Sandbox API base: `https://api.sandbox.sankhya.com.br`
 - Authentication endpoint: `POST /authenticate`
 - Confirmed authentication: OAuth 2.0 `client_credentials` with Client ID, Client Secret and an `X-Token` header — confirms F-01 in the Sandbox, not just documentation.
-- An authentication attempt against the production endpoint `https://api.sankhya.com.br/authenticate` with Sandbox credentials was rejected (recorded by the previous spike session): the credentials are environment-specific. It was a credential-only contact with production — no data was requested — and is **not** logged in §8; flagged for owner acknowledgement (SNK-3). It must not be repeated.
+- An authentication attempt against the production endpoint `https://api.sankhya.com.br/authenticate` with Sandbox credentials was rejected (recorded by the previous spike session): the credentials are environment-specific. It was a credential-only contact with production — no data was requested — and is recorded in §8 as a historical, non-authorized contact (owner ruling 2026-09-18, SNK-6). It must not be repeated without explicit owner authorization.
 - Observed access token `expires_in = 300` (~5 minutes).
 - An expired token can produce HTTP 403; calls resume normally after renewing the bearer token.
-- **Action required:** the credentials/tokens used during this spike were exposed during testing and must be rotated before any real implementation work (§6 rule 4 — no actual secret values are recorded here).
+- **Action required:** the credentials/tokens used during this spike were exposed during testing and must be rotated before any real implementation work — owner ruling 2026-09-18 (SEC-1): considered exposed, rotated before the implemented runtime uses them, no current or replacement value stored in the repository, never wired into the runnable application (§6 rule 4 — no actual secret values are recorded here).
 
 ### 9.2 MGE gateway
 
@@ -731,8 +732,8 @@ Status: NEEDS VALIDATION — mapped to existing spikes; owner decisions are prop
 8. Available credit, overdue titles, last purchase; whether `TGFFIN`/`TGFCAB` are mirrored in Phase 0 → S4.3, Q-02.
 9. `pagina=0` — **resolved** for the price endpoint (HTTP 400, F-43). Still open: REST time-filter support and contact e-mail location → S1.2.
 10. Owner/architect decision on the read mechanism (§9.33) → SNK-1/SNK-2 remain PROPOSED.
-11. Proposal, NOT APPROVED — Sales Force account ↔ seller mapping. A Sales Force login is its own account (RF-IAM-1) and is not a Sankhya user. Measured: the Sankhya user table links to sellers (F-33), but 15 of 69 users are unlinked, one seller has 2 users, there is no partner route and no active flag (F-34), and the Sales Force e-mail has no documented relation to any `TSIUSU` column. Option A (draft `RF-IAM-4`): a Sales Force-owned mapping set by an admin, `sales-force user → CODVEND`, validated against the mirrored `TGFVEN` (exists, active); `TSIUSU` is not needed for scope. Option B: derive it from `TSIUSU` by matching e-mail/login — no documented rule and it needs heuristics; not recommended. Owner to decide (the mapping direction, whether one seller may map to several accounts, and how a hierarchy/`CODGER` applies, are undocumented → R35/R36 UNDECIDED, `RF-IAM-4`/`RF-IAM-5` draft).
-12. Proposal, NOT APPROVED — W-14 sellable filter. Candidate rule to confirm with the business: `TGFPRO.ATIVO='S'` and `USOPROD` in (`V` Venda (fabricação própria), `R` Revenda), corroborated by measured price coverage (F-36: 1,604 of the 1,606 priced active products in `CODTAB` 5 are `V`/`R`); to keep configurable until confirmed; `S` (21) and `3` (2) unlisted in the dictionary, and `D` Revenda (por fórmula) is listed but unused. Questions: are `2`/`M`/`C`/`E` never sold; may a product with `USOPROD` outside `V`/`R` appear in an order; is a product without a price in the customer's table hidden or shown "no price" (S2). **S2 measured (F-42):** in `CODTAB` 5 (effective `NUTAB` 13) 1,606 of 3,789 active products have a positive price row, 1,604 of them `V`/`R`; 86 active `V`/`R` products (72 `V`) have no row, and REST reports them as `valor 0` — so a "priced" filter must be computed from `TGFEXC` (or treat REST `0` as "no price"), never from the product flag alone. Owner still to decide the UI treatment of a missing price and the sellable values.
+11. **Superseded 2026-09-18 by CFG-2** (governed from the Sankhya-side Sales Force configuration; `TSIUSU.CODVEND` not hardcoded). Original proposal, NOT APPROVED — Sales Force account ↔ seller mapping. A Sales Force login is its own account (RF-IAM-1) and is not a Sankhya user. Measured: the Sankhya user table links to sellers (F-33), but 15 of 69 users are unlinked, one seller has 2 users, there is no partner route and no active flag (F-34), and the Sales Force e-mail has no documented relation to any `TSIUSU` column. Option A (draft `RF-IAM-4`): a Sales Force-owned mapping set by an admin, `sales-force user → CODVEND`, validated against the mirrored `TGFVEN` (exists, active); `TSIUSU` is not needed for scope. Option B: derive it from `TSIUSU` by matching e-mail/login — no documented rule and it needs heuristics; not recommended. Owner to decide (the mapping direction, whether one seller may map to several accounts, and how a hierarchy/`CODGER` applies, are undocumented → R35/R36 UNDECIDED, `RF-IAM-4`/`RF-IAM-5` draft).
+12. **Superseded 2026-09-18 by CFG-3** (allowed `USOPROD` values are installation configuration; `V`/`R` is not a universal rule). Original proposal, NOT APPROVED — W-14 sellable filter. Candidate rule to confirm with the business: `TGFPRO.ATIVO='S'` and `USOPROD` in (`V` Venda (fabricação própria), `R` Revenda), corroborated by measured price coverage (F-36: 1,604 of the 1,606 priced active products in `CODTAB` 5 are `V`/`R`); to keep configurable until confirmed; `S` (21) and `3` (2) unlisted in the dictionary, and `D` Revenda (por fórmula) is listed but unused. Questions: are `2`/`M`/`C`/`E` never sold; may a product with `USOPROD` outside `V`/`R` appear in an order; is a product without a price in the customer's table hidden or shown "no price" (S2). **S2 measured (F-42):** in `CODTAB` 5 (effective `NUTAB` 13) 1,606 of 3,789 active products have a positive price row, 1,604 of them `V`/`R`; 86 active `V`/`R` products (72 `V`) have no row, and REST reports them as `valor 0` — so a "priced" filter must be computed from `TGFEXC` (or treat REST `0` as "no price"), never from the product flag alone. Owner still to decide the UI treatment of a missing price and the sellable values.
 
 13. Remaining S2 gaps (Sandbox, NEEDS VALIDATION), by impact: **blocks first UI** — none for a read-only catalog priced from `CODTAB` 5 via the partner's table, but customers with a null `CODTAB` (531 active) have no defined table → the UI must show "table not defined" or use an owner-approved default (NOT APPROVED); business meaning of a missing price. **Blocks order creation (S3)** — refined by the S3 test (§9.38): the transactional price of one item equalled the list price (F-46), so the remaining open items are why `VLRUNIT` ≠ table price on ≈ 11–20% of historical items (discount/negotiation, mechanism unproven; discount write path untested), rounding (S2.3, quantity 1 only), taxes before an order exists (S2.4; IPI at insertion is a HYPOTHESIS, F-47), company/TOP/payment/quantity/region dependence, minimum price and maximum discount (S2.1), what selects the table for the 34 exceptions, decoding `TSIPAR.TIPTABPRECOS` = 4. **Can wait** — chains of derived tables, `CODTABFLEX`/`FORMULA`, future-dated versions, alternate-unit rows on a single read, inactive product with a price row.
 
@@ -808,7 +809,7 @@ No HTTP 429, no `Retry-After`, no error status; all 25 answers were HTTP 200. Th
 **ARCHITECTURAL DECISION INPUT — NOT APPROVED** (for `architect` / owner; nothing here changes SNK-4):
 
 1. Identifier: the Sales Force order UUID, stable across retries (U-07); an attempt or job id is never used.
-2. Field: a dedicated custom `TGFCAB` field agreed with the Sankhya partner (V-11). Options: (a) a new field with a supporting index requested from the partner; (b) reuse `AD_VDYORIG`/`AD_NUVIDYA` — capacity fits, but they appear (HYPOTHESIS, from their names) to belong to the outgoing Vidya Force flow and may collide or be overwritten while both systems run; owner and partner to decide.
+2. Field: a dedicated custom `TGFCAB` field agreed with the Sankhya partner (V-11). Options: (a) a new field with a supporting index requested from the partner; (b) reuse `AD_VDYORIG`/`AD_NUVIDYA` (**rejected 2026-09-18 by SNK-5**) — capacity fits, but they appear (HYPOTHESIS, from their names) to belong to the outgoing Vidya Force flow and may collide or be overwritten while both systems run; owner and partner to decide.
 3. Outbox state machine (worker): `pending → sending → confirmed (NUNOTA stored) | rejected (permanent) | unknown`. The outcome is `unknown` on any timeout, dropped connection or 5xx after the request left — never `failed`.
 4. Before any retry (and on `unknown`): a `SELECT` on the origin-id field (through the same gateway) → found: adopt its `NUNOTA`, do not write; not found and the lookup succeeded: the write may be retried; lookup impossible: stay `unknown` and alert. No matching by customer/date/total (SNK-4).
 5. Persist `NUNOTA` from `responseBody.pk.NUNOTA.$` in the same transaction that closes the outbox row; read back header, item count and title count to confirm.
@@ -837,3 +838,22 @@ No HTTP 429, no `Retry-After`, no error status; all 25 answers were HTTP 200. Th
 **Recommendation (not a decision):** the implementation gate may be opened for Phase 0 scope (no Sankhya writes; read mirror per S1); the order write path stays out of scope until V-11 and V-13 are closed.
 
 ---
+
+### 9.41 Owner rulings of 2026-09-18 on the S1–S3 proposals
+
+Recorded in `decisions.md` §3.8. Where this section and an earlier proposal in §9 differ, this section wins. The Sandbox values and candidate rules measured in §9 remain evidence, not application constants.
+
+| Topic (earlier proposal location) | Ruling | Entry |
+|---|---|---|
+| Account ↔ seller mapping (§9.36 item 11) | Governed from the Sankhya-side Sales Force configuration and mirrored locally; `TSIUSU.CODVEND` is evidence/default, not the universal rule | CFG-2 |
+| Sellable `USOPROD` (§9.36 item 12) | Installation configuration; `V`/`R` are candidates only; the catalog consumes `configuration.product.sellableUsageValues` | CFG-3 |
+| Customer with `CODTAB` null (§9.37) | No hardcoded fallback; policy is configuration; until configured, null = no resolved price table (table 5 never assumed) | CFG-4 |
+| Missing price in the UI (§9.37) | "Sem preço", never R$ 0,00; not orderable by default; visibility/orderability configurable | CFG-5 |
+| TOP, company, payment type (§9.38) | Installation configuration from the Sankhya-side model; S3 Sandbox values are test evidence only; do not block Phase 0 | CFG-6 |
+| Origin id (§9.39) | Dedicated Sales Force field (proposed name `AD_SFORIGINID`), not created yet; `AD_VDYORIG`/`AD_NUVIDYA` are not reused | SNK-5 |
+| Second Sandbox write | Not authorized now; only after the origin-id approach is designed, the configuration contract is clearer and a specific unresolved behavior justifies it | SNK-6 |
+| S3 authorization scope | The one-order Sandbox write did not violate SNK-4/V-11/V-13; it is not approval of the user-facing order-write path, which stays disabled | SNK-6 |
+| Production authentication attempt (F-02, §9.1, §8) | Historical evidence; not authorization; no further production probe without explicit owner authorization | SNK-6 |
+| Spike credentials (§9.1) | Exposed; rotate before runtime use; never stored in the repository | SEC-1 |
+| Identifiers in this document | Technical ERP codes allowed; names and legal identifiers sanitized | DOC-1 |
+| Product model | Reusable product, one isolated installation per customer; configuration governed from Sankhya | PROD-1, CFG-1 |

@@ -209,7 +209,7 @@ Headers: protocol version, device identity (session per AUTH-1)
 
 ---
 
-## 9. Local database — PROPOSED (MOB-2) / UNDECIDED (migrations)
+## 9. Local database — APPROVED in direction (MOB-2; library NEEDS VALIDATION, V-09) / UNDECIDED (migrations)
 
 - Encrypted SQLite through Drizzle; library per spike S7 (MOB-2, V-09).
 - Synchronized datasets are disposable caches: they can always be rebuilt by resync.

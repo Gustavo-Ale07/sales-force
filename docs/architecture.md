@@ -21,11 +21,12 @@ This document describes the **working architecture proposal**. Most of it depend
 | §1 System context | "Clients never call Sankhya", isolated environments, VPS/VM compute, managed PostgreSQL, external object storage, API/worker process split and worker-only Sankhya credentials APPROVED; Caddy/Compose, Sentry and SMTP details PROPOSED | P-03, OPS-1, STACK-7, STACK-2, STACK-6; OPS-3…5 PROPOSED |
 | §2 Principles | APPROVED (the policy-module mechanism is PROPOSED) | P-02…P-05, P-08, P-21; AUTH-4 PROPOSED |
 | §3 Data ownership | Sankhya vs Sales Force split APPROVED; per-row write paths PROPOSED; account lifecycle and customer approval APPROVED | P-02, P-18, P-19 |
-| §4 Repository layout | `apps/server`, `packages/domain`, `packages/db`, `packages/sankhya` roles and the ARCH-1 dependency direction APPROVED; web, mobile, contracts, UI, tooling and the full dependency table PROPOSED | P-03, P-05, STACK-2, STACK-3, DATA-2, ARCH-1; STACK-1, STACK-4, STACK-5, MOB-1 PROPOSED |
+| §4 Repository layout | `apps/server`, `packages/domain`, `packages/db`, `packages/sankhya` roles and the ARCH-1 dependency direction APPROVED; web stack and monorepo tooling APPROVED, contracts and mobile approved in direction (Round 6); UI package and the full dependency table PROPOSED | P-03, P-05, STACK-2, STACK-3, DATA-2, ARCH-1; STACK-1, STACK-5 APPROVED; STACK-4, MOB-1 approved in direction (2026-09-18) |
 | §5 Server application | Processes, framework constraint, jobs and outbox rule APPROVED; module map PROPOSED (refined in the Phase 0 plan) | STACK-2, STACK-3, STACK-6; V-16 |
-| §6 Data storage | PostgreSQL version policy and object storage APPROVED; mobile storage PROPOSED | P-17, DATA-1, STACK-7; MOB-2 PROPOSED |
+| §5.5 Installation configuration | APPROVED in direction; physical model PROPOSED | PROD-1, CFG-1…CFG-6; U-10 |
+| §6 Data storage | PostgreSQL version policy and object storage APPROVED; mobile storage: encryption APPROVED in direction, library NEEDS VALIDATION | P-17, DATA-1, STACK-7; MOB-2 APPROVED in direction (V-09) |
 | §7 Sankhya boundary | Duplicate-proof writes and the outbox write path APPROVED; mirror reads, allowlist and authentication PROPOSED | SNK-4, STACK-6; SNK-1, SNK-2 PROPOSED |
-| §8–§9 Web and mobile | PROPOSED | STACK-5, MOB-1, MOB-2, AUTH-1, AUTH-2 |
+| §8–§9 Web and mobile | Web stack APPROVED; Expo development builds and encrypted local data approved in direction (library V-09); session, device and access details PROPOSED | STACK-5 APPROVED; MOB-1, MOB-2 approved in direction; AUTH-1, AUTH-2 PROPOSED |
 | §10 Environments | Isolation, hosting direction, database network access and recovery targets APPROVED; providers NEEDS VALIDATION (comparison §10.2, quote checklist §10.3); staging database optimization and local/CI tooling PROPOSED | P-15, SNK-3, OPS-1, OPS-2, OPS-6; V-04, V-05, V-15, V-16 |
 | §11–§13 Delivery, operations, observability | Backups/recovery APPROVED (OPS-2); delivery pipeline, Compose/Caddy details and observability PROPOSED | OPS-2; OPS-3, OPS-4, OPS-5 PROPOSED |
 
@@ -123,7 +124,7 @@ packages/domain ──never──► apps/server, NestJS, Drizzle, PostgreSQL cl
 
 ### 4.2 Full package dependency table — PROPOSED
 
-The table below refines ARCH-1 for every package. It is still a proposal (web, mobile, contracts and UI are decided in Round 6), including the stricter rule that `packages/domain` uses no Node built-ins at all.
+The table below refines ARCH-1 for every package. It is still a proposal (web, mobile and contracts were decided in Round 6; the package-level dependency table itself was not), including the stricter rule that `packages/domain` uses no Node built-ins at all.
 
 | Package | May depend on (internal) | Must never depend on |
 |---|---|---|
@@ -194,6 +195,14 @@ data migrations ─► separate, tracked, run as their own controlled step
 - `drizzle-kit push` (or any direct schema sync) only against disposable local development databases — never staging with valuable data, pilot or production.
 - Expand → migrate → contract per P-16; contract waits while released mobile clients still depend on the old shape (version policy UNDECIDED, R11).
 - The locking mechanism for concurrent-execution protection is chosen in the Phase 0 plan.
+
+### 5.5 Installation configuration — APPROVED in direction (PROD-1, CFG-1…CFG-6); physical model PROPOSED (U-10)
+
+- One installation per customer: own PostgreSQL database, Sankhya environment, secrets, business data and configuration; same source, migrations, Docker images and version (PROD-1).
+- Commercial configuration flows from the Sankhya-side "Configuração Sales Force" through worker/`SankhyaGateway` synchronization into a PostgreSQL configuration mirror/cache. Sankhya credentials live only in the worker (STACK-2) and clients never call Sankhya (P-03); the API and clients read the local mirror.
+- `packages/domain` receives configuration as typed input (for example `configuration.product.sellableUsageValues`). It never reads Sankhya or the database and holds no customer-specific literals.
+- Covered: account → seller mapping, allowed product-use values, customer-without-price-table policy (until configured, `CODTAB` null = no resolved price table), missing-price visibility/orderability, company, order/quotation TOP, payment defaults. Not covered: secrets (P-22, SEC-1), discount authority (P-10), authorization (P-21).
+- The source of configuration before the Sankhya-side model exists is UNDECIDED (U-11); nothing is hardcoded meanwhile.
 
 ---
 
@@ -277,7 +286,7 @@ Operations the `api` process may call synchronously (read-only, with timeout and
 
 ## 9. Mobile application (`apps/mobile`)
 
-- Expo with generated native projects and development builds; EAS Build/Update with signed updates (MOB-1).
+- Expo with generated native projects and development builds; EAS Build/Update with signed updates (MOB-1). Mobile is not on the critical path of the first implementation slice; Phase 0 builds only the toolchain shell.
 - Local encrypted SQLite through Drizzle (`packages/mobile-db`) holding only authorized data (MOB-2).
 - Business rules evaluated offline with `packages/domain`; the server revalidates everything (P-08).
 - Writes are recorded as commands in a local outbox and pushed per `sync-protocol.md`.
