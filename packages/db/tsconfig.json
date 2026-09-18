@@ -1,0 +1,10 @@
+{
+  "extends": "@salesforce/config/tsconfig.node.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["src", "tests", "drizzle.config.ts", "vitest.config.ts"]
+}

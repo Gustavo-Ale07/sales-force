@@ -1,0 +1,22 @@
+# Local development database only (bound to 127.0.0.1). Real deployments use deploy/docker-compose.yml.
+# The password default below is a throwaway local-development value, never used outside this container.
+name: salesforce-dev
+services:
+  postgres:
+    image: postgres:${POSTGRES_MAJOR:-17}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-salesforce}
+      POSTGRES_USER: ${POSTGRES_USER:-salesforce}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-salesforce_local_dev}
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-55432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-salesforce} -d ${POSTGRES_DB:-salesforce}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  pgdata:

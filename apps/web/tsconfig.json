@@ -1,0 +1,8 @@
+{
+  "extends": "@salesforce/config/tsconfig.web.json",
+  "compilerOptions": {
+    "types": ["vite/client", "node", "@testing-library/jest-dom"],
+    "declaration": false
+  },
+  "include": ["src", "vite.config.ts"]
+}

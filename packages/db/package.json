@@ -1,0 +1,37 @@
+{
+  "name": "@salesforce/db",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Sales Force PostgreSQL schema (Drizzle), reviewed SQL migrations and one-shot migration runner",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" }
+  },
+  "files": ["dist", "migrations"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "generate": "drizzle-kit generate",
+    "migrate": "pnpm run build && node dist/migrate/cli.js"
+  },
+  "dependencies": {
+    "drizzle-orm": "0.45.2",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "@salesforce/config": "workspace:*",
+    "@testcontainers/postgresql": "^12.1.0",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "0.31.10",
+    "eslint": "^10.10.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.70.0",
+    "vitest": "^5.0.1"
+  }
+}

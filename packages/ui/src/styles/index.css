@@ -1,0 +1,167 @@
+/*
+ * Sales Force design tokens (@salesforce/ui).
+ * Import after `@import "tailwindcss"` in the app stylesheet.
+ * Palette: neutral cool-grey surfaces, petroleum/emerald accent, semantic status colours.
+ * Colours are exposed twice: raw CSS variables (--sf-*) and Tailwind theme colours.
+ */
+:root {
+  color-scheme: light;
+
+  /* surfaces */
+  --sf-bg: #f3f5f7;
+  --sf-surface: #ffffff;
+  --sf-surface-2: #f6f8fa;
+  --sf-surface-3: #e9edf1;
+  --sf-border: #d9dfe5;
+  --sf-border-strong: #bcc6cf;
+
+  /* text (all >= 4.5:1 on --sf-surface) */
+  --sf-fg: #16202a;
+  --sf-fg-muted: #475462;
+  --sf-fg-faint: #5f6b78;
+
+  /* accent: petroleum / emerald */
+  --sf-accent: #0b6560;
+  --sf-accent-hover: #095550;
+  --sf-accent-weak: #e2f0ee;
+  --sf-accent-text: #084a46;
+  --sf-on-accent: #ffffff;
+  --sf-ring: #0f8a80;
+
+  /* semantic status */
+  --sf-ok: #17693d;
+  --sf-ok-bg: #e3f3e9;
+  --sf-warn: #8a5a00;
+  --sf-warn-bg: #fcf1d4;
+  --sf-danger: #b3261e;
+  --sf-danger-bg: #fbe8e6;
+  --sf-info: #2c55b0;
+  --sf-info-bg: #e7edfb;
+  --sf-neutral: #465363;
+  --sf-neutral-bg: #eceff3;
+
+  --sf-scrim: rgba(12, 18, 28, 0.46);
+
+  /* shape and elevation */
+  --sf-radius-sm: 3px;
+  --sf-radius: 4px;
+  --sf-radius-lg: 6px;
+  --sf-shadow-1: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.08);
+  --sf-shadow-2: 0 4px 12px rgba(16, 24, 40, 0.12), 0 1px 3px rgba(16, 24, 40, 0.1);
+
+  /* layout */
+  --sf-sidebar-w: 220px;
+  --sf-topbar-h: 48px;
+  --sf-control-h: 30px;
+}
+
+@theme inline {
+  --font-sans: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", Consolas, "SFMono-Regular", Menlo, monospace;
+
+  --color-bg: var(--sf-bg);
+  --color-surface: var(--sf-surface);
+  --color-surface-2: var(--sf-surface-2);
+  --color-surface-3: var(--sf-surface-3);
+  --color-line: var(--sf-border);
+  --color-line-strong: var(--sf-border-strong);
+  --color-fg: var(--sf-fg);
+  --color-fg-muted: var(--sf-fg-muted);
+  --color-fg-faint: var(--sf-fg-faint);
+  --color-accent: var(--sf-accent);
+  --color-accent-hover: var(--sf-accent-hover);
+  --color-accent-weak: var(--sf-accent-weak);
+  --color-accent-text: var(--sf-accent-text);
+  --color-on-accent: var(--sf-on-accent);
+  --color-ring: var(--sf-ring);
+  --color-ok: var(--sf-ok);
+  --color-ok-bg: var(--sf-ok-bg);
+  --color-warn: var(--sf-warn);
+  --color-warn-bg: var(--sf-warn-bg);
+  --color-danger: var(--sf-danger);
+  --color-danger-bg: var(--sf-danger-bg);
+  --color-info: var(--sf-info);
+  --color-info-bg: var(--sf-info-bg);
+  --color-neutral: var(--sf-neutral);
+  --color-neutral-bg: var(--sf-neutral-bg);
+  --color-scrim: var(--sf-scrim);
+
+  --radius-sm: var(--sf-radius-sm);
+  --radius-md: var(--sf-radius);
+  --radius-lg: var(--sf-radius-lg);
+  --shadow-card: var(--sf-shadow-1);
+  --shadow-pop: var(--sf-shadow-2);
+
+  /* dense type scale */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.0625rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.875rem;
+  --text-base--line-height: 1.375rem;
+  --text-lg: 1rem;
+  --text-lg--line-height: 1.5rem;
+  --text-xl: 1.125rem;
+  --text-xl--line-height: 1.5rem;
+  --text-2xl: 1.375rem;
+  --text-2xl--line-height: 1.75rem;
+
+  --animate-sf-fade-in: sf-fade-in 120ms ease-out;
+  --animate-sf-slide-in-right: sf-slide-in-right 160ms ease-out;
+  --animate-sf-slide-in-left: sf-slide-in-left 160ms ease-out;
+  --animate-sf-toast-in: sf-toast-in 160ms ease-out;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--sf-bg);
+    color: var(--sf-fg);
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid var(--sf-ring);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: var(--sf-accent-weak);
+  }
+  a {
+    color: var(--sf-accent);
+  }
+}
+
+@keyframes sf-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes sf-slide-in-right {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes sf-slide-in-left {
+  from { transform: translateX(-24px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes sf-toast-in {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

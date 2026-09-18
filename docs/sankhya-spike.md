@@ -857,3 +857,21 @@ Recorded in `decisions.md` §3.8. Where this section and an earlier proposal in 
 | Spike credentials (§9.1) | Exposed; rotate before runtime use; never stored in the repository | SEC-1 |
 | Identifiers in this document | Technical ERP codes allowed; names and legal identifiers sanitized | DOC-1 |
 | Product model | Reusable product, one isolated installation per customer; configuration governed from Sankhya | PROD-1, CFG-1 |
+
+### 9.42 `packages/sankhya` read adapter — what is validated and what is not (2026-09-18)
+
+Implementation note for Phase 0 slice 1. No Sankhya environment was contacted; the adapter is exercised only against a mocked HTTP layer and a synthetic fake. Everything below is NEEDS VALIDATION in an owner-authorized non-production environment before the real read path is trusted.
+
+| Item | Status |
+|---|---|
+| Wire format: OAuth form fields, `X-Token` sent only on `/authenticate`, `Authorization: Bearer` on gateway calls, `DbExplorerSP.executeQuery` request/response envelope (`fieldsMetadata[].name`, `rows`, `burstLimit`, `status`, `statusMessage`) | Taken from public developer documentation and F-01…F-04, F-19, F-31; not re-observed by this work. NEEDS VALIDATION |
+| Reads implemented: sellers (TGFVEN), customers (TGFPAR), products (TGFPRO), price-table versions (TGFTAB), list prices (TGFEXC), all with `ORDER BY <full PK>` + `OFFSET/FETCH` (F-23, F-30) and a trailing COUNT check | Column contracts from §9.35; paging from F-23. Live behavior NEEDS VALIDATION |
+| Customers filtered by `CLIENTE = 'S'` in a paged read | NEEDS VALIDATION (business meaning of the flag and completeness of the filtered set) |
+| `BLOQUEAR` null read as "not blocked"; `BLOQUEAR` semantics | NEEDS VALIDATION |
+| `CODVEND = 0` and null seller passed through as recorded, never converted | NEEDS VALIDATION (meaning of 0) |
+| Product-group description column and price-table name/active columns | NEEDS VALIDATION; `readProductGroups` and `readPriceTables` throw `NotImplementedError` (query the data dictionary in an authorized environment first) |
+| `DTVIGOR` granularity and DB time zone (adapter assumes UTC-03:00 from F-39 and is configurable; date-only read via `TO_CHAR`) | NEEDS VALIDATION |
+| Derived tables: `CODTABORIG` and `PERCENTUAL` are per version in the ERP, per table in the domain type; percentage may be negative while the domain decimal is unsigned | NEEDS VALIDATION / modeling question for the architect |
+| `readConfiguration()` against Sankhya | NotImplemented (U-10, U-11); only the bootstrap file source (`SF_CONFIG_FILE`) exists |
+| `submitOrder` | Type only; both implementations throw `NotImplementedError` (SNK-4, SNK-5, SNK-6, V-11, V-13) |
+| Request limits, rate-limit responses, concurrency | Unmeasured (§5); adapter serializes requests |

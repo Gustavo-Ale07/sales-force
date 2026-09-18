@@ -1,0 +1,5 @@
+@import "tailwindcss";
+@import "@salesforce/ui/styles.css";
+
+/* Tailwind must scan the design-system sources too (they live outside this app). */
+@source "../../../packages/ui/src";

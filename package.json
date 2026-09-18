@@ -1,0 +1,32 @@
+{
+  "name": "salesforce",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Sales Force — reusable commercial platform (one isolated installation per customer)",
+  "packageManager": "pnpm@11.23.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm -r --if-present run build",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "lint": "pnpm -r --if-present run lint",
+    "test": "pnpm -r --if-present run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:migrate": "pnpm --filter @salesforce/db run migrate",
+    "db:seed": "pnpm --filter @salesforce/server run seed",
+    "dev:api": "pnpm --filter @salesforce/server run dev:api",
+    "dev:worker": "pnpm --filter @salesforce/server run dev:worker",
+    "dev:web": "pnpm --filter @salesforce/web run dev",
+    "turbo:build": "turbo run build",
+    "turbo:typecheck": "turbo run typecheck",
+    "turbo:lint": "turbo run lint",
+    "turbo:test": "turbo run test"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.7",
+    "turbo": "^2.10.13",
+    "typescript": "6.0.3"
+  }
+}

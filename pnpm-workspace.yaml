@@ -1,0 +1,9 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+# Dependency build scripts are denied by default (supply-chain hygiene). Enable one only after a review.
+allowBuilds:
+  cpu-features: false
+  esbuild: false
+  protobufjs: false
+  ssh2: false

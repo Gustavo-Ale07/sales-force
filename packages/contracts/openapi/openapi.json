@@ -1,0 +1,3536 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Sales Force API",
+    "version": "1.0.0",
+    "description": "Sales Force HTTP API. Generated from the Zod contracts in @salesforce/contracts; do not edit by hand. Decimal values are strings. Errors use { code, message, details? }."
+  },
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
+  "tags": [
+    {
+      "name": "auth"
+    },
+    {
+      "name": "catalog"
+    },
+    {
+      "name": "configuration"
+    },
+    {
+      "name": "customers"
+    },
+    {
+      "name": "dashboard"
+    },
+    {
+      "name": "orders"
+    },
+    {
+      "name": "platform"
+    },
+    {
+      "name": "sellers"
+    }
+  ],
+  "security": [
+    {
+      "sessionCookie": []
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "tags": [
+          "platform"
+        ],
+        "summary": "Liveness",
+        "description": "The process is up. Does not check the database or the integration.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "API no ar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ready": {
+      "get": {
+        "operationId": "getReady",
+        "tags": [
+          "platform"
+        ],
+        "summary": "Readiness",
+        "description": "Database, migration level and integration summary. A degraded integration does not make the API not ready.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Pronta (ready) ou degradada (degraded)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Não pronta (not_ready)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "login",
+        "tags": [
+          "auth"
+        ],
+        "summary": "Sign in",
+        "description": "Sets the HttpOnly session cookie. The response body carries no token.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sessão criada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthenticatedSession"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Muitas tentativas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Serviço indisponível",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "tags": [
+          "auth"
+        ],
+        "summary": "Sign out",
+        "responses": {
+          "204": {
+            "description": "Sessão encerrada"
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/session": {
+      "get": {
+        "operationId": "getSession",
+        "tags": [
+          "auth"
+        ],
+        "summary": "Current session",
+        "description": "Always 200: `authenticated` tells whether a valid session exists.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Estado da sessão",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/configuration": {
+      "get": {
+        "operationId": "getConfiguration",
+        "tags": [
+          "configuration"
+        ],
+        "summary": "Installation configuration summary and integration state",
+        "description": "Client-safe snapshot summary, sync states, gateway mode. Never contains secrets.",
+        "responses": {
+          "200": {
+            "description": "Configuração vigente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Serviço indisponível",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dashboard": {
+      "get": {
+        "operationId": "getDashboard",
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Dashboard KPIs within the actor scope",
+        "responses": {
+          "200": {
+            "description": "Indicadores",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sellers": {
+      "get": {
+        "operationId": "listSellers",
+        "tags": [
+          "sellers"
+        ],
+        "summary": "List sellers visible to the actor",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Vendedores",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SellersResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/customers": {
+      "get": {
+        "operationId": "listCustomers",
+        "tags": [
+          "customers"
+        ],
+        "summary": "Customer portfolio (scoped)",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/CustomerStatusFilter"
+            }
+          },
+          {
+            "name": "sellerCode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "hasPriceTable",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": "name",
+              "$ref": "#/components/schemas/CustomerSort"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Carteira de clientes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomersResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/customers/{code}": {
+      "get": {
+        "operationId": "getCustomer",
+        "tags": [
+          "customers"
+        ],
+        "summary": "Customer detail (scoped)",
+        "description": "A customer outside the actor scope is reported as 404.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cliente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/product-groups": {
+      "get": {
+        "operationId": "listProductGroups",
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Product groups",
+        "responses": {
+          "200": {
+            "description": "Grupos de produto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductGroupsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/products": {
+      "get": {
+        "operationId": "listProducts",
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Product catalog with list price context",
+        "description": "With `customerCode` prices are resolved against that customer table (within scope); otherwise against the catalog reference table.",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "group",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "sellable",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "priceState",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ListPriceState"
+            }
+          },
+          {
+            "name": "customerCode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": "description",
+              "$ref": "#/components/schemas/ProductSort"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Produtos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/products/{code}": {
+      "get": {
+        "operationId": "getProduct",
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Product detail with list price context",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "customerCode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Produto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders": {
+      "get": {
+        "operationId": "listOrders",
+        "tags": [
+          "orders"
+        ],
+        "summary": "Orders and drafts (scoped)",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/OrderStatus"
+            }
+          },
+          {
+            "name": "customerCode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": "-updatedAt",
+              "$ref": "#/components/schemas/OrderSort"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pedidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrdersResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createOrder",
+        "tags": [
+          "orders"
+        ],
+        "summary": "Create a draft order",
+        "description": "Idempotent on `clientRequestId`: 201 when created, 200 with the original order on a replay of the same payload, 409 idempotency_conflict when the id was used with a different payload. Prices are always computed server-side.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOrderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reenvio idempotente: pedido original",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderDetail"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Rascunho criado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflito de estado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{id}": {
+      "get": {
+        "operationId": "getOrder",
+        "tags": [
+          "orders"
+        ],
+        "summary": "Order detail (scoped)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pedido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "replaceOrder",
+        "tags": [
+          "orders"
+        ],
+        "summary": "Replace a draft (optimistic concurrency)",
+        "description": "Full replace. 409 version_conflict when `expectedVersion` is stale; 409 order_not_editable when the order is not a draft. The server recomputes prices and totals.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceOrderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Rascunho atualizado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflito de estado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "discardOrder",
+        "tags": [
+          "orders"
+        ],
+        "summary": "Discard a draft (status becomes cancelled)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Rascunho descartado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflito de estado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{id}/submit": {
+      "post": {
+        "operationId": "submitOrder",
+        "tags": [
+          "orders"
+        ],
+        "summary": "Submit an order to the ERP (disabled)",
+        "description": "Always 409 erp_submission_disabled until the ERP write-safety gates close (SNK-4/SNK-5).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Envio ao ERP aguardando conclusão da integração segura",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErpSubmissionDisabledError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Account": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/AccountRole"
+          },
+          "sellerCodes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "displayName",
+          "role",
+          "sellerCodes"
+        ],
+        "additionalProperties": false
+      },
+      "AccountRole": {
+        "type": "string",
+        "enum": [
+          "admin",
+          "manager",
+          "seller"
+        ]
+      },
+      "AnonymousSession": {
+        "type": "object",
+        "properties": {
+          "authenticated": {
+            "type": "boolean",
+            "const": false
+          },
+          "authMode": {
+            "$ref": "#/components/schemas/AuthMode"
+          }
+        },
+        "required": [
+          "authenticated",
+          "authMode"
+        ],
+        "additionalProperties": false
+      },
+      "ApiError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "message": {
+            "type": "string"
+          },
+          "details": {
+            "$ref": "#/components/schemas/ErrorDetails"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "additionalProperties": false
+      },
+      "AuthMode": {
+        "type": "string",
+        "enum": [
+          "dev"
+        ]
+      },
+      "AuthenticatedSession": {
+        "type": "object",
+        "properties": {
+          "authenticated": {
+            "type": "boolean",
+            "const": true
+          },
+          "authMode": {
+            "$ref": "#/components/schemas/AuthMode"
+          },
+          "account": {
+            "$ref": "#/components/schemas/Account"
+          },
+          "expiresAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          }
+        },
+        "required": [
+          "authenticated",
+          "authMode",
+          "account",
+          "expiresAt"
+        ],
+        "additionalProperties": false
+      },
+      "ConfigurationResponse": {
+        "type": "object",
+        "properties": {
+          "contentHash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "configuration": {
+            "$ref": "#/components/schemas/ConfigurationSummary"
+          },
+          "syncStates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SyncState"
+            }
+          },
+          "gateway": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "$ref": "#/components/schemas/GatewayMode"
+              }
+            },
+            "required": [
+              "mode"
+            ],
+            "additionalProperties": false
+          },
+          "integration": {
+            "$ref": "#/components/schemas/IntegrationSummary"
+          }
+        },
+        "required": [
+          "contentHash",
+          "configuration",
+          "syncStates",
+          "gateway",
+          "integration"
+        ],
+        "additionalProperties": false
+      },
+      "ConfigurationSourceKind": {
+        "type": "string",
+        "enum": [
+          "sankhya",
+          "bootstrap-file",
+          "demo"
+        ]
+      },
+      "ConfigurationSummary": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "number",
+            "const": 1
+          },
+          "source": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "$ref": "#/components/schemas/ConfigurationSourceKind"
+              },
+              "version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "syncedAt": {
+                "$ref": "#/components/schemas/IsoTimestamp"
+              }
+            },
+            "required": [
+              "kind",
+              "version",
+              "syncedAt"
+            ],
+            "additionalProperties": false
+          },
+          "general": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "enabledCompanyCodes": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "required": [
+              "enabled",
+              "enabledCompanyCodes"
+            ],
+            "additionalProperties": false
+          },
+          "sales": {
+            "type": "object",
+            "properties": {
+              "orderTopCode": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "quotationTopCode": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "defaultNegotiationTypeCode": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "negotiationTypes": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/NegotiationType"
+                }
+              },
+              "orderBehavior": {
+                "type": "object",
+                "properties": {
+                  "allowDraftWithoutPrice": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "allowDraftWithoutPrice"
+                ],
+                "additionalProperties": false
+              },
+              "confirmationBehavior": {
+                "$ref": "#/components/schemas/ConfirmationBehavior"
+              }
+            },
+            "required": [
+              "orderTopCode",
+              "quotationTopCode",
+              "defaultNegotiationTypeCode",
+              "negotiationTypes",
+              "orderBehavior",
+              "confirmationBehavior"
+            ],
+            "additionalProperties": false
+          },
+          "customers": {
+            "type": "object",
+            "properties": {
+              "portfolioOwnership": {
+                "type": "object",
+                "properties": {
+                  "strategy": {
+                    "$ref": "#/components/schemas/PortfolioOwnershipStrategy"
+                  }
+                },
+                "required": [
+                  "strategy"
+                ],
+                "additionalProperties": false
+              },
+              "customerWithoutPriceTable": {
+                "$ref": "#/components/schemas/CustomerWithoutPriceTablePolicy"
+              },
+              "creditFeatures": {
+                "type": "object",
+                "properties": {
+                  "showCreditLimit": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "showCreditLimit"
+                ],
+                "additionalProperties": false
+              },
+              "accountSellerLinkCount": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "portfolioOwnership",
+              "customerWithoutPriceTable",
+              "creditFeatures",
+              "accountSellerLinkCount"
+            ],
+            "additionalProperties": false
+          },
+          "products": {
+            "type": "object",
+            "properties": {
+              "sellableUsageValues": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 20
+                }
+              },
+              "showInactive": {
+                "type": "boolean"
+              },
+              "productWithoutPrice": {
+                "type": "object",
+                "properties": {
+                  "visible": {
+                    "type": "boolean"
+                  },
+                  "orderable": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "visible",
+                  "orderable"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "sellableUsageValues",
+              "showInactive",
+              "productWithoutPrice"
+            ],
+            "additionalProperties": false
+          },
+          "pricing": {
+            "type": "object",
+            "properties": {
+              "customerTableStrategy": {
+                "type": "string",
+                "const": "customer_table"
+              },
+              "fallbackStrategy": {
+                "$ref": "#/components/schemas/FallbackStrategy"
+              },
+              "fallbackTableCode": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "catalogReferenceTableCode": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "missingPrice": {
+                "type": "string",
+                "const": "no_price_state"
+              }
+            },
+            "required": [
+              "customerTableStrategy",
+              "fallbackStrategy",
+              "fallbackTableCode",
+              "catalogReferenceTableCode",
+              "missingPrice"
+            ],
+            "additionalProperties": false
+          },
+          "financial": {
+            "type": "object",
+            "properties": {
+              "showFinancialArea": {
+                "type": "boolean"
+              },
+              "overdueTitles": {
+                "type": "boolean"
+              },
+              "creditChecks": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "showFinancialArea",
+              "overdueTitles",
+              "creditChecks"
+            ],
+            "additionalProperties": false
+          },
+          "features": {
+            "$ref": "#/components/schemas/FeatureFlags"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "source",
+          "general",
+          "sales",
+          "customers",
+          "products",
+          "pricing",
+          "financial",
+          "features"
+        ],
+        "additionalProperties": false
+      },
+      "ConfirmationBehavior": {
+        "type": "string",
+        "enum": [
+          "manual",
+          "automatic",
+          "disabled"
+        ]
+      },
+      "CreateOrderRequest": {
+        "type": "object",
+        "properties": {
+          "clientRequestId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "customerCode": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "negotiationTypeCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "items": {
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderItemInput"
+            }
+          }
+        },
+        "required": [
+          "clientRequestId",
+          "customerCode",
+          "negotiationTypeCode",
+          "notes",
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "CustomerDetail": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "tradeName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "document": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "blocked": {
+            "type": "boolean"
+          },
+          "sellerCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sellerName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "priceTableCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "priceTableName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolvedPriceTable": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "customer",
+                      "fallback"
+                    ]
+                  }
+                },
+                "required": [
+                  "code",
+                  "source"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "creditLimit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "syncedAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "tradeName",
+          "document",
+          "active",
+          "blocked",
+          "sellerCode",
+          "sellerName",
+          "priceTableCode",
+          "priceTableName",
+          "resolvedPriceTable",
+          "creditLimit",
+          "syncedAt"
+        ],
+        "additionalProperties": false
+      },
+      "CustomerListItem": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "tradeName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "document": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "blocked": {
+            "type": "boolean"
+          },
+          "sellerCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sellerName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "priceTableCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "tradeName",
+          "document",
+          "active",
+          "blocked",
+          "sellerCode",
+          "sellerName",
+          "priceTableCode"
+        ],
+        "additionalProperties": false
+      },
+      "CustomerSort": {
+        "type": "string",
+        "enum": [
+          "name",
+          "-name",
+          "code",
+          "-code"
+        ]
+      },
+      "CustomerStatusFilter": {
+        "type": "string",
+        "enum": [
+          "active",
+          "inactive",
+          "blocked"
+        ]
+      },
+      "CustomerWithoutPriceTablePolicy": {
+        "type": "string",
+        "enum": [
+          "no_resolved_table",
+          "use_fallback_table"
+        ]
+      },
+      "CustomersResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomerListItem"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ],
+        "additionalProperties": false
+      },
+      "DashboardResponse": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/DashboardScope"
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MetricGroup"
+            }
+          },
+          "recentOrders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderListItem"
+            }
+          }
+        },
+        "required": [
+          "generatedAt",
+          "scope",
+          "groups",
+          "recentOrders"
+        ],
+        "additionalProperties": false
+      },
+      "DashboardScope": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "all",
+              "sellers"
+            ]
+          },
+          "sellerCodes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "required": [
+          "kind",
+          "sellerCodes"
+        ],
+        "additionalProperties": false
+      },
+      "DecimalString": {
+        "type": "string",
+        "maxLength": 40,
+        "pattern": "^\\d+(\\.\\d+)?$"
+      },
+      "ErpSubmissionDisabledError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "const": "erp_submission_disabled"
+          },
+          "message": {
+            "type": "string"
+          },
+          "details": {
+            "$ref": "#/components/schemas/ErrorDetails"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "additionalProperties": false
+      },
+      "ErrorCode": {
+        "type": "string",
+        "enum": [
+          "validation_failed",
+          "unauthenticated",
+          "invalid_credentials",
+          "forbidden",
+          "not_found",
+          "conflict",
+          "version_conflict",
+          "idempotency_conflict",
+          "order_not_editable",
+          "installation_not_enabled",
+          "erp_submission_disabled",
+          "rate_limited",
+          "service_unavailable",
+          "internal_error"
+        ]
+      },
+      "ErrorDetails": {
+        "type": "object",
+        "properties": {
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ErrorIssue"
+            }
+          }
+        },
+        "additionalProperties": {}
+      },
+      "ErrorIssue": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "code"
+        ],
+        "additionalProperties": false
+      },
+      "FallbackStrategy": {
+        "type": "string",
+        "enum": [
+          "none",
+          "fixed_table"
+        ]
+      },
+      "FeatureFlags": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "additionalProperties": {
+          "type": "boolean"
+        }
+      },
+      "GatewayMode": {
+        "type": "string",
+        "enum": [
+          "fake",
+          "live"
+        ]
+      },
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ok"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "IntegrationSummary": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "degraded",
+              "not_configured"
+            ]
+          },
+          "gatewayMode": {
+            "$ref": "#/components/schemas/GatewayMode"
+          },
+          "lastSuccessAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IsoTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "failingEntities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "state",
+          "gatewayMode",
+          "lastSuccessAt",
+          "failingEntities",
+          "message"
+        ],
+        "additionalProperties": false
+      },
+      "IsoTimestamp": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "ListPriceContext": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "state": {
+                "type": "string",
+                "const": "priced"
+              },
+              "unitPrice": {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              "tableCode": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "versionId": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "noPriceReason": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "state",
+              "unitPrice",
+              "tableCode",
+              "versionId",
+              "noPriceReason"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "state": {
+                "type": "string",
+                "const": "zero"
+              },
+              "unitPrice": {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              "tableCode": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "versionId": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "noPriceReason": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "state",
+              "unitPrice",
+              "tableCode",
+              "versionId",
+              "noPriceReason"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "state": {
+                "type": "string",
+                "const": "none"
+              },
+              "unitPrice": {
+                "type": "null"
+              },
+              "tableCode": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "versionId": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "noPriceReason": {
+                "$ref": "#/components/schemas/NoPriceReason"
+              }
+            },
+            "required": [
+              "state",
+              "unitPrice",
+              "tableCode",
+              "versionId",
+              "noPriceReason"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "ListPriceState": {
+        "type": "string",
+        "enum": [
+          "priced",
+          "zero",
+          "none"
+        ]
+      },
+      "LoginRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 254,
+            "format": "email",
+            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "additionalProperties": false
+      },
+      "Metric": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "value",
+          "description"
+        ],
+        "additionalProperties": false
+      },
+      "MetricGroup": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/MetricGroupKey"
+          },
+          "label": {
+            "type": "string"
+          },
+          "demo": {
+            "type": "boolean"
+          },
+          "metrics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Metric"
+            }
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "demo",
+          "metrics"
+        ],
+        "additionalProperties": false
+      },
+      "MetricGroupKey": {
+        "type": "string",
+        "enum": [
+          "portfolio",
+          "catalog",
+          "orders",
+          "credit",
+          "positivation"
+        ]
+      },
+      "MetricValue": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "count"
+              },
+              "value": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "kind",
+              "value"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "money"
+              },
+              "value": {
+                "$ref": "#/components/schemas/DecimalString"
+              }
+            },
+            "required": [
+              "kind",
+              "value"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "percent"
+              },
+              "value": {
+                "$ref": "#/components/schemas/DecimalString"
+              }
+            },
+            "required": [
+              "kind",
+              "value"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "NegotiationType": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "code",
+          "label"
+        ],
+        "additionalProperties": false
+      },
+      "NoPriceReason": {
+        "type": "string",
+        "enum": [
+          "no_resolved_table",
+          "no_effective_version",
+          "no_price_row"
+        ]
+      },
+      "OrderDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "draftNumber": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "customerCode": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "customerName": {
+            "type": "string"
+          },
+          "sellerCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/OrderStatus"
+          },
+          "estimatedTotal": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "itemCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "isPartial": {
+            "type": "boolean"
+          },
+          "erpNumber": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          },
+          "negotiationTypeCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderItem"
+            }
+          },
+          "totals": {
+            "$ref": "#/components/schemas/OrderTotals"
+          }
+        },
+        "required": [
+          "id",
+          "draftNumber",
+          "customerCode",
+          "customerName",
+          "sellerCode",
+          "status",
+          "estimatedTotal",
+          "itemCount",
+          "isPartial",
+          "erpNumber",
+          "version",
+          "createdAt",
+          "updatedAt",
+          "negotiationTypeCode",
+          "notes",
+          "items",
+          "totals"
+        ],
+        "additionalProperties": false
+      },
+      "OrderItem": {
+        "type": "object",
+        "properties": {
+          "lineNo": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "productCode": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "productDescription": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "quantity": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "unitListPrice": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "priceState": {
+            "$ref": "#/components/schemas/ListPriceState"
+          },
+          "priceTableCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "priceVersionId": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "estimatedLineTotal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "lineNo",
+          "productCode",
+          "productDescription",
+          "unit",
+          "quantity",
+          "unitListPrice",
+          "priceState",
+          "priceTableCode",
+          "priceVersionId",
+          "estimatedLineTotal"
+        ],
+        "additionalProperties": false
+      },
+      "OrderItemInput": {
+        "type": "object",
+        "properties": {
+          "productCode": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "quantity": {
+            "$ref": "#/components/schemas/DecimalString"
+          }
+        },
+        "required": [
+          "productCode",
+          "quantity"
+        ],
+        "additionalProperties": false
+      },
+      "OrderListItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "draftNumber": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "customerCode": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "customerName": {
+            "type": "string"
+          },
+          "sellerCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/OrderStatus"
+          },
+          "estimatedTotal": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "itemCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "isPartial": {
+            "type": "boolean"
+          },
+          "erpNumber": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          }
+        },
+        "required": [
+          "id",
+          "draftNumber",
+          "customerCode",
+          "customerName",
+          "sellerCode",
+          "status",
+          "estimatedTotal",
+          "itemCount",
+          "isPartial",
+          "erpNumber",
+          "version",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "OrderSort": {
+        "type": "string",
+        "enum": [
+          "updatedAt",
+          "-updatedAt",
+          "draftNumber",
+          "-draftNumber"
+        ]
+      },
+      "OrderStatus": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "cancelled",
+          "queued",
+          "sent",
+          "rejected",
+          "unknown"
+        ]
+      },
+      "OrderTotals": {
+        "type": "object",
+        "properties": {
+          "estimatedTotal": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "lineCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "unpricedLineCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "isPartial": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "estimatedTotal",
+          "lineCount",
+          "unpricedLineCount",
+          "isPartial"
+        ],
+        "additionalProperties": false
+      },
+      "OrdersResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderListItem"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ],
+        "additionalProperties": false
+      },
+      "PortfolioOwnershipStrategy": {
+        "type": "string",
+        "enum": [
+          "customer_seller_field",
+          "explicit_account_links",
+          "all_visible"
+        ]
+      },
+      "PriceContext": {
+        "type": "object",
+        "properties": {
+          "customerCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tableCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tableName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "customer",
+              "fallback",
+              "catalog_reference",
+              "none"
+            ]
+          }
+        },
+        "required": [
+          "customerCode",
+          "tableCode",
+          "tableName",
+          "source"
+        ],
+        "additionalProperties": false
+      },
+      "ProductDetail": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "sellable": {
+            "type": "boolean"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "brand": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reference": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "groupCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "groupName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "listPrice": {
+            "$ref": "#/components/schemas/ListPriceContext"
+          },
+          "usageCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "priceContext": {
+            "$ref": "#/components/schemas/PriceContext"
+          }
+        },
+        "required": [
+          "code",
+          "description",
+          "active",
+          "sellable",
+          "unit",
+          "brand",
+          "reference",
+          "groupCode",
+          "groupName",
+          "listPrice",
+          "usageCode",
+          "priceContext"
+        ],
+        "additionalProperties": false
+      },
+      "ProductGroup": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "ProductGroupsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductGroup"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "ProductListItem": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "sellable": {
+            "type": "boolean"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "brand": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reference": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "groupCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "groupName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "listPrice": {
+            "$ref": "#/components/schemas/ListPriceContext"
+          }
+        },
+        "required": [
+          "code",
+          "description",
+          "active",
+          "sellable",
+          "unit",
+          "brand",
+          "reference",
+          "groupCode",
+          "groupName",
+          "listPrice"
+        ],
+        "additionalProperties": false
+      },
+      "ProductSort": {
+        "type": "string",
+        "enum": [
+          "description",
+          "-description",
+          "code",
+          "-code"
+        ]
+      },
+      "ProductsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductListItem"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "priceContext": {
+            "$ref": "#/components/schemas/PriceContext"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total",
+          "priceContext"
+        ],
+        "additionalProperties": false
+      },
+      "ReadyResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "degraded",
+              "not_ready"
+            ]
+          },
+          "checks": {
+            "type": "object",
+            "properties": {
+              "database": {
+                "type": "string",
+                "enum": [
+                  "ok",
+                  "fail"
+                ]
+              },
+              "migrations": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "ok",
+                      "behind",
+                      "ahead",
+                      "unknown"
+                    ]
+                  },
+                  "applied": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "expected": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "status",
+                  "applied",
+                  "expected"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "database",
+              "migrations"
+            ],
+            "additionalProperties": false
+          },
+          "integration": {
+            "$ref": "#/components/schemas/IntegrationSummary"
+          }
+        },
+        "required": [
+          "status",
+          "checks",
+          "integration"
+        ],
+        "additionalProperties": false
+      },
+      "ReplaceOrderRequest": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "customerCode": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "negotiationTypeCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "items": {
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderItemInput"
+            }
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "customerCode",
+          "negotiationTypeCode",
+          "notes",
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "Seller": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "active"
+        ],
+        "additionalProperties": false
+      },
+      "SellersResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Seller"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "SessionResponse": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/AuthenticatedSession"
+          },
+          {
+            "$ref": "#/components/schemas/AnonymousSession"
+          }
+        ]
+      },
+      "SyncState": {
+        "type": "object",
+        "properties": {
+          "entity": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "status": {
+            "$ref": "#/components/schemas/SyncStatus"
+          },
+          "lastSuccessAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IsoTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lastAttemptAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IsoTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lastFullReconcileAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IsoTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rowCount": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lastErrorClass": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastErrorMessage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "entity",
+          "status",
+          "lastSuccessAt",
+          "lastAttemptAt",
+          "lastFullReconcileAt",
+          "rowCount",
+          "lastErrorClass",
+          "lastErrorMessage"
+        ],
+        "additionalProperties": false
+      },
+      "SyncStatus": {
+        "type": "string",
+        "enum": [
+          "idle",
+          "running",
+          "succeeded",
+          "failed"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "sessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "sf_session"
+      }
+    }
+  }
+}

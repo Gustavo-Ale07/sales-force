@@ -1,0 +1,35 @@
+{
+  "name": "@salesforce/domain",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Sales Force pure business rules (no framework, no infrastructure, no Node built-ins)",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint src test",
+    "test": "vitest run && node scripts/check-boundaries.mjs",
+    "check:boundaries": "node scripts/check-boundaries.mjs"
+  },
+  "dependencies": {
+    "decimal.js": "10.6.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@salesforce/config": "workspace:*",
+    "eslint": "10.10.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.70.0",
+    "vitest": "5.0.1"
+  }
+}
