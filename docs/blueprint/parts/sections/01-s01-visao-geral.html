@@ -1,0 +1,94 @@
+<section class="doc-section" id="s01" data-group="Parte I · Produto" data-num="1" data-title="Visão Geral" data-kw="objetivo problema critérios sucesso premissas escala usuários">
+  <div class="sec-head"><span class="sec-num">01</span><h2>Visão Geral</h2><div class="sec-meta"><span class="badge st-A">P-01 · P-02 aprovados</span><span class="badge st-D">spec §1–§2</span></div></div>
+  <p class="lead">Sistema <b>sob medida, interno e single-tenant</b> para uma indústria, com <b>20 a 100 usuários</b> no início (P-01). Une em uma plataforma a força de vendas com pedidos offline integrados ao Sankhya e o CRM gerencial, com importação de planilhas e IA controlada pelo backend.</p>
+  <div class="grid-3">
+    <div class="card">
+      <div class="card-h"><strong>Força de vendas</strong><span class="tag">Fase 1</span></div>
+      <p class="small">Substitui o Vidya Force: carteira, títulos, crédito, histórico, pedidos e orçamentos (inclusive offline), aprovações, revisão de preço, metas, positivação e comissões lidas do Sankhya.</p>
+      <div class="chips"><span class="ref">RF-ORD-1</span><span class="ref">RF-ACC-2</span><span class="ref">RF-GOL-1</span></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><strong>CRM gerencial</strong><span class="tag">Fase 2</span></div>
+      <p class="small">Substitui o Agendor: leads, contas, funis configuráveis, oportunidades, propostas com PDF, follow-ups, automações pré-definidas e dashboards.</p>
+      <div class="chips"><span class="ref">RF-OPP-1</span><span class="ref">RF-PRP-1</span><span class="ref">RF-AUT-1</span></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><strong>Inteligência e canais</strong><span class="tag">Fase 3</span></div>
+      <p class="small">Construtor de regras, assistente interno com ferramentas somente leitura, resumo e próxima ação, mix sugerido, churn, captura de leads e telefonia.</p>
+      <div class="chips"><span class="ref">RF-IA-1</span><span class="ref">RF-AUT-4</span><span class="badge st-A">P-14</span></div>
+    </div>
+  </div>
+
+  <h3>Problema atual</h3>
+  <ul>
+    <li>Duas ferramentas pagas e desconectadas (Vidya Force + Agendor), com dados duplicados e sem visão única do cliente.</li>
+    <li>O CRM não enxerga o que o cliente compra ou deve no Sankhya; a força de vendas não enxerga o funil.</li>
+  </ul>
+
+  <h3>O sistema em uma visão</h3>
+  <div class="diagram" role="img" aria-label="Visão resumida: web e app mobile falam apenas com a API; o worker é o único que fala com o Sankhya">
+    <div class="ctx">
+      <div class="col">
+        <div class="box client"><b>Web (SPA)</b>Vendedores internos, gestores, backoffice, admin<br><span class="badge st-P">STACK-5</span></div>
+        <div class="box client"><b>App mobile offline</b>Representantes PJ (e internos)<br><span class="badge st-A">P-07</span> <span class="badge st-P">MOB-1</span></div>
+      </div>
+      <div class="zone">
+        <div class="zone-l">Sales Force (monólito modular) <span class="badge st-A">P-04</span></div>
+        <div class="grid-2">
+          <div class="box"><b>server: API</b>Autenticação, autorização, regras orquestradas, sync<br><span class="badge st-A">STACK-2</span></div>
+          <div class="box"><b>server: Worker</b>Espelho Sankhya, outbox, jobs, e-mail, PDFs<br><span class="badge st-A">STACK-2</span></div>
+        </div>
+        <div class="arrow-d">dados</div>
+        <div class="box store"><b>PostgreSQL gerenciado (PITR)</b>Dados, espelho Sankhya, filas pg-boss, auditoria<br><span class="badge st-A">OPS-1</span> <span class="badge st-A">STACK-6</span> <span class="badge st-V">V-04</span></div>
+      </div>
+      <div class="col">
+        <div class="box sankhya"><b>Sankhya ERP</b>Sistema de registro dos dados de ERP<br><span class="badge st-A">P-02</span> <span class="badge st-A">P-03</span></div>
+        <div class="box ext"><b>Armazenamento S3</b>PDFs, planilhas, imagens<br><span class="badge st-A">STACK-7</span></div>
+        <div class="box ext"><b>Claude API</b>Somente pelo backend (Fase 3)<br><span class="badge st-A">P-14</span></div>
+      </div>
+    </div>
+    <p class="diagram-cap">Web e mobile nunca falam com o Sankhya (P-03, APROVADO). Detalhe completo na seção <a href="#s07">7 — Arquitetura geral</a>.</p>
+  </div>
+
+  <h3>Critérios de sucesso <span class="badge st-D">spec §1.3</span></h3>
+  <div class="table-wrap"><table class="t">
+    <thead><tr><th>Critério</th><th>Meta</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Vidya Force desligado</td><td>Ao fim da Fase 1, após piloto em paralelo</td><td><span class="badge st-D">RF rascunho</span></td></tr>
+      <tr><td>Agendor desligado</td><td>Ao fim da Fase 2, com dados migrados</td><td><span class="badge st-D">RF rascunho</span></td></tr>
+      <tr><td>Pedidos pelo Sales Force</td><td>100% dos pedidos de vendedores e representantes</td><td><span class="badge st-D">RF rascunho</span></td></tr>
+      <tr><td>Falhas de integração de pedido</td><td>&lt; 1% exigindo intervenção manual</td><td><span class="badge st-D">RF rascunho</span></td></tr>
+      <tr><td>Sincronização incremental no app</td><td>&lt; 30 s em 4G para uma carteira típica</td><td><span class="badge st-V">V-14 / R12 — vale após medição</span></td></tr>
+      <tr><td>Pedidos duplicados no Sankhya</td><td>Zero</td><td><span class="badge st-A">SNK-4</span> <span class="badge st-V">V-11 · V-13</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Premissas e escala</h3>
+  <div class="grid-4">
+    <div class="kpi"><div class="v">20–100</div><div class="l">usuários iniciais · <span class="badge st-A">P-01</span></div></div>
+    <div class="kpi"><div class="v">5–50 mil</div><div class="l">clientes no Sankhya · <span class="badge st-V">V-14</span></div></div>
+    <div class="kpi"><div class="v">2–20 mil</div><div class="l">produtos · <span class="badge st-V">V-14</span></div></div>
+    <div class="kpi"><div class="v">1 empresa</div><div class="l">single-tenant, sem cobrança · <span class="badge st-A">P-01</span></div></div>
+  </div>
+  <ul class="small" style="margin-top:10px">
+    <li>O Sankhya continua sendo o sistema de registro de clientes, produtos, preços, pedidos/notas, financeiro, metas e comissões (P-02, APROVADO).</li>
+    <li>Sankhya Cloud com API oficial. A autenticação documentada é OAuth 2.0 + <code>X-Token</code> (F-01, conhecido em documentação); a spec ainda cita appkey/token (desatualizado — SNK-2 PROPOSTO).</li>
+    <li>Desenvolvimento e manutenção pelo dono do projeto com apoio de IA; equipe pequena, runbooks documentados (OPS-6, APROVADO).</li>
+    <li>Sem prazo rígido de desligamento das ferramentas atuais.</li>
+  </ul>
+
+  <h3>Estado do design</h3>
+  <div class="table-wrap"><table class="t compact">
+    <thead><tr><th>Rodada</th><th>Itens</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>GOV-1, princípios, SNK-3, SNK-4, MOB-3</td><td><span class="badge st-A">Fechada 16/09/2026</span></td></tr>
+      <tr><td>2</td><td>OPS-6, OPS-1, DATA-1, STACK-7, OPS-2</td><td><span class="badge st-A">Fechada</span> <span class="badge st-V">provedores V-04/V-05/V-15</span></td></tr>
+      <tr><td>3</td><td>STACK-2, STACK-3, STACK-6, DATA-2, ARCH-1</td><td><span class="badge st-A">Fechada</span> <span class="badge st-V">V-16 · V-03</span></td></tr>
+      <tr><td>4</td><td>AUTH-4, AUTH-3, AUTH-2, AUTH-1, P-23</td><td><span class="badge st-P">Aberta — a apresentar</span></td></tr>
+      <tr><td>5</td><td>SYNC-1, SYNC-2, SYNC-3, DATA-3</td><td><span class="badge st-P">Não iniciada</span></td></tr>
+      <tr><td>6</td><td>STACK-5, STACK-4, MOB-1, MOB-2, STACK-1</td><td><span class="badge st-P">Não iniciada</span></td></tr>
+      <tr><td>7</td><td>SNK-1, SNK-2, OPS-3, OPS-4, OPS-5</td><td><span class="badge st-P">Não iniciada</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+

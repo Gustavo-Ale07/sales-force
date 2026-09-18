@@ -1,0 +1,12 @@
+
+{ id: 'C-16', name: 'Distribuição de leads', grp: 'crm', plat: 'Web', ph: 'F2', prof: ['ADM', 'GER'],
+  purpose: 'Definir como leads novos são atribuídos.',
+  info: 'Regras por origem e log de distribuição',
+  fields: 'Origem · estratégia (região UF/cidade → vendedor, rodízio na equipe, por carga) · equipe · ativa',
+  filters: 'Origem · estratégia · ativa', cols: 'Origem · estratégia · equipe · ativa · último lead distribuído',
+  actions: 'Nova regra · Editar · Ativar/desativar · Ver log',
+  perms: 'Admin; gerente da equipe' + WPJ,
+  rules: 'Estratégia configurável por origem (RF-AUT-2) · PROPOSTO R53: pool até a distribuição · execução registrada (RF-AUT-5)',
+  audit: 'alteração de automações',
+  ents: 'lead_distribution_rules · automation_runs · accounts', rf: 'RF-AUT-2 · RF-AUT-5',
+  st: [INV, ['U', 'R53 — pool de leads sem responsável']] },

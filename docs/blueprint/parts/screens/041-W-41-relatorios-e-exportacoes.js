@@ -1,0 +1,13 @@
+
+{ id: 'W-41', name: 'Relatórios e exportações', grp: 'web', plat: 'Web', ph: 'F2', prof: WALL,
+  purpose: 'Exportar relatórios em CSV/XLSX para perfis internos autorizados.',
+  info: 'Relatórios dos dashboards e histórico de exportações',
+  fields: 'Relatório · filtros · formato (CSV/XLSX)',
+  filters: 'Período · equipe · vendedor · tipo de relatório',
+  cols: 'Relatório · filtros · formato · solicitado por · data · status',
+  actions: 'Gerar exportação · Baixar',
+  perms: 'Perfis internos com permissão; Representante PJ nunca (P-20) — PROPOSTO: nenhum endpoint de exportação o atende' + WPJ,
+  rules: 'Exportação respeita o escopo (P-21) · toda exportação auditada · custo/margem só para perfis com permissão · arquivo em object storage (P-17)',
+  audit: 'exportação',
+  ents: 'files · audit_log', rf: 'RF-DSH-6',
+  st: [INV, P20, P21, P17] },

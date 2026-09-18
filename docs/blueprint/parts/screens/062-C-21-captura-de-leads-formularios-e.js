@@ -1,0 +1,12 @@
+
+{ id: 'C-21', name: 'Captura de leads (formulários e anúncios)', grp: 'crm', plat: 'Web', ph: 'F3', prof: ['ADM'],
+  purpose: 'Receber leads de formulários do site e de anúncios.',
+  info: 'Formulários do site (webhook com token por formulário) · Meta Lead Ads · Google Ads lead form',
+  fields: 'Nome do formulário · mapeamento de campos · origem/campanha · regra de distribuição',
+  filters: 'Fonte · período', cols: 'Fonte · tipo · leads 24 h · último recebido · erros',
+  actions: 'Novo formulário · Gerar/rotacionar token · Mapear campos · Ver erros',
+  perms: 'Admin' + WPJ,
+  rules: 'Webhooks autenticados por token ou assinatura · anti-spam honeypot + rate limit (RF-INT-5) · lead → distribuição · tokens nunca em logs (P-22)',
+  audit: 'ação administrativa',
+  ents: 'accounts · lead_distribution_rules', rf: 'RF-INT-5 · RF-INT-6 · RF-ACC-7',
+  st: [INV, P22] },

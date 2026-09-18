@@ -1,0 +1,13 @@
+
+{ id: 'M-21', name: 'Novo cliente (offline)', grp: 'mobile', plat: 'Mobile', ph: 'F1', prof: ['PJ', 'GER', 'VI'],
+  purpose: 'Cadastrar cliente novo em campo, inclusive sem conexão.',
+  info: 'Formulário de cadastro · consulta CNPJ/CEP quando online',
+  fields: 'Tipo (PJ/PF) · CNPJ/CPF · razão social · nome fantasia · endereço · contatos · condição sugerida',
+  filters: '—', cols: '—',
+  actions: 'Salvar (comando na outbox) · Consultar CNPJ/CEP (online)',
+  perms: 'Cadastrar cliente novo: PJ, Gerente, Vendedor interno (§8.2)',
+  rules: 'Status cliente_pendente; segue para aprovação (RF-ACC-3, P-18) · preenchimento automático por CNPJ/CEP só online · deduplicação decidida no servidor; PROPOSTO R17 · PROPOSTO R06: pedido de cliente rejeitado cancelado com motivo',
+  offline: 'Cadastro offline; consultas CNPJ/CEP só online',
+  audit: '—',
+  ents: 'accounts · contacts · outbox local', rf: 'RF-ACC-3 · RF-ACC-6 · RF-INT-1 · RF-INT-2',
+  st: [INV, P18, P19, ['U', 'R17 — deduplicação sem revelar outra carteira'], ['U', 'R06 — dependências de comandos'], ['S', 'S5 — campos do parceiro (R27)']] },

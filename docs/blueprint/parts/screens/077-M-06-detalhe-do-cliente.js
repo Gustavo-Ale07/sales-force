@@ -1,0 +1,11 @@
+
+{ id: 'M-06', name: 'Detalhe do cliente', grp: 'mobile', plat: 'Mobile', ph: 'F1', prof: ['PJ', 'GER', 'VI'], mock: 'mm-cliente',
+  purpose: 'Ficha do cliente offline para atendimento em campo.',
+  info: 'Dados cadastrais · contatos · histórico resumido e títulos (12 meses) · crédito · pedidos (90 dias + abertos) · tarefas',
+  fields: '—', filters: 'Por aba', cols: 'Conforme aba',
+  actions: 'Novo pedido · Repetir pedido · Ligar / WhatsApp · Nova tarefa',
+  perms: 'Conta no escopo; dados derivados herdam a visibilidade (AUTH-4 PROPOSTO)',
+  rules: 'Dados do Sankhya somente leitura (P-02) · crédito offline indicativo; servidor decide (P-08) · PROPOSTO R38: desconta pedidos locais pendentes · sem custo/margem (P-20; P-23 PROPOSTO) · janelas de retenção PROPOSTAS',
+  audit: '—',
+  ents: 'accounts · contacts · receivables · sales_documents · orders · activities', rf: 'RF-ACC-2 · RF-CON-1 · RF-ORD-8',
+  st: [INV, P02, P08, P20, P23, ['U', 'R38 — crédito disponível offline']] },

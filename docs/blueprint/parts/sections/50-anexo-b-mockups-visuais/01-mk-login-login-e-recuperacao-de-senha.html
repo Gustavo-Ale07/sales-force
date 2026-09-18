@@ -1,0 +1,29 @@
+<figure class="mock-fig" id="mk-login" data-screens="W-01,W-02">
+<figcaption class="mock-cap"><span class="mock-id">MK-01</span> <strong>Login e recuperação de senha</strong> <span class="mock-screens">Telas W-01, W-02</span> <span class="badge st-P">PROPOSTO</span> <span class="ref">P-11</span> <span class="badge st-A">APROVADO</span> <span class="ref">AUTH-1</span> <span class="ref">AUTH-3</span> <span class="badge st-P">PROPOSTO</span></figcaption>
+<div class="mock-scroll" tabindex="0" role="region" aria-label="Mockup MK-01 — Login e recuperação de senha (rolável)"><div class="mock-app"><div class="m-login">
+<div class="m-login-l"><div class="m-card">
+<div class="m-logo"><span class="m-logo-mark">SF</span><span>Sales Force</span></div>
+<div><div class="m-h1">Entrar</div><div class="m-sub">Use seu e-mail corporativo e sua senha. <span class="m-pin">1</span></div></div>
+<div class="m-f "><span class="m-lb">E-mail</span><span class="m-in focus">ana.ribeiro@empresa.example</span></div>
+<div class="m-f "><span class="m-lb">Senha <span class="m-sp"></span><span class="m-link">Esqueci minha senha</span></span><span class="m-in ">••••••••••••••</span></div>
+<span class="m-btn pri block">Entrar</span>
+<div class="m-help">Acesso restrito a usuários internos autorizados. Sessão expira após inatividade.</div>
+</div></div>
+<div class="m-login-r">
+<div class="m-inset"><div class="m-inset-h">Estado · bloqueio após 5 falhas <span class="m-pin">2</span></div>
+<div class="m-alert err"><svg class="m-i" viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="7" width="9" height="7" rx="1"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg><div><b>Acesso temporariamente bloqueado.</b><br>Muitas tentativas sem sucesso. Tente novamente em 15 minutos ou fale com o administrador.</div></div>
+<div class="m-f "><span class="m-lb">E-mail</span><span class="m-in ro">ana.ribeiro@empresa.example</span></div>
+<span class="m-btn dis block">Entrar</span></div>
+<div class="m-inset"><div class="m-inset-h">Estado · credenciais inválidas <span class="m-pin">3</span></div>
+<div class="m-alert err"><svg class="m-i" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2 15 14H1zM8 6.5v3.5M8 12h.01"/></svg><div><b>E-mail ou senha incorretos.</b></div></div>
+<div class="m-f "><span class="m-lb">Senha</span><span class="m-in err"></span><span class="m-help ">Mesma mensagem exista ou não o e-mail cadastrado.</span></div></div>
+<div class="m-inset"><div class="m-inset-h">W-02 · Recuperar senha <span class="m-pin">4</span></div>
+<div class="m-f "><span class="m-lb">E-mail</span><span class="m-in ph">nome@empresa.example</span></div>
+<span class="m-btn pri block">Enviar link de redefinição</span>
+<div class="m-alert info"><svg class="m-i" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 7v4.5M8 4.8h.01"/></svg><div>Se o e-mail estiver cadastrado, você receberá um link de uso único válido por 30 minutos.</div></div></div>
+<div class="m-inset"><div class="m-inset-h">Estado · perfil sem acesso web <span class="m-pin">5</span></div>
+<div class="m-alert warn"><svg class="m-i" viewBox="0 0 16 16" aria-hidden="true"><rect x="4.5" y="1.5" width="7" height="13" rx="1.5"/><path d="M7 12.5h2"/></svg><div><b>Este perfil acessa somente pelo aplicativo móvel.</b><br>Instale o app Sales Force no aparelho aprovado.</div></div>
+<div class="m-help">Verificado no servidor no login e em cada requisição.</div></div>
+</div></div></div></div>
+<ol class="mock-notes"><li>Login por e-mail e senha forte (mínimo 12 caracteres, verificada contra senhas vazadas/comuns); hash Argon2id no servidor; sem 2FA — risco aceito <span class="ref">P-11</span> <span class="badge st-A">APROVADO</span> <span class="ref">RF-IAM-1</span> <span class="badge st-D">RF RASCUNHO</span>.</li><li>Bloqueio progressivo: 5 falhas → 15 min; bloqueios repetidos → desbloqueio pelo admin <span class="ref">RF-IAM-2</span> <span class="badge st-D">RF RASCUNHO</span>. Quantos bloqueios exigem admin <span class="badge st-U">DECISÃO PENDENTE</span> (revisão de segurança da Fase 0).</li><li>Respostas de login e redefinição não revelam se o e-mail existe <span class="badge st-P">PROPOSTO</span> (security-model §3.1).</li><li>Link de uso único, 30 min <span class="ref">RF-IAM-3</span> <span class="badge st-D">RF RASCUNHO</span>; envio por SMTP <span class="ref">OPS-5</span> <span class="badge st-P">PROPOSTO</span> depende de <span class="ref">V-06</span> <span class="badge st-V">PRECISA VALIDAR</span>.</li><li>Representante PJ não autentica na web, bloqueio no servidor <span class="ref">AUTH-3</span> <span class="badge st-P">PROPOSTO</span>.</li></ol>
+</figure>

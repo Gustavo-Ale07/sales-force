@@ -1,0 +1,31 @@
+/* Flow lanes (Annex C) */
+.flow{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);margin:0 0 16px}
+.flow-h{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface-2)}
+.flow-h h3{margin:0;font-size:1rem}
+.flow-h .fid{font:650 .76rem/1 var(--mono);color:var(--text-3)}
+.flow-h .meta{margin-left:auto;display:flex;flex-wrap:wrap;gap:6px}
+.flow-scroll{overflow-x:auto}
+.lanes{display:grid;min-width:720px;position:relative;padding-bottom:6px}
+.lane-h{font:700 .7rem/1.2 var(--font);text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);padding:8px 8px;border-bottom:1px solid var(--border);border-right:1px dashed var(--border);background:var(--surface-2);text-align:center}
+.lane-h.last,.lane-bg.last{border-right:0}
+.lane-bg{border-right:1px dashed var(--border)}
+.lane-cell{padding:4px 8px;display:flex;align-items:center;justify-content:center;position:relative;z-index:1}
+.conn{position:relative;height:22px;z-index:0}
+.conn span{position:absolute;background:var(--text-3)}
+.conn .v1{width:2px;margin-left:-1px;top:-4px;height:calc(50% + 5px)}
+.conn .h{height:2px;top:calc(50% - 1px)}
+.conn .v2{width:2px;margin-left:-1px;top:calc(50% - 1px);height:calc(50% - 2px)}
+.conn .vs{width:2px;margin-left:-1px;top:-4px;bottom:3px}
+.conn .tip{width:0;height:0;background:none!important;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid var(--text-3);bottom:-4px;margin-left:-5px}
+.fnode{position:relative;width:100%;border:1px solid var(--border-strong);background:var(--surface);border-radius:var(--radius);padding:6px 8px 6px 30px;font-size:.8rem;line-height:1.35;box-shadow:var(--shadow-1)}
+.fnode .no{position:absolute;left:6px;top:6px;width:18px;height:18px;border-radius:50%;background:var(--surface-3);font:700 .64rem/18px var(--mono);text-align:center;color:var(--text-2)}
+.fnode.start{border-color:var(--accent);background:var(--accent-weak)}
+.fnode.end{border-color:var(--ok);background:var(--ok-bg)}
+.fnode.error{border-color:var(--danger);background:var(--danger-bg)}
+.fnode.decision{border-color:var(--warn);background:var(--warn-bg);border-style:solid;border-width:1px 1px 1px 4px}
+.fnode.wait{border-style:dashed}
+.fnode .fb{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.fnode .out{display:block;margin-top:3px;font-size:.75rem;color:var(--text-2)}
+.lane-row-link{grid-column:1/-1;height:0}
+.flow-foot{padding:8px 14px;border-top:1px solid var(--border);font-size:.8rem;color:var(--text-2);display:flex;flex-wrap:wrap;gap:6px 14px}
+

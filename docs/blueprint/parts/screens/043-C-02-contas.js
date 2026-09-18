@@ -1,0 +1,13 @@
+
+{ id: 'C-02', name: 'Contas', grp: 'crm', plat: 'Web', ph: 'F2', prof: WALL,
+  purpose: 'Visão única de todas as contas do escopo em qualquer estágio.',
+  info: 'Contas lead, prospect, cliente_pendente, cliente, rejeitado, inativo',
+  fields: '—',
+  filters: 'Estágio · responsável · atendente · tags · segmento · região · campos personalizados',
+  cols: 'Conta · documento · estágio · responsável · tags · oportunidades abertas · última interação',
+  actions: 'Abrir conta · Nova conta · Adicionar tag · Atualização em massa (admin/gerente)',
+  perms: 'Escopo por AUTH-4 (PROPOSTO); Cadastro/Financeiro só contas/pendências' + WPJ,
+  rules: 'Ciclo lead → prospect → cliente_pendente → cliente, com rejeitado e inativo (P-19) · inativo reflete o Sankhya · campos de CRM do cliente pertencem ao Sales Force (architecture §3)',
+  audit: 'importação (atualização em massa)',
+  ents: 'accounts · tags · entity_tags · custom_field_defs', rf: 'RF-ACC-7 · RF-ACC-8 · RF-ACC-9 · RF-IMP-3',
+  st: [INV, P19, P02, AUTH4] },

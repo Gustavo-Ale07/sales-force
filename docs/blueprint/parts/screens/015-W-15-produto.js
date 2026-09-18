@@ -1,0 +1,11 @@
+
+{ id: 'W-15', name: 'Produto', grp: 'web', plat: 'Web', ph: 'F1', prof: WALL,
+  purpose: 'Ficha do produto com preços aplicáveis.',
+  info: 'Código, descrição, grupo, unidade, EAN, imagem, status · preços por tabela aplicável · compras do cliente em contexto',
+  fields: '—', filters: 'Tabela de preço · cliente', cols: 'Tabela · preço · vigência',
+  actions: 'Adicionar ao pedido · Voltar ao catálogo',
+  perms: 'Perfis internos; custo/margem só perfis permitidos (§8.2, PROPOSTO)' + WPJ,
+  rules: 'Dados do Sankhya somente leitura (P-02) · resolução de preço e precisão PRECISA VALIDAR (S2) · sem estoque (P-13)',
+  audit: '—',
+  ents: 'products · price_tables · price_table_items', rf: 'RF-CAT-1 · RF-CAT-2 · RF-CAT-4',
+  st: [INV, P02, P20, ['S', 'S2 — resolução de preço, arredondamento e precisão']] },

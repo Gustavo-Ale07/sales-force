@@ -1,0 +1,11 @@
+
+{ id: 'W-22', name: 'Detalhe do pedido', grp: 'web', plat: 'Web', ph: 'F1', prof: ['ADM', 'DIR', 'GER', 'VI'],
+  purpose: 'Acompanhar o pedido do rascunho ao faturamento.',
+  info: 'Cabeçalho, itens e totais · status atual · NUNOTA, data de faturamento e nota fiscal quando disponível · linha do tempo de status e aprovações · status de integração',
+  fields: '—', filters: '—', cols: 'Itens: produto, qtd, preço tabela, % desc, preço final, total',
+  actions: 'Editar (estados permitidos) · Repetir pedido · Gerar PDF · Cancelar (não enviado) · Ver erro de integração',
+  perms: 'Pedido no escopo (AUTH-4 PROPOSTO); reprocessar integração só admin (W-32)' + WPJ,
+  rules: 'PROPOSTO (spec §10.3): pedido enviado ao Sankhya não é editável · enviado → cancelado refletido do Sankhya (RF-ORD-4) · erros de integração com mensagem traduzida (RF-SNK-5)',
+  audit: 'aprovação/reprovação de pedido (na linha do tempo)',
+  ents: 'orders · order_items · order_approvals · order_status_history · integration_outbox · sales_documents', rf: 'RF-ORD-4 · RF-ORD-7 · RF-ORD-8 · RF-ORD-10 · RF-SNK-5',
+  st: [INV, STACK6, SNK4, ['S', 'S3 — confirmação, faturamento parcial e cancelamento (R24, R25)'], ['U', 'R60 — PDF offline × PDF no worker']] },

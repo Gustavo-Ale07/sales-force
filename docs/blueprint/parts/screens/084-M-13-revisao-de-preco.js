@@ -1,0 +1,12 @@
+
+{ id: 'M-13', name: 'Revisão de preço', grp: 'mobile', plat: 'Mobile', ph: 'F1', prof: ['PJ', 'GER', 'VI'], mock: 'mm-revisao-preco',
+  purpose: 'Resolver pedido offline cujo preço mudou no servidor.',
+  info: 'Itens com preço anterior × atual · variação · novo total · alçada reavaliada',
+  fields: '—', filters: '—', cols: 'Produto · anterior · atual · variação',
+  actions: 'Confirmar novos preços · Editar pedido · Cancelar',
+  perms: 'Autor do pedido',
+  rules: 'Pedido em revisao_preco (needs_review) quando o preço aplicável mudou (P-09, RF-ORD-6) · confirmar reavalia a alçada · nunca troca silenciosa',
+  offline: 'Aparece após sincronizar; confirmação vira comando na outbox',
+  audit: '—',
+  ents: 'orders · order_items · price_table_items', rf: 'RF-ORD-6',
+  st: [INV, P09, ['U', 'R33 — snapshot de preço'], ['U', 'R07 — edição em revisão de preço']] },

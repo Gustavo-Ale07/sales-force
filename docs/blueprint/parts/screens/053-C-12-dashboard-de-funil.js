@@ -1,0 +1,12 @@
+
+{ id: 'C-12', name: 'Dashboard de funil', grp: 'crm', plat: 'Web', ph: 'F2', prof: ['ADM', 'DIR', 'GER', 'VI'], mock: 'mk-dash-funil',
+  purpose: 'Analisar conversão, ciclo e previsão do funil.',
+  info: 'Valor e quantidade por etapa · conversão entre etapas · ciclo médio de venda · motivos de perda · previsão ponderada',
+  fields: '—', filters: 'Funil · período · equipe · vendedor · origem',
+  cols: 'Etapa · qtd · valor · conversão · tempo médio',
+  actions: 'Detalhar etapa · Exportar (com permissão)',
+  perms: 'Escopo aplicado no servidor (P-21)' + WPJ,
+  rules: 'Previsão = soma ponderada por probabilidade e data prevista (RF-DSH-2)',
+  audit: 'exportação (quando executada)',
+  ents: 'opportunities · opportunity_stage_history · loss_reasons · pipeline_stages', rf: 'RF-DSH-2',
+  st: [INV, P21] },

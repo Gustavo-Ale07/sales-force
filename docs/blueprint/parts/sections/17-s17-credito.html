@@ -1,0 +1,36 @@
+<section class="doc-section" id="s17" data-group="Parte III · Vendas" data-num="17" data-title="Crédito" data-kw="crédito limite títulos vencidos bloqueio disponível offline indicativo">
+  <div class="sec-head"><span class="sec-num">17</span><h2>Crédito</h2><div class="sec-meta"><span class="badge st-D">RF-ORD-3</span><span class="badge st-S">S4.3</span><span class="badge st-U">R37 · R38</span></div></div>
+  <div class="grid-2">
+    <div>
+      <h3>Bloqueios do pedido <span class="badge st-D">RF-ORD-3</span></h3>
+      <ul class="small">
+        <li>Cliente com títulos vencidos há mais de <b>X dias</b> (configurável): pedido bloqueado, com opção de enviar para aprovação. Valor inicial de X: <span class="badge st-V">parâmetro spec §17</span></li>
+        <li>Total acima do crédito disponível: exige aprovação.</li>
+        <li>Avaliados offline com os dados da última sincronização e <b>novamente no servidor</b> (P-08, APROVADO).</li>
+      </ul>
+      <h3>Crédito disponível</h3>
+      <div class="table-wrap"><table class="t compact">
+        <thead><tr><th>Onde</th><th>Cálculo</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Sankhya</td><td>Fórmula real (limite, títulos abertos, pedidos pendentes?) desconhecida</td><td><span class="badge st-S">S4.3</span></td></tr>
+          <tr><td>Servidor</td><td>Checagem que vale, com a mesma fórmula do Sankhya</td><td><span class="badge st-U">R38</span></td></tr>
+          <tr><td>App offline</td><td>Indicativa; desconta pedidos locais pendentes; não enxerga pedidos de outros vendedores nem enviados não faturados</td><td><span class="badge st-U">R38</span></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div>
+      <h3>Exemplo visual (dados fictícios)</h3>
+      <div class="card">
+        <div class="card-h"><strong>Metalúrgica Vale Azul Ltda</strong><span class="badge st-V">fórmula S4.3</span></div>
+        <div class="budget" style="min-width:0;margin:26px 0 14px" role="img" aria-label="Limite de 50 mil reais: 31 mil em títulos abertos, 9 mil em pedidos pendentes, 10 mil disponíveis; pedido de 14 mil excede">
+          <div class="seg" style="left:0;width:62%;background:var(--danger-bg);color:var(--danger)">Títulos abertos R$ 31.000</div>
+          <div class="seg" style="left:62%;width:18%;background:var(--warn-bg);color:var(--warn)">Pendentes R$ 9.000</div>
+          <div class="seg" style="left:80%;width:20%;background:var(--ok-bg);color:var(--ok)">Disp. R$ 10.000</div>
+          <span class="tick" style="left:0">0</span><span class="tick" style="left:100%">R$ 50.000</span>
+        </div>
+        <div class="callout warn small"><p>Pedido de <b>R$ 14.000,00</b> acima do crédito disponível indicativo → <b>exige aprovação</b>. Quem aprova: PROPOSTO Cadastro/Financeiro (R37). O servidor refaz o cálculo ao receber.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+

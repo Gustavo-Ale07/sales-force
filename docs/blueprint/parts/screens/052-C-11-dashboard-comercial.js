@@ -1,0 +1,13 @@
+
+{ id: 'C-11', name: 'Dashboard comercial', grp: 'crm', plat: 'Web', ph: 'F2', prof: ['ADM', 'DIR', 'GER', 'VI'],
+  purpose: 'Indicadores de vendas com dados do Sankhya.',
+  info: 'Faturamento e pedidos por período · ticket médio · metas × realizado · positivação · comissão · ranking de vendedores · vendas por produto/grupo e por cliente',
+  fields: '—', filters: 'Período · equipe · vendedor',
+  cols: 'Ranking: vendedor, faturamento, pedidos, ticket médio, % da meta',
+  actions: 'Detalhar · Exportar (com permissão)',
+  perms: 'Dashboards: todos (Admin, Diretoria) · equipe (Gerente) · próprios (Vendedor) — §8.2' + WPJ,
+  rules: 'Respeita visibilidade (P-21) · PROPOSTO R25: faturamento a partir das notas, não dos pedidos · PROPOSTO (architecture §5.2): leitura por views SQL de um módulo de relatórios',
+  sync: 'Lê views de relatório sobre o espelho; mostra a hora da última sincronização',
+  audit: 'exportação (quando executada)',
+  ents: 'sales_documents · sales_document_items · goals · commissions', rf: 'RF-DSH-1 · RF-DSH-6',
+  st: [INV, P21, ['S', 'S3 / S6 — notas e fontes de metas'], ['U', 'R42 — histórico no servidor']] },

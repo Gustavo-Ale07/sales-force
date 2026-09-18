@@ -1,0 +1,12 @@
+
+{ id: 'C-14', name: 'Risco da carteira', grp: 'crm', plat: 'Web', ph: 'F2', prof: WALL,
+  purpose: 'Identificar clientes inativos, em queda ou inadimplentes.',
+  info: 'Clientes inativos por faixa de dias · queda de compra (período atual × média anterior) · inadimplência · clientes novos pendentes',
+  fields: '—', filters: 'Faixa de inatividade · equipe · vendedor · UF',
+  cols: 'Cliente · responsável · última compra · dias sem compra · variação · títulos vencidos',
+  actions: 'Criar tarefa · Abrir cliente · Exportar (com permissão)',
+  perms: 'Cadastro/Financeiro: carteira/pendências (§8.2); escopo no servidor' + WPJ,
+  rules: 'Indicadores por regra, sem IA (score com IA é F3, A-05) · alertas de carteira (RF-AUT-3) · PROPOSTO R42: 36 meses de histórico no servidor',
+  audit: 'exportação (quando executada)',
+  ents: 'accounts · sales_documents · receivables', rf: 'RF-DSH-4 · RF-AUT-3',
+  st: [INV, P21, ['U', 'R42 — profundidade do histórico no servidor']] },

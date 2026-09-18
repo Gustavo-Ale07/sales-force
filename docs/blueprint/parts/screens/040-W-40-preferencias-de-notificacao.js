@@ -1,0 +1,11 @@
+
+{ id: 'W-40', name: 'Preferências de notificação', grp: 'web', plat: 'Web', ph: 'F2', prof: WALL,
+  purpose: 'Escolher quais eventos notificar e por qual canal.',
+  info: 'Eventos × canais',
+  fields: 'Por evento: central · push · e-mail', filters: '—', cols: 'Evento · central · push · e-mail',
+  actions: 'Salvar',
+  perms: 'Próprias preferências' + WPJ,
+  rules: 'Preferências por usuário (RF-NOT-3) · PROPOSTO OPS-5: e-mails sem dados comerciais sensíveis',
+  audit: '—',
+  ents: 'notification_preferences', rf: 'RF-NOT-3',
+  st: [INV, ['P', 'OPS-5 — e-mail transacional']] },

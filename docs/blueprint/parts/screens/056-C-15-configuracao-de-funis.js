@@ -1,0 +1,12 @@
+
+{ id: 'C-15', name: 'Configuração de funis', grp: 'crm', plat: 'Web', ph: 'F2', prof: ['ADM', 'GER'],
+  purpose: 'Criar funis, etapas e motivos de perda.',
+  info: 'Funis com etapas ordenadas e motivos de perda',
+  fields: 'Funil: nome · etapas (nome, probabilidade padrão %, dias máximos parada) · motivos de perda',
+  filters: '—', cols: 'Etapa · ordem · probabilidade · dias máximos',
+  actions: 'Novo funil · Adicionar/reordenar etapas · Editar motivos de perda',
+  perms: 'Admin e gerente criam funis (RF-OPP-1)' + WPJ,
+  rules: 'Etapas ordenadas com probabilidade e alerta opcional (RF-OPP-1) · funis/etapas do Agendor mapeados na migração (RF-IMP-4)',
+  audit: 'ação administrativa',
+  ents: 'pipelines · pipeline_stages · loss_reasons', rf: 'RF-OPP-1 · RF-OPP-4 · RF-IMP-4',
+  st: [INV, ['P', 'D9 — detalhes decididos na F2'], ['V', 'Funis e etapas atuais do Agendor (spec §17)']] },

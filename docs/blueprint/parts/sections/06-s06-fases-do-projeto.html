@@ -1,0 +1,31 @@
+<section class="doc-section" id="s06" data-group="Parte I · Produto" data-num="6" data-title="Fases do projeto" data-kw="fases fase 0 fase 1 fase 2 fase 3 fase 4 gate piloto design">
+  <div class="sec-head"><span class="sec-num">06</span><h2>Fases do projeto</h2><div class="sec-meta"><span class="badge st-A">Ordem P-12</span><span class="badge st-P">Pacotes da Fase 0</span></div></div>
+  <h3>Fases e portões</h3>
+  <div class="diagram">
+    <div class="phases">
+      <div class="phase now"><span class="ph-n">FASE 0</span><h3>Fundação</h3><ul><li>Monorepo, CI, ambientes</li><li>Identidade, perfis, equipes, auditoria</li><li>Gateway Sankhya + espelho inicial</li><li>Saúde da integração</li></ul><div class="gate">Não iniciada — aguarda <code>BEGIN IMPLEMENTATION</code></div></div>
+      <div class="phase"><span class="ph-n">FASE 1</span><h3>Força de vendas</h3><ul><li>App offline e sync</li><li>Carteira, títulos, crédito</li><li>Pedidos, aprovações, revisão de preço</li><li>Envio ao Sankhya, cliente novo</li><li>Metas, tarefas, notificações, imports</li></ul><div class="gate">Gate: S2–S7, R05–R60 · Piloto → desliga Vidya</div></div>
+      <div class="phase"><span class="ph-n">FASE 2</span><h3>CRM</h3><ul><li>Leads, funis, oportunidades</li><li>Propostas com PDF</li><li>Follow-ups, agenda, automações</li><li>Dashboards, exportações</li><li>Migração do Agendor</li></ul><div class="gate">Gate: S9, R34, R53, D9/D10 → desliga Agendor</div></div>
+      <div class="phase"><span class="ph-n">FASE 3</span><h3>Inteligência e canais</h3><ul><li>Construtor de regras</li><li>Assistente e IA</li><li>Captura de leads</li><li>Telefonia</li></ul><div class="gate">Gate: R18, provedor VoIP, tetos de custo de IA</div></div>
+      <div class="phase"><span class="ph-n">FASE 4</span><h3>Futuro</h3><ul><li>WhatsApp API oficial</li><li>Chatbot externo</li></ul><div class="gate">Não planejada</div></div>
+    </div>
+  </div>
+  <h3>Etapas do design (antes de qualquer código)</h3>
+  <div class="diagram">
+    <div class="dsteps">
+      <div class="dstep done"><b>1</b>Git verificado; branch <code>design/blueprint</code></div>
+      <div class="dstep now"><b>2</b>Rodadas 1–7 (1–3 fechadas)</div>
+      <div class="dstep now"><b>3</b>Blueprint visual — <b>Draft v0.1 antecipado</b> por instrução do dono (16/09/2026)</div>
+      <div class="dstep"><b>4</b>Auditoria completa do design</div>
+      <div class="dstep"><b>5</b>Red Team (arquitetura, segurança, sync)</div>
+      <div class="dstep"><b>6</b>Resolver achados com o dono</div>
+      <div class="dstep"><b>7</b>Especificação v1.0 + Blueprint v1.0</div>
+      <div class="dstep"><b>8</b>Relatório de prontidão do design</div>
+    </div>
+    <p class="diagram-cap">O blueprint evolui por versão (v0.1, v0.2, …) conforme decisões são aprovadas; a v1.0 acompanha a Especificação v1.0 (GOV-1). Implementação continua aguardando <code>BEGIN IMPLEMENTATION</code>.</p>
+  </div>
+  <p class="small">Pacotes de trabalho, portões e trilhas paralelas: <a href="#s46">46 — Roadmap</a>.</p>
+</section>
+
+<div class="part-title">Parte II · Arquitetura e acesso</div>
+

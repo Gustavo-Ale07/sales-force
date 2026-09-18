@@ -1,0 +1,12 @@
+
+{ id: 'A-08', name: 'Mapeamento de planilha assistido', grp: 'ia', plat: 'Web', ph: 'F3', prof: ['ADM', 'GER', 'VI', 'CF'],
+  purpose: 'Sugerir mapeamento de colunas na etapa 2 do assistente de importação.',
+  info: 'Sugestão de mapeamento de colunas e normalizações',
+  fields: 'Coluna da planilha → campo de destino', filters: '—', cols: 'Coluna · campo sugerido · normalização',
+  actions: 'Aceitar sugestão · Ajustar manualmente · Confirmar',
+  perms: 'Quem pode importar o tipo escolhido (W-29)' + WPJ,
+  rules: 'IA recebe só cabeçalhos + 5 linhas de amostra · o usuário sempre confirma antes de importar (RF-IA-5)',
+  offline: 'Somente online',
+  audit: 'importação',
+  ents: 'imports · ai_requests', rf: 'RF-IA-5 · RF-IMP-2',
+  st: [INV, P14, ['U', 'R67 — LGPD (amostra enviada ao provedor)']] },

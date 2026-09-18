@@ -1,0 +1,37 @@
+<section class="doc-section" id="s03" data-group="Parte I · Produto" data-num="3" data-title="O que substitui do Vidya Force" data-kw="vidya force substituição piloto desligamento paridade">
+  <div class="sec-head"><span class="sec-num">03</span><h2>O que substitui do Vidya Force</h2><div class="sec-meta"><span class="tag">Fase 1</span><span class="badge st-D">spec §1.1, §3, §16</span></div></div>
+  <div class="callout warn"><p><b>Limite deste mapeamento:</b> a lista abaixo usa as capacidades do Vidya Force citadas na spec. Um inventário tela a tela do Vidya Force em uso na empresa não foi levantado — lacuna <span class="ref">BP-01</span> (DECISÃO PENDENTE).</p></div>
+  <div class="table-wrap"><table class="t">
+    <thead><tr><th>Capacidade usada no Vidya Force</th><th>No Sales Force</th><th>Requisitos</th><th>Telas</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Pedidos pelo celular, inclusive offline</td><td>App offline-first; comandos idempotentes revalidados no servidor</td><td><span class="ref">RF-ORD-1</span> <span class="ref">RF-ORD-2</span></td><td><span class="ref">M-09</span> <span class="ref">M-11</span></td><td><span class="badge st-A">P-07 · P-08</span> <span class="badge st-P">SYNC-1..3</span></td></tr>
+      <tr><td>Integração de pedidos com o Sankhya</td><td>Outbox de integração processada pelo worker; campo de origem antes de reenviar</td><td><span class="ref">RF-SNK-3</span> <span class="ref">RF-SNK-5</span></td><td><span class="ref">W-32</span></td><td><span class="badge st-A">STACK-6 · SNK-4</span> <span class="badge st-V">S0 · S3</span></td></tr>
+      <tr><td>Consulta de clientes da carteira</td><td>Espelho no PostgreSQL filtrado por escopo; ficha do cliente</td><td><span class="ref">RF-ACC-1</span> <span class="ref">RF-ACC-2</span></td><td><span class="ref">W-07</span> <span class="ref">M-05</span></td><td><span class="badge st-A">P-02 · P-21</span> <span class="badge st-P">AUTH-4</span></td></tr>
+      <tr><td>Títulos em aberto e vencidos, limite de crédito</td><td>Espelho somente leitura; bloqueios de pedido</td><td><span class="ref">RF-ACC-2</span> <span class="ref">RF-ORD-3</span></td><td><span class="ref">W-10</span> <span class="ref">M-06</span></td><td><span class="badge st-V">S4.3 fórmula</span> <span class="badge st-P">Q-02 fase</span></td></tr>
+      <tr><td>Histórico de compras</td><td>Espelho de notas e itens; resumo de 12 meses no aparelho</td><td><span class="ref">RF-ACC-2</span></td><td><span class="ref">W-09</span></td><td><span class="badge st-U">R42 profundidade</span></td></tr>
+      <tr><td>Tabela de preço e descontos</td><td>Preço derivado do Sankhya; limites de desconto configurados no Sales Force</td><td><span class="ref">RF-CAT-2</span> <span class="ref">RF-CAT-3</span></td><td><span class="ref">W-14</span> <span class="ref">W-39</span></td><td><span class="badge st-A">P-09 · P-10</span> <span class="badge st-S">S2 · R31</span></td></tr>
+      <tr><td>Metas, positivação e comissões</td><td>Leitura do Sankhya, sem cálculo próprio</td><td><span class="ref">RF-GOL-1</span> <span class="ref">RF-GOL-2</span> <span class="ref">RF-GOL-3</span></td><td><span class="ref">W-23</span> <span class="ref">M-24</span></td><td><span class="badge st-A">P-13</span> <span class="badge st-S">S6 · R28</span></td></tr>
+      <tr><td>Cadastro de cliente novo</td><td>Cadastro com CNPJ/CEP, fila de aprovação, parceiro criado pela outbox</td><td><span class="ref">RF-ACC-3</span> <span class="ref">RF-ACC-4</span></td><td><span class="ref">W-12</span> <span class="ref">W-13</span> <span class="ref">M-21</span></td><td><span class="badge st-A">P-18 · P-19</span> <span class="badge st-S">S5 · R27</span></td></tr>
+    </tbody>
+  </table></div>
+  <h3>Piloto e critérios de desligamento</h3>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-h"><strong>Piloto em paralelo</strong><span class="badge st-D">spec §16</span></div>
+      <ul class="small">
+        <li>3 a 5 representantes e 1 a 2 vendedores internos, por 2 a 4 semanas, em paralelo ao Vidya.</li>
+        <li>Comparação de pedidos e preços.</li>
+        <li><b>Desligar o Vidya quando:</b> zero divergência de preço nos pedidos do piloto; falhas de integração &lt; 1%; todos treinados e com carga inicial concluída.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-h"><strong>Portões obrigatórios antes do piloto</strong><span class="badge st-A">Aprovados</span></div>
+      <ul class="small">
+        <li>Um pedido real e um parceiro real gravados ponta a ponta em Sankhya <b>não produtivo</b>; senão, nova decisão (SNK-3 / U-04).</li>
+        <li>Procedimento de recuperação documentado, backups monitorados e ao menos um restore testado (OPS-2).</li>
+        <li>Distribuição S8 (V-10), revisão LGPD R67, região do Sentry V-08, demo para lojas U-08 — pendentes.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+

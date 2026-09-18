@@ -1,0 +1,12 @@
+
+{ id: 'W-36', name: 'Dispositivos', grp: 'web', plat: 'Web', ph: 'F1', prof: ['ADM', 'GER'], mock: 'mk-dispositivos',
+  purpose: 'Aprovar, acompanhar e revogar aparelhos móveis.',
+  info: 'Aparelhos por usuário: plataforma, status (pending, approved, revoked), versão do app/protocolo, última sincronização',
+  fields: '—', filters: 'Status · usuário · equipe · plataforma · sem sincronizar há N dias',
+  cols: 'Usuário · aparelho · plataforma · status · versão · última sync · registrado em',
+  actions: 'Aprovar · Rejeitar · Revogar aparelho · Revogar usuário',
+  perms: 'PROPOSTO AUTH-2: Admin ou gerente do representante aprova aparelho de PJ; aparelhos de internos auto-aprovados com aviso ao admin' + WPJ,
+  rules: 'Revogação invalida a sessão na hora; na próxima conexão o app apaga o banco local (RF-IAM-7) · PROPOSTO: no máximo 1 aparelho ativo por PJ (configurável) · aparelho pending não recebe dados de negócio · PROPOSTO R11: aparelhos por versão de protocolo',
+  audit: 'aparelho registrado, aprovado, revogado · sessão revogada',
+  ents: 'devices · sessions · users · audit_log', rf: 'RF-IAM-7 · RF-IAM-8',
+  st: [INV, AUTH2, ['U', 'R11 — política de versão do protocolo'], ['U', 'R16 — relógio do aparelho × bloqueio offline']] },

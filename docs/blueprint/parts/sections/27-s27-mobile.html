@@ -1,0 +1,59 @@
+<section class="doc-section" id="s27" data-group="Parte V · Mobile e sincronização" data-num="27" data-title="Mobile" data-kw="mobile expo android ios distribuição play store app store eas aparelho telas navegação">
+  <div class="sec-head"><span class="sec-num">27</span><h2>Mobile</h2><div class="sec-meta"><span class="badge st-A">P-07 · MOB-3</span><span class="badge st-P">MOB-1 · MOB-2 · AUTH-2</span><span class="badge st-V">V-09 · V-10</span></div></div>
+  <div class="grid-3">
+    <div class="card">
+      <div class="card-h"><strong>Plataforma</strong><span class="badge st-P">MOB-1</span></div>
+      <ul class="small">
+        <li>Expo com development builds (sem Expo Go); projetos nativos gerados.</li>
+        <li>EAS Build e EAS Update com assinatura de código; builds iOS no EAS.</li>
+        <li>Regras de negócio de <code>packages/domain</code> rodando no Hermes.</li>
+        <li>Android 10+ e iOS 16+ <span class="badge st-D">spec §13</span></li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-h"><strong>Distribuição</strong><span class="badge st-A">MOB-3</span></div>
+      <ul class="small">
+        <li><b>Android:</b> Google Play normal com autenticação no app se Managed Play exigir gestão de aparelhos pessoais; verificar opções privadas/não listadas.</li>
+        <li><b>iOS:</b> App Store não listada preferida; custom app via Apple Business Manager como alternativa; TestFlight só para beta.</li>
+        <li>Contas organizacionais Apple/Google e D-U-N-S desde já (trilha T2) <span class="badge st-V">V-10</span></li>
+        <li>Demo para revisão das lojas <span class="badge st-U">U-08</span></li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-h"><strong>Dados no aparelho</strong><span class="badge st-P">MOB-2</span></div>
+      <ul class="small">
+        <li>SQLite criptografado; chave e tokens só no armazenamento seguro.</li>
+        <li>Sem campos de custo ou margem no schema local (<span class="badge st-A">P-20</span> PJ · <span class="badge st-P">P-23</span> todos).</li>
+        <li>Exclusão do backup do sistema e PDFs temporários <span class="badge st-U">R19</span></li>
+        <li>Chave local perdida <span class="badge st-U">R45</span></li>
+      </ul>
+    </div>
+  </div>
+  <h3>Mapa de navegação do app <span class="badge st-P">Proposto</span></h3>
+  <div class="diagram">
+    <div class="hflow" style="min-width:900px">
+      <div class="box client"><b>Login</b>M-01</div><span class="to">→</span>
+      <div class="box"><b>Aparelho</b>M-02 pendente</div><span class="to">→</span>
+      <div class="box"><b>Carga inicial</b>M-03</div><span class="to">→</span>
+      <div class="zone" style="flex:1">
+        <div class="zone-l">Abas principais</div>
+        <div class="hflow">
+          <div class="box"><b>Início</b>M-04</div>
+          <div class="box"><b>Clientes</b>M-05 · M-06 · M-21</div>
+          <div class="box"><b>Pedidos</b>M-22 · M-09 · M-10 · M-23</div>
+          <div class="box"><b>Tarefas</b>M-15</div>
+          <div class="box"><b>Mais</b>M-12 · M-16 · M-17 · M-24</div>
+        </div>
+      </div>
+    </div>
+    <div class="hflow" style="min-width:900px;margin-top:10px">
+      <span class="small muted">Estados de bloqueio (sobrepõem qualquer tela):</span>
+      <div class="box" style="border-color:var(--warn)"><b>Limite offline</b>M-18</div>
+      <div class="box" style="border-color:var(--danger)"><b>Aparelho revogado</b>M-19</div>
+      <div class="box" style="border-color:var(--warn)"><b>Atualização obrigatória</b>M-20</div>
+      <div class="box" style="border-color:var(--warn)"><b>Chave perdida</b>M-26</div>
+    </div>
+    <p class="diagram-cap">Mockups de celular: <a href="#mm-home">MK-19</a> a <a href="#mm-atualizacao">MK-26</a>. Catálogo completo: <a href="#anexo-a">Anexo A</a>.</p>
+  </div>
+</section>
+

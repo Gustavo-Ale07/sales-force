@@ -1,0 +1,26 @@
+<section class="doc-section" id="s38" data-group="Parte VII · Plataforma" data-num="38" data-title="Imports" data-kw="importação planilha xlsx csv mapeamento validação erros pedido do cliente clientes em lote leads agendor atualização em massa">
+  <div class="sec-head"><span class="sec-num">38</span><h2>Imports</h2><div class="sec-meta"><span class="badge st-D">RF-IMP-1…5</span><span class="badge st-A">P-20</span><span class="badge st-U">R14</span></div></div>
+  <div class="diagram">
+    <div class="hflow" style="min-width:900px">
+      <div class="box"><b>1 · Tipo</b>escolher importação</div><span class="to">→</span>
+      <div class="box"><b>2 · Mapear colunas</b>sugestão por nome; por IA na F3 (usuário confirma)</div><span class="to">→</span>
+      <div class="box"><b>3 · Pré-visualizar</b>erros por linha, duplicados</div><span class="to">→</span>
+      <div class="box"><b>4 · Confirmar</b></div><span class="to">→</span>
+      <div class="box"><b>5 · Processar</b>segundo plano (worker)</div><span class="to">→</span>
+      <div class="box"><b>6 · Relatório</b>planilha de erros para download</div>
+    </div>
+    <p class="diagram-cap"><code>.xlsx</code> ou <code>.csv</code> até 20 MB / 50 mil linhas, validados antes do parse. Estados: <a href="#sm-importacao">SM-5</a> (PROPOSTO). Mockup <a href="#mk-importacao">MK-10</a>.</p>
+  </div>
+  <div class="table-wrap"><table class="t compact">
+    <thead><tr><th>Tipo</th><th>Fase</th><th>Destino</th><th>Quem importa (spec §8.2)</th></tr></thead>
+    <tbody>
+      <tr><td>Pedido do cliente</td><td>F1</td><td>Rascunho de pedido; linhas não reconhecidas listadas</td><td>Admin, gerente, vendedor interno, representante</td></tr>
+      <tr><td>Clientes novos em lote</td><td>F1</td><td>Contas <code>cliente_pendente</code> → fila de aprovação</td><td>Admin, gerente, vendedor interno, representante, cadastro/financeiro</td></tr>
+      <tr><td>Listas de leads</td><td>F2</td><td>Contas <code>lead</code>, deduplicadas, distribuição opcional</td><td>Admin, gerente, vendedor interno</td></tr>
+      <tr><td>Migração do Agendor</td><td>F2</td><td>Empresas, pessoas, negócios, tarefas, histórico</td><td>Admin (carga assistida)</td></tr>
+      <tr><td>Atualização em massa</td><td>F2</td><td>Responsável, etapa, tags</td><td>Apenas admin e gerente</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout warn small"><p>Representantes podem importar, mas <b>nunca exportar</b> (RF-IMP-5, P-20). Com representante só no mobile (AUTH-3, proposto), a UX da importação do representante é <b>DECISÃO PENDENTE</b> (R14): no app, ou por um usuário interno em nome dele — tela <span class="ref">M-25</span>. Toda importação é auditada.</p></div>
+</section>
+

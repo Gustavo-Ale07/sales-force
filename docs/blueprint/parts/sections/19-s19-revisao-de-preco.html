@@ -1,0 +1,33 @@
+<section class="doc-section" id="s19" data-group="Parte III · Vendas" data-num="19" data-title="Revisão de preço" data-kw="revisão de preço revisao_preco offline preço mudou snapshot tolerância">
+  <div class="sec-head"><span class="sec-num">19</span><h2>Revisão de preço</h2><div class="sec-meta"><span class="badge st-A">P-09</span><span class="badge st-P">conteúdo exibido</span><span class="badge st-U">R33</span></div></div>
+  <div class="callout ok"><p><b>APROVADO (P-09):</b> preços vêm de dados derivados do Sankhya. Um pedido offline cujo preço aplicável mudou vai para <code>revisao_preco</code>. Preços <b>nunca</b> são substituídos silenciosamente.</p></div>
+  <div class="grid-2">
+    <div>
+      <h3>Como funciona</h3>
+      <ol class="steps">
+        <li>Pedido criado offline chega ao servidor no push.</li>
+        <li>Servidor compara o preço usado em cada item com o preço vigente.</li>
+        <li class="rev">Algum preço mudou → pedido em <code>revisao_preco</code>; resultado <code>needs_review</code>.</li>
+        <li>App/web mostra item a item: preço anterior, preço atual, diferença.</li>
+        <li class="ok">Vendedor confirma (alçada e crédito reavaliados) ou edita o pedido.</li>
+      </ol>
+      <p class="small">Fluxo <a href="#fl-11">FL-11</a> · Telas <span class="ref">W-19</span> <span class="ref">M-13</span> · Mockup <a href="#mm-revisao-preco">MK-23</a></p>
+    </div>
+    <div>
+      <h3>Detecção <span class="badge st-U">R33</span></h3>
+      <div class="table-wrap"><table class="t compact">
+        <thead><tr><th>Item guarda (PROPOSTO)</th><th>Por quê</th></tr></thead>
+        <tbody>
+          <tr><td>Tabela de preço usada</td><td>Saber qual regra foi aplicada</td></tr>
+          <tr><td>Preço de tabela usado</td><td>Comparar com o vigente</td></tr>
+          <tr><td>Versão da linha de preço</td><td>Detectar mudança mesmo com mesmo valor de data</td></tr>
+          <tr><td>Tolerância de arredondamento</td><td>Diferença abaixo dela não dispara revisão</td></tr>
+        </tbody>
+      </table></div>
+      <p class="small">A spec previa só <code>price_snapshot_at</code>, insuficiente. A regra de resolução de preço em si é <span class="badge st-S">S2 · R31</span>. Propostas aceitas com validade vencida ou preço alterado também passam pela revisão (RF-PRP-6).</p>
+    </div>
+  </div>
+</section>
+
+<div class="part-title">Parte IV · CRM</div>
+

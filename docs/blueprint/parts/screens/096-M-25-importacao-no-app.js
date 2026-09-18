@@ -1,0 +1,13 @@
+
+{ id: 'M-25', name: 'Importação no app', grp: 'mobile', plat: 'Mobile', ph: 'F1', prof: ['PJ'],
+  purpose: 'Permitir ao PJ importar pedido do cliente ou clientes novos.',
+  info: 'Seleção de arquivo · tipo · mapeamento · resultado',
+  fields: 'Arquivo · tipo (pedido do cliente, clientes novos) · mapeamento',
+  filters: '—', cols: 'Linha · erro',
+  actions: 'Selecionar arquivo · Mapear · Enviar',
+  perms: 'RF-IMP-5: PJ importa, nunca exporta · DECISÃO PENDENTE R14: no app ou por interno em nome dele',
+  rules: 'PROPOSTO R14 (recomendação da revisão): importação no app ou por vendedor interno/gerente em nome do PJ · processamento no servidor · limites de arquivo de RF-IMP-1',
+  offline: 'Requer conexão',
+  audit: 'importação',
+  ents: 'imports · import_row_errors · files', rf: 'RF-IMP-3 · RF-IMP-5 · RF-ORD-9',
+  st: [INV, P20, AUTH3, ['U', 'R14 — UX de importação do PJ']] },

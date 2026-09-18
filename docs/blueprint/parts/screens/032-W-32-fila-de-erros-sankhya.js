@@ -1,0 +1,12 @@
+
+{ id: 'W-32', name: 'Fila de erros Sankhya', grp: 'web', plat: 'Web', ph: 'F1', prof: ['ADM'], mock: 'mk-integracoes',
+  purpose: 'Tratar entregas ao Sankhya que falharam.',
+  info: 'Entregas da integration_outbox em erro: tipo (pedido, parceiro), entidade, tentativas, classe do erro, mensagem traduzida, próxima tentativa',
+  fields: '—', filters: 'Tipo · classe de erro · estado · período',
+  cols: 'Tipo · entidade · origem (UUID) · tentativas · classe · mensagem · atualizado',
+  actions: 'Reprocessar · Abrir entidade · Ver detalhes técnicos',
+  perms: 'Admin (RF-SNK-5); vendedor vê o erro no status do pedido' + WPJ,
+  rules: 'Antes de reenviar, o worker verifica o campo de origem no Sankhya (SNK-4) · até 8 tentativas com backoff exponencial (RF-SNK-3) · falhas permanentes não são reenviadas às cegas · PROPOSTO: classes transitória, limite de requisições, autenticação, autorização, validação, permanente',
+  audit: 'ação administrativa (reprocessamento)',
+  ents: 'integration_outbox · orders · accounts · audit_log', rf: 'RF-SNK-3 · RF-SNK-4 · RF-SNK-5',
+  st: [INV, SNK4, STACK6, ['V', 'V-11 / V-13 — antes de escrita real'], ['R', 'Deduplicação heurística como checagem primária (SNK-4)']] },

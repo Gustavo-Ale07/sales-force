@@ -1,0 +1,12 @@
+
+{ id: 'M-09', name: 'Montagem de pedido', grp: 'mobile', plat: 'Mobile', ph: 'F1', prof: ['PJ', 'GER', 'VI'], mock: 'mm-pedido',
+  purpose: 'Montar orçamento/pedido offline.',
+  info: 'Cliente · empresa/TOP · condição · itens · totais · alertas de alçada, crédito e títulos · indicador de conexão',
+  fields: 'Condição de pagamento · observações · itens',
+  filters: '—', cols: 'Produto · qtd · preço · % desc · total',
+  actions: 'Adicionar produto · Editar item · Salvar rascunho · Revisar e enviar',
+  perms: 'Criar pedido: PJ, Gerente, Vendedor interno (§8.2)',
+  rules: 'Mesmo código de totais e alçada que o servidor (RF-ORD-2) · bloqueios RF-ORD-3 avaliados com a última sync e de novo no servidor · PROPOSTO R30: valor sem impostos com aviso · rascunho local ou sincronizado: R08 pendente',
+  audit: '—',
+  ents: 'orders · order_items', rf: 'RF-ORD-1 · RF-ORD-2 · RF-ORD-3',
+  st: [INV, P08, P10, ['U', 'R08 — rascunhos sincronizados'], ['U', 'R30 — impostos'], R35, R36] },

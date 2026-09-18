@@ -1,0 +1,12 @@
+
+{ id: 'W-38', name: 'Configurações', grp: 'web', plat: 'Web', ph: 'F0', prof: ['ADM'],
+  purpose: 'Parâmetros gerais do sistema.',
+  info: 'Dias máximos sem sincronizar · dias de títulos vencidos que bloqueiam pedido · TOP e empresa padrão · e-mail de alertas · marca do PDF (F2)',
+  fields: 'Dias máximos sem sync (padrão 7) · dias de atraso para bloqueio · TOP e empresa padrão · destinatário dos alertas',
+  filters: '—', cols: '—',
+  actions: 'Salvar · Restaurar padrão',
+  perms: 'Admin' + WPJ,
+  rules: 'Valores iniciais PRECISAM VALIDAR (spec §17) · segredos e credenciais nunca aparecem na tela (P-22) · credenciais Sankhya só no worker (STACK-2)',
+  audit: 'ação administrativa',
+  ents: 'operation_types · payment_terms · sankhya_sync_state', rf: 'RF-IAM-8 · RF-ORD-1 · RF-ORD-3 · RF-SNK-1',
+  st: [INV, P22, ['A', 'STACK-2 — credenciais Sankhya só no worker'], ['V', 'Parâmetros iniciais (spec §17)'], ['S', 'S3.1 — TOP e empresa']] },

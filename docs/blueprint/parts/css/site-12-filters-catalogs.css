@@ -1,0 +1,6 @@
+/* ---------- Filters (catalogs) ---------- */
+.filterbar{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface-2);margin:.6em 0 1em}
+.filterbar label{display:flex;flex-direction:column;gap:3px;font-size:.74rem;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+.filterbar input,.filterbar select{height:32px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface);color:var(--text);font:inherit;font-size:.88rem;padding:0 8px;min-width:140px}
+.filterbar .count{margin-left:auto;font-size:.84rem;color:var(--text-2);align-self:center}
+

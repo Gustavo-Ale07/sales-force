@@ -1,0 +1,16 @@
+<section class="doc-section" id="anexo-a" data-group="Anexos" data-num="A" data-title="Catálogo de telas" data-kw="telas catálogo inventário web crm ia mobile screen id campos filtros colunas ações estados auditoria">
+  <div class="sec-head"><span class="sec-num">A</span><h2>Catálogo de telas</h2><div class="sec-meta"><span class="badge st-P">Inventário proposto</span><span class="badge st-U">BP-16</span></div></div>
+  <p class="lead">Inventário completo de telas planejadas, com rastreabilidade para requisitos e decisões. Cada tela documenta: ID, nome, fase, plataforma, perfis, objetivo, informações, campos, filtros, colunas, ações, permissões, regras de negócio, comportamento online/offline, sincronização, estados de carregamento, vazio, erro e permissão negada, eventos de auditoria, entidades, requisitos RF e status de decisão. Campos marcados como <em>padrão da plataforma</em> seguem a regra geral da web ou do mobile.</p>
+  <div class="plat-count" id="scr-counts"></div>
+  <div class="filterbar" role="group" aria-label="Filtros do catálogo de telas">
+    <label>Buscar<input id="scrQ" type="search" placeholder="Nome, ID, campo, regra…"></label>
+    <label>Área<select id="scrGrp"><option value="">Todas</option><option value="web">Web</option><option value="crm">CRM</option><option value="ia">IA</option><option value="mobile">Mobile</option></select></label>
+    <label>Fase<select id="scrPh"><option value="">Todas</option><option value="F0">F0</option><option value="F1">F1</option><option value="F2">F2</option><option value="F3">F3</option></select></label>
+    <label>Perfil<select id="scrProf"><option value="">Todos</option></select></label>
+    <label>Status<select id="scrSt"><option value="">Todos</option><option value="A">Com item aprovado</option><option value="U">Com decisão pendente</option><option value="V">Com validação pendente</option><option value="S">Com spike necessário</option><option value="R">Com item rejeitado</option></select></label>
+    <label style="flex-direction:row;align-items:center;gap:6px;text-transform:none;font-weight:500;font-size:.86rem;color:var(--text-2)"><input id="scrMock" type="checkbox" style="min-width:0;width:auto;height:auto"> Só com mockup</label>
+    <span class="count" id="scrCount" aria-live="polite"></span>
+  </div>
+  <div id="screens"></div>
+</section>
+

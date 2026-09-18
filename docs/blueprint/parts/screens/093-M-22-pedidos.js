@@ -1,0 +1,12 @@
+
+{ id: 'M-22', name: 'Pedidos', grp: 'mobile', plat: 'Mobile', ph: 'F1', prof: ['PJ', 'GER', 'VI'],
+  purpose: 'Listar pedidos locais com status.',
+  info: 'Pedidos dos últimos 90 dias + abertos, com status e NUNOTA',
+  fields: '—', filters: 'Status · período · cliente',
+  cols: 'Cliente · data · status · total · estado de sync',
+  actions: 'Abrir · Repetir pedido · Novo pedido',
+  perms: 'Pedidos no escopo',
+  rules: 'Status atualizados por pull · PROPOSTO: pedido enviado não é editável · estados adicionais dependem de S3 (R24, R25)',
+  audit: '—',
+  ents: 'orders · order_items', rf: 'RF-ORD-4 · RF-ORD-7 · RF-ORD-8',
+  st: [INV, ['S', 'S3 — ciclo do pedido'], ['U', 'R08 — rascunhos']] },

@@ -1,0 +1,11 @@
+
+{ id: 'W-28', name: 'Notificações', grp: 'web', plat: 'Web', ph: 'F1', prof: WALL,
+  purpose: 'Central de notificações da web.',
+  info: 'Pedido aprovado, reprovado, com erro, em revisão de preço ou faturado · cliente aprovado/rejeitado · tarefa vencendo · aprovação pendente',
+  fields: '—', filters: 'Não lidas · tipo · período', cols: 'Evento · entidade · data · lida',
+  actions: 'Abrir entidade · Marcar como lida · Marcar todas',
+  perms: 'Próprias notificações' + WPJ,
+  rules: 'Notificação só referencia registros no escopo do destinatário (P-21) · preferências por usuário na F2 (W-40)',
+  audit: '—',
+  ents: 'notifications', rf: 'RF-NOT-1 · RF-NOT-2',
+  st: [INV, P21] },

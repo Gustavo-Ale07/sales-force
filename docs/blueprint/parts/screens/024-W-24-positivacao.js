@@ -1,0 +1,12 @@
+
+{ id: 'W-24', name: 'Positivação', grp: 'web', plat: 'Web', ph: 'F1', prof: ['VI', 'GER', 'DIR', 'ADM'],
+  purpose: 'Mostrar clientes da carteira que compraram no período.',
+  info: 'Clientes positivados × total da carteira · lista de não positivados',
+  fields: '—', filters: 'Período · vendedor · equipe · cidade/UF',
+  cols: 'Vendedor · carteira · positivados · % · não positivados',
+  actions: 'Ver clientes não positivados · Nova tarefa',
+  perms: 'Escopo próprio/equipe/tudo (AUTH-4 PROPOSTO)' + WPJ,
+  rules: 'Fonte PRECISA VALIDAR (S6.2) · PROPOSTO R28: contagem a partir das notas no Sales Force, sem violar D6',
+  audit: '—',
+  ents: 'goals · sales_documents · accounts', rf: 'RF-GOL-2',
+  st: [INV, ['S', 'S6.2 — positivação existe como dado no Sankhya?'], ['U', 'R28 — cálculo a partir das notas']] },

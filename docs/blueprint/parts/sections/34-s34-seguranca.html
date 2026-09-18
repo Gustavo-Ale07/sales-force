@@ -1,0 +1,71 @@
+<section class="doc-section" id="s34" data-group="Parte VII · Plataforma" data-num="34" data-title="Segurança" data-kw="segurança autenticação senha argon2id sessão cookie token csrf ameaças segredos rede banco riscos aceitos 2fa">
+  <div class="sec-head"><span class="sec-num">34</span><h2>Segurança</h2><div class="sec-meta"><span class="badge st-A">P-11 · P-20 · P-21 · P-22 · OPS-1</span><span class="badge st-P">AUTH-1…4 · P-23</span></div></div>
+  <div class="grid-3">
+    <div class="card">
+      <div class="card-h"><strong>Credenciais</strong><span class="badge st-A">P-11</span></div>
+      <ul class="small">
+        <li>E-mail + senha forte; hash Argon2id; sem 2FA (risco aceito).</li>
+        <li>Mínimo 12 caracteres; checagem contra senhas vazadas (HIBP por prefixo de hash) e lista local <span class="badge st-P">AUTH-1</span></li>
+        <li>5 falhas → 15 min; bloqueios repetidos → admin desbloqueia (quantos? <span class="badge st-U">revisão F0</span>)</li>
+        <li>Reset por e-mail: link único, 30 min.</li>
+        <li>Respostas não revelam se o e-mail existe <span class="badge st-P">proposto</span></li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-h"><strong>Sessões</strong><span class="badge st-P">AUTH-1</span></div>
+      <ul class="small">
+        <li>Sessões opacas no servidor; só hashes armazenados; comparação em tempo constante.</li>
+        <li><b>Web:</b> cookie <code>httpOnly</code>, <code>Secure</code>, <code>SameSite=Lax</code> + CSRF; expira após 12 h de inatividade; nenhum token no navegador.</li>
+        <li><b>Mobile:</b> access token curto (15 min) + refresh rotativo (30 dias) com detecção de reuso, no secure store.</li>
+        <li>Toda requisição valida sessão, usuário, versão da sessão, aparelho e canal.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-h"><strong>Dados sensíveis</strong><span class="badge st-A">P-20</span> <span class="badge st-P">P-23</span></div>
+      <ul class="small">
+        <li>Custo e margem nunca a representantes em canal algum (APROVADO); nunca no mobile para ninguém e nunca à IA (PROPOSTO).</li>
+        <li>Na web só a perfis com permissão explícita.</li>
+        <li>Representantes sem exportação; toda exportação auditada.</li>
+        <li>Respostas por DTO explícito; nunca serializar linhas do banco; erros e deduplicação sem vazar escopo.</li>
+      </ul>
+    </div>
+  </div>
+  <h3>Ameaças consideradas</h3>
+  <div class="table-wrap"><table class="t compact">
+    <thead><tr><th>Ameaça</th><th>Controles principais</th></tr></thead>
+    <tbody>
+      <tr><td>Representante copiando a carteira para concorrente</td><td>Só mobile (AUTH-3), aprovação de aparelho (AUTH-2), sem exportação (P-20), escopo (AUTH-4), auditoria</td></tr>
+      <tr><td>Celular perdido ou roubado</td><td>Banco local criptografado (MOB-2), revogação + limpeza, período offline máximo</td></tr>
+      <tr><td>Reuso de senha / credential stuffing</td><td>Política forte, checagem de vazadas, bloqueio, rate limit, aprovação de aparelho</td></tr>
+      <tr><td>Usuário vendo outra carteira</td><td>Política central (AUTH-4), sync ciente de escopo (SYNC-3), testes de matriz</td></tr>
+      <tr><td>Vazamento de campo sensível por API ou sync</td><td>Mapeamento explícito de resposta; regras de campo</td></tr>
+      <tr><td>Staging tocando produção</td><td>Separação de ambientes (P-15, SNK-3)</td></tr>
+      <tr><td>Dependência ou CI comprometidos</td><td>Revisão de dependências, actions fixadas por SHA, ambiente de produção protegido (OPS-3)</td></tr>
+      <tr><td>Dados pessoais enviados a terceiros</td><td>Scrubbing (OPS-4), minimização (P-14), registro de operadores</td></tr>
+    </tbody>
+  </table></div>
+  <div class="grid-2">
+    <div>
+      <h3>Infraestrutura e segredos</h3>
+      <ul class="small">
+        <li>Segredos nunca no Git, nos clientes, em logs, fixtures, documentação ou neste blueprint (P-22, APROVADO).</li>
+        <li>Banco por rede privada; endpoint TLS com allowlist só como fallback revisado; <code>0.0.0.0/0</code> + senha <span class="badge st-R">Rejeitado</span> (OPS-1).</li>
+        <li>HTTPS + HSTS; rate limit em login, reset, sync, webhooks e IA; entrada validada com Zod; acesso parametrizado.</li>
+        <li>PROPOSTO: CSP restrita à origem; papel de migração com DDL e papel da aplicação sem DDL; auditoria sem update/delete pela aplicação.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Riscos aceitos</h3>
+      <div class="table-wrap"><table class="t compact">
+        <thead><tr><th>Risco</th><th>Controles compensatórios</th></tr></thead>
+        <tbody>
+          <tr><td>Sem 2FA (P-11)</td><td>Senha forte, vazadas, bloqueio, rate limit, aprovação de aparelho, auditoria; reavaliar após incidente</td></tr>
+          <tr><td>Limpeza remota é melhor esforço</td><td>Criptografia, período offline máximo, revogação imediata de sessão</td></tr>
+          <tr><td>Foto de tela e cópia manual</td><td>Escopo limita a exposição; auditoria; controles contratuais</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+  <p class="small">Mudanças em autenticação, sessões, aparelhos, política, sync, dados sensíveis, segredos, CI/CD, credenciais Sankhya, novos operadores, topologia de rede e backups exigem revisão de segurança (security-model §15). Fluxo de login <a href="#fl-01">FL-01</a>.</p>
+</section>
+

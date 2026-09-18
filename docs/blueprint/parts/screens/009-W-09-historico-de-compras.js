@@ -1,0 +1,12 @@
+
+{ id: 'W-09', name: 'Histórico de compras', grp: 'web', plat: 'Web', ph: 'F1', prof: WALL,
+  purpose: 'Consultar o que o cliente comprou e com que frequência.',
+  info: 'Últimos pedidos/notas · itens mais comprados · data da última compra',
+  fields: '—', filters: 'Período · produto/grupo · documento',
+  cols: 'Data · documento (NUNOTA) · tipo · status · valor total · vendedor',
+  actions: 'Abrir documento · Repetir pedido',
+  perms: 'Herda a visibilidade da conta (AUTH-4 PROPOSTO)' + WPJ,
+  rules: 'Espelho somente leitura (P-02) · vínculo pedido → nota e faturamento parcial PRECISA VALIDAR (S3; R25) · PROPOSTO R42: 36 meses de histórico no servidor',
+  audit: '—',
+  ents: 'sales_documents · sales_document_items · products', rf: 'RF-ACC-2 · RF-ORD-8',
+  st: [INV, P02, ['S', 'S3 — vínculo pedido → nota (R25)'], ['U', 'R42 — profundidade do histórico no servidor'], ['U', 'Q-02 — documentos de venda espelhados na F0 ou F1?']] },

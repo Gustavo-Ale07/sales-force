@@ -1,0 +1,17 @@
+/* ---------- Layout ---------- */
+.layout{display:grid;grid-template-columns:var(--side-w) minmax(0,1fr)}
+.sidebar{position:sticky;top:var(--topbar-h);height:calc(100vh - var(--topbar-h));overflow:auto;border-right:1px solid var(--border);background:var(--surface);padding:12px 10px 40px}
+.side-tools{display:flex;flex-direction:column;gap:6px;padding:4px 6px 10px;border-bottom:1px solid var(--border);margin-bottom:8px}
+.side-tools label{display:flex;gap:6px;align-items:center;font-size:.82rem;color:var(--text-2);cursor:pointer}
+.side-count{font-size:.78rem;color:var(--text-3)}
+.nav-group{margin:10px 0 2px;padding:0 8px;font-size:.7rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text-3)}
+.nav a{display:flex;gap:8px;align-items:baseline;padding:4px 8px;border-radius:3px;color:var(--text-2);text-decoration:none;font-size:.86rem;line-height:1.35}
+.nav a:hover{background:var(--surface-2);color:var(--text)}
+.nav a[aria-current="true"]{background:var(--accent-weak);color:var(--accent-text);font-weight:600}
+.nav a .n{font:600 .74rem/1.6 var(--mono);color:var(--text-3);min-width:22px}
+.nav a[aria-current="true"] .n{color:var(--accent-text)}
+.nav a.hide{display:none}
+.nav mark,.content mark.hit{background:var(--warn-bg);color:inherit;border-radius:2px}
+main{min-width:0}
+.content{max-width:1220px;margin:0 auto;padding:24px 32px 80px}
+

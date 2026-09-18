@@ -1,0 +1,66 @@
+/* ==========================================================================
+   Sales Force — Blueprint (documentação de design)
+   Tokens de tema: claro por padrão; escuro via prefers-color-scheme ou data-theme.
+   ========================================================================== */
+:root{
+  --bg:#f4f6f8; --surface:#ffffff; --surface-2:#f3f5f8; --surface-3:#e9edf2;
+  --border:#d8dee6; --border-strong:#bcc5d0;
+  --text:#17202b; --text-2:#465363; --text-3:#65717f;
+  --accent:#1f5fa8; --accent-weak:#e6eff9; --accent-text:#174a85;
+  --ok:#17693d; --ok-bg:#e3f3e9; --warn:#8a5a00; --warn-bg:#fcf1d4;
+  --danger:#b3261e; --danger-bg:#fbe8e6; --info:#2c55b0; --info-bg:#e7edfb;
+  --purple:#6437a8; --purple-bg:#efe8f9; --teal:#0d6b63; --teal-bg:#dff1ef;
+  --orange:#a8431a; --orange-bg:#fbe9df; --slate:#4b5767; --slate-bg:#eceff3;
+  --radius:4px; --shadow-1:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
+  --font:"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+  --mono:ui-monospace,"Cascadia Mono","Consolas","SFMono-Regular",Menlo,monospace;
+  --topbar-h:56px; --side-w:292px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e1217; --surface:#151a21; --surface-2:#1a2029; --surface-3:#222a35;
+    --border:#2b3440; --border-strong:#3b4654;
+    --text:#e5e9ee; --text-2:#aab4c0; --text-3:#8a95a3;
+    --accent:#6aa3ec; --accent-weak:#1a2940; --accent-text:#9cc3f5;
+    --ok:#5cc58a; --ok-bg:#12291d; --warn:#e3b54f; --warn-bg:#2d2410;
+    --danger:#f08a80; --danger-bg:#321715; --info:#8fadf3; --info-bg:#18223a;
+    --purple:#b99af0; --purple-bg:#241a36; --teal:#5fc7bb; --teal-bg:#10292a;
+    --orange:#f0a27a; --orange-bg:#321c12; --slate:#aab4c0; --slate-bg:#222a35;
+    --shadow-1:0 1px 2px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1217; --surface:#151a21; --surface-2:#1a2029; --surface-3:#222a35;
+  --border:#2b3440; --border-strong:#3b4654;
+  --text:#e5e9ee; --text-2:#aab4c0; --text-3:#8a95a3;
+  --accent:#6aa3ec; --accent-weak:#1a2940; --accent-text:#9cc3f5;
+  --ok:#5cc58a; --ok-bg:#12291d; --warn:#e3b54f; --warn-bg:#2d2410;
+  --danger:#f08a80; --danger-bg:#321715; --info:#8fadf3; --info-bg:#18223a;
+  --purple:#b99af0; --purple-bg:#241a36; --teal:#5fc7bb; --teal-bg:#10292a;
+  --orange:#f0a27a; --orange-bg:#321c12; --slate:#aab4c0; --slate-bg:#222a35;
+  --shadow-1:0 1px 2px rgba(0,0,0,.4);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-padding-top:calc(var(--topbar-h) + 12px);-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.55 var(--font);font-feature-settings:"tnum" 1}
+h1,h2,h3,h4{line-height:1.25;margin:0 0 .5em;color:var(--text)}
+h2{font-size:1.45rem;font-weight:650;letter-spacing:-.01em}
+h3{font-size:1.06rem;font-weight:650;margin-top:1.4em}
+h4{font-size:.92rem;font-weight:650;margin-top:1.1em;color:var(--text-2);text-transform:uppercase;letter-spacing:.04em}
+p{margin:.45em 0 .8em}
+ul,ol{margin:.3em 0 .9em;padding-left:1.35em}
+li{margin:.18em 0}
+a{color:var(--accent-text)}
+a:hover{text-decoration-thickness:2px}
+code,.mono{font-family:var(--mono);font-size:.88em}
+code{background:var(--surface-3);padding:.05em .35em;border-radius:3px}
+hr{border:0;border-top:1px solid var(--border);margin:1.5em 0}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.skip{position:absolute;left:8px;top:-60px;z-index:100;background:var(--accent);color:#fff;padding:8px 12px;border-radius:var(--radius)}
+.skip:focus{top:8px}
+.muted{color:var(--text-3)}
+.small{font-size:.86em}
+.nowrap{white-space:nowrap}
+

@@ -1,0 +1,44 @@
+<section class="doc-section" id="s15" data-group="Parte III · Vendas" data-num="15" data-title="Fluxos de pedidos" data-kw="pedido orçamento rascunho estados na_fila enviado faturado repetir pedido planilha pdf nunota top">
+  <div class="sec-head"><span class="sec-num">15</span><h2>Fluxos de pedidos</h2><div class="sec-meta"><span class="badge st-A">P-05 · P-08 · P-09</span><span class="badge st-S">S2 · S3</span><span class="badge st-U">R07 · R08 · R30</span></div></div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-h"><strong>Conteúdo do pedido/orçamento</strong><span class="ref">RF-ORD-1</span></div>
+      <dl class="kv small">
+        <dt>Cliente</dt><dd>conta no escopo (inclusive <code>cliente_pendente</code> para orçamento)</dd>
+        <dt>Empresa/filial e TOP</dt><dd>padrão configurável · valores reais <span class="badge st-S">S3.1</span></dd>
+        <dt>Condição</dt><dd>condição de pagamento / tipo de negociação</dd>
+        <dt>Itens</dt><dd>produto, quantidade, preço de tabela, % desconto, preço final</dd>
+        <dt>Totais</dt><dd>mesmo código no app e no servidor (<code>packages/domain</code>) <span class="badge st-A">P-05</span></dd>
+        <dt>Impostos</dt><dd>PROPOSTO: valor dos produtos sem impostos + aviso; simulação online se S2 confirmar <span class="badge st-U">R30</span></dd>
+        <dt>Observações</dt><dd>texto livre</dd>
+      </dl>
+    </div>
+    <div class="card">
+      <div class="card-h"><strong>Estados do pedido</strong><span class="badge st-D">RF-ORD-4</span></div>
+      <div class="hflow small">
+        <span class="tag">rascunho</span><span class="to">→</span><span class="tag">aguardando_aprovacao</span><span class="to">→</span><span class="tag">aprovado</span><span class="to">→</span><span class="tag">na_fila</span><span class="to">→</span><span class="tag">enviado</span><span class="to">→</span><span class="tag">faturado</span>
+      </div>
+      <p class="small">Alternativos: <span class="tag">reprovado</span> <span class="tag">revisao_preco</span> <span class="tag">erro_integracao</span> <span class="tag">cancelado</span>. Possíveis após spike S3: <span class="tag">confirmado</span> <span class="tag">faturado_parcial</span> <span class="badge st-S">R24 · R25</span></p>
+      <p class="small">Diagrama: <a href="#sm-pedido">SM-2</a>. Pedido enviado ao Sankhya não é editável no Sales Force (PROPOSTO).</p>
+    </div>
+  </div>
+  <h3>Caminhos de criação</h3>
+  <div class="grid-4">
+    <div class="card alt"><strong>Web online</strong><p class="small">Vendedor interno ou gerente monta o pedido; servidor revalida e roteia. <a href="#fl-07">FL-07</a></p></div>
+    <div class="card alt"><strong>App offline</strong><p class="small">Comando na outbox local, revalidado no push; pode voltar em revisão de preço. <a href="#fl-08">FL-08</a></p></div>
+    <div class="card alt"><strong>Repetir pedido</strong><p class="small">Duplica pedido anterior como novo rascunho com preços atualizados. <span class="ref">RF-ORD-8</span></p></div>
+    <div class="card alt"><strong>Planilha do cliente</strong><p class="small">Código/EAN + quantidade → rascunho com preços da tabela; linhas não reconhecidas listadas. <span class="ref">RF-ORD-9</span></p></div>
+  </div>
+  <h3>Regras em aberto que afetam pedidos</h3>
+  <div class="table-wrap"><table class="t compact">
+    <thead><tr><th>Tema</th><th>Recomendação atual (PROPOSTO)</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Edição durante aprovação</td><td>Editar só em rascunho, reprovado e revisao_preco; editar aguardando_aprovacao volta a rascunho e cancela o pedido de aprovação; qualquer mudança em itens invalida aprovação anterior; aprovações só online</td><td><span class="badge st-U">R07</span></td></tr>
+      <tr><td>Rascunhos</td><td>Sincronizados com o servidor; editáveis offline; visíveis ao vendedor na web e ao gerente</td><td><span class="badge st-U">R08</span></td></tr>
+      <tr><td>Orçamento × pedido</td><td>A spec usa "orçamento/pedido" como uma entidade; se orçamento é tipo, estado ou documento separado não está definido</td><td><span class="badge st-U">BP-03</span></td></tr>
+      <tr><td>PDF offline do orçamento</td><td>Template HTML único; <code>expo-print</code> no app; Chromium headless no servidor; logo embutido</td><td><span class="badge st-U">R60</span></td></tr>
+      <tr><td>Ciclo no Sankhya</td><td>Mapear inclusão → confirmação → faturamento (inclusive parcial) → cancelamento</td><td><span class="badge st-S">S3 · R24 · R25</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+

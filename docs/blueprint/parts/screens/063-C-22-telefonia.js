@@ -1,0 +1,11 @@
+
+{ id: 'C-22', name: 'Telefonia', grp: 'crm', plat: 'Web', ph: 'F3', prof: ['ADM', 'GER', 'VI'],
+  purpose: 'Ligar pelo sistema e registrar chamadas.',
+  info: 'Click-to-call · registro automático (duração, resultado) · link da gravação',
+  fields: 'Resultado da ligação', filters: 'Período · usuário · resultado', cols: 'Data · conta · contato · duração · resultado · gravação',
+  actions: 'Ligar · Registrar resultado · Ouvir gravação',
+  perms: 'Escopo das atividades' + WPJ,
+  rules: 'Provedor escolhido no início da F3, atrás da interface TelephonyProvider (RF-INT-7)',
+  audit: '—',
+  ents: 'activities', rf: 'RF-INT-7',
+  st: [INV, ['U', 'Provedor de telefonia/VoIP (gate F3)'], ['U', 'R67 — LGPD']] },

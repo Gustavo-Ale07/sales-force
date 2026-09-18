@@ -1,0 +1,26 @@
+<section class="doc-section" id="s04" data-group="Parte I · Produto" data-num="4" data-title="O que substitui do Agendor" data-kw="agendor crm migração funis negócios leads">
+  <div class="sec-head"><span class="sec-num">04</span><h2>O que substitui do Agendor</h2><div class="sec-meta"><span class="tag">Fase 2</span><span class="badge st-S">S9</span><span class="badge st-D">spec §3, §16</span></div></div>
+  <div class="table-wrap"><table class="t">
+    <thead><tr><th>Uso no Agendor</th><th>No Sales Force</th><th>Requisitos</th><th>Telas</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Empresas e pessoas</td><td>Tabela única de contas + contatos; leads e prospects no mesmo ciclo de vida</td><td><span class="ref">RF-ACC-7</span> <span class="ref">RF-CON-1</span></td><td><span class="ref">C-02</span> <span class="ref">W-11</span></td><td><span class="badge st-A">P-19</span></td></tr>
+      <tr><td>Leads e listas</td><td>Leads com deduplicação, distribuição e importação de listas</td><td><span class="ref">RF-ACC-7</span> <span class="ref">RF-AUT-2</span></td><td><span class="ref">C-01</span> <span class="ref">C-16</span></td><td><span class="badge st-U">R53 pool</span></td></tr>
+      <tr><td>Funis e negócios</td><td>Vários funis configuráveis, oportunidades, kanban, motivos de perda</td><td><span class="ref">RF-OPP-1</span> <span class="ref">RF-OPP-3</span> <span class="ref">RF-OPP-4</span></td><td><span class="ref">C-03</span> <span class="ref">C-04</span></td><td><span class="badge st-P">D9</span></td></tr>
+      <tr><td>Propostas</td><td>Propostas com itens do catálogo Sankhya, versões, PDF, e-mail e link WhatsApp</td><td><span class="ref">RF-PRP-1</span> <span class="ref">RF-PRP-3</span></td><td><span class="ref">C-06</span> <span class="ref">C-07</span></td><td><span class="badge st-P">D10</span> <span class="badge st-U">R34</span></td></tr>
+      <tr><td>Tarefas, follow-ups e histórico</td><td>Tarefas, follow-ups rastreáveis, interações na timeline, agenda</td><td><span class="ref">RF-ACT-4</span> <span class="ref">RF-ACT-5</span> <span class="ref">RF-ACT-6</span></td><td><span class="ref">C-08</span> <span class="ref">C-09</span> <span class="ref">W-27</span></td><td><span class="badge st-D">RF rascunho</span></td></tr>
+      <tr><td>Automações e relatórios</td><td>Automações pré-definidas (F2), construtor (F3), dashboards com escopo</td><td><span class="ref">RF-AUT-1</span> <span class="ref">RF-DSH-2</span></td><td><span class="ref">C-10</span> <span class="ref">C-12</span></td><td><span class="badge st-A">P-21</span></td></tr>
+    </tbody>
+  </table></div>
+  <h3>Migração do Agendor</h3>
+  <div class="diagram">
+    <div class="hflow" style="min-width:760px">
+      <div class="box"><b>1 · S9</b>Validar formato de exportação/API do Agendor<br><span class="badge st-S">Spike</span></div><span class="to">→</span>
+      <div class="box"><b>2 · Mapeamento salvo</b>Funis/etapas → funis; usuários → usuários<br><span class="badge st-D">RF-IMP-4</span></div><span class="to">→</span>
+      <div class="box"><b>3 · Staging</b>Carga assistida e validação por amostragem com gestores</div><span class="to">→</span>
+      <div class="box"><b>4 · Produção</b>Carga num fim de semana</div><span class="to">→</span>
+      <div class="box"><b>5 · Somente leitura</b>Agendor 30 dias em leitura → desligamento</div>
+    </div>
+    <p class="diagram-cap">Carga única assistida (spec §16.4). Dados migrados: empresas, pessoas, negócios abertos e fechados, tarefas, histórico/anotações. Staging nunca recebe dados de produção sem sanitização aprovada (SNK-3/P-15) — como a migração do Agendor se concilia com essa regra ainda não foi decidido: <span class="ref">BP-02</span>.</p>
+  </div>
+</section>
+

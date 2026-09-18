@@ -1,0 +1,12 @@
+
+{ id: 'C-09', name: 'Follow-up', grp: 'crm', plat: 'Web', ph: 'F2', prof: ['ADM', 'GER', 'VI'],
+  purpose: 'Agendar e cumprir follow-ups com origem rastreável.',
+  info: 'Tarefa de follow-up com origem (manual ou automação)',
+  fields: 'Tipo · data/hora · responsável · descrição · origem (atividade, proposta, regra)',
+  filters: 'Origem · período · responsável', cols: 'Tipo · origem · data/hora · responsável · status',
+  actions: 'Agendar follow-up · Concluir com resultado · Reagendar',
+  perms: 'Escopo das tarefas' + WPJ,
+  rules: 'Manual ("agendar follow-up") ou automático, ex.: proposta enviada → tarefa em N dias (RF-ACT-4, RF-AUT-1) · origem rastreável',
+  audit: '—',
+  ents: 'activities · automation_runs', rf: 'RF-ACT-4 · RF-AUT-1',
+  st: [INV] },

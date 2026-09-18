@@ -1,0 +1,11 @@
+
+{ id: 'M-17', name: 'Status de sync', grp: 'mobile', plat: 'Mobile', ph: 'F1', prof: ['PJ', 'GER', 'VI'],
+  purpose: 'Mostrar a saúde da sincronização do aparelho.',
+  info: 'Última sincronização · itens na fila · dias restantes até o bloqueio offline · versão do app e do protocolo · estado do aparelho',
+  fields: '—', filters: '—', cols: '—',
+  actions: 'Sincronizar agora · Ver fila',
+  perms: 'Usuário do aparelho',
+  rules: 'PROPOSTO gatilhos: abrir o app, reconectar, a cada 15 min em primeiro plano, manual, após salvar pedido · limite de 7 dias sem sync, configurável (RF-IAM-8)',
+  audit: '—',
+  ents: 'sync_state local · outbox local · devices', rf: 'RF-IAM-8',
+  st: [INV, SYNC, ['U', 'R11 — versão do protocolo'], ['U', 'R16 — relógio do aparelho']] },

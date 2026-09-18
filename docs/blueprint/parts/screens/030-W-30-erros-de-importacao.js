@@ -1,0 +1,11 @@
+
+{ id: 'W-30', name: 'Erros de importação', grp: 'web', plat: 'Web', ph: 'F1', prof: ['ADM', 'GER', 'VI', 'CF'], mock: 'mk-importacao',
+  purpose: 'Corrigir linhas rejeitadas de uma importação.',
+  info: 'Linhas com erro: nº da linha, coluna, valor, motivo · duplicados',
+  fields: '—', filters: 'Tipo de erro · coluna', cols: 'Linha · coluna · valor · erro',
+  actions: 'Baixar planilha de erros · Corrigir e reimportar',
+  perms: 'Autor da importação e perfis com escopo sobre ela' + WPJ,
+  rules: 'Planilha de erros em object storage (P-17), baixada por URL pré-assinada de curta duração (STACK-7) · erros não revelam registros fora do escopo (P-21)',
+  audit: '—',
+  ents: 'imports · import_row_errors · files', rf: 'RF-IMP-2',
+  st: [INV, ['A', 'STACK-7 — S3 privado com URLs pré-assinadas curtas'], P21] },

@@ -1,7 +1,18 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "model": "sonnet",
   "permissions": {
+    "allow": [
+      "Bash(node docs/blueprint/build.mjs*)",
+      "PowerShell(node docs/blueprint/build.mjs*)",
+      "Bash(git diff --stat*)",
+      "Bash(git status*)",
+      "Bash(git log*)"
+    ],
     "deny": [
+      "Read(docs/blueprint.html)",
+      "Edit(docs/blueprint.html)",
+      "Write(docs/blueprint.html)",
       "Read(.env)",
       "Read(.env.*)",
       "Read(!.env.example)",

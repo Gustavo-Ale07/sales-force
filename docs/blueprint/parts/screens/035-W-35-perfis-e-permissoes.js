@@ -1,0 +1,13 @@
+
+{ id: 'W-35', name: 'Perfis e permissões', grp: 'web', plat: 'Web', ph: 'F0', prof: ['ADM'], mock: 'mk-permissoes',
+  purpose: 'Ajustar permissões e escopos de cada perfil.',
+  info: 'Matriz perfil × permissão (recurso.ação) × escopo',
+  fields: 'Permissão · escopo (nenhum, proprio, equipe, tudo)',
+  filters: 'Perfil · recurso',
+  cols: 'Permissão · Admin · Diretoria · Gerente · Vend. interno · Repr. PJ · Cadastro/Fin.',
+  actions: 'Ajustar permissão · Ajustar escopo · Salvar com confirmação',
+  perms: 'Admin' + WPJ,
+  rules: 'Admin ajusta as permissões de cada perfil (RF-IAM-6) · exportação e custo/margem não concedíveis ao PJ (P-20) · PROPOSTO: novas permissões negadas por padrão · PROPOSTO SYNC-3: mudança força resync dos usuários afetados',
+  audit: 'mudança de perfil e de permissões',
+  ents: 'roles · role_permissions · audit_log', rf: 'RF-IAM-6',
+  st: [INV, P20, P21, AUTH4, ['P', 'Novas permissões negadas por padrão']] },

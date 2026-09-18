@@ -1,0 +1,14 @@
+<section class="doc-section" id="s11" data-group="Parte II · Arquitetura e acesso" data-num="11" data-title="Permissões" data-kw="permissões matriz rbac ação exportar custo margem aprovar">
+  <div class="sec-head"><span class="sec-num">11</span><h2>Permissões</h2><div class="sec-meta"><span class="badge st-A">P-20 · P-21</span><span class="badge st-P">AUTH-4 · matriz §8.2</span></div></div>
+  <p class="lead"><b>Permissão de ação</b> (o que o perfil pode fazer) é separada de <b>escopo de dados</b> (sobre quais registros). Permissões nomeadas <code>recurso.ação</code> (ex.: <code>order.approve</code>, <code>account.export</code>) agrupadas em perfis; o admin ajusta (RF-IAM-6). Autorização sempre no servidor (P-21, APROVADO).</p>
+  <div class="chips small" style="margin:.4em 0 .8em">
+    <span><b class="pm"><span class="yes">✔</span></b> permitido</span>
+    <span>— não permitido</span>
+    <span><b class="pm"><span class="deny">✖</span></b> proibido explicitamente</span>
+    <span class="tag">borda verde</span> célula coberta por decisão aprovada
+    <span class="tag" style="background:var(--orange-bg);color:var(--orange)">fundo laranja</span> decisão pendente
+  </div>
+  <div id="perm-matrix"></div>
+  <div class="callout warn small"><p><b>Proposto (security-model §5.1):</b> novas permissões nascem negadas. Até isso ser aprovado, nenhuma permissão nova é concedida a um perfil sem instrução explícita.</p></div>
+</section>
+

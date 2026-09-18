@@ -1,0 +1,18 @@
+<section class="doc-section" id="s16" data-group="Parte III · Vendas" data-num="16" data-title="Aprovações" data-kw="aprovação desconto crédito cliente aparelho alçada fila aprovador">
+  <div class="sec-head"><span class="sec-num">16</span><h2>Aprovações</h2><div class="sec-meta"><span class="badge st-A">P-10 · P-18</span><span class="badge st-P">AUTH-2</span><span class="badge st-U">R26 · R35 · R36 · R37</span></div></div>
+  <div class="table-wrap"><table class="t">
+    <thead><tr><th>Tipo</th><th>Gatilho</th><th>Aprovador</th><th>Resultado</th><th>Status</th><th>Fluxo / telas</th></tr></thead>
+    <tbody>
+      <tr><td><b>Desconto</b></td><td>Desconto acima do limite do vendedor</td><td>Gerente até o seu limite; diretoria acima</td><td>aprovado / reprovado com comentário</td><td><span class="badge st-A">P-10</span> <span class="badge st-U">R35 · R36</span></td><td><a href="#fl-09">FL-09</a> <span class="ref">W-20</span></td></tr>
+      <tr><td><b>Exceção de crédito</b></td><td>Títulos vencidos há mais de X dias ou total acima do crédito disponível</td><td>PROPOSTO: Cadastro/Financeiro</td><td>liberado / reprovado</td><td><span class="badge st-D">RF-ORD-3</span> <span class="badge st-U">R37</span></td><td><a href="#fl-10">FL-10</a> <span class="ref">W-21</span></td></tr>
+      <tr><td><b>Cliente novo</b></td><td>Cadastro <code>cliente_pendente</code></td><td>Cadastro/Financeiro (e admin)</td><td>cliente (via outbox) / rejeitado com motivo</td><td><span class="badge st-A">P-18</span></td><td><a href="#fl-05">FL-05</a> <span class="ref">W-13</span></td></tr>
+      <tr><td><b>Aparelho</b></td><td>Primeiro login do representante em aparelho novo</td><td>Admin ou gerente do representante</td><td>approved / recusado</td><td><span class="badge st-P">AUTH-2</span></td><td><a href="#fl-02">FL-02</a> <span class="ref">W-36</span></td></tr>
+      <tr><td><b>Proposta</b> (F2)</td><td>Desconto acima da alçada</td><td>Mesmas regras de pedido</td><td>pronta para envio</td><td><span class="badge st-D">RF-PRP-1</span></td><td><a href="#fl-17">FL-17</a></td></tr>
+    </tbody>
+  </table></div>
+  <div class="grid-2">
+    <div class="callout warn"><p><b>Fonte única de aprovação (R26, DECISÃO PENDENTE após S4):</b> o Sankhya tem eventos nativos de liberação de limites. PROPOSTO: o Sales Force é a fonte da alçada de desconto e da exceção de crédito, e pedidos originados nele usam uma TOP dedicada que não gera esses eventos (ou os gera já liberados) — a confirmar no spike S4.</p></div>
+    <div class="callout note"><p><b>Ordem e registro (R37, DECISÃO PENDENTE):</b> PROPOSTO ordem fixa crédito → desconto; cada aprovação registrada separadamente em <code>order_approvals</code> (nível, aprovador, decisão, comentário) e na auditoria.</p></div>
+  </div>
+</section>
+

@@ -1,0 +1,47 @@
+<section class="doc-section" id="s42" data-group="Parte VIII · Operação e qualidade" data-num="42" data-title="Operação" data-kw="operação ambientes provedores custo orçamento hostinger aws azure magalu observabilidade health runbook sentry uptime">
+  <div class="sec-head"><span class="sec-num">42</span><h2>Operação</h2><div class="sec-meta"><span class="badge st-A">OPS-6 · OPS-1</span><span class="badge st-P">OPS-3 · OPS-4</span><span class="badge st-V">V-04 · V-05 · V-15 · V-16</span></div></div>
+  <div class="grid-2">
+    <div>
+      <h3>Restrições operacionais <span class="badge st-A">OPS-6</span></h3>
+      <ul class="small">
+        <li>Operado por equipe interna pequena com apoio de IA; sem exigir equipe de DevOps.</li>
+        <li>Mínimo de componentes; serviços gerenciados quando reduzem risco.</li>
+        <li>Todo procedimento com runbook; recuperação nunca depende de conhecimento não documentado.</li>
+        <li>Produção preferencialmente no Brasil; LGPD com justificativa se fora.</li>
+        <li>Uma instância de API e uma de worker por ambiente inicialmente; transações longas proibidas em tabelas sincronizáveis.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Orçamento mensal de produção <span class="badge st-A">OPS-6</span></h3>
+      <div class="diagram" style="padding-top:26px">
+        <div class="budget" role="img" aria-label="Faixa alvo 300 a 600 reais; até cerca de 700 apresentável; acima de 800 volta ao dono">
+          <div class="seg" style="left:30%;width:30%;background:var(--ok-bg);color:var(--ok)">alvo</div>
+          <div class="seg" style="left:60%;width:10%;background:var(--info-bg);color:var(--info)">≈700</div>
+          <div class="seg" style="left:70%;width:10%;background:var(--warn-bg);color:var(--warn)">justificar</div>
+          <div class="seg" style="left:80%;width:20%;background:var(--danger-bg);color:var(--danger)">dono revisa</div>
+          <span class="tick" style="left:30%">R$ 300</span><span class="tick" style="left:60%">R$ 600</span><span class="tick" style="left:80%">R$ 800</span>
+        </div>
+        <p class="diagram-cap">Staging otimizado à parte e materialmente mais barato. O orçamento nunca justifica sacrificar backups, segurança, isolamento, integridade ou recuperabilidade. Observabilidade é linha opcional até OPS-4.</p>
+      </div>
+    </div>
+  </div>
+  <h3>Comparação de provedores <span class="badge st-V">Nenhum provedor escolhido</span></h3>
+  <div class="table-wrap"><table class="t compact">
+    <thead><tr><th>Combinação (indicativa, antes de impostos)</th><th>Produção base</th><th>+ observabilidade</th><th>Encaixe</th><th>Principais trade-offs</th></tr></thead>
+    <tbody>
+      <tr><td>D1-lean · AWS São Paulo (Lightsail + RDS 2 GB + S3)</td><td class="num">≈ R$ 485</td><td class="num">≈ R$ 665</td><td><span class="badge st-V">candidata</span></td><td>Atende critérios técnicos; preços de RDS de espelho de terceiros (não verificado)</td></tr>
+      <tr><td>D2-lean · Azure Brazil South (VM + Flexible B1ms)</td><td class="num">≈ R$ 471 + S3 externo</td><td class="num">≈ R$ 651+</td><td><span class="badge st-V">candidata</span></td><td>Blob não é S3 (STACK-7) → segundo provedor; banco burstable sem HA</td></tr>
+      <tr><td>D3 · Hostinger + Azure DB por endpoint TLS com allowlist</td><td class="num">≈ R$ 287</td><td class="num">≈ R$ 467</td><td><span class="badge st-U">topologia não preferida</span></td><td>Endpoint público apesar de existir rede privada no Azure</td></tr>
+      <tr><td>D4 · Magalu Cloud (tudo Brasil, BRL)</td><td class="num">—</td><td class="num">—</td><td><span class="badge st-V">cotação formal</span></td><td>Pode liderar se PITR, PG 17/18 e lifecycle confirmados</td></tr>
+      <tr><td>E · Fallback: PostgreSQL próprio na VPS + WAL em S3</td><td class="num">≈ R$ 83</td><td class="num">≈ R$ 263</td><td><span class="badge st-P">só fallback</span></td><td>App e banco no mesmo domínio de falha; equipe assume patching e prova de restore</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small">Todos os totais: <b>NEEDS FORMAL QUOTE</b>. Checklist de cotação AWS/Magalu/Azure em <code>architecture.md</code> §10.3 (trilha T3).</p>
+  <h3>Saúde e observabilidade</h3>
+  <div class="grid-3">
+    <div class="card"><div class="card-h"><strong>Integração</strong><span class="badge st-D">RF-SNK-6</span></div><p class="small">Último sucesso por entidade, atraso, erros em 24 h, tamanho da fila; alerta por e-mail. Fase 0 ou 1 <span class="badge st-U">Q-01</span>. Mockup <a href="#mk-integracoes">MK-08</a>.</p></div>
+    <div class="card"><div class="card-h"><strong>Aplicação</strong><span class="badge st-P">OPS-4</span></div><p class="small">Logs JSON (pino) com correlation id da requisição ao job; Sentry com scrubbing; <code>/health</code> (api, heartbeat do worker, banco, Sankhya); monitor externo de uptime; rotação de logs Docker.</p></div>
+    <div class="card"><div class="card-h"><strong>Rotina</strong><span class="badge st-D">spec §14</span></div><p class="small">Painel de saúde da integração; fila de erros com reprocessamento; painel de custos de IA (F3); idade da transação aberta mais antiga (proposto).</p></div>
+  </div>
+</section>
+

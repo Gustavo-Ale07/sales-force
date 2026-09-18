@@ -1,0 +1,12 @@
+
+{ id: 'C-17', name: 'Campos personalizados e tags', grp: 'crm', plat: 'Web', ph: 'F2', prof: ['ADM'],
+  purpose: 'Configurar campos extras e tags de segmentação.',
+  info: 'Definições de campos por entidade · tags',
+  fields: 'Entidade · nome · tipo (texto, número, data, lista) · opções · tags',
+  filters: 'Entidade', cols: 'Campo · entidade · tipo · opções',
+  actions: 'Novo campo · Editar · Nova tag',
+  perms: 'Admin (RF-ACC-8)' + WPJ,
+  rules: 'Campos configurados pelo admin (RF-ACC-8) · tags e segmentação por origem, segmento, porte, região (RF-ACC-9)',
+  audit: 'ação administrativa',
+  ents: 'custom_field_defs · tags · entity_tags', rf: 'RF-ACC-8 · RF-ACC-9',
+  st: [INV] },

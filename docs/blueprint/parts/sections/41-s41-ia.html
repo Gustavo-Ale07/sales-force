@@ -1,0 +1,31 @@
+<section class="doc-section" id="s41" data-group="Parte VII · Plataforma" data-num="41" data-title="IA" data-kw="ia inteligência artificial claude assistente ferramentas somente leitura minimização custo teto evals churn mix resumo base de conhecimento">
+  <div class="sec-head"><span class="sec-num">41</span><h2>IA</h2><div class="sec-meta"><span class="tag">Fase 3</span><span class="badge st-A">P-14 · P-21</span><span class="badge st-P">P-23</span><span class="badge st-U">R18</span></div></div>
+  <div class="callout ok"><p><b>APROVADO (P-14):</b> regras críticas são determinísticas. A IA roda só por interfaces controladas pelo backend, recebe dados mínimos, usa ferramentas <b>somente leitura</b> na Fase 3 e nunca substitui preço, crédito, permissões, totais, transições de estado ou idempotência. Ferramentas usam o mesmo escopo do usuário (P-21).</p></div>
+  <div class="diagram" role="img" aria-label="Usuário pergunta; backend aplica escopo e minimização; ferramentas somente leitura chamam a API com as permissões do usuário; Claude API recebe apenas dados mínimos">
+    <div class="hflow" style="min-width:900px">
+      <div class="box client"><b>Web / app (online)</b>pergunta</div><span class="to">→</span>
+      <div class="box"><b>Backend</b>chave só no servidor; tetos de custo</div><span class="to">→</span>
+      <div class="box"><b>Ferramentas somente leitura</b>contas, pedidos, títulos, oportunidades, tarefas, métricas — com as permissões do usuário</div><span class="to">→</span>
+      <div class="box"><b>Minimização</b>só campos necessários; nunca custo/margem, segredos, dados fora do escopo</div><span class="to">↔</span>
+      <div class="box ext"><b>Claude API</b>SDK oficial</div>
+    </div>
+  </div>
+  <div class="table-wrap"><table class="t compact">
+    <thead><tr><th>Recurso</th><th>Como funciona</th><th>Req.</th><th>Tela</th></tr></thead>
+    <tbody>
+      <tr><td>Assistente interno</td><td>Dúvidas de uso, produtos e políticas (base de conhecimento do admin) + consultas a dados em linguagem natural; só online; sugere, o usuário executa</td><td><span class="ref">RF-IA-1</span></td><td><span class="ref">A-01</span> <span class="ref">M-27</span></td></tr>
+      <tr><td>Resumo e próxima ação</td><td>Na conta ou oportunidade, sob demanda, cache até mudança relevante</td><td><span class="ref">RF-IA-2</span></td><td><span class="ref">A-02</span> <span class="ref">A-03</span></td></tr>
+      <tr><td>Mix sugerido</td><td>Candidatos <b>estatísticos</b> (reposição, clientes semelhantes); IA só ordena e explica; pré-calculado para uso offline</td><td><span class="ref">RF-IA-3</span></td><td><span class="ref">A-04</span></td></tr>
+      <tr><td>Alertas de churn</td><td>Score por regras; lote noturno com explicação por IA para priorizados; vira alerta de carteira</td><td><span class="ref">RF-IA-4</span></td><td><span class="ref">A-05</span></td></tr>
+      <tr><td>Mapeamento de planilhas</td><td>Cabeçalhos + 5 linhas de amostra → sugestão; usuário sempre confirma</td><td><span class="ref">RF-IA-5</span></td><td><span class="ref">A-08</span></td></tr>
+    </tbody>
+  </table></div>
+  <div class="grid-3">
+    <div class="card"><div class="card-h"><strong>Diretrizes da spec</strong><span class="badge st-D">§6.2</span></div><p class="small">Modelo e effort por rota em configuração (low: mapeamento; medium: resumos; high: assistente); saídas estruturadas; checar <code>stop_reason</code> inclusive recusa; erros tratados por tipo; prompt caching; Batch API nos lotes.</p></div>
+    <div class="card"><div class="card-h"><strong>Custo</strong></div><p class="small">Registro de tokens e custo por requisição, usuário e recurso; teto mensal global e por usuário com bloqueio e aviso ao admin. Valores dos tetos <span class="badge st-U">gate F3</span>. Tela <span class="ref">A-07</span>.</p></div>
+    <div class="card"><div class="card-h"><strong>Qualidade e acesso</strong></div><p class="small">Evals com perguntas reais antes de trocar modelo, effort ou prompt. Base de conhecimento filtrada por perfil <span class="badge st-U">R18</span>. Transferência internacional (LGPD) <span class="badge st-U">R67</span>.</p></div>
+  </div>
+</section>
+
+<div class="part-title">Parte VIII · Operação e qualidade</div>
+

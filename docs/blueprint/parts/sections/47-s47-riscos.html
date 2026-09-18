@@ -1,0 +1,25 @@
+<section class="doc-section" id="s47" data-group="Parte VIII · Operação e qualidade" data-num="47" data-title="Riscos" data-kw="riscos impacto mitigação sankhya preço sincronização 2fa escopo custo ia agendor distribuição">
+  <div class="sec-head"><span class="sec-num">47</span><h2>Riscos</h2><div class="sec-meta"><span class="badge st-D">spec §17</span><span class="badge st-D">spec-review</span></div></div>
+  <div class="table-wrap"><table class="t">
+    <thead><tr><th>Risco</th><th>Impacto</th><th>Mitigação</th><th>Relacionados</th></tr></thead>
+    <tbody>
+      <tr><td>API Sankhya com limites/serviços diferentes do esperado</td><td><span class="badge st-U">Alto</span></td><td>Spikes S0/S1 antes de qualquer tela; <code>SankhyaGateway</code> isola mudanças</td><td><span class="ref">V-11</span> <span class="ref">V-12</span></td></tr>
+      <tr><td>Regra de preço mais complexa que "tabela por cliente"</td><td><span class="badge st-U">Alto</span></td><td>S2 com 50–100 casos reais como testes de aceitação; piloto exige 100% dos casos batendo (R31)</td><td><span class="ref">R31</span></td></tr>
+      <tr><td>Impostos ausentes em orçamentos e propostas</td><td><span class="badge st-U">Alto</span></td><td>Valor sem impostos + aviso; simulação online se possível</td><td><span class="ref">R30</span></td></tr>
+      <tr><td>Aprovação dupla ou pedido travado por liberação nativa do Sankhya</td><td><span class="badge st-U">Alto</span></td><td>Fonte única + TOP dedicada (a confirmar)</td><td><span class="ref">R26</span></td></tr>
+      <tr><td>Sync offline com duplicidade ou dados de outra carteira</td><td><span class="badge st-U">Alto</span></td><td>Idempotência, watermark, eventos de escopo, testes de sync e permissão, piloto em paralelo</td><td><span class="ref">SYNC-2</span> <span class="ref">SYNC-3</span></td></tr>
+      <tr><td>Pedido duplicado no Sankhya</td><td><span class="badge st-U">Alto</span></td><td>Campo de origem antes de todo reenvio; nada de heurística; nenhuma escrita antes de S0</td><td><span class="ref">SNK-4</span></td></tr>
+      <tr><td>Escopo grande para um desenvolvedor</td><td><span class="badge st-U">Alto</span></td><td>Fases que desligam ferramentas; YAGNI por fase</td><td><span class="ref">P-12</span></td></tr>
+      <tr><td>Sem 2FA com representantes PJ</td><td><span class="badge st-V">Médio</span></td><td>Senha forte, bloqueio, aprovação de aparelho, revogação e limpeza, bloqueio offline, auditoria</td><td><span class="ref">P-11</span> <span class="ref">AUTH-2</span></td></tr>
+      <tr><td>Nenhuma combinação de provedores atende todos os critérios no alvo de R$ 300–600</td><td><span class="badge st-V">Médio</span></td><td>Cotações formais; até ≈ R$ 700 apresentável; fallback documentado</td><td><span class="ref">V-04</span></td></tr>
+      <tr><td>Desempenho do app com volume real em Android de entrada</td><td><span class="badge st-V">Médio</span></td><td>Spike S7 com dados sintéticos no volume real antes de fixar metas</td><td><span class="ref">V-14</span></td></tr>
+      <tr><td>Custos de IA crescendo</td><td><span class="badge st-V">Médio</span></td><td>Tetos, logs de custo, estatística antes da IA, Batch API</td><td><span class="ref">RF-IA-3</span></td></tr>
+      <tr><td>Formato de exportação do Agendor</td><td><span class="badge st-V">Médio</span></td><td>Spike S9 no início da Fase 2</td><td><span class="ref">S9</span></td></tr>
+      <tr><td>Transferência internacional de dados (LGPD)</td><td><span class="badge st-V">Médio</span></td><td>Revisão jurídica antes do piloto; preferir regiões brasileiras</td><td><span class="ref">R67</span></td></tr>
+      <tr><td>Distribuição privada iOS/Android</td><td><span class="badge st-P">Baixo</span></td><td>Contas organizacionais desde já; validar antes do piloto</td><td><span class="ref">V-10</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<div class="part-title">Parte IX · Governança</div>
+

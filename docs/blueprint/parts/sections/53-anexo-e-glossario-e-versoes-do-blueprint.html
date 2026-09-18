@@ -1,0 +1,42 @@
+<section class="doc-section" id="anexo-e" data-group="Anexos" data-num="E" data-title="Glossário e versões do blueprint" data-kw="glossário carteira positivação top nunota parceiro versões changelog">
+  <div class="sec-head"><span class="sec-num">E</span><h2>Glossário e versões do blueprint</h2></div>
+  <div class="grid-2">
+    <div>
+      <h3>Glossário</h3>
+      <div class="table-wrap"><table class="t compact">
+        <thead><tr><th>Termo</th><th>Significado</th></tr></thead>
+        <tbody>
+          <tr><td>Representante externo / PJ</td><td>Representante autônomo em campo; só no mobile (proposto) e com as restrições mais fortes</td></tr>
+          <tr><td>Vendedor interno</td><td>Inside sales / televendas</td></tr>
+          <tr><td>Gerente</td><td>Gerente de uma equipe (árvore proposta)</td></tr>
+          <tr><td>Diretoria</td><td>Diretores comerciais</td></tr>
+          <tr><td>Cadastro/Financeiro</td><td>Backoffice que aprova clientes novos</td></tr>
+          <tr><td>Carteira</td><td>Contas atribuídas a um vendedor</td></tr>
+          <tr><td>Positivação</td><td>Clientes da carteira que compraram no período</td></tr>
+          <tr><td>Alçada</td><td>Limite de desconto que cada nível pode conceder ou aprovar</td></tr>
+          <tr><td>TOP</td><td>Tipo de operação do Sankhya</td></tr>
+          <tr><td>NUNOTA</td><td>Número do documento no Sankhya, como citado na spec; comportamento no ciclo do pedido a validar (S3)</td></tr>
+          <tr><td>Parceiro</td><td>Cadastro de cliente no Sankhya</td></tr>
+          <tr><td>Espelho</td><td>Cópia somente leitura de dados do Sankhya no PostgreSQL</td></tr>
+          <tr><td>Outbox local</td><td>Fila de comandos pendentes no aparelho</td></tr>
+          <tr><td>integration_outbox</td><td>Registro de negócio de cada entrega ao Sankhya</td></tr>
+          <tr><td>Watermark</td><td>Marca d'água de transações concluídas usada no pull</td></tr>
+          <tr><td>Bundle</td><td>Conta com todos os dados filhos enviada ou removida de uma vez</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div>
+      <h3>Versões do blueprint</h3>
+      <div class="table-wrap"><table class="t compact">
+        <thead><tr><th>Versão</th><th>Data</th><th>Base</th><th>Mudanças</th></tr></thead>
+        <tbody>
+          <tr><td><b>Draft v0.1</b></td><td>16/09/2026</td><td>Rodadas 1–3 fechadas; commit <code>5fb15ee</code></td><td>Primeira versão, antecipada por instrução do dono do projeto: 48 seções, catálogo de telas, mockups, fluxos, máquinas de estado, matrizes e decisões em aberto</td></tr>
+          <tr><td>v0.2, v0.3…</td><td>—</td><td>Próximas rodadas</td><td>Atualizada a cada lote de decisões aprovado</td></tr>
+          <tr><td>v1.0</td><td>—</td><td>Especificação v1.0</td><td>Publicada junto com a especificação aprovada (GOV-1)</td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout note small"><p><b>Como atualizar:</b> dados de telas, fluxos, estados, matrizes e decisões em aberto ficam em blocos <code>&lt;script&gt;</code> no final do arquivo; seções narrativas e mockups são HTML estático. Nenhum segredo, credencial ou dado real entra neste arquivo (P-22).</p></div>
+    </div>
+  </div>
+  <p class="foot">Sales Force — Blueprint Draft v0.1 · documentação de design, não é código da aplicação · dados fictícios · gerado em 16/09/2026 no branch <code>design/blueprint</code>. Implementação aguarda <code>BEGIN IMPLEMENTATION</code>.</p>
+</section>

@@ -1,0 +1,12 @@
+
+{ id: 'M-14', name: 'Resultado de aprovação', grp: 'mobile', plat: 'Mobile', ph: 'F1', prof: ['PJ', 'GER', 'VI'],
+  purpose: 'Informar a decisão sobre um pedido em aprovação.',
+  info: 'Aprovado ou reprovado · nível do aprovador · comentário · próximo passo (fila Sankhya)',
+  fields: '—', filters: '—', cols: '—',
+  actions: 'Abrir pedido · Editar (se reprovado) · Nova tarefa',
+  perms: 'Autor do pedido',
+  rules: 'Aprovações feitas online pelos aprovadores (PROPOSTO R07) · resultado chega por pull e push (RF-NOT-1)',
+  offline: 'Mostra o último estado sincronizado',
+  audit: '—',
+  ents: 'orders · order_approvals · notifications', rf: 'RF-ORD-5 · RF-NOT-1 · RF-NOT-2',
+  st: [INV, P10, R36, ['U', 'R37 — aprovador de crédito']] },

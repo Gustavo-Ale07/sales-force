@@ -1,0 +1,13 @@
+
+{ id: 'W-08', name: 'Detalhe do cliente', grp: 'web', plat: 'Web', ph: 'F1', prof: WALL, mock: 'mk-cliente',
+  purpose: 'Ficha completa do cliente para atendimento e venda.',
+  info: 'Cabeçalho (razão social, CNPJ, status, responsável, atendentes) · abas Resumo, Contatos, Histórico de compras, Títulos, Pedidos, Oportunidades (F2), Atividades · limite e crédito disponível · última compra',
+  fields: 'Dados do Sankhya somente leitura; campos de CRM (tags, campos personalizados) na F2',
+  filters: 'Por aba (ver W-09, W-10, W-11, W-16)', cols: 'Conforme a aba',
+  actions: 'Novo pedido · Repetir pedido · Nova tarefa · Registrar interação (F2) · Resumo IA (F3)',
+  perms: 'Conta precisa estar no escopo; títulos, pedidos, contatos e histórico herdam a visibilidade da conta (AUTH-4 PROPOSTO)' + WPJ,
+  rules: 'Crédito disponível: fórmula do Sankhya PRECISA VALIDAR (S4) · RF-ACC-5 (rascunho da spec): cliente_pendente permite orçamento; envio ao Sankhya só após aprovação · custo/margem nunca exibidos aqui',
+  denied: 'Resposta não confirma a existência de conta fora do escopo',
+  audit: '—',
+  ents: 'accounts · contacts · receivables · sales_documents · orders · activities', rf: 'RF-ACC-2 · RF-ACC-5 · RF-CON-1 · RF-ORD-8',
+  st: [INV, P02, AUTH4, ['S', 'S4 — fórmula do crédito disponível'], ['U', 'Nota P-18 — regras do cliente pendente (RF-ACC-3/4) ainda a aprovar']] },

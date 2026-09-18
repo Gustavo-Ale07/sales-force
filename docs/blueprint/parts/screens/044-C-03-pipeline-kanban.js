@@ -1,0 +1,13 @@
+
+{ id: 'C-03', name: 'Pipeline Kanban', grp: 'crm', plat: 'Web', ph: 'F2', prof: ['ADM', 'DIR', 'GER', 'VI'], mock: 'mk-kanban',
+  purpose: 'Gerenciar oportunidades por etapa do funil.',
+  info: 'Colunas por etapa com cartões: conta, valor, data prevista, responsável, dias parada · soma por etapa',
+  fields: '—',
+  filters: 'Funil · responsável · equipe · período de fechamento · origem · tags',
+  cols: 'Kanban por etapa · Lista: conta, oportunidade, etapa, valor, probabilidade, data prevista, responsável',
+  actions: 'Arrastar entre etapas · Nova oportunidade · Alternar kanban/lista · Marcar ganha/perdida',
+  perms: 'Diretoria só visualiza (§8.2); escopo AUTH-4 (PROPOSTO)' + WPJ,
+  rules: 'Kanban e lista respeitam visibilidade (RF-OPP-3) · mudança de etapa entra no histórico (RF-OPP-6) · perda exige motivo (C-05) · alerta de etapa parada além dos dias máximos (RF-AUT-1) · PROPOSTO R05: etapa e responsável rejeitam edição conflitante',
+  audit: '—',
+  ents: 'opportunities · pipelines · pipeline_stages · opportunity_stage_history', rf: 'RF-OPP-1 · RF-OPP-3 · RF-OPP-6 · RF-AUT-1',
+  st: [INV, ['P', 'D9 — vários funis configuráveis (detalhes na F2)'], ['U', 'R05 — regra de edição concorrente']] },

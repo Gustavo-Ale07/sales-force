@@ -1,0 +1,13 @@
+
+{ id: 'M-18', name: 'Limite offline atingido', grp: 'mobile', plat: 'Mobile', ph: 'F1', prof: ['PJ', 'GER', 'VI'], mock: 'mm-limite-offline',
+  purpose: 'Bloquear o uso após o período máximo sem sincronizar.',
+  info: 'Dias sem sincronizar (limite 7, configurável) · fila pendente preservada',
+  fields: '—', filters: '—', cols: '—',
+  actions: 'Sincronizar agora · Sair',
+  perms: 'Usuário do aparelho',
+  rules: 'App bloqueia uso após o limite até sincronizar (RF-IAM-8) · outbox preservada · PROPOSTO R16: hora do servidor da última sync e detecção de relógio retrocedido — mitigação, não garantia',
+  offline: 'Bloqueado até haver conexão e sync bem-sucedida',
+  empty: '—', denied: 'É o próprio estado de bloqueio',
+  audit: '—',
+  ents: 'sync_state local · devices', rf: 'RF-IAM-8',
+  st: [INV, ['U', 'R16 — manipulação do relógio']] },

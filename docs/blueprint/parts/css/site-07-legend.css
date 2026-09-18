@@ -1,0 +1,6 @@
+/* ---------- Legend ---------- */
+.legend{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.legend.five{grid-template-columns:repeat(5,minmax(0,1fr))}
+.legend .item{border:1px solid var(--border);border-radius:var(--radius);padding:9px 11px;background:var(--surface)}
+.legend .item p{margin:.35em 0 0;font-size:.82rem;color:var(--text-2)}
+

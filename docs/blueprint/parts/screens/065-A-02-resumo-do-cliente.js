@@ -1,0 +1,12 @@
+
+{ id: 'A-02', name: 'Resumo do cliente', grp: 'ia', plat: 'Web', ph: 'F3', prof: WALL,
+  purpose: 'Gerar resumo do relacionamento na ficha da conta ou oportunidade.',
+  info: 'Resumo de histórico de compras, interações, títulos e oportunidades',
+  fields: '—', filters: '—', cols: '—',
+  actions: 'Gerar resumo · Atualizar',
+  perms: 'Conta no escopo; dados enviados filtrados pelas permissões do usuário (P-21)' + WPJ,
+  rules: 'Sob demanda, com cache até a próxima mudança relevante (RF-IA-2) · saída estruturada · dados mínimos (P-14) · custo/margem nunca enviados (P-23 PROPOSTO)',
+  offline: 'Somente online', error: 'Teto de custo atingido · provedor indisponível',
+  audit: '—',
+  ents: 'ai_requests · accounts · sales_documents · activities · receivables · opportunities', rf: 'RF-IA-2',
+  st: [INV, P14, P23] },

@@ -1,0 +1,12 @@
+
+{ id: 'W-06', name: 'Dashboard gerente', grp: 'web', plat: 'Web', ph: 'F1', prof: ['GER', 'DIR', 'ADM'],
+  purpose: 'Acompanhar a equipe: metas, aprovações pendentes, erros e clientes pendentes.',
+  info: 'Meta × realizado da equipe · positivação por vendedor · aprovações pendentes · pedidos com erro de integração · clientes pendentes de aprovação · tarefas atrasadas',
+  fields: '—', filters: 'Período · equipe (com subequipes) · vendedor',
+  cols: 'Vendedor · meta · realizado · % · positivação · pedidos em aprovação · erros',
+  actions: 'Abrir fila de aprovações · Filtrar vendedor · Abrir pedido com erro',
+  perms: 'Gerente: escopo equipe incluindo subequipes (AUTH-4 PROPOSTO) · Diretoria e Admin: tudo' + WPJ,
+  rules: 'Mesmo filtro de escopo da API (P-21) · custo/margem só para perfil com permissão (§8.2, PROPOSTO) · comissões: gerente vê as da equipe (RF-GOL-3)',
+  audit: '—',
+  ents: 'goals · commissions · orders · order_approvals · accounts · activities', rf: 'RF-GOL-1 · RF-GOL-2 · RF-GOL-3 · RF-ORD-5',
+  st: [INV, P21, AUTH4, ['S', 'S6 — fontes de metas e comissões']] },

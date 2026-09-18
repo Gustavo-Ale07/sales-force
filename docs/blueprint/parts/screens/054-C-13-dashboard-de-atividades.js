@@ -1,0 +1,12 @@
+
+{ id: 'C-13', name: 'Dashboard de atividades', grp: 'crm', plat: 'Web', ph: 'F2', prof: ['ADM', 'DIR', 'GER', 'VI'],
+  purpose: 'Acompanhar produtividade comercial.',
+  info: 'Tarefas criadas, concluídas e atrasadas · interações por tipo · por vendedor',
+  fields: '—', filters: 'Período · equipe · vendedor · tipo',
+  cols: 'Vendedor · criadas · concluídas · atrasadas · interações por tipo',
+  actions: 'Detalhar vendedor · Exportar (com permissão)',
+  perms: 'Escopo aplicado no servidor (P-21)' + WPJ,
+  rules: 'Contagens sobre atividades no escopo (RF-DSH-3)',
+  audit: 'exportação (quando executada)',
+  ents: 'activities', rf: 'RF-DSH-3',
+  st: [INV, P21] },

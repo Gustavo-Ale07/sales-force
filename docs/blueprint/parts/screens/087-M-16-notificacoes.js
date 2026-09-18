@@ -1,0 +1,11 @@
+
+{ id: 'M-16', name: 'Notificações', grp: 'mobile', plat: 'Mobile', ph: 'F1', prof: ['PJ', 'GER', 'VI'],
+  purpose: 'Central de notificações e push do app.',
+  info: 'Pedido aprovado, reprovado, com erro, em revisão de preço ou faturado · cliente aprovado/rejeitado · tarefa vencendo',
+  fields: '—', filters: 'Não lidas · tipo', cols: 'Evento · entidade · data',
+  actions: 'Abrir · Marcar como lida',
+  perms: 'Próprias notificações',
+  rules: 'Central no app + push (RF-NOT-1) · PROPOSTO: notificações no dataset do usuário',
+  audit: '—',
+  ents: 'notifications', rf: 'RF-NOT-1 · RF-NOT-2',
+  st: [INV, SYNC] },

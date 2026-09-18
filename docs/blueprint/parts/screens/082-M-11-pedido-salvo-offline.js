@@ -1,0 +1,12 @@
+
+{ id: 'M-11', name: 'Pedido salvo offline', grp: 'mobile', plat: 'Mobile', ph: 'F1', prof: ['PJ', 'GER', 'VI'],
+  purpose: 'Confirmar que o pedido ficou salvo e na fila de envio.',
+  info: 'Pedido salvo no aparelho · posição na fila · será enviado ao reconectar',
+  fields: '—', filters: '—', cols: '—',
+  actions: 'Ver fila · Novo pedido · Voltar ao cliente',
+  perms: 'Autor do pedido',
+  rules: 'Envio automático ao reconectar ou logo após salvar, se online (PROPOSTO, sync-protocol §10) · reenviar o mesmo command_id não duplica (P-08)',
+  sync: 'Comando pendente na outbox local',
+  audit: '—',
+  ents: 'outbox local · orders', rf: 'RF-ORD-1',
+  st: [INV, P07, P08, SYNC] },

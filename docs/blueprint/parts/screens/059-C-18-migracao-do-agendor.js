@@ -1,0 +1,12 @@
+
+{ id: 'C-18', name: 'Migração do Agendor', grp: 'crm', plat: 'Web', ph: 'F2', prof: ['ADM'],
+  purpose: 'Carga única assistida dos dados do Agendor.',
+  info: 'Empresas, pessoas, negócios abertos e fechados, tarefas, histórico/anotações · mapeamento salvo',
+  fields: 'Arquivo/fonte · mapeamento funis/etapas → funis · usuários → usuários · ambiente (staging primeiro)',
+  filters: 'Entidade · status', cols: 'Entidade · lidas · importadas · erros',
+  actions: 'Mapear · Executar em staging · Validar por amostragem · Executar em produção',
+  perms: 'Admin' + WPJ,
+  rules: 'Staging antes de produção (RF-IMP-4) · Agendor em somente leitura por 30 dias após a carga (spec §16) · formato de exportação PRECISA VALIDAR (S9) · CONFLITO a resolver: carga real em staging × regra de não levar dados de produção a staging sem sanitização aprovada',
+  audit: 'importação',
+  ents: 'imports · import_row_errors · accounts · contacts · opportunities · activities', rf: 'RF-IMP-3 · RF-IMP-4',
+  st: [INV, P15, ['S', 'S9 — formato de exportação/API do Agendor'], ['U', 'Conflito: migração em staging × sem dados de produção em staging sem sanitização aprovada']] },

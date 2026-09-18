@@ -1,0 +1,13 @@
+
+{ id: 'M-27', name: 'Assistente (online)', grp: 'mobile', plat: 'Mobile', ph: 'F3', prof: ['PJ', 'GER', 'VI'],
+  purpose: 'Assistente interno no app, apenas com conexão.',
+  info: 'Conversa · respostas com referências a registros no escopo',
+  fields: 'Pergunta', filters: '—', cols: '—',
+  actions: 'Perguntar · Abrir registro citado',
+  perms: 'Ferramentas com as permissões do usuário logado (RF-IA-1, P-21)',
+  rules: 'Ferramentas só leitura (P-14) · PJ nunca recebe custo/margem (P-20) · PROPOSTO R18: base filtrada por perfil · teto de custo por usuário',
+  offline: 'Indisponível offline; mensagem clara',
+  sync: 'Não sincroniza; requisição online',
+  audit: '—',
+  ents: 'ai_requests · knowledge_documents', rf: 'RF-IA-1',
+  st: [INV, P14, P20, P21, ['U', 'R18 — base de conhecimento por perfil']] },

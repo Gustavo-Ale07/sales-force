@@ -1,0 +1,57 @@
+<section class="doc-section" id="s14" data-group="Parte III · Vendas" data-num="14" data-title="Fluxos de clientes" data-kw="cliente novo cadastro aprovação ciclo de vida lead prospect cliente_pendente rejeitado inativo cnpj cep deduplicação">
+  <div class="sec-head"><span class="sec-num">14</span><h2>Fluxos de clientes</h2><div class="sec-meta"><span class="badge st-A">P-18 · P-19</span><span class="badge st-S">S5</span><span class="badge st-U">R17 · R06 · R27</span></div></div>
+  <h3>Ciclo de vida da conta <span class="badge st-A">P-19</span></h3>
+  <div class="diagram">
+    <div class="hflow" style="min-width:760px">
+      <div class="box"><b>lead</b>F2</div><span class="to">→</span>
+      <div class="box"><b>prospect</b>F2</div><span class="to">→</span>
+      <div class="box" style="border-color:var(--warn)"><b>cliente_pendente</b>aguarda backoffice</div><span class="to">→</span>
+      <div class="box" style="border-color:var(--ok)"><b>cliente</b>parceiro Sankhya</div><span class="to">→</span>
+      <div class="box"><b>inativo</b>reflete o Sankhya</div>
+      <span class="to" style="margin-left:14px">alternativo:</span>
+      <div class="box" style="border-color:var(--danger)"><b>rejeitado</b>motivo obrigatório</div>
+    </div>
+    <p class="diagram-cap">Uma tabela única de contas em todo o ciclo (P-19). Máquina de estados completa: <a href="#sm-conta">SM-1</a>.</p>
+  </div>
+  <div class="grid-3">
+    <div class="card">
+      <div class="card-h"><strong>Cadastro de cliente novo</strong><span class="ref">RF-ACC-3</span></div>
+      <ul class="small">
+        <li>Pelo vendedor ou representante, <b>inclusive offline</b>.</li>
+        <li>CNPJ/CPF, razão social, fantasia, endereço, contatos, condição sugerida.</li>
+        <li>Online: preenchimento por CNPJ (BrasilAPI, cache 30 dias) e CEP (BrasilAPI/ViaCEP).</li>
+        <li>Status inicial <code>cliente_pendente</code>.</li>
+      </ul>
+      <p class="small">Fluxo: <a href="#fl-04">FL-04</a> · Telas <span class="ref">W-12</span> <span class="ref">M-21</span></p>
+    </div>
+    <div class="card">
+      <div class="card-h"><strong>Aprovação pelo backoffice</strong><span class="badge st-A">P-18</span></div>
+      <ul class="small">
+        <li>Cadastro/Financeiro revisa dados, define limite de crédito e condições.</li>
+        <li><b>Aprova</b> → parceiro criado no Sankhya pela outbox → <code>cliente</code>.</li>
+        <li><b>Rejeita</b> → motivo obrigatório → <code>rejeitado</code> + notificação.</li>
+        <li>Campos obrigatórios do parceiro, endereço codificado e dados fiscais: <span class="badge st-S">S5</span></li>
+      </ul>
+      <p class="small">Fluxo: <a href="#fl-05">FL-05</a> · Tela <span class="ref">W-13</span> · Mockup <a href="#mk-aprov-cliente">MK-07</a></p>
+    </div>
+    <div class="card">
+      <div class="card-h"><strong>Cliente pendente e pedidos</strong><span class="badge st-U">Regras a escrever</span></div>
+      <ul class="small">
+        <li>Spec: com cliente pendente, o vendedor pode fazer <b>orçamentos</b>; o envio do pedido ao Sankhya só acontece após aprovação (RF-ACC-5).</li>
+        <li>P-18 aprova apenas a frase "aprovação antes de virar parceiro". O que um cliente pendente pode receber e o que bloqueia o envio ainda serão escritos e aprovados.</li>
+        <li>Cliente rejeitado com pedido aguardando: PROPOSTO cancelar o pedido com motivo e notificar (R06).</li>
+      </ul>
+    </div>
+  </div>
+  <h3>Deduplicação por CNPJ/CPF <span class="badge st-U">R17</span></h3>
+  <div class="table-wrap"><table class="t compact">
+    <thead><tr><th>Situação</th><th>Comportamento</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Documento novo</td><td>Segue o cadastro</td><td><span class="badge st-D">RF-ACC-6</span></td></tr>
+      <tr><td>Documento existe e a conta está no escopo do usuário</td><td>Avisa e mostra a conta existente</td><td><span class="badge st-D">RF-ACC-6</span></td></tr>
+      <tr><td>Documento existe em outra carteira</td><td>PROPOSTO: só "este documento já está cadastrado" + "solicitar ao gerente"; sem dono nem dados; limite diário de consultas contra enumeração</td><td><span class="badge st-U">R17</span></td></tr>
+      <tr><td>Lead sem CNPJ</td><td>Deduplicação por e-mail e telefone normalizados</td><td><span class="badge st-D">RF-ACC-7</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+

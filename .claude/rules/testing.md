@@ -1,3 +1,13 @@
+---
+paths:
+  - "apps/**"
+  - "packages/**"
+  - ".github/**"
+  - "**/*.test.*"
+  - "**/*.spec.*"
+  - "**/e2e/**"
+  - "**/tests/**"
+---
 # Testing rules (all code)
 
 > **Status (2026-09-16):** design mode — nothing here authorizes application code before the project owner writes `BEGIN IMPLEMENTATION`. Items citing APPROVED decisions bind now; items citing PROPOSED decisions (`STACK-1`, `STACK-4`, `STACK-5`, `DATA-3`, `AUTH-x`, `SYNC-x`, `MOB-1/2`, `SNK-1/2` (except the approved outbox write path), `OPS-3…5`, `P-23` — see `docs/decisions.md` §0) describe the working proposal and bind only once approved.

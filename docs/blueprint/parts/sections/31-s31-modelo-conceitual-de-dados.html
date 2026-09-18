@@ -1,0 +1,85 @@
+<section class="doc-section" id="s31" data-group="Parte VI · Sankhya e dados" data-num="31" data-title="Modelo conceitual de dados" data-kw="modelo de dados entidades tabelas accounts orders opportunities integration_outbox convenções uuid numeric timestamptz">
+  <div class="sec-head"><span class="sec-num">31</span><h2>Modelo conceitual de dados</h2><div class="sec-meta"><span class="badge st-A">P-02 · P-17 · P-19</span><span class="badge st-P">DATA-3 · entidades spec §9.2</span></div></div>
+  <p class="lead">Modelo <b>conceitual</b> da spec (rascunho). Nenhum schema real existe ou é criado nesta fase. Grupos em verde-água são espelho somente leitura do Sankhya; em azul, dados do Sales Force.</p>
+  <h3>Entidades por domínio</h3>
+  <div class="er">
+    <div class="er-g own"><h3>Identidade e acesso <span class="tag">iam · audit</span></h3>
+      <div class="ent"><b>users</b><span>nome, e-mail, hash de senha, perfil, equipe, sankhya_codvend, ativo, bloqueio</span></div>
+      <div class="ent"><b>teams</b><span>nome, gerente (árvore — AUTH-4)</span></div>
+      <div class="ent"><b>roles · role_permissions</b><span>perfil → permissões e escopo</span></div>
+      <div class="ent"><b>devices</b><span>usuário, identificador, plataforma, último sync, status/revoked_at</span></div>
+      <div class="ent"><b>sessions · refresh_tokens</b><span>somente hashes (AUTH-1)</span></div>
+      <div class="ent"><b>discount_limits</b><span>perfil ou usuário, limite (%)</span></div>
+      <div class="ent"><b>audit_log</b><span>ator, ação, entidade, id, antes/depois resumido, IP, aparelho, data</span></div>
+    </div>
+    <div class="er-g mirror"><h3>Sankhya: catálogo <span class="tag">espelho</span></h3>
+      <div class="ent"><b>products</b><span>código, descrição, grupo, unidade, EAN, ativo, imagem</span></div>
+      <div class="ent"><b>price_tables · price_table_items</b><span>tabela, produto, preço, vigência</span></div>
+      <div class="ent"><b>price_rules</b><span>resolução por cliente — conforme S2</span></div>
+      <div class="ent"><b>payment_terms · operation_types</b><span>condições; TOPs habilitadas</span></div>
+      <div class="ent"><b>sankhya_sync_state</b><span>entidade, cursor, último sucesso, erro</span></div>
+    </div>
+    <div class="er-g mirror"><h3>Sankhya: financeiro e histórico <span class="tag">espelho</span></h3>
+      <div class="ent"><b>receivables</b><span>conta, documento, emissão, vencimento, valor, saldo, situação</span></div>
+      <div class="ent"><b>sales_documents · sales_document_items</b><span>NUNOTA, tipo, datas, total, status, vendedor; relação pedido → notas (R25)</span></div>
+      <div class="ent"><b>goals · commissions</b><span>vendedor, período, alvo/realizado; base, valor, situação (S6)</span></div>
+    </div>
+    <div class="er-g own"><h3>Contas e contatos <span class="tag">accounts</span></h3>
+      <div class="ent"><b>accounts</b><span>PJ/PF, documento, razão social, fantasia, endereço, lifecycle_status, owner_user_id, atendentes (AUTH-4), origem, tags, sankhya_codparc, crédito, campos personalizados</span></div>
+      <div class="ent"><b>account_approvals</b><span>solicitante, decisor, decisão, motivo, datas</span></div>
+      <div class="ent"><b>contacts</b><span>conta, nome, cargo, e-mail, telefones, WhatsApp, sankhya_*</span></div>
+      <div class="ent"><b>custom_field_defs · tags · entity_tags</b><span>F2</span></div>
+    </div>
+    <div class="er-g own"><h3>Pedidos <span class="tag">orders</span></h3>
+      <div class="ent"><b>orders</b><span>conta, empresa, TOP, condição, tabela, totais, status, sankhya_nunota, origem (app/web/import/proposta), client_created_at</span></div>
+      <div class="ent"><b>order_items</b><span>produto, qtd, preço de tabela, % desc., preço final, snapshot de preço (R33)</span></div>
+      <div class="ent"><b>order_approvals · order_status_history</b><span>nível, aprovador, decisão, comentário; transições</span></div>
+    </div>
+    <div class="er-g own"><h3>CRM <span class="tag">F2</span></h3>
+      <div class="ent"><b>pipelines · pipeline_stages</b><span>ordem, probabilidade, dias máximos</span></div>
+      <div class="ent"><b>opportunities · opportunity_stage_history · loss_reasons</b><span>conta, contato, funil, etapa, responsável, valor, status</span></div>
+      <div class="ent"><b>proposals · proposal_items</b><span>oportunidade, conta, versão, status, validade, PDF</span></div>
+      <div class="ent"><b>activities</b><span>tipo, datas, responsável, status, resultado; vínculos explícitos account/contact/opportunity/proposal/order; origem; google_event_id</span></div>
+    </div>
+    <div class="er-g sys"><h3>Integração, sync e jobs <span class="tag">integration</span></h3>
+      <div class="ent"><b>integration_outbox</b><span>tipo, payload, UUID de origem (SNK-4), estado, tentativas, próximo horário, erro, resultado</span></div>
+      <div class="ent"><b>resultados de comandos de sync</b><span>por command_id (P-08) — nome da tabela a definir</span></div>
+      <div class="ent"><b>eventos de escopo · tombstones</b><span>usuário, objeto, entered/left, xid8 (SYNC-3)</span></div>
+      <div class="ent"><b>pg-boss</b><span>filas de execução — nunca o registro de negócio</span></div>
+    </div>
+    <div class="er-g sys"><h3>Automação, importação, IA <span class="tag">F1–F3</span></h3>
+      <div class="ent"><b>automation_rules · automation_runs · lead_distribution_rules</b><span>gatilho, condições, ações; log</span></div>
+      <div class="ent"><b>imports · import_row_errors</b><span>tipo, arquivo, mapeamento, status, contagens</span></div>
+      <div class="ent"><b>ai_requests · ai_budgets · knowledge_documents</b><span>tokens, custo, tetos; base de conhecimento</span></div>
+    </div>
+    <div class="er-g sys"><h3>Plataforma <span class="tag">platform</span></h3>
+      <div class="ent"><b>notifications · notification_preferences</b><span>central, push, e-mail</span></div>
+      <div class="ent"><b>files</b><span>chave no object storage, tipo, tamanho, dono (P-17)</span></div>
+      <div class="ent"><b>integration_credentials</b><span>OAuth Google por usuário, criptografado (F2)</span></div>
+    </div>
+  </div>
+  <h3>Relacionamentos principais</h3>
+  <div class="diagram">
+    <div class="hflow small" style="min-width:880px">
+      <div class="box"><b>teams</b></div><span class="to">1—N</span><div class="box"><b>users</b></div><span class="to">1—N</span><div class="box"><b>accounts</b> (dono) · N—N atendentes</div><span class="to">1—N</span><div class="box"><b>contacts · receivables · sales_documents · orders · opportunities · activities</b></div>
+    </div>
+    <div class="hflow small" style="min-width:880px;margin-top:8px">
+      <div class="box"><b>orders</b></div><span class="to">1—N</span><div class="box"><b>order_items</b> → products</div><span class="to">·</span><div class="box"><b>orders</b> 1—N <b>order_approvals</b></div><span class="to">·</span><div class="box"><b>orders / accounts</b> 1—N <b>integration_outbox</b></div><span class="to">·</span><div class="box"><b>opportunities</b> 1—N <b>proposals</b> → pedido</div>
+    </div>
+  </div>
+  <h3>Convenções <span class="badge st-P">DATA-3</span></h3>
+  <div class="table-wrap"><table class="t compact">
+    <thead><tr><th>Tema</th><th>Proposta</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Identificadores</td><td>UUIDv7 gerado por cliente ou servidor; nunca ordenar por id; rejeitar &gt; 1 dia no futuro; espelho com UUIDv5 da chave natural</td><td><span class="badge st-P">DATA-3</span> <span class="badge st-A">UUIDv7 fora do PG (DATA-1)</span></td></tr>
+      <tr><td>Dinheiro</td><td>Preço unitário <code>numeric(18,6)</code>; totais <code>numeric(14,2)</code>; aritmética decimal exata, nunca <code>number</code></td><td><span class="badge st-P">DATA-3</span></td></tr>
+      <tr><td>Percentuais, quantidades, arredondamento</td><td>Definidos pelo spike de preços</td><td><span class="badge st-S">S2.3</span></td></tr>
+      <tr><td>Tempo</td><td><code>timestamptz</code> para eventos; <code>date</code> para datas de negócio; cálculos em America/Sao_Paulo</td><td><span class="badge st-P">DATA-3</span></td></tr>
+      <tr><td>Tabelas sincronizáveis</td><td>Exclusão lógica, colunas de auditoria, carimbo <code>xid8</code>, <code>account_id</code> não nulo quando por conta</td><td><span class="badge st-P">DATA-3 · SYNC-2/3</span></td></tr>
+      <tr><td>Organização</td><td>Schema por módulo; lint de dependência no CI; relatórios por views somente leitura</td><td><span class="badge st-P">DATA-3</span></td></tr>
+      <tr><td>Migrations</td><td>SQL versionado e revisado; passo único protegido contra concorrência; migrações de dados separadas; expandir → migrar → contrair</td><td><span class="badge st-A">DATA-2 · P-16</span></td></tr>
+      <tr><td>Histórico no servidor</td><td>PROPOSTO: 36 meses de notas e itens</td><td><span class="badge st-U">R42</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+

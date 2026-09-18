@@ -1,0 +1,12 @@
+
+{ id: 'C-04', name: 'Oportunidade', grp: 'crm', plat: 'Web', ph: 'F2', prof: ['ADM', 'DIR', 'GER', 'VI'], mock: 'mk-oportunidade',
+  purpose: 'Conduzir uma oportunidade até ganho ou perda.',
+  info: 'Conta, contato principal, funil, etapa, responsável, valor estimado, data prevista, origem, produtos de interesse, status · histórico de etapas · propostas · timeline',
+  fields: 'Conta · contato principal · funil · etapa · responsável · valor estimado · data prevista de fechamento · origem · produtos de interesse',
+  filters: '—', cols: 'Histórico: etapa, entrada, saída, tempo, usuário',
+  actions: 'Mudar etapa · Marcar ganha · Marcar perdida · Nova proposta · Nova tarefa · Registrar interação · Resumo IA (F3)',
+  perms: 'Escopo AUTH-4 (PROPOSTO); Diretoria só visualiza' + WPJ,
+  rules: 'Status aberta | ganha | perdida · ganho de não-cliente inicia cadastro de cliente novo pré-preenchido → aprovação (RF-OPP-5, P-18) · proposta aceita oferece gerar pedido · histórico com quem, quando e tempo em cada etapa · também para clientes existentes (RF-OPP-7)',
+  audit: '—',
+  ents: 'opportunities · opportunity_stage_history · proposals · activities · accounts · contacts', rf: 'RF-OPP-2 · RF-OPP-5 · RF-OPP-6 · RF-OPP-7',
+  st: [INV, P18, ['P', 'D9 — funis configuráveis']] },

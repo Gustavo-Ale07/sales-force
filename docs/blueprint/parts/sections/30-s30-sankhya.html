@@ -1,0 +1,73 @@
+<section class="doc-section" id="s30" data-group="Parte VI · Sankhya e dados" data-num="30" data-title="Sankhya" data-kw="sankhya spike s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 homologação oauth x-token tgfpar espelho inspeção produção fixtures limites">
+  <div class="sec-head"><span class="sec-num">30</span><h2>Sankhya</h2><div class="sec-meta"><span class="badge st-A">P-03 · SNK-3 · SNK-4</span><span class="badge st-P">SNK-1 · SNK-2</span><span class="badge st-K">F-01</span><span class="badge st-S">S0–S6</span></div></div>
+  <div class="callout danger"><p><b>Regra:</b> nenhum comportamento do Sankhya é presumido. Serviços, endpoints, tabelas, campos, TOP, códigos de empresa, regras de preço, campos obrigatórios, fontes de metas/comissões, limites e formato de erro só viram fato com evidência registrada em <code>sankhya-spike.md</code>. Nomes de tabela são <b>candidatos</b>, não comportamento.</p></div>
+  <div class="legend five">
+    <div class="item"><span class="badge st-K">Conhecido</span><p>Validado em documentação oficial; confirmar no ambiente.</p></div>
+    <div class="item"><span class="badge st-A">Aprovado</span><p>Decisão do projeto sobre a integração.</p></div>
+    <div class="item"><span class="badge st-P">Proposto</span><p>Desenho de integração não aprovado.</p></div>
+    <div class="item"><span class="badge st-V">Precisa validar</span><p>Pergunta registrada, sem resposta.</p></div>
+    <div class="item"><span class="badge st-S">Spike necessário</span><p>Só um spike prático responde.</p></div>
+  </div>
+
+  <h3>O que se sabe e o que foi decidido</h3>
+  <div class="table-wrap"><table class="t">
+    <thead><tr><th>Item</th><th>Conteúdo</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>F-01 Autenticação</td><td>Gateway autentica com OAuth 2.0 client credentials (<code>client_id</code>, <code>client_secret</code>) + <code>X-Token</code>; resposta traz bearer token com expiração; substitui appkey + token</td><td><span class="badge st-K">Conhecido (docs)</span> <span class="badge st-V">S1.6 no ambiente</span></td></tr>
+      <tr><td>Fronteira</td><td>Web e mobile nunca falam com o Sankhya; formato Sankhya só em <code>packages/sankhya</code></td><td><span class="badge st-A">P-03</span></td></tr>
+      <tr><td>Credenciais</td><td>Só no runtime do worker</td><td><span class="badge st-A">STACK-2</span></td></tr>
+      <tr><td>Caminho de escrita</td><td>Registro em <code>integration_outbox</code> + job pg-boss na transação de negócio → worker → gateway</td><td><span class="badge st-A">STACK-6</span></td></tr>
+      <tr><td>Idempotência</td><td>Campo customizado com UUID da entidade verificado antes de todo reenvio; nativa em adição se existir; heurística como verificação primária <span class="badge st-R">Rejeitada</span>; campo de observação só em emergência com autorização do dono por incidente</td><td><span class="badge st-A">SNK-4</span> <span class="badge st-V">S0.4 · S0.5 · S0.8</span></td></tr>
+      <tr><td>Ambientes</td><td>Staging usa homologação se existir, senão gateway fake; CI sempre fake; staging nunca conecta à produção; produção como ambiente de dev/CI/staging (inclusive leitura) <span class="badge st-R">Rejeitada</span></td><td><span class="badge st-A">SNK-3</span> <span class="badge st-V">V-11</span></td></tr>
+      <tr><td>Leituras do usuário</td><td>Do espelho no PostgreSQL; chamadas síncronas só por allowlist (vazia)</td><td><span class="badge st-P">SNK-1</span></td></tr>
+      <tr><td>Cliente de API</td><td>OAuth + <code>X-Token</code> com token em cache; REST v1 ou serviços do gateway decididos por operação</td><td><span class="badge st-P">SNK-2</span> <span class="badge st-S">S1.1</span></td></tr>
+      <tr><td>Identificadores do espelho</td><td>UUIDv5 determinístico da chave natural Sankhya + restrição única</td><td><span class="badge st-P">DATA-3</span></td></tr>
+      <tr><td>Limites de requisição</td><td>Desconhecidos; até medir, o worker serializa e recua em 429/5xx</td><td><span class="badge st-V">S0.2 · S1.4 · S1.5</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Spikes</h3>
+  <div class="grid-3">
+    <div class="card"><div class="card-h"><strong>S0 Comercial e ambiente</strong><span class="badge st-S">Iniciar já</span></div><p class="small">Homologação ou ambiente isolado; limites; custo; campos customizados; idempotência nativa; manutenção; credenciais só leitura; campos de observação e capacidade para UUID.</p><p class="small"><b>Bloqueia:</b> S1–S6, SNK-3, escritas · <span class="ref">V-11</span> <span class="ref">V-13</span></p></div>
+    <div class="card"><div class="card-h"><strong>S1 API e leituras</strong><span class="badge st-S">Spike</span></div><p class="small">API por operação; serviço, filtros, paginação e cursor por entidade; detecção de exclusões; formato de erro e rate limit; latência; vida do token.</p><p class="small"><b>Bloqueia:</b> espelho real da Fase 0 · <span class="ref">V-12</span></p></div>
+    <div class="card"><div class="card-h"><strong>S2 Preço, arredondamento, impostos</strong><span class="badge st-S">Spike</span></div><p class="small">Regra real de preço; 50–100 casos reais sanitizados como testes de aceitação; arredondamento e precisão; simulação de IPI/ICMS-ST.</p><p class="small"><b>Bloqueia:</b> preço em <code>domain</code>, orçamentos, pedidos · R30 R31</p></div>
+    <div class="card"><div class="card-h"><strong>S3 Ciclo do pedido</strong><span class="badge st-S">Spike</span></div><p class="small">Campos obrigatórios, TOP e empresa; pendente de confirmação?; faturamento e vínculo com notas, parcial, itens cortados; cancelamento.</p><p class="small"><b>Bloqueia:</b> envio e status · R24 R25</p></div>
+    <div class="card"><div class="card-h"><strong>S4 Liberações e crédito</strong><span class="badge st-S">Spike</span></div><p class="small">Eventos nativos de liberação de limites; TOP dedicada sem eventos; fórmula de crédito disponível.</p><p class="small"><b>Bloqueia:</b> aprovações e crédito · R26 R38</p></div>
+    <div class="card"><div class="card-h"><strong>S5 Cadastro de parceiro</strong><span class="badge st-S">Spike</span></div><p class="small">Campos obrigatórios; endereço codificado a partir do CEP; dados fiscais; campo de idempotência do parceiro.</p><p class="small"><b>Bloqueia:</b> cliente novo no Sankhya · R27</p></div>
+    <div class="card"><div class="card-h"><strong>S6 Metas, positivação, comissões</strong><span class="badge st-S">Spike</span></div><p class="small">Onde ficam, granularidade, frequência; positivação existe como dado?; comissões só após fechamento?</p><p class="small"><b>Bloqueia:</b> telas de metas · R28</p></div>
+    <div class="card"><div class="card-h"><strong>S7 Mobile offline</strong><span class="badge st-S">Spike</span></div><p class="small">Biblioteca SQLCipher, páginas de 16 KB no Android, FTS5, Drizzle seguro com criptografia, desempenho com volume real em Android de entrada.</p><p class="small"><b>Bloqueia:</b> banco local · <span class="ref">V-09</span> <span class="ref">V-14</span></p></div>
+    <div class="card"><div class="card-h"><strong>S8 Distribuição · S9 Agendor</strong><span class="badge st-S">Spike</span></div><p class="small">S8: contas organizacionais, D-U-N-S, opções privadas do Play, App Store não listada, verificação Android. S9: formato de exportação/API do Agendor.</p><p class="small"><b>Bloqueia:</b> piloto (S8) · migração F2 (S9)</p></div>
+  </div>
+
+  <h3>Mapa de entidades do espelho da Fase 0 <span class="badge st-V">S1</span></h3>
+  <div class="table-wrap"><table class="t compact">
+    <thead><tr><th>Entidade</th><th>Fonte Sankhya</th><th>Método de leitura</th><th>Cursor incremental</th><th>Exclusões</th><th>Frequência</th></tr></thead>
+    <tbody>
+      <tr><td>Vendedores</td><td><span class="badge st-V">candidata TGFVEN</span></td><td><span class="badge st-V">validar</span></td><td><span class="badge st-V">validar</span></td><td><span class="badge st-V">validar</span></td><td>15 min <span class="badge st-P">até S0.2</span></td></tr>
+      <tr><td>Clientes / parceiros e carteira</td><td><span class="badge st-V">candidata TGFPAR</span></td><td><span class="badge st-V">validar</span></td><td><span class="badge st-V">validar</span></td><td><span class="badge st-V">validar</span></td><td>10 min <span class="badge st-P">até S0.2</span></td></tr>
+      <tr><td>Produtos</td><td><span class="badge st-V">candidata TGFPRO</span></td><td><span class="badge st-V">validar</span></td><td><span class="badge st-V">validar</span></td><td><span class="badge st-V">validar</span></td><td>15 min <span class="badge st-P">até S0.2</span></td></tr>
+      <tr><td>Tabelas de preço</td><td><span class="badge st-V">candidatas TGFTAB/TGFEXC</span></td><td><span class="badge st-V">validar</span></td><td><span class="badge st-V">validar</span></td><td><span class="badge st-V">validar</span></td><td>10 min <span class="badge st-P">até S0.2</span></td></tr>
+      <tr><td>Títulos, notas, metas/comissões</td><td><span class="badge st-V">candidatas TGFFIN, TGFCAB/TGFITE; metas a identificar</span></td><td colspan="3">Fase 0 ou Fase 1? <span class="badge st-U">Q-02</span></td><td>15 / 5 / 60 min <span class="badge st-P">spec</span></td></tr>
+    </tbody>
+  </table></div>
+  <p class="small">Reconciliação completa diária de madrugada para corrigir diferenças e detectar exclusões (RF-SNK-2), viabilidade a medir em S1.5.</p>
+
+  <h3>Inspeção diagnóstica somente leitura em produção <span class="badge st-A">SNK-3 exceção</span></h3>
+  <div class="grid-2">
+    <ol class="small">
+      <li>Dono do projeto autoriza aquela ocasião específica (registrada antes).</li>
+      <li>Não há ambiente de teste adequado para a questão.</li>
+      <li>Nenhuma escrita.</li>
+      <li>Credenciais somente leitura quando tecnicamente possível (S0.7).</li>
+      <li>Apenas o mínimo de informação.</li>
+    </ol>
+    <ol class="small" start="6">
+      <li>Dados reais não copiados sem necessidade; capturas brutas em <code>.sankhya-raw/</code> (git-ignorado).</li>
+      <li>Tudo persistido no repositório é sanitizado antes.</li>
+      <li>Credenciais e tokens nunca no Git.</li>
+      <li>Staging nunca conectado à produção.</li>
+      <li>Registrada no log de inspeções de <code>sankhya-spike.md</code> §8 — nenhuma realizada até hoje.</li>
+    </ol>
+  </div>
+</section>
+

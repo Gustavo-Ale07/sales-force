@@ -1,0 +1,34 @@
+<section class="doc-section" id="s43" data-group="Parte VIII · Operação e qualidade" data-num="43" data-title="Backup e recuperação" data-kw="backup recuperação rpo rto pitr dump restore teste runbook">
+  <div class="sec-head"><span class="sec-num">43</span><h2>Backup e recuperação</h2><div class="sec-meta"><span class="badge st-A">OPS-2</span><span class="badge st-V">V-04</span></div></div>
+  <div class="grid-4">
+    <div class="kpi"><div class="v">≤ 15 min</div><div class="l">RPO produção · <span class="badge st-A">OPS-2</span></div></div>
+    <div class="kpi"><div class="v">≤ 4 h</div><div class="l">RTO produção · <span class="badge st-A">OPS-2</span></div></div>
+    <div class="kpi"><div class="v">≥ 30 dias</div><div class="l">PITR onde razoável · <span class="badge st-V">V-04</span></div></div>
+    <div class="kpi"><div class="v">Mensal</div><div class="l">teste de restauração · <span class="badge st-A">OPS-2</span></div></div>
+  </div>
+  <div class="diagram" role="img" aria-label="Topologia de backup: PITR e backups automáticos no provedor principal; dump lógico copiado para local fora do domínio de falha; monitoramento e teste mensal de restauração">
+    <div class="grid-3" style="min-width:760px">
+      <div class="zone"><div class="zone-l">Domínio de falha principal</div>
+        <div class="box store"><b>PostgreSQL de produção</b>PITR do provedor + backups automáticos criptografados</div>
+        <div class="arrow-d">dump lógico agendado</div>
+        <div class="box store"><b>Object storage de produção</b>versionamento onde útil + regras de ciclo de vida</div>
+      </div>
+      <div class="zone"><div class="zone-l">Fora do domínio de falha</div>
+        <div class="box"><b>Cópia secundária</b>outro provedor ou região; criptografada; retenção por runbook</div>
+        <p class="small muted">Credenciais separadas do provedor principal <span class="badge st-P">proposto</span></p>
+      </div>
+      <div class="zone"><div class="zone-l">Verificação</div>
+        <div class="box"><b>Monitoramento</b>jobs de backup, status do PITR, frescor do dump → alerta</div>
+        <div class="arrow-d"></div>
+        <div class="box" style="border-color:var(--ok)"><b>Restore mensal</b>instância temporária → relatório; backup só vale após restore bem-sucedido</div>
+      </div>
+    </div>
+  </div>
+  <ul class="small">
+    <li>Para pedidos, aprovações, interações de CRM, mudanças de clientes e comandos de sync, 24 h de perda não é aceitável.</li>
+    <li><b>Antes do piloto/produção:</b> procedimento documentado, backups monitorados e pelo menos um restore bem-sucedido.</li>
+    <li>Staging: retenção menor e RPO menos agressivo; nunca a única cópia de informação de negócio.</li>
+    <li>PROPOSTO (não aprovado): ramo de WAL self-hosted (só se o fallback OPS-1 for aprovado); backup criptografado de segredos fora dos servidores e scripts reproduzíveis de provisionamento (com OPS-3); acesso a backups restrito a operadores nomeados.</li>
+  </ul>
+</section>
+

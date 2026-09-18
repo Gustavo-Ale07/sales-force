@@ -1,0 +1,13 @@
+
+{ id: 'W-12', name: 'Novo cliente', grp: 'web', plat: 'Web', ph: 'F1', prof: ['ADM', 'GER', 'VI', 'CF'],
+  purpose: 'Cadastrar cliente novo que seguirá para a fila de aprovação.',
+  info: 'Formulário com consulta de CNPJ e CEP · aviso de documento já cadastrado',
+  fields: 'Tipo (PJ/PF) · CNPJ/CPF · razão social · nome fantasia · endereço (CEP, logradouro, número, bairro, cidade, UF) · contatos · condição sugerida',
+  filters: '—', cols: '—',
+  actions: 'Consultar CNPJ · Consultar CEP · Salvar e enviar para aprovação · Solicitar transferência ao gerente (duplicado de outra carteira)',
+  perms: 'Cadastrar cliente novo: Admin, Gerente, Vendedor interno, Cadastro/Financeiro (§8.2); Diretoria não' + WPJ,
+  rules: 'Status inicial cliente_pendente (RF-ACC-3, P-19) · deduplicação por CNPJ/CPF (RF-ACC-6) · PROPOSTO R17: fora do escopo mostra só "documento já cadastrado", sem dono nem dados, com limite diário de consultas · campos obrigatórios e fiscais do parceiro PRECISA VALIDAR (S5)',
+  error: 'Consulta CNPJ/CEP indisponível → preenchimento manual · documento inválido · documento duplicado',
+  audit: '—',
+  ents: 'accounts · contacts · account_approvals', rf: 'RF-ACC-3 · RF-ACC-6 · RF-INT-1 · RF-INT-2',
+  st: [INV, P18, P19, ['U', 'R17 — deduplicação sem revelar outra carteira'], ['S', 'S5 — campos obrigatórios do parceiro (R27)']] },

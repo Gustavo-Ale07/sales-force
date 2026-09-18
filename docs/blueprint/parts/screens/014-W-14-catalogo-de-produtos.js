@@ -1,0 +1,12 @@
+
+{ id: 'W-14', name: 'Catálogo de produtos', grp: 'web', plat: 'Web', ph: 'F1', prof: WALL,
+  purpose: 'Pesquisar produtos e ver o preço aplicável ao cliente.',
+  info: 'Produtos: código, descrição, grupo, unidade, imagem quando houver · preço de tabela para o cliente selecionado',
+  fields: '—', filters: 'Busca (código, descrição, EAN) · grupo · ativo · cliente para cálculo de preço',
+  cols: 'Código · descrição · grupo · unidade · preço de tabela (com cliente) · custo/margem só para perfis permitidos',
+  actions: 'Abrir produto · Adicionar ao pedido',
+  perms: 'Perfis internos; custo/margem só Admin, Diretoria e Gerente configurável (§8.2, PROPOSTO)' + WPJ,
+  rules: 'Preço pela tabela vigente aplicável ao cliente conforme regra do Sankhya (RF-CAT-2); regra real PRECISA VALIDAR (S2, R31) · sem consulta de estoque (P-13) · custo/margem nunca para PJ (P-20)',
+  audit: '—',
+  ents: 'products · price_tables · price_table_items · price_rules', rf: 'RF-CAT-1 · RF-CAT-2 · RF-CAT-4',
+  st: [INV, P09, P13, P20, ['S', 'S2 — regra real de resolução de preço (R31)']] },

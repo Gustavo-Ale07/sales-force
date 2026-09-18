@@ -1,0 +1,12 @@
+
+{ id: 'W-11', name: 'Contatos', grp: 'web', plat: 'Web', ph: 'F1', prof: WALL,
+  purpose: 'Gerenciar as pessoas vinculadas à conta.',
+  info: 'Nome, cargo, e-mail, telefones, WhatsApp, aniversário, observações · origem (Sankhya ou Sales Force)',
+  fields: 'Nome · cargo · e-mail · telefones · WhatsApp · aniversário · observações',
+  filters: 'Busca · origem', cols: 'Nome · cargo · e-mail · telefone · WhatsApp · origem',
+  actions: 'Novo contato · Editar (só contatos do Sales Force) · Ligar / WhatsApp / e-mail com registro de interação (F2)',
+  perms: 'Herda a visibilidade da conta (AUTH-4 PROPOSTO)' + WPJ,
+  rules: 'Contatos do Sankhya espelhados e somente leitura; criados no Sales Force ficam só no Sales Force (RF-CON-2) · WhatsApp apenas por link wa.me (D13 PROPOSTO); integração não oficial proibida (P-13)',
+  audit: '—',
+  ents: 'contacts · accounts · activities', rf: 'RF-CON-1 · RF-CON-2 · RF-CON-3 · RF-INT-4',
+  st: [INV, P02, P13, ['P', 'D13 — link wa.me + registro manual'], ['U', 'R05 — edição concorrente de registros do CRM']] },

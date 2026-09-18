@@ -1,0 +1,11 @@
+
+{ id: 'M-08', name: 'Seleção de produto', grp: 'mobile', plat: 'Mobile', ph: 'F1', prof: ['PJ', 'GER', 'VI'],
+  purpose: 'Definir quantidade e desconto do item.',
+  info: 'Preço de tabela · quantidade · % desconto · preço final · indicação de aprovação necessária',
+  fields: 'Quantidade · % desconto', filters: '—', cols: '—',
+  actions: 'Adicionar ao pedido · Cancelar',
+  perms: 'Quem cria pedido',
+  rules: 'Cálculo por packages/domain (RF-ORD-2) · indicação de alçada é prévia; servidor decide · base da alçada pendente (R35) · precisão e arredondamento PRECISA VALIDAR (S2)',
+  audit: '—',
+  ents: 'order_items · discount_limits · price_table_items', rf: 'RF-ORD-1 · RF-ORD-2 · RF-CAT-3',
+  st: [INV, P10, R35, ['S', 'S2 — arredondamento e precisão']] },

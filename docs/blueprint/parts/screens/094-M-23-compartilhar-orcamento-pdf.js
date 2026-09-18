@@ -1,0 +1,12 @@
+
+{ id: 'M-23', name: 'Compartilhar orçamento (PDF)', grp: 'mobile', plat: 'Mobile', ph: 'F1', prof: ['PJ', 'GER', 'VI'],
+  purpose: 'Compartilhar o PDF do orçamento com o próprio cliente.',
+  info: 'Pré-visualização do PDF do orçamento',
+  fields: '—', filters: '—', cols: '—',
+  actions: 'Compartilhar por WhatsApp · Compartilhar por e-mail · Cancelar',
+  perms: 'Representante compartilha só PDF de orçamento/proposta do próprio cliente (spec §12.2)',
+  rules: 'Sem custo/margem (P-20) · PROPOSTO R60: template HTML único gerado localmente · PROPOSTO R19: arquivo temporário apagado após compartilhar · impostos pendentes (R30)',
+  offline: 'PROPOSTO R60: geração local offline',
+  audit: '—',
+  ents: 'orders · files', rf: 'RF-ORD-10',
+  st: [INV, P20, ['U', 'R60 — PDF offline × worker'], ['U', 'R19 — backups do sistema e arquivos temporários'], ['U', 'R30 — impostos']] },

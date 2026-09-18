@@ -1,0 +1,6 @@
+/* Budget bar */
+.budget{position:relative;height:38px;border-radius:3px;background:var(--surface-3);margin:24px 0 30px;min-width:560px}
+.budget .seg{position:absolute;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:600}
+.budget .tick{position:absolute;top:-18px;font:600 .7rem/1 var(--mono);color:var(--text-2);transform:translateX(-50%)}
+.budget .tick::after{content:"";position:absolute;left:50%;top:14px;height:42px;border-left:1px dashed var(--border-strong)}
+

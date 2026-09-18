@@ -1,0 +1,32 @@
+<section class="doc-section" id="s32" data-group="Parte VI · Sankhya e dados" data-num="32" data-title="Background jobs" data-kw="jobs pg-boss worker agendamento espelho reconciliação e-mail pdf importação notificações expiração churn backup">
+  <div class="sec-head"><span class="sec-num">32</span><h2>Background jobs</h2><div class="sec-meta"><span class="badge st-A">STACK-6 · STACK-2</span><span class="badge st-P">catálogo e classificação de falhas</span><span class="badge st-V">V-16</span></div></div>
+  <div class="grid-2">
+    <div class="callout ok"><p><b>APROVADO:</b> pg-boss no PostgreSQL executa jobs; sem Redis/BullMQ. Job causado por escrita de negócio é enfileirado <b>na mesma transação</b>. pg-boss é mecanismo de execução, nunca o registro de negócio. Trabalho longo nunca roda dentro de requisição HTTP.</p></div>
+    <div class="callout note"><p><b>PROPOSTO:</b> handlers idempotentes; falhas classificadas como temporária, rate limit, autenticação, autorização, validação ou permanente; só temporária e rate limit repetem, com backoff exponencial. <b>Conexão:</b> worker usa conexão direta dedicada para o pg-boss se o pooler do provedor for incompatível (V-16).</p></div>
+  </div>
+  <h3>Catálogo de jobs <span class="badge st-P">Proposto (derivado de RF e arquitetura)</span></h3>
+  <div class="table-wrap"><table class="t compact">
+    <thead><tr><th>Job</th><th>Disparo</th><th>Frequência / regra</th><th>Fase</th><th>Req.</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Espelho: vendedores, produtos</td><td>Agenda</td><td>15 min</td><td>F0</td><td><span class="ref">RF-SNK-1</span></td><td><span class="badge st-P">até S0.2</span></td></tr>
+      <tr><td>Espelho: clientes/carteira, tabelas de preço</td><td>Agenda</td><td>10 min</td><td>F0</td><td><span class="ref">RF-SNK-1</span></td><td><span class="badge st-P">até S0.2</span></td></tr>
+      <tr><td>Espelho: títulos · pedidos/notas · metas/comissões</td><td>Agenda</td><td>15 · 5 · 60 min</td><td>F0/F1</td><td><span class="ref">RF-SNK-1</span></td><td><span class="badge st-U">Q-02</span></td></tr>
+      <tr><td>Reconciliação completa</td><td>Agenda noturna</td><td>Diária (madrugada)</td><td>F0</td><td><span class="ref">RF-SNK-2</span></td><td><span class="badge st-S">S1.5</span></td></tr>
+      <tr><td>Entrega da outbox ao Sankhya</td><td>Transacional (mesma transação do negócio)</td><td>Até 8 tentativas, backoff exponencial</td><td>F1</td><td><span class="ref">RF-SNK-3</span></td><td><span class="badge st-A">STACK-6 · SNK-4</span></td></tr>
+      <tr><td>Varredura de outbox pendente sem job</td><td>Agenda</td><td>Recria jobs</td><td>F1</td><td>—</td><td><span class="badge st-P">sync-protocol §6.2.1</span></td></tr>
+      <tr><td>Alerta de integração</td><td>Agenda</td><td>Entidade &gt; 1 h sem sucesso ou outbox com erro → e-mail ao admin</td><td>F0</td><td><span class="ref">RF-SNK-7</span></td><td><span class="badge st-U">Q-01</span></td></tr>
+      <tr><td>E-mail transacional</td><td>Transacional</td><td>Reset de senha, alertas, notificações</td><td>F0</td><td><span class="ref">RF-IAM-3</span></td><td><span class="badge st-P">OPS-5</span></td></tr>
+      <tr><td>Push e central de notificações</td><td>Transacional</td><td>Eventos RF-NOT-2</td><td>F1</td><td><span class="ref">RF-NOT-1</span></td><td><span class="badge st-D">RF rascunho</span></td></tr>
+      <tr><td>Lembretes de tarefas</td><td>Agenda</td><td>Tarefa vencendo</td><td>F1</td><td><span class="ref">RF-ACT-3</span></td><td><span class="badge st-D">RF rascunho</span></td></tr>
+      <tr><td>Processamento de importação</td><td>Transacional (após confirmação)</td><td>Em segundo plano; relatório e planilha de erros</td><td>F1</td><td><span class="ref">RF-IMP-2</span></td><td><span class="badge st-D">RF rascunho</span></td></tr>
+      <tr><td>Geração de PDF</td><td>Sob demanda</td><td>Orçamento/proposta</td><td>F1/F2</td><td><span class="ref">RF-PRP-4</span></td><td><span class="badge st-U">R60</span></td></tr>
+      <tr><td>Expiração de propostas</td><td>Agenda</td><td>Validade vencida → expirada + notificação</td><td>F2</td><td><span class="ref">RF-PRP-7</span></td><td><span class="badge st-D">RF rascunho</span></td></tr>
+      <tr><td>Automações e alertas de carteira</td><td>Evento e agenda</td><td>Profundidade ≤ 3; limite por registro/minuto</td><td>F2</td><td><span class="ref">RF-AUT-1</span></td><td><span class="badge st-D">RF rascunho</span></td></tr>
+      <tr><td>Distribuição de leads</td><td>Evento</td><td>Região, rodízio, carga</td><td>F2</td><td><span class="ref">RF-AUT-2</span></td><td><span class="badge st-U">R53</span></td></tr>
+      <tr><td>Sincronização Google Calendar</td><td>Evento</td><td>Unidirecional</td><td>F2</td><td><span class="ref">RF-ACT-7</span></td><td><span class="badge st-D">RF rascunho</span></td></tr>
+      <tr><td>IA em lote: churn e mix</td><td>Agenda noturna</td><td>Batch API; candidatos estatísticos</td><td>F3</td><td><span class="ref">RF-IA-3</span> <span class="ref">RF-IA-4</span></td><td><span class="badge st-D">RF rascunho</span></td></tr>
+      <tr><td>Dump lógico + cópia fora do domínio de falha; monitoramento de backup</td><td>Agenda</td><td>Frequência definida com V-04</td><td>antes do piloto</td><td>—</td><td><span class="badge st-A">OPS-2</span> <span class="badge st-V">V-04</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+

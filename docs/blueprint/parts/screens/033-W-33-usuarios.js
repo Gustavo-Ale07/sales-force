@@ -1,0 +1,13 @@
+
+{ id: 'W-33', name: 'Usuários', grp: 'web', plat: 'Web', ph: 'F0', prof: ['ADM'],
+  purpose: 'Administrar usuários, perfis e vínculo com o vendedor do Sankhya.',
+  info: 'Usuários com perfil, equipe, gerente, CODVEND, status, bloqueio e último acesso',
+  fields: 'Nome · e-mail · perfil · equipe · gerente · código de vendedor Sankhya (CODVEND) · ativo',
+  filters: 'Perfil · equipe · status · bloqueados',
+  cols: 'Nome · e-mail · perfil · equipe · CODVEND · status · último login',
+  actions: 'Novo usuário · Editar · Desativar · Desbloquear · Revogar sessões',
+  perms: 'Usuários, integrações e configurações: só Admin (§8.2)' + WPJ,
+  rules: 'Admin cria, edita, desativa e atribui perfil, gerente e CODVEND (RF-IAM-4) · PROPOSTO AUTH-1: desativação e revogação incrementam a versão da sessão e invalidam sessões na hora · sem 2FA (P-11)',
+  audit: 'usuário criado, alterado, desativado · mudança de perfil · desbloqueio · sessão revogada',
+  ents: 'users · teams · roles · sessions · audit_log', rf: 'RF-IAM-2 · RF-IAM-4 · RF-IAM-9',
+  st: [INV, P11, AUTH1] },

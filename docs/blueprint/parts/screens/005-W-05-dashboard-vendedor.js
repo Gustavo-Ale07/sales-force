@@ -1,0 +1,12 @@
+
+{ id: 'W-05', name: 'Dashboard vendedor', grp: 'web', plat: 'Web', ph: 'F1', prof: ['VI', 'GER', 'ADM'], mock: 'mk-dash-vendedor',
+  purpose: 'Painel diário do vendedor interno: meta, positivação, pedidos e tarefas.',
+  info: 'Meta do mês × realizado · positivação · pedidos pendentes, em aprovação e com erro · tarefas do dia · notificações recentes · hora da última sincronização do espelho',
+  fields: '—', filters: 'Período (mês)',
+  cols: 'Pedidos recentes: nº, cliente, status, total, atualizado',
+  actions: 'Novo pedido · Abrir pedido com erro · Concluir tarefa',
+  perms: 'Escopo próprio (AUTH-4 PROPOSTO); gerente/admin conforme escopo' + WPJ,
+  rules: 'Metas, positivação e comissões vêm do Sankhya, sem cálculo próprio (P-13) · equivalente web do painel RF-DSH-5 (spec §3: mesmas funcionalidades na web) · dashboards completos são F2',
+  audit: '—',
+  ents: 'goals · commissions · orders · activities · notifications', rf: 'RF-DSH-5 · RF-GOL-1 · RF-GOL-2 · RF-ACT-3',
+  st: [INV, P13, P21, ['S', 'S6 — fontes de metas, positivação e comissões'], ['U', 'R28 — positivação contada a partir das notas?']] },

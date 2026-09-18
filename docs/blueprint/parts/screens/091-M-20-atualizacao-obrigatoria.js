@@ -1,0 +1,13 @@
+
+{ id: 'M-20', name: 'Atualização obrigatória', grp: 'mobile', plat: 'Mobile', ph: 'F1', prof: ['PJ', 'GER', 'VI'], mock: 'mm-atualizacao',
+  purpose: 'Exigir atualização quando a versão está abaixo do mínimo.',
+  info: 'Versão do app/protocolo abaixo do mínimo · fila pendente preservada · link para a loja',
+  fields: '—', filters: '—', cols: '—',
+  actions: 'Atualizar na loja · Tentar sincronizar',
+  perms: 'Usuário do aparelho',
+  rules: 'Servidor recusa versões abaixo do mínimo com resposta "atualização necessária" (spec §10.1) · PROPOSTO R11: versão de protocolo no cabeçalho; servidor aceita N e N-1 · PROPOSTO interino (sync-protocol §9): mudança de schema local ou protocolo só em novo binário',
+  sync: 'Pull e push recusados até atualizar',
+  empty: '—',
+  audit: '—',
+  ents: 'sync_state local · devices', rf: '—',
+  st: [INV, ['A', 'MOB-3 — distribuição pelas lojas'], ['U', 'R11 — política de versão'], ['U', 'R10 — migração local com fila pendente']] },

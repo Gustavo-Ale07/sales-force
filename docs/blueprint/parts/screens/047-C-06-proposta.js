@@ -1,0 +1,12 @@
+
+{ id: 'C-06', name: 'Proposta', grp: 'crm', plat: 'Web', ph: 'F2', prof: ['ADM', 'DIR', 'GER', 'VI'], mock: 'mk-proposta',
+  purpose: 'Montar, aprovar, enviar e converter propostas comerciais.',
+  info: 'Itens do catálogo Sankhya · validade · condição de pagamento · prazo de entrega · observações e termos · status · versão · PDF',
+  fields: 'Itens (produto, quantidade, % desconto) · validade · condição de pagamento · prazo de entrega (texto) · observações · termos',
+  filters: '—', cols: 'Produto · qtd · preço tabela · % desc · preço final · total',
+  actions: 'Salvar · Enviar para aprovação · Gerar PDF · Enviar por e-mail (Gmail) · Link de WhatsApp · Marcar aceita → gerar pedido · Marcar recusada',
+  perms: 'Propostas: Admin, Gerente, Vendedor interno; Diretoria só visualiza (§8.2)' + WPJ,
+  rules: 'Mesmas regras de preço, desconto e alçada dos pedidos (RF-PRP-1) · status rascunho, aguardando_aprovacao, enviada, aceita, recusada, expirada · aceita com validade vencida ou preço mudado → revisão de preço (P-09) · envio registra atividade e dispara follow-up · PROPOSTO R34: lead sem Sankhya usa tabela padrão por UF',
+  audit: '—',
+  ents: 'proposals · proposal_items · opportunities · files · activities', rf: 'RF-PRP-1 · RF-PRP-2 · RF-PRP-4 · RF-PRP-5 · RF-PRP-6 · RF-PRP-7',
+  st: [INV, P09, P10, ['P', 'D10 — proposta com produtos Sankhya → PDF → pedido'], ['U', 'R34 — preço de proposta para lead'], ['U', 'R30 — impostos em propostas'], ['V', 'V-06 — Google Workspace']] },

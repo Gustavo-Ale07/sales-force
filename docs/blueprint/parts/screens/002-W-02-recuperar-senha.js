@@ -1,0 +1,12 @@
+
+{ id: 'W-02', name: 'Recuperar senha', grp: 'web', plat: 'Web', ph: 'F0', prof: WALL,
+  purpose: 'Solicitar link de redefinição de senha por e-mail.',
+  info: 'Campo de e-mail · confirmação neutra de envio',
+  fields: 'E-mail', filters: '—', cols: '—',
+  actions: 'Enviar link · Voltar ao login',
+  perms: 'Público (não autenticado)' + WPJ,
+  rules: 'Link de uso único válido por 30 min (RF-IAM-3) · PROPOSTO: resposta idêntica para e-mail cadastrado ou não · rate limit por IP e por usuário · PROPOSTO OPS-5: e-mail sem dados comerciais sensíveis',
+  error: 'Falha de envio registrada no log; mensagem neutra ao usuário',
+  audit: 'redefinição de senha solicitada',
+  ents: 'users · audit_log', rf: 'RF-IAM-3',
+  st: [INV, ['P', 'OPS-5 — e-mail transacional por SMTP'], ['V', 'V-06 — a empresa usa Google Workspace?']] },

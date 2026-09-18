@@ -1,0 +1,6 @@
+/* KPI tiles for docs */
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.kpi{border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;background:var(--surface-2)}
+.kpi .v{font-size:1.25rem;font-weight:650}
+.kpi .l{font-size:.76rem;color:var(--text-3)}
+

@@ -1,0 +1,20 @@
+<section class="doc-section" id="s22" data-group="Parte IV · CRM" data-num="22" data-title="Funil" data-kw="funil funis etapas probabilidade dias máximos parada kanban">
+  <div class="sec-head"><span class="sec-num">22</span><h2>Funil</h2><div class="sec-meta"><span class="tag">Fase 2</span><span class="badge st-P">D9</span><span class="badge st-D">RF-OPP-1</span></div></div>
+  <p>Admin e gerente criam <b>vários funis</b> com etapas ordenadas. Cada etapa tem nome, probabilidade padrão (%) e, opcionalmente, dias máximos parada para alerta. As etapas atuais do Agendor e os motivos de perda serão levantados na Fase 2 (spec §17).</p>
+  <div class="diagram">
+    <div class="hflow" style="min-width:820px" role="img" aria-label="Exemplo fictício de funil com cinco etapas">
+      <div class="box"><b>Qualificação</b>10% · máx. 7 dias</div><span class="to">→</span>
+      <div class="box"><b>Diagnóstico</b>25% · máx. 10 dias</div><span class="to">→</span>
+      <div class="box"><b>Proposta enviada</b>50% · máx. 15 dias</div><span class="to">→</span>
+      <div class="box"><b>Negociação</b>75% · máx. 10 dias</div><span class="to">→</span>
+      <div class="box" style="border-color:var(--ok)"><b>Fechamento</b>90%</div>
+    </div>
+    <p class="diagram-cap">Exemplo ilustrativo (nomes, probabilidades e prazos fictícios). Kanban: mockup <a href="#mk-kanban">MK-12</a> · configuração <span class="ref">C-15</span>.</p>
+  </div>
+  <ul class="small">
+    <li>Visão kanban (arrastar entre etapas) e lista com filtros, sempre respeitando a visibilidade (RF-OPP-3).</li>
+    <li>Oportunidade parada além dos dias máximos da etapa → alerta ao responsável e ao gerente (RF-AUT-1).</li>
+    <li>Previsão = soma ponderada por probabilidade e data prevista (RF-DSH-2).</li>
+  </ul>
+</section>
+

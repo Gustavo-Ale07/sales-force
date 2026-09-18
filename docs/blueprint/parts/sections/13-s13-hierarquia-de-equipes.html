@@ -1,0 +1,45 @@
+<section class="doc-section" id="s13" data-group="Parte II · Arquitetura e acesso" data-num="13" data-title="Hierarquia de equipes" data-kw="hierarquia equipe gerente subequipe árvore carteira atendentes">
+  <div class="sec-head"><span class="sec-num">13</span><h2>Hierarquia de equipes</h2><div class="sec-meta"><span class="badge st-D">RF-IAM-5</span><span class="badge st-P">Árvore AUTH-4</span></div></div>
+  <div class="grid-2">
+    <div class="diagram tree" aria-label="Exemplo fictício de árvore de equipes">
+      <ul>
+        <li><span class="tnode"><span class="av">MT</span><b>Diretoria Comercial</b><span class="who">Marcos Teixeira · escopo tudo</span></span>
+          <ul>
+            <li><span class="tnode"><span class="av">CM</span><b>Equipe Sul</b><span class="who">Gerente: Carlos Menezes · equipe</span></span>
+              <ul>
+                <li><span class="tnode"><span class="av">AR</span>Ana Ribeiro<span class="who">Vendedora interna · próprio</span></span></li>
+                <li><span class="tnode"><span class="av">RS</span>Rafael Souza<span class="who">Representante PJ · próprio</span></span></li>
+                <li><span class="tnode"><span class="av">LF</span><b>Subequipe Serra</b><span class="who">Gerente: Lúcia Farias · equipe</span></span>
+                  <ul><li><span class="tnode"><span class="av">DP</span>Diego Pires<span class="who">Representante PJ · próprio</span></span></li></ul>
+                </li>
+              </ul>
+            </li>
+            <li><span class="tnode"><span class="av">BN</span><b>Equipe Norte</b><span class="who">Gerente: Bruno Nogueira · equipe</span></span>
+              <ul><li><span class="tnode"><span class="av">TC</span>Tatiane Costa<span class="who">Vendedora interna · próprio</span></span></li></ul>
+            </li>
+          </ul>
+        </li>
+        <li style="margin-top:8px"><span class="tnode"><span class="av">JP</span><b>Backoffice</b><span class="who">Juliana Prado · Cadastro/Financeiro</span></span></li>
+      </ul>
+      <p class="diagram-cap">Pessoas e equipes fictícias.</p>
+    </div>
+    <div>
+      <div class="table-wrap"><table class="t compact">
+        <thead><tr><th>Regra</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Cada usuário pertence a uma equipe; cada equipe tem um gerente</td><td><span class="badge st-D">RF-IAM-5</span></td></tr>
+          <tr><td>Equipes formam uma árvore; <code>equipe</code> inclui subequipes (Carlos vê Diego)</td><td><span class="badge st-P">AUTH-4 b</span></td></tr>
+          <tr><td>Carteira compartilhada: dono + atendentes (ex.: Ana atende uma conta de Rafael)</td><td><span class="badge st-P">AUTH-4 c</span></td></tr>
+          <tr><td>Admin atribui perfil, gerente e código de vendedor Sankhya (<code>CODVEND</code>)</td><td><span class="badge st-D">RF-IAM-4</span></td></tr>
+          <tr><td>Mudança de equipe, gerente ou perfil força ressincronização completa do aparelho</td><td><span class="badge st-P">SYNC-3</span></td></tr>
+          <tr><td>Troca de dono ou atendente gera eventos de escopo (entra/sai) na mesma transação</td><td><span class="badge st-P">SYNC-3</span></td></tr>
+          <tr><td>Aprovador substituto configurável por equipe; pedido do gerente sobe para a diretoria</td><td><span class="badge st-U">R36</span></td></tr>
+          <tr><td>Vínculo entre equipe do Sales Force e vendedor/carteira no Sankhya</td><td><span class="badge st-S">S1 · S6</span></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+</section>
+
+<div class="part-title">Parte III · Vendas</div>
+

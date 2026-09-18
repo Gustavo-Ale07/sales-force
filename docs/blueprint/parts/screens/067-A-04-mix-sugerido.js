@@ -1,0 +1,13 @@
+
+{ id: 'A-04', name: 'Mix sugerido', grp: 'ia', plat: 'Web + Mobile', ph: 'F3', prof: ['ADM', 'GER', 'VI', 'PJ'],
+  purpose: 'Sugerir produtos ao montar o pedido.',
+  info: 'Reposição pela frequência de compra do cliente · produtos comprados por clientes semelhantes · explicação',
+  fields: '—', filters: '—', cols: 'Produto · motivo · última compra',
+  actions: 'Adicionar ao pedido · Ignorar',
+  perms: 'Quem cria pedido (§8.2); cliente no escopo',
+  rules: 'Candidatos calculados estatisticamente; a IA só ordena e explica (RF-IA-3, P-14) · preço e alçada continuam determinísticos (P-09, P-10)',
+  offline: 'Disponível offline com sugestões pré-calculadas baixadas na sincronização',
+  sync: 'PROPOSTO: dataset de sugestões entregue no pull',
+  audit: '—',
+  ents: 'sales_document_items · products · ai_requests', rf: 'RF-IA-3',
+  st: [INV, P14, P09, SYNC] },

@@ -1,0 +1,11 @@
+
+{ id: 'C-19', name: 'Integração Google Workspace', grp: 'crm', plat: 'Web', ph: 'F2', prof: WALL,
+  purpose: 'Conectar Gmail e Calendar por usuário.',
+  info: 'Status da conexão OAuth · Gmail · Calendar',
+  fields: '—', filters: '—', cols: 'Serviço · status · conectado em',
+  actions: 'Conectar conta Google · Desconectar',
+  perms: 'Cada usuário conecta a própria conta' + WPJ,
+  rules: 'OAuth por usuário; credenciais criptografadas no banco (spec §12.3) · e-mail pelo Gmail com registro automático da atividade · Calendar unidirecional (RF-ACT-7)',
+  audit: '—',
+  ents: 'integration_credentials · activities', rf: 'RF-INT-3 · RF-ACT-7',
+  st: [INV, P22, ['V', 'V-06 — a empresa usa Google Workspace?'], ['U', 'R67 — LGPD: transferência internacional']] },

@@ -1,0 +1,12 @@
+
+{ id: 'M-26', name: 'Chave local perdida', grp: 'mobile', plat: 'Mobile', ph: 'F1', prof: ['PJ', 'GER', 'VI'],
+  purpose: 'Tratar banco local ilegível por perda da chave de criptografia.',
+  info: 'Banco local ilegível · itens possivelmente não enviados · orientação',
+  fields: '—', filters: '—', cols: '—',
+  actions: 'Recriar banco e ressincronizar · Falar com o gestor',
+  perms: 'Usuário do aparelho',
+  rules: 'DECISÃO PENDENTE R45 — PROPOSTO: enviar a fila sempre que houver conexão; se a chave se perder, recriar o banco, ressincronizar e alertar sobre o que não foi enviado · rascunhos sincronizados (R08) reduzem a perda',
+  offline: 'Requer conexão para ressincronizar',
+  audit: '—',
+  ents: 'sync_state local · outbox local', rf: '—',
+  st: [INV, MOB2, ['U', 'R45 — perda da chave local'], ['U', 'R08 — rascunhos sincronizados']] },

@@ -1,0 +1,35 @@
+<section class="doc-section" id="s46" data-group="Parte VIII · Operação e qualidade" data-num="46" data-title="Roadmap" data-kw="roadmap pacotes de trabalho wp fase 0 critérios de saída trilhas paralelas gate fase 1">
+  <div class="sec-head"><span class="sec-num">46</span><h2>Roadmap</h2><div class="sec-meta"><span class="badge st-A">P-12</span><span class="badge st-P">Pacotes e critérios da Fase 0</span></div></div>
+  <h3>Trilhas paralelas (sem código)</h3>
+  <div class="table-wrap"><table class="t compact">
+    <thead><tr><th>Trilha</th><th>Ação</th><th>Resolve</th><th>Necessário antes de</th></tr></thead>
+    <tbody>
+      <tr><td>T1</td><td>Enviar perguntas S0 ao parceiro/executivo Sankhya — pode começar já</td><td><span class="ref">V-11</span> <span class="ref">V-13</span></td><td>Qualquer conexão real ao Sankhya</td></tr>
+      <tr><td>T2</td><td>Contas organizacionais Apple e Google e D-U-N-S — pode começar já</td><td><span class="ref">V-10</span></td><td>Piloto da Fase 1</td></tr>
+      <tr><td>T3</td><td>Checklist de cotação a AWS, Magalu e Azure; aprovar provedores; fixar major do PostgreSQL; confirmar pg-boss</td><td><span class="ref">V-04</span> <span class="ref">V-05</span> <span class="ref">V-15</span> <span class="ref">V-16</span></td><td>WP 0.6</td></tr>
+      <tr><td>T4</td><td>Confirmar Google Workspace; preparar domínio de envio (SPF, DKIM, DMARC)</td><td><span class="ref">V-06</span></td><td>Reset de senha (WP 0.5)</td></tr>
+      <tr><td>T5</td><td>Revisão jurídica de operadores e transferências internacionais</td><td><span class="ref">R67</span></td><td>Piloto da Fase 1</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Fase 0 — pacotes de trabalho <span class="badge st-P">Proposto; replanejados quando as rodadas 4–7 fecharem</span></h3>
+  <div class="table-wrap"><table class="t compact">
+    <thead><tr><th>WP</th><th>Conteúdo</th><th>Depende de</th></tr></thead>
+    <tbody>
+      <tr><td>0.1</td><td>Repositório: merge do design aprovado; proteção da <code>main</code></td><td>aprovação do dono</td></tr>
+      <tr><td>0.2</td><td>Esqueleto do monorepo: shells de server, web, mobile; pacotes; scripts; lint de dependências</td><td>0.1 · V-01 V-02 V-03</td></tr>
+      <tr><td>0.3</td><td>Pipeline de CI com Testcontainers no mesmo major de produção</td><td>0.2</td></tr>
+      <tr><td>0.4</td><td>Fundação do banco: Drizzle, passo de migração com lock, convenções, trigger de carimbo e teste de watermark</td><td>0.2 · V-07</td></tr>
+      <tr><td>0.5</td><td>Identidade e acesso: usuários, equipes, perfis, política central, login, senha, bloqueio, reset, sessões com aparelho, bloqueio web do PJ, auditoria, testes de matriz, revisão de segurança</td><td>0.4 · V-06</td></tr>
+      <tr><td>0.6</td><td>Ambientes: staging e produção, banco, buckets, e-mail, Caddy, segredos, deploy com migração, Sentry, <code>/health</code>, uptime</td><td>0.3 · V-04 V-05 V-06 V-08 V-15</td></tr>
+      <tr><td>0.7</td><td>Shell web: login, reset, administração de usuários/equipes/perfis</td><td>0.5</td></tr>
+      <tr><td>0.8</td><td>Cliente Sankhya e espelho: gateway + fake, OAuth, S1, espelho de vendedores, clientes, produtos, preços</td><td>0.4 0.6 · V-11 V-12 · Q-02</td></tr>
+      <tr><td>0.9</td><td>Saúde da integração e alerta por e-mail</td><td>0.8 · Q-01</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small"><b>Fase 0 não inclui:</b> funcionalidades mobile, endpoints de sync, eventos de escopo, pedidos, preços no domain, regras de desconto e crédito, aprovação de cliente, escritas no Sankhya, notificações, importações.</p>
+  <div class="grid-2">
+    <div class="card"><div class="card-h"><strong>Critérios de saída da Fase 0</strong><span class="badge st-P">Proposto</span></div><ol class="small"><li>CI em todo PR bloqueando merge</li><li>Staging implantado pelo pipeline; produção provisionada</li><li>Login, bloqueio, reset e revogação de sessão em staging; revisão de segurança concluída</li><li>Testes de matriz de autorização passando</li><li>Teste de concorrência do watermark passando (V-07)</li><li>Espelho rodando em staging contra o ambiente SNK-3, com saúde visível</li><li>Achados S0 e S1 registrados</li><li><code>decisions.md</code> reflete as decisões da Fase 0</li></ol></div>
+    <div class="card"><div class="card-h"><strong>Gate da Fase 1 (resumo)</strong></div><ul class="small"><li>S2–S7 e validações SNK-4 antes das funcionalidades que bloqueiam</li><li>R05–R11 (sync), R16 R17 R19 R45 (aparelho), R33 R35 R36 R37 (regras de dinheiro), R42, R48, R60, R14</li><li><b>Piloto:</b> restore testado (OPS-2); escrita real de pedido e parceiro fora de produção (SNK-3); S8, R67, V-08, U-08</li></ul><p class="small">Lista completa: <a href="#s48">48 — Decisões em aberto</a>.</p></div>
+  </div>
+</section>
+

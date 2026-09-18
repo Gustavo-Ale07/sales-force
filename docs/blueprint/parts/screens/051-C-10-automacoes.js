@@ -1,0 +1,13 @@
+
+{ id: 'C-10', name: 'Automações', grp: 'crm', plat: 'Web', ph: 'F2', prof: ['ADM', 'GER'],
+  purpose: 'Configurar automações pré-definidas (construtor genérico na F3).',
+  info: 'Regras pré-definidas com parâmetros · log de execução',
+  fields: 'Regra · parâmetros (N dias, etapa X → tarefa Y, dias sem compra) · ativa',
+  filters: 'Tipo · ativa · equipe',
+  cols: 'Regra · parâmetros · escopo · ativa · última execução · erros',
+  actions: 'Ativar/desativar · Editar parâmetros · Ver log',
+  perms: 'Configurar automações: Admin; Gerente só da equipe (§8.2)' + WPJ,
+  rules: 'Follow-up automático, distribuição de leads, alertas de carteira (RF-AUT-1…3) · log por regra (RF-AUT-5) · proteção contra laços: profundidade 3 e limite por registro/minuto (RF-AUT-6)',
+  audit: 'alteração de automações',
+  ents: 'automation_rules · automation_runs', rf: 'RF-AUT-1 · RF-AUT-2 · RF-AUT-3 · RF-AUT-5 · RF-AUT-6',
+  st: [INV, ['P', 'Construtor genérico só na F3 (C-20)']] },

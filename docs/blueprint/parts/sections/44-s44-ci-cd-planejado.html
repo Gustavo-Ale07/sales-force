@@ -1,0 +1,29 @@
+<section class="doc-section" id="s44" data-group="Parte VIII · Operação e qualidade" data-num="44" data-title="CI/CD planejado" data-kw="ci cd github actions ghcr deploy ssh migração eas staging produção tag aprovação manual branch protection">
+  <div class="sec-head"><span class="sec-num">44</span><h2>CI/CD planejado</h2><div class="sec-meta"><span class="badge st-P">OPS-3</span><span class="badge st-A">DATA-2 migrações</span></div></div>
+  <div class="diagram" role="img" aria-label="Pipeline proposta: PR com lint, typecheck, testes e build; merge em main publica imagem e implanta em staging; tag de versão com aprovação manual implanta em produção">
+    <div class="hflow" style="min-width:940px">
+      <div class="box client"><b>Pull request</b>lint · typecheck · testes (Testcontainers) · build · varredura</div><span class="to">→</span>
+      <div class="box"><b>Merge em main</b>protegida: PR + CI verde</div><span class="to">→</span>
+      <div class="box"><b>Imagem</b>tag = SHA do commit → GHCR</div><span class="to">→</span>
+      <div class="zone"><div class="zone-l">Deploy SSH (usuário restrito)</div><div class="hflow"><div class="box"><b>1 · Migração</b>passo único com lock <span class="badge st-A">DATA-2</span></div><span class="to">→</span><div class="box"><b>2 · compose up</b>caddy, api, worker</div></div></div><span class="to">→</span>
+      <div class="box"><b>Staging</b></div>
+    </div>
+    <div class="hflow" style="min-width:940px;margin-top:10px">
+      <div class="box"><b>Tag de versão</b></div><span class="to">→</span><div class="box" style="border-color:var(--warn)"><b>Aprovação manual</b>GitHub Environment protegido</div><span class="to">→</span><div class="box" style="border-color:var(--ok)"><b>Produção</b>mesmos passos</div>
+      <span class="to" style="margin-left:18px">mobile:</span><div class="box"><b>EAS Build / Update</b>canais staging e produção; updates assinados</div>
+    </div>
+  </div>
+  <div class="table-wrap"><table class="t compact">
+    <thead><tr><th>Regra</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Migrations versionadas e revisadas; passo único protegido contra concorrência antes da nova versão ficar ativa; migrações de dados separadas</td><td><span class="badge st-A">DATA-2</span></td></tr>
+      <tr><td><code>drizzle-kit push</code> só em banco local descartável; nunca staging com dados, piloto ou produção</td><td><span class="badge st-A">DATA-2</span></td></tr>
+      <tr><td>Expandir → migrar → contrair a partir do primeiro ambiente com dados reais</td><td><span class="badge st-A">P-16</span></td></tr>
+      <tr><td>Actions fixadas por SHA; scripts de ciclo de vida de pacotes desativados salvo allowlist; atualização automática de dependências e varredura de vulnerabilidades</td><td><span class="badge st-P">OPS-3</span></td></tr>
+      <tr><td>Rollback: reimplantar a tag de imagem anterior (schema compatível)</td><td><span class="badge st-P">OPS-3</span></td></tr>
+      <tr><td>Testes de fumaça com Sankhya real nunca no GitHub Actions; manuais ou agendados a partir do staging após V-11</td><td><span class="badge st-A">STACK-2 · SNK-3</span></td></tr>
+      <tr><td>Breve indisponibilidade no <code>compose up</code></td><td><span class="badge st-P">aceita no R66</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+

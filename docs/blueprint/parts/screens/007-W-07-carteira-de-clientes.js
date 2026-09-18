@@ -1,0 +1,13 @@
+
+{ id: 'W-07', name: 'Carteira de clientes', grp: 'web', plat: 'Web', ph: 'F1', prof: WALL, mock: 'mk-carteira',
+  purpose: 'Listar as contas de clientes dentro do escopo do usuário.',
+  info: 'Contas com status do ciclo, responsável, crédito disponível, títulos vencidos e última compra',
+  fields: '—',
+  filters: 'Busca (razão social, fantasia, CNPJ/CPF, código) · status do ciclo · responsável · equipe · cidade/UF · com títulos vencidos',
+  cols: 'Razão social / fantasia · CNPJ/CPF · cidade/UF · responsável · status · última compra · títulos vencidos · crédito disponível',
+  actions: 'Abrir cliente · Novo cliente · Novo pedido · Exportar (só perfis com permissão)',
+  perms: 'Todos os perfis internos, filtrado por escopo: próprio, equipe ou tudo; Cadastro/Financeiro tudo (só contas/pendências) — AUTH-4 PROPOSTO' + WPJ,
+  rules: 'Dados de parceiro espelhados são somente leitura (P-02) · PROPOSTO AUTH-4: conta com 1 responsável (do Sankhya) + atendentes · exportação auditada e nunca para PJ (P-20)',
+  audit: 'exportação (quando executada)',
+  ents: 'accounts · receivables · sales_documents', rf: 'RF-ACC-1 · RF-ACC-2 · RF-DSH-6',
+  st: [INV, P02, P19, AUTH4, P21, ['S', 'S4 — fórmula do crédito disponível']] },

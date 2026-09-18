@@ -1,0 +1,12 @@
+
+{ id: 'W-23', name: 'Metas', grp: 'web', plat: 'Web', ph: 'F1', prof: ['VI', 'GER', 'DIR', 'ADM'],
+  purpose: 'Exibir metas e realizado lidos do Sankhya.',
+  info: 'Metas por período (valor/volume; por produto/grupo quando houver) × realizado',
+  fields: '—', filters: 'Período · vendedor · equipe',
+  cols: 'Vendedor · período · tipo · meta · realizado · %',
+  actions: 'Mudar período · Detalhar por produto/grupo',
+  perms: 'Vendedor: próprias · gerente: equipe · Diretoria/Admin: tudo (AUTH-4 PROPOSTO)' + WPJ,
+  rules: 'Somente leitura do Sankhya; sem cálculo próprio (P-13) · origem, granularidade e frequência PRECISA VALIDAR (S6)',
+  audit: '—',
+  ents: 'goals', rf: 'RF-GOL-1',
+  st: [INV, P13, ['S', 'S6 — fonte das metas (R28)'], ['U', 'Q-02 — metas espelhadas na F0 ou F1?']] },

@@ -1,0 +1,11 @@
+/* ---------- Sections ---------- */
+.doc-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px 26px 18px;margin:0 0 18px}
+.doc-section.hidden-by-filter{display:none}
+.sec-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 12px;border-bottom:1px solid var(--border);padding-bottom:10px;margin-bottom:14px}
+.sec-head h2{margin:0}
+.sec-num{font:650 .8rem/1 var(--mono);color:var(--accent-text);background:var(--accent-weak);border-radius:3px;padding:5px 7px;align-self:center}
+.sec-meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-left:auto}
+.part-title{margin:34px 0 12px;font-size:.78rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--text-3);display:flex;align-items:center;gap:10px}
+.part-title::after{content:"";flex:1;border-top:1px solid var(--border)}
+.lead{color:var(--text-2);max-width:980px}
+

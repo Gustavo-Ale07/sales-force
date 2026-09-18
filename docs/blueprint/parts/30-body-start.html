@@ -1,0 +1,69 @@
+</style>
+
+</head>
+<body>
+<a class="skip" href="#conteudo">Pular para o conteúdo</a>
+<header class="topbar" id="top">
+  <button class="btn menu-btn" id="menuBtn" type="button" aria-controls="sidebar" aria-expanded="false" aria-label="Abrir navegação">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <a class="brand" href="#inicio"><span class="brand-mark" aria-hidden="true">S</span><span class="brand-name">Sales Force</span><span class="brand-sub">Blueprint do produto</span></a>
+  <span class="ver" title="Versão do blueprint">DRAFT v0.1</span>
+  <span class="spacer"></span>
+  <div class="search" role="search">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <label for="q" class="sr-only">Buscar e filtrar seções do blueprint</label>
+    <input id="q" type="search" placeholder="Buscar no blueprint…" autocomplete="off" spellcheck="false">
+    <kbd aria-hidden="true">/</kbd>
+  </div>
+  <button class="btn" id="themeBtn" type="button" aria-label="Alternar tema (automático, claro, escuro)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    <span class="lbl" id="themeLbl">Tema: auto</span>
+  </button>
+  <button class="btn no-print" id="printBtn" type="button" aria-label="Imprimir blueprint">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4v-7h16v7h-2M8 14h8v7H8z"/></svg>
+    <span class="lbl">Imprimir</span>
+  </button>
+</header>
+<div class="scrim" id="scrim" aria-hidden="true"></div>
+<div class="layout">
+  <nav class="sidebar" id="sidebar" aria-label="Seções do blueprint">
+    <div class="side-tools">
+      <label><input type="checkbox" id="filterContent"> Ocultar seções sem correspondência</label>
+      <div class="chips">
+        <button class="btn sm" id="expandAll" type="button">Expandir detalhes</button>
+        <button class="btn sm" id="collapseAll" type="button">Recolher</button>
+      </div>
+      <span class="side-count" id="navCount" aria-live="polite"></span>
+    </div>
+    <div class="nav" id="nav"></div>
+  </nav>
+  <main id="conteudo" tabindex="-1">
+  <div class="content">
+
+<noscript><p class="callout warn">Este blueprint usa JavaScript embutido (sem rede) para montar a navegação, o catálogo de telas, os fluxos, as máquinas de estado, as matrizes e a lista de decisões em aberto. Com JavaScript desativado, apenas o conteúdo estático aparece.</p></noscript>
+
+<div class="hero" id="inicio">
+  <div class="chips" style="margin-bottom:8px">
+    <span class="badge st-D">Documentação de design</span>
+    <span class="badge st-P">Draft v0.1 — não aprovado como especificação</span>
+    <span class="tag">Modo do projeto: DESIGN</span>
+  </div>
+  <h1>Sales Force — Blueprint do produto</h1>
+  <p class="lede">Representação visual de tudo o que se sabe hoje sobre o futuro Sales Force: a plataforma comercial interna que substitui o <b>Vidya Force</b> (força de vendas integrada ao <b>Sankhya</b>) e depois o <b>Agendor</b> (CRM). Cada bloco mostra o seu status de decisão. Nada aqui autoriza implementação.</p>
+  <div class="hero-meta">
+    <span><b>Versão:</b> Blueprint Draft v0.1</span>
+    <span><b>Data:</b> 16/09/2026</span>
+    <span><b>Base:</b> <code>docs/decisions.md</code> (Rodadas 1–3 fechadas), <code>project-spec.md</code> (rascunho), <code>architecture.md</code>, <code>security-model.md</code>, <code>sync-protocol.md</code>, <code>sankhya-spike.md</code>, <code>roadmap.md</code> — commit base <code>5fb15ee</code></span>
+    <span><b>Branch:</b> <code>design/blueprint</code></span>
+  </div>
+  <div class="stat-row" aria-label="Números deste blueprint">
+    <div class="stat"><div class="v" data-stat="screens">—</div><div class="l">telas documentadas</div></div>
+    <div class="stat"><div class="v" data-stat="mockups">—</div><div class="l">mockups visuais</div></div>
+    <div class="stat"><div class="v" data-stat="flows">—</div><div class="l">fluxos visuais</div></div>
+    <div class="stat"><div class="v" data-stat="states">—</div><div class="l">máquinas de estado</div></div>
+    <div class="stat"><div class="v" data-stat="open">—</div><div class="l">itens em aberto</div></div>
+    <div class="stat"><div class="v" data-stat="rf">—</div><div class="l">requisitos RF rastreados</div></div>
+  </div>
+</div>
+

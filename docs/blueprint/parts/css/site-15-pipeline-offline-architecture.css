@@ -1,0 +1,18 @@
+/* Pipeline (offline architecture) */
+.pipe-wrap{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:18px}
+.pipe{display:flex;flex-direction:column;align-items:stretch}
+.pipe-h{font:700 .72rem/1 var(--font);letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);margin:0 0 8px}
+.pnode{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:10px;align-items:center;border:1px solid var(--border-strong);background:var(--surface);border-radius:var(--radius);padding:7px 10px}
+.pnode .i{width:30px;height:30px;border-radius:4px;display:grid;place-items:center;font:700 .72rem/1 var(--mono);background:var(--surface-3);color:var(--text-2)}
+.pnode .t b{display:block;font-size:.9rem}
+.pnode .t span{display:block;font-size:.78rem;color:var(--text-3)}
+.pnode.dev .i{background:var(--accent-weak);color:var(--accent-text)}
+.pnode.srv .i{background:var(--info-bg);color:var(--info)}
+.pnode.snk .i{background:var(--teal-bg);color:var(--teal)}
+.pnode.db .i{background:var(--purple-bg);color:var(--purple)}
+.plink{display:flex;align-items:center;gap:8px;padding:0 0 0 24px;min-height:24px;font-size:.74rem;color:var(--text-3)}
+.plink::before{content:"↓";font-size:1rem;color:var(--border-strong);font-weight:700}
+.plink.up::before{content:"↑"}
+.boundary{border-top:2px dashed var(--danger);margin:6px 0;position:relative}
+.boundary span{position:absolute;right:0;top:-10px;background:var(--surface-2);padding:0 6px;font:700 .66rem/1.4 var(--font);color:var(--danger);letter-spacing:.05em;text-transform:uppercase}
+

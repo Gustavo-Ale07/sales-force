@@ -1,0 +1,15 @@
+/* Permission matrix */
+.pm td.cell{text-align:center;white-space:nowrap}
+.pm .v{display:inline-flex;align-items:center;gap:4px;font-weight:600}
+.pm .yes{color:var(--ok)} .pm .no{color:var(--text-3)} .pm .deny{color:var(--danger)}
+.pm .cond{color:var(--info);font-weight:500;font-size:.8rem}
+.pm td.cell.u{background:var(--orange-bg)!important}
+.pm td.cell.a{box-shadow:inset 3px 0 0 var(--ok)}
+.pm .mk{display:block;font:700 .6rem/1.2 var(--font);letter-spacing:.04em;text-transform:uppercase;margin-top:2px}
+.pm .mk.a{color:var(--ok)} .pm .mk.p{color:var(--info)} .pm .mk.u{color:var(--orange)} .pm .mk.v{color:var(--warn)}
+.scope{display:inline-block;font:600 .74rem/1 var(--mono);padding:4px 6px;border-radius:3px;border:1px solid var(--border)}
+.scope.tudo{background:var(--purple-bg);color:var(--purple)}
+.scope.equipe{background:var(--info-bg);color:var(--info)}
+.scope.proprio{background:var(--ok-bg);color:var(--ok)}
+.scope.nenhum{background:var(--surface-3);color:var(--text-3)}
+

@@ -1,0 +1,22 @@
+<section class="doc-section" id="s08" data-group="Parte II · Arquitetura e acesso" data-num="8" data-title="Módulos" data-kw="módulos iam access-policy audit sankhya-mirror integration platform acc ord opp prp act aut gol imp dsh not int ia cat con snk">
+  <div class="sec-head"><span class="sec-num">08</span><h2>Módulos</h2><div class="sec-meta"><span class="badge st-A">P-04</span><span class="badge st-P">Mapa de módulos §5.2</span></div></div>
+  <h3>Módulos funcionais (requisitos)</h3>
+  <div class="grid-4" id="module-cards"></div>
+  <h3>Módulos do servidor na Fase 0 <span class="badge st-P">Proposto</span></h3>
+  <div class="table-wrap"><table class="t compact">
+    <thead><tr><th>Módulo</th><th>É dono de</th><th>Processo</th></tr></thead>
+    <tbody>
+      <tr><td><code>iam</code></td><td>Usuários, equipes (árvore), perfis, permissões com escopo, sessões, aparelhos, configuração de limites de desconto (F1)</td><td>API</td></tr>
+      <tr><td><code>access-policy</code></td><td>Política central de autorização; não possui dados de negócio; produz filtros de escopo</td><td>API, worker (jobs em nome do usuário)</td></tr>
+      <tr><td><code>audit</code></td><td>Log de auditoria</td><td>API, worker</td></tr>
+      <tr><td><code>sankhya-mirror</code></td><td>Tabelas espelho e estado de sync por entidade</td><td>Worker</td></tr>
+      <tr><td><code>integration</code></td><td><code>integration_outbox</code>, saúde da integração</td><td>Worker grava · API lê</td></tr>
+      <tr><td><code>platform</code></td><td>Configuração, <code>/health</code>, metadados de arquivos, envio de e-mail</td><td>API, worker</td></tr>
+    </tbody>
+  </table></div>
+  <ul class="small">
+    <li>Módulos se comunicam por serviços de aplicação exportados, nunca pelas tabelas uns dos outros; uma tabela tem exatamente um módulo dono.</li>
+    <li>Controllers finos; regras em <code>packages/domain</code>; relatórios entre módulos por views SQL somente leitura (Fase 2).</li>
+  </ul>
+</section>
+

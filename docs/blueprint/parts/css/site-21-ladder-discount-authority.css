@@ -1,0 +1,7 @@
+/* Ladder (discount authority) */
+.ladder{display:grid;gap:6px;min-width:560px}
+.rung{display:grid;grid-template-columns:170px minmax(0,1fr) 190px;gap:10px;align-items:center}
+.rung .bar{height:30px;border-radius:3px;display:flex;align-items:center;padding:0 10px;font-size:.8rem;font-weight:600;color:var(--text)}
+.rung .who{font-weight:600;font-size:.88rem}
+.rung .st{font-size:.78rem;color:var(--text-2)}
+

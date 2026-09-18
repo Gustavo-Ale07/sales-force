@@ -1,0 +1,13 @@
+
+{ id: 'W-39', name: 'Limites de desconto', grp: 'web', plat: 'Web', ph: 'F1', prof: ['ADM'],
+  purpose: 'Configurar os limites de desconto por perfil e por usuário.',
+  info: 'Limite do vendedor e limite do gerente por perfil (padrão) com sobrescrita por usuário; acima do gerente, diretoria',
+  fields: 'Perfil ou usuário · limite do vendedor (%) · limite do gerente (%)',
+  filters: 'Perfil · usuário · com sobrescrita',
+  cols: 'Perfil/usuário · limite vendedor · limite gerente · origem (padrão/sobrescrita)',
+  actions: 'Editar padrão do perfil · Sobrescrever para usuário · Remover sobrescrita',
+  perms: 'Admin' + WPJ,
+  rules: 'Configurado no Sales Force e aplicado no servidor (P-10) · PROPOSTO R36: teto absoluto configurável · base de cálculo pendente (R35) · valores iniciais PRECISAM VALIDAR (spec §17)',
+  audit: 'alteração de limites de desconto',
+  ents: 'discount_limits · audit_log', rf: 'RF-CAT-3',
+  st: [INV, P10, R35, R36, ['S', 'S4 — conflito com liberação nativa do Sankhya (R26)']] },

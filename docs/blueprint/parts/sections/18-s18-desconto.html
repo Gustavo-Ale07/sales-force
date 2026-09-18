@@ -1,0 +1,26 @@
+<section class="doc-section" id="s18" data-group="Parte III · Vendas" data-num="18" data-title="Desconto" data-kw="desconto alçada limite vendedor gerente diretoria teto base de cálculo">
+  <div class="sec-head"><span class="sec-num">18</span><h2>Desconto</h2><div class="sec-meta"><span class="badge st-A">P-10</span><span class="badge st-U">R35 · R36 · R26</span></div></div>
+  <p class="lead">Limites configurados <b>no Sales Force</b>: limite do vendedor, limite do gerente e diretoria acima do gerente; padrão por perfil com sobrescrita por usuário; aplicados no servidor (P-10, APROVADO). Base de cálculo e roteamento ainda não decididos.</p>
+  <div class="diagram">
+    <div class="ladder" role="img" aria-label="Escada de alçada ilustrativa: até o limite do vendedor sem aprovação; até o limite do gerente aprovação do gerente; acima, diretoria; acima do teto proposto, bloqueado">
+      <div class="rung"><span class="who">Vendedor / Representante</span><div class="bar" style="width:30%;background:var(--ok-bg)">0% – limite do vendedor</div><span class="st">Sem aprovação <span class="badge st-A">P-10</span></span></div>
+      <div class="rung"><span class="who">Gerente</span><div class="bar" style="width:55%;background:var(--info-bg)">até o limite do gerente</div><span class="st">Gerente aprova <span class="badge st-A">P-10</span></span></div>
+      <div class="rung"><span class="who">Diretoria</span><div class="bar" style="width:80%;background:var(--purple-bg)">acima do limite do gerente</div><span class="st">Diretoria aprova <span class="badge st-A">P-10</span></span></div>
+      <div class="rung"><span class="who">Teto absoluto</span><div class="bar" style="width:100%;background:var(--danger-bg);color:var(--danger)">acima do teto → bloqueado</div><span class="st">PROPOSTO <span class="badge st-U">R36</span></span></div>
+    </div>
+    <p class="diagram-cap">Larguras ilustrativas; nenhum percentual foi definido. Valores iniciais por perfil são pendência de validação (spec §17).</p>
+  </div>
+  <div class="table-wrap"><table class="t compact">
+    <thead><tr><th>Questão</th><th>Recomendação atual</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Base de cálculo</td><td>Maior % de desconto entre os itens; sem desconto no cabeçalho no MVP</td><td><span class="badge st-U">R35</span></td></tr>
+      <tr><td>Roteamento</td><td>Direto ao nível com alçada suficiente, gerente notificado</td><td><span class="badge st-U">R36</span></td></tr>
+      <tr><td>Pedido criado pelo gerente</td><td>Sobe para a diretoria</td><td><span class="badge st-U">R36</span></td></tr>
+      <tr><td>Ausência do aprovador</td><td>Aprovador substituto configurável por equipe</td><td><span class="badge st-U">R36</span></td></tr>
+      <tr><td>Desconto máximo nativo do Sankhya</td><td>Sales Force como fonte única + TOP dedicada</td><td><span class="badge st-U">R26</span> <span class="badge st-S">S4</span></td></tr>
+      <tr><td>Precisão de percentuais e arredondamento</td><td>Definidos pelo spike de preços</td><td><span class="badge st-S">S2.3</span></td></tr>
+    </tbody>
+  </table></div>
+  <p class="small">Configuração: tela <span class="ref">W-39</span>. Alteração de limites é evento de auditoria (spec §12.4).</p>
+</section>
+

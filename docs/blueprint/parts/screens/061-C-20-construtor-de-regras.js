@@ -1,0 +1,12 @@
+
+{ id: 'C-20', name: 'Construtor de regras', grp: 'crm', plat: 'Web', ph: 'F3', prof: ['ADM', 'GER'],
+  purpose: 'Criar automações "quando X, se Y, faça Z".',
+  info: 'Editor de gatilho, condições e ações · log de execução',
+  fields: 'Gatilho (registro criado/alterado, mudança de etapa/status, agendamento, evento de integração) · condições (comparações, e/ou) · ações (criar tarefa, notificar, atribuir, mudar etapa, tag, e-mail por modelo, webhook)',
+  filters: 'Gatilho · ativa', cols: 'Regra · gatilho · ações · ativa · última execução',
+  actions: 'Salvar · Ativar/desativar · Ver log',
+  perms: 'Admin; gerente da equipe' + WPJ,
+  rules: 'Proteção contra laços: profundidade 3 e limite por registro/minuto (RF-AUT-6) · log por regra (RF-AUT-5)',
+  audit: 'alteração de automações',
+  ents: 'automation_rules · automation_runs', rf: 'RF-AUT-4 · RF-AUT-5 · RF-AUT-6',
+  st: [INV] },

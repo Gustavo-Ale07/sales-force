@@ -1,0 +1,39 @@
+<section class="doc-section" id="s05" data-group="Parte I · Produto" data-num="5" data-title="Relação com Sankhya" data-kw="sankhya dono dados espelho outbox fronteira sistema de registro">
+  <div class="sec-head"><span class="sec-num">05</span><h2>Relação com Sankhya</h2><div class="sec-meta"><span class="badge st-A">P-02 · P-03 · SNK-3 · SNK-4</span><span class="badge st-P">SNK-1 · SNK-2</span></div></div>
+  <div class="diagram" role="img" aria-label="Leituras do Sankhya vão ao espelho pelo worker; escritas saem pela outbox pelo worker; clientes nunca falam com o Sankhya">
+    <div class="ctx" style="grid-template-columns:1fr 1.3fr 1fr">
+      <div class="col">
+        <div class="box client"><b>Web e mobile</b>Leem e escrevem só na API do Sales Force</div>
+        <div class="boundary"><span>Nunca chamam o Sankhya · P-03</span></div>
+      </div>
+      <div class="zone">
+        <div class="zone-l">Sales Force</div>
+        <div class="box"><b>Espelho (somente leitura)</b>Vendedores, clientes/carteira, produtos, tabelas de preço, títulos, notas, metas<br><span class="badge st-P">leituras SNK-1</span> <span class="badge st-V">S1 · Q-02</span></div>
+        <div class="arrow-d"></div>
+        <div class="box"><b>integration_outbox</b>Pedidos aprovados e clientes aprovados<br><span class="badge st-A">STACK-6</span></div>
+      </div>
+      <div class="col">
+        <div class="box sankhya"><b>Worker ↔ SankhyaGateway ↔ Sankhya</b>Credenciais só no worker<br><span class="badge st-A">STACK-2</span> <span class="badge st-P">OAuth SNK-2</span></div>
+        <div class="box ext"><b>Idempotência</b>Campo de origem com UUID da entidade, verificado antes de todo reenvio<br><span class="badge st-A">SNK-4</span> <span class="badge st-V">S0.4 · V-13</span></div>
+      </div>
+    </div>
+  </div>
+  <h3>Quem é dono de cada dado</h3>
+  <div class="table-wrap"><table class="t">
+    <thead><tr><th>Dado</th><th>Dono</th><th>Caminho de escrita</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Vendedores, produtos, tabelas de preço, condições, TOP</td><td>Sankhya</td><td>Somente espelho (worker)</td><td><span class="badge st-A">P-02</span></td></tr>
+      <tr><td>Clientes (<code>cliente</code>) — dados de parceiro</td><td>Sankhya</td><td>Somente espelho; campos de CRM na mesma conta são do Sales Force</td><td><span class="badge st-A">P-02</span> <span class="badge st-P">por linha</span></td></tr>
+      <tr><td>Clientes pendentes (<code>cliente_pendente</code>)</td><td>Sales Force → Sankhya</td><td>Módulo de contas; vira dado do Sankhya após criação do parceiro pela outbox</td><td><span class="badge st-A">P-18 · P-19</span></td></tr>
+      <tr><td>Leads, prospects, contas rejeitadas</td><td>Sales Force</td><td>Módulo de contas</td><td><span class="badge st-A">P-19</span></td></tr>
+      <tr><td>Contatos do Sankhya / criados no Sales Force</td><td>Sankhya / Sales Force</td><td>Espelho / módulo de contatos (ficam só no Sales Force)</td><td><span class="badge st-D">RF-CON-2</span></td></tr>
+      <tr><td>Pedidos antes do envio</td><td>Sales Force</td><td>Módulo de pedidos; estados em <code>packages/domain</code></td><td><span class="badge st-A">P-05</span></td></tr>
+      <tr><td>Pedidos após envio, notas</td><td>Sankhya</td><td>Espelho + acompanhamento de status</td><td><span class="badge st-S">S3</span></td></tr>
+      <tr><td>Títulos, limites de crédito, metas, comissões</td><td>Sankhya</td><td>Somente espelho</td><td><span class="badge st-S">S4 · S6</span></td></tr>
+      <tr><td>Limites de desconto, aprovações, usuários, equipes, perfis, aparelhos, auditoria</td><td>Sales Force</td><td>Módulos IAM e aprovação</td><td><span class="badge st-A">P-10</span></td></tr>
+      <tr><td>Funis, oportunidades, propostas, atividades, automações</td><td>Sales Force</td><td>Módulos de CRM (Fase 2+)</td><td><span class="badge st-A">P-02</span></td></tr>
+    </tbody>
+  </table></div>
+  <p class="small">Detalhe de integração, spikes e fatos conhecidos: <a href="#s30">30 — Sankhya</a>.</p>
+</section>
+

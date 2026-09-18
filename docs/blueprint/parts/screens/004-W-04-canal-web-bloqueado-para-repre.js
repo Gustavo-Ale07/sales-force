@@ -1,0 +1,12 @@
+
+{ id: 'W-04', name: 'Canal web bloqueado para Representante PJ', grp: 'web', plat: 'Web', ph: 'F0', prof: ['PJ'],
+  purpose: 'Informar ao Representante PJ que o acesso é somente pelo app mobile.',
+  info: 'Mensagem de canal não permitido · orientação para usar o app · contato do gestor',
+  fields: '—', filters: '—', cols: '—',
+  actions: 'Voltar ao login',
+  perms: 'Exibida ao perfil PJ que tenta entrar na web; bloqueio aplicado no servidor (AUTH-3 PROPOSTO), não por esconder a interface',
+  rules: 'Nenhuma sessão web é criada para o perfil · impede contornar aparelho aprovado, limpeza remota e ausência de exportação (P-20)',
+  denied: 'É o próprio estado de acesso negado',
+  audit: 'falha de login',
+  ents: 'users · audit_log', rf: '—',
+  st: [INV, AUTH3, P20, ['U', 'R14 — UX das importações do PJ sem web']] },

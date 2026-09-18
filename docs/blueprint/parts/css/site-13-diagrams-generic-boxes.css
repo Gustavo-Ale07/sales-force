@@ -1,0 +1,14 @@
+/* ---------- Diagrams: generic boxes ---------- */
+.diagram{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface-2);padding:16px;margin:.8em 0 1.1em;overflow-x:auto}
+.diagram-cap{font-size:.8rem;color:var(--text-3);margin-top:8px}
+.box{border:1px solid var(--border-strong);background:var(--surface);border-radius:var(--radius);padding:8px 10px;font-size:.84rem;min-width:0}
+.box b{display:block;font-size:.88rem}
+.box .badge{margin-top:4px}
+.box.sankhya{border-color:var(--teal);background:var(--teal-bg)}
+.box.client{border-color:var(--accent);background:var(--accent-weak)}
+.box.store{border-style:dashed}
+.box.ext{background:var(--surface-2)}
+.arrow-d{display:flex;justify-content:center;color:var(--text-3);font-size:.76rem;align-items:center;gap:6px;min-height:22px}
+.arrow-d::before{content:"";width:0;height:14px;border-left:2px solid var(--border-strong)}
+.arrow-d::after{content:"";width:0;height:0;border:5px solid transparent;border-top:6px solid var(--border-strong);margin-top:14px;margin-left:-13px}
+

@@ -1,0 +1,11 @@
+
+{ id: 'W-27', name: 'Agenda', grp: 'web', plat: 'Web', ph: 'F2', prof: WALL,
+  purpose: 'Visão de calendário das tarefas com horário.',
+  info: 'Dia/semana · tarefas com horário · atrasadas',
+  fields: '—', filters: 'Dia/semana · responsável · tipo', cols: '—',
+  actions: 'Nova tarefa · Reagendar · Concluir',
+  perms: 'Mesmo escopo das tarefas (W-26)' + WPJ,
+  rules: 'Sincronização unidirecional Sales Force → Google Calendar para tarefas com horário (RF-ACT-7)',
+  audit: '—',
+  ents: 'activities · integration_credentials', rf: 'RF-ACT-6 · RF-ACT-7',
+  st: [INV, ['V', 'V-06 — a empresa usa Google Workspace?']] },

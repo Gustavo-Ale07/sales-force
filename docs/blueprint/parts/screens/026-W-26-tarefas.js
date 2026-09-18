@@ -1,0 +1,13 @@
+
+{ id: 'W-26', name: 'Tarefas', grp: 'web', plat: 'Web', ph: 'F1', prof: WALL,
+  purpose: 'Gerenciar tarefas e lembretes.',
+  info: 'Minhas tarefas · atrasadas em destaque · vínculos',
+  fields: 'Tipo (ligação, visita, e-mail, WhatsApp, reunião, outro) · título · descrição · data/hora · responsável · vínculo (conta, contato, oportunidade, proposta, pedido)',
+  filters: 'Status (pendente, concluída, cancelada) · tipo · período · responsável · atrasadas',
+  cols: 'Tipo · título · vínculo · data/hora · responsável · status',
+  actions: 'Nova tarefa · Concluir · Cancelar · Reatribuir (gerente, F2)',
+  perms: 'Diretoria só visualiza · gerente: equipe · Cadastro/Financeiro: próprias (§8.2)' + WPJ,
+  rules: 'Lembretes por push e na web (RF-ACT-3) · "visita" não implica check-in GPS (P-13) · gerente vê e reatribui tarefas da equipe na F2 (RF-ACT-8)',
+  audit: '—',
+  ents: 'activities', rf: 'RF-ACT-1 · RF-ACT-3 · RF-ACT-6 · RF-ACT-8',
+  st: [INV, P13, ['U', 'R05 — edição concorrente']] },

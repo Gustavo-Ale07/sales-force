@@ -1,0 +1,12 @@
+
+{ id: 'W-37', name: 'Auditoria', grp: 'web', plat: 'Web', ph: 'F0', prof: ['ADM'],
+  purpose: 'Consultar a trilha de auditoria de ações sensíveis.',
+  info: 'Ator, ação, entidade, identificador, antes/depois resumido, IP, aparelho, data',
+  fields: '—', filters: 'Período · ator · ação · entidade · IP/aparelho',
+  cols: 'Data/hora · ator · ação · entidade · id · IP · aparelho',
+  actions: 'Filtrar · Ver detalhe · Exportar',
+  perms: 'Admin' + WPJ,
+  rules: 'Retenção mínima de 1 ano (spec §12.4) · PROPOSTO: o papel da aplicação não altera nem apaga linhas de auditoria · nunca registra senhas, tokens ou payloads (P-22)',
+  audit: 'exportação',
+  ents: 'audit_log', rf: 'RF-IAM-9',
+  st: [INV, P22, ['P', 'Auditoria imutável para o papel da aplicação']] },

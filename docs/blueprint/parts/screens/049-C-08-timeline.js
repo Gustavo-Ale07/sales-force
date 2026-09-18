@@ -1,0 +1,12 @@
+
+{ id: 'C-08', name: 'Timeline', grp: 'crm', plat: 'Web', ph: 'F2', prof: ['ADM', 'DIR', 'GER', 'VI'],
+  purpose: 'Linha do tempo de relacionamento da conta ou oportunidade.',
+  info: 'Interações registradas, tarefas, mudanças de etapa, propostas, pedidos',
+  fields: 'Registrar interação: tipo · resultado · anotação',
+  filters: 'Tipo de evento · período · usuário', cols: 'Data · tipo · resumo · usuário · resultado',
+  actions: 'Registrar interação · Agendar follow-up · Abrir item',
+  perms: 'Itens herdam visibilidade da conta (AUTH-4 PROPOSTO); Cadastro/Financeiro sem acesso ao funil (spec §2)' + WPJ,
+  rules: 'Interação = atividade concluída com resultado e anotação (RF-ACT-5)',
+  audit: '—',
+  ents: 'activities · opportunity_stage_history · proposals · orders', rf: 'RF-ACT-5 · RF-OPP-6',
+  st: [INV, AUTH4] },

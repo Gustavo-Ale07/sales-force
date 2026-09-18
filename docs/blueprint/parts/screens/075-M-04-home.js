@@ -1,0 +1,11 @@
+
+{ id: 'M-04', name: 'Home', grp: 'mobile', plat: 'Mobile', ph: 'F1', prof: ['PJ', 'GER', 'VI'], mock: 'mm-home',
+  purpose: 'Painel resumido do vendedor no app.',
+  info: 'Meta do mês × realizado · positivação · pedidos pendentes/com erro · tarefas do dia · última sincronização e itens na fila · notificações',
+  fields: '—', filters: '—', cols: '—',
+  actions: 'Novo pedido · Clientes · Sincronizar agora · Abrir fila',
+  perms: 'Dados do usuário e da carteira no escopo',
+  rules: 'Painel resumido RF-DSH-5 · metas/positivação do Sankhya (fontes S6) · bloqueio após 7 dias sem sincronizar (RF-IAM-8)',
+  audit: '—',
+  ents: 'goals · orders · activities · notifications', rf: 'RF-DSH-5 · RF-GOL-1 · RF-GOL-2',
+  st: [INV, P07, SYNC, ['S', 'S6 — fontes de metas e positivação']] },

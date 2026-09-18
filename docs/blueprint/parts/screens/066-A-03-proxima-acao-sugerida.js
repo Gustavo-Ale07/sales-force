@@ -1,0 +1,12 @@
+
+{ id: 'A-03', name: 'Próxima ação sugerida', grp: 'ia', plat: 'Web', ph: 'F3', prof: ['ADM', 'DIR', 'GER', 'VI'],
+  purpose: 'Sugerir o próximo passo com base no resumo.',
+  info: 'Sugestão de ação com justificativa',
+  fields: '—', filters: '—', cols: '—',
+  actions: 'Criar tarefa a partir da sugestão · Descartar',
+  perms: 'Conta/oportunidade no escopo (P-21)' + WPJ,
+  rules: 'A IA sugere; o usuário executa — sem ferramentas de escrita na F3 (P-14) · parte de RF-IA-2',
+  offline: 'Somente online',
+  audit: '—',
+  ents: 'ai_requests · activities', rf: 'RF-IA-2',
+  st: [INV, P14] },

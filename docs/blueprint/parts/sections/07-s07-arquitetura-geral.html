@@ -1,0 +1,103 @@
+<section class="doc-section" id="s07" data-group="Parte II · Arquitetura e acesso" data-num="7" data-title="Arquitetura geral" data-kw="arquitetura contexto api worker nestjs pg-boss drizzle postgresql stack monorepo ambientes caddy">
+  <div class="sec-head"><span class="sec-num">07</span><h2>Arquitetura geral</h2><div class="sec-meta"><span class="badge st-A">P-04 · STACK-2 · STACK-3 · STACK-6 · DATA-2 · ARCH-1</span><span class="badge st-P">Clientes e entrega</span></div></div>
+  <h3>Contexto do sistema</h3>
+  <div class="diagram" role="img" aria-label="Diagrama de contexto: navegador e app mobile acessam a API via HTTPS; API e worker compartilham o PostgreSQL; apenas o worker acessa o Sankhya; armazenamento de objetos, SMTP e Sentry são externos">
+    <div class="ctx">
+      <div class="col">
+        <div class="box client"><b>Navegador</b>SPA web, cookie de sessão, mesma origem <code>/api</code><br><span class="badge st-P">STACK-5 · AUTH-1</span></div>
+        <div class="box client"><b>App mobile (Expo)</b>SQLite criptografado + outbox local<br><span class="badge st-P">MOB-1 · MOB-2</span></div>
+        <div class="box ext"><b>Integrações por fase</b>BrasilAPI/ViaCEP (F1), Google (F2), anúncios e telefonia (F3)</div>
+      </div>
+      <div class="zone">
+        <div class="zone-l">Host do ambiente (produção e staging isolados) <span class="badge st-A">P-15 · OPS-1</span></div>
+        <div class="box"><b>Caddy (HTTPS)</b><code>/api</code> → API · <code>/</code> → build estático da web<br><span class="badge st-P">OPS-3</span></div>
+        <div class="arrow-d"></div>
+        <div class="grid-2">
+          <div class="box"><b>apps/server · API</b>HTTP, autenticação, autorização (política central), sync, OpenAPI. <b>Sem credenciais Sankhya.</b><br><span class="badge st-A">STACK-2</span></div>
+          <div class="box"><b>apps/server · Worker</b>Jobs pg-boss: espelho, outbox, reconciliação, e-mail, importações, PDFs, notificações, IA em lote (F3)<br><span class="badge st-A">STACK-2 · STACK-6</span></div>
+        </div>
+        <div class="arrow-d">conexões privadas</div>
+        <div class="box store"><b>PostgreSQL gerenciado com PITR</b>Dados da aplicação, espelho Sankhya, filas pg-boss, auditoria, eventos de escopo. Rede privada preferida; endpoint público aberto REJEITADO.<br><span class="badge st-A">OPS-1 · DATA-1</span> <span class="badge st-V">V-04 · V-15 · V-16</span></div>
+      </div>
+      <div class="col">
+        <div class="box sankhya"><b>Sankhya API</b>Somente via <code>SankhyaGateway</code> no worker<br><span class="badge st-A">P-03 · STACK-2</span> <span class="badge st-P">SNK-2</span></div>
+        <div class="box ext"><b>Object storage S3-compatível</b>Buckets privados por ambiente, URLs pré-assinadas<br><span class="badge st-A">STACK-7</span> <span class="badge st-V">V-05</span></div>
+        <div class="box ext"><b>SMTP</b>Reset de senha, alertas, notificações<br><span class="badge st-P">OPS-5</span> <span class="badge st-V">V-06</span></div>
+        <div class="box ext"><b>Sentry</b>Server, web e mobile com scrubbing<br><span class="badge st-P">OPS-4</span> <span class="badge st-V">V-08</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div>
+      <h3>Processos do servidor <span class="badge st-A">STACK-2</span></h3>
+      <div class="table-wrap"><table class="t compact">
+        <thead><tr><th>Processo</th><th>Responsabilidades</th><th>Segredos</th></tr></thead>
+        <tbody>
+          <tr><td><b>API</b></td><td>Endpoints HTTP, autenticação, autorização, orquestração, sync, webhooks (fases futuras), OpenAPI</td><td>Sem credenciais Sankhya</td></tr>
+          <tr><td><b>Worker</b></td><td>Handlers e agendas pg-boss: espelho, outbox, reconciliação, e-mail, importações, PDFs, notificações; IA em lote (F3)</td><td>Credenciais Sankhya (só aqui)</td></tr>
+        </tbody>
+      </table></div>
+      <p class="small">NestJS orquestra e nunca é dono de regra de negócio (STACK-3). Processamento em segundo plano nunca bloqueia HTTP.</p>
+    </div>
+    <div>
+      <h3>Direção de dependências <span class="badge st-A">ARCH-1</span></h3>
+      <div class="diagram" style="margin-top:.4em">
+        <div class="hflow"><div class="box"><b>apps/server</b></div><span class="to">→</span><div class="box"><b>packages/domain</b>regras puras</div></div>
+        <div class="hflow" style="margin-top:8px"><div class="box"><b>apps/server</b></div><span class="to">→</span><div class="box"><b>packages/db</b>Drizzle + SQL</div></div>
+        <p class="diagram-cap"><b>packages/domain nunca depende de:</b> apps/server, NestJS, Drizzle, clientes PostgreSQL, HTTP, pg-boss, tipos Sankhya, APIs só-Node quando a regra roda no mobile. Tabela completa por pacote e "nenhum built-in Node em domain": <span class="badge st-P">Proposto (§4.2)</span></p>
+      </div>
+    </div>
+  </div>
+
+  <h3>Estrutura do repositório</h3>
+  <div class="table-wrap"><table class="t compact">
+    <thead><tr><th>Pacote</th><th>Papel</th><th>Pode depender de</th><th>Nunca depende de</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td><code>apps/server</code></td><td>NestJS; entradas API e Worker</td><td>domain, contracts, db, sankhya</td><td>mobile-db, ui</td><td><span class="badge st-A">STACK-2/3</span></td></tr>
+      <tr><td><code>apps/web</code></td><td>SPA Vite</td><td>contracts, ui, domain</td><td>db, sankhya, mobile-db</td><td><span class="badge st-P">STACK-5</span></td></tr>
+      <tr><td><code>apps/mobile</code></td><td>App Expo</td><td>domain, contracts, mobile-db</td><td>db, sankhya, ui</td><td><span class="badge st-P">MOB-1</span></td></tr>
+      <tr><td><code>packages/domain</code></td><td>Regras determinísticas: preço, desconto, alçada, crédito, estados</td><td>—</td><td>frameworks, banco, HTTP, Sankhya</td><td><span class="badge st-A">P-05 · ARCH-1</span></td></tr>
+      <tr><td><code>packages/db</code></td><td>Schema Drizzle por módulo + migrations SQL versionadas</td><td>domain (tipos)</td><td>sankhya, apps</td><td><span class="badge st-A">DATA-2</span></td></tr>
+      <tr><td><code>packages/mobile-db</code></td><td>Schema SQLite + migrations locais</td><td>domain, contracts</td><td>db, sankhya, servidor</td><td><span class="badge st-P">MOB-2</span> <span class="badge st-V">V-09</span></td></tr>
+      <tr><td><code>packages/contracts</code></td><td>Schemas Zod, protocolo de sync, fonte do OpenAPI</td><td>domain (tipos)</td><td>db, sankhya, apps</td><td><span class="badge st-P">STACK-4</span></td></tr>
+      <tr><td><code>packages/sankhya</code></td><td>SankhyaGateway real + fake, mapeamento, fixtures sanitizadas</td><td>domain (tipos)</td><td>db, contracts, apps</td><td><span class="badge st-A">P-03</span></td></tr>
+      <tr><td><code>packages/ui</code> · <code>packages/config</code></td><td>Componentes web · presets TS/lint</td><td>config</td><td>db, sankhya, regras</td><td><span class="badge st-P">STACK-1/5</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Stack e status</h3>
+  <div class="table-wrap"><table class="t compact">
+    <thead><tr><th>Camada</th><th>Escolha</th><th>Status</th><th>Observação</th></tr></thead>
+    <tbody>
+      <tr><td>Linguagem / arquitetura</td><td>TypeScript strict · monólito modular</td><td><span class="badge st-A">P-06 · P-04</span></td><td>Sem microsserviços</td></tr>
+      <tr><td>Servidor</td><td>NestJS, processos API + Worker</td><td><span class="badge st-A">STACK-3 · STACK-2</span></td><td>Adaptador HTTP definido no plano da Fase 0</td></tr>
+      <tr><td>Jobs</td><td>pg-boss no PostgreSQL</td><td><span class="badge st-A">STACK-6</span> <span class="badge st-V">V-16</span></td><td>Redis + BullMQ da spec <span class="tag">substituídos</span></td></tr>
+      <tr><td>Persistência</td><td>Drizzle (PostgreSQL); migrations SQL revisadas</td><td><span class="badge st-A">DATA-2</span> <span class="badge st-V">V-03</span></td><td><code>drizzle-kit push</code> só em banco local descartável</td></tr>
+      <tr><td>Banco</td><td>PostgreSQL ≥ 16, mesmo major em todo ambiente, 18 preferido</td><td><span class="badge st-A">DATA-1</span> <span class="badge st-V">V-15</span></td><td>UUIDv7 gerado fora do PostgreSQL</td></tr>
+      <tr><td>Arquivos</td><td>Object storage S3-compatível gerenciado</td><td><span class="badge st-A">STACK-7</span> <span class="badge st-V">V-05</span></td><td>MinIO Community <span class="badge st-R">Rejeitado</span></td></tr>
+      <tr><td>Web</td><td>Vite + React SPA, TanStack Router/Query, Tailwind, shadcn/ui</td><td><span class="badge st-P">STACK-5</span></td><td>Spec citava Next.js</td></tr>
+      <tr><td>Contratos</td><td>Zod → OpenAPI → clientes tipados</td><td><span class="badge st-P">STACK-4</span> <span class="badge st-V">V-02</span></td><td></td></tr>
+      <tr><td>Mobile</td><td>Expo com development builds, EAS Build/Update assinados</td><td><span class="badge st-P">MOB-1</span></td><td>Distribuição <span class="badge st-A">MOB-3</span></td></tr>
+      <tr><td>Banco local</td><td>SQLite criptografado (SQLCipher) via Drizzle</td><td><span class="badge st-P">MOB-2</span> <span class="badge st-V">V-09</span></td><td>Criptografia nunca é enfraquecida (DATA-2)</td></tr>
+      <tr><td>Sincronização</td><td>Protocolo próprio</td><td><span class="badge st-P">SYNC-1</span></td><td>PowerSync não usado (proposta)</td></tr>
+      <tr><td>Monorepo</td><td>pnpm workspaces + Turborepo</td><td><span class="badge st-P">STACK-1</span> <span class="badge st-V">V-01</span></td><td></td></tr>
+      <tr><td>Entrega</td><td>Docker Compose + Caddy; GitHub Actions → GHCR → SSH</td><td><span class="badge st-P">OPS-3</span></td><td></td></tr>
+      <tr><td>Observabilidade / e-mail</td><td>pino + Sentry com scrubbing · SMTP</td><td><span class="badge st-P">OPS-4 · OPS-5</span></td><td>Custo opcional até OPS-4</td></tr>
+      <tr><td>Hospedagem</td><td>VPS/VM + PostgreSQL gerenciado com PITR, rede privada</td><td><span class="badge st-A">OPS-1</span> <span class="badge st-V">V-04</span></td><td>Nenhum provedor escolhido</td></tr>
+      <tr><td>IA</td><td>Claude API via SDK oficial, só no backend</td><td><span class="badge st-A">P-14</span> <span class="badge st-D">spec §6.2</span></td><td>Modelo e effort por rota em configuração</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Ambientes</h3>
+  <div class="table-wrap"><table class="t compact">
+    <thead><tr><th>Ambiente</th><th>Host</th><th>PostgreSQL</th><th>Sankhya</th><th>Arquivos</th></tr></thead>
+    <tbody>
+      <tr><td>Local</td><td>Windows + Docker Desktop/WSL2</td><td>Container, mesmo major de produção</td><td>Gateway fake + fixtures sanitizadas</td><td>Emulador S3 (V-05)</td></tr>
+      <tr><td>CI</td><td>GitHub Actions</td><td>Testcontainers, mesmo major</td><td>Sempre fake</td><td>Emulador ou nenhum</td></tr>
+      <tr><td>Staging</td><td>VPS/VM menor, domínio de falha separado</td><td>Instância separada; <span class="badge st-P">no host de staging</span></td><td>Homologação se existir; senão fake — <b>nunca produção</b> <span class="badge st-A">SNK-3</span></td><td>Bucket e credenciais próprios</td></tr>
+      <tr><td>Produção</td><td>VPS/VM <span class="badge st-V">V-04</span></td><td>Gerenciado com PITR, rede privada</td><td>Sankhya produção</td><td>Bucket de produção versionado</td></tr>
+    </tbody>
+  </table></div>
+</section>
+

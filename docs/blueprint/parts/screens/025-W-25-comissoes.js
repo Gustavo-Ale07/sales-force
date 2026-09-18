@@ -1,0 +1,12 @@
+
+{ id: 'W-25', name: 'Comissões', grp: 'web', plat: 'Web', ph: 'F1', prof: ['VI', 'GER', 'DIR', 'ADM'],
+  purpose: 'Exibir comissões previstas/liberadas conforme disponível no Sankhya.',
+  info: 'Comissões por período: base, valor e situação',
+  fields: '—', filters: 'Período · vendedor (gerente: equipe)',
+  cols: 'Vendedor · período · base · valor · situação',
+  actions: 'Mudar período',
+  perms: 'Vendedor vê só as próprias; gerente as da equipe (RF-GOL-3)' + WPJ,
+  rules: 'Sem cálculo próprio (P-13) · PROPOSTO R28: se só existirem no fechamento, mostrar "apurado até o último fechamento"',
+  audit: '—',
+  ents: 'commissions', rf: 'RF-GOL-3',
+  st: [INV, P13, ['S', 'S6.3 — onde ficam as comissões']] },

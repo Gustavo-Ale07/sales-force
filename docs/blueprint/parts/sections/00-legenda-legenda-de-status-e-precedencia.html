@@ -1,0 +1,24 @@
+<section class="doc-section" id="legenda" data-group="Como ler" data-num="•" data-title="Legenda de status e precedência" data-kw="status aprovado proposto validar pendente rejeitado legenda precedência">
+  <div class="sec-head"><span class="sec-num">•</span><h2>Legenda de status e precedência</h2></div>
+  <div class="legend">
+    <div class="item"><span class="badge st-A">Aprovado</span><p><b>APPROVED</b> — aprovado explicitamente pelo dono do projeto e registrado em <code>decisions.md</code>. Único status que vincula.</p></div>
+    <div class="item"><span class="badge st-P">Proposto</span><p><b>PROPOSED</b> — recomendação atual, <b>não aprovada</b>. Mostrada para visualizar o sistema; nunca é regra.</p></div>
+    <div class="item"><span class="badge st-V">Precisa validar</span><p><b>NEEDS VALIDATION</b> — depende de spike ou fato externo (Sankhya, provedores, volumes).</p></div>
+    <div class="item"><span class="badge st-U">Decisão pendente</span><p><b>UNDECIDED</b> — questão em aberto; quando há recomendação, ela aparece como PROPOSTO ao lado.</p></div>
+    <div class="item"><span class="badge st-R">Rejeitado</span><p><b>REJECTED</b> — considerado e rejeitado explicitamente pelo dono do projeto.</p></div>
+    <div class="item"><span class="badge st-K">Conhecido (docs)</span><p>Fato do Sankhya validado <b>apenas em documentação oficial</b> (ex.: F-01); ainda precisa confirmação no ambiente.</p></div>
+    <div class="item"><span class="badge st-S">Spike necessário</span><p>Comportamento do Sankhya ou da plataforma que só um spike (S0–S9) pode responder.</p></div>
+    <div class="item"><span class="badge st-D">RF rascunho</span><p>Requisito de <code>project-spec.md</code>, ainda rascunho até a Especificação v1.0 (GOV-1). Orienta, mas não é decisão aprovada.</p></div>
+  </div>
+  <div class="grid-2" style="margin-top:12px">
+    <div class="callout note">
+      <p><b>Precedência em conflito:</b> (1) instrução explícita do dono do projeto · (2) itens APROVADOS de <code>decisions.md</code> · (3) <code>project-spec.md</code> · (4) arquitetura, segurança e sincronização · (5) regras <code>.claude/rules</code>. Este blueprint <b>não</b> tem precedência própria: se divergir de <code>decisions.md</code>, vale <code>decisions.md</code>.</p>
+    </div>
+    <div class="callout warn">
+      <p><b>Criado neste blueprint (sem aprovação):</b> inventário de telas, layouts e mockups, nomes de estados de importação, comando de sync e <code>integration_outbox</code>, fluxos passo a passo e lacunas <span class="ref">BP-xx</span>. Todos aparecem como PROPOSTO ou DECISÃO PENDENTE até serem levados a uma rodada de decisão.</p>
+    </div>
+  </div>
+</section>
+
+<div class="part-title">Parte I · Produto</div>
+

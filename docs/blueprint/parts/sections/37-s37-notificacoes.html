@@ -1,0 +1,20 @@
+<section class="doc-section" id="s37" data-group="Parte VII · Plataforma" data-num="37" data-title="Notificações" data-kw="notificações push central e-mail eventos preferências">
+  <div class="sec-head"><span class="sec-num">37</span><h2>Notificações</h2><div class="sec-meta"><span class="badge st-D">RF-NOT-1…3</span><span class="badge st-P">OPS-5</span></div></div>
+  <div class="table-wrap"><table class="t compact">
+    <thead><tr><th>Evento</th><th>Destinatário</th><th>Canais</th><th>Fase</th></tr></thead>
+    <tbody>
+      <tr><td>Pedido aprovado, reprovado, com erro, em revisão de preço ou faturado</td><td>Vendedor responsável</td><td>Central web/app + push</td><td>F1</td></tr>
+      <tr><td>Cliente novo aprovado ou rejeitado</td><td>Vendedor solicitante</td><td>Central + push</td><td>F1</td></tr>
+      <tr><td>Tarefa vencendo</td><td>Responsável</td><td>Central + push</td><td>F1</td></tr>
+      <tr><td>Aprovação pendente</td><td>Aprovadores (desconto, crédito, cliente, aparelho)</td><td>Central + push</td><td>F1</td></tr>
+      <tr><td>Integração parada &gt; 1 h ou outbox com erro</td><td>Admin</td><td>E-mail</td><td>F0 <span class="badge st-U">Q-01</span></td></tr>
+      <tr><td>Proposta expirada; oportunidade parada; alertas de carteira</td><td>Responsável e gerente</td><td>Central + push (+ e-mail por preferência)</td><td>F2</td></tr>
+    </tbody>
+  </table></div>
+  <ul class="small">
+    <li>Preferências por usuário (quais eventos, push/e-mail) na Fase 2 (RF-NOT-3) — tela <span class="ref">W-40</span>.</li>
+    <li>E-mail sem dados comerciais sensíveis no corpo; SPF, DKIM e DMARC (OPS-5, proposto; V-06).</li>
+    <li>Conteúdo de push exibido na tela bloqueada do celular não deve expor valores ou dados de clientes — a definir com R19 <span class="badge st-U">BP-07</span>.</li>
+  </ul>
+</section>
+

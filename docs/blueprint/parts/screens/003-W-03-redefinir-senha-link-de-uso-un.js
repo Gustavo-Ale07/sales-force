@@ -1,0 +1,12 @@
+
+{ id: 'W-03', name: 'Redefinir senha (link de uso único)', grp: 'web', plat: 'Web', ph: 'F0', prof: WALL,
+  purpose: 'Definir nova senha a partir do link recebido por e-mail.',
+  info: 'Formulário de nova senha · requisitos da política exibidos',
+  fields: 'Nova senha · Confirmar senha', filters: '—', cols: '—',
+  actions: 'Salvar nova senha · Solicitar novo link',
+  perms: 'Portador de link válido' + WPJ,
+  rules: 'Mínimo 12 caracteres; verificada contra lista de senhas vazadas/comuns (RF-IAM-1) · PROPOSTO AUTH-1: HIBP k-anonymity + lista local · link único 30 min · redefinição incrementa a versão da sessão e invalida sessões existentes',
+  error: 'Link expirado ou já usado → solicitar novo · senha fraca ou vazada, com orientação',
+  audit: 'redefinição de senha concluída · sessão revogada',
+  ents: 'users · sessions · audit_log', rf: 'RF-IAM-1 · RF-IAM-3',
+  st: [INV, P11, AUTH1, ['U', 'Comportamento com a API de senhas vazadas indisponível (revisão de segurança F0)']] },

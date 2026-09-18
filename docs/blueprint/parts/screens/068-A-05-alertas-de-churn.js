@@ -1,0 +1,12 @@
+
+{ id: 'A-05', name: 'Alertas de churn', grp: 'ia', plat: 'Web', ph: 'F3', prof: ['ADM', 'DIR', 'GER', 'VI'],
+  purpose: 'Priorizar clientes em risco de parar de comprar.',
+  info: 'Score por regras (queda de frequência/valor, atraso vs padrão) · explicação por IA para os priorizados',
+  fields: '—', filters: 'Score · equipe · vendedor',
+  cols: 'Cliente · score · motivo · explicação · responsável',
+  actions: 'Criar tarefa · Abrir cliente · Dispensar alerta',
+  perms: 'Escopo no servidor (P-21)' + WPJ,
+  rules: 'Score determinístico; explicação em lote noturno (Batch API) (RF-IA-4) · vira alerta de carteira (RF-AUT-3)',
+  audit: '—',
+  ents: 'accounts · sales_documents · ai_requests · notifications', rf: 'RF-IA-4 · RF-AUT-3',
+  st: [INV, P14, ['U', 'R42 — profundidade do histórico no servidor']] },

@@ -1,0 +1,12 @@
+
+{ id: 'W-19', name: 'Revisão de preço', grp: 'web', plat: 'Web', ph: 'F1', prof: ['ADM', 'GER', 'VI'],
+  purpose: 'Confirmar ou editar pedido cujo preço de tabela mudou antes de seguir.',
+  info: 'Item a item: preço anterior × preço atual e variação · impacto no total e na alçada',
+  fields: '—', filters: '—',
+  cols: 'Produto · qtd · preço anterior · preço atual · variação · % desconto · novo total',
+  actions: 'Confirmar novos preços · Editar pedido · Cancelar pedido',
+  perms: 'Responsável pelo pedido no escopo' + WPJ,
+  rules: 'Pedido vai para revisao_preco quando o preço aplicável mudou (P-09, RF-ORD-6); nunca troca silenciosa · após confirmar, a alçada é reavaliada · PROPOSTO R33: item guarda tabela, preço usado e versão da linha; diferença abaixo da tolerância de arredondamento não dispara',
+  audit: '—',
+  ents: 'orders · order_items · price_table_items · order_status_history', rf: 'RF-ORD-6 · RF-PRP-6',
+  st: [INV, P09, ['U', 'R33 — conteúdo do snapshot de preço'], ['U', 'R07 — edição em revisão de preço']] },

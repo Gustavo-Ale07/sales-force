@@ -1,0 +1,12 @@
+
+{ id: 'M-07', name: 'Busca de produtos', grp: 'mobile', plat: 'Mobile', ph: 'F1', prof: ['PJ', 'GER', 'VI'],
+  purpose: 'Encontrar produtos offline para o pedido.',
+  info: 'Catálogo local: código, descrição, grupo, unidade, imagem quando houver, preço aplicável ao cliente do pedido',
+  fields: '—', filters: 'Busca (código, descrição, EAN) · grupo',
+  cols: 'Código · descrição · un · preço',
+  actions: 'Selecionar produto',
+  perms: 'Produtos e preços aplicáveis ao usuário (dataset de referência PROPOSTO)',
+  rules: 'Disponível offline (RF-CAT-1) · preço resolvido localmente com packages/domain; servidor revalida (P-08) · sem estoque (P-13) · sem custo/margem',
+  audit: '—',
+  ents: 'products · price_table_items', rf: 'RF-CAT-1 · RF-CAT-2 · RF-CAT-4',
+  st: [INV, P09, P13, P23, ['S', 'S2 — regra real de preço']] },

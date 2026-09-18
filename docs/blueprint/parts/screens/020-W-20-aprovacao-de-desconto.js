@@ -1,0 +1,13 @@
+
+{ id: 'W-20', name: 'Aprovação de desconto', grp: 'web', plat: 'Web', ph: 'F1', prof: ['GER', 'DIR', 'ADM'], mock: 'mk-aprov-desconto',
+  purpose: 'Fila de pedidos com desconto acima da alçada do solicitante.',
+  info: 'Pedido, vendedor, cliente, maior desconto, limites aplicáveis, total, histórico de compras e títulos do cliente',
+  fields: 'Comentário da decisão',
+  filters: 'Nível exigido · equipe · vendedor · tempo na fila',
+  cols: 'Pedido · vendedor · cliente · total · maior % desconto · nível exigido · aguardando há',
+  actions: 'Aprovar · Reprovar com comentário · Abrir pedido',
+  perms: 'Gerente até o seu limite; Diretoria acima do limite do gerente; Admin (§8.2) · servidor valida a alçada do aprovador (P-10)' + WPJ,
+  rules: 'Vendedor notificado da decisão (RF-ORD-5) · PROPOSTO R36: direto ao nível com alçada, gerente notificado; teto absoluto; pedido do gerente sobe para a diretoria; substituto por equipe · PROPOSTO R07: mudança em itens invalida aprovação; aprovações só online',
+  audit: 'aprovação/reprovação de pedido',
+  ents: 'orders · order_approvals · discount_limits · notifications', rf: 'RF-ORD-5 · RF-CAT-3 · RF-NOT-2',
+  st: [INV, P10, R35, R36, ['S', 'S4 — liberação de limites nativa do Sankhya (R26)']] },

@@ -1,0 +1,12 @@
+
+{ id: 'W-17', name: 'Novo pedido', grp: 'web', plat: 'Web', ph: 'F1', prof: ['ADM', 'GER', 'VI'], mock: 'mk-pedido-editor',
+  purpose: 'Iniciar orçamento/pedido escolhendo cliente e condições.',
+  info: 'Seleção de cliente, empresa/filial, tipo de operação e condição de pagamento',
+  fields: 'Cliente · empresa/filial · tipo de operação (TOP, padrão configurável) · condição de pagamento / tipo de negociação',
+  filters: '—', cols: '—',
+  actions: 'Criar rascunho · Repetir pedido anterior · Importar planilha do cliente (W-29)',
+  perms: 'Criar pedido/orçamento: Admin, Gerente, Vendedor interno (§8.2); Diretoria não' + WPJ,
+  rules: 'TOP, empresa e campos obrigatórios nunca inventados: PRECISA VALIDAR (S3.1) · RF-ACC-5 (rascunho): cliente_pendente permite orçamento, envio só após aprovação · repetir pedido cria rascunho com preços atualizados (RF-ORD-8)',
+  audit: '—',
+  ents: 'orders · accounts · operation_types · payment_terms · price_tables', rf: 'RF-ORD-1 · RF-ORD-8 · RF-ORD-9 · RF-ACC-5',
+  st: [INV, ['S', 'S3.1 — TOP, empresa e campos obrigatórios do pedido'], ['U', 'Nota P-18 — orçamento/envio com cliente pendente'], ['U', 'R08 — rascunhos']] },

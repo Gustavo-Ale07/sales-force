@@ -1,0 +1,11 @@
+
+{ id: 'M-10', name: 'Resumo do pedido', grp: 'mobile', plat: 'Mobile', ph: 'F1', prof: ['PJ', 'GER', 'VI'],
+  purpose: 'Revisão final antes de confirmar o pedido.',
+  info: 'Cliente, condição, itens, totais, aprovações previstas, aviso de impostos',
+  fields: '—', filters: '—', cols: 'Produto · qtd · total',
+  actions: 'Confirmar pedido · Voltar para editar · Compartilhar orçamento (PDF)',
+  perms: 'Quem cria pedido',
+  rules: 'Confirmar grava comando na outbox local com command_id e entity_id UUIDv7 (PROPOSTO) · aprovação prevista é indicativa; servidor decide (P-08)',
+  audit: '—',
+  ents: 'orders · order_items · outbox local', rf: 'RF-ORD-1 · RF-ORD-5 · RF-ORD-10',
+  st: [INV, P08, ['P', 'DATA-3 — identificadores UUIDv7'], ['U', 'R09 — nomes e papéis dos identificadores']] },

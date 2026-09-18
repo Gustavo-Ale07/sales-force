@@ -1,0 +1,12 @@
+
+{ id: 'A-07', name: 'Custos e limites de IA', grp: 'ia', plat: 'Web', ph: 'F3', prof: ['ADM'],
+  purpose: 'Controlar consumo e custo da IA.',
+  info: 'Tokens de entrada/saída/cache e custo por requisição, usuário e recurso · tetos mensais',
+  fields: 'Teto global · teto por usuário · modelo e effort por rota',
+  filters: 'Período · recurso · usuário', cols: 'Recurso · modelo · effort · requisições · tokens · custo · usuário',
+  actions: 'Ajustar tetos · Ajustar modelo/effort por rota',
+  perms: 'Admin' + WPJ,
+  rules: 'Ao atingir o teto: bloqueio e aviso ao admin · troca de modelo, effort ou prompt só após rodar o eval (spec §6.2)',
+  audit: 'ação administrativa',
+  ents: 'ai_requests · ai_budgets', rf: 'RF-IA-1 · RF-IA-2 · RF-IA-3 · RF-IA-4 · RF-IA-5',
+  st: [INV, P14, ['U', 'Configuração dos tetos de custo (gate F3)']] },

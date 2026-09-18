@@ -1,0 +1,18 @@
+{
+  "output": "../blueprint.html",
+  "order": [
+    "00-head.html",
+    "css/site-*.css",
+    "20-head-mid.html",
+    "css/mock-*.css",
+    "30-body-start.html",
+    "sections/**",
+    "40-main-end.html",
+    "screens/*.js",
+    "50-between-1.html",
+    "data/*.js",
+    "60-between-2.html",
+    "app/app.js",
+    "99-tail.html"
+  ]
+}

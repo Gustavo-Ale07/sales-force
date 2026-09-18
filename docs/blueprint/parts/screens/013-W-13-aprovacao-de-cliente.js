@@ -1,0 +1,13 @@
+
+{ id: 'W-13', name: 'Aprovação de cliente', grp: 'web', plat: 'Web', ph: 'F1', prof: ['CF', 'ADM'], mock: 'mk-aprov-cliente',
+  purpose: 'Fila do backoffice para revisar, aprovar ou rejeitar clientes novos.',
+  info: 'Clientes cliente_pendente com solicitante, data, dados cadastrais, alerta de duplicidade e status da criação no Sankhya',
+  fields: 'Limite de crédito · condições · dados complementares do parceiro (S5) · motivo da rejeição (obrigatório)',
+  filters: 'Status · solicitante · equipe · data · origem (manual, importação, app)',
+  cols: 'Solicitante · razão social · CNPJ/CPF · cidade/UF · data · dias na fila · status da integração',
+  actions: 'Aprovar · Rejeitar com motivo · Abrir conta · Ver erro de integração',
+  perms: 'Aprovar cliente novo: Cadastro/Financeiro e Admin (§8.2)' + WPJ,
+  rules: 'Aprovar → parceiro criado no Sankhya via integration_outbox pelo worker → status cliente (RF-ACC-4, P-18) · rejeitar exige motivo → rejeitado + notificação ao vendedor · identificador de origem = UUID da conta (SNK-4) · escrita real bloqueada até V-11/V-13',
+  audit: 'aprovação/rejeição de cliente',
+  ents: 'accounts · account_approvals · integration_outbox · notifications', rf: 'RF-ACC-4 · RF-SNK-3 · RF-SNK-4 · RF-NOT-2',
+  st: [INV, P18, SNK4, STACK6, ['S', 'S5 — campos obrigatórios e fiscais do parceiro'], ['U', 'R06 — pedido pendente de cliente rejeitado'], ['V', 'V-11 / V-13 — antes de escrita real no Sankhya']] },

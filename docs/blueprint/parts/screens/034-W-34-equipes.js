@@ -1,0 +1,12 @@
+
+{ id: 'W-34', name: 'Equipes', grp: 'web', plat: 'Web', ph: 'F0', prof: ['ADM'],
+  purpose: 'Definir a hierarquia de equipes e gerentes.',
+  info: 'Árvore de equipes com gerente e membros',
+  fields: 'Nome · gerente · equipe superior · membros',
+  filters: 'Busca', cols: 'Equipe · gerente · membros · subequipes',
+  actions: 'Nova equipe · Mover membro · Trocar gerente',
+  perms: 'Admin' + WPJ,
+  rules: 'Cada usuário pertence a uma equipe; cada equipe tem um gerente (RF-IAM-5) · PROPOSTO AUTH-4: equipes em árvore; escopo equipe inclui subequipes · PROPOSTO SYNC-3: mudança de equipe gera resync dos usuários afetados',
+  audit: 'usuário alterado · ação administrativa',
+  ents: 'teams · users', rf: 'RF-IAM-5',
+  st: [INV, AUTH4, ['P', 'SYNC-3 — resync_required em mudança de equipe']] },

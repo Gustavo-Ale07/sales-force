@@ -1,0 +1,12 @@
+
+{ id: 'M-05', name: 'Clientes', grp: 'mobile', plat: 'Mobile', ph: 'F1', prof: ['PJ', 'GER', 'VI'],
+  purpose: 'Buscar clientes da carteira offline.',
+  info: 'Carteira local: nome, CNPJ, cidade, status, títulos vencidos, última compra',
+  fields: '—', filters: 'Busca local (nome, fantasia, CNPJ, código) · com vencidos · cidade · status',
+  cols: 'Lista: razão social/fantasia · cidade · status · indicadores',
+  actions: 'Abrir cliente · Novo cliente · Novo pedido',
+  perms: 'Só contas no escopo chegam ao aparelho (P-21)',
+  rules: 'PROPOSTO SYNC-3: conta que sai do escopo é removida (bundle_delete) · busca local < 300 ms PRECISA VALIDAR (S7)',
+  audit: '—',
+  ents: 'accounts · receivables', rf: 'RF-ACC-1 · RF-ACC-2',
+  st: [INV, P21, SYNC, ['S', 'S7 — busca (FTS5) e desempenho']] },

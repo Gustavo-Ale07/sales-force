@@ -1,0 +1,28 @@
+<section class="doc-section" id="s26" data-group="Parte IV · CRM" data-num="26" data-title="Automações" data-kw="automações regras gatilho condição ação follow-up automático distribuição alertas laço log">
+  <div class="sec-head"><span class="sec-num">26</span><h2>Automações</h2><div class="sec-meta"><span class="tag">F2 pré-definidas · F3 construtor</span><span class="badge st-A">P-14 determinístico</span><span class="badge st-D">RF-AUT-1…6</span></div></div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-h"><strong>Pré-definidas (F2)</strong></div>
+      <ul class="small">
+        <li><b>Follow-up automático:</b> proposta enviada → tarefa em N dias; mudança para etapa X → tarefa Y; parada além dos dias máximos → alerta ao responsável e ao gerente.</li>
+        <li><b>Distribuição de leads:</b> região, rodízio ou carga, por origem.</li>
+        <li><b>Alertas de carteira:</b> sem comprar há N dias; título vencido; pedido faturado ou cancelado; cliente novo aprovado ou rejeitado.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-h"><strong>Construtor "quando X, se Y, faça Z" (F3)</strong><span class="ref">RF-AUT-4</span></div>
+      <div class="grid-3" style="gap:6px">
+        <div class="box small"><b>Quando</b>criado/alterado; mudança de etapa/status; agenda; evento de integração</div>
+        <div class="box small"><b>Se</b>comparações de campos com e/ou</div>
+        <div class="box small"><b>Faça</b>criar tarefa, notificar, atribuir, mudar etapa, tag, e-mail por modelo, webhook</div>
+      </div>
+    </div>
+  </div>
+  <div class="grid-2" style="margin-top:12px">
+    <div class="callout note"><p><b>Log de execução</b> por regra: quando rodou, registro afetado, resultado ou erro (RF-AUT-5). Alterações de automações são auditadas.</p></div>
+    <div class="callout warn"><p><b>Proteção contra laços:</b> profundidade máxima de encadeamento 3 e limite de execuções por registro/minuto (RF-AUT-6). Automações executam no worker com contexto de sistema explícito e auditado (PROPOSTO).</p></div>
+  </div>
+</section>
+
+<div class="part-title">Parte V · Mobile e sincronização</div>
+

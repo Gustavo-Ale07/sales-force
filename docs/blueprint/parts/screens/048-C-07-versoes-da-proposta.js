@@ -1,0 +1,11 @@
+
+{ id: 'C-07', name: 'Versões da proposta', grp: 'crm', plat: 'Web', ph: 'F2', prof: ['ADM', 'DIR', 'GER', 'VI'], mock: 'mk-proposta',
+  purpose: 'Consultar versões anteriores de uma proposta enviada.',
+  info: 'Lista de versões com data, autor, total, status e PDF',
+  fields: '—', filters: '—', cols: 'Versão · data · autor · total · status · PDF',
+  actions: 'Abrir versão · Baixar PDF',
+  perms: 'Mesmo acesso da proposta' + WPJ,
+  rules: 'Editar proposta enviada cria nova versão; as anteriores ficam consultáveis (RF-PRP-3) · PDF em object storage (P-17)',
+  audit: '—',
+  ents: 'proposals · proposal_items · files', rf: 'RF-PRP-3',
+  st: [INV, P17] },

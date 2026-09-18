@@ -1,0 +1,12 @@
+
+{ id: 'M-15', name: 'Tarefas', grp: 'mobile', plat: 'Mobile', ph: 'F1', prof: ['PJ', 'GER', 'VI'],
+  purpose: 'Criar e concluir tarefas offline.',
+  info: 'Tarefas abertas + últimos 30 dias · atrasadas em destaque',
+  fields: 'Tipo · título · descrição · data/hora · vínculo',
+  filters: 'Hoje · atrasadas · tipo', cols: 'Tipo · título · vínculo · data/hora · status',
+  actions: 'Nova tarefa · Concluir · Cancelar',
+  perms: 'Próprias tarefas e de contas no escopo',
+  rules: 'Criar e concluir offline sincroniza depois (RF-ACT-2) · lembretes por push (RF-ACT-3) · retenção local PROPOSTA (sync-protocol §2.2)',
+  audit: '—',
+  ents: 'activities · outbox local', rf: 'RF-ACT-1 · RF-ACT-2 · RF-ACT-3',
+  st: [INV, P08, ['U', 'R05 — edição concorrente']] },

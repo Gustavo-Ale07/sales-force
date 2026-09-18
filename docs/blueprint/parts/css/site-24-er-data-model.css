@@ -1,0 +1,12 @@
+/* ER / data model */
+.er{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.er-g{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}
+.er-g h3{margin:0;padding:8px 10px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:6px;align-items:center;text-transform:none;letter-spacing:0;color:var(--text);font-size:.9rem;flex-wrap:wrap}
+.er-g.mirror h4{background:var(--teal-bg)}
+.er-g.own h4{background:var(--accent-weak)}
+.er-g.sys h4{background:var(--surface-2)}
+.ent{padding:6px 10px;border-bottom:1px solid var(--border);font-size:.8rem}
+.ent:last-child{border-bottom:0}
+.ent b{font-family:var(--mono);font-size:.8rem}
+.ent span{display:block;color:var(--text-3);font-size:.76rem}
+

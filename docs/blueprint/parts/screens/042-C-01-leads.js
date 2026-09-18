@@ -1,0 +1,13 @@
+/* ===================== CRM ===================== */
+{ id: 'C-01', name: 'Leads', grp: 'crm', plat: 'Web', ph: 'F2', prof: ['ADM', 'DIR', 'GER', 'VI'],
+  purpose: 'Capturar, qualificar e distribuir leads.',
+  info: 'Contas lead/prospect: origem, responsável, segmento, tags, última interação',
+  fields: 'Nome/razão social · CNPJ (opcional) · contato · e-mail · telefone · origem · segmento · porte · região · tags · campos personalizados',
+  filters: 'Origem · responsável · tags · segmento · porte · região · sem responsável (gerente/admin)',
+  cols: 'Nome · origem · responsável · status · tags · última interação · criado em',
+  actions: 'Novo lead · Importar lista · Converter em prospect · Criar oportunidade · Atribuir responsável',
+  perms: 'Escopo por AUTH-4 (PROPOSTO); Diretoria só visualiza · matriz §8.2 concede funil ao PJ, mas não há canal CRM mobile especificado' + WPJ,
+  rules: 'Mesma tabela de contas (P-19) · sem CNPJ, deduplicação por e-mail e telefone normalizados (RF-ACC-7) · PROPOSTO R53: leads sem responsável num pool visível só a gerentes e admin · distribuição automática (C-16)',
+  audit: 'importação (quando por lista)',
+  ents: 'accounts · contacts · tags · entity_tags · lead_distribution_rules', rf: 'RF-ACC-7 · RF-ACC-9 · RF-AUT-2 · RF-IMP-3',
+  st: [INV, P19, ['U', 'R53 — pool de leads sem responsável'], ['U', 'R17 — deduplicação sem revelar outra carteira']] },

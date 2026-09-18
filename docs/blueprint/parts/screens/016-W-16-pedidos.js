@@ -1,0 +1,12 @@
+
+{ id: 'W-16', name: 'Pedidos', grp: 'web', plat: 'Web', ph: 'F1', prof: ['ADM', 'DIR', 'GER', 'VI'],
+  purpose: 'Listar orçamentos e pedidos no escopo com status e integração.',
+  info: 'Orçamentos/pedidos com status, número Sankhya (NUNOTA), total e origem',
+  fields: '—', filters: 'Status · período · cliente · vendedor · equipe · origem (app, web, importação, proposta) · com erro de integração',
+  cols: 'Nº Sales Force · cliente · data · status · NUNOTA · total · origem · atualizado',
+  actions: 'Novo pedido · Abrir · Repetir pedido · Exportar (com permissão)',
+  perms: 'Escopo por AUTH-4 (PROPOSTO); Diretoria consulta' + WPJ,
+  rules: 'Estados RF-ORD-4 (rascunho): rascunho, aguardando_aprovacao, aprovado, reprovado, revisao_preco, na_fila, enviado, erro_integracao, faturado, cancelado · confirmado e faturado_parcial dependem de S3 (R24, R25)',
+  audit: 'exportação (quando executada)',
+  ents: 'orders · order_items · order_status_history', rf: 'RF-ORD-4 · RF-ORD-7 · RF-ORD-8',
+  st: [INV, P21, ['S', 'S3 — ciclo do pedido no Sankhya (R24, R25)'], ['U', 'R08 — rascunhos sincronizados com o servidor?']] },

@@ -1,0 +1,77 @@
+<section class="doc-section" id="s28" data-group="Parte V · Mobile e sincronização" data-num="28" data-title="Offline" data-kw="offline arquitetura sqlite outbox push pull cenários duplicado retry revogado preço carteira limite 7 dias retenção">
+  <div class="sec-head"><span class="sec-num">28</span><h2>Offline</h2><div class="sec-meta"><span class="badge st-A">P-07 · P-08 · P-09 · STACK-6 · SNK-4</span><span class="badge st-P">SYNC-1…3 · MOB-2 · AUTH-2</span></div></div>
+  <p class="lead">O aparelho guarda uma cópia filtrada e descartável dos dados autorizados, mais os seus próprios comandos pendentes. O servidor é a autoridade: revalida cada comando e decide o que o aparelho pode ver.</p>
+
+  <h3>Arquitetura offline</h3>
+  <div class="diagram">
+    <div class="pipe-wrap">
+      <div class="pipe" aria-label="Caminho de escrita, do aparelho até o Sankhya">
+        <p class="pipe-h">Escrita (push) — do aparelho ao Sankhya</p>
+        <div class="pnode dev"><span class="i">M</span><span class="t"><b>App mobile</b><span>Vendedor monta pedido; regras de <code>packages/domain</code> calculam totais e alçada indicativa</span></span><span class="badge st-A">P-07</span></div>
+        <div class="plink">grava</div>
+        <div class="pnode dev"><span class="i">DB</span><span class="t"><b>SQLite criptografado</b><span>Dados autorizados; chave no secure store; sem custo/margem</span></span><span class="badge st-P">MOB-2</span></div>
+        <div class="plink">enfileira</div>
+        <div class="pnode dev"><span class="i">OB</span><span class="t"><b>Outbox local</b><span>Comandos em ordem de criação: <code>command_id</code> + <code>entity_id</code> (UUIDv7)</span></span><span class="badge st-P">SYNC · R09</span></div>
+        <div class="plink">POST /sync/push (em lote, quando online)</div>
+        <div class="boundary"><span>Rede · HTTPS</span></div>
+        <div class="pnode srv"><span class="i">SP</span><span class="t"><b>Sync push (API)</b><span>Sessão, usuário, versão da sessão, aparelho, versão do protocolo</span></span><span class="badge st-P">AUTH-1</span></div>
+        <div class="plink">resultado já armazenado para o <code>command_id</code>? devolve sem efeito</div>
+        <div class="pnode srv"><span class="i">AZ</span><span class="t"><b>Autorização</b><span>Política central: permissão + escopo atuais</span></span><span class="badge st-A">P-21</span></div>
+        <div class="plink"></div>
+        <div class="pnode srv"><span class="i">CH</span><span class="t"><b>Command handler</b><span>Revalida preço, alçada, crédito, estado e invariantes → accepted / rejected / needs_review</span></span><span class="badge st-A">P-08</span></div>
+        <div class="plink">mesma transação</div>
+        <div class="pnode db"><span class="i">PG</span><span class="t"><b>PostgreSQL</b><span>Efeito do comando + resultado por <code>command_id</code> + eventos de escopo</span></span><span class="badge st-A">P-08</span></div>
+        <div class="plink">mesma transação</div>
+        <div class="pnode db"><span class="i">IO</span><span class="t"><b>integration_outbox</b><span>Registro de negócio da entrega + job pg-boss</span></span><span class="badge st-A">STACK-6</span></div>
+        <div class="plink">job</div>
+        <div class="pnode srv"><span class="i">WK</span><span class="t"><b>Worker</b><span>Verifica campo de origem antes de incluir ou reenviar</span></span><span class="badge st-A">SNK-4</span></div>
+        <div class="plink"></div>
+        <div class="pnode snk"><span class="i">GW</span><span class="t"><b>SankhyaGateway</b><span>Tipos do Sales Force; OAuth 2.0 + X-Token; credenciais só no worker</span></span><span class="badge st-P">SNK-2</span></div>
+        <div class="plink"></div>
+        <div class="pnode snk"><span class="i">SK</span><span class="t"><b>Sankhya</b><span>Pedido / parceiro incluído — campos e TOP a validar</span></span><span class="badge st-S">S0 · S3 · S5</span></div>
+      </div>
+      <div class="pipe" aria-label="Caminho de leitura, do servidor ao aparelho">
+        <p class="pipe-h">Leitura (pull) — do servidor ao aparelho</p>
+        <div class="pnode snk"><span class="i">SK</span><span class="t"><b>Sankhya</b><span>Fonte dos dados de ERP</span></span><span class="badge st-A">P-02</span></div>
+        <div class="plink">worker agenda leitura incremental</div>
+        <div class="pnode srv"><span class="i">MR</span><span class="t"><b>Espelho</b><span>Upsert só se o hash do conteúdo mudou</span></span><span class="badge st-P">SYNC-2</span></div>
+        <div class="plink"></div>
+        <div class="pnode db"><span class="i">PG</span><span class="t"><b>PostgreSQL</b><span>Linhas carimbadas com <code>xid8</code> da transação; tombstones</span></span><span class="badge st-P">SYNC-2</span></div>
+        <div class="plink">mudanças de dono/atendente/equipe</div>
+        <div class="pnode db"><span class="i">SE</span><span class="t"><b>Eventos de escopo</b><span>entered / left / resync_required na mesma transação</span></span><span class="badge st-P">SYNC-3</span></div>
+        <div class="plink"></div>
+        <div class="pnode srv"><span class="i">SC</span><span class="t"><b>Pull com escopo</b><span><code>GET /sync/pull?cursor</code>: janela <code>W_prev ≤ xid &lt; W_now</code> filtrada pela política central</span></span><span class="badge st-P">SYNC-2</span></div>
+        <div class="plink">HTTPS</div>
+        <div class="boundary"><span>Rede · HTTPS</span></div>
+        <div class="pnode dev"><span class="i">M</span><span class="t"><b>App mobile</b><span>Aplica resync, bundle_delete, bundles, dataset reset e mudanças; limpeza por retenção preservando linhas da outbox</span></span><span class="badge st-P">SYNC-3</span></div>
+        <div class="callout note small" style="margin-top:14px"><p><b>Aparelho <code>pending</code> ou <code>revoked</code>:</b> pull e push recusados, nenhum dado de negócio (AUTH-2, PROPOSTO). <b>Revogado:</b> o app apaga banco local e arquivos.</p></div>
+        <div class="callout warn small"><p><b>Nunca no aparelho:</b> custo, margem (P-20/P-23), dados fora do escopo (P-21), credenciais de servidor (P-22).</p></div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Cenários</h3>
+  <div class="grid-2">
+    <div class="scen"><h4>1 · Sincronização normal <span class="badge st-P">SYNC-2</span></h4><ol class="steps"><li>Gatilho: app aberto, conexão voltou, 15 min em primeiro plano, manual ou após salvar pedido.</li><li>Push dos comandos pendentes (nenhum).</li><li>Pull a partir do cursor: janela de transações já concluídas.</li><li class="ok">Aplica mudanças; "sincronizado às 10:42".</li></ol></div>
+    <div class="scen"><h4>2 · Pedido offline <span class="badge st-A">P-08</span></h4><ol class="steps"><li>Sem sinal: pedido montado com dados da última sync.</li><li>Comando <code>createOrder</code> na outbox local; tela "salvo offline".</li><li>Conexão volta → push; servidor revalida tudo.</li><li class="ok"><code>accepted</code> → aprovado ou aguardando aprovação → outbox de integração → Sankhya.</li></ol></div>
+    <div class="scen"><h4>3 · Retry <span class="badge st-A">STACK-6 · SNK-4</span></h4><ol class="steps"><li>Worker tenta incluir pedido; Sankhya responde erro temporário.</li><li class="rev">Outbox registra tentativa e próximo horário (backoff; até 8 tentativas — RF-SNK-3).</li><li>Antes de reenviar, verifica o campo de origem com o UUID do pedido.</li><li class="ok">Não existe → inclui; existe → vincula sem duplicar.</li></ol></div>
+    <div class="scen"><h4>4 · Comando duplicado <span class="badge st-A">P-08</span></h4><ol class="steps"><li>Push enviado; conexão cai antes da resposta.</li><li>App reenvia o mesmo lote na próxima sync.</li><li>Servidor encontra o resultado armazenado para o <code>command_id</code>.</li><li class="ok">Devolve o mesmo resultado; nenhum pedido duplicado.</li></ol></div>
+    <div class="scen"><h4>5 · Conta sai da carteira <span class="badge st-P">SYNC-3</span> <span class="badge st-U">R06</span></h4><ol class="steps"><li>Gerente transfere a conta para outro vendedor; eventos <code>left</code>/<code>entered</code> na mesma transação.</li><li>Pull do vendedor anterior recebe <code>bundle_delete</code>: conta e dados filhos apagados do aparelho.</li><li class="bad">Comando pendente para a conta → <code>rejected</code> com motivo (PROPOSTO).</li><li class="ok">Novo dono recebe o bundle completo da conta.</li></ol></div>
+    <div class="scen"><h4>6 · Preço mudou <span class="badge st-A">P-09</span> <span class="badge st-U">R33</span></h4><ol class="steps"><li>Pedido criado offline com preço antigo.</li><li>Tabela de preço mudou no Sankhya e chegou ao espelho.</li><li class="rev">Push → <code>needs_review</code>; pedido em <code>revisao_preco</code>.</li><li class="ok">Vendedor vê anterior × atual e confirma ou edita; alçada reavaliada.</li></ol></div>
+    <div class="scen"><h4>7 · Aparelho revogado <span class="badge st-D">RF-IAM-7</span> <span class="badge st-P">AUTH-2</span></h4><ol class="steps"><li>Admin revoga o aparelho; sessões invalidadas imediatamente.</li><li>Próximo contato: API recusa com status "revogado".</li><li class="bad">App apaga banco local e arquivos; comandos não enviados são perdidos (R08 reduziria).</li><li>Se nunca reconectar: bloqueio após 7 dias sem sync; limpeza é melhor esforço (risco aceito).</li></ol></div>
+    <div class="scen"><h4>8 · Limite offline <span class="badge st-D">RF-IAM-8</span> <span class="badge st-U">R16</span></h4><ol class="steps"><li>Aparelho sem sincronizar há mais de 7 dias (configurável).</li><li class="bad">App bloqueia o uso até sincronizar; outbox preservada.</li><li>Relógio adulterado: PROPOSTO guardar hora do servidor da última sync, detectar volta no tempo, usar tempo desde o boot.</li><li class="ok">Sync bem-sucedida desbloqueia.</li></ol></div>
+  </div>
+
+  <h3>Dados no aparelho <span class="badge st-P">spec §9.3 · SYNC-3</span></h3>
+  <div class="table-wrap"><table class="t compact">
+    <thead><tr><th>Classe</th><th>Base de visibilidade</th><th>Conteúdo</th><th>Retenção no aparelho</th></tr></thead>
+    <tbody>
+      <tr><td>Por conta</td><td>Conta no escopo (dono, atendente, equipe)</td><td>Contas, contatos, resumos de títulos, histórico resumido, pedidos, tarefas da conta</td><td>Títulos e histórico: 12 meses · pedidos: 90 dias + abertos · tarefas: abertas + 30 dias</td></tr>
+      <tr><td>Por registro</td><td>Usuário é responsável por registro de conta fora do escopo</td><td>O próprio registro (ex.: tarefa)</td><td>Igual à classe</td></tr>
+      <tr><td>Por usuário</td><td>O usuário</td><td>Metas, positivação, comissões, tarefas sem conta, notificações</td><td>—</td></tr>
+      <tr><td>Referência</td><td>Aplicabilidade ao usuário</td><td>Produtos, tabelas e itens de preço aplicáveis, condições, TOPs; sugestões de mix (F3)</td><td>—</td></tr>
+      <tr><td>Somente local</td><td>—</td><td><code>sync_state</code>, <code>outbox</code>; rascunhos locais ou sincronizados <span class="badge st-U">R08</span></td><td>Nunca apagados pela limpeza</td></tr>
+    </tbody>
+  </table></div>
+</section>
+

@@ -1,0 +1,32 @@
+<section class="doc-section" id="s36" data-group="Parte VII · Plataforma" data-num="36" data-title="Auditoria" data-kw="auditoria eventos log retenção login aprovação exportação importação">
+  <div class="sec-head"><span class="sec-num">36</span><h2>Auditoria</h2><div class="sec-meta"><span class="badge st-D">RF-IAM-9 · spec §12.4</span><span class="badge st-P">extensões security-model §13</span></div></div>
+  <div class="grid-2">
+    <div>
+      <h3>Eventos registrados</h3>
+      <ul class="small">
+        <li>Login com sucesso, falha, bloqueio e desbloqueio</li>
+        <li>Reset de senha solicitado e concluído</li>
+        <li>Usuário criado, alterado, desativado; mudanças de perfil e permissão</li>
+        <li>Aparelho registrado, aprovado, revogado; sessão revogada</li>
+        <li>Aprovações e reprovações de pedido e de cliente (F1)</li>
+        <li>Alterações de limites de desconto (F1)</li>
+        <li>Importações e exportações</li>
+        <li>Alterações de automações (F2)</li>
+        <li>Ações administrativas (inclui reprocessamento de integração)</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Cada entrada</h3>
+      <dl class="kv small">
+        <dt>Ator</dt><dd>usuário ou contexto de sistema explícito (proposto)</dd>
+        <dt>Ação</dt><dd>o que foi feito</dd>
+        <dt>Entidade e id</dt><dd>registro afetado</dd>
+        <dt>Antes/depois</dt><dd>resumido — sem senhas, tokens ou payloads</dd>
+        <dt>Origem</dt><dd>IP, aparelho, data/hora</dd>
+        <dt>Retenção</dt><dd>mínimo 1 ano</dd>
+      </dl>
+      <div class="callout note small"><p>PROPOSTO: papel da aplicação não altera nem apaga linhas de auditoria. Quem pode <b>consultar</b> a auditoria além do admin não está definido <span class="badge st-U">BP-06</span>. Tela <span class="ref">W-37</span>.</p></div>
+    </div>
+  </div>
+</section>
+

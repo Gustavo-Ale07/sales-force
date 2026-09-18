@@ -1,0 +1,13 @@
+
+{ id: 'W-31', name: 'Saúde das integrações', grp: 'web', plat: 'Web', ph: 'F0/F1', prof: ['ADM'], mock: 'mk-integracoes',
+  purpose: 'Painel operacional do espelho Sankhya e da fila de saída.',
+  info: 'Último sucesso por entidade · atraso · erros nas últimas 24 h · tamanho da fila de saída · alertas',
+  fields: '—', filters: 'Entidade · período',
+  cols: 'Entidade · frequência · último sucesso · atraso · erros 24 h · estado',
+  actions: 'Abrir fila de erros · Ver detalhe do erro',
+  perms: 'Admin' + WPJ,
+  rules: 'Alerta por e-mail ao admin se uma entidade ficar > 1 h sem sucesso ou a fila de saída tiver itens em erro (RF-SNK-7) · frequências iniciais PROPOSTAS até S0.2 · worker escreve, API lê',
+  sync: 'Lê o estado por entidade (sankhya_sync_state) e a integration_outbox; atualiza ao abrir ou recarregar',
+  audit: '—',
+  ents: 'sankhya_sync_state · integration_outbox', rf: 'RF-SNK-1 · RF-SNK-6 · RF-SNK-7',
+  st: [INV, STACK6, ['U', 'Q-01 — painel de saúde na F0 ou F1?'], ['V', 'S0.2 — limites de requisição do Sankhya'], ['P', 'OPS-4 — observabilidade (Sentry, /health, monitor externo)']] },

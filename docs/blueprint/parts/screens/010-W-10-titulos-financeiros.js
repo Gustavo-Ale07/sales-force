@@ -1,0 +1,12 @@
+
+{ id: 'W-10', name: 'Títulos financeiros', grp: 'web', plat: 'Web', ph: 'F1', prof: WALL,
+  purpose: 'Ver títulos em aberto e vencidos e a situação de crédito do cliente.',
+  info: 'Títulos em aberto e vencidos · limite de crédito · saldo',
+  fields: '—', filters: 'Situação · vencimento · faixa de atraso',
+  cols: 'Documento · emissão · vencimento · valor · saldo · situação · dias de atraso',
+  actions: 'Filtrar vencidos · Exportar (perfis com permissão)',
+  perms: 'Herda a visibilidade da conta (AUTH-4 PROPOSTO)' + WPJ,
+  rules: 'Espelho somente leitura (P-02) · títulos vencidos há mais de X dias bloqueiam pedido, com opção de enviar para aprovação (RF-ORD-3); X ainda a definir (spec §17)',
+  audit: 'exportação (quando executada)',
+  ents: 'receivables · accounts', rf: 'RF-ACC-2 · RF-ORD-3',
+  st: [INV, P02, ['U', 'Q-02 — títulos espelhados na F0 ou F1?'], ['V', 'Dias de atraso que bloqueiam pedido (spec §17)']] },

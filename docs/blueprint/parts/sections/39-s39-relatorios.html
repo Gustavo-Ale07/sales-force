@@ -1,0 +1,25 @@
+<section class="doc-section" id="s39" data-group="Parte VII · Plataforma" data-num="39" data-title="Relatórios" data-kw="relatórios exportação csv xlsx views auditoria representante proibido">
+  <div class="sec-head"><span class="sec-num">39</span><h2>Relatórios</h2><div class="sec-meta"><span class="badge st-D">RF-DSH-6</span><span class="badge st-A">P-20 · P-21</span></div></div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-h"><strong>Exportação de relatórios</strong><span class="tag">F2</span></div>
+      <ul class="small">
+        <li>CSV/XLSX para perfis internos com permissão (Admin, Diretoria, Gerente, Vendedor interno, Cadastro/Financeiro — matriz padrão).</li>
+        <li><b>Proibida para representantes</b>: nenhuma permissão de exportação concedível ao perfil e nenhum endpoint de download em massa o atende (P-20 APROVADO; mecanismo proposto).</li>
+        <li>Mesmo escopo dos dashboards (P-21); toda exportação auditada.</li>
+        <li>Custo e margem só para perfis com permissão.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-h"><strong>Fonte dos dados</strong></div>
+      <ul class="small">
+        <li>Relatórios entre módulos leem <b>views SQL somente leitura</b> de um módulo de relatórios (PROPOSTO, architecture §5.2).</li>
+        <li>Faturamento por <b>notas</b>, não por pedidos, após mapear o vínculo pedido → notas (R25, spike S3).</li>
+        <li>Queda de compra, churn e mix dependem da profundidade do histórico no servidor <span class="badge st-U">R42</span>.</li>
+        <li>Latência alvo: &lt; 2 s em dashboards (spec §13).</li>
+      </ul>
+    </div>
+  </div>
+  <p class="small">Catálogo de relatórios exportáveis além dos dashboards não foi especificado <span class="badge st-U">BP-08</span>. Tela <span class="ref">W-41</span>.</p>
+</section>
+

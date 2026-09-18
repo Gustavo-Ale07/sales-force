@@ -1,0 +1,11 @@
+
+{ id: 'M-24', name: 'Metas e comissões', grp: 'mobile', plat: 'Mobile', ph: 'F1', prof: ['PJ', 'GER', 'VI'],
+  purpose: 'Consultar metas, positivação e comissões próprias.',
+  info: 'Meta do mês × realizado · positivação · comissões próprias',
+  fields: '—', filters: 'Período', cols: 'Período · meta · realizado · comissão',
+  actions: 'Mudar período',
+  perms: 'Próprias; gerente também da equipe (RF-GOL-3)',
+  rules: 'PROPOSTO: dataset do usuário · fontes PRECISA VALIDAR (S6) · sem cálculo próprio (P-13)',
+  audit: '—',
+  ents: 'goals · commissions', rf: 'RF-GOL-1 · RF-GOL-2 · RF-GOL-3',
+  st: [INV, P13, ['S', 'S6 — fontes de metas, positivação e comissões']] },

@@ -1,0 +1,13 @@
+
+{ id: 'W-21', name: 'Aprovação de crédito', grp: 'web', plat: 'Web', ph: 'F1', prof: ['CF', 'ADM'],
+  purpose: 'Decidir exceções de crédito: títulos vencidos ou total acima do crédito disponível.',
+  info: 'Pedido · cliente · limite · crédito disponível · títulos vencidos e dias de atraso · total do pedido',
+  fields: 'Comentário da decisão',
+  filters: 'Motivo (títulos vencidos, acima do crédito) · equipe · tempo na fila',
+  cols: 'Pedido · cliente · total · crédito disponível · vencidos · motivo · aguardando há',
+  actions: 'Aprovar exceção · Reprovar · Abrir títulos',
+  perms: 'DECISÃO PENDENTE R37 — PROPOSTO: Cadastro/Financeiro aprova; a matriz §8.2 ainda não tem essa permissão' + WPJ,
+  rules: 'Bloqueios de RF-ORD-3 avaliados offline e reavaliados no servidor (P-08) · PROPOSTO R37: com crédito e desconto, ordem crédito → desconto; cada aprovação registrada separadamente · fórmula de crédito PRECISA VALIDAR (S4)',
+  audit: 'aprovação/reprovação de pedido',
+  ents: 'orders · order_approvals · receivables · accounts', rf: 'RF-ORD-3',
+  st: [INV, P08, ['U', 'R37 — quem aprova exceção de crédito e em que ordem'], ['U', 'R38 — crédito disponível offline'], ['S', 'S4 — fórmula de crédito e liberações nativas (R26)']] },

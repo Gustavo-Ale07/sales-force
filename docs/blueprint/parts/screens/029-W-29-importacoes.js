@@ -1,0 +1,13 @@
+
+{ id: 'W-29', name: 'Importações', grp: 'web', plat: 'Web', ph: 'F1', prof: ['ADM', 'GER', 'VI', 'CF'], mock: 'mk-importacao',
+  purpose: 'Assistente de importação de planilhas em etapas.',
+  info: 'Etapas: tipo → mapear colunas → pré-visualizar e validar → confirmar → processar em segundo plano → relatório · histórico de importações',
+  fields: 'Tipo · arquivo (.xlsx/.csv até 20 MB / 50 mil linhas) · mapeamento de colunas · cliente (pedido do cliente)',
+  filters: 'Tipo · status · usuário · período',
+  cols: 'Tipo · arquivo · usuário · status · linhas ok/erro · criada em',
+  actions: 'Nova importação · Continuar mapeamento · Confirmar · Baixar planilha de erros',
+  perms: 'F1: pedido do cliente e clientes novos · Vendedor interno também leads (F2) · Cadastro/Financeiro: clientes · atualização em massa só admin/gerente (F2)' + WPJ,
+  rules: 'Tipo e tamanho validados antes do parse · processamento pelo worker (pg-boss) · pedido do cliente gera rascunho com preços de tabela; linhas não reconhecidas listadas (RF-ORD-9) · clientes em lote → cliente_pendente → fila de aprovação · arquivos em object storage (P-17)',
+  audit: 'importação',
+  ents: 'imports · import_row_errors · files · orders · accounts', rf: 'RF-IMP-1 · RF-IMP-2 · RF-IMP-3 · RF-ORD-9',
+  st: [INV, P17, STACK6, ['U', 'R14 — importações do PJ (app ou em nome dele)']] },

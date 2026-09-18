@@ -1,0 +1,43 @@
+<section class="doc-section" id="s02" data-group="Parte I · Produto" data-num="2" data-title="Escopo" data-kw="escopo fora de escopo fases estoque metas comissões whatsapp gps">
+  <div class="sec-head"><span class="sec-num">02</span><h2>Escopo</h2><div class="sec-meta"><span class="badge st-A">P-12 · P-13</span><span class="badge st-D">spec §3</span></div></div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-h"><strong>Dentro do escopo (por fase)</strong><span class="badge st-D">RF rascunho</span></div>
+      <dl class="kv">
+        <dt>Fase 0</dt><dd>Monorepo, CI, ambientes, autenticação, perfis, equipes, auditoria, cliente Sankhya + espelho incremental, spike Sankhya.</dd>
+        <dt>Fase 1</dt><dd>App offline, carteira, títulos, crédito, pedidos e orçamentos, aprovações, revisão de preço, envio ao Sankhya, cliente novo com CNPJ/CEP, metas/positivação/comissões, tarefas básicas, notificações, importações (pedido e clientes), piloto.</dd>
+        <dt>Fase 2</dt><dd>Leads, funis, oportunidades, propostas com PDF, follow-ups, agenda, automações pré-definidas, migração do Agendor, dashboards, Google Workspace.</dd>
+        <dt>Fase 3</dt><dd>Construtor de regras, IA, captura de leads (site e anúncios), telefonia.</dd>
+        <dt>Fase 4</dt><dd>WhatsApp API oficial e chatbot externo — fora desta especificação.</dd>
+      </dl>
+      <p class="small muted">Ordem das fases: fundação → força de vendas → CRM → inteligência/canais → futuro (P-12, APROVADO).</p>
+    </div>
+    <div class="card">
+      <div class="card-h"><strong>Fora do escopo</strong><span class="badge st-A">Aprovado · P-13</span></div>
+      <ul class="small">
+        <li>Multi-empresa / SaaS, cobrança e assinatura</li>
+        <li>Roteiro de visitas e check-in com GPS</li>
+        <li>Pesquisas de campo e fotos no ponto de venda</li>
+        <li>Trocas e devoluções</li>
+        <li>Consulta ou bloqueio por estoque</li>
+        <li>Cálculo próprio de metas e comissões (vêm do Sankhya)</li>
+        <li>Portal B2B de autoatendimento</li>
+        <li>Integração não oficial de WhatsApp</li>
+      </ul>
+      <div class="callout note small"><p>Positivação pode ser <b>contada</b> no Sales Force a partir das notas sem violar P-13 se o Sankhya não a tiver pronta — recomendação R28, <b>DECISÃO PENDENTE</b> após o spike S6.</p></div>
+    </div>
+  </div>
+  <h3>Decisões de escopo da spec (§4)</h3>
+  <div class="table-wrap"><table class="t compact">
+    <thead><tr><th>Spec</th><th>Decisão</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>D5</td><td>Estoque fora do escopo</td><td><span class="badge st-A">P-13</span></td></tr>
+      <tr><td>D6</td><td>Metas e comissões calculadas no Sankhya; o app só exibe</td><td><span class="badge st-A">P-13</span> <span class="badge st-V">fonte S6 / R28</span></td></tr>
+      <tr><td>D9</td><td>Vários funis configuráveis</td><td><span class="badge st-P">Proposto (Fase 2)</span></td></tr>
+      <tr><td>D10</td><td>Proposta com produtos Sankhya → PDF → pedido</td><td><span class="badge st-P">Proposto (Fase 2)</span></td></tr>
+      <tr><td>D13</td><td>WhatsApp via link + registro manual; API oficial só na Fase 4</td><td><span class="badge st-P">Proposto</span> <span class="badge st-A">API não oficial fora (P-13)</span></td></tr>
+      <tr><td>D20</td><td>Testes em pirâmide; CI bloqueia merge; sem meta global de cobertura</td><td><span class="badge st-P">Proposto</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+

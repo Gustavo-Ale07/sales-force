@@ -1,0 +1,12 @@
+
+{ id: 'A-06', name: 'Administração da base de conhecimento', grp: 'ia', plat: 'Web', ph: 'F3', prof: ['ADM'],
+  purpose: 'Manter os documentos usados pelo assistente.',
+  info: 'Documentos: título, tipo (uso do sistema, produto, política), perfis, status, atualizado',
+  fields: 'Título · arquivo/conteúdo · tipo · perfis que podem ver (R18 PROPOSTO)',
+  filters: 'Tipo · perfil · status', cols: 'Documento · tipo · perfis · atualizado · status',
+  actions: 'Novo documento · Editar · Arquivar',
+  perms: 'Admin' + WPJ,
+  rules: 'Base não inclui dados pessoais (spec §6.2) · PROPOSTO R18: cada documento com os perfis que podem vê-lo; recuperação filtra por perfil · arquivos em object storage (P-17)',
+  audit: 'ação administrativa',
+  ents: 'knowledge_documents · files', rf: 'RF-IA-1',
+  st: [INV, P17, ['U', 'R18 — visibilidade da base por perfil']] },

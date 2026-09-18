@@ -1,0 +1,5 @@
+/* Test pyramid */
+.pyr{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:560px}
+.pyr div{border:1px solid var(--border-strong);border-radius:3px;text-align:center;padding:7px 10px;font-size:.82rem;background:var(--surface)}
+.pyr div b{display:block}
+

@@ -1,0 +1,26 @@
+<section class="doc-section" id="s35" data-group="Parte VII · Plataforma" data-num="35" data-title="Dispositivos" data-kw="dispositivos aparelho aprovação pendente revogado limpeza wipe 7 dias offline relógio backup chave perdida">
+  <div class="sec-head"><span class="sec-num">35</span><h2>Dispositivos</h2><div class="sec-meta"><span class="badge st-D">RF-IAM-7 · RF-IAM-8</span><span class="badge st-P">AUTH-2</span><span class="badge st-U">R16 · R19 · R45</span></div></div>
+  <div class="diagram">
+    <div class="hflow" style="min-width:780px;justify-content:center" role="img" aria-label="Estados do aparelho: pendente, aprovado, revogado">
+      <div class="box" style="border-color:var(--warn)"><b>pending</b>registrado no 1º login; nenhum dado de negócio</div>
+      <span class="to">— aprovado por admin/gerente →</span>
+      <div class="box" style="border-color:var(--ok)"><b>approved</b>sincroniza normalmente</div>
+      <span class="to">— revogado →</span>
+      <div class="box" style="border-color:var(--danger)"><b>revoked</b>sessões invalidadas; wipe no próximo contato</div>
+    </div>
+    <p class="diagram-cap">PROPOSTO (AUTH-2). Internos: autoaprovados com aviso ao admin. Representantes: máximo 1 aparelho ativo (configurável). Identidade e status do aparelho fazem parte do modelo de sessão da Fase 0; telas de aprovação, limpeza e bloqueio offline são Fase 1.</p>
+  </div>
+  <div class="table-wrap"><table class="t compact">
+    <thead><tr><th>Tema</th><th>Regra</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Revogação</td><td>Admin revoga usuário ou aparelho: sessão invalidada imediatamente; na próxima conexão o app apaga o banco local e arquivos</td><td><span class="badge st-D">RF-IAM-7</span></td></tr>
+      <tr><td>Período offline máximo</td><td>7 dias (configurável) sem sincronizar → app bloqueia até conectar</td><td><span class="badge st-D">RF-IAM-8</span></td></tr>
+      <tr><td>Relógio adulterado</td><td>PROPOSTO: hora do servidor da última sync, detectar volta no tempo, tempo desde o boot (mitigação, não garantia)</td><td><span class="badge st-U">R16</span></td></tr>
+      <tr><td>Backups do sistema operacional</td><td>PROPOSTO: excluir banco e arquivos; PDFs em diretório temporário apagados após compartilhar; chave sem iCloud Keychain</td><td><span class="badge st-U">R19</span></td></tr>
+      <tr><td>Chave local perdida</td><td>PROPOSTO: enviar a fila agressivamente; recriar banco, ressincronizar e alertar o que não foi enviado</td><td><span class="badge st-U">R45</span></td></tr>
+      <tr><td>Segundo aparelho do representante com um já ativo</td><td>Regra de substituição não especificada</td><td><span class="badge st-U">BP-05</span></td></tr>
+    </tbody>
+  </table></div>
+  <p class="small">Fluxos <a href="#fl-02">FL-02</a> e <a href="#fl-19">FL-19</a> · Tela <span class="ref">W-36</span> · Mockups <a href="#mk-dispositivos">MK-09</a>, <a href="#mm-aprovacao-aparelho">MK-17</a>, <a href="#mm-revogado">MK-25</a>.</p>
+</section>
+

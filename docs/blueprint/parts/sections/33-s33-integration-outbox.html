@@ -1,0 +1,42 @@
+<section class="doc-section" id="s33" data-group="Parte VI · Sankhya e dados" data-num="33" data-title="Integration outbox" data-kw="integration_outbox outbox entrega sankhya estado tentativas origem idempotência erro reprocessar operador fallback">
+  <div class="sec-head"><span class="sec-num">33</span><h2>Integration outbox</h2><div class="sec-meta"><span class="badge st-A">STACK-6 · SNK-4</span><span class="badge st-P">estados e campos</span><span class="badge st-V">V-11 · V-13</span></div></div>
+  <div class="diagram" role="img" aria-label="A transação de negócio grava o registro de outbox e o job; o worker verifica a origem, inclui pelo gateway e atualiza o registro">
+    <div class="hflow" style="min-width:920px">
+      <div class="zone"><div class="zone-l">Uma transação <span class="badge st-A">STACK-6</span></div><div class="hflow"><div class="box"><b>Efeito de negócio</b>pedido aprovado / cliente aprovado</div><span class="to">+</span><div class="box"><b>integration_outbox</b>registro de negócio</div><span class="to">+</span><div class="box"><b>job pg-boss</b>gatilho</div></div></div>
+      <span class="to">→</span><div class="box"><b>Worker</b>carrega registro</div>
+      <span class="to">→</span><div class="box sankhya"><b>Checa campo de origem</b>UUID da entidade <span class="badge st-A">SNK-4</span></div>
+      <span class="to">→</span><div class="box sankhya"><b>SankhyaGateway</b>inclui se não existe</div>
+      <span class="to">→</span><div class="box"><b>Atualiza outbox</b>estado, tentativas, erro, ids de resultado</div>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div>
+      <h3>O registro guarda <span class="badge st-A">STACK-6</span></h3>
+      <ul class="small">
+        <li>Estado e número de tentativas</li>
+        <li>Identificador de origem = UUID da entidade (pedido ou conta), estável entre tentativas, nunca id de tentativa ou job (U-07)</li>
+        <li>Dados de idempotência (SNK-4)</li>
+        <li>Detalhes do erro, com mensagem traduzida para o usuário</li>
+        <li>Visibilidade ao operador; reenvio e reprocessamento; trilha de auditoria</li>
+      </ul>
+      <p class="small">Desenho campo a campo: rodada 5 / passe de entidades. Estados: <a href="#sm-outbox">SM-7</a> (PROPOSTO neste blueprint).</p>
+    </div>
+    <div>
+      <h3>Regras de erro</h3>
+      <div class="table-wrap"><table class="t compact">
+        <thead><tr><th>Classe</th><th>Tratamento</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Indisponível / temporário</td><td>Retry com backoff; checa origem antes</td><td><span class="badge st-P">§5.3</span></td></tr>
+          <tr><td>Rate limit</td><td>Retry respeitando limites medidos</td><td><span class="badge st-P">§5.3</span> <span class="badge st-V">S0.2</span></td></tr>
+          <tr><td>Autenticação</td><td>Classe própria; alerta; sem martelar o gateway</td><td><span class="badge st-P">§5.3</span></td></tr>
+          <tr><td>Validação / rejeição permanente</td><td>Sem retry cego; <code>erro_integracao</code>; operador corrige e reprocessa</td><td><span class="badge st-P">§5.3</span></td></tr>
+          <tr><td>Campo de origem indisponível</td><td>Fallback em campo de observação só com autorização do dono por incidente, registrada</td><td><span class="badge st-A">SNK-4 U-05/U-06</span></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+  <p class="small">Fluxos <a href="#fl-13">FL-13</a> e <a href="#fl-14">FL-14</a> · Tela <span class="ref">W-32</span> · Mockup <a href="#mk-integracoes">MK-08</a>. Nenhuma escrita real no Sankhya antes de V-11 e V-13.</p>
+</section>
+
+<div class="part-title">Parte VII · Plataforma</div>
+
