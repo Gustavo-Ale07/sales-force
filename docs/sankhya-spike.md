@@ -875,3 +875,18 @@ Implementation note for Phase 0 slice 1. No Sankhya environment was contacted; t
 | `readConfiguration()` against Sankhya | NotImplemented (U-10, U-11); only the bootstrap file source (`SF_CONFIG_FILE`) exists |
 | `submitOrder` | Type only; both implementations throw `NotImplementedError` (SNK-4, SNK-5, SNK-6, V-11, V-13) |
 | Request limits, rate-limit responses, concurrency | Unmeasured (§5); adapter serializes requests |
+
+### 9.43 Worker mirror sync — assumptions and open questions (2026-09-21)
+
+Implementation note for the Phase 0 functional slice (`apps/server/src/sync`). Exercised only against the fake gateway; no Sankhya environment was contacted. Read-only: the sync depends on the gateway read port and cannot reach `submitOrder`.
+
+| Item | Status |
+|---|---|
+| Strategy: full snapshot + content-hash diff per entity (§9.33); soft deactivation (`deleted_at`) only after a complete read; an empty snapshot over a populated mirror is refused (`empty_snapshot`) | Implemented as designed in §9.33 |
+| Deletion detection by absence, for every entity (physical-delete behavior in the ERP, §9.32) | NEEDS VALIDATION |
+| Incremental cursor (`DTALTER`) per entity | NEEDS VALIDATION; not used |
+| Default schedules: sellers */15, customers */10, products */15, prices */10 (minutes) | PROPOSED until request limits are measured (S0.2); keep scheduled sync off against a live Sandbox until then |
+| `blockedRaw` stored as `'true'`/`'false'` (gateway exposes a boolean); the API reads a customer as blocked when the mirror value is `S`, `TRUE` or `1` | NEEDS VALIDATION (S4) |
+| Product groups derived from `erp_product` with the fallback label `Grupo {code}`; no product-group table | NEEDS VALIDATION (§9.42: `readProductGroups` is NotImplemented) |
+| Live reads of price tables, price-table versions and list prices | NotImplemented in the live adapter (§9.42); in live mode `sync_state` records `failed/not_implemented` and `/ready` is degraded until implemented |
+| Time zone and granularity of `DTVIGOR` on price-table versions | NEEDS VALIDATION (§9.42) |
