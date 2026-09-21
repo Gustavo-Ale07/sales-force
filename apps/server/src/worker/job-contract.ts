@@ -11,6 +11,8 @@ export interface JobContext {
   /** Logger of the process; every line already carries `jobId` and `queue` (log context). */
   readonly logger: Logger;
   readonly now: () => Date;
+  /** Aborted by pg-boss when the job expires or the worker shuts down; long jobs must honor it. */
+  readonly signal?: AbortSignal;
 }
 
 /**

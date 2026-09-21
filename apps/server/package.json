@@ -17,6 +17,8 @@
     "start:api": "node dist/main-api.js",
     "start:worker": "node dist/main-worker.js",
     "queue:install": "tsx --env-file-if-exists=../../.env src/queue-install.ts",
+    "sync:once": "tsx --env-file-if-exists=../../.env src/sync-once.ts",
+    "start:sync-once": "node dist/sync-once.js",
     "seed": "tsx --env-file-if-exists=../../.env src/seed.ts",
     "account": "tsx --env-file-if-exists=../../.env src/account-cli.ts",
     "create-user": "tsx --env-file-if-exists=../../.env src/account-cli.ts create",

@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { createDb } from '@salesforce/db';
 import { loadWorkerConfig } from './config/worker-env.js';
+import { mirrorSchedulesFromSettings } from './sync/schedules.js';
 import { createLogger } from './observability/logger.js';
 import { NestPinoLogger } from './observability/nest-logger.js';
 import { installProcessGuards, logPoolErrors, runMain } from './process.js';
@@ -10,11 +11,12 @@ import { WorkerModule } from './worker/worker.module.js';
 
 /**
  * Worker process entry point (STACK-2). The only process that reads Sankhya settings (STACK-3); it
- * builds the gateway from them (default: the synthetic fake) and fails fast on any problem. It never
- * runs migrations or installs queue tables (DATA-2) and performs no Sankhya write (SNK-4).
+ * builds the gateway from them (default: the synthetic fake) and fails fast on any problem. The
+ * gateway goes only to the mirror sync service, which uses its read port. It never runs migrations or
+ * installs queue tables (DATA-2) and performs no Sankhya write (SNK-4).
  */
 runMain('worker', async () => {
-  const { env, gatewayDescription } = loadWorkerConfig(process.env);
+  const { env, gateway, gatewayDescription } = loadWorkerConfig(process.env);
   const logger = createLogger({ level: env.LOG_LEVEL, service: 'worker' });
   const db = createDb(env.DATABASE_URL.reveal(), { max: env.DB_POOL_MAX, applicationName: 'salesforce-worker-app' });
   logPoolErrors(db, logger);
@@ -29,6 +31,7 @@ runMain('worker', async () => {
         health: { host: env.WORKER_HEALTH_HOST, port: env.WORKER_HEALTH_PORT },
         gatewayMode: gatewayDescription.mode,
       },
+      { gateway, schedules: mirrorSchedulesFromSettings(env) },
     ),
     { logger: new NestPinoLogger(logger), abortOnError: false },
   );

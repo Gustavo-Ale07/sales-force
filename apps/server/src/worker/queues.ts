@@ -1,4 +1,5 @@
 import type { Queue } from 'pg-boss';
+import { MIRROR_ENTITIES, mirrorQueueName } from '../sync/mirror-entities.js';
 
 /**
  * Queue registry (STACK-6). pg-boss executes jobs; `integration_outbox` (a table) stays the business
@@ -24,6 +25,25 @@ export interface QueueSpec {
 }
 
 /**
+ * Mirror sync queues. Policy `short` keeps at most one job queued (a slow run never piles up ticks);
+ * the per-entity advisory lock is the real guard against double runs. Transient failures
+ * (unavailable, rate limit, temporary) are retried with exponential backoff (30 s, doubling, capped
+ * at 15 min) up to 5 times, then dead-lettered; permanent ones never retry (see `retry.ts`).
+ * `expireInSeconds` bounds one run.
+ */
+const MIRROR_QUEUE_OPTIONS: Omit<Queue, 'name'> = {
+  policy: 'short',
+  retryLimit: 5,
+  retryDelay: 30,
+  retryBackoff: true,
+  retryDelayMax: 900,
+  expireInSeconds: 1800,
+  retentionSeconds: 3600,
+  deleteAfterSeconds: 24 * 3600,
+  deadLetter: QUEUE_NAMES.deadLetter,
+};
+
+/**
  * Retry policy of a queue = `retryLimit` / `retryDelay` / `retryBackoff` / `retryDelayMax` in its
  * options (exponential backoff for failures the handler classified as retryable). Permanent failures
  * never consume retries: the runner sends them straight to the dead-letter queue (`retry.ts`).
@@ -46,4 +66,6 @@ export const QUEUE_REGISTRY: readonly QueueSpec[] = [
       deadLetter: QUEUE_NAMES.deadLetter,
     },
   },
+  // Mirror synchronization: one queue per entity (`sync.mirror.<entity>`).
+  ...MIRROR_ENTITIES.map((entity): QueueSpec => ({ name: mirrorQueueName(entity), options: MIRROR_QUEUE_OPTIONS })),
 ];

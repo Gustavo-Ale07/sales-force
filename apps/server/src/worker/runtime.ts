@@ -11,6 +11,10 @@ import {
 import { startHealthServer, WorkerHealth, type HealthServer } from './health.js';
 import type { JobHandler } from './job-contract.js';
 import { createBatchHandler } from './job-runner.js';
+import { MIRROR_ENTITIES, mirrorQueueName } from '../sync/mirror-entities.js';
+import type { MirrorSyncService } from '../sync/mirror-sync.service.js';
+import type { MirrorSchedules } from '../sync/schedules.js';
+import { MirrorSyncJob } from './jobs/mirror-sync.job.js';
 import { SyncHeartbeatJob } from './jobs/sync-heartbeat.job.js';
 import { QUEUE_NAMES, QUEUE_REGISTRY, type QueueSpec } from './queues.js';
 
@@ -47,13 +51,19 @@ export interface WorkerRuntimeDeps {
   readonly queues?: readonly QueueSpec[];
   /** Handlers registered in addition to the built-in ones (tests, later modules). */
   readonly extraHandlers?: readonly JobHandler<unknown>[];
+  /**
+   * Mirror synchronization (WP 0.8): the service that reads Sankhya (read port only) and the cron of
+   * each entity (`null` = not scheduled). Absent = no mirror jobs (the API-less unit tests).
+   */
+  readonly mirror?: { readonly service: MirrorSyncService; readonly schedules: MirrorSchedules };
 }
 
 /**
  * The Worker process runtime (STACK-2): pg-boss workers for every registered handler, the scheduled
  * `sync.heartbeat`, the loopback health endpoint and graceful shutdown. It never runs migrations or
  * installs queue tables (DATA-2): a missing pg-boss schema or queue stops the start with an
- * actionable message. It never writes to Sankhya (SNK-4): no handler here touches the gateway.
+ * actionable message. It never writes to Sankhya (SNK-4): the only handlers that touch the gateway are
+ * the mirror sync jobs, which use its read port.
  */
 export class WorkerRuntime {
   readonly health: WorkerHealth;
@@ -98,6 +108,7 @@ export class WorkerRuntime {
       throw new WorkerStartError(`Cannot start the job queue (pg-boss). ${QUEUE_INSTALL_HINT}`, { cause });
     }
 
+    const mirrorSchedules: Record<string, string> = {};
     try {
       for (const spec of queues) {
         if ((await boss.getQueue(spec.name)) === null) {
@@ -110,7 +121,9 @@ export class WorkerRuntime {
         startedAt: this.deps.now().toISOString(),
       };
       const heartbeat = new SyncHeartbeatJob(this.deps.db.db, heartbeatCursor, (at) => this.health.recordBeat(at));
-      const handlers: readonly JobHandler<unknown>[] = [heartbeat, ...(this.deps.extraHandlers ?? [])];
+      const { mirror } = this.deps;
+      const mirrorHandlers = mirror === undefined ? [] : MIRROR_ENTITIES.map((entity) => new MirrorSyncJob(entity, mirror.service));
+      const handlers: readonly JobHandler<unknown>[] = [heartbeat, ...mirrorHandlers, ...(this.deps.extraHandlers ?? [])];
 
       for (const handler of handlers) {
         await boss.work(
@@ -128,6 +141,16 @@ export class WorkerRuntime {
 
       // Idempotent upsert: a changed HEARTBEAT_CRON replaces the stored schedule.
       await boss.schedule(QUEUE_NAMES.syncHeartbeat, options.heartbeatCron, {});
+      for (const entity of mirror === undefined ? [] : MIRROR_ENTITIES) {
+        const cron = mirror?.schedules[entity] ?? null;
+        if (cron === null) {
+          // Disabled: drop a schedule stored by an earlier configuration.
+          await boss.unschedule(mirrorQueueName(entity));
+        } else {
+          await boss.schedule(mirrorQueueName(entity), cron, {});
+          mirrorSchedules[entity] = cron;
+        }
+      }
 
       this.health.markStarted();
       // First beat right away, so the API sees the worker (and its gateway mode) without waiting a minute.
@@ -144,7 +167,10 @@ export class WorkerRuntime {
     }
 
     this.#started = true;
-    logger.info({ gatewayMode: options.gatewayMode, heartbeatCron: options.heartbeatCron }, 'worker started');
+    logger.info(
+      { gatewayMode: options.gatewayMode, heartbeatCron: options.heartbeatCron, mirrorSchedules },
+      'worker started',
+    );
   }
 
   /** Graceful shutdown: stop taking jobs, let running ones finish (bounded), then close pg-boss. */

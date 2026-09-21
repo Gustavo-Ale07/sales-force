@@ -5,6 +5,7 @@ import {
   type SankhyaGateway,
 } from '@salesforce/sankhya';
 import { z } from 'zod';
+import { DEFAULT_MIRROR_CRONS } from '../sync/schedules.js';
 import { validateInstallationConfiguration } from '../configuration/validate.js';
 import {
   databaseUrlField,
@@ -23,6 +24,12 @@ import {
  * `SANKHYA_*` (and `SF_CONFIG_FILE`): those are parsed and validated by `createGateway` from
  * `@salesforce/sankhya`, which reports its own problems by variable name only.
  */
+const cronField = (defaultValue: string) =>
+  z
+    .string()
+    .regex(/^S+(s+S+){4}$/, { error: 'must be a 5-field cron expression, e.g. "*/10 * * * *".' })
+    .default(defaultValue);
+
 export const WorkerEnvSchema = z.object({
   NODE_ENV: nodeEnvField,
   DATABASE_URL: databaseUrlField,
@@ -36,6 +43,20 @@ export const WorkerEnvSchema = z.object({
     .string()
     .regex(/^\S+(\s+\S+){4}$/, { error: 'must be a 5-field cron expression, e.g. "* * * * *".' })
     .default('* * * * *'),
+  /**
+   * Mirror synchronization (WP 0.8). `false` = no scheduled mirror jobs (a manual `sync:once` still
+   * works). The default crons are the PROPOSED frequencies of the spec (RF-SNK-1, spike §4) and stay
+   * proposals until the Sankhya request limits are measured (S0.2).
+   */
+  SYNC_MIRROR_ENABLED: z
+    .enum(['true', 'false'], { error: "must be 'true' or 'false'." })
+    .default('true')
+    .transform((value) => value === 'true'),
+  SYNC_CRON_SELLERS: cronField(DEFAULT_MIRROR_CRONS.sellers),
+  SYNC_CRON_CUSTOMERS: cronField(DEFAULT_MIRROR_CRONS.customers),
+  SYNC_CRON_PRODUCTS: cronField(DEFAULT_MIRROR_CRONS.products),
+  /** One schedule for the whole price model (price tables, versions, list prices). */
+  SYNC_CRON_PRICES: cronField(DEFAULT_MIRROR_CRONS.prices),
   /** How long a graceful shutdown waits for running jobs before giving up. */
   WORKER_SHUTDOWN_TIMEOUT_MS: integerField({ min: 1000, max: 600_000 }, 30_000),
 });

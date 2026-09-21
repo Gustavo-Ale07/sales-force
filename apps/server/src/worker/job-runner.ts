@@ -61,7 +61,7 @@ async function runOne<TPayload>(
       return { id: job.id, status: 'deadletter', output: { errorClass: 'invalid_payload' } };
     }
 
-    const context: JobContext = { jobId: job.id, queue: handler.queue, logger, now: deps.now };
+    const context: JobContext = { jobId: job.id, queue: handler.queue, logger, now: deps.now, signal: job.signal };
     try {
       await handler.handle(parsed.data, context);
       return { id: job.id, status: 'completed' };
