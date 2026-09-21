@@ -1,14 +1,16 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
 import { normalizeEmail } from '@salesforce/domain';
 import type { LoginResponse as AuthenticatedSession } from '@salesforce/contracts';
 import { AppError } from '../http/app-error.js';
-import type { Logger } from '../observability/logger.js';
+import { errorLogFields, type Logger } from '../observability/logger.js';
 import { uuidv7 } from '../platform/ids.js';
 import { CLOCK, LOGGER, type Clock } from '../platform/tokens.js';
 import { AccountRepository } from './account.repository.js';
+import { AuditSampler } from './audit-sampler.js';
 import { AUDIT_ACTIONS, AuditService } from './audit.service.js';
 import type { AuthConfig } from './auth-config.js';
 import type { CurrentUser } from './current-user.js';
+import { HashLimiter } from './hash-limiter.js';
 import { AUTH_CONFIG, PASSWORD_HASHER } from './iam-tokens.js';
 import type { PasswordHasher } from './password-hasher.js';
 import { isChannelAllowed, type Channel } from './policy.js';
@@ -48,6 +50,14 @@ export interface ResolvedSession {
 export type LoginFailureReason = 'unknown_account' | 'bad_password' | 'account_disabled' | 'channel_not_permitted';
 
 const PURGE_INTERVAL_MS = 10 * 60 * 1000;
+/** Installation-wide counter of failed password checks (`auth_throttle`); one row, fixed window. */
+const GLOBAL_FAILURES_KEY = 'global:login-failures';
+const GLOBAL_WINDOW_MS = 60_000;
+/** A login refused because every Argon2id slot is busy is worth retrying almost at once. */
+const SATURATED_RETRY_AFTER_SECONDS = 1;
+
+/** Why a login was refused before any password work. Audit only: the client always sees `rate_limited`. */
+type RefusalScope = 'ip' | 'account' | 'global' | 'saturated';
 const USER_AGENT_MAX = 200;
 
 function retryAfterSeconds(until: Date, now: Date): number {
@@ -65,8 +75,10 @@ function retryAfterSeconds(until: Date, now: Date): number {
  * to registered and unregistered addresses.
  */
 @Injectable()
-export class AuthService {
+export class AuthService implements OnModuleInit {
   #lastPurgeAt = 0;
+  readonly #hashSlots: HashLimiter;
+  readonly #refusalSampler: AuditSampler;
 
   constructor(
     @Inject(AUTH_CONFIG) private readonly config: AuthConfig,
@@ -77,7 +89,15 @@ export class AuthService {
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(LOGGER) private readonly logger: Logger,
-  ) {}
+  ) {
+    this.#hashSlots = new HashLimiter(config.login.maxConcurrentHashes);
+    this.#refusalSampler = new AuditSampler(config.login.blockedAuditWindowMs);
+  }
+
+  /** Computes the throw-away hash of unknown accounts once, before the first login arrives. */
+  async onModuleInit(): Promise<void> {
+    await this.hasher.warmUp();
+  }
 
   async login(input: { email: string; password: string }, meta: RequestMeta): Promise<LoginResult> {
     const now = this.clock();
@@ -86,27 +106,42 @@ export class AuthService {
     const ipKey = ipThrottleKey(meta.ip);
     const auditMeta = { ip: meta.ip, userAgent: meta.userAgent?.slice(0, USER_AGENT_MAX) ?? null, requestId: meta.requestId };
 
-    // 1. Blocked keys are rejected before any password work (bounds the CPU an attacker can spend).
-    const [ipState, emailState] = await Promise.all([this.throttle.find(ipKey), this.throttle.find(emailKey)]);
+    // 1. Refusals before any password work (bounds the CPU and the writes an attacker can cause):
+    // a locked key, an exhausted installation-wide failure budget, or no free Argon2id slot.
+    const [ipState, emailState, globalState] = await Promise.all([
+      this.throttle.find(ipKey),
+      this.throttle.find(emailKey),
+      this.throttle.find(GLOBAL_FAILURES_KEY),
+    ]);
     const ipLock = activeLockUntil(ipState, now);
     const emailLock = activeLockUntil(emailState, now);
     if (ipLock !== null || emailLock !== null) {
       const until = [ipLock, emailLock].filter((value): value is Date => value !== null).reduce((a, b) => (a > b ? a : b));
-      await this.audit.record({
-        action: AUDIT_ACTIONS.loginBlocked,
-        actorAccountId: null,
-        detail: {
-          ...auditMeta,
-          scope: ipLock !== null ? 'ip' : 'account',
-          emailFingerprint: emailFingerprint(email),
-        },
-      });
-      throw new AppError('rate_limited', { retryAfterSeconds: retryAfterSeconds(until, now) });
+      await this.refuse(ipLock !== null ? 'ip' : 'account', retryAfterSeconds(until, now), email, auditMeta, now);
+    }
+    if (
+      globalState !== null &&
+      now.getTime() - globalState.windowStartedAt.getTime() < GLOBAL_WINDOW_MS &&
+      globalState.failures >= this.config.login.globalMaxFailuresPerMinute
+    ) {
+      const windowEnd = new Date(globalState.windowStartedAt.getTime() + GLOBAL_WINDOW_MS);
+      await this.refuse('global', retryAfterSeconds(windowEnd, now), email, auditMeta, now);
+    }
+    const releaseSlot = this.#hashSlots.tryAcquire();
+    if (releaseSlot === null) {
+      await this.refuse('saturated', SATURATED_RETRY_AFTER_SECONDS, email, auditMeta, now);
     }
 
-    // 2. Verify. An unknown account verifies against a throw-away hash (same cost).
-    const found = await this.accounts.findByEmail(email);
-    const passwordOk = await this.hasher.verify(found?.passwordHash ?? null, input.password);
+    // 2. Verify. An unknown account verifies against a throw-away hash (same cost). The slot covers
+    // the account lookup and the hash: those are what a flood would pile up.
+    let found: Awaited<ReturnType<AccountRepository['findByEmail']>>;
+    let passwordOk: boolean;
+    try {
+      found = await this.accounts.findByEmail(email);
+      passwordOk = await this.hasher.verify(found?.passwordHash ?? null, input.password);
+    } finally {
+      releaseSlot?.();
+    }
     let failure: LoginFailureReason | null = null;
     if (found === null) failure = 'unknown_account';
     else if (!passwordOk) failure = 'bad_password';
@@ -125,7 +160,7 @@ export class AuthService {
       try {
         await this.accounts.updatePasswordHash(found.id, await this.hasher.hash(input.password));
       } catch (error) {
-        this.logger.warn({ err: error, accountId: found.id }, 'password hash upgrade failed; keeping the old hash');
+        this.logger.warn({ ...errorLogFields(error), accountId: found.id }, 'password hash upgrade failed; keeping the old hash');
       }
     }
 
@@ -191,6 +226,19 @@ export class AuthService {
     };
   }
 
+  /**
+   * Whether the token belongs to a live session of an active account. Read only: it never slides the
+   * expiry and never writes (for public endpoints that show more to a signed-in caller, such as
+   * `/ready`); every authorization decision still goes through `resolveSession` and the policy.
+   */
+  async hasActiveSession(token: string | undefined): Promise<boolean> {
+    if (token === undefined || !looksLikeSessionToken(token)) return false;
+    const tokenHash = hashSessionToken(token);
+    const row = await this.sessions.findByTokenHash(tokenHash);
+    if (row === null || !constantTimeEqualHex(row.tokenHash, tokenHash)) return false;
+    return row.revokedAt === null && row.expiresAt.getTime() > this.clock().getTime() && row.status === 'active';
+  }
+
   async logout(user: CurrentUser, meta: RequestMeta): Promise<void> {
     const now = this.clock();
     await this.sessions.revoke(user.sessionId, now);
@@ -228,6 +276,7 @@ export class AuthService {
   }): Promise<void> {
     const account = await this.throttle.recordFailure(input.emailKey, input.now, this.config.throttle.account);
     const ip = await this.throttle.recordFailure(input.ipKey, input.now, this.config.throttle.ip);
+    await this.throttle.bumpWindow(GLOBAL_FAILURES_KEY, input.now, GLOBAL_WINDOW_MS);
 
     await this.audit.record({
       action: AUDIT_ACTIONS.loginFailure,
@@ -262,6 +311,34 @@ export class AuthService {
     await this.maybePurge(input.now);
   }
 
+  /**
+   * Refuses a login before any password work: 429 `rate_limited` with `Retry-After`, no counter is
+   * touched. The audit row is SAMPLED (1st, 2nd, 4th, 8th ... refusal per scope and window, carrying
+   * the running count) so that a flood of refused attempts cannot flood the audit trail or the
+   * database with writes.
+   */
+  private async refuse(
+    scope: RefusalScope,
+    retryAfter: number,
+    email: string,
+    auditMeta: { ip: string; userAgent: string | null; requestId: string },
+    now: Date,
+  ): Promise<never> {
+    const sample = this.#refusalSampler.observe(scope, now);
+    if (sample.record) {
+      try {
+        await this.audit.record({
+          action: AUDIT_ACTIONS.loginBlocked,
+          actorAccountId: null,
+          detail: { ...auditMeta, scope, emailFingerprint: emailFingerprint(email), attemptsInWindow: sample.count },
+        });
+      } catch (error) {
+        this.logger.warn({ ...errorLogFields(error), scope }, 'could not record a refused login attempt');
+      }
+    }
+    throw new AppError('rate_limited', { retryAfterSeconds: retryAfter });
+  }
+
   /** Keeps `auth_throttle` and `session` bounded without a scheduler: at most once per interval per process. */
   private async maybePurge(now: Date): Promise<void> {
     if (now.getTime() - this.#lastPurgeAt < PURGE_INTERVAL_MS) return;
@@ -270,7 +347,7 @@ export class AuthService {
       await this.throttle.purgeStale(now);
       await this.sessions.purge(now);
     } catch (error) {
-      this.logger.warn({ err: error }, 'auth housekeeping failed');
+      this.logger.warn({ ...errorLogFields(error) }, 'auth housekeeping failed');
     }
   }
 }

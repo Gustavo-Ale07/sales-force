@@ -4,6 +4,7 @@ import { createApiApp } from './api/create-app.js';
 import { parseApiEnv } from './config/api-env.js';
 import { authConfigFromEnv } from './iam/auth-config.js';
 import { createLogger } from './observability/logger.js';
+import { applyPoolLimits } from './platform/pool-limits.js';
 import { installProcessGuards, logPoolErrors, runMain } from './process.js';
 
 /**
@@ -15,12 +16,15 @@ runMain('api', async () => {
   const env = parseApiEnv(process.env);
   const logger = createLogger({ level: env.LOG_LEVEL, service: 'api' });
   const db = createDb(env.DATABASE_URL.reveal(), { max: env.DB_POOL_MAX, applicationName: 'salesforce-api' });
+  // Bounded waits: no request queues forever for a connection, no statement runs unbounded (A7).
+  applyPoolLimits(db.pool, { connectionTimeoutMs: env.DB_CONNECTION_TIMEOUT_MS, statementTimeoutMs: env.DB_STATEMENT_TIMEOUT_MS });
   logPoolErrors(db, logger);
 
   const app = await createApiApp({
     logger,
     db,
     auth: authConfigFromEnv(env),
+    readinessCacheTtlMs: env.READINESS_CACHE_TTL_MS,
     trustProxy: env.TRUST_PROXY,
     limits: {
       requestTimeoutMs: env.REQUEST_TIMEOUT_MS,

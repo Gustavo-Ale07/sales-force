@@ -3,6 +3,7 @@ import { normalizeEmail } from '@salesforce/domain';
 import { BootstrapFileConfigurationSource, DEMO_ACCOUNTS, DEMO_CONFIGURATION } from '@salesforce/sankhya';
 import { z } from 'zod';
 import { createOperatorAccountService } from './cli/operator.js';
+import { operatorIdentity } from './cli/operator-identity.js';
 import { passwordHashFields, passwordHashParamsOf } from './config/auth-env.js';
 import { InstallationConfigurationRepository } from './configuration/configuration.repository.js';
 import { validateInstallationConfiguration } from './configuration/validate.js';
@@ -64,7 +65,7 @@ runMain('seed', async () => {
         : `installation configuration unchanged (${saved.contentHash})\n`,
     );
 
-    const { accounts, repository } = createOperatorAccountService(db, passwordHashParamsOf(env));
+    const { accounts, repository } = createOperatorAccountService(db, passwordHashParamsOf(env), undefined, operatorIdentity(process.env));
     let created = 0;
     for (const demo of DEMO_ACCOUNTS) {
       if ((await repository.findByEmail(demo.email)) !== null) continue;

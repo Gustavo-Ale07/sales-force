@@ -191,4 +191,39 @@ describe('seed and account CLI against a disposable database', () => {
     const unlocked = await runScript('account-cli.ts', env, ['unlock', '--email', 'p@example.test']);
     expect(unlocked.code, unlocked.stderr).toBe(0);
   }, 240_000);
+
+  it('attributes every operator action in the audit trail: OPERATOR when set, otherwise the OS user', async () => {
+    const database = await createMigratedDatabase(postgres);
+    opened.push(() => database.handle.close());
+    const env = { NODE_ENV: 'development', DATABASE_URL: database.url, ACCOUNT_PASSWORD: TEST_PASSWORD, ...FAST_HASH };
+
+    const named = await runScript('account-cli.ts', { ...env, OPERATOR: 'maria.ops' }, ['create', '--email', 'a1@example.test', '--name', 'A1', '--role', 'admin']);
+    expect(named.code, named.stderr).toBe(0);
+    const anonymous = await runScript('account-cli.ts', env, ['create', '--email', 'a2@example.test', '--name', 'A2', '--role', 'admin']);
+    expect(anonymous.code, anonymous.stderr).toBe(0);
+    const unlock = await runScript('account-cli.ts', { ...env, OPERATOR: 'maria.ops' }, ['unlock', '--email', 'a1@example.test']);
+    expect(unlock.code, unlock.stderr).toBe(0);
+
+    const rows = await database.handle.db.select().from(auditLog);
+    const operators = (action: string) => rows.filter((row) => row.action === action).map((row) => (row.detail as { operator?: string }).operator);
+    const created = operators('account.created');
+    expect(created).toContain('maria.ops');
+    expect(created.filter((operator) => operator?.startsWith('os:'))).toHaveLength(1);
+    expect(operators('auth.unlock')).toEqual(['maria.ops']);
+    expect(JSON.stringify(rows)).not.toContain(TEST_PASSWORD);
+
+    const invalid = await runScript('account-cli.ts', { ...env, OPERATOR: 'x'.repeat(200) }, ['unlock', '--email', 'a1@example.test']);
+    expect(invalid.code).not.toBe(0);
+    expect(invalid.stderr).toMatch(/OPERATOR/);
+  }, 240_000);
+
+  it('records the operator on the seed accounts too', async () => {
+    const database = await createMigratedDatabase(postgres);
+    opened.push(() => database.handle.close());
+    const seeded = await runScript('seed.ts', { NODE_ENV: 'development', DATABASE_URL: database.url, SEED_DEV_PASSWORD: SEED_PASSWORD, OPERATOR: 'seed-runner', ...FAST_HASH });
+    expect(seeded.code, seeded.stderr).toBe(0);
+    const created = (await database.handle.db.select().from(auditLog)).filter((row) => row.action === 'account.created');
+    expect(created.length).toBeGreaterThan(0);
+    expect(created.every((row) => (row.detail as { operator?: string }).operator === 'seed-runner')).toBe(true);
+  }, 240_000);
 });

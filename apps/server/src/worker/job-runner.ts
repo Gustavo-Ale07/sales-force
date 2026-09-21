@@ -1,6 +1,6 @@
 import { isSankhyaGatewayError } from '@salesforce/sankhya';
 import type { Job, JobResult } from 'pg-boss';
-import type { Logger } from '../observability/logger.js';
+import { errorLogFields, type Logger } from '../observability/logger.js';
 import { runWithLogContext } from '../observability/request-context.js';
 import type { Clock } from '../platform/tokens.js';
 import type { JobContext, JobHandler } from './job-contract.js';
@@ -73,10 +73,10 @@ async function runOne<TPayload>(
         ...(safeMessage(error) !== undefined ? { message: safeMessage(error) } : {}),
       };
       if (failure.retry) {
-        logger.warn({ err: error, errorClass: failure.errorClass }, 'job failed; will be retried with backoff');
+        logger.warn({ ...errorLogFields(error), errorClass: failure.errorClass }, 'job failed; will be retried with backoff');
         return { id: job.id, status: 'failed', output };
       }
-      logger.error({ err: error, errorClass: failure.errorClass }, 'job failed permanently; sent to dead-letter queue');
+      logger.error({ ...errorLogFields(error), errorClass: failure.errorClass }, 'job failed permanently; sent to dead-letter queue');
       return { id: job.id, status: 'deadletter', output };
     }
   });

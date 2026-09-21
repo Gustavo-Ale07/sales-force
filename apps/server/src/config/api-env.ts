@@ -24,6 +24,16 @@ export const ApiEnvSchema = z.object({
   API_HOST: z.string().min(1).default('127.0.0.1'),
   API_PORT: portField(3000),
   DB_POOL_MAX: integerField({ min: 1, max: 100 }, 10),
+  /** How long a request waits for a free pooled connection before failing (bounded, never forever). */
+  DB_CONNECTION_TIMEOUT_MS: integerField({ min: 100, max: 60_000 }, 5000),
+  /** Server-side `statement_timeout` of every pooled connection: a slow query is cancelled by PostgreSQL. */
+  DB_STATEMENT_TIMEOUT_MS: integerField({ min: 100, max: 600_000 }, 15_000),
+  /** `/ready` results are reused this long (ms; 0 = no cache): the endpoint is public, its cost must be bounded. */
+  READINESS_CACHE_TTL_MS: integerField({ min: 0, max: 60_000 }, 3000),
+  /** Argon2id hashes running at once (they block the event loop); beyond it a login answers 429. */
+  LOGIN_MAX_CONCURRENT_HASHES: integerField({ min: 1, max: 64 }, 4),
+  /** Failed password checks per minute the whole installation tolerates, every client together (login DoS budget). */
+  LOGIN_GLOBAL_MAX_PER_MINUTE: integerField({ min: 10, max: 100_000 }, 300),
 
   // Authentication. Only `dev` exists today and it needs an explicit opt-in (ALLOW_DEV_AUTH=1) on
   // top of a non-production NODE_ENV (both checked below).
@@ -38,7 +48,10 @@ export const ApiEnvSchema = z.object({
   ...passwordHashFields,
 
   // HTTP server hardening.
-  /** Reverse-proxy hops or proxy CIDRs trusted for X-Forwarded-For (default: none). */
+  /**
+   * Reverse-proxy hops or proxy CIDRs trusted for X-Forwarded-For (default outside production: none).
+   * REQUIRED when NODE_ENV=production (checked below): `0` states "no proxy in front" on purpose.
+   */
   TRUST_PROXY: trustProxyField,
   REQUEST_TIMEOUT_MS: integerField({ min: 1000, max: 600_000 }, 30_000),
   KEEP_ALIVE_TIMEOUT_MS: integerField({ min: 1000, max: 600_000 }, 65_000),
@@ -91,6 +104,12 @@ export function parseApiEnv(source: EnvSource): ParsedApiEnv {
       if (parsed.ALLOW_DEV_AUTH !== '1') {
         problems.push('ALLOW_DEV_AUTH: the dev authentication mode needs the explicit opt-in ALLOW_DEV_AUTH=1.');
       }
+    }
+    if (parsed.NODE_ENV === 'production' && (source['TRUST_PROXY'] ?? '').trim() === '') {
+      problems.push(
+        'TRUST_PROXY: is required when NODE_ENV=production (proxy hop count or proxy IPs/CIDRs; 0 = no proxy in front). ' +
+          'A wrong value lets clients choose their own address (rate limiting, audit) or collapses them into one.',
+      );
     }
     const origins = originProblems(parsed.ALLOWED_ORIGINS, parsed.NODE_ENV);
     allowedOrigins = origins.origins;

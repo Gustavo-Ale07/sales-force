@@ -18,6 +18,8 @@ export interface PasswordHasher {
   verify(storedHash: string | null, password: string): Promise<boolean>;
   /** True when the stored hash was made with weaker parameters than the configured ones. */
   needsRehash(storedHash: string): boolean;
+  /** Precomputes the throw-away hash used for unknown accounts (once, at start-up). */
+  warmUp(): Promise<void>;
 }
 
 const SALT_BYTES = 16;
@@ -47,10 +49,19 @@ export class Argon2idPasswordHasher implements PasswordHasher {
     });
   }
 
+  /** The throw-away hash, computed once with the configured parameters (never per request). */
+  #dummy(): Promise<string> {
+    this.#dummyHash ??= this.hash(randomBytes(24).toString('base64url'));
+    return this.#dummyHash;
+  }
+
+  async warmUp(): Promise<void> {
+    await this.#dummy();
+  }
+
   async verify(storedHash: string | null, password: string): Promise<boolean> {
     if (storedHash === null) {
-      this.#dummyHash ??= this.hash(randomBytes(24).toString('base64url'));
-      await argon2Verify({ password, hash: await this.#dummyHash });
+      await argon2Verify({ password, hash: await this.#dummy() });
       return false;
     }
     try {

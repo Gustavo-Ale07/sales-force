@@ -1,12 +1,22 @@
 import { Global, Module, type DynamicModule } from '@nestjs/common';
 import type { DbHandle } from '@salesforce/db';
 import type { Logger } from '../observability/logger.js';
-import { CLOCK, DATABASE, DATABASE_HANDLE, LOGGER, systemClock, type Clock } from './tokens.js';
+import {
+  CLOCK,
+  DATABASE,
+  DATABASE_HANDLE,
+  LOGGER,
+  READINESS_CACHE_TTL_MS,
+  systemClock,
+  type Clock,
+} from './tokens.js';
 
 export interface InfrastructureDeps {
   readonly logger: Logger;
   readonly db: DbHandle;
   readonly clock?: Clock;
+  /** `/ready` cache window (default 0 = every call checks; the API entry point sets a few seconds). */
+  readonly readinessCacheTtlMs?: number;
 }
 
 /**
@@ -23,6 +33,7 @@ export class InfrastructureModule {
       { provide: DATABASE_HANDLE, useValue: deps.db },
       { provide: DATABASE, useValue: deps.db.db },
       { provide: CLOCK, useValue: deps.clock ?? systemClock },
+      { provide: READINESS_CACHE_TTL_MS, useValue: deps.readinessCacheTtlMs ?? 0 },
     ];
     return {
       module: InfrastructureModule,

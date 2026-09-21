@@ -8,12 +8,13 @@ import {
   type ReadyResponse,
 } from '@salesforce/contracts';
 import { createDb, MIGRATION_TABLE } from '@salesforce/db';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createApiApp } from '../../src/api/create-app.js';
 import { ApiRoute, Contract } from '../../src/http/route.js';
 import { createLogger } from '../../src/observability/logger.js';
 import { recordWorkerHeartbeat } from '../../src/platform/worker-heartbeat.js';
-import { testAuthConfig } from '../helpers/auth.js';
+import { createTestAccount, TEST_PASSWORD, TestClock, testAuthConfig } from '../helpers/auth.js';
+import { loginCookie } from '../helpers/auth-app.js';
 import {
   captureLogs,
   createMigratedDatabase,
@@ -34,10 +35,16 @@ afterAll(async () => {
   await postgres.stop();
 });
 
-async function apiOver(database: MigratedDatabase, options: { level?: string } = {}) {
+async function apiOver(database: MigratedDatabase, options: { level?: string; readinessCacheTtlMs?: number; clock?: () => Date } = {}) {
   const capture = captureLogs();
   const logger = createLogger({ level: options.level ?? 'info', service: 'api', destination: capture.stream });
-  const app = await createApiApp({ logger, db: database.handle, auth: testAuthConfig() });
+  const app = await createApiApp({
+    logger,
+    db: database.handle,
+    auth: testAuthConfig(),
+    ...(options.readinessCacheTtlMs === undefined ? {} : { readinessCacheTtlMs: options.readinessCacheTtlMs }),
+    ...(options.clock === undefined ? {} : { clock: options.clock }),
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
   opened.push(() => app.close());
@@ -49,6 +56,17 @@ async function freshApi() {
   opened.push(() => database.handle.close());
   return { database, ...(await apiOver(database)) };
 }
+
+const READY_URL = '/api/v1/ready';
+
+/** A signed-in administrator's cookie: /ready shows detail only to an active session. */
+async function adminCookie(app: NestFastifyApplication, database: MigratedDatabase): Promise<string> {
+  await createTestAccount(database.handle, { email: 'ready-admin@example.test', role: 'admin' });
+  return loginCookie({ app }, 'ready-admin@example.test', TEST_PASSWORD);
+}
+
+const readyWith = (app: NestFastifyApplication, cookie?: string) =>
+  app.inject({ method: 'GET', url: READY_URL, headers: cookie === undefined ? {} : { cookie } });
 
 describe('GET /api/v1/health', () => {
   it('answers ok without touching the database, and returns a generated correlation id', async () => {
@@ -107,7 +125,7 @@ describe('GET /api/v1/ready', () => {
   it('is ready once the worker heartbeat exists, and reports the worker gateway mode', async () => {
     const { app, database } = await freshApi();
     await recordWorkerHeartbeat(database.handle.db, { gatewayMode: 'fake', startedAt: new Date().toISOString() }, new Date());
-    const response = await app.inject({ method: 'GET', url: '/api/v1/ready' });
+    const response = await readyWith(app, await adminCookie(app, database));
     expect(response.statusCode).toBe(200);
     expect(ReadyResponseSchema.parse(response.json())).toMatchObject({
       status: 'ready',
@@ -117,15 +135,16 @@ describe('GET /api/v1/ready', () => {
 
   it('is degraded when the worker heartbeat is stale or a mirror entity failed', async () => {
     const { app, database } = await freshApi();
+    const cookie = await adminCookie(app, database);
     const old = new Date(Date.now() - 30 * 60_000);
     await recordWorkerHeartbeat(database.handle.db, { gatewayMode: 'fake', startedAt: old.toISOString() }, old);
-    const stale = await app.inject({ method: 'GET', url: '/api/v1/ready' });
+    const stale = await readyWith(app, cookie);
     expect(stale.statusCode).toBe(200);
     expect(stale.json<ReadyResponse>()).toMatchObject({ status: 'degraded', integration: { state: 'degraded' } });
 
     await recordWorkerHeartbeat(database.handle.db, { gatewayMode: 'fake', startedAt: old.toISOString() }, new Date());
     await database.handle.pool.query(`insert into sync_state (entity, status) values ('customers', 'failed')`);
-    const failing = await app.inject({ method: 'GET', url: '/api/v1/ready' });
+    const failing = await readyWith(app, cookie);
     expect(failing.statusCode).toBe(200);
     expect(failing.json<ReadyResponse>()).toMatchObject({
       status: 'degraded',
@@ -173,6 +192,102 @@ describe('GET /api/v1/ready', () => {
     });
     expect(response.body).not.toMatch(/ECONNREFUSED|secret-password-1|127\.0\.0\.1/);
     expect(JSON.stringify(capture.lines())).not.toContain('secret-password-1');
+  });
+});
+
+describe('GET /api/v1/ready disclosure and cost (A7)', () => {
+  it('gives an anonymous caller only the coarse verdict: no counts, no entity names, no messages', async () => {
+    const { app, database } = await freshApi();
+    const old = new Date(Date.now() - 30 * 60_000);
+    await recordWorkerHeartbeat(database.handle.db, { gatewayMode: 'fake', startedAt: old.toISOString() }, new Date());
+    await database.handle.pool.query(`insert into sync_state (entity, status, last_error_message) values ('customers', 'failed', 'detalhe interno')`);
+
+    const anonymous = await readyWith(app);
+    expect(anonymous.statusCode).toBe(200);
+    const coarse = ReadyResponseSchema.parse(anonymous.json());
+    expect(coarse.status).toBe('degraded');
+    expect(coarse.checks.database).toBe('ok');
+    expect(coarse.checks.migrations).toEqual({ status: 'ok', applied: null, expected: null });
+    expect(coarse.integration).toMatchObject({ state: 'degraded', lastSuccessAt: null, failingEntities: [], message: null });
+    expect(anonymous.body).not.toContain('customers');
+    expect(anonymous.body).not.toContain('detalhe interno');
+
+    // The same instance shows the detail to an active session (the web pill).
+    const detailed = ReadyResponseSchema.parse((await readyWith(app, await adminCookie(app, database))).json());
+    expect(detailed.integration.failingEntities).toEqual(['customers']);
+    expect(detailed.checks.migrations.applied).not.toBeNull();
+  });
+
+  it('treats an unknown, expired-looking or duplicated session cookie as anonymous', async () => {
+    const { app, database } = await freshApi();
+    const cookie = await adminCookie(app, database);
+    for (const header of [`sf_session=${'a'.repeat(43)}`, 'sf_session=nonsense', `${cookie}; ${cookie}`]) {
+      const body = ReadyResponseSchema.parse((await readyWith(app, header)).json());
+      expect(body.checks.migrations.applied, header).toBeNull();
+    }
+  });
+
+  it('does not slide the session when it is only used to read /ready', async () => {
+    const database = await createMigratedDatabase(postgres);
+    opened.push(() => database.handle.close());
+    const clock = new TestClock();
+    const { app } = await apiOver(database, { clock: clock.fn });
+    const cookie = await adminCookie(app, database);
+    const before = await database.handle.pool.query('select expires_at from session');
+    clock.advance(10 * 60_000);
+    await readyWith(app, cookie);
+    const after = await database.handle.pool.query('select expires_at from session');
+    expect(after.rows).toEqual(before.rows);
+  });
+
+  it('serves repeated calls inside the cache window from memory, and refreshes after it', async () => {
+    const database = await createMigratedDatabase(postgres);
+    opened.push(() => database.handle.close());
+    const clock = new TestClock();
+    const { app } = await apiOver(database, { clock: clock.fn, readinessCacheTtlMs: 3000 });
+    const cookie = await adminCookie(app, database);
+
+    const first = await readyWith(app, cookie);
+    expect(first.json<ReadyResponse>().integration.failingEntities).toEqual([]);
+    await database.handle.pool.query(`insert into sync_state (entity, status) values ('products', 'failed')`);
+
+    clock.advance(1000);
+    const cached = await readyWith(app, cookie);
+    expect(cached.json<ReadyResponse>().integration.failingEntities).toEqual([]);
+
+    clock.advance(2500);
+    const fresh = await readyWith(app, cookie);
+    expect(fresh.json<ReadyResponse>().integration.failingEntities).toEqual(['products']);
+  });
+
+  it('runs one check for a burst of concurrent calls (single flight)', async () => {
+    const database = await createMigratedDatabase(postgres);
+    opened.push(() => database.handle.close());
+    const { app } = await apiOver(database, { readinessCacheTtlMs: 3000 });
+    const cookie = await adminCookie(app, database);
+    const spy = vi.spyOn(database.handle.pool, 'query');
+    try {
+      const responses = await Promise.all(Array.from({ length: 25 }, () => readyWith(app, cookie)));
+      expect(responses.every((response) => response.statusCode === 200)).toBe(true);
+      const readinessQueries = spy.mock.calls.filter((call) => String(typeof call[0] === 'string' ? call[0] : (call[0] as { text?: string })?.text).includes('to_regclass'));
+      expect(readinessQueries.length).toBeLessThanOrEqual(1);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('never caches a failure: a database that comes back is reported on the next call', async () => {
+    const database = await createMigratedDatabase(postgres);
+    opened.push(() => database.handle.close());
+    const clock = new TestClock();
+    const { app } = await apiOver(database, { clock: clock.fn, readinessCacheTtlMs: 3000 });
+    const spy = vi.spyOn(database.handle.pool, 'query').mockRejectedValueOnce(new Error('connection refused'));
+    try {
+      expect((await readyWith(app)).statusCode).toBe(503);
+    } finally {
+      spy.mockRestore();
+    }
+    expect((await readyWith(app)).statusCode).toBe(200);
   });
 });
 

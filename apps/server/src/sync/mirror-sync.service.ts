@@ -1,7 +1,7 @@
 import { schema, type DbHandle } from '@salesforce/db';
 import { isSankhyaGatewayError } from '@salesforce/sankhya';
 import { drizzle } from 'drizzle-orm/node-postgres';
-import type { Logger } from '../observability/logger.js';
+import { errorLogFields, type Logger } from '../observability/logger.js';
 import type { Clock } from '../platform/tokens.js';
 import { TransientJobError } from '../worker/job-contract.js';
 import { withEntityLock } from './entity-lock.js';
@@ -119,7 +119,7 @@ export class MirrorSyncService {
         );
         // Recorded on a fresh pooled connection: the locked session may be the very thing that failed.
         await markFailed(this.deps.db.db, entity, this.deps.now(), failure).catch((recordError: unknown) =>
-          logger.error({ err: recordError, entity }, 'could not record the failure in sync_state'),
+          logger.error({ ...errorLogFields(recordError), entity }, 'could not record the failure in sync_state'),
         );
         throw error;
       }

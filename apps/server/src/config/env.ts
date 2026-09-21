@@ -80,11 +80,30 @@ export const nodeEnvField = z.enum(NODE_ENVIRONMENTS, {
   error: `is required and must be one of: ${NODE_ENVIRONMENTS.join(', ')}.`,
 });
 
-/** Loopback hosts: the only databases the development seed may touch. */
+/** Loopback host names/addresses (IPv6 without brackets). */
+export function isLoopbackHost(host: string): boolean {
+  const normalized = host.toLowerCase().replace(/^\[|\]$/g, '');
+  return normalized === 'localhost' || normalized === '::1' || /^127(\.\d{1,3}){3}$/.test(normalized);
+}
+
+/** libpq/pg parameters that replace the target named in the authority part of the URL. */
+const TARGET_OVERRIDE_PARAMETERS = new Set(['host', 'hostaddr', 'port', 'service']);
+
+/**
+ * Loopback databases only: the guard of the development seed and of the account CLI. It resolves the
+ * ACTUAL target of the connection string: the host of the authority part (a single, non-empty host;
+ * multi-host lists and host-less URLs are refused) AND no `host`, `hostaddr`, `port` or `service`
+ * query parameter, which libpq-style clients let override the authority (a URL that says
+ * `127.0.0.1` but carries `?host=db.internal` connects to db.internal).
+ */
 export function isLoopbackDatabaseUrl(url: string): boolean {
   try {
-    const host = new URL(url).hostname.toLowerCase().replace(/^\[|\]$/g, '');
-    return host === 'localhost' || host === '::1' || /^127(\.\d{1,3}){3}$/.test(host);
+    const parsed = new URL(url);
+    for (const name of parsed.searchParams.keys()) {
+      if (TARGET_OVERRIDE_PARAMETERS.has(name.toLowerCase())) return false;
+    }
+    if (parsed.hostname === '' || parsed.hostname.includes(',')) return false;
+    return isLoopbackHost(parsed.hostname);
   } catch {
     return false;
   }

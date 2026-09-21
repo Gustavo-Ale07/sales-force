@@ -1,4 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { throttleAddress } from './client-address.js';
 
 /** 256 bits from the CSPRNG, base64url (43 characters). The plain value only ever exists in the cookie. */
 export const SESSION_TOKEN_BYTES = 32;
@@ -31,8 +32,9 @@ export function emailThrottleKey(normalizedEmail: string): string {
   return `email:${createHash('sha256').update(normalizedEmail, 'utf8').digest('hex')}`;
 }
 
+/** Throttle key of a client address: IPv4 as is, IPv6 aggregated by /64 (see `throttleAddress`). */
 export function ipThrottleKey(address: string): string {
-  return `ip:${address.slice(0, 64)}`;
+  return `ip:${throttleAddress(address)}`;
 }
 
 export function emailFingerprint(normalizedEmail: string): string {

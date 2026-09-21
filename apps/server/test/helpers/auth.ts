@@ -24,6 +24,7 @@ export function testAuthConfig(overrides: Partial<AuthConfig> = {}): AuthConfig 
     sessionTouchIntervalMs: 60_000,
     passwordHash: TEST_HASH_PARAMS,
     throttle: { account: DEFAULT_ACCOUNT_THROTTLE, ip: DEFAULT_IP_THROTTLE },
+    login: { maxConcurrentHashes: 8, globalMaxFailuresPerMinute: 300, blockedAuditWindowMs: 60_000 },
     ...overrides,
   };
 }

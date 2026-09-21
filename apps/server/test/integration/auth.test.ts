@@ -1,9 +1,10 @@
 import { ApiErrorSchema, SESSION_COOKIE_NAME, SessionResponseSchema } from '@salesforce/contracts';
 import { account, auditLog, authThrottle, session } from '@salesforce/db';
 import { eq, sql } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_ACCOUNT_THROTTLE, DEFAULT_IP_THROTTLE } from '../../src/iam/auth-config.js';
-import { hashSessionToken } from '../../src/iam/session-crypto.js';
+import { Argon2idPasswordHasher } from '../../src/iam/password-hasher.js';
+import { emailThrottleKey, hashSessionToken } from '../../src/iam/session-crypto.js';
 import {
   TEST_ORIGIN,
   TEST_PASSWORD,
@@ -486,5 +487,144 @@ describe('GET /configuration', () => {
     expect(response.headers['cache-control']).toBe('no-store');
     // The synchronization cursor and account e-mails are never part of the body.
     expect(response.body).not.toMatch(/cursor|@example\.test/i);
+  });
+});
+
+describe('login denial-of-service limits (A1, A2, A6)', () => {
+  const limits = (overrides: Partial<{ maxConcurrentHashes: number; globalMaxFailuresPerMinute: number }> = {}) => ({
+    login: { maxConcurrentHashes: 8, globalMaxFailuresPerMinute: 300, blockedAuditWindowMs: 60_000, ...overrides },
+  });
+
+  it('aggregates IPv6 addresses by /64: rotating the low 64 bits does not evade the address limit', async () => {
+    const ctx = await boot({
+      authOverrides: { throttle: { account: DEFAULT_ACCOUNT_THROTTLE, ip: { ...DEFAULT_IP_THROTTLE, maxFailures: 4 } } },
+    });
+    for (let i = 0; i < 4; i += 1) {
+      const response = await login(ctx, `v6-${i}@example.test`, WRONG_PASSWORD, { remoteAddress: `2001:db8:1:2:${i + 1}:aaaa:bbbb:cccc` });
+      expect(response.statusCode).toBe(401);
+    }
+    const sameSubnet = await login(ctx, 'v6-x@example.test', WRONG_PASSWORD, { remoteAddress: '2001:db8:1:2:ffff:1:2:3' });
+    expect(sameSubnet.statusCode).toBe(429);
+    expect((await login(ctx, 'v6-x@example.test', WRONG_PASSWORD, { remoteAddress: '2001:db8:1:3::1' })).statusCode).toBe(401);
+    const keys = (await ctx.database.handle.db.select().from(authThrottle)).map((row) => row.key);
+    expect(keys).toContain('ip:2001:db8:1:2::/64');
+  });
+
+  it('stops password checks when the installation-wide failure budget is spent, without locking any account', async () => {
+    const ctx = await boot({ authOverrides: limits({ globalMaxFailuresPerMinute: 5 }) });
+    await createTestAccount(ctx.database.handle, { email: 'victim@example.test', role: 'seller' }, ctx.clock.fn);
+    for (let i = 0; i < 5; i += 1) {
+      const response = await login(ctx, `spray-${i}@example.test`, WRONG_PASSWORD, { remoteAddress: `198.51.100.${i + 1}` });
+      expect(response.statusCode).toBe(401);
+    }
+
+    // Budget spent: even the right password of a real account is refused, before any hashing.
+    const refused = await login(ctx, 'victim@example.test', TEST_PASSWORD, { remoteAddress: '203.0.113.50' });
+    expect(refused.statusCode).toBe(429);
+    expect(ApiErrorSchema.parse(refused.json()).code).toBe('rate_limited');
+    const retryAfter = Number(refused.headers['retry-after']);
+    expect(retryAfter).toBeGreaterThanOrEqual(1);
+    expect(retryAfter).toBeLessThanOrEqual(60);
+    expect(setCookieHeaders(refused)).toEqual([]);
+
+    // The refused attempts touched no per-account or per-address counter.
+    const victimKey = emailThrottleKey('victim@example.test');
+    const keys = (await ctx.database.handle.db.select().from(authThrottle)).map((row) => row.key);
+    expect(keys).not.toContain(victimKey);
+    expect(keys).not.toContain('ip:203.0.113.50');
+
+    // A new minute, a new budget.
+    ctx.clock.advance(60_000);
+    expect((await login(ctx, 'victim@example.test', TEST_PASSWORD, { remoteAddress: '203.0.113.50' })).statusCode).toBe(200);
+  });
+
+  it('does not spend the failure budget on successful logins', async () => {
+    const ctx = await boot({ authOverrides: limits({ globalMaxFailuresPerMinute: 3 }) });
+    for (let i = 0; i < 6; i += 1) {
+      await createTestAccount(ctx.database.handle, { email: `ok-${i}@example.test`, role: 'seller' }, ctx.clock.fn);
+      expect((await login(ctx, `ok-${i}@example.test`, TEST_PASSWORD, { remoteAddress: `192.0.2.${i + 1}` })).statusCode).toBe(200);
+    }
+  });
+
+  it('answers 429 with Retry-After when the Argon2id slots are all busy, and frees them afterwards', async () => {
+    const ctx = await boot({ authOverrides: limits({ maxConcurrentHashes: 2 }) });
+    let open: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    const verify = vi.spyOn(Argon2idPasswordHasher.prototype, 'verify').mockImplementation(async () => {
+      await gate;
+      return false;
+    });
+    try {
+      const settled: number[] = [];
+      const attempts = [1, 2, 3].map((n) =>
+        login(ctx, `busy-${n}@example.test`, WRONG_PASSWORD, { remoteAddress: `192.0.2.${n}` }).then((response) => {
+          settled.push(response.statusCode);
+          return response;
+        }),
+      );
+      // The third attempt is refused while the first two hold the slots.
+      await vi.waitFor(() => expect(settled).toEqual([429]));
+      expect(verify).toHaveBeenCalledTimes(2);
+      open();
+      const responses = await Promise.all(attempts);
+      const refused = responses.filter((response) => response.statusCode === 429);
+      expect(refused).toHaveLength(1);
+      expect(ApiErrorSchema.parse(refused[0]?.json()).code).toBe('rate_limited');
+      expect(Number(refused[0]?.headers['retry-after'])).toBeGreaterThanOrEqual(1);
+      expect(responses.filter((response) => response.statusCode === 401)).toHaveLength(2);
+      // The refused attempt recorded no failure counters.
+      const keys = (await ctx.database.handle.db.select().from(authThrottle)).map((row) => row.key);
+      expect(keys.filter((key) => key.startsWith('email:'))).toHaveLength(2);
+    } finally {
+      verify.mockRestore();
+    }
+    // Slots are released: the next login is served normally.
+    await createTestAccount(ctx.database.handle, { email: 'after@example.test', role: 'seller' }, ctx.clock.fn);
+    expect((await login(ctx, 'after@example.test', TEST_PASSWORD, { remoteAddress: '192.0.2.99' })).statusCode).toBe(200);
+  });
+
+  it('releases the Argon2id slot when the verification itself throws', async () => {
+    const ctx = await boot({ authOverrides: limits({ maxConcurrentHashes: 1 }) });
+    const verify = vi.spyOn(Argon2idPasswordHasher.prototype, 'verify').mockRejectedValueOnce(new Error('wasm failure'));
+    try {
+      expect((await login(ctx, 'boom@example.test', WRONG_PASSWORD, { remoteAddress: '192.0.2.1' })).statusCode).toBe(500);
+    } finally {
+      verify.mockRestore();
+    }
+    expect((await login(ctx, 'boom@example.test', WRONG_PASSWORD, { remoteAddress: '192.0.2.2' })).statusCode).toBe(401);
+  });
+
+  it('writes a bounded number of audit rows for a flood of blocked attempts', async () => {
+    const ctx = await boot();
+    await createTestAccount(ctx.database.handle, { email: 'flood@example.test', role: 'seller' }, ctx.clock.fn);
+    for (let i = 0; i < DEFAULT_ACCOUNT_THROTTLE.maxFailures; i += 1) {
+      await login(ctx, 'flood@example.test', WRONG_PASSWORD, { remoteAddress: `10.6.0.${i}` });
+    }
+    for (let i = 0; i < 40; i += 1) {
+      expect((await login(ctx, 'flood@example.test', TEST_PASSWORD, { remoteAddress: `10.6.1.${i}` })).statusCode).toBe(429);
+    }
+    const blocked = await auditRows(ctx, 'auth.login.blocked');
+    expect(blocked.length).toBeGreaterThanOrEqual(1);
+    expect(blocked.length).toBeLessThanOrEqual(7); // occurrences 1, 2, 4, 8, 16, 32 of 40
+    expect(JSON.stringify(blocked)).not.toContain('flood@example.test');
+    expect(JSON.stringify(blocked[blocked.length - 1]?.detail)).toContain('attemptsInWindow');
+  });
+
+  it('treats a repeated session cookie as no cookie at all (never picks one of them)', async () => {
+    const ctx = await boot();
+    await createTestAccount(ctx.database.handle, { email: 'dup@example.test', role: 'admin' }, ctx.clock.fn);
+    const cookie = await loginCookie(ctx, 'dup@example.test', TEST_PASSWORD);
+    expect((await get(ctx, '/api/v1/auth/session', cookie)).json()).toMatchObject({ authenticated: true });
+
+    const forged = `${SESSION_COOKIE_NAME}=${'b'.repeat(43)}`;
+    for (const header of [`${cookie}; ${forged}`, `${forged}; ${cookie}`, `${cookie}; ${cookie}`]) {
+      const response = await get(ctx, '/api/v1/auth/session', header);
+      expect(SessionResponseSchema.parse(response.json()).authenticated, header).toBe(false);
+      expect((await get(ctx, '/api/v1/configuration', header)).statusCode, header).toBe(401);
+    }
+    // The session itself is untouched.
+    expect((await get(ctx, '/api/v1/auth/session', cookie)).json()).toMatchObject({ authenticated: true });
   });
 });

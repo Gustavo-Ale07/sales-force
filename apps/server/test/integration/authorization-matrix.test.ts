@@ -13,8 +13,9 @@ import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
  * handler behind it may answer anything except 401/403 (e.g. 409 when the installation is not enabled).
  *
  * Deny-by-default (security-model 5.1 is PROPOSED): a role not listed for an operation is denied.
- * Which ROWS an allowed role sees is data scope, not route access: see the IDOR suite
- * (`commercial-scope.test.ts`).
+ * Which ROWS an allowed role sees is data scope, not route access: the IDOR tests live in
+ * `commercial-orders.test.ts` (orders, including the lock-time race) and `commercial-catalog.test.ts`
+ * (customers, products, sellers).
  */
 type Expectation = 'allow' | 'deny';
 const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>>> = {

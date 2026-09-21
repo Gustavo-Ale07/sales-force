@@ -13,6 +13,7 @@ import {
   integerField,
   logLevelField,
   nodeEnvField,
+  isLoopbackHost,
   parseEnv,
   portField,
   withoutEmptyValues,
@@ -27,7 +28,7 @@ import {
 const cronField = (defaultValue: string) =>
   z
     .string()
-    .regex(/^S+(s+S+){4}$/, { error: 'must be a 5-field cron expression, e.g. "*/10 * * * *".' })
+    .regex(/^\S+(\s+\S+){4}$/,{ error: 'must be a 5-field cron expression, e.g. "*/10 * * * *".' })
     .default(defaultValue);
 
 export const WorkerEnvSchema = z.object({
@@ -37,6 +38,8 @@ export const WorkerEnvSchema = z.object({
   DB_POOL_MAX: integerField({ min: 1, max: 100 }, 10),
   /** Loopback health endpoint used by the container HEALTHCHECK. Never bind it to a public address. */
   WORKER_HEALTH_HOST: z.string().min(1).default('127.0.0.1'),
+  /** Explicit override that lets `WORKER_HEALTH_HOST` be a non-loopback address (`1`). Off by default. */
+  WORKER_HEALTH_ALLOW_NON_LOOPBACK: z.string().optional(),
   WORKER_HEALTH_PORT: portField(3001),
   /** Cron expression (5 fields) of the `sync.heartbeat` scheduled job. */
   HEARTBEAT_CRON: z
@@ -46,7 +49,8 @@ export const WorkerEnvSchema = z.object({
   /**
    * Mirror synchronization (WP 0.8). `false` = no scheduled mirror jobs (a manual `sync:once` still
    * works). The default crons are the PROPOSED frequencies of the spec (RF-SNK-1, spike §4) and stay
-   * proposals until the Sankhya request limits are measured (S0.2).
+   * proposals until the Sankhya request limits are measured (S0.2). Default `true` for the fake
+   * gateway only: with `SANKHYA_MODE=live` the variable is mandatory (checked in `loadWorkerConfig`).
    */
   SYNC_MIRROR_ENABLED: z
     .enum(['true', 'false'], { error: "must be 'true' or 'false'." })
@@ -77,7 +81,25 @@ export function loadWorkerConfig(source: EnvSource): WorkerConfig {
   const problems: string[] = [];
   let env: WorkerEnv | undefined;
   try {
-    env = parseEnv('Worker', WorkerEnvSchema, source);
+    env = parseEnv('Worker', WorkerEnvSchema, source, (parsed) => {
+      const extra: string[] = [];
+      if (parsed.WORKER_HEALTH_ALLOW_NON_LOOPBACK !== '1' && !isLoopbackHost(parsed.WORKER_HEALTH_HOST)) {
+        extra.push(
+          'WORKER_HEALTH_HOST: must be a loopback address (127.0.0.1, ::1, localhost); ' +
+            'a non-loopback bind needs the explicit WORKER_HEALTH_ALLOW_NON_LOOPBACK=1.',
+        );
+      }
+      // Scheduled mirror jobs against a REAL Sankhya are never on by default: the request limits are
+      // still unmeasured (spike S0.2). Live mode must say `SYNC_MIRROR_ENABLED=true|false` explicitly.
+      const values = withoutEmptyValues(source);
+      if (values['SANKHYA_MODE']?.toLowerCase() === 'live' && values['SYNC_MIRROR_ENABLED'] === undefined) {
+        extra.push(
+          'SYNC_MIRROR_ENABLED: must be set explicitly (true or false) when SANKHYA_MODE=live; ' +
+            'scheduled mirror jobs never start against a real Sankhya by default (spike S0.2 open).',
+        );
+      }
+      return extra;
+    });
   } catch (error) {
     if (!(error instanceof EnvValidationError)) throw error;
     problems.push(...error.problems);

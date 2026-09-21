@@ -5,6 +5,8 @@ export const DATABASE = Symbol('DATABASE');
 /** The `DbHandle` (pool + close): only readiness and shutdown use it directly. */
 export const DATABASE_HANDLE = Symbol('DATABASE_HANDLE');
 export const CLOCK = Symbol('CLOCK');
+/** How long `/ready` results are reused (milliseconds; 0 disables the cache). */
+export const READINESS_CACHE_TTL_MS = Symbol('READINESS_CACHE_TTL_MS');
 
 /** Injected time source; tests replace it (no hidden `Date.now()` in application services). */
 export type Clock = () => Date;

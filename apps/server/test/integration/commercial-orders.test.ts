@@ -4,7 +4,8 @@ import { auditLog, integrationOutbox, salesOrder } from '@salesforce/db';
 import { computeLineTotal, decimalEquals, sumTotals, type InstallationConfiguration } from '@salesforce/domain';
 import { DEMO_ACCOUNT_EMAILS, DEMO_CONFIGURATION, getDemoDataset } from '@salesforce/sankhya';
 import { eq } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { OrdersRepository } from '../../src/orders/orders.repository.js';
 import { restrictedKeys, startCommercialApp, type CommercialApp, type Json, type Who } from '../helpers/commercial-app.js';
 import { TEST_ORIGIN, TEST_PASSWORD, createTestAccount } from '../helpers/auth.js';
 import { loginCookie, startAuthApp } from '../helpers/auth-app.js';
@@ -451,6 +452,58 @@ describe('IDOR: a seller never reaches another seller data', () => {
     const list = await ctx.call('manager', 'GET', '/orders?pageSize=100');
     expect(restrictedKeys(list.body)).toEqual([]);
     expect(restrictedKeys((await ctx.call('manager', 'GET', `/orders/${foreignId}`)).body)).toEqual([]);
+  });
+});
+
+describe('IDOR race: the order leaves the caller scope between the unlocked read and the row lock (L3.1)', () => {
+  /**
+   * After the caller's first (unlocked) read of the order, another writer moves it to seller 2 and bumps
+   * its version. The locked re-read must decide scope BEFORE version: the caller gets the same 404 as
+   * for a missing order, never a version_conflict that shows the order exists and its current version.
+   */
+  async function moveAfterFirstRead(orderId: string): Promise<() => void> {
+    const original = OrdersRepository.prototype.findById;
+    let moved = false;
+    const spy = vi.spyOn(OrdersRepository.prototype, 'findById').mockImplementation(async function (this: OrdersRepository, ...args) {
+      const row = await original.apply(this, args);
+      if (!moved && args[0] === orderId && args[2] !== true) {
+        moved = true;
+        await ctx.database.handle.pool.query('update sales_order set seller_code = $1, version = version + 1 where id = $2', [SELLER_2, orderId]);
+      }
+      return row;
+    });
+    return () => spy.mockRestore();
+  }
+
+  const body = (version: number) => ({ expectedVersion: version, customerCode: customer1, negotiationTypeCode: 2, notes: null, items: [] });
+
+  it('replace answers 404 (not version_conflict) when the locked row is out of scope', async () => {
+    const created = await create('seller1', draftBody());
+    const restore = await moveAfterFirstRead(created.body.id);
+    try {
+      const result = await ctx.call('seller1', 'PUT', `/orders/${created.body.id}`, body(1));
+      const missing = await ctx.call('seller1', 'PUT', `/orders/${randomUUID()}`, body(1));
+      expect(result.status).toBe(404);
+      expect(result.body.code).toBe('not_found');
+      expect(result.body.code).toBe(missing.body.code);
+      expect(JSON.stringify(result.body)).not.toContain('currentVersion');
+    } finally {
+      restore();
+    }
+  });
+
+  it('discard answers 404 when the locked row is out of scope, and does not cancel it', async () => {
+    const created = await create('seller1', draftBody());
+    const restore = await moveAfterFirstRead(created.body.id);
+    try {
+      const result = await ctx.call('seller1', 'DELETE', `/orders/${created.body.id}`);
+      expect(result.status).toBe(404);
+      expect(result.body.code).toBe('not_found');
+    } finally {
+      restore();
+    }
+    const [row] = await ctx.database.handle.db.select().from(salesOrder).where(eq(salesOrder.id, created.body.id));
+    expect(row?.status).toBe('draft');
   });
 });
 

@@ -10,12 +10,14 @@ import { systemClock, type Clock } from '../platform/tokens.js';
 
 /**
  * Wires the account services without the Nest container, for the operator scripts (seed and the
- * account CLI). Same classes, same audit trail as the API process.
+ * account CLI). Same classes, same audit trail as the API process. `operator` (who ran the script)
+ * is written to the detail of every audit row.
  */
 export function createOperatorAccountService(
   handle: DbHandle,
   hash: PasswordHashParams,
   clock: Clock = systemClock,
+  operator?: string,
 ): { accounts: AccountService; repository: AccountRepository } {
   const repository = new AccountRepository(handle.db);
   const service = new AccountService(
@@ -27,5 +29,6 @@ export function createOperatorAccountService(
     new AuditService(handle.db, clock),
     clock,
   );
+  if (operator !== undefined) service.attributeTo(operator);
   return { accounts: service, repository };
 }

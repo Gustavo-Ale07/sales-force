@@ -3,6 +3,7 @@ import { createDb } from '@salesforce/db';
 import { ACCOUNT_ROLES, type AccountRole } from '@salesforce/domain';
 import { z } from 'zod';
 import { createOperatorAccountService } from './cli/operator.js';
+import { operatorIdentity } from './cli/operator-identity.js';
 import { passwordHashFields, passwordHashParamsOf, passwordHashProblems } from './config/auth-env.js';
 import { databaseUrlField, isLoopbackDatabaseUrl, nodeEnvField, parseEnv } from './config/env.js';
 import { AccountAlreadyExistsError, AccountNotFoundError, PasswordPolicyError } from './iam/account.service.js';
@@ -75,7 +76,7 @@ runMain('account-cli', async () => {
 
   const db = createDb(env.DATABASE_URL.reveal(), { max: 2, applicationName: 'salesforce-account-cli' });
   try {
-    const { accounts, repository } = createOperatorAccountService(db, passwordHashParamsOf(env));
+    const { accounts, repository } = createOperatorAccountService(db, passwordHashParamsOf(env), undefined, operatorIdentity(process.env));
     try {
       if (command === 'create') {
         const role = values.role ?? fail('--role is required (admin, manager or seller)');

@@ -29,6 +29,17 @@ export interface AuthConfig {
     /** Failure rate limit per client address. */
     readonly ip: ThrottleRule;
   };
+  /** Denial-of-service limits of the login endpoint (independent of the per-key lockouts above). */
+  readonly login: LoginLimits;
+}
+
+export interface LoginLimits {
+  /** Argon2id hashes in flight at once; a login that finds none free answers 429. */
+  readonly maxConcurrentHashes: number;
+  /** Failed password checks per minute the whole installation tolerates; beyond it logins answer 429. */
+  readonly globalMaxFailuresPerMinute: number;
+  /** Window of the audit sampling of blocked / throttled attempts. */
+  readonly blockedAuditWindowMs: number;
 }
 
 /** RF-IAM-2: 5 failures lock for 15 minutes; repeated lockouts double the duration (cap 24 h). */
@@ -57,5 +68,10 @@ export function authConfigFromEnv(env: ParsedApiEnv): AuthConfig {
     sessionTouchIntervalMs: MINUTE_MS,
     passwordHash: passwordHashParamsOf(env),
     throttle: { account: DEFAULT_ACCOUNT_THROTTLE, ip: DEFAULT_IP_THROTTLE },
+    login: {
+      maxConcurrentHashes: env.LOGIN_MAX_CONCURRENT_HASHES,
+      globalMaxFailuresPerMinute: env.LOGIN_GLOBAL_MAX_PER_MINUTE,
+      blockedAuditWindowMs: MINUTE_MS,
+    },
   };
 }

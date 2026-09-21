@@ -144,6 +144,6 @@ export function login(
 /** Logs in and returns the `cookie` header value for follow-up requests. */
 export async function loginCookie(app: Pick<AuthApp, 'app'>, email: string, password: string): Promise<string> {
   const response = await login(app, email, password);
-  if (response.statusCode !== 200) throw new Error(`login failed with ${response.statusCode}`);
+  if (response.statusCode !== 200) throw new Error(`login failed with ${response.statusCode}: ${response.body.slice(0, 300)}`);
   return sessionCookieOf(response);
 }

@@ -155,7 +155,9 @@ export class OrdersService {
     const updated = await this.orders.transaction(async (tx) => {
       // The read above was unlocked: decide again on the locked row so two writers cannot both win.
       const locked = await this.orders.findById(id, tx, true);
-      if (locked === null) throw new AppError('not_found');
+      // Scope first, on the locked row: a concurrent change may have moved the order out of the caller's
+      // scope, and then it must look exactly like a missing one (never a version_conflict that shows it exists).
+      this.assertInScope(context.scope, locked);
       this.assertEditable(locked, body.expectedVersion);
 
       const row = await this.orders.updateOrder(
@@ -191,7 +193,7 @@ export class OrdersService {
 
     const updated = await this.orders.transaction(async (tx) => {
       const locked = await this.orders.findById(id, tx, true);
-      if (locked === null) throw new AppError('not_found');
+      this.assertInScope(scope, locked);
       this.assertCancellable(locked);
       const row = await this.orders.updateOrder(
         id,
@@ -229,9 +231,13 @@ export class OrdersService {
 
   private async loadVisible(scope: CustomerScope, id: string): Promise<OrderRow> {
     const row = await this.orders.findById(id);
-    // Out of scope looks exactly like missing (P-21).
-    if (row === null || !isCustomerInScope({ sellerCode: row.sellerCode }, scope)) throw new AppError('not_found');
+    this.assertInScope(scope, row);
     return row;
+  }
+
+  /** Out of scope (or gone) looks exactly like missing (P-21); used on the row locked for update. */
+  private assertInScope(scope: CustomerScope, row: OrderRow | null): asserts row is OrderRow {
+    if (row === null || !isCustomerInScope({ sellerCode: row.sellerCode }, scope)) throw new AppError('not_found');
   }
 
   private assertEditable(order: OrderRow, expectedVersion: number): void {

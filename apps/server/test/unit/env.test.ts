@@ -74,7 +74,7 @@ describe('API environment', () => {
   });
 
   it('refuses AUTH_MODE=dev in production, even with the opt-in', () => {
-    expect(problemsOf(() => parseApiEnv({ DATABASE_URL, NODE_ENV: 'production', ALLOW_DEV_AUTH: '1', ALLOWED_ORIGINS: 'https://app.example.com' }))).toEqual([
+    expect(problemsOf(() => parseApiEnv({ DATABASE_URL, NODE_ENV: 'production', TRUST_PROXY: '1', ALLOW_DEV_AUTH: '1', ALLOWED_ORIGINS: 'https://app.example.com' }))).toEqual([
       expect.stringMatching(/^AUTH_MODE: .*production/),
     ]);
   });

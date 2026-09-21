@@ -4,7 +4,7 @@ import { normalizeEmail } from '@salesforce/domain';
 import { uuidv7 } from '../platform/ids.js';
 import { CLOCK, DATABASE, type Clock } from '../platform/tokens.js';
 import { AccountRepository } from './account.repository.js';
-import { AUDIT_ACTIONS, AuditService } from './audit.service.js';
+import { AUDIT_ACTIONS, AuditService, type AuditDetail } from './audit.service.js';
 import { PASSWORD_HASHER } from './iam-tokens.js';
 import type { PasswordHasher } from './password-hasher.js';
 import { checkPasswordPolicy, describePasswordViolations, type PasswordViolation } from './password-policy.js';
@@ -35,9 +35,14 @@ export class AccountNotFoundError extends Error {
   }
 }
 
-/** Who performed an administrative change: an account, or `null` for the operator CLI / seed. */
+/**
+ * Who performed an administrative change: an account, or `null` for the operator CLI / seed. For the
+ * scripts, `operator` names the person who ran them (see `operatorIdentity`) and is written to the
+ * audit detail: an action with no actor account is otherwise attributable to nobody.
+ */
 export interface ActorRef {
   readonly accountId: string | null;
+  readonly operator?: string;
 }
 
 export const CLI_ACTOR: ActorRef = { accountId: null };
@@ -49,6 +54,8 @@ export const CLI_ACTOR: ActorRef = { accountId: null };
  */
 @Injectable()
 export class AccountService {
+  #operator: string | null = null;
+
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     @Inject(PASSWORD_HASHER) private readonly hasher: PasswordHasher,
@@ -58,6 +65,17 @@ export class AccountService {
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
+
+  /** Attributes every audit row of this instance to the person running the script (operator CLI, seed). */
+  attributeTo(operator: string): this {
+    this.#operator = operator;
+    return this;
+  }
+
+  private detailOf(actor: ActorRef, detail: AuditDetail): AuditDetail {
+    const operator = actor.operator ?? this.#operator;
+    return operator === null || operator === undefined ? detail : { ...detail, operator };
+  }
 
   /** Creates an active account. Throws `PasswordPolicyError` / `AccountAlreadyExistsError`. Returns the id. */
   async createAccount(
@@ -79,7 +97,7 @@ export class AccountService {
       );
       if (!inserted) throw new AccountAlreadyExistsError();
       await this.audit.record(
-        { action: AUDIT_ACTIONS.accountCreated, actorAccountId: actor.accountId, detail: { accountId: id, role: input.role } },
+        { action: AUDIT_ACTIONS.accountCreated, actorAccountId: actor.accountId, detail: this.detailOf(actor, { accountId: id, role: input.role }) },
         tx,
       );
     });
@@ -101,7 +119,7 @@ export class AccountService {
         {
           action: AUDIT_ACTIONS.accountPasswordChanged,
           actorAccountId: actor.accountId,
-          detail: { accountId, sessionsRevoked: revoked },
+          detail: this.detailOf(actor, { accountId, sessionsRevoked: revoked }),
         },
         tx,
       );
@@ -119,7 +137,7 @@ export class AccountService {
         {
           action: AUDIT_ACTIONS.accountStatusChanged,
           actorAccountId: actor.accountId,
-          detail: { accountId, status, sessionsRevoked: revoked },
+          detail: this.detailOf(actor, { accountId, status, sessionsRevoked: revoked }),
         },
         tx,
       );
@@ -136,7 +154,7 @@ export class AccountService {
     await this.db.transaction(async (tx) => {
       await this.accounts.upsertSellerLink({ accountId, sellerCode, configVersionId }, tx);
       await this.audit.record(
-        { action: AUDIT_ACTIONS.accountSellerLinked, actorAccountId: actor.accountId, detail: { accountId, sellerCode } },
+        { action: AUDIT_ACTIONS.accountSellerLinked, actorAccountId: actor.accountId, detail: this.detailOf(actor, { accountId, sellerCode }) },
         tx,
       );
     });
@@ -149,7 +167,7 @@ export class AccountService {
     await this.audit.record({
       action: AUDIT_ACTIONS.unlock,
       actorAccountId: actor.accountId,
-      detail: { accountId: found?.id ?? null, cleared },
+      detail: this.detailOf(actor, { accountId: found?.id ?? null, cleared }),
     });
     return cleared;
   }

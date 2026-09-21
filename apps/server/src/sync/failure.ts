@@ -1,4 +1,5 @@
 import { isSankhyaGatewayError, type SankhyaErrorKind } from '@salesforce/sankhya';
+import { maskUris } from '../observability/logger.js';
 import { PermanentJobError, TransientJobError } from '../worker/job-contract.js';
 import { classifyJobFailure } from '../worker/retry.js';
 
@@ -19,6 +20,14 @@ export interface SyncFailure {
 
 const MAX_MESSAGE_CHARS = 500;
 
+/** A driver/system error code (`23505`, `ECONNRESET`, ...) only; free text or URIs become `null`. */
+function safeErrorCode(error: unknown): string | null {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return null;
+  const { code } = error as { code: unknown };
+  const text = typeof code === 'number' ? String(code) : code;
+  return typeof text === 'string' && /^[A-Za-z0-9_.-]{1,40}$/.test(text) ? text : null;
+}
+
 /**
  * Classifies any failure of a mirror run. The message is stored in the database and shown in the
  * integration status, so only text that is secret-free by contract is kept: gateway errors and the
@@ -32,7 +41,7 @@ export function describeSyncFailure(error: unknown): SyncFailure {
     return {
       errorClass: error.kind,
       errorCode: error.code,
-      message: `${error.code}: ${error.message}`.slice(0, MAX_MESSAGE_CHARS),
+      message: maskUris(`${error.code}: ${error.message}`).slice(0, MAX_MESSAGE_CHARS),
       retry: error.retryable,
     };
   }
@@ -40,7 +49,7 @@ export function describeSyncFailure(error: unknown): SyncFailure {
     return {
       errorClass: error instanceof TransientJobError ? 'temporary' : 'permanent',
       errorCode: null,
-      message: error.message.slice(0, MAX_MESSAGE_CHARS),
+      message: maskUris(error.message).slice(0, MAX_MESSAGE_CHARS),
       retry: classification.retry,
     };
   }
@@ -52,7 +61,7 @@ export function describeSyncFailure(error: unknown): SyncFailure {
       retry: true,
     };
   }
-  const code = typeof error === 'object' && error !== null && 'code' in error ? String((error as { code: unknown }).code) : null;
+  const code = safeErrorCode(error);
   return {
     errorClass: 'unclassified',
     errorCode: code,

@@ -5,16 +5,24 @@ export interface SessionCookieOptions {
   readonly secure: boolean;
 }
 
-/** Reads one cookie from a `Cookie` request header. Returns the first occurrence, undecoded. */
+/**
+ * Reads one cookie from a `Cookie` request header, undecoded. When the name appears more than once
+ * (a forged or confused client, a cookie planted from a sibling path or subdomain) NO value is
+ * returned: picking the first or the last would let whoever controls the extra cookie choose which
+ * session is used. The caller treats it as "no cookie".
+ */
 export function readCookie(header: string | string[] | undefined, name: string): string | undefined {
   const raw = Array.isArray(header) ? header.join(';') : header;
   if (raw === undefined) return undefined;
+  let found: string | undefined;
   for (const part of raw.split(';')) {
     const separator = part.indexOf('=');
     if (separator === -1) continue;
-    if (part.slice(0, separator).trim() === name) return part.slice(separator + 1).trim();
+    if (part.slice(0, separator).trim() !== name) continue;
+    if (found !== undefined) return undefined;
+    found = part.slice(separator + 1).trim();
   }
-  return undefined;
+  return found;
 }
 
 function attributes(options: SessionCookieOptions): string[] {
