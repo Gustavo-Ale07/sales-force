@@ -16,6 +16,11 @@ export const AUDIT_ACTIONS = {
   accountPasswordChanged: 'account.password_changed',
   accountStatusChanged: 'account.status_changed',
   accountSellerLinked: 'account.seller_linked',
+  orderCreated: 'order.created',
+  orderReplaced: 'order.replaced',
+  orderDiscarded: 'order.discarded',
+  /** An ERP submission was requested; it is refused while submission is disabled (SNK-4/SNK-6). */
+  orderSubmitAttempted: 'order.submit_attempted',
 } as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
 

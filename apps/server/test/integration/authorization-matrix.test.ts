@@ -10,32 +10,32 @@ import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
  * Authorization matrix (role x route). Every `session` route of the contract registry needs a row
  * here: a route added to the registry without one fails this suite, so no endpoint can ship without
  * an explicit allow/deny decision per role. `allow` means "the guard lets the role through"; the
- * handler behind it may not exist yet (then the answer is 404, never 401/403).
+ * handler behind it may answer anything except 401/403 (e.g. 409 when the installation is not enabled).
  *
  * Deny-by-default (security-model 5.1 is PROPOSED): a role not listed for an operation is denied.
+ * Which ROWS an allowed role sees is data scope, not route access: see the IDOR suite
+ * (`commercial-scope.test.ts`).
  */
 type Expectation = 'allow' | 'deny';
 const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>>> = {
   logout: { admin: 'allow', manager: 'allow', seller: 'allow' },
   getConfiguration: { admin: 'allow', manager: 'deny', seller: 'deny' },
-  // Routes whose handlers and grants arrive with later stages: denied for every role until then.
-  getDashboard: { admin: 'deny', manager: 'deny', seller: 'deny' },
-  listSellers: { admin: 'deny', manager: 'deny', seller: 'deny' },
-  listCustomers: { admin: 'deny', manager: 'deny', seller: 'deny' },
-  getCustomer: { admin: 'deny', manager: 'deny', seller: 'deny' },
-  listProductGroups: { admin: 'deny', manager: 'deny', seller: 'deny' },
-  listProducts: { admin: 'deny', manager: 'deny', seller: 'deny' },
-  getProduct: { admin: 'deny', manager: 'deny', seller: 'deny' },
-  listOrders: { admin: 'deny', manager: 'deny', seller: 'deny' },
-  createOrder: { admin: 'deny', manager: 'deny', seller: 'deny' },
-  getOrder: { admin: 'deny', manager: 'deny', seller: 'deny' },
-  replaceOrder: { admin: 'deny', manager: 'deny', seller: 'deny' },
-  discardOrder: { admin: 'deny', manager: 'deny', seller: 'deny' },
-  submitOrder: { admin: 'deny', manager: 'deny', seller: 'deny' },
+  // Commercial routes (Stage 3A). The three roles that exist may use them; the external
+  // representative role does not exist yet (AUTH-3 PROPOSED) and gets no grant until the owner decides.
+  getDashboard: { admin: 'allow', manager: 'allow', seller: 'allow' },
+  listSellers: { admin: 'allow', manager: 'allow', seller: 'allow' },
+  listCustomers: { admin: 'allow', manager: 'allow', seller: 'allow' },
+  getCustomer: { admin: 'allow', manager: 'allow', seller: 'allow' },
+  listProductGroups: { admin: 'allow', manager: 'allow', seller: 'allow' },
+  listProducts: { admin: 'allow', manager: 'allow', seller: 'allow' },
+  getProduct: { admin: 'allow', manager: 'allow', seller: 'allow' },
+  listOrders: { admin: 'allow', manager: 'allow', seller: 'allow' },
+  createOrder: { admin: 'allow', manager: 'allow', seller: 'allow' },
+  getOrder: { admin: 'allow', manager: 'allow', seller: 'allow' },
+  replaceOrder: { admin: 'allow', manager: 'allow', seller: 'allow' },
+  discardOrder: { admin: 'allow', manager: 'allow', seller: 'allow' },
+  submitOrder: { admin: 'allow', manager: 'allow', seller: 'allow' },
 };
-
-/** Session routes that have a real handler in `apps/server` today. */
-const IMPLEMENTED = new Set(['logout', 'getConfiguration']);
 
 const sessionRoutes = (Object.values(routes) as RouteDefinition[]).filter((route) => route.auth === 'session');
 
@@ -46,11 +46,9 @@ const cookies = {} as Record<AccountRole, string>;
 
 beforeAll(async () => {
   postgres = await startPostgres();
-  // Handlers of later stages do not exist yet: serve those registry routes with throwing stubs so the
-  // real guard and policy still decide (a 404 would say nothing about authorization).
-  ctx = await startAuthApp(postgres, opened, {
-    stubRoutes: sessionRoutes.filter((route) => !IMPLEMENTED.has(route.operationId)),
-  });
+  // Every session route of the registry has a real handler now: no stubs. The real guard and policy
+  // decide, then the real handler runs (an empty installation answers 409, never 401/403).
+  ctx = await startAuthApp(postgres, opened);
   for (const role of ACCOUNT_ROLES) {
     await createTestAccount(ctx.database.handle, { email: `${role}@example.test`, role }, ctx.clock.fn);
     cookies[role] = await loginCookie(ctx, `${role}@example.test`, TEST_PASSWORD);
@@ -64,7 +62,7 @@ afterAll(async () => {
 
 /** A concrete URL for a route: path parameters replaced by a well-formed UUID. */
 function urlOf(route: RouteDefinition): string {
-  return `/api/v1${toColonPath(route).replace(/:\w+/g,'019a0000-0000-7000-8000-000000000000')}`;
+  return `/api/v1${toColonPath(route).replace(/:\w+/g, '019a0000-0000-7000-8000-000000000000')}`;
 }
 
 function callOf(route: RouteDefinition, cookie: string | undefined) {

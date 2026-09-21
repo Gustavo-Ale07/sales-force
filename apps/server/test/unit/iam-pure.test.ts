@@ -1,4 +1,4 @@
-import { SESSION_COOKIE_NAME } from '@salesforce/contracts';
+import { SESSION_COOKIE_NAME, routes } from '@salesforce/contracts';
 import { describe, expect, it } from 'vitest';
 import { checkCsrf } from '../../src/iam/csrf.js';
 import {
@@ -153,7 +153,11 @@ describe('central policy', () => {
   });
 
   it('keeps the grant table free of cost/margin or export operations', () => {
-    expect(Object.keys(ROUTE_POLICY).sort()).toEqual(['getConfiguration', 'logout']);
+    const granted = Object.keys(ROUTE_POLICY);
+    // Every grant is a route of the registry (nothing invented), and none is a cost, margin or export operation.
+    const known = new Set<string>(Object.values(routes).map((route) => route.operationId));
+    for (const operationId of granted) expect(known.has(operationId), operationId).toBe(true);
+    expect(granted.filter((operationId) => /export|cost|margin|commission/i.test(operationId))).toEqual([]);
   });
 });
 

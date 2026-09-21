@@ -1,0 +1,486 @@
+import { randomUUID } from 'node:crypto';
+import { OrderDetailSchema, OrdersResponseSchema } from '@salesforce/contracts';
+import { auditLog, integrationOutbox, salesOrder } from '@salesforce/db';
+import { computeLineTotal, decimalEquals, sumTotals, type InstallationConfiguration } from '@salesforce/domain';
+import { DEMO_ACCOUNT_EMAILS, DEMO_CONFIGURATION, getDemoDataset } from '@salesforce/sankhya';
+import { eq } from 'drizzle-orm';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { restrictedKeys, startCommercialApp, type CommercialApp, type Json, type Who } from '../helpers/commercial-app.js';
+import { TEST_ORIGIN, TEST_PASSWORD, createTestAccount } from '../helpers/auth.js';
+import { loginCookie, startAuthApp } from '../helpers/auth-app.js';
+import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
+
+const dataset = getDemoDataset();
+const SELLER_1 = 103;
+const SELLER_2 = 107;
+
+let postgres: TestPostgres;
+const opened: (() => Promise<unknown>)[] = [];
+let ctx: CommercialApp;
+
+// Fixtures chosen from the API itself (so they are visible and orderable by construction).
+let customer1: number; // seller 103, active, unblocked, with its own price table
+let customer2: number; // seller 107
+let priced: Json[]; // sellable products with a price for customer1
+let unpriced: Json; // sellable product with no price for customer1
+let notSellable: Json;
+
+beforeAll(async () => {
+  postgres = await startPostgres();
+  ctx = await startCommercialApp(postgres, opened);
+  const own = (seller: number) => dataset.customers.find((c) => c.sellerCode === seller && c.active && !c.blocked && c.priceTableCode === 21);
+  const c1 = own(SELLER_1);
+  const c2 = own(SELLER_2);
+  if (c1 === undefined || c2 === undefined) throw new Error('fixture lacks orderable customers');
+  customer1 = c1.code;
+  customer2 = c2.code;
+  const list = async (query: string): Promise<Json[]> => (await ctx.call('manager', 'GET', `/products?customerCode=${customer1}&pageSize=100&${query}`)).body.items;
+  priced = (await list('sellable=true&priceState=priced')).slice(0, 4);
+  unpriced = (await list('sellable=true&priceState=none'))[0];
+  notSellable = (await list('sellable=false'))[0];
+  if (priced.length < 3 || unpriced === undefined || notSellable === undefined) throw new Error('fixture lacks products');
+});
+
+afterAll(async () => {
+  for (const close of opened.reverse()) await close();
+  await postgres.stop();
+});
+
+const draftBody = (overrides: Record<string, unknown> = {}, customerCode = customer1) => ({
+  clientRequestId: randomUUID(),
+  customerCode,
+  negotiationTypeCode: 2,
+  notes: 'pedido de teste',
+  items: [
+    { productCode: priced[0]?.code, quantity: '2' },
+    { productCode: priced[1]?.code, quantity: '3.5' },
+  ],
+  ...overrides,
+});
+
+const expectedTotal = (lines: readonly { price: string; quantity: string }[]) =>
+  sumTotals(lines.map((line) => computeLineTotal(line.quantity, line.price)));
+
+const create = (who: Who, body: unknown) => ctx.call(who, 'POST', '/orders', body);
+
+describe('create draft', () => {
+  it('201: prices and totals come from the server (domain rules), contract-valid', async () => {
+    const { status, body } = await create('seller1', draftBody());
+    expect(status).toBe(201);
+    expect(OrderDetailSchema.safeParse(body).success).toBe(true);
+    expect(body.status).toBe('draft');
+    expect(body.version).toBe(1);
+    expect(body.erpNumber).toBeNull();
+    expect(body.sellerCode).toBe(SELLER_1);
+    expect(body.items).toHaveLength(2);
+    for (const item of body.items) expect(item.priceState).toBe('priced');
+    const total = expectedTotal([
+      { price: priced[0]?.listPrice.unitPrice, quantity: '2' },
+      { price: priced[1]?.listPrice.unitPrice, quantity: '3.5' },
+    ]);
+    expect(decimalEquals(body.totals.estimatedTotal, total)).toBe(true);
+    expect(decimalEquals(body.estimatedTotal, total)).toBe(true);
+    expect(body.isPartial).toBe(false);
+    expect(restrictedKeys(body)).toEqual([]);
+  });
+
+  it('rejects a client-sent price or extra field (never silently ignored)', async () => {
+    const withPrice = draftBody({ items: [{ productCode: priced[0]?.code, quantity: '1', unitPrice: '0.01' }] });
+    const response = await create('seller1', withPrice);
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe('validation_failed');
+    expect((await create('seller1', { ...draftBody(), discountPercent: '10' })).status).toBe(400);
+  });
+
+  it('domain issues become validation_failed with stable issue codes', async () => {
+    const unknown = await create('seller1', draftBody({ items: [{ productCode: 1, quantity: '1' }] }));
+    expect(unknown.status).toBe(400);
+    expect(unknown.body.details.issues.map((issue: Json) => issue.code)).toContain('product_unknown');
+
+    const zero = await create('seller1', draftBody({ items: [{ productCode: priced[0]?.code, quantity: '0' }] }));
+    expect(zero.status).toBe(400);
+    expect(zero.body.details.issues.map((issue: Json) => issue.code)).toContain('invalid_quantity');
+
+    const nonSellable = await create('seller1', draftBody({ items: [{ productCode: notSellable.code, quantity: '1' }] }));
+    expect(nonSellable.status).toBe(400);
+    expect(nonSellable.body.details.issues.map((issue: Json) => issue.code)).toContain('product_not_sellable');
+  });
+
+  it('a product without a price is never priced at 0: the configuration says it is not orderable', async () => {
+    const response = await create('seller1', draftBody({ items: [{ productCode: unpriced.code, quantity: '1' }] }));
+    expect(response.status).toBe(400);
+    expect(response.body.details.issues.map((issue: Json) => issue.code)).toContain('line_not_orderable');
+  });
+
+  it('a product without a price can be drafted when the installation allows it, and stays "Sem preço" (null, never 0)', async () => {
+    const permissive: InstallationConfiguration = {
+      ...DEMO_CONFIGURATION,
+      sales: { ...DEMO_CONFIGURATION.sales, orderBehavior: { allowDraftWithoutPrice: true } },
+      products: { ...DEMO_CONFIGURATION.products, productWithoutPrice: { visible: true, orderable: true } },
+    };
+    const other = await startCommercialApp(postgres, opened, { configuration: permissive });
+    const target = (await other.call('manager', 'GET', `/products?customerCode=${customer1}&sellable=true&priceState=none&pageSize=1`)).body.items[0];
+    const response = await other.call('seller1', 'POST', '/orders', {
+      ...draftBody({
+        items: [
+          { productCode: priced[0]?.code, quantity: '1' },
+          { productCode: target.code, quantity: '5' },
+        ],
+      }),
+    });
+    expect(response.status).toBe(201);
+    const line = response.body.items.find((item: Json) => item.productCode === target.code);
+    expect(line.priceState).toBe('none');
+    expect(line.unitListPrice).toBeNull();
+    expect(line.estimatedLineTotal).toBeNull();
+    expect(response.body.isPartial).toBe(true);
+    expect(response.body.totals.unpricedLineCount).toBe(1);
+    // The estimate covers only the priced line: the missing price adds nothing and is not shown as 0.
+    expect(decimalEquals(response.body.totals.estimatedTotal, computeLineTotal('1', priced[0]?.listPrice.unitPrice))).toBe(true);
+    const listed = await other.call('seller1', 'GET', '/orders');
+    expect(listed.body.items[0].isPartial).toBe(true);
+  });
+
+  it('a seller cannot draft for a customer outside their portfolio (404, like an unknown customer)', async () => {
+    const foreign = await create('seller1', draftBody({}, customer2));
+    const unknown = await create('seller1', draftBody({}, 2_000_000_000));
+    expect(foreign.status).toBe(404);
+    expect(unknown.status).toBe(404);
+    expect(foreign.body.code).toBe(unknown.body.code);
+    expect(await ctx.database.handle.db.select().from(salesOrder).where(eq(salesOrder.customerCode, customer2))).toHaveLength(0);
+  });
+
+  it('a manager can draft for any customer; the order carries the customer seller', async () => {
+    const { status, body } = await create('manager', draftBody({}, customer2));
+    expect(status).toBe(201);
+    expect(body.sellerCode).toBe(SELLER_2);
+  });
+
+  it('an empty item list is a valid draft', async () => {
+    const { status, body } = await create('seller1', draftBody({ items: [] }));
+    expect(status).toBe(201);
+    expect(body.items).toEqual([]);
+    expect(body.totals.estimatedTotal).toMatch(/^0(\.0+)?$/);
+  });
+});
+
+describe('idempotency (clientRequestId)', () => {
+  it('same id and same payload: 200 with the original order, one row', async () => {
+    const payload = draftBody();
+    const first = await create('seller1', payload);
+    const again = await create('seller1', payload);
+    expect(first.status).toBe(201);
+    expect(again.status).toBe(200);
+    expect(again.body).toEqual(first.body);
+    const rows = await ctx.database.handle.db.select().from(salesOrder).where(eq(salesOrder.clientRequestId, payload.clientRequestId));
+    expect(rows).toHaveLength(1);
+  });
+
+  it('a line order that does not change the meaning still counts as a different payload only when content differs', async () => {
+    const payload = draftBody();
+    await create('seller1', payload);
+    const changedQuantity = { ...payload, items: [{ productCode: priced[0]?.code, quantity: '9' }, payload.items[1]] };
+    const conflict = await create('seller1', changedQuantity);
+    expect(conflict.status).toBe(409);
+    expect(conflict.body.code).toBe('idempotency_conflict');
+    const changedNotes = await create('seller1', { ...payload, notes: 'outro texto' });
+    expect(changedNotes.status).toBe(409);
+    expect(changedNotes.body.code).toBe('idempotency_conflict');
+    // Equivalent decimal spelling is the same payload.
+    const sameQuantity = await create('seller1', { ...payload, items: [{ productCode: priced[0]?.code, quantity: '2.0000' }, payload.items[1]] });
+    expect(sameQuantity.status).toBe(200);
+  });
+
+  it('another account reusing the id gets idempotency_conflict and learns nothing about the order', async () => {
+    const payload = draftBody({}, customer1);
+    const original = await create('seller1', payload);
+    const stolen = await create('seller2', payload);
+    expect(stolen.status).toBe(409);
+    expect(stolen.body.code).toBe('idempotency_conflict');
+    expect(JSON.stringify(stolen.body)).not.toContain(original.body.id);
+    // Even a manager (who could see the customer) cannot adopt someone else's request id.
+    const adopted = await create('manager', payload);
+    expect(adopted.status).toBe(409);
+  });
+
+  it('concurrent creates with one id produce exactly one order', async () => {
+    const payload = draftBody();
+    const results = await Promise.all(Array.from({ length: 6 }, () => create('seller1', payload)));
+    const statuses = results.map((result) => result.status).sort();
+    expect(statuses.filter((status) => status === 201)).toHaveLength(1);
+    expect(statuses.filter((status) => status === 200)).toHaveLength(5);
+    expect(new Set(results.map((result) => result.body.id)).size).toBe(1);
+    const rows = await ctx.database.handle.db.select().from(salesOrder).where(eq(salesOrder.clientRequestId, payload.clientRequestId));
+    expect(rows).toHaveLength(1);
+  });
+});
+
+describe('replace, discard, submit', () => {
+  it('replace with the current version recomputes items and bumps the version; a stale version is version_conflict', async () => {
+    const created = await create('seller1', draftBody());
+    const id = created.body.id;
+    const replaced = await ctx.call('seller1', 'PUT', `/orders/${id}`, {
+      expectedVersion: 1,
+      customerCode: customer1,
+      negotiationTypeCode: 3,
+      notes: null,
+      items: [{ productCode: priced[2]?.code, quantity: '10' }],
+    });
+    expect(replaced.status).toBe(200);
+    expect(replaced.body.version).toBe(2);
+    expect(replaced.body.items).toHaveLength(1);
+    expect(replaced.body.negotiationTypeCode).toBe(3);
+    expect(replaced.body.notes).toBeNull();
+    expect(decimalEquals(replaced.body.totals.estimatedTotal, computeLineTotal('10', priced[2]?.listPrice.unitPrice))).toBe(true);
+
+    const stale = await ctx.call('seller1', 'PUT', `/orders/${id}`, {
+      expectedVersion: 1,
+      customerCode: customer1,
+      negotiationTypeCode: 2,
+      notes: null,
+      items: [],
+    });
+    expect(stale.status).toBe(409);
+    expect(stale.body.code).toBe('version_conflict');
+    expect(stale.body.details.currentVersion).toBe(2);
+    const after = await ctx.call('seller1', 'GET', `/orders/${id}`);
+    expect(after.body.version).toBe(2);
+    expect(after.body.items).toHaveLength(1);
+  });
+
+  it('two concurrent replaces with the same expectedVersion: exactly one wins', async () => {
+    const created = await create('seller1', draftBody());
+    const replace = (quantity: string) =>
+      ctx.call('seller1', 'PUT', `/orders/${created.body.id}`, {
+        expectedVersion: 1,
+        customerCode: customer1,
+        negotiationTypeCode: 2,
+        notes: null,
+        items: [{ productCode: priced[0]?.code, quantity }],
+      });
+    const results = await Promise.all([replace('1'), replace('2'), replace('3')]);
+    expect(results.filter((result) => result.status === 200)).toHaveLength(1);
+    expect(results.filter((result) => result.status === 409 && result.body.code === 'version_conflict')).toHaveLength(2);
+    expect((await ctx.call('seller1', 'GET', `/orders/${created.body.id}`)).body.version).toBe(2);
+  });
+
+  it('replace validates the new draft like create (invalid lines change nothing)', async () => {
+    const created = await create('seller1', draftBody());
+    const invalid = await ctx.call('seller1', 'PUT', `/orders/${created.body.id}`, {
+      expectedVersion: 1,
+      customerCode: customer1,
+      negotiationTypeCode: 2,
+      notes: null,
+      items: [{ productCode: 1, quantity: '1' }],
+    });
+    expect(invalid.status).toBe(400);
+    const after = await ctx.call('seller1', 'GET', `/orders/${created.body.id}`);
+    expect(after.body.version).toBe(1);
+    expect(after.body.items).toHaveLength(2);
+  });
+
+  it('discard makes the draft cancelled; then replace, discard and any edit are order_not_editable', async () => {
+    const created = await create('seller1', draftBody());
+    const id = created.body.id;
+    const discarded = await ctx.call('seller1', 'DELETE', `/orders/${id}`);
+    expect(discarded.status).toBe(200);
+    expect(discarded.body.status).toBe('cancelled');
+    expect(discarded.body.version).toBe(2);
+
+    const replaceAfter = await ctx.call('seller1', 'PUT', `/orders/${id}`, {
+      expectedVersion: 2,
+      customerCode: customer1,
+      negotiationTypeCode: 2,
+      notes: null,
+      items: [],
+    });
+    expect(replaceAfter.status).toBe(409);
+    expect(replaceAfter.body.code).toBe('order_not_editable');
+    const discardAgain = await ctx.call('seller1', 'DELETE', `/orders/${id}`);
+    expect(discardAgain.status).toBe(409);
+    expect(discardAgain.body.code).toBe('order_not_editable');
+    // The draft number and history stay readable.
+    expect((await ctx.call('seller1', 'GET', `/orders/${id}`)).body.status).toBe('cancelled');
+  });
+
+  it('a non-editable status is reported before a version mismatch', async () => {
+    const created = await create('seller1', draftBody());
+    await ctx.call('seller1', 'DELETE', `/orders/${created.body.id}`);
+    const response = await ctx.call('seller1', 'PUT', `/orders/${created.body.id}`, {
+      expectedVersion: 1,
+      customerCode: customer1,
+      negotiationTypeCode: 2,
+      notes: null,
+      items: [],
+    });
+    expect(response.body.code).toBe('order_not_editable');
+  });
+
+  it('submit is ALWAYS 409 erp_submission_disabled: no outbox row, no status change, attempt audited', async () => {
+    const created = await create('seller1', draftBody());
+    const id = created.body.id;
+    const before = await ctx.database.handle.db.select().from(integrationOutbox);
+    const response = await ctx.call('seller1', 'POST', `/orders/${id}/submit`);
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe('erp_submission_disabled');
+    const outboxAfter = await ctx.database.handle.db.select().from(integrationOutbox);
+    expect(outboxAfter).toHaveLength(before.length);
+    expect(outboxAfter).toHaveLength(0);
+
+    const order = await ctx.call('seller1', 'GET', `/orders/${id}`);
+    expect(order.body.status).toBe('draft');
+    expect(order.body.erpNumber).toBeNull();
+    expect(order.body.version).toBe(1);
+
+    const audits = (await ctx.database.handle.db.select().from(auditLog)).filter((row) => row.action === 'order.submit_attempted');
+    expect(audits.some((row) => (row.detail as Json).orderId === id && (row.detail as Json).outcome === 'erp_submission_disabled')).toBe(true);
+    // Still refused for a cancelled order and for a manager: it is not a permission question.
+    await ctx.call('seller1', 'DELETE', `/orders/${id}`);
+    expect((await ctx.call('seller1', 'POST', `/orders/${id}/submit`)).body.code).toBe('erp_submission_disabled');
+    expect((await ctx.call('manager', 'POST', `/orders/${id}/submit`)).body.code).toBe('erp_submission_disabled');
+    expect((await ctx.call('admin', 'POST', `/orders/${id}/submit`)).body.code).toBe('erp_submission_disabled');
+  });
+
+  it('audits create, replace and discard with identifiers only (no notes, no payload)', async () => {
+    const notes = 'texto-livre-que-nao-deve-ir-para-a-auditoria';
+    const created = await create('seller1', draftBody({ notes }));
+    const id = created.body.id;
+    await ctx.call('seller1', 'PUT', `/orders/${id}`, { expectedVersion: 1, customerCode: customer1, negotiationTypeCode: 2, notes, items: [] });
+    await ctx.call('seller1', 'DELETE', `/orders/${id}`);
+    const rows = (await ctx.database.handle.db.select().from(auditLog)).filter((row) => (row.detail as Json | null)?.orderId === id);
+    expect(rows.map((row) => row.action).sort()).toEqual(['order.created', 'order.discarded', 'order.replaced']);
+    expect(JSON.stringify(rows)).not.toContain(notes);
+    expect(rows.every((row) => row.actorAccountId === ctx.accounts.ids[DEMO_ACCOUNT_EMAILS.seller1])).toBe(true);
+  });
+
+  it('a malformed order id is 400; an unknown id is 404', async () => {
+    expect((await ctx.call('seller1', 'GET', '/orders/not-a-uuid')).status).toBe(400);
+    expect((await ctx.call('seller1', 'GET', `/orders/${randomUUID()}`)).status).toBe(404);
+    expect((await ctx.call('seller1', 'POST', `/orders/${randomUUID()}/submit`)).status).toBe(404);
+  });
+});
+
+describe('list orders', () => {
+  it('filters, sorts and paginates inside the scope', async () => {
+    const first = await create('seller1', draftBody());
+    const second = await create('seller1', draftBody({ notes: 'lista' }));
+    await ctx.call('seller1', 'DELETE', `/orders/${second.body.id}`);
+
+    const drafts = await ctx.call('seller1', 'GET', '/orders?status=draft&pageSize=100');
+    expect(OrdersResponseSchema.safeParse(drafts.body).success).toBe(true);
+    expect(drafts.body.items.every((order: Json) => order.status === 'draft')).toBe(true);
+    expect(drafts.body.items.map((order: Json) => order.id)).toContain(first.body.id);
+    expect(drafts.body.items.map((order: Json) => order.id)).not.toContain(second.body.id);
+
+    const cancelled = await ctx.call('seller1', 'GET', '/orders?status=cancelled&pageSize=100');
+    expect(cancelled.body.items.map((order: Json) => order.id)).toContain(second.body.id);
+
+    const byNumber = await ctx.call('seller1', 'GET', '/orders?sort=draftNumber&pageSize=100');
+    const numbers = byNumber.body.items.map((order: Json) => order.draftNumber);
+    expect(numbers).toEqual([...numbers].sort((a: number, b: number) => a - b));
+
+    const page = await ctx.call('seller1', 'GET', '/orders?pageSize=2&page=1');
+    expect(page.body.items).toHaveLength(2);
+    expect(page.body.total).toBeGreaterThan(2);
+    expect(page.body.items[0].itemCount).toBeGreaterThanOrEqual(0);
+
+    const byCustomer = await ctx.call('manager', 'GET', `/orders?customerCode=${customer2}&pageSize=100`);
+    expect(byCustomer.body.items.every((order: Json) => order.customerCode === customer2)).toBe(true);
+    const bySearch = await ctx.call('seller1', 'GET', `/orders?search=${encodeURIComponent(first.body.customerName.slice(0, 6))}&pageSize=100`);
+    expect(bySearch.body.items.map((order: Json) => order.id)).toContain(first.body.id);
+  });
+});
+
+describe('IDOR: a seller never reaches another seller data', () => {
+  let foreignId: string;
+  let foreignCustomer: number;
+  beforeAll(async () => {
+    const other = await create('seller2', draftBody({}, customer2));
+    expect(other.status).toBe(201);
+    foreignId = other.body.id;
+    foreignCustomer = customer2;
+  });
+
+  const editBody = () => ({ expectedVersion: 1, customerCode: foreignCustomer, negotiationTypeCode: 2, notes: null, items: [] });
+
+  it('detail, replace, discard and submit of another seller order are 404, identical to a missing order', async () => {
+    const missingId = randomUUID();
+    const pairs: [string, () => Promise<{ status: number; body: Json }>, () => Promise<{ status: number; body: Json }>][] = [
+      ['get', () => ctx.call('seller1', 'GET', `/orders/${foreignId}`), () => ctx.call('seller1', 'GET', `/orders/${missingId}`)],
+      ['replace', () => ctx.call('seller1', 'PUT', `/orders/${foreignId}`, editBody()), () => ctx.call('seller1', 'PUT', `/orders/${missingId}`, editBody())],
+      ['discard', () => ctx.call('seller1', 'DELETE', `/orders/${foreignId}`), () => ctx.call('seller1', 'DELETE', `/orders/${missingId}`)],
+      ['submit', () => ctx.call('seller1', 'POST', `/orders/${foreignId}/submit`), () => ctx.call('seller1', 'POST', `/orders/${missingId}/submit`)],
+    ];
+    for (const [name, foreign, missing] of pairs) {
+      const [f, m] = [await foreign(), await missing()];
+      expect(f.status, name).toBe(404);
+      expect(m.status, name).toBe(404);
+      expect({ ...f.body, details: undefined }, name).toEqual({ ...m.body, details: undefined });
+    }
+    // Nothing changed: still a version-1 draft, and no submit attempt was audited for it.
+    const untouched = await ctx.call('manager', 'GET', `/orders/${foreignId}`);
+    expect(untouched.body.status).toBe('draft');
+    expect(untouched.body.version).toBe(1);
+    const attempts = (await ctx.database.handle.db.select().from(auditLog)).filter(
+      (row) => row.action === 'order.submit_attempted' && (row.detail as Json).orderId === foreignId,
+    );
+    expect(attempts).toHaveLength(0);
+  });
+
+  it('the list never contains another seller order, whatever filter is used', async () => {
+    for (const query of ['', `?customerCode=${foreignCustomer}`, '?status=draft', `?search=${encodeURIComponent(foreignId)}`]) {
+      const { body } = await ctx.call('seller1', 'GET', `/orders${query}${query === '' ? '?' : '&'}pageSize=100`);
+      expect(body.items.map((order: Json) => order.id), query).not.toContain(foreignId);
+      expect(body.items.every((order: Json) => order.sellerCode === SELLER_1), query).toBe(true);
+    }
+  });
+
+  it('a seller cannot move their own draft onto another seller customer', async () => {
+    const own = await create('seller1', draftBody());
+    const moved = await ctx.call('seller1', 'PUT', `/orders/${own.body.id}`, { ...editBody(), expectedVersion: 1 });
+    expect(moved.status).toBe(404);
+    expect((await ctx.call('seller1', 'GET', `/orders/${own.body.id}`)).body.customerCode).toBe(customer1);
+  });
+
+  it('managers and admins see every order', async () => {
+    expect((await ctx.call('manager', 'GET', `/orders/${foreignId}`)).status).toBe(200);
+    expect((await ctx.call('admin', 'GET', `/orders/${foreignId}`)).status).toBe(200);
+  });
+
+  it('order bodies never carry cost or margin', async () => {
+    const list = await ctx.call('manager', 'GET', '/orders?pageSize=100');
+    expect(restrictedKeys(list.body)).toEqual([]);
+    expect(restrictedKeys((await ctx.call('manager', 'GET', `/orders/${foreignId}`)).body)).toEqual([]);
+  });
+});
+
+describe('installation not enabled', () => {
+  it('every commercial endpoint answers installation_not_enabled (409) until the installation is enabled', async () => {
+    const disabled: InstallationConfiguration = { ...DEMO_CONFIGURATION, general: { ...DEMO_CONFIGURATION.general, enabled: false } };
+    const app = await startCommercialApp(postgres, opened, { configuration: disabled });
+    const probes: [Parameters<CommercialApp['call']>[1], string, unknown?][] = [
+      ['GET', '/customers'],
+      ['GET', `/customers/${customer1}`],
+      ['GET', '/products'],
+      ['GET', '/product-groups'],
+      ['GET', '/dashboard'],
+      ['GET', '/orders'],
+      ['POST', '/orders', draftBody()],
+    ];
+    for (const [method, url, body] of probes) {
+      const response = await app.call('seller1', method, url, body);
+      expect(response.status, `${method} ${url}`).toBe(409);
+      expect(response.body.code, `${method} ${url}`).toBe('installation_not_enabled');
+    }
+    expect(await app.database.handle.db.select().from(salesOrder)).toHaveLength(0);
+  });
+
+  it('no stored configuration at all is also installation_not_enabled, never a 500', async () => {
+    const bare = await startAuthApp(postgres, opened);
+    await createTestAccount(bare.database.handle, { email: 'sem-config@example.test', role: 'manager' }, bare.clock.fn);
+    const cookie = await loginCookie(bare, 'sem-config@example.test', TEST_PASSWORD);
+    const response = await bare.app.inject({ method: 'GET', url: '/api/v1/customers', headers: { cookie, origin: TEST_ORIGIN } });
+    expect(response.statusCode).toBe(409);
+    expect(JSON.parse(response.body).code).toBe('installation_not_enabled');
+  });
+});

@@ -1,4 +1,4 @@
-import { Module, type DynamicModule } from '@nestjs/common';
+import { Global, Module, type DynamicModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigurationModule } from '../configuration/configuration.module.js';
 import { AccessGuard } from './access.guard.js';
@@ -18,6 +18,7 @@ import { ThrottleRepository } from './throttle.repository.js';
  * Identity and access (RF-IAM, AUTH-1..4 PROPOSED): accounts, sessions, throttling, audit, the
  * central policy and the global access guard. Registered in the API process only.
  */
+@Global()
 @Module({})
 export class IamModule {
   static register(config: AuthConfig): DynamicModule {

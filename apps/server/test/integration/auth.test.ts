@@ -431,9 +431,9 @@ describe('default deny', () => {
     await createTestAccount(ctx.database.handle, { email: 'root@example.test', role: 'admin' }, ctx.clock.fn);
     const cookie = await loginCookie(ctx, 'root@example.test', TEST_PASSWORD);
 
-    const anonymous = await get(ctx, '/api/v1/sellers');
+    const anonymous = await get(ctx, '/api/v1/probe-ungranted');
     expect(anonymous.statusCode).toBe(401);
-    const admin = await get(ctx, '/api/v1/sellers', cookie);
+    const admin = await get(ctx, '/api/v1/probe-ungranted', cookie);
     expect(admin.statusCode).toBe(403);
     expect(ApiErrorSchema.parse(admin.json()).code).toBe('forbidden');
   });

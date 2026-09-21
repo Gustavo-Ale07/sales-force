@@ -4,6 +4,7 @@ import {
   DatabaseConfigurationSource,
   InstallationConfigurationService,
 } from './configuration.service.js';
+import { ConfigurationVersionService } from './configuration-version.service.js';
 import { ConfigurationController } from './configuration.controller.js';
 import { InstallationConfigurationRepository } from './configuration.repository.js';
 
@@ -18,7 +19,8 @@ import { InstallationConfigurationRepository } from './configuration.repository.
       inject: [InstallationConfigurationRepository],
     },
     InstallationConfigurationService,
+    ConfigurationVersionService,
   ],
-  exports: [InstallationConfigurationService],
+  exports: [InstallationConfigurationService, ConfigurationVersionService],
 })
 export class ConfigurationModule {}

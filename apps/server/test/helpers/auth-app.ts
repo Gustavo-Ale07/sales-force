@@ -10,6 +10,13 @@ import { createLogger } from '../../src/observability/logger.js';
 import { TEST_ORIGIN, TestClock, testAuthConfig, sessionCookieOf } from './auth.js';
 import { captureLogs, createMigratedDatabase, type MigratedDatabase, type TestPostgres } from './postgres.js';
 
+/** A registry-shaped `session` route that exists only in tests and is deliberately absent from ROUTE_POLICY. */
+export const UNGRANTED_PROBE_ROUTE: RouteDefinition = {
+  ...routes.listSellers,
+  operationId: 'probeUngranted',
+  path: '/probe-ungranted',
+};
+
 /**
  * Two handlers for the default-deny tests: one that is not bound to the contract registry at all, and
  * one bound to a `session` route of the registry that has no grant in the policy table.
@@ -26,8 +33,8 @@ class ProbeController {
     return { reached: true };
   }
 
-  // `listSellers` is a `session` route with no entry in ROUTE_POLICY.
-  @ApiRoute(routes.listSellers)
+  // A `session` route whose operation has no entry in ROUTE_POLICY (every real route has one by now).
+  @ApiRoute(UNGRANTED_PROBE_ROUTE)
   ungranted(): never {
     throw new Error('the policy must have denied this before the handler runs');
   }

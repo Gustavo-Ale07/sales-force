@@ -42,6 +42,23 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   // "Usuários, integrações, configurações: Admin" (project-spec 8.2, default matrix). ASSUMPTION:
   // the contract lists 403 for this route but names no role; admin-only is the least privilege.
   getConfiguration: { roles: ['admin'] },
+  // Commercial routes (Stage 3A). Each is open to the three roles the schema has; WHICH rows a
+  // caller sees is the data scope (`resolveCustomerScope`), never this table. An external
+  // representative role does not exist yet (AUTH-3 PROPOSED): when it does it gets no line here
+  // until the owner grants it. ASSUMPTION: a seller may create/replace/discard their own drafts.
+  getDashboard: { roles: EVERY_ROLE },
+  listSellers: { roles: EVERY_ROLE },
+  listCustomers: { roles: EVERY_ROLE },
+  getCustomer: { roles: EVERY_ROLE },
+  listProductGroups: { roles: EVERY_ROLE },
+  listProducts: { roles: EVERY_ROLE },
+  getProduct: { roles: EVERY_ROLE },
+  listOrders: { roles: EVERY_ROLE },
+  createOrder: { roles: EVERY_ROLE },
+  getOrder: { roles: EVERY_ROLE },
+  replaceOrder: { roles: EVERY_ROLE },
+  discardOrder: { roles: EVERY_ROLE },
+  submitOrder: { roles: EVERY_ROLE },
 };
 
 export type PolicyDenial = 'channel_not_permitted' | 'no_policy' | 'role_not_permitted';
