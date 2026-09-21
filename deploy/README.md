@@ -8,13 +8,16 @@ PostgreSQL, secrets, deploy pipeline) are a separate work package (OPS-3) and us
 ## Run
 
 ```sh
+cp deploy/.env.example deploy/.env   # then set SEED_DEV_PASSWORD (git-ignored file)
 docker compose -f deploy/docker-compose.dev.yml up --build
 ```
 
+`SEED_DEV_PASSWORD` is required and has no default: choose a local password of 12 or more characters
+(not a common one). Compose refuses to start, for any command, while it is unset.
+
 Open <http://localhost:8080> and sign in with a seeded demo account, for example
-`admin@demo.salesforce.local` (also `gerente@`, `vendedor1@`, `vendedor2@`, same domain). The demo
-password is `SEED_DEV_PASSWORD`; its local-only default is in the compose file and can be changed in
-`deploy/.env` (copy `deploy/.env.example`, git-ignored).
+`admin@demo.salesforce.local` (also `gerente@`, `vendedor1@`, `vendedor2@`, same domain) and the
+password you put in `deploy/.env`.
 
 Stop: `docker compose -f deploy/docker-compose.dev.yml down` (keeps the database volume; add `-v` only
 if you want to drop the local database).

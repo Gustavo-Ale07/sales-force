@@ -66,8 +66,9 @@ services:
     environment:
       NODE_ENV: development
       DATABASE_URL: postgres://${POSTGRES_USER:-salesforce}:${POSTGRES_PASSWORD:-salesforce_local_dev}@127.0.0.1:5432/${POSTGRES_DB:-salesforce}
-      # LOCAL-ONLY throwaway password of the synthetic demo accounts (*.local). Change it in deploy/.env.
-      SEED_DEV_PASSWORD: ${SEED_DEV_PASSWORD:-local-dev-only-demo-2026}
+      # LOCAL-ONLY password of the synthetic demo accounts (*.local). Deliberately NO default: a password
+      # written in a tracked file is a known password. Set your own (12+ characters) in deploy/.env.
+      SEED_DEV_PASSWORD: ${SEED_DEV_PASSWORD:?set SEED_DEV_PASSWORD in deploy/.env}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     command: ["node", "dist/seed.js"]
 
