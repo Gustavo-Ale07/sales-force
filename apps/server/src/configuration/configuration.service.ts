@@ -73,7 +73,7 @@ export type CurrentConfiguration =
  * defaults (a disabled installation, nothing sellable). Consumers that need a working installation
  * call `requireEnabled()` and get `installation_not_enabled` otherwise.
  *
- * Not exposed over HTTP in Stage 1a: `GET /configuration` needs authentication (Stage 1b).
+ * Exposed as `GET /configuration` (session, admin grant in the policy table) by `ConfigurationController`.
  */
 @Injectable()
 export class InstallationConfigurationService {

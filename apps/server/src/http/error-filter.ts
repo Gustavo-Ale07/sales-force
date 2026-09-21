@@ -39,6 +39,7 @@ export interface ResolvedError {
   readonly code: ErrorCode;
   readonly message: string;
   readonly details: AppErrorDetails | undefined;
+  readonly retryAfterSeconds?: number;
 }
 
 /**
@@ -48,7 +49,12 @@ export interface ResolvedError {
  */
 export function resolveError(error: unknown): ResolvedError {
   if (error instanceof AppError) {
-    return { code: error.code, message: error.message, details: error.details };
+    return {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      ...(error.retryAfterSeconds !== undefined ? { retryAfterSeconds: error.retryAfterSeconds } : {}),
+    };
   }
   const status = statusOf(error);
   const code: ErrorCode = status === undefined ? 'internal_error' : codeForFrameworkStatus(status);
@@ -91,6 +97,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
     }
 
     if (reply.sent) return;
+    if (resolved.retryAfterSeconds !== undefined) void reply.header('retry-after', String(resolved.retryAfterSeconds));
     void reply.status(status).header('content-type', 'application/json; charset=utf-8').send(body);
   }
 }

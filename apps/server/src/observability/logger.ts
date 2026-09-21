@@ -11,23 +11,27 @@ export type { Logger };
  */
 export const REDACTED_KEYS = [
   'authorization',
+  'proxy-authorization',
   'cookie',
   'set-cookie',
   'x-token',
+  'x-api-key',
   'password',
   'passwordHash',
+  'password_hash',
   'currentPassword',
   'newPassword',
   'token',
   'accessToken',
   'refreshToken',
   'sessionId',
+  'sessionToken',
   'secret',
   'clientSecret',
-  'client_secret',
   'apiKey',
   'databaseUrl',
   'connectionString',
+  'otp',
 ] as const;
 
 export const REDACTED_PLACEHOLDER = '[redacted]';
@@ -36,19 +40,49 @@ function accessor(key: string): string {
   return /^[A-Za-z_$][\w$]*$/.test(key) ? key : `["${key}"]`;
 }
 
-/** Builds the pino `redact.paths` list for `REDACTED_KEYS`. */
+const capitalize = (word: string): string => word.charAt(0).toUpperCase() + word.slice(1);
+
+/**
+ * Pino matches paths case-sensitively, and header names arrive as `Authorization`, `x-token`,
+ * `X-Token`, `set-cookie`, ...; body fields as `password`, `Password`, `password_hash`, `passwordHash`.
+ * Every configured key is therefore expanded to its spelling variants: kebab, snake, camel, Pascal,
+ * Title-Kebab, Title_Snake, and the upper-case forms.
+ */
+export function caseVariants(key: string): string[] {
+  const words = key
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .split(/[\s_-]+/)
+    .filter((word) => word.length > 0)
+    .map((word) => word.toLowerCase());
+  const [first = '', ...rest] = words;
+  const variants = [
+    key,
+    words.join('-'),
+    words.join('_'),
+    words.join(''),
+    [first, ...rest.map(capitalize)].join(''),
+    words.map(capitalize).join(''),
+    words.map(capitalize).join('-'),
+    words.map(capitalize).join('_'),
+    words.join('-').toUpperCase(),
+    words.join('_').toUpperCase(),
+  ];
+  return [...new Set(variants)];
+}
+
+/** Builds the pino `redact.paths` list for `REDACTED_KEYS` (all spelling variants, four levels deep). */
 export function buildRedactPaths(keys: readonly string[] = REDACTED_KEYS): string[] {
-  const paths: string[] = [];
-  for (const key of keys) {
+  const paths = new Set<string>();
+  for (const key of keys.flatMap(caseVariants)) {
     const leaf = accessor(key);
     const bracket = leaf.startsWith('[');
-    paths.push(leaf);
+    paths.add(leaf);
     for (let depth = 1; depth <= 4; depth += 1) {
       const wildcards = Array.from({ length: depth }, () => '*').join('.');
-      paths.push(bracket ? `${wildcards}${leaf}` : `${wildcards}.${leaf}`);
+      paths.add(bracket ? `${wildcards}${leaf}` : `${wildcards}.${leaf}`);
     }
   }
-  return paths;
+  return [...paths];
 }
 
 export interface CreateLoggerOptions {

@@ -1,5 +1,7 @@
 import { Module, type DynamicModule } from '@nestjs/common';
 import { ConfigurationModule } from '../configuration/configuration.module.js';
+import type { AuthConfig } from '../iam/auth-config.js';
+import { IamModule } from '../iam/iam.module.js';
 import { InfrastructureModule, type InfrastructureDeps } from '../platform/infrastructure.module.js';
 import { PlatformModule } from '../platform/platform.module.js';
 
@@ -9,10 +11,10 @@ import { PlatformModule } from '../platform/platform.module.js';
  */
 @Module({})
 export class ApiModule {
-  static register(deps: InfrastructureDeps): DynamicModule {
+  static register(deps: InfrastructureDeps, auth: AuthConfig): DynamicModule {
     return {
       module: ApiModule,
-      imports: [InfrastructureModule.register(deps), PlatformModule, ConfigurationModule],
+      imports: [InfrastructureModule.register(deps), PlatformModule, ConfigurationModule, IamModule.register(auth)],
     };
   }
 }

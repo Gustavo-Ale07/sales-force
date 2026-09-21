@@ -13,6 +13,7 @@ import { createApiApp } from '../../src/api/create-app.js';
 import { ApiRoute, Contract } from '../../src/http/route.js';
 import { createLogger } from '../../src/observability/logger.js';
 import { recordWorkerHeartbeat } from '../../src/platform/worker-heartbeat.js';
+import { testAuthConfig } from '../helpers/auth.js';
 import {
   captureLogs,
   createMigratedDatabase,
@@ -36,7 +37,7 @@ afterAll(async () => {
 async function apiOver(database: MigratedDatabase, options: { level?: string } = {}) {
   const capture = captureLogs();
   const logger = createLogger({ level: options.level ?? 'info', service: 'api', destination: capture.stream });
-  const app = await createApiApp({ logger, db: database.handle });
+  const app = await createApiApp({ logger, db: database.handle, auth: testAuthConfig() });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
   opened.push(() => app.close());
@@ -55,7 +56,11 @@ describe('GET /api/v1/health', () => {
     const dead = createDb('postgres://nobody:nothing@127.0.0.1:1/none', { max: 1 });
     opened.push(() => dead.close());
     const capture = captureLogs();
-    const app = await createApiApp({ logger: createLogger({ level: 'info', service: 'api', destination: capture.stream }), db: dead });
+    const app = await createApiApp({
+      logger: createLogger({ level: 'info', service: 'api', destination: capture.stream }),
+      db: dead,
+      auth: testAuthConfig(),
+    });
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
     opened.push(() => app.close());
@@ -151,7 +156,11 @@ describe('GET /api/v1/ready', () => {
     const dead = createDb('postgres://nobody:secret-password-1@127.0.0.1:1/none', { max: 1 });
     opened.push(() => dead.close());
     const capture = captureLogs();
-    const app = await createApiApp({ logger: createLogger({ level: 'info', service: 'api', destination: capture.stream }), db: dead });
+    const app = await createApiApp({
+      logger: createLogger({ level: 'info', service: 'api', destination: capture.stream }),
+      db: dead,
+      auth: testAuthConfig(),
+    });
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
     opened.push(() => app.close());
@@ -241,6 +250,7 @@ describe('registry-driven request and response validation', () => {
     app = await createApiApp({
       logger: createLogger({ level: 'info', service: 'api', destination: capture.stream }),
       db: database.handle,
+      auth: testAuthConfig(),
       rootModule: ProbeModule,
     });
     await app.init();

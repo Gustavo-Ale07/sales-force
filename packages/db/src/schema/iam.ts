@@ -83,7 +83,35 @@ export const accountSellerLink = pgTable(
   ],
 );
 
-/** Append-only audit trail (login success/failure/logout today). */
+/**
+ * Login throttling state (RF-IAM-2; Stage 1b). One row per throttle key: a hash of the normalized
+ * e-mail (progressive lockout, identical for existing and unknown accounts so it never reveals
+ * which e-mails are registered) or a client address (failure rate limit). Counters live in
+ * PostgreSQL (no Redis). Rows carry no credentials; the e-mail is stored only as a SHA-256 hash.
+ */
+export const authThrottle = pgTable(
+  'auth_throttle',
+  {
+    /** `email:<sha256 hex>` or `ip:<address>`. */
+    key: text('key').primaryKey(),
+    /** Failures counted in the current window (reset by a success or when the window elapses). */
+    failures: integer('failures').notNull().default(0),
+    windowStartedAt: timestamp('window_started_at', { withTimezone: true }).notNull(),
+    /** Set while the key is locked out; null otherwise. */
+    lockedUntil: timestamp('locked_until', { withTimezone: true }),
+    /** Consecutive lockouts since the last success; drives the escalating duration. */
+    lockoutCount: integer('lockout_count').notNull().default(0),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check('auth_throttle_failures_chk', sql`${t.failures} >= 0`),
+    check('auth_throttle_lockout_count_chk', sql`${t.lockoutCount} >= 0`),
+    // Serves: periodic purge of stale throttle rows.
+    index('auth_throttle_updated_at_idx').on(t.updatedAt),
+  ],
+);
+
+/** Append-only audit trail (auth events and account administration; never credentials or tokens). */
 export const auditLog = pgTable(
   'audit_log',
   {

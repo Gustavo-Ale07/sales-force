@@ -17,7 +17,11 @@
     "start:api": "node dist/main-api.js",
     "start:worker": "node dist/main-worker.js",
     "queue:install": "tsx --env-file-if-exists=../../.env src/queue-install.ts",
-    "seed": "tsx --env-file-if-exists=../../.env src/seed.ts"
+    "seed": "tsx --env-file-if-exists=../../.env src/seed.ts",
+    "account": "tsx --env-file-if-exists=../../.env src/account-cli.ts",
+    "create-user": "tsx --env-file-if-exists=../../.env src/account-cli.ts create",
+    "bootstrap-admin": "tsx --env-file-if-exists=../../.env src/account-cli.ts create --role admin",
+    "start:account": "node dist/account-cli.js"
   },
   "dependencies": {
     "@nestjs/common": "12.0.3",
@@ -29,6 +33,7 @@
     "@salesforce/sankhya": "workspace:*",
     "drizzle-orm": "0.45.2",
     "fastify": "5.12.4",
+    "hash-wasm": "4.12.0",
     "pg": "^8.23.0",
     "pg-boss": "12.33.2",
     "pino": "10.3.1",

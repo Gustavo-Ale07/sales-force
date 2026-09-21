@@ -37,7 +37,7 @@ describe('migrations', () => {
   it('applies from an empty database and creates the expected tables', async () => {
     const url = await pgc.createDatabase();
     const result = await runMigrations(url, quiet);
-    expect(result.applied).toEqual(['0000_initial_schema']);
+    expect(result.applied).toEqual(['0000_initial_schema', '0001_auth_throttle']);
     expect(result.alreadyApplied).toBe(0);
 
     const tables = await query<{ table_name: string }>(
@@ -50,6 +50,7 @@ describe('migrations', () => {
         'account',
         'account_seller_link',
         'audit_log',
+        'auth_throttle',
         'erp_customer',
         'erp_list_price',
         'erp_price_table',
@@ -75,9 +76,9 @@ describe('migrations', () => {
     await runMigrations(url, quiet);
     const second = await runMigrations(url, quiet);
     expect(second.applied).toEqual([]);
-    expect(second.alreadyApplied).toBe(1);
+    expect(second.alreadyApplied).toBe(2);
     const rows = await query(url, `SELECT * FROM schema_migration`);
-    expect(rows).toHaveLength(1);
+    expect(rows).toHaveLength(2);
   });
 
   it('two concurrent runners do not corrupt the database (advisory lock)', async () => {
@@ -87,11 +88,11 @@ describe('migrations', () => {
       runMigrations(url, quiet),
       runMigrations(url, quiet),
     ]);
-    // Exactly one runner applied the migration; the others found it applied.
-    expect(results.filter((r) => r.applied.length === 1)).toHaveLength(1);
+    // Exactly one runner applied the migrations; the others found them applied.
+    expect(results.filter((r) => r.applied.length === 2)).toHaveLength(1);
     expect(results.filter((r) => r.applied.length === 0)).toHaveLength(2);
     const rows = await query(url, `SELECT * FROM schema_migration`);
-    expect(rows).toHaveLength(1);
+    expect(rows).toHaveLength(2);
   });
 
   it('waits for, and fails clearly on, a held migration lock', async () => {
@@ -111,7 +112,7 @@ describe('migrations', () => {
     }
     // Once released, the run succeeds.
     const ok = await runMigrations(url, quiet);
-    expect(ok.applied).toEqual(['0000_initial_schema']);
+    expect(ok.applied).toEqual(['0000_initial_schema', '0001_auth_throttle']);
   });
 
   it('refuses when an applied migration file was edited', async () => {
@@ -131,22 +132,22 @@ describe('migrations', () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), 'sf-migrations-'));
     await cp(defaultMigrationsDir, dir, { recursive: true });
     await writeFile(
-      path.join(dir, '0001_broken.sql'),
+      path.join(dir, '0002_broken.sql'),
       'CREATE TABLE ok_table (id int);\n--> statement-breakpoint\nCREATE TABLE ok_table (id int);\n',
     );
     const journalPath = path.join(dir, 'meta', '_journal.json');
     const journal = JSON.parse(await readFile(journalPath, 'utf8')) as {
       entries: { idx: number; version: string; when: number; tag: string; breakpoints: boolean }[];
     };
-    journal.entries.push({ idx: 1, version: '7', when: Date.now(), tag: '0001_broken', breakpoints: true });
+    journal.entries.push({ idx: 2, version: '7', when: Date.now(), tag: '0002_broken', breakpoints: true });
     await writeFile(journalPath, JSON.stringify(journal));
 
     const err = await runMigrations(url, { ...quiet, migrationsDir: dir }).catch((e) => e);
     expect(err).toBeInstanceOf(MigrationError);
-    expect((err as Error).message).toMatch(/0001_broken failed and was rolled back/);
+    expect((err as Error).message).toMatch(/0002_broken failed and was rolled back/);
     expect(await query(url, `SELECT to_regclass('public.ok_table') AS t`)).toEqual([{ t: null }]);
     const recorded = await query<{ tag: string }>(url, `SELECT tag FROM schema_migration ORDER BY idx`);
-    expect(recorded.map((r) => r.tag)).toEqual(['0000_initial_schema']);
+    expect(recorded.map((r) => r.tag)).toEqual(['0000_initial_schema', '0001_auth_throttle']);
   });
 
   it('error messages never contain the password', async () => {
@@ -164,14 +165,14 @@ describe('migrations', () => {
       expect(await readiness(handle.pool)).toMatchObject({
         appliedCount: 0,
         lastId: null,
-        expectedCount: 1,
+        expectedCount: 2,
         upToDate: false,
       });
       await runMigrations(url, quiet);
       expect(await readiness(handle.pool)).toEqual({
-        appliedCount: 1,
-        lastId: '0000_initial_schema',
-        expectedCount: 1,
+        appliedCount: 2,
+        lastId: '0001_auth_throttle',
+        expectedCount: 2,
         upToDate: true,
       });
     } finally {

@@ -37,6 +37,8 @@ export interface AppErrorOptions {
   readonly details?: AppErrorDetails;
   /** Internal cause, logged and never sent to the client. */
   readonly cause?: unknown;
+  /** Served as the `Retry-After` header (and `details.retryAfterSeconds`); used by `rate_limited`. */
+  readonly retryAfterSeconds?: number;
 }
 
 /**
@@ -46,12 +48,17 @@ export interface AppErrorOptions {
 export class AppError extends Error {
   readonly code: ErrorCode;
   readonly details: AppErrorDetails | undefined;
+  readonly retryAfterSeconds: number | undefined;
 
   constructor(code: ErrorCode, options: AppErrorOptions = {}) {
     super(options.message ?? DEFAULT_ERROR_MESSAGES[code], options.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = 'AppError';
     this.code = code;
-    this.details = options.details;
+    this.retryAfterSeconds = options.retryAfterSeconds;
+    this.details =
+      options.retryAfterSeconds === undefined
+        ? options.details
+        : { ...options.details, retryAfterSeconds: options.retryAfterSeconds };
   }
 
   get status(): number {

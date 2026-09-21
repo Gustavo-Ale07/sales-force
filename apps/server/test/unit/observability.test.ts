@@ -59,6 +59,40 @@ describe('logger', () => {
     expect(line).toMatchObject({ password: REDACTED_PLACEHOLDER, headers: { 'x-token': REDACTED_PLACEHOLDER } });
   });
 
+  it('redacts every case and separator spelling of credential keys', () => {
+    const capture = captureLogs();
+    const logger = createLogger({ level: 'info', service: 'api', destination: capture.stream });
+    const leaked = 'leaked-value-456';
+    logger.info(
+      {
+        headers: {
+          Authorization: leaked,
+          'Proxy-Authorization': leaked,
+          'proxy-authorization': leaked,
+          Cookie: leaked,
+          'Set-Cookie': leaked,
+          'X-Token': leaked,
+          'X-TOKEN': leaked,
+          'X-Api-Key': leaked,
+          'x-api-key': leaked,
+        },
+        body: {
+          Password: leaked,
+          PASSWORD: leaked,
+          password_hash: leaked,
+          refresh_token: leaked,
+          access_token: leaked,
+          client_secret: leaked,
+          otp: leaked,
+          OTP: leaked,
+        },
+      },
+      'variants',
+    );
+    const [line] = capture.lines();
+    expect(JSON.stringify(line)).not.toContain(leaked);
+  });
+
   it('serializes a Secret as redacted and keeps only method and path of a request', () => {
     const capture = captureLogs();
     const logger = createLogger({ level: 'info', service: 'api', destination: capture.stream });

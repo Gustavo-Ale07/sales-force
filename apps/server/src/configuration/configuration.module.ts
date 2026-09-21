@@ -4,10 +4,12 @@ import {
   DatabaseConfigurationSource,
   InstallationConfigurationService,
 } from './configuration.service.js';
+import { ConfigurationController } from './configuration.controller.js';
 import { InstallationConfigurationRepository } from './configuration.repository.js';
 
 /** Installation configuration (CFG-1...6): the local mirror of the governed configuration. */
 @Module({
+  controllers: [ConfigurationController],
   providers: [
     InstallationConfigurationRepository,
     {

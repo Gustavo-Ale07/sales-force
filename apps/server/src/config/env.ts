@@ -72,9 +72,46 @@ export const databaseUrlField = z
   })
   .transform((value) => new Secret(value));
 
-export const nodeEnvField = z
-  .enum(NODE_ENVIRONMENTS, { error: `must be one of: ${NODE_ENVIRONMENTS.join(', ')}.` })
-  .default('development');
+/**
+ * No default, on purpose: a production container that lost `NODE_ENV` must fail to start instead of
+ * silently running with development guards (AUTH_MODE=dev, seed). Local scripts get it from `.env`.
+ */
+export const nodeEnvField = z.enum(NODE_ENVIRONMENTS, {
+  error: `is required and must be one of: ${NODE_ENVIRONMENTS.join(', ')}.`,
+});
+
+/** Loopback hosts: the only databases the development seed may touch. */
+export function isLoopbackDatabaseUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    return host === 'localhost' || host === '::1' || /^127(\.\d{1,3}){3}$/.test(host);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * `TRUST_PROXY`: how many reverse-proxy hops (a number) or which proxy addresses/CIDRs (comma list)
+ * may set `X-Forwarded-For`. Unset = trust nobody (the socket address is the client). Never `true`:
+ * trusting every hop lets a client pick its own address and defeats IP rate limiting and audit.
+ */
+export const trustProxyField = z
+  .string()
+  .optional()
+  .transform((value, ctx): number | string[] | false => {
+    if (value === undefined) return false;
+    if (/^\d+$/.test(value)) {
+      const hops = Number(value);
+      return hops === 0 ? false : hops;
+    }
+    const entries = value.split(',').map((entry) => entry.trim());
+    const valid = entries.every((entry) => /^[0-9a-fA-F:.]+(\/\d{1,3})?$/.test(entry));
+    if (!valid || entries.length === 0) {
+      ctx.addIssue({ code: 'custom', message: 'must be a hop count or a comma-separated list of proxy IPs/CIDRs.' });
+      return z.NEVER;
+    }
+    return entries;
+  });
 
 export const logLevelField = z
   .enum(LOG_LEVELS, { error: `must be one of: ${LOG_LEVELS.join(', ')}.` })
