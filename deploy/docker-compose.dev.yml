@@ -1,6 +1,23 @@
-# Local development database only (bound to 127.0.0.1). Real deployments use deploy/docker-compose.yml.
-# The password default below is a throwaway local-development value, never used outside this container.
+# Local development stack: `docker compose -f deploy/docker-compose.dev.yml up --build`
+# (details: deploy/README.md). Real deployments use their own compose file (OPS-3).
+#
+# Everything here is LOCAL-ONLY: throwaway passwords, dev authentication (NODE_ENV=development,
+# ALLOW_DEV_AUTH=1), the synthetic Sankhya gateway. Nothing in this file is a secret and none may be
+# reused outside a developer machine. Override any value through deploy/.env (git-ignored; see
+# deploy/.env.example) or the shell environment.
+#
+# Start-up order (DATA-2, STACK-2): postgres -> migrate (one-shot: SQL migrations, then the pg-boss
+# schema/queues) -> api and worker (processes never migrate) ; seed (one-shot, dev only) after migrate.
 name: salesforce-dev
+
+x-server-image: &server-image
+  image: sales-force-server:dev
+  build:
+    context: ..
+    dockerfile: deploy/Dockerfile.server
+
+x-database-url: &database-url postgres://${POSTGRES_USER:-salesforce}:${POSTGRES_PASSWORD:-salesforce_local_dev}@postgres:5432/${POSTGRES_DB:-salesforce}
+
 services:
   postgres:
     image: postgres:${POSTGRES_MAJOR:-17}
@@ -18,5 +35,126 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # One-shot: reviewed SQL migrations (advisory-lock protected, DATA-2) and then the pg-boss schema and
+  # queues. Idempotent; exits 0 when nothing is pending. api and worker wait for it to complete.
+  migrate:
+    <<: *server-image
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: *database-url
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    command:
+      - sh
+      - -c
+      - node node_modules/@salesforce/db/dist/migrate/cli.js && node dist/queue-install.js
+
+  # One-shot, development only. The seed refuses any non-loopback database (guard in apps/server
+  # src/seed.ts, unchanged), so it shares the postgres container's network namespace and reaches the
+  # database as 127.0.0.1. It is not started by anything else and never runs against a shared database.
+  seed:
+    <<: *server-image
+    restart: "no"
+    network_mode: "service:postgres"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgres://${POSTGRES_USER:-salesforce}:${POSTGRES_PASSWORD:-salesforce_local_dev}@127.0.0.1:5432/${POSTGRES_DB:-salesforce}
+      # LOCAL-ONLY throwaway password of the synthetic demo accounts (*.local). Change it in deploy/.env.
+      SEED_DEV_PASSWORD: ${SEED_DEV_PASSWORD:-local-dev-only-demo-2026}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    command: ["node", "dist/seed.js"]
+
+  api:
+    <<: *server-image
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DATABASE_URL: *database-url
+      API_HOST: 0.0.0.0
+      API_PORT: "3000"
+      AUTH_MODE: dev
+      ALLOW_DEV_AUTH: "1"
+      # The browser talks to the web container (same origin); the CSRF Origin check must allow it.
+      ALLOWED_ORIGINS: http://localhost:${WEB_HOST_PORT:-8080},http://127.0.0.1:${WEB_HOST_PORT:-8080}
+      # One trusted hop: the web container's nginx (it overwrites X-Forwarded-For).
+      TRUST_PROXY: "1"
+      # No SANKHYA_* here: the API never reads Sankhya settings (STACK-2/STACK-3).
+    command: ["node", "dist/main-api.js"]
+    # Debugging only; the browser goes through the web container. Loopback binding, optional.
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:-3000}:3000"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/v1/health').then((r)=>process.exit(r.ok?0:1),()=>process.exit(1))"
+      interval: 10s
+      timeout: 4s
+      start_period: 15s
+      retries: 6
+
+  worker:
+    <<: *server-image
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DATABASE_URL: *database-url
+      # Loopback health endpoint inside the container (used by the healthcheck below; not published).
+      WORKER_HEALTH_HOST: 127.0.0.1
+      WORKER_HEALTH_PORT: "3001"
+      # Sankhya settings exist ONLY on the worker (STACK-2). `fake` = synthetic gateway. Every other
+      # variable is a pass-through with an EMPTY default: no value is ever written in this file. Live
+      # mode needs values from your own secret store, and only against a non-production Sankhya (SNK-3).
+      SANKHYA_MODE: ${SANKHYA_MODE:-fake}
+      SANKHYA_BASE_URL: ${SANKHYA_BASE_URL:-}
+      SANKHYA_ALLOWED_HOSTS: ${SANKHYA_ALLOWED_HOSTS:-}
+      SANKHYA_ENVIRONMENT: ${SANKHYA_ENVIRONMENT:-}
+      SANKHYA_CLIENT_ID: ${SANKHYA_CLIENT_ID:-}
+      SANKHYA_CLIENT_SECRET: ${SANKHYA_CLIENT_SECRET:-}
+      SANKHYA_X_TOKEN: ${SANKHYA_X_TOKEN:-}
+    command: ["node", "dist/main-worker.js"]
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3001/health').then((r)=>process.exit(r.ok?0:1),()=>process.exit(1))"
+      interval: 15s
+      timeout: 4s
+      start_period: 20s
+      retries: 6
+
+  web:
+    image: sales-force-web:dev
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      # Runtime config.json (public, no secrets). Not a customer name: an installation label.
+      INSTALLATION_NAME: ${INSTALLATION_NAME:-Sales Force}
+      WEB_AUTH_MODE: dev
+    ports:
+      - "127.0.0.1:${WEB_HOST_PORT:-8080}:8080"
+
 volumes:
   pgdata:
