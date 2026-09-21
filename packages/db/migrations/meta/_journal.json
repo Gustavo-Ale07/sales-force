@@ -15,6 +15,13 @@
       "when": 1789993182523,
       "tag": "0001_auth_throttle",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789996600031,
+      "tag": "0002_sales_order_client_request_hash",
+      "breakpoints": true
     }
   ]
 }

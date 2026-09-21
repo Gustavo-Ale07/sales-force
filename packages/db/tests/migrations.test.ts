@@ -37,7 +37,7 @@ describe('migrations', () => {
   it('applies from an empty database and creates the expected tables', async () => {
     const url = await pgc.createDatabase();
     const result = await runMigrations(url, quiet);
-    expect(result.applied).toEqual(['0000_initial_schema', '0001_auth_throttle']);
+    expect(result.applied).toEqual(['0000_initial_schema', '0001_auth_throttle', '0002_sales_order_client_request_hash']);
     expect(result.alreadyApplied).toBe(0);
 
     const tables = await query<{ table_name: string }>(
@@ -76,9 +76,9 @@ describe('migrations', () => {
     await runMigrations(url, quiet);
     const second = await runMigrations(url, quiet);
     expect(second.applied).toEqual([]);
-    expect(second.alreadyApplied).toBe(2);
+    expect(second.alreadyApplied).toBe(3);
     const rows = await query(url, `SELECT * FROM schema_migration`);
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
   });
 
   it('two concurrent runners do not corrupt the database (advisory lock)', async () => {
@@ -89,10 +89,10 @@ describe('migrations', () => {
       runMigrations(url, quiet),
     ]);
     // Exactly one runner applied the migrations; the others found them applied.
-    expect(results.filter((r) => r.applied.length === 2)).toHaveLength(1);
+    expect(results.filter((r) => r.applied.length === 3)).toHaveLength(1);
     expect(results.filter((r) => r.applied.length === 0)).toHaveLength(2);
     const rows = await query(url, `SELECT * FROM schema_migration`);
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
   });
 
   it('waits for, and fails clearly on, a held migration lock', async () => {
@@ -112,7 +112,7 @@ describe('migrations', () => {
     }
     // Once released, the run succeeds.
     const ok = await runMigrations(url, quiet);
-    expect(ok.applied).toEqual(['0000_initial_schema', '0001_auth_throttle']);
+    expect(ok.applied).toEqual(['0000_initial_schema', '0001_auth_throttle', '0002_sales_order_client_request_hash']);
   });
 
   it('refuses when an applied migration file was edited', async () => {
@@ -132,22 +132,22 @@ describe('migrations', () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), 'sf-migrations-'));
     await cp(defaultMigrationsDir, dir, { recursive: true });
     await writeFile(
-      path.join(dir, '0002_broken.sql'),
+      path.join(dir, '0003_broken.sql'),
       'CREATE TABLE ok_table (id int);\n--> statement-breakpoint\nCREATE TABLE ok_table (id int);\n',
     );
     const journalPath = path.join(dir, 'meta', '_journal.json');
     const journal = JSON.parse(await readFile(journalPath, 'utf8')) as {
       entries: { idx: number; version: string; when: number; tag: string; breakpoints: boolean }[];
     };
-    journal.entries.push({ idx: 2, version: '7', when: Date.now(), tag: '0002_broken', breakpoints: true });
+    journal.entries.push({ idx: 3, version: '7', when: Date.now(), tag: '0003_broken', breakpoints: true });
     await writeFile(journalPath, JSON.stringify(journal));
 
     const err = await runMigrations(url, { ...quiet, migrationsDir: dir }).catch((e) => e);
     expect(err).toBeInstanceOf(MigrationError);
-    expect((err as Error).message).toMatch(/0002_broken failed and was rolled back/);
+    expect((err as Error).message).toMatch(/0003_broken failed and was rolled back/);
     expect(await query(url, `SELECT to_regclass('public.ok_table') AS t`)).toEqual([{ t: null }]);
     const recorded = await query<{ tag: string }>(url, `SELECT tag FROM schema_migration ORDER BY idx`);
-    expect(recorded.map((r) => r.tag)).toEqual(['0000_initial_schema', '0001_auth_throttle']);
+    expect(recorded.map((r) => r.tag)).toEqual(['0000_initial_schema', '0001_auth_throttle', '0002_sales_order_client_request_hash']);
   });
 
   it('error messages never contain the password', async () => {
@@ -165,14 +165,14 @@ describe('migrations', () => {
       expect(await readiness(handle.pool)).toMatchObject({
         appliedCount: 0,
         lastId: null,
-        expectedCount: 2,
+        expectedCount: 3,
         upToDate: false,
       });
       await runMigrations(url, quiet);
       expect(await readiness(handle.pool)).toEqual({
-        appliedCount: 2,
-        lastId: '0001_auth_throttle',
-        expectedCount: 2,
+        appliedCount: 3,
+        lastId: '0002_sales_order_client_request_hash',
+        expectedCount: 3,
         upToDate: true,
       });
     } finally {

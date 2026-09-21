@@ -51,6 +51,8 @@ export const salesOrder = pgTable(
     version: integer('version').notNull().default(1),
     /** Client-generated idempotency key for creation. */
     clientRequestId: uuid('client_request_id').notNull(),
+    /** SHA-256 (hex) of the canonical create payload: a replay with the same id but another payload is a conflict. NULL only for rows that predate the column. */
+    clientRequestHash: text('client_request_hash'),
     /** Unresolved integration point (SNK-5): never populated today. */
     externalOriginId: text('external_origin_id'),
     /** ERP order number once known. */
