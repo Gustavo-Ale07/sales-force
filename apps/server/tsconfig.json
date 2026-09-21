@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@salesforce/config/tsconfig.node.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "noEmit": true,
+    "types": ["node"],
+    // NestJS uses legacy decorators. Dependencies are always injected with an explicit @Inject(token),
+    // so `emitDecoratorMetadata` is not needed (and conflicts with isolatedModules/verbatimModuleSyntax).
+    "experimentalDecorators": true
+  },
+  "include": ["src", "test", "vitest.config.ts"]
+}
