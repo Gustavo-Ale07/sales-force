@@ -1,10 +1,13 @@
 import { createContext, useContext, type ReactNode } from "react";
+import type { ApiClient } from "./api";
 import type { AuthClient } from "./auth-client";
 import type { RuntimeConfig } from "./runtime-config";
 
 export interface AppServices {
   config: RuntimeConfig;
   authClient: AuthClient;
+  /** The single typed API client (same origin, session cookie). Pages read data through query options built on it. */
+  api: ApiClient;
 }
 
 const AppContext = createContext<AppServices | null>(null);
@@ -17,4 +20,8 @@ export function useAppServices(): AppServices {
   const value = useContext(AppContext);
   if (!value) throw new Error("AppServicesProvider ausente");
   return value;
+}
+
+export function useApi(): ApiClient {
+  return useAppServices().api;
 }

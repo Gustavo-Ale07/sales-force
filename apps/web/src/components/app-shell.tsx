@@ -13,7 +13,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useAppServices } from "../lib/app-context";
 import type { AuthUser } from "../lib/auth-client";
 import { DevAuthBanner } from "./dev-auth-banner";
-import { IntegrationPill, type IntegrationState } from "./integration-pill";
+import { ConnectedIntegrationPill } from "./integration-pill";
 import { navSections } from "./nav-items";
 import { UserMenu } from "./user-menu";
 
@@ -89,12 +89,11 @@ function RouteBreadcrumbs() {
 export interface AppShellProps {
   user: AuthUser | null;
   onLogout?: () => void;
-  integrationState?: IntegrationState;
   children: ReactNode;
 }
 
 /** Application frame: skip link, sidebar (drawer on narrow screens), top bar, page container. */
-export function AppShell({ user, onLogout, integrationState, children }: AppShellProps) {
+export function AppShell({ user, onLogout, children }: AppShellProps) {
   const [navOpen, setNavOpen] = useState(false);
   const { config } = useAppServices();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
@@ -149,7 +148,7 @@ export function AppShell({ user, onLogout, integrationState, children }: AppShel
               <RouteBreadcrumbs />
             </div>
             <div className="flex items-center gap-3">
-              <IntegrationPill state={integrationState} />
+              <ConnectedIntegrationPill />
               <UserMenu user={user} onLogout={onLogout ?? (() => undefined)} />
             </div>
           </header>

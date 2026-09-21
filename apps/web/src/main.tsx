@@ -5,15 +5,17 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import { AppServicesProvider } from "./lib/app-context";
-import { unconfiguredAuthClient } from "./lib/auth-client";
+import { createWebApiClient } from "./lib/api";
+import { createApiAuthClient } from "./lib/api-auth-client";
 import { createQueryClient } from "./lib/query-client";
 import { loadRuntimeConfig } from "./lib/runtime-config";
 import { createAppRouter } from "./router";
 
 async function bootstrap() {
   const config = await loadRuntimeConfig();
-  // Real implementation (generated API client, same-origin /api, cookie session) is wired here once the contracts exist.
-  const authClient = unconfiguredAuthClient;
+  // Same-origin generated client with the cookie session; no token is ever held by the app.
+  const api = createWebApiClient();
+  const authClient = createApiAuthClient(api);
 
   // Assigned after the client exists: the 401 handler needs the router, the router context needs the client.
   const routerRef: { current?: ReturnType<typeof createAppRouter> } = {};
@@ -34,7 +36,7 @@ async function bootstrap() {
   if (!container) throw new Error("Elemento #root não encontrado");
   createRoot(container).render(
     <StrictMode>
-      <AppServicesProvider value={{ config, authClient }}>
+      <AppServicesProvider value={{ config, authClient, api }}>
         <QueryClientProvider client={queryClient}>
           <TooltipProvider>
             <RouterProvider router={router} />

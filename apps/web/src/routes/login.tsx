@@ -44,7 +44,7 @@ function FailureAlert({ failure }: { failure: LoginFailure }) {
     case "rate_limited":
       return (
         <Alert tone="warning" title="Muitas tentativas em pouco tempo.">
-          Aguarde alguns instantes e tente novamente.
+          Aguarde {failure.retryAfterSeconds ? minutesText(failure.retryAfterSeconds) : "alguns instantes"} e tente novamente.
         </Alert>
       );
     case "channel_forbidden":

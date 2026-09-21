@@ -1,19 +1,24 @@
+import type { AccountRole } from "@salesforce/contracts";
 import { queryOptions } from "@tanstack/react-query";
 
 /**
  * Authentication boundary of the web app.
  *
- * The UI only depends on this interface. The real implementation will call the generated API client
- * (`POST /auth/login`, `POST /auth/logout`, `GET /auth/session`, same origin, HttpOnly session cookie) and map the
- * contract types to these shapes. No token or session data is ever stored in browser storage.
- * `AuthUser` is a UI-side projection: it is replaced by the contract type once `packages/contracts` exposes it.
+ * The UI only depends on this interface. `createApiAuthClient` (api-auth-client.ts) implements it over the typed API
+ * client (`POST /auth/login`, `POST /auth/logout`, `GET /auth/session`, same origin, HttpOnly session cookie).
+ * No token or session data is ever stored in browser storage.
+ * `AuthUser` is a UI-side projection of the contract `Account`.
  */
 export interface AuthUser {
   id: string;
   name: string;
   email: string;
-  /** Human-readable profile name (pt-BR), when the server provides one. */
+  /** Contract role (`admin`, `manager`, `seller`). Convenience for the UI only; the server enforces access. */
+  role: AccountRole;
+  /** Human-readable profile name (pt-BR). */
   roleLabel?: string;
+  /** Seller codes linked to the account by configuration. */
+  sellerCodes: readonly number[];
 }
 
 export interface LoginCredentials {

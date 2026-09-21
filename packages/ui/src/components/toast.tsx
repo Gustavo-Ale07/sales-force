@@ -42,6 +42,12 @@ export function dismissToast(id: number) {
   }, 300);
 }
 
+/** Removes every toast at once (module-level store: used by tests to isolate cases, or on sign-out). */
+export function clearToasts() {
+  items = [];
+  emit();
+}
+
 const toneBar: Record<AlertTone, string> = {
   info: "border-l-info",
   success: "border-l-ok",
