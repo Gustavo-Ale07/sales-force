@@ -1,0 +1,5 @@
+# Files executed or parsed inside Linux containers must keep LF endings on every checkout (Windows
+# core.autocrlf would otherwise turn a shell entrypoint into `\r`-terminated lines that cannot run).
+*.sh text eol=lf
+deploy/nginx/* text eol=lf
+deploy/Dockerfile.* text eol=lf

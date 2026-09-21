@@ -1,0 +1,48 @@
+# Build context for deploy/Dockerfile.* (context = repository root). Keep the context small and free of
+# anything that must never reach an image: dependencies (installed in the image from the lockfile),
+# VCS data, documents, environment files, credentials and local tooling.
+**/node_modules
+**/dist
+**/build
+**/.turbo
+**/coverage
+**/*.tsbuildinfo
+**/*.log
+
+.git
+.github
+.claude
+.superpowers
+.worktrees
+worktrees
+docs
+LEIA-ME.md
+CLAUDE.md
+skills-lock.json
+
+# Environment and secrets: never in an image (Sankhya and database values come from the runtime environment).
+.env
+.env.*
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+credentials
+secrets
+.sankhya-raw
+
+# Local artifacts
+**/*.dump
+**/*.backup
+**/*.sql.gz
+**/*.sqlite
+**/*.sqlite3
+**/playwright-report
+**/test-results
+apps/mobile
+
+# Deployment files are not part of any image, except what Dockerfile.web copies (deploy/nginx).
+deploy/*
+!deploy/nginx

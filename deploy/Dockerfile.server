@@ -1,0 +1,43 @@
+# syntax=docker/dockerfile:1
+#
+# One image for the API, the Worker and the one-shot jobs (migrate, queue install, dev seed): same
+# source, same version, different command (PROD-1, STACK-2). Build context = repository root.
+#
+#   docker build -f deploy/Dockerfile.server -t sales-force-server .
+#
+# Stages: fetch (lockfile-only, cacheable) -> build (full deps, compile the workspace) -> deploy
+# (`pnpm deploy --prod`: production dependencies + built workspace packages, nothing else) -> runtime.
+# Dependency build scripts stay denied (pnpm-workspace.yaml `allowBuilds`); none is enabled here.
+
+ARG NODE_IMAGE=node:22-alpine
+
+FROM ${NODE_IMAGE} AS base
+WORKDIR /repo
+# pnpm comes from the `packageManager` field (corepack), so the image uses exactly the repository's version.
+RUN corepack enable
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
+FROM base AS build
+# Resolve the lockfile into the pnpm store first: this layer only changes when the lockfile does.
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
+    pnpm fetch --frozen-lockfile
+COPY . .
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
+    pnpm install --offline --frozen-lockfile --filter "@salesforce/server..."
+# Builds the workspace dependencies first (db, domain, sankhya, contracts), then the server.
+RUN pnpm --filter "@salesforce/server..." run build
+RUN pnpm --filter "@salesforce/server" deploy --prod --legacy /out
+
+FROM ${NODE_IMAGE} AS runtime
+# Safe default: the API refuses the dev authentication mode when NODE_ENV=production. Local
+# development overrides it in deploy/docker-compose.dev.yml (NODE_ENV=development + ALLOW_DEV_AUTH=1).
+ENV NODE_ENV=production
+WORKDIR /app
+# Only what runs: package.json (ESM "type"), the compiled output and the production dependency tree
+# (workspace packages included, built). No sources, tests or tooling configuration from /out.
+COPY --from=build --chown=node:node /out/package.json ./package.json
+COPY --from=build --chown=node:node /out/dist ./dist
+COPY --from=build --chown=node:node /out/node_modules ./node_modules
+USER node
+# No default command on purpose: the compose file chooses the role (api, worker or a one-shot job).
+CMD ["node", "dist/main-api.js"]
