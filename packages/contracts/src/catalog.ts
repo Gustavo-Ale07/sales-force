@@ -142,3 +142,82 @@ export const ProductDetailSchema = named(
   }),
 );
 export type ProductDetail = z.infer<typeof ProductDetailSchema>;
+
+/* ---------- product resolution (batch of pasted / imported identifiers) ---------- */
+
+/** Largest value of a PostgreSQL `integer` column: the range of every ERP code (matches the server mirror). */
+const PG_INT_MAX = 2_147_483_647;
+
+export const MAX_PRODUCT_RESOLUTION_IDENTIFIERS = 500;
+export const MAX_PRODUCT_IDENTIFIER_LENGTH = 40;
+/** Candidates returned for an ambiguous identifier (more would only be noise for a picker). */
+export const MAX_PRODUCT_RESOLUTION_CANDIDATES = 5;
+
+/** A product code or reference as typed, pasted or imported: trimmed, 1..40 characters, no control characters. */
+const ProductIdentifierSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(MAX_PRODUCT_IDENTIFIER_LENGTH)
+  // eslint-disable-next-line no-control-regex
+  .regex(/^[^\u0000-\u001f\u007f-\u009f]+$/, 'Control characters are not allowed');
+
+/**
+ * `POST /product-resolutions`. A read (nothing is created or changed); it is a POST only because the
+ * batch does not fit a query string. Matching is exact and never heuristic: see the route description.
+ */
+export const ResolveProductsRequestSchema = named(
+  'ResolveProductsRequest',
+  z.strictObject({
+    /** When present, prices are resolved for this customer's price table (within scope); otherwise the catalog reference table. */
+    customerCode: z.number().int().min(1).max(PG_INT_MAX).optional(),
+    identifiers: z.array(ProductIdentifierSchema).min(1).max(MAX_PRODUCT_RESOLUTION_IDENTIFIERS),
+  }),
+);
+export type ResolveProductsRequest = z.infer<typeof ResolveProductsRequestSchema>;
+
+export const ProductResolutionStatusSchema = named(
+  'ProductResolutionStatus',
+  z.enum(['found', 'not_found', 'ambiguous']),
+);
+export type ProductResolutionStatus = z.infer<typeof ProductResolutionStatusSchema>;
+
+/** One answer per request identifier, in request order. `found` carries `product`; `ambiguous` carries 2..5 `candidates`; `not_found` neither. */
+export const ProductResolutionItemSchema = named(
+  'ProductResolutionItem',
+  z
+    .object({
+      /** The identifier as sent (after trim). */
+      identifier: z.string(),
+      status: ProductResolutionStatusSchema,
+      product: ProductListItemSchema.optional(),
+      candidates: z.array(ProductListItemSchema).max(MAX_PRODUCT_RESOLUTION_CANDIDATES).optional(),
+    })
+    .superRefine((item, ctx) => {
+      const problem = (path: string, message: string): void => {
+        ctx.addIssue({ code: 'custom', path: [path], message });
+      };
+      if (item.status === 'found') {
+        if (item.product === undefined) problem('product', 'A found identifier carries its product');
+        if (item.candidates !== undefined) problem('candidates', 'A found identifier carries no candidates');
+      } else if (item.status === 'ambiguous') {
+        if (item.candidates === undefined || item.candidates.length < 2) {
+          problem('candidates', 'An ambiguous identifier carries 2 to 5 candidates');
+        }
+        if (item.product !== undefined) problem('product', 'An ambiguous identifier carries no product');
+      } else {
+        if (item.product !== undefined) problem('product', 'A not_found identifier carries no product');
+        if (item.candidates !== undefined) problem('candidates', 'A not_found identifier carries no candidates');
+      }
+    }),
+);
+export type ProductResolutionItem = z.infer<typeof ProductResolutionItemSchema>;
+
+export const ResolveProductsResponseSchema = named(
+  'ResolveProductsResponse',
+  z.object({
+    items: z.array(ProductResolutionItemSchema),
+    priceContext: PriceContextSchema,
+  }),
+);
+export type ResolveProductsResponse = z.infer<typeof ResolveProductsResponseSchema>;

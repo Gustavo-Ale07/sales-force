@@ -14,6 +14,8 @@ import {
   OrderItemInputSchema,
   OrdersQuerySchema,
   ProductsQuerySchema,
+  ResolveProductsRequestSchema,
+  ResolveProductsResponseSchema,
   ReplaceOrderRequestSchema,
   SellersQuerySchema,
   SessionResponseSchema,
@@ -422,5 +424,81 @@ describe('route registry', () => {
       .map((r) => r.operationId)
       .sort();
     expect(publicRoutes).toEqual(['getHealth', 'getReady', 'getSession', 'login']);
+  });
+});
+
+describe('product resolution (POST /product-resolutions)', () => {
+  const listItem = {
+    code: 10,
+    description: 'Produto',
+    active: true,
+    sellable: true,
+    unit: 'UN',
+    brand: null,
+    reference: 'REF-1',
+    groupCode: null,
+    groupName: null,
+    listPrice: { state: 'none', unitPrice: null, tableCode: null, versionId: null, noPriceReason: 'no_resolved_table' },
+  };
+  const priceContext = { customerCode: null, tableCode: null, tableName: null, source: 'none' };
+
+  it('describes the route: post, session, catalog, 400/401/403/404, body capped at 128 kB', () => {
+    const route = routes.resolveProducts;
+    expect(route.operationId).toBe('resolveProducts');
+    expect(route.method).toBe('post');
+    expect(route.path).toBe('/product-resolutions');
+    expect(route.auth).toBe('session');
+    expect(route.tags).toEqual(['catalog']);
+    expect([...route.errors]).toEqual([400, 401, 403, 404]);
+    expect(route.maxBodyBytes).toBe(128 * 1024);
+  });
+
+  it('trims identifiers and accepts a customer code and duplicates', () => {
+    const parsed = ResolveProductsRequestSchema.parse({ customerCode: 5, identifiers: [' 123 ', 'ABC-1', 'ABC-1'] });
+    expect(parsed).toEqual({ customerCode: 5, identifiers: ['123', 'ABC-1', 'ABC-1'] });
+    expect(ResolveProductsRequestSchema.parse({ identifiers: ['x'] }).customerCode).toBeUndefined();
+  });
+
+  it('bounds the batch, the identifier and the customer code', () => {
+    const many = (n: number) => Array.from({ length: n }, (_, i) => `P${i}`);
+    expect(ResolveProductsRequestSchema.safeParse({ identifiers: many(500) }).success).toBe(true);
+    expect(ResolveProductsRequestSchema.safeParse({ identifiers: many(501) }).success).toBe(false);
+    expect(ResolveProductsRequestSchema.safeParse({ identifiers: [] }).success).toBe(false);
+    expect(ResolveProductsRequestSchema.safeParse({}).success).toBe(false);
+    expect(ResolveProductsRequestSchema.safeParse({ identifiers: ['a'.repeat(40)] }).success).toBe(true);
+    expect(ResolveProductsRequestSchema.safeParse({ identifiers: ['a'.repeat(41)] }).success).toBe(false);
+    for (const bad of ['', '   ', 'a\u0000b', 'a\nb', 'a\u007fb', 7]) {
+      expect(ResolveProductsRequestSchema.safeParse({ identifiers: [bad] }).success, JSON.stringify(bad)).toBe(false);
+    }
+    for (const customerCode of [0, -1, 1.5, 2_147_483_648, '5']) {
+      expect(ResolveProductsRequestSchema.safeParse({ customerCode, identifiers: ['a'] }).success).toBe(false);
+    }
+    expect(ResolveProductsRequestSchema.safeParse({ customerCode: 2_147_483_647, identifiers: ['a'] }).success).toBe(true);
+  });
+
+  it('rejects unrecognized request keys', () => {
+    expect(ResolveProductsRequestSchema.safeParse({ identifiers: ['a'], cost: true }).success).toBe(false);
+  });
+
+  it('accepts the three outcomes and enforces their shape', () => {
+    const ok = (items: unknown[]) => ResolveProductsResponseSchema.safeParse({ items, priceContext }).success;
+    expect(ok([{ identifier: '10', status: 'found', product: listItem }])).toBe(true);
+    expect(ok([{ identifier: 'x', status: 'not_found' }])).toBe(true);
+    expect(ok([{ identifier: 'R', status: 'ambiguous', candidates: [listItem, listItem] }])).toBe(true);
+    // found needs a product; ambiguous needs 2..5 candidates; not_found carries neither.
+    expect(ok([{ identifier: '10', status: 'found' }])).toBe(false);
+    expect(ok([{ identifier: 'R', status: 'ambiguous', candidates: [listItem] }])).toBe(false);
+    expect(ok([{ identifier: 'R', status: 'ambiguous', candidates: Array(6).fill(listItem) }])).toBe(false);
+    expect(ok([{ identifier: 'R', status: 'ambiguous', candidates: Array(5).fill(listItem) }])).toBe(true);
+    expect(ok([{ identifier: 'x', status: 'not_found', product: listItem }])).toBe(false);
+    expect(ok([{ identifier: 'x', status: 'found', product: listItem, candidates: [listItem, listItem] }])).toBe(false);
+  });
+
+  it('never lets a cost or margin key through in a response item', () => {
+    const parsed = ResolveProductsResponseSchema.parse({
+      items: [{ identifier: '10', status: 'found', product: { ...listItem, cost: '1.00', margin: '0.2' } }],
+      priceContext,
+    });
+    expect(JSON.stringify(parsed)).not.toMatch(/cost|margin/i);
   });
 });

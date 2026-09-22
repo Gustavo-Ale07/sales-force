@@ -6,3 +6,4 @@ export * from './configuration.js';
 export * from './pricing.js';
 export * from './scope.js';
 export * from './ordering.js';
+export * from './templates.js';

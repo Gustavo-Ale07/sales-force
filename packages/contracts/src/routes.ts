@@ -7,6 +7,8 @@ import {
   ProductPathSchema,
   ProductsQuerySchema,
   ProductsResponseSchema,
+  ResolveProductsRequestSchema,
+  ResolveProductsResponseSchema,
 } from './catalog.js';
 import { ConfigurationResponseSchema } from './configuration.js';
 import {
@@ -25,8 +27,19 @@ import {
   OrdersQuerySchema,
   OrdersResponseSchema,
   ReplaceOrderRequestSchema,
+  RepeatLastOrderRequestSchema,
 } from './orders.js';
 import { SellersQuerySchema, SellersResponseSchema } from './sellers.js';
+import {
+  CreateOrderTemplateRequestSchema,
+  OrderTemplateDetailSchema,
+  OrderTemplatePathSchema,
+  OrderTemplatesResponseSchema,
+  ReplaceOrderTemplateRequestSchema,
+  RepeatLastOrderResponseSchema,
+  UseOrderTemplateRequestSchema,
+  UseOrderTemplateResponseSchema,
+} from './templates.js';
 
 /**
  * Route registry: the single source for HTTP method, path, request/response schemas, operation id,
@@ -62,6 +75,8 @@ export interface RouteDefinition {
   readonly description?: string;
   readonly auth: RouteAuth;
   readonly request: RouteRequest;
+  /** Request body cap for this route, in bytes; the server enforces it. Omitted = the API-wide limit. */
+  readonly maxBodyBytes?: number;
   /** Documented success (and specific error) responses by HTTP status. */
   readonly responses: Readonly<Record<number, RouteResponse>>;
   /** Generic error statuses; their body is always `ApiError`. */
@@ -236,6 +251,20 @@ export const routes = {
     responses: { 200: { description: 'Produto', schema: ProductDetailSchema } },
     errors: [400, 401, 403, 404],
   }),
+  resolveProducts: defineRoute({
+    operationId: 'resolveProducts',
+    method: 'post',
+    path: '/product-resolutions',
+    tags: ['catalog'],
+    summary: 'Resolve a batch of product identifiers',
+    description:
+      'A read, not a write. Each identifier (trimmed) is matched exactly, with no wildcard or fuzzy matching: against the product code when it is all digits without leading zeros (\'007\' is not code 7), and against the product reference (case-sensitive). One answer per identifier, in request order; a duplicate identifier is answered at each position. found: exactly one visible product; ambiguous: several (up to 5 candidates, ordered by code); not_found: none. A product the configuration hides from the catalog counts as not found. With `customerCode` prices come from that customer table (404 outside the seller scope); otherwise from the catalog reference table. Body up to 128 kB.',
+    auth: 'session',
+    request: { body: ResolveProductsRequestSchema },
+    maxBodyBytes: 128 * 1024,
+    responses: { 200: { description: 'Uma resposta por identificador', schema: ResolveProductsResponseSchema } },
+    errors: [400, 401, 403, 404],
+  }),
 
   listOrders: defineRoute({
     operationId: 'listOrders',
@@ -316,6 +345,109 @@ export const routes = {
       },
     },
     errors: [400, 401, 403, 404],
+  }),
+  repeatLastOrder: defineRoute({
+    operationId: 'repeatLastOrder',
+    method: 'post',
+    path: '/customers/{code}/orders/repeat-last',
+    tags: ['orders'],
+    summary: "Create a new draft from the customer's most recent order ('Repetir último pedido')",
+    description:
+      "Creates a NEW, independent draft from the customer's most recent NON-cancelled order recorded in Sales Force (never from Sankhya/ERP history, which is not mirrored here), through the same path as `createOrder`, using `clientRequestId` as the draft request id (201 created; 200 with the original draft on a replay of the same request). Only `productCode` and `quantity` are copied from the source order; no price, discount or note. Each line is revalidated against the current catalog and the customer price context; lines whose product is removed, inactive, hidden, not sellable or without a usable price are left out and reported in `skippedLines`, never priced by guess. The new draft is assigned to the customer's CURRENT seller, which may differ from the source order's seller. 409 conflict (details.reason `no_previous_order`) when the customer has no previous order in Sales Force at all. 409 conflict (details.reason `no_usable_lines`, with `skippedLines`) when no line of the source order can be used: no draft is created. The source order is never modified.",
+    auth: 'session',
+    request: { params: CustomerPathSchema, body: RepeatLastOrderRequestSchema },
+    maxBodyBytes: 2 * 1024,
+    responses: {
+      201: { description: 'Rascunho criado a partir do último pedido', schema: RepeatLastOrderResponseSchema },
+      200: { description: 'Reenvio idempotente: rascunho original', schema: RepeatLastOrderResponseSchema },
+    },
+    errors: [400, 401, 403, 404, 409],
+  }),
+
+  listOrderTemplates: defineRoute({
+    operationId: 'listOrderTemplates',
+    method: 'get',
+    path: '/customers/{code}/order-templates',
+    tags: ['order-templates'],
+    summary: 'Recurring order templates of a customer (scoped)',
+    description:
+      'Live templates of the customer, by name. A customer outside the actor scope is reported as 404. At most 50 per customer.',
+    auth: 'session',
+    request: { params: CustomerPathSchema },
+    responses: { 200: { description: 'Modelos do cliente', schema: OrderTemplatesResponseSchema } },
+    errors: [400, 401, 403, 404],
+  }),
+  createOrderTemplate: defineRoute({
+    operationId: 'createOrderTemplate',
+    method: 'post',
+    path: '/customers/{code}/order-templates',
+    tags: ['order-templates'],
+    summary: 'Save a recurring order template for a customer',
+    description:
+      'A saved list of product + quantity (1 to 500 lines, each product once); no price, discount or note. Idempotent on `clientRequestId` per account: 201 when created, 200 with the same template on a replay of the same payload, 409 idempotency_conflict when the id was used with a different payload. 409 conflict (details.reason `template_limit_reached`) beyond 50 live templates for the customer; 409 conflict (`template_name_taken`) when a live template of the customer already has that name, ignoring case. Body up to 128 kB.',
+    auth: 'session',
+    request: { params: CustomerPathSchema, body: CreateOrderTemplateRequestSchema },
+    maxBodyBytes: 128 * 1024,
+    responses: {
+      201: { description: 'Modelo criado', schema: OrderTemplateDetailSchema },
+      200: { description: 'Reenvio idempotente: modelo original', schema: OrderTemplateDetailSchema },
+    },
+    errors: [400, 401, 403, 404, 409],
+  }),
+  getOrderTemplate: defineRoute({
+    operationId: 'getOrderTemplate',
+    method: 'get',
+    path: '/order-templates/{id}',
+    tags: ['order-templates'],
+    summary: 'Order template detail (scoped)',
+    description: 'A template of a customer outside the actor scope, or a deleted one, is reported as 404.',
+    auth: 'session',
+    request: { params: OrderTemplatePathSchema },
+    responses: { 200: { description: 'Modelo', schema: OrderTemplateDetailSchema } },
+    errors: [400, 401, 403, 404],
+  }),
+  replaceOrderTemplate: defineRoute({
+    operationId: 'replaceOrderTemplate',
+    method: 'put',
+    path: '/order-templates/{id}',
+    tags: ['order-templates'],
+    summary: 'Replace an order template (optimistic concurrency)',
+    description:
+      'Full replace of name and lines; the customer never changes. 409 version_conflict when `expectedVersion` is stale; 409 conflict (`template_name_taken`) on a name collision. Body up to 128 kB.',
+    auth: 'session',
+    request: { params: OrderTemplatePathSchema, body: ReplaceOrderTemplateRequestSchema },
+    maxBodyBytes: 128 * 1024,
+    responses: { 200: { description: 'Modelo atualizado', schema: OrderTemplateDetailSchema } },
+    errors: [400, 401, 403, 404, 409],
+  }),
+  deleteOrderTemplate: defineRoute({
+    operationId: 'deleteOrderTemplate',
+    method: 'delete',
+    path: '/order-templates/{id}',
+    tags: ['order-templates'],
+    summary: 'Delete an order template (soft delete)',
+    description: 'Orders already created from the template are not affected.',
+    auth: 'session',
+    request: { params: OrderTemplatePathSchema },
+    responses: { 204: { description: 'Modelo removido' } },
+    errors: [400, 401, 403, 404],
+  }),
+  useOrderTemplate: defineRoute({
+    operationId: 'useOrderTemplate',
+    method: 'post',
+    path: '/order-templates/{id}/use',
+    tags: ['order-templates'],
+    summary: 'Create a new draft order from a template',
+    description:
+      'Creates a NEW draft for the template customer through the same path as `createOrder`, using `clientRequestId` as the draft request id (201 created; 200 with the original draft on a replay of the same request). Each line is revalidated against the current catalog and the customer price context; lines whose product is removed, inactive, hidden, not sellable or without a usable price are left out and reported in `skippedLines`, never priced by guess. 409 conflict (details.reason `no_usable_lines`, with `skippedLines`) when no line can be used: no draft is created. The draft is independent of the template afterwards.',
+    auth: 'session',
+    request: { params: OrderTemplatePathSchema, body: UseOrderTemplateRequestSchema },
+    maxBodyBytes: 2 * 1024,
+    responses: {
+      201: { description: 'Rascunho criado a partir do modelo', schema: UseOrderTemplateResponseSchema },
+      200: { description: 'Reenvio idempotente: rascunho original', schema: UseOrderTemplateResponseSchema },
+    },
+    errors: [400, 401, 403, 404, 409],
   }),
 } as const;
 

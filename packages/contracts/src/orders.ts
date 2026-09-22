@@ -175,3 +175,13 @@ export const ReplaceOrderRequestSchema = named(
   }),
 );
 export type ReplaceOrderRequest = z.infer<typeof ReplaceOrderRequestSchema>;
+
+/**
+ * `POST /customers/{code}/orders/repeat-last`. One `clientRequestId` per user action (it becomes the
+ * new draft's own request id), same shape as `UseOrderTemplateRequest`.
+ */
+export const RepeatLastOrderRequestSchema = named(
+  'RepeatLastOrderRequest',
+  z.strictObject({ clientRequestId: UuidSchema }),
+);
+export type RepeatLastOrderRequest = z.infer<typeof RepeatLastOrderRequestSchema>;

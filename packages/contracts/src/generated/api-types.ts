@@ -246,6 +246,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/product-resolutions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve a batch of product identifiers
+         * @description A read, not a write. Each identifier (trimmed) is matched exactly, with no wildcard or fuzzy matching: against the product code when it is all digits without leading zeros ('007' is not code 7), and against the product reference (case-sensitive). One answer per identifier, in request order; a duplicate identifier is answered at each position. found: exactly one visible product; ambiguous: several (up to 5 candidates, ordered by code); not_found: none. A product the configuration hides from the catalog counts as not found. With `customerCode` prices come from that customer table (404 outside the seller scope); otherwise from the catalog reference table. Body up to 128 kB.
+         */
+        post: operations["resolveProducts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orders": {
         parameters: {
             query?: never;
@@ -303,6 +323,98 @@ export interface paths {
          * @description Always 409 erp_submission_disabled until the ERP write-safety gates close (SNK-4/SNK-5).
          */
         post: operations["submitOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/customers/{code}/orders/repeat-last": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a new draft from the customer's most recent order ('Repetir último pedido')
+         * @description Creates a NEW, independent draft from the customer's most recent NON-cancelled order recorded in Sales Force (never from Sankhya/ERP history, which is not mirrored here), through the same path as `createOrder`, using `clientRequestId` as the draft request id (201 created; 200 with the original draft on a replay of the same request). Only `productCode` and `quantity` are copied from the source order; no price, discount or note. Each line is revalidated against the current catalog and the customer price context; lines whose product is removed, inactive, hidden, not sellable or without a usable price are left out and reported in `skippedLines`, never priced by guess. The new draft is assigned to the customer's CURRENT seller, which may differ from the source order's seller. 409 conflict (details.reason `no_previous_order`) when the customer has no previous order in Sales Force at all. 409 conflict (details.reason `no_usable_lines`, with `skippedLines`) when no line of the source order can be used: no draft is created. The source order is never modified.
+         */
+        post: operations["repeatLastOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/customers/{code}/order-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recurring order templates of a customer (scoped)
+         * @description Live templates of the customer, by name. A customer outside the actor scope is reported as 404. At most 50 per customer.
+         */
+        get: operations["listOrderTemplates"];
+        put?: never;
+        /**
+         * Save a recurring order template for a customer
+         * @description A saved list of product + quantity (1 to 500 lines, each product once); no price, discount or note. Idempotent on `clientRequestId` per account: 201 when created, 200 with the same template on a replay of the same payload, 409 idempotency_conflict when the id was used with a different payload. 409 conflict (details.reason `template_limit_reached`) beyond 50 live templates for the customer; 409 conflict (`template_name_taken`) when a live template of the customer already has that name, ignoring case. Body up to 128 kB.
+         */
+        post: operations["createOrderTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/order-templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Order template detail (scoped)
+         * @description A template of a customer outside the actor scope, or a deleted one, is reported as 404.
+         */
+        get: operations["getOrderTemplate"];
+        /**
+         * Replace an order template (optimistic concurrency)
+         * @description Full replace of name and lines; the customer never changes. 409 version_conflict when `expectedVersion` is stale; 409 conflict (`template_name_taken`) on a name collision. Body up to 128 kB.
+         */
+        put: operations["replaceOrderTemplate"];
+        post?: never;
+        /**
+         * Delete an order template (soft delete)
+         * @description Orders already created from the template are not affected.
+         */
+        delete: operations["deleteOrderTemplate"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/order-templates/{id}/use": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a new draft order from a template
+         * @description Creates a NEW draft for the template customer through the same path as `createOrder`, using `clientRequestId` as the draft request id (201 created; 200 with the original draft on a replay of the same request). Each line is revalidated against the current catalog and the customer price context; lines whose product is removed, inactive, hidden, not sellable or without a usable price are left out and reported in `skippedLines`, never priced by guess. 409 conflict (details.reason `no_usable_lines`, with `skippedLines`) when no line can be used: no draft is created. The draft is independent of the template afterwards.
+         */
+        post: operations["useOrderTemplate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -419,6 +531,12 @@ export interface components {
             negotiationTypeCode: number | null;
             notes: string | null;
             items: components["schemas"]["OrderItemInput"][];
+        };
+        CreateOrderTemplateRequest: {
+            /** Format: uuid */
+            clientRequestId: string;
+            name: string;
+            items: components["schemas"]["OrderTemplateItem"][];
         };
         CustomerDetail: {
             code: number;
@@ -631,6 +749,34 @@ export interface components {
         OrderSort: "updatedAt" | "-updatedAt" | "draftNumber" | "-draftNumber";
         /** @enum {string} */
         OrderStatus: "draft" | "cancelled" | "queued" | "sent" | "rejected" | "unknown";
+        OrderTemplate: {
+            /** Format: uuid */
+            id: string;
+            customerCode: number;
+            name: string;
+            version: number;
+            itemCount: number;
+            createdAt: components["schemas"]["IsoTimestamp"];
+            updatedAt: components["schemas"]["IsoTimestamp"];
+        };
+        OrderTemplateDetail: {
+            /** Format: uuid */
+            id: string;
+            customerCode: number;
+            name: string;
+            version: number;
+            itemCount: number;
+            createdAt: components["schemas"]["IsoTimestamp"];
+            updatedAt: components["schemas"]["IsoTimestamp"];
+            items: components["schemas"]["OrderTemplateItem"][];
+        };
+        OrderTemplateItem: {
+            productCode: number;
+            quantity: components["schemas"]["DecimalString"];
+        };
+        OrderTemplatesResponse: {
+            items: components["schemas"]["OrderTemplate"][];
+        };
         OrderTotals: {
             estimatedTotal: components["schemas"]["DecimalString"];
             lineCount: number;
@@ -685,6 +831,14 @@ export interface components {
             groupName: string | null;
             listPrice: components["schemas"]["ListPriceContext"];
         };
+        ProductResolutionItem: {
+            identifier: string;
+            status: components["schemas"]["ProductResolutionStatus"];
+            product?: components["schemas"]["ProductListItem"];
+            candidates?: components["schemas"]["ProductListItem"][];
+        };
+        /** @enum {string} */
+        ProductResolutionStatus: "found" | "not_found" | "ambiguous";
         /** @enum {string} */
         ProductSort: "description" | "-description" | "code" | "-code";
         ProductsResponse: {
@@ -709,12 +863,33 @@ export interface components {
             };
             integration: components["schemas"]["IntegrationSummary"];
         };
+        RepeatLastOrderRequest: {
+            /** Format: uuid */
+            clientRequestId: string;
+        };
+        RepeatLastOrderResponse: {
+            order: components["schemas"]["OrderDetail"];
+            skippedLines: components["schemas"]["SkippedTemplateLine"][];
+        };
         ReplaceOrderRequest: {
             expectedVersion: number;
             customerCode: number;
             negotiationTypeCode: number | null;
             notes: string | null;
             items: components["schemas"]["OrderItemInput"][];
+        };
+        ReplaceOrderTemplateRequest: {
+            expectedVersion: number;
+            name: string;
+            items: components["schemas"]["OrderTemplateItem"][];
+        };
+        ResolveProductsRequest: {
+            customerCode?: number;
+            identifiers: string[];
+        };
+        ResolveProductsResponse: {
+            items: components["schemas"]["ProductResolutionItem"][];
+            priceContext: components["schemas"]["PriceContext"];
         };
         Seller: {
             code: number;
@@ -725,6 +900,11 @@ export interface components {
             items: components["schemas"]["Seller"][];
         };
         SessionResponse: components["schemas"]["AuthenticatedSession"] | components["schemas"]["AnonymousSession"];
+        SkippedTemplateLine: {
+            lineNo: number;
+            productCode: number;
+            reason: components["schemas"]["TemplateLineSkipReason"];
+        };
         SyncState: {
             entity: string;
             status: components["schemas"]["SyncStatus"];
@@ -737,6 +917,16 @@ export interface components {
         };
         /** @enum {string} */
         SyncStatus: "idle" | "running" | "succeeded" | "failed";
+        /** @enum {string} */
+        TemplateLineSkipReason: "product_removed" | "product_inactive" | "no_price" | "zero_price" | "product_hidden" | "product_not_sellable";
+        UseOrderTemplateRequest: {
+            /** Format: uuid */
+            clientRequestId: string;
+        };
+        UseOrderTemplateResponse: {
+            order: components["schemas"]["OrderDetail"];
+            skippedLines: components["schemas"]["SkippedTemplateLine"][];
+        };
     };
     responses: never;
     parameters: never;
@@ -1313,6 +1503,66 @@ export interface operations {
             };
         };
     };
+    resolveProducts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveProductsRequest"];
+            };
+        };
+        responses: {
+            /** @description Uma resposta por identificador */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolveProductsResponse"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     listOrders: {
         parameters: {
             query?: {
@@ -1695,6 +1945,489 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErpSubmissionDisabledError"];
+                };
+            };
+        };
+    };
+    repeatLastOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RepeatLastOrderRequest"];
+            };
+        };
+        responses: {
+            /** @description Reenvio idempotente: rascunho original */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepeatLastOrderResponse"];
+                };
+            };
+            /** @description Rascunho criado a partir do último pedido */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepeatLastOrderResponse"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflito de estado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    listOrderTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Modelos do cliente */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderTemplatesResponse"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    createOrderTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateOrderTemplateRequest"];
+            };
+        };
+        responses: {
+            /** @description Reenvio idempotente: modelo original */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderTemplateDetail"];
+                };
+            };
+            /** @description Modelo criado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderTemplateDetail"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflito de estado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    getOrderTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Modelo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderTemplateDetail"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    replaceOrderTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceOrderTemplateRequest"];
+            };
+        };
+        responses: {
+            /** @description Modelo atualizado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderTemplateDetail"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflito de estado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    deleteOrderTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Modelo removido */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    useOrderTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UseOrderTemplateRequest"];
+            };
+        };
+        responses: {
+            /** @description Reenvio idempotente: rascunho original */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UseOrderTemplateResponse"];
+                };
+            };
+            /** @description Rascunho criado a partir do modelo */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UseOrderTemplateResponse"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflito de estado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
         };
