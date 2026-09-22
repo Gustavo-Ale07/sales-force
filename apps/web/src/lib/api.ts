@@ -35,6 +35,10 @@ export class ApiRequestError extends Error {
   readonly code?: string;
   readonly correlationId?: string;
   readonly retryAfterSeconds?: number;
+  /** Discriminator of a 409 `conflict` (`details.reason`: `template_name_taken`, `no_usable_lines`...). */
+  readonly reason?: string;
+  /** Raw `details` of the envelope, for the few cases that carry data (e.g. `skippedLines`). */
+  readonly details?: Record<string, unknown>;
   readonly issues: readonly { path: string; code: string; message?: string }[];
 
   constructor(init: {
@@ -43,6 +47,8 @@ export class ApiRequestError extends Error {
     message: string;
     correlationId?: string;
     retryAfterSeconds?: number;
+    reason?: string;
+    details?: Record<string, unknown>;
     issues?: readonly { path: string; code: string; message?: string }[];
   }) {
     super(init.message);
@@ -51,6 +57,8 @@ export class ApiRequestError extends Error {
     this.code = init.code;
     this.correlationId = init.correlationId;
     this.retryAfterSeconds = init.retryAfterSeconds;
+    this.reason = init.reason;
+    this.details = init.details;
     this.issues = init.issues ?? [];
   }
 
@@ -95,6 +103,8 @@ export function toApiRequestError(response: Response, body: unknown): ApiRequest
     message: typeof envelope?.message === "string" ? envelope.message : `HTTP ${response.status}`,
     correlationId: response.headers.get("x-request-id") ?? requestId ?? undefined,
     retryAfterSeconds: parseRetryAfter(response.headers.get("retry-after"), details),
+    reason: typeof details?.reason === "string" ? details.reason : undefined,
+    details,
     issues,
   });
 }

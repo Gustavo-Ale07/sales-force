@@ -25,7 +25,21 @@ describe("runtime config", () => {
     expect(parseRuntimeConfig({ installationName: " Acme ", authMode: "standard" })).toEqual({
       installationName: "Acme",
       authMode: "standard",
+      brand: { logoUrl: null, markUrl: null, accent: null },
     });
+  });
+  it("reads the installation brand and drops each invalid part on its own", () => {
+    const parsed = parseRuntimeConfig({
+      installationName: "Acme",
+      authMode: "standard",
+      brand: { logoUrl: "/brand/logo.svg", markUrl: "https://evil.example/x.png", accent: "#1A237E" },
+    });
+    expect(parsed.brand).toEqual({ logoUrl: "/brand/logo.svg", markUrl: null, accent: "#1a237e" });
+  });
+  it("ignores a brand that is not an object", () => {
+    for (const brand of ["x", 1, null, [], undefined]) {
+      expect(parseRuntimeConfig({ installationName: "Acme", authMode: "standard", brand }).brand).toEqual(defaultRuntimeConfig.brand);
+    }
   });
   it("uses defaults when the file is unreachable or not ok", async () => {
     expect(await loadRuntimeConfig(vi.fn().mockRejectedValue(new Error("offline")))).toEqual(defaultRuntimeConfig);

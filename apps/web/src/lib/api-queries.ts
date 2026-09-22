@@ -31,6 +31,9 @@ export const queryKeys = {
   orders: (params: OrdersParams) => ["orders", "list", params] as const,
   order: (id: string) => ["orders", "detail", id] as const,
   ordersAll: ["orders"] as const,
+  orderTemplates: (customerCode: number) => ["order-templates", "list", customerCode] as const,
+  orderTemplate: (id: string) => ["order-templates", "detail", id] as const,
+  orderTemplatesAll: ["order-templates"] as const,
 };
 
 export function readyQueryOptions(api: ApiClient) {
@@ -131,5 +134,19 @@ export function orderQueryOptions(api: ApiClient, id: string) {
   return queryOptions({
     queryKey: queryKeys.order(id),
     queryFn: () => callApi(() => api.GET("/orders/{id}", { params: { path: { id } } })),
+  });
+}
+
+export function orderTemplatesQueryOptions(api: ApiClient, customerCode: number) {
+  return queryOptions({
+    queryKey: queryKeys.orderTemplates(customerCode),
+    queryFn: () => callApi(() => api.GET("/customers/{code}/order-templates", { params: { path: { code: customerCode } } })),
+  });
+}
+
+export function orderTemplateQueryOptions(api: ApiClient, id: string) {
+  return queryOptions({
+    queryKey: queryKeys.orderTemplate(id),
+    queryFn: () => callApi(() => api.GET("/order-templates/{id}", { params: { path: { id } } })),
   });
 }

@@ -78,39 +78,47 @@ export function createMockApi(handlers: Handlers) {
 }
 
 /** Error envelope as the server sends it, with the correlation id in `x-request-id`. */
-export function apiError(status: number, code: string, message: string, extra: { requestId?: string; issues?: unknown[]; headers?: Record<string, string> } = {}): MockResponse {
+export function apiError(status: number, code: string, message: string, extra: { requestId?: string; issues?: unknown[]; details?: Record<string, unknown>; headers?: Record<string, string> } = {}): MockResponse {
+  const details = extra.issues || extra.details ? { ...extra.details, ...(extra.issues ? { issues: extra.issues } : {}) } : undefined;
   return {
     status,
-    body: { code, message, ...(extra.issues ? { details: { issues: extra.issues } } : {}) },
+    body: { code, message, ...(details ? { details } : {}) },
     headers: { ...(extra.requestId ? { "x-request-id": extra.requestId } : {}), ...extra.headers },
   };
 }
 
-export const session = (authenticated: boolean): MockResponse =>
+export const session = (authenticated: boolean, role: ApiSchema<"Account">["role"] = account.role): MockResponse =>
   authenticated
-    ? { body: { authenticated: true, authMode: "dev", account, expiresAt: "2026-09-21T20:00:00.000Z" } satisfies ApiSchema<"AuthenticatedSession"> }
+    ? { body: { authenticated: true, authMode: "dev", account: { ...account, role }, expiresAt: "2026-09-21T20:00:00.000Z" } satisfies ApiSchema<"AuthenticatedSession"> }
     : { body: { authenticated: false, authMode: "dev" } satisfies ApiSchema<"AnonymousSession"> };
 
 export interface RenderOptions {
   handlers?: Handlers;
   /** Signed in by default; `false` renders an anonymous visitor. */
   signedIn?: boolean;
+  /** Role of the signed-in account; a seller by default. */
+  role?: ApiSchema<"Account">["role"];
   config?: Partial<RuntimeConfig>;
   /** Replaces the API-backed auth client (only for tests that need a scripted one). */
   authClient?: AuthClient;
+  /** Cache retention of the test query client (0 by default: nothing survives without an observer). */
+  gcTime?: number;
+  /** Runs before the first render, e.g. to prime the query cache. */
+  prepare?: (queryClient: QueryClient) => void;
 }
 
 export function renderApp(initialPath: string, options: RenderOptions = {}) {
-  const { handlers = {}, signedIn = true, config, authClient: customAuth } = options;
+  const { handlers = {}, signedIn = true, role, config, authClient: customAuth, gcTime = 0, prepare } = options;
   const mock = createMockApi({
-    "GET /auth/session": session(signedIn),
+    "GET /auth/session": session(signedIn, role),
     "GET /ready": { body: ready },
     "GET /configuration": { body: configuration },
     ...handlers,
   });
   const api = createWebApiClient({ fetch: mock.fetch, origin: "http://localhost" });
   const authClient = customAuth ?? createApiAuthClient(api);
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } });
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime }, mutations: { retry: false } } });
+  prepare?.(queryClient);
   const router = createAppRouter({ queryClient, authClient }, { history: createMemoryHistory({ initialEntries: [initialPath] }) });
   const utils = render(
     <AppServicesProvider value={{ config: { ...defaultRuntimeConfig, ...config }, authClient, api }}>

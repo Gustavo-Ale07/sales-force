@@ -95,6 +95,15 @@ describe("Carteira (customers)", () => {
     await waitFor(() => expect(router.state.location.pathname).toBe("/clientes/1001"));
   });
 
+  it("offers a new order for the customer straight from the row, without opening the customer", async () => {
+    const { user, router } = renderApp("/clientes", { handlers: { "GET /customers": { body: customersPage([customer()]) } } });
+    const action = await screen.findByRole("link", { name: "Novo pedido para Comercial Alfa Ltda" });
+    expect(action).toHaveAttribute("href", expect.stringContaining("customer=1001"));
+    await user.click(action);
+    await waitFor(() => expect(router.state.location.pathname).toBe("/pedidos/novo"));
+    expect(router.state.location.search).toEqual({ customer: 1001 });
+  });
+
   it("shows skeleton rows while loading", async () => {
     renderApp("/clientes", { handlers: { "GET /customers": () => new Promise(() => undefined) } });
     expect(await screen.findByRole("heading", { name: "Carteira de clientes" })).toBeInTheDocument();
@@ -306,7 +315,7 @@ describe("Rascunhos (orders)", () => {
 
 describe("Integração", () => {
   it("shows the read-only configuration and marks fake-gateway data as demonstration", async () => {
-    renderApp("/integracao");
+    renderApp("/integracao", { role: "admin" });
     expect(await screen.findByText("Dados de demonstração")).toBeInTheDocument();
     expect(screen.getByText("Demonstração (dados de exemplo)")).toBeInTheDocument();
     expect(screen.getByText("Sincronização por entidade", { selector: "caption" })).toBeInTheDocument();
@@ -315,6 +324,7 @@ describe("Integração", () => {
 
   it("shows failing entities when the integration is degraded", async () => {
     renderApp("/integracao", {
+      role: "admin",
       handlers: {
         "GET /configuration": {
           body: {
@@ -333,7 +343,7 @@ describe("Integração", () => {
   });
 
   it("shows the error state", async () => {
-    renderApp("/integracao", { handlers: { "GET /configuration": apiError(500, "internal_error", "x", { requestId: "req-i-1" }) } });
+    renderApp("/integracao", { role: "admin", handlers: { "GET /configuration": apiError(500, "internal_error", "x", { requestId: "req-i-1" }) } });
     expect(await screen.findByText("req-i-1")).toBeInTheDocument();
   });
 });

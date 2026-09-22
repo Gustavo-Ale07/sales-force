@@ -67,6 +67,83 @@ describe("Novo pedido", () => {
     expect(screen.getByTestId("order-total")).toHaveTextContent("31,25");
   });
 
+  describe("changing the customer once items exist", () => {
+    const handlers = () =>
+      newOrderHandlers({ "GET /customers": { body: customersPage([customer(), customer({ code: 1002, name: "Beta Ltda" })]) } });
+    const pickOther = async (user: ReturnType<typeof renderApp>["user"]) => {
+      await user.click(await screen.findByRole("combobox", { name: /^Cliente/ }));
+      await user.click(await screen.findByRole("option", { name: /Beta Ltda/ }));
+    };
+
+    it("asks first and drops the items (their prices belong to the previous customer) only when confirmed", async () => {
+      const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: handlers() });
+      await addProduct(user, "Balão");
+      await pickOther(user);
+      const dialog = await screen.findByRole("dialog", { name: "Trocar o cliente do pedido?" });
+      expect(dialog).toHaveTextContent("itens já adicionados serão removidos");
+      await user.click(within(dialog).getByRole("button", { name: "Trocar e remover itens" }));
+      await waitFor(() => expect(screen.queryByLabelText("Quantidade de Balão látex 9 pol. vermelho")).not.toBeInTheDocument());
+      expect(screen.getByRole("combobox", { name: /^Cliente/ })).toHaveDisplayValue(/Beta Ltda/);
+    });
+
+    it("keeps the customer and the items when the seller declines", async () => {
+      const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: handlers() });
+      await addProduct(user, "Balão");
+      await pickOther(user);
+      const dialog = await screen.findByRole("dialog", { name: "Trocar o cliente do pedido?" });
+      await user.click(within(dialog).getByRole("button", { name: "Manter o cliente atual" }));
+      expect(screen.getByLabelText("Quantidade de Balão látex 9 pol. vermelho")).toBeInTheDocument();
+      expect(screen.getByRole("combobox", { name: /^Cliente/ })).toHaveDisplayValue(/Comercial Alfa/);
+    });
+
+    it("asks as well when the customer is cleared, so picking another one afterwards cannot keep the old prices", async () => {
+      const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: handlers() });
+      await addProduct(user, "Balão");
+      await user.click(screen.getByRole("combobox", { name: /^Cliente/ }));
+      await user.keyboard("{Backspace}");
+      const dialog = await screen.findByRole("dialog", { name: "Trocar o cliente do pedido?" });
+      expect(dialog).toHaveTextContent("Ao remover o cliente");
+      await user.click(within(dialog).getByRole("button", { name: "Manter o cliente atual" }));
+      expect(screen.getByLabelText("Quantidade de Balão látex 9 pol. vermelho")).toBeInTheDocument();
+    });
+
+    it("drops the items when clearing the customer is confirmed, and picking another one then asks nothing", async () => {
+      const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: handlers() });
+      await addProduct(user, "Balão");
+      await user.click(screen.getByRole("combobox", { name: /^Cliente/ }));
+      await user.keyboard("{Backspace}");
+      await user.click(
+        within(await screen.findByRole("dialog", { name: "Trocar o cliente do pedido?" })).getByRole("button", {
+          name: "Trocar e remover itens",
+        }),
+      );
+      await waitFor(() => expect(screen.queryByLabelText("Quantidade de Balão látex 9 pol. vermelho")).not.toBeInTheDocument());
+      await pickOther(user);
+      expect(screen.queryByRole("dialog", { name: "Trocar o cliente do pedido?" })).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Quantidade de Balão látex 9 pol. vermelho")).not.toBeInTheDocument();
+    });
+
+    it("does not bring back removed lines (priced for the previous customer) with Desfazer after the change", async () => {
+      const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: handlers() });
+      await addProduct(user, "Balão");
+      await addProduct(user, "Vela");
+      await user.click(await screen.findByRole("checkbox", { name: "Selecionar Balão látex 9 pol. vermelho" }));
+      await user.click(screen.getByRole("button", { name: "Remover selecionados" }));
+      await pickOther(user);
+      const dialog = await screen.findByRole("dialog", { name: "Trocar o cliente do pedido?" });
+      await user.click(within(dialog).getByRole("button", { name: "Trocar e remover itens" }));
+      await waitFor(() => expect(screen.queryByLabelText("Quantidade de Vela sem preço")).not.toBeInTheDocument());
+      expect(screen.queryByRole("button", { name: "Desfazer" })).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Quantidade de Balão látex 9 pol. vermelho")).not.toBeInTheDocument();
+    });
+  });
+
+  it("tells the seller when the customer from the link cannot be loaded, and lets them pick one", async () => {
+    renderApp("/pedidos/novo?customer=9", { handlers: newOrderHandlers({ "GET /customers/:code": apiError(404, "not_found", "x") }) });
+    expect(await screen.findByText("Não foi possível carregar o cliente indicado")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /^Cliente/ })).toBeEnabled();
+  });
+
   it("rejects a duplicate product and an invalid quantity", async () => {
     const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: newOrderHandlers() });
     await addProduct(user, "Balão");
@@ -80,6 +157,146 @@ describe("Novo pedido", () => {
     expect(await screen.findByText("Use vírgula como separador decimal.")).toBeInTheDocument();
     expect(quantity).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByRole("button", { name: "Salvar rascunho" })).toBeDisabled();
+  });
+
+  describe("fast entry", () => {
+    const BALAO = "Quantidade de Balão látex 9 pol. vermelho";
+    const VELA = "Quantidade de Vela sem preço";
+
+    it("does not save the draft when Enter is pressed in a quantity; it moves to the next line, then to the product search", async () => {
+      const { user, calls } = renderApp("/pedidos/novo?customer=1001", {
+        handlers: newOrderHandlers({ "POST /orders": { status: 201, body: orderDetail() } }),
+      });
+      await addProduct(user, "Balão");
+      await addProduct(user, "Vela");
+      const first = await screen.findByLabelText(BALAO);
+      await user.click(first);
+      await user.keyboard("{Enter}");
+      expect(screen.getByLabelText(VELA)).toHaveFocus();
+      await user.keyboard("{Enter}");
+      expect(screen.getByRole("combobox", { name: /Adicionar produto/ })).toHaveFocus();
+      expect(callsTo(calls, "POST", "/orders")).toHaveLength(0);
+    });
+
+    it("removes the selected lines and brings them back with Desfazer", async () => {
+      const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: newOrderHandlers() });
+      await addProduct(user, "Balão");
+      await addProduct(user, "Vela");
+      await user.click(await screen.findByRole("checkbox", { name: "Selecionar Balão látex 9 pol. vermelho" }));
+      expect(screen.getByText("1 item selecionado")).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Remover selecionados" }));
+      expect(screen.queryByLabelText(BALAO)).not.toBeInTheDocument();
+      expect(screen.getByLabelText(VELA)).toBeInTheDocument();
+      expect(screen.getByText("1 item removido.")).toBeInTheDocument();
+      // The bar that had the focus is gone: the undo button takes it (keyboard users keep their place).
+      expect(screen.getByRole("button", { name: "Desfazer" })).toHaveFocus();
+      await user.click(screen.getByRole("button", { name: "Desfazer" }));
+      expect(screen.getByRole("combobox", { name: /Adicionar produto/ })).toHaveFocus();
+      expect(screen.getByLabelText(BALAO)).toBeInTheDocument();
+      expect(screen.queryByText("1 item removido.")).not.toBeInTheDocument();
+    });
+
+    it("selects every line at once and sets the same quantity on them", async () => {
+      const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: newOrderHandlers() });
+      await addProduct(user, "Balão");
+      await addProduct(user, "Vela");
+      await user.click(await screen.findByRole("checkbox", { name: "Selecionar todos os itens" }));
+      expect(screen.getByText("2 itens selecionados")).toBeInTheDocument();
+      const bulk = screen.getByLabelText("Quantidade para os selecionados");
+      await user.type(bulk, "3,5");
+      await user.click(screen.getByRole("button", { name: "Aplicar quantidade" }));
+      expect(screen.getByLabelText(BALAO)).toHaveValue("3,5");
+      expect(screen.getByLabelText(VELA)).toHaveValue("3,5");
+    });
+
+    it("refuses an invalid bulk quantity and leaves the lines untouched", async () => {
+      const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: newOrderHandlers() });
+      await addProduct(user, "Balão");
+      await user.click(await screen.findByRole("checkbox", { name: "Selecionar todos os itens" }));
+      await user.type(screen.getByLabelText("Quantidade para os selecionados"), "0");
+      await user.click(screen.getByRole("button", { name: "Aplicar quantidade" }));
+      expect(await screen.findByText("A quantidade deve ser maior que zero.")).toBeInTheDocument();
+      expect(screen.getByLabelText(BALAO)).toHaveValue("1");
+    });
+  });
+
+  describe("lançamento múltiplo", () => {
+    const balao = product({ code: 2001, description: "Balão látex 9 pol. vermelho", listPrice: pricedList("12.5") });
+    const fita = product({ code: 2003, description: "Fita de cetim azul", listPrice: pricedList("3.2") });
+    const resolutions = (request: { body?: unknown }) => {
+      const { identifiers } = request.body as { identifiers: string[] };
+      const items = identifiers.map((identifier): ApiSchema<"ProductResolutionItem"> => {
+        if (identifier === "2001") return { identifier, status: "found", product: balao };
+        if (identifier === "FITA-AZ") return { identifier, status: "found", product: fita };
+        return { identifier, status: "not_found" };
+      });
+      return { body: { items, priceContext: { customerCode: 1001, tableCode: 1, tableName: "Referência", source: "customer_table" } } };
+    };
+    const open = async (user: ReturnType<typeof renderApp>["user"]) => {
+      await user.click(await screen.findByRole("button", { name: "Lançamento múltiplo" }));
+      return screen.findByRole("dialog", { name: "Lançamento múltiplo" });
+    };
+    const paste = async (user: ReturnType<typeof renderApp>["user"], dialog: HTMLElement, text: string) => {
+      await user.click(within(dialog).getByRole("textbox", { name: /Linhas/ }));
+      await user.paste(text);
+      await user.click(within(dialog).getByRole("button", { name: "Conferir" }));
+    };
+
+    it("needs a customer first", async () => {
+      renderApp("/pedidos/novo", { handlers: newOrderHandlers() });
+      expect(await screen.findByRole("button", { name: "Lançamento múltiplo" })).toBeDisabled();
+    });
+
+    it("resolves the pasted lines on the server, shows what each one does and adds only the good ones", async () => {
+      const { user, calls } = renderApp("/pedidos/novo?customer=1001", {
+        handlers: newOrderHandlers({ "POST /product-resolutions": resolutions }),
+      });
+      const dialog = await open(user);
+      await paste(user, dialog, "2001;5\nFITA-AZ;2,5\nNADA;1\n2001;9");
+      const summary = (await within(dialog).findByText("2 itens serão adicionados")).parentElement;
+      expect(summary).toHaveTextContent("2 itens serão adicionados; 2 linhas ficam de fora (motivo em cada linha).");
+      expect(within(dialog).getByText("Produto não encontrado.")).toBeInTheDocument();
+      expect(within(dialog).getByText("Produto repetido nas linhas: só a primeira ocorrência entra.")).toBeInTheDocument();
+      const [request] = callsTo(calls, "POST", "/product-resolutions");
+      expect(request?.body).toEqual({ customerCode: 1001, identifiers: ["2001", "FITA-AZ", "NADA", "2001"] });
+
+      await user.click(within(dialog).getByRole("button", { name: "Adicionar 2 itens" }));
+      expect(screen.getByLabelText("Quantidade de Balão látex 9 pol. vermelho")).toHaveValue("5");
+      expect(screen.getByLabelText("Quantidade de Fita de cetim azul")).toHaveValue("2,5");
+      expect(screen.queryByRole("dialog", { name: "Lançamento múltiplo" })).not.toBeInTheDocument();
+    });
+
+    it("never sends lines with an invalid quantity and keeps them out of the order", async () => {
+      const { user, calls } = renderApp("/pedidos/novo?customer=1001", {
+        handlers: newOrderHandlers({ "POST /product-resolutions": resolutions }),
+      });
+      const dialog = await open(user);
+      await paste(user, dialog, "2001;0");
+      expect(await within(dialog).findByText("A quantidade deve ser maior que zero.")).toBeInTheDocument();
+      expect(callsTo(calls, "POST", "/product-resolutions")).toHaveLength(0);
+      expect(within(dialog).getByRole("button", { name: "Adicionar 0 itens" })).toBeDisabled();
+    });
+
+    it("does not add a product that is already in the order", async () => {
+      const { user } = renderApp("/pedidos/novo?customer=1001", {
+        handlers: newOrderHandlers({ "POST /product-resolutions": resolutions }),
+      });
+      await addProduct(user, "Balão");
+      const dialog = await open(user);
+      await paste(user, dialog, "2001;4");
+      expect(await within(dialog).findByText("Produto já está no pedido.")).toBeInTheDocument();
+      expect(within(dialog).getByRole("button", { name: "Adicionar 0 itens" })).toBeDisabled();
+    });
+
+    it("tells the seller when the lookup fails and adds nothing", async () => {
+      const { user } = renderApp("/pedidos/novo?customer=1001", {
+        handlers: newOrderHandlers({ "POST /product-resolutions": apiError(500, "internal_error", "Falha") }),
+      });
+      const dialog = await open(user);
+      await paste(user, dialog, "2001;1");
+      expect(await within(dialog).findByText("Não foi possível conferir os produtos")).toBeInTheDocument();
+      expect(screen.queryByLabelText("Quantidade de Balão látex 9 pol. vermelho")).not.toBeInTheDocument();
+    });
   });
 
   it("saves with product and quantity only (no price in the request) and opens the saved draft", async () => {
@@ -108,7 +325,9 @@ describe("Novo pedido", () => {
       handlers: newOrderHandlers({
         "POST /orders": () => {
           attempts += 1;
-          return attempts === 1 ? apiError(503, "service_unavailable", "x", { requestId: "req-s-1" }) : { status: 201, body: orderDetail() };
+          return attempts === 1
+            ? apiError(503, "service_unavailable", "x", { requestId: "req-s-1" })
+            : { status: 201, body: orderDetail() };
         },
         "GET /orders/:id": { body: orderDetail() },
       }),
@@ -125,7 +344,10 @@ describe("Novo pedido", () => {
   it("lists the server's item issues in Portuguese when the save is rejected", async () => {
     const { user } = renderApp("/pedidos/novo?customer=1001", {
       handlers: newOrderHandlers({
-        "POST /orders": apiError(422, "validation_failed", "x", { issues: [{ path: "items[0]", code: "product_not_sellable" }], requestId: "req-v-1" }),
+        "POST /orders": apiError(422, "validation_failed", "x", {
+          issues: [{ path: "items[0]", code: "product_not_sellable" }],
+          requestId: "req-v-1",
+        }),
       }),
     });
     await addProduct(user, "Balão");
@@ -136,7 +358,9 @@ describe("Novo pedido", () => {
 
   it("blocks saving a line without price when the installation does not allow it", async () => {
     const { user } = renderApp("/pedidos/novo?customer=1001", {
-      handlers: newOrderHandlers(withConfiguration((config) => ({ ...config, sales: { ...config.sales, orderBehavior: { allowDraftWithoutPrice: false } } }))),
+      handlers: newOrderHandlers(
+        withConfiguration((config) => ({ ...config, sales: { ...config.sales, orderBehavior: { allowDraftWithoutPrice: false } } })),
+      ),
     });
     await addProduct(user, "Vela");
     expect(await screen.findByText("Este item não pode ser pedido sem preço nesta instalação.")).toBeInTheDocument();
@@ -153,14 +377,18 @@ describe("Novo pedido", () => {
   });
 
   it("asks for confirmation before leaving with unsaved changes", async () => {
-    const { user, router } = renderApp("/pedidos/novo?customer=1001", { handlers: newOrderHandlers({ "GET /orders": { body: { items: [], page: 1, pageSize: 25, total: 0 } } }) });
+    const { user, router } = renderApp("/pedidos/novo?customer=1001", {
+      handlers: newOrderHandlers({ "GET /orders": { body: { items: [], page: 1, pageSize: 25, total: 0 } } }),
+    });
     await addProduct(user, "Balão");
     await user.click(screen.getByRole("button", { name: "Cancelar" }));
     const dialog = await screen.findByRole("dialog", { name: "Sair sem salvar?" });
     await user.click(within(dialog).getByRole("button", { name: "Continuar editando" }));
     expect(router.state.location.pathname).toBe("/pedidos/novo");
     await user.click(screen.getByRole("button", { name: "Cancelar" }));
-    await user.click(within(await screen.findByRole("dialog", { name: "Sair sem salvar?" })).getByRole("button", { name: "Sair sem salvar" }));
+    await user.click(
+      within(await screen.findByRole("dialog", { name: "Sair sem salvar?" })).getByRole("button", { name: "Sair sem salvar" }),
+    );
     await waitFor(() => expect(router.state.location.pathname).toBe("/pedidos"));
   });
 
@@ -204,7 +432,9 @@ describe("Rascunho existente", () => {
 
   it("shows other submit failures as errors with the correlation id", async () => {
     const { user } = renderApp(`/pedidos/${ORDER_ID}`, {
-      handlers: existing(orderDetail(), { "POST /orders/:id/submit": apiError(503, "service_unavailable", "x", { requestId: "req-sub-2" }) }),
+      handlers: existing(orderDetail(), {
+        "POST /orders/:id/submit": apiError(503, "service_unavailable", "x", { requestId: "req-sub-2" }),
+      }),
     });
     await user.click(await screen.findByRole("button", { name: "Enviar ao ERP" }));
     expect(await screen.findByText("req-sub-2")).toBeInTheDocument();
@@ -221,8 +451,14 @@ describe("Rascunho existente", () => {
   });
 
   it("replaces the draft with the expected version and shows the saved result", async () => {
-    const saved = orderDetail({ version: 2, items: [orderItem({ quantity: "3", estimatedLineTotal: "37.5" })], totals: { estimatedTotal: "37.5", lineCount: 1, unpricedLineCount: 0, isPartial: false } });
-    const { user, calls } = renderApp(`/pedidos/${ORDER_ID}`, { handlers: existing(orderDetail(), { "PUT /orders/:id": { body: saved } }) });
+    const saved = orderDetail({
+      version: 2,
+      items: [orderItem({ quantity: "3", estimatedLineTotal: "37.5" })],
+      totals: { estimatedTotal: "37.5", lineCount: 1, unpricedLineCount: 0, isPartial: false },
+    });
+    const { user, calls } = renderApp(`/pedidos/${ORDER_ID}`, {
+      handlers: existing(orderDetail(), { "PUT /orders/:id": { body: saved } }),
+    });
     const quantity = await screen.findByLabelText("Quantidade de Balão látex 9 pol. vermelho");
     await user.clear(quantity);
     await user.type(quantity, "3");

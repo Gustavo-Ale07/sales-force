@@ -4,6 +4,7 @@ import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
+import { applyBrand } from "./lib/brand";
 import { AppServicesProvider } from "./lib/app-context";
 import { createWebApiClient } from "./lib/api";
 import { createApiAuthClient } from "./lib/api-auth-client";
@@ -13,6 +14,7 @@ import { createAppRouter } from "./router";
 
 async function bootstrap() {
   const config = await loadRuntimeConfig();
+  applyBrand(config.brand);
   // Same-origin generated client with the cookie session; no token is ever held by the app.
   const api = createWebApiClient();
   const authClient = createApiAuthClient(api);

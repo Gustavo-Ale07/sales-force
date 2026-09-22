@@ -194,21 +194,53 @@ describe("login page", () => {
   });
 });
 
+describe("Integração é só do administrador", () => {
+  it("hides the menu entry, the state pill and the /ready poll from a seller", async () => {
+    const { calls } = renderApp("/", { handlers: shellData, role: "seller" });
+    expect(await screen.findByRole("heading", { name: "Início" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Integração" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Integração:/)).not.toBeInTheDocument();
+    expect(callsTo(calls, "GET", "/ready")).toHaveLength(0);
+  });
+
+  it("hides them from a manager too (the server policy is admin-only)", async () => {
+    renderApp("/", { handlers: shellData, role: "manager" });
+    expect(await screen.findByRole("heading", { name: "Início" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Integração" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Integração:/)).not.toBeInTheDocument();
+  });
+
+  it("sends a seller who types /integracao back to the start page without asking for the configuration", async () => {
+    const { router, calls } = renderApp("/integracao", { handlers: shellData, role: "seller" });
+    expect(await screen.findByRole("heading", { name: "Início" })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/");
+    expect(callsTo(calls, "GET", "/configuration")).toHaveLength(0);
+  });
+
+  it("shows the menu entry, the pill and the page to an administrator", async () => {
+    renderApp("/integracao", { handlers: shellData, role: "admin" });
+    expect(await screen.findByText("Sincronização por entidade", { selector: "caption" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Integração" })).toBeInTheDocument();
+    expect(await screen.findByText("Integração: não configurada")).toBeInTheDocument();
+  });
+});
+
 describe("integration pill and dev banner in the shell", () => {
   it("shows the integration state from /ready", async () => {
-    renderApp("/", { handlers: shellData });
+    renderApp("/", { handlers: shellData, role: "admin" });
     const banner = await screen.findByText(DEV_AUTH_NOTICE);
     expect(banner).toBeInTheDocument();
     expect(await screen.findByText("Integração: não configurada")).toBeInTheDocument();
   });
 
   it("shows the integration as unavailable when /ready fails", async () => {
-    renderApp("/", { handlers: { ...shellData, "GET /ready": apiError(503, "service_unavailable", "Fora do ar.") } });
+    renderApp("/", { role: "admin", handlers: { ...shellData, "GET /ready": apiError(503, "service_unavailable", "Fora do ar.") } });
     expect(await screen.findByText("Integração: indisponível")).toBeInTheDocument();
   });
 
   it("shows the degraded state", async () => {
     renderApp("/", {
+      role: "admin",
       handlers: {
         ...shellData,
         "GET /ready": {

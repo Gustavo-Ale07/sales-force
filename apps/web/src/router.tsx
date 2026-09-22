@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { canSeeIntegration } from "@salesforce/contracts";
 import { toast } from "@salesforce/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -8,26 +9,17 @@ import {
   createRouter,
   lazyRouteComponent,
   redirect,
-  useNavigate,
-  useParams,
   useRouter,
-  useSearch,
   type RouterHistory,
 } from "@tanstack/react-router";
 import { AppShell } from "./components/app-shell";
 import { NotFound, RouteError, RoutePending } from "./components/route-states";
 import { useAppServices } from "./lib/app-context";
 import { sessionQueryOptions, type AuthClient } from "./lib/auth-client";
+import { parseCustomersSearch, parseOrdersSearch, parseProductsSearch } from "./lib/route-search";
 import { safeRedirect } from "./lib/safe-redirect";
 import { asInt } from "./lib/search-params";
-import { CustomerDetailPage } from "./routes/customer-detail";
-import { CustomersPage, parseCustomersSearch } from "./routes/customers";
-import { DashboardPage } from "./routes/dashboard";
-import { IntegrationPage } from "./routes/integration";
 import { LoginPage } from "./routes/login";
-import { OrderEditorPage } from "./routes/order-editor";
-import { OrdersPage, parseOrdersSearch } from "./routes/orders";
-import { ProductsPage, parseProductsSearch } from "./routes/products";
 
 export interface RouterContext {
   queryClient: QueryClient;
@@ -96,66 +88,11 @@ const loginRoute = createRoute({
   component: LoginPage,
 });
 
-function CustomersRouteComponent() {
-  const navigate = useNavigate();
-  const params = parseCustomersSearch(useSearch({ strict: false }) as Record<string, unknown>);
-  return (
-    <CustomersPage
-      params={params}
-      onSearchChange={(next) => void navigate({ to: "/clientes", search: next, replace: true })}
-      onOpenCustomer={(code) => void navigate({ to: "/clientes/$code", params: { code: String(code) } })}
-    />
-  );
-}
-
-function CustomerDetailRouteComponent() {
-  const { code } = useParams({ strict: false });
-  const parsed = asInt(code, 0);
-  return parsed === undefined ? <NotFound /> : <CustomerDetailPage code={parsed} />;
-}
-
-function ProductsRouteComponent() {
-  const navigate = useNavigate();
-  const params = parseProductsSearch(useSearch({ strict: false }) as Record<string, unknown>);
-  return <ProductsPage params={params} onSearchChange={(next) => void navigate({ to: "/produtos", search: next, replace: true })} />;
-}
-
-function OrdersRouteComponent() {
-  const navigate = useNavigate();
-  const params = parseOrdersSearch(useSearch({ strict: false }) as Record<string, unknown>);
-  return (
-    <OrdersPage
-      params={params}
-      onSearchChange={(next) => void navigate({ to: "/pedidos", search: next, replace: true })}
-      onOpenOrder={(id) => void navigate({ to: "/pedidos/$id", params: { id } })}
-    />
-  );
-}
-
-function NewOrderRouteComponent() {
-  const navigate = useNavigate();
-  const { customer } = useSearch({ strict: false }) as { customer?: unknown };
-  return (
-    <OrderEditorPage
-      initialCustomerCode={asInt(customer, 0)}
-      onCreated={(id) => void navigate({ to: "/pedidos/$id", params: { id }, replace: true })}
-      onClose={() => void navigate({ to: "/pedidos" })}
-    />
-  );
-}
-
-function OrderRouteComponent() {
-  const navigate = useNavigate();
-  const { id } = useParams({ strict: false });
-  if (!id) return <NotFound />;
-  return <OrderEditorPage orderId={id} onCreated={() => undefined} onClose={() => void navigate({ to: "/pedidos" })} />;
-}
-
 const dashboardRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/",
   staticData: { crumb: "Início" },
-  component: DashboardPage,
+  component: lazyRouteComponent(() => import("./routes/dashboard"), "DashboardPage"),
 });
 
 const customersRoute = createRoute({
@@ -168,13 +105,13 @@ const customersIndexRoute = createRoute({
   getParentRoute: () => customersRoute,
   path: "/",
   validateSearch: (search: Record<string, unknown>) => parseCustomersSearch(search),
-  component: CustomersRouteComponent,
+  component: lazyRouteComponent(() => import("./routes/customers-route"), "CustomersRoute"),
 });
 const customerDetailRoute = createRoute({
   getParentRoute: () => customersRoute,
   path: "$code",
   staticData: { crumb: (params) => `Cliente ${params.code ?? ""}`.trim() },
-  component: CustomerDetailRouteComponent,
+  component: lazyRouteComponent(() => import("./routes/customers-route"), "CustomerDetailRoute"),
 });
 
 const productsRoute = createRoute({
@@ -182,7 +119,7 @@ const productsRoute = createRoute({
   path: "/produtos",
   staticData: { crumb: "Produtos" },
   validateSearch: (search: Record<string, unknown>) => parseProductsSearch(search),
-  component: ProductsRouteComponent,
+  component: lazyRouteComponent(() => import("./routes/products-route"), "ProductsRoute"),
 });
 
 const ordersRoute = createRoute({
@@ -195,7 +132,7 @@ const ordersIndexRoute = createRoute({
   getParentRoute: () => ordersRoute,
   path: "/",
   validateSearch: (search: Record<string, unknown>) => parseOrdersSearch(search),
-  component: OrdersRouteComponent,
+  component: lazyRouteComponent(() => import("./routes/orders-route"), "OrdersRoute"),
 });
 const newOrderRoute = createRoute({
   getParentRoute: () => ordersRoute,
@@ -205,20 +142,26 @@ const newOrderRoute = createRoute({
     const customer = asInt(search.customer, 0);
     return customer === undefined ? {} : { customer };
   },
-  component: NewOrderRouteComponent,
+  component: lazyRouteComponent(() => import("./routes/orders-route"), "NewOrderRoute"),
 });
 const orderDetailRoute = createRoute({
   getParentRoute: () => ordersRoute,
   path: "$id",
   staticData: { crumb: "Pedido" },
-  component: OrderRouteComponent,
+  component: lazyRouteComponent(() => import("./routes/orders-route"), "OrderRoute"),
 });
 
 const integrationRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/integracao",
   staticData: { crumb: "Integração" },
-  component: IntegrationPage,
+  // Not a page for every profile: whoever may not see it lands on the start page, without a request for its data.
+  // The server (getConfiguration) is what enforces it; this only keeps the screen out of the way.
+  beforeLoad: async ({ context }) => {
+    const user = await context.queryClient.ensureQueryData(sessionQueryOptions(context.authClient));
+    if (!user || !canSeeIntegration(user.role)) throw redirect({ to: "/" });
+  },
+  component: lazyRouteComponent(() => import("./routes/integration"), "IntegrationPage"),
 });
 
 /**

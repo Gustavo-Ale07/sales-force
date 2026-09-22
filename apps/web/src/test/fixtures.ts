@@ -150,6 +150,36 @@ export function ordersPage(items: ApiSchema<"OrderListItem">[], total = items.le
   return { items, page: 1, pageSize: 25, total };
 }
 
+export const TEMPLATE_ID = "0190a000-0000-7000-8000-0000000000cc";
+
+export function orderTemplate(overrides: Partial<ApiSchema<"OrderTemplate">> = {}): ApiSchema<"OrderTemplate"> {
+  return {
+    id: TEMPLATE_ID,
+    customerCode: 1001,
+    name: "Reposição mensal",
+    version: 1,
+    itemCount: 2,
+    createdAt: "2026-09-10T10:00:00.000Z",
+    updatedAt: "2026-09-15T11:00:00.000Z",
+    ...overrides,
+  };
+}
+
+export function orderTemplateDetail(overrides: Partial<ApiSchema<"OrderTemplateDetail">> = {}): ApiSchema<"OrderTemplateDetail"> {
+  return {
+    ...orderTemplate(),
+    items: [
+      { productCode: 2001, quantity: "5" },
+      { productCode: 2003, quantity: "2.5" },
+    ],
+    ...overrides,
+  };
+}
+
+export function orderTemplatesPage(items: ApiSchema<"OrderTemplate">[]): ApiSchema<"OrderTemplatesResponse"> {
+  return { items };
+}
+
 export const integrationFake: ApiSchema<"IntegrationSummary"> = {
   state: "not_configured",
   gatewayMode: "fake",
