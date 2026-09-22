@@ -27,40 +27,17 @@ import {
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Plus, Trash2 } from "lucide-react";
+import { ClipboardList, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { DiscardOrderDialog } from "../components/discard-order-dialog";
 import { QueryError } from "../components/query-error";
 import { ordersQueryOptions, type OrdersParams } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { formatCount, orderReference, orderStatusLabels } from "../lib/labels";
-import { asInt, asOneOf, asPageSize, asString, compact } from "../lib/search-params";
+import { ORDER_STATUSES, type OrdersSearch } from "../lib/route-search";
+import { asOneOf, compact } from "../lib/search-params";
 import { useSearchBox } from "../lib/use-search-box";
 
-export interface OrdersSearch {
-  search?: string;
-  status?: ApiSchema<"OrderStatus">;
-  customerCode?: number;
-  sort?: ApiSchema<"OrderSort">;
-  page?: number;
-  pageSize?: number;
-}
-
-const STATUSES = ["draft", "cancelled", "queued", "sent", "rejected", "unknown"] as const;
-const SORTS = ["updatedAt", "-updatedAt", "draftNumber", "-draftNumber"] as const;
-
-export function parseOrdersSearch(raw: Record<string, unknown>): OrdersSearch {
-  const page = asInt(raw.page, 1);
-  const pageSize = asPageSize(raw.pageSize);
-  return compact({
-    search: asString(raw.search),
-    status: asOneOf(raw.status, STATUSES),
-    customerCode: asInt(raw.customerCode, 0),
-    sort: asOneOf(raw.sort, SORTS),
-    page: page !== undefined && page > 1 ? page : undefined,
-    pageSize: pageSize !== 25 ? pageSize : undefined,
-  });
-}
 
 function sortDirection(sort: OrdersSearch["sort"], field: "updatedAt" | "draftNumber"): SortDirection | null {
   if (sort === field) return "asc";
@@ -96,6 +73,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
     <>
       <PageHeader
         title="Pedidos e rascunhos"
+        icon={<ClipboardList size={16} aria-hidden="true" />}
         description="Abra, edite ou descarte rascunhos. O envio ao ERP ainda não está habilitado nesta instalação."
         actions={
           <Button asChild variant="primary" leftIcon={<Plus size={14} aria-hidden="true" />}>
@@ -115,9 +93,9 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
           />
         </FilterField>
         <FilterField label="Situação" className="w-[180px]">
-          <Select size="sm" value={params.status ?? ""} onChange={(e) => change({ status: asOneOf(e.target.value, STATUSES) })}>
+          <Select size="sm" value={params.status ?? ""} onChange={(e) => change({ status: asOneOf(e.target.value, ORDER_STATUSES) })}>
             <option value="">Todas</option>
-            {STATUSES.map((status) => (
+            {ORDER_STATUSES.map((status) => (
               <option key={status} value={status}>
                 {orderStatusLabels[status].label}
               </option>

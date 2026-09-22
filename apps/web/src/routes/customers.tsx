@@ -1,6 +1,8 @@
 import type { ApiSchema } from "@salesforce/contracts/client";
 import {
+  Avatar,
   Badge,
+  Button,
   Card,
   EmptyState,
   FilterBar,
@@ -24,24 +26,14 @@ import {
   type SortDirection,
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { Plus, Users } from "lucide-react";
 import { QueryError } from "../components/query-error";
 import { customersQueryOptions, sellersQueryOptions, type CustomersParams } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
-import { asInt, asOneOf, asPageSize, asString, compact } from "../lib/search-params";
+import { CUSTOMER_STATUSES, type CustomersSearch } from "../lib/route-search";
+import { asInt, asOneOf, compact } from "../lib/search-params";
 import { useSearchBox } from "../lib/use-search-box";
-
-export interface CustomersSearch {
-  search?: string;
-  status?: ApiSchema<"CustomerStatusFilter">;
-  sellerCode?: number;
-  hasPriceTable?: "true" | "false";
-  sort?: ApiSchema<"CustomerSort">;
-  page?: number;
-  pageSize?: number;
-}
-
-const STATUSES = ["active", "inactive", "blocked"] as const;
-const SORTS = ["name", "-name", "code", "-code"] as const;
 
 const statusLabels: Record<ApiSchema<"CustomerStatusFilter">, string> = {
   active: "Ativos",
@@ -49,27 +41,13 @@ const statusLabels: Record<ApiSchema<"CustomerStatusFilter">, string> = {
   blocked: "Bloqueados",
 };
 
-export function parseCustomersSearch(raw: Record<string, unknown>): CustomersSearch {
-  const page = asInt(raw.page, 1);
-  const pageSize = asPageSize(raw.pageSize);
-  return compact({
-    search: asString(raw.search),
-    status: asOneOf(raw.status, STATUSES),
-    sellerCode: asInt(raw.sellerCode, 0),
-    hasPriceTable: asOneOf(raw.hasPriceTable === true ? "true" : raw.hasPriceTable === false ? "false" : raw.hasPriceTable, ["true", "false"] as const),
-    sort: asOneOf(raw.sort, SORTS),
-    page: page !== undefined && page > 1 ? page : undefined,
-    pageSize: pageSize !== 25 ? pageSize : undefined,
-  });
-}
-
 export interface CustomersPageProps {
   params: CustomersSearch;
   onSearchChange: (next: CustomersSearch) => void;
   onOpenCustomer: (code: number) => void;
 }
 
-const COLUMNS = 6;
+const COLUMNS = 7;
 
 function sortDirection(sort: CustomersSearch["sort"], field: "name" | "code"): SortDirection | null {
   if (sort === field) return "asc";
@@ -98,7 +76,11 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
 
   return (
     <>
-      <PageHeader title="Carteira de clientes" description="Clientes da sua carteira, conforme o escopo definido pelo servidor." />
+      <PageHeader
+        title="Carteira de clientes"
+        icon={<Users size={16} aria-hidden="true" />}
+        description="Clientes da sua carteira, conforme o escopo definido pelo servidor."
+      />
 
       <FilterBar aria-label="Filtros da carteira">
         <FilterField label="Busca" className="min-w-[220px] flex-1">
@@ -111,9 +93,9 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
           />
         </FilterField>
         <FilterField label="Situação" className="w-[140px]">
-          <Select size="sm" value={params.status ?? ""} onChange={(e) => change({ status: asOneOf(e.target.value, STATUSES) })}>
+          <Select size="sm" value={params.status ?? ""} onChange={(e) => change({ status: asOneOf(e.target.value, CUSTOMER_STATUSES) })}>
             <option value="">Todas</option>
-            {STATUSES.map((status) => (
+            {CUSTOMER_STATUSES.map((status) => (
               <option key={status} value={status}>
                 {statusLabels[status]}
               </option>
@@ -168,16 +150,25 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
           <TableCaption>Carteira de clientes</TableCaption>
           <TableHeader>
             <TableRow>
-              <SortableHead direction={sortDirection(params.sort ?? "name", "code")} onSort={() => change({ sort: toggleSort(params.sort, "code") })}>
+              <SortableHead
+                direction={sortDirection(params.sort ?? "name", "code")}
+                onSort={() => change({ sort: toggleSort(params.sort, "code") })}
+              >
                 Código
               </SortableHead>
-              <SortableHead direction={sortDirection(params.sort ?? "name", "name")} onSort={() => change({ sort: toggleSort(params.sort ?? "name", "name") })}>
+              <SortableHead
+                direction={sortDirection(params.sort ?? "name", "name")}
+                onSort={() => change({ sort: toggleSort(params.sort ?? "name", "name") })}
+              >
                 Cliente
               </SortableHead>
               <TableHead>Documento</TableHead>
               <TableHead>Situação</TableHead>
               <TableHead>Vendedor</TableHead>
               <TableHead>Tabela de preço</TableHead>
+              <TableHead>
+                <span className="sr-only">Ações</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -192,7 +183,11 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
                 <EmptyState
                   compact
                   title={hasFilters ? "Nenhum cliente encontrado" : "Nenhum cliente na carteira"}
-                  description={hasFilters ? "Ajuste ou limpe os filtros para ver mais resultados." : "Quando houver clientes no seu escopo, eles aparecem aqui."}
+                  description={
+                    hasFilters
+                      ? "Ajuste ou limpe os filtros para ver mais resultados."
+                      : "Quando houver clientes no seu escopo, eles aparecem aqui."
+                  }
                 />
               </TableMessageRow>
             ) : (
@@ -200,8 +195,13 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
                 <TableRow key={customer.code} interactive onActivate={() => onOpenCustomer(customer.code)}>
                   <TableCell numeric>{customer.code}</TableCell>
                   <TableCell wrap>
-                    <span className="font-medium">{customer.name}</span>
-                    {customer.tradeName ? <span className="block text-fg-muted">{customer.tradeName}</span> : null}
+                    <span className="flex items-center gap-2">
+                      <Avatar name={customer.name} seed={String(customer.code)} size="sm" />
+                      <span className="min-w-0">
+                        <span className="block font-medium">{customer.name}</span>
+                        {customer.tradeName ? <span className="block text-fg-muted">{customer.tradeName}</span> : null}
+                      </span>
+                    </span>
                   </TableCell>
                   <TableCell>{formatDocument(customer.document)}</TableCell>
                   <TableCell>
@@ -209,7 +209,25 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
                   </TableCell>
                   <TableCell>{customer.sellerName ?? <span className="text-fg-faint">—</span>}</TableCell>
                   <TableCell>
-                    {customer.priceTableCode === null ? <span className="text-fg-faint">Sem tabela</span> : `Tabela ${customer.priceTableCode}`}
+                    {customer.priceTableCode === null ? (
+                      <span className="text-fg-faint">Sem tabela</span>
+                    ) : (
+                      `Tabela ${customer.priceTableCode}`
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {/* Straight to a new order for this customer; the click must not also open the customer. */}
+                    <Button asChild size="sm" variant="secondary">
+                      <Link
+                        to="/pedidos/novo"
+                        search={{ customer: customer.code }}
+                        aria-label={`Novo pedido para ${customer.name}`}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <Plus size={12} aria-hidden="true" />
+                        Novo pedido
+                      </Link>
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))

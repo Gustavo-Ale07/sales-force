@@ -8,7 +8,9 @@
     ".": "./src/index.ts",
     "./styles.css": "./src/styles/index.css"
   },
-  "sideEffects": ["**/*.css"],
+  "sideEffects": [
+    "**/*.css"
+  ],
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
@@ -19,6 +21,9 @@
     "react-dom": "^19.0.0"
   },
   "dependencies": {
+    "@visx/group": "^4.0.0",
+    "@visx/scale": "^4.0.0",
+    "@visx/shape": "^4.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.47.0",

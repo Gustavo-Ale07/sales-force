@@ -29,6 +29,7 @@ import {
   type SortDirection,
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
+import { Package } from "lucide-react";
 import { CustomerPicker } from "../components/customer-picker";
 import { PriceCell } from "../components/price-cell";
 import { QueryError } from "../components/query-error";
@@ -41,48 +42,16 @@ import {
 } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { priceContextSourceLabels } from "../lib/labels";
-import { asInt, asOneOf, asPageSize, asString, compact } from "../lib/search-params";
+import { BOOLEAN_TEXT, PRICE_STATES, type ProductsSearch } from "../lib/route-search";
+import { asInt, asOneOf, compact } from "../lib/search-params";
 import { useSearchBox } from "../lib/use-search-box";
 
-export interface ProductsSearch {
-  search?: string;
-  group?: number;
-  sellable?: "true" | "false";
-  priceState?: ApiSchema<"ListPriceState">;
-  customerCode?: number;
-  sort?: ApiSchema<"ProductSort">;
-  page?: number;
-  pageSize?: number;
-  /** Product open in the detail panel. */
-  product?: number;
-}
-
-const PRICE_STATES = ["priced", "zero", "none"] as const;
-const SORTS = ["description", "-description", "code", "-code"] as const;
-const BOOLEAN_TEXT = ["true", "false"] as const;
 
 const priceStateLabels: Record<ApiSchema<"ListPriceState">, string> = {
   priced: "Com preço",
   zero: "Preço zero",
   none: "Sem preço",
 };
-
-export function parseProductsSearch(raw: Record<string, unknown>): ProductsSearch {
-  const page = asInt(raw.page, 1);
-  const pageSize = asPageSize(raw.pageSize);
-  const sellable = raw.sellable === true ? "true" : raw.sellable === false ? "false" : raw.sellable;
-  return compact({
-    search: asString(raw.search),
-    group: asInt(raw.group, 0),
-    sellable: asOneOf(sellable, BOOLEAN_TEXT),
-    priceState: asOneOf(raw.priceState, PRICE_STATES),
-    customerCode: asInt(raw.customerCode, 0),
-    sort: asOneOf(raw.sort, SORTS),
-    page: page !== undefined && page > 1 ? page : undefined,
-    pageSize: pageSize !== 25 ? pageSize : undefined,
-    product: asInt(raw.product, 0),
-  });
-}
 
 function sortDirection(sort: ProductsSearch["sort"], field: "description" | "code"): SortDirection | null {
   if (sort === field) return "asc";
@@ -168,7 +137,11 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
 
   return (
     <>
-      <PageHeader title="Catálogo de produtos" description="Consulte produtos, grupos e preços de tabela. Produtos sem preço aparecem como “Sem preço”." />
+      <PageHeader
+        title="Catálogo de produtos"
+        icon={<Package size={16} aria-hidden="true" />}
+        description="Consulte produtos, grupos e preços de tabela. Produtos sem preço aparecem como “Sem preço”."
+      />
 
       <FilterBar aria-label="Filtros do catálogo">
         <FilterField label="Busca" className="min-w-[220px] flex-1">

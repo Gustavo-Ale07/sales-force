@@ -1,3 +1,4 @@
+import { canSeeIntegration } from "@salesforce/contracts";
 import { ClipboardList, LayoutDashboard, Package, Plug, Users, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
@@ -8,11 +9,12 @@ export interface NavItem {
 
 export interface NavSection {
   heading?: string;
+  /** Only for the roles that may see the integration (INTEGRATION_ROLES). */
+  integrationOnly?: boolean;
   items: NavItem[];
 }
 
-/** Slice 1 navigation. Visibility here is convenience only: the server enforces access. */
-export const navSections: NavSection[] = [
+const allNavSections: NavSection[] = [
   {
     items: [
       { to: "/", label: "Início", icon: LayoutDashboard },
@@ -23,6 +25,15 @@ export const navSections: NavSection[] = [
   },
   {
     heading: "Sistema",
+    integrationOnly: true,
     items: [{ to: "/integracao", label: "Integração", icon: Plug }],
   },
 ];
+
+/**
+ * Navigation for a role. Integração is only for who may see it; with no role (the dev design page) it is
+ * left out. Visibility here is convenience only: the server enforces access.
+ */
+export function navSectionsFor(role: string | undefined): NavSection[] {
+  return allNavSections.filter((section) => !section.integrationOnly || (role !== undefined && canSeeIntegration(role)));
+}

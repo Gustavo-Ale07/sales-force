@@ -60,19 +60,31 @@ export interface PageHeaderProps extends Omit<ComponentProps<"header">, "title">
   /** Primary/secondary actions, right-aligned. */
   actions?: ReactNode;
   breadcrumbs?: ReactNode;
+  /** Optional section icon (lucide, decorative) shown in a small chip before the title. */
+  icon?: ReactNode;
 }
 
-export function PageHeader({ title, description, badges, actions, breadcrumbs, className, ...props }: PageHeaderProps) {
+export function PageHeader({ title, description, badges, actions, breadcrumbs, icon, className, ...props }: PageHeaderProps) {
   return (
     <header className={cn("flex flex-col gap-1", className)} {...props}>
       {breadcrumbs}
       <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
-        <div className="min-w-0">
-          <h1 className="m-0 flex flex-wrap items-center gap-2 text-xl font-semibold tracking-tight text-fg">
-            {title}
-            {badges}
-          </h1>
-          {description ? <p className="m-0 mt-0.5 text-xs text-fg-muted">{description}</p> : null}
+        <div className="flex min-w-0 items-center gap-2.5">
+          {icon ? (
+            <span
+              aria-hidden="true"
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-accent-weak text-accent-text"
+            >
+              {icon}
+            </span>
+          ) : null}
+          <div className="min-w-0">
+            <h1 className="m-0 flex flex-wrap items-center gap-2 text-xl font-semibold tracking-tight text-fg">
+              {title}
+              {badges}
+            </h1>
+            {description ? <p className="m-0 mt-0.5 text-xs text-fg-muted">{description}</p> : null}
+          </div>
         </div>
         {actions ? <div className="flex flex-wrap items-center gap-1.5">{actions}</div> : null}
       </div>

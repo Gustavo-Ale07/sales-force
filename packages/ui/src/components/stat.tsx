@@ -1,5 +1,6 @@
 import type { ComponentProps, ReactNode } from "react";
 import { cn } from "../lib/cn";
+import type { Tone } from "./badge";
 
 export interface StatTileProps extends Omit<ComponentProps<"div">, "children"> {
   label: ReactNode;
@@ -9,12 +10,36 @@ export interface StatTileProps extends Omit<ComponentProps<"div">, "children"> {
   progress?: number;
   /** Value colour only for genuinely negative signals (e.g. errors); default neutral. */
   emphasis?: "default" | "danger";
+  /** Optional supporting icon (e.g. lucide, size ~13-14). Purely decorative: never the only signal. */
+  icon?: ReactNode;
+  /**
+   * Colours the icon chip when the figure deserves attention (e.g. blocked customers, a pricing gap).
+   * Most tiles stay purely informational and should leave this unset (neutral grey chip).
+   */
+  tone?: Tone;
 }
 
-/** Restrained KPI tile: small caps label, strong value, muted hint. No colour fills or icons. */
-export function StatTile({ label, value, hint, progress, emphasis = "default", className, ...props }: StatTileProps) {
+const toneChip: Record<Tone, string> = {
+  neutral: "bg-surface-3 text-fg-muted",
+  accent: "bg-accent-weak text-accent-text",
+  success: "bg-ok-bg text-ok",
+  warning: "bg-warn-bg text-warn",
+  danger: "bg-danger-bg text-danger",
+  info: "bg-info-bg text-info",
+};
+
+/** Dense KPI tile: small caps label, strong value, muted hint. Colour/icon are opt-in per tile (see `tone`, `icon`). */
+export function StatTile({ label, value, hint, progress, emphasis = "default", icon, tone = "neutral", className, ...props }: StatTileProps) {
   return (
-    <div className={cn("min-w-0 rounded-md border border-line bg-surface px-3 py-2.5", className)} {...props}>
+    <div className={cn("relative min-w-0 rounded-md border border-line bg-surface px-3 py-2.5", icon && "pr-8", className)} {...props}>
+      {icon ? (
+        <span
+          aria-hidden="true"
+          className={cn("absolute right-2.5 top-2.5 inline-flex shrink-0 items-center justify-center rounded-full p-1", toneChip[tone])}
+        >
+          {icon}
+        </span>
+      ) : null}
       <div className="text-2xs font-semibold uppercase tracking-wider text-fg-muted">{label}</div>
       <div className={cn("mt-1 whitespace-nowrap text-2xl font-semibold tracking-tight", emphasis === "danger" ? "text-danger" : "text-fg")}>
         {value}

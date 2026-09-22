@@ -5,11 +5,12 @@ import { cn } from "../lib/cn";
 import { Spinner } from "./spinner";
 
 export const buttonVariants = cva(
-  "inline-flex shrink-0 select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-md border font-medium transition-colors disabled:pointer-events-none disabled:border-line disabled:bg-surface-2 disabled:text-fg-faint aria-disabled:pointer-events-none aria-disabled:opacity-60",
+  "inline-flex shrink-0 select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-md border font-medium transition-[color,background-color,border-color,transform,box-shadow] duration-150 ease-spring active:translate-y-px disabled:pointer-events-none disabled:border-line disabled:bg-surface-2 disabled:text-fg-faint disabled:shadow-none aria-disabled:pointer-events-none aria-disabled:opacity-60",
   {
     variants: {
       variant: {
-        primary: "border-accent bg-accent text-on-accent hover:border-accent-hover hover:bg-accent-hover",
+        primary:
+          "border-accent bg-accent text-on-accent shadow-[0_1px_2px_rgba(16,24,40,0.08)] hover:-translate-y-px hover:border-accent-hover hover:bg-accent-hover hover:shadow-glow active:shadow-[0_1px_2px_rgba(16,24,40,0.08)]",
         secondary: "border-line-strong bg-surface text-fg hover:bg-surface-2",
         ghost: "border-transparent bg-transparent text-fg-muted hover:bg-surface-3 hover:text-fg",
         danger: "border-danger bg-danger text-on-accent hover:opacity-90",

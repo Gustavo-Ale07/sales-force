@@ -7,36 +7,27 @@ import {
   cn,
   type BreadcrumbItem,
 } from "@salesforce/ui";
+import { canSeeIntegration } from "@salesforce/contracts";
 import { Link, useMatches, useRouterState } from "@tanstack/react-router";
 import { Menu } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useAppServices } from "../lib/app-context";
 import type { AuthUser } from "../lib/auth-client";
+import { Brand } from "./brand";
 import { DevAuthBanner } from "./dev-auth-banner";
 import { ConnectedIntegrationPill } from "./integration-pill";
-import { navSections } from "./nav-items";
+import { navSectionsFor } from "./nav-items";
 import { UserMenu } from "./user-menu";
 
 const linkBase =
-  "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-fg-muted no-underline hover:bg-surface-3 hover:text-fg";
-const linkActive = "bg-accent-weak font-semibold text-fg shadow-[inset_2px_0_0_var(--sf-accent)]";
+  "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-fg-muted no-underline transition-[background-color,color,box-shadow] duration-150 ease-spring hover:bg-surface-3 hover:text-fg";
+// More than a hairline: a thicker accent rail, the accent-tinted text/icon (currentColor) and a soft
+// accent-tinted ring reinforce "you are here" without the drop-shadow "glow" used for elevated action
+// surfaces (Card/Button) — a flush sidebar item never lifts off the page.
+const linkActive = "bg-accent-weak font-semibold text-accent-text shadow-[inset_3px_0_0_var(--sf-accent)] ring-1 ring-inset ring-accent/15";
 
-function Brand() {
-  const { config } = useAppServices();
-  return (
-    <div className="flex items-center gap-2 px-2 pb-3 pt-1">
-      <span
-        aria-hidden="true"
-        className="grid size-[22px] shrink-0 place-items-center rounded-md bg-accent text-[10px] font-extrabold tracking-wide text-on-accent"
-      >
-        SF
-      </span>
-      <span className="truncate text-sm font-bold">{config.installationName}</span>
-    </div>
-  );
-}
-
-function SideNav({ onNavigate }: { onNavigate?: () => void }) {
+function SideNav({ role, onNavigate }: { role: string | undefined; onNavigate?: () => void }) {
+  const navSections = navSectionsFor(role);
   return (
     <nav aria-label="Principal" className="flex flex-col gap-0.5">
       {navSections.map((section, index) => (
@@ -129,8 +120,8 @@ export function AppShell({ user, onLogout, children }: AppShellProps) {
       <DevAuthBanner />
       <div className="flex min-h-0 flex-1">
         <aside className="sticky top-0 hidden h-screen w-[var(--sf-sidebar-w)] shrink-0 flex-col overflow-y-auto border-r border-line bg-surface px-2 py-2.5 md:flex">
-          <Brand />
-          <SideNav />
+          <Brand className="px-2 pb-3 pt-1" />
+          <SideNav role={user?.role} />
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
@@ -140,15 +131,15 @@ export function AppShell({ user, onLogout, children }: AppShellProps) {
                 <IconButton label="Abrir menu de navegação" icon={<Menu size={17} aria-hidden="true" />} className="md:hidden" />
               </DrawerTrigger>
               <DrawerContent side="left" hideHeader title="Menu de navegação" className="[--drawer-w:260px] px-2 py-2.5">
-                <Brand />
-                <SideNav onNavigate={() => setNavOpen(false)} />
+                <Brand className="px-2 pb-3 pt-1" />
+                <SideNav role={user?.role} onNavigate={() => setNavOpen(false)} />
               </DrawerContent>
             </Drawer>
             <div className="min-w-0 flex-1">
               <RouteBreadcrumbs />
             </div>
             <div className="flex items-center gap-3">
-              <ConnectedIntegrationPill />
+              {user && canSeeIntegration(user.role) ? <ConnectedIntegrationPill /> : null}
               <UserMenu user={user} onLogout={onLogout ?? (() => undefined)} />
             </div>
           </header>
