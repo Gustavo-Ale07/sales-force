@@ -414,6 +414,32 @@ export class MirrorRepository {
     return row ?? null;
   }
 
+  /**
+   * Live products whose code is one of `codes`, or whose reference is exactly one of `references`
+   * (`=`, case-sensitive: no LIKE, no normalization), each with its price row in the effective
+   * version. One parametrized query for the whole batch, ordered by code. The caller applies the
+   * visibility rules and decides what an identifier resolved to.
+   */
+  async findProductsByIdentifiers(
+    codes: readonly number[],
+    references: readonly string[],
+    versionId: number | null,
+  ): Promise<PricedProductRow[]> {
+    const usableCodes = [...new Set(codes.filter(fitsPgInt))];
+    const usableReferences = [...new Set(references)];
+    if (usableCodes.length === 0 && usableReferences.length === 0) return [];
+    const matches = or(
+      usableCodes.length === 0 ? undefined : sql`${erpProduct.code} = any(${sql.param(usableCodes)}::int[])`,
+      usableReferences.length === 0 ? undefined : sql`${erpProduct.reference} = any(${sql.param(usableReferences)}::text[])`,
+    );
+    return this.db
+      .select({ ...this.productSelectFields(), unitPrice: erpListPrice.unitPrice })
+      .from(erpProduct)
+      .leftJoin(erpListPrice, this.priceJoin(versionId))
+      .where(and(isNull(erpProduct.deletedAt), matches))
+      .orderBy(asc(erpProduct.code));
+  }
+
   /** Live products by code (order lines). */
   async findProducts(codes: readonly number[]): Promise<ProductRow[]> {
     const usable = [...new Set(codes.filter(fitsPgInt))];

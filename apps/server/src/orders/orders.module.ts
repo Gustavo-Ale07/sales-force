@@ -15,6 +15,6 @@ import { OrdersService } from './orders.service.js';
   imports: [MirrorModule, CustomersModule, CatalogModule],
   controllers: [OrdersController],
   providers: [OrdersRepository, OrdersService, DraftBuilder],
-  exports: [OrdersService],
+  exports: [OrdersService, DraftBuilder],
 })
 export class OrdersModule {}

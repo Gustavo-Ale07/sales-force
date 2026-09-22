@@ -3,13 +3,17 @@ import type { OrderItemInput } from '@salesforce/contracts';
 import {
   buildOrderItem,
   computeOrderTotals,
+  selectUsableTemplateLines,
   validateDraftInvariants,
   type DraftIssue,
   type InstallationConfiguration,
   type OrderItem,
   type OrderTotals,
   type Product,
+  type ResolvedPrice,
   type SalesOrderDraft,
+  type TemplateLine,
+  type TemplateLineSkip,
 } from '@salesforce/domain';
 import { PricingService } from '../catalog/pricing.service.js';
 import { toDomainProduct } from '../catalog/catalog.service.js';
@@ -17,10 +21,16 @@ import { MirrorRepository } from '../mirror/mirror.repository.js';
 import { CLOCK, type Clock } from '../platform/tokens.js';
 
 export interface DraftRequest {
-  readonly customer: { readonly code: number; readonly sellerCode: number | null; readonly priceTableCode: number | null };
+  readonly customer: DraftCustomer;
   readonly negotiationTypeCode: number | null;
   readonly notes: string | null;
   readonly items: readonly OrderItemInput[];
+}
+
+export interface DraftCustomer {
+  readonly code: number;
+  readonly sellerCode: number | null;
+  readonly priceTableCode: number | null;
 }
 
 export type DraftOutcome =
@@ -41,13 +51,44 @@ export class DraftBuilder {
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
-  async build(request: DraftRequest, config: InstallationConfiguration): Promise<DraftOutcome> {
-    const productCodes = [...new Set(request.items.map((item) => item.productCode))];
+  /** Current catalog rows and the customer's list prices for the given products (the data every draft rule reads). */
+  private async load(
+    customer: DraftCustomer,
+    codes: readonly number[],
+    config: InstallationConfiguration,
+  ): Promise<{ products: Map<number, Product>; prices: Map<number, ResolvedPrice> }> {
+    const productCodes = [...new Set(codes)];
     const productRows = await this.mirror.findProducts(productCodes);
     const products = new Map<number, Product>(productRows.map((row) => [row.code, toDomainProduct(row)]));
-
-    const book = await this.pricing.open(this.pricing.forCustomer(request.customer, config), this.clock());
+    const book = await this.pricing.open(this.pricing.forCustomer(customer, config), this.clock());
     const prices = await this.pricing.priceMany(book, productCodes);
+    return { products, prices };
+  }
+
+  /**
+   * Which lines of a saved template can be ordered now, judged against the CURRENT catalog with the
+   * customer's price context: the same data and the same rules as `build` (the domain decides). Lines that
+   * cannot are reported with a reason and never priced by guess.
+   */
+  async classifyTemplateLines(
+    customer: DraftCustomer,
+    lines: readonly TemplateLine[],
+    config: InstallationConfiguration,
+  ): Promise<{ usable: TemplateLine[]; skipped: TemplateLineSkip[] }> {
+    const { products, prices } = await this.load(
+      customer,
+      lines.map((line) => line.productCode),
+      config,
+    );
+    return selectUsableTemplateLines(lines, products, prices, config);
+  }
+
+  async build(request: DraftRequest, config: InstallationConfiguration): Promise<DraftOutcome> {
+    const { products, prices } = await this.load(
+      request.customer,
+      request.items.map((item) => item.productCode),
+      config,
+    );
 
     const issues: DraftIssue[] = [];
     const built: OrderItem[] = [];

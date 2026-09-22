@@ -30,12 +30,23 @@ const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>
   listProductGroups: { admin: 'allow', manager: 'allow', seller: 'allow' },
   listProducts: { admin: 'allow', manager: 'allow', seller: 'allow' },
   getProduct: { admin: 'allow', manager: 'allow', seller: 'allow' },
+  // ASSUMPTION (pending owner confirmation): a read of the same catalog as listProducts, open to every role.
+  resolveProducts: { admin: 'allow', manager: 'allow', seller: 'allow' },
   listOrders: { admin: 'allow', manager: 'allow', seller: 'allow' },
   createOrder: { admin: 'allow', manager: 'allow', seller: 'allow' },
   getOrder: { admin: 'allow', manager: 'allow', seller: 'allow' },
   replaceOrder: { admin: 'allow', manager: 'allow', seller: 'allow' },
   discardOrder: { admin: 'allow', manager: 'allow', seller: 'allow' },
   submitOrder: { admin: 'allow', manager: 'allow', seller: 'allow' },
+  repeatLastOrder: { admin: 'allow', manager: 'allow', seller: 'allow' },
+  // Recurring order templates (Phase E). ASSUMPTION (owner ruling in the plan): every role reaches them; which
+  // templates it sees is the customer's seller scope (IDOR tests: order-templates.test.ts).
+  listOrderTemplates: { admin: 'allow', manager: 'allow', seller: 'allow' },
+  createOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow' },
+  getOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow' },
+  replaceOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow' },
+  deleteOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow' },
+  useOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow' },
 };
 
 const sessionRoutes = (Object.values(routes) as RouteDefinition[]).filter((route) => route.auth === 'session');

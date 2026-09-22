@@ -1,3 +1,4 @@
+import { INTEGRATION_ROLES } from '@salesforce/contracts';
 import type { AccountRole, ScopeActor } from '@salesforce/domain';
 import type { CurrentUser } from './current-user.js';
 
@@ -41,7 +42,7 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   logout: { roles: EVERY_ROLE },
   // "Usuários, integrações, configurações: Admin" (project-spec 8.2, default matrix). ASSUMPTION:
   // the contract lists 403 for this route but names no role; admin-only is the least privilege.
-  getConfiguration: { roles: ['admin'] },
+  getConfiguration: { roles: INTEGRATION_ROLES },
   // Commercial routes (Stage 3A). Each is open to the three roles the schema has; WHICH rows a
   // caller sees is the data scope (`resolveCustomerScope`), never this table. An external
   // representative role does not exist yet (AUTH-3 PROPOSED): when it does it gets no line here
@@ -56,12 +57,28 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   listProductGroups: { roles: EVERY_ROLE },
   listProducts: { roles: EVERY_ROLE },
   getProduct: { roles: EVERY_ROLE },
+  // ASSUMPTION (pending owner confirmation): resolving pasted/imported product identifiers is a read of the
+  // same catalog as listProducts, so it is open to every role; the customer scope still applies to prices.
+  resolveProducts: { roles: EVERY_ROLE },
   listOrders: { roles: EVERY_ROLE },
   createOrder: { roles: EVERY_ROLE },
   getOrder: { roles: EVERY_ROLE },
   replaceOrder: { roles: EVERY_ROLE },
   discardOrder: { roles: EVERY_ROLE },
   submitOrder: { roles: EVERY_ROLE },
+  // "Repetir último pedido" (Phase C): a draft-creation route from the customer's own order history in
+  // Sales Force, so it follows the same grant as createOrder.
+  repeatLastOrder: { roles: EVERY_ROLE },
+  // Recurring order templates (Phase E). Reads follow the customer read grant and writes follow the
+  // order-draft grant: every role that exists, never more than the order routes give. WHICH customers a
+  // caller reaches is the seller scope of the customer (404 outside it), never this table. ASSUMPTION
+  // (owner ruling, PLAN): any actor in the customer scope may read, use, edit and delete a template.
+  listOrderTemplates: { roles: EVERY_ROLE },
+  createOrderTemplate: { roles: EVERY_ROLE },
+  getOrderTemplate: { roles: EVERY_ROLE },
+  replaceOrderTemplate: { roles: EVERY_ROLE },
+  deleteOrderTemplate: { roles: EVERY_ROLE },
+  useOrderTemplate: { roles: EVERY_ROLE },
 };
 
 export type PolicyDenial = 'channel_not_permitted' | 'no_policy' | 'role_not_permitted';

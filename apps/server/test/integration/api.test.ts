@@ -133,6 +133,50 @@ describe('GET /api/v1/ready', () => {
     });
   });
 
+  it.each(['seller', 'manager'] as const)(
+    'gives a signed-in %s only the coarse verdict: integration detail is admin-only (getConfiguration)',
+    async (role) => {
+      const { app, database } = await freshApi();
+      await recordWorkerHeartbeat(database.handle.db, { gatewayMode: 'live', startedAt: new Date().toISOString() }, new Date());
+      await database.handle.pool.query(`insert into sync_state (entity, status) values ('customers', 'failed')`);
+      await createTestAccount(database.handle, { email: `ready-${role}@example.test`, role });
+      const cookie = await loginCookie({ app }, `ready-${role}@example.test`, TEST_PASSWORD);
+      const response = await readyWith(app, cookie);
+      expect(response.statusCode).toBe(200);
+      const body = ReadyResponseSchema.parse(response.json());
+      // The placeholder mode, not the worker's `live`; no entity names, message, timestamp or counts.
+      expect(body.integration.gatewayMode).toBe('fake');
+      expect(body.integration.failingEntities).toEqual([]);
+      expect(body.integration.message).toBeNull();
+      expect(body.integration.lastSuccessAt).toBeNull();
+      expect(body.checks.migrations).toMatchObject({ applied: null, expected: null });
+    },
+  );
+
+  it('gives an admin whose session was revoked, or whose account was disabled, only the coarse verdict', async () => {
+    const { app, database } = await freshApi();
+    await recordWorkerHeartbeat(database.handle.db, { gatewayMode: 'live', startedAt: new Date().toISOString() }, new Date());
+    const admin = await createTestAccount(database.handle, { email: 'ready-gone@example.test', role: 'admin' });
+    const cookie = await loginCookie({ app }, 'ready-gone@example.test', TEST_PASSWORD);
+    expect(ReadyResponseSchema.parse((await readyWith(app, cookie)).json()).integration.gatewayMode).toBe('live');
+
+    await database.handle.pool.query('update session set revoked_at = now() where account_id = $1', [admin.id]);
+    expect(ReadyResponseSchema.parse((await readyWith(app, cookie)).json()).integration.gatewayMode).toBe('fake');
+
+    const fresh = await loginCookie({ app }, 'ready-gone@example.test', TEST_PASSWORD);
+    await database.handle.pool.query("update account set status = 'disabled' where id = $1", [admin.id]);
+    expect(ReadyResponseSchema.parse((await readyWith(app, fresh)).json()).integration.gatewayMode).toBe('fake');
+  });
+
+  it('does not slide the session when it only peeks at the role for /ready', async () => {
+    const { app, database } = await freshApi();
+    const cookie = await adminCookie(app, database);
+    const read = () => database.handle.pool.query('select expires_at, last_seen_at from session');
+    const before = await read();
+    await readyWith(app, cookie);
+    expect((await read()).rows).toEqual(before.rows);
+  });
+
   it('is degraded when the worker heartbeat is stale or a mirror entity failed', async () => {
     const { app, database } = await freshApi();
     const cookie = await adminCookie(app, database);

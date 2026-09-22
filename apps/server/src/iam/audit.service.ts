@@ -19,6 +19,13 @@ export const AUDIT_ACTIONS = {
   orderCreated: 'order.created',
   orderReplaced: 'order.replaced',
   orderDiscarded: 'order.discarded',
+  orderTemplateCreated: 'order_template.created',
+  orderTemplateReplaced: 'order_template.replaced',
+  orderTemplateDeleted: 'order_template.deleted',
+  /** A template produced a new draft order (ids and counts only). */
+  orderTemplateUsed: 'order_template.used',
+  /** "Repetir último pedido": a new draft order was produced from the customer's most recent order. */
+  orderRepeatedFromLast: 'order.repeated_from_last',
   /** An ERP submission was requested; it is refused while submission is disabled (SNK-4/SNK-6). */
   orderSubmitAttempted: 'order.submit_attempted',
 } as const;

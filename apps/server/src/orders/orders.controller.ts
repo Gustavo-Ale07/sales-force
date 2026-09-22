@@ -1,5 +1,11 @@
 import { Controller, Inject, Res } from '@nestjs/common';
-import { API_BASE_PATH, routes, type OrderDetail, type OrdersResponse } from '@salesforce/contracts';
+import {
+  API_BASE_PATH,
+  routes,
+  type OrderDetail,
+  type OrdersResponse,
+  type RepeatLastOrderResponse,
+} from '@salesforce/contracts';
 import type { FastifyReply } from 'fastify';
 import { ApiRoute, Contract, type RequestContract } from '../http/route.js';
 import { CurrentUserParam, type CurrentUser } from '../iam/current-user.js';
@@ -60,5 +66,17 @@ export class OrdersController {
     @Contract() contract: RequestContract<typeof routes.submitOrder>,
   ): Promise<never> {
     return this.orders.submit(user, contract.params.id);
+  }
+
+  @ApiRoute(routes.repeatLastOrder)
+  async repeatLast(
+    @CurrentUserParam() user: CurrentUser,
+    @Contract() contract: RequestContract<typeof routes.repeatLastOrder>,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<RepeatLastOrderResponse> {
+    const { result, replayed } = await this.orders.repeatLast(user, contract.params.code, contract.body);
+    // 201 when created; 200 with the original draft on a replay of the same request.
+    if (replayed) void reply.status(200);
+    return result;
   }
 }

@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { erpCustomer, salesOrder, salesOrderItem, type Database } from '@salesforce/db';
 import type { CustomerScope, OrderItem } from '@salesforce/domain';
-import { and, asc, desc, eq, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, ne, or, sql, type SQL } from 'drizzle-orm';
 import { containsText, digitsOf, eqInt, inInts, offsetOf } from '../platform/sql.js';
 import { DATABASE } from '../platform/tokens.js';
 
@@ -60,6 +60,22 @@ export class OrdersRepository {
 
   async itemsOf(orderId: string, executor: Executor = this.db): Promise<OrderItemRow[]> {
     return executor.select().from(salesOrderItem).where(eq(salesOrderItem.orderId, orderId)).orderBy(asc(salesOrderItem.lineNo));
+  }
+
+  /**
+   * The customer's most recent NON-cancelled order recorded in Sales Force ("Repetir último pedido",
+   * Phase C) — never Sankhya/ERP order history, which is not mirrored here. `draftNumber` is a global
+   * sequential identity, so the highest value for the customer is the most recently created order.
+   * Scoped like every other order read (P-21).
+   */
+  async findLatestForCustomer(scope: CustomerScope, customerCode: number, executor: Executor = this.db): Promise<OrderRow | null> {
+    const [row] = await executor
+      .select()
+      .from(salesOrder)
+      .where(and(scopeCondition(scope), eqInt(salesOrder.customerCode, customerCode), ne(salesOrder.status, 'cancelled')))
+      .orderBy(desc(salesOrder.draftNumber))
+      .limit(1);
+    return row ?? null;
   }
 
   /** Inserts the order unless the client request id already exists (`null` = a concurrent create won). */

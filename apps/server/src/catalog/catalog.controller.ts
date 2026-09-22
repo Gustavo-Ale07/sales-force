@@ -5,6 +5,7 @@ import {
   type ProductDetail,
   type ProductGroupsResponse,
   type ProductsResponse,
+  type ResolveProductsResponse,
 } from '@salesforce/contracts';
 import { ApiRoute, Contract, type RequestContract } from '../http/route.js';
 import { CurrentUserParam, type CurrentUser } from '../iam/current-user.js';
@@ -33,5 +34,13 @@ export class CatalogController {
     @Contract() contract: RequestContract<typeof routes.getProduct>,
   ): Promise<ProductDetail> {
     return this.catalog.get(user, contract.params.code, contract.query.customerCode);
+  }
+
+  @ApiRoute(routes.resolveProducts)
+  resolve(
+    @CurrentUserParam() user: CurrentUser,
+    @Contract() contract: RequestContract<typeof routes.resolveProducts>,
+  ): Promise<ResolveProductsResponse> {
+    return this.catalog.resolve(user, contract.body);
   }
 }

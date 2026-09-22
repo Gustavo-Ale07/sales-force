@@ -227,16 +227,17 @@ export class AuthService implements OnModuleInit {
   }
 
   /**
-   * Whether the token belongs to a live session of an active account. Read only: it never slides the
-   * expiry and never writes (for public endpoints that show more to a signed-in caller, such as
-   * `/ready`); every authorization decision still goes through `resolveSession` and the policy.
+   * The role of the live session behind a token, or `null`. Read only: it never slides the expiry and
+   * never writes (for public endpoints that show more to some signed-in callers, such as `/ready`);
+   * the caller still asks the central policy (`authorizeRoute`) what that role may see.
    */
-  async hasActiveSession(token: string | undefined): Promise<boolean> {
-    if (token === undefined || !looksLikeSessionToken(token)) return false;
+  async peekSession(token: string | undefined): Promise<{ readonly role: string } | null> {
+    if (token === undefined || !looksLikeSessionToken(token)) return null;
     const tokenHash = hashSessionToken(token);
     const row = await this.sessions.findByTokenHash(tokenHash);
-    if (row === null || !constantTimeEqualHex(row.tokenHash, tokenHash)) return false;
-    return row.revokedAt === null && row.expiresAt.getTime() > this.clock().getTime() && row.status === 'active';
+    if (row === null || !constantTimeEqualHex(row.tokenHash, tokenHash)) return null;
+    const live = row.revokedAt === null && row.expiresAt.getTime() > this.clock().getTime() && row.status === 'active';
+    return live ? { role: row.role } : null;
   }
 
   async logout(user: CurrentUser, meta: RequestMeta): Promise<void> {

@@ -1,10 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type {
-  ProductDetail,
-  ProductGroupsResponse,
-  ProductListItem,
-  ProductsQuery,
-  ProductsResponse,
+import {
+  MAX_PRODUCT_RESOLUTION_CANDIDATES,
+  type ProductDetail,
+  type ProductGroupsResponse,
+  type ProductListItem,
+  type ProductResolutionItem,
+  type ProductsQuery,
+  type ProductsResponse,
+  type ResolveProductsRequest,
+  type ResolveProductsResponse,
 } from '@salesforce/contracts';
 import { isProductSellable, isProductVisible, type InstallationConfiguration, type Product } from '@salesforce/domain';
 import { CustomersService } from '../customers/customers.service.js';
@@ -17,6 +21,7 @@ import {
   type ProductFilter,
   type ProductRow,
 } from '../mirror/mirror.repository.js';
+import { fitsPgInt } from '../platform/sql.js';
 import { CLOCK, type Clock } from '../platform/tokens.js';
 import { PricingService, toListPriceContext, type PriceBook } from './pricing.service.js';
 
@@ -32,6 +37,14 @@ export function toDomainProduct(row: ProductRow): Product {
     brand: row.brand,
     reference: row.reference,
   };
+}
+
+/**
+ * An identifier that can be a product code: canonical ASCII digits (no leading zero: "007" is not code 7, it can only
+ * match a reference) within the ERP's integer range. Never normalised into a match.
+ */
+function isCodeIdentifier(identifier: string): boolean {
+  return /^(0|[1-9][0-9]*)$/.test(identifier) && fitsPgInt(Number(identifier));
 }
 
 export function productFilterOf(config: InstallationConfiguration): Omit<ProductFilter, 'sort'> {
@@ -125,5 +138,51 @@ export class CatalogService {
       throw new AppError('not_found');
     }
     return { ...item, usageCode: row.usageCode, priceContext: await this.pricing.priceContext(book) };
+  }
+
+  /**
+   * Resolves a batch of pasted/imported identifiers, one answer per request position. Matching is
+   * exact (product code when the identifier is all digits, product reference verbatim); a product the
+   * configuration hides is not found, exactly as in `get`. Prices use the same book and mapping as
+   * the catalog list. The identifiers are looked up once each, however often they repeat.
+   */
+  async resolve(user: CurrentUser, request: ResolveProductsRequest): Promise<ResolveProductsResponse> {
+    const context = await this.policy.accessContext(user);
+    const book = await this.bookFor(context, request.customerCode);
+    const distinct = [...new Set(request.identifiers)];
+    const codes = distinct.filter(isCodeIdentifier).map(Number);
+    const rows = await this.mirror.findProductsByIdentifiers(codes, distinct, book.versionId);
+
+    const byCode = new Map<number, ProductListItem>();
+    const byReference = new Map<string, ProductListItem[]>();
+    for (const row of rows) {
+      const item = this.toListItem(row, book, context.configuration);
+      if (!isProductVisible(toDomainProduct(row), context.configuration, item.listPrice.state)) continue;
+      byCode.set(row.code, item);
+      if (row.reference !== null) byReference.set(row.reference, [...(byReference.get(row.reference) ?? []), item]);
+    }
+
+    const answers = new Map<string, ProductResolutionItem>();
+    for (const identifier of distinct) {
+      const matches = new Map<number, ProductListItem>();
+      const byCodeMatch = isCodeIdentifier(identifier) ? byCode.get(Number(identifier)) : undefined;
+      if (byCodeMatch !== undefined) matches.set(byCodeMatch.code, byCodeMatch);
+      for (const item of byReference.get(identifier) ?? []) matches.set(item.code, item);
+      const found = [...matches.values()].sort((a, b) => a.code - b.code);
+      const [only] = found;
+      answers.set(
+        identifier,
+        found.length === 0 || only === undefined
+          ? { identifier, status: 'not_found' }
+          : found.length === 1
+            ? { identifier, status: 'found', product: only }
+            : { identifier, status: 'ambiguous', candidates: found.slice(0, MAX_PRODUCT_RESOLUTION_CANDIDATES) },
+      );
+    }
+
+    return {
+      items: request.identifiers.map((identifier) => answers.get(identifier) ?? { identifier, status: 'not_found' }),
+      priceContext: await this.pricing.priceContext(book),
+    };
   }
 }

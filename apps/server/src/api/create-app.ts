@@ -1,5 +1,6 @@
 import type { DynamicModule, Type } from '@nestjs/common';
 import { LogController } from 'fastify';
+import { API_BASE_PATH, routeList, toColonPath } from '@salesforce/contracts';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { ApiExceptionFilter } from '../http/error-filter.js';
@@ -49,6 +50,17 @@ function toFastifyTrustProxy(setting: TrustProxySetting): boolean | string[] | (
 /** Request bodies above this size are rejected (no upload endpoint exists yet). */
 export const API_BODY_LIMIT_BYTES = 1024 * 1024;
 
+/** Per-route body caps declared by the contract registry (`maxBodyBytes`), keyed by "METHOD /full/path". */
+function routeBodyLimits(): ReadonlyMap<string, number> {
+  const limits = new Map<string, number>();
+  for (const route of routeList) {
+    if (route.maxBodyBytes !== undefined) {
+      limits.set(`${route.method.toUpperCase()} ${API_BASE_PATH}${toColonPath(route)}`, route.maxBodyBytes);
+    }
+  }
+  return limits;
+}
+
 /**
  * Builds the API application (Nest on Fastify) without listening: the entry point calls `listen`,
  * tests call `inject`. Correlation: the caller's `x-request-id` is accepted when well formed
@@ -76,6 +88,27 @@ export async function createApiApp(options: CreateApiAppOptions): Promise<NestFa
 
   // Hooks must be registered before Nest registers the routes (at `init`).
   const fastify = adapter.getInstance();
+  // A route that declares a smaller body cap than the API-wide limit gets it (checked while the body streams in).
+  const bodyLimits = routeBodyLimits();
+  const appliedLimits = new Set<string>();
+  fastify.addHook('onRoute', (routeOptions) => {
+    const methods = Array.isArray(routeOptions.method) ? routeOptions.method : [routeOptions.method];
+    for (const method of methods) {
+      const key = `${method} ${routeOptions.url}`;
+      const limit = bodyLimits.get(key);
+      if (limit === undefined) continue;
+      routeOptions.bodyLimit = limit;
+      appliedLimits.add(key);
+    }
+  });
+  // A declared cap that matched no route (a renamed path, a changed prefix) would silently fall back to the API-wide limit.
+  // Only the real module registers every contract route, so a test module with a subset is not checked.
+  if (options.rootModule === undefined) {
+    fastify.addHook('onReady', (done) => {
+      const unmatched = [...bodyLimits.keys()].filter((key) => !appliedLimits.has(key));
+      done(unmatched.length > 0 ? new Error(`Body limit declared for no registered route: ${unmatched.join(', ')}`) : undefined);
+    });
+  }
   fastify.addHook('onRequest', (request, reply, done) => {
     void reply.header(REQUEST_ID_HEADER, request.id);
     done();

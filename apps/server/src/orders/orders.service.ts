@@ -4,12 +4,16 @@ import type {
   OrderDetail,
   OrdersQuery,
   OrdersResponse,
+  RepeatLastOrderRequest,
+  RepeatLastOrderResponse,
   ReplaceOrderRequest,
 } from '@salesforce/contracts';
 import {
   canTransitionOrder,
   isCustomerInScope,
   isOrderEditable,
+  normalizeDecimalString,
+  presentSkips,
   type CustomerScope,
 } from '@salesforce/domain';
 import { CustomersService } from '../customers/customers.service.js';
@@ -23,13 +27,31 @@ import { CLOCK, type Clock } from '../platform/tokens.js';
 import { DraftBuilder, type DraftOutcome } from './draft-builder.js';
 import { orderFingerprint } from './order-fingerprint.js';
 import { toOrderDetail, toOrderListItem } from './order.mapper.js';
-import { OrdersRepository, type OrderCounts, type OrderRow } from './orders.repository.js';
+import { OrdersRepository, type Executor, type OrderCounts, type OrderRow } from './orders.repository.js';
 
 type ValidDraft = Extract<DraftOutcome, { ok: true }>;
+
+/**
+ * Extra work that must commit or roll back together with a draft, run inside its create transaction:
+ * how a feature that creates drafts (a saved template) locks what it depends on and audits its own
+ * action without a second code path for the draft itself. Not run when the request is a replay.
+ */
+export interface CreateHooks {
+  /** First thing in the transaction (locks, last checks). Throwing aborts the create. */
+  readonly beforeInsert?: (tx: Executor) => Promise<void>;
+  /** After the draft and its lines are written. */
+  readonly afterInsert?: (tx: Executor, order: { readonly id: string; readonly itemCount: number }) => Promise<void>;
+}
 
 export interface CreateResult {
   readonly order: OrderDetail;
   /** True when the request id had already created this very order (served as 200, not 201). */
+  readonly replayed: boolean;
+}
+
+export interface RepeatLastOrderResult {
+  readonly result: RepeatLastOrderResponse;
+  /** True when the request id had already created this very draft (served as 200, not 201). */
   readonly replayed: boolean;
 }
 
@@ -80,7 +102,7 @@ export class OrdersService {
 
   /* ---------- create (idempotent) ---------- */
 
-  async create(user: CurrentUser, body: CreateOrderRequest): Promise<CreateResult> {
+  async create(user: CurrentUser, body: CreateOrderRequest, hooks: CreateHooks = {}): Promise<CreateResult> {
     const context = await this.policy.accessContext(user);
     const fingerprint = orderFingerprint(body);
 
@@ -92,6 +114,7 @@ export class OrdersService {
     const at = this.clock();
 
     const created = await this.orders.transaction(async (tx) => {
+      await hooks.beforeInsert?.(tx);
       const id = uuidv7(at.getTime());
       const row = await this.orders.insertOrder(
         {
@@ -118,6 +141,7 @@ export class OrdersService {
         { action: AUDIT_ACTIONS.orderCreated, actorAccountId: user.accountId, detail: this.auditDetail(row, draft.draft.items.length) },
         tx,
       );
+      await hooks.afterInsert?.(tx, { id: row.id, itemCount: draft.draft.items.length });
       return row;
     });
 
@@ -128,6 +152,96 @@ export class OrdersService {
       return { order: await this.replayOf(winner, user, fingerprint, context.scope), replayed: true };
     }
     return { order: await this.detailOf(created), replayed: false };
+  }
+
+  /**
+   * "Repetir último pedido" (Phase C): a NEW, independent draft from the customer's own most recent
+   * NON-cancelled order recorded in Sales Force — never from Sankhya/ERP history, which is not
+   * mirrored here. Only `productCode` and `quantity` are copied; lines are revalidated against the
+   * CURRENT catalog by the very same classification a template use goes through, so removed,
+   * inactive, hidden, not sellable or unpriced lines are left out and reported, never priced by guess.
+   * The new draft goes through the ordinary `create` path, so it gets the customer's CURRENT seller
+   * (which may differ from the source order's seller) and its own price, totals and idempotency. The
+   * source order is only read here, never locked or mutated: unlike a template it has no version field
+   * to protect, and nothing about this flow can change it.
+   */
+  async repeatLast(user: CurrentUser, customerCode: number, body: RepeatLastOrderRequest): Promise<RepeatLastOrderResult> {
+    const context = await this.policy.accessContext(user);
+    const customer = await this.customers.requireVisible(context.scope, customerCode);
+
+    // Idempotency comes first, before any resolution of "the latest order" or reclassification of its
+    // lines: both depend on mutable state (order history, catalog, prices), so a legitimate retry of
+    // the same `clientRequestId` (e.g. after a client timeout) could otherwise recompute a different
+    // item set, or find no usable source at all, and wrongly surface `no_previous_order` /
+    // `no_usable_lines` / `idempotency_conflict` for what should be a transparent replay of the draft
+    // already created. `skippedLines` is not persisted with the order, so a replay reports none: the
+    // guarantee owed to a retry is the created draft itself (same id, same items), not a replay of the
+    // original informational skip list.
+    const priorOrder = await this.orders.findByClientRequestId(body.clientRequestId);
+    if (priorOrder !== null) {
+      const sameRequest =
+        priorOrder.createdByAccountId === user.accountId &&
+        priorOrder.customerCode === customer.code &&
+        isCustomerInScope({ sellerCode: priorOrder.sellerCode }, context.scope);
+      if (!sameRequest) throw new AppError('idempotency_conflict');
+      return { result: { order: await this.detailOf(priorOrder), skippedLines: [] }, replayed: true };
+    }
+
+    const source = await this.orders.findLatestForCustomer(context.scope, customer.code);
+    if (source === null) {
+      throw new AppError('conflict', {
+        message: 'Nenhum pedido anterior registrado no Sales Force para este cliente.',
+        details: { reason: 'no_previous_order' },
+      });
+    }
+    const sourceItems = await this.orders.itemsOf(source.id);
+
+    const { usable, skipped } = await this.builder.classifyTemplateLines(
+      { code: customer.code, sellerCode: customer.sellerCode, priceTableCode: customer.priceTableCode },
+      sourceItems.map((item) => ({
+        lineNo: item.lineNo,
+        productCode: item.productCode,
+        quantity: normalizeDecimalString(item.quantity),
+      })),
+      context.configuration,
+    );
+    if (usable.length === 0) {
+      throw new AppError('conflict', {
+        message:
+          'Nenhum item do último pedido pode ser pedido agora (produtos removidos, inativos, indisponíveis ou sem preço). Nenhum pedido foi criado.',
+        details: { reason: 'no_usable_lines', skippedLines: presentSkips(user.role, skipped) },
+      });
+    }
+
+    const { order, replayed } = await this.create(
+      user,
+      {
+        clientRequestId: body.clientRequestId,
+        customerCode: customer.code,
+        negotiationTypeCode: null,
+        notes: null,
+        items: usable.map((line) => ({ productCode: line.productCode, quantity: line.quantity })),
+      },
+      {
+        afterInsert: async (tx, created) => {
+          await this.audit.record(
+            {
+              action: AUDIT_ACTIONS.orderRepeatedFromLast,
+              actorAccountId: user.accountId,
+              detail: {
+                sourceOrderId: source.id,
+                orderId: created.id,
+                customerCode: customer.code,
+                usedCount: created.itemCount,
+                skippedCount: skipped.length,
+              },
+            },
+            tx,
+          );
+        },
+      },
+    );
+    return { result: { order, skippedLines: presentSkips(user.role, skipped) }, replayed };
   }
 
   private async replayOf(existing: OrderRow, user: CurrentUser, fingerprint: string, scope: CustomerScope): Promise<OrderDetail> {

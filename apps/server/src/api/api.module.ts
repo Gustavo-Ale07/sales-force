@@ -5,6 +5,7 @@ import { CustomersModule } from '../customers/customers.module.js';
 import { DashboardModule } from '../dashboard/dashboard.module.js';
 import { OrdersModule } from '../orders/orders.module.js';
 import { SellersModule } from '../sellers/sellers.module.js';
+import { TemplatesModule } from '../templates/templates.module.js';
 import type { AuthConfig } from '../iam/auth-config.js';
 import { IamModule } from '../iam/iam.module.js';
 import { InfrastructureModule, type InfrastructureDeps } from '../platform/infrastructure.module.js';
@@ -28,6 +29,7 @@ export class ApiModule {
         CustomersModule,
         CatalogModule,
         OrdersModule,
+        TemplatesModule,
         DashboardModule,
       ],
     };

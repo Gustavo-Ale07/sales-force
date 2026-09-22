@@ -4,6 +4,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { ApiRoute } from '../http/route.js';
 import { readCookie } from '../iam/cookies.js';
 import { AuthService } from '../iam/auth.service.js';
+import { authorizeRoute } from '../iam/policy.js';
 import { coarseReadiness, ReadinessService } from './readiness.service.js';
 
 @Controller(API_BASE_PATH)
@@ -22,7 +23,7 @@ export class HealthController {
   /**
    * Readiness: 200 when `ready` or `degraded`, 503 when `not_ready`. Public, so an anonymous caller
    * gets only the coarse verdict; the detail (migration counts, failing entities, messages) needs a live
-   * session. The check itself is cached and shared (`ReadinessService`).
+   * session whose role may read the configuration (integration is admin-only). The check itself is cached and shared (`ReadinessService`).
    */
   @ApiRoute(routes.getReady)
   async ready(
@@ -34,7 +35,9 @@ export class HealthController {
     // Database down: no session can be verified, and the coarse body is all that is safe to say.
     if (full.checks.database === 'fail') return coarseReadiness(full);
     const token = readCookie(request.headers.cookie, SESSION_COOKIE_NAME);
-    const signedIn = await this.auth.hasActiveSession(token).catch(() => false);
-    return signedIn ? full : coarseReadiness(full);
+    const peeked = await this.auth.peekSession(token).catch(() => null);
+    // The detail is what `getConfiguration` shows: whoever the central policy lets read it (web channel).
+    const mayReadDetail = peeked !== null && authorizeRoute({ role: peeked.role, channel: 'web' }, 'getConfiguration').allowed;
+    return mayReadDetail ? full : coarseReadiness(full);
   }
 }
