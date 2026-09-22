@@ -154,6 +154,10 @@ services:
       # Runtime config.json (public, no secrets). Not a customer name: an installation label.
       INSTALLATION_NAME: ${INSTALLATION_NAME:-Sales Force}
       WEB_AUTH_MODE: dev
+      # Optional brand (see deploy/README.md); empty = the neutral default.
+      BRAND_LOGO_URL: ${BRAND_LOGO_URL:-}
+      BRAND_MARK_URL: ${BRAND_MARK_URL:-}
+      BRAND_ACCENT: ${BRAND_ACCENT:-}
     ports:
       - "127.0.0.1:${WEB_HOST_PORT:-8080}:8080"
 

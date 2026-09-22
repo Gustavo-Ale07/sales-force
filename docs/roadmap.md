@@ -153,6 +153,8 @@ Scope (spec §3 and `RF-*` tagged F1):
 | Web equivalents for internal sellers and managers | spec §3 |
 | Pilot in parallel with Vidya; shutdown criteria | spec §16 |
 
+**Anticipated by explicit owner instruction (2026-09-21, task "Evolução Comercial e Visual"):** two Phase 1 items are built early on the web only, inside the existing boundaries (server-side revalidation, no ERP submission, no price/discount/commission rule invented): the order-spreadsheet import (RF-IMP-1, RF-IMP-5) — browser-side CSV/paste parsing, a batched read endpoint `POST /product-resolutions`, no XLSX and no background processing yet, so RF-IMP-2's step-by-step wizard is only partly met — and recurring orders per customer (order templates; a new draft is created from a template, prices always recomputed). Discounts, commissions, sales history, financial data and the customer map stay blocked on their open decisions (R28, R35–R37, Q-02, R42, P-13). This does not move the Phase 1 gate.
+
 ---
 
 ## 6. Phase 2 — CRM (replaces Agendor)

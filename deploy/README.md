@@ -56,8 +56,13 @@ Two images, generic names, built from the repository root:
   image default, so the image never enables development authentication by itself: only the compose file
   sets `NODE_ENV=development` and `ALLOW_DEV_AUTH=1`.
 - `sales-force-web` (`deploy/Dockerfile.web`): static build served by unprivileged nginx. `/config.json`
-  is generated at container start from `INSTALLATION_NAME` (default `Sales Force`) and `WEB_AUTH_MODE`;
-  no environment value is baked into the bundle.
+  is generated at container start from `INSTALLATION_NAME` (default `Sales Force`), `WEB_AUTH_MODE` and the
+  optional brand (`BRAND_LOGO_URL`, `BRAND_MARK_URL`, `BRAND_ACCENT`); no environment value is baked into the
+  bundle. The brand is per installation: the logo and mark are files the installation mounts read-only at
+  `/usr/share/nginx/html/brand/` (never in the image or the repository), referenced as `/brand/<file>.(png|svg|
+  webp|jpg|jpeg)`; the accent is `#rrggbb` and is ignored by the web app when it is too light: white text on it needs 5.5:1, so that the accent also
+  reads as text on the pale surfaces (WCAG AA). Malformed values stop the container at start. nginx serves `/brand/` with `sandbox` CSP and every
+  response with a same-origin CSP.
 
 Dependency lifecycle scripts remain denied (`pnpm-workspace.yaml`); the Dockerfiles enable none.
 
