@@ -1,4 +1,9 @@
 {
   "installationName": "Sales Force",
-  "authMode": "dev"
+  "authMode": "dev",
+  "brand": {
+    "logoUrl": "/brand/plac-logo.png",
+    "markUrl": null,
+    "accent": "#001369"
+  }
 }
