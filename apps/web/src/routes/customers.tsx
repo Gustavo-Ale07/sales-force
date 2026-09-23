@@ -91,7 +91,7 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
       {portfolio && portfolio.metrics.length > 0 ? (
         <Card aria-label={portfolio.label}>
           <CardBody>
-            <StatGrid>
+            <StatGrid className="grid-cols-2 md:grid-cols-4 xl:grid-cols-4">
               {portfolio.metrics.map((metric) => {
                 const visual = METRIC_VISUALS[metric.key];
                 return (
