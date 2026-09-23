@@ -21,13 +21,13 @@ describe("Brand", () => {
     expect(mark).not.toBeNull();
     fireEvent.error(mark!);
     expect(container.querySelector("img")).toBeNull();
-    expect(screen.getByText("SF")).toBeInTheDocument();
+    expect(screen.getByText("A")).toBeInTheDocument();
   });
 
   it("shows the neutral placeholder and the installation name by default", () => {
     renderBrand({});
     expect(screen.getByText("Acme")).toBeInTheDocument();
-    expect(screen.getByText("SF")).toBeInTheDocument();
+    expect(screen.getByText("A")).toBeInTheDocument();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
 

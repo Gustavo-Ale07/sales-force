@@ -244,6 +244,9 @@ export const ready: ApiSchema<"ReadyResponse"> = {
   integration: integrationFake,
 };
 
+const metricCount = (value: number) => ({ kind: "count", value }) as const;
+
+/** Mirrors the real group/metric taxonomy in `apps/server/src/dashboard/dashboard.service.ts` (keys, labels, value kinds). */
 export function dashboard(overrides: Partial<ApiSchema<"DashboardResponse">> = {}): ApiSchema<"DashboardResponse"> {
   return {
     generatedAt: "2026-09-21T09:00:00.000Z",
@@ -251,11 +254,69 @@ export function dashboard(overrides: Partial<ApiSchema<"DashboardResponse">> = {
     groups: [
       {
         key: "portfolio",
-        label: "Carteira",
+        label: "Carteira de clientes",
         demo: false,
         metrics: [
-          { key: "customers", label: "Clientes na carteira", value: { kind: "count", value: 1250 }, description: null },
-          { key: "credit", label: "Crédito disponível", value: null, description: null },
+          { key: "customers_total", label: "Clientes na carteira", value: metricCount(1250), description: null },
+          { key: "customers_active", label: "Clientes ativos e liberados", value: metricCount(1180), description: null },
+          { key: "customers_blocked", label: "Clientes bloqueados", value: metricCount(12), description: null },
+          { key: "customers_without_price_table", label: "Clientes sem tabela de preço", value: metricCount(34), description: null },
+        ],
+      },
+      {
+        key: "catalog",
+        label: "Catálogo",
+        demo: false,
+        metrics: [
+          { key: "products_visible", label: "Produtos visíveis", value: metricCount(640), description: null },
+          { key: "products_sellable", label: "Produtos vendáveis", value: metricCount(512), description: null },
+          {
+            key: "products_sellable_without_price",
+            label: "Vendáveis sem preço na tabela de referência",
+            value: metricCount(8),
+            description: null,
+          },
+        ],
+      },
+      {
+        key: "orders",
+        label: "Pedidos",
+        demo: false,
+        metrics: [
+          { key: "drafts", label: "Rascunhos em aberto", value: metricCount(6), description: null },
+          {
+            key: "drafts_estimated_total",
+            label: "Valor estimado dos rascunhos",
+            value: { kind: "money", value: "18500.00" },
+            description: "Estimativa pelo preço de lista; linhas sem preço não entram na soma.",
+          },
+          { key: "cancelled", label: "Rascunhos descartados", value: metricCount(3), description: null },
+        ],
+      },
+      {
+        key: "credit",
+        label: "Crédito",
+        demo: false,
+        metrics: [
+          {
+            key: "credit_indicators",
+            label: "Indicadores de crédito",
+            value: null,
+            description: "As regras de crédito ainda não foram definidas.",
+          },
+        ],
+      },
+      {
+        key: "positivation",
+        label: "Positivação",
+        demo: false,
+        metrics: [
+          {
+            key: "positivation_rate",
+            label: "Positivação da carteira",
+            value: null,
+            description: "A regra de positivação ainda não foi definida.",
+          },
         ],
       },
     ],

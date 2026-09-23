@@ -13,36 +13,84 @@ function useImageOk(src: string | null): { ok: boolean; onError: () => void } {
  * logo (which already carries the name), else the configured mark plus the name, else the neutral "SF"
  * placeholder plus the name. Asset paths were validated when the runtime configuration was parsed; an image
  * that fails to load falls through to the next option instead of leaving a broken-image icon.
+ *
+ * `tone="dark"` is for the navy sidebar: the installation logo is expected to be legible on light surfaces
+ * (login, a future light topbar), so on dark it renders in a white plate instead of bare, and the fallback
+ * mark switches to the CTA red (the one place red stands in for the institutional mark, per the brand
+ * direction — everywhere else red stays reserved for actions). "Sales Force" is always the product's own
+ * name, shown as the secondary line under the installation's identity, never replacing it.
  */
-export function Brand({ size = "md", className }: { size?: "md" | "lg"; className?: string }) {
+export function Brand({
+  size = "md",
+  tone = "light",
+  collapsed = false,
+  className,
+}: {
+  size?: "md" | "lg";
+  tone?: "light" | "dark";
+  /** Icon/mark only, no name (the collapsed sidebar rail). Ignored unless a mark/logo/initial can stand alone. */
+  collapsed?: boolean;
+  className?: string;
+}) {
   const { config } = useAppServices();
   const { logoUrl, markUrl } = config.brand;
   const name = config.installationName;
   const logo = useImageOk(logoUrl);
   const mark = useImageOk(markUrl);
+  const dark = tone === "dark";
+  const showProductName = !collapsed && name !== "Sales Force";
 
-  if (logoUrl !== null && logo.ok) {
+  const logoImg = logoUrl !== null && logo.ok;
+  const box = size === "lg" ? "size-9 rounded-lg text-xs" : "size-8 rounded-lg text-xs";
+  const secondaryClass = cn("block truncate text-2xs font-medium uppercase tracking-wider", dark ? "text-sidebar-fg-faint" : "text-fg-faint");
+
+  if (logoImg && !collapsed) {
     return (
-      <img
-        src={logoUrl}
-        alt={name}
-        onError={logo.onError}
-        className={cn(size === "lg" ? "h-10 max-w-[220px]" : "h-7 max-w-[168px]", "w-auto object-contain object-left", className)}
-      />
+      <div className={cn("flex items-center gap-2.5", className)}>
+        <span className={cn("inline-flex shrink-0 items-center justify-center rounded-md bg-white p-1", dark && "shadow-sm")}>
+          <img
+            src={logoUrl}
+            alt={name}
+            onError={logo.onError}
+            className={cn(size === "lg" ? "h-7 max-w-[132px]" : "h-5 max-w-[104px]", "w-auto object-contain object-left")}
+          />
+        </span>
+        {showProductName ? <span className={secondaryClass}>Sales Force</span> : null}
+      </div>
     );
   }
 
-  const box = size === "lg" ? "size-9 rounded-lg text-xs" : "size-7 rounded-md text-2xs";
+  const markNode =
+    markUrl !== null && mark.ok ? (
+      <img src={markUrl} alt={collapsed ? name : ""} aria-hidden={!collapsed} onError={mark.onError} className={cn(box, "shrink-0 object-contain")} />
+    ) : (
+      <span
+        aria-hidden={!collapsed}
+        role={collapsed ? "img" : undefined}
+        aria-label={collapsed ? name : undefined}
+        className={cn(
+          box,
+          "grid shrink-0 place-items-center font-heading font-extrabold tracking-wide",
+          dark ? "bg-cta text-on-cta" : "bg-accent text-on-accent",
+        )}
+      >
+        {name.slice(0, 1).toUpperCase() || "S"}
+      </span>
+    );
+
+  if (collapsed) {
+    return <div className={cn("flex items-center justify-center", className)}>{markNode}</div>;
+  }
+
   return (
     <div className={cn("flex items-center gap-2.5", className)}>
-      {markUrl !== null && mark.ok ? (
-        <img src={markUrl} alt="" aria-hidden="true" onError={mark.onError} className={cn(box, "shrink-0 object-contain")} />
-      ) : (
-        <span aria-hidden="true" className={cn(box, "grid shrink-0 place-items-center bg-accent font-extrabold tracking-wide text-on-accent")}>
-          SF
+      {markNode}
+      <span className="min-w-0 leading-tight">
+        <span className={cn("block truncate font-heading font-bold", size === "lg" ? "text-lg" : "text-sm", dark ? "text-sidebar-fg-active" : "text-fg")}>
+          {name}
         </span>
-      )}
-      <span className={cn("truncate font-bold", size === "lg" ? "text-lg" : "text-sm")}>{name}</span>
+        {showProductName ? <span className={secondaryClass}>Sales Force</span> : null}
+      </span>
     </div>
   );
 }

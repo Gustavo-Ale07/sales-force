@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   Card,
+  CardBody,
   EmptyState,
   FilterBar,
   FilterChip,
@@ -13,6 +14,8 @@ import {
   SearchInput,
   Select,
   SortableHead,
+  StatGrid,
+  StatTile,
   Table,
   TableBody,
   TableCaption,
@@ -28,8 +31,9 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Plus, Users } from "lucide-react";
+import { MetricValueText, METRIC_VISUALS } from "../components/metric-value";
 import { QueryError } from "../components/query-error";
-import { customersQueryOptions, sellersQueryOptions, type CustomersParams } from "../lib/api-queries";
+import { customersQueryOptions, dashboardQueryOptions, sellersQueryOptions, type CustomersParams } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { CUSTOMER_STATUSES, type CustomersSearch } from "../lib/route-search";
 import { asInt, asOneOf, compact } from "../lib/search-params";
@@ -64,6 +68,8 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
   const apiParams: CustomersParams = { ...params, page: params.page ?? 1, pageSize: params.pageSize ?? 25, sort: params.sort ?? "name" };
   const query = useQuery(customersQueryOptions(api, apiParams));
   const sellers = useQuery(sellersQueryOptions(api));
+  const dashboard = useQuery(dashboardQueryOptions(api));
+  const portfolio = dashboard.data?.groups.find((group) => group.key === "portfolio");
 
   const change = (patch: Partial<CustomersSearch>) => onSearchChange(compact({ ...params, page: undefined, ...patch }));
   const [searchText, setSearchText] = useSearchBox(params.search, (search) => change({ search }));
@@ -81,6 +87,28 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
         icon={<Users size={16} aria-hidden="true" />}
         description="Clientes da sua carteira, conforme o escopo definido pelo servidor."
       />
+
+      {portfolio && portfolio.metrics.length > 0 ? (
+        <Card aria-label={portfolio.label}>
+          <CardBody>
+            <StatGrid>
+              {portfolio.metrics.map((metric) => {
+                const visual = METRIC_VISUALS[metric.key];
+                return (
+                  <StatTile
+                    key={metric.key}
+                    label={metric.label}
+                    value={<MetricValueText metric={metric} />}
+                    hint={metric.description ?? undefined}
+                    tone={visual?.tone}
+                    icon={visual?.icon}
+                  />
+                );
+              })}
+            </StatGrid>
+          </CardBody>
+        </Card>
+      ) : null}
 
       <FilterBar aria-label="Filtros da carteira">
         <FilterField label="Busca" className="min-w-[220px] flex-1">

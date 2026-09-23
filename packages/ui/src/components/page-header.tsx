@@ -73,17 +73,17 @@ export function PageHeader({ title, description, badges, actions, breadcrumbs, i
           {icon ? (
             <span
               aria-hidden="true"
-              className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-accent-weak text-accent-text"
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent-weak text-accent-text"
             >
               {icon}
             </span>
           ) : null}
           <div className="min-w-0">
-            <h1 className="m-0 flex flex-wrap items-center gap-2 text-xl font-semibold tracking-tight text-fg">
+            <h1 className="m-0 flex flex-wrap items-center gap-2 font-heading text-[26px] font-bold leading-tight tracking-tight text-fg md:text-[30px]">
               {title}
               {badges}
             </h1>
-            {description ? <p className="m-0 mt-0.5 text-xs text-fg-muted">{description}</p> : null}
+            {description ? <p className="m-0 mt-0.5 text-sm text-fg-muted">{description}</p> : null}
           </div>
         </div>
         {actions ? <div className="flex flex-wrap items-center gap-1.5">{actions}</div> : null}

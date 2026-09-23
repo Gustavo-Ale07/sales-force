@@ -37,10 +37,10 @@ describe("Início (dashboard)", () => {
     });
     expect(await screen.findByText("Carregando indicadores…")).toBeInTheDocument();
     release();
-    expect(await screen.findByText("Clientes na carteira")).toBeInTheDocument();
-    expect(screen.getByText("1.250")).toBeInTheDocument();
+    // The KPI grid shows the compact tile labels (per the Início redesign), not each metric's own long label.
+    expect(await screen.findByText("1.250")).toBeInTheDocument();
     // A metric the server could not provide is "not available", never a made-up zero.
-    const credit = screen.getByText("Crédito disponível").parentElement;
+    const credit = screen.getByText("Indicadores de crédito").parentElement;
     expect(credit).toHaveTextContent("Não disponível");
     expect(screen.getByText(/Escopo: Vendedor 7/)).toBeInTheDocument();
     expect(screen.getByText("Rascunho nº 12")).toBeInTheDocument();
@@ -71,7 +71,7 @@ describe("Início (dashboard)", () => {
     expect(await screen.findByText("Serviço indisponível")).toBeInTheDocument();
     expect(screen.getByText("req-dash-1")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Tentar novamente/ }));
-    expect(await screen.findByText("Clientes na carteira")).toBeInTheDocument();
+    expect(await screen.findByText("1.250")).toBeInTheDocument();
   });
 
   it("shows the forbidden state on 403", async () => {

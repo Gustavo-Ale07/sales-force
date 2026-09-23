@@ -21,48 +21,28 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  formatPercent,
+  cn,
   type BarChartDatum,
-  type Tone,
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, Ban, LayoutDashboard, Plus } from "lucide-react";
+import { AlertTriangle, Ban, CheckCircle2, ChevronRight, LayoutDashboard, Package, Plus, Tag, Users } from "lucide-react";
 import type { ReactNode } from "react";
+import { findMetric, metricCount, MetricValueOrUnavailable, MetricValueText } from "../components/metric-value";
 import { QueryError } from "../components/query-error";
 import { dashboardQueryOptions } from "../lib/api-queries";
-import { useApi } from "../lib/app-context";
-import { formatCount, orderReference, orderStatusLabels } from "../lib/labels";
+import { useApi, useAppServices } from "../lib/app-context";
+import { sessionQueryOptions } from "../lib/auth-client";
+import { orderReference, orderStatusLabels } from "../lib/labels";
 
-type Metric = ApiSchema<"Metric">;
 type MetricGroup = ApiSchema<"MetricGroup">;
 type DashboardResponse = ApiSchema<"DashboardResponse">;
 type OrderListItem = ApiSchema<"OrderListItem">;
 
-export const METRIC_UNAVAILABLE = "Não disponível";
-
-/** Per-metric visual accent: only for figures that genuinely ask for attention. Every other tile stays neutral. */
-const METRIC_VISUALS: Partial<Record<string, { tone: Tone; icon: ReactNode }>> = {
-  customers_blocked: { tone: "danger", icon: <Ban size={13} aria-hidden="true" /> },
-  products_sellable_without_price: { tone: "warning", icon: <AlertTriangle size={13} aria-hidden="true" /> },
-};
-
-/** Subset of the "Carteira de clientes" group rendered as a bar breakdown (same counts as the tiles above, read differently). */
-const PORTFOLIO_CHART_TONES: Record<string, Tone> = {
-  customers_active: "success",
-  customers_blocked: "danger",
-  customers_without_price_table: "warning",
-};
-
-function portfolioBreakdown(metrics: Metric[]): BarChartDatum[] {
-  const data: BarChartDatum[] = [];
-  for (const metric of metrics) {
-    const tone = PORTFOLIO_CHART_TONES[metric.key];
-    const value = metric.value?.kind === "count" ? metric.value.value : null;
-    if (tone === undefined || value === null) continue;
-    data.push({ key: metric.key, label: metric.label, value, tone });
-  }
-  return data;
+function greeting(hour = new Date().getHours()): string {
+  if (hour < 12) return "Bom dia";
+  if (hour < 18) return "Boa tarde";
+  return "Boa noite";
 }
 
 /** Status distribution of the recent orders already listed below — not the whole order history, just this list read as a chart. */
@@ -74,62 +54,45 @@ function recentOrdersDistribution(orders: readonly OrderListItem[]): BarChartDat
     .map(([status, value]) => ({ key: status, label: orderStatusLabels[status].label, value, tone: orderStatusLabels[status].tone }));
 }
 
-function MetricValueText({ metric }: { metric: Metric }) {
-  const value = metric.value;
-  if (value === null) return <span className="text-fg-faint">{METRIC_UNAVAILABLE}</span>;
-  switch (value.kind) {
-    case "count":
-      return <>{formatCount(value.value)}</>;
-    case "money":
-      return <Money value={value.value} />;
-    case "percent":
-      return <>{formatPercent(value.value)}</>;
-  }
-}
-
 function scopeText(scope: DashboardResponse["scope"]): string {
   if (scope.kind === "all") return "Todos os vendedores";
-  return scope.sellerCodes.length === 1
-    ? `Vendedor ${scope.sellerCodes[0]}`
-    : `Vendedores ${scope.sellerCodes.join(", ")}`;
+  return scope.sellerCodes.length === 1 ? `Vendedor ${scope.sellerCodes[0]}` : `Vendedores ${scope.sellerCodes.join(", ")}`;
 }
 
-function MetricGroupCard({ group }: { group: MetricGroup }) {
-  const breakdown = group.key === "portfolio" ? portfolioBreakdown(group.metrics) : [];
+/** One clickable KPI tile: the whole card is the link, focus-visible ring stands in for hover on keyboard nav. */
+function KpiLink({ to, search, children }: { to: string; search?: Record<string, unknown>; children: ReactNode }) {
   return (
-    <Card aria-label={group.label}>
-      <CardHeader
-        title={group.label}
-        actions={group.demo ? <Badge tone="warning">Dados de demonstração</Badge> : undefined}
-      />
-      <CardBody>
-        {group.metrics.length === 0 ? (
-          <p className="m-0 text-xs text-fg-muted">Sem indicadores neste grupo.</p>
-        ) : (
-          <StatGrid>
-            {group.metrics.map((metric) => {
-              const visual = METRIC_VISUALS[metric.key];
-              return (
-                <StatTile
-                  key={metric.key}
-                  label={metric.label}
-                  value={<MetricValueText metric={metric} />}
-                  hint={metric.description ?? undefined}
-                  tone={visual?.tone}
-                  icon={visual?.icon}
-                />
-              );
-            })}
-          </StatGrid>
-        )}
-        {breakdown.length > 0 ? (
-          <div className="mt-3 border-t border-line pt-3">
-            <p className="m-0 mb-2 text-2xs font-semibold uppercase tracking-wider text-fg-muted">Distribuição da carteira</p>
-            <SimpleBarChart data={breakdown} />
-          </div>
-        ) : null}
-      </CardBody>
-    </Card>
+    <Link
+      to={to as never}
+      search={search as never}
+      className="block rounded-lg outline-none transition-transform duration-150 ease-spring hover:-translate-y-px focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+    >
+      {children}
+    </Link>
+  );
+}
+
+interface AttentionItemDef {
+  key: string;
+  count: number | null;
+  icon: ReactNode;
+  title: (count: number) => string;
+  to: string;
+  search: Record<string, unknown>;
+}
+
+function AttentionRow({ item }: { item: AttentionItemDef }) {
+  if (item.count === null || item.count <= 0) return null;
+  return (
+    <Link
+      to={item.to as never}
+      search={item.search as never}
+      className="flex items-center gap-3 rounded-md px-2.5 py-2.5 no-underline transition-colors duration-150 ease-spring hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-warn-bg text-warn">{item.icon}</span>
+      <span className="min-w-0 flex-1 text-sm font-medium text-fg">{item.title(item.count)}</span>
+      <ChevronRight size={16} aria-hidden="true" className="shrink-0 text-fg-faint" />
+    </Link>
   );
 }
 
@@ -196,9 +159,60 @@ function RecentOrders({ orders }: { orders: DashboardResponse["recentOrders"] })
   );
 }
 
+function DemoBadge({ groups, keys }: { groups: readonly MetricGroup[]; keys: readonly string[] }) {
+  const demoLabels = groups.filter((g) => keys.includes(g.key) && g.demo).map((g) => g.label);
+  if (demoLabels.length === 0) return null;
+  return <Badge tone="warning" title={demoLabels.join(", ")}>Dados de demonstração</Badge>;
+}
+
 export function DashboardPage() {
   const api = useApi();
+  const { authClient } = useAppServices();
   const query = useQuery(dashboardQueryOptions(api));
+  const session = useQuery(sessionQueryOptions(authClient));
+  const firstName = session.data?.name.split(" ")[0];
+
+  const groups = query.data?.groups ?? [];
+  const customersTotal = findMetric(groups, "portfolio", "customers_total");
+  const customersActive = findMetric(groups, "portfolio", "customers_active");
+  const customersBlocked = findMetric(groups, "portfolio", "customers_blocked");
+  const customersWithoutPriceTable = findMetric(groups, "portfolio", "customers_without_price_table");
+  const productsVisible = findMetric(groups, "catalog", "products_visible");
+  const productsSellable = findMetric(groups, "catalog", "products_sellable");
+  const productsSellableWithoutPrice = findMetric(groups, "catalog", "products_sellable_without_price");
+  const drafts = findMetric(groups, "orders", "drafts");
+  const draftsEstimatedTotal = findMetric(groups, "orders", "drafts_estimated_total");
+  const cancelled = findMetric(groups, "orders", "cancelled");
+  const creditIndicators = findMetric(groups, "credit", "credit_indicators");
+  const positivationRate = findMetric(groups, "positivation", "positivation_rate");
+
+  const attentionItems: AttentionItemDef[] = [
+    {
+      key: "customers_blocked",
+      count: metricCount(customersBlocked),
+      icon: <Ban size={15} aria-hidden="true" />,
+      title: (n) => `${n === 1 ? "1 cliente bloqueado" : `${n} clientes bloqueados`}`,
+      to: "/clientes",
+      search: { status: "blocked" },
+    },
+    {
+      key: "customers_without_price_table",
+      count: metricCount(customersWithoutPriceTable),
+      icon: <Tag size={15} aria-hidden="true" />,
+      title: (n) => `${n === 1 ? "1 cliente sem tabela de preço" : `${n} clientes sem tabela de preço`}`,
+      to: "/clientes",
+      search: { hasPriceTable: "false" },
+    },
+    {
+      key: "products_sellable_without_price",
+      count: metricCount(productsSellableWithoutPrice),
+      icon: <AlertTriangle size={15} aria-hidden="true" />,
+      title: (n) => `${n === 1 ? "1 produto vendável sem preço" : `${n} produtos vendáveis sem preço`}`,
+      to: "/produtos",
+      search: { sellable: "true", priceState: "none" },
+    },
+  ];
+  const pendingAttention = attentionItems.filter((item) => item.count !== null && item.count > 0);
 
   return (
     <>
@@ -206,18 +220,33 @@ export function DashboardPage() {
         title="Início"
         icon={<LayoutDashboard size={16} aria-hidden="true" />}
         description={
-          query.data ? (
-            <>
-              Escopo: {scopeText(query.data.scope)} · Atualizado em <DateText value={query.data.generatedAt} withTime />
-            </>
-          ) : (
-            "Resumo da sua carteira e dos pedidos recentes."
-          )
+          <span className="flex flex-col gap-0.5">
+            <span>{firstName ? `${greeting()}, ${firstName}.` : "Resumo da sua carteira e dos pedidos recentes."}</span>
+            {query.data ? (
+              <span className="text-2xs text-fg-faint">
+                Escopo: {scopeText(query.data.scope)} · Atualizado em <DateText value={query.data.generatedAt} withTime />
+              </span>
+            ) : null}
+          </span>
         }
         actions={
-          <Button asChild variant="primary" leftIcon={<Plus size={14} aria-hidden="true" />}>
-            <Link to="/pedidos/novo">Novo pedido</Link>
-          </Button>
+          <>
+            <Button asChild variant="secondary" size="sm">
+              <Link to="/produtos">
+                <Package size={14} aria-hidden="true" />
+                Produtos
+              </Link>
+            </Button>
+            <Button asChild variant="secondary" size="sm">
+              <Link to="/clientes">
+                <Users size={14} aria-hidden="true" />
+                Clientes
+              </Link>
+            </Button>
+            <Button asChild variant="primary" leftIcon={<Plus size={14} aria-hidden="true" />}>
+              <Link to="/pedidos/novo">Novo pedido</Link>
+            </Button>
+          </>
         }
       />
 
@@ -235,9 +264,82 @@ export function DashboardPage() {
         </Card>
       ) : (
         <>
-          {query.data.groups.map((group) => (
-            <MetricGroupCard key={group.key} group={group} />
-          ))}
+          <div className="flex items-center justify-between gap-2">
+            <p className="m-0 text-2xs font-semibold uppercase tracking-wider text-fg-muted">Visão geral</p>
+            <DemoBadge groups={groups} keys={["portfolio", "catalog", "orders"]} />
+          </div>
+          <StatGrid>
+            <KpiLink to="/clientes">
+              <StatTile label="Clientes" value={<MetricValueOrUnavailable metric={customersTotal} />} />
+            </KpiLink>
+            <KpiLink to="/clientes" search={{ status: "active" }}>
+              <StatTile label="Ativos" value={<MetricValueOrUnavailable metric={customersActive} />} />
+            </KpiLink>
+            <KpiLink to="/produtos">
+              <StatTile label="Produtos" value={<MetricValueOrUnavailable metric={productsVisible} />} />
+            </KpiLink>
+            <KpiLink to="/produtos" search={{ sellable: "true" }}>
+              <StatTile label="Vendáveis" value={<MetricValueOrUnavailable metric={productsSellable} />} />
+            </KpiLink>
+            <KpiLink to="/pedidos" search={{ status: "draft" }}>
+              <StatTile label="Pedidos em aberto" value={<MetricValueOrUnavailable metric={drafts} />} />
+            </KpiLink>
+            <KpiLink to="/pedidos" search={{ status: "draft" }}>
+              <StatTile label="R$ em rascunhos" value={<MetricValueOrUnavailable metric={draftsEstimatedTotal} />} />
+            </KpiLink>
+          </StatGrid>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card className="md:col-span-2" aria-label="Atenção necessária">
+              <CardHeader
+                title="Atenção necessária"
+                actions={pendingAttention.length > 0 ? <Badge tone="warning">{pendingAttention.length}</Badge> : undefined}
+              />
+              <CardBody className={cn(pendingAttention.length > 0 && "p-1.5")}>
+                {pendingAttention.length === 0 ? (
+                  <div className="flex items-center gap-2.5 px-1.5 py-1.5 text-sm text-fg-muted">
+                    <CheckCircle2 size={16} aria-hidden="true" className="shrink-0 text-ok" />
+                    Nenhuma pendência no momento.
+                  </div>
+                ) : (
+                  <div className="flex flex-col">
+                    {pendingAttention.map((item) => (
+                      <AttentionRow key={item.key} item={item} />
+                    ))}
+                  </div>
+                )}
+              </CardBody>
+            </Card>
+
+            <Card aria-label="Outros indicadores">
+              <CardHeader
+                title="Outros indicadores"
+                actions={<DemoBadge groups={groups} keys={["orders", "credit", "positivation"]} />}
+              />
+              <CardBody>
+                <StatGrid className="grid-cols-1">
+                  {cancelled ? (
+                    <StatTile label={cancelled.label} value={<MetricValueText metric={cancelled} />} hint={cancelled.description ?? undefined} />
+                  ) : null}
+                  {creditIndicators ? (
+                    <StatTile
+                      label={creditIndicators.label}
+                      value={<MetricValueText metric={creditIndicators} />}
+                      hint={creditIndicators.description ?? undefined}
+                    />
+                  ) : null}
+                  {positivationRate ? (
+                    <StatTile
+                      label={positivationRate.label}
+                      value={<MetricValueText metric={positivationRate} />}
+                      hint={positivationRate.description ?? undefined}
+                    />
+                  ) : null}
+                </StatGrid>
+              </CardBody>
+            </Card>
+          </div>
+
           <RecentOrders orders={query.data.recentOrders} />
         </>
       )}

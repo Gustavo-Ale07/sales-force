@@ -31,17 +31,29 @@ const toneChip: Record<Tone, string> = {
 /** Dense KPI tile: small caps label, strong value, muted hint. Colour/icon are opt-in per tile (see `tone`, `icon`). */
 export function StatTile({ label, value, hint, progress, emphasis = "default", icon, tone = "neutral", className, ...props }: StatTileProps) {
   return (
-    <div className={cn("relative min-w-0 rounded-md border border-line bg-surface px-3 py-2.5", icon && "pr-8", className)} {...props}>
+    <div
+      className={cn(
+        "relative min-w-0 rounded-lg border border-line bg-surface px-3.5 py-3 shadow-card transition-[border-color,box-shadow] duration-150 ease-spring",
+        icon && "pr-9",
+        className,
+      )}
+      {...props}
+    >
       {icon ? (
         <span
           aria-hidden="true"
-          className={cn("absolute right-2.5 top-2.5 inline-flex shrink-0 items-center justify-center rounded-full p-1", toneChip[tone])}
+          className={cn("absolute right-3 top-3 inline-flex shrink-0 items-center justify-center rounded-full p-1.5", toneChip[tone])}
         >
           {icon}
         </span>
       ) : null}
       <div className="text-2xs font-semibold uppercase tracking-wider text-fg-muted">{label}</div>
-      <div className={cn("mt-1 whitespace-nowrap text-2xl font-semibold tracking-tight", emphasis === "danger" ? "text-danger" : "text-fg")}>
+      <div
+        className={cn(
+          "mt-1.5 whitespace-nowrap text-[26px] font-bold leading-none tracking-tight",
+          emphasis === "danger" ? "text-danger" : "text-fg",
+        )}
+      >
         {value}
       </div>
       {progress !== undefined ? (
