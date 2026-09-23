@@ -317,7 +317,7 @@ export function DashboardPage() {
                 actions={<DemoBadge groups={groups} keys={["orders", "credit", "positivation"]} />}
               />
               <CardBody>
-                <StatGrid className="grid-cols-1">
+                <StatGrid className="grid-cols-1 md:grid-cols-1 xl:grid-cols-1">
                   {cancelled ? (
                     <StatTile label={cancelled.label} value={<MetricValueText metric={cancelled} />} hint={cancelled.description ?? undefined} />
                   ) : null}
