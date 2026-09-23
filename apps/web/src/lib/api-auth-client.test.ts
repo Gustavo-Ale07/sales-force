@@ -45,12 +45,18 @@ describe("API-backed AuthClient", () => {
   it.each([
     [401, "invalid_credentials"],
     [400, "invalid_credentials"],
-    [403, "channel_forbidden"],
     [503, "unavailable"],
     [500, "unavailable"],
   ] as const)("maps a %s login response to %s", async (status, reason) => {
     const { client } = clientWith({ "POST /auth/login": apiError(status, "internal_error", "x", { requestId: "req-1" }) });
     await expect(client.login({ email: "a@b.test", password: "x" })).resolves.toMatchObject({ ok: false, reason, correlationId: "req-1" });
+  });
+
+  it("never reports a CORS/origin rejection (403 forbidden) as a channel restriction", async () => {
+    const { client } = clientWith({ "POST /auth/login": apiError(403, "forbidden", "x", { requestId: "req-1" }) });
+    const result = await client.login({ email: "a@b.test", password: "x" });
+    expect(result).toMatchObject({ ok: false, reason: "unavailable", correlationId: "req-1" });
+    expect(result).not.toMatchObject({ reason: "channel_forbidden" });
   });
 
   it("maps 429 to rate_limited with the Retry-After seconds", async () => {

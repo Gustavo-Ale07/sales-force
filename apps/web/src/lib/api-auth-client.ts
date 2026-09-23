@@ -20,9 +20,17 @@ export function toAuthUser(account: Account): AuthUser {
 }
 
 /**
- * Maps a failed login to the UI reason. Server codes: `invalid_credentials` (401), `rate_limited` (429, with
- * `Retry-After`), `forbidden` (403: the profile may not use the web channel, AUTH-3), everything else
- * (503, network, unexpected) is "unavailable". A 400 is answered like a wrong credential: no detail leaks.
+ * Maps a failed login to the UI reason. Server codes: `invalid_credentials` (401, also covers an
+ * account whose profile may not use the web channel — AUTH-3 is folded into it on purpose so the
+ * response never reveals *why* a login failed, only *that* it failed), `rate_limited` (429, with
+ * `Retry-After`), everything else (403, 503, network, unexpected) is "unavailable". A 400 is
+ * answered like a wrong credential: no detail leaks.
+ *
+ * A 403 on `/auth/login` is never a business-rule refusal: the access guard rejects cross-site/
+ * disallowed-origin requests with a generic 403 *before* the login handler runs (see `csrf.ts`),
+ * so it must not be shown as "channel_forbidden" (that message is reserved for a real channel
+ * restriction, which today never reaches this status code). Mapping it to "unavailable" avoids
+ * displaying a specific, wrong reason for what is actually a request the server never evaluated.
  */
 export function mapLoginFailure(error: ApiRequestError): Extract<LoginResult, { ok: false }> {
   const correlationId = error.correlationId;
@@ -30,8 +38,6 @@ export function mapLoginFailure(error: ApiRequestError): Extract<LoginResult, { 
     case 400:
     case 401:
       return { ok: false, reason: "invalid_credentials", correlationId };
-    case 403:
-      return { ok: false, reason: "channel_forbidden", correlationId };
     case 429:
       return { ok: false, reason: "rate_limited", retryAfterSeconds: error.retryAfterSeconds, correlationId };
     default:

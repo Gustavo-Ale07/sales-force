@@ -32,7 +32,12 @@ export type LoginFailureReason =
   /** Progressive lockout after repeated failures. */
   | "locked"
   | "rate_limited"
-  /** The profile may not use the web channel (enforced by the server). */
+  /**
+   * The profile may not use the web channel (AUTH-3, enforced by the server). Currently unreachable:
+   * today the server folds this case into `invalid_credentials` to avoid revealing the reason a login
+   * failed (see `mapLoginFailure`). Kept for the UI copy it already has, ready for when AUTH-3 gets its
+   * own distinguishable server signal.
+   */
   | "channel_forbidden"
   /** Network failure, 5xx or auth service not wired. */
   | "unavailable";

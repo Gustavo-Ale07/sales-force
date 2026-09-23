@@ -50,4 +50,34 @@ async function bootstrap() {
   );
 }
 
-void bootstrap();
+void bootstrap().catch((error: unknown) => {
+  // Nothing in bootstrap() is expected to throw, but a silent rejection here would leave #root
+  // empty with no signal at all. Render a visible, actionable fallback instead of a white screen.
+  console.error("Falha ao iniciar o aplicativo:", error);
+  const container = document.getElementById("root");
+  if (!container) return;
+  container.innerHTML = "";
+  const wrapper = document.createElement("div");
+  wrapper.setAttribute(
+    "style",
+    "display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px;font-family:system-ui,sans-serif;background:#f4f5f7;color:#1a1a2e;text-align:center;",
+  );
+  const box = document.createElement("div");
+  box.setAttribute("style", "max-width:420px;");
+  const title = document.createElement("h1");
+  title.textContent = "Não foi possível iniciar o aplicativo";
+  title.setAttribute("style", "font-size:18px;font-weight:600;margin:0 0 8px;");
+  const description = document.createElement("p");
+  description.textContent = "Recarregue a página. Se o problema continuar, fale com o administrador.";
+  description.setAttribute("style", "font-size:14px;color:#4a4a5a;margin:0 0 16px;");
+  const button = document.createElement("button");
+  button.textContent = "Recarregar";
+  button.setAttribute(
+    "style",
+    "font-size:14px;font-weight:600;padding:8px 20px;border-radius:8px;border:none;background:#001369;color:#fff;cursor:pointer;",
+  );
+  button.addEventListener("click", () => window.location.reload());
+  box.append(title, description, button);
+  wrapper.append(box);
+  container.append(wrapper);
+});

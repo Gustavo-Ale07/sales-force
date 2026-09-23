@@ -131,13 +131,15 @@ describe("login page", () => {
     expect(alert).toHaveTextContent("2 minutos");
   });
 
-  it("explains that the profile only uses the mobile app when the channel is forbidden", async () => {
+  it("never shows the mobile-only channel message for a CORS/origin rejection (403)", async () => {
     const { user } = renderApp("/login", {
       signedIn: false,
-      handlers: { "POST /auth/login": apiError(403, "forbidden", "Canal não permitido.") },
+      handlers: { "POST /auth/login": apiError(403, "forbidden", "Origem não permitida.") },
     });
     await typeCredentials(user);
-    expect(await screen.findByRole("alert")).toHaveTextContent("Este perfil acessa somente pelo aplicativo móvel.");
+    const alert = await screen.findByRole("alert");
+    expect(alert).not.toHaveTextContent("Este perfil acessa somente pelo aplicativo móvel.");
+    expect(alert).toHaveTextContent("Não foi possível entrar agora.");
   });
 
   it("shows the unavailable state on a server failure", async () => {
