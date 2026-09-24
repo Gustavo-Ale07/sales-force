@@ -20,7 +20,9 @@
     "@tanstack/react-router": "^1.170.38",
     "lucide-react": "^1.47.0",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "read-excel-file": "^9.3.10",
+    "unpdf": "^1.8.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",

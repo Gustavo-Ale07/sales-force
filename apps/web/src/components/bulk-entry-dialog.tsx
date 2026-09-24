@@ -14,14 +14,19 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
   Textarea,
 } from "@salesforce/ui";
 import { useMutation } from "@tanstack/react-query";
 import { useMemo, useState, type ChangeEvent } from "react";
+import { EntryFileError, entryFileFailureMessages, readEntryFile } from "../lib/entry-file";
+import { ProductMultiSelect, quantityProblem, type ProductSelection } from "./product-multi-select";
 import { resolveProducts } from "../lib/api-mutations";
 import { useApi } from "../lib/app-context";
 import {
-  MAX_ENTRY_BYTES,
   MAX_ORDER_ROWS,
   entryFailureMessages,
   identifiersToResolve,
@@ -52,7 +57,10 @@ export interface BulkEntryDialogProps {
 
 const EXAMPLE = "2001;5\n2002;2,5\nBL-09-VM;10";
 
-/** "Lançamento múltiplo": paste `código;quantidade` lines or read a CSV, review what each line does, then add. */
+/**
+ * "Lançamento múltiplo", two ways in: tick many products from the list, or import a file (CSV, TXT, Excel, PDF)
+ * / paste `código;quantidade` lines and review what each line does. Nothing is added before the seller confirms.
+ */
 export function BulkEntryDialog({ open, onOpenChange, ...rest }: BulkEntryDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -77,6 +85,9 @@ function BulkEntryContent({
   const [text, setText] = useState("");
   const [inputError, setInputError] = useState<string | null>(null);
   const [review, setReview] = useState<Review | null>(null);
+  const [tab, setTab] = useState<"produtos" | "arquivo">("produtos");
+  const [selection, setSelection] = useState<ProductSelection>(new Map());
+  const [fileNote, setFileNote] = useState<string | null>(null);
 
   const resolve = useMutation({
     mutationFn: async (rows: EntryRow[]) => {
@@ -110,21 +121,37 @@ function BulkEntryContent({
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    // The size is checked before the file is read into memory.
-    if (file.size > MAX_ENTRY_BYTES) {
-      setReview(null);
-      setInputError(entryFailureMessages.too_large);
-      return;
+    setReview(null);
+    setFileNote(null);
+    try {
+      const { text: content, ignoredLines } = await readEntryFile(file);
+      if (ignoredLines > 0) {
+        setFileNote(
+          `${ignoredLines === 1 ? "1 linha do PDF não parecia" : `${ignoredLines} linhas do PDF não pareciam`} "código quantidade" e não foi lida. Confira a lista abaixo.`,
+        );
+      }
+      setText(content);
+      check(content);
+    } catch (error) {
+      setInputError(entryFileFailureMessages[error instanceof EntryFileError ? error.reason : "unreadable"]);
     }
-    const content = await file.text();
-    setText(content);
-    check(content);
   };
+
+  const pickedItems = useMemo(
+    () => [...selection.values()].map((picked) => ({ product: picked.product, quantityText: picked.quantityText.trim() === "" ? "1" : picked.quantityText.trim() })),
+    [selection],
+  );
+  const pickedProblem = [...selection.values()].some((picked) => quantityProblem(picked.quantityText) !== null);
 
   const toAdd = useMemo(() => review?.planned.filter((entry) => entry.skip === null && entry.product !== null) ?? [], [review]);
   const leftOut = review ? review.planned.length - toAdd.length : 0;
   const overLimit = existingCount + toAdd.length > MAX_ORDER_ROWS;
   const failure = resolve.isError ? describeApiError(resolve.error, "Não foi possível conferir os produtos") : null;
+
+  const confirmPicked = () => {
+    onAdd(pickedItems);
+    onClose();
+  };
 
   const confirm = () => {
     onAdd(toAdd.flatMap((entry) => (entry.product ? [{ product: entry.product, quantityText: entry.row.quantityText.trim() }] : [])));
@@ -134,14 +161,18 @@ function BulkEntryContent({
   return (
     <DialogContent
       title="Lançamento múltiplo"
-      description="Cole uma linha por produto ou leia um arquivo CSV. Nada é adicionado antes de você conferir."
+      description="Escolha vários produtos de uma vez ou importe uma lista. Nada é adicionado antes de você conferir."
       className="max-w-3xl"
       footer={
         <>
           <DialogClose asChild>
             <Button variant="secondary">Cancelar</Button>
           </DialogClose>
-          {review ? (
+          {tab === "produtos" ? (
+            <Button variant="primary" disabled={pickedItems.length === 0 || pickedProblem} onClick={confirmPicked}>
+              {pickedItems.length === 1 ? "Adicionar 1 item" : `Adicionar ${pickedItems.length} itens`}
+            </Button>
+          ) : review ? (
             <Button variant="primary" disabled={toAdd.length === 0 || overLimit} onClick={confirm}>
               {toAdd.length === 1 ? "Adicionar 1 item" : `Adicionar ${toAdd.length} itens`}
             </Button>
@@ -153,6 +184,30 @@ function BulkEntryContent({
         </>
       }
     >
+      <Tabs value={tab} onValueChange={(value) => setTab(value === "arquivo" ? "arquivo" : "produtos")}>
+        <TabsList aria-label="Como lançar os itens">
+          <TabsTrigger value="produtos">Selecionar produtos</TabsTrigger>
+          <TabsTrigger value="arquivo">Importar arquivo</TabsTrigger>
+        </TabsList>
+        <TabsContent value="produtos">
+          <ProductMultiSelect
+            customerCode={customerCode}
+            selection={selection}
+            onSelectionChange={setSelection}
+            existingCodes={planContext.existingCodes}
+            isPriceOrderable={planContext.isPriceOrderable}
+            remainingSlots={Math.max(0, MAX_ORDER_ROWS - existingCount)}
+          />
+          {selection.size > 0 ? (
+            <p className="m-0 mt-2 flex items-center gap-2 text-sm" aria-live="polite">
+              <strong>{selection.size === 1 ? "1 produto selecionado" : `${selection.size} produtos selecionados`}</strong>
+              <button type="button" className="text-xs text-accent hover:underline" onClick={() => setSelection(new Map())}>
+                Limpar seleção
+              </button>
+            </p>
+          ) : null}
+        </TabsContent>
+        <TabsContent value="arquivo">
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
           <label htmlFor="bulk-entry-text" className="text-xs font-medium">
@@ -177,17 +232,25 @@ function BulkEntryContent({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <label className="text-xs font-medium" htmlFor="bulk-entry-file">
-            Ou leia um arquivo CSV/TXT
+            Ou leia um arquivo CSV, TXT, Excel (.xlsx) ou PDF
           </label>
           <input
             id="bulk-entry-file"
             type="file"
-            accept=".csv,.txt,text/csv,text/plain"
+            accept=".csv,.txt,.xlsx,.pdf,text/csv,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             className="text-xs"
             disabled={resolve.isPending}
             onChange={(event) => void onFile(event)}
           />
         </div>
+        <FieldHint>
+          Excel: identificador na 1ª coluna e quantidade na 2ª. PDF: só com texto (não escaneado), uma linha "código quantidade" por produto.
+        </FieldHint>
+        {fileNote ? (
+          <Alert tone="warning" title="Nem todo o PDF foi lido">
+            {fileNote}
+          </Alert>
+        ) : null}
         {inputError ? <FieldError>{inputError}</FieldError> : null}
         {failure ? (
           <Alert tone="danger" title={failure.title}>
@@ -234,6 +297,8 @@ function BulkEntryContent({
           </div>
         ) : null}
       </div>
+        </TabsContent>
+      </Tabs>
     </DialogContent>
   );
 }

@@ -386,6 +386,7 @@ describe("Novo pedido", () => {
       return screen.findByRole("dialog", { name: "Lançamento múltiplo" });
     };
     const paste = async (user: ReturnType<typeof renderApp>["user"], dialog: HTMLElement, text: string) => {
+      await user.click(within(dialog).getByRole("tab", { name: "Importar arquivo" }));
       await user.click(within(dialog).getByRole("textbox", { name: /Linhas/ }));
       await user.paste(text);
       await user.click(within(dialog).getByRole("button", { name: "Conferir" }));
@@ -394,6 +395,46 @@ describe("Novo pedido", () => {
     it("needs a customer first", async () => {
       renderApp("/pedidos/novo", { handlers: newOrderHandlers() });
       expect(await screen.findByRole("button", { name: "Lançamento múltiplo" })).toBeDisabled();
+    });
+
+    it("selects products from the list, with a quantity each, and adds them together", async () => {
+      const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: newOrderHandlers() });
+      const dialog = await open(user);
+      expect(within(dialog).getByRole("button", { name: "Adicionar 0 itens" })).toBeDisabled();
+      await user.click(await within(dialog).findByLabelText("Selecionar Balão látex 9 pol. vermelho"));
+      expect(within(dialog).getByRole("button", { name: "Adicionar 1 item" })).toBeEnabled();
+      await user.type(within(dialog).getByLabelText("Quantidade de Balão látex 9 pol. vermelho"), "4");
+      await user.click(within(dialog).getByRole("button", { name: "Adicionar 1 item" }));
+      expect(screen.getByLabelText("Quantidade de Balão látex 9 pol. vermelho")).toHaveValue("4");
+      expect(screen.queryByRole("dialog", { name: "Lançamento múltiplo" })).not.toBeInTheDocument();
+    });
+
+    it("selects every orderable product of the page at once and defaults the quantity to 1", async () => {
+      const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: newOrderHandlers() });
+      const dialog = await open(user);
+      await user.click(await within(dialog).findByLabelText("Selecionar todos os produtos desta página"));
+      await user.click(within(dialog).getByRole("button", { name: "Adicionar 2 itens" }));
+      expect(screen.getByLabelText("Quantidade de Balão látex 9 pol. vermelho")).toHaveValue("1");
+      expect(screen.getByLabelText("Quantidade de Vela sem preço")).toHaveValue("1");
+    });
+
+    it("does not let a product without price be selected when the installation forbids it", async () => {
+      const { user } = renderApp("/pedidos/novo?customer=1001", {
+        handlers: newOrderHandlers(
+          withConfiguration((config) => ({ ...config, sales: { ...config.sales, orderBehavior: { allowDraftWithoutPrice: false } } })),
+        ),
+      });
+      const dialog = await open(user);
+      expect(await within(dialog).findByLabelText("Selecionar Vela sem preço")).toBeDisabled();
+      expect(within(dialog).getByLabelText("Selecionar Balão látex 9 pol. vermelho")).toBeEnabled();
+    });
+
+    it("blocks adding while a selected quantity is invalid", async () => {
+      const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: newOrderHandlers() });
+      const dialog = await open(user);
+      await user.type(await within(dialog).findByLabelText("Quantidade de Balão látex 9 pol. vermelho"), "0");
+      expect(await within(dialog).findByText("A quantidade deve ser maior que zero.")).toBeInTheDocument();
+      expect(within(dialog).getByRole("button", { name: "Adicionar 1 item" })).toBeDisabled();
     });
 
     it("resolves the pasted lines on the server, shows what each one does and adds only the good ones", async () => {
