@@ -308,6 +308,22 @@ describe("Rascunhos (orders)", () => {
     expect(await within(dialog).findByText("req-d-1")).toBeInTheDocument();
   });
 
+  it("shows the creation date and filters by customer through the selector, sending only the code", async () => {
+    const { user, calls } = renderApp("/pedidos", {
+      handlers: {
+        "GET /orders": { body: ordersPage([orderListItem()]) },
+        "GET /customers": { body: customersPage([customer(), customer({ code: 1002, name: "Beta Ltda" })]) },
+        "GET /customers/:code": { body: customerDetail({ code: 1002, name: "Beta Ltda" }) },
+      },
+    });
+    expect(await screen.findByRole("heading", { name: "Vendas" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Data" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Filtrar por cliente/ }));
+    await user.click(await screen.findByRole("button", { name: /Beta Ltda/ }));
+    await waitFor(() => expect(callsTo(calls, "GET", "/orders").some((call) => call.search.get("customerCode") === "1002")).toBe(true));
+    expect(await screen.findByRole("button", { name: /Filtrar por cliente/ })).toHaveTextContent("Beta Ltda");
+  });
+
   it("shows the empty and error states", async () => {
     const empty = renderApp("/pedidos", { handlers: { "GET /orders": { body: ordersPage([]) } } });
     expect(await screen.findByText("Nenhum pedido ainda")).toBeInTheDocument();

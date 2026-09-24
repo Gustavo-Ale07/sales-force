@@ -29,9 +29,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ClipboardList, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { CustomerPicker } from "../components/customer-picker";
 import { DiscardOrderDialog } from "../components/discard-order-dialog";
 import { QueryError } from "../components/query-error";
-import { ordersQueryOptions, type OrdersParams } from "../lib/api-queries";
+import { customerQueryOptions, ordersQueryOptions, type OrdersParams } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { formatCount, orderReference, orderStatusLabels } from "../lib/labels";
 import { ORDER_STATUSES, type OrdersSearch } from "../lib/route-search";
@@ -55,7 +56,21 @@ export interface OrdersPageProps {
   onOpenOrder: (id: string) => void;
 }
 
-const COLUMNS = 7;
+const COLUMNS = 8;
+
+/** Customer filter: the same selector modal as the new sale; the URL only carries the code, the name is read for display. */
+function CustomerFilter({ code, onChange }: { code: number | undefined; onChange: (code: number | undefined) => void }) {
+  const api = useApi();
+  const customer = useQuery({ ...customerQueryOptions(api, code ?? 0), enabled: code !== undefined, staleTime: 30_000 });
+  return (
+    <CustomerPicker
+      compact
+      aria-label="Filtrar por cliente"
+      selected={code === undefined ? null : { code, name: customer.data?.name ?? "" }}
+      onSelect={(picked) => onChange(picked?.code)}
+    />
+  );
+}
 
 export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPageProps) {
   const api = useApi();
@@ -72,9 +87,9 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
   return (
     <>
       <PageHeader
-        title="Pedidos e rascunhos"
+        title="Vendas"
         icon={<ClipboardList size={16} aria-hidden="true" />}
-        description="Abra, edite ou descarte rascunhos. O envio ao ERP ainda não está habilitado nesta instalação."
+        description="Pedidos e rascunhos. O envio ao ERP ainda não está habilitado nesta instalação."
         actions={
           <Button asChild variant="primary" leftIcon={<Plus size={14} aria-hidden="true" />}>
             <Link to="/pedidos/novo">Novo pedido</Link>
@@ -83,7 +98,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
       />
 
       <FilterBar aria-label="Filtros de pedidos">
-        <FilterField label="Busca" className="min-w-[220px] flex-1">
+        <FilterField label="Nº do pedido ou cliente" className="min-w-[220px] flex-1">
           <SearchInput
             size="sm"
             value={searchText}
@@ -91,6 +106,9 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
             placeholder="Número ou cliente"
             aria-label="Buscar pedido por número ou cliente"
           />
+        </FilterField>
+        <FilterField label="Cliente" className="min-w-[240px] flex-1">
+          <CustomerFilter code={params.customerCode} onChange={(customerCode) => change({ customerCode })} />
         </FilterField>
         <FilterField label="Situação" className="w-[180px]">
           <Select size="sm" value={params.status ?? ""} onChange={(e) => change({ status: asOneOf(e.target.value, ORDER_STATUSES) })}>
@@ -129,6 +147,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
                 Pedido
               </SortableHead>
               <TableHead>Cliente</TableHead>
+              <TableHead>Data</TableHead>
               <TableHead>Situação</TableHead>
               <TableHead numeric>Itens</TableHead>
               <TableHead numeric>Total estimado</TableHead>
@@ -174,6 +193,9 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
                       <span className="font-medium">{orderReference(order)}</span>
                     </TableCell>
                     <TableCell wrap>{order.customerName}</TableCell>
+                    <TableCell>
+                      <DateText value={order.createdAt} />
+                    </TableCell>
                     <TableCell>
                       <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
                     </TableCell>

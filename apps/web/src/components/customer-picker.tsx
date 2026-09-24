@@ -118,6 +118,8 @@ export interface CustomerPickerProps {
   selected: PickedCustomer | null;
   onSelect: (customer: ApiSchema<"CustomerListItem"> | null) => void;
   disabled?: boolean;
+  /** Same height as the small inputs of a filter bar (default matches the form fields). */
+  compact?: boolean;
   id?: string;
   "aria-describedby"?: string;
   "aria-labelledby"?: string;
@@ -130,7 +132,7 @@ export interface CustomerPickerProps {
  * over `GET /customers` (scoped by the server), never a text dropdown. The selected customer can be removed
  * with the "×" beside the field.
  */
-export function CustomerPicker({ selected, onSelect, disabled, ...aria }: CustomerPickerProps) {
+export function CustomerPicker({ selected, onSelect, disabled, compact, ...aria }: CustomerPickerProps) {
   const [open, setOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   return (
@@ -143,7 +145,8 @@ export function CustomerPicker({ selected, onSelect, disabled, ...aria }: Custom
             disabled={disabled}
             aria-haspopup="dialog"
             className={cn(
-              "flex h-[30px] w-full min-w-0 items-center gap-2 rounded-md border border-line-strong bg-surface px-2.5 text-left text-sm text-fg",
+              compact ? "h-[26px]" : "h-[30px]",
+              "flex w-full min-w-0 items-center gap-2 rounded-md border border-line-strong bg-surface px-2.5 text-left text-sm text-fg",
               "hover:border-accent focus-visible:border-accent focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-fg-muted",
               "aria-[invalid=true]:border-danger aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-danger",
               selected ? "pr-8" : "",

@@ -137,7 +137,7 @@ export function AppShell({ user, onLogout, children }: AppShellProps) {
             <DrawerNav role={user?.role} onNavigate={() => setNavOpen(false)} />
           </DrawerContent>
         </Drawer>
-        <Brand tone="dark" size="md" className="shrink-0" />
+        <Brand tone="dark" size="md" className="shrink-0 max-sm:[&>span:last-child]:hidden" />
         <div className="flex min-w-0 flex-1 items-center justify-center">
           <TopNav role={user?.role} />
         </div>

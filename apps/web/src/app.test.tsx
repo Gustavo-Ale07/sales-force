@@ -165,7 +165,7 @@ describe("login page", () => {
       },
     });
     await typeCredentials(user);
-    expect(await screen.findByRole("heading", { name: "Pedidos e rascunhos" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Vendas" })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/pedidos");
   });
 
