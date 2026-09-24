@@ -192,6 +192,16 @@ describe("Novo pedido", () => {
       expect(screen.queryByRole("button", { name: "Ficha do cliente" })).not.toBeInTheDocument();
     });
 
+    it("pins a customer context bar with document, price table, credit limit and status", async () => {
+      renderApp("/pedidos/novo?customer=1001", { handlers: fichaHandlers() });
+      const bar = await screen.findByRole("region", { name: "Cliente do pedido" });
+      expect(bar).toHaveTextContent("Cliente: 1001 – Comercial Alfa Ltda");
+      expect(await within(bar).findByText(/11\.222\.333\/0001-81/)).toBeInTheDocument();
+      expect(within(bar).getByText("5 – Tabela Varejo")).toBeInTheDocument();
+      expect(within(bar).getByText(/5\.000,00/)).toBeInTheDocument();
+      expect(within(bar).getByText("Ativo")).toBeInTheDocument();
+    });
+
     it("opens a modal with the five tabs over the order, without leaving it", async () => {
       const { user, router } = renderApp("/pedidos/novo?customer=1001", { handlers: fichaHandlers() });
       await user.click(await screen.findByRole("button", { name: "Ficha do cliente" }));

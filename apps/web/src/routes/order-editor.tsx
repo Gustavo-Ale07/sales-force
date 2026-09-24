@@ -31,9 +31,10 @@ import {
 } from "@salesforce/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useBlocker } from "@tanstack/react-router";
-import { BookmarkPlus, IdCard, Save, Send, ShoppingCart, Trash2, X } from "lucide-react";
+import { BookmarkPlus, Save, Send, ShoppingCart, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { BulkEntryDialog, type BulkEntryItem } from "../components/bulk-entry-dialog";
+import { CustomerContextBar } from "../components/customer-context-bar";
 import { CustomerFichaDialog } from "../components/customer-ficha";
 import { CustomerPicker, type PickedCustomer } from "../components/customer-picker";
 import { DiscardOrderDialog } from "../components/discard-order-dialog";
@@ -398,6 +399,8 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
         badges={status ? <StatusBadge tone={status.tone}>{status.label}</StatusBadge> : <Badge tone="neutral">Novo</Badge>}
       />
 
+      {customer ? <CustomerContextBar customerCode={customer.code} customerName={customer.name} onOpenFicha={() => setFichaOpen(true)} /> : null}
+
       {notice}
       {!installationEnabled ? (
         <Alert tone="warning" title="Pedidos ainda não habilitados">
@@ -432,14 +435,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
           <CardBody className="grid gap-3 md:grid-cols-2">
             <FormField label="Cliente" required>
               {(controlProps) => (
-                <div className="flex items-center gap-2">
-                  <CustomerPicker {...controlProps} selected={customer} onSelect={(picked) => requestCustomer(picked)} disabled={readOnly} />
-                  {customer ? (
-                    <Button variant="secondary" size="sm" leftIcon={<IdCard size={13} aria-hidden="true" />} onClick={() => setFichaOpen(true)} className="shrink-0">
-                      Ficha do cliente
-                    </Button>
-                  ) : null}
-                </div>
+                <CustomerPicker {...controlProps} selected={customer} onSelect={(picked) => requestCustomer(picked)} disabled={readOnly} />
               )}
             </FormField>
             <FormField label="Tipo de negociação" hint={config.isError ? "Tipos de negociação indisponíveis no momento." : undefined}>
@@ -682,7 +678,12 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
           </CardBody>
         </Card>
 
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="sticky bottom-0 z-20 -mx-3 flex flex-wrap items-center justify-end gap-2 border-t border-line bg-surface px-3 py-2 shadow-[0_-2px_6px_rgba(0,0,0,0.06)] md:-mx-6 md:px-6">
+          <p className="m-0 mr-auto text-sm text-fg-muted">
+            Total: <strong className="text-base text-ok">
+              <Money value={preview.totals.estimatedTotal} />
+            </strong>
+          </p>
           <Button type="button" variant="ghost" leftIcon={<X size={14} aria-hidden="true" />} onClick={onClose}>
             {readOnly ? "Voltar" : "Cancelar"}
           </Button>
