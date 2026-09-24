@@ -1,0 +1,17 @@
+{
+  "name": "@salesforce/mobile-db",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Local database of the mobile app. STUB: no encrypted SQLite library is selected until spike S7 (V-09)",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@salesforce/config": "workspace:*",
+    "typescript": "~6.0.3"
+  }
+}
