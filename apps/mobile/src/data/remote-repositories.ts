@@ -1,0 +1,36 @@
+import { callApi, type ApiClient } from "./api";
+import type { CustomerRepository, ProductRepository, Repositories } from "./ports";
+
+/**
+ * Online adapters of the repository ports over the scoped read endpoints. The server decides which rows the
+ * actor may see (P-21); nothing here filters by role. Prices are list prices as returned (P-09), never edited.
+ */
+export function createRemoteCustomerRepository(api: ApiClient): CustomerRepository {
+  return {
+    async list({ search, page, pageSize }) {
+      const body = await callApi(() =>
+        api.GET("/customers", {
+          params: { query: { search: search === "" ? undefined : search, page, pageSize, sort: "name" } },
+        }),
+      );
+      return { items: body.items, page: body.page, pageSize: body.pageSize, total: body.total };
+    },
+  };
+}
+
+export function createRemoteProductRepository(api: ApiClient): ProductRepository {
+  return {
+    async list({ search, page, pageSize }) {
+      const body = await callApi(() =>
+        api.GET("/products", {
+          params: { query: { search: search === "" ? undefined : search, page, pageSize, sort: "description" } },
+        }),
+      );
+      return { items: body.items, page: body.page, pageSize: body.pageSize, total: body.total };
+    },
+  };
+}
+
+export function createRemoteRepositories(api: ApiClient): Repositories {
+  return { customers: createRemoteCustomerRepository(api), products: createRemoteProductRepository(api) };
+}

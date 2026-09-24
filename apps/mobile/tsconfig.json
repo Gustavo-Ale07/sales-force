@@ -1,0 +1,12 @@
+{
+  "extends": "@salesforce/config/tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-native",
+    "noEmit": true,
+    "declaration": false,
+    "types": ["jest"]
+  },
+  "include": ["index.ts", "App.tsx", "src"]
+}

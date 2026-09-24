@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "PLAC Sales Force",
+    "slug": "plac-sales-force",
+    "version": "0.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "salesforce",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "br.com.plac.salesforce.dev"
+    },
+    "android": {
+      "package": "br.com.plac.salesforce.dev"
+    },
+    "extra": {
+      "notice": "Identificadores de pacote provisorios de desenvolvimento; o identificador definitivo depende da conta de loja (MOB-3) e nao foi decidido."
+    }
+  }
+}
