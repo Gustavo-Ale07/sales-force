@@ -83,7 +83,7 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
   return (
     <>
       <PageHeader
-        title="Carteira de clientes"
+        title="Clientes"
         icon={<Users size={16} aria-hidden="true" />}
         description="Clientes da sua carteira, conforme o escopo definido pelo servidor."
       />

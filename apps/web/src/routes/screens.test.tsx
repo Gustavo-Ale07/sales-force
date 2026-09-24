@@ -106,7 +106,7 @@ describe("Carteira (customers)", () => {
 
   it("shows skeleton rows while loading", async () => {
     renderApp("/clientes", { handlers: { "GET /customers": () => new Promise(() => undefined) } });
-    expect(await screen.findByRole("heading", { name: "Carteira de clientes" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Clientes", level: 1 })).toBeInTheDocument();
     expect(document.querySelector("[aria-busy='true']")).not.toBeNull();
   });
 

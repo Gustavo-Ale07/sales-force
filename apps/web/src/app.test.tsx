@@ -21,7 +21,7 @@ describe("session guard", () => {
 
   it("renders the shell with active navigation and breadcrumbs for a signed-in user", async () => {
     renderApp("/clientes", { handlers: shellData });
-    expect(await screen.findByRole("heading", { name: "Carteira de clientes" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Clientes", level: 1 })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Clientes" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("navigation", { name: /Trilha|Breadcrumb|Você está em/i })).toBeInTheDocument();
     await waitFor(() => expect(document.title).toBe("Clientes — Sales Force"));
@@ -29,7 +29,7 @@ describe("session guard", () => {
 
   it("uses the installation name from the runtime configuration, never a built-in brand", async () => {
     renderApp("/clientes", { handlers: shellData, config: { installationName: "Instalação Teste" } });
-    expect(await screen.findByRole("heading", { name: "Carteira de clientes" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Clientes", level: 1 })).toBeInTheDocument();
     expect(screen.getAllByText("Instalação Teste").length).toBeGreaterThan(0);
     await waitFor(() => expect(document.title).toBe("Clientes — Instalação Teste"));
   });
