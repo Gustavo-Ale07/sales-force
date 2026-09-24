@@ -467,10 +467,12 @@ describe("Editor de pedido: Salvar como recorrente", () => {
     ...extra,
   });
   const addProduct = async (user: ReturnType<typeof renderApp>["user"], description: string) => {
-    const combobox = await screen.findByRole("combobox", { name: /Adicionar produto/ });
-    await waitFor(() => expect(combobox).toBeEnabled());
-    await user.click(combobox);
-    await user.click(await screen.findByRole("option", { name: new RegExp(description) }));
+    const produtos = await screen.findByRole("button", { name: "Produtos" });
+    if (produtos.getAttribute("aria-pressed") !== "true") await user.click(produtos);
+    const add = await screen.findByRole("button", { name: new RegExp(`^Adicionar .*${description}`) });
+    await waitFor(() => expect(add).toBeEnabled());
+    await user.click(add);
+    await user.click(screen.getByRole("button", { name: /^Carrinho/ }));
   };
   const openSave = async (user: ReturnType<typeof renderApp>["user"]) => {
     await user.click(await screen.findByRole("button", { name: "Salvar como recorrente" }));

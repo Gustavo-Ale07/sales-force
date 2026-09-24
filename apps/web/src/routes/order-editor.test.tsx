@@ -33,11 +33,14 @@ const newOrderHandlers = (extra: Handlers = {}): Handlers => ({
   ...extra,
 });
 
+/** Adds a product from the "Produtos" table, then shows the cart (where the lines are edited). */
 async function addProduct(user: ReturnType<typeof renderApp>["user"], description: string) {
-  const combobox = await screen.findByRole("combobox", { name: /Adicionar produto/ });
-  await waitFor(() => expect(combobox).toBeEnabled());
-  await user.click(combobox);
-  await user.click(await screen.findByRole("option", { name: new RegExp(description) }));
+  const produtos = await screen.findByRole("button", { name: "Produtos" });
+  if (produtos.getAttribute("aria-pressed") !== "true") await user.click(produtos);
+  const add = await screen.findByRole("button", { name: new RegExp(`^Adicionar .*${description}`) });
+  await waitFor(() => expect(add).toBeEnabled());
+  await user.click(add);
+  await user.click(screen.getByRole("button", { name: /^Carrinho/ }));
 }
 
 const withConfiguration = (patch: (config: ApiSchema<"ConfigurationSummary">) => ApiSchema<"ConfigurationSummary">): Handlers => ({
@@ -48,7 +51,9 @@ describe("Novo pedido", () => {
   it("cannot pick products before a customer is chosen", async () => {
     renderApp("/pedidos/novo", { handlers: newOrderHandlers() });
     expect(await screen.findByRole("heading", { name: /^Novo pedido/ })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: /Adicionar produto/ })).toBeDisabled();
+    expect(screen.getByText("Selecione o cliente")).toBeInTheDocument();
+    expect(screen.queryByRole("searchbox", { name: "Buscar produto" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Lançamento múltiplo" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Salvar rascunho" })).toBeDisabled();
   });
 
@@ -233,12 +238,15 @@ describe("Novo pedido", () => {
     expect(screen.getByRole("button", { name: /^Cliente/ })).toBeEnabled();
   });
 
-  it("rejects a duplicate product and an invalid quantity", async () => {
+  it("offers a product only once and rejects an invalid quantity", async () => {
     const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: newOrderHandlers() });
     await addProduct(user, "Balão");
-    await addProduct(user, "Balão");
-    expect(await screen.findByText("Produto já está no pedido")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Carrinho (1)" })).toBeInTheDocument();
     expect(screen.getAllByLabelText("Quantidade de Balão látex 9 pol. vermelho")).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: "Produtos" }));
+    expect(await screen.findByText("No carrinho: 1")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Adicionar Balão/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^Carrinho/ }));
 
     const quantity = screen.getByLabelText("Quantidade de Balão látex 9 pol. vermelho");
     await user.clear(quantity);
@@ -246,6 +254,58 @@ describe("Novo pedido", () => {
     expect(await screen.findByText("Use vírgula como separador decimal.")).toBeInTheDocument();
     expect(quantity).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByRole("button", { name: "Salvar rascunho" })).toBeDisabled();
+  });
+
+  describe("Produtos | Carrinho", () => {
+    const groupHandlers = (): Handlers =>
+      newOrderHandlers({ "GET /product-groups": { body: { items: [{ code: 7, name: "Balões" }, { code: 8, name: "Velas" }] } } });
+
+    it("filters the table by group and search on the server, for the selected customer's price table", async () => {
+      const { user, calls } = renderApp("/pedidos/novo?customer=1001", { handlers: groupHandlers() });
+      await screen.findByRole("button", { name: /^Adicionar .*Balão/ });
+      await user.selectOptions(await screen.findByRole("combobox", { name: "Grupo" }), "7");
+      await waitFor(() => expect(callsTo(calls, "GET", "/products").some((call) => call.search.get("group") === "7")).toBe(true));
+      const filtered = callsTo(calls, "GET", "/products").find((call) => call.search.get("group") === "7");
+      expect(filtered?.search.get("customerCode")).toBe("1001");
+      expect(filtered?.search.get("sellable")).toBe("true");
+
+      await user.type(screen.getByRole("searchbox", { name: "Buscar produto" }), "vela");
+      await waitFor(() => expect(callsTo(calls, "GET", "/products").some((call) => call.search.get("search") === "vela")).toBe(true));
+    });
+
+    it("adds with the typed quantity (Enter or button), keeps the filters when switching views, and counts the cart", async () => {
+      const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: groupHandlers() });
+      const search = await screen.findByRole("searchbox", { name: "Buscar produto" });
+      await user.type(search, "bal");
+      const quantity = await screen.findByLabelText("Quantidade de Balão látex 9 pol. vermelho a adicionar");
+      await user.type(quantity, "2,5{Enter}");
+      expect(await screen.findByText("No carrinho: 2,5")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Carrinho (1)" })).toHaveAttribute("aria-pressed", "false");
+
+      await user.click(screen.getByRole("button", { name: "Carrinho (1)" }));
+      expect(screen.getByLabelText("Quantidade de Balão látex 9 pol. vermelho")).toHaveValue("2,5");
+      expect(screen.queryByRole("searchbox", { name: "Buscar produto" })).not.toBeInTheDocument();
+      expect(screen.getByTestId("order-total")).toHaveTextContent("31,25");
+
+      await user.click(screen.getByRole("button", { name: "Produtos" }));
+      expect(screen.getByRole("searchbox", { name: "Buscar produto" })).toHaveValue("bal");
+    });
+
+    it("refuses an invalid quantity in the table without adding the product", async () => {
+      const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: groupHandlers() });
+      const quantity = await screen.findByLabelText("Quantidade de Balão látex 9 pol. vermelho a adicionar");
+      await user.type(quantity, "2.5");
+      await user.click(screen.getByRole("button", { name: /^Adicionar .*Balão/ }));
+      expect(await screen.findByText("Use vírgula como separador decimal.")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Carrinho (0)" })).toBeInTheDocument();
+    });
+
+    it("opens a saved order on the cart", async () => {
+      renderApp(`/pedidos/${ORDER_ID}`, {
+        handlers: newOrderHandlers({ "GET /orders/:id": { body: orderDetail({ items: [orderItem()] }) } }),
+      });
+      expect(await screen.findByRole("button", { name: "Carrinho (1)" })).toHaveAttribute("aria-pressed", "true");
+    });
   });
 
   describe("fast entry", () => {
@@ -263,7 +323,7 @@ describe("Novo pedido", () => {
       await user.keyboard("{Enter}");
       expect(screen.getByLabelText(VELA)).toHaveFocus();
       await user.keyboard("{Enter}");
-      expect(screen.getByRole("combobox", { name: /Adicionar produto/ })).toHaveFocus();
+      expect(screen.getByRole("searchbox", { name: "Buscar produto" })).toHaveFocus();
       expect(callsTo(calls, "POST", "/orders")).toHaveLength(0);
     });
 
@@ -280,7 +340,7 @@ describe("Novo pedido", () => {
       // The bar that had the focus is gone: the undo button takes it (keyboard users keep their place).
       expect(screen.getByRole("button", { name: "Desfazer" })).toHaveFocus();
       await user.click(screen.getByRole("button", { name: "Desfazer" }));
-      expect(screen.getByRole("combobox", { name: /Adicionar produto/ })).toHaveFocus();
+      expect(screen.getByRole("button", { name: /^Carrinho/ })).toHaveFocus();
       expect(screen.getByLabelText(BALAO)).toBeInTheDocument();
       expect(screen.queryByText("1 item removido.")).not.toBeInTheDocument();
     });

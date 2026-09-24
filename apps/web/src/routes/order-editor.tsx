@@ -39,7 +39,7 @@ import { CustomerFichaDialog } from "../components/customer-ficha";
 import { CustomerPicker, type PickedCustomer } from "../components/customer-picker";
 import { DiscardOrderDialog } from "../components/discard-order-dialog";
 import { NO_PRICE_TEXT, PriceCell } from "../components/price-cell";
-import { ProductPicker } from "../components/product-picker";
+import { INITIAL_PRODUCT_FILTERS, ProductBrowser, type ProductFilters } from "../components/product-browser";
 import { QueryError } from "../components/query-error";
 import { SaveTemplateDialog } from "../components/save-template-dialog";
 import { ApiRequestError } from "../lib/api";
@@ -67,6 +67,9 @@ export const SUBMIT_DISABLED_MESSAGE =
   "O envio de pedidos ao ERP ainda não está habilitado nesta instalação. O rascunho continua salvo e nada foi enviado.";
 
 const PRODUCT_SEARCH_ID = "order-product-search";
+const CART_VIEW_ID = "order-view-cart";
+
+type ItemsView = "produtos" | "carrinho";
 
 function newUuid(): string {
   return globalThis.crypto.randomUUID();
@@ -150,6 +153,21 @@ function FailureAlert({ failure, onReload }: { failure: FailureView; onReload?: 
   );
 }
 
+/** One half of the Produtos | Carrinho switch (pill style, `aria-pressed` so the state reaches assistive technology). */
+function ViewPill({ id, active, onClick, children }: { id?: string; active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      id={id}
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className="rounded-full px-3 py-1 text-sm font-medium text-fg-muted transition-colors hover:text-fg focus-visible:outline-2 focus-visible:outline-ring aria-pressed:bg-accent aria-pressed:text-on-accent aria-pressed:hover:text-on-accent"
+    >
+      {children}
+    </button>
+  );
+}
+
 interface EditorProps {
   order: OrderDetail | null;
   initialCustomer: PickedCustomer | null;
@@ -201,6 +219,19 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
     }
   }, [removed]);
   const quantityInputs = useRef(new Map<string, HTMLInputElement>());
+  /** "Produtos" (catalog table) or "Carrinho" (the order lines); a saved order with items opens on the cart. */
+  const [view, setView] = useState<ItemsView>(order && order.items.length > 0 ? "carrinho" : "produtos");
+  const cartQuantities = useMemo(() => new Map(lines.map((line) => [line.productCode, line.quantityText])), [lines]);
+  const [productFilters, setProductFilters] = useState<ProductFilters>(INITIAL_PRODUCT_FILTERS);
+  const [searchFocusRequest, setSearchFocusRequest] = useState(0);
+  // The product search lives in the "Produtos" view: switch to it first, then focus once it is on screen.
+  const focusProductSearch = () => {
+    setView("produtos");
+    setSearchFocusRequest((count) => count + 1);
+  };
+  useEffect(() => {
+    if (searchFocusRequest > 0) document.getElementById(PRODUCT_SEARCH_ID)?.focus();
+  }, [searchFocusRequest]);
 
   const negotiationTypeCode =
     negotiationChoice !== undefined ? negotiationChoice : (config.data?.configuration.sales.defaultNegotiationTypeCode ?? null);
@@ -316,11 +347,14 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
     setPendingCustomer(null);
   };
 
-  const addBulkEntry = (items: BulkEntryItem[]) =>
+  const addBulkEntry = (items: BulkEntryItem[]) => {
     setLines((current) => [
       ...current,
       ...items.map((item) => ({ ...lineFromProduct(item.product, nextKey()), quantityText: item.quantityText })),
     ]);
+    // The seller wants to see what the paste produced.
+    setView("carrinho");
+  };
   const planContext = {
     existingCodes: new Set(lines.map((line) => line.productCode)),
     // Until the configuration loads nothing is blocked here; the server revalidates every line on save.
@@ -357,7 +391,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
       return next;
     });
     setRemoved(null);
-    document.getElementById(PRODUCT_SEARCH_ID)?.focus();
+    document.getElementById(CART_VIEW_ID)?.focus();
   };
   const applyBulkQuantity = () => {
     const parsed = parseQuantityInput(bulkQuantity);
@@ -376,8 +410,8 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
     if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
     event.preventDefault();
     const next = lines[index + 1];
-    const target = next ? quantityInputs.current.get(next.key) : document.getElementById(PRODUCT_SEARCH_ID);
-    target?.focus();
+    if (next) quantityInputs.current.get(next.key)?.focus();
+    else focusProductSearch();
   };
 
   const updateLine = (key: string, patch: Partial<EditorLine>) =>
@@ -462,42 +496,50 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
         <Card>
           <CardHeader title="Itens" description="Preços de lista da tabela do cliente. O servidor confirma preços e totais ao salvar." />
           {!readOnly ? (
-            <CardBody className="flex flex-wrap items-end gap-2 border-b border-line">
-              <FormField
-                id={PRODUCT_SEARCH_ID}
-                className="min-w-[240px] flex-1"
-                label="Adicionar produto"
-                hint={customer ? undefined : "Selecione o cliente para consultar os preços dos produtos."}
-              >
-                {(controlProps) => (
-                  <ProductPicker
-                    {...controlProps}
-                    customerCode={customer?.code ?? 0}
-                    disabled={customer === null}
-                    onSelect={(product) => {
-                      if (lines.some((line) => line.productCode === product.code)) {
-                        toast({
-                          title: "Produto já está no pedido",
-                          description: product.description,
-                          tone: "warning",
-                        });
-                        return;
-                      }
-                      setLines((current) => [...current, lineFromProduct(product, nextKey())]);
-                    }}
-                  />
-                )}
-              </FormField>
-              <Button type="button" variant="secondary" disabled={customer === null} onClick={() => setBulkEntryOpen(true)}>
-                Lançamento múltiplo
-              </Button>
-            </CardBody>
+            <>
+              <CardBody className="flex flex-wrap items-center gap-2 border-b border-line">
+                <div role="group" aria-label="Visualização dos itens" className="inline-flex rounded-full border border-line-strong bg-surface-2 p-0.5">
+                  <ViewPill active={view === "produtos"} onClick={() => setView("produtos")}>
+                    Produtos
+                  </ViewPill>
+                  <ViewPill id={CART_VIEW_ID} active={view === "carrinho"} onClick={() => setView("carrinho")}>
+                    Carrinho ({lines.length})
+                  </ViewPill>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="rounded-full"
+                  disabled={customer === null}
+                  onClick={() => setBulkEntryOpen(true)}
+                >
+                  Lançamento múltiplo
+                </Button>
+              </CardBody>
+              {view === "produtos" ? (
+                <ProductBrowser
+                  filters={productFilters}
+                  onFiltersChange={setProductFilters}
+                  customerCode={customer?.code ?? null}
+                  cartQuantities={cartQuantities}
+                  searchId={PRODUCT_SEARCH_ID}
+                  onAdd={(product, quantityText) => {
+                    if (lines.some((line) => line.productCode === product.code)) {
+                      toast({ title: "Produto já está no pedido", description: product.description, tone: "warning" });
+                      return;
+                    }
+                    setLines((current) => [...current, { ...lineFromProduct(product, nextKey()), quantityText }]);
+                  }}
+                />
+              ) : null}
+            </>
           ) : null}
-          {lines.length === 0 ? (
-            <CardBody>
-              <p className="m-0 text-xs text-fg-muted">Nenhum item. Busque um produto acima para começar.</p>
-            </CardBody>
-          ) : (
+          {readOnly || view === "carrinho" ? (
+            lines.length === 0 ? (
+              <CardBody>
+                <p className="m-0 text-xs text-fg-muted">Nenhum item no carrinho. Adicione produtos na visualização Produtos.</p>
+              </CardBody>
+            ) : (
             <>
               {!readOnly && selectedLines.length > 0 ? (
                 <div className="flex flex-wrap items-center gap-2 border-b border-line bg-accent-weak px-3 py-2">
@@ -551,7 +593,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
                     aria-label="Dispensar aviso"
                     onClick={() => {
                       setRemoved(null);
-                      document.getElementById(PRODUCT_SEARCH_ID)?.focus();
+                      document.getElementById(CART_VIEW_ID)?.focus();
                     }}
                   >
                     <X size={13} aria-hidden="true" />
@@ -654,7 +696,8 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
                 </TableBody>
               </Table>
             </>
-          )}
+            )
+          ) : null}
           <CardBody className="border-t border-line">
             <dl className="m-0 flex flex-wrap items-baseline justify-end gap-x-6 gap-y-1">
               <div className="flex items-baseline gap-2">
