@@ -7,6 +7,8 @@ import {
   customer,
   customerDetail,
   customersPage,
+  ordersPage,
+  orderListItem,
   noPriceList,
   orderDetail,
   orderItem,
@@ -174,6 +176,44 @@ describe("Novo pedido", () => {
       await user.click(await screen.findByRole("button", { name: /Beta Ltda/ }));
       await waitFor(() => expect(screen.queryByRole("dialog", { name: "Selecionar cliente" })).not.toBeInTheDocument());
       expect(screen.getByRole("button", { name: /^Cliente/ })).toHaveTextContent("1002 — Beta Ltda");
+    });
+  });
+
+  describe("customer ficha modal", () => {
+    const fichaHandlers = () =>
+      newOrderHandlers({
+        "GET /customers/:code": { body: customerDetail({ creditLimit: "5000" }) },
+        "GET /orders": { body: ordersPage([orderListItem()]) },
+      });
+
+    it("only offers the ficha once a customer is selected", async () => {
+      renderApp("/pedidos/novo", { handlers: fichaHandlers() });
+      await screen.findByRole("button", { name: /^Cliente/ });
+      expect(screen.queryByRole("button", { name: "Ficha do cliente" })).not.toBeInTheDocument();
+    });
+
+    it("opens a modal with the five tabs over the order, without leaving it", async () => {
+      const { user, router } = renderApp("/pedidos/novo?customer=1001", { handlers: fichaHandlers() });
+      await user.click(await screen.findByRole("button", { name: "Ficha do cliente" }));
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).getByRole("heading", { name: /1001 – Comercial Alfa Ltda/ })).toBeInTheDocument();
+      expect(within(dialog).getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+        "Dados cadastrais",
+        "Financeiro",
+        "Análise do cliente",
+        "Engajamento",
+        "Vendas",
+      ]);
+      expect(await within(dialog).findByText("11.222.333/0001-81")).toBeInTheDocument();
+      await user.click(within(dialog).getByRole("tab", { name: /Financeiro/ }));
+      expect(await within(dialog).findByText(/5.000,00/)).toBeInTheDocument();
+      await user.click(within(dialog).getByRole("tab", { name: /Vendas/ }));
+      expect(await within(dialog).findByText("Rascunho nº 12")).toBeInTheDocument();
+      await user.click(within(dialog).getByRole("tab", { name: /Engajamento/ }));
+      expect(within(dialog).getByText("Engajamento indisponível")).toBeInTheDocument();
+      await user.click(within(dialog).getByRole("button", { name: "Fechar" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(router.state.location.pathname).toBe("/pedidos/novo");
     });
   });
 

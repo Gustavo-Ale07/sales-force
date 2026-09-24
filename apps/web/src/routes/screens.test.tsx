@@ -149,23 +149,27 @@ describe("Carteira (customers)", () => {
 
 describe("Cliente (customer detail)", () => {
   it("shows the registration, the price table and credit limit as not available when the server omits it", async () => {
-    renderApp("/clientes/1001", {
+    const { user } = renderApp("/clientes/1001", {
       handlers: { "GET /customers/:code": { body: customerDetail() }, "GET /orders": { body: ordersPage([orderListItem()]) } },
     });
     expect(await screen.findByRole("heading", { name: /Comercial Alfa Ltda/ })).toBeInTheDocument();
     expect(screen.getByText("11.222.333/0001-81")).toBeInTheDocument();
     expect(screen.getByText("5 — Tabela Varejo")).toBeInTheDocument();
     expect(screen.getByText("Tabela 5 (do cliente)")).toBeInTheDocument();
-    expect(screen.getByText("Limite de crédito").closest("div")).toHaveTextContent("Não disponível");
+    await user.click(screen.getByRole("tab", { name: /Financeiro/ }));
+    expect(screen.getByText("Limite de crédito", { selector: "dt" }).closest("div")).toHaveTextContent("Não disponível");
+    await user.click(screen.getByRole("tab", { name: /Vendas/ }));
     expect(await screen.findByText("Rascunho nº 12")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Novo pedido/ })).toHaveAttribute("href", expect.stringContaining("customer=1001"));
   });
 
   it("shows the credit limit only when the server sent it", async () => {
-    renderApp("/clientes/1001", {
+    const { user } = renderApp("/clientes/1001", {
       handlers: { "GET /customers/:code": { body: customerDetail({ creditLimit: "5000" }) }, "GET /orders": { body: ordersPage([]) } },
     });
+    await user.click(await screen.findByRole("tab", { name: /Financeiro/ }));
     expect(await screen.findByText(/5\.000,00/)).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: /Vendas/ }));
     expect(await screen.findByText("Nenhum pedido para este cliente")).toBeInTheDocument();
   });
 

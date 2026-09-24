@@ -31,9 +31,10 @@ import {
 } from "@salesforce/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useBlocker } from "@tanstack/react-router";
-import { BookmarkPlus, Save, Send, ShoppingCart, Trash2, X } from "lucide-react";
+import { BookmarkPlus, IdCard, Save, Send, ShoppingCart, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { BulkEntryDialog, type BulkEntryItem } from "../components/bulk-entry-dialog";
+import { CustomerFichaDialog } from "../components/customer-ficha";
 import { CustomerPicker, type PickedCustomer } from "../components/customer-picker";
 import { DiscardOrderDialog } from "../components/discard-order-dialog";
 import { NO_PRICE_TEXT, PriceCell } from "../components/price-cell";
@@ -169,6 +170,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
   const [customer, setCustomer] = useState<PickedCustomer | null>(
     order ? { code: order.customerCode, name: order.customerName } : initialCustomer,
   );
+  const [fichaOpen, setFichaOpen] = useState(false);
   /** `undefined` = the installation default (loaded asynchronously); `null` = explicitly none. */
   const [negotiationChoice, setNegotiationChoice] = useState<number | null | undefined>(order ? order.negotiationTypeCode : undefined);
   const [notes, setNotes] = useState(order?.notes ?? "");
@@ -430,7 +432,14 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
           <CardBody className="grid gap-3 md:grid-cols-2">
             <FormField label="Cliente" required>
               {(controlProps) => (
-                <CustomerPicker {...controlProps} selected={customer} onSelect={(picked) => requestCustomer(picked)} disabled={readOnly} />
+                <div className="flex items-center gap-2">
+                  <CustomerPicker {...controlProps} selected={customer} onSelect={(picked) => requestCustomer(picked)} disabled={readOnly} />
+                  {customer ? (
+                    <Button variant="secondary" size="sm" leftIcon={<IdCard size={13} aria-hidden="true" />} onClick={() => setFichaOpen(true)} className="shrink-0">
+                      Ficha do cliente
+                    </Button>
+                  ) : null}
+                </div>
               )}
             </FormField>
             <FormField label="Tipo de negociação" hint={config.isError ? "Tipos de negociação indisponíveis no momento." : undefined}>
@@ -760,6 +769,8 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
           onAdd={addBulkEntry}
         />
       ) : null}
+
+      {customer ? <CustomerFichaDialog customerCode={customer.code} open={fichaOpen} onOpenChange={setFichaOpen} /> : null}
 
       <DiscardOrderDialog
         order={discarding && order ? { id: order.id, label: orderReference(order) } : null}

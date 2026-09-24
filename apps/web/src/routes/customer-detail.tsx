@@ -1,20 +1,18 @@
-import { Alert, Avatar, Button, Card, CardBody, CardHeader, DateText, EmptyState, KeyValue, KeyValueList, Money, PageHeader, SkeletonLines, StatusBadge, Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow, formatDocument, toast } from "@salesforce/ui";
+import { Alert, Avatar, Button, Card, PageHeader, SkeletonLines, toast } from "@salesforce/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Building2, Plus, RotateCcw } from "lucide-react";
 import { useRef } from "react";
+import { CustomerFichaTabs } from "../components/customer-ficha";
 import { OrderTemplatesCard } from "../components/order-templates-card";
 import { QueryError } from "../components/query-error";
 import { TemplateSkippedNotice } from "../components/template-skipped-notice";
 import { repeatLastOrder } from "../lib/api-mutations";
-import { customerQueryOptions, ordersQueryOptions, queryKeys } from "../lib/api-queries";
+import { customerQueryOptions, queryKeys } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { errorStatus } from "../lib/http-error";
-import { orderReference, orderStatusLabels } from "../lib/labels";
 import { describeTemplateError, skippedLinesOf } from "../lib/order-templates";
 import { CustomerStatus } from "./customers";
-
-const NOT_AVAILABLE = "Não disponível";
 
 function newUuid(): string {
   return globalThis.crypto.randomUUID();
@@ -99,67 +97,6 @@ function RepeatLastOrderNotice({ mutation }: { mutation: RepeatLastOrderMutation
   );
 }
 
-function CustomerOrders({ customerCode }: { customerCode: number }) {
-  const api = useApi();
-  const query = useQuery(ordersQueryOptions(api, { customerCode, pageSize: 5, page: 1, sort: "-updatedAt" }));
-  return (
-    <Card>
-      <CardHeader
-        title="Pedidos do cliente"
-        actions={
-          <Link to="/pedidos" search={{ customerCode }} className="text-accent hover:underline">
-            Ver todos
-          </Link>
-        }
-      />
-      {query.isPending ? (
-        <CardBody aria-busy="true">
-          <SkeletonLines lines={3} label="Carregando pedidos do cliente…" />
-        </CardBody>
-      ) : query.isError ? (
-        <QueryError error={query.error} onRetry={() => void query.refetch()} retrying={query.isRefetching} title="Não foi possível carregar os pedidos" compact />
-      ) : query.data.items.length === 0 ? (
-        <EmptyState compact title="Nenhum pedido para este cliente" description="Crie um novo pedido para começar." />
-      ) : (
-        <Table label="Pedidos do cliente">
-          <TableCaption>Pedidos do cliente</TableCaption>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Pedido</TableHead>
-              <TableHead>Situação</TableHead>
-              <TableHead numeric>Total estimado</TableHead>
-              <TableHead>Atualizado em</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {query.data.items.map((order) => {
-              const status = orderStatusLabels[order.status];
-              return (
-                <TableRow key={order.id}>
-                  <TableCell>
-                    <Link to="/pedidos/$id" params={{ id: order.id }} className="font-medium text-accent hover:underline">
-                      {orderReference(order)}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
-                  </TableCell>
-                  <TableCell numeric>
-                    <Money value={order.estimatedTotal} />
-                  </TableCell>
-                  <TableCell>
-                    <DateText value={order.updatedAt} withTime />
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      )}
-    </Card>
-  );
-}
-
 export function CustomerDetailPage({ code }: { code: number }) {
   const api = useApi();
   const query = useQuery(customerQueryOptions(api, code));
@@ -189,7 +126,6 @@ export function CustomerDetailPage({ code }: { code: number }) {
   }
 
   const customer = query.data;
-  const resolved = customer.resolvedPriceTable;
   return (
     <>
       <PageHeader
@@ -215,44 +151,8 @@ export function CustomerDetailPage({ code }: { code: number }) {
         }
       />
       <RepeatLastOrderNotice mutation={repeatLast} />
-      <div className="grid gap-3 lg:grid-cols-2">
-        <Card>
-          <CardHeader title="Cadastro" />
-          <CardBody>
-            <KeyValueList>
-              <KeyValue label="Código">{customer.code}</KeyValue>
-              <KeyValue label="CNPJ/CPF">{formatDocument(customer.document)}</KeyValue>
-              <KeyValue label="Vendedor">{customer.sellerName ?? "—"}</KeyValue>
-              <KeyValue label="Última sincronização">
-                <DateText value={customer.syncedAt} withTime />
-              </KeyValue>
-            </KeyValueList>
-          </CardBody>
-        </Card>
-        <Card>
-          <CardHeader title="Condições comerciais" />
-          <CardBody>
-            <KeyValueList>
-              <KeyValue label="Tabela de preço do cadastro">
-                {customer.priceTableCode === null ? "Sem tabela" : `${customer.priceTableCode}${customer.priceTableName ? ` — ${customer.priceTableName}` : ""}`}
-              </KeyValue>
-              <KeyValue label="Tabela usada nos pedidos">
-                {resolved === null ? (
-                  <span>Sem tabela resolvida (produtos aparecem como “Sem preço”)</span>
-                ) : (
-                  `Tabela ${resolved.code} (${resolved.source === "customer" ? "do cliente" : "alternativa da instalação"})`
-                )}
-              </KeyValue>
-              {/* The server sends the credit limit only when the installation and profile allow it. */}
-              <KeyValue label="Limite de crédito">
-                {customer.creditLimit === null ? <span className="text-fg-faint">{NOT_AVAILABLE}</span> : <Money value={customer.creditLimit} />}
-              </KeyValue>
-            </KeyValueList>
-          </CardBody>
-        </Card>
-      </div>
+      <CustomerFichaTabs customerCode={customer.code} />
       <OrderTemplatesCard customerCode={customer.code} />
-      <CustomerOrders customerCode={customer.code} />
     </>
   );
 }
