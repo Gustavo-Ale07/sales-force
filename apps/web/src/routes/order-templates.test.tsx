@@ -481,8 +481,8 @@ describe("Editor de pedido: Salvar como recorrente", () => {
   it("is disabled without a customer or without lines, and enabled with a valid line", async () => {
     const { user } = renderApp("/pedidos/novo", { handlers: editorHandlers() });
     expect(await screen.findByRole("button", { name: "Salvar como recorrente" })).toBeDisabled();
-    await user.click(screen.getByRole("combobox", { name: /^Cliente/ }));
-    await user.click(await screen.findByRole("option", { name: /Comercial Alfa/ }));
+    await user.click(screen.getByRole("button", { name: /^Cliente/ }));
+    await user.click(await screen.findByRole("button", { name: /Comercial Alfa/ }));
     expect(screen.getByRole("button", { name: "Salvar como recorrente" })).toBeDisabled();
     await addProduct(user, "Balão");
     expect(screen.getByRole("button", { name: "Salvar como recorrente" })).toBeEnabled();

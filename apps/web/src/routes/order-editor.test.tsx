@@ -71,8 +71,8 @@ describe("Novo pedido", () => {
     const handlers = () =>
       newOrderHandlers({ "GET /customers": { body: customersPage([customer(), customer({ code: 1002, name: "Beta Ltda" })]) } });
     const pickOther = async (user: ReturnType<typeof renderApp>["user"]) => {
-      await user.click(await screen.findByRole("combobox", { name: /^Cliente/ }));
-      await user.click(await screen.findByRole("option", { name: /Beta Ltda/ }));
+      await user.click(await screen.findByRole("button", { name: /^Cliente/ }));
+      await user.click(await screen.findByRole("button", { name: /Beta Ltda/ }));
     };
 
     it("asks first and drops the items (their prices belong to the previous customer) only when confirmed", async () => {
@@ -83,7 +83,7 @@ describe("Novo pedido", () => {
       expect(dialog).toHaveTextContent("itens já adicionados serão removidos");
       await user.click(within(dialog).getByRole("button", { name: "Trocar e remover itens" }));
       await waitFor(() => expect(screen.queryByLabelText("Quantidade de Balão látex 9 pol. vermelho")).not.toBeInTheDocument());
-      expect(screen.getByRole("combobox", { name: /^Cliente/ })).toHaveDisplayValue(/Beta Ltda/);
+      expect(screen.getByRole("button", { name: /^Cliente/ })).toHaveTextContent(/Beta Ltda/);
     });
 
     it("keeps the customer and the items when the seller declines", async () => {
@@ -93,14 +93,13 @@ describe("Novo pedido", () => {
       const dialog = await screen.findByRole("dialog", { name: "Trocar o cliente do pedido?" });
       await user.click(within(dialog).getByRole("button", { name: "Manter o cliente atual" }));
       expect(screen.getByLabelText("Quantidade de Balão látex 9 pol. vermelho")).toBeInTheDocument();
-      expect(screen.getByRole("combobox", { name: /^Cliente/ })).toHaveDisplayValue(/Comercial Alfa/);
+      expect(screen.getByRole("button", { name: /^Cliente/ })).toHaveTextContent(/Comercial Alfa/);
     });
 
     it("asks as well when the customer is cleared, so picking another one afterwards cannot keep the old prices", async () => {
       const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: handlers() });
       await addProduct(user, "Balão");
-      await user.click(screen.getByRole("combobox", { name: /^Cliente/ }));
-      await user.keyboard("{Backspace}");
+      await user.click(screen.getByRole("button", { name: "Remover cliente" }));
       const dialog = await screen.findByRole("dialog", { name: "Trocar o cliente do pedido?" });
       expect(dialog).toHaveTextContent("Ao remover o cliente");
       await user.click(within(dialog).getByRole("button", { name: "Manter o cliente atual" }));
@@ -110,8 +109,7 @@ describe("Novo pedido", () => {
     it("drops the items when clearing the customer is confirmed, and picking another one then asks nothing", async () => {
       const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: handlers() });
       await addProduct(user, "Balão");
-      await user.click(screen.getByRole("combobox", { name: /^Cliente/ }));
-      await user.keyboard("{Backspace}");
+      await user.click(screen.getByRole("button", { name: "Remover cliente" }));
       await user.click(
         within(await screen.findByRole("dialog", { name: "Trocar o cliente do pedido?" })).getByRole("button", {
           name: "Trocar e remover itens",
@@ -138,10 +136,51 @@ describe("Novo pedido", () => {
     });
   });
 
+  describe("customer selector modal", () => {
+    const twoCustomers = () =>
+      newOrderHandlers({
+        "GET /customers": { body: customersPage([customer(), customer({ code: 1002, name: "Beta Ltda", blocked: true, document: "12345678901" })]) },
+      });
+
+    it("opens a dedicated dialog with a search box and one card per customer (no dropdown)", async () => {
+      const { user } = renderApp("/pedidos/novo", { handlers: twoCustomers() });
+      expect(screen.queryByRole("combobox", { name: /^Cliente/ })).not.toBeInTheDocument();
+      await user.click(await screen.findByRole("button", { name: /^Cliente/ }));
+      const dialog = await screen.findByRole("dialog", { name: "Selecionar cliente" });
+      await waitFor(() => expect(within(dialog).getByRole("searchbox", { name: "Cliente" })).toHaveFocus());
+      const alfa = await within(dialog).findByRole("button", { name: /Comercial Alfa Ltda/ });
+      expect(alfa).toHaveTextContent("1001 – Comercial Alfa Ltda");
+      expect(alfa).toHaveTextContent("11.222.333/0001-81");
+      expect(alfa).toHaveTextContent("Alfa Festas");
+      const beta = within(dialog).getByRole("button", { name: /Beta Ltda/ });
+      expect(beta).toHaveTextContent("123.456.789-01");
+      expect(beta).toHaveTextContent("Bloqueado");
+    });
+
+    it("sends the typed search to the server and shows an empty state", async () => {
+      const { user, calls } = renderApp("/pedidos/novo", {
+        handlers: newOrderHandlers({ "GET /customers": { body: customersPage([]) } }),
+      });
+      await user.click(await screen.findByRole("button", { name: /^Cliente/ }));
+      const dialog = await screen.findByRole("dialog", { name: "Selecionar cliente" });
+      await user.type(within(dialog).getByRole("searchbox", { name: "Cliente" }), "zzz");
+      await waitFor(() => expect(callsTo(calls, "GET", "/customers").some((call) => call.search.get("search") === "zzz")).toBe(true));
+      expect(await within(dialog).findByText("Nenhum cliente encontrado")).toBeInTheDocument();
+    });
+
+    it("closes the dialog and shows the picked customer on the field", async () => {
+      const { user } = renderApp("/pedidos/novo", { handlers: twoCustomers() });
+      await user.click(await screen.findByRole("button", { name: /^Cliente/ }));
+      await user.click(await screen.findByRole("button", { name: /Beta Ltda/ }));
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Selecionar cliente" })).not.toBeInTheDocument());
+      expect(screen.getByRole("button", { name: /^Cliente/ })).toHaveTextContent("1002 — Beta Ltda");
+    });
+  });
+
   it("tells the seller when the customer from the link cannot be loaded, and lets them pick one", async () => {
     renderApp("/pedidos/novo?customer=9", { handlers: newOrderHandlers({ "GET /customers/:code": apiError(404, "not_found", "x") }) });
     expect(await screen.findByText("Não foi possível carregar o cliente indicado")).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: /^Cliente/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /^Cliente/ })).toBeEnabled();
   });
 
   it("rejects a duplicate product and an invalid quantity", async () => {
