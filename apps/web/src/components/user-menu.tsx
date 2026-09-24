@@ -22,14 +22,11 @@ export function UserMenu({ user, onLogout }: UserMenuProps) {
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={`Menu do usuário ${user.name}`}
-        className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-surface-3 data-[state=open]:bg-surface-3"
+        className="flex items-center gap-2 rounded-md px-1.5 py-1 text-sidebar-fg-active hover:bg-sidebar-hover data-[state=open]:bg-sidebar-hover"
       >
+        <span className="hidden max-w-[200px] truncate text-sm md:block">Olá, {user.name}</span>
         <Avatar name={user.name} size="md" />
-        <span className="hidden text-left leading-tight md:block">
-          <span className="block max-w-[160px] truncate text-sm font-medium">{user.name}</span>
-          {user.roleLabel ? <span className="block text-2xs text-fg-muted">{user.roleLabel}</span> : null}
-        </span>
-        <ChevronDown size={13} aria-hidden="true" className="text-fg-muted" />
+        <ChevronDown size={13} aria-hidden="true" className="text-sidebar-fg" />
       </DropdownMenuTrigger>
       <DropdownMenuContent>
         <DropdownMenuLabel>
