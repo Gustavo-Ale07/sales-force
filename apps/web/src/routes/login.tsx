@@ -248,13 +248,13 @@ function LoginHero() {
     <section
       role="img"
       aria-label="PLAC, artigos para festas e confeitaria. Venda com agilidade: catálogo, pedidos e clientes em um só lugar."
-      className="relative overflow-hidden bg-[#0b1442] max-lg:h-[min(112vw,560px)] lg:min-h-full"
+      className="relative overflow-hidden bg-[#0b1442] max-lg:aspect-[1374/1145] max-lg:max-h-[720px] lg:min-h-full"
     >
       <img
-        src="/assets/login/login-hero.png"
+        src="/assets/login/login-hero-left.png"
         alt=""
-        width={1153}
-        height={941}
+        width={1374}
+        height={1145}
         fetchPriority="high"
         className="absolute inset-0 size-full object-cover object-[left_center]"
       />
