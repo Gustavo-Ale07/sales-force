@@ -163,7 +163,7 @@ function ViewPill({ id, active, onClick, children }: { id?: string; active: bool
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className="rounded-full px-3 py-1 text-sm font-medium text-fg-muted transition-colors hover:text-fg focus-visible:outline-2 focus-visible:outline-ring aria-pressed:bg-accent aria-pressed:text-on-accent aria-pressed:hover:text-on-accent"
+      className="rounded-full px-3 py-[7px] text-sm font-medium text-fg-muted transition-colors hover:text-fg focus-visible:outline-2 focus-visible:outline-ring aria-pressed:bg-accent aria-pressed:text-on-accent aria-pressed:hover:text-on-accent"
     >
       {children}
     </button>

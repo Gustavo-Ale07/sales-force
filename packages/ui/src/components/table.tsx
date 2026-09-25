@@ -160,7 +160,8 @@ export function TableCell({ className, numeric, wrap, ...props }: TableCellProps
     <td
       className={cn(
         "h-14 border-b border-line px-4 align-middle",
-        wrap ? "" : "whitespace-nowrap",
+        // A wrapping cell (a description) never shrinks below a readable width: the table scrolls inside its card instead.
+        wrap ? "min-w-44" : "whitespace-nowrap",
         numeric && "text-right tabular-nums",
         className,
       )}

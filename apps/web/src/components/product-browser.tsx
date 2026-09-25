@@ -103,7 +103,7 @@ export function ProductBrowser({ filters, onFiltersChange, customerCode, cartQua
           value={search}
           onValueChange={(value) => onFiltersChange({ ...filters, search: value, page: 1 })}
           aria-label="Buscar produto"
-          placeholder="Buscar por código, descrição ou referência"
+          placeholder="Código, descrição ou referência"
           wrapperClassName="min-w-[240px] flex-1"
         />
         <Select

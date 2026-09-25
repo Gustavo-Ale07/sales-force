@@ -129,7 +129,7 @@ export function ProductMultiSelect({
             setPage(1);
           }}
           aria-label="Buscar produto para seleção"
-          placeholder="Buscar por código, descrição ou referência"
+          placeholder="Código, descrição ou referência"
           wrapperClassName="min-w-[220px] flex-1"
         />
         <Select

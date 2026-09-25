@@ -178,7 +178,7 @@ function ProductFilterContent({
               setPage(1);
             }}
             aria-label="Buscar produto para o filtro"
-            placeholder="Buscar por nome, código ou referência"
+            placeholder="Nome, código ou referência"
             wrapperClassName="min-w-[220px] flex-1"
           />
           <Select

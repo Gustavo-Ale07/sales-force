@@ -79,7 +79,7 @@ function CustomerSearchResults({
         value={query}
         onValueChange={setQuery}
         aria-label="Cliente"
-        placeholder="Buscar por código, nome ou documento"
+        placeholder="Código, nome ou documento"
         size="lg"
       />
       <div aria-live="polite" aria-busy={isFetching} className="flex flex-col gap-2">

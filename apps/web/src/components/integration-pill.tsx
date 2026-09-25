@@ -34,7 +34,10 @@ export function IntegrationPill({ state = "unknown", detail, syncing = false }: 
       {/* Focusable so keyboard users can reach the explanatory tooltip (WCAG 1.4.13). */}
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
       <span tabIndex={0} data-syncing={syncing || undefined} className="inline-flex rounded-full data-[syncing=true]:animate-sf-breathe">
-        <StatusBadge tone={tone}>{label}</StatusBadge>
+        {/* Phones keep only the dot (the text stays in the DOM for screen readers) so the top bar never overflows. */}
+        <StatusBadge tone={tone} className="max-md:size-8 max-md:justify-center max-md:gap-0 max-md:p-0 max-md:text-[0px]">
+          {label}
+        </StatusBadge>
       </span>
     </Tooltip>
   );
