@@ -20,6 +20,7 @@ export * from "./components/money";
 export * from "./components/page-header";
 export * from "./components/pagination";
 export * from "./components/popover";
+export * from "./components/segmented";
 export * from "./components/select";
 export * from "./components/skeleton";
 export * from "./components/spinner";

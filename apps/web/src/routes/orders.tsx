@@ -12,6 +12,7 @@ import {
   PageHeader,
   Pagination,
   SearchInput,
+  SegmentedControl,
   Select,
   SortableHead,
   StatusDot,
@@ -33,12 +34,12 @@ import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { CustomerPicker } from "../components/customer-picker";
 import { DiscardOrderDialog } from "../components/discard-order-dialog";
-import { OrderProductFilter, useProductLabel } from "../components/order-product-filter";
+import { OrderProductFilter, PRODUCT_MATCH_OPTIONS, useProductLabel, type ProductMatch } from "../components/order-product-filter";
 import { QueryError } from "../components/query-error";
 import { customerQueryOptions, ordersQueryOptions, type OrdersParams } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { formatCount, orderReference, orderStatusLabels } from "../lib/labels";
-import { MAX_ORDER_PRODUCTS, ORDER_DATE_FIELDS, ORDER_PRODUCT_MATCHES, ORDER_STATUSES, type OrdersSearch } from "../lib/route-search";
+import { MAX_ORDER_PRODUCTS, ORDER_DATE_FIELDS, ORDER_STATUSES, type OrdersSearch } from "../lib/route-search";
 import { asDate, asOneOf, compact } from "../lib/search-params";
 import { useSearchBox } from "../lib/use-search-box";
 
@@ -239,7 +240,12 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
           <DateFilterInput label="Data final" value={params.to} min={params.from} onCommit={setTo} />
         </FilterField>
         <FilterField label="Produtos" className="lg:col-span-4 sm:col-span-2">
-          <OrderProductFilter codes={selectedProducts} max={MAX_ORDER_PRODUCTS} onChange={(codes) => change({ products: codes.length > 0 ? codes : undefined, productMatch: codes.length > 1 ? params.productMatch : undefined })} />
+          <OrderProductFilter
+            codes={selectedProducts}
+            match={params.productMatch ?? "any"}
+            max={MAX_ORDER_PRODUCTS}
+            onChange={(codes, match) => change({ products: codes.length > 0 ? codes : undefined, productMatch: codes.length > 1 && match === "all" ? match : undefined })}
+          />
         </FilterField>
         <FilterField label="Descrição do produto" className="lg:col-span-4 sm:col-span-2">
           <SearchInput
@@ -251,17 +257,16 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
           />
         </FilterField>
         {selectedProducts.length > 1 ? (
-          <FilterField label="Pedidos com" className="lg:col-span-2">
-            <Select
-              size="md"
+          <div className="flex min-w-0 flex-col gap-1 sm:col-span-2 lg:col-span-4">
+            <span className="text-xs font-medium text-fg-muted">Correspondência dos produtos</span>
+            <SegmentedControl<ProductMatch>
               aria-label="Combinação dos produtos"
               value={params.productMatch ?? "any"}
-              onChange={(e) => change({ productMatch: asOneOf(e.target.value, ORDER_PRODUCT_MATCHES) })}
-            >
-              <option value="any">Qualquer produto</option>
-              <option value="all">Todos os produtos</option>
-            </Select>
-          </FilterField>
+              onValueChange={(match) => change({ productMatch: match === "all" ? match : undefined })}
+              options={PRODUCT_MATCH_OPTIONS}
+              className="h-10 items-center"
+            />
+          </div>
         ) : null}
       </FilterBar>
 

@@ -72,7 +72,7 @@ describe("Vendas: filtros comerciais", () => {
     expect(router.state.location.search).toMatchObject({ products: [12] });
     expect(await screen.findByRole("button", { name: /Remover filtro: Produto: 12 – Cabo/i })).toBeInTheDocument();
     // one product: the "any / all" choice is not offered
-    expect(screen.queryByLabelText("Combinação dos produtos")).not.toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup", { name: "Combinação dos produtos" })).not.toBeInTheDocument();
   });
 
   it("several products: 'any' by default, 'all' on request, and each chip removes only its product", async () => {
@@ -86,7 +86,9 @@ describe("Vendas: filtros comerciais", () => {
     expect(lastOrdersCall(calls)?.get("productMatch")).toBeNull();
     expect(await screen.findByText("Contendo qualquer um:")).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText("Combinação dos produtos"), "all");
+    const group = screen.getByRole("radiogroup", { name: "Combinação dos produtos" });
+    expect(within(group).getByRole("radio", { name: "Qualquer selecionado" })).toBeChecked();
+    await user.click(within(group).getByRole("radio", { name: "Todos selecionados" }));
     await waitFor(() => expect(lastOrdersCall(calls)?.get("productMatch")).toBe("all"));
     expect(lastOrdersCall(calls)?.get("productCodes")).toBe("12,34");
     expect(router.state.location.search).toMatchObject({ products: [12, 34], productMatch: "all" });
@@ -122,6 +124,22 @@ describe("Vendas: filtros comerciais", () => {
     await user.click(screen.getByRole("button", { name: "Cancelar" }));
     expect(lastOrdersCall(calls)?.get("productCodes")).toBeNull();
     expect(screen.getByRole("button", { name: "Filtrar por produtos" })).toHaveTextContent("Todos os produtos");
+  });
+
+  it("the rule for several products is chosen explicitly in the dialog and applied with the products", async () => {
+    const { user, calls } = renderApp("/pedidos", { handlers: handlers() });
+    await screen.findByText("Rascunho nº 12");
+    await user.click(screen.getByRole("button", { name: "Filtrar por produtos" }));
+    await user.click(await screen.findByRole("checkbox", { name: /Selecionar CABO FLEXIVEL/i }));
+    // one product: there is nothing to combine yet
+    expect(screen.queryByRole("radiogroup", { name: "Correspondência dos produtos selecionados" })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole("checkbox", { name: /Selecionar BALAO LATEX/i }));
+    const choice = await screen.findByRole("radiogroup", { name: "Correspondência dos produtos selecionados" });
+    expect(within(choice).getByRole("radio", { name: "Qualquer selecionado" })).toBeChecked();
+    await user.click(within(choice).getByRole("radio", { name: "Todos selecionados" }));
+    await user.click(screen.getByRole("button", { name: "Aplicar filtro" }));
+    await waitFor(() => expect(lastOrdersCall(calls)?.get("productMatch")).toBe("all"));
+    expect(lastOrdersCall(calls)?.get("productCodes")).toBe("12,34");
   });
 
   it("the group narrows the product list; \"Limpar seleção\" then Aplicar filtro removes the product filter", async () => {
@@ -210,7 +228,7 @@ describe("Vendas: filtros comerciais", () => {
     expect(screen.getByLabelText("Data inicial")).toHaveValue("2026-03-01");
     expect(screen.getByLabelText("Data final")).toHaveValue("2026-03-31");
     expect(screen.getByLabelText("Data usada no período")).toHaveValue("updatedAt");
-    expect(screen.getByLabelText("Combinação dos produtos")).toHaveValue("all");
+    expect(within(screen.getByRole("radiogroup", { name: "Combinação dos produtos" })).getByRole("radio", { name: "Todos selecionados" })).toBeChecked();
     expect(screen.getByRole("button", { name: "Filtrar por produtos" })).toHaveTextContent("2 produtos selecionados");
     expect(await screen.findByRole("button", { name: "Remover filtro: Cliente: Beta Ltda" })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: /Remover filtro: Produto: 12 – Cabo/i })).toBeInTheDocument();

@@ -8,6 +8,7 @@ import {
   EmptyState,
   Pagination,
   SearchInput,
+  SegmentedControl,
   Select,
   SkeletonLines,
   Table,
@@ -27,6 +28,13 @@ import { useApi } from "../lib/app-context";
 import { useDebounced } from "../lib/use-debounced";
 import { QueryError } from "./query-error";
 
+export type ProductMatch = "any" | "all";
+
+export const PRODUCT_MATCH_OPTIONS = [
+  { value: "any", label: "Qualquer selecionado", description: "Pedidos que tenham pelo menos um dos produtos selecionados" },
+  { value: "all", label: "Todos selecionados", description: "Pedidos que tenham todos os produtos selecionados" },
+] as const;
+
 const PAGE_SIZE = 10;
 
 /** "Code – Description" of a product for a chip; the code alone while the name loads or if the product is gone. */
@@ -39,7 +47,9 @@ export function useProductLabel(code: number): string {
 export interface OrderProductFilterProps {
   /** Product codes selected so far (kept by the URL). */
   codes: readonly number[];
-  onChange: (codes: number[]) => void;
+  /** How several products combine (only meaningful with two or more). */
+  match: ProductMatch;
+  onChange: (codes: number[], match: ProductMatch) => void;
   /** How many products can be selected. */
   max: number;
 }
@@ -50,7 +60,7 @@ export interface OrderProductFilterProps {
  * while paging and searching and only reach the list (and the URL) on "Aplicar filtro". The whole catalog is
  * searched (an order may hold a product that is no longer sellable, so nothing is pre-filtered).
  */
-export function OrderProductFilter({ codes, onChange, max }: OrderProductFilterProps) {
+export function OrderProductFilter({ codes, match, onChange, max }: OrderProductFilterProps) {
   const [open, setOpen] = useState(false);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -70,9 +80,10 @@ export function OrderProductFilter({ codes, onChange, max }: OrderProductFilterP
       {open ? (
         <ProductFilterContent
           initial={codes}
+          initialMatch={match}
           max={max}
-          onApply={(next) => {
-            onChange(next);
+          onApply={(next, nextMatch) => {
+            onChange(next, nextMatch);
             setOpen(false);
           }}
         />
@@ -81,9 +92,20 @@ export function OrderProductFilter({ codes, onChange, max }: OrderProductFilterP
   );
 }
 
-function ProductFilterContent({ initial, max, onApply }: { initial: readonly number[]; max: number; onApply: (codes: number[]) => void }) {
+function ProductFilterContent({
+  initial,
+  initialMatch,
+  max,
+  onApply,
+}: {
+  initial: readonly number[];
+  initialMatch: ProductMatch;
+  max: number;
+  onApply: (codes: number[], match: ProductMatch) => void;
+}) {
   const api = useApi();
   const [picked, setPicked] = useState<number[]>([...initial]);
+  const [match, setMatch] = useState<ProductMatch>(initialMatch);
   const [search, setSearch] = useState("");
   const [group, setGroup] = useState("");
   const [page, setPage] = useState(1);
@@ -128,7 +150,7 @@ function ProductFilterContent({ initial, max, onApply }: { initial: readonly num
           <DialogClose asChild>
             <Button variant="secondary">Cancelar</Button>
           </DialogClose>
-          <Button variant="primary" onClick={() => onApply(picked)}>
+          <Button variant="primary" onClick={() => onApply(picked, match)}>
             Aplicar filtro
           </Button>
         </>
@@ -216,6 +238,12 @@ function ProductFilterContent({ initial, max, onApply }: { initial: readonly num
             <Pagination page={page} pageSize={PAGE_SIZE} total={query.data.total} onPageChange={setPage} pageSizeOptions={[PAGE_SIZE]} />
           ) : null}
         </div>
+        {picked.length > 1 ? (
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-fg-muted">Correspondência</span>
+            <SegmentedControl<ProductMatch> aria-label="Correspondência dos produtos selecionados" value={match} onValueChange={setMatch} options={PRODUCT_MATCH_OPTIONS} className="sm:max-w-md" />
+          </div>
+        ) : null}
         <p className="m-0 text-xs text-fg-muted" aria-live="polite">
           {picked.length === 0 ? "Nenhum produto selecionado: o filtro não restringe os pedidos." : `${picked.length} de ${max} selecionados.`}
           {full ? ` Limite de ${max} produtos atingido.` : ""}
