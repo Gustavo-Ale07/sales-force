@@ -777,6 +777,11 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
               <Money value={preview.totals.estimatedTotal} />
             </strong>
           </p>
+          {!readOnly && hasBlockedLines ? (
+            <p className="m-0 w-full text-xs text-danger sm:w-auto" role="status" data-testid="save-blocked-reason">
+              Remova os itens sem preço para salvar.
+            </p>
+          ) : null}
           <Button type="button" variant="ghost" className="flex-1 sm:flex-none" leftIcon={<X size={14} aria-hidden="true" />} onClick={onClose}>
             {readOnly ? "Voltar" : "Cancelar"}
           </Button>

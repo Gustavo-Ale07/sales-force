@@ -595,6 +595,7 @@ describe("Novo pedido", () => {
     await addProduct(user, "Vela");
     expect(await screen.findByText("Este item não pode ser pedido sem preço nesta instalação.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Salvar rascunho" })).toBeDisabled();
+    expect(screen.getByTestId("save-blocked-reason")).toHaveTextContent("Remova os itens sem preço para salvar.");
   });
 
   it("warns and blocks saving when the installation is not enabled for orders", async () => {
