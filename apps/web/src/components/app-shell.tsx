@@ -8,6 +8,7 @@ import type { AuthUser } from "../lib/auth-client";
 import { Brand } from "./brand";
 import { CommandMenu } from "./command-menu";
 import { DevAuthBanner } from "./dev-auth-banner";
+import { GlobalActivity } from "./global-activity";
 import { ConnectedIntegrationPill } from "./integration-pill";
 import { navItemsFor } from "./nav-items";
 import { NotificationsBell } from "./notifications-bell";
@@ -126,6 +127,7 @@ export function AppShell({ user, onLogout, children }: AppShellProps) {
       >
         Ir para o conteúdo
       </a>
+      <GlobalActivity />
       <DevAuthBanner />
       <header className="sticky top-0 z-30 flex h-[var(--sf-topbar-h)] shrink-0 items-center gap-3 border-b-[length:var(--sf-topbar-line-h)] border-b-[var(--sf-red)] bg-sidebar px-3 md:gap-6 md:px-8">
         <Drawer open={navOpen} onOpenChange={setNavOpen}>

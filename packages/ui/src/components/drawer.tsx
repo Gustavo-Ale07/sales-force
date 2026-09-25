@@ -14,8 +14,8 @@ const drawerVariants = cva(
   {
     variants: {
       side: {
-        right: "right-0 animate-sf-slide-in-right rounded-l-xl",
-        left: "left-0 animate-sf-slide-in-left rounded-r-xl",
+        right: "right-0 animate-sf-slide-in-right rounded-l-xl data-[state=closed]:animate-sf-slide-out-right",
+        left: "left-0 animate-sf-slide-in-left rounded-r-xl data-[state=closed]:animate-sf-slide-out-left",
       },
     },
     defaultVariants: { side: "right" },

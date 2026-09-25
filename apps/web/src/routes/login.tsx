@@ -120,7 +120,7 @@ export function LoginPage() {
   };
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-white">
+    <div className="flex h-dvh animate-sf-fade-in flex-col overflow-hidden bg-white">
       <DevAuthBanner />
       {/* Approved reference: campaign photograph on the left (~69%), white sign-in panel on the right. */}
       <main id="conteudo" className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] lg:grid-cols-[minmax(0,69fr)_minmax(420px,31fr)]">

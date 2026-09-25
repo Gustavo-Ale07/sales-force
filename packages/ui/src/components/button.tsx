@@ -5,7 +5,7 @@ import { cn } from "../lib/cn";
 import { Spinner } from "./spinner";
 
 export const buttonVariants = cva(
-  "inline-flex shrink-0 select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-md border font-semibold transition-[color,background-color,border-color,transform,box-shadow] duration-[var(--sf-dur-fast)] ease-spring active:translate-y-px disabled:pointer-events-none disabled:border-line disabled:bg-surface-2 disabled:text-fg-faint disabled:shadow-none aria-disabled:pointer-events-none aria-disabled:opacity-60",
+  "inline-flex shrink-0 select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-md border font-semibold transition-[color,background-color,border-color,translate,scale,box-shadow] duration-[var(--sf-dur-fast)] ease-spring active:translate-y-px active:scale-[0.98] disabled:translate-none disabled:scale-100 disabled:border-line disabled:bg-surface-2 disabled:text-fg-faint disabled:shadow-none aria-disabled:pointer-events-none aria-disabled:opacity-60",
   {
     variants: {
       variant: {

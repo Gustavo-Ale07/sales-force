@@ -22,7 +22,7 @@ import {
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Boxes, ChevronDown } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { productGroupsQueryOptions, productQueryOptions, productsQueryOptions } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { useDebounced } from "../lib/use-debounced";
@@ -62,8 +62,21 @@ export interface OrderProductFilterProps {
  */
 export function OrderProductFilter({ codes, match, onChange, max }: OrderProductFilterProps) {
   const [open, setOpen] = useState(false);
+  // The content stays mounted while the dialog fades out, then is dropped so the next opening starts from the URL.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    if (open) return;
+    const timer = setTimeout(() => setMounted(false), 260);
+    return () => clearTimeout(timer);
+  }, [open]);
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) setMounted(true);
+      }}
+    >
       <DialogTrigger asChild>
         <Button
           variant="secondary"
@@ -77,7 +90,7 @@ export function OrderProductFilter({ codes, match, onChange, max }: OrderProduct
           </span>
         </Button>
       </DialogTrigger>
-      {open ? (
+      {open || mounted ? (
         <ProductFilterContent
           initial={codes}
           initialMatch={match}
@@ -187,6 +200,13 @@ function ProductFilterContent({
           </Select>
         </div>
 
+        {picked.length > 1 ? (
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-fg-muted">Correspondência</span>
+            <SegmentedControl<ProductMatch> aria-label="Correspondência dos produtos selecionados" value={match} onValueChange={setMatch} options={PRODUCT_MATCH_OPTIONS} className="sm:max-w-md" />
+          </div>
+        ) : null}
+
         <div aria-live="polite" aria-busy={query.isFetching}>
           {query.isPending ? (
             <SkeletonLines lines={4} label="Carregando produtos…" />
@@ -238,12 +258,6 @@ function ProductFilterContent({
             <Pagination page={page} pageSize={PAGE_SIZE} total={query.data.total} onPageChange={setPage} pageSizeOptions={[PAGE_SIZE]} />
           ) : null}
         </div>
-        {picked.length > 1 ? (
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-fg-muted">Correspondência</span>
-            <SegmentedControl<ProductMatch> aria-label="Correspondência dos produtos selecionados" value={match} onValueChange={setMatch} options={PRODUCT_MATCH_OPTIONS} className="sm:max-w-md" />
-          </div>
-        ) : null}
         <p className="m-0 text-xs text-fg-muted" aria-live="polite">
           {picked.length === 0 ? "Nenhum produto selecionado: o filtro não restringe os pedidos." : `${picked.length} de ${max} selecionados.`}
           {full ? ` Limite de ${max} produtos atingido.` : ""}

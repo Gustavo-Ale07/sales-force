@@ -13,7 +13,7 @@ export function DropdownMenuContent({ className, sideOffset = 6, align = "end", 
         sideOffset={sideOffset}
         align={align}
         className={cn(
-          "z-50 min-w-[200px] animate-sf-pop-in overflow-hidden rounded-lg bg-surface p-1.5 text-sm shadow-pop",
+          "z-50 min-w-[200px] animate-sf-pop-in data-[state=closed]:animate-sf-pop-out overflow-hidden rounded-lg bg-surface p-1.5 text-sm shadow-pop",
           className,
         )}
         {...props}

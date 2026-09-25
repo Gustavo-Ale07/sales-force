@@ -8,7 +8,7 @@ export const DialogTrigger = RadixDialog.Trigger;
 export const DialogClose = RadixDialog.Close;
 
 export function DialogOverlay({ className, ...props }: ComponentProps<typeof RadixDialog.Overlay>) {
-  return <RadixDialog.Overlay className={cn("fixed inset-0 z-40 animate-sf-fade-in bg-scrim", className)} {...props} />;
+  return <RadixDialog.Overlay className={cn("fixed inset-0 z-40 animate-sf-fade-in bg-scrim data-[state=closed]:animate-sf-fade-out", className)} {...props} />;
 }
 
 export interface DialogContentProps extends Omit<ComponentProps<typeof RadixDialog.Content>, "title"> {
@@ -27,7 +27,7 @@ export function DialogContent({ title, description, footer, closeLabel = "Fechar
       <RadixDialog.Content
         {...(description ? {} : { "aria-describedby": undefined })}
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 flex max-h-[85vh] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 animate-sf-pop-in flex-col rounded-xl bg-surface shadow-overlay",
+          "fixed left-1/2 top-1/2 z-50 flex max-h-[85vh] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 animate-sf-pop-in flex-col data-[state=closed]:animate-sf-pop-out rounded-xl bg-surface shadow-overlay",
           className,
         )}
         {...props}

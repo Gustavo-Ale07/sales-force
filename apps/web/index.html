@@ -8,7 +8,14 @@
     <title>Sales Force</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Boot screen: shown until the app mounts and replaces #root's content. Styled from the bundled stylesheet (the CSP forbids inline styles). -->
+      <div class="sf-boot" role="status" aria-live="polite">
+        <span class="sf-boot__mark" aria-hidden="true"></span>
+        <p class="sf-boot__text">Carregando o Sales Force…</p>
+        <span class="sf-boot__bar" aria-hidden="true"></span>
+      </div>
+    </div>
     <noscript>Este aplicativo precisa de JavaScript habilitado.</noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>

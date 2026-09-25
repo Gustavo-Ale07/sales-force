@@ -75,7 +75,7 @@ export function Toaster({ label = "Notificações" }: { label?: string }) {
             if (!open) dismissToast(item.id);
           }}
           className={cn(
-            "flex animate-sf-toast-in items-start gap-3 rounded-lg bg-[#1d1d1b] px-4 py-3 text-white shadow-overlay",
+            "flex animate-sf-toast-in data-[state=closed]:animate-sf-toast-out items-start gap-3 rounded-lg bg-[#1d1d1b] px-4 py-3 text-white shadow-overlay",
           )}
         >
           <span aria-hidden="true" className={cn("mt-1.5 size-2 shrink-0 rounded-full", toneDot[item.tone ?? "neutral"])} />

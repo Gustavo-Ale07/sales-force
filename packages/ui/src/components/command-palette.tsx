@@ -114,10 +114,10 @@ function PaletteBody({
   return (
     <>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className="fixed inset-0 z-40 animate-sf-fade-in bg-scrim" />
+        <RadixDialog.Overlay className="fixed inset-0 z-40 animate-sf-fade-in bg-scrim data-[state=closed]:animate-sf-fade-out" />
         <RadixDialog.Content
           aria-describedby={undefined}
-          className="fixed left-1/2 top-[12vh] z-50 flex max-h-[76vh] w-[calc(100vw-2rem)] max-w-[620px] -translate-x-1/2 animate-sf-pop-in flex-col overflow-hidden rounded-[20px] bg-surface shadow-overlay"
+          className="fixed left-1/2 top-[12vh] z-50 flex max-h-[76vh] w-[calc(100vw-2rem)] max-w-[620px] -translate-x-1/2 animate-sf-pop-in flex-col overflow-hidden rounded-[20px] data-[state=closed]:animate-sf-pop-out bg-surface shadow-overlay"
         >
           <RadixDialog.Title className="sr-only">{title}</RadixDialog.Title>
           <div className="flex h-[60px] shrink-0 items-center gap-3 border-b border-line px-5">

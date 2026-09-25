@@ -23,7 +23,7 @@ export function Tooltip({ content, children, side = "top", className }: TooltipP
         <RadixTooltip.Content
           side={side}
           sideOffset={5}
-          className={cn("z-50 max-w-xs rounded-md bg-fg px-2 py-1 text-xs text-surface shadow-pop", className)}
+          className={cn("z-50 max-w-xs animate-sf-fade-in data-[state=closed]:animate-sf-fade-out rounded-md bg-fg px-2 py-1 text-xs text-surface shadow-pop", className)}
         >
           {content}
           <RadixTooltip.Arrow className="fill-fg" />

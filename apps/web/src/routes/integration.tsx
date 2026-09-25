@@ -2,6 +2,7 @@ import type { ApiSchema } from "@salesforce/contracts/client";
 import {
   Alert,
   Badge,
+  Button,
   Card,
   CardBody,
   CardHeader,
@@ -9,8 +10,9 @@ import {
   EmptyState,
   KeyValue,
   KeyValueList,
+  LoadingPanel,
   PageHeader,
-  SkeletonLines,
+  Reveal,
   StatusBadge,
   StatusDot,
   Table,
@@ -23,6 +25,7 @@ import {
   type Tone,
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
+import { RefreshCw } from "lucide-react";
 import { QueryError } from "../components/query-error";
 import { configurationQueryOptions } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
@@ -65,17 +68,33 @@ export function IntegrationPage() {
         title="Integração e configuração"
        
         description="Estado da integração com o ERP e da configuração desta instalação (somente leitura)."
+        actions={
+          <Button
+            variant="secondary"
+            leftIcon={<RefreshCw size={15} strokeWidth={1.75} aria-hidden="true" />}
+            loading={query.isFetching}
+            loadingText="Sincronizando…"
+            onClick={() => void query.refetch()}
+          >
+            Atualizar estado
+          </Button>
+        }
       />
       {query.isPending ? (
-        <div aria-busy="true">
-          <SkeletonLines lines={8} label="Carregando configuração…" />
-        </div>
+        <LoadingPanel title="Consultando a integração com o ERP…" description="Buscando o estado da sincronização e a configuração desta instalação." lines={8} />
       ) : query.isError ? (
         <Card>
           <QueryError error={query.error} onRetry={() => void query.refetch()} retrying={query.isRefetching} title="Não foi possível carregar a configuração" />
         </Card>
       ) : (
-        <ConfigurationView data={query.data} />
+        <>
+          {query.isFetching ? (
+            <Alert tone="info" title="Sincronizando com o ERP…">
+              Atualizando o estado da integração; os dados abaixo serão substituídos assim que a resposta chegar.
+            </Alert>
+          ) : null}
+          <ConfigurationView data={query.data} />
+        </>
       )}
     </>
   );
@@ -125,6 +144,7 @@ function ConfigurationView({ data }: { data: ApiSchema<"ConfigurationResponse"> 
           </CardBody>
         </Card>
       </div>
+      <Reveal>
       <Card>
         <CardHeader title="Sincronização por entidade" />
         {syncStates.length === 0 ? (
@@ -175,6 +195,7 @@ function ConfigurationView({ data }: { data: ApiSchema<"ConfigurationResponse"> 
           </Table>
         )}
       </Card>
+      </Reveal>
     </>
   );
 }

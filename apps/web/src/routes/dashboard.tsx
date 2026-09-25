@@ -10,7 +10,8 @@ import {
   Money,
   PageHeader,
   SimpleBarChart,
-  SkeletonLines,
+  LoadingPanel,
+  Reveal,
   StatGrid,
   StatTile,
   StatusDot,
@@ -258,9 +259,7 @@ export function DashboardPage() {
       />
 
       {query.isPending ? (
-        <div aria-busy="true">
-          <SkeletonLines lines={6} label="Carregando indicadores…" />
-        </div>
+        <LoadingPanel title="Carregando indicadores…" description="Reunindo clientes, produtos e pedidos da sua carteira." lines={6} />
       ) : query.isError ? (
         <Card>
           <QueryError error={query.error} onRetry={() => void query.refetch()} retrying={query.isRefetching} />
@@ -292,7 +291,7 @@ export function DashboardPage() {
             </KpiLink>
           </StatGrid>
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <Reveal className="grid gap-4 md:grid-cols-3">
             <Card className="md:col-span-2" aria-label="Atenção necessária">
               <CardHeader
                 title="Atenção necessária"
@@ -330,9 +329,11 @@ export function DashboardPage() {
                 ) : null}
               </CardBody>
             </Card>
-          </div>
+          </Reveal>
 
-          <RecentOrders orders={query.data.recentOrders} />
+          <Reveal delayMs={60}>
+            <RecentOrders orders={query.data.recentOrders} />
+          </Reveal>
         </>
       )}
     </>

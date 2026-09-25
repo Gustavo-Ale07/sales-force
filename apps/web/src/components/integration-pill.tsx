@@ -27,13 +27,13 @@ export function integrationStateOf(ready: ApiSchema<"ReadyResponse"> | undefined
 }
 
 /** Integration-state slot for the top bar, fed by `GET /ready` (polled every minute). */
-export function IntegrationPill({ state = "unknown", detail }: { state?: IntegrationState; detail?: string | null }) {
+export function IntegrationPill({ state = "unknown", detail, syncing = false }: { state?: IntegrationState; detail?: string | null; syncing?: boolean }) {
   const { tone, label, hint } = presentation[state];
   return (
     <Tooltip content={detail ? `${hint} ${detail}` : hint}>
       {/* Focusable so keyboard users can reach the explanatory tooltip (WCAG 1.4.13). */}
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
-      <span tabIndex={0} className="inline-flex rounded-full">
+      <span tabIndex={0} data-syncing={syncing || undefined} className="inline-flex rounded-full data-[syncing=true]:animate-sf-breathe">
         <StatusBadge tone={tone}>{label}</StatusBadge>
       </span>
     </Tooltip>
@@ -43,5 +43,5 @@ export function IntegrationPill({ state = "unknown", detail }: { state?: Integra
 export function ConnectedIntegrationPill() {
   const api = useApi();
   const ready = useQuery(readyQueryOptions(api));
-  return <IntegrationPill state={integrationStateOf(ready.data, ready.isError)} detail={ready.data?.integration.message} />;
+  return <IntegrationPill state={integrationStateOf(ready.data, ready.isError)} detail={ready.data?.integration.message} syncing={ready.isFetching} />;
 }
