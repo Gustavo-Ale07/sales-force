@@ -24,10 +24,11 @@ describe("SegmentedControl", () => {
     expect(screen.getByRole("radio", { name: "Qualquer selecionado" })).not.toBeChecked();
   });
 
-  it("moves the choice with the arrow keys", async () => {
+  it("is a single tab stop and the arrow keys move between the choices", async () => {
     render(<Harness />);
-    screen.getByRole("radio", { name: "Qualquer selecionado" }).focus();
+    await userEvent.tab();
+    expect(screen.getByRole("radio", { name: "Qualquer selecionado" })).toHaveFocus();
     await userEvent.keyboard("{ArrowRight}");
-    expect(screen.getByRole("radio", { name: "Todos selecionados" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Todos selecionados" })).toHaveFocus();
   });
 });
