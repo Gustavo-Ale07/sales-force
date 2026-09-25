@@ -88,6 +88,33 @@ describe('list queries', () => {
     });
     expect(OrdersQuerySchema.parse({}).sort).toBe('-updatedAt');
   });
+
+  it('orders query: period as calendar dates, products as a deduplicated comma list', () => {
+    expect(OrdersQuerySchema.parse({ from: '2026-03-01', to: '2026-03-31', dateField: 'updatedAt' })).toMatchObject({
+      from: '2026-03-01',
+      to: '2026-03-31',
+      dateField: 'updatedAt',
+    });
+    expect(OrdersQuerySchema.parse({ productCodes: '12,34,12', productMatch: 'all' })).toMatchObject({
+      productCodes: [12, 34],
+      productMatch: 'all',
+    });
+    expect(OrdersQuerySchema.parse({ productCodes: '7' }).productCodes).toEqual([7]);
+    for (const query of [
+      { from: '01/03/2026' },
+      { to: '2026-02-30' },
+      { dateField: 'deletedAt' },
+      { productMatch: 'some' },
+      { productCodes: '' },
+      { productCodes: '1,,2' },
+      { productCodes: '1;2' },
+      { productCodes: '-3' },
+      { productCodes: Array.from({ length: 21 }, (_, i) => i).join(',') },
+    ]) {
+      expect(OrdersQuerySchema.safeParse(query).success, JSON.stringify(query)).toBe(false);
+    }
+    expect(OrdersQuerySchema.safeParse({ productCodes: Array.from({ length: 20 }, (_, i) => i).join(',') }).success).toBe(true);
+  });
 });
 
 describe('list price context', () => {

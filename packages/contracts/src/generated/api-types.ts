@@ -693,6 +693,8 @@ export interface components {
         };
         /** @enum {string} */
         NoPriceReason: "no_resolved_table" | "no_effective_version" | "no_price_row";
+        /** @enum {string} */
+        OrderDateField: "createdAt" | "updatedAt";
         OrderDetail: {
             /** Format: uuid */
             id: string;
@@ -739,12 +741,15 @@ export interface components {
             status: components["schemas"]["OrderStatus"];
             estimatedTotal: components["schemas"]["DecimalString"];
             itemCount: number;
+            itemPreview: string[];
             isPartial: boolean;
             erpNumber: number | null;
             version: number;
             createdAt: components["schemas"]["IsoTimestamp"];
             updatedAt: components["schemas"]["IsoTimestamp"];
         };
+        /** @enum {string} */
+        OrderProductMatch: "any" | "all";
         /** @enum {string} */
         OrderSort: "updatedAt" | "-updatedAt" | "draftNumber" | "-draftNumber";
         /** @enum {string} */
@@ -1569,6 +1574,11 @@ export interface operations {
                 search?: string;
                 status?: components["schemas"]["OrderStatus"];
                 customerCode?: number;
+                from?: string;
+                to?: string;
+                dateField?: components["schemas"]["OrderDateField"];
+                productCodes?: string;
+                productMatch?: components["schemas"]["OrderProductMatch"];
                 sort?: components["schemas"]["OrderSort"];
                 page?: number;
                 pageSize?: number;

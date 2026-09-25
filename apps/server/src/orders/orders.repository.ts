@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { erpCustomer, salesOrder, salesOrderItem, type Database } from '@salesforce/db';
 import type { CustomerScope, OrderItem } from '@salesforce/domain';
 import { and, asc, desc, eq, ne, or, sql, type SQL } from 'drizzle-orm';
-import { containsText, digitsOf, eqInt, inInts, offsetOf } from '../platform/sql.js';
+import { containsText, digitsOf, eqInt, fitsPgInt, inInts, offsetOf } from '../platform/sql.js';
 import { DATABASE } from '../platform/tokens.js';
 
 export type OrderRow = typeof salesOrder.$inferSelect;
@@ -18,13 +18,28 @@ export interface OrderListFilter {
   readonly search?: string | undefined;
   readonly status?: string | undefined;
   readonly customerCode?: number | undefined;
+  /** Inclusive calendar dates (`YYYY-MM-DD`) in {@link BUSINESS_TIME_ZONE}, applied to `dateField`. */
+  readonly from?: string | undefined;
+  readonly to?: string | undefined;
+  readonly dateField?: 'createdAt' | 'updatedAt' | undefined;
+  /** Orders with a line for these products: at least one (`any`, default) or every one (`all`). */
+  readonly productCodes?: readonly number[] | undefined;
+  readonly productMatch?: 'any' | 'all' | undefined;
   readonly sort: 'updatedAt' | '-updatedAt' | 'draftNumber' | '-draftNumber';
 }
+
+/** Time zone the period filter is read in (decisions.md: business calculations in America/Sao_Paulo). */
+export const BUSINESS_TIME_ZONE = 'America/Sao_Paulo';
+
+/** Lines shown as a glance in the list. */
+const ITEM_PREVIEW_SIZE = 3;
 
 export interface OrderListRow {
   readonly order: OrderRow;
   readonly customerName: string | null;
   readonly itemCount: number;
+  /** Descriptions of the first lines (matching lines first when filtered by product). */
+  readonly itemPreview: readonly string[];
   readonly unpricedCount: number;
 }
 
@@ -35,6 +50,28 @@ export interface OrderCounts {
 }
 
 /** Order visibility follows the seller recorded on the order at draft time (P-21). */
+/**
+ * Product filter on the order lines. `any`: at least one line is one of the products. `all`: every product has a
+ * line (distinct products, so a repeated line never counts twice). A code that cannot exist in an `integer`
+ * column matches nothing, so it makes an `all` filter empty and is ignored by `any`.
+ */
+function productCondition(codes: readonly number[] | undefined, match: 'any' | 'all' | undefined): SQL | undefined {
+  if (codes === undefined || codes.length === 0) return undefined;
+  const wanted = [...new Set(codes)];
+  const usable = wanted.filter(fitsPgInt);
+  if (usable.length === 0 || (match === 'all' && usable.length !== wanted.length)) return sql`false`;
+  const lineOfProducts = sql`${salesOrderItem.orderId} = ${salesOrder.id} and ${inInts(salesOrderItem.productCode, usable)}`;
+  return match === 'all'
+    ? sql`(select count(distinct ${salesOrderItem.productCode}) from ${salesOrderItem} where ${lineOfProducts}) = ${usable.length}`
+    : sql`exists (select 1 from ${salesOrderItem} where ${lineOfProducts})`;
+}
+
+/** `ORDER BY` prefix that puts the lines of the filtered products first in the list preview. */
+function matchingLinesFirst(codes: readonly number[] | undefined): SQL {
+  const usable = (codes ?? []).filter(fitsPgInt);
+  return usable.length === 0 ? sql`` : sql`(${inInts(salesOrderItem.productCode, usable)}) desc, `;
+}
+
 function scopeCondition(scope: CustomerScope): SQL | undefined {
   return scope.kind === 'all' ? undefined : inInts(salesOrder.sellerCode, scope.sellerCodes);
 }
@@ -140,12 +177,19 @@ export class OrdersRepository {
             number === null ? undefined : eqInt(salesOrder.customerCode, number),
             number === null || !Number.isSafeInteger(number) ? undefined : sql`${salesOrder.erpNumber} = ${number}`,
           );
+    const dateColumn = filter.dateField === 'updatedAt' ? salesOrder.updatedAt : salesOrder.createdAt;
+    const zone = sql.raw(`'${BUSINESS_TIME_ZONE}'`);
     const where = and(
       scopeCondition(filter.scope),
       filter.status === undefined ? undefined : eq(salesOrder.status, filter.status),
       filter.customerCode === undefined ? undefined : eqInt(salesOrder.customerCode, filter.customerCode),
+      // The bounds are compared against the raw column so the date indexes stay usable.
+      filter.from === undefined ? undefined : sql`${dateColumn} >= (${filter.from}::date)::timestamp at time zone ${zone}`,
+      filter.to === undefined ? undefined : sql`${dateColumn} < (${filter.to}::date + 1)::timestamp at time zone ${zone}`,
+      productCondition(filter.productCodes, filter.productMatch),
       searchCondition,
     );
+    const previewFirst = matchingLinesFirst(filter.productCodes);
 
     const direction = filter.sort.startsWith('-') ? desc : asc;
     const order =
@@ -159,6 +203,7 @@ export class OrdersRepository {
           order: salesOrder,
           customerName: erpCustomer.name,
           itemCount: sql<number>`(select count(*)::int from ${salesOrderItem} where ${salesOrderItem.orderId} = ${salesOrder.id})`,
+          itemPreview: sql<string[]>`array(select ${salesOrderItem.productDescription} from ${salesOrderItem} where ${salesOrderItem.orderId} = ${salesOrder.id} order by ${previewFirst}${salesOrderItem.lineNo} limit ${sql.raw(String(ITEM_PREVIEW_SIZE))})`,
           unpricedCount: sql<number>`(select count(*)::int from ${salesOrderItem} where ${salesOrderItem.orderId} = ${salesOrder.id} and ${salesOrderItem.priceState} = 'none')`,
         })
         .from(salesOrder)

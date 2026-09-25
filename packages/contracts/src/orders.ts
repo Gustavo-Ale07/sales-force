@@ -8,7 +8,9 @@ import {
   named,
   paginated,
   paginationQueryShape,
+  queryDate,
   queryInt,
+  queryIntList,
   querySearch,
 } from './primitives.js';
 
@@ -48,10 +50,31 @@ export const OrderSortSchema = named(
   z.enum(['updatedAt', '-updatedAt', 'draftNumber', '-draftNumber']),
 );
 
+/**
+ * Which date the period filter (`from`/`to`) applies to. Sales Force only records two dates for an order:
+ * when the draft was created (the "Data" shown in the list) and when it last changed. There is no separate
+ * emission / sale / invoice date until the ERP submission exists.
+ */
+export const OrderDateFieldSchema = named('OrderDateField', z.enum(['createdAt', 'updatedAt']));
+
+/** How several product filters combine: the order has AT LEAST ONE of them (`any`) or ALL of them (`all`). */
+export const OrderProductMatchSchema = named('OrderProductMatch', z.enum(['any', 'all']));
+
+export const MAX_ORDER_PRODUCT_FILTER = 20;
+
 export const OrdersQuerySchema = z.object({
   search: querySearch().optional(),
   status: OrderStatusSchema.optional(),
   customerCode: queryInt(0).optional(),
+  /** Period, inclusive on both ends, as calendar dates in the business time zone (America/Sao_Paulo). */
+  from: queryDate().optional(),
+  to: queryDate().optional(),
+  /** Date the period applies to; `createdAt` when omitted. */
+  dateField: OrderDateFieldSchema.optional(),
+  /** Product codes, comma-separated (at most 20): orders with a line for those products. */
+  productCodes: queryIntList(MAX_ORDER_PRODUCT_FILTER).optional(),
+  /** `any` (default): at least one of the products; `all`: every one of them. Ignored without `productCodes`. */
+  productMatch: OrderProductMatchSchema.optional(),
   sort: OrderSortSchema.default('-updatedAt'),
   ...paginationQueryShape,
 });
@@ -69,6 +92,11 @@ export const OrderListItemSchema = named(
     /** Estimate from list prices; the final value is calculated by the ERP. */
     estimatedTotal: DecimalStringSchema,
     itemCount: z.number().int().min(0),
+    /**
+     * Descriptions of up to 3 lines, for a glance at the list. When the list is filtered by product, the
+     * matching lines come first; otherwise they follow the line number.
+     */
+    itemPreview: z.array(z.string()).max(3),
     /** True when at least one line has no price, so the estimate does not cover the whole order. */
     isPartial: z.boolean(),
     /** ERP order number once the order exists there; always `null` while submission is disabled. */
@@ -119,7 +147,8 @@ export type OrderTotals = z.infer<typeof OrderTotalsSchema>;
 export const OrderDetailSchema = named(
   'OrderDetail',
   z.object({
-    ...OrderListItemSchema.shape,
+    // The detail lists every line, so the list preview does not apply.
+    ...OrderListItemSchema.omit({ itemPreview: true }).shape,
     negotiationTypeCode: codeInt().nullable(),
     notes: z.string().nullable(),
     items: z.array(OrderItemSchema),

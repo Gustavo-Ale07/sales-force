@@ -18,6 +18,7 @@ export function toOrderListItem(row: OrderListRow): OrderListItem {
     status: order.status as OrderStatus,
     estimatedTotal: order.estimatedTotal,
     itemCount: row.itemCount,
+    itemPreview: [...row.itemPreview],
     isPartial: row.unpricedCount > 0,
     erpNumber: order.erpNumber,
     version: order.version,

@@ -78,9 +78,25 @@ export class OrdersService {
   /* ---------- reads ---------- */
 
   async list(user: CurrentUser, query: OrdersQuery): Promise<OrdersResponse> {
+    if (query.from !== undefined && query.to !== undefined && query.from > query.to) {
+      throw new AppError('validation_failed', {
+        details: { issues: [{ path: 'to', code: 'range_inverted', message: 'A data final não pode ser anterior à inicial.' }] },
+      });
+    }
     const { scope } = await this.policy.accessContext(user);
     const { rows, total } = await this.orders.list(
-      { scope, search: query.search, status: query.status, customerCode: query.customerCode, sort: query.sort },
+      {
+        scope,
+        search: query.search,
+        status: query.status,
+        customerCode: query.customerCode,
+        from: query.from,
+        to: query.to,
+        dateField: query.dateField,
+        productCodes: query.productCodes,
+        productMatch: query.productMatch,
+        sort: query.sort,
+      },
       { page: query.page, pageSize: query.pageSize },
     );
     return { items: rows.map(toOrderListItem), page: query.page, pageSize: query.pageSize, total };

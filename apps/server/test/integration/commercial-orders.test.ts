@@ -392,6 +392,139 @@ describe('list orders', () => {
   });
 });
 
+describe('list orders: commercial filters (period, products, combinations)', () => {
+  const at = (iso: string) => new Date(iso);
+  let A: string; // products 0+1, created 10/03/2026, edited 02/05/2026
+  let B: string; // products 1+2, created 31/03/2026 23:30 in Brasilia (already 01/04 in UTC)
+  let C: string; // products 0+1+2, created now
+  let foreign: string; // seller 2, product 2 only
+  let mine: Set<string>;
+  const code = (index: number) => Number(priced[index]?.code);
+  const ids = async (who: Who, query: string): Promise<string[]> => {
+    const { status, body } = await ctx.call(who, 'GET', `/orders?pageSize=100&${query}`);
+    expect(status, query).toBe(200);
+    expect(OrdersResponseSchema.safeParse(body).success, query).toBe(true);
+    return body.items.map((order: Json) => order.id).filter((id: string) => mine.has(id));
+  };
+  const line = (index: number) => ({ productCode: code(index), quantity: '1' });
+
+  beforeAll(async () => {
+    const make = async (who: Who, items: unknown[], customerCode = customer1) =>
+      (await create(who, draftBody({ items }, customerCode))).body.id as string;
+    A = await make('seller1', [line(0), line(1)]);
+    B = await make('seller1', [line(1), line(2)]);
+    C = await make('seller1', [line(0), line(1), line(2)]);
+    foreign = await make('seller2', [line(2)], customer2);
+    mine = new Set([A, B, C, foreign]);
+    const { db } = ctx.database.handle;
+    await db.update(salesOrder).set({ createdAt: at('2026-03-10T15:00:00Z'), updatedAt: at('2026-05-02T15:00:00Z') }).where(eq(salesOrder.id, A));
+    await db.update(salesOrder).set({ createdAt: at('2026-04-01T02:30:00Z'), updatedAt: at('2026-04-01T02:30:00Z') }).where(eq(salesOrder.id, B));
+  });
+
+  it('period: inclusive on both ends, read as calendar dates in America/Sao_Paulo', async () => {
+    expect(await ids('seller1', 'from=2026-03-10&to=2026-03-10')).toEqual([A]);
+    // B was created 23:30 of 31/03 in Brasilia, although it is already 01/04 in UTC.
+    expect(await ids('seller1', 'from=2026-03-31&to=2026-03-31')).toEqual([B]);
+    expect(await ids('seller1', 'from=2026-04-01&to=2026-04-01')).toEqual([]);
+    expect((await ids('seller1', 'from=2026-03-01&to=2026-03-31')).sort()).toEqual([A, B].sort());
+    expect((await ids('seller1', 'to=2026-03-31')).sort()).toEqual([A, B].sort());
+    expect(await ids('seller1', 'from=2026-04-01')).toEqual([C]);
+  });
+
+  it('dateField picks the creation date (default) or the last update', async () => {
+    expect(await ids('seller1', 'from=2026-05-01&to=2026-05-31')).toEqual([]);
+    expect(await ids('seller1', 'from=2026-05-01&to=2026-05-31&dateField=createdAt')).toEqual([]);
+    expect(await ids('seller1', 'from=2026-05-01&to=2026-05-31&dateField=updatedAt')).toEqual([A]);
+  });
+
+  it('a malformed or inverted period, or a malformed product list, is a 400 and never reaches the database', async () => {
+    for (const query of [
+      'from=2026-13-40',
+      'from=10/03/2026',
+      'to=ontem',
+      'from=2026-05-02&to=2026-05-01',
+      'dateField=deletedAt',
+      'productCodes=abc',
+      'productCodes=1,,2',
+      'productCodes=-1',
+      `productCodes=${Array.from({ length: 21 }, (_, i) => i + 1).join(',')}`,
+      'productMatch=some',
+    ]) {
+      const { status, body } = await ctx.call('seller1', 'GET', `/orders?${query}`);
+      expect(status, query).toBe(400);
+      expect(body.code, query).toBe('validation_failed');
+    }
+  });
+
+  it('one product: every order with a line for it', async () => {
+    expect((await ids('seller1', `productCodes=${code(0)}`)).sort()).toEqual([A, C].sort());
+    expect((await ids('seller1', `productCodes=${code(2)}`)).sort()).toEqual([B, C].sort());
+    expect(await ids('seller1', 'productCodes=999999999')).toEqual([]);
+    expect(await ids('seller1', 'productCodes=99999999999999')).toEqual([]);
+  });
+
+  it('several products: "any" (default) is the union, "all" is the intersection', async () => {
+    const both = `productCodes=${code(0)},${code(2)}`;
+    expect((await ids('seller1', both)).sort()).toEqual([A, B, C].sort());
+    expect((await ids('seller1', `${both}&productMatch=any`)).sort()).toEqual([A, B, C].sort());
+    expect(await ids('seller1', `${both}&productMatch=all`)).toEqual([C]);
+    expect((await ids('seller1', `productCodes=${code(0)},${code(1)}&productMatch=all`)).sort()).toEqual([A, C].sort());
+  });
+
+  it('"all" with an unknown product finds nothing, "any" ignores it; a repeated code counts once', async () => {
+    expect(await ids('seller1', `productCodes=${code(0)},999999999&productMatch=all`)).toEqual([]);
+    expect((await ids('seller1', `productCodes=${code(0)},999999999&productMatch=any`)).sort()).toEqual([A, C].sort());
+    expect(await ids('seller1', `productCodes=${code(0)},${code(0)},${code(2)}&productMatch=all`)).toEqual([C]);
+    expect(await ids('seller1', `productCodes=${code(0)},99999999999999&productMatch=all`)).toEqual([]);
+  });
+
+  it('all filters work together (customer + period + products + status)', async () => {
+    const both = `customerCode=${customer1}&status=draft&productCodes=${code(1)},${code(2)}&productMatch=all`;
+    expect((await ids('seller1', both)).sort()).toEqual([B, C].sort());
+    expect(await ids('seller1', `${both}&from=2026-03-01&to=2026-03-31`)).toEqual([B]);
+    expect(await ids('seller1', `${both}&from=2026-03-01&to=2026-03-31&dateField=updatedAt`)).toEqual([B]);
+    expect(await ids('seller1', `${both}&from=2026-03-01&to=2026-03-09`)).toEqual([]);
+    expect(await ids('seller1', `customerCode=${customer1}&productCodes=${code(1)}&status=cancelled`)).toEqual([]);
+    expect(await ids('manager', `customerCode=${customer2}&productCodes=${code(2)}`)).toEqual([foreign]);
+  });
+
+  it('the total and the pages follow the filter', async () => {
+    const query = `productCodes=${code(0)},${code(1)}&productMatch=all&sort=draftNumber`;
+    const full = await ctx.call('seller1', 'GET', `/orders?${query}&pageSize=100`);
+    const total = full.body.total as number;
+    expect(total).toBeGreaterThanOrEqual(2);
+    const firstPage = await ctx.call('seller1', 'GET', `/orders?${query}&pageSize=1&page=1`);
+    const lastPage = await ctx.call('seller1', 'GET', `/orders?${query}&pageSize=1&page=${total}`);
+    expect(firstPage.body.total).toBe(total);
+    expect(firstPage.body.items).toHaveLength(1);
+    expect(firstPage.body.items[0].id).toBe(full.body.items[0].id);
+    expect(lastPage.body.items[0].id).toBe(full.body.items[total - 1].id);
+  });
+
+  it('the list preview shows up to 3 line descriptions, the filtered products first', async () => {
+    const lastIndex = priced[3] ? 3 : 2;
+    const wide = await create('seller1', draftBody({ items: Array.from({ length: lastIndex + 1 }, (_, index) => line(index)) }));
+    mine.add(wide.body.id);
+    const plain = await ctx.call('seller1', 'GET', '/orders?pageSize=100');
+    const plainItem = plain.body.items.find((order: Json) => order.id === wide.body.id);
+    expect(plainItem.itemCount).toBe(lastIndex + 1);
+    expect(plainItem.itemPreview).toEqual(priced.slice(0, 3).map((product) => product.description));
+
+    const filtered = await ctx.call('seller1', 'GET', `/orders?pageSize=100&productCodes=${code(lastIndex)}`);
+    const filteredItem = filtered.body.items.find((order: Json) => order.id === wide.body.id);
+    expect(filteredItem.itemPreview).toHaveLength(3);
+    expect(filteredItem.itemPreview[0]).toBe(priced[lastIndex]?.description);
+  });
+
+  it('scope: a seller never finds another seller order through the product or period filters', async () => {
+    expect(await ids('seller1', `productCodes=${code(2)}`)).not.toContain(foreign);
+    expect(await ids('seller1', `productCodes=${code(2)}&customerCode=${customer2}`)).toEqual([]);
+    expect(await ids('seller1', `from=${new Date().toISOString().slice(0, 10)}&productCodes=${code(2)}`)).not.toContain(foreign);
+    expect(await ids('seller2', `productCodes=${code(2)}`)).toEqual([foreign]);
+    expect(await ids('manager', `productCodes=${code(2)}`)).toContain(foreign);
+  });
+});
+
 describe('IDOR: a seller never reaches another seller data', () => {
   let foreignId: string;
   let foreignCustomer: number;

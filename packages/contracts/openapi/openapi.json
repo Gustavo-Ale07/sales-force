@@ -956,6 +956,51 @@
             }
           },
           {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          {
+            "name": "dateField",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/OrderDateField"
+            }
+          },
+          {
+            "name": "productCodes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d+(,\\d+)*$"
+            }
+          },
+          {
+            "name": "productMatch",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/OrderProductMatch"
+            }
+          },
+          {
             "name": "sort",
             "in": "query",
             "required": false,
@@ -3346,6 +3391,13 @@
           "no_price_row"
         ]
       },
+      "OrderDateField": {
+        "type": "string",
+        "enum": [
+          "createdAt",
+          "updatedAt"
+        ]
+      },
       "OrderDetail": {
         "type": "object",
         "properties": {
@@ -3594,6 +3646,13 @@
             "type": "integer",
             "minimum": 0
           },
+          "itemPreview": {
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "isPartial": {
             "type": "boolean"
           },
@@ -3627,6 +3686,7 @@
           "status",
           "estimatedTotal",
           "itemCount",
+          "itemPreview",
           "isPartial",
           "erpNumber",
           "version",
@@ -3634,6 +3694,13 @@
           "updatedAt"
         ],
         "additionalProperties": false
+      },
+      "OrderProductMatch": {
+        "type": "string",
+        "enum": [
+          "any",
+          "all"
+        ]
       },
       "OrderSort": {
         "type": "string",

@@ -49,6 +49,20 @@ export const queryBoolean = () => z.enum(['true', 'false']).transform((v) => v =
 
 export const querySearch = () => z.string().trim().min(1).max(100);
 
+/** Calendar date `YYYY-MM-DD` (no time, no zone): the server reads it in the business time zone. */
+export const queryDate = () => z.iso.date();
+
+/**
+ * Comma-separated list of non-negative integers (`?productCodes=12,34`): one plain string on the wire, so it
+ * survives every client and proxy the same way. Duplicates are dropped, order is kept.
+ */
+export const queryIntList = (max: number) =>
+  z
+    .string()
+    .regex(/^\d+(,\d+)*$/, 'Expected comma-separated integers')
+    .transform((value) => [...new Set(value.split(',').map(Number))])
+    .pipe(z.array(z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)).min(1).max(max));
+
 export const MAX_PAGE_SIZE = 100;
 export const DEFAULT_PAGE_SIZE = 25;
 
