@@ -1,5 +1,5 @@
 import type { ApiSchema } from "@salesforce/contracts/client";
-import { asInt, asOneOf, asPageSize, asString, compact } from "./search-params";
+import { asDate, asInt, asIntList, asOneOf, asPageSize, asString, compact } from "./search-params";
 
 /**
  * URL search parameters of the list screens. Kept apart from the screens so the router can validate the
@@ -36,21 +36,45 @@ export interface OrdersSearch {
   search?: string;
   status?: ApiSchema<"OrderStatus">;
   customerCode?: number;
+  /** Period, inclusive, as `YYYY-MM-DD` calendar dates. */
+  from?: string;
+  to?: string;
+  /** Date the period applies to; the creation date when absent. */
+  dateField?: ApiSchema<"OrderDateField">;
+  /** Codes of the products the orders must contain. */
+  products?: number[];
+  /** How several products combine; "any" when absent. */
+  productMatch?: ApiSchema<"OrderProductMatch">;
   sort?: ApiSchema<"OrderSort">;
   page?: number;
   pageSize?: number;
 }
 
 export const ORDER_STATUSES = ["draft", "cancelled", "queued", "sent", "rejected", "unknown"] as const;
+export const MAX_ORDER_PRODUCTS = 20;
+export const ORDER_DATE_FIELDS = ["createdAt", "updatedAt"] as const;
+export const ORDER_PRODUCT_MATCHES = ["any", "all"] as const;
 export const ORDER_SORTS = ["updatedAt", "-updatedAt", "draftNumber", "-draftNumber"] as const;
 
 export function parseOrdersSearch(raw: Record<string, unknown>): OrdersSearch {
   const page = asInt(raw.page, 1);
   const pageSize = asPageSize(raw.pageSize);
+  const from = asDate(raw.from);
+  const to = asDate(raw.to);
+  const products = asIntList(raw.products, MAX_ORDER_PRODUCTS);
+  const dateField = asOneOf(raw.dateField, ORDER_DATE_FIELDS);
+  const productMatch = asOneOf(raw.productMatch, ORDER_PRODUCT_MATCHES);
   return compact({
     search: asString(raw.search),
     status: asOneOf(raw.status, ORDER_STATUSES),
     customerCode: asInt(raw.customerCode, 0),
+    from,
+    // An inverted period would be rejected by the API: keep the start and drop the impossible end.
+    to: from !== undefined && to !== undefined && to < from ? undefined : to,
+    // Defaults stay out of the URL; the choices only mean something next to what they qualify.
+    dateField: dateField !== undefined && dateField !== "createdAt" && (from !== undefined || to !== undefined) ? dateField : undefined,
+    products,
+    productMatch: productMatch === "all" && products !== undefined && products.length > 1 ? productMatch : undefined,
     sort: asOneOf(raw.sort, ORDER_SORTS),
     page: page !== undefined && page > 1 ? page : undefined,
     pageSize: pageSize !== 25 ? pageSize : undefined,
