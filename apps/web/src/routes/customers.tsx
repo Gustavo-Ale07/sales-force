@@ -75,6 +75,7 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
   const [searchText, setSearchText] = useSearchBox(params.search, (search) => change({ search }));
 
   const sellerOptions = sellers.data?.items ?? [];
+  const withSellers = sellerOptions.length > 1;
   const sellerName = sellerOptions.find((s) => s.code === params.sellerCode)?.name;
   const hasFilters =
     params.search !== undefined || params.status !== undefined || params.sellerCode !== undefined || params.hasPriceTable !== undefined;
@@ -104,8 +105,8 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
         </section>
       ) : null}
 
-      <FilterBar aria-label="Filtros da carteira">
-        <FilterField label="Busca" className="min-w-[220px] flex-1">
+      <FilterBar aria-label="Filtros da carteira" grid>
+        <FilterField label="Busca" className={withSellers ? "lg:col-span-4" : "sm:col-span-2 lg:col-span-6"}>
           <SearchInput
             size="md"
             value={searchText}
@@ -114,7 +115,7 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
             aria-label="Buscar cliente por código, nome ou documento"
           />
         </FilterField>
-        <FilterField label="Situação" className="w-[140px]">
+        <FilterField label="Situação" className={withSellers ? "lg:col-span-2" : "lg:col-span-3"}>
           <Select size="md" value={params.status ?? ""} onChange={(e) => change({ status: asOneOf(e.target.value, CUSTOMER_STATUSES) })}>
             <option value="">Todas</option>
             {CUSTOMER_STATUSES.map((status) => (
@@ -124,8 +125,8 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
             ))}
           </Select>
         </FilterField>
-        {sellerOptions.length > 1 ? (
-          <FilterField label="Vendedor" className="w-[200px]">
+        {withSellers ? (
+          <FilterField label="Vendedor" className="lg:col-span-3">
             <Select size="md" value={params.sellerCode ?? ""} onChange={(e) => change({ sellerCode: asInt(e.target.value, 0) })}>
               <option value="">Todos</option>
               {sellerOptions.map((seller) => (
@@ -136,7 +137,7 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
             </Select>
           </FilterField>
         ) : null}
-        <FilterField label="Tabela de preço" className="w-[160px]">
+        <FilterField label="Tabela de preço" className="lg:col-span-3">
           <Select
             size="md"
             value={params.hasPriceTable ?? ""}

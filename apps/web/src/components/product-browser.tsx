@@ -111,7 +111,7 @@ export function ProductBrowser({ filters, onFiltersChange, customerCode, cartQua
           aria-label="Grupo"
           value={group}
           onChange={(event) => onFiltersChange({ ...filters, group: event.target.value, page: 1 })}
-          wrapperClassName="w-[220px]"
+          wrapperClassName="w-full sm:w-[220px]"
         >
           <option value="">Todos os grupos</option>
           {(groups.data?.items ?? []).map((item) => (

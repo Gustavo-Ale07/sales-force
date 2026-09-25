@@ -85,7 +85,7 @@ export function OrderProductFilter({ codes, match, onChange, max }: OrderProduct
           rightIcon={<ChevronDown size={14} aria-hidden="true" />}
           className="w-full justify-between"
         >
-          <span className="truncate">
+          <span className="flex-1 truncate text-left">
             {codes.length === 0 ? "Todos os produtos" : codes.length === 1 ? "1 produto selecionado" : `${codes.length} produtos selecionados`}
           </span>
         </Button>
@@ -189,7 +189,7 @@ function ProductFilterContent({
               setGroup(event.target.value);
               setPage(1);
             }}
-            wrapperClassName="w-[200px]"
+            wrapperClassName="w-full sm:w-[200px]"
           >
             <option value="">Todos os grupos</option>
             {(groups.data?.items ?? []).map((item) => (

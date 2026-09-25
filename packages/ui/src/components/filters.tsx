@@ -2,12 +2,16 @@ import { X } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { cn } from "../lib/cn";
 
-/** Visible, explicit filter row above a table (never hidden behind a menu). Unboxed, as in the reference kit. */
-export function FilterBar({ className, ...props }: ComponentProps<"form">) {
+/**
+ * Visible, explicit filter row above a table (never hidden behind a menu). Unboxed, as in the reference kit.
+ * With `grid` the fields sit on a 12-column grid (1 column on phones, 2 on tablets): give each field a
+ * `lg:col-span-*` so every row adds up to 12 and the bar has no gaps.
+ */
+export function FilterBar({ className, grid, ...props }: ComponentProps<"form"> & { grid?: boolean }) {
   return (
     <form
       role="search"
-      className={cn("flex flex-wrap items-end gap-3", className)}
+      className={cn(grid ? "grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-12" : "flex flex-wrap items-end gap-3", className)}
       onSubmit={(event) => event.preventDefault()}
       {...props}
     />

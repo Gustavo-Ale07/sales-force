@@ -195,7 +195,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
         }
       />
 
-      <FilterBar aria-label="Filtros de pedidos" className="grid grid-cols-1 gap-x-3 gap-y-3 sm:grid-cols-2 lg:grid-cols-12">
+      <FilterBar aria-label="Filtros de pedidos" grid>
         <FilterField label="Nº do pedido ou cliente" className="lg:col-span-4">
           <SearchInput
             size="md"
@@ -205,7 +205,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
             aria-label="Buscar pedido por número ou cliente"
           />
         </FilterField>
-        <FilterField label="Cliente" className="lg:col-span-5">
+        <FilterField label="Cliente" className="lg:col-span-8">
           <CustomerFilter code={params.customerCode} onChange={(customerCode) => change({ customerCode })} />
         </FilterField>
         <FilterField label="Situação" className="lg:col-span-3">
@@ -219,7 +219,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
           </Select>
         </FilterField>
 
-        <FilterField label="Período por" className="lg:col-span-2">
+        <FilterField label="Período por" className="lg:col-span-3">
           <Select
             size="md"
             aria-label="Data usada no período"
@@ -233,13 +233,13 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
             ))}
           </Select>
         </FilterField>
-        <FilterField label="De" className="lg:col-span-2">
+        <FilterField label="De" className="lg:col-span-3">
           <DateFilterInput label="Data inicial" value={params.from} max={params.to} onCommit={setFrom} />
         </FilterField>
-        <FilterField label="Até" className="lg:col-span-2">
+        <FilterField label="Até" className="lg:col-span-3">
           <DateFilterInput label="Data final" value={params.to} min={params.from} onCommit={setTo} />
         </FilterField>
-        <FilterField label="Produtos" className="lg:col-span-4 sm:col-span-2">
+        <FilterField label="Produtos" className="lg:col-span-4">
           <OrderProductFilter
             codes={selectedProducts}
             match={params.productMatch ?? "any"}
@@ -247,7 +247,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
             onChange={(codes, match) => change({ products: codes.length > 0 ? codes : undefined, productMatch: codes.length > 1 && match === "all" ? match : undefined })}
           />
         </FilterField>
-        <FilterField label="Descrição do produto" className="lg:col-span-4 sm:col-span-2">
+        <FilterField label="Descrição do produto" className={selectedProducts.length > 1 ? "lg:col-span-4" : "lg:col-span-8"}>
           <SearchInput
             size="md"
             value={productText}

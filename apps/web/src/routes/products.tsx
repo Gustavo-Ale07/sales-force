@@ -140,8 +140,8 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
     <>
       <PageHeader title="Catálogo de produtos" count={query.data ? query.data.total.toLocaleString("pt-BR") : undefined} />
 
-      <FilterBar aria-label="Filtros do catálogo">
-        <FilterField label="Busca" className="min-w-[220px] flex-1">
+      <FilterBar aria-label="Filtros do catálogo" grid>
+        <FilterField label="Busca" className="lg:col-span-6">
           <SearchInput
             size="md"
             value={searchText}
@@ -150,34 +150,7 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
             aria-label="Buscar produto por código, descrição ou referência"
           />
         </FilterField>
-        <FilterField label="Grupo" className="w-[180px]">
-          <Select size="md" value={params.group ?? ""} onChange={(e) => change({ group: asInt(e.target.value, 0) })}>
-            <option value="">Todos</option>
-            {groups.data?.items.map((group) => (
-              <option key={group.code} value={group.code}>
-                {group.name}
-              </option>
-            ))}
-          </Select>
-        </FilterField>
-        <FilterField label="Venda" className="w-[140px]">
-          <Select size="md" value={params.sellable ?? ""} onChange={(e) => change({ sellable: asOneOf(e.target.value, BOOLEAN_TEXT) })}>
-            <option value="">Todos</option>
-            <option value="true">Vendáveis</option>
-            <option value="false">Não vendáveis</option>
-          </Select>
-        </FilterField>
-        <FilterField label="Preço" className="w-[140px]">
-          <Select size="md" value={params.priceState ?? ""} onChange={(e) => change({ priceState: asOneOf(e.target.value, PRICE_STATES) })}>
-            <option value="">Todos</option>
-            {PRICE_STATES.map((state) => (
-              <option key={state} value={state}>
-                {priceStateLabels[state]}
-              </option>
-            ))}
-          </Select>
-        </FilterField>
-        <div className="flex w-[260px] min-w-0 flex-col gap-0.5">
+        <div className="flex min-w-0 flex-col gap-1 lg:col-span-6">
           <span id="products-customer-label" className="text-xs font-medium text-fg-muted">
             Preços para o cliente
           </span>
@@ -191,6 +164,33 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
             onSelect={(customer) => change({ customerCode: customer?.code })}
           />
         </div>
+        <FilterField label="Grupo" className="lg:col-span-4">
+          <Select size="md" value={params.group ?? ""} onChange={(e) => change({ group: asInt(e.target.value, 0) })}>
+            <option value="">Todos</option>
+            {groups.data?.items.map((group) => (
+              <option key={group.code} value={group.code}>
+                {group.name}
+              </option>
+            ))}
+          </Select>
+        </FilterField>
+        <FilterField label="Venda" className="lg:col-span-4">
+          <Select size="md" value={params.sellable ?? ""} onChange={(e) => change({ sellable: asOneOf(e.target.value, BOOLEAN_TEXT) })}>
+            <option value="">Todos</option>
+            <option value="true">Vendáveis</option>
+            <option value="false">Não vendáveis</option>
+          </Select>
+        </FilterField>
+        <FilterField label="Preço" className="sm:col-span-2 lg:col-span-4">
+          <Select size="md" value={params.priceState ?? ""} onChange={(e) => change({ priceState: asOneOf(e.target.value, PRICE_STATES) })}>
+            <option value="">Todos</option>
+            {PRICE_STATES.map((state) => (
+              <option key={state} value={state}>
+                {priceStateLabels[state]}
+              </option>
+            ))}
+          </Select>
+        </FilterField>
       </FilterBar>
 
       {hasFilters ? (

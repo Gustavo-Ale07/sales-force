@@ -140,7 +140,7 @@ export function ProductMultiSelect({
             setGroup(event.target.value);
             setPage(1);
           }}
-          wrapperClassName="w-[200px]"
+          wrapperClassName="w-full sm:w-[200px]"
         >
           <option value="">Todos os grupos</option>
           {(groups.data?.items ?? []).map((item) => (
