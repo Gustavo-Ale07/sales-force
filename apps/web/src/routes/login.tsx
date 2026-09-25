@@ -251,7 +251,7 @@ function LoginHero() {
       className="relative overflow-hidden bg-[#0b1442] max-lg:aspect-[1374/1145] max-lg:max-h-[720px] lg:min-h-full"
     >
       <img
-        src="/assets/login/login-hero-left.png"
+        src="/assets/login/login-hero.png"
         alt=""
         width={1374}
         height={1145}
