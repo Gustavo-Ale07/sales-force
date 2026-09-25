@@ -135,15 +135,15 @@ export function LoginPage() {
               <span aria-hidden="true" className="mt-3 h-[2px] w-9 rounded-full bg-cta" />
             </div>
 
-            <form noValidate onSubmit={onSubmit} className="mt-[clamp(32px,7vh,64px)] flex animate-sf-fade-in flex-col gap-4" aria-describedby="login-help">
+            <form noValidate onSubmit={onSubmit} className="mt-[clamp(32px,10.4vh,104px)] flex animate-sf-fade-in flex-col gap-5" aria-describedby="login-help">
               <div>
                 <h1 className="m-0 text-[26px] font-extrabold leading-8 tracking-tight text-[#0b1442]">Bem-vindo(a)!</h1>
-                <p className="m-0 mt-1.5 text-[15px] text-fg-muted">Acesse sua conta para continuar.</p>
+                <p className="m-0 mt-2 text-[17px] text-fg-muted">Acesse sua conta para continuar.</p>
               </div>
 
               {failure ? <FailureAlert failure={failure} /> : null}
 
-              <div className="mt-2 flex flex-col gap-1.5">
+              <div className="mt-4 flex flex-col gap-1.5">
                 <label htmlFor="login-email" className="sr-only">
                   Usuário (E-mail)
                 </label>
@@ -160,7 +160,7 @@ export function LoginPage() {
                   placeholder="Usuário"
                   aria-invalid={errors.email ? true : undefined}
                   aria-describedby={errors.email ? "login-email-error" : undefined}
-                  startSlot={<User size={22} strokeWidth={1.5} className="ml-2 text-[#0b1442]" aria-hidden="true" />}
+                  startSlot={<User size={26} strokeWidth={1.4} className="ml-2 text-[#0b1442]" aria-hidden="true" />}
                   value={email}
                   onChange={(event) => {
                     setEmail(event.target.value);
@@ -189,7 +189,7 @@ export function LoginPage() {
                   placeholder="Senha"
                   aria-invalid={errors.password ? true : undefined}
                   aria-describedby={errors.password ? "login-password-error" : undefined}
-                  startSlot={<LockKeyhole size={22} strokeWidth={1.5} className="ml-2 text-[#0b1442]" aria-hidden="true" />}
+                  startSlot={<LockKeyhole size={26} strokeWidth={1.4} className="ml-2 text-[#0b1442]" aria-hidden="true" />}
                   value={password}
                   onChange={(event) => {
                     setPassword(event.target.value);
@@ -223,7 +223,7 @@ export function LoginPage() {
                 loading={login.isPending}
                 loadingText="Entrando…"
                 disabled={locked}
-                className="mt-1 h-14 rounded-[10px] text-lg font-bold shadow-[0_8px_18px_-8px_rgba(224,0,26,0.55)]"
+                className="mt-1.5 h-14 rounded-[10px] text-lg font-bold shadow-[0_8px_18px_-8px_rgba(224,0,26,0.55)]"
               >
                 Entrar
                 <ArrowRight size={22} strokeWidth={2} aria-hidden="true" />
@@ -251,9 +251,9 @@ function LoginHero() {
       className="relative overflow-hidden bg-[#0b1442] max-lg:h-[min(112vw,560px)] lg:min-h-full"
     >
       <img
-        src="/brand/login-hero.jpg"
+        src="/assets/login/login-hero.png"
         alt=""
-        width={1150}
+        width={1153}
         height={941}
         fetchPriority="high"
         className="absolute inset-0 size-full object-cover object-[left_center]"
