@@ -1,14 +1,16 @@
-import { Breadcrumbs, Drawer, DrawerContent, DrawerTrigger, IconButton, type BreadcrumbItem } from "@salesforce/ui";
+import { Drawer, DrawerContent, DrawerTrigger, IconButton, type BreadcrumbItem } from "@salesforce/ui";
 import { canSeeIntegration } from "@salesforce/contracts";
 import { Link, useMatches, useRouterState } from "@tanstack/react-router";
-import { Menu } from "lucide-react";
+import { ArrowLeft, Menu } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useAppServices } from "../lib/app-context";
 import type { AuthUser } from "../lib/auth-client";
 import { Brand } from "./brand";
+import { CommandMenu } from "./command-menu";
 import { DevAuthBanner } from "./dev-auth-banner";
 import { ConnectedIntegrationPill } from "./integration-pill";
 import { navItemsFor } from "./nav-items";
+import { NotificationsBell } from "./notifications-bell";
 import { UserMenu } from "./user-menu";
 
 // Horizontal navigation (structure from Vidya Force, skin from the PLAC reference kit): sentence-case white
@@ -16,7 +18,7 @@ import { UserMenu } from "./user-menu";
 // The router sets `data-status="active"` on the current link; styling off that attribute (instead of swapping
 // class strings) keeps the active colours from losing a Tailwind specificity/merge fight with the base ones.
 const topLink =
-  "flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-sidebar-fg no-underline transition-[background-color,color] duration-[var(--sf-dur-fast)] ease-spring hover:bg-sidebar-hover hover:text-sidebar-fg-active data-[status=active]:bg-white data-[status=active]:text-[var(--sf-sidebar-bg)]";
+  "flex h-11 items-center gap-2 rounded-[12px] px-[18px] text-[15px] font-semibold text-sidebar-fg no-underline transition-[background-color,color] duration-[var(--sf-dur-fast)] ease-spring hover:bg-sidebar-hover hover:text-sidebar-fg-active data-[status=active]:bg-white data-[status=active]:text-[var(--sf-sidebar-bg)] data-[status=active]:shadow-[0_2px_8px_rgba(0,0,0,0.18)]";
 
 function TopNav({ role }: { role: string | undefined }) {
   return (
@@ -53,7 +55,7 @@ function DrawerNav({ role, onNavigate }: { role: string | undefined; onNavigate:
   );
 }
 
-/** Breadcrumbs derived from `staticData.crumb` of the matched routes. */
+/** Back link ("← Clientes") to the parent of the current page, derived from `staticData.crumb` of the matched routes. */
 function RouteBreadcrumbs() {
   const matches = useMatches();
   const items: BreadcrumbItem[] = matches.flatMap((match) => {
@@ -62,18 +64,25 @@ function RouteBreadcrumbs() {
     const label = typeof crumb === "function" ? crumb(match.params as Record<string, string>) : crumb;
     return [{ label, href: match.pathname }];
   });
-  // A single crumb would only repeat the page title right below it.
-  if (items.length <= 1) return null;
+  // Top-level pages have no parent to go back to.
+  const parent = items.length >= 2 ? items[items.length - 2] : undefined;
+  if (!parent) return null;
   return (
-    <Breadcrumbs
-      items={items}
-      renderLink={(item, className) => (
-        // `href` comes from an already-resolved match pathname, so it is a valid concrete route.
-        <Link to={item.href as never} className={className}>
-          {item.label}
-        </Link>
-      )}
-    />
+    <nav aria-label="Trilha de navegação" className="-mb-2">
+      {/* `href` comes from an already-resolved match pathname, so it is a valid concrete route. */}
+      <Link
+        to={parent.href as never}
+        className="group inline-flex min-h-8 items-center gap-1.5 rounded-md text-sm font-medium text-fg-muted no-underline transition-colors duration-[var(--sf-dur-fast)] hover:text-fg"
+      >
+        <ArrowLeft
+          size={16}
+          strokeWidth={1.75}
+          aria-hidden="true"
+          className="transition-transform duration-[var(--sf-dur-fast)] ease-spring group-hover:-translate-x-0.5"
+        />
+        {parent.label}
+      </Link>
+    </nav>
   );
 }
 
@@ -137,12 +146,14 @@ export function AppShell({ user, onLogout, children }: AppShellProps) {
             <DrawerNav role={user?.role} onNavigate={() => setNavOpen(false)} />
           </DrawerContent>
         </Drawer>
-        <Brand tone="dark" size="md" className="shrink-0 max-sm:[&>span:last-child]:hidden" />
+        <Brand tone="dark" size="md" className="shrink-0" />
         <div className="flex min-w-0 flex-1 items-center md:pl-4">
           <TopNav role={user?.role} />
         </div>
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex shrink-0 items-center gap-0.5 md:gap-2">
           {user && canSeeIntegration(user.role) ? <ConnectedIntegrationPill /> : null}
+          <CommandMenu role={user?.role} />
+          <NotificationsBell />
           <UserMenu user={user} onLogout={onLogout ?? (() => undefined)} />
         </div>
       </header>
@@ -154,7 +165,10 @@ export function AppShell({ user, onLogout, children }: AppShellProps) {
         className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-6 px-4 py-6 outline-none md:px-8 md:py-8 xl:px-12"
       >
         <RouteBreadcrumbs />
-        {children}
+        {/* Keyed by page so each navigation fades in (opacity only, so fixed/sticky descendants are unaffected). */}
+        <div key={pathname} className="flex min-w-0 flex-1 animate-sf-fade-in flex-col gap-6">
+          {children}
+        </div>
       </main>
     </div>
   );

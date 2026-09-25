@@ -13,7 +13,7 @@ import {
   SkeletonLines,
   StatGrid,
   StatTile,
-  StatusBadge,
+  StatusDot,
   Table,
   TableBody,
   TableCaption,
@@ -27,7 +27,7 @@ import {
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, Ban, CheckCircle2, ChevronRight, Package, Plus, Tag, Users } from "lucide-react";
+import { AlertTriangle, Ban, CheckCircle2, ChevronRight, Plus, Tag } from "lucide-react";
 import type { ReactNode } from "react";
 import { findMetric, metricCount, MetricValueOrUnavailable, MetricValueText } from "../components/metric-value";
 import { QueryError } from "../components/query-error";
@@ -36,12 +36,10 @@ import { useApi, useAppServices } from "../lib/app-context";
 import { sessionQueryOptions } from "../lib/auth-client";
 import { orderReference, orderStatusLabels } from "../lib/labels";
 
+type Metric = ApiSchema<"Metric">;
 type MetricGroup = ApiSchema<"MetricGroup">;
 type DashboardResponse = ApiSchema<"DashboardResponse">;
 type OrderListItem = ApiSchema<"OrderListItem">;
-
-/** Tiles that sit inside a card: flat tint instead of a second bordered card. */
-const NESTED_TILE = "border-transparent bg-surface-2 shadow-none hover:border-transparent";
 
 function greeting(hour = new Date().getHours()): string {
   if (hour < 12) return "Bom dia";
@@ -69,7 +67,7 @@ function KpiLink({ to, search, children }: { to: string; search?: Record<string,
     <Link
       to={to as never}
       search={search as never}
-      className="block rounded-lg outline-none transition-transform duration-150 ease-spring hover:-translate-y-px focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="-m-2 block rounded-lg p-2 outline-none transition-colors duration-[var(--sf-dur-fast)] hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ring"
     >
       {children}
     </Link>
@@ -83,6 +81,19 @@ interface AttentionItemDef {
   title: (count: number) => string;
   to: string;
   search: Record<string, unknown>;
+}
+
+/** One secondary indicator as a quiet row: label (and hint) left, value right; an unavailable value stays small. */
+function OtherIndicatorRow({ metric }: { metric: Metric }) {
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 border-b border-line py-3 first:pt-0 last:border-b-0 last:pb-0">
+      <p className="m-0 text-sm font-medium text-fg">{metric.label}</p>
+      <p className="m-0 text-sm font-semibold tabular-nums text-fg">
+        <MetricValueText metric={metric} />
+      </p>
+      {metric.description ? <p className="m-0 w-full text-xs text-fg-muted">{metric.description}</p> : null}
+    </div>
+  );
 }
 
 function AttentionRow({ item }: { item: AttentionItemDef }) {
@@ -143,7 +154,7 @@ function RecentOrders({ orders }: { orders: DashboardResponse["recentOrders"] })
                     </TableCell>
                     <TableCell>{titleCase(order.customerName)}</TableCell>
                     <TableCell>
-                      <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
+                      <StatusDot tone={status.tone}>{status.label}</StatusDot>
                     </TableCell>
                     <TableCell numeric>
                       <Money value={order.estimatedTotal} />
@@ -222,32 +233,20 @@ export function DashboardPage() {
     <>
       <PageHeader
         title="Início"
-       
         description={
           <span className="flex flex-col gap-0.5">
             <span>{firstName ? `${greeting()}, ${firstName}.` : "Resumo da sua carteira e dos pedidos recentes."}</span>
             {query.data ? (
               <span className="text-2xs text-fg-faint">
-                Escopo: {scopeText(query.data.scope)} · Atualizado em <DateText value={query.data.generatedAt} withTime />
+                Escopo: {scopeText(query.data.scope)} · Atualizado em <DateText value={query.data.generatedAt} withTime />{" "}
+                <DemoBadge groups={groups} keys={["portfolio", "catalog", "orders", "credit", "positivation"]} />
               </span>
             ) : null}
           </span>
         }
         actions={
           <>
-            <Button asChild variant="secondary" size="sm">
-              <Link to="/produtos">
-                <Package size={14} aria-hidden="true" />
-                Produtos
-              </Link>
-            </Button>
-            <Button asChild variant="secondary" size="sm">
-              <Link to="/clientes">
-                <Users size={14} aria-hidden="true" />
-                Clientes
-              </Link>
-            </Button>
-            <Button asChild variant="primary" leftIcon={<Plus size={14} aria-hidden="true" />}>
+            <Button asChild variant="primary" leftIcon={<Plus size={16} strokeWidth={1.75} aria-hidden="true" />}>
               <Link to="/pedidos/novo">Novo pedido</Link>
             </Button>
           </>
@@ -268,11 +267,7 @@ export function DashboardPage() {
         </Card>
       ) : (
         <>
-          <div className="flex items-center justify-between gap-2">
-            <p className="m-0 text-xs font-medium text-fg-muted">Visão geral</p>
-            <DemoBadge groups={groups} keys={["portfolio", "catalog", "orders"]} />
-          </div>
-          <StatGrid>
+          <StatGrid className="sm:grid-cols-3">
             <KpiLink to="/clientes">
               <StatTile label="Clientes" value={<MetricValueOrUnavailable metric={customersTotal} />} />
             </KpiLink>
@@ -316,37 +311,11 @@ export function DashboardPage() {
             </Card>
 
             <Card aria-label="Outros indicadores">
-              <CardHeader
-                title="Outros indicadores"
-                actions={<DemoBadge groups={groups} keys={["orders", "credit", "positivation"]} />}
-              />
+              <CardHeader title="Outros indicadores" />
               <CardBody>
-                <StatGrid className="grid-cols-1">
-                  {cancelled ? (
-                    <StatTile
-                      className={NESTED_TILE}
-                      label={cancelled.label}
-                      value={<MetricValueText metric={cancelled} />}
-                      hint={cancelled.description ?? undefined}
-                    />
-                  ) : null}
-                  {creditIndicators ? (
-                    <StatTile
-                      className={NESTED_TILE}
-                      label={creditIndicators.label}
-                      value={<MetricValueText metric={creditIndicators} />}
-                      hint={creditIndicators.description ?? undefined}
-                    />
-                  ) : null}
-                  {positivationRate ? (
-                    <StatTile
-                      className={NESTED_TILE}
-                      label={positivationRate.label}
-                      value={<MetricValueText metric={positivationRate} />}
-                      hint={positivationRate.description ?? undefined}
-                    />
-                  ) : null}
-                </StatGrid>
+                {[cancelled, creditIndicators, positivationRate].map((metric) =>
+                  metric ? <OtherIndicatorRow key={metric.key} metric={metric} /> : null,
+                )}
               </CardBody>
             </Card>
           </div>

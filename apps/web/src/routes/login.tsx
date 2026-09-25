@@ -1,4 +1,4 @@
-import { Alert, Button, Card, FormField, IconButton, Input } from "@salesforce/ui";
+import { Alert, Button, FormField, IconButton, Input } from "@salesforce/ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearch } from "@tanstack/react-router";
 import { Eye, EyeOff } from "lucide-react";
@@ -69,6 +69,9 @@ function FailureAlert({ failure }: { failure: LoginFailure }) {
   }
 }
 
+/** Login fields are 44px tall with the 12px radius of the reference (the shared "md" is 40px). */
+const LOGIN_FIELD = "h-11 rounded-[12px]";
+
 export function LoginPage() {
   const { authClient } = useAppServices();
   const queryClient = useQueryClient();
@@ -118,89 +121,69 @@ export function LoginPage() {
   return (
     <div className="flex min-h-screen flex-col bg-bg">
       <DevAuthBanner />
-      <main id="conteudo" className="flex flex-1 flex-col md:flex-row">
-        {/* Decorative brand panel: identity carried by the accent color of this installation. Hidden below
-            `md` so the form stays the only thing on screen on narrow/mobile viewports — the `Brand` mark
-            inside the form card already gives the same identity there, so nothing accessible is lost. */}
-        <div
-          aria-hidden="true"
-          className="relative hidden shrink-0 flex-col justify-between overflow-hidden bg-accent px-10 py-12 text-on-accent md:flex md:basis-2/5 lg:basis-1/2"
-        >
-          <Brand size="lg" className="text-on-accent" />
-          <p className="m-0 max-w-sm text-sm text-on-accent/80">
-            Clientes, catálogo e pedidos da sua carteira, em um só lugar.
-          </p>
-        </div>
-
-        <div className="flex flex-1 items-center justify-center px-4 py-10">
-          <div className="w-full max-w-[380px]">
-            <Card interactive className="shadow-card">
-              <form noValidate onSubmit={onSubmit} className="flex flex-col gap-4 p-6" aria-describedby="login-help">
-                <span className="md:hidden">
-                  <Brand size="lg" />
-                </span>
-                <div>
-                  <h1 className="m-0 text-xl font-semibold tracking-tight">Entrar</h1>
-                  <p className="m-0 mt-0.5 text-xs text-fg-muted">Use seu e-mail corporativo e sua senha.</p>
-                </div>
-
-                {failure ? <FailureAlert failure={failure} /> : null}
-
-                <FormField label="E-mail" required error={errors.email}>
-                  <Input
-                    ref={emailRef}
-                    type="email"
-                    name="email"
-                    size="lg"
-                    autoComplete="username"
-                    autoCapitalize="none"
-                    spellCheck={false}
-                    inputMode="email"
-                    placeholder="nome@empresa.com.br"
-                    value={email}
-                    onChange={(event) => {
-                      setEmail(event.target.value);
-                      if (errors.email) setErrors((current) => ({ ...current, email: undefined }));
-                      if (locked) setFailure(null);
-                    }}
-                  />
-                </FormField>
-
-                <FormField label="Senha" required error={errors.password}>
-                  <Input
-                    ref={passwordRef}
-                    type={showPassword ? "text" : "password"}
-                    name="password"
-                    size="lg"
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(event) => {
-                      setPassword(event.target.value);
-                      if (errors.password) setErrors((current) => ({ ...current, password: undefined }));
-                    }}
-                    endSlot={
-                      <IconButton
-                        label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                        aria-pressed={showPassword}
-                        size="sm"
-                        icon={showPassword ? <EyeOff size={15} aria-hidden="true" /> : <Eye size={15} aria-hidden="true" />}
-                        onClick={() => setShowPassword((current) => !current)}
-                      />
-                    }
-                  />
-                </FormField>
-
-                <Button type="submit" variant="primary" size="lg" block loading={login.isPending} loadingText="Entrando…" disabled={locked}>
-                  Entrar
-                </Button>
-
-                <p id="login-help" className="m-0 text-xs text-fg-muted">
-                  Acesso restrito a usuários internos autorizados. A sessão expira após inatividade.
-                </p>
-              </form>
-            </Card>
+      {/* Reference kit: one calm column on the page background — no card, no brand panel. */}
+      <main id="conteudo" className="flex flex-1 items-center justify-center px-4 pb-[10vh] pt-10">
+        <form noValidate onSubmit={onSubmit} className="flex w-full max-w-[360px] animate-sf-fade-in flex-col gap-4" aria-describedby="login-help">
+          <Brand size="md" showProductName={false} />
+          <div className="mb-2 mt-6">
+            <h1 className="m-0 text-2xl font-medium leading-8 tracking-tight">Entrar</h1>
+            <p className="m-0 mt-1 text-sm text-fg-muted">Força de Vendas</p>
           </div>
-        </div>
+
+          {failure ? <FailureAlert failure={failure} /> : null}
+
+          <FormField label="E-mail" required error={errors.email}>
+            <Input
+              ref={emailRef}
+              type="email"
+              name="email"
+              className={LOGIN_FIELD}
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              inputMode="email"
+              placeholder="nome@empresa.com.br"
+              value={email}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                if (errors.email) setErrors((current) => ({ ...current, email: undefined }));
+                if (locked) setFailure(null);
+              }}
+            />
+          </FormField>
+
+          <FormField label="Senha" required error={errors.password}>
+            <Input
+              ref={passwordRef}
+              type={showPassword ? "text" : "password"}
+              name="password"
+              className={LOGIN_FIELD}
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                if (errors.password) setErrors((current) => ({ ...current, password: undefined }));
+              }}
+              endSlot={
+                <IconButton
+                  label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                  aria-pressed={showPassword}
+                  size="sm"
+                  icon={showPassword ? <EyeOff size={16} strokeWidth={1.75} aria-hidden="true" /> : <Eye size={16} strokeWidth={1.75} aria-hidden="true" />}
+                  onClick={() => setShowPassword((current) => !current)}
+                />
+              }
+            />
+          </FormField>
+
+          <Button type="submit" variant="primary" size="lg" block loading={login.isPending} loadingText="Entrando…" disabled={locked} className="mt-2">
+            Entrar
+          </Button>
+
+          <p id="login-help" className="m-0 text-center text-xs text-fg-muted">
+            Acesso restrito a usuários internos autorizados. A sessão expira após inatividade.
+          </p>
+        </form>
       </main>
     </div>
   );

@@ -3,7 +3,7 @@ import { cn } from "../lib/cn";
 
 export function Label({ className, ...props }: ComponentProps<"label">) {
   // eslint-disable-next-line jsx-a11y/label-has-associated-control -- association comes from htmlFor supplied by callers
-  return <label className={cn("text-xs font-semibold text-fg-muted", className)} {...props} />;
+  return <label className={cn("text-xs font-medium text-fg-muted", className)} {...props} />;
 }
 
 export function FieldError({ className, ...props }: ComponentProps<"p">) {
@@ -54,7 +54,7 @@ export function FormField({ label, labelAside, hint, error, required, id, classN
   const control =
     typeof children === "function" ? children(controlProps) : isValidElement(children) ? cloneElement(children, controlProps) : children;
   return (
-    <div className={cn("flex min-w-0 flex-col gap-1", className)}>
+    <div className={cn("flex min-w-0 flex-col gap-1.5", className)}>
       <div className="flex items-center justify-between gap-2">
         <Label htmlFor={controlId}>
           {label}

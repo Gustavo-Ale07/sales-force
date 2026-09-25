@@ -34,6 +34,8 @@ export function StatTile({ label, value, hint, progress, emphasis = "default", i
     <div
       className={cn(
         "relative min-w-0 rounded-lg border border-line bg-surface px-5 py-4 shadow-card transition-[border-color,box-shadow] duration-[var(--sf-dur-base)] ease-spring hover:border-line-strong",
+        // Inside a StatGrid strip the tile is a bare cell of the shared card (reference: one card, no inner borders).
+        "group-data-[stat-strip]/strip:rounded-none group-data-[stat-strip]/strip:border-0 group-data-[stat-strip]/strip:bg-transparent group-data-[stat-strip]/strip:p-0 group-data-[stat-strip]/strip:shadow-none",
         icon && "pr-12",
         className,
       )}
@@ -50,7 +52,7 @@ export function StatTile({ label, value, hint, progress, emphasis = "default", i
       <div className="text-xs font-medium text-fg-muted">{label}</div>
       <div
         className={cn(
-          "mt-2 whitespace-nowrap text-[22px] font-semibold sm:text-[26px] leading-none tracking-[-0.02em]",
+          "mt-2 whitespace-nowrap text-[24px] font-semibold leading-none tracking-[-0.02em] sm:text-[28px]",
           emphasis === "danger" ? "text-danger" : "text-fg",
         )}
       >
@@ -72,6 +74,23 @@ export function StatTile({ label, value, hint, progress, emphasis = "default", i
   );
 }
 
-export function StatGrid({ className, ...props }: ComponentProps<"div">) {
-  return <div className={cn("grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-3", className)} {...props} />;
+export interface StatGridProps extends ComponentProps<"div"> {
+  /** `strip` (default): ONE card holding borderless metrics, as in the reference. `tiles`: separate bordered tiles. */
+  variant?: "strip" | "tiles";
+}
+
+export function StatGrid({ variant = "strip", className, ...props }: StatGridProps) {
+  if (variant === "tiles") {
+    return <div className={cn("grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-3", className)} {...props} />;
+  }
+  return (
+    <div
+      data-stat-strip=""
+      className={cn(
+        "group/strip grid grid-cols-2 gap-x-8 gap-y-6 rounded-lg border border-line bg-surface p-5 shadow-card sm:grid-cols-[repeat(auto-fit,minmax(150px,1fr))] sm:p-6",
+        className,
+      )}
+      {...props}
+    />
+  );
 }

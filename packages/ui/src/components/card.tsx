@@ -17,7 +17,7 @@ export function Card({ className, interactive = false, ...props }: CardProps) {
   return (
     <section
       className={cn(
-        "min-w-0 rounded-lg border border-line bg-surface",
+        "min-w-0 rounded-lg border border-line bg-surface transition-opacity duration-[var(--sf-dur-base)] aria-busy:opacity-70",
         interactive &&
           "shadow-card transition-[box-shadow,border-color,transform] duration-[var(--sf-dur-base)] ease-spring hover:border-line-strong hover:shadow-pop focus-within:border-accent/50",
         className,

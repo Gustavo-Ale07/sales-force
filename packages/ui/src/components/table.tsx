@@ -110,7 +110,7 @@ export function TableHead({ className, numeric, scope = "col", ...props }: Table
     <th
       scope={scope}
       className={cn(
-        "h-11 whitespace-nowrap border-b border-line px-4 text-left text-xs font-semibold text-fg-muted",
+        "h-10 whitespace-nowrap border-b border-line px-4 text-left text-[12.5px] font-medium text-fg-muted",
         numeric && "text-right",
         className,
       )}

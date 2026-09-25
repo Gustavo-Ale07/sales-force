@@ -14,6 +14,7 @@ import {
   PageHeader,
   Pagination,
   SearchInput,
+  StatusDot,
   Select,
   SkeletonLines,
   SortableHead,
@@ -137,16 +138,12 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
 
   return (
     <>
-      <PageHeader
-        title="Catálogo de produtos"
-       
-        description="Consulte produtos, grupos e preços de tabela. Produtos sem preço aparecem como “Sem preço”."
-      />
+      <PageHeader title="Catálogo de produtos" count={query.data ? query.data.total.toLocaleString("pt-BR") : undefined} />
 
       <FilterBar aria-label="Filtros do catálogo">
         <FilterField label="Busca" className="min-w-[220px] flex-1">
           <SearchInput
-            size="sm"
+            size="md"
             value={searchText}
             onValueChange={setSearchText}
             placeholder="Código, descrição ou referência"
@@ -154,7 +151,7 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
           />
         </FilterField>
         <FilterField label="Grupo" className="w-[180px]">
-          <Select size="sm" value={params.group ?? ""} onChange={(e) => change({ group: asInt(e.target.value, 0) })}>
+          <Select size="md" value={params.group ?? ""} onChange={(e) => change({ group: asInt(e.target.value, 0) })}>
             <option value="">Todos</option>
             {groups.data?.items.map((group) => (
               <option key={group.code} value={group.code}>
@@ -164,14 +161,14 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
           </Select>
         </FilterField>
         <FilterField label="Venda" className="w-[140px]">
-          <Select size="sm" value={params.sellable ?? ""} onChange={(e) => change({ sellable: asOneOf(e.target.value, BOOLEAN_TEXT) })}>
+          <Select size="md" value={params.sellable ?? ""} onChange={(e) => change({ sellable: asOneOf(e.target.value, BOOLEAN_TEXT) })}>
             <option value="">Todos</option>
             <option value="true">Vendáveis</option>
             <option value="false">Não vendáveis</option>
           </Select>
         </FilterField>
         <FilterField label="Preço" className="w-[140px]">
-          <Select size="sm" value={params.priceState ?? ""} onChange={(e) => change({ priceState: asOneOf(e.target.value, PRICE_STATES) })}>
+          <Select size="md" value={params.priceState ?? ""} onChange={(e) => change({ priceState: asOneOf(e.target.value, PRICE_STATES) })}>
             <option value="">Todos</option>
             {PRICE_STATES.map((state) => (
               <option key={state} value={state}>
@@ -260,15 +257,17 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
               query.data.items.map((product) => (
                 <TableRow key={product.code} interactive onActivate={() => onSearchChange(compact({ ...params, product: product.code }))}>
                   <TableCell className="tabular-nums text-fg-muted">{product.code}</TableCell>
-                  <TableCell wrap>
+                  <TableCell wrap className="min-w-[12rem]">
                     <span className="font-medium">{titleCase(product.description)}</span>
                     {product.reference ? <span className="block text-fg-muted">Ref. {product.reference}</span> : null}
                   </TableCell>
                   <TableCell>{product.groupName ?? "—"}</TableCell>
                   <TableCell>{product.unit}</TableCell>
                   <TableCell>
-                    {product.sellable ? <Badge tone="info">Vendável</Badge> : <Badge tone="neutral">Não vendável</Badge>}
-                    {product.active ? null : <Badge tone="neutral" className="ml-1">Inativo</Badge>}
+                    <span className="inline-flex flex-wrap items-center gap-x-4 gap-y-1">
+                      <StatusDot tone={product.sellable ? "success" : "neutral"}>{product.sellable ? "Vendável" : "Não vendável"}</StatusDot>
+                      {product.active ? null : <StatusDot tone="neutral">Inativo</StatusDot>}
+                    </span>
                   </TableCell>
                   <TableCell numeric>
                     <PriceCell price={product.listPrice} />

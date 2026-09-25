@@ -53,7 +53,7 @@ export function CustomerContextBar({ customerCode, customerName, onOpenFicha }: 
           <CustomerStatus active={detail.active} blocked={detail.blocked} />
         </dl>
       ) : null}
-      <Button type="button" variant="primary" size="sm" leftIcon={<IdCard size={14} aria-hidden="true" />} onClick={onOpenFicha} className="shrink-0">
+      <Button type="button" variant="secondary" size="sm" leftIcon={<IdCard size={14} aria-hidden="true" />} onClick={onOpenFicha} className="shrink-0">
         Ficha do cliente
       </Button>
     </section>

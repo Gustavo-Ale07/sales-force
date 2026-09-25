@@ -15,8 +15,8 @@ function useImageOk(src: string | null): { ok: boolean; onError: () => void } {
  * that fails to load falls through to the next option instead of leaving a broken-image icon.
  *
  * `tone="dark"` is for the navy sidebar: the installation logo is expected to be legible on light surfaces
- * (login, a future light topbar), so on dark it renders in a white plate instead of bare, and the fallback
- * mark switches to the CTA red (the one place red stands in for the institutional mark, per the brand
+ * (login), and it is drawn bare on both tones as in the reference kit, where the wordmark sits directly on
+ * the navy bar; on dark the fallback mark switches to the CTA red (the one place red stands in for the institutional mark, per the brand
  * direction — everywhere else red stays reserved for actions). "Sales Force" is always the product's own
  * name, shown as the secondary line under the installation's identity, never replacing it.
  */
@@ -24,12 +24,15 @@ export function Brand({
   size = "md",
   tone = "light",
   collapsed = false,
+  showProductName: withProductName = true,
   className,
 }: {
   size?: "md" | "lg";
   tone?: "light" | "dark";
   /** Icon/mark only, no name (the collapsed sidebar rail). Ignored unless a mark/logo/initial can stand alone. */
   collapsed?: boolean;
+  /** Secondary "Sales Force" line next to the name; the login shows the bare wordmark instead. */
+  showProductName?: boolean;
   className?: string;
 }) {
   const { config } = useAppServices();
@@ -38,7 +41,7 @@ export function Brand({
   const logo = useImageOk(logoUrl);
   const mark = useImageOk(markUrl);
   const dark = tone === "dark";
-  const showProductName = !collapsed && !dark && name !== "Sales Force";
+  const showProductName = withProductName && !collapsed && !dark && name !== "Sales Force";
 
   const logoImg = logoUrl !== null && logo.ok;
   const box = size === "lg" ? "size-9 rounded-lg text-xs" : "size-8 rounded-lg text-xs";
@@ -47,7 +50,7 @@ export function Brand({
   if (logoImg && !collapsed) {
     return (
       <div className={cn("flex items-center gap-2.5", className)}>
-        <span className={cn("inline-flex shrink-0 items-center justify-center", !dark && "rounded-md bg-white p-1")}>
+        <span className="inline-flex shrink-0 items-center justify-center">
           <img
             src={logoUrl}
             alt={name}

@@ -5,11 +5,11 @@ import { cn } from "../lib/cn";
 export type AlertTone = "info" | "success" | "warning" | "danger" | "neutral";
 
 const toneClasses: Record<AlertTone, string> = {
-  info: "border-transparent border-l-info bg-info-bg [&_.sf-alert-icon]:text-info",
-  success: "border-transparent border-l-ok bg-ok-bg [&_.sf-alert-icon]:text-ok",
-  warning: "border-transparent border-l-warn bg-warn-bg [&_.sf-alert-icon]:text-warn",
-  danger: "border-transparent border-l-danger bg-danger-bg [&_.sf-alert-icon]:text-danger",
-  neutral: "border-transparent border-l-line-strong bg-surface-2 text-fg-muted [&_.sf-alert-icon]:text-fg-muted",
+  info: "border-transparent bg-surface-2 [&_.sf-alert-icon]:text-info",
+  success: "border-transparent bg-ok-bg [&_.sf-alert-icon]:text-ok",
+  warning: "border-transparent bg-warn-bg [&_.sf-alert-icon]:text-warn",
+  danger: "border-transparent bg-danger-bg [&_.sf-alert-icon]:text-danger",
+  neutral: "border-transparent bg-surface-2 text-fg-muted [&_.sf-alert-icon]:text-fg-muted",
 };
 
 const toneIcons = {
@@ -32,7 +32,7 @@ export interface AlertProps extends Omit<ComponentProps<"div">, "title"> {
   variant?: "inline" | "banner";
 }
 
-/** Inline alert or page banner. Danger/warning use role="alert"; others role="status". */
+/** Inline alert ("note" in the reference kit: soft background, no border, no side stripe) or page banner. Danger/warning use role="alert"; others role="status". */
 export function Alert({
   tone = "info",
   title,
@@ -52,7 +52,7 @@ export function Alert({
       role={role ?? (tone === "danger" || tone === "warning" ? "alert" : "status")}
       className={cn(
         "flex items-start gap-2.5 border px-4 py-3 text-sm text-fg",
-        variant === "banner" ? "rounded-none border-x-0 border-t-0 border-b py-2 text-xs" : "rounded-lg border-l-[3px]",
+        variant === "banner" ? "rounded-none border-x-0 border-t-0 border-b py-2 text-xs" : "rounded-[12px]",
         toneClasses[tone],
         variant === "banner" && "border-b-line",
         className,

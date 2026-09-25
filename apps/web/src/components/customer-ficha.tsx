@@ -13,7 +13,7 @@ import {
   Money,
   Pagination,
   SkeletonLines,
-  StatusBadge,
+  StatusDot,
   Table,
   TableBody,
   TableCaption,
@@ -30,7 +30,6 @@ import {
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Activity, BarChart3, FileText, ShoppingCart, Wallet } from "lucide-react";
 import { useState } from "react";
 import { customerQueryOptions, ordersQueryOptions } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
@@ -43,12 +42,12 @@ const NOT_AVAILABLE = "Não disponível";
 export type FichaTab = "cadastro" | "financeiro" | "analise" | "engajamento" | "vendas";
 
 const tabs = [
-  { value: "cadastro", label: "Dados cadastrais", icon: FileText },
-  { value: "financeiro", label: "Financeiro", icon: Wallet },
-  { value: "analise", label: "Análise do cliente", icon: BarChart3 },
-  { value: "engajamento", label: "Engajamento", icon: Activity },
-  { value: "vendas", label: "Vendas", icon: ShoppingCart },
-] as const satisfies readonly { value: FichaTab; label: string; icon: unknown }[];
+  { value: "cadastro", label: "Dados cadastrais" },
+  { value: "financeiro", label: "Financeiro" },
+  { value: "analise", label: "Análise do cliente" },
+  { value: "engajamento", label: "Engajamento" },
+  { value: "vendas", label: "Vendas" },
+] as const satisfies readonly { value: FichaTab; label: string }[];
 
 const ORDERS_PAGE_SIZE = 10;
 
@@ -106,7 +105,7 @@ function CustomerOrders({ customerCode }: { customerCode: number }) {
                       </Link>
                     </TableCell>
                     <TableCell>
-                      <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
+                      <StatusDot tone={status.tone}>{status.label}</StatusDot>
                     </TableCell>
                     <TableCell numeric>
                       <Money value={order.estimatedTotal} />
@@ -232,9 +231,8 @@ export function CustomerFichaTabs({ customerCode, initialTab = "cadastro" }: Cus
   return (
     <Tabs defaultValue={initialTab}>
       <TabsList aria-label="Ficha do cliente">
-        {tabs.map(({ value, label, icon: Icon }) => (
+        {tabs.map(({ value, label }) => (
           <TabsTrigger key={value} value={value} className="tracking-normal">
-            <Icon size={14} aria-hidden="true" />
             {label}
           </TabsTrigger>
         ))}

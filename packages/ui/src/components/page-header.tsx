@@ -55,6 +55,8 @@ export function Breadcrumbs({ items, renderLink, className, ...props }: Breadcru
 export interface PageHeaderProps extends Omit<ComponentProps<"header">, "title"> {
   title: ReactNode;
   description?: ReactNode;
+  /** Muted total shown next to the title ("Clientes 312"). */
+  count?: ReactNode;
   /** Status badges next to the title. */
   badges?: ReactNode;
   /** Primary/secondary actions, right-aligned. */
@@ -62,7 +64,7 @@ export interface PageHeaderProps extends Omit<ComponentProps<"header">, "title">
   breadcrumbs?: ReactNode;
 }
 
-export function PageHeader({ title, description, badges, actions, breadcrumbs, className, ...props }: PageHeaderProps) {
+export function PageHeader({ title, description, count, badges, actions, breadcrumbs, className, ...props }: PageHeaderProps) {
   return (
     <header className={cn("flex flex-col gap-2", className)} {...props}>
       {breadcrumbs}
@@ -71,6 +73,7 @@ export function PageHeader({ title, description, badges, actions, breadcrumbs, c
           <div className="min-w-0">
             <h1 className="m-0 flex flex-wrap items-center gap-2 font-heading text-2xl font-semibold leading-tight tracking-[-0.02em] text-fg">
               {title}
+              {count !== undefined && count !== null ? <span className="text-lg font-medium text-fg-faint">{count}</span> : null}
               {badges}
             </h1>
             {description ? <p className="m-0 mt-1 text-sm text-fg-muted">{description}</p> : null}

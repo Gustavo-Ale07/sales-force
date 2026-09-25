@@ -21,7 +21,7 @@ export const buttonVariants = cva(
       size: {
         sm: "h-8 px-3 text-xs",
         md: "h-10 px-4 text-sm",
-        lg: "h-12 px-5 text-base",
+        lg: "h-12 rounded-[12px] px-5 text-[15px]",
       },
       block: { true: "w-full", false: "" },
     },

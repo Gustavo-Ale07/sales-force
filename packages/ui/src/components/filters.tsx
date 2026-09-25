@@ -2,12 +2,12 @@ import { X } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { cn } from "../lib/cn";
 
-/** Visible, explicit filter row above a table (never hidden behind a menu). */
+/** Visible, explicit filter row above a table (never hidden behind a menu). Unboxed, as in the reference kit. */
 export function FilterBar({ className, ...props }: ComponentProps<"form">) {
   return (
     <form
       role="search"
-      className={cn("flex flex-wrap items-end gap-3 rounded-lg border border-line bg-surface px-4 py-3", className)}
+      className={cn("flex flex-wrap items-end gap-3", className)}
       onSubmit={(event) => event.preventDefault()}
       {...props}
     />

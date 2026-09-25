@@ -1,7 +1,6 @@
 import type { ApiSchema } from "@salesforce/contracts/client";
 import {
   Alert,
-  Badge,
   Button,
   Card,
   CardBody,
@@ -429,9 +428,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
     <>
       <PageHeader
         title={order ? orderReference(order) : "Novo pedido"}
-       
-        description={order ? `Cliente: ${titleCase(order.customerName)}` : "Escolha o cliente, adicione produtos e salve como rascunho."}
-        badges={status ? <StatusBadge tone={status.tone}>{status.label}</StatusBadge> : <Badge tone="neutral">Novo</Badge>}
+        badges={status ? <StatusBadge tone={status.tone}>{status.label}</StatusBadge> : undefined}
       />
 
       {customer ? <CustomerContextBar customerCode={customer.code} customerName={customer.name} onOpenFicha={() => setFichaOpen(true)} /> : null}
@@ -723,15 +720,16 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
         </Card>
 
         <div className="sticky bottom-0 z-20 -mx-3 flex flex-wrap items-center justify-end gap-2 border-t border-line bg-surface px-3 py-2 shadow-[0_-2px_6px_rgba(0,0,0,0.06)] md:-mx-6 md:px-6">
-          <p className="m-0 mr-auto text-sm text-fg-muted">
+          <p className="m-0 w-full text-sm text-fg-muted sm:mr-auto sm:w-auto">
             Total: <strong className="text-base text-ok">
               <Money value={preview.totals.estimatedTotal} />
             </strong>
           </p>
-          <Button type="button" variant="ghost" leftIcon={<X size={14} aria-hidden="true" />} onClick={onClose}>
+          <Button type="button" variant="ghost" className="flex-1 sm:flex-none" leftIcon={<X size={14} aria-hidden="true" />} onClick={onClose}>
             {readOnly ? "Voltar" : "Cancelar"}
           </Button>
           <Button
+              className="flex-1 sm:flex-none"
             type="button"
             variant="secondary"
             leftIcon={<BookmarkPlus size={14} aria-hidden="true" />}
@@ -743,6 +741,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
           </Button>
           {order && order.status === "draft" ? (
             <Button
+              className="flex-1 sm:flex-none"
               type="button"
               variant="danger-outline"
               leftIcon={<Trash2 size={14} aria-hidden="true" />}
@@ -753,6 +752,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
           ) : null}
           {order && order.status === "draft" ? (
             <Button
+              className="flex-1 sm:flex-none"
               type="button"
               variant="secondary"
               leftIcon={<Send size={14} aria-hidden="true" />}
@@ -769,6 +769,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
           ) : null}
           {!readOnly ? (
             <Button
+              className="flex-1 sm:flex-none"
               type="submit"
               variant="primary"
               leftIcon={<Save size={14} aria-hidden="true" />}

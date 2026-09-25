@@ -130,9 +130,9 @@ export function CustomerDetailPage({ code }: { code: number }) {
     <>
       <PageHeader
         title={
-          <span className="flex items-center gap-2">
+          <span className="flex items-center gap-4">
             <span aria-hidden="true">
-              <Avatar name={titleCase(customer.name)} seed={String(customer.code)} size="md" />
+              <Avatar name={titleCase(customer.name)} seed={String(customer.code)} size="xl" />
             </span>
             {titleCase(customer.name)}
           </span>

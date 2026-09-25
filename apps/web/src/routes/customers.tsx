@@ -1,7 +1,6 @@
 import type { ApiSchema } from "@salesforce/contracts/client";
 import {
   Avatar,
-  Badge,
   Button,
   Card,
   EmptyState,
@@ -11,6 +10,7 @@ import {
   PageHeader,
   Pagination,
   SearchInput,
+  StatusDot,
   Select,
   SortableHead,
   StatGrid,
@@ -82,15 +82,11 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
 
   return (
     <>
-      <PageHeader
-        title="Clientes"
-       
-        description="Clientes da sua carteira, conforme o escopo definido pelo servidor."
-      />
+      <PageHeader title="Clientes" count={query.data ? query.data.total.toLocaleString("pt-BR") : undefined} />
 
       {portfolio && portfolio.metrics.length > 0 ? (
         <section aria-label={portfolio.label}>
-          <StatGrid className="grid-cols-2 md:grid-cols-4 xl:grid-cols-4">
+          <StatGrid className="sm:grid-cols-4">
               {portfolio.metrics.map((metric) => {
                 const visual = METRIC_VISUALS[metric.key];
                 return (
@@ -111,7 +107,7 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
       <FilterBar aria-label="Filtros da carteira">
         <FilterField label="Busca" className="min-w-[220px] flex-1">
           <SearchInput
-            size="sm"
+            size="md"
             value={searchText}
             onValueChange={setSearchText}
             placeholder="Código, nome ou documento"
@@ -119,7 +115,7 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
           />
         </FilterField>
         <FilterField label="Situação" className="w-[140px]">
-          <Select size="sm" value={params.status ?? ""} onChange={(e) => change({ status: asOneOf(e.target.value, CUSTOMER_STATUSES) })}>
+          <Select size="md" value={params.status ?? ""} onChange={(e) => change({ status: asOneOf(e.target.value, CUSTOMER_STATUSES) })}>
             <option value="">Todas</option>
             {CUSTOMER_STATUSES.map((status) => (
               <option key={status} value={status}>
@@ -130,7 +126,7 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
         </FilterField>
         {sellerOptions.length > 1 ? (
           <FilterField label="Vendedor" className="w-[200px]">
-            <Select size="sm" value={params.sellerCode ?? ""} onChange={(e) => change({ sellerCode: asInt(e.target.value, 0) })}>
+            <Select size="md" value={params.sellerCode ?? ""} onChange={(e) => change({ sellerCode: asInt(e.target.value, 0) })}>
               <option value="">Todos</option>
               {sellerOptions.map((seller) => (
                 <option key={seller.code} value={seller.code}>
@@ -142,7 +138,7 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
         ) : null}
         <FilterField label="Tabela de preço" className="w-[160px]">
           <Select
-            size="sm"
+            size="md"
             value={params.hasPriceTable ?? ""}
             onChange={(e) => change({ hasPriceTable: asOneOf(e.target.value, ["true", "false"] as const) })}
           >
@@ -220,7 +216,7 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
               query.data.items.map((customer) => (
                 <TableRow key={customer.code} interactive className="group" onActivate={() => onOpenCustomer(customer.code)}>
                   <TableCell className="tabular-nums text-fg-muted">{customer.code}</TableCell>
-                  <TableCell wrap>
+                  <TableCell wrap className="min-w-[12rem]">
                     <span className="flex items-center gap-2">
                       <Avatar name={titleCase(customer.name)} seed={String(customer.code)} size="sm" />
                       <span className="min-w-0">
@@ -282,9 +278,9 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
 
 export function CustomerStatus({ active, blocked }: { active: boolean; blocked: boolean }) {
   return (
-    <span className="inline-flex items-center gap-1">
-      <Badge tone={active ? "success" : "neutral"}>{active ? "Ativo" : "Inativo"}</Badge>
-      {blocked ? <Badge tone="danger">Bloqueado</Badge> : null}
+    <span className="inline-flex flex-wrap items-center gap-x-4 gap-y-1">
+      <StatusDot tone={active ? "success" : "neutral"}>{active ? "Ativo" : "Inativo"}</StatusDot>
+      {blocked ? <StatusDot tone="danger">Bloqueado</StatusDot> : null}
     </span>
   );
 }

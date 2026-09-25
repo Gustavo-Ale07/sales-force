@@ -3,7 +3,7 @@ import type { ComponentProps, ReactNode } from "react";
 import { cn } from "../lib/cn";
 
 export const controlBase =
-  "w-full min-w-0 rounded-md border border-line-strong bg-surface text-sm text-fg transition-[border-color,box-shadow] duration-[var(--sf-dur-fast)] ease-spring placeholder:text-fg-faint hover:border-fg-faint disabled:cursor-not-allowed disabled:border-line disabled:bg-surface-2 disabled:text-fg-muted read-only:bg-surface-2 aria-[invalid=true]:border-danger aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-danger focus-visible:border-accent focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-ring";
+  "w-full min-w-0 rounded-md border border-line-strong bg-surface text-sm text-fg transition-[border-color,box-shadow] duration-[var(--sf-dur-fast)] ease-spring placeholder:text-fg-faint hover:border-fg-faint disabled:cursor-not-allowed disabled:border-line disabled:bg-surface-2 disabled:text-fg-muted [&:is(input,textarea):read-only]:bg-surface-2 aria-[invalid=true]:border-danger aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-danger focus-visible:border-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-accent-weak";
 
 export interface InputProps extends Omit<ComponentProps<"input">, "size"> {
   size?: "sm" | "md" | "lg";
@@ -41,11 +41,15 @@ export interface SearchInputProps extends Omit<InputProps, "type" | "startSlot" 
   clearLabel?: string;
 }
 
+/** Reference "soft" search: tinted surface, transparent border; the border returns on hover and focus. */
+const SOFT_FIELD = "border-transparent bg-surface-2 hover:border-line-strong focus-visible:bg-surface";
+
 /** Search field with icon and clear button; use inside filter bars. */
-export function SearchInput({ value, onValueChange, clearLabel = "Limpar busca", ...props }: SearchInputProps) {
+export function SearchInput({ value, onValueChange, clearLabel = "Limpar busca", className, ...props }: SearchInputProps) {
   return (
     <Input
       type="search"
+      className={cn(SOFT_FIELD, className)}
       value={value}
       onChange={(event) => onValueChange(event.target.value)}
       startSlot={<Search size={16} strokeWidth={1.75} aria-hidden="true" />}

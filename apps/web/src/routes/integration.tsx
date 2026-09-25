@@ -12,6 +12,7 @@ import {
   PageHeader,
   SkeletonLines,
   StatusBadge,
+  StatusDot,
   Table,
   TableBody,
   TableCaption,
@@ -148,7 +149,7 @@ function ConfigurationView({ data }: { data: ApiSchema<"ConfigurationResponse"> 
                   <TableRow key={sync.entity}>
                     <TableCell>{sync.entity}</TableCell>
                     <TableCell>
-                      <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
+                      <StatusDot tone={status.tone}>{status.label}</StatusDot>
                     </TableCell>
                     <TableCell>
                       <DateText value={sync.lastSuccessAt} withTime fallback="Nunca" />

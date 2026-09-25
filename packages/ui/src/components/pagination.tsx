@@ -82,7 +82,7 @@ export function Pagination({ page, pageSize, total, onPageChange, onPageSizeChan
         <Select
           size="sm"
           aria-label="Itens por página"
-          wrapperClassName="w-[110px]"
+          wrapperClassName="w-[140px]"
           value={pageSize}
           onChange={(event) => onPageSizeChange(Number(event.target.value))}
         >

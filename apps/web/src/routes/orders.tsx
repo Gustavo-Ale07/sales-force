@@ -13,7 +13,7 @@ import {
   SearchInput,
   Select,
   SortableHead,
-  StatusBadge,
+  StatusDot,
   Table,
   TableBody,
   TableCaption,
@@ -65,7 +65,6 @@ function CustomerFilter({ code, onChange }: { code: number | undefined; onChange
   const customer = useQuery({ ...customerQueryOptions(api, code ?? 0), enabled: code !== undefined, staleTime: 30_000 });
   return (
     <CustomerPicker
-      compact
       aria-label="Filtrar por cliente"
       selected={code === undefined ? null : { code, name: customer.data?.name ?? "" }}
       onSelect={(picked) => onChange(picked?.code)}
@@ -89,10 +88,10 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
     <>
       <PageHeader
         title="Vendas"
-       
+        count={query.data ? query.data.total.toLocaleString("pt-BR") : undefined}
         description="Pedidos e rascunhos. O envio ao ERP ainda não está habilitado nesta instalação."
         actions={
-          <Button asChild variant="primary" leftIcon={<Plus size={14} aria-hidden="true" />}>
+          <Button asChild variant="primary" leftIcon={<Plus size={16} strokeWidth={1.75} aria-hidden="true" />}>
             <Link to="/pedidos/novo">Novo pedido</Link>
           </Button>
         }
@@ -101,7 +100,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
       <FilterBar aria-label="Filtros de pedidos">
         <FilterField label="Nº do pedido ou cliente" className="min-w-[220px] flex-1">
           <SearchInput
-            size="sm"
+            size="md"
             value={searchText}
             onValueChange={setSearchText}
             placeholder="Número ou cliente"
@@ -112,7 +111,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
           <CustomerFilter code={params.customerCode} onChange={(customerCode) => change({ customerCode })} />
         </FilterField>
         <FilterField label="Situação" className="w-[180px]">
-          <Select size="sm" value={params.status ?? ""} onChange={(e) => change({ status: asOneOf(e.target.value, ORDER_STATUSES) })}>
+          <Select size="md" value={params.status ?? ""} onChange={(e) => change({ status: asOneOf(e.target.value, ORDER_STATUSES) })}>
             <option value="">Todas</option>
             {ORDER_STATUSES.map((status) => (
               <option key={status} value={status}>
@@ -193,12 +192,12 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
                     <TableCell>
                       <span className="font-medium">{orderReference(order)}</span>
                     </TableCell>
-                    <TableCell wrap>{titleCase(order.customerName)}</TableCell>
+                    <TableCell wrap className="min-w-[10rem]">{titleCase(order.customerName)}</TableCell>
                     <TableCell>
                       <DateText value={order.createdAt} />
                     </TableCell>
                     <TableCell>
-                      <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
+                      <StatusDot tone={status.tone}>{status.label}</StatusDot>
                     </TableCell>
                     <TableCell numeric>{formatCount(order.itemCount)}</TableCell>
                     <TableCell numeric>

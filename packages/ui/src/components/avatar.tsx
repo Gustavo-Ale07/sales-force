@@ -4,7 +4,7 @@ import { initials } from "../lib/format";
 
 export interface AvatarProps extends Omit<ComponentProps<"span">, "children"> {
   name: string;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
   /**
    * Identifier the colour is hashed from (e.g. a customer or user code). Defaults to `name`; pass a
    * stable id when two different accounts can share a display name, so they don't collide on colour.
@@ -12,7 +12,7 @@ export interface AvatarProps extends Omit<ComponentProps<"span">, "children"> {
   seed?: string;
 }
 
-const sizes = { sm: "size-6 text-[9px]", md: "size-8 text-xs", lg: "size-10 text-sm" } as const;
+const sizes = { sm: "size-6 text-[9px]", md: "size-8 text-xs", lg: "size-10 text-sm", xl: "size-[52px] text-lg" } as const;
 
 // Non-alarming tones only: identity colour must never be mistaken for a status signal (danger/warning are
 // reserved for StatusBadge/Alert). Picked deterministically so the same person/account always reads the same
