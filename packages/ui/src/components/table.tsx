@@ -48,7 +48,7 @@ export function Table({ label, maxHeightClassName, containerClassName, className
       onKeyDown={onKeyDown}
       className={cn("overflow-auto", maxHeightClassName, containerClassName)}
     >
-      <table className={cn("w-full border-collapse text-xs", className)} {...props}>
+      <table className={cn("w-full border-collapse text-sm", className)} {...props}>
         {children}
       </table>
     </div>
@@ -56,7 +56,7 @@ export function Table({ label, maxHeightClassName, containerClassName, className
 }
 
 export function TableHeader({ className, ...props }: ComponentProps<"thead">) {
-  return <thead className={cn("sticky top-0 z-10 bg-surface-2", className)} {...props} />;
+  return <thead className={cn("sticky top-0 z-10 bg-surface", className)} {...props} />;
 }
 
 export function TableBody({ className, ...props }: ComponentProps<"tbody">) {
@@ -77,7 +77,7 @@ export function TableRow({ className, selected, interactive, onActivate, onKeyDo
       tabIndex={interactive ? 0 : undefined}
       data-selected={selected || undefined}
       className={cn(
-        "group hover:bg-surface-2 focus-visible:outline-offset-[-2px]",
+        "group transition-colors duration-[var(--sf-dur-fast)] hover:bg-surface-2 focus-visible:outline-offset-[-2px]",
         selected && "bg-accent-weak hover:bg-accent-weak",
         interactive && onActivate && "cursor-pointer",
         className,
@@ -110,7 +110,7 @@ export function TableHead({ className, numeric, scope = "col", ...props }: Table
     <th
       scope={scope}
       className={cn(
-        "whitespace-nowrap border-b border-line px-2.5 py-1.5 text-left text-2xs font-semibold uppercase tracking-wider text-fg-muted",
+        "h-11 whitespace-nowrap border-b border-line px-4 text-left text-xs font-semibold text-fg-muted",
         numeric && "text-right",
         className,
       )}
@@ -138,12 +138,12 @@ export function SortableHead({ direction, onSort, numeric, children, className, 
         type="button"
         onClick={onSort}
         className={cn(
-          "-mx-1 inline-flex items-center gap-1 rounded-sm px-1 uppercase tracking-wider hover:text-fg",
+          "-mx-1 inline-flex items-center gap-1 rounded-sm px-1 hover:text-fg",
           direction && "text-fg",
         )}
       >
         {children}
-        <Icon size={11} aria-hidden="true" className={direction ? "" : "opacity-50"} />
+        <Icon size={12} aria-hidden="true" className={direction ? "" : "opacity-50"} />
       </button>
     </TableHead>
   );
@@ -159,7 +159,7 @@ export function TableCell({ className, numeric, wrap, ...props }: TableCellProps
   return (
     <td
       className={cn(
-        "border-b border-line px-2.5 py-1.5 align-middle",
+        "h-14 border-b border-line px-4 align-middle",
         wrap ? "" : "whitespace-nowrap",
         numeric && "text-right tabular-nums",
         className,
@@ -206,7 +206,7 @@ export function TableLoadingRows({ columns, rows = 6 }: TableLoadingRowsProps) {
       {Array.from({ length: rows }, (_, r) => (
         <tr key={r} aria-hidden="true">
           {Array.from({ length: columns }, (_, c) => (
-            <td key={c} className="border-b border-line px-2.5 py-2.5">
+            <td key={c} className="h-14 border-b border-line px-4">
               <Skeleton className={c === 0 ? "w-[70%]" : "w-[50%]"} />
             </td>
           ))}

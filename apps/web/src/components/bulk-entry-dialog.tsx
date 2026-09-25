@@ -19,6 +19,7 @@ import {
   TabsList,
   TabsTrigger,
   Textarea,
+  titleCase,
 } from "@salesforce/ui";
 import { useMutation } from "@tanstack/react-query";
 import { useMemo, useState, type ChangeEvent } from "react";
@@ -312,7 +313,7 @@ function ReviewRow({ entry }: { entry: PlannedRow }) {
       <TableCell wrap>
         {product ? (
           <>
-            <span className="font-medium">{product.description}</span>
+            <span className="font-medium">{titleCase(product.description)}</span>
             <span className="block text-fg-muted">Código {product.code}</span>
           </>
         ) : candidates.length > 0 ? (

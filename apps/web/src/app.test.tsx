@@ -19,11 +19,11 @@ describe("session guard", () => {
     expect(router.state.location.search).toEqual({ redirect: "/clientes" });
   });
 
-  it("renders the shell with active navigation and breadcrumbs for a signed-in user", async () => {
+  it("renders the shell with active navigation for a signed-in user, without a breadcrumb that only repeats the title", async () => {
     renderApp("/clientes", { handlers: shellData });
     expect(await screen.findByRole("heading", { name: "Clientes", level: 1 })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Clientes" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("navigation", { name: /Trilha|Breadcrumb|Você está em/i })).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: /Trilha/i })).not.toBeInTheDocument();
     await waitFor(() => expect(document.title).toBe("Clientes — Sales Force"));
   });
 

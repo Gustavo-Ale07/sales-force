@@ -26,6 +26,7 @@ import {
   TabsList,
   TabsTrigger,
   formatDocument,
+  titleCase,
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -149,8 +150,8 @@ function RegistrationTab({ customerCode }: { customerCode: number }) {
           <CardBody>
             <KeyValueList>
               <KeyValue label="Código">{customer.code}</KeyValue>
-              <KeyValue label="Razão social">{customer.name}</KeyValue>
-              <KeyValue label="Nome fantasia">{customer.tradeName ?? "—"}</KeyValue>
+              <KeyValue label="Razão social">{titleCase(customer.name)}</KeyValue>
+              <KeyValue label="Nome fantasia">{customer.tradeName ? titleCase(customer.tradeName) : "—"}</KeyValue>
               <KeyValue label="CNPJ/CPF">{formatDocument(customer.document)}</KeyValue>
               <KeyValue label="Vendedor preferencial">{customer.sellerName ?? "—"}</KeyValue>
               <KeyValue label="Última sincronização">
@@ -232,7 +233,7 @@ export function CustomerFichaTabs({ customerCode, initialTab = "cadastro" }: Cus
     <Tabs defaultValue={initialTab}>
       <TabsList aria-label="Ficha do cliente">
         {tabs.map(({ value, label, icon: Icon }) => (
-          <TabsTrigger key={value} value={value} className="uppercase tracking-wide">
+          <TabsTrigger key={value} value={value} className="tracking-normal">
             <Icon size={14} aria-hidden="true" />
             {label}
           </TabsTrigger>
@@ -263,7 +264,7 @@ function FichaHeader({ customerCode }: { customerCode: number }) {
   return (
     <span className="flex items-center gap-2">
       {customer ? <Avatar name={customer.name} seed={String(customer.code)} size="md" className="rounded-full" aria-hidden="true" role="presentation" /> : null}
-      <span className="min-w-0 truncate">{customer ? `${customer.code} – ${customer.name}` : `Cliente ${customerCode}`}</span>
+      <span className="min-w-0 truncate">{customer ? `${customer.code} – ${titleCase(customer.name)}` : `Cliente ${customerCode}`}</span>
       {customer ? <CustomerStatus active={customer.active} blocked={customer.blocked} /> : null}
     </span>
   );

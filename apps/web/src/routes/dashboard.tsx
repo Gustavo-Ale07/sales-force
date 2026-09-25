@@ -23,10 +23,11 @@ import {
   TableRow,
   cn,
   type BarChartDatum,
+  titleCase,
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, Ban, CheckCircle2, ChevronRight, LayoutDashboard, Package, Plus, Tag, Users } from "lucide-react";
+import { AlertTriangle, Ban, CheckCircle2, ChevronRight, Package, Plus, Tag, Users } from "lucide-react";
 import type { ReactNode } from "react";
 import { findMetric, metricCount, MetricValueOrUnavailable, MetricValueText } from "../components/metric-value";
 import { QueryError } from "../components/query-error";
@@ -38,6 +39,9 @@ import { orderReference, orderStatusLabels } from "../lib/labels";
 type MetricGroup = ApiSchema<"MetricGroup">;
 type DashboardResponse = ApiSchema<"DashboardResponse">;
 type OrderListItem = ApiSchema<"OrderListItem">;
+
+/** Tiles that sit inside a card: flat tint instead of a second bordered card. */
+const NESTED_TILE = "border-transparent bg-surface-2 shadow-none hover:border-transparent";
 
 function greeting(hour = new Date().getHours()): string {
   if (hour < 12) return "Bom dia";
@@ -113,7 +117,7 @@ function RecentOrders({ orders }: { orders: DashboardResponse["recentOrders"] })
       ) : (
         <>
           <CardBody className="border-b border-line">
-            <p className="m-0 mb-2 text-2xs font-semibold uppercase tracking-wider text-fg-muted">Situação dos pedidos recentes</p>
+            <p className="m-0 mb-2 text-xs font-medium text-fg-muted">Situação dos pedidos recentes</p>
             <SimpleBarChart data={distribution} />
           </CardBody>
           <Table label="Pedidos recentes">
@@ -137,7 +141,7 @@ function RecentOrders({ orders }: { orders: DashboardResponse["recentOrders"] })
                         {orderReference(order)}
                       </Link>
                     </TableCell>
-                    <TableCell>{order.customerName}</TableCell>
+                    <TableCell>{titleCase(order.customerName)}</TableCell>
                     <TableCell>
                       <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
                     </TableCell>
@@ -218,7 +222,7 @@ export function DashboardPage() {
     <>
       <PageHeader
         title="Início"
-        icon={<LayoutDashboard size={16} aria-hidden="true" />}
+       
         description={
           <span className="flex flex-col gap-0.5">
             <span>{firstName ? `${greeting()}, ${firstName}.` : "Resumo da sua carteira e dos pedidos recentes."}</span>
@@ -265,7 +269,7 @@ export function DashboardPage() {
       ) : (
         <>
           <div className="flex items-center justify-between gap-2">
-            <p className="m-0 text-2xs font-semibold uppercase tracking-wider text-fg-muted">Visão geral</p>
+            <p className="m-0 text-xs font-medium text-fg-muted">Visão geral</p>
             <DemoBadge groups={groups} keys={["portfolio", "catalog", "orders"]} />
           </div>
           <StatGrid>
@@ -317,12 +321,18 @@ export function DashboardPage() {
                 actions={<DemoBadge groups={groups} keys={["orders", "credit", "positivation"]} />}
               />
               <CardBody>
-                <StatGrid className="grid-cols-1 md:grid-cols-1 xl:grid-cols-1">
+                <StatGrid className="grid-cols-1">
                   {cancelled ? (
-                    <StatTile label={cancelled.label} value={<MetricValueText metric={cancelled} />} hint={cancelled.description ?? undefined} />
+                    <StatTile
+                      className={NESTED_TILE}
+                      label={cancelled.label}
+                      value={<MetricValueText metric={cancelled} />}
+                      hint={cancelled.description ?? undefined}
+                    />
                   ) : null}
                   {creditIndicators ? (
                     <StatTile
+                      className={NESTED_TILE}
                       label={creditIndicators.label}
                       value={<MetricValueText metric={creditIndicators} />}
                       hint={creditIndicators.description ?? undefined}
@@ -330,6 +340,7 @@ export function DashboardPage() {
                   ) : null}
                   {positivationRate ? (
                     <StatTile
+                      className={NESTED_TILE}
                       label={positivationRate.label}
                       value={<MetricValueText metric={positivationRate} />}
                       hint={positivationRate.description ?? undefined}

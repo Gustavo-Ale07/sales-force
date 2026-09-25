@@ -11,19 +11,18 @@ import { ConnectedIntegrationPill } from "./integration-pill";
 import { navItemsFor } from "./nav-items";
 import { UserMenu } from "./user-menu";
 
-// Horizontal navigation, as in Vidya Force: white text on the navy bar; the active item is a white pill with
-// navy bold text. Structure is replicated from the legacy system, the skin (PLAC navy/red, own logo) is ours.
+// Horizontal navigation (structure from Vidya Force, skin from the PLAC reference kit): sentence-case white
+// labels on the flat navy bar; the active item is a white pill with navy text; a 3px red line closes the bar.
 // The router sets `data-status="active"` on the current link; styling off that attribute (instead of swapping
 // class strings) keeps the active colours from losing a Tailwind specificity/merge fight with the base ones.
 const topLink =
-  "flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-sidebar-fg-active no-underline transition-[background-color,color] duration-150 ease-spring hover:bg-sidebar-hover data-[status=active]:bg-white data-[status=active]:font-bold data-[status=active]:text-[var(--sf-sidebar-bg)]";
+  "flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold text-sidebar-fg no-underline transition-[background-color,color] duration-[var(--sf-dur-fast)] ease-spring hover:bg-sidebar-hover hover:text-sidebar-fg-active data-[status=active]:bg-white data-[status=active]:text-[var(--sf-sidebar-bg)]";
 
 function TopNav({ role }: { role: string | undefined }) {
   return (
     <nav aria-label="Principal" className="hidden items-center gap-1.5 md:flex">
-      {navItemsFor(role).map(({ to, label, icon: Icon }) => (
+      {navItemsFor(role).map(({ to, label }) => (
         <Link key={to} to={to} activeOptions={{ exact: to === "/" }} className={topLink}>
-          <Icon size={16} aria-hidden="true" className="shrink-0" />
           {label}
         </Link>
       ))}
@@ -32,7 +31,7 @@ function TopNav({ role }: { role: string | undefined }) {
 }
 
 const drawerLink =
-  "flex items-center gap-2.5 rounded-md px-2.5 py-2.5 text-sm font-medium uppercase tracking-wide text-sidebar-fg no-underline transition-colors duration-150 ease-spring hover:bg-sidebar-hover hover:text-sidebar-fg-active data-[status=active]:bg-white data-[status=active]:font-bold data-[status=active]:text-[var(--sf-sidebar-bg)]";
+  "flex items-center gap-3 rounded-md px-3 py-3 text-base font-semibold text-sidebar-fg no-underline transition-colors duration-[var(--sf-dur-fast)] ease-spring hover:bg-sidebar-hover hover:text-sidebar-fg-active data-[status=active]:bg-white data-[status=active]:text-[var(--sf-sidebar-bg)]";
 
 /** Same items as `TopNav`, stacked, for the drawer used below the `md` breakpoint. */
 function DrawerNav({ role, onNavigate }: { role: string | undefined; onNavigate: () => void }) {
@@ -46,7 +45,7 @@ function DrawerNav({ role, onNavigate }: { role: string | undefined; onNavigate:
           className={drawerLink}
           onClick={onNavigate}
         >
-          <Icon size={17} aria-hidden="true" className="shrink-0" />
+          <Icon size={18} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
           {label}
         </Link>
       ))}
@@ -63,7 +62,8 @@ function RouteBreadcrumbs() {
     const label = typeof crumb === "function" ? crumb(match.params as Record<string, string>) : crumb;
     return [{ label, href: match.pathname }];
   });
-  if (items.length === 0) return null;
+  // A single crumb would only repeat the page title right below it.
+  if (items.length <= 1) return null;
   return (
     <Breadcrumbs
       items={items}
@@ -118,12 +118,12 @@ export function AppShell({ user, onLogout, children }: AppShellProps) {
         Ir para o conteúdo
       </a>
       <DevAuthBanner />
-      <header className="sticky top-0 z-30 flex h-[var(--sf-topbar-h)] shrink-0 items-center gap-3 bg-[linear-gradient(90deg,var(--sf-sidebar-bg),var(--sf-sidebar-bg-raised))] px-3 shadow-[0_1px_0_var(--sf-sidebar-line)] md:px-6">
+      <header className="sticky top-0 z-30 flex h-[var(--sf-topbar-h)] shrink-0 items-center gap-3 border-b-[length:var(--sf-topbar-line-h)] border-b-[var(--sf-red)] bg-sidebar px-3 md:gap-6 md:px-8">
         <Drawer open={navOpen} onOpenChange={setNavOpen}>
           <DrawerTrigger asChild>
             <IconButton
               label="Abrir menu de navegação"
-              icon={<Menu size={17} aria-hidden="true" />}
+              icon={<Menu size={20} strokeWidth={1.75} aria-hidden="true" />}
               className="text-sidebar-fg-active hover:bg-sidebar-hover md:hidden"
             />
           </DrawerTrigger>
@@ -131,14 +131,14 @@ export function AppShell({ user, onLogout, children }: AppShellProps) {
             side="left"
             hideHeader
             title="Menu de navegação"
-            className="border-sidebar-line bg-sidebar [--drawer-w:260px] px-2 py-2.5"
+            className="bg-sidebar [--drawer-w:280px] px-3 py-4"
           >
             <Brand tone="dark" size="lg" className="px-1.5 pb-3 pt-1" />
             <DrawerNav role={user?.role} onNavigate={() => setNavOpen(false)} />
           </DrawerContent>
         </Drawer>
         <Brand tone="dark" size="md" className="shrink-0 max-sm:[&>span:last-child]:hidden" />
-        <div className="flex min-w-0 flex-1 items-center justify-center">
+        <div className="flex min-w-0 flex-1 items-center md:pl-4">
           <TopNav role={user?.role} />
         </div>
         <div className="flex shrink-0 items-center gap-3">
@@ -151,7 +151,7 @@ export function AppShell({ user, onLogout, children }: AppShellProps) {
         id="conteudo"
         ref={mainRef}
         tabIndex={-1}
-        className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-4 px-3 py-4 outline-none md:px-6 md:py-5"
+        className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-6 px-4 py-6 outline-none md:px-8 md:py-8 xl:px-12"
       >
         <RouteBreadcrumbs />
         {children}

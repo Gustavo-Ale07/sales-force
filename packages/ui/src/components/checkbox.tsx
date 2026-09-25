@@ -16,7 +16,7 @@ export function Checkbox({ className, label, description, id, ...props }: Checkb
     <RadixCheckbox.Root
       id={controlId}
       className={cn(
-        "flex size-4 shrink-0 items-center justify-center rounded-sm border border-line-strong bg-surface text-on-accent data-[state=checked]:border-accent data-[state=checked]:bg-accent data-[state=indeterminate]:border-accent data-[state=indeterminate]:bg-accent disabled:cursor-not-allowed disabled:opacity-50",
+        "flex size-[18px] shrink-0 items-center justify-center rounded-[6px] border border-line-strong transition-colors duration-[var(--sf-dur-fast)] bg-surface text-on-accent data-[state=checked]:border-accent data-[state=checked]:bg-accent data-[state=indeterminate]:border-accent data-[state=indeterminate]:bg-accent disabled:cursor-not-allowed disabled:opacity-50",
         className,
       )}
       {...props}
@@ -33,7 +33,7 @@ export function Checkbox({ className, label, description, id, ...props }: Checkb
   if (!label) return box;
   return (
     <div className="flex items-start gap-2">
-      <span className="mt-[3px] flex">{box}</span>
+      <span className="mt-[2px] flex">{box}</span>
       <label htmlFor={controlId} className="flex flex-col text-sm text-fg">
         {label}
         {description ? <span className="text-xs text-fg-muted">{description}</span> : null}

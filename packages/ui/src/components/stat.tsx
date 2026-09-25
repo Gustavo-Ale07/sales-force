@@ -33,8 +33,8 @@ export function StatTile({ label, value, hint, progress, emphasis = "default", i
   return (
     <div
       className={cn(
-        "relative min-w-0 rounded-lg border border-line bg-surface px-3.5 py-3 shadow-card transition-[border-color,box-shadow] duration-150 ease-spring",
-        icon && "pr-9",
+        "relative min-w-0 rounded-lg border border-line bg-surface px-5 py-4 shadow-card transition-[border-color,box-shadow] duration-[var(--sf-dur-base)] ease-spring hover:border-line-strong",
+        icon && "pr-12",
         className,
       )}
       {...props}
@@ -42,15 +42,15 @@ export function StatTile({ label, value, hint, progress, emphasis = "default", i
       {icon ? (
         <span
           aria-hidden="true"
-          className={cn("absolute right-3 top-3 inline-flex shrink-0 items-center justify-center rounded-full p-1.5", toneChip[tone])}
+          className={cn("absolute right-4 top-4 inline-flex shrink-0 items-center justify-center rounded-full p-1.5", toneChip[tone])}
         >
           {icon}
         </span>
       ) : null}
-      <div className="text-2xs font-semibold uppercase tracking-wider text-fg-muted">{label}</div>
+      <div className="text-xs font-medium text-fg-muted">{label}</div>
       <div
         className={cn(
-          "mt-1.5 whitespace-nowrap text-[26px] font-bold leading-none tracking-tight",
+          "mt-2 whitespace-nowrap text-[22px] font-semibold sm:text-[26px] leading-none tracking-[-0.02em]",
           emphasis === "danger" ? "text-danger" : "text-fg",
         )}
       >
@@ -62,16 +62,16 @@ export function StatTile({ label, value, hint, progress, emphasis = "default", i
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={Math.round(Math.min(100, Math.max(0, progress)))}
-          className="mt-1.5 h-[5px] overflow-hidden rounded-full bg-surface-3"
+          className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-3"
         >
           <div className="h-full bg-accent" style={{ width: `${Math.min(100, Math.max(0, progress))}%` }} />
         </div>
       ) : null}
-      {hint ? <div className="mt-1 text-xs text-fg-muted">{hint}</div> : null}
+      {hint ? <div className="mt-1.5 text-xs text-fg-muted">{hint}</div> : null}
     </div>
   );
 }
 
 export function StatGrid({ className, ...props }: ComponentProps<"div">) {
-  return <div className={cn("grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5", className)} {...props} />;
+  return <div className={cn("grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-3", className)} {...props} />;
 }

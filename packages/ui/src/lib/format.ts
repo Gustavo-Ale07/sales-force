@@ -161,3 +161,27 @@ export function initials(name: string | null | undefined): string {
 }
 
 export { NBSP };
+
+const TITLE_CASE_LOWER = new Set(["a", "as", "o", "os", "e", "de", "da", "das", "do", "dos", "em", "na", "nas", "no", "nos", "para", "com", "c/", "p/", "cm", "mm", "ml", "kg"]);
+const TITLE_CASE_UPPER = new Set(["ltda", "me", "epp", "eireli", "sa", "s/a", "mei"]);
+
+/**
+ * Display-only Title Case for names the ERP stores in capitals ("DOCES DA VOVÓ LTDA" -> "Doces da Vovó LTDA").
+ * Text that already mixes cases is left as typed. Tokens with digits (measures, codes) stay as they are, and legal
+ * suffixes stay uppercase. Never use the result as a key or send it back to the server.
+ */
+export function titleCase(value: string | null | undefined): string {
+  if (!value) return "";
+  if (value !== value.toLocaleUpperCase("pt-BR")) return value;
+  return value
+    .toLocaleLowerCase("pt-BR")
+    .split(/(\s+)/)
+    .map((token, index) => {
+      if (token.trim() === "") return token;
+      if (/\d/.test(token)) return token.toLocaleUpperCase("pt-BR");
+      if (TITLE_CASE_UPPER.has(token)) return token.toLocaleUpperCase("pt-BR");
+      if (index > 0 && TITLE_CASE_LOWER.has(token)) return token;
+      return token.charAt(0).toLocaleUpperCase("pt-BR") + token.slice(1);
+    })
+    .join("");
+}

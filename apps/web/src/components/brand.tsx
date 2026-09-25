@@ -38,7 +38,7 @@ export function Brand({
   const logo = useImageOk(logoUrl);
   const mark = useImageOk(markUrl);
   const dark = tone === "dark";
-  const showProductName = !collapsed && name !== "Sales Force";
+  const showProductName = !collapsed && !dark && name !== "Sales Force";
 
   const logoImg = logoUrl !== null && logo.ok;
   const box = size === "lg" ? "size-9 rounded-lg text-xs" : "size-8 rounded-lg text-xs";
@@ -47,12 +47,12 @@ export function Brand({
   if (logoImg && !collapsed) {
     return (
       <div className={cn("flex items-center gap-2.5", className)}>
-        <span className={cn("inline-flex shrink-0 items-center justify-center rounded-md bg-white p-1", dark && "shadow-sm")}>
+        <span className={cn("inline-flex shrink-0 items-center justify-center", !dark && "rounded-md bg-white p-1")}>
           <img
             src={logoUrl}
             alt={name}
             onError={logo.onError}
-            className={cn(size === "lg" ? "h-7 max-w-[132px]" : "h-5 max-w-[104px]", "w-auto object-contain object-left")}
+            className={cn(size === "lg" ? "h-9 max-w-[132px]" : "h-8 max-w-[108px]", "w-auto rounded-[6px] object-contain object-left")}
           />
         </span>
         {showProductName ? <span className={secondaryClass}>Sales Force</span> : null}

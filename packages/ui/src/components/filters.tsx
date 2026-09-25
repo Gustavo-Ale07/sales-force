@@ -7,7 +7,7 @@ export function FilterBar({ className, ...props }: ComponentProps<"form">) {
   return (
     <form
       role="search"
-      className={cn("flex flex-wrap items-end gap-2 rounded-md border border-line bg-surface px-3 py-2", className)}
+      className={cn("flex flex-wrap items-end gap-3 rounded-lg border border-line bg-surface px-4 py-3", className)}
       onSubmit={(event) => event.preventDefault()}
       {...props}
     />
@@ -23,8 +23,8 @@ export interface FilterFieldProps {
 /** Compact labelled filter control (label above, small caps). */
 export function FilterField({ label, children, className }: FilterFieldProps) {
   return (
-    <label className={cn("flex min-w-0 flex-col gap-0.5", className)}>
-      <span className="text-2xs font-semibold uppercase tracking-wider text-fg-muted">{label}</span>
+    <label className={cn("flex min-w-0 flex-col gap-1", className)}>
+      <span className="text-xs font-medium text-fg-muted">{label}</span>
       {children}
     </label>
   );
@@ -39,7 +39,7 @@ export interface FilterChipProps {
 /** Active-filter chip with remove button. */
 export function FilterChip({ children, onRemove, removeLabel = "Remover filtro" }: FilterChipProps) {
   return (
-    <span className="inline-flex h-[22px] items-center gap-1 rounded-full border border-accent bg-accent-weak pl-2 pr-1 text-xs text-fg">
+    <span className="inline-flex h-7 items-center gap-1 rounded-full bg-accent-weak pl-3 pr-1.5 text-xs font-semibold text-accent-text">
       {children}
       <button
         type="button"

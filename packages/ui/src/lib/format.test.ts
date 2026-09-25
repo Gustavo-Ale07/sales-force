@@ -9,6 +9,7 @@ import {
   formatPercent,
   formatQuantity,
   initials,
+  titleCase,
 } from "./format";
 
 const plain = (s: string) => s.replaceAll(" ", " ");
@@ -66,5 +67,17 @@ describe("documents", () => {
     expect(initials("Ana Maria Ribeiro")).toBe("AR");
     expect(initials("Ana")).toBe("A");
     expect(initials(null)).toBe("?");
+  });
+});
+
+describe("titleCase", () => {
+  it("converts ERP capitals to Title Case, keeping legal suffixes and small words", () => {
+    expect(titleCase("DOCES DA VOVÓ COMÉRCIO LTDA")).toBe("Doces da Vovó Comércio LTDA");
+    expect(titleCase("MERCADINHO DO ZÉ EIRELI")).toBe("Mercadinho do Zé EIRELI");
+    expect(titleCase("FORMINHA DE DOCE 3 CM BRANCA C/100")).toBe("Forminha de Doce 3 cm Branca C/100");
+  });
+  it("leaves text that already mixes cases, and empty values, alone", () => {
+    expect(titleCase("Casa do Bolo Ltda")).toBe("Casa do Bolo Ltda");
+    expect(titleCase(null)).toBe("");
   });
 });

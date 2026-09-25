@@ -27,9 +27,9 @@ import {
   TableMessageRow,
   TableRow,
   type SortDirection,
+  titleCase,
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
-import { Package } from "lucide-react";
 import { CustomerPicker } from "../components/customer-picker";
 import { PriceCell } from "../components/price-cell";
 import { QueryError } from "../components/query-error";
@@ -139,7 +139,7 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
     <>
       <PageHeader
         title="Catálogo de produtos"
-        icon={<Package size={16} aria-hidden="true" />}
+       
         description="Consulte produtos, grupos e preços de tabela. Produtos sem preço aparecem como “Sem preço”."
       />
 
@@ -181,7 +181,7 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
           </Select>
         </FilterField>
         <div className="flex w-[260px] min-w-0 flex-col gap-0.5">
-          <span id="products-customer-label" className="text-2xs font-semibold uppercase tracking-wider text-fg-muted">
+          <span id="products-customer-label" className="text-xs font-medium text-fg-muted">
             Preços para o cliente
           </span>
           <CustomerPicker
@@ -259,9 +259,9 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
             ) : (
               query.data.items.map((product) => (
                 <TableRow key={product.code} interactive onActivate={() => onSearchChange(compact({ ...params, product: product.code }))}>
-                  <TableCell numeric>{product.code}</TableCell>
+                  <TableCell className="tabular-nums text-fg-muted">{product.code}</TableCell>
                   <TableCell wrap>
-                    <span className="font-medium">{product.description}</span>
+                    <span className="font-medium">{titleCase(product.description)}</span>
                     {product.reference ? <span className="block text-fg-muted">Ref. {product.reference}</span> : null}
                   </TableCell>
                   <TableCell>{product.groupName ?? "—"}</TableCell>

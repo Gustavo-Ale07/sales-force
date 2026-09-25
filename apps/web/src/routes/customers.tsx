@@ -4,7 +4,6 @@ import {
   Badge,
   Button,
   Card,
-  CardBody,
   EmptyState,
   FilterBar,
   FilterChip,
@@ -26,11 +25,12 @@ import {
   TableMessageRow,
   TableRow,
   formatDocument,
+  titleCase,
   type SortDirection,
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Plus, Users } from "lucide-react";
+import { Plus } from "lucide-react";
 import { MetricValueText, METRIC_VISUALS } from "../components/metric-value";
 import { QueryError } from "../components/query-error";
 import { customersQueryOptions, dashboardQueryOptions, sellersQueryOptions, type CustomersParams } from "../lib/api-queries";
@@ -84,14 +84,13 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
     <>
       <PageHeader
         title="Clientes"
-        icon={<Users size={16} aria-hidden="true" />}
+       
         description="Clientes da sua carteira, conforme o escopo definido pelo servidor."
       />
 
       {portfolio && portfolio.metrics.length > 0 ? (
-        <Card aria-label={portfolio.label}>
-          <CardBody>
-            <StatGrid className="grid-cols-2 md:grid-cols-4 xl:grid-cols-4">
+        <section aria-label={portfolio.label}>
+          <StatGrid className="grid-cols-2 md:grid-cols-4 xl:grid-cols-4">
               {portfolio.metrics.map((metric) => {
                 const visual = METRIC_VISUALS[metric.key];
                 return (
@@ -105,9 +104,8 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
                   />
                 );
               })}
-            </StatGrid>
-          </CardBody>
-        </Card>
+          </StatGrid>
+        </section>
       ) : null}
 
       <FilterBar aria-label="Filtros da carteira">
@@ -220,14 +218,14 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
               </TableMessageRow>
             ) : (
               query.data.items.map((customer) => (
-                <TableRow key={customer.code} interactive onActivate={() => onOpenCustomer(customer.code)}>
-                  <TableCell numeric>{customer.code}</TableCell>
+                <TableRow key={customer.code} interactive className="group" onActivate={() => onOpenCustomer(customer.code)}>
+                  <TableCell className="tabular-nums text-fg-muted">{customer.code}</TableCell>
                   <TableCell wrap>
                     <span className="flex items-center gap-2">
-                      <Avatar name={customer.name} seed={String(customer.code)} size="sm" />
+                      <Avatar name={titleCase(customer.name)} seed={String(customer.code)} size="sm" />
                       <span className="min-w-0">
-                        <span className="block font-medium">{customer.name}</span>
-                        {customer.tradeName ? <span className="block text-fg-muted">{customer.tradeName}</span> : null}
+                        <span className="block font-semibold">{titleCase(customer.name)}</span>
+                        {customer.tradeName ? <span className="block text-xs text-fg-muted">{titleCase(customer.tradeName)}</span> : null}
                       </span>
                     </span>
                   </TableCell>
@@ -245,11 +243,17 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
                   </TableCell>
                   <TableCell>
                     {/* Straight to a new order for this customer; the click must not also open the customer. */}
-                    <Button asChild size="sm" variant="secondary">
+                    {/* On hover-capable screens the action shows on row hover/focus; touch screens keep it visible. */}
+                    <Button
+                      asChild
+                      size="sm"
+                      variant="secondary"
+                      className="transition-opacity duration-[var(--sf-dur-fast)] [@media(hover:hover)]:opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
+                    >
                       <Link
                         to="/pedidos/novo"
                         search={{ customer: customer.code }}
-                        aria-label={`Novo pedido para ${customer.name}`}
+                        aria-label={`Novo pedido para ${titleCase(customer.name)}`}
                         onClick={(event) => event.stopPropagation()}
                       >
                         <Plus size={12} aria-hidden="true" />

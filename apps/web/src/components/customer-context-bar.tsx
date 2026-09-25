@@ -1,4 +1,4 @@
-import { Button, Money, formatDocument } from "@salesforce/ui";
+import { Button, Money, formatDocument, titleCase } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { IdCard } from "lucide-react";
 import type { ReactNode } from "react";
@@ -15,7 +15,7 @@ export interface CustomerContextBarProps {
 function BarField({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="min-w-0">
-      <dt className="text-2xs font-semibold uppercase tracking-wider text-fg-muted">{label}</dt>
+      <dt className="text-xs font-medium text-fg-muted">{label}</dt>
       <dd className="m-0 truncate text-sm text-fg">{children}</dd>
     </div>
   );
@@ -34,11 +34,11 @@ export function CustomerContextBar({ customerCode, customerName, onOpenFicha }: 
   return (
     <section
       aria-label="Cliente do pedido"
-      className="z-20 md:sticky md:top-[var(--sf-topbar-h)] -mx-3 flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-line bg-surface px-3 py-2 shadow-sm md:-mx-6 md:px-6"
+      className="z-20 md:sticky md:top-[var(--sf-topbar-h)] -mx-4 flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-line bg-surface px-4 py-3 shadow-sm md:-mx-8 md:px-8 xl:-mx-12 xl:px-12"
     >
       <div className="min-w-0 flex-1 basis-64">
         <p className="m-0 truncate text-sm font-bold text-fg">
-          Cliente: {customerCode} – <span className="uppercase">{customerName}</span>
+          Cliente: {customerCode} – <span className="font-semibold">{titleCase(customerName)}</span>
         </p>
         <p className="m-0 truncate text-xs text-fg-muted">{detail ? `CNPJ/CPF: ${formatDocument(detail.document)}` : "Carregando dados do cliente…"}</p>
       </div>

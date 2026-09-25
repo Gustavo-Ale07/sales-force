@@ -30,7 +30,7 @@ export function pageWindow(page: number, pageCount: number): (number | null)[] {
 }
 
 const pageButton =
-  "inline-flex h-6 min-w-6 items-center justify-center rounded-md border border-line px-1.5 text-xs text-fg hover:bg-surface-2 disabled:pointer-events-none disabled:text-fg-faint";
+  "inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-line px-2 text-xs font-medium text-fg transition-colors hover:bg-surface-2 disabled:pointer-events-none disabled:text-fg-faint";
 
 /** Table footer: "Mostrando 1–25 de 38", page buttons and page-size selector. Counts are integers (not money). */
 export function Pagination({ page, pageSize, total, onPageChange, onPageSizeChange, pageSizeOptions = [25, 50, 100], className }: PaginationProps) {
@@ -41,14 +41,14 @@ export function Pagination({ page, pageSize, total, onPageChange, onPageSizeChan
   const fmt = new Intl.NumberFormat("pt-BR");
 
   return (
-    <div className={cn("flex flex-wrap items-center gap-3 border-t border-line px-3 py-1.5 text-xs text-fg-muted", className)}>
+    <div className={cn("flex flex-wrap items-center gap-3 border-t border-line px-4 py-3 text-xs text-fg-muted", className)}>
       <span aria-live="polite">
         {total === 0 ? "Nenhum registro" : `Mostrando ${fmt.format(first)}–${fmt.format(last)} de ${fmt.format(total)}`}
       </span>
       <span className="flex-1" />
       <nav aria-label="Paginação" className="flex items-center gap-1">
         <button type="button" className={pageButton} disabled={current <= 1} onClick={() => onPageChange(current - 1)} aria-label="Página anterior">
-          <ChevronLeft size={13} aria-hidden="true" />
+          <ChevronLeft size={15} strokeWidth={1.75} aria-hidden="true" />
         </button>
         {pageWindow(current, pageCount).map((p, i) =>
           p === null ? (
@@ -75,7 +75,7 @@ export function Pagination({ page, pageSize, total, onPageChange, onPageSizeChan
           onClick={() => onPageChange(current + 1)}
           aria-label="Próxima página"
         >
-          <ChevronRight size={13} aria-hidden="true" />
+          <ChevronRight size={15} strokeWidth={1.75} aria-hidden="true" />
         </button>
       </nav>
       {onPageSizeChange ? (

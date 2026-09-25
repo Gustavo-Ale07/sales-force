@@ -5,21 +5,23 @@ import { cn } from "../lib/cn";
 import { Spinner } from "./spinner";
 
 export const buttonVariants = cva(
-  "inline-flex shrink-0 select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-md border font-medium transition-[color,background-color,border-color,transform,box-shadow] duration-150 ease-spring active:translate-y-px disabled:pointer-events-none disabled:border-line disabled:bg-surface-2 disabled:text-fg-faint disabled:shadow-none aria-disabled:pointer-events-none aria-disabled:opacity-60",
+  "inline-flex shrink-0 select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-md border font-semibold transition-[color,background-color,border-color,transform,box-shadow] duration-[var(--sf-dur-fast)] ease-spring active:translate-y-px disabled:pointer-events-none disabled:border-line disabled:bg-surface-2 disabled:text-fg-faint disabled:shadow-none aria-disabled:pointer-events-none aria-disabled:opacity-60",
   {
     variants: {
       variant: {
         primary:
-          "border-cta bg-cta text-on-cta shadow-[0_1px_2px_rgba(16,24,40,0.08)] hover:-translate-y-px hover:border-cta-hover hover:bg-cta-hover hover:shadow-glow-cta active:shadow-[0_1px_2px_rgba(16,24,40,0.08)]",
-        secondary: "border-line-strong bg-surface text-fg hover:bg-surface-2",
+          "border-cta bg-cta text-on-cta shadow-[0_1px_2px_rgba(29,29,27,0.12)] hover:-translate-y-px hover:border-cta-hover hover:bg-cta-hover hover:shadow-glow-cta active:shadow-[0_1px_2px_rgba(29,29,27,0.12)]",
+        /** Support action in the light tint of the primary red (reference: "botões de apoio em vermelho claro"). */
+        soft: "border-transparent bg-cta-weak text-cta-text hover:bg-cta-weak/70",
+        secondary: "border-line-strong bg-surface text-fg hover:border-fg-faint hover:bg-surface-2",
         ghost: "border-transparent bg-transparent text-fg-muted hover:bg-surface-3 hover:text-fg",
         danger: "border-danger bg-danger text-on-accent hover:opacity-90",
         "danger-outline": "border-danger bg-surface text-danger hover:bg-danger-bg",
       },
       size: {
-        sm: "h-[26px] px-2 text-xs",
-        md: "h-[30px] px-3 text-sm",
-        lg: "h-9 px-4 text-base",
+        sm: "h-8 px-3 text-xs",
+        md: "h-10 px-4 text-sm",
+        lg: "h-12 px-5 text-base",
       },
       block: { true: "w-full", false: "" },
     },
@@ -78,13 +80,13 @@ export function Button({
   );
 }
 
-const iconButtonSizes = { sm: "size-[26px]", md: "size-[30px]", lg: "size-9" } as const;
+const iconButtonSizes = { sm: "size-8", md: "size-10", lg: "size-12" } as const;
 
 export interface IconButtonProps extends Omit<ComponentProps<"button">, "aria-label" | "children"> {
   /** Required accessible name (icon-only control). */
   label: string;
   icon: ReactNode;
-  variant?: "secondary" | "ghost" | "primary" | "danger-outline";
+  variant?: "secondary" | "ghost" | "primary" | "soft" | "danger-outline";
   size?: keyof typeof iconButtonSizes;
 }
 

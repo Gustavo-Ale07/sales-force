@@ -18,13 +18,13 @@ function StateShell({ icon, title, description, action, tone = "neutral", compac
       <span
         aria-hidden="true"
         className={cn(
-          "flex size-9 items-center justify-center rounded-full border border-dashed",
-          tone === "danger" ? "border-danger text-danger" : "border-line-strong text-fg-muted",
+          "flex size-12 items-center justify-center rounded-full",
+          tone === "danger" ? "bg-danger-bg text-danger" : "bg-surface-3 text-fg-muted",
         )}
       >
         {icon}
       </span>
-      <p className="m-0 text-base font-semibold text-fg">{title}</p>
+      <p className="m-0 text-lg font-semibold tracking-[-0.01em] text-fg">{title}</p>
       {description ? <p className="m-0 max-w-md text-sm text-fg-muted">{description}</p> : null}
       {children}
       {action ? <div className="mt-1 flex items-center gap-2">{action}</div> : null}

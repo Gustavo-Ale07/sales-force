@@ -12,7 +12,7 @@ export interface AvatarProps extends Omit<ComponentProps<"span">, "children"> {
   seed?: string;
 }
 
-const sizes = { sm: "size-5 text-[8.5px]", md: "size-[26px] text-2xs", lg: "size-10 text-sm rounded-md" } as const;
+const sizes = { sm: "size-6 text-[9px]", md: "size-8 text-xs", lg: "size-10 text-sm" } as const;
 
 // Non-alarming tones only: identity colour must never be mistaken for a status signal (danger/warning are
 // reserved for StatusBadge/Alert). Picked deterministically so the same person/account always reads the same
@@ -37,7 +37,7 @@ export function Avatar({ name, size = "md", seed, className, ...props }: AvatarP
       role="img"
       aria-label={name}
       className={cn(
-        "inline-flex shrink-0 select-none items-center justify-center rounded-full border border-line-strong font-bold",
+        "inline-flex shrink-0 select-none items-center justify-center rounded-full font-semibold",
         hashTone(seed ?? (name || "?")),
         sizes[size],
         className,

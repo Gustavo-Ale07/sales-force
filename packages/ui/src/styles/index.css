@@ -1,38 +1,21 @@
 /*
  * Sales Force design tokens (@salesforce/ui).
  * Import after `@import "tailwindcss"` in the app stylesheet.
- * Palette: neutral cool-grey surfaces, petroleum/emerald accent, semantic status colours.
- * Colours are exposed twice: raw CSS variables (--sf-*) and Tailwind theme colours.
+ * Visual language: PLAC "linguagem calma" (reference kit plac-forca-de-vendas) — warm neutral surfaces,
+ * PLAC red for the primary action, PLAC navy for structure (top bar), a lighter navy accent for selection,
+ * focus and tabs, semantic status colours. Colours are exposed twice: raw CSS variables (--sf-*) and
+ * Tailwind theme colours.
  *
- * Type: Inter (body, variable weight) and Poppins (headings, 600/700), self-hosted here so the
- * app never depends on a third-party font CDN (same-origin CSP, no external request at runtime).
- * Only the latin subset is shipped — all user-facing text is pt-BR (Latin-1 Supplement covers
- * accented characters such as ã, ç, õ).
+ * Type: Manrope (variable weight), self-hosted here so the app never depends on a third-party font CDN
+ * (same-origin CSP, no external request at runtime). Only the latin subset is shipped — all user-facing
+ * text is pt-BR (Latin-1 Supplement covers accented characters such as ã, ç, õ). Licence: fonts/MANROPE-OFL.txt.
  */
 @font-face {
-  font-family: "Inter";
+  font-family: "Manrope";
   font-style: normal;
-  font-weight: 400 600;
+  font-weight: 200 800;
   font-display: swap;
-  src: url("./fonts/inter-var-latin.woff2") format("woff2");
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
-    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: "Poppins";
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url("./fonts/poppins-600-latin.woff2") format("woff2");
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
-    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: "Poppins";
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url("./fonts/poppins-700-latin.woff2") format("woff2");
+  src: url("./fonts/manrope-var-latin.woff2") format("woff2");
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
     U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
@@ -40,97 +23,102 @@
 :root {
   color-scheme: light;
 
-  /* surfaces */
-  --sf-bg: #f4f5f9;
+  /* surfaces (warm neutrals) */
+  --sf-bg: #f6f6f4;
   --sf-surface: #ffffff;
-  --sf-surface-2: #f6f8fa;
-  --sf-surface-3: #e9edf1;
-  --sf-border: #dde1e8;
-  --sf-border-strong: #c1c8d3;
+  --sf-surface-2: #f3f3f1;
+  --sf-surface-3: #ecece9;
+  --sf-border: #e8e8e4;
+  --sf-border-strong: #c4c4be;
 
   /* text (all >= 4.5:1 on --sf-surface) */
-  --sf-fg: #12172a;
-  --sf-fg-muted: #4a5268;
-  --sf-fg-faint: #626a80;
+  --sf-fg: #1d1d1b;
+  --sf-fg-muted: #5c5c57;
+  --sf-fg-faint: #6e6e68;
 
   /*
-   * PLAC brand. `--sf-red-strong` is #ff010a mixed toward black just enough to carry white text at the
-   * design system's own >=5.5:1 bar (see packages/ui... brand.ts `MIN_CONTRAST_WITH_WHITE`): the pure
-   * brand red only clears ~4:1, which is not enough for button/label text. Pure `--sf-red` stays
-   * available for non-text accents (rails, icons, thin highlights) where WCAG only asks for 3:1.
+   * PLAC brand. Navy carries the top bar; the red carries the primary action (`--sf-cta`). `--sf-red` is
+   * the pure brand red for non-text accents only (the 3px top-bar line, thin highlights).
    */
-  --sf-navy: #001369;
-  --sf-navy-strong: #000d4d;
-  --sf-red: #ff010a;
-  --sf-red-strong: #d10108;
-  --sf-red-strong-hover: #ad0107;
+  --sf-navy: #01136a;
+  --sf-navy-strong: #000c4d;
+  --sf-red: #ff0109;
+  --sf-red-strong: #d91a24;
+  --sf-red-strong-hover: #b8141d;
 
   /*
-   * accent: PLAC navy — structure, links, active/selected states, institutional emphasis. Literal hex
-   * (not var(--sf-navy)): a token-audit test reads this file's raw text for "--sf-accent: #hex" to check
-   * contrast, and does not resolve custom-property references.
+   * accent: navy for selection, focus, tabs, checkboxes, progress — never the main button. Literal hex
+   * (not var(--sf-navy)): a token-audit test reads the raw text of this file for "--sf-accent: #hex" to
+   * check contrast, and does not resolve custom-property references.
    */
-  --sf-accent: #001369;
-  --sf-accent-hover: #000d4d;
-  --sf-accent-weak: #e7e9f6;
-  --sf-accent-text: #001369;
+  --sf-accent: #1e2b8f;
+  --sf-accent-hover: #141f6e;
+  --sf-accent-weak: #ebecf7;
+  --sf-accent-text: #1e2b8f;
   --sf-on-accent: #ffffff;
-  --sf-ring: #3450d6;
+  --sf-ring: #1e2b8f;
 
-  /* cta: PLAC red — calls to action and important highlights only, never structure or navigation */
+  /* cta: PLAC red — the primary action and important highlights only, never structure or navigation */
   --sf-cta: var(--sf-red-strong);
   --sf-cta-hover: var(--sf-red-strong-hover);
-  --sf-cta-weak: #ffe6e6;
-  --sf-cta-text: var(--sf-red-strong);
+  --sf-cta-weak: #fbe8e9;
+  --sf-cta-text: #b8141d;
   --sf-on-cta: #ffffff;
 
-  /* sidebar: the one dark surface in the app (PLAC navy); every other surface stays light */
+  /* top bar / drawer: the one strong colour block of the screen (PLAC navy); everything below stays calm */
   --sf-sidebar-bg: var(--sf-navy);
-  --sf-sidebar-bg-raised: #061a7a;
+  --sf-sidebar-bg-raised: #0a1f80;
   --sf-sidebar-active: rgba(255, 255, 255, 0.14);
-  --sf-sidebar-hover: rgba(255, 255, 255, 0.08);
-  --sf-sidebar-line: rgba(255, 255, 255, 0.12);
-  --sf-sidebar-fg: rgba(255, 255, 255, 0.72);
+  --sf-sidebar-hover: rgba(255, 255, 255, 0.1);
+  --sf-sidebar-line: rgba(255, 255, 255, 0.14);
+  --sf-sidebar-fg: rgba(255, 255, 255, 0.82);
   --sf-sidebar-fg-active: #ffffff;
-  --sf-sidebar-fg-faint: rgba(255, 255, 255, 0.46);
+  --sf-sidebar-fg-faint: rgba(255, 255, 255, 0.55);
   --sf-sidebar-accent: var(--sf-red);
 
   /* semantic status — green stays reserved for success/positive states, never navigation or CTAs */
-  --sf-ok: #17693d;
-  --sf-ok-bg: #e3f3e9;
-  --sf-warn: #8a5a00;
-  --sf-warn-bg: #fcf1d4;
-  --sf-danger: #b3261e;
-  --sf-danger-bg: #fbe8e6;
-  --sf-info: #2c55b0;
-  --sf-info-bg: #e7edfb;
-  --sf-neutral: #465363;
-  --sf-neutral-bg: #eceff3;
+  --sf-ok: #27784a;
+  --sf-ok-bg: #e9f3ed;
+  --sf-warn: #9c6511;
+  --sf-warn-bg: #f9f0dc;
+  --sf-danger: #a8322f;
+  --sf-danger-bg: #f7e9e8;
+  --sf-info: #3561be;
+  --sf-info-bg: #eaeff9;
+  --sf-neutral: #5c5c57;
+  --sf-neutral-bg: #ecece9;
 
-  --sf-scrim: rgba(8, 11, 32, 0.5);
+  --sf-scrim: rgba(29, 29, 27, 0.32);
 
-  /* shape and elevation */
+  /* shape and elevation: 10 controls, 16 cards, 20 dialogs/drawers; shadows stay discreet */
   --sf-radius-sm: 8px;
-  --sf-radius: 12px;
-  --sf-radius-lg: 18px;
-  --sf-shadow-1: 0 1px 2px rgba(16, 24, 40, 0.05), 0 1px 3px rgba(16, 24, 40, 0.07);
-  --sf-shadow-2: 0 8px 24px rgba(16, 24, 40, 0.1), 0 2px 6px rgba(16, 24, 40, 0.08);
-  --sf-shadow-glow: 0 8px 24px -6px color-mix(in srgb, var(--sf-accent) 45%, transparent);
-  --sf-shadow-glow-cta: 0 8px 20px -6px color-mix(in srgb, var(--sf-cta) 50%, transparent);
+  --sf-radius: 10px;
+  --sf-radius-lg: 16px;
+  --sf-radius-xl: 20px;
+  --sf-shadow-1: 0 1px 2px rgba(29, 29, 27, 0.04);
+  --sf-shadow-2: 0 12px 32px rgba(29, 29, 27, 0.1), 0 0 0 1px #e8e8e4;
+  --sf-shadow-overlay: 0 24px 64px rgba(29, 29, 27, 0.16);
+  --sf-shadow-glow: 0 6px 18px -8px color-mix(in srgb, var(--sf-accent) 40%, transparent);
+  --sf-shadow-glow-cta: 0 6px 16px -6px color-mix(in srgb, var(--sf-cta) 45%, transparent);
 
-  /* motion: one signed easing curve for interactive hover/focus transitions (Smilo-derived "spring" feel) */
-  --sf-ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  /* motion: 120 / 180 / 240 ms on one deceleration curve */
+  --sf-ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --sf-dur-fast: 120ms;
+  --sf-dur-base: 180ms;
+  --sf-dur-slow: 240ms;
 
   /* layout */
   --sf-sidebar-w: 232px;
   --sf-sidebar-w-collapsed: 64px;
-  --sf-topbar-h: 56px;
-  --sf-control-h: 30px;
+  --sf-topbar-h: 80px;
+  --sf-topbar-line-h: 3px;
+  --sf-control-h: 40px;
+  --sf-row-h: 56px;
 }
 
 @theme inline {
-  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
-  --font-heading: "Poppins", "Inter", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: "Manrope", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-heading: "Manrope", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, "Cascadia Mono", Consolas, "SFMono-Regular", Menlo, monospace;
 
   --color-bg: var(--sf-bg);
@@ -180,6 +168,8 @@
   --radius-sm: var(--sf-radius-sm);
   --radius-md: var(--sf-radius);
   --radius-lg: var(--sf-radius-lg);
+  --radius-xl: var(--sf-radius-xl);
+  --shadow-overlay: var(--sf-shadow-overlay);
   --shadow-card: var(--sf-shadow-1);
   --shadow-pop: var(--sf-shadow-2);
   --shadow-glow: var(--sf-shadow-glow);
@@ -203,10 +193,11 @@
   --text-2xl: 1.375rem;
   --text-2xl--line-height: 1.75rem;
 
-  --animate-sf-fade-in: sf-fade-in 120ms ease-out;
-  --animate-sf-slide-in-right: sf-slide-in-right 160ms ease-out;
-  --animate-sf-slide-in-left: sf-slide-in-left 160ms ease-out;
-  --animate-sf-toast-in: sf-toast-in 160ms ease-out;
+  --animate-sf-fade-in: sf-fade-in var(--sf-dur-base) var(--sf-ease-spring);
+  --animate-sf-slide-in-right: sf-slide-in-right var(--sf-dur-slow) var(--sf-ease-spring);
+  --animate-sf-slide-in-left: sf-slide-in-left var(--sf-dur-slow) var(--sf-ease-spring);
+  --animate-sf-pop-in: sf-pop-in var(--sf-dur-slow) var(--sf-ease-spring);
+  --animate-sf-toast-in: sf-toast-in var(--sf-dur-slow) var(--sf-ease-spring);
 }
 
 @layer base {
@@ -219,8 +210,9 @@
     margin: 0;
     background: var(--sf-bg);
     color: var(--sf-fg);
-    font-size: var(--text-sm);
-    line-height: var(--text-sm--line-height);
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
+    font-weight: 500;
     font-variant-numeric: tabular-nums;
     -webkit-font-smoothing: antialiased;
   }
@@ -236,6 +228,8 @@
   }
   h1, h2, h3, h4 {
     font-family: var(--font-heading);
+    font-weight: 600;
+    letter-spacing: -0.01em;
   }
 }
 
@@ -256,6 +250,10 @@ body[data-scroll-locked] {
 }
 @keyframes sf-slide-in-left {
   from { transform: translateX(-24px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes sf-pop-in {
+  from { transform: translateY(6px) scale(0.98); opacity: 0; }
   to { transform: none; opacity: 1; }
 }
 @keyframes sf-toast-in {

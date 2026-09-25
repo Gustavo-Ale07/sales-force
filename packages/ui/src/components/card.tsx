@@ -17,9 +17,9 @@ export function Card({ className, interactive = false, ...props }: CardProps) {
   return (
     <section
       className={cn(
-        "min-w-0 rounded-md border border-line bg-surface",
+        "min-w-0 rounded-lg border border-line bg-surface",
         interactive &&
-          "shadow-card transition-[box-shadow,border-color] duration-200 ease-spring hover:border-accent/50 hover:shadow-glow focus-within:border-accent/50 focus-within:shadow-glow",
+          "shadow-card transition-[box-shadow,border-color,transform] duration-[var(--sf-dur-base)] ease-spring hover:border-line-strong hover:shadow-pop focus-within:border-accent/50",
         className,
       )}
       {...props}
@@ -38,10 +38,10 @@ export interface CardHeaderProps extends Omit<ComponentProps<"div">, "title"> {
 
 export function CardHeader({ title, description, actions, as: Heading = "h2", className, ...props }: CardHeaderProps) {
   return (
-    <div className={cn("flex items-center justify-between gap-3 border-b border-line px-3 py-2", className)} {...props}>
+    <div className={cn("flex items-center justify-between gap-3 border-b border-line px-5 py-3.5", className)} {...props}>
       <div className="min-w-0">
-        <Heading className="m-0 text-sm font-semibold text-fg">{title}</Heading>
-        {description ? <p className="m-0 text-xs text-fg-muted">{description}</p> : null}
+        <Heading className="m-0 text-[15px] font-semibold text-fg">{title}</Heading>
+        {description ? <p className="m-0 mt-0.5 text-xs text-fg-muted">{description}</p> : null}
       </div>
       {actions ? <div className="flex shrink-0 items-center gap-2 text-xs">{actions}</div> : null}
     </div>
@@ -49,11 +49,11 @@ export function CardHeader({ title, description, actions, as: Heading = "h2", cl
 }
 
 export function CardBody({ className, ...props }: ComponentProps<"div">) {
-  return <div className={cn("px-3 py-3", className)} {...props} />;
+  return <div className={cn("px-5 py-4", className)} {...props} />;
 }
 
 export function CardFooter({ className, ...props }: ComponentProps<"div">) {
-  return <div className={cn("flex items-center gap-2 border-t border-line px-3 py-2 text-xs text-fg-muted", className)} {...props} />;
+  return <div className={cn("flex items-center gap-2 border-t border-line px-5 py-3 text-xs text-fg-muted", className)} {...props} />;
 }
 
 export interface KeyValueProps {
@@ -65,7 +65,7 @@ export interface KeyValueProps {
 /** Label/value row for detail panels; wrap several in `<dl>` via KeyValueList. */
 export function KeyValue({ label, children, className }: KeyValueProps) {
   return (
-    <div className={cn("flex items-baseline justify-between gap-4 border-b border-dashed border-line py-1.5 last:border-b-0", className)}>
+    <div className={cn("flex items-baseline justify-between gap-4 border-b border-line py-2.5 last:border-b-0", className)}>
       <dt className="text-fg-muted">{label}</dt>
       <dd className="m-0 min-w-0 text-right text-fg">{children}</dd>
     </div>

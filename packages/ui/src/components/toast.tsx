@@ -48,12 +48,12 @@ export function clearToasts() {
   emit();
 }
 
-const toneBar: Record<AlertTone, string> = {
-  info: "border-l-info",
-  success: "border-l-ok",
-  warning: "border-l-warn",
-  danger: "border-l-danger",
-  neutral: "border-l-line-strong",
+const toneDot: Record<AlertTone, string> = {
+  info: "bg-[#8fb0ff]",
+  success: "bg-[#5ed69a]",
+  warning: "bg-[#efb85a]",
+  danger: "bg-[#ff8f86]",
+  neutral: "bg-white/50",
 };
 
 function subscribe(listener: () => void) {
@@ -65,7 +65,7 @@ const getSnapshot = () => items;
 export function Toaster({ label = "Notificações" }: { label?: string }) {
   const current = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   return (
-    <RadixToast.Provider swipeDirection="right" label={label}>
+    <RadixToast.Provider swipeDirection="down" label={label}>
       {current.map((item) => (
         <RadixToast.Root
           key={item.id}
@@ -75,25 +75,25 @@ export function Toaster({ label = "Notificações" }: { label?: string }) {
             if (!open) dismissToast(item.id);
           }}
           className={cn(
-            "flex animate-sf-toast-in items-start gap-3 rounded-md border border-l-[3px] border-line-strong bg-surface px-3 py-2.5 shadow-pop",
-            toneBar[item.tone ?? "neutral"],
+            "flex animate-sf-toast-in items-start gap-3 rounded-lg bg-[#1d1d1b] px-4 py-3 text-white shadow-overlay",
           )}
         >
+          <span aria-hidden="true" className={cn("mt-1.5 size-2 shrink-0 rounded-full", toneDot[item.tone ?? "neutral"])} />
           <div className="min-w-0 flex-1">
-            <RadixToast.Title className="text-sm font-semibold text-fg">{item.title}</RadixToast.Title>
+            <RadixToast.Title className="text-sm font-semibold text-white">{item.title}</RadixToast.Title>
             {item.description ? (
-              <RadixToast.Description className="mt-0.5 text-xs text-fg-muted">{item.description}</RadixToast.Description>
+              <RadixToast.Description className="mt-0.5 text-xs text-white/70">{item.description}</RadixToast.Description>
             ) : null}
           </div>
           <RadixToast.Close
             aria-label="Fechar notificação"
-            className="flex size-5 shrink-0 items-center justify-center rounded-sm text-fg-muted hover:bg-surface-3"
+            className="flex size-6 shrink-0 items-center justify-center rounded-sm text-white/70 transition-colors hover:bg-white/10 hover:text-white"
           >
             <X size={13} aria-hidden="true" />
           </RadixToast.Close>
         </RadixToast.Root>
       ))}
-      <RadixToast.Viewport className="fixed bottom-4 right-4 z-[60] m-0 flex w-[360px] max-w-[calc(100vw-2rem)] list-none flex-col gap-2 p-0 outline-none" />
+      <RadixToast.Viewport className="fixed bottom-6 left-1/2 z-[60] m-0 flex w-[420px] -translate-x-1/2 max-w-[calc(100vw-2rem)] list-none flex-col gap-2 p-0 outline-none" />
     </RadixToast.Provider>
   );
 }

@@ -15,6 +15,11 @@ export interface UserMenuProps {
   onLogout: () => void;
 }
 
+/** "Ana Paula Souza" → "Ana Paula" for the top bar (full name stays in the menu). */
+function displayName(name: string): string {
+  return name.trim().split(/\s+/).slice(0, 2).join(" ");
+}
+
 /** User menu slot. Without a session (design route) it renders nothing. */
 export function UserMenu({ user, onLogout }: UserMenuProps) {
   if (!user) return null;
@@ -22,11 +27,11 @@ export function UserMenu({ user, onLogout }: UserMenuProps) {
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={`Menu do usuário ${user.name}`}
-        className="flex items-center gap-2 rounded-md px-1.5 py-1 text-sidebar-fg-active hover:bg-sidebar-hover data-[state=open]:bg-sidebar-hover"
+        className="flex items-center gap-2.5 rounded-full py-1 pl-1 pr-2.5 text-sidebar-fg-active transition-colors duration-[var(--sf-dur-fast)] hover:bg-sidebar-hover data-[state=open]:bg-sidebar-hover md:pr-3"
       >
-        <span className="hidden max-w-[200px] truncate text-sm md:block">Olá, {user.name}</span>
-        <Avatar name={user.name} size="md" />
-        <ChevronDown size={13} aria-hidden="true" className="text-sidebar-fg" />
+        <Avatar name={user.name} size="md" className="bg-white text-[var(--sf-navy)]" />
+        <span className="hidden max-w-[180px] truncate text-sm font-semibold md:block">{displayName(user.name)}</span>
+        <ChevronDown size={14} strokeWidth={1.75} aria-hidden="true" className="text-sidebar-fg" />
       </DropdownMenuTrigger>
       <DropdownMenuContent>
         <DropdownMenuLabel>
@@ -35,7 +40,7 @@ export function UserMenu({ user, onLogout }: UserMenuProps) {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onLogout}>
-          <LogOut size={14} aria-hidden="true" />
+          <LogOut size={16} strokeWidth={1.75} aria-hidden="true" />
           Sair
         </DropdownMenuItem>
       </DropdownMenuContent>

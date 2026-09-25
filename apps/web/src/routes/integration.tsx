@@ -22,7 +22,6 @@ import {
   type Tone,
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
-import { Plug } from "lucide-react";
 import { QueryError } from "../components/query-error";
 import { configurationQueryOptions } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
@@ -63,7 +62,7 @@ export function IntegrationPage() {
     <>
       <PageHeader
         title="Integração e configuração"
-        icon={<Plug size={16} aria-hidden="true" />}
+       
         description="Estado da integração com o ERP e da configuração desta instalação (somente leitura)."
       />
       {query.isPending ? (

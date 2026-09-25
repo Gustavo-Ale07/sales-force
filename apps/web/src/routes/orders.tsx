@@ -24,10 +24,11 @@ import {
   TableMessageRow,
   TableRow,
   type SortDirection,
+  titleCase,
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ClipboardList, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { CustomerPicker } from "../components/customer-picker";
 import { DiscardOrderDialog } from "../components/discard-order-dialog";
@@ -88,7 +89,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
     <>
       <PageHeader
         title="Vendas"
-        icon={<ClipboardList size={16} aria-hidden="true" />}
+       
         description="Pedidos e rascunhos. O envio ao ERP ainda não está habilitado nesta instalação."
         actions={
           <Button asChild variant="primary" leftIcon={<Plus size={14} aria-hidden="true" />}>
@@ -192,7 +193,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
                     <TableCell>
                       <span className="font-medium">{orderReference(order)}</span>
                     </TableCell>
-                    <TableCell wrap>{order.customerName}</TableCell>
+                    <TableCell wrap>{titleCase(order.customerName)}</TableCell>
                     <TableCell>
                       <DateText value={order.createdAt} />
                     </TableCell>

@@ -18,9 +18,9 @@ export const badgeVariants = cva("inline-flex items-center gap-1 whitespace-nowr
     tone: toneClasses,
     shape: {
       /** Compact rectangular tag (categories, flags). */
-      tag: "rounded-sm border border-current/20 px-1.5 text-2xs leading-4",
+      tag: "rounded-sm px-2 text-2xs font-semibold leading-5",
       /** Status pill with leading dot. */
-      pill: "rounded-full px-2 text-2xs leading-[18px]",
+      pill: "rounded-full px-2.5 text-xs font-semibold leading-6",
     },
   },
   defaultVariants: { tone: "neutral", shape: "tag" },
@@ -44,7 +44,7 @@ export interface StatusBadgeProps extends Omit<ComponentProps<"span">, "children
 export function StatusBadge({ tone = "neutral", className, children, ...props }: StatusBadgeProps) {
   return (
     <span className={cn(badgeVariants({ tone, shape: "pill" }), className)} {...props}>
-      <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
+      <span aria-hidden="true" className="size-2 rounded-full bg-current" />
       {children}
     </span>
   );

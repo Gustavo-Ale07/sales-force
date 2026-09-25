@@ -1,7 +1,7 @@
-import { Alert, Avatar, Button, Card, PageHeader, SkeletonLines, toast } from "@salesforce/ui";
+import { Alert, Avatar, Button, Card, PageHeader, SkeletonLines, toast, titleCase } from "@salesforce/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Building2, Plus, RotateCcw } from "lucide-react";
+import { Plus, RotateCcw } from "lucide-react";
 import { useRef } from "react";
 import { CustomerFichaTabs } from "../components/customer-ficha";
 import { OrderTemplatesCard } from "../components/order-templates-card";
@@ -107,7 +107,7 @@ export function CustomerDetailPage({ code }: { code: number }) {
   if (query.isPending) {
     return (
       <>
-        <PageHeader title={`Cliente ${code}`} icon={<Building2 size={16} aria-hidden="true" />} />
+        <PageHeader title={`Cliente ${code}`} />
         <div aria-busy="true">
           <SkeletonLines lines={6} label="Carregando cliente…" />
         </div>
@@ -117,7 +117,7 @@ export function CustomerDetailPage({ code }: { code: number }) {
   if (query.isError) {
     return (
       <>
-        <PageHeader title={`Cliente ${code}`} icon={<Building2 size={16} aria-hidden="true" />} />
+        <PageHeader title={`Cliente ${code}`} />
         <Card>
           <QueryError error={query.error} onRetry={() => void query.refetch()} retrying={query.isRefetching} title="Não foi possível carregar o cliente" />
         </Card>
@@ -132,12 +132,12 @@ export function CustomerDetailPage({ code }: { code: number }) {
         title={
           <span className="flex items-center gap-2">
             <span aria-hidden="true">
-              <Avatar name={customer.name} seed={String(customer.code)} size="md" />
+              <Avatar name={titleCase(customer.name)} seed={String(customer.code)} size="md" />
             </span>
-            {customer.name}
+            {titleCase(customer.name)}
           </span>
         }
-        description={customer.tradeName ?? undefined}
+        description={customer.tradeName ? titleCase(customer.tradeName) : undefined}
         badges={<CustomerStatus active={customer.active} blocked={customer.blocked} />}
         actions={
           <>

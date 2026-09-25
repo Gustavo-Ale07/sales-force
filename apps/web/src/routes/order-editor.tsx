@@ -28,10 +28,11 @@ import {
   TableRow,
   Textarea,
   toast,
+  titleCase,
 } from "@salesforce/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useBlocker } from "@tanstack/react-router";
-import { BookmarkPlus, Save, Send, ShoppingCart, Trash2, X } from "lucide-react";
+import { BookmarkPlus, Save, Send, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { BulkEntryDialog, type BulkEntryItem } from "../components/bulk-entry-dialog";
 import { CustomerContextBar } from "../components/customer-context-bar";
@@ -428,8 +429,8 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
     <>
       <PageHeader
         title={order ? orderReference(order) : "Novo pedido"}
-        icon={<ShoppingCart size={16} aria-hidden="true" />}
-        description={order ? `Cliente: ${order.customerName}` : "Escolha o cliente, adicione produtos e salve como rascunho."}
+       
+        description={order ? `Cliente: ${titleCase(order.customerName)}` : "Escolha o cliente, adicione produtos e salve como rascunho."}
         badges={status ? <StatusBadge tone={status.tone}>{status.label}</StatusBadge> : <Badge tone="neutral">Novo</Badge>}
       />
 
@@ -643,7 +644,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
                         )}
                         <TableCell numeric>{index + 1}</TableCell>
                         <TableCell wrap>
-                          <span className="font-medium">{line.description}</span>
+                          <span className="font-medium">{titleCase(line.description)}</span>
                           <span className="block text-fg-muted">Código {line.productCode}</span>
                           {blocked ? <FieldError>Este item não pode ser pedido sem preço nesta instalação.</FieldError> : null}
                         </TableCell>
@@ -862,7 +863,7 @@ export interface OrderEditorPageProps {
 function LoadingHeader({ title }: { title: string }) {
   return (
     <>
-      <PageHeader title={title} icon={<ShoppingCart size={16} aria-hidden="true" />} />
+      <PageHeader title={title} />
       <div aria-busy="true">
         <SkeletonLines lines={6} label="Carregando pedido…" />
       </div>
@@ -877,7 +878,7 @@ function ExistingOrder({ orderId, onCreated, onClose, notice }: { orderId: strin
   if (query.isError) {
     return (
       <>
-        <PageHeader title="Pedido" icon={<ShoppingCart size={16} aria-hidden="true" />} />
+        <PageHeader title="Pedido" />
         <Card>
           <QueryError
             error={query.error}

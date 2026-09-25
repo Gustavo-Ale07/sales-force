@@ -9,6 +9,7 @@ import {
   StatusBadge,
   cn,
   formatDocument,
+  titleCase,
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Search, X } from "lucide-react";
@@ -24,7 +25,7 @@ const RESULT_LIMIT = 20;
 function CardField({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="min-w-0">
-      <dt className="text-2xs font-semibold uppercase tracking-wider text-fg-muted">{label}</dt>
+      <dt className="text-xs font-medium text-fg-muted">{label}</dt>
       <dd className="m-0 truncate text-sm text-fg">{children}</dd>
     </div>
   );
@@ -40,16 +41,16 @@ function CustomerCard({ customer, onPick }: { customer: ApiSchema<"CustomerListI
     >
       <span className="flex items-center gap-3">
         <Avatar name={customer.name} seed={String(customer.code)} size="lg" className="rounded-full" aria-hidden="true" role="presentation" />
-        <span className="min-w-0 flex-1 truncate text-sm font-bold uppercase text-fg">
-          {customer.code} – {customer.name}
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">
+          {customer.code} – {titleCase(customer.name)}
         </span>
         {!customer.active ? <StatusBadge tone="neutral">Inativo</StatusBadge> : null}
         {customer.blocked ? <StatusBadge tone="danger">Bloqueado</StatusBadge> : null}
       </span>
       <dl className="m-0 grid grid-cols-1 gap-x-4 gap-y-1.5 sm:grid-cols-2">
-        <CardField label="Razão social">{customer.name}</CardField>
+        <CardField label="Razão social">{titleCase(customer.name)}</CardField>
         <CardField label="CPF / CNPJ">{formatDocument(customer.document, "—")}</CardField>
-        <CardField label="Nome fantasia">{customer.tradeName ?? "—"}</CardField>
+        <CardField label="Nome fantasia">{customer.tradeName ? titleCase(customer.tradeName) : "—"}</CardField>
         <CardField label="Vendedor">{customer.sellerName ?? "—"}</CardField>
       </dl>
     </button>
@@ -145,15 +146,15 @@ export function CustomerPicker({ selected, onSelect, disabled, compact, ...aria 
             disabled={disabled}
             aria-haspopup="dialog"
             className={cn(
-              compact ? "h-[26px]" : "h-[30px]",
-              "flex w-full min-w-0 items-center gap-2 rounded-md border border-line-strong bg-surface px-2.5 text-left text-sm text-fg",
+              compact ? "h-8" : "h-10",
+              "flex w-full min-w-0 items-center gap-2 rounded-md border border-line-strong bg-surface px-3 text-left text-sm text-fg transition-colors duration-[var(--sf-dur-fast)]",
               "hover:border-accent focus-visible:border-accent focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-fg-muted",
               "aria-[invalid=true]:border-danger aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-danger",
               selected ? "pr-8" : "",
             )}
           >
             <span className={cn("min-w-0 flex-1 truncate", selected ? "" : "text-fg-faint")}>
-              {selected ? `${selected.code} — ${selected.name}` : "Selecionar cliente"}
+              {selected ? `${selected.code} — ${titleCase(selected.name)}` : "Selecionar cliente"}
             </span>
             {selected ? null : <ChevronDown size={14} aria-hidden="true" className="shrink-0 text-fg-faint" />}
           </button>

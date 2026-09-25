@@ -10,12 +10,13 @@ export interface NavItem {
 }
 
 /**
- * Main navigation, in the Vidya Force order (Home, Catálogo, Clientes, Vendas). Labels follow the legacy
- * system's vocabulary so a seller used to it finds each area without relearning; the routes are unchanged.
+ * Main navigation, in the Vidya Force order (Início, Catálogo, Clientes, Vendas). Labels follow the legacy
+ * system's vocabulary so a seller used to it finds each area without relearning (the PLAC reference kit names
+ * the first one "Início"); the routes are unchanged.
  * Integração is not part of Vidya: it stays as a trailing item that only the integration roles see.
  */
 const allNavItems: NavItem[] = [
-  { to: "/", label: "Home", icon: Target },
+  { to: "/", label: "Início", icon: Target },
   { to: "/produtos", label: "Catálogo", icon: List },
   { to: "/clientes", label: "Clientes", icon: Users },
   { to: "/pedidos", label: "Vendas", icon: ShoppingCart },

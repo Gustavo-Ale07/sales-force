@@ -15,6 +15,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  titleCase,
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
@@ -153,7 +154,7 @@ export function ProductBrowser({ filters, onFiltersChange, customerCode, cartQua
                   <TableRow key={product.code}>
                     <TableCell numeric>{product.code}</TableCell>
                     <TableCell wrap>
-                      <span className="font-medium">{product.description}</span>
+                      <span className="font-medium">{titleCase(product.description)}</span>
                       {product.groupName ? <span className="block text-fg-muted">{product.groupName}</span> : null}
                     </TableCell>
                     <TableCell>{product.unit}</TableCell>

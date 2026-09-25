@@ -60,33 +60,23 @@ export interface PageHeaderProps extends Omit<ComponentProps<"header">, "title">
   /** Primary/secondary actions, right-aligned. */
   actions?: ReactNode;
   breadcrumbs?: ReactNode;
-  /** Optional section icon (lucide, decorative) shown in a small chip before the title. */
-  icon?: ReactNode;
 }
 
-export function PageHeader({ title, description, badges, actions, breadcrumbs, icon, className, ...props }: PageHeaderProps) {
+export function PageHeader({ title, description, badges, actions, breadcrumbs, className, ...props }: PageHeaderProps) {
   return (
-    <header className={cn("flex flex-col gap-1", className)} {...props}>
+    <header className={cn("flex flex-col gap-2", className)} {...props}>
       {breadcrumbs}
-      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
         <div className="flex min-w-0 items-center gap-2.5">
-          {icon ? (
-            <span
-              aria-hidden="true"
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent-weak text-accent-text"
-            >
-              {icon}
-            </span>
-          ) : null}
           <div className="min-w-0">
-            <h1 className="m-0 flex flex-wrap items-center gap-2 font-heading text-[26px] font-bold leading-tight tracking-tight text-fg md:text-[30px]">
+            <h1 className="m-0 flex flex-wrap items-center gap-2 font-heading text-2xl font-semibold leading-tight tracking-[-0.02em] text-fg">
               {title}
               {badges}
             </h1>
-            {description ? <p className="m-0 mt-0.5 text-sm text-fg-muted">{description}</p> : null}
+            {description ? <p className="m-0 mt-1 text-sm text-fg-muted">{description}</p> : null}
           </div>
         </div>
-        {actions ? <div className="flex flex-wrap items-center gap-1.5">{actions}</div> : null}
+        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
     </header>
   );

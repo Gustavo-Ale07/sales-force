@@ -13,7 +13,7 @@ export function DropdownMenuContent({ className, sideOffset = 6, align = "end", 
         sideOffset={sideOffset}
         align={align}
         className={cn(
-          "z-50 min-w-[190px] animate-sf-fade-in overflow-hidden rounded-md border border-line-strong bg-surface py-1 text-sm shadow-pop",
+          "z-50 min-w-[200px] animate-sf-pop-in overflow-hidden rounded-lg bg-surface p-1.5 text-sm shadow-pop",
           className,
         )}
         {...props}
@@ -30,7 +30,7 @@ export function DropdownMenuItem({ className, destructive, ...props }: DropdownM
   return (
     <RadixMenu.Item
       className={cn(
-        "flex cursor-pointer items-center gap-2 px-3 py-1.5 outline-none data-[disabled]:pointer-events-none data-[disabled]:text-fg-faint data-[highlighted]:bg-accent-weak",
+        "flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 font-medium outline-none data-[disabled]:pointer-events-none data-[disabled]:text-fg-faint data-[highlighted]:bg-accent-weak",
         destructive ? "text-danger" : "text-fg",
         className,
       )}
