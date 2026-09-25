@@ -261,6 +261,11 @@ function LoginHero() {
         fetchPriority="high"
         className="absolute inset-0 size-full object-cover object-[left_center]"
       />
+      {/* Cool navy veil over the untouched artwork: less warm/bright, so the form on the right leads. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(6,16,56,0.28),rgba(6,16,56,0.18)_55%,rgba(6,16,56,0.34))] backdrop-saturate-[0.88]"
+      />
     </section>
   );
 }
