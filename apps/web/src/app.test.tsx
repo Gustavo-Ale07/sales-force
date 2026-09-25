@@ -14,7 +14,7 @@ const shellData = {
 describe("session guard", () => {
   it("redirects an anonymous visitor to /login keeping the target", async () => {
     const { router } = renderApp("/clientes", { signedIn: false });
-    expect(await screen.findByRole("heading", { name: "Entrar" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Bem-vindo(a)!" })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/login");
     expect(router.state.location.search).toEqual({ redirect: "/clientes" });
   });
@@ -46,7 +46,7 @@ describe("session guard", () => {
 
   it("sends an expired session (401 on the session probe) to the login page", async () => {
     const { router } = renderApp("/pedidos", { handlers: { "GET /auth/session": apiError(401, "unauthenticated", "Sessão expirada.") } });
-    expect(await screen.findByRole("heading", { name: "Entrar" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Bem-vindo(a)!" })).toBeInTheDocument();
     expect(router.state.location.search).toEqual({ redirect: "/pedidos" });
   });
 
@@ -105,7 +105,7 @@ describe("login page", () => {
 
   it("hides the dev-auth banner outside the dev auth mode", async () => {
     renderApp("/login", { signedIn: false, config: { authMode: "standard" } });
-    expect(await screen.findByRole("heading", { name: "Entrar" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Bem-vindo(a)!" })).toBeInTheDocument();
     expect(screen.queryByText(DEV_AUTH_NOTICE)).not.toBeInTheDocument();
   });
 

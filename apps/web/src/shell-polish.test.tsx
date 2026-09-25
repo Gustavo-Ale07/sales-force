@@ -70,10 +70,14 @@ describe("top bar and navigation", () => {
 });
 
 describe("login screen", () => {
-  it("is one centered form with the product subtitle and no product-name line under the logo", async () => {
+  it("follows the approved reference: hero column, welcome heading, icon fields and the primary action", async () => {
     renderApp("/login", { signedIn: false, config: { installationName: "Instalação Teste" } });
-    expect(await screen.findByRole("heading", { name: "Entrar", level: 1 })).toBeInTheDocument();
-    expect(screen.getByText("Força de Vendas")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Bem-vindo(a)!", level: 1 })).toBeInTheDocument();
+    expect(screen.getByText("Acesse sua conta para continuar.")).toBeInTheDocument();
+    expect(screen.getByText("Plataforma comercial")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Venda com agilidade/ })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Usuário")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Senha")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Entrar" })).toBeInTheDocument();
     expect(screen.queryByText(/^Sales Force$/i)).not.toBeInTheDocument();
   });
