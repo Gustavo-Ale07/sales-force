@@ -228,6 +228,10 @@ export function DashboardPage() {
     },
   ];
   const pendingAttention = attentionItems.filter((item) => item.count !== null && item.count > 0);
+  // A metric the server could not provide is listed once, quietly, instead of as a row of "Não disponível" (never a made-up zero).
+  const otherMetrics = [cancelled, creditIndicators, positivationRate].filter((metric): metric is Metric => metric !== undefined);
+  const otherWithValue = otherMetrics.filter((metric) => metric.value !== null);
+  const otherWithoutValue = otherMetrics.filter((metric) => metric.value === null);
 
   return (
     <>
@@ -313,9 +317,17 @@ export function DashboardPage() {
             <Card aria-label="Outros indicadores">
               <CardHeader title="Outros indicadores" />
               <CardBody>
-                {[cancelled, creditIndicators, positivationRate].map((metric) =>
-                  metric ? <OtherIndicatorRow key={metric.key} metric={metric} /> : null,
-                )}
+                {otherWithValue.map((metric) => (
+                  <OtherIndicatorRow key={metric.key} metric={metric} />
+                ))}
+                {otherWithoutValue.length > 0 ? (
+                  <p
+                    className={cn("m-0 text-xs text-fg-faint", otherWithValue.length > 0 && "mt-3 border-t border-line pt-3")}
+                    data-testid="indicators-without-data"
+                  >
+                    Sem dados nesta instalação: {otherWithoutValue.map((metric) => metric.label).join(", ")}.
+                  </p>
+                ) : null}
               </CardBody>
             </Card>
           </div>

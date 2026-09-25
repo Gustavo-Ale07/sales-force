@@ -40,8 +40,8 @@ describe("Início (dashboard)", () => {
     // The KPI grid shows the compact tile labels (per the Início redesign), not each metric's own long label.
     expect(await screen.findByText("1.250")).toBeInTheDocument();
     // A metric the server could not provide is "not available", never a made-up zero.
-    const credit = screen.getByText("Indicadores de crédito").parentElement;
-    expect(credit).toHaveTextContent("Não disponível");
+    // It is not shown as a row of "Não disponível": one quiet note names it instead.
+    expect(screen.getByTestId("indicators-without-data")).toHaveTextContent(/Sem dados nesta instalação:.*Indicadores de crédito/);
     expect(screen.getByText(/Escopo: Vendedor 7/)).toBeInTheDocument();
     expect(screen.getByText("Rascunho nº 12")).toBeInTheDocument();
   });
