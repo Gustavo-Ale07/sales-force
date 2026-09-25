@@ -478,6 +478,18 @@ describe('list orders: commercial filters (period, products, combinations)', () 
     expect(await ids('seller1', `productCodes=${code(0)},99999999999999&productMatch=all`)).toEqual([]);
   });
 
+  it('productSearch: orders with a line whose description contains the text (any case) or whose code is typed', async () => {
+    const description = String(priced[0]?.description);
+    const fragment = description.slice(0, Math.min(6, description.length));
+    const byText = await ids('seller1', `productSearch=${encodeURIComponent(fragment.toLowerCase())}`);
+    expect(byText).toEqual(expect.arrayContaining([A, C]));
+    expect((await ids('seller1', `productSearch=${code(0)}`)).sort()).toEqual(expect.arrayContaining([A, C]));
+    expect(await ids('seller1', 'productSearch=zzzz-sem-produto')).toEqual([]);
+    // Combines with the product list and a wildcard typed by the user is literal.
+    expect(await ids('seller1', `productSearch=${encodeURIComponent(description)}&productCodes=${code(2)}&productMatch=all`)).toEqual([C]);
+    expect(await ids('seller1', 'productSearch=%25')).toEqual([]);
+  });
+
   it('all filters work together (customer + period + products + status)', async () => {
     const both = `customerCode=${customer1}&status=draft&productCodes=${code(1)},${code(2)}&productMatch=all`;
     expect((await ids('seller1', both)).sort()).toEqual([B, C].sort());

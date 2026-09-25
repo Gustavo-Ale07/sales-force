@@ -75,6 +75,8 @@ export const OrdersQuerySchema = z.object({
   productCodes: queryIntList(MAX_ORDER_PRODUCT_FILTER).optional(),
   /** `any` (default): at least one of the products; `all`: every one of them. Ignored without `productCodes`. */
   productMatch: OrderProductMatchSchema.optional(),
+  /** Text of a product description (or a product code): orders with a line that contains it. Combines with `productCodes`. */
+  productSearch: querySearch().optional(),
   sort: OrderSortSchema.default('-updatedAt'),
   ...paginationQueryShape,
 });

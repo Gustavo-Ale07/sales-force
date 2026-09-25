@@ -1579,6 +1579,7 @@ export interface operations {
                 dateField?: components["schemas"]["OrderDateField"];
                 productCodes?: string;
                 productMatch?: components["schemas"]["OrderProductMatch"];
+                productSearch?: string;
                 sort?: components["schemas"]["OrderSort"];
                 page?: number;
                 pageSize?: number;

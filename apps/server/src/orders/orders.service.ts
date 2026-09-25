@@ -95,6 +95,7 @@ export class OrdersService {
         dateField: query.dateField,
         productCodes: query.productCodes,
         productMatch: query.productMatch,
+        productSearch: query.productSearch,
         sort: query.sort,
       },
       { page: query.page, pageSize: query.pageSize },

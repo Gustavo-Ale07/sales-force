@@ -25,6 +25,8 @@ export interface OrderListFilter {
   /** Orders with a line for these products: at least one (`any`, default) or every one (`all`). */
   readonly productCodes?: readonly number[] | undefined;
   readonly productMatch?: 'any' | 'all' | undefined;
+  /** Orders with a line whose description contains this text (or whose product code equals it, when numeric). */
+  readonly productSearch?: string | undefined;
   readonly sort: 'updatedAt' | '-updatedAt' | 'draftNumber' | '-draftNumber';
 }
 
@@ -64,6 +66,18 @@ function productCondition(codes: readonly number[] | undefined, match: 'any' | '
   return match === 'all'
     ? sql`(select count(distinct ${salesOrderItem.productCode}) from ${salesOrderItem} where ${lineOfProducts}) = ${usable.length}`
     : sql`exists (select 1 from ${salesOrderItem} where ${lineOfProducts})`;
+}
+
+/** Orders with at least one line whose description contains the text, or whose product code is the number typed. */
+function productTextCondition(term: string | undefined): SQL | undefined {
+  if (term === undefined) return undefined;
+  const digits = digitsOf(term);
+  const code = digits === null ? null : Number(digits);
+  const lineMatches = or(
+    containsText(salesOrderItem.productDescription, term),
+    code === null || !fitsPgInt(code) ? undefined : eqInt(salesOrderItem.productCode, code),
+  );
+  return sql`exists (select 1 from ${salesOrderItem} where ${salesOrderItem.orderId} = ${salesOrder.id} and ${lineMatches})`;
 }
 
 /** `ORDER BY` prefix that puts the lines of the filtered products first in the list preview. */
@@ -187,6 +201,7 @@ export class OrdersRepository {
       filter.from === undefined ? undefined : sql`${dateColumn} >= (${filter.from}::date)::timestamp at time zone ${zone}`,
       filter.to === undefined ? undefined : sql`${dateColumn} < (${filter.to}::date + 1)::timestamp at time zone ${zone}`,
       productCondition(filter.productCodes, filter.productMatch),
+      productTextCondition(filter.productSearch),
       searchCondition,
     );
     const previewFirst = matchingLinesFirst(filter.productCodes);
