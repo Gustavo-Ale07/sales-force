@@ -4,6 +4,7 @@ import {
   buildOrderItem,
   computeOrderTotals,
   isLineOrderable,
+  sumQuantities,
   validateQuantity,
   type DecimalError,
   type OrderItem,
@@ -186,4 +187,33 @@ export function isLinePriceOrderable(
   config: { sales: { orderBehavior: { allowDraftWithoutPrice: boolean } }; products: { productWithoutPrice: { orderable: boolean } } },
 ): boolean {
   return isLineOrderable(state, config as Parameters<typeof isLineOrderable>[1]);
+}
+
+export interface CartSummary {
+  /** Lines in the cart, valid or not. */
+  lineCount: number;
+  /** Sum of the valid quantities per unit; units are never mixed into one number. */
+  quantities: { unit: string; quantity: string }[];
+  /** Lines whose quantity is still invalid (and so left out of the quantities and the total). */
+  invalidLineCount: number;
+}
+
+export function summarizeCart(lines: readonly EditorLine[], previews: readonly LinePreview[]): CartSummary {
+  const byUnit = new Map<string, string[]>();
+  let invalid = 0;
+  lines.forEach((line, index) => {
+    const item = previews[index]?.item;
+    if (!item) {
+      invalid += 1;
+      return;
+    }
+    const list = byUnit.get(line.unit) ?? [];
+    list.push(item.quantity);
+    byUnit.set(line.unit, list);
+  });
+  return {
+    lineCount: lines.length,
+    quantities: [...byUnit.entries()].map(([unit, list]) => ({ unit, quantity: sumQuantities(list) })),
+    invalidLineCount: invalid,
+  };
 }

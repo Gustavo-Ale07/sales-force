@@ -26,6 +26,7 @@ import {
   TableHeader,
   TableRow,
   Textarea,
+  formatQuantity,
   toast,
   titleCase,
 } from "@salesforce/ui";
@@ -57,6 +58,7 @@ import {
   parseQuantityInput,
   previewDraft,
   quantityProblemMessages,
+  summarizeCart,
   toRequestItems,
   type EditorLine,
 } from "../lib/order-draft";
@@ -271,6 +273,9 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
   });
 
   const preview = useMemo(() => previewDraft(lines), [lines]);
+  const cartSummary = useMemo(() => summarizeCart(lines, preview.lines), [lines, preview]);
+  /** Bulk removals of more than one line (and "Limpar carrinho") ask first; a single line goes away at once and can be undone. */
+  const [confirmRemoval, setConfirmRemoval] = useState<"selected" | "all" | null>(null);
   const installationEnabled = config.data?.configuration.general.enabled ?? true;
   const blockedLine = (line: EditorLine) => config.data !== undefined && !isLinePriceOrderable(line.price.state, config.data.configuration);
   const hasBlockedLines = lines.some(blockedLine);
@@ -373,11 +378,20 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
     });
   const toggleAll = (on: boolean) => setSelected(on ? new Set(lines.map((line) => line.key)) : new Set());
 
-  const removeSelected = () => {
-    setRemoved(lines.flatMap((line, index) => (selected.has(line.key) ? [{ line, index }] : [])));
-    setLines((current) => current.filter((line) => !selected.has(line.key)));
+  const removeKeys = (keys: ReadonlySet<string>) => {
+    setRemoved(lines.flatMap((line, index) => (keys.has(line.key) ? [{ line, index }] : [])));
+    setLines((current) => current.filter((line) => !keys.has(line.key)));
     setSelected(new Set());
     focusAfterRemoval.current = true;
+  };
+  const removeSelected = () => {
+    if (selectedLines.length > 1) setConfirmRemoval("selected");
+    else removeKeys(selected);
+  };
+  const confirmRemove = () => {
+    if (confirmRemoval === "all") removeKeys(new Set(lines.map((line) => line.key)));
+    else if (confirmRemoval === "selected") removeKeys(selected);
+    setConfirmRemoval(null);
   };
   const undoRemoval = () => {
     if (removed === null) return;
@@ -416,6 +430,28 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
 
   const updateLine = (key: string, patch: Partial<EditorLine>) =>
     setLines((current) => current.map((line) => (line.key === key ? { ...line, ...patch } : line)));
+
+  const removedBar =
+    removed !== null && removed.length > 0 ? (
+      <div className="flex items-center gap-2 border-b border-line px-3 py-2 text-xs" role="status">
+        <span>{removed.length === 1 ? "1 item removido." : `${removed.length} itens removidos.`}</span>
+        <Button ref={undoButton} type="button" size="sm" variant="secondary" onClick={undoRemoval}>
+          Desfazer
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          aria-label="Dispensar aviso"
+          onClick={() => {
+            setRemoved(null);
+            document.getElementById(CART_VIEW_ID)?.focus();
+          }}
+        >
+          <X size={13} aria-hidden="true" />
+        </Button>
+      </div>
+    ) : null;
 
   const negotiationTypes = config.data?.configuration.sales.negotiationTypes ?? [];
   const submitFailure =
@@ -513,6 +549,17 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
                 >
                   Lançamento múltiplo
                 </Button>
+                {lines.length > 0 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="ml-auto rounded-full"
+                    leftIcon={<Trash2 size={13} aria-hidden="true" />}
+                    onClick={() => setConfirmRemoval("all")}
+                  >
+                    Limpar carrinho
+                  </Button>
+                ) : null}
               </CardBody>
               {view === "produtos" ? (
                 <ProductBrowser
@@ -534,9 +581,12 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
           ) : null}
           {readOnly || view === "carrinho" ? (
             lines.length === 0 ? (
-              <CardBody>
-                <p className="m-0 text-xs text-fg-muted">Nenhum item no carrinho. Adicione produtos na visualização Produtos.</p>
-              </CardBody>
+              <>
+                {removedBar}
+                <CardBody>
+                  <p className="m-0 text-xs text-fg-muted">Nenhum item no carrinho. Adicione produtos na visualização Produtos.</p>
+                </CardBody>
+              </>
             ) : (
             <>
               {!readOnly && selectedLines.length > 0 ? (
@@ -578,26 +628,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
                   {bulkProblem ? <FieldError>{bulkProblem}</FieldError> : null}
                 </div>
               ) : null}
-              {removed !== null && removed.length > 0 ? (
-                <div className="flex items-center gap-2 border-b border-line px-3 py-2 text-xs" role="status">
-                  <span>{removed.length === 1 ? "1 item removido." : `${removed.length} itens removidos.`}</span>
-                  <Button ref={undoButton} type="button" size="sm" variant="secondary" onClick={undoRemoval}>
-                    Desfazer
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    aria-label="Dispensar aviso"
-                    onClick={() => {
-                      setRemoved(null);
-                      document.getElementById(CART_VIEW_ID)?.focus();
-                    }}
-                  >
-                    <X size={13} aria-hidden="true" />
-                  </Button>
-                </div>
-              ) : null}
+              {removedBar}
               <Table label="Itens do pedido">
                 <TableCaption>Itens do pedido</TableCaption>
                 <TableHeader>
@@ -697,7 +728,21 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
             )
           ) : null}
           <CardBody className="border-t border-line">
-            <dl className="m-0 flex flex-wrap items-baseline justify-end gap-x-6 gap-y-1">
+            <dl aria-label="Resumo do pedido" className="m-0 flex flex-wrap items-baseline justify-end gap-x-6 gap-y-1">
+              <div className="flex items-baseline gap-2">
+                <dt className="text-fg-muted">Itens</dt>
+                <dd className="m-0 font-medium" data-testid="order-line-count">
+                  {cartSummary.lineCount}
+                </dd>
+              </div>
+              {cartSummary.quantities.length > 0 ? (
+                <div className="flex items-baseline gap-2">
+                  <dt className="text-fg-muted">Quantidade</dt>
+                  <dd className="m-0 font-medium" data-testid="order-quantity">
+                    {cartSummary.quantities.map(({ unit, quantity }) => `${formatQuantity(quantity)} ${unit}`).join(" · ")}
+                  </dd>
+                </div>
+              ) : null}
               <div className="flex items-baseline gap-2">
                 <dt className="text-fg-muted">{preview.totals.isPartial ? "Total parcial estimado" : "Total estimado"}</dt>
                 <dd className="m-0 text-lg font-semibold" data-testid="order-total">
@@ -705,6 +750,13 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
                 </dd>
               </div>
             </dl>
+            {cartSummary.invalidLineCount > 0 ? (
+              <p className="m-0 mt-1 text-right text-xs text-danger">
+                {cartSummary.invalidLineCount === 1
+                  ? "1 item com quantidade inválida não entra na soma."
+                  : `${cartSummary.invalidLineCount} itens com quantidade inválida não entram na soma.`}
+              </p>
+            ) : null}
             {preview.totals.isPartial ? (
               <p className="m-0 mt-1 text-right text-xs text-fg-muted">
                 {preview.totals.unpricedLineCount === 1
@@ -802,6 +854,29 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
           }
         >
           <p className="m-0 text-sm text-fg-muted">A troca ainda não é salva: ela só vale quando você salvar o rascunho.</p>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmRemoval !== null} onOpenChange={(open) => !open && setConfirmRemoval(null)}>
+        <DialogContent
+          title={confirmRemoval === "all" ? "Limpar o carrinho?" : "Remover os itens selecionados?"}
+          description={
+            confirmRemoval === "all"
+              ? `${lines.length === 1 ? "O item será removido" : `Os ${lines.length} itens serão removidos`} do carrinho.`
+              : `${selectedLines.length} itens serão removidos do carrinho.`
+          }
+          footer={
+            <>
+              <DialogClose asChild>
+                <Button variant="secondary">Manter itens</Button>
+              </DialogClose>
+              <Button variant="danger" onClick={confirmRemove}>
+                {confirmRemoval === "all" ? "Limpar carrinho" : "Remover itens"}
+              </Button>
+            </>
+          }
+        >
+          <p className="m-0 text-sm text-fg-muted">Depois de remover, você ainda pode desfazer enquanto não fizer outra remoção.</p>
         </DialogContent>
       </Dialog>
 

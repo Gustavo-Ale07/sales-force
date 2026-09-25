@@ -6,6 +6,7 @@ import {
   isDecimalString,
   isTotalInRange,
   normalizeDecimalString,
+  sumQuantities,
   sumTotals,
   validateQuantity,
   validateUnitPrice,
@@ -120,5 +121,20 @@ describe('decimal helpers', () => {
   it('checks numeric(14,2) range', () => {
     expect(isTotalInRange('999999999999.99')).toBe(true);
     expect(isTotalInRange('1000000000000.00')).toBe(false);
+  });
+});
+
+describe('sumQuantities', () => {
+  it('adds exactly, keeping up to 4 decimals and dropping trailing zeros', () => {
+    expect(sumQuantities(['0.1', '0.2'])).toBe('0.3');
+    expect(sumQuantities(['1.5', '2.5'])).toBe('4');
+    expect(sumQuantities(['0.0001', '0.0002'])).toBe('0.0003');
+  });
+  it('sums an empty list to 0', () => {
+    expect(sumQuantities([])).toBe('0');
+  });
+  it('rejects malformed input', () => {
+    expect(() => sumQuantities(['abc'])).toThrow(RangeError);
+    expect(() => sumQuantities(['-1'])).toThrow(RangeError);
   });
 });

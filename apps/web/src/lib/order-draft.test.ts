@@ -8,6 +8,7 @@ import {
   listPriceOfLine,
   parseQuantityInput,
   previewDraft,
+  summarizeCart,
   toRequestItems,
   type EditorLine,
 } from "./order-draft";
@@ -135,5 +136,27 @@ describe("describeIssue", () => {
   it("falls back to the server message, then a generic one, for unknown codes", () => {
     expect(describeIssue({ path: "notes", code: "novo_codigo", message: "Texto do servidor" })).toBe("Texto do servidor");
     expect(describeIssue({ path: "notes", code: "novo_codigo" })).toBe("Dado inválido.");
+  });
+});
+
+describe("summarizeCart", () => {
+  it("adds the valid quantities per unit without mixing units and counts invalid lines apart", () => {
+    const lines = [
+      line({ key: "a", quantityText: "2,5", unit: "UN" }),
+      line({ key: "b", productCode: 2, quantityText: "1,5", unit: "UN" }),
+      line({ key: "c", productCode: 3, quantityText: "3", unit: "KG" }),
+      line({ key: "d", productCode: 4, quantityText: "", unit: "UN" }),
+    ];
+    const summary = summarizeCart(lines, previewDraft(lines).lines);
+    expect(summary.lineCount).toBe(4);
+    expect(summary.invalidLineCount).toBe(1);
+    expect(summary.quantities).toEqual([
+      { unit: "UN", quantity: "4" },
+      { unit: "KG", quantity: "3" },
+    ]);
+  });
+
+  it("is empty for an empty cart", () => {
+    expect(summarizeCart([], [])).toEqual({ lineCount: 0, quantities: [], invalidLineCount: 0 });
   });
 });

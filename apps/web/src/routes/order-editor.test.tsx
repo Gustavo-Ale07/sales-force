@@ -358,6 +358,46 @@ describe("Novo pedido", () => {
       expect(screen.getByLabelText(VELA)).toHaveValue("3,5");
     });
 
+    it("asks before removing more than one selected line and keeps them when the seller declines", async () => {
+      const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: newOrderHandlers() });
+      await addProduct(user, "Balão");
+      await addProduct(user, "Vela");
+      await user.click(await screen.findByRole("checkbox", { name: "Selecionar todos os itens" }));
+      await user.click(screen.getByRole("button", { name: "Remover selecionados" }));
+      const dialog = await screen.findByRole("dialog", { name: "Remover os itens selecionados?" });
+      expect(within(dialog).getByText("2 itens serão removidos do carrinho.")).toBeInTheDocument();
+      await user.click(within(dialog).getByRole("button", { name: "Manter itens" }));
+      expect(screen.getByLabelText(BALAO)).toBeInTheDocument();
+      expect(screen.getByLabelText(VELA)).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Remover selecionados" }));
+      await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Remover itens" }));
+      expect(screen.queryByLabelText(BALAO)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(VELA)).not.toBeInTheDocument();
+      expect(screen.getByText("2 itens removidos.")).toBeInTheDocument();
+    });
+
+    it("clears the whole cart only after confirmation and can undo it", async () => {
+      const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: newOrderHandlers() });
+      await addProduct(user, "Balão");
+      await addProduct(user, "Vela");
+      await user.click(await screen.findByRole("button", { name: "Limpar carrinho" }));
+      await user.click(within(await screen.findByRole("dialog", { name: "Limpar o carrinho?" })).getByRole("button", { name: "Limpar carrinho" }));
+      expect(screen.queryByLabelText(BALAO)).not.toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Desfazer" }));
+      expect(screen.getByLabelText(BALAO)).toBeInTheDocument();
+      expect(screen.getByLabelText(VELA)).toBeInTheDocument();
+    });
+
+    it("shows the order summary: item count, quantity per unit and the estimated total", async () => {
+      const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: newOrderHandlers() });
+      await addProduct(user, "Balão");
+      await addProduct(user, "Vela");
+      expect(await screen.findByLabelText("Resumo do pedido")).toBeInTheDocument();
+      expect(screen.getByTestId("order-line-count")).toHaveTextContent("2");
+      expect(screen.getByTestId("order-quantity").textContent).toMatch(/^2 /);
+      expect(screen.getByTestId("order-total")).toBeInTheDocument();
+    });
+
     it("refuses an invalid bulk quantity and leaves the lines untouched", async () => {
       const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: newOrderHandlers() });
       await addProduct(user, "Balão");

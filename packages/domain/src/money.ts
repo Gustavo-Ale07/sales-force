@@ -118,6 +118,20 @@ export function sumTotals(totals: readonly DecimalString[]): DecimalString {
   return sum.toDecimalPlaces(TOTAL_SCALE, Decimal.ROUND_HALF_UP).toFixed(TOTAL_SCALE);
 }
 
+/**
+ * Exact sum of quantities (up to QUANTITY_SCALE decimals, trailing zeros dropped). Quantities of different units
+ * must not be added together by the caller; this only adds numbers.
+ */
+export function sumQuantities(quantities: readonly DecimalString[]): DecimalString {
+  let sum = new Decimal(0);
+  for (const quantity of quantities) {
+    const parsed = parseUnsigned(quantity);
+    if (!parsed) throw new RangeError('Malformed decimal string');
+    sum = sum.plus(parsed.value);
+  }
+  return sum.toDecimalPlaces(QUANTITY_SCALE, Decimal.ROUND_HALF_UP).toFixed();
+}
+
 /** True when the total fits numeric(14,2). */
 export function isTotalInRange(total: DecimalString): boolean {
   const parsed = parseUnsigned(total);
