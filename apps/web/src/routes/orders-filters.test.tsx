@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { asDate, asIntList } from "../lib/search-params";
 import { MAX_ORDER_PRODUCTS, parseOrdersSearch } from "../lib/route-search";
-import { customer, customerDetail, customersPage, orderListItem, ordersPage, product, productDetail, productsPage } from "../test/fixtures";
+import { customer, customerDetail, customersPage, orderListItem, ordersPage, priceContext, product, productDetail, productsPage } from "../test/fixtures";
 import { callsTo, renderApp, type Handlers } from "../test/harness";
 
 const CABO = product({ code: 12, description: "CABO FLEXIVEL 2,5 MM", reference: "CB-25" });
@@ -63,7 +63,10 @@ describe("Vendas: filtros comerciais", () => {
     const { user, calls, router } = renderApp("/pedidos", { handlers: handlers() });
     await screen.findByText("Rascunho nº 12");
     await user.click(screen.getByRole("button", { name: "Filtrar por produtos" }));
-    await user.click(await screen.findByRole("checkbox", { name: /Cabo Flexivel/i }));
+    await user.click(await screen.findByRole("checkbox", { name: /Selecionar CABO FLEXIVEL/i }));
+    // nothing is applied before "Aplicar filtro"
+    expect(lastOrdersCall(calls)?.get("productCodes")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Aplicar filtro" }));
     await waitFor(() => expect(lastOrdersCall(calls)?.get("productCodes")).toBe("12"));
     expect(lastOrdersCall(calls)?.get("productMatch")).toBeNull();
     expect(router.state.location.search).toMatchObject({ products: [12] });
@@ -76,12 +79,12 @@ describe("Vendas: filtros comerciais", () => {
     const { user, calls, router } = renderApp("/pedidos", { handlers: handlers() });
     await screen.findByText("Rascunho nº 12");
     await user.click(screen.getByRole("button", { name: "Filtrar por produtos" }));
-    await user.click(await screen.findByRole("checkbox", { name: /Cabo Flexivel/i }));
-    await user.click(await screen.findByRole("checkbox", { name: /Balao Latex/i }));
+    await user.click(await screen.findByRole("checkbox", { name: /Selecionar CABO FLEXIVEL/i }));
+    await user.click(await screen.findByRole("checkbox", { name: /Selecionar BALAO LATEX/i }));
+    await user.click(screen.getByRole("button", { name: "Aplicar filtro" }));
     await waitFor(() => expect(lastOrdersCall(calls)?.get("productCodes")).toBe("12,34"));
     expect(lastOrdersCall(calls)?.get("productMatch")).toBeNull();
     expect(await screen.findByText("Contendo qualquer um:")).toBeInTheDocument();
-    await user.keyboard("{Escape}");
 
     await user.selectOptions(screen.getByLabelText("Combinação dos produtos"), "all");
     await waitFor(() => expect(lastOrdersCall(calls)?.get("productMatch")).toBe("all"));
@@ -104,6 +107,47 @@ describe("Vendas: filtros comerciais", () => {
     await waitFor(() => expect(callsTo(calls, "GET", "/products").some((call) => call.search.get("search") === "CB-25")).toBe(true));
   });
 
+  it("the selection survives a new search and a page change, and Cancelar discards it", async () => {
+    const { user, calls } = renderApp("/pedidos", {
+      handlers: handlers({ "GET /products": (request) => ({ body: request.search.get("search") === "balao" ? productsPage([BALAO]) : productsPage([CABO, BALAO], priceContext, 25) }) }),
+    });
+    await screen.findByText("Rascunho nº 12");
+    await user.click(screen.getByRole("button", { name: "Filtrar por produtos" }));
+    await user.click(await screen.findByRole("checkbox", { name: /Selecionar CABO FLEXIVEL/i }));
+    await user.click(screen.getByRole("button", { name: "Próxima página" }));
+    await waitFor(() => expect(callsTo(calls, "GET", "/products").some((call) => call.search.get("page") === "2")).toBe(true));
+    await user.type(screen.getByRole("searchbox", { name: "Buscar produto para o filtro" }), "balao");
+    await user.click(await screen.findByRole("checkbox", { name: /Selecionar BALAO LATEX/i }));
+    expect(screen.getByText("2 de 20 selecionados.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(lastOrdersCall(calls)?.get("productCodes")).toBeNull();
+    expect(screen.getByRole("button", { name: "Filtrar por produtos" })).toHaveTextContent("Todos os produtos");
+  });
+
+  it("the group narrows the product list; \"Limpar seleção\" then Aplicar filtro removes the product filter", async () => {
+    const { user, calls } = renderApp("/pedidos?products=%5B12%5D", {
+      handlers: handlers({ "GET /product-groups": { body: { items: [{ code: 7, name: "Cabos" }] } } }),
+    });
+    await screen.findByText("Rascunho nº 12");
+    await user.click(screen.getByRole("button", { name: "Filtrar por produtos" }));
+    await user.selectOptions(await screen.findByRole("combobox", { name: "Grupo dos produtos do filtro" }), "7");
+    await waitFor(() => expect(callsTo(calls, "GET", "/products").some((call) => call.search.get("group") === "7")).toBe(true));
+    await user.click(screen.getByRole("button", { name: "Limpar seleção" }));
+    await user.click(screen.getByRole("button", { name: "Aplicar filtro" }));
+    await waitFor(() => expect(lastOrdersCall(calls)?.get("productCodes")).toBeNull());
+  });
+
+  it("description of the product: typed text goes to the API as productSearch, shows a chip and can be removed", async () => {
+    const { user, calls, router } = renderApp("/pedidos", { handlers: handlers() });
+    await screen.findByText("Rascunho nº 12");
+    await user.type(screen.getByRole("searchbox", { name: "Buscar pedidos por descrição do produto" }), "cabo flex");
+    await waitFor(() => expect(lastOrdersCall(calls)?.get("productSearch")).toBe("cabo flex"));
+    expect(router.state.location.search).toMatchObject({ productSearch: "cabo flex" });
+    await user.click(await screen.findByRole("button", { name: "Remover filtro: Descrição do produto: cabo flex" }));
+    await waitFor(() => expect(lastOrdersCall(calls)?.get("productSearch")).toBeNull());
+    expect(router.state.location.search).not.toHaveProperty("productSearch");
+  });
+
   it("combined filters: every one goes to the API together, page resets to 1 and 'Limpar filtros' clears them all", async () => {
     const { user, calls, router } = renderApp("/pedidos?page=3&pageSize=50", {
       handlers: handlers({ "GET /orders": { body: { ...ordersPage([orderListItem()], 195), page: 3, pageSize: 50 } } }),
@@ -118,8 +162,8 @@ describe("Vendas: filtros comerciais", () => {
     fireEvent.change(screen.getByLabelText("Data inicial"), { target: { value: "2026-03-01" } });
     await waitFor(() => expect(lastOrdersCall(calls)?.get("from")).toBe("2026-03-01"));
     await user.click(screen.getByRole("button", { name: "Filtrar por produtos" }));
-    await user.click(await screen.findByRole("checkbox", { name: /Cabo Flexivel/i }));
-    await user.keyboard("{Escape}");
+    await user.click(await screen.findByRole("checkbox", { name: /Selecionar CABO FLEXIVEL/i }));
+    await user.click(screen.getByRole("button", { name: "Aplicar filtro" }));
     await waitFor(() => expect(lastOrdersCall(calls)?.get("productCodes")).toBe("12"));
     await user.click(screen.getByRole("button", { name: /Filtrar por cliente/ }));
     await user.click(await screen.findByRole("button", { name: /Beta Ltda/ }));
@@ -148,7 +192,7 @@ describe("Vendas: filtros comerciais", () => {
 
   it("URL persistence: a link with every filter reproduces the same query, chips and controls", async () => {
     const { calls } = renderApp(
-      `/pedidos?${new URLSearchParams({ search: "12", status: "draft", customerCode: "1002", from: "2026-03-01", to: "2026-03-31", dateField: "updatedAt", products: "[12,34]", productMatch: "all" })}`,
+      `/pedidos?${new URLSearchParams({ search: "12", status: "draft", customerCode: "1002", from: "2026-03-01", to: "2026-03-31", dateField: "updatedAt", products: "[12,34]", productMatch: "all", productSearch: "cabo" })}`,
       { handlers: handlers() },
     );
     await screen.findByText("Rascunho nº 12");
@@ -161,6 +205,7 @@ describe("Vendas: filtros comerciais", () => {
     expect(search.get("dateField")).toBe("updatedAt");
     expect(search.get("productCodes")).toBe("12,34");
     expect(search.get("productMatch")).toBe("all");
+    expect(search.get("productSearch")).toBe("cabo");
 
     expect(screen.getByLabelText("Data inicial")).toHaveValue("2026-03-01");
     expect(screen.getByLabelText("Data final")).toHaveValue("2026-03-31");

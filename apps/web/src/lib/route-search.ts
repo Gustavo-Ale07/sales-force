@@ -45,6 +45,8 @@ export interface OrdersSearch {
   products?: number[];
   /** How several products combine; "any" when absent. */
   productMatch?: ApiSchema<"OrderProductMatch">;
+  /** Text of a product description (or code) that a line of the order must contain. */
+  productSearch?: string;
   sort?: ApiSchema<"OrderSort">;
   page?: number;
   pageSize?: number;
@@ -75,6 +77,7 @@ export function parseOrdersSearch(raw: Record<string, unknown>): OrdersSearch {
     dateField: dateField !== undefined && dateField !== "createdAt" && (from !== undefined || to !== undefined) ? dateField : undefined,
     products,
     productMatch: productMatch === "all" && products !== undefined && products.length > 1 ? productMatch : undefined,
+    productSearch: asString(raw.productSearch),
     sort: asOneOf(raw.sort, ORDER_SORTS),
     page: page !== undefined && page > 1 ? page : undefined,
     pageSize: pageSize !== 25 ? pageSize : undefined,

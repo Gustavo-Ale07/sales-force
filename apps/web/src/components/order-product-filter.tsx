@@ -1,13 +1,33 @@
-import { Button, Checkbox, EmptyState, Popover, PopoverContent, PopoverTrigger, SearchInput, SkeletonLines, titleCase } from "@salesforce/ui";
+import {
+  Button,
+  Checkbox,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTrigger,
+  EmptyState,
+  Pagination,
+  SearchInput,
+  Select,
+  SkeletonLines,
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  titleCase,
+} from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Boxes, ChevronDown } from "lucide-react";
 import { useState } from "react";
-import { productQueryOptions, productsQueryOptions } from "../lib/api-queries";
+import { productGroupsQueryOptions, productQueryOptions, productsQueryOptions } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { useDebounced } from "../lib/use-debounced";
 import { QueryError } from "./query-error";
 
-const RESULT_LIMIT = 8;
+const PAGE_SIZE = 10;
 
 /** "Code – Description" of a product for a chip; the code alone while the name loads or if the product is gone. */
 export function useProductLabel(code: number): string {
@@ -25,24 +45,16 @@ export interface OrderProductFilterProps {
 }
 
 /**
- * Multi-select of the products an order must contain. Searches the whole catalog by code, description or
- * reference (an order may hold a product that is no longer sellable, so nothing is pre-filtered); each tick is
- * applied right away and the choice lives in the URL. The active choices are shown as removable chips by the host.
+ * Filter of the products an order must contain, laid out like the multiple entry of a new sale: search by code,
+ * description or reference, a group filter, a table with a checkbox per row and pagination. The ticks are kept
+ * while paging and searching and only reach the list (and the URL) on "Aplicar filtro". The whole catalog is
+ * searched (an order may hold a product that is no longer sellable, so nothing is pre-filtered).
  */
 export function OrderProductFilter({ codes, onChange, max }: OrderProductFilterProps) {
-  const api = useApi();
-  const [search, setSearch] = useState("");
-  const debounced = useDebounced(search.trim(), 300);
-  const query = useQuery(productsQueryOptions(api, { search: debounced || undefined, pageSize: RESULT_LIMIT, sort: "description" }));
-  const selected = new Set(codes);
-  const full = codes.length >= max;
-  const items = query.data?.items ?? [];
-
-  const toggle = (code: number, on: boolean) => onChange(on ? (selected.has(code) ? [...codes] : [...codes, code]) : codes.filter((existing) => existing !== code));
-
+  const [open, setOpen] = useState(false);
   return (
-    <Popover>
-      <PopoverTrigger asChild>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
         <Button
           variant="secondary"
           aria-label="Filtrar por produtos"
@@ -54,54 +66,161 @@ export function OrderProductFilter({ codes, onChange, max }: OrderProductFilterP
             {codes.length === 0 ? "Todos os produtos" : codes.length === 1 ? "1 produto selecionado" : `${codes.length} produtos selecionados`}
           </span>
         </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-[440px] p-3">
-        <div className="flex flex-col gap-2">
+      </DialogTrigger>
+      {open ? (
+        <ProductFilterContent
+          initial={codes}
+          max={max}
+          onApply={(next) => {
+            onChange(next);
+            setOpen(false);
+          }}
+        />
+      ) : null}
+    </Dialog>
+  );
+}
+
+function ProductFilterContent({ initial, max, onApply }: { initial: readonly number[]; max: number; onApply: (codes: number[]) => void }) {
+  const api = useApi();
+  const [picked, setPicked] = useState<number[]>([...initial]);
+  const [search, setSearch] = useState("");
+  const [group, setGroup] = useState("");
+  const [page, setPage] = useState(1);
+  const debounced = useDebounced(search.trim(), 300);
+
+  const groups = useQuery(productGroupsQueryOptions(api));
+  const query = useQuery(
+    productsQueryOptions(api, {
+      search: debounced || undefined,
+      group: group === "" ? undefined : Number(group),
+      pageSize: PAGE_SIZE,
+      page,
+      sort: "description",
+    }),
+  );
+  const items = query.data?.items ?? [];
+  const selected = new Set(picked);
+  const full = picked.length >= max;
+  const pageSelected = items.filter((product) => selected.has(product.code));
+  const pageFree = items.filter((product) => !selected.has(product.code));
+
+  const toggle = (code: number, on: boolean) =>
+    setPicked((current) => (on ? (current.includes(code) || current.length >= max ? current : [...current, code]) : current.filter((existing) => existing !== code)));
+  const togglePage = (on: boolean) =>
+    setPicked((current) => {
+      if (!on) return current.filter((code) => !items.some((product) => product.code === code));
+      const room = Math.max(0, max - current.length);
+      return [...current, ...pageFree.slice(0, room).map((product) => product.code)];
+    });
+
+  return (
+    <DialogContent
+      title="Filtrar por produtos"
+      description="Escolha os produtos que o pedido deve conter. A seleção vale para todas as páginas e buscas."
+      className="max-w-3xl"
+      footer={
+        <>
+          <Button variant="ghost" disabled={picked.length === 0} onClick={() => setPicked([])}>
+            Limpar seleção
+          </Button>
+          <span className="flex-1" />
+          <DialogClose asChild>
+            <Button variant="secondary">Cancelar</Button>
+          </DialogClose>
+          <Button variant="primary" onClick={() => onApply(picked)}>
+            Aplicar filtro
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-end gap-2">
           <SearchInput
             value={search}
-            onValueChange={setSearch}
-            placeholder="Buscar por nome, código ou referência"
+            onValueChange={(value) => {
+              setSearch(value);
+              setPage(1);
+            }}
             aria-label="Buscar produto para o filtro"
+            placeholder="Buscar por nome, código ou referência"
+            wrapperClassName="min-w-[220px] flex-1"
           />
-          <div className="flex items-center justify-between text-xs text-fg-muted" aria-live="polite">
-            <span>{codes.length === 0 ? "Nenhum produto selecionado" : `${codes.length} de ${max} selecionados`}</span>
-            {codes.length > 0 ? (
-              <button type="button" className="text-accent hover:underline" onClick={() => onChange([])}>
-                Limpar seleção
-              </button>
-            ) : null}
-          </div>
-          <div className="max-h-72 overflow-y-auto" aria-busy={query.isFetching}>
-            {query.isPending ? (
-              <SkeletonLines lines={4} label="Carregando produtos…" />
-            ) : query.isError ? (
-              <QueryError error={query.error} onRetry={() => void query.refetch()} retrying={query.isRefetching} title="Não foi possível carregar os produtos" compact />
-            ) : items.length === 0 ? (
-              <EmptyState compact title="Nenhum produto encontrado" description="Tente outro nome, código ou referência." />
-            ) : (
-              <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
-                {items.map((product) => (
-                  <li key={product.code}>
-                    <Checkbox
-                      checked={selected.has(product.code)}
-                      disabled={full && !selected.has(product.code)}
-                      onCheckedChange={(checked) => toggle(product.code, checked === true)}
-                      label={titleCase(product.description)}
-                      description={`Cód. ${product.code}${product.reference ? ` · Ref. ${product.reference}` : ""}`}
-                    />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          {query.data && query.data.total > items.length ? (
-            <p className="m-0 text-xs text-fg-muted">
-              Mostrando {items.length} de {query.data.total.toLocaleString("pt-BR")}. Refine a busca para ver outros.
-            </p>
-          ) : null}
-          {full ? <p className="m-0 text-xs text-fg-muted">Limite de {max} produtos atingido.</p> : null}
+          <Select
+            size="md"
+            aria-label="Grupo dos produtos do filtro"
+            value={group}
+            onChange={(event) => {
+              setGroup(event.target.value);
+              setPage(1);
+            }}
+            wrapperClassName="w-[200px]"
+          >
+            <option value="">Todos os grupos</option>
+            {(groups.data?.items ?? []).map((item) => (
+              <option key={item.code} value={item.code}>
+                {item.name}
+              </option>
+            ))}
+          </Select>
         </div>
-      </PopoverContent>
-    </Popover>
+
+        <div aria-live="polite" aria-busy={query.isFetching}>
+          {query.isPending ? (
+            <SkeletonLines lines={4} label="Carregando produtos…" />
+          ) : query.isError ? (
+            <QueryError error={query.error} onRetry={() => void query.refetch()} retrying={query.isRefetching} title="Não foi possível carregar os produtos" compact />
+          ) : items.length === 0 ? (
+            <EmptyState compact title="Nenhum produto encontrado" description="Tente outro nome, código, referência ou grupo." />
+          ) : (
+            <Table label="Produtos do filtro">
+              <TableCaption>Marque os produtos que o pedido deve conter</TableCaption>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>
+                    <Checkbox
+                      aria-label="Selecionar todos os produtos desta página"
+                      checked={pageSelected.length === 0 ? false : pageFree.length === 0 ? true : "indeterminate"}
+                      disabled={pageSelected.length === 0 && (full || pageFree.length === 0)}
+                      onCheckedChange={(checked) => togglePage(checked === true)}
+                    />
+                  </TableHead>
+                  <TableHead numeric>Cód.</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead>Referência</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {items.map((product) => (
+                  <TableRow key={product.code}>
+                    <TableCell>
+                      <Checkbox
+                        aria-label={`Selecionar ${product.description}`}
+                        checked={selected.has(product.code)}
+                        disabled={full && !selected.has(product.code)}
+                        onCheckedChange={(checked) => toggle(product.code, checked === true)}
+                      />
+                    </TableCell>
+                    <TableCell numeric>{product.code}</TableCell>
+                    <TableCell wrap>
+                      <span className="font-medium">{titleCase(product.description)}</span>
+                      {product.groupName ? <span className="block text-fg-muted">{product.groupName}</span> : null}
+                    </TableCell>
+                    <TableCell>{product.reference ?? ""}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          {query.data && query.data.total > PAGE_SIZE ? (
+            <Pagination page={page} pageSize={PAGE_SIZE} total={query.data.total} onPageChange={setPage} pageSizeOptions={[PAGE_SIZE]} />
+          ) : null}
+        </div>
+        <p className="m-0 text-xs text-fg-muted" aria-live="polite">
+          {picked.length === 0 ? "Nenhum produto selecionado: o filtro não restringe os pedidos." : `${picked.length} de ${max} selecionados.`}
+          {full ? ` Limite de ${max} produtos atingido.` : ""}
+        </p>
+      </div>
+    </DialogContent>
   );
 }

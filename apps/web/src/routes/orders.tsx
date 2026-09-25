@@ -171,10 +171,11 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
 
   const change = (patch: Partial<OrdersSearch>) => onSearchChange(compact({ ...params, page: undefined, ...patch }));
   const [searchText, setSearchText] = useSearchBox(params.search, (search) => change({ search }));
+  const [productText, setProductText] = useSearchBox(params.productSearch, (productSearch) => change({ productSearch }));
   const selectedProducts = params.products ?? [];
   const hasPeriod = params.from !== undefined || params.to !== undefined;
   const hasFilters =
-    params.search !== undefined || params.status !== undefined || params.customerCode !== undefined || hasPeriod || selectedProducts.length > 0;
+    params.search !== undefined || params.status !== undefined || params.customerCode !== undefined || hasPeriod || selectedProducts.length > 0 || params.productSearch !== undefined;
   const clearAll = () => onSearchChange(compact({ sort: params.sort, pageSize: params.pageSize }));
   const currentSort = params.sort ?? "-updatedAt";
   const setFrom = (from: string | undefined) => change({ from, to: from !== undefined && params.to !== undefined && params.to < from ? from : params.to });
@@ -240,6 +241,15 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
         <FilterField label="Produtos" className="lg:col-span-4 sm:col-span-2">
           <OrderProductFilter codes={selectedProducts} max={MAX_ORDER_PRODUCTS} onChange={(codes) => change({ products: codes.length > 0 ? codes : undefined, productMatch: codes.length > 1 ? params.productMatch : undefined })} />
         </FilterField>
+        <FilterField label="Descrição do produto" className="lg:col-span-4 sm:col-span-2">
+          <SearchInput
+            size="md"
+            value={productText}
+            onValueChange={setProductText}
+            placeholder="Ex.: cabo flexível"
+            aria-label="Buscar pedidos por descrição do produto"
+          />
+        </FilterField>
         {selectedProducts.length > 1 ? (
           <FilterField label="Pedidos com" className="lg:col-span-2">
             <Select
@@ -263,6 +273,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
           {hasPeriod ? (
             <FilterChip onRemove={() => change({ from: undefined, to: undefined, dateField: undefined })}>{periodLabel(params)}</FilterChip>
           ) : null}
+          {params.productSearch ? <FilterChip onRemove={() => change({ productSearch: undefined })}>{`Descrição do produto: ${params.productSearch}`}</FilterChip> : null}
           {selectedProducts.length > 1 ? (
             <span className="text-xs text-fg-muted">{params.productMatch === "all" ? "Contendo todos:" : "Contendo qualquer um:"}</span>
           ) : null}
