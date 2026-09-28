@@ -439,6 +439,23 @@ describe("Novo pedido", () => {
       expect(await screen.findByRole("button", { name: "Lançamento múltiplo" })).toBeDisabled();
     });
 
+    it("returns focus to the trigger button after closing, whether by Escape or by adding items", async () => {
+      const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: newOrderHandlers() });
+      const trigger = await screen.findByRole("button", { name: "Lançamento múltiplo" });
+
+      await user.click(trigger);
+      await screen.findByRole("dialog", { name: "Lançamento múltiplo" });
+      await user.keyboard("{Escape}");
+      expect(screen.queryByRole("dialog", { name: "Lançamento múltiplo" })).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+
+      const dialog = await open(user);
+      await user.click(await within(dialog).findByLabelText("Selecionar Balão látex 9 pol. vermelho"));
+      await user.click(within(dialog).getByRole("button", { name: "Adicionar 1 item" }));
+      expect(screen.queryByRole("dialog", { name: "Lançamento múltiplo" })).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+    });
+
     it("selects products from the list, with a quantity each, and adds them together", async () => {
       const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: newOrderHandlers() });
       const dialog = await open(user);

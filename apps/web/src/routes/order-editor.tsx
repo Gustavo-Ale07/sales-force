@@ -207,6 +207,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
   /** Line keys ticked for a bulk action; keys of lines that no longer exist are ignored (see `selectedLines`). */
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [bulkEntryOpen, setBulkEntryOpen] = useState(false);
+  const bulkEntryTriggerRef = useRef<HTMLButtonElement>(null);
   const [bulkQuantity, setBulkQuantity] = useState("");
   const [bulkProblem, setBulkProblem] = useState<string | null>(null);
   /** The last bulk removal, kept in memory so it can be undone; cleared by the next removal or when dismissed. */
@@ -541,6 +542,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
                   </ViewPill>
                 </div>
                 <Button
+                  ref={bulkEntryTriggerRef}
                   type="button"
                   variant="secondary"
                   className="rounded-full"
@@ -893,6 +895,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
           existingCount={lines.length}
           planContext={planContext}
           onAdd={addBulkEntry}
+          triggerRef={bulkEntryTriggerRef}
         />
       ) : null}
 

@@ -22,7 +22,7 @@ import {
   titleCase,
 } from "@salesforce/ui";
 import { useMutation } from "@tanstack/react-query";
-import { useMemo, useState, type ChangeEvent } from "react";
+import { useMemo, useState, type ChangeEvent, type RefObject } from "react";
 import { EntryFileError, entryFileFailureMessages, readEntryFile } from "../lib/entry-file";
 import { ProductMultiSelect, quantityProblem, type ProductSelection } from "./product-multi-select";
 import { resolveProducts } from "../lib/api-mutations";
@@ -54,6 +54,11 @@ export interface BulkEntryDialogProps {
   existingCount: number;
   planContext: PlanContext;
   onAdd: (items: BulkEntryItem[]) => void;
+  /**
+   * The button that opens the dialog. `open`/`onOpenChange` are caller-controlled (no `Dialog.Trigger` is
+   * rendered), so Radix has no trigger to restore focus to on close and falls back to the document body.
+   */
+  triggerRef?: RefObject<HTMLElement | null>;
 }
 
 const EXAMPLE = "2001;5\n2002;2,5\nBL-09-VM;10";
@@ -81,6 +86,7 @@ function BulkEntryContent({
   existingCount,
   planContext,
   onAdd,
+  triggerRef,
 }: Omit<BulkEntryDialogProps, "open" | "onOpenChange"> & { onClose: () => void }) {
   const api = useApi();
   const [text, setText] = useState("");
@@ -164,6 +170,11 @@ function BulkEntryContent({
       title="Lançamento múltiplo"
       description="Escolha vários produtos de uma vez ou importe uma lista. Nada é adicionado antes de você conferir."
       className="max-w-3xl"
+      onCloseAutoFocus={(event) => {
+        if (!triggerRef?.current) return;
+        event.preventDefault();
+        triggerRef.current.focus();
+      }}
       footer={
         <>
           <DialogClose asChild>
