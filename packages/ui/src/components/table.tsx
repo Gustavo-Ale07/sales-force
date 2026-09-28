@@ -48,7 +48,7 @@ export function Table({ label, maxHeightClassName, containerClassName, className
       onKeyDown={onKeyDown}
       className={cn("overflow-auto", maxHeightClassName, containerClassName)}
     >
-      <table className={cn("w-full border-collapse text-sm", className)} {...props}>
+      <table className={cn("min-w-full border-collapse text-sm", className)} {...props}>
         {children}
       </table>
     </div>
