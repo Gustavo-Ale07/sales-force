@@ -104,14 +104,14 @@ export function ProductBrowser({ filters, onFiltersChange, customerCode, cartQua
           onValueChange={(value) => onFiltersChange({ ...filters, search: value, page: 1 })}
           aria-label="Buscar produto"
           placeholder="Código, descrição ou referência"
-          wrapperClassName="min-w-[240px] flex-1"
+          wrapperClassName="min-w-[220px] flex-1"
         />
         <Select
           size="md"
           aria-label="Grupo"
           value={group}
           onChange={(event) => onFiltersChange({ ...filters, group: event.target.value, page: 1 })}
-          wrapperClassName="w-full sm:w-[220px]"
+          wrapperClassName="w-full sm:w-[200px]"
         >
           <option value="">Todos os grupos</option>
           {(groups.data?.items ?? []).map((item) => (

@@ -363,7 +363,7 @@ function EditForm({ detail, customerCode, descriptions, onReload, reloading, onC
                         size="sm"
                         inputMode="decimal"
                         autoComplete="off"
-                        wrapperClassName="w-[110px]"
+                        className="w-[110px]"
                         value={line.quantityText}
                         aria-label={`Quantidade de ${label}`}
                         aria-invalid={problem ? true : undefined}

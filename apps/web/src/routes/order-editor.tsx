@@ -598,7 +598,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
                     size="sm"
                     inputMode="decimal"
                     autoComplete="off"
-                    wrapperClassName="w-[110px]"
+                    className="w-[110px]"
                     placeholder="Quantidade"
                     value={bulkQuantity}
                     aria-label="Quantidade para os selecionados"
@@ -682,7 +682,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
                             size="sm"
                             inputMode="decimal"
                             autoComplete="off"
-                            wrapperClassName="w-[110px]"
+                            className="w-[110px]"
                             value={line.quantityText}
                             readOnly={readOnly}
                             aria-label={`Quantidade de ${line.description}`}
