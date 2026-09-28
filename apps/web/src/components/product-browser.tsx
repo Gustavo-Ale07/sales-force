@@ -22,7 +22,7 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 import { productGroupsQueryOptions, productsQueryOptions } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
-import { parseQuantityInput, quantityProblemMessages } from "../lib/order-draft";
+import { discountProblemMessages, parseDiscountInput, parseQuantityInput, quantityProblemMessages } from "../lib/order-draft";
 import type { ProductRow } from "../lib/price-types";
 import { useDebounced } from "../lib/use-debounced";
 import { PriceCell } from "./price-cell";
@@ -46,8 +46,8 @@ export interface ProductBrowserProps {
   customerCode: number | null;
   /** Quantity text of the products already in the cart, by product code. */
   cartQuantities: ReadonlyMap<number, string>;
-  /** Adds the product with an already validated quantity text (comma decimal separator). */
-  onAdd: (product: ProductRow, quantityText: string) => void;
+  /** Adds the product with an already validated quantity text and discount text (comma decimal separator; empty discount = none). */
+  onAdd: (product: ProductRow, quantityText: string, discountText: string) => void;
   /** Id of the search field, so the editor can move the focus back to it. */
   searchId: string;
 }
@@ -62,6 +62,8 @@ export function ProductBrowser({ filters, onFiltersChange, customerCode, cartQua
   const { search, group, page } = filters;
   const [quantities, setQuantities] = useState<Record<number, string>>({});
   const [problems, setProblems] = useState<Record<number, string>>({});
+  const [discounts, setDiscounts] = useState<Record<number, string>>({});
+  const [discountProblems, setDiscountProblems] = useState<Record<number, string>>({});
   const debounced = useDebounced(search.trim(), 300);
 
   const groups = useQuery(productGroupsQueryOptions(api));
@@ -85,13 +87,21 @@ export function ProductBrowser({ filters, onFiltersChange, customerCode, cartQua
   const add = (product: ProductRow) => {
     const text = (quantities[product.code] ?? "").trim();
     const parsed = parseQuantityInput(text === "" ? "1" : text);
-    if (!parsed.ok) {
-      setProblems((current) => ({ ...current, [product.code]: quantityProblemMessages[parsed.problem] }));
+    // A product without a price takes no discount (P-09): whatever was typed is ignored.
+    const discountText = product.listPrice.state === "none" ? "" : (discounts[product.code] ?? "").trim();
+    const parsedDiscount = parseDiscountInput(discountText);
+    if (!parsed.ok || !parsedDiscount.ok) {
+      setProblems(({ [product.code]: _dropped, ...rest }) => (parsed.ok ? rest : { ...rest, [product.code]: quantityProblemMessages[parsed.problem] }));
+      setDiscountProblems(({ [product.code]: _dropped, ...rest }) =>
+        parsedDiscount.ok ? rest : { ...rest, [product.code]: discountProblemMessages[parsedDiscount.problem] },
+      );
       return;
     }
     setProblems(({ [product.code]: _dropped, ...rest }) => rest);
+    setDiscountProblems(({ [product.code]: _dropped, ...rest }) => rest);
     setQuantities(({ [product.code]: _dropped, ...rest }) => rest);
-    onAdd(product, text === "" ? "1" : text);
+    setDiscounts(({ [product.code]: _dropped, ...rest }) => rest);
+    onAdd(product, text === "" ? "1" : text, parsedDiscount.value === "0" ? "" : discountText.replace(/\s*%$/, ""));
   };
 
   const items = query.data?.items ?? [];
@@ -140,6 +150,7 @@ export function ProductBrowser({ filters, onFiltersChange, customerCode, cartQua
                 <TableHead>Un.</TableHead>
                 <TableHead numeric>Valor tabela</TableHead>
                 <TableHead>Quantidade</TableHead>
+                <TableHead>Desc. (%)</TableHead>
                 <TableHead>
                   <span className="sr-only">Ações</span>
                 </TableHead>
@@ -150,6 +161,9 @@ export function ProductBrowser({ filters, onFiltersChange, customerCode, cartQua
                 const inCart = cartQuantities.get(product.code);
                 const problem = problems[product.code];
                 const errorId = `product-qty-error-${product.code}`;
+                const discountProblem = discountProblems[product.code];
+                const discountErrorId = `product-discount-error-${product.code}`;
+                const noPrice = product.listPrice.state === "none";
                 return (
                   <TableRow key={product.code}>
                     <TableCell numeric>{product.code}</TableCell>
@@ -188,6 +202,36 @@ export function ProductBrowser({ filters, onFiltersChange, customerCode, cartQua
                             }}
                           />
                           {problem ? <FieldError id={errorId}>{problem}</FieldError> : null}
+                        </>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {inCart !== undefined ? null : (
+                        <>
+                          <Input
+                            size="sm"
+                            inputMode="decimal"
+                            autoComplete="off"
+                            className="w-[80px]"
+                            placeholder={noPrice ? "—" : "0"}
+                            value={noPrice ? "" : (discounts[product.code] ?? "")}
+                            disabled={noPrice}
+                            title={noPrice ? "Produto sem preço não recebe desconto" : undefined}
+                            aria-label={`Desconto de ${product.description} (%) a adicionar`}
+                            aria-invalid={discountProblem ? true : undefined}
+                            aria-describedby={discountProblem ? discountErrorId : undefined}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setDiscounts((current) => ({ ...current, [product.code]: value }));
+                              setDiscountProblems(({ [product.code]: _dropped, ...rest }) => rest);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+                              event.preventDefault();
+                              add(product);
+                            }}
+                          />
+                          {discountProblem ? <FieldError id={discountErrorId}>{discountProblem}</FieldError> : null}
                         </>
                       )}
                     </TableCell>

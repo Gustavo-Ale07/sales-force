@@ -32,13 +32,14 @@ import {
 } from "@salesforce/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useBlocker } from "@tanstack/react-router";
-import { BookmarkPlus, Save, Send, Trash2, X } from "lucide-react";
+import { BookmarkPlus, Percent, Save, Send, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { BulkEntryDialog, type BulkEntryItem } from "../components/bulk-entry-dialog";
 import { CustomerContextBar } from "../components/customer-context-bar";
 import { CustomerFichaDialog } from "../components/customer-ficha";
 import { CustomerPicker, type PickedCustomer } from "../components/customer-picker";
 import { DiscardOrderDialog } from "../components/discard-order-dialog";
+import { GroupDiscountDialog, MassDiscountDialog } from "../components/discount-dialogs";
 import { NO_PRICE_TEXT, PriceCell } from "../components/price-cell";
 import { INITIAL_PRODUCT_FILTERS, ProductBrowser, type ProductFilters } from "../components/product-browser";
 import { QueryError } from "../components/query-error";
@@ -51,6 +52,7 @@ import { describeApiError } from "../lib/error-message";
 import { orderReference, orderStatusLabels } from "../lib/labels";
 import {
   describeIssue,
+  discountProblemMessages,
   isLinePriceOrderable,
   lineFromOrderItem,
   lineFromProduct,
@@ -222,6 +224,9 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
     }
   }, [removed]);
   const quantityInputs = useRef(new Map<string, HTMLInputElement>());
+  const discountInputs = useRef(new Map<string, HTMLInputElement>());
+  const [massDiscountOpen, setMassDiscountOpen] = useState(false);
+  const [groupDiscountOpen, setGroupDiscountOpen] = useState(false);
   /** "Produtos" (catalog table) or "Carrinho" (the order lines); a saved order with items opens on the cart. */
   const [view, setView] = useState<ItemsView>(order && order.items.length > 0 ? "carrinho" : "produtos");
   const cartQuantities = useMemo(() => new Map(lines.map((line) => [line.productCode, line.quantityText])), [lines]);
@@ -244,7 +249,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
     negotiation: number | null | undefined;
     notes: string;
     lines: readonly EditorLine[];
-  }) => JSON.stringify([state.customerCode, state.negotiation, state.notes, state.lines.map((l) => [l.productCode, l.quantityText])]);
+  }) => JSON.stringify([state.customerCode, state.negotiation, state.notes, state.lines.map((l) => [l.productCode, l.quantityText, l.discountText.trim()])]);
   const [baseline] = useState(() =>
     snapshot({
       customerCode: order ? order.customerCode : (initialCustomer?.code ?? null),
@@ -429,6 +434,26 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
     else focusProductSearch();
   };
 
+  /** Enter in a discount never submits the form either: it moves to the next priced line's discount, then to the product search. */
+  const onDiscountKeyDown = (event: KeyboardEvent<HTMLInputElement>, index: number) => {
+    if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    const next = lines.slice(index + 1).find((line) => line.price.state !== "none");
+    if (next) discountInputs.current.get(next.key)?.focus();
+    else focusProductSearch();
+  };
+
+  /** Group and mass discounts only set each line's percentage; the seller can still adjust any line afterwards. */
+  const onDiscountApplied = (next: EditorLine[], applied: number, scope: string) => {
+    setLines(next);
+    setView("carrinho");
+    toast({
+      title: applied === 0 ? "Nenhum item recebeu desconto" : "Desconto aplicado",
+      description: applied === 0 ? "Itens sem preço não recebem desconto." : `${applied === 1 ? "1 item" : `${applied} itens`} ${scope}`,
+      tone: applied === 0 ? "warning" : "success",
+    });
+  };
+
   const updateLine = (key: string, patch: Partial<EditorLine>) =>
     setLines((current) => current.map((line) => (line.key === key ? { ...line, ...patch } : line)));
 
@@ -551,6 +576,28 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
                 >
                   Lançamento múltiplo
                 </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="rounded-full"
+                  leftIcon={<Percent size={13} aria-hidden="true" />}
+                  disabled={lines.length === 0}
+                  title={lines.length === 0 ? "Adicione itens ao carrinho para aplicar desconto" : undefined}
+                  onClick={() => setGroupDiscountOpen(true)}
+                >
+                  Desconto por grupo
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="rounded-full"
+                  leftIcon={<Percent size={13} aria-hidden="true" />}
+                  disabled={lines.length === 0}
+                  title={lines.length === 0 ? "Adicione itens ao carrinho para aplicar desconto" : undefined}
+                  onClick={() => setMassDiscountOpen(true)}
+                >
+                  Desconto em massa
+                </Button>
                 {lines.length > 0 ? (
                   <Button
                     type="button"
@@ -570,12 +617,12 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
                   customerCode={customer?.code ?? null}
                   cartQuantities={cartQuantities}
                   searchId={PRODUCT_SEARCH_ID}
-                  onAdd={(product, quantityText) => {
+                  onAdd={(product, quantityText, discountText) => {
                     if (lines.some((line) => line.productCode === product.code)) {
                       toast({ title: "Produto já está no pedido", description: product.description, tone: "warning" });
                       return;
                     }
-                    setLines((current) => [...current, { ...lineFromProduct(product, nextKey()), quantityText }]);
+                    setLines((current) => [...current, { ...lineFromProduct(product, nextKey()), quantityText, discountText }]);
                   }}
                 />
               ) : null}
@@ -649,6 +696,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
                     <TableHead>Un.</TableHead>
                     <TableHead>Quantidade</TableHead>
                     <TableHead numeric>Preço unitário</TableHead>
+                    <TableHead>Desc. (%)</TableHead>
                     <TableHead numeric>Total estimado</TableHead>
                     <TableHead>
                       <span className="sr-only">Ações</span>
@@ -660,6 +708,9 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
                     const linePreview = preview.lines[index];
                     const problem = linePreview?.quantityProblem;
                     const errorId = `qty-error-${line.key}`;
+                    const discountProblem = linePreview?.discountProblem;
+                    const discountErrorId = `discount-error-${line.key}`;
+                    const noPrice = line.price.state === "none";
                     const blocked = blockedLine(line);
                     return (
                       <TableRow key={line.key}>
@@ -701,6 +752,29 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
                         </TableCell>
                         <TableCell numeric>
                           <PriceCell price={listPriceOfLine(line.price)} />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            size="sm"
+                            inputMode="decimal"
+                            autoComplete="off"
+                            wrapperClassName="w-[90px]"
+                            placeholder={noPrice ? "—" : "0"}
+                            value={noPrice ? "" : line.discountText}
+                            readOnly={readOnly}
+                            disabled={noPrice}
+                            title={noPrice ? "Item sem preço não recebe desconto" : undefined}
+                            aria-label={`Desconto de ${line.description} (%)`}
+                            aria-invalid={discountProblem ? true : undefined}
+                            aria-describedby={discountProblem ? discountErrorId : undefined}
+                            onChange={(event) => updateLine(line.key, { discountText: event.target.value })}
+                            onKeyDown={(event) => onDiscountKeyDown(event, index)}
+                            ref={(element) => {
+                              if (element) discountInputs.current.set(line.key, element);
+                              else discountInputs.current.delete(line.key);
+                            }}
+                          />
+                          {discountProblem ? <FieldError id={discountErrorId}>{discountProblemMessages[discountProblem]}</FieldError> : null}
                         </TableCell>
                         <TableCell numeric>
                           <Money
@@ -745,6 +819,22 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
                   </dd>
                 </div>
               ) : null}
+              {preview.discounts.discountedLineCount > 0 ? (
+                <>
+                  <div className="flex items-baseline gap-2">
+                    <dt className="text-fg-muted">Subtotal (tabela)</dt>
+                    <dd className="m-0 font-medium" data-testid="order-list-total">
+                      <Money value={preview.discounts.listTotal} />
+                    </dd>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <dt className="text-fg-muted">Descontos</dt>
+                    <dd className="m-0 font-medium text-danger" data-testid="order-discount-total">
+                      − <Money value={preview.discounts.discountTotal} />
+                    </dd>
+                  </div>
+                </>
+              ) : null}
               <div className="flex items-baseline gap-2">
                 <dt className="text-fg-muted">{preview.totals.isPartial ? "Total parcial estimado" : "Total estimado"}</dt>
                 <dd className="m-0 text-lg font-semibold" data-testid="order-total">
@@ -755,8 +845,8 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
             {cartSummary.invalidLineCount > 0 ? (
               <p className="m-0 mt-1 text-right text-xs text-danger">
                 {cartSummary.invalidLineCount === 1
-                  ? "1 item com quantidade inválida não entra na soma."
-                  : `${cartSummary.invalidLineCount} itens com quantidade inválida não entram na soma.`}
+                  ? "1 item com quantidade ou desconto inválido não entra na soma."
+                  : `${cartSummary.invalidLineCount} itens com quantidade ou desconto inválido não entram na soma.`}
               </p>
             ) : null}
             {preview.totals.isPartial ? (
@@ -767,8 +857,8 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
               </p>
             ) : null}
             <FieldHint className="mt-1 text-right">
-              Estimativa pelos preços de lista. Desconto, condição de pagamento e análise de crédito ainda não estão disponíveis nesta
-              versão.
+              Estimativa pelos preços de lista e descontos informados. O desconto é gravado no rascunho; a aprovação por alçada, a
+              condição de pagamento e a análise de crédito ainda não estão disponíveis nesta versão.
             </FieldHint>
           </CardBody>
         </Card>
@@ -898,6 +988,19 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
           triggerRef={bulkEntryTriggerRef}
         />
       ) : null}
+
+      <MassDiscountDialog
+        open={massDiscountOpen}
+        onOpenChange={setMassDiscountOpen}
+        lines={lines}
+        onApply={(next, applied, text) => onDiscountApplied(next, applied, text === "" ? "sem desconto" : `com ${text}% de desconto`)}
+      />
+      <GroupDiscountDialog
+        open={groupDiscountOpen}
+        onOpenChange={setGroupDiscountOpen}
+        lines={lines}
+        onApply={(next, applied) => onDiscountApplied(next, applied, "com desconto por grupo")}
+      />
 
       {customer ? <CustomerFichaDialog customerCode={customer.code} open={fichaOpen} onOpenChange={setFichaOpen} /> : null}
 

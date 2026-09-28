@@ -105,6 +105,7 @@ export function orderItem(overrides: Partial<ApiSchema<"OrderItem">> = {}): ApiS
     unit: "PCT",
     quantity: "2",
     unitListPrice: "12.5",
+    discountPercent: "0",
     priceState: "priced",
     priceTableCode: 5,
     priceVersionId: 9,
