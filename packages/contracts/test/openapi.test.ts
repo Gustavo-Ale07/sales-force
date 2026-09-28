@@ -104,6 +104,7 @@ describe('OpenAPI generation', () => {
       doc['components'] as { schemas: Record<string, { properties: Record<string, unknown> }> }
     ).schemas;
     expect(Object.keys(schemas['OrderItemInput']?.properties ?? {}).sort()).toEqual([
+      'discountPercent',
       'productCode',
       'quantity',
     ]);

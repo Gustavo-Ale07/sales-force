@@ -3710,6 +3710,9 @@
               }
             ]
           },
+          "discountPercent": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
           "estimatedLineTotal": {
             "anyOf": [
               {
@@ -3731,6 +3734,7 @@
           "priceState",
           "priceTableCode",
           "priceVersionId",
+          "discountPercent",
           "estimatedLineTotal"
         ],
         "additionalProperties": false
@@ -3743,6 +3747,9 @@
             "minimum": 0
           },
           "quantity": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "discountPercent": {
             "$ref": "#/components/schemas/DecimalString"
           }
         },

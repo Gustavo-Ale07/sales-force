@@ -30,6 +30,7 @@ export const DraftIssueCodeSchema = named(
     'invalid_line_number',
     'duplicate_line_number',
     'invalid_quantity',
+    'invalid_discount',
     'price_state_inconsistent',
     'price_reference_missing',
     'line_total_mismatch',
@@ -129,7 +130,9 @@ export const OrderItemSchema = named(
     priceState: ListPriceStateSchema,
     priceTableCode: codeInt().nullable(),
     priceVersionId: codeInt().nullable(),
-    /** Estimate from list price only; `null` when the price state is `none`. */
+    /** Percentage discount on the list price (`"0"` when none). Approval by authority is not modelled yet (P-10; R35/R36). */
+    discountPercent: DecimalStringSchema,
+    /** Estimate from the list price with the line discount; `null` when the price state is `none`. */
     estimatedLineTotal: DecimalStringSchema.nullable(),
   }),
 );
@@ -166,7 +169,7 @@ export const OrderPathSchema = z.object({ id: UuidSchema });
 export const MAX_ORDER_ITEMS = 500;
 
 /**
- * A requested line: product and quantity only. Prices, totals and descriptions are always
+ * A requested line: product, quantity and an optional discount percentage. Prices, totals and descriptions are always
  * resolved server-side from the mirror; a client-sent price is rejected (unrecognized key), never
  * silently ignored (P-09).
  */
@@ -176,6 +179,8 @@ export const OrderItemInputSchema = named(
     productCode: codeInt(),
     /** Positive decimal string with at most 4 decimals (validated again by the domain). */
     quantity: DecimalStringSchema,
+    /** Percentage discount on the list price, 0 to 99.99 with at most 2 decimals; omitted means 0. Validated again by the domain. */
+    discountPercent: DecimalStringSchema.optional(),
   }),
 );
 export type OrderItemInput = z.infer<typeof OrderItemInputSchema>;

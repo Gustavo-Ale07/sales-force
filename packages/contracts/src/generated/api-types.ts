@@ -762,11 +762,13 @@ export interface components {
             priceState: components["schemas"]["ListPriceState"];
             priceTableCode: number | null;
             priceVersionId: number | null;
+            discountPercent: components["schemas"]["DecimalString"];
             estimatedLineTotal: components["schemas"]["DecimalString"] | null;
         };
         OrderItemInput: {
             productCode: number;
             quantity: components["schemas"]["DecimalString"];
+            discountPercent?: components["schemas"]["DecimalString"];
         };
         OrderListItem: {
             /** Format: uuid */
