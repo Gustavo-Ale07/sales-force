@@ -169,6 +169,29 @@ export const ConfigurationSummarySchema = named(
 );
 export type ConfigurationSummary = z.infer<typeof ConfigurationSummarySchema>;
 
+/**
+ * Minimal configuration slice for the order-entry screen ("Novo pedido"): open to every role that
+ * can create an order (seller/manager/admin), unlike `/configuration` (admin-only). Explicit field
+ * list, extracted directly from the domain configuration — never a slice of `ConfigurationSummary`,
+ * so nothing broader (customers, pricing, financial, sync/integration state) is ever assembled for a
+ * non-admin request.
+ */
+export const OrderEntryConfigurationSchema = named(
+  'OrderEntryConfiguration',
+  z.object({
+    general: z.strictObject({ enabled: z.boolean() }),
+    sales: z.strictObject({
+      defaultNegotiationTypeCode: codeInt().nullable(),
+      negotiationTypes: z.array(NegotiationTypeSchema),
+      orderBehavior: z.strictObject({ allowDraftWithoutPrice: z.boolean() }),
+    }),
+    products: z.strictObject({
+      productWithoutPrice: z.strictObject({ orderable: z.boolean() }),
+    }),
+  }),
+);
+export type OrderEntryConfiguration = z.infer<typeof OrderEntryConfigurationSchema>;
+
 export const SyncStatusSchema = named(
   'SyncStatus',
   z.enum(['idle', 'running', 'succeeded', 'failed']),

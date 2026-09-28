@@ -43,6 +43,9 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   // "Usuários, integrações, configurações: Admin" (project-spec 8.2, default matrix). ASSUMPTION:
   // the contract lists 403 for this route but names no role; admin-only is the least privilege.
   getConfiguration: { roles: INTEGRATION_ROLES },
+  // Minimal order-entry slice (never syncStates/gateway/integration/customers/pricing/financial):
+  // open to every role that can create an order (seller/manager/admin), unlike getConfiguration above.
+  getOrderEntryConfiguration: { roles: EVERY_ROLE },
   // Commercial routes (Stage 3A). Each is open to the three roles the schema has; WHICH rows a
   // caller sees is the data scope (`resolveCustomerScope`), never this table. An external
   // representative role does not exist yet (AUTH-3 PROPOSED): when it does it gets no line here

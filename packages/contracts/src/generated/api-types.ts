@@ -121,6 +121,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/order-entry/configuration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Minimal configuration slice for the order-entry screen
+         * @description Only the fields order-editor needs (general.enabled, sales.negotiationTypes/defaultNegotiationTypeCode/orderBehavior, products.productWithoutPrice.orderable). Never the admin-only /configuration payload.
+         */
+        get: operations["getOrderEntryConfiguration"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dashboard": {
         parameters: {
             query?: never;
@@ -715,6 +735,23 @@ export interface components {
             items: components["schemas"]["OrderItem"][];
             totals: components["schemas"]["OrderTotals"];
         };
+        OrderEntryConfiguration: {
+            general: {
+                enabled: boolean;
+            };
+            sales: {
+                defaultNegotiationTypeCode: number | null;
+                negotiationTypes: components["schemas"]["NegotiationType"][];
+                orderBehavior: {
+                    allowDraftWithoutPrice: boolean;
+                };
+            };
+            products: {
+                productWithoutPrice: {
+                    orderable: boolean;
+                };
+            };
+        };
         OrderItem: {
             lineNo: number;
             productCode: number;
@@ -1113,6 +1150,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConfigurationResponse"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Serviço indisponível */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    getOrderEntryConfiguration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Configuração mínima do fluxo de pedido */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderEntryConfiguration"];
                 };
             };
             /** @description Não autenticado */

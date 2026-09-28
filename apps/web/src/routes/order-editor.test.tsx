@@ -3,11 +3,11 @@ import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import {
   ORDER_ID,
-  configuration,
   customer,
   customerDetail,
   customersPage,
   ordersPage,
+  orderEntryConfiguration,
   orderListItem,
   noPriceList,
   orderDetail,
@@ -43,8 +43,10 @@ async function addProduct(user: ReturnType<typeof renderApp>["user"], descriptio
   await user.click(screen.getByRole("button", { name: /^Carrinho/ }));
 }
 
-const withConfiguration = (patch: (config: ApiSchema<"ConfigurationSummary">) => ApiSchema<"ConfigurationSummary">): Handlers => ({
-  "GET /configuration": { body: { ...configuration, configuration: patch(configuration.configuration) } },
+const withOrderEntryConfiguration = (
+  patch: (config: ApiSchema<"OrderEntryConfiguration">) => ApiSchema<"OrderEntryConfiguration">,
+): Handlers => ({
+  "GET /order-entry/configuration": { body: patch(orderEntryConfiguration) },
 });
 
 describe("Novo pedido", () => {
@@ -461,7 +463,7 @@ describe("Novo pedido", () => {
     it("does not let a product without price be selected when the installation forbids it", async () => {
       const { user } = renderApp("/pedidos/novo?customer=1001", {
         handlers: newOrderHandlers(
-          withConfiguration((config) => ({ ...config, sales: { ...config.sales, orderBehavior: { allowDraftWithoutPrice: false } } })),
+          withOrderEntryConfiguration((config) => ({ ...config, sales: { ...config.sales, orderBehavior: { allowDraftWithoutPrice: false } } })),
         ),
       });
       const dialog = await open(user);
@@ -589,7 +591,7 @@ describe("Novo pedido", () => {
   it("blocks saving a line without price when the installation does not allow it", async () => {
     const { user } = renderApp("/pedidos/novo?customer=1001", {
       handlers: newOrderHandlers(
-        withConfiguration((config) => ({ ...config, sales: { ...config.sales, orderBehavior: { allowDraftWithoutPrice: false } } })),
+        withOrderEntryConfiguration((config) => ({ ...config, sales: { ...config.sales, orderBehavior: { allowDraftWithoutPrice: false } } })),
       ),
     });
     await addProduct(user, "Vela");
@@ -600,7 +602,7 @@ describe("Novo pedido", () => {
 
   it("warns and blocks saving when the installation is not enabled for orders", async () => {
     const { user } = renderApp("/pedidos/novo?customer=1001", {
-      handlers: newOrderHandlers(withConfiguration((config) => ({ ...config, general: { ...config.general, enabled: false } }))),
+      handlers: newOrderHandlers(withOrderEntryConfiguration((config) => ({ ...config, general: { ...config.general, enabled: false } }))),
     });
     expect(await screen.findByText("Pedidos ainda não habilitados")).toBeInTheDocument();
     await addProduct(user, "Balão");
@@ -627,6 +629,54 @@ describe("Novo pedido", () => {
     const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: newOrderHandlers() });
     await addProduct(user, "Balão");
     expect(document.body.textContent).not.toMatch(FORBIDDEN_TERMS);
+  });
+});
+
+// Regression coverage for the fix to a real bug: order-editor used to call the admin-only GET /configuration,
+// which 403s for sellers/managers. It must use the dedicated, session-scoped GET /order-entry/configuration.
+describe("order-entry configuration source", () => {
+  it("loads via GET /order-entry/configuration, never the admin-only GET /configuration", async () => {
+    const { calls } = renderApp("/pedidos/novo?customer=1001", { handlers: newOrderHandlers() });
+    await screen.findByRole("heading", { name: /^Novo pedido/ });
+    await waitFor(() => expect(callsTo(calls, "GET", "/order-entry/configuration")).toHaveLength(1));
+    expect(callsTo(calls, "GET", "/configuration")).toHaveLength(0);
+  });
+
+  it("populates the negotiation type selector from the endpoint response", async () => {
+    renderApp("/pedidos/novo?customer=1001", {
+      handlers: newOrderHandlers(
+        withOrderEntryConfiguration((config) => ({
+          ...config,
+          sales: {
+            ...config.sales,
+            defaultNegotiationTypeCode: 9,
+            negotiationTypes: [
+              { code: 9, label: "Faturado 60 dias" },
+              { code: 10, label: "Cartão" },
+            ],
+          },
+        })),
+      ),
+    });
+    const select = await screen.findByRole("combobox", { name: "Tipo de negociação" });
+    await waitFor(() => expect(select).toBeEnabled());
+    expect(within(select).getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "Não informado",
+      "Faturado 60 dias",
+      "Cartão",
+    ]);
+    expect(select).toHaveValue("9");
+  });
+
+  it("does not silently fall back to an empty configuration when the endpoint succeeds", async () => {
+    const { user } = renderApp("/pedidos/novo?customer=1001", {
+      handlers: newOrderHandlers(
+        withOrderEntryConfiguration((config) => ({ ...config, sales: { ...config.sales, orderBehavior: { allowDraftWithoutPrice: false } } })),
+      ),
+    });
+    // If the response were silently ignored, the installation's real "no price = not orderable" rule would not apply.
+    await addProduct(user, "Vela");
+    expect(await screen.findByText("Este item não pode ser pedido sem preço nesta instalação.")).toBeInTheDocument();
   });
 });
 

@@ -45,7 +45,7 @@ import { QueryError } from "../components/query-error";
 import { SaveTemplateDialog } from "../components/save-template-dialog";
 import { ApiRequestError } from "../lib/api";
 import { ERP_SUBMISSION_DISABLED, createOrder, replaceOrder, submitOrder } from "../lib/api-mutations";
-import { configurationQueryOptions, customerQueryOptions, orderQueryOptions, queryKeys } from "../lib/api-queries";
+import { orderEntryConfigurationQueryOptions, customerQueryOptions, orderQueryOptions, queryKeys } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { describeApiError } from "../lib/error-message";
 import { orderReference, orderStatusLabels } from "../lib/labels";
@@ -182,7 +182,7 @@ interface EditorProps {
 function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: EditorProps) {
   const api = useApi();
   const queryClient = useQueryClient();
-  const config = useQuery(configurationQueryOptions(api));
+  const config = useQuery(orderEntryConfigurationQueryOptions(api));
 
   const readOnly = order !== null && order.status !== "draft";
   const lineCounter = useRef(0);
@@ -236,7 +236,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
   }, [searchFocusRequest]);
 
   const negotiationTypeCode =
-    negotiationChoice !== undefined ? negotiationChoice : (config.data?.configuration.sales.defaultNegotiationTypeCode ?? null);
+    negotiationChoice !== undefined ? negotiationChoice : (config.data?.sales.defaultNegotiationTypeCode ?? null);
 
   const snapshot = (state: {
     customerCode: number | null;
@@ -276,8 +276,8 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
   const cartSummary = useMemo(() => summarizeCart(lines, preview.lines), [lines, preview]);
   /** Bulk removals of more than one line (and "Limpar carrinho") ask first; a single line goes away at once and can be undone. */
   const [confirmRemoval, setConfirmRemoval] = useState<"selected" | "all" | null>(null);
-  const installationEnabled = config.data?.configuration.general.enabled ?? true;
-  const blockedLine = (line: EditorLine) => config.data !== undefined && !isLinePriceOrderable(line.price.state, config.data.configuration);
+  const installationEnabled = config.data?.general.enabled ?? true;
+  const blockedLine = (line: EditorLine) => config.data !== undefined && !isLinePriceOrderable(line.price.state, config.data);
   const hasBlockedLines = lines.some(blockedLine);
 
   // One idempotency key per distinct payload: a retry after a lost response resends the same key, an edited payload gets a new one.
@@ -364,7 +364,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
     existingCodes: new Set(lines.map((line) => line.productCode)),
     // Until the configuration loads nothing is blocked here; the server revalidates every line on save.
     isPriceOrderable: (state: "priced" | "zero" | "none") =>
-      config.data === undefined || isLinePriceOrderable(state, config.data.configuration),
+      config.data === undefined || isLinePriceOrderable(state, config.data),
   };
 
   const selectedLines = lines.filter((line) => selected.has(line.key));
@@ -453,7 +453,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
       </div>
     ) : null;
 
-  const negotiationTypes = config.data?.configuration.sales.negotiationTypes ?? [];
+  const negotiationTypes = config.data?.sales.negotiationTypes ?? [];
   const submitFailure =
     submit.isError && !(submit.error instanceof ApiRequestError && submit.error.code === ERP_SUBMISSION_DISABLED)
       ? describeApiError(submit.error, "Não foi possível enviar o pedido")

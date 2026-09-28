@@ -10,7 +10,7 @@ import { AppServicesProvider } from "../lib/app-context";
 import type { AuthClient } from "../lib/auth-client";
 import { defaultRuntimeConfig, type RuntimeConfig } from "../lib/runtime-config";
 import { createAppRouter } from "../router";
-import { account, configuration, ready } from "./fixtures";
+import { account, configuration, orderEntryConfiguration, ready } from "./fixtures";
 
 export interface MockRequest {
   method: string;
@@ -113,6 +113,7 @@ export function renderApp(initialPath: string, options: RenderOptions = {}) {
     "GET /auth/session": session(signedIn, role),
     "GET /ready": { body: ready },
     "GET /configuration": { body: configuration },
+    "GET /order-entry/configuration": { body: orderEntryConfiguration },
     ...handlers,
   });
   const api = createWebApiClient({ fetch: mock.fetch, origin: "http://localhost" });

@@ -10,7 +10,7 @@ import {
   ResolveProductsRequestSchema,
   ResolveProductsResponseSchema,
 } from './catalog.js';
-import { ConfigurationResponseSchema } from './configuration.js';
+import { ConfigurationResponseSchema, OrderEntryConfigurationSchema } from './configuration.js';
 import {
   CustomerDetailSchema,
   CustomerPathSchema,
@@ -165,6 +165,20 @@ export const routes = {
     responses: {
       200: { description: 'Configuração vigente', schema: ConfigurationResponseSchema },
     },
+    errors: [401, 403, 503],
+  }),
+
+  getOrderEntryConfiguration: defineRoute({
+    operationId: 'getOrderEntryConfiguration',
+    method: 'get',
+    path: '/order-entry/configuration',
+    tags: ['configuration'],
+    summary: 'Minimal configuration slice for the order-entry screen',
+    description:
+      'Only the fields order-editor needs (general.enabled, sales.negotiationTypes/defaultNegotiationTypeCode/orderBehavior, products.productWithoutPrice.orderable). Never the admin-only /configuration payload.',
+    auth: 'session',
+    request: {},
+    responses: { 200: { description: 'Configuração mínima do fluxo de pedido', schema: OrderEntryConfigurationSchema } },
     errors: [401, 403, 503],
   }),
 

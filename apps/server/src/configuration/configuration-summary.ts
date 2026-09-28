@@ -1,4 +1,4 @@
-import type { ConfigurationResponse, ConfigurationSummary, SyncState } from '@salesforce/contracts';
+import type { ConfigurationResponse, ConfigurationSummary, OrderEntryConfiguration, SyncState } from '@salesforce/contracts';
 import type { syncState } from '@salesforce/db';
 import type { InstallationConfiguration } from '@salesforce/domain';
 import { summarizeIntegration } from '../platform/integration-summary.js';
@@ -45,6 +45,26 @@ export function toConfigurationSummary(configuration: InstallationConfiguration)
     pricing: { ...configuration.pricing },
     financial: { ...configuration.financial },
     features: { ...configuration.features },
+  };
+}
+
+/**
+ * `GET /order-entry/configuration` body: the minimal slice the "Novo pedido" screen reads, open to
+ * seller/manager/admin (unlike `/configuration`, admin-only). Extracted directly from the domain
+ * configuration — never built from `toConfigurationSummary` — so nothing broader (customers,
+ * pricing, financial, sync/integration state) is ever assembled in memory for a non-admin request.
+ */
+export function toOrderEntryConfiguration(configuration: InstallationConfiguration): OrderEntryConfiguration {
+  return {
+    general: { enabled: configuration.general.enabled },
+    sales: {
+      defaultNegotiationTypeCode: configuration.sales.defaultNegotiationTypeCode,
+      negotiationTypes: configuration.sales.negotiationTypes.map((type) => ({ code: type.code, label: type.label })),
+      orderBehavior: { allowDraftWithoutPrice: configuration.sales.orderBehavior.allowDraftWithoutPrice },
+    },
+    products: {
+      productWithoutPrice: { orderable: configuration.products.productWithoutPrice.orderable },
+    },
   };
 }
 

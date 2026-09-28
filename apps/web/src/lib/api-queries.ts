@@ -21,6 +21,7 @@ export type OrdersParams = Query<"/orders">;
 export const queryKeys = {
   ready: ["ready"] as const,
   configuration: ["configuration"] as const,
+  orderEntryConfiguration: ["order-entry-configuration"] as const,
   dashboard: ["dashboard"] as const,
   sellers: ["sellers"] as const,
   customers: (params: CustomersParams) => ["customers", "list", params] as const,
@@ -61,6 +62,13 @@ export function configurationQueryOptions(api: ApiClient) {
   return queryOptions({
     queryKey: queryKeys.configuration,
     queryFn: () => callApi(() => api.GET("/configuration")),
+  });
+}
+
+export function orderEntryConfigurationQueryOptions(api: ApiClient) {
+  return queryOptions({
+    queryKey: queryKeys.orderEntryConfiguration,
+    queryFn: () => callApi(() => api.GET("/order-entry/configuration")),
   });
 }
 

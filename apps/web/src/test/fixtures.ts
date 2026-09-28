@@ -239,6 +239,20 @@ export const configuration: ApiSchema<"ConfigurationResponse"> = {
   integration: integrationFake,
 };
 
+/** Mirrors the fields `getOrderEntryConfiguration` slices out of the full configuration, for the order-editor screen. */
+export const orderEntryConfiguration: ApiSchema<"OrderEntryConfiguration"> = {
+  general: { enabled: true },
+  sales: {
+    defaultNegotiationTypeCode: 3,
+    negotiationTypes: [
+      { code: 3, label: "À vista" },
+      { code: 4, label: "30 dias" },
+    ],
+    orderBehavior: { allowDraftWithoutPrice: true },
+  },
+  products: { productWithoutPrice: { orderable: true } },
+};
+
 export const ready: ApiSchema<"ReadyResponse"> = {
   status: "ready",
   checks: { database: "ok", migrations: { status: "ok", applied: "0001", expected: "0001" } },

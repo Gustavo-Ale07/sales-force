@@ -273,6 +273,58 @@
         }
       }
     },
+    "/order-entry/configuration": {
+      "get": {
+        "operationId": "getOrderEntryConfiguration",
+        "tags": [
+          "configuration"
+        ],
+        "summary": "Minimal configuration slice for the order-entry screen",
+        "description": "Only the fields order-editor needs (general.enabled, sales.negotiationTypes/defaultNegotiationTypeCode/orderBehavior, products.productWithoutPrice.orderable). Never the admin-only /configuration payload.",
+        "responses": {
+          "200": {
+            "description": "Configuração mínima do fluxo de pedido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderEntryConfiguration"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Serviço indisponível",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/dashboard": {
       "get": {
         "operationId": "getDashboard",
@@ -3516,6 +3568,90 @@
           "notes",
           "items",
           "totals"
+        ],
+        "additionalProperties": false
+      },
+      "OrderEntryConfiguration": {
+        "type": "object",
+        "properties": {
+          "general": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "enabled"
+            ],
+            "additionalProperties": false
+          },
+          "sales": {
+            "type": "object",
+            "properties": {
+              "defaultNegotiationTypeCode": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "negotiationTypes": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/NegotiationType"
+                }
+              },
+              "orderBehavior": {
+                "type": "object",
+                "properties": {
+                  "allowDraftWithoutPrice": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "allowDraftWithoutPrice"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "defaultNegotiationTypeCode",
+              "negotiationTypes",
+              "orderBehavior"
+            ],
+            "additionalProperties": false
+          },
+          "products": {
+            "type": "object",
+            "properties": {
+              "productWithoutPrice": {
+                "type": "object",
+                "properties": {
+                  "orderable": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "orderable"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "productWithoutPrice"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "general",
+          "sales",
+          "products"
         ],
         "additionalProperties": false
       },

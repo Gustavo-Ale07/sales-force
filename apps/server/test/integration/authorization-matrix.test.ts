@@ -21,6 +21,8 @@ type Expectation = 'allow' | 'deny';
 const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>>> = {
   logout: { admin: 'allow', manager: 'allow', seller: 'allow' },
   getConfiguration: { admin: 'allow', manager: 'deny', seller: 'deny' },
+  // Minimal order-entry slice: every role that can create an order needs it (unlike getConfiguration above).
+  getOrderEntryConfiguration: { admin: 'allow', manager: 'allow', seller: 'allow' },
   // Commercial routes (Stage 3A). The three roles that exist may use them; the external
   // representative role does not exist yet (AUTH-3 PROPOSED) and gets no grant until the owner decides.
   getDashboard: { admin: 'allow', manager: 'allow', seller: 'allow' },
