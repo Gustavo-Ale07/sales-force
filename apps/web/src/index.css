@@ -4,6 +4,16 @@
 /* Tailwind must scan the design-system sources too (they live outside this app). */
 @source "../../../packages/ui/src";
 
+/* CSP (deploy/nginx/default.conf) has no unsafe-inline/hash/nonce for style-src, which blocks the
+   <style> tag react-remove-scroll-bar injects to lock body scroll under Radix Dialog/Popover/Command
+   overlays (no nonce or stable-hash option exists in the installed react-style-singleton version —
+   verified by reading its source/types). It still sets body[data-scroll-locked] via a separate,
+   unrelated effect, so we lock scroll ourselves from our own stylesheet instead of an inline style. */
+body[data-scroll-locked] {
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
 /* Boot screen (see index.html): centred mark, message and an indeterminate bar, fading in so a fast start does not flash. */
 .sf-boot {
   display: flex;
