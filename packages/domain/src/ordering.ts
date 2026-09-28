@@ -1,12 +1,15 @@
 import type { InstallationConfiguration } from './configuration.js';
 import type { OrderItem, Product, ResolvedPrice } from './entities.js';
 import {
+  computeDiscountedLineTotal,
   computeLineTotal,
   decimalEquals,
   isDecimalString,
   isTotalInRange,
   isZeroDecimal,
+  subtractTotals,
   sumTotals,
+  validateDiscountPercent,
   validateQuantity,
   type DecimalError,
   type DecimalString,
@@ -33,6 +36,8 @@ export interface BuildOrderItemInput {
   readonly quantity: string;
   /** Price resolved server-side. Client-sent prices are never an input. */
   readonly price: ResolvedPrice;
+  /** Percentage discount on the list price as a decimal string; "0" when omitted. Validated here. */
+  readonly discountPercent?: string;
 }
 
 /**
@@ -43,6 +48,9 @@ export function buildOrderItem(input: BuildOrderItemInput): Result<OrderItem, De
   const quantity = validateQuantity(input.quantity);
   if (!quantity.ok) return err(quantity.error);
 
+  const discount = validateDiscountPercent(input.discountPercent ?? '0');
+  if (!discount.ok) return err(discount.error);
+
   const { price } = input;
   const base = {
     lineNo: input.lineNo,
@@ -50,6 +58,7 @@ export function buildOrderItem(input: BuildOrderItemInput): Result<OrderItem, De
     productDescription: input.product.description,
     unit: input.product.unit,
     quantity: quantity.value,
+    discountPercent: discount.value,
   };
 
   if (price.state === 'none') {
@@ -68,7 +77,7 @@ export function buildOrderItem(input: BuildOrderItemInput): Result<OrderItem, De
     priceState: price.state,
     priceTableCode: price.tableCode,
     priceVersionId: price.versionId,
-    estimatedLineTotal: computeLineTotal(quantity.value, price.unitPrice),
+    estimatedLineTotal: computeDiscountedLineTotal(quantity.value, price.unitPrice, discount.value),
   });
 }
 
@@ -96,12 +105,36 @@ export function computeOrderTotals(items: readonly OrderItem[]): OrderTotals {
   };
 }
 
+export interface OrderDiscountSummary {
+  /** Sum of quantity x list price of the priced lines, before any discount. */
+  readonly listTotal: DecimalString;
+  /** What the line discounts take off the list total (`listTotal` minus the estimated total of the priced lines). */
+  readonly discountTotal: DecimalString;
+  readonly discountedLineCount: number;
+}
+
+/** Totals before discount and the amount discounted, from the lines the domain built. Lines without a price contribute nothing. */
+export function computeDiscountSummary(items: readonly OrderItem[]): OrderDiscountSummary {
+  const lists: DecimalString[] = [];
+  const nets: DecimalString[] = [];
+  let discounted = 0;
+  for (const item of items) {
+    if (item.unitListPrice === null || item.estimatedLineTotal === null) continue;
+    lists.push(computeLineTotal(item.quantity, item.unitListPrice));
+    nets.push(item.estimatedLineTotal);
+    if (!isZeroDecimal(item.discountPercent)) discounted += 1;
+  }
+  const listTotal = sumTotals(lists);
+  return { listTotal, discountTotal: subtractTotals(listTotal, sumTotals(nets)), discountedLineCount: discounted };
+}
+
 export type DraftIssueCode =
   | 'installation_not_enabled'
   | 'status_not_editable'
   | 'invalid_line_number'
   | 'duplicate_line_number'
   | 'invalid_quantity'
+  | 'invalid_discount'
   | 'price_state_inconsistent'
   | 'price_reference_missing'
   | 'line_total_mismatch'
@@ -153,6 +186,11 @@ export function validateDraftInvariants(
     seenLines.add(item.lineNo);
 
     if (!validateQuantity(item.quantity).ok) add('invalid_quantity', `${at}.quantity`);
+    if (!validateDiscountPercent(item.discountPercent).ok) add('invalid_discount', `${at}.discountPercent`);
+    else if (item.priceState === 'none' && !isZeroDecimal(item.discountPercent)) {
+      // A discount needs a price to apply to; a missing price is never treated as 0 (P-09).
+      add('invalid_discount', `${at}.discountPercent`);
+    }
 
     checkPriceConsistency(item, at, add);
 
@@ -206,8 +244,8 @@ function checkPriceConsistency(
     add('line_total_mismatch', `${at}.estimatedLineTotal`);
     return;
   }
-  if (validateQuantity(item.quantity).ok) {
-    const expected = computeLineTotal(item.quantity, item.unitListPrice);
+  if (validateQuantity(item.quantity).ok && validateDiscountPercent(item.discountPercent).ok) {
+    const expected = computeDiscountedLineTotal(item.quantity, item.unitListPrice, item.discountPercent);
     if (!decimalEquals(expected, item.estimatedLineTotal)) {
       add('line_total_mismatch', `${at}.estimatedLineTotal`);
     }

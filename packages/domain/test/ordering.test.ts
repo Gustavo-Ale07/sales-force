@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildOrderItem,
+  computeDiscountSummary,
   computeOrderTotals,
   validateDraftInvariants,
   type InstallationConfiguration,
@@ -53,7 +54,45 @@ describe('buildOrderItem', () => {
       priceState: 'priced',
       priceTableCode: 88,
       priceVersionId: 4,
+      discountPercent: '0',
       estimatedLineTotal: '1.01',
+    });
+  });
+
+  describe('line discount', () => {
+    const build = (discountPercent: string, price = priced('10')) =>
+      buildOrderItem({ lineNo: 1, product, quantity: '3', price, discountPercent });
+
+    it('applies the percentage on the list price and rounds the line total once', () => {
+      expect(build('10')).toMatchObject({ ok: true, value: { discountPercent: '10', estimatedLineTotal: '27.00' } });
+      expect(build('12.5')).toMatchObject({ value: { discountPercent: '12.5', estimatedLineTotal: '26.25' } });
+      // 3 x 0.335 x 0.9 = 0.9045 -> 0.90 (one rounding of the exact product)
+      expect(buildOrderItem({ lineNo: 1, product, quantity: '3', price: priced('0.335'), discountPercent: '10' })).toMatchObject({
+        value: { estimatedLineTotal: '0.90' },
+      });
+    });
+
+    it('keeps the plain total when the discount is 0 or omitted', () => {
+      expect(build('0')).toMatchObject({ value: { estimatedLineTotal: '30.00' } });
+      expect(item(1, '3', priced('10')).discountPercent).toBe('0');
+    });
+
+    it('a discount on a zero price stays zero; on a missing price the total stays null', () => {
+      expect(build('10', zero)).toMatchObject({ value: { estimatedLineTotal: '0.00' } });
+      expect(build('0', none)).toMatchObject({ value: { estimatedLineTotal: null } });
+    });
+
+    it.each([
+      ['-1', 'negative'],
+      ['100', 'out_of_range'],
+      ['99.999', 'too_many_decimals'],
+      ['abc', 'not_a_decimal'],
+    ])('rejects discount %j', (discountPercent, error) => {
+      expect(build(discountPercent)).toEqual({ ok: false, error });
+    });
+
+    it('accepts the technical maximum 99.99', () => {
+      expect(build('99.99')).toMatchObject({ value: { estimatedLineTotal: '0.00' } });
     });
   });
 
@@ -151,6 +190,17 @@ describe('validateDraftInvariants', () => {
     expect(codes({ ...draft([wrong]), estimatedTotal: '19.99' })).toEqual(['line_total_mismatch@items[0].estimatedLineTotal']);
   });
 
+  it('flags an invalid discount, a stale discounted total and a discount on a missing price', () => {
+    const a = item(1, '2', priced('10'));
+    expect(codes(draft([{ ...a, discountPercent: '100' }]))).toContain('invalid_discount@items[0].discountPercent');
+    // 10% discount recorded but the total was not recalculated
+    expect(codes({ ...draft([{ ...a, discountPercent: '10' }]), estimatedTotal: '20.00' })).toEqual([
+      'line_total_mismatch@items[0].estimatedLineTotal',
+    ]);
+    const missing = item(1, '2', none);
+    expect(codes(draft([{ ...missing, discountPercent: '5' }]))).toContain('invalid_discount@items[0].discountPercent');
+  });
+
   it('flags a wrong order total', () => {
     const d = draft([item(1, '2', priced('10'))], { estimatedTotal: '21.00' });
     expect(codes(d)).toEqual(['order_total_mismatch@estimatedTotal']);
@@ -218,5 +268,16 @@ describe('validateDraftInvariants', () => {
       const other = makeProduct({ code: 3001, usageCode: 'Z9' });
       expect(codes(d, config, { products: new Map([[3001, other]]) })).toEqual(['product_not_sellable@items[0].productCode']);
     });
+  });
+});
+
+describe('computeDiscountSummary', () => {
+  it('reports the list total and what the line discounts take off; unpriced lines contribute nothing', () => {
+    const a = buildOrderItem({ lineNo: 1, product, quantity: '2', price: priced('10'), discountPercent: '10' });
+    const b = buildOrderItem({ lineNo: 2, product, quantity: '1', price: priced('5.5') });
+    const c = item(3, '4', none);
+    if (!a.ok || !b.ok) throw new Error('fixture');
+    expect(computeDiscountSummary([a.value, b.value, c])).toEqual({ listTotal: '25.50', discountTotal: '2.00', discountedLineCount: 1 });
+    expect(computeDiscountSummary([])).toEqual({ listTotal: '0.00', discountTotal: '0.00', discountedLineCount: 0 });
   });
 });

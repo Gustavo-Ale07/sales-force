@@ -121,6 +121,8 @@ export interface OrderItem {
   readonly priceState: ListPriceState;
   readonly priceTableCode: number | null;
   readonly priceVersionId: number | null;
-  /** Estimate from list price only; `null` when the price state is `none`. */
+  /** Percentage discount on the list price, `"0"` when none. Whether it needs approval is not decided here (P-10; R35/R36). */
+  readonly discountPercent: DecimalString;
+  /** Estimate from the list price with the line discount; `null` when the price state is `none`. */
   readonly estimatedLineTotal: DecimalString | null;
 }

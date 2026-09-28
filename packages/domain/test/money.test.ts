@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   compareDecimalStrings,
+  computeDiscountedLineTotal,
   computeLineTotal,
+  computeNetUnitPrice,
   decimalEquals,
   isDecimalString,
   isTotalInRange,
   normalizeDecimalString,
   sumQuantities,
   sumTotals,
+  validateDiscountPercent,
   validateQuantity,
   validateUnitPrice,
 } from '../src/index.js';
@@ -136,5 +139,28 @@ describe('sumQuantities', () => {
   it('rejects malformed input', () => {
     expect(() => sumQuantities(['abc'])).toThrow(RangeError);
     expect(() => sumQuantities(['-1'])).toThrow(RangeError);
+  });
+});
+
+describe('discount', () => {
+  it('validateDiscountPercent: 0 to 99.99 with at most 2 decimals', () => {
+    expect(validateDiscountPercent('0')).toEqual({ ok: true, value: '0' });
+    expect(validateDiscountPercent('7.50')).toEqual({ ok: true, value: '7.5' });
+    expect(validateDiscountPercent('99.99')).toMatchObject({ ok: true });
+    expect(validateDiscountPercent('100')).toEqual({ ok: false, error: 'out_of_range' });
+    expect(validateDiscountPercent('1.234')).toEqual({ ok: false, error: 'too_many_decimals' });
+    expect(validateDiscountPercent('-5')).toEqual({ ok: false, error: 'negative' });
+  });
+
+  it('computeDiscountedLineTotal equals computeLineTotal at 0% and rounds once half-up', () => {
+    expect(computeDiscountedLineTotal('3', '0.335', '0')).toBe(computeLineTotal('3', '0.335'));
+    expect(computeDiscountedLineTotal('1', '10.05', '50')).toBe('5.03'); // 5.025 -> 5.03
+    expect(computeDiscountedLineTotal('7', '19.9', '33.33')).toBe('92.87');
+  });
+
+  it('computeNetUnitPrice: list x (1 - d/100), at most 6 decimals', () => {
+    expect(computeNetUnitPrice('8', '10')).toBe('7.2');
+    expect(computeNetUnitPrice('0.335', '12.5')).toBe('0.293125');
+    expect(computeNetUnitPrice('8', '0')).toBe('8');
   });
 });
