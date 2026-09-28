@@ -2,7 +2,7 @@
 
 **Responsibility of this file:** phase sequencing, Phase 0 work breakdown, parallel non-code tracks, phase gates, and open scope questions. Requirement details stay in `project-spec.md` (referenced by `RF-*` IDs); decisions stay in `decisions.md`.
 
-**Last updated:** 2026-09-16
+**Last updated:** 2026-09-28
 
 ---
 
@@ -11,7 +11,7 @@
 | Item | Status |
 |---|---|
 | Project mode | **IMPLEMENTATION, Phase 0 only** — `BEGIN IMPLEMENTATION` issued by the owner 2026-09-18 (GOV-1); anything outside the current phase, or depending on a PROPOSED/UNDECIDED decision, needs owner approval |
-| Implementation phase | Phase 0 — Foundation, **authorized 2026-09-18**. Checkpoint `b12c5af` delivered domain, db, contracts, Sankhya gateway (fake + read-only real, OAuth2 + `X-Token` from env), ui and web scaffold. **Owner instruction 2026-09-21** (recorded here as an owner instruction, not a decision-register entry): Phase 0 also delivers a working slice — `apps/server` (API + Worker), auth, installation-configuration layer without customer hardcode, health, structured logging, standard errors, sync/queue foundation, Docker dev environment and a web shell wired to the API (Login, Dashboard, Carteira, Cliente, Catálogo, Novo Pedido, Rascunhos). Order drafts only: **no ERP submission and no Sankhya write** (SNK-4, SNK-6; S3 end-to-end validation, including partial invoicing and the order → invoices link, still gates any write). Rounds 4, 5 and 7 remain PROPOSED: what is built on them is provisional and reviewed when those rounds close |
+| Implementation phase | Phase 0 — Foundation, **authorized 2026-09-18**. Checkpoint `b12c5af` delivered domain, db, contracts, Sankhya gateway (fake + read-only real, OAuth2 + `X-Token` from env), ui and web scaffold. **Owner instruction 2026-09-21** (recorded here as an owner instruction, not a decision-register entry): Phase 0 also delivers a working slice — `apps/server` (API + Worker), auth, installation-configuration layer without customer hardcode, health, structured logging, standard errors, sync/queue foundation, Docker dev environment and a web shell wired to the API (Login, Dashboard, Carteira, Cliente, Catálogo, Novo Pedido, Rascunhos). Order drafts only: **no ERP submission and no Sankhya write** (SNK-4, SNK-6; S3 end-to-end validation, including partial invoicing and the order → invoices link, still gates any write). **Owner ruling 2026-09-28** (`decisions.md` §3.9, DISC-1): Phase 0 also delivers per-item discount on order drafts, structurally bounded (0–99.99%) but with no commercial ceiling and no approval workflow — a narrow, interim exception to the Phase 1 gate below; R35/R36/R37 stay UNDECIDED and still gate full discount authority. Rounds 4, 5 and 7 remain PROPOSED: what is built on them is provisional and reviewed when those rounds close |
 | Decision rounds | Rounds 1, 2 and 3 closed 2026-09-16 (U-08 deferred to the Phase 1 gate; providers, final PostgreSQL major, pg-boss provider compatibility and Drizzle versions NEEDS VALIDATION); Round 4 open; Rounds 5 and 7 not started; Round 6 closed 2026-09-18 and the owner rulings of `decisions.md` §3.8 recorded (`decisions.md` §0) |
 | Documentation and Claude Code configuration | Drafted 2026-09-16; statuses corrected; batches 2 and 3 recorded 2026-09-16 |
 | Repository | `main` at `05ccc63` (stable); design work on `design/blueprint` |
@@ -120,7 +120,7 @@ Resolve each item before starting the Phase 1 work it blocks.
 | S7 (V-09, V-14, R12) | Mobile local database and sync sizing |
 | R05, R06, R07, R08, R09, R10, R11 | Sync push, conflicts, drafts, OTA/local migrations |
 | R16, R17, R19, R45 | Device lock, deduplication, backups, key loss |
-| R33, R35, R36, R37 | Price revision details, discount authority, approval routing, credit approver |
+| R33, R35, R36, R37 | Price revision details, discount authority, approval routing, credit approver (interim ceiling-free per-item discount already shipped in Phase 0 — `decisions.md` DISC-1, §3.9; this row is about the full authority/ceiling/approval layer, still gated) |
 | R42 | Sales document mirror depth |
 | R48, R60 | Mobile testing strategy, offline quotation PDF |
 | R14 (AUTH-3 follow-up) | Representative import UX |

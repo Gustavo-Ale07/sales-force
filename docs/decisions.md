@@ -494,6 +494,15 @@ Recorded from the project owner's instructions of 2026-09-18, after the Sandbox 
 - **Status:** APPROVED 2026-09-18
 - **Decision:** technical ERP identifiers and codes (for example `CODPARC`, `CODPROD`, `CODVEND`, `NUNOTA`, TOP, `CODTAB`/`NUTAB`) may remain in spike documentation for reproducibility, provided names, CPF/CNPJ and other legal identifiers and personal employee/customer names are sanitized and no credentials or secrets are present. This refines the identifier-remapping wording of `sankhya-spike.md` §6 rule 2 for documentation (committed fixtures keep the stricter rule).
 
+### 3.9 APPROVED — Owner ruling on interim structural per-item discount (2026-09-28)
+
+#### DISC-1 · Structural per-item discount ahead of R35/R36/R37 (interim, Phase 0)
+- **Status:** APPROVED 2026-09-28 (owner ruling, this session) · strictly interim and additive · does not resolve, and is superseded by, R35/R36/R37
+- **Decision:** Sales Force implements per-item discount in Phase 0, expressed as a percentage, bounded only by a structural/mathematical validity range of 0% to 99.99%. This range is a data-validity bound, not a commercial ceiling, alçada or discount policy, and must never be presented in the UI, documentation or code as an authorized maximum. There is no discount ceiling, no seller → manager → director routing, and no approval workflow in this phase: no `aguardando_aprovacao`, `aprovado` or `rejeitado` status is created for orders or discounts, and no per-profile limit is invented. The domain/backend stay the sole source of truth for the calculation (P-14); totals and persistence are deterministic. Order-level (global) discount stays out of this decision's scope; only the already-modeled per-item discount is finalized.
+- **Relationship to P-10:** P-10 requires discount authority (seller → manager → director) enforced server-side. This entry does not implement or claim to satisfy P-10 — it explicitly defers authority entirely, by owner instruction, rather than approximating it. The feature ships with no ceiling/approval mechanic at all until R35/R36/R37 resolve.
+- **Explicitly still open:** R35 (discount authority calculation base), R36 (approval routing, absolute ceiling, substitute approver), R37 (credit exception approver and approval order) — unchanged, UNDECIDED, and still gate full Phase 1 discount authority (§5.2). Resolving them supersedes this entry by adding a real ceiling/approval layer on top of the same per-item mechanism, without expected rework of the money/persistence layer.
+- **Scope note:** this is a narrow exception to the Phase 1 gate (`roadmap.md` §4) for one bounded capability, not a reopening of Phase 1 generally.
+
 ---
 
 ## 4. Status of the specification's decisions (spec §4)
@@ -522,7 +531,7 @@ The spec is a draft. Its decisions are binding only where an APPROVED entry abov
 | D18 | APPROVED | P-14 |
 | D19 | AMENDED | OPS-1 (VPS/VM compute kept; managed PostgreSQL with PITR preferred; isolated staging) |
 | D20 | PROPOSED | CI blocks merge; no global coverage target; high coverage in domain, sync and permissions |
-| D21 | APPROVED | P-10; calculation base and routing UNDECIDED (R35, R36) |
+| D21 | APPROVED | P-10; calculation base and routing UNDECIDED (R35, R36); interim ceiling-free structural per-item discount APPROVED (DISC-1, §3.9) |
 
 ---
 
@@ -568,8 +577,8 @@ Kept for traceability. The binding text lives in the entry named in "Recorded in
 | R30 | Taxes (IPI/ICMS-ST) in quotations and proposals — spike S2 |
 | R31 | Real price resolution rule — spike S2 |
 | R33 | Price snapshot content for revision detection |
-| R35 | Discount authority calculation base |
-| R36 | Approval routing, absolute ceiling, substitute approver |
+| R35 | Discount authority calculation base (interim ceiling-free per-item discount shipped in Phase 0 — DISC-1, §3.9; full authority still gates Phase 1) |
+| R36 | Approval routing, absolute ceiling, substitute approver (unaffected by DISC-1) |
 | R37 | Credit exception approver and approval order |
 | R38 | Offline available-credit calculation |
 | R42 | Server history depth — decide before the first sales-document mirror load |
