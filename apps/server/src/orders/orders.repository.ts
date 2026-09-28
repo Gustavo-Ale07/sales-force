@@ -159,6 +159,7 @@ export class OrdersRepository {
         priceState: item.priceState,
         priceTableCode: item.priceTableCode,
         priceVersionId: item.priceVersionId,
+        discountPercent: item.discountPercent,
         estimatedLineTotal: item.estimatedLineTotal,
       })),
     );

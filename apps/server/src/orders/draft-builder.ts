@@ -5,6 +5,7 @@ import {
   computeOrderTotals,
   selectUsableTemplateLines,
   validateDraftInvariants,
+  validateQuantity,
   type DraftIssue,
   type InstallationConfiguration,
   type OrderItem,
@@ -102,9 +103,14 @@ export class DraftBuilder {
         issues.push({ code: 'product_unknown', path: `items[${index}].productCode` });
         return;
       }
-      const item = buildOrderItem({ lineNo: index + 1, product, quantity: line.quantity, price });
+      const item = buildOrderItem({ lineNo: index + 1, product, quantity: line.quantity, price, discountPercent: line.discountPercent });
       if (!item.ok) {
-        issues.push({ code: 'invalid_quantity', path: `items[${index}].quantity` });
+        // The domain checks the quantity first, so a valid quantity means the discount was the failing input.
+        issues.push(
+          validateQuantity(line.quantity).ok
+            ? { code: 'invalid_discount', path: `items[${index}].discountPercent` }
+            : { code: 'invalid_quantity', path: `items[${index}].quantity` },
+        );
         return;
       }
       built.push(item.value);

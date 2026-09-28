@@ -63,6 +63,10 @@ export interface RepeatLastOrderResult {
  * UNDECIDED). Nothing is ever sent to the ERP: `submit` always ends in `erp_submission_disabled`
  * (SNK-4, SNK-6) and touches neither the outbox nor the gateway.
  */
+function discountedLines(items: readonly { readonly discountPercent: string }[]): number {
+  return items.filter((item) => item.discountPercent !== '0').length;
+}
+
 @Injectable()
 export class OrdersService {
   constructor(
@@ -155,7 +159,7 @@ export class OrdersService {
       if (row === null) return null;
       await this.orders.insertItems(id, draft.draft.items, () => uuidv7(at.getTime()), tx);
       await this.audit.record(
-        { action: AUDIT_ACTIONS.orderCreated, actorAccountId: user.accountId, detail: this.auditDetail(row, draft.draft.items.length) },
+        { action: AUDIT_ACTIONS.orderCreated, actorAccountId: user.accountId, detail: this.auditDetail(row, draft.draft.items.length, discountedLines(draft.draft.items)) },
         tx,
       );
       await hooks.afterInsert?.(tx, { id: row.id, itemCount: draft.draft.items.length });
@@ -308,7 +312,7 @@ export class OrdersService {
       await this.orders.deleteItems(id, tx);
       await this.orders.insertItems(id, draft.draft.items, () => uuidv7(at.getTime()), tx);
       await this.audit.record(
-        { action: AUDIT_ACTIONS.orderReplaced, actorAccountId: user.accountId, detail: this.auditDetail(row, draft.draft.items.length) },
+        { action: AUDIT_ACTIONS.orderReplaced, actorAccountId: user.accountId, detail: this.auditDetail(row, draft.draft.items.length, discountedLines(draft.draft.items)) },
         tx,
       );
       return row;
@@ -415,13 +419,15 @@ export class OrdersService {
   }
 
   /** Identifiers and counts only: no notes, no free text. */
-  private auditDetail(order: OrderRow, itemCount: number): AuditDetail {
+  private auditDetail(order: OrderRow, itemCount: number, discountedLineCount = 0): AuditDetail {
     return {
       orderId: order.id,
       draftNumber: order.draftNumber,
       customerCode: order.customerCode,
       version: order.version,
       itemCount,
+      // Discounts are sensitive actions (CLAUDE.md §6): the trail shows that lines carry one, never the amounts.
+      ...(discountedLineCount > 0 ? { discountedLineCount } : {}),
     };
   }
 }

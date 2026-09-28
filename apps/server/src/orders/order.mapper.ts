@@ -38,6 +38,7 @@ function toItemDto(row: OrderItemRow): OrderItemDto {
     priceState: row.priceState as OrderItemDto['priceState'],
     priceTableCode: row.priceTableCode,
     priceVersionId: row.priceVersionId,
+    discountPercent: normalizeDecimalString(row.discountPercent),
     estimatedLineTotal: row.estimatedLineTotal,
   };
 }

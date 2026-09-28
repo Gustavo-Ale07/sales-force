@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { OrderDetailSchema, OrdersResponseSchema } from '@salesforce/contracts';
 import { auditLog, integrationOutbox, salesOrder } from '@salesforce/db';
-import { computeLineTotal, decimalEquals, sumTotals, type InstallationConfiguration } from '@salesforce/domain';
+import { computeDiscountedLineTotal, computeLineTotal, decimalEquals, sumTotals, type InstallationConfiguration } from '@salesforce/domain';
 import { DEMO_ACCOUNT_EMAILS, DEMO_CONFIGURATION, getDemoDataset } from '@salesforce/sankhya';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -680,5 +680,132 @@ describe('installation not enabled', () => {
     const response = await bare.app.inject({ method: 'GET', url: '/api/v1/customers', headers: { cookie, origin: TEST_ORIGIN } });
     expect(response.statusCode).toBe(409);
     expect(JSON.parse(response.body).code).toBe('installation_not_enabled');
+  });
+});
+
+describe('line discounts (drafts only: authority approval is not decided, R35/R36)', () => {
+  const discounted = (discountPercent: string) =>
+    draftBody({
+      items: [
+        { productCode: priced[0]?.code, quantity: '2', discountPercent },
+        { productCode: priced[1]?.code, quantity: '3.5' },
+      ],
+    });
+
+  it('the server applies the percentage to that line, rounding once, and the totals follow', async () => {
+    const { status, body } = await create('seller1', discounted('12.5'));
+    expect(status).toBe(201);
+    expect(OrderDetailSchema.safeParse(body).success).toBe(true);
+    expect(body.items[0].discountPercent).toBe('12.5');
+    expect(body.items[1].discountPercent).toBe('0');
+    const first = computeDiscountedLineTotal('2', priced[0]?.listPrice.unitPrice, '12.5');
+    expect(decimalEquals(body.items[0].estimatedLineTotal, first)).toBe(true);
+    expect(decimalEquals(body.items[1].estimatedLineTotal, computeLineTotal('3.5', priced[1]?.listPrice.unitPrice))).toBe(true);
+    const total = sumTotals([first, computeLineTotal('3.5', priced[1]?.listPrice.unitPrice)]);
+    expect(decimalEquals(body.totals.estimatedTotal, total)).toBe(true);
+    expect(restrictedKeys(body)).toEqual([]);
+  });
+
+  it('is stored and read back by GET, and a line with no discount reads "0"', async () => {
+    const created = await create('seller1', discounted('7.25'));
+    const read = await ctx.call('seller1', 'GET', `/orders/${created.body.id}`);
+    expect(read.body.items.map((item: Json) => item.discountPercent)).toEqual(['7.25', '0']);
+    expect(read.body.items).toEqual(created.body.items);
+  });
+
+  it('replace recomputes with the new percentage (last write wins) and can remove it', async () => {
+    const created = await create('seller1', discounted('10'));
+    const id = created.body.id;
+    const replaced = await ctx.call('seller1', 'PUT', `/orders/${id}`, {
+      expectedVersion: 1,
+      customerCode: customer1,
+      negotiationTypeCode: 2,
+      notes: null,
+      items: [{ productCode: priced[0]?.code, quantity: '2', discountPercent: '20' }],
+    });
+    expect(replaced.status).toBe(200);
+    expect(replaced.body.items[0].discountPercent).toBe('20');
+    expect(decimalEquals(replaced.body.totals.estimatedTotal, computeDiscountedLineTotal('2', priced[0]?.listPrice.unitPrice, '20'))).toBe(true);
+    const cleared = await ctx.call('seller1', 'PUT', `/orders/${id}`, {
+      expectedVersion: 2,
+      customerCode: customer1,
+      negotiationTypeCode: 2,
+      notes: null,
+      items: [{ productCode: priced[0]?.code, quantity: '2' }],
+    });
+    expect(cleared.body.items[0].discountPercent).toBe('0');
+    expect(decimalEquals(cleared.body.totals.estimatedTotal, computeLineTotal('2', priced[0]?.listPrice.unitPrice))).toBe(true);
+  });
+
+  it.each([['100'], ['10.005']])('rejects the well-formed but invalid percentage %j as invalid_discount', async (value) => {
+    const response = await create('seller1', discounted(value));
+    expect(response.status).toBe(400);
+    const issue = response.body.details.issues.find((entry: Json) => entry.code === 'invalid_discount');
+    expect(issue?.path).toBe('items[0].discountPercent');
+  });
+
+  it.each([['-1'], ['abc'], ['']])('rejects the malformed percentage %j at the contract (validation_failed)', async (value) => {
+    const response = await create('seller1', discounted(value));
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe('validation_failed');
+  });
+
+  it('a quantity problem is still reported as invalid_quantity, not as a discount problem', async () => {
+    const response = await create('seller1', draftBody({ items: [{ productCode: priced[0]?.code, quantity: '0', discountPercent: '10' }] }));
+    expect(response.status).toBe(400);
+    expect(response.body.details.issues.map((issue: Json) => issue.code)).toContain('invalid_quantity');
+  });
+
+  it('a discount on a product without a price is refused (there is nothing to discount, P-09)', async () => {
+    const permissive: InstallationConfiguration = {
+      ...DEMO_CONFIGURATION,
+      sales: { ...DEMO_CONFIGURATION.sales, orderBehavior: { allowDraftWithoutPrice: true } },
+      products: { ...DEMO_CONFIGURATION.products, productWithoutPrice: { visible: true, orderable: true } },
+    };
+    const other = await startCommercialApp(postgres, opened, { configuration: permissive });
+    const target = (await other.call('manager', 'GET', `/products?customerCode=${customer1}&sellable=true&priceState=none&pageSize=1`)).body.items[0];
+    const response = await other.call('seller1', 'POST', '/orders', draftBody({ items: [{ productCode: target.code, quantity: '1', discountPercent: '10' }] }));
+    expect(response.status).toBe(400);
+    expect(response.body.details.issues.map((issue: Json) => issue.code)).toContain('invalid_discount');
+  });
+
+  it('idempotency: the same discount replays (200), another is idempotency_conflict, and an explicit 0 equals no discount', async () => {
+    const payload = discounted('10');
+    const first = await create('seller1', payload);
+    expect(first.status).toBe(201);
+    expect((await create('seller1', payload)).status).toBe(200);
+    // Equivalent decimal spelling is the same payload.
+    const sameValue = await create('seller1', { ...payload, items: [{ ...payload.items[0], discountPercent: '10.00' }, payload.items[1]] });
+    expect(sameValue.status).toBe(200);
+    const other = await create('seller1', { ...payload, items: [{ ...payload.items[0], discountPercent: '11' }, payload.items[1]] });
+    expect(other.status).toBe(409);
+    expect(other.body.code).toBe('idempotency_conflict');
+    const dropped = await create('seller1', { ...payload, items: [{ productCode: priced[0]?.code, quantity: '2' }, payload.items[1]] });
+    expect(dropped.status).toBe(409);
+    const plain = draftBody();
+    expect((await create('seller1', plain)).status).toBe(201);
+    const explicitZero = await create('seller1', { ...plain, items: [{ ...plain.items[0], discountPercent: '0' }, plain.items[1]] });
+    expect(explicitZero.status).toBe(200);
+  });
+
+  it('audits only how many lines carry a discount, never the percentages or amounts', async () => {
+    const created = await create('seller1', discounted('33.33'));
+    const rows = (await ctx.database.handle.db.select().from(auditLog)).filter((row) => (row.detail as Json | null)?.orderId === created.body.id);
+    const createdRow = rows.find((row) => row.action === 'order.created');
+    expect((createdRow?.detail as Json).discountedLineCount).toBe(1);
+    expect(JSON.stringify(rows)).not.toContain('33.33');
+    // A draft without discounts keeps the previous audit shape.
+    const plain = await create('seller1', draftBody());
+    const plainRow = (await ctx.database.handle.db.select().from(auditLog)).find(
+      (row) => row.action === 'order.created' && (row.detail as Json | null)?.orderId === plain.body.id,
+    );
+    expect(plainRow?.detail).not.toHaveProperty('discountedLineCount');
+  });
+
+  it('the database refuses a percentage outside 0 to 99.99 even if the application did not', async () => {
+    const created = await create('seller1', discounted('10'));
+    await expect(
+      ctx.database.handle.pool.query('update sales_order_item set discount_percent = 100 where order_id = $1', [created.body.id]),
+    ).rejects.toThrow(/sales_order_item_discount_percent_chk/);
   });
 });
