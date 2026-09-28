@@ -8,10 +8,16 @@
    <style> tag react-remove-scroll-bar injects to lock body scroll under Radix Dialog/Popover/Command
    overlays (no nonce or stable-hash option exists in the installed react-style-singleton version —
    verified by reading its source/types). It still sets body[data-scroll-locked] via a separate,
-   unrelated effect, so we lock scroll ourselves from our own stylesheet instead of an inline style. */
+   unrelated effect, so we lock scroll ourselves from our own stylesheet instead of an inline style.
+   document.scrollingElement is <html> here (no html/body height+overflow reset in this app), so
+   overflow:hidden on body alone never stops the page from scrolling; html must be locked too. */
 body[data-scroll-locked] {
   overflow: hidden;
   overscroll-behavior: contain;
+}
+
+html:has(body[data-scroll-locked]) {
+  overflow: hidden;
 }
 
 /* Boot screen (see index.html): centred mark, message and an indeterminate bar, fading in so a fast start does not flash. */
