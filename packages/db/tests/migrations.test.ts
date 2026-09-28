@@ -18,6 +18,7 @@ const ALL_MIGRATIONS = [
   '0001_auth_throttle',
   '0002_sales_order_client_request_hash',
   '0003_customer_order_template',
+  '0004_sales_order_item_discount_percent',
 ];
 const N = ALL_MIGRATIONS.length;
 
@@ -91,18 +92,18 @@ describe('migrations', () => {
     expect(rows).toHaveLength(N);
   });
 
-  it('upgrades a database at the previous version (expand-only: 0003 only adds objects)', async () => {
+  it('upgrades a database at the previous version (expand-only: 0004 only adds a defaulted column and a check)', async () => {
     const url = await pgc.createDatabase();
     const dir = await mkdtemp(path.join(os.tmpdir(), 'sf-migrations-'));
     await cp(defaultMigrationsDir, dir, { recursive: true });
-    // Previous release: journal without 0003.
+    // Previous release: journal without 0004.
     const journalPath = path.join(dir, 'meta', '_journal.json');
     const journal = JSON.parse(await readFile(journalPath, 'utf8')) as { entries: { tag: string }[] };
-    journal.entries = journal.entries.filter((e) => e.tag !== '0003_customer_order_template');
+    journal.entries = journal.entries.filter((e) => e.tag !== '0004_sales_order_item_discount_percent');
     await writeFile(journalPath, JSON.stringify(journal));
     const prev = await runMigrations(url, { ...quiet, migrationsDir: dir });
     expect(prev.applied).toEqual(ALL_MIGRATIONS.slice(0, -1));
-    expect(await query(url, `SELECT to_regclass('public.customer_order_template') AS t`)).toEqual([{ t: null }]);
+    expect(await query(url, `SELECT to_regclass('public.customer_order_template') AS t`)).toEqual([{ t: 'customer_order_template' }]);
 
     // Existing rows must survive untouched.
     const acc = '018f0000-0000-7000-8000-000000000001';
@@ -111,23 +112,26 @@ describe('migrations', () => {
     await query(url, `INSERT INTO account (id, email, display_name, password_hash, role) VALUES ($1, 'u@example.test', 'U', 'x', 'seller')`, [acc]);
     await query(url, `INSERT INTO installation_configuration_version (id, version_label, source_kind, payload, content_hash, synced_at) VALUES ($1, 'v', 'demo', '{}', 'h', now())`, [cfg]);
     await query(url, `INSERT INTO sales_order (id, customer_code, created_by_account_id, client_request_id, config_version_id) VALUES ($1, 1, $2, $3, $4)`, [ord, acc, '018f0000-0000-7000-8000-000000000004', cfg]);
+    await query(url, `INSERT INTO sales_order_item (id, order_id, line_no, product_code, product_description, quantity, unit_list_price, price_state, price_table_code, price_version_id, estimated_line_total) VALUES ($1, $2, 1, 10, 'P', 2, 5, 'priced', 1, 1, 10)`, ['018f0000-0000-7000-8000-000000000005', ord]);
 
     // Deploy the new release: only the new migration runs.
     const next = await runMigrations(url, quiet);
-    expect(next.applied).toEqual(['0003_customer_order_template']);
+    expect(next.applied).toEqual(['0004_sales_order_item_discount_percent']);
     expect(next.alreadyApplied).toBe(N - 1);
     expect(await query(url, `SELECT id FROM sales_order`)).toEqual([{ id: ord }]);
-    expect(await query(url, `SELECT count(*)::int AS n FROM customer_order_template`)).toEqual([{ n: 0 }]);
+    // The existing line is kept as it was, with no discount.
+    expect(await query(url, `SELECT quantity::text AS q, estimated_line_total::text AS t, discount_percent::text AS d FROM sales_order_item`)).toEqual([{ q: '2.0000', t: '10.00', d: '0.00' }]);
+    await expect(query(url, `UPDATE sales_order_item SET discount_percent = 100`)).rejects.toThrow(/sales_order_item_discount_percent_chk/);
+    await expect(query(url, `UPDATE sales_order_item SET discount_percent = -1`)).rejects.toThrow(/sales_order_item_discount_percent_chk/);
+    await query(url, `UPDATE sales_order_item SET discount_percent = 99.99`);
 
-    // Expand-only guard: the file creates objects and never alters/drops/rewrites existing ones.
-    const file = await readFile(path.join(defaultMigrationsDir, '0003_customer_order_template.sql'), 'utf8');
+    // Expand-only guard: the file only adds a defaulted NOT NULL column and a check; it never drops, renames or rewrites.
+    const file = await readFile(path.join(defaultMigrationsDir, '0004_sales_order_item_discount_percent.sql'), 'utf8');
     const statements = file.split('--> statement-breakpoint').map((s) => s.trim());
-    expect(statements.length).toBeGreaterThan(0);
-    for (const stmt of statements) {
-      expect(stmt).toMatch(
-        /^(CREATE TABLE "customer_order_template[a-z_]*"|CREATE UNIQUE INDEX "[a-z_]+" ON "customer_order_template[a-z_]*"|ALTER TABLE "customer_order_template[a-z_]*" ADD CONSTRAINT )/,
-      );
-    }
+    expect(statements).toHaveLength(2);
+    expect(statements[0]).toMatch(/^ALTER TABLE "sales_order_item" ADD COLUMN "discount_percent" numeric\(5, 2\) DEFAULT '0' NOT NULL;$/);
+    expect(statements[1]).toMatch(/^ALTER TABLE "sales_order_item" ADD CONSTRAINT "sales_order_item_discount_percent_chk" CHECK /);
+    expect(file).not.toMatch(/DROP|RENAME|TYPE|TRUNCATE|DELETE/i);
   });
 
   it('two concurrent runners do not corrupt the database (advisory lock)', async () => {
@@ -181,19 +185,19 @@ describe('migrations', () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), 'sf-migrations-'));
     await cp(defaultMigrationsDir, dir, { recursive: true });
     await writeFile(
-      path.join(dir, '0004_broken.sql'),
+      path.join(dir, '0005_broken.sql'),
       'CREATE TABLE ok_table (id int);\n--> statement-breakpoint\nCREATE TABLE ok_table (id int);\n',
     );
     const journalPath = path.join(dir, 'meta', '_journal.json');
     const journal = JSON.parse(await readFile(journalPath, 'utf8')) as {
       entries: { idx: number; version: string; when: number; tag: string; breakpoints: boolean }[];
     };
-    journal.entries.push({ idx: N, version: '7', when: Date.now(), tag: '0004_broken', breakpoints: true });
+    journal.entries.push({ idx: N, version: '7', when: Date.now(), tag: '0005_broken', breakpoints: true });
     await writeFile(journalPath, JSON.stringify(journal));
 
     const err = await runMigrations(url, { ...quiet, migrationsDir: dir }).catch((e) => e);
     expect(err).toBeInstanceOf(MigrationError);
-    expect((err as Error).message).toMatch(/0004_broken failed and was rolled back/);
+    expect((err as Error).message).toMatch(/0005_broken failed and was rolled back/);
     expect(await query(url, `SELECT to_regclass('public.ok_table') AS t`)).toEqual([{ t: null }]);
     const recorded = await query<{ tag: string }>(url, `SELECT tag FROM schema_migration ORDER BY idx`);
     expect(recorded.map((r) => r.tag)).toEqual(ALL_MIGRATIONS);
@@ -220,7 +224,7 @@ describe('migrations', () => {
       await runMigrations(url, quiet);
       expect(await readiness(handle.pool)).toEqual({
         appliedCount: N,
-        lastId: '0003_customer_order_template',
+        lastId: '0004_sales_order_item_discount_percent',
         expectedCount: N,
         upToDate: true,
       });

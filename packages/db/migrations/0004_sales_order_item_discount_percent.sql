@@ -1,0 +1,2 @@
+ALTER TABLE "sales_order_item" ADD COLUMN "discount_percent" numeric(5, 2) DEFAULT '0' NOT NULL;--> statement-breakpoint
+ALTER TABLE "sales_order_item" ADD CONSTRAINT "sales_order_item_discount_percent_chk" CHECK ("sales_order_item"."discount_percent" >= 0 and "sales_order_item"."discount_percent" <= 99.99);

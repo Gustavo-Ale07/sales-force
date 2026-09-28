@@ -106,6 +106,8 @@ export const salesOrderItem = pgTable(
     priceState: text('price_state').notNull(),
     priceTableCode: integer('price_table_code'),
     priceVersionId: integer('price_version_id'),
+    /** Percentage discount on the list price (0 = none). Whether it needs approval is not stored here (P-10; R35/R36). */
+    discountPercent: numeric('discount_percent', { precision: 5, scale: 2 }).notNull().default('0'),
     estimatedLineTotal: numeric('estimated_line_total', { precision: 14, scale: 2 }),
   },
   (t) => [
@@ -123,6 +125,7 @@ export const salesOrderItem = pgTable(
         or (${t.priceState} = 'zero' and ${t.unitListPrice} is not null and ${t.unitListPrice} = 0)
         or (${t.priceState} = 'priced' and ${t.unitListPrice} is not null and ${t.unitListPrice} > 0 and ${t.estimatedLineTotal} is not null)`,
     ),
+    check('sales_order_item_discount_percent_chk', sql`${t.discountPercent} >= 0 and ${t.discountPercent} <= 99.99`),
     check(
       'sales_order_item_estimated_line_total_chk',
       sql`${t.estimatedLineTotal} is null or ${t.estimatedLineTotal} >= 0`,
