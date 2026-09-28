@@ -2,7 +2,7 @@ import { Alert, Button, IconButton, Input } from "@salesforce/ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearch } from "@tanstack/react-router";
 import { Eye, EyeOff, LockKeyhole, User } from "lucide-react";
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Brand } from "../components/brand";
 import { DevAuthBanner } from "../components/dev-auth-banner";
 import { useAppServices } from "../lib/app-context";
@@ -74,10 +74,14 @@ const LOGIN_FIELD =
   "h-14 [@media(max-height:720px)]:h-12 rounded-[10px] border-transparent bg-[#eef2f6] pl-[67px] text-[17px] tracking-[-0.03em] text-fg placeholder:text-[#4d5a78] hover:border-line-strong focus-visible:bg-white";
 
 export function LoginPage() {
-  const { authClient } = useAppServices();
+  const { authClient, config } = useAppServices();
   const queryClient = useQueryClient();
   const router = useRouter();
   const search = useSearch({ strict: false }) as { redirect?: unknown };
+
+  useEffect(() => {
+    document.title = config.installationName;
+  }, [config.installationName]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

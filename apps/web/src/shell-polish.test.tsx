@@ -80,5 +80,6 @@ describe("login screen", () => {
     expect(screen.getByPlaceholderText("Senha")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Entrar" })).toBeInTheDocument();
     expect(screen.queryByText(/^Sales Force$/i)).not.toBeInTheDocument();
+    await waitFor(() => expect(document.title).toBe("Instalação Teste"));
   });
 });

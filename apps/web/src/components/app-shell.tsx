@@ -144,11 +144,11 @@ export function AppShell({ user, onLogout, children }: AppShellProps) {
             title="Menu de navegação"
             className="bg-sidebar [--drawer-w:280px] px-3 py-4"
           >
-            <Brand tone="dark" size="lg" className="px-1.5 pb-3 pt-1" />
+            <Brand tone="dark" size="lg" preferMark className="px-1.5 pb-3 pt-1" />
             <DrawerNav role={user?.role} onNavigate={() => setNavOpen(false)} />
           </DrawerContent>
         </Drawer>
-        <Brand tone="dark" size="md" className="shrink-0" />
+        <Brand tone="dark" size="md" preferMark className="shrink-0" />
         <div className="flex min-w-0 flex-1 items-center md:pl-4">
           <TopNav role={user?.role} />
         </div>

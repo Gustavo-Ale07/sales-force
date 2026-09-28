@@ -158,6 +158,9 @@ services:
       BRAND_LOGO_URL: ${BRAND_LOGO_URL:-}
       BRAND_MARK_URL: ${BRAND_MARK_URL:-}
       BRAND_ACCENT: ${BRAND_ACCENT:-}
+    # Per-installation brand files (deploy/README.md): mounted read-only, never baked into the image.
+    volumes:
+      - ${BRAND_DIR:-./brand}:/usr/share/nginx/html/brand:ro
     ports:
       - "127.0.0.1:${WEB_HOST_PORT:-8080}:8080"
 

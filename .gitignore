@@ -96,3 +96,7 @@ worktrees/
 desktop.ini
 .vscode/*
 !.vscode/extensions.json
+
+# Per-installation brand assets (deploy/README.md): mounted read-only into the web container,
+# never part of the image or the repository.
+deploy/brand/
