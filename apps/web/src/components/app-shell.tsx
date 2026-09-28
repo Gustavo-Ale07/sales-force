@@ -23,7 +23,10 @@ const topLink =
 
 function TopNav({ role }: { role: string | undefined }) {
   return (
-    <nav aria-label="Principal" className="hidden items-center gap-1.5 md:flex">
+    // lg, not md: at md (768px) the integration pill still shows its full label (see integration-pill.tsx's
+    // max-md: collapse), and up to 5 nav items plus that label don't both fit in the 768-1023px range -- the
+    // drawer nav below covers that gap instead of the two colliding.
+    <nav aria-label="Principal" className="hidden items-center gap-1.5 lg:flex">
       {navItemsFor(role).map(({ to, label }) => (
         <Link key={to} to={to} activeOptions={{ exact: to === "/" }} className={topLink}>
           {label}
@@ -36,7 +39,7 @@ function TopNav({ role }: { role: string | undefined }) {
 const drawerLink =
   "flex items-center gap-3 rounded-md px-3 py-3 text-base font-semibold text-sidebar-fg no-underline transition-colors duration-[var(--sf-dur-fast)] ease-spring hover:bg-sidebar-hover hover:text-sidebar-fg-active data-[status=active]:bg-white data-[status=active]:text-[var(--sf-sidebar-bg)]";
 
-/** Same items as `TopNav`, stacked, for the drawer used below the `md` breakpoint. */
+/** Same items as `TopNav`, stacked, for the drawer used below the `lg` breakpoint. */
 function DrawerNav({ role, onNavigate }: { role: string | undefined; onNavigate: () => void }) {
   return (
     <nav aria-label="Principal" className="flex flex-col gap-1">
@@ -135,7 +138,7 @@ export function AppShell({ user, onLogout, children }: AppShellProps) {
             <IconButton
               label="Abrir menu de navegação"
               icon={<Menu size={20} strokeWidth={1.75} aria-hidden="true" />}
-              className="text-sidebar-fg-active hover:bg-sidebar-hover md:hidden"
+              className="text-sidebar-fg-active hover:bg-sidebar-hover lg:hidden"
             />
           </DrawerTrigger>
           <DrawerContent
@@ -149,7 +152,7 @@ export function AppShell({ user, onLogout, children }: AppShellProps) {
           </DrawerContent>
         </Drawer>
         <Brand tone="dark" size="md" preferMark className="shrink-0" />
-        <div className="flex min-w-0 flex-1 items-center md:pl-4">
+        <div className="flex min-w-0 flex-1 items-center lg:pl-4">
           <TopNav role={user?.role} />
         </div>
         <div className="flex shrink-0 items-center gap-0.5 md:gap-2">

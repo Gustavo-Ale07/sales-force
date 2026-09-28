@@ -87,6 +87,18 @@ describe("top bar and navigation", () => {
     const nav = await screen.findByRole("navigation", { name: /Trilha de navegação/ });
     expect(within(nav).getByRole("link", { name: "Clientes" })).toHaveAttribute("href", "/clientes");
   });
+
+  it("collapses the horizontal nav into the drawer at lg, not md, so it never contests 768-1023px with the admin integration badge's full label", async () => {
+    renderApp("/", { handlers: shellData });
+    const drawerTrigger = await screen.findByRole("button", { name: "Abrir menu de navegação" });
+    expect(drawerTrigger.className).toContain("lg:hidden");
+    expect(drawerTrigger.className).not.toContain("md:hidden");
+
+    const navs = screen.getAllByRole("navigation", { name: "Principal" });
+    const horizontalNav = navs.find((nav) => nav.className.includes("lg:flex"));
+    expect(horizontalNav).toBeDefined();
+    expect(horizontalNav?.className).not.toContain("md:flex");
+  });
 });
 
 describe("login screen", () => {
