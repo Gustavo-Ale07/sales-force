@@ -1,7 +1,7 @@
 import { CommandPalette, type CommandItem } from "@salesforce/ui";
 import { useNavigate } from "@tanstack/react-router";
 import { Plus, Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { navItemsFor } from "./nav-items";
 
 const isApple = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/i.test(navigator.platform);
@@ -14,6 +14,7 @@ const isApple = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/i.tes
 export function CommandMenu({ role }: { role: string | undefined }) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -52,6 +53,7 @@ export function CommandMenu({ role }: { role: string | undefined }) {
   return (
     <>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen(true)}
         aria-label={`Ir para… (${chip})`}
@@ -66,6 +68,7 @@ export function CommandMenu({ role }: { role: string | undefined }) {
       <CommandPalette
         open={open}
         onOpenChange={setOpen}
+        triggerRef={triggerRef}
         items={items}
         renderEmpty={() => (
           <>

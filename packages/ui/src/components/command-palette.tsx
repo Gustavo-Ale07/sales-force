@@ -1,6 +1,6 @@
 import { CornerDownLeft, Search } from "lucide-react";
 import { Dialog as RadixDialog } from "radix-ui";
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import { cn } from "../lib/cn";
 
 export interface CommandItem {
@@ -23,6 +23,11 @@ export interface CommandPaletteProps {
   placeholder?: string;
   /** Shown when nothing matches; receives the current query. */
   renderEmpty?: (query: string) => ReactNode;
+  /**
+   * The element that opened the palette. `open`/`onOpenChange` are caller-controlled (no `Dialog.Trigger`
+   * is rendered), so Radix has no trigger to restore focus to on close and falls back to the document body.
+   */
+  triggerRef?: RefObject<HTMLElement | null>;
 }
 
 /** Lower-case without accents so "catalogo" finds "Catálogo". */
@@ -59,6 +64,7 @@ function PaletteBody({
   title = "Busca rápida",
   placeholder = "Ir para…",
   renderEmpty,
+  triggerRef,
 }: Omit<CommandPaletteProps, "open">) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -117,6 +123,11 @@ function PaletteBody({
         <RadixDialog.Overlay className="fixed inset-0 z-40 animate-sf-fade-in bg-scrim data-[state=closed]:animate-sf-fade-out" />
         <RadixDialog.Content
           aria-describedby={undefined}
+          onCloseAutoFocus={(event) => {
+            if (!triggerRef?.current) return;
+            event.preventDefault();
+            triggerRef.current.focus();
+          }}
           className="fixed left-1/2 top-[12vh] z-50 flex max-h-[76vh] w-[calc(100vw-2rem)] max-w-[620px] -translate-x-1/2 animate-sf-pop-in flex-col overflow-hidden rounded-[20px] data-[state=closed]:animate-sf-pop-out bg-surface shadow-overlay"
         >
           <RadixDialog.Title className="sr-only">{title}</RadixDialog.Title>

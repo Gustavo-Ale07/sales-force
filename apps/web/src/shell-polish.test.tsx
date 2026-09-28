@@ -43,6 +43,26 @@ describe("quick navigation (Ctrl K)", () => {
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
+
+  it("returns focus to the trigger button after closing, whether opened by click or by the Ctrl+K shortcut", async () => {
+    // The palette is manually controlled (no Dialog.Trigger), so Radix has no trigger to restore
+    // focus to on its own; without command-menu.tsx wiring triggerRef, focus falls through to <body>.
+    const { user } = renderApp("/", { handlers: shellData });
+    const trigger = await screen.findByRole("button", { name: /Ir para…/ });
+
+    await user.click(trigger);
+    await screen.findByRole("dialog");
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(trigger).toHaveFocus());
+
+    trigger.focus();
+    await user.keyboard("{Control>}k{/Control}");
+    await screen.findByRole("dialog");
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
 });
 
 describe("notifications bell", () => {
