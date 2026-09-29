@@ -527,6 +527,12 @@ Recorded from the project owner's instructions of 2026-09-18, after the Sandbox 
 - **Decision:** from this point on, a commercial feature (order/cart/discount/pricing-facing) is not COMPLETE on the strength of the web implementation alone. Definition of Done: domain = PASS, backend = PASS, contracts = PASS, web = PASS, mobile = PASS, offline = PASS when applicable, sync = PASS when applicable, tests = PASS, QA = PASS. A PARTIAL state may exist mid-development, but a feature is not reported or recorded as COMPLETE while a relevant Web/Mobile gap remains. "When applicable" for offline/sync defers to MOB-5: a feature otherwise complete on web+mobile+backend is not held open by offline/sync only because V-09 has not closed yet — that dimension is marked "pending S7" rather than blocking the rest, and the feature record says so explicitly rather than silently marking COMPLETE.
 - **Applies to:** DISC-1 discount work going forward — per-item, mass and group discount are not COMPLETE until mobile ships them at parity with web, per MOB-4.
 
+#### MOB-4a · Mobile "group discount" means catalog-group bucketing, same as web (2026-09-29)
+- **Status:** APPROVED 2026-09-29 (owner ruling, this session)
+- **Context:** mobile Slice 2 (apps/mobile) shipped a manual multi-select "apply one percent to the selected lines" as its first cut of "group discount," flagged by code review as behaviorally different from web's `GroupDiscountDialog` (`apps/web/src/components/discount-dialogs.tsx`), which automatically buckets cart lines by product catalog group (`groupCode`/`groupName`) and lets the user set a different percentage per group in one action.
+- **Decision:** mobile's "group discount" must implement the same catalog-group bucketing as web — automatic grouping by product `groupCode`/`groupName`, one percentage per group, not a manual ad-hoc line selection. The manual multi-select UI shipped in Slice 2 does not satisfy DOD-1/MOB-4 group-discount parity and is superseded by this entry; it may be kept only if repurposed as a distinct, separately-labeled capability (not presented as "group discount"), at the implementer's discretion, since nothing here forbids an additional manual-selection convenience.
+- **Refines:** MOB-4, DOD-1 (§3.10). Group-discount parity for DISC-1/MOB-4 remains PARTIAL until this is implemented and reviewed.
+
 ---
 
 ## 4. Status of the specification's decisions (spec §4)
