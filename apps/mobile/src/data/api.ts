@@ -31,6 +31,8 @@ export class ApiRequestError extends Error {
   readonly code?: string;
   readonly retryAfterSeconds?: number;
   readonly correlationId?: string;
+  /** Stable per-item issue codes of a rejected order draft (`details.issues`), e.g. `invalid_discount`. */
+  readonly issues: readonly { path: string; code: string; message?: string }[];
 
   constructor(init: {
     status: number;
@@ -38,6 +40,7 @@ export class ApiRequestError extends Error {
     code?: string;
     retryAfterSeconds?: number;
     correlationId?: string;
+    issues?: readonly { path: string; code: string; message?: string }[];
   }) {
     super(init.message);
     this.name = "ApiRequestError";
@@ -45,6 +48,7 @@ export class ApiRequestError extends Error {
     this.code = init.code;
     this.retryAfterSeconds = init.retryAfterSeconds;
     this.correlationId = init.correlationId;
+    this.issues = init.issues ?? [];
   }
 
   /** Network failure, timeout or a proxy answering without the API envelope. */
@@ -80,12 +84,21 @@ export async function callApi<T>(call: () => Promise<ClientResult<T>>): Promise<
   }
   if (!result.response.ok) {
     const envelope = record(result.error);
+    const details = record(envelope?.details);
+    const rawIssues = Array.isArray(details?.issues) ? details.issues : [];
+    const issues = rawIssues.flatMap((issue) => {
+      const item = record(issue);
+      return item && typeof item.path === "string" && typeof item.code === "string"
+        ? [{ path: item.path, code: item.code, message: typeof item.message === "string" ? item.message : undefined }]
+        : [];
+    });
     throw new ApiRequestError({
       status: result.response.status,
       code: typeof envelope?.code === "string" ? envelope.code : undefined,
       message: typeof envelope?.message === "string" ? envelope.message : `HTTP ${result.response.status}`,
       retryAfterSeconds: retryAfter(result.response.headers.get("retry-after")),
       correlationId: result.response.headers.get("x-request-id") ?? undefined,
+      issues,
     });
   }
   return result.data as T;

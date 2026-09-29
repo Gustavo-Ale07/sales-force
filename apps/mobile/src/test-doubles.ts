@@ -2,7 +2,16 @@ import type { Account, AuthPort } from "./auth/auth-port";
 import type { ConnectivityPort, ConnectivityState } from "./connectivity/connectivity";
 import type { AppDependencies } from "./dependencies";
 import { ApiRequestError } from "./data/api";
-import type { CustomerListItem, Page, ProductListItem, Repositories } from "./data/ports";
+import type {
+  CreateOrderRequest,
+  CustomerListItem,
+  OrderDetail,
+  OrderEntryConfiguration,
+  OrderRepository,
+  Page,
+  ProductListItem,
+  Repositories,
+} from "./data/ports";
 
 /** In-memory ports for component tests: no network, no native modules. */
 export const account: Account = {
@@ -48,6 +57,46 @@ export function pageOf<T>(items: readonly T[], total = items.length, page = 1): 
   return { items, page, pageSize: 25, total };
 }
 
+export function orderEntryConfiguration(overrides: Partial<OrderEntryConfiguration> = {}): OrderEntryConfiguration {
+  return {
+    general: { enabled: true },
+    sales: { defaultNegotiationTypeCode: null, negotiationTypes: [], orderBehavior: { allowDraftWithoutPrice: false } },
+    products: { productWithoutPrice: { orderable: false } },
+    ...overrides,
+  };
+}
+
+export function orderDetail(overrides: Partial<OrderDetail> = {}): OrderDetail {
+  return {
+    id: "0190a0c0-0000-7000-8000-000000000050",
+    draftNumber: 1,
+    customerCode: 10,
+    customerName: "Cliente 10",
+    sellerCode: 7,
+    status: "draft",
+    estimatedTotal: "0.00",
+    itemCount: 0,
+    isPartial: false,
+    erpNumber: null,
+    version: 1,
+    createdAt: "2026-09-29T12:00:00.000Z",
+    updatedAt: "2026-09-29T12:00:00.000Z",
+    negotiationTypeCode: null,
+    notes: null,
+    items: [],
+    totals: { estimatedTotal: "0.00", lineCount: 0, unpricedLineCount: 0, isPartial: false },
+    ...overrides,
+  };
+}
+
+export function fakeOrders(overrides: Partial<OrderRepository> = {}): OrderRepository {
+  return {
+    getEntryConfiguration: async () => orderEntryConfiguration(),
+    create: async (request: CreateOrderRequest) => orderDetail({ customerCode: request.customerCode, items: [] }),
+    ...overrides,
+  };
+}
+
 export function unauthenticatedError(): ApiRequestError {
   return new ApiRequestError({ status: 401, code: "unauthenticated", message: "Sessão expirada" });
 }
@@ -83,6 +132,7 @@ export function fakeDependencies(overrides: Partial<AppDependencies> = {}): AppD
   const repositories: Repositories = {
     customers: { list: async () => pageOf([]) },
     products: { list: async () => pageOf([]) },
+    orders: fakeOrders(),
   };
   return {
     auth: fakeAuth(),

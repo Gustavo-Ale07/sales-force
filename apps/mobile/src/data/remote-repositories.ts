@@ -1,5 +1,5 @@
 import { callApi, type ApiClient } from "./api";
-import type { CustomerRepository, ProductRepository, Repositories } from "./ports";
+import type { CustomerRepository, OrderRepository, ProductRepository, Repositories } from "./ports";
 
 /**
  * Online adapters of the repository ports over the scoped read endpoints. The server decides which rows the
@@ -31,6 +31,26 @@ export function createRemoteProductRepository(api: ApiClient): ProductRepository
   };
 }
 
+/**
+ * Draft order writes (MOB-4, online-only): the same `POST /orders` / `GET /order-entry/configuration` endpoints
+ * the web app uses. Prices, totals and validation are always resolved server-side (P-09); this adapter sends
+ * only product, quantity and discount percentage.
+ */
+export function createRemoteOrderRepository(api: ApiClient): OrderRepository {
+  return {
+    async getEntryConfiguration() {
+      return callApi(() => api.GET("/order-entry/configuration"));
+    },
+    async create(request) {
+      return callApi(() => api.POST("/orders", { body: request }));
+    },
+  };
+}
+
 export function createRemoteRepositories(api: ApiClient): Repositories {
-  return { customers: createRemoteCustomerRepository(api), products: createRemoteProductRepository(api) };
+  return {
+    customers: createRemoteCustomerRepository(api),
+    products: createRemoteProductRepository(api),
+    orders: createRemoteOrderRepository(api),
+  };
 }

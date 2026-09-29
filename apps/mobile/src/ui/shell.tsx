@@ -8,12 +8,13 @@ import { colors, spacing } from "../theme";
 import { ConnectivityBadge } from "./connectivity-badge";
 import { CustomersScreen } from "./customers-screen";
 import { LoginScreen } from "./login-screen";
+import { NewOrderScreen } from "./new-order-screen";
 import { ProductsScreen } from "./products-screen";
 
 type Session = { readonly phase: "checking" } | { readonly phase: "anonymous" } | { readonly phase: "authenticated"; readonly account: Account };
-type Tab = "customers" | "products";
+type Tab = "customers" | "products" | "newOrder";
 
-const TAB_LABEL: Record<Tab, string> = { customers: "Clientes", products: "Catálogo" };
+const TAB_LABEL: Record<Tab, string> = { customers: "Clientes", products: "Catálogo", newOrder: "Novo pedido" };
 
 /** Offline banner. Honest about the current state: there is no offline data until spike S7 (MOB-2, V-09). */
 export function OfflineNotice() {
@@ -110,11 +111,9 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
           </Pressable>
         ))}
       </View>
-      {tab === "customers" ? (
-        <CustomersScreen customers={repositories.customers} onUnauthenticated={expire} />
-      ) : (
-        <ProductsScreen products={repositories.products} onUnauthenticated={expire} />
-      )}
+      {tab === "customers" && <CustomersScreen customers={repositories.customers} onUnauthenticated={expire} />}
+      {tab === "products" && <ProductsScreen products={repositories.products} onUnauthenticated={expire} />}
+      {tab === "newOrder" && <NewOrderScreen repositories={repositories} onUnauthenticated={expire} />}
     </View>
   );
 }

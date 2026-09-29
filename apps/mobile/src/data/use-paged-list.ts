@@ -42,10 +42,20 @@ export function usePagedList<T>(
   const latest = useRef(0);
   const loadRef = useRef(load);
   const expiredRef = useRef(onUnauthenticated);
+  const mountedRef = useRef(true);
   useEffect(() => {
     loadRef.current = load;
     expiredRef.current = onUnauthenticated;
   });
+  // A page fetch can still be in flight when the screen unmounts (e.g. the customer or product picker is
+  // swapped out, or a test moves on); without this guard its answer lands after `render()` has already committed
+  // the next screen, corrupting an unrelated in-progress render (RTL/React "overlapping act()" warnings).
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const key = `${reloadToken}:${search}`;
 
@@ -54,7 +64,7 @@ export function usePagedList<T>(
     const append = previous !== null && nextPage > 1;
     try {
       const result = await loadRef.current({ search: query, page: nextPage, pageSize: LIST_PAGE_SIZE });
-      if (ticket !== latest.current) return;
+      if (ticket !== latest.current || !mountedRef.current) return;
       setSnapshot({
         key: requestKey,
         items: append ? [...previous.items, ...result.items] : result.items,
@@ -64,7 +74,7 @@ export function usePagedList<T>(
         error: null,
       });
     } catch (failure) {
-      if (ticket !== latest.current) return;
+      if (ticket !== latest.current || !mountedRef.current) return;
       const info = describeDataError(failure);
       if (info.kind === "unauthenticated") {
         expiredRef.current();
@@ -77,7 +87,7 @@ export function usePagedList<T>(
           : { key: requestKey, items: [], total: 0, page: 0, failed: true, error: info },
       );
     } finally {
-      if (ticket === latest.current) setLoadingMore(false);
+      if (ticket === latest.current && mountedRef.current) setLoadingMore(false);
     }
   }, []);
 

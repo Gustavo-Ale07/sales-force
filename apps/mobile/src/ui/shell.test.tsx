@@ -6,6 +6,7 @@ import {
   fakeAuth,
   fakeConnectivity,
   fakeDependencies,
+  fakeOrders,
   networkError,
   pageOf,
   product,
@@ -37,7 +38,7 @@ describe("Shell", () => {
     };
     const products: ProductRepository = { list: async () => pageOf([product(5, { description: "Copo 200 ml" })]) };
     await render(
-      <Shell dependencies={fakeDependencies({ auth: signedIn(), repositories: { customers, products } })} />,
+      <Shell dependencies={fakeDependencies({ auth: signedIn(), repositories: { customers, products, orders: fakeOrders() } })} />,
     );
     expect(await screen.findByText("Padaria Central")).toBeTruthy();
     expect(screen.getByText("Bloqueado")).toBeTruthy();
@@ -59,7 +60,7 @@ describe("Shell", () => {
       <Shell
         dependencies={fakeDependencies({
           auth: signedIn(),
-          repositories: { customers, products: { list: async () => pageOf([]) } },
+          repositories: { customers, products: { list: async () => pageOf([]) }, orders: fakeOrders() },
         })}
       />,
     );
@@ -102,7 +103,7 @@ describe("Shell", () => {
       <Shell
         dependencies={fakeDependencies({
           auth: signedIn(),
-          repositories: { customers, products: { list: async () => pageOf([]) } },
+          repositories: { customers, products: { list: async () => pageOf([]) }, orders: fakeOrders() },
         })}
       />,
     );

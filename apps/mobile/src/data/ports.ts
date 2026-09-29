@@ -43,7 +43,21 @@ export interface ProductRepository {
   list(request: PageRequest): Promise<Page<ProductListItem>>;
 }
 
+export type OrderEntryConfiguration = ApiSchema<"OrderEntryConfiguration">;
+export type OrderDetail = ApiSchema<"OrderDetail">;
+export type CreateOrderRequest = ApiSchema<"CreateOrderRequest">;
+
+/**
+ * Online-only draft order writes (MOB-4). Save always goes to the server; there is no local outbox in this
+ * slice (MOB-2/V-09 still gates `packages/mobile-db`). Prices, totals and validation are always server-side.
+ */
+export interface OrderRepository {
+  getEntryConfiguration(): Promise<OrderEntryConfiguration>;
+  create(request: CreateOrderRequest): Promise<OrderDetail>;
+}
+
 export interface Repositories {
   readonly customers: CustomerRepository;
   readonly products: ProductRepository;
+  readonly orders: OrderRepository;
 }

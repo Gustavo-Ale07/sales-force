@@ -101,4 +101,57 @@ describe("remote repositories", () => {
     const { repositories } = repositoriesWith(() => new Error("offline"));
     await expect(repositories.products.list(firstRequest)).rejects.toMatchObject({ status: 0 });
   });
+
+  it("reads the order-entry configuration", async () => {
+    const configuration = {
+      general: { enabled: true },
+      sales: { defaultNegotiationTypeCode: null, negotiationTypes: [], orderBehavior: { allowDraftWithoutPrice: false } },
+      products: { productWithoutPrice: { orderable: false } },
+    };
+    const { repositories, requests } = repositoriesWith(() => ({ status: 200, body: configuration }));
+    await expect(repositories.orders.getEntryConfiguration()).resolves.toEqual(configuration);
+    expect(new URL(requests[0]?.url ?? "").pathname).toBe("/api/v1/order-entry/configuration");
+  });
+
+  it("creates a draft order sending only product, quantity and discount, never a price", async () => {
+    const request = {
+      clientRequestId: "0190a0c0-0000-7000-8000-000000000099",
+      customerCode: 10,
+      negotiationTypeCode: null,
+      notes: null,
+      items: [{ productCode: 2001, quantity: "1", discountPercent: "10" }],
+    };
+    const { repositories, requests } = repositoriesWith(() => ({
+      status: 201,
+      body: { id: "order-1", version: 1 },
+    }));
+    const created = await repositories.orders.create(request);
+    expect(created).toEqual({ id: "order-1", version: 1 });
+    expect(requests[0]?.method).toBe("POST");
+    expect(new URL(requests[0]?.url ?? "").pathname).toBe("/api/v1/orders");
+    expect(requests[0]?.body).toEqual(request);
+  });
+
+  it("surfaces per-item draft issues from a rejected save", async () => {
+    const { repositories } = repositoriesWith(() => ({
+      status: 400,
+      body: {
+        code: "validation_failed",
+        message: "Dados inválidos",
+        details: { issues: [{ path: "items[0].discountPercent", code: "invalid_discount" }] },
+      },
+    }));
+    await expect(
+      repositories.orders.create({
+        clientRequestId: "0190a0c0-0000-7000-8000-000000000099",
+        customerCode: 10,
+        negotiationTypeCode: null,
+        notes: null,
+        items: [],
+      }),
+    ).rejects.toMatchObject({
+      status: 400,
+      issues: [{ path: "items[0].discountPercent", code: "invalid_discount" }],
+    });
+  });
 });
