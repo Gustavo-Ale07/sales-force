@@ -45,15 +45,23 @@ export interface ProductRepository {
 
 export type OrderEntryConfiguration = ApiSchema<"OrderEntryConfiguration">;
 export type OrderDetail = ApiSchema<"OrderDetail">;
+export type OrderItem = ApiSchema<"OrderItem">;
 export type CreateOrderRequest = ApiSchema<"CreateOrderRequest">;
+export type ReplaceOrderRequest = ApiSchema<"ReplaceOrderRequest">;
 
 /**
  * Online-only draft order writes (MOB-4). Save always goes to the server; there is no local outbox in this
  * slice (MOB-2/V-09 still gates `packages/mobile-db`). Prices, totals and validation are always server-side.
+ *
+ * `replace` mirrors the web app's `PUT /orders/{id}` usage exactly: optimistic concurrency via
+ * `expectedVersion`, no separate client-generated idempotency key (a stale retry surfaces `version_conflict`,
+ * same as web). `get` reopens a previously-saved draft (its own version and lines) for editing.
  */
 export interface OrderRepository {
   getEntryConfiguration(): Promise<OrderEntryConfiguration>;
   create(request: CreateOrderRequest): Promise<OrderDetail>;
+  get(id: string): Promise<OrderDetail>;
+  replace(id: string, request: ReplaceOrderRequest): Promise<OrderDetail>;
 }
 
 export interface Repositories {

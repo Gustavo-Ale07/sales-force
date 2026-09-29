@@ -154,4 +154,50 @@ describe("remote repositories", () => {
       issues: [{ path: "items[0].discountPercent", code: "invalid_discount" }],
     });
   });
+
+  it("reopens a saved draft by id (GET /orders/{id})", async () => {
+    const { repositories, requests } = repositoriesWith(() => ({
+      status: 200,
+      body: { id: "order-1", version: 2 },
+    }));
+    const found = await repositories.orders.get("order-1");
+    expect(found).toEqual({ id: "order-1", version: 2 });
+    expect(requests[0]?.method).toBe("GET");
+    expect(new URL(requests[0]?.url ?? "").pathname).toBe("/api/v1/orders/order-1");
+  });
+
+  it("replaces a draft with optimistic concurrency, never an idempotency key (PUT /orders/{id})", async () => {
+    const request = {
+      expectedVersion: 1,
+      customerCode: 10,
+      negotiationTypeCode: null,
+      notes: null,
+      items: [{ productCode: 2001, quantity: "2", discountPercent: "10" }],
+    };
+    const { repositories, requests } = repositoriesWith(() => ({
+      status: 200,
+      body: { id: "order-1", version: 2 },
+    }));
+    const updated = await repositories.orders.replace("order-1", request);
+    expect(updated).toEqual({ id: "order-1", version: 2 });
+    expect(requests[0]?.method).toBe("PUT");
+    expect(new URL(requests[0]?.url ?? "").pathname).toBe("/api/v1/orders/order-1");
+    expect(requests[0]?.body).toEqual(request);
+  });
+
+  it("surfaces a version conflict from a stale edit as ApiRequestError with the code", async () => {
+    const { repositories } = repositoriesWith(() => ({
+      status: 409,
+      body: { code: "version_conflict", message: "Conflito de versão" },
+    }));
+    await expect(
+      repositories.orders.replace("order-1", {
+        expectedVersion: 1,
+        customerCode: 10,
+        negotiationTypeCode: null,
+        notes: null,
+        items: [],
+      }),
+    ).rejects.toMatchObject({ status: 409, code: "version_conflict" });
+  });
 });

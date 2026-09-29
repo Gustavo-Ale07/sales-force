@@ -21,27 +21,45 @@ interface CartLineProps {
   readonly onQuantityChange: (key: string, text: string) => void;
   readonly onDiscountChange: (key: string, text: string) => void;
   readonly onRemove: (key: string) => void;
+  /** Selection mode (mobile's phone-appropriate stand-in for the desktop's checkboxes + toolbar, DISC-1/MOB-4). */
+  readonly selectionMode: boolean;
+  readonly selected: boolean;
+  readonly onToggleSelect: (key: string) => void;
+  /** Long-pressing any line enters selection mode and selects it in one gesture. */
+  readonly onLongPress: (key: string) => void;
 }
 
-function CartLine({ line, preview, onQuantityChange, onDiscountChange, onRemove }: CartLineProps) {
+function CartLine({ line, preview, onQuantityChange, onDiscountChange, onRemove, selectionMode, selected, onToggleSelect, onLongPress }: CartLineProps) {
   const amounts = lineAmountsOf(preview);
   const noPrice = line.price.state === "none";
   return (
-    <View style={styles.line} accessible>
-      <View style={styles.lineHeader}>
+    <View style={[styles.line, selected && styles.lineSelected]} accessible>
+      <Pressable
+        style={styles.lineHeader}
+        onPress={() => selectionMode && onToggleSelect(line.key)}
+        onLongPress={() => onLongPress(line.key)}
+        accessibilityRole={selectionMode ? "checkbox" : undefined}
+        accessibilityState={selectionMode ? { checked: selected } : undefined}
+        accessibilityLabel={selectionMode ? `Selecionar ${line.description}` : undefined}
+      >
+        {selectionMode && (
+          <View style={[styles.checkbox, selected && styles.checkboxChecked]}>{selected && <Text style={styles.checkboxMark}>✓</Text>}</View>
+        )}
         <View style={styles.lineHeaderText}>
           <Text style={styles.name}>{line.description}</Text>
           <Text style={styles.meta}>{`Código ${line.productCode} · ${line.unit} · ${describeListPrice(line.price)}`}</Text>
         </View>
-        <Pressable
-          onPress={() => onRemove(line.key)}
-          accessibilityRole="button"
-          accessibilityLabel={`Remover ${line.description} do carrinho`}
-          hitSlop={8}
-        >
-          <Text style={styles.remove}>Remover</Text>
-        </Pressable>
-      </View>
+        {!selectionMode && (
+          <Pressable
+            onPress={() => onRemove(line.key)}
+            accessibilityRole="button"
+            accessibilityLabel={`Remover ${line.description} do carrinho`}
+            hitSlop={8}
+          >
+            <Text style={styles.remove}>Remover</Text>
+          </Pressable>
+        )}
+      </Pressable>
 
       <View style={styles.fields}>
         <View style={styles.field}>
@@ -91,6 +109,11 @@ export interface CartViewProps {
   readonly onQuantityChange: (key: string, text: string) => void;
   readonly onDiscountChange: (key: string, text: string) => void;
   readonly onRemove: (key: string) => void;
+  /** Selection mode: choosing a subset of lines for group discount (long-press or the "Selecionar itens" toggle). */
+  readonly selectionMode: boolean;
+  readonly selected: ReadonlySet<string>;
+  readonly onToggleSelect: (key: string) => void;
+  readonly onLongPressLine: (key: string) => void;
 }
 
 /**
@@ -98,7 +121,7 @@ export interface CartViewProps {
  * financial summary. Every number shown comes from `packages/domain` via `order-draft.ts` previews — this
  * component only renders text and forwards edits.
  */
-export function CartView({ lines, preview, onQuantityChange, onDiscountChange, onRemove }: CartViewProps) {
+export function CartView({ lines, preview, onQuantityChange, onDiscountChange, onRemove, selectionMode, selected, onToggleSelect, onLongPressLine }: CartViewProps) {
   if (lines.length === 0) {
     return (
       <View style={styles.empty}>
@@ -109,6 +132,9 @@ export function CartView({ lines, preview, onQuantityChange, onDiscountChange, o
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      {!selectionMode && (
+        <Text style={styles.selectionHint}>Toque e segure um item para selecionar vários e aplicar desconto em grupo.</Text>
+      )}
       {lines.map((line, index) => (
         <CartLine
           key={line.key}
@@ -117,6 +143,10 @@ export function CartView({ lines, preview, onQuantityChange, onDiscountChange, o
           onQuantityChange={onQuantityChange}
           onDiscountChange={onDiscountChange}
           onRemove={onRemove}
+          selectionMode={selectionMode}
+          selected={selected.has(line.key)}
+          onToggleSelect={onToggleSelect}
+          onLongPress={onLongPressLine}
         />
       ))}
 
@@ -150,6 +180,7 @@ const styles = StyleSheet.create({
   content: { padding: spacing.lg, gap: spacing.sm, paddingBottom: spacing.xl },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl },
   emptyText: { color: colors.textMuted, textAlign: "center" },
+  selectionHint: { fontSize: 11, color: colors.textMuted, fontStyle: "italic" },
   line: {
     backgroundColor: colors.surface,
     borderRadius: 8,
@@ -158,8 +189,20 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     gap: spacing.sm,
   },
+  lineSelected: { borderColor: colors.navy, borderWidth: 2 },
   lineHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: spacing.sm },
   lineHeaderText: { flex: 1, gap: 2 },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxChecked: { borderColor: colors.navy, backgroundColor: colors.navy },
+  checkboxMark: { color: colors.onNavy, fontSize: 13, fontWeight: "800" },
   name: { fontSize: 15, fontWeight: "700", color: colors.text },
   meta: { fontSize: 12, color: colors.textMuted },
   remove: { color: colors.red, fontWeight: "700", fontSize: 13 },

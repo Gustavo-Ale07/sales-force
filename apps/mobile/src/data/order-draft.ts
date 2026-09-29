@@ -15,7 +15,7 @@ import {
   type OrderTotals,
   type ResolvedPrice,
 } from "@salesforce/domain";
-import type { ListPriceContext, ProductListItem } from "./ports";
+import type { ListPriceContext, OrderItem as OrderItemDto, ProductListItem } from "./ports";
 
 /**
  * Mobile-side model of a new order draft, used only while online (MOB-4). Only product, quantity and the
@@ -105,6 +105,27 @@ export function lineFromProduct(product: ProductListItem, key: string): EditorLi
   };
 }
 
+/** Missing or inconsistent price data on a saved order line is treated as "no price", never fabricated (mirrors `resolvedPriceOf`). */
+function priceFromOrderItem(item: OrderItemDto): ListPriceContext {
+  if (item.priceState !== "none" && item.unitListPrice !== null && item.priceTableCode !== null && item.priceVersionId !== null) {
+    return { state: item.priceState, unitPrice: item.unitListPrice, tableCode: item.priceTableCode, versionId: item.priceVersionId };
+  }
+  return { state: "none", tableCode: item.priceTableCode, versionId: item.priceVersionId, noPriceReason: "no_price_row" };
+}
+
+/** Rebuilds an editor line from a saved order item, to reopen an existing draft for editing (mirrors `apps/web`'s `lineFromOrderItem`). */
+export function lineFromOrderItem(item: OrderItemDto, key: string): EditorLine {
+  return {
+    key,
+    productCode: item.productCode,
+    description: item.productDescription,
+    unit: item.unit,
+    quantityText: item.quantity.replace(".", ","),
+    discountText: discountTextOf(item.discountPercent),
+    price: priceFromOrderItem(item),
+  };
+}
+
 /** Missing or inconsistent price data is treated as "no price", never as a fabricated value. */
 function resolvedPriceOf(price: ListPriceContext): ResolvedPrice {
   if (price.state === "none") return { state: "none", reason: price.noPriceReason, tableCode: price.tableCode, versionId: price.versionId };
@@ -188,6 +209,26 @@ export function toRequestItems(lines: readonly EditorLine[]): OrderItemInput[] {
     const hasDiscount = discount.ok && discount.value !== "0" && line.price.state !== "none";
     return [{ productCode: line.productCode, quantity: quantity.value, ...(hasDiscount ? { discountPercent: discount.value } : {}) }];
   });
+}
+
+/**
+ * Sets the discount text of the lines that `match` and that have a price to discount (a missing price is never
+ * discounted, P-09). Returns the new lines and how many were changed. The percentage is validated by the caller
+ * (`parseDiscountInput`); this is the same UI-level iteration used for both mass apply (`match = () => true`) and
+ * group/subset apply (`match` over a selected set of keys) — mirrors `apps/web/src/lib/order-draft.ts`.
+ */
+export function applyDiscount(
+  lines: readonly EditorLine[],
+  discountText: string,
+  match: (line: EditorLine) => boolean,
+): { lines: EditorLine[]; applied: number } {
+  let applied = 0;
+  const next = lines.map((line) => {
+    if (!match(line) || line.price.state === "none") return line;
+    applied += 1;
+    return { ...line, discountText };
+  });
+  return { lines: next, applied };
 }
 
 /**

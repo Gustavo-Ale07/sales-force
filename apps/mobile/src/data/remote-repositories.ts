@@ -44,6 +44,12 @@ export function createRemoteOrderRepository(api: ApiClient): OrderRepository {
     async create(request) {
       return callApi(() => api.POST("/orders", { body: request }));
     },
+    async get(id) {
+      return callApi(() => api.GET("/orders/{id}", { params: { path: { id } } }));
+    },
+    async replace(id, request) {
+      return callApi(() => api.PUT("/orders/{id}", { params: { path: { id } }, body: request }));
+    },
   };
 }
 

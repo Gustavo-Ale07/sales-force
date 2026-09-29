@@ -5,6 +5,7 @@ import { describeDataError, type DataErrorInfo } from "../data/errors";
 import {
   incrementLineQuantity,
   isLinePriceOrderable,
+  lineFromOrderItem,
   lineFromProduct,
   previewDraft,
   toRequestItems,
@@ -17,24 +18,47 @@ import { newClientRequestId } from "../lib/uuid";
 import { colors, spacing } from "../theme";
 import { CartView } from "./cart-view";
 import { CustomerPicker } from "./customer-picker";
+import { DiscountSheet } from "./discount-sheet";
 import { ProductPicker } from "./product-picker";
 
 type Step = "customer" | "products" | "cart";
+
+/** Enough of a customer to display and to send as `customerCode`; a saved/reopened draft never carries the full catalog row. */
+type PickedCustomer = Pick<CustomerListItem, "code" | "name">;
 
 interface SaveFailure {
   readonly title: string;
   readonly messages: readonly string[];
   readonly correlationId?: string;
+  /** `version_conflict` / `order_not_editable`: another save happened elsewhere — offer to reload, never silently overwrite it. */
+  readonly reloadable: boolean;
 }
 
-/** Turns a failed `POST /orders` into user-facing text. Per-item issues are listed; the server stays authoritative. */
+/** Turns a failed save into user-facing text. Per-item issues are listed; the server stays authoritative. Mirrors `apps/web`'s `describeSaveFailure`. */
 function describeSaveFailure(error: unknown): SaveFailure {
   if (error instanceof ApiRequestError) {
+    if (error.code === "version_conflict") {
+      return {
+        title: "O rascunho foi alterado em outro lugar",
+        messages: ["Recarregue para ver a versão atual. Suas alterações não salvas serão descartadas."],
+        correlationId: error.correlationId,
+        reloadable: true,
+      };
+    }
+    if (error.code === "order_not_editable") {
+      return {
+        title: "Este pedido não pode mais ser editado",
+        messages: ["Ele já não é um rascunho. Recarregue para ver a situação atual."],
+        correlationId: error.correlationId,
+        reloadable: true,
+      };
+    }
     if (error.code === "idempotency_conflict") {
       return {
         title: "Não foi possível salvar",
         messages: ["Esta solicitação já foi registrada com outros dados. Tente salvar novamente."],
         correlationId: error.correlationId,
+        reloadable: false,
       };
     }
     if (error.issues.length > 0) {
@@ -42,11 +66,12 @@ function describeSaveFailure(error: unknown): SaveFailure {
         title: "Corrija os itens antes de salvar",
         messages: error.issues.map(describeIssue),
         correlationId: error.correlationId,
+        reloadable: false,
       };
     }
   }
   const info: DataErrorInfo = describeDataError(error);
-  return { title: "Não foi possível salvar o rascunho", messages: [info.message], correlationId: info.correlationId };
+  return { title: "Não foi possível salvar o rascunho", messages: [info.message], correlationId: info.correlationId, reloadable: false };
 }
 
 export interface NewOrderScreenProps {
@@ -56,19 +81,28 @@ export interface NewOrderScreenProps {
 
 /**
  * Online-only new-order flow (MOB-4): pick the customer, browse the catalog, edit the cart and save the draft
- * through the same `POST /orders` the web editor uses. There is no local outbox here (MOB-2/V-09 pending) — a
- * save always needs the server, and every price/total shown is an estimate from `packages/domain`, the server
- * response on save being authoritative (P-09). Negotiation type, notes, bulk entry, mass/group discount and
- * editing an existing draft are out of this slice (see the mobile-engineer report).
+ * through the same `POST /orders` / `PUT /orders/{id}` the web editor uses. There is no local outbox here
+ * (MOB-2/V-09 pending) — a save always needs the server, and every price/total shown is an estimate from
+ * `packages/domain`, the server response on save being authoritative (P-09). Negotiation type, notes and bulk
+ * entry are out of this slice; reopening an existing draft is only reachable from this screen's own success
+ * step (there is no order-list screen yet — see the mobile-engineer report).
  */
 export function NewOrderScreen({ repositories, onUnauthenticated }: NewOrderScreenProps) {
   const [step, setStep] = useState<Step>("customer");
-  const [customer, setCustomer] = useState<CustomerListItem | null>(null);
+  const [customer, setCustomer] = useState<PickedCustomer | null>(null);
   const [lines, setLines] = useState<readonly EditorLine[]>([]);
   const lineCounter = useRef(0);
   const nextKey = () => `line-${(lineCounter.current += 1)}`;
   // One idempotency key per distinct payload: a retry after a lost response resends the same key, an edited payload gets a new one.
+  // Only `create` uses this: `replace` is optimistic-concurrency based (`expectedVersion`), not idempotency-key based (mirrors web).
   const requestIdRef = useRef<{ payload: string; id: string } | null>(null);
+  /** `null` while creating a fresh draft; the loaded order (its id, version, negotiation type and notes) while editing one. */
+  const [editingOrder, setEditingOrder] = useState<OrderDetail | null>(null);
+  /** Phone-appropriate stand-in for the desktop's checkboxes + toolbar (DISC-1/MOB-4): long-press or this toggle. */
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [massDiscountOpen, setMassDiscountOpen] = useState(false);
+  const [groupDiscountOpen, setGroupDiscountOpen] = useState(false);
 
   const [config, setConfig] = useState<
     { status: "loading" } | { status: "error"; error: DataErrorInfo } | { status: "ready"; value: OrderEntryConfiguration }
@@ -116,7 +150,65 @@ export function NewOrderScreen({ repositories, onUnauthenticated }: NewOrderScre
     setLines([]);
     setSavedOrder(null);
     setSaveFailure(null);
+    setEditingOrder(null);
+    setSelectionMode(false);
+    setSelected(new Set());
     setStep("customer");
+  }
+
+  /** Reopens the just-saved draft for editing (the only entry point this slice has — there is no order-list screen yet). */
+  function editSavedOrder(order: OrderDetail) {
+    setEditingOrder(order);
+    setCustomer({ code: order.customerCode, name: order.customerName });
+    setLines(order.items.map((item, index) => lineFromOrderItem(item, `edit-${index}`)));
+    setSavedOrder(null);
+    setSaveFailure(null);
+    setSelectionMode(false);
+    setSelected(new Set());
+    setStep("cart");
+  }
+
+  /** Discards local edits and reloads the authoritative order after a `version_conflict` / `order_not_editable`. */
+  async function reload() {
+    if (editingOrder === null) return;
+    try {
+      const fresh = await repositories.orders.get(editingOrder.id);
+      setEditingOrder(fresh);
+      setCustomer({ code: fresh.customerCode, name: fresh.customerName });
+      setLines(fresh.items.map((item, index) => lineFromOrderItem(item, `edit-${index}`)));
+      setSaveFailure(null);
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.status === 401) {
+        onUnauthenticated();
+        return;
+      }
+      setSaveFailure(describeSaveFailure(error));
+    }
+  }
+
+  function toggleSelectionMode() {
+    setSelectionMode((current) => !current);
+    setSelected(new Set());
+  }
+
+  function cancelSelection() {
+    setSelectionMode(false);
+    setSelected(new Set());
+  }
+
+  function toggleSelect(key: string) {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  /** Long-pressing a line enters selection mode and selects it in one gesture. */
+  function enterSelectionWith(key: string) {
+    setSelectionMode(true);
+    setSelected(new Set([key]));
   }
 
   function changeCustomer() {
@@ -149,6 +241,12 @@ export function NewOrderScreen({ repositories, onUnauthenticated }: NewOrderScre
 
   function removeLine(key: string) {
     setLines((current) => current.filter((line) => line.key !== key));
+    setSelected((current) => {
+      if (!current.has(key)) return current;
+      const next = new Set(current);
+      next.delete(key);
+      return next;
+    });
   }
 
   function setQuantityText(key: string, text: string) {
@@ -166,16 +264,29 @@ export function NewOrderScreen({ repositories, onUnauthenticated }: NewOrderScre
     try {
       const body = {
         customerCode: customer.code,
-        negotiationTypeCode: config.status === "ready" ? config.value.sales.defaultNegotiationTypeCode : null,
-        notes: null,
+        // Editing an existing draft keeps its negotiation type and notes as loaded (not editable in this slice);
+        // a fresh draft uses the installation default.
+        negotiationTypeCode:
+          editingOrder !== null
+            ? editingOrder.negotiationTypeCode
+            : config.status === "ready"
+              ? config.value.sales.defaultNegotiationTypeCode
+              : null,
+        notes: editingOrder !== null ? editingOrder.notes : null,
         items: toRequestItems(lines),
       };
-      const payload = JSON.stringify(body);
-      if (requestIdRef.current?.payload !== payload) {
-        requestIdRef.current = { payload, id: newClientRequestId() };
+      if (editingOrder !== null) {
+        const updated = await repositories.orders.replace(editingOrder.id, { expectedVersion: editingOrder.version, ...body });
+        setEditingOrder(updated);
+        setSavedOrder(updated);
+      } else {
+        const payload = JSON.stringify(body);
+        if (requestIdRef.current?.payload !== payload) {
+          requestIdRef.current = { payload, id: newClientRequestId() };
+        }
+        const created = await repositories.orders.create({ clientRequestId: requestIdRef.current.id, ...body });
+        setSavedOrder(created);
       }
-      const created = await repositories.orders.create({ clientRequestId: requestIdRef.current.id, ...body });
-      setSavedOrder(created);
     } catch (error) {
       if (error instanceof ApiRequestError && error.status === 401) {
         onUnauthenticated();
@@ -190,12 +301,20 @@ export function NewOrderScreen({ repositories, onUnauthenticated }: NewOrderScre
   if (savedOrder !== null) {
     return (
       <View style={styles.center}>
-        <Text style={styles.successTitle}>Rascunho salvo</Text>
+        <Text style={styles.successTitle}>{editingOrder !== null ? "Alterações salvas" : "Rascunho salvo"}</Text>
         <Text style={styles.successMeta}>{`Pedido nº ${savedOrder.draftNumber} · ${savedOrder.customerName}`}</Text>
         <Text style={styles.successTotal}>{formatBrl(savedOrder.estimatedTotal) ?? "—"}</Text>
         {savedOrder.isPartial && <Text style={styles.partialNotice}>Total parcial: há itens sem preço neste rascunho.</Text>}
         <Pressable style={styles.primaryButton} onPress={resetOrder} accessibilityRole="button" accessibilityLabel="Novo pedido">
           <Text style={styles.primaryButtonText}>Novo pedido</Text>
+        </Pressable>
+        <Pressable
+          style={styles.secondaryButton}
+          onPress={() => editSavedOrder(savedOrder)}
+          accessibilityRole="button"
+          accessibilityLabel="Editar pedido"
+        >
+          <Text style={styles.secondaryButtonText}>Editar pedido</Text>
         </Pressable>
       </View>
     );
@@ -223,9 +342,11 @@ export function NewOrderScreen({ repositories, onUnauthenticated }: NewOrderScre
         <Text style={styles.customerName} numberOfLines={1}>
           {customer?.name}
         </Text>
-        <Pressable onPress={changeCustomer} accessibilityRole="button" accessibilityLabel="Trocar cliente">
-          <Text style={styles.changeCustomer}>Trocar</Text>
-        </Pressable>
+        {editingOrder === null && (
+          <Pressable onPress={changeCustomer} accessibilityRole="button" accessibilityLabel="Trocar cliente">
+            <Text style={styles.changeCustomer}>Trocar</Text>
+          </Pressable>
+        )}
       </View>
 
       <View style={styles.pills} accessibilityRole="tablist">
@@ -257,15 +378,53 @@ export function NewOrderScreen({ repositories, onUnauthenticated }: NewOrderScre
           onUnauthenticated={onUnauthenticated}
         />
       ) : (
-        <ScrollView style={styles.flex}>
-          <CartView
-            lines={lines}
-            preview={preview}
-            onQuantityChange={setQuantityText}
-            onDiscountChange={setDiscountText}
-            onRemove={removeLine}
-          />
-        </ScrollView>
+        <View style={styles.flex}>
+          {lines.length > 0 && (
+            <View style={styles.cartToolbar}>
+              <Pressable
+                style={styles.toolbarButton}
+                onPress={toggleSelectionMode}
+                accessibilityRole="button"
+                accessibilityLabel={selectionMode ? "Cancelar seleção" : "Selecionar itens"}
+              >
+                <Text style={styles.toolbarButtonText}>{selectionMode ? "Cancelar seleção" : "Selecionar itens"}</Text>
+              </Pressable>
+              {selectionMode ? (
+                <Pressable
+                  style={[styles.toolbarButton, selected.size === 0 && styles.toolbarButtonDisabled]}
+                  onPress={() => setGroupDiscountOpen(true)}
+                  disabled={selected.size === 0}
+                  accessibilityRole="button"
+                  accessibilityLabel="Aplicar desconto aos selecionados"
+                >
+                  <Text style={styles.toolbarButtonText}>{`Desconto (${selected.size})`}</Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  style={styles.toolbarButton}
+                  onPress={() => setMassDiscountOpen(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Desconto em massa"
+                >
+                  <Text style={styles.toolbarButtonText}>Desconto em massa</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
+          <ScrollView style={styles.flex}>
+            <CartView
+              lines={lines}
+              preview={preview}
+              onQuantityChange={setQuantityText}
+              onDiscountChange={setDiscountText}
+              onRemove={removeLine}
+              selectionMode={selectionMode}
+              selected={selected}
+              onToggleSelect={toggleSelect}
+              onLongPressLine={enterSelectionWith}
+            />
+          </ScrollView>
+        </View>
       )}
 
       <View style={styles.footer}>
@@ -283,6 +442,11 @@ export function NewOrderScreen({ repositories, onUnauthenticated }: NewOrderScre
                 {message}
               </Text>
             ))}
+            {saveFailure.reloadable && (
+              <Pressable onPress={() => void reload()} accessibilityRole="button" accessibilityLabel="Recarregar pedido">
+                <Text style={styles.reloadLink}>Recarregar</Text>
+              </Pressable>
+            )}
           </View>
         )}
         <Pressable
@@ -293,11 +457,41 @@ export function NewOrderScreen({ repositories, onUnauthenticated }: NewOrderScre
           onPress={() => void save()}
           disabled={lines.length === 0 || !preview.valid || blockedLineCount > 0 || saving}
           accessibilityRole="button"
-          accessibilityLabel="Salvar rascunho"
+          accessibilityLabel={editingOrder !== null ? "Salvar alterações" : "Salvar rascunho"}
         >
-          {saving ? <ActivityIndicator color={colors.onNavy} /> : <Text style={styles.primaryButtonText}>Salvar rascunho</Text>}
+          {saving ? (
+            <ActivityIndicator color={colors.onNavy} />
+          ) : (
+            <Text style={styles.primaryButtonText}>{editingOrder !== null ? "Salvar alterações" : "Salvar rascunho"}</Text>
+          )}
         </Pressable>
       </View>
+
+      <DiscountSheet
+        visible={massDiscountOpen}
+        title="Desconto em massa"
+        description="Aplica um desconto percentual a todos os itens do carrinho."
+        lines={lines}
+        match={() => true}
+        onApply={(nextLines) => {
+          setLines(nextLines);
+          setMassDiscountOpen(false);
+        }}
+        onClose={() => setMassDiscountOpen(false)}
+      />
+      <DiscountSheet
+        visible={groupDiscountOpen}
+        title="Desconto no grupo selecionado"
+        description="Aplica um desconto percentual apenas aos itens selecionados."
+        lines={lines}
+        match={(line) => selected.has(line.key)}
+        onApply={(nextLines) => {
+          setLines(nextLines);
+          setGroupDiscountOpen(false);
+          cancelSelection();
+        }}
+        onClose={() => setGroupDiscountOpen(false)}
+      />
     </View>
   );
 }
@@ -323,6 +517,24 @@ const styles = StyleSheet.create({
   pillActive: { backgroundColor: colors.navy },
   pillText: { fontSize: 14, fontWeight: "600", color: colors.textMuted },
   pillTextActive: { color: colors.onNavy },
+  cartToolbar: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  toolbarButton: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.navy,
+  },
+  toolbarButtonDisabled: { opacity: 0.5 },
+  toolbarButtonText: { color: colors.navy, fontWeight: "700", fontSize: 13 },
   footer: {
     padding: spacing.lg,
     gap: spacing.sm,
@@ -334,6 +546,7 @@ const styles = StyleSheet.create({
   failureBox: { backgroundColor: colors.errorBackground, borderRadius: 8, padding: spacing.md, gap: 2 },
   failureTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
   failureMessage: { fontSize: 13, color: colors.text },
+  reloadLink: { color: colors.navy, fontWeight: "700", fontSize: 13, marginTop: spacing.xs },
   primaryButton: {
     backgroundColor: colors.navy,
     borderRadius: 8,
@@ -344,6 +557,17 @@ const styles = StyleSheet.create({
   },
   primaryButtonDisabled: { opacity: 0.5 },
   primaryButtonText: { color: colors.onNavy, fontSize: 16, fontWeight: "700" },
+  secondaryButton: {
+    borderRadius: 8,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.navy,
+    minHeight: 48,
+  },
+  secondaryButtonText: { color: colors.navy, fontSize: 15, fontWeight: "700" },
   successTitle: { fontSize: 20, fontWeight: "800", color: colors.text },
   successMeta: { fontSize: 14, color: colors.textMuted },
   successTotal: { fontSize: 28, fontWeight: "800", color: colors.navy },

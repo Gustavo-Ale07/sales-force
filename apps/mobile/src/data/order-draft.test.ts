@@ -1,11 +1,13 @@
-import { product } from "../test-doubles";
+import { orderItem, product } from "../test-doubles";
 import {
+  applyDiscount,
   describeIssue,
   discountProblemMessages,
   discountTextOf,
   incrementLineQuantity,
   isLinePriceOrderable,
   lineAmountsOf,
+  lineFromOrderItem,
   lineFromProduct,
   parseDiscountInput,
   parseQuantityInput,
@@ -255,6 +257,84 @@ describe("incrementLineQuantity", () => {
   it("does not change any other field of the line", () => {
     const original = line({ quantityText: "1", discountText: "10" });
     expect(incrementLineQuantity(original)).toMatchObject({ ...original, quantityText: "2" });
+  });
+});
+
+describe("applyDiscount (mass and group/subset apply share this iteration)", () => {
+  it("sets the discount text on every matching, priced line and counts how many changed", () => {
+    const lines = [
+      line({ key: "a", discountText: "" }),
+      line({ key: "b", discountText: "5" }),
+      line({ key: "c", price: { state: "none", tableCode: null, versionId: null, noPriceReason: "no_price_row" } }),
+    ];
+    const result = applyDiscount(lines, "10", () => true);
+    expect(result.applied).toBe(2);
+    expect(result.lines.map((l) => l.discountText)).toEqual(["10", "10", ""]);
+  });
+
+  it("only touches lines the matcher selects (group/subset apply)", () => {
+    const lines = [line({ key: "a" }), line({ key: "b" }), line({ key: "c" })];
+    const selected = new Set(["a", "c"]);
+    const result = applyDiscount(lines, "20", (l) => selected.has(l.key));
+    expect(result.applied).toBe(2);
+    expect(result.lines.find((l) => l.key === "a")?.discountText).toBe("20");
+    expect(result.lines.find((l) => l.key === "b")?.discountText).toBe("");
+    expect(result.lines.find((l) => l.key === "c")?.discountText).toBe("20");
+  });
+
+  it("never discounts a line without a price even when it matches", () => {
+    const lines = [line({ key: "a", price: { state: "none", tableCode: null, versionId: null, noPriceReason: "no_resolved_table" } })];
+    const result = applyDiscount(lines, "10", () => true);
+    expect(result.applied).toBe(0);
+    expect(result.lines[0]?.discountText).toBe("");
+  });
+
+  it("removes discounts on the matched lines when applied with an empty text", () => {
+    const lines = [line({ key: "a", discountText: "15" }), line({ key: "b", discountText: "15" })];
+    const result = applyDiscount(lines, "", (l) => l.key === "a");
+    expect(result.applied).toBe(1);
+    expect(result.lines.find((l) => l.key === "a")?.discountText).toBe("");
+    expect(result.lines.find((l) => l.key === "b")?.discountText).toBe("15");
+  });
+});
+
+describe("lineFromOrderItem (loading a saved draft for editing)", () => {
+  it("carries the product, quantity, discount and price of a priced line", () => {
+    const built = lineFromOrderItem(
+      orderItem({ productCode: 9, productDescription: "Vela", unit: "CX", quantity: "2.5", discountPercent: "7.5", unitListPrice: "4", priceTableCode: 2, priceVersionId: 3 }),
+      "k",
+    );
+    expect(built).toEqual({
+      key: "k",
+      productCode: 9,
+      description: "Vela",
+      unit: "CX",
+      quantityText: "2,5",
+      discountText: "7,5",
+      price: { state: "priced", unitPrice: "4", tableCode: 2, versionId: 3 },
+    });
+  });
+
+  it("shows no discount for a stored '0' percentage", () => {
+    const built = lineFromOrderItem(orderItem({ discountPercent: "0" }), "k");
+    expect(built.discountText).toBe("");
+  });
+
+  it("treats a line without a price as 'none', never fabricating a value", () => {
+    const built = lineFromOrderItem(
+      orderItem({ priceState: "none", unitListPrice: null, priceTableCode: null, priceVersionId: null }),
+      "k",
+    );
+    expect(built.price).toEqual({ state: "none", tableCode: null, versionId: null, noPriceReason: "no_price_row" });
+  });
+});
+
+describe("quantity change preserves the line's discount (discount and quantity are independent fields)", () => {
+  it("changing quantityText never touches discountText", () => {
+    const original = line({ quantityText: "1", discountText: "12,5" });
+    const changed = { ...original, quantityText: "5" };
+    expect(changed.discountText).toBe("12,5");
+    expect(previewDraft([changed]).lines[0]?.item?.discountPercent).toBe("12.5");
   });
 });
 

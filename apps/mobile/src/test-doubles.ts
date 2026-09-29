@@ -7,6 +7,7 @@ import type {
   CustomerListItem,
   OrderDetail,
   OrderEntryConfiguration,
+  OrderItem,
   OrderRepository,
   Page,
   ProductListItem,
@@ -66,6 +67,23 @@ export function orderEntryConfiguration(overrides: Partial<OrderEntryConfigurati
   };
 }
 
+export function orderItem(overrides: Partial<OrderItem> = {}): OrderItem {
+  return {
+    lineNo: 1,
+    productCode: 5,
+    productDescription: "Produto 5",
+    unit: "UN",
+    quantity: "1",
+    unitListPrice: "10",
+    discountPercent: "0",
+    priceState: "priced",
+    priceTableCode: 1,
+    priceVersionId: 1,
+    estimatedLineTotal: "10",
+    ...overrides,
+  };
+}
+
 export function orderDetail(overrides: Partial<OrderDetail> = {}): OrderDetail {
   return {
     id: "0190a0c0-0000-7000-8000-000000000050",
@@ -93,6 +111,9 @@ export function fakeOrders(overrides: Partial<OrderRepository> = {}): OrderRepos
   return {
     getEntryConfiguration: async () => orderEntryConfiguration(),
     create: async (request: CreateOrderRequest) => orderDetail({ customerCode: request.customerCode, items: [] }),
+    get: async (id: string) => orderDetail({ id }),
+    replace: async (id: string, request) =>
+      orderDetail({ id, customerCode: request.customerCode, negotiationTypeCode: request.negotiationTypeCode, notes: request.notes, version: request.expectedVersion + 1 }),
     ...overrides,
   };
 }
