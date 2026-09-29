@@ -19,6 +19,7 @@ import { colors, spacing } from "../theme";
 import { CartView } from "./cart-view";
 import { CustomerPicker } from "./customer-picker";
 import { DiscountSheet } from "./discount-sheet";
+import { GroupDiscountSheet } from "./group-discount-sheet";
 import { ProductPicker } from "./product-picker";
 
 type Step = "customer" | "products" | "cart";
@@ -102,6 +103,9 @@ export function NewOrderScreen({ repositories, onUnauthenticated }: NewOrderScre
   const [selectionMode, setSelectionMode] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [massDiscountOpen, setMassDiscountOpen] = useState(false);
+  /** Manual ad-hoc subset apply (not "group discount" — MOB-4a superseded that label; see `GroupDiscountSheet` below for the real catalog-group feature). */
+  const [selectedDiscountOpen, setSelectedDiscountOpen] = useState(false);
+  /** Automatic catalog-group discount (MOB-4a): buckets the cart by product `groupCode`/`groupName`. */
   const [groupDiscountOpen, setGroupDiscountOpen] = useState(false);
 
   const [config, setConfig] = useState<
@@ -392,7 +396,7 @@ export function NewOrderScreen({ repositories, onUnauthenticated }: NewOrderScre
               {selectionMode ? (
                 <Pressable
                   style={[styles.toolbarButton, selected.size === 0 && styles.toolbarButtonDisabled]}
-                  onPress={() => setGroupDiscountOpen(true)}
+                  onPress={() => setSelectedDiscountOpen(true)}
                   disabled={selected.size === 0}
                   accessibilityRole="button"
                   accessibilityLabel="Aplicar desconto aos selecionados"
@@ -400,14 +404,24 @@ export function NewOrderScreen({ repositories, onUnauthenticated }: NewOrderScre
                   <Text style={styles.toolbarButtonText}>{`Desconto (${selected.size})`}</Text>
                 </Pressable>
               ) : (
-                <Pressable
-                  style={styles.toolbarButton}
-                  onPress={() => setMassDiscountOpen(true)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Desconto em massa"
-                >
-                  <Text style={styles.toolbarButtonText}>Desconto em massa</Text>
-                </Pressable>
+                <>
+                  <Pressable
+                    style={styles.toolbarButton}
+                    onPress={() => setMassDiscountOpen(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Desconto em massa"
+                  >
+                    <Text style={styles.toolbarButtonText}>Desconto em massa</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.toolbarButton}
+                    onPress={() => setGroupDiscountOpen(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Desconto por grupo"
+                  >
+                    <Text style={styles.toolbarButtonText}>Desconto por grupo</Text>
+                  </Pressable>
+                </>
               )}
             </View>
           )}
@@ -480,15 +494,25 @@ export function NewOrderScreen({ repositories, onUnauthenticated }: NewOrderScre
         onClose={() => setMassDiscountOpen(false)}
       />
       <DiscountSheet
-        visible={groupDiscountOpen}
-        title="Desconto no grupo selecionado"
-        description="Aplica um desconto percentual apenas aos itens selecionados."
+        visible={selectedDiscountOpen}
+        title="Desconto nos itens selecionados"
+        description="Aplica um desconto percentual apenas aos itens marcados abaixo."
         lines={lines}
         match={(line) => selected.has(line.key)}
         onApply={(nextLines) => {
           setLines(nextLines);
-          setGroupDiscountOpen(false);
+          setSelectedDiscountOpen(false);
           cancelSelection();
+        }}
+        onClose={() => setSelectedDiscountOpen(false)}
+      />
+      <GroupDiscountSheet
+        visible={groupDiscountOpen}
+        lines={lines}
+        products={repositories.products}
+        onApply={(nextLines) => {
+          setLines(nextLines);
+          setGroupDiscountOpen(false);
         }}
         onClose={() => setGroupDiscountOpen(false)}
       />
@@ -519,6 +543,7 @@ const styles = StyleSheet.create({
   pillTextActive: { color: colors.onNavy },
   cartToolbar: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: spacing.sm,
     padding: spacing.md,
     borderBottomWidth: 1,
@@ -526,7 +551,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   toolbarButton: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: "30%",
     alignItems: "center",
     paddingVertical: spacing.sm,
     borderRadius: 8,

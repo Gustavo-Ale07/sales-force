@@ -84,6 +84,27 @@ describe("remote repositories", () => {
     expect(url.searchParams.get("sort")).toBe("description");
   });
 
+  it("reads a single product by code, group included (group-discount lookup for a reopened draft, MOB-4a)", async () => {
+    const productDetail = {
+      code: 5,
+      description: "Copo 200 ml",
+      active: true,
+      sellable: true,
+      unit: "PCT",
+      brand: null,
+      reference: null,
+      groupCode: 30,
+      groupName: "Copos",
+      listPrice: { state: "none", unitPrice: null, tableCode: null, versionId: null, noPriceReason: "no_resolved_table" },
+      usageCode: null,
+      priceContext: { customerCode: null, tableCode: null, tableName: null, source: "none" },
+    };
+    const { repositories, requests } = repositoriesWith(() => ({ status: 200, body: productDetail }));
+    const found = await repositories.products.get(5);
+    expect(found).toMatchObject({ code: 5, groupCode: 30, groupName: "Copos" });
+    expect(new URL(requests[0]?.url ?? "").pathname).toBe("/api/v1/products/5");
+  });
+
   it("surfaces an API failure as ApiRequestError with the status", async () => {
     const { repositories } = repositoriesWith(() => ({
       status: 401,

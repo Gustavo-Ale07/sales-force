@@ -133,7 +133,7 @@ export function CartView({ lines, preview, onQuantityChange, onDiscountChange, o
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {!selectionMode && (
-        <Text style={styles.selectionHint}>Toque e segure um item para selecionar vários e aplicar desconto em grupo.</Text>
+        <Text style={styles.selectionHint}>Toque e segure um item para selecionar vários e aplicar um desconto só a eles.</Text>
       )}
       {lines.map((line, index) => (
         <CartLine

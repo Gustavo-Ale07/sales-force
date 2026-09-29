@@ -1,9 +1,13 @@
 import { orderItem, product } from "../test-doubles";
 import {
   applyDiscount,
+  applyGroupDiscounts,
   describeIssue,
   discountProblemMessages,
   discountTextOf,
+  groupKeyOf,
+  groupOfLine,
+  groupRowsOf,
   incrementLineQuantity,
   isLinePriceOrderable,
   lineAmountsOf,
@@ -115,6 +119,16 @@ describe("lineFromProduct", () => {
       "k",
     );
     expect(built.price).toMatchObject({ state: "none", noPriceReason: "no_effective_version" });
+  });
+
+  it("carries the product's catalog group (known immediately, unlike a line reopened from a saved draft)", () => {
+    const built = lineFromProduct(product(3, { groupCode: 30, groupName: "Balões" }), "k");
+    expect(built.group).toEqual({ code: 30, name: "Balões" });
+  });
+
+  it("carries a null group as-is when the product has none", () => {
+    const built = lineFromProduct(product(4, { groupCode: null, groupName: null }), "k");
+    expect(built.group).toEqual({ code: null, name: null });
   });
 });
 
@@ -326,6 +340,116 @@ describe("lineFromOrderItem (loading a saved draft for editing)", () => {
       "k",
     );
     expect(built.price).toEqual({ state: "none", tableCode: null, versionId: null, noPriceReason: "no_price_row" });
+  });
+
+  it("does not know the catalog group (a saved order item does not carry it; the group sheet looks it up)", () => {
+    const built = lineFromOrderItem(orderItem(), "k");
+    expect(built.group).toBeUndefined();
+  });
+});
+
+describe("catalog-group discount (MOB-4a): buckets cart lines by product groupCode/groupName, mirrors apps/web's GroupDiscountDialog", () => {
+  const balloon = (key: string, overrides: Partial<EditorLine> = {}) =>
+    line({ key, group: { code: 30, name: "Balões" }, ...overrides });
+  const candle = (key: string, overrides: Partial<EditorLine> = {}) =>
+    line({ key, group: { code: 40, name: "Velas" }, ...overrides });
+
+  describe("groupKeyOf", () => {
+    it("keys a known group by its code", () => {
+      expect(groupKeyOf({ code: 30, name: "Balões" })).toBe("30");
+    });
+
+    it("keys a product with no group under a distinct constant, never null itself", () => {
+      expect(groupKeyOf({ code: null, name: null })).toBe("none");
+    });
+
+    it("keys an unknown (not yet looked up) group as null", () => {
+      expect(groupKeyOf(undefined)).toBeNull();
+    });
+  });
+
+  describe("groupOfLine", () => {
+    it("uses the line's own group when it already knows it", () => {
+      const l = balloon("a");
+      expect(groupOfLine(l, new Map())).toEqual({ code: 30, name: "Balões" });
+    });
+
+    it("falls back to the lookup map for a line that does not know its group yet", () => {
+      const l = line({ key: "a" }); // group undefined, as from lineFromOrderItem
+      const lookup = new Map([[l.productCode, { code: 40, name: "Velas" }]]);
+      expect(groupOfLine(l, lookup)).toEqual({ code: 40, name: "Velas" });
+    });
+
+    it("stays undefined when neither the line nor the lookup knows the group", () => {
+      const l = line({ key: "a" });
+      expect(groupOfLine(l, new Map())).toBeUndefined();
+    });
+  });
+
+  describe("groupRowsOf", () => {
+    it("buckets lines by group, counting how many cart lines are in each, sorted by name (pt-BR)", () => {
+      const rows = groupRowsOf([balloon("a"), candle("b"), balloon("c")], new Map());
+      expect(rows).toEqual([
+        { key: "30", name: "Balões", count: 2 },
+        { key: "40", name: "Velas", count: 1 },
+      ]);
+    });
+
+    it("gives a product with no group its own row, labelled distinctly", () => {
+      const rows = groupRowsOf([line({ key: "a", group: { code: null, name: null } })], new Map());
+      expect(rows).toEqual([{ key: "none", name: "Sem grupo", count: 1 }]);
+    });
+
+    it("falls back to a generic label when a known group code has no name", () => {
+      const rows = groupRowsOf([line({ key: "a", group: { code: 50, name: null } })], new Map());
+      expect(rows).toEqual([{ key: "50", name: "Grupo 50", count: 1 }]);
+    });
+
+    it("excludes lines whose group is still unknown (loading, or lookup failed) instead of guessing", () => {
+      const rows = groupRowsOf([line({ key: "a" }), balloon("b")], new Map());
+      expect(rows).toEqual([{ key: "30", name: "Balões", count: 1 }]);
+    });
+
+    it("resolves an unknown line's group from the lookup map (reopened-draft case)", () => {
+      const l = line({ key: "a", productCode: 9 });
+      const lookup = new Map([[9, { code: 40, name: "Velas" }]]);
+      expect(groupRowsOf([l], lookup)).toEqual([{ key: "40", name: "Velas", count: 1 }]);
+    });
+  });
+
+  describe("applyGroupDiscounts (one percentage per group, in one action)", () => {
+    it("applies a different percentage per group, leaving an unmentioned group untouched", () => {
+      const lines = [balloon("a"), balloon("b"), candle("c")];
+      const result = applyGroupDiscounts(lines, [{ key: "30", discountText: "10" }], (l) => groupKeyOf(l.group));
+      expect(result.applied).toBe(2);
+      expect(result.lines.find((l) => l.key === "a")?.discountText).toBe("10");
+      expect(result.lines.find((l) => l.key === "b")?.discountText).toBe("10");
+      expect(result.lines.find((l) => l.key === "c")?.discountText).toBe("");
+    });
+
+    it("applies every listed group's percentage in one call", () => {
+      const lines = [balloon("a"), candle("b")];
+      const result = applyGroupDiscounts(
+        lines,
+        [
+          { key: "30", discountText: "10" },
+          { key: "40", discountText: "20" },
+        ],
+        (l) => groupKeyOf(l.group),
+      );
+      expect(result.applied).toBe(2);
+      expect(result.lines.find((l) => l.key === "a")?.discountText).toBe("10");
+      expect(result.lines.find((l) => l.key === "b")?.discountText).toBe("20");
+    });
+
+    it("never discounts a line without a price even when its group is listed (P-09)", () => {
+      const lines = [
+        balloon("a", { price: { state: "none", tableCode: null, versionId: null, noPriceReason: "no_price_row" } }),
+      ];
+      const result = applyGroupDiscounts(lines, [{ key: "30", discountText: "10" }], (l) => groupKeyOf(l.group));
+      expect(result.applied).toBe(0);
+      expect(result.lines[0]?.discountText).toBe("");
+    });
   });
 });
 

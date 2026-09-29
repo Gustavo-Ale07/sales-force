@@ -11,6 +11,7 @@ import type {
   OrderRepository,
   Page,
   ProductListItem,
+  ProductRepository,
   Repositories,
 } from "./data/ports";
 
@@ -56,6 +57,16 @@ export function product(code: number, overrides: Partial<ProductListItem> = {}):
 
 export function pageOf<T>(items: readonly T[], total = items.length, page = 1): Page<T> {
   return { items, page, pageSize: 25, total };
+}
+
+/** Default product repository fake: an empty catalog, and `get` resolving to a bare product by code (its group
+ * defaults to none — override per test when a group lookup is exercised, e.g. the group-discount sheet). */
+export function fakeProducts(overrides: Partial<ProductRepository> = {}): ProductRepository {
+  return {
+    list: async () => pageOf([]),
+    get: async (code) => product(code),
+    ...overrides,
+  };
 }
 
 export function orderEntryConfiguration(overrides: Partial<OrderEntryConfiguration> = {}): OrderEntryConfiguration {
@@ -152,7 +163,7 @@ export function fakeConnectivity(initial: ConnectivityState = "online") {
 export function fakeDependencies(overrides: Partial<AppDependencies> = {}): AppDependencies {
   const repositories: Repositories = {
     customers: { list: async () => pageOf([]) },
-    products: { list: async () => pageOf([]) },
+    products: fakeProducts(),
     orders: fakeOrders(),
   };
   return {

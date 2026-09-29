@@ -25,6 +25,12 @@ import type { ListPriceContext, OrderItem as OrderItemDto, ProductListItem } fro
  * (each client owns its own UI-state adapter; the commercial math itself lives only in `packages/domain`).
  */
 
+/** A product's catalog group (`groupCode`/`groupName`), or `{ code: null, name: null }` for a product with none. */
+export interface LineGroup {
+  readonly code: number | null;
+  readonly name: string | null;
+}
+
 export interface EditorLine {
   /** Stable React key (not sent to the server). */
   readonly key: string;
@@ -36,6 +42,11 @@ export interface EditorLine {
   /** Discount percentage as typed (pt-BR, decimal comma); empty = no discount. */
   readonly discountText: string;
   readonly price: ListPriceContext;
+  /**
+   * Catalog group, for the group discount (MOB-4a). `undefined` = not known yet (a line reopened from a saved
+   * draft via `lineFromOrderItem`, which does not carry it — the group-discount sheet looks it up while open).
+   */
+  readonly group?: LineGroup;
 }
 
 export type QuantityProblem = "empty" | DecimalError | "dot_separator";
@@ -102,6 +113,7 @@ export function lineFromProduct(product: ProductListItem, key: string): EditorLi
     quantityText: "1",
     discountText: "",
     price: product.listPrice,
+    group: { code: product.groupCode, name: product.groupName },
   };
 }
 
@@ -228,6 +240,72 @@ export function applyDiscount(
     applied += 1;
     return { ...line, discountText };
   });
+  return { lines: next, applied };
+}
+
+/**
+ * Catalog-group discount (MOB-4a): buckets cart lines by product `groupCode`/`groupName` and applies one
+ * percentage per group in a single action — mirrors `apps/web`'s `GroupDiscountDialog`
+ * (`apps/web/src/components/discount-dialogs.tsx`) exactly in behavior, not layout. A line added from the
+ * catalog already knows its group (`lineFromProduct`); a line reopened from a saved draft
+ * (`lineFromOrderItem`) does not, so a `lookup` (fetched by the UI, one product read per distinct code) fills
+ * it in while it is otherwise unknown.
+ */
+
+/** A product with no catalog group buckets under this key, distinct from an unresolved/unknown group (`null`). */
+export const NO_GROUP_KEY = "none";
+
+/** The line's own group when known, otherwise the given lookup; `undefined` when neither knows it yet. */
+export function groupOfLine(line: EditorLine, lookup: ReadonlyMap<number, LineGroup>): LineGroup | undefined {
+  return line.group ?? lookup.get(line.productCode);
+}
+
+/** `null` = still unknown (not looked up yet); `NO_GROUP_KEY` = known to have no group; otherwise the group code. */
+export function groupKeyOf(group: LineGroup | undefined): string | null {
+  if (group === undefined) return null;
+  return group.code === null ? NO_GROUP_KEY : String(group.code);
+}
+
+export interface GroupRow {
+  readonly key: string;
+  readonly name: string;
+  readonly count: number;
+}
+
+/**
+ * One row per catalog group present in the cart (lines whose group is still unknown are left out, never
+ * guessed at). Sorted by name, pt-BR collation, mirroring web's row ordering.
+ */
+export function groupRowsOf(lines: readonly EditorLine[], lookup: ReadonlyMap<number, LineGroup>): GroupRow[] {
+  const byKey = new Map<string, GroupRow>();
+  for (const line of lines) {
+    const group = groupOfLine(line, lookup);
+    if (group === undefined) continue;
+    const key = groupKeyOf(group) as string;
+    const name = group.code === null ? "Sem grupo" : (group.name ?? `Grupo ${group.code}`);
+    const existing = byKey.get(key);
+    byKey.set(key, { key, name, count: (existing?.count ?? 0) + 1 });
+  }
+  return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+}
+
+/**
+ * Applies one stored discount text per group `key` (as produced by `groupKeyOf`), in the given order — the
+ * exact same per-line iteration as `applyDiscount` (no duplicated discount math), run once per group. A group
+ * left out of `entries` is not touched.
+ */
+export function applyGroupDiscounts(
+  lines: readonly EditorLine[],
+  entries: readonly { key: string; discountText: string }[],
+  keyOfLine: (line: EditorLine) => string | null,
+): { lines: EditorLine[]; applied: number } {
+  let next = [...lines];
+  let applied = 0;
+  for (const entry of entries) {
+    const result = applyDiscount(next, entry.discountText, (line) => keyOfLine(line) === entry.key);
+    next = result.lines;
+    applied += result.applied;
+  }
   return { lines: next, applied };
 }
 

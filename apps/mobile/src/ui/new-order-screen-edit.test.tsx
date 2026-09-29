@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { ApiRequestError } from "../data/api";
 import type { OrderDetail, OrderRepository, ReplaceOrderRequest } from "../data/ports";
-import { customer, fakeOrders, orderDetail, orderItem, pageOf, product } from "../test-doubles";
+import { customer, fakeOrders, fakeProducts, orderDetail, orderItem, pageOf, product } from "../test-doubles";
 import { NewOrderScreen } from "./new-order-screen";
 
 // See new-order-screen.test.tsx for why press is wrapped in an async act() with a real-timer delay, and why the
@@ -20,9 +20,9 @@ afterEach(async () => {
 
 async function saveAFreshDraft(orders: OrderRepository) {
   const customers = { list: async () => pageOf([customer(10, { name: "Padaria Central" })]) };
-  const products = {
+  const products = fakeProducts({
     list: async () => pageOf([product(5, { description: "Copo 200 ml", listPrice: { state: "priced", unitPrice: "10.00", tableCode: 1, versionId: 1 } })]),
-  };
+  });
   await render(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} />);
   await pressAndSettle(await screen.findByText("Padaria Central"));
   await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
@@ -145,9 +145,9 @@ describe("NewOrderScreen — reopening a saved draft for editing (PUT /orders/{i
       },
     });
     const customers = { list: async () => pageOf([customer(10, { name: "Padaria Central" })]) };
-    const products = {
+    const products = fakeProducts({
       list: async () => pageOf([product(5, { description: "Copo 200 ml", listPrice: { state: "priced", unitPrice: "10.00", tableCode: 1, versionId: 1 } })]),
-    };
+    });
     await render(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={onUnauthenticated} />);
     await pressAndSettle(await screen.findByText("Padaria Central"));
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));

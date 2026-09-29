@@ -28,6 +28,9 @@ export function createRemoteProductRepository(api: ApiClient): ProductRepository
       );
       return { items: body.items, page: body.page, pageSize: body.pageSize, total: body.total };
     },
+    async get(code) {
+      return callApi(() => api.GET("/products/{code}", { params: { path: { code }, query: {} } }));
+    },
   };
 }
 

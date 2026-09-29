@@ -41,6 +41,12 @@ export interface CustomerRepository {
 
 export interface ProductRepository {
   list(request: PageRequest): Promise<Page<ProductListItem>>;
+  /**
+   * A single product by code, detail fields included. Used to resolve the catalog group (`groupCode`/`groupName`)
+   * of a cart line reopened from a saved draft (`lineFromOrderItem`), which does not carry it — mirrors
+   * `apps/web`'s `productQueryOptions` lookup used by `GroupDiscountDialog` (MOB-4a).
+   */
+  get(code: number): Promise<ProductListItem>;
 }
 
 export type OrderEntryConfiguration = ApiSchema<"OrderEntryConfiguration">;

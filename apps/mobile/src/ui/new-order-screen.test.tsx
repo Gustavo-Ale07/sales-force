@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { ApiRequestError } from "../data/api";
 import type { CreateOrderRequest, CustomerRepository, OrderDetail, OrderRepository, ProductRepository } from "../data/ports";
-import { customer, fakeOrders, networkError, orderDetail, orderEntryConfiguration, pageOf, product, unauthenticatedError } from "../test-doubles";
+import { customer, fakeOrders, fakeProducts, networkError, orderDetail, orderEntryConfiguration, pageOf, product, unauthenticatedError } from "../test-doubles";
 import { NewOrderScreen } from "./new-order-screen";
 
 // fireEvent.press is synchronous and only wraps the event dispatch itself in act(); a handler's own async
@@ -41,7 +41,7 @@ async function setup(overrides: Overrides = {}) {
   const onUnauthenticated = overrides.onUnauthenticated ?? jest.fn();
   const repositories = {
     customers: overrides.customers ?? { list: async () => pageOf([customer(10, { name: "Padaria Central" })]) },
-    products: overrides.products ?? { list: async () => pageOf([product(5, { description: "Copo 200 ml", listPrice: { state: "priced", unitPrice: "10.00", tableCode: 1, versionId: 1 } })]) },
+    products: overrides.products ?? fakeProducts({ list: async () => pageOf([product(5, { description: "Copo 200 ml", listPrice: { state: "priced", unitPrice: "10.00", tableCode: 1, versionId: 1 } })]) }),
     orders: overrides.orders ?? fakeOrders(),
   };
   const rendered = await render(<NewOrderScreen repositories={repositories} onUnauthenticated={onUnauthenticated} />);
@@ -199,9 +199,9 @@ describe("NewOrderScreen", () => {
   });
 
   it("blocks saving and explains why when a no-price line is not orderable in this installation", async () => {
-    const products: ProductRepository = {
+    const products: ProductRepository = fakeProducts({
       list: async () => pageOf([product(9, { description: "Sem preço", listPrice: { state: "none", tableCode: null, versionId: null, noPriceReason: "no_resolved_table" } })]),
-    };
+    });
     const orders = fakeOrders({
       getEntryConfiguration: async () => orderEntryConfiguration({ sales: { defaultNegotiationTypeCode: null, negotiationTypes: [], orderBehavior: { allowDraftWithoutPrice: false } }, products: { productWithoutPrice: { orderable: false } } }),
     });
