@@ -2,7 +2,7 @@
 
 **Responsibility of this file:** phase sequencing, Phase 0 work breakdown, parallel non-code tracks, phase gates, and open scope questions. Requirement details stay in `project-spec.md` (referenced by `RF-*` IDs); decisions stay in `decisions.md`.
 
-**Last updated:** 2026-09-28
+**Last updated:** 2026-09-29
 
 ---
 
@@ -11,7 +11,7 @@
 | Item | Status |
 |---|---|
 | Project mode | **IMPLEMENTATION, Phase 0 only** — `BEGIN IMPLEMENTATION` issued by the owner 2026-09-18 (GOV-1); anything outside the current phase, or depending on a PROPOSED/UNDECIDED decision, needs owner approval |
-| Implementation phase | Phase 0 — Foundation, **authorized 2026-09-18**. Checkpoint `b12c5af` delivered domain, db, contracts, Sankhya gateway (fake + read-only real, OAuth2 + `X-Token` from env), ui and web scaffold. **Owner instruction 2026-09-21** (recorded here as an owner instruction, not a decision-register entry): Phase 0 also delivers a working slice — `apps/server` (API + Worker), auth, installation-configuration layer without customer hardcode, health, structured logging, standard errors, sync/queue foundation, Docker dev environment and a web shell wired to the API (Login, Dashboard, Carteira, Cliente, Catálogo, Novo Pedido, Rascunhos). Order drafts only: **no ERP submission and no Sankhya write** (SNK-4, SNK-6; S3 end-to-end validation, including partial invoicing and the order → invoices link, still gates any write). **Owner ruling 2026-09-28** (`decisions.md` §3.9, DISC-1): Phase 0 also delivers per-item discount on order drafts, structurally bounded (0–99.99%) but with no commercial ceiling and no approval workflow — a narrow, interim exception to the Phase 1 gate below; R35/R36/R37 stay UNDECIDED and still gate full discount authority. Rounds 4, 5 and 7 remain PROPOSED: what is built on them is provisional and reviewed when those rounds close |
+| Implementation phase | Phase 0 — Foundation, **authorized 2026-09-18**. Checkpoint `b12c5af` delivered domain, db, contracts, Sankhya gateway (fake + read-only real, OAuth2 + `X-Token` from env), ui and web scaffold. **Owner instruction 2026-09-21** (recorded here as an owner instruction, not a decision-register entry): Phase 0 also delivers a working slice — `apps/server` (API + Worker), auth, installation-configuration layer without customer hardcode, health, structured logging, standard errors, sync/queue foundation, Docker dev environment and a web shell wired to the API (Login, Dashboard, Carteira, Cliente, Catálogo, Novo Pedido, Rascunhos). Order drafts only: **no ERP submission and no Sankhya write** (SNK-4, SNK-6; S3 end-to-end validation, including partial invoicing and the order → invoices link, still gates any write). **Owner ruling 2026-09-28** (`decisions.md` §3.9, DISC-1): Phase 0 also delivers per-item discount on order drafts, structurally bounded (0–99.99%) but with no commercial ceiling and no approval workflow — a narrow, interim exception to the Phase 1 gate below; R35/R36/R37 stay UNDECIDED and still gate full discount authority. **Owner ruling 2026-09-29** (`decisions.md` §3.10, MOB-4/MOB-5/IMP-1/DOD-1): Phase 0 widened to include mobile UI parity with the web slice above, online-only (customer list/ficha, catalog, order list+filters, new-order flow, negotiation type, cart, bulk entry, per-item/mass/group discounts, financial summary, server-side draft persistence — reusing `packages/domain`/`packages/contracts`, no duplicated math); the S7/V-09 mobile local-database spike may run now (findings in `docs/mobile-spike.md`, `packages/mobile-db` still gains no real implementation until V-09 closes, MOB-2 unchanged); and an import pipeline (CSV/TXT/XLSX/XLSM/PDF textual, one shared model/ruleset across web and mobile) pulled forward from Phase 1 (RF-IMP-1 scope extended). ERP order submission, Sankhya writes, notifications, the customer-approval workflow, scanned/OCR PDF import and any running offline/sync capability remain out of Phase 0 until their own gates close. A new Definition of Done (DOD-1) applies from this ruling onward: a commercial feature is not COMPLETE until domain/backend/contracts/web/mobile/tests/QA all PASS (offline/sync PASS only where applicable and not yet gated by V-09). Rounds 4, 5 and 7 remain PROPOSED: what is built on them is provisional and reviewed when those rounds close |
 | Decision rounds | Rounds 1, 2 and 3 closed 2026-09-16 (U-08 deferred to the Phase 1 gate; providers, final PostgreSQL major, pg-boss provider compatibility and Drizzle versions NEEDS VALIDATION); Round 4 open; Rounds 5 and 7 not started; Round 6 closed 2026-09-18 and the owner rulings of `decisions.md` §3.8 recorded (`decisions.md` §0) |
 | Documentation and Claude Code configuration | Drafted 2026-09-16; statuses corrected; batches 2 and 3 recorded 2026-09-16 |
 | Repository | `main` at `05ccc63` (stable); design work on `design/blueprint` |
@@ -88,9 +88,11 @@ Each round keeps enough structured information for the blueprint to be generated
 
 ### 3.2 Phase 0 does not include
 
-Mobile features, sync endpoints, scope events, orders, prices in the domain, discount/credit rules, customer approval, Sankhya writes, notifications, imports.
+~~Mobile features~~, ~~orders~~ (mobile), ~~discount/credit rules~~ (mobile) — **SUPERSEDED 2026-09-29** for the online-only mobile UI scope defined in `decisions.md` §3.10 (MOB-4); web order drafts and per-item discount were already in Phase 0 scope (owner instructions 2026-09-21, 2026-09-28, both above). ~~Imports~~ — **SUPERSEDED 2026-09-29** for the scope defined in `decisions.md` §3.10 (IMP-1).
 
-The mobile app shell in 0.2 exists only to validate the monorepo toolchain (V-01); mobile is not on the critical path of the first implementation slice (MOB-1).
+Still out of Phase 0: ERP order submission and any Sankhya write (SNK-4/SNK-5/SNK-6 gates, unchanged); notifications; the customer-approval *workflow* (account-state transitions stay under P-19/CFG rules); scanned/OCR PDF import; sync endpoints and scope events as a *running* capability; and any real implementation in `packages/mobile-db` until V-09 closes (`decisions.md` MOB-2, MOB-5).
+
+The mobile app shell in 0.2 validates the monorepo toolchain (V-01) and, per the 2026-09-29 ruling, now also carries the online-only feature slices above; mobile work must still reuse `packages/domain`/`packages/contracts` and must not duplicate or diverge from the web slice's rules (MOB-1).
 
 ### 3.3 Exit criteria — PROPOSED (confirm with this roadmap)
 
@@ -102,6 +104,7 @@ The mobile app shell in 0.2 exists only to validate the monorepo toolchain (V-01
 6. The Phase 0 mirror runs in staging against the SNK-3 environment, with health visible.
 7. S0 and S1 findings are recorded in `sankhya-spike.md`.
 8. `decisions.md` reflects every decision taken during Phase 0.
+9. Every commercial feature in scope meets DOD-1 (`decisions.md` §3.10): domain/backend/contracts/web/mobile/tests/QA PASS, offline/sync PASS only where applicable and not gated by V-09.
 
 ---
 
@@ -117,7 +120,7 @@ Resolve each item before starting the Phase 1 work it blocks.
 | S5 (R27) | New customer creation in Sankhya |
 | S6 (R28) | Goals, positivization, commissions |
 | SNK-4 validations (V-11; V-13 for native idempotency) | Any Sankhya write |
-| S7 (V-09, V-14, R12) | Mobile local database and sync sizing |
+| S7 (V-09, V-14, R12) | Mobile local database and sync sizing — S7 execution itself authorized in Phase 0 (`decisions.md` MOB-5, 2026-09-29); this row still gates real `packages/mobile-db` implementation and full sync sizing until V-09 closes |
 | R05, R06, R07, R08, R09, R10, R11 | Sync push, conflicts, drafts, OTA/local migrations |
 | R16, R17, R19, R45 | Device lock, deduplication, backups, key loss |
 | R33, R35, R36, R37 | Price revision details, discount authority, approval routing, credit approver (interim ceiling-free per-item discount already shipped in Phase 0 — `decisions.md` DISC-1, §3.9; this row is about the full authority/ceiling/approval layer, still gated) |
