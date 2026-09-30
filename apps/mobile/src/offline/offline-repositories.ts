@@ -4,6 +4,8 @@ import {
   getCachedProduct,
   getMeta,
   isoNow,
+  customerLetters,
+  customerSellers,
   searchCustomers,
   searchProducts,
   setMeta,
@@ -38,7 +40,21 @@ export function createOfflineFirstRepositories(deps: {
       async list(request) {
         if (!(await cacheReady())) return remote.customers.list(request);
         const page = await searchCustomers<CustomerListItem>(db, request);
-        return { items: page.items, page: page.page, pageSize: page.pageSize, total: page.total };
+        // With a jump (startAt) the total is what is left from that row on, so "has more" stays truthful.
+        const total = Math.max(0, page.total - Math.max(0, request.startAt ?? 0));
+        return { items: page.items, page: page.page, pageSize: page.pageSize, total };
+      },
+      async get(code) {
+        if (remote.customers.get === undefined) throw new Error("Customer detail is not available");
+        return remote.customers.get(code);
+      },
+      async letters(request) {
+        if (!(await cacheReady())) return [];
+        return customerLetters(db, request);
+      },
+      async sellers() {
+        if (!(await cacheReady())) return [];
+        return customerSellers(db);
       },
     },
     products: {

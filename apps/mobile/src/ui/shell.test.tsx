@@ -245,4 +245,26 @@ describe("Shell", () => {
     await render(<Shell dependencies={fakeDependencies({ auth: unreachable(), offline, connectivity: connectivity.port })} />);
     expect(await screen.findByText(/Modo offline: você entrou com a sessão salva/)).toBeTruthy();
   });
+
+  it("opens the customer sheet from Clientes, goes back, and starts a new order for that customer", async () => {
+    const customers: CustomerRepository = {
+      list: async (request) => (request.pageSize === 1 ? pageOf([]) : pageOf([customer(10, { name: "Padaria Central", document: "12345678000190" })])),
+    };
+    const products: ProductRepository = fakeProducts({ list: async () => pageOf([product(5, { description: "Copo 200 ml" })]) });
+    await render(
+      <Shell dependencies={fakeDependencies({ auth: signedIn(), repositories: { customers, products, orders: fakeOrders() } })} />,
+    );
+    await fireEvent.press(await screen.findByRole("tab", { name: "Clientes" }));
+    await fireEvent.press(await screen.findByRole("button", { name: /Padaria Central, código 10/ }));
+    expect(await screen.findByRole("button", { name: "Voltar para Clientes" })).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole("button", { name: "Voltar para Clientes" }));
+    expect(screen.queryByRole("button", { name: "Voltar para Clientes" })).toBeNull();
+    expect(screen.getByText("Padaria Central")).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole("button", { name: /Padaria Central, código 10/ }));
+    await fireEvent.press(await screen.findByRole("button", { name: "Novo pedido" }));
+    expect(await screen.findByText("Copo 200 ml")).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Vendas" }).props.accessibilityState.selected).toBe(true);
+  });
 });

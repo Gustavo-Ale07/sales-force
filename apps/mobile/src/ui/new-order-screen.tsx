@@ -88,6 +88,9 @@ export interface NewOrderScreenProps {
   /** A local draft chosen in the "Pedidos" tab; loaded once, then `onResumeConsumed` clears it. */
   readonly resumeLocalId?: string | null;
   readonly onResumeConsumed?: () => void;
+  /** "Novo pedido" from a customer sheet: start (or continue) an order for this customer. Handled once per `nonce`. */
+  readonly startRequest?: { readonly nonce: number; readonly customer: PickedCustomer } | null;
+  readonly onStartConsumed?: () => void;
 }
 
 /**
@@ -98,7 +101,15 @@ export interface NewOrderScreenProps {
  * entry are out of this slice; reopening an existing draft is only reachable from this screen's own success
  * step (there is no order-list screen yet — see the mobile-engineer report).
  */
-export function NewOrderScreen({ repositories, onUnauthenticated, localOrders, resumeLocalId = null, onResumeConsumed }: NewOrderScreenProps) {
+export function NewOrderScreen({
+  repositories,
+  onUnauthenticated,
+  localOrders,
+  resumeLocalId = null,
+  onResumeConsumed,
+  startRequest = null,
+  onStartConsumed,
+}: NewOrderScreenProps) {
   const [step, setStep] = useState<Step>("customer");
   const [customer, setCustomer] = useState<PickedCustomer | null>(null);
   const [lines, setLines] = useState<readonly EditorLine[]>([]);
@@ -127,6 +138,46 @@ export function NewOrderScreen({ repositories, onUnauthenticated, localOrders, r
   /** The device-local draft being edited (offline-first path); `null` for a fresh order. */
   const [localDraft, setLocalDraft] = useState<DraftRecord | null>(null);
   const [savedLocal, setSavedLocal] = useState<DraftRecord | null>(null);
+
+  // Latest cart state for the start-request handler, which must react only to a new request, not to every edit.
+  const finished = savedLocal !== null || savedOrder !== null;
+  const inProgress = useRef({ customer, lines, finished });
+  useEffect(() => {
+    inProgress.current = { customer, lines, finished };
+  });
+  const startNonce = startRequest?.nonce ?? null;
+  const startCustomer = startRequest?.customer ?? null;
+  useEffect(() => {
+    if (startNonce === null || startCustomer === null) return;
+    onStartConsumed?.();
+    const current = inProgress.current;
+    const begin = () => {
+      resetOrder();
+      setCustomer(startCustomer);
+      setStep("products");
+    };
+    // Nothing at risk: an empty cart, or an order already saved (its success screen is showing).
+    if (current.lines.length === 0 || current.finished) {
+      begin();
+      return;
+    }
+    if (current.customer?.code === startCustomer.code) {
+      setStep("products");
+      return;
+    }
+    // An order with items is in progress for another customer: never replace it silently.
+    Alert.alert(
+      "Você já possui um pedido em andamento",
+      `Pedido de ${current.customer?.name ?? "outro cliente"} com ${current.lines.length} ${current.lines.length === 1 ? "item" : "itens"}. Iniciar um novo pedido descarta os itens que ainda não foram salvos.`,
+      [
+        { text: "Continuar pedido atual", onPress: () => setStep("cart") },
+        { text: "Iniciar novo pedido", style: "destructive", onPress: begin },
+        { text: "Cancelar", style: "cancel" },
+      ],
+    );
+    // Only a new request (nonce) triggers this; the handlers above read the latest state through refs/closures of this run.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startNonce]);
 
   useEffect(() => {
     if (resumeLocalId === null || localOrders === undefined) return undefined;

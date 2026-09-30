@@ -7,13 +7,26 @@ import type { CustomerRepository, OrderRepository, ProductRepository, Repositori
  */
 export function createRemoteCustomerRepository(api: ApiClient): CustomerRepository {
   return {
-    async list({ search, page, pageSize }) {
+    async list({ search, page, pageSize, filters }) {
       const body = await callApi(() =>
         api.GET("/customers", {
-          params: { query: { search: search === "" ? undefined : search, page, pageSize, sort: "name" } },
+          params: {
+            query: {
+              search: search === "" ? undefined : search,
+              page,
+              pageSize,
+              sort: "name",
+              status: filters?.status,
+              sellerCode: filters?.sellerCode,
+              hasPriceTable: filters?.hasPriceTable === undefined ? undefined : filters.hasPriceTable ? "true" : "false",
+            },
+          },
         }),
       );
       return { items: body.items, page: body.page, pageSize: body.pageSize, total: body.total };
+    },
+    async get(code) {
+      return callApi(() => api.GET("/customers/{code}", { params: { path: { code } } }));
     },
   };
 }

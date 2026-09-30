@@ -31,10 +31,12 @@ interface Snapshot<T> {
  * fresher one. A 401 is reported through `onUnauthenticated` (the session is gone) instead of as a list error.
  * "Loading" is derived (no snapshot for the current request yet), never set from inside an effect.
  */
-export function usePagedList<T>(
-  load: (request: PageRequest) => Promise<Page<T>>,
+export function usePagedList<T, R extends PageRequest = PageRequest>(
+  load: (request: R) => Promise<Page<T>>,
   search: string,
   onUnauthenticated: () => void,
+  /** Extra request fields (filters, jump offset). A change restarts the list from page 1 like a new search. */
+  extra?: Omit<R, keyof PageRequest>,
 ): PagedListState<T> {
   const [snapshot, setSnapshot] = useState<Snapshot<T> | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -42,10 +44,13 @@ export function usePagedList<T>(
   const latest = useRef(0);
   const loadRef = useRef(load);
   const expiredRef = useRef(onUnauthenticated);
+  const extraRef = useRef(extra);
+  const extraKey = JSON.stringify(extra ?? null);
   const mountedRef = useRef(true);
   useEffect(() => {
     loadRef.current = load;
     expiredRef.current = onUnauthenticated;
+    extraRef.current = extra;
   });
   // A page fetch can still be in flight when the screen unmounts (e.g. the customer or product picker is
   // swapped out, or a test moves on); without this guard its answer lands after `render()` has already committed
@@ -57,13 +62,13 @@ export function usePagedList<T>(
     };
   }, []);
 
-  const key = `${reloadToken}:${search}`;
+  const key = `${reloadToken}:${search}:${extraKey}`;
 
   const run = useCallback(async (requestKey: string, query: string, nextPage: number, previous: Snapshot<T> | null) => {
     const ticket = ++latest.current;
     const append = previous !== null && nextPage > 1;
     try {
-      const result = await loadRef.current({ search: query, page: nextPage, pageSize: LIST_PAGE_SIZE });
+      const result = await loadRef.current({ ...extraRef.current, search: query, page: nextPage, pageSize: LIST_PAGE_SIZE } as R);
       if (ticket !== latest.current || !mountedRef.current) return;
       setSnapshot({
         key: requestKey,

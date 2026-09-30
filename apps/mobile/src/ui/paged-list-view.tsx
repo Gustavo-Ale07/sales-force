@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactElement } from "react";
+import { useEffect, useState, type ReactElement, type ReactNode } from "react";
 import { ActivityIndicator, FlatList, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { Page, PageRequest } from "../data/ports";
 import { usePagedList } from "../data/use-paged-list";
@@ -6,8 +6,16 @@ import { colors, spacing } from "../theme";
 
 const SEARCH_DEBOUNCE_MS = 400;
 
-export interface PagedListViewProps<T> {
-  readonly load: (request: PageRequest) => Promise<Page<T>>;
+export interface PagedListViewProps<T, R extends PageRequest = PageRequest> {
+  readonly load: (request: R) => Promise<Page<T>>;
+  /** Extra request fields (filters, jump offset); a change restarts the list. */
+  readonly extra?: Omit<R, keyof PageRequest>;
+  /** Called with the applied (debounced) search text. */
+  readonly onSearchChange?: (search: string) => void;
+  /** Rendered between the search box and the list (filter button, chips). */
+  readonly header?: ReactNode;
+  /** Empty-state title while filters are active (and no search text). */
+  readonly filteredEmptyText?: string;
   readonly keyOf: (item: T) => string;
   readonly renderItem: (item: T) => ReactElement;
   readonly searchLabel: string;
@@ -28,8 +36,12 @@ export interface PagedListViewProps<T> {
 }
 
 /** Search box + paged list with loading, empty and error states. Shared by the customers and product screens. */
-export function PagedListView<T>({
+export function PagedListView<T, R extends PageRequest = PageRequest>({
   load,
+  extra,
+  onSearchChange,
+  header,
+  filteredEmptyText,
   keyOf,
   renderItem,
   searchLabel,
@@ -41,7 +53,7 @@ export function PagedListView<T>({
   describeCount,
   loadingText,
   onUnauthenticated,
-}: PagedListViewProps<T>) {
+}: PagedListViewProps<T, R>) {
   const [text, setText] = useState("");
   const [search, setSearch] = useState("");
 
@@ -50,7 +62,11 @@ export function PagedListView<T>({
     return () => clearTimeout(timer);
   }, [text]);
 
-  const list = usePagedList(load, search, onUnauthenticated);
+  useEffect(() => {
+    onSearchChange?.(search);
+  }, [search, onSearchChange]);
+
+  const list = usePagedList<T, R>(load, search, onUnauthenticated, extra);
   const searching = search !== "";
 
   return (
@@ -74,6 +90,8 @@ export function PagedListView<T>({
         clearButtonMode="while-editing"
         onSubmitEditing={() => Keyboard.dismiss()}
       />
+
+      {header}
 
       {list.status === "loading" && (
         <View style={styles.centered}>
@@ -105,8 +123,8 @@ export function PagedListView<T>({
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
             <View style={styles.centered}>
-              <Text style={styles.emptyTitle}>{searching && noResultText !== undefined ? noResultText(search) : emptyText}</Text>
-              {!searching && emptyHint !== undefined && <Text style={styles.centeredText}>{emptyHint}</Text>}
+              <Text style={styles.emptyTitle}>{searching && noResultText !== undefined ? noResultText(search) : filteredEmptyText !== undefined ? filteredEmptyText : emptyText}</Text>
+              {!searching && filteredEmptyText === undefined && emptyHint !== undefined && <Text style={styles.centeredText}>{emptyHint}</Text>}
               {searching && noResultText !== undefined && <Text style={styles.centeredText}>Confira o nome, o código ou o documento.</Text>}
             </View>
           }

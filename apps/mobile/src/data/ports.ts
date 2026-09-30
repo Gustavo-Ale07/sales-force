@@ -35,8 +35,42 @@ export interface Page<T> {
   readonly total: number;
 }
 
+export type CustomerDetail = ApiSchema<"CustomerDetail">;
+
+/** Same meaning as the API query: active = active and not blocked; inactive = not active; blocked = blocked flag. */
+export interface CustomerFilters {
+  readonly status?: "active" | "inactive" | "blocked";
+  readonly sellerCode?: number;
+  readonly hasPriceTable?: boolean;
+}
+
+export interface CustomerPageRequest extends PageRequest {
+  readonly filters?: CustomerFilters;
+  /** Zero-based row the list starts from (alphabetical jump). Only repositories that implement `letters` honor it. */
+  readonly startAt?: number;
+}
+
+export interface CustomerLetter {
+  /** `#` groups names that do not start with a letter. */
+  readonly letter: string;
+  readonly count: number;
+  readonly offset: number;
+}
+
+export interface CustomerSellerOption {
+  readonly code: number;
+  readonly name: string | null;
+  readonly count: number;
+}
+
 export interface CustomerRepository {
-  list(request: PageRequest): Promise<Page<CustomerListItem>>;
+  list(request: CustomerPageRequest): Promise<Page<CustomerListItem>>;
+  /** Detail fields that are not in the list item (price table name, credit limit when configured). Online only. */
+  get?(code: number): Promise<CustomerDetail>;
+  /** Alphabetical index of the searched/filtered list. Only where it can run in the local database. */
+  letters?(request: Pick<CustomerPageRequest, "search" | "filters">): Promise<readonly CustomerLetter[]>;
+  /** Sellers present in the portfolio available on this device (for the seller filter). */
+  sellers?(): Promise<readonly CustomerSellerOption[]>;
 }
 
 export interface ProductRepository {

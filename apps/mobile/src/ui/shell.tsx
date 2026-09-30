@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { KeyboardAvoidingView, Pressable, StatusBar, StyleSheet, Text, View } from "react-native";
+import { BackHandler, KeyboardAvoidingView, Pressable, StatusBar, StyleSheet, Text, View } from "react-native";
 import { useConnectivity } from "../connectivity/use-connectivity";
 import type { Account } from "../auth/auth-port";
 import type { AppDependencies } from "../dependencies";
+import type { CustomerListItem } from "../data/ports";
 import { evaluateOfflineAccess } from "../offline/session";
 import { useSyncStatus } from "../offline/use-sync";
 import { colors, spacing } from "../theme";
 import { BottomNav, type MainTab } from "./bottom-nav";
 import { BrandLogo, SplashView } from "./brand";
+import { CustomerDetailScreen } from "./customer-detail-screen";
 import { CustomersScreen } from "./customers-screen";
 import { DraftsScreen } from "./drafts-screen";
 import { HomeScreen } from "./home-screen";
@@ -53,6 +55,8 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
   const [visited, setVisited] = useState<ReadonlySet<MainTab>>(() => new Set<MainTab>(["home"]));
   const [salesView, setSalesView] = useState<SalesView>("orders");
   const [resumeLocalId, setResumeLocalId] = useState<string | null>(null);
+  const [customerDetail, setCustomerDetail] = useState<CustomerListItem | null>(null);
+  const [startRequest, setStartRequest] = useState<{ nonce: number; customer: Pick<CustomerListItem, "code" | "name"> } | null>(null);
   const connectivityState = useConnectivity(connectivity);
   const account = session.phase === "authenticated" ? session.account : null;
   // One set of services per signed-in account: cache-backed reads, local drafts and the sync manager.
@@ -60,6 +64,17 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
   const repositories = services?.repositories ?? dependencies.repositories;
   const syncStatus = useSyncStatus(services?.sync ?? null, connectivityState);
   const clearResume = useCallback(() => setResumeLocalId(null), []);
+  const clearStart = useCallback(() => setStartRequest(null), []);
+  const inDetail = customerDetail !== null && tab === "customers";
+  // Hardware back closes the customer sheet before anything else.
+  useEffect(() => {
+    if (!inDetail) return undefined;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      setCustomerDetail(null);
+      return true;
+    });
+    return () => subscription.remove();
+  }, [inDetail]);
   const syncNow = useCallback(() => {
     void services?.sync.sync("manual");
   }, [services]);
@@ -112,6 +127,8 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
     setTab("home");
     setVisited(new Set<MainTab>(["home"]));
     setSalesView("orders");
+    setCustomerDetail(null);
+    setStartRequest(null);
     setSession({ phase: "anonymous" });
   }
 
@@ -132,6 +149,11 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
 
   const openDraft = (localId: string) => {
     setResumeLocalId(localId);
+    setSalesView("newOrder");
+    selectTab("sales");
+  };
+  const startOrderFor = (picked: CustomerListItem) => {
+    setStartRequest({ nonce: Date.now(), customer: { code: picked.code, name: picked.name } });
     setSalesView("newOrder");
     selectTab("sales");
   };
@@ -170,7 +192,18 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
             />
           </Pane>
           <Pane active={tab === "customers"} visited={visited.has("customers")}>
-            <CustomersScreen customers={repositories.customers} onUnauthenticated={expire} connectivity={connectivityState} />
+            <View style={customerDetail === null ? styles.paneActive : styles.paneHidden}>
+              <CustomersScreen customers={repositories.customers} onUnauthenticated={expire} connectivity={connectivityState} onOpen={setCustomerDetail} />
+            </View>
+            {customerDetail !== null && (
+              <CustomerDetailScreen
+                customer={customerDetail}
+                customers={repositories.customers}
+                connectivity={connectivityState}
+                onBack={() => setCustomerDetail(null)}
+                onNewOrder={startOrderFor}
+              />
+            )}
           </Pane>
           <Pane active={tab === "sales"} visited={visited.has("sales")}>
             {services !== null && (
@@ -193,6 +226,8 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
                 repositories={repositories}
                 onUnauthenticated={expire}
                 {...(services === null ? {} : { localOrders: services.localOrders, resumeLocalId, onResumeConsumed: clearResume })}
+                startRequest={startRequest}
+                onStartConsumed={clearStart}
               />
             </View>
             {services !== null && (

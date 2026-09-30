@@ -12,6 +12,42 @@ export interface CustomerLike {
   readonly name: string;
   readonly tradeName?: string | null;
   readonly document?: string | null;
+  readonly active?: boolean;
+  readonly blocked?: boolean;
+  readonly sellerCode?: number | null;
+  readonly sellerName?: string | null;
+  readonly priceTableCode?: number | null;
+}
+
+/**
+ * Customer list filters that run inside SQLite over the cached JSON (no schema change). Same meaning as the API's
+ * `status` / `sellerCode` / `hasPriceTable` query: `active` = active and not blocked; `inactive` = not active;
+ * `blocked` = blocked flag set.
+ */
+export interface CustomerCacheFilters {
+  readonly status?: "active" | "inactive" | "blocked";
+  readonly sellerCode?: number;
+  readonly hasPriceTable?: boolean;
+}
+
+export interface CustomerCacheRequest extends CachePageRequest {
+  readonly filters?: CustomerCacheFilters;
+  /** Row offset the list starts from (alphabetical jump); page 1 is the page at this offset. */
+  readonly startAt?: number;
+}
+
+export interface CustomerLetterEntry {
+  /** `#` groups every name that does not start with a letter. */
+  readonly letter: string;
+  readonly count: number;
+  /** Zero-based position of the first customer of this group in the sorted, filtered list. */
+  readonly offset: number;
+}
+
+export interface CustomerSellerOption {
+  readonly code: number;
+  readonly name: string | null;
+  readonly count: number;
 }
 
 export interface ProductLike {
@@ -91,21 +127,52 @@ export async function replaceProducts(tx: SqlExecutor, products: readonly Produc
   );
 }
 
-function searchClause(search: string): { where: string; params: string[] } {
+function searchConditions(search: string): { conditions: string[]; params: (string | number)[] } {
   const terms = normalizeSearchText(search).split(" ").filter((term) => term !== "");
-  if (terms.length === 0) return { where: "", params: [] };
   return {
-    where: `WHERE ${terms.map(() => "search_text LIKE ? ESCAPE '\\'").join(" AND ")}`,
+    conditions: terms.map(() => "search_text LIKE ? ESCAPE '\\'"),
     params: terms.map((term) => `%${escapeLike(term)}%`),
   };
 }
 
-async function searchTable<T>(tx: SqlExecutor, table: string, request: CachePageRequest): Promise<CachePage<T>> {
-  const { where, params } = searchClause(request.search);
+function whereOf(conditions: string[]): string {
+  return conditions.length === 0 ? "" : `WHERE ${conditions.join(" AND ")}`;
+}
+
+function searchClause(search: string): { where: string; params: (string | number)[] } {
+  const { conditions, params } = searchConditions(search);
+  return { where: whereOf(conditions), params };
+}
+
+const BLOCKED_SQL = "COALESCE(json_extract(data, '$.blocked'), 0) = 1";
+
+function customerClause(search: string, filters: CustomerCacheFilters | undefined): { where: string; params: (string | number)[] } {
+  const { conditions, params } = searchConditions(search);
+  if (filters?.status === "active") conditions.push(`COALESCE(json_extract(data, '$.active'), 1) = 1 AND NOT (${BLOCKED_SQL})`);
+  else if (filters?.status === "inactive") conditions.push("COALESCE(json_extract(data, '$.active'), 1) = 0");
+  else if (filters?.status === "blocked") conditions.push(BLOCKED_SQL);
+  if (filters?.sellerCode !== undefined) {
+    conditions.push("json_extract(data, '$.sellerCode') = ?");
+    params.push(filters.sellerCode);
+  }
+  if (filters?.hasPriceTable !== undefined) {
+    conditions.push(`json_extract(data, '$.priceTableCode') IS ${filters.hasPriceTable ? "NOT " : ""}NULL`);
+  }
+  return { where: whereOf(conditions), params };
+}
+
+async function searchTable<T>(
+  tx: SqlExecutor,
+  table: string,
+  request: CachePageRequest,
+  clause: { where: string; params: (string | number)[] } = searchClause(request.search),
+  startAt = 0,
+): Promise<CachePage<T>> {
+  const { where, params } = clause;
   const totalRow = (await tx.query<SqlRow>(`SELECT count(*) AS n FROM ${table} ${where}`, params))[0];
   const rows = await tx.query<SqlRow>(
     `SELECT data FROM ${table} ${where} ORDER BY sort_text, code LIMIT ? OFFSET ?`,
-    [...params, request.pageSize, (request.page - 1) * request.pageSize],
+    [...params, request.pageSize, startAt + (request.page - 1) * request.pageSize],
   );
   return {
     items: rows.map((row) => JSON.parse(String(row.data)) as T),
@@ -115,8 +182,39 @@ async function searchTable<T>(tx: SqlExecutor, table: string, request: CachePage
   };
 }
 
-export function searchCustomers<T extends CustomerLike>(tx: SqlExecutor, request: CachePageRequest): Promise<CachePage<T>> {
-  return searchTable<T>(tx, "cache_customer", request);
+export function searchCustomers<T extends CustomerLike>(tx: SqlExecutor, request: CustomerCacheRequest): Promise<CachePage<T>> {
+  return searchTable<T>(tx, "cache_customer", request, customerClause(request.search, request.filters), Math.max(0, request.startAt ?? 0));
+}
+
+/**
+ * The alphabetical index of the (searched, filtered) customer list, computed by SQLite from the sort column, so the
+ * screen can jump to a letter without loading the rows before it. Returns only letters that have customers.
+ */
+export async function customerLetters(
+  tx: SqlExecutor,
+  request: Pick<CustomerCacheRequest, "search" | "filters">,
+): Promise<CustomerLetterEntry[]> {
+  const { where, params } = customerClause(request.search, request.filters);
+  const rows = await tx.query<SqlRow>(
+    `SELECT CASE WHEN substr(sort_text, 1, 1) BETWEEN 'a' AND 'z' THEN substr(sort_text, 1, 1) ELSE '#' END AS letter, count(*) AS n
+     FROM cache_customer ${where} GROUP BY letter ORDER BY CASE letter WHEN '#' THEN 0 ELSE 1 END, letter`,
+    params,
+  );
+  let offset = 0;
+  return rows.map((row) => {
+    const entry = { letter: String(row.letter).toUpperCase(), count: Number(row.n), offset };
+    offset += entry.count;
+    return entry;
+  });
+}
+
+/** Sellers present in the cached portfolio, for the seller filter (the cache holds only what the API delivered to this actor). */
+export async function customerSellers(tx: SqlExecutor): Promise<CustomerSellerOption[]> {
+  const rows = await tx.query<SqlRow>(
+    `SELECT json_extract(data, '$.sellerCode') AS seller_code, max(json_extract(data, '$.sellerName')) AS seller_name, count(*) AS n
+     FROM cache_customer WHERE json_extract(data, '$.sellerCode') IS NOT NULL GROUP BY seller_code ORDER BY lower(seller_name), seller_code`,
+  );
+  return rows.map((row) => ({ code: Number(row.seller_code), name: row.seller_name === null ? null : String(row.seller_name), count: Number(row.n) }));
 }
 
 export function searchProducts<T extends ProductLike>(tx: SqlExecutor, request: CachePageRequest): Promise<CachePage<T>> {
