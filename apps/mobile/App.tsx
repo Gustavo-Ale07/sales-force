@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { StatusBar, StyleSheet, Text, View } from "react-native";
+import * as SplashScreen from "expo-splash-screen";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { apiConfig } from "./src/config";
 import { openAppDatabase } from "./src/db/app-database";
@@ -21,6 +22,9 @@ function ConfigError({ reason }: { reason: "missing" | "invalid" }) {
     </View>
   );
 }
+
+// The native splash stays up until the first React frame is laid out, then hands over to the (identical) JS splash: no blank flash.
+void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 /** Spike S7 (V-09): build-time flag, never set in a real build. Inlined by Expo at bundle time. */
 const S7_DIAGNOSTICS = process.env.EXPO_PUBLIC_S7_DIAGNOSTICS === "1";
@@ -70,7 +74,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar barStyle="dark-content" />
-      <View style={styles.root}>
+      <View style={styles.root} onLayout={() => void SplashScreen.hideAsync().catch(() => undefined)}>
         {S7_DIAGNOSTICS ? (
           safe(<S7DiagnosticsScreen />)
         ) : !apiConfig.ok ? (

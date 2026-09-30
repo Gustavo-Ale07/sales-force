@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
   sheetTitle: { fontSize: 18, fontWeight: "800", color: colors.text },
   panel: { gap: spacing.sm },
   row: { flexDirection: "row", justifyContent: "space-between", gap: spacing.md, paddingVertical: spacing.xs },
-  rowLabel: { fontSize: 14, color: colors.textMuted, flexShrink: 1 },
+  rowLabel: { fontSize: 14, color: colors.textMuted, flexShrink: 1, minWidth: 100 },
   rowValue: { fontSize: 14, fontWeight: "700", color: colors.text, flexShrink: 1, textAlign: "right" },
   errorNote: { fontSize: 13, color: colors.text, backgroundColor: colors.errorBackground, borderRadius: 6, padding: spacing.sm },
   syncButton: { backgroundColor: colors.navy, borderRadius: 8, minHeight: 48, alignItems: "center", justifyContent: "center", marginTop: spacing.sm },
