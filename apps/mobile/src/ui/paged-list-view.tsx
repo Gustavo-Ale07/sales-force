@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactElement } from "react";
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, FlatList, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { Page, PageRequest } from "../data/ports";
 import { usePagedList } from "../data/use-paged-list";
 import { colors, spacing } from "../theme";
@@ -11,7 +11,19 @@ export interface PagedListViewProps<T> {
   readonly keyOf: (item: T) => string;
   readonly renderItem: (item: T) => ReactElement;
   readonly searchLabel: string;
+  /** Visible hint inside the empty search box; defaults to the label. */
+  readonly searchPlaceholder?: string;
+  /** Shown when the list is empty and there is no search text. */
   readonly emptyText: string;
+  /** Second line of the empty state without a search (what to do about it). */
+  readonly emptyHint?: string;
+  /** Shown when a search text matched nothing. */
+  readonly noResultText?: (search: string) => string;
+  /** When set, a compact header (title + count line) replaces the plain "N resultado(s)" line above the list. */
+  readonly title?: string;
+  /** Count line under the title; `searching` is true while a search text is applied. */
+  readonly describeCount?: (total: number, searching: boolean) => string;
+  readonly loadingText?: string;
   readonly onUnauthenticated: () => void;
 }
 
@@ -21,7 +33,13 @@ export function PagedListView<T>({
   keyOf,
   renderItem,
   searchLabel,
+  searchPlaceholder,
   emptyText,
+  emptyHint,
+  noResultText,
+  title,
+  describeCount,
+  loadingText,
   onUnauthenticated,
 }: PagedListViewProps<T>) {
   const [text, setText] = useState("");
@@ -33,21 +51,36 @@ export function PagedListView<T>({
   }, [text]);
 
   const list = usePagedList(load, search, onUnauthenticated);
+  const searching = search !== "";
 
   return (
     <View style={styles.container}>
+      {title !== undefined && (
+        <View>
+          <Text style={styles.title} accessibilityRole="header">{title}</Text>
+          {describeCount !== undefined && list.status === "ready" && <Text style={styles.subtitle}>{describeCount(list.total, searching)}</Text>}
+        </View>
+      )}
       <TextInput
         style={styles.search}
         value={text}
         onChangeText={setText}
-        placeholder={searchLabel}
+        placeholder={searchPlaceholder ?? searchLabel}
+        placeholderTextColor={colors.textMuted}
         accessibilityLabel={searchLabel}
         autoCapitalize="none"
         autoCorrect={false}
         returnKeyType="search"
+        clearButtonMode="while-editing"
+        onSubmitEditing={() => Keyboard.dismiss()}
       />
 
-      {list.status === "loading" && <ActivityIndicator style={styles.spinner} color={colors.navy} />}
+      {list.status === "loading" && (
+        <View style={styles.centered}>
+          <ActivityIndicator color={colors.navy} />
+          {loadingText !== undefined && <Text style={styles.centeredText}>{loadingText}</Text>}
+        </View>
+      )}
 
       {list.status === "error" && list.error !== null && (
         <View style={styles.notice} accessibilityRole="alert">
@@ -67,9 +100,18 @@ export function PagedListView<T>({
           onEndReachedThreshold={0.4}
           onRefresh={list.reload}
           refreshing={false}
-          ListEmptyComponent={<Text style={styles.empty}>{emptyText}</Text>}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={
+            <View style={styles.centered}>
+              <Text style={styles.emptyTitle}>{searching && noResultText !== undefined ? noResultText(search) : emptyText}</Text>
+              {!searching && emptyHint !== undefined && <Text style={styles.centeredText}>{emptyHint}</Text>}
+              {searching && noResultText !== undefined && <Text style={styles.centeredText}>Confira o nome, o código ou o documento.</Text>}
+            </View>
+          }
           ListHeaderComponent={
-            list.total > 0 ? <Text style={styles.count}>{`${list.total} resultado(s)`}</Text> : null
+            title === undefined && list.total > 0 ? <Text style={styles.count}>{`${list.total} resultado(s)`}</Text> : null
           }
           ListFooterComponent={
             <View>
@@ -84,22 +126,27 @@ export function PagedListView<T>({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: spacing.lg, gap: spacing.md },
+  container: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.sm },
+  title: { fontSize: 22, fontWeight: "800", color: colors.navy },
+  subtitle: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
   search: {
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 8,
     backgroundColor: colors.surface,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    minHeight: 46,
     fontSize: 16,
     color: colors.text,
   },
+  listContent: { paddingBottom: spacing.lg },
   spinner: { marginVertical: spacing.lg },
+  centered: { alignItems: "center", gap: spacing.xs, marginTop: spacing.xl, paddingHorizontal: spacing.lg },
+  centeredText: { textAlign: "center", color: colors.textMuted, fontSize: 14 },
+  emptyTitle: { textAlign: "center", color: colors.text, fontSize: 16, fontWeight: "700" },
   notice: { backgroundColor: colors.errorBackground, borderRadius: 8, padding: spacing.lg, gap: spacing.sm },
   noticeText: { color: colors.text, fontSize: 14 },
   retry: { color: colors.red, fontWeight: "700", fontSize: 14 },
-  empty: { textAlign: "center", color: colors.textMuted, marginTop: spacing.xl },
   count: { color: colors.textMuted, fontSize: 12, marginBottom: spacing.sm },
   footerError: { color: colors.red, fontSize: 13, paddingVertical: spacing.sm },
 });

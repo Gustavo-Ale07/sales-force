@@ -169,7 +169,8 @@ describe("Shell", () => {
   it("shows a retryable error when the list cannot be loaded offline", async () => {
     let calls = 0;
     const customers: CustomerRepository = {
-      list: async () => {
+      list: async (request) => {
+        if (request.pageSize === 1) return pageOf([]); // the Home's counter read, not the screen under test
         calls += 1;
         if (calls === 1) throw networkError();
         return pageOf([customer(1, { name: "Mercado Sul" })]);
@@ -198,7 +199,8 @@ describe("Shell", () => {
   it("keeps a visited tab mounted, so its state is not rebuilt when the seller comes back", async () => {
     let calls = 0;
     const customers: CustomerRepository = {
-      list: async () => {
+      list: async (request) => {
+        if (request.pageSize === 1) return pageOf([]); // the Home's counter read, not the screen under test
         calls += 1;
         return pageOf([customer(1, { name: "Mercado Sul" })]);
       },

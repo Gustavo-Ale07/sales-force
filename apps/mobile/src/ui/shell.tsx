@@ -154,10 +154,23 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
       <KeyboardAvoidingView style={styles.flex} behavior="padding">
         <View style={styles.flex}>
           <Pane active={tab === "home"} visited={visited.has("home")}>
-            <HomeScreen account={session.account} />
+            <HomeScreen
+              account={session.account}
+              active={tab === "home"}
+              repositories={repositories}
+              localOrders={services?.localOrders ?? null}
+              syncStatus={syncStatus}
+              connectivity={connectivityState}
+              onNewOrder={() => {
+                setSalesView("newOrder");
+                selectTab("sales");
+              }}
+              onResumeDraft={openDraft}
+              {...(services === null ? {} : { onSyncNow: syncNow })}
+            />
           </Pane>
           <Pane active={tab === "customers"} visited={visited.has("customers")}>
-            <CustomersScreen customers={repositories.customers} onUnauthenticated={expire} />
+            <CustomersScreen customers={repositories.customers} onUnauthenticated={expire} connectivity={connectivityState} />
           </Pane>
           <Pane active={tab === "sales"} visited={visited.has("sales")}>
             {services !== null && (
