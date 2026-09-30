@@ -136,3 +136,56 @@ Based only on what was validated in this session:
 - Installed `expo-sqlite@57.0.3` + `drizzle-orm@0.45.2` into `apps/mobile` (`pnpm add`), wrote a throwaway type-level prototype (never committed, never wired into `packages/mobile-db` or any screen), ran `tsc`, `eslint`, `jest`, and `expo export --platform android` — all passed with no errors. Confirmed no Android SDK / Java / emulator / EAS credentials are available in this session's environment (`ANDROID_HOME` unset, no `java` on `PATH`), so no native build or on-device test was attempted.
 - Reverted the experimental install in full: `pnpm remove expo-sqlite drizzle-orm`, deleted the scratch prototype directory, restored `pnpm-lock.yaml` via `git checkout`, reinstalled with `pnpm install --frozen-lockfile`. Re-ran `apps/mobile` typecheck and lint after the revert — both pass. `git status` confirmed clean of this experiment (only pre-existing, unrelated untracked paths remain).
 - Did not touch `docs/roadmap.md`, `docs/decisions.md`, `app.json`, or any file under `packages/mobile-db`.
+
+### 7.2 2026-09-30 — S7 executed on a real device
+
+- Local Android toolchain set up on Windows (SDK, JDK 17, VC++ runtime, LongPathsEnabled, cmake 3.31.4, Ninja 1.13.2 — paths over 260 chars break older Ninja/cmake). Debug dev-client APK (`br.com.plac.salesforce.dev`) built locally and installed by `adb` on Samsung SM-M556B (R9QX5042B5K, Android 16, page size 4096). Metro over `adb reverse tcp:8081`. No EAS/cloud.
+- Diagnostics (`apps/mobile/src/dev/s7-diagnostics.ts`, dev-only, gated by `EXPO_PUBLIC_S7_DIAGNOSTICS=1`) read from logcat (`S7RESULT`/`S7DONE`). Final pass: all steps ok, including a run with airplane mode on and Wi-Fi off (bundle delivered over USB). See §8.1.
+
+---
+
+## 8. S7 result and design record (2026-09-30)
+
+### 8.1 Evidence — VALIDADO EM DISPOSITIVO REAL (SM-M556B, Android 16, Hermes, New Architecture)
+
+| Item | Result |
+|---|---|
+| SQLCipher 4.7.0 community / SQLite 3.49.1; app schema v1 (`sync_metadata`, `outbox`) applied | PASS |
+| Persistence after `am force-stop` + relaunch (rows 34→35, 38→39 on later launches) | PASS |
+| Transactions: commit; rollback restores state | PASS |
+| Drizzle over the keyed connection (insert + select) | PASS |
+| Migration v1→v2 preserving data (scratch DB, not the real app DB) | PASS |
+| Encryption on disk: no plaintext header; open without key and with wrong key rejected | PASS |
+| Performance, 20k synthetic rows: insert 1.9–2.6 s (500 rows/statement; 71.6 s with one statement per row), indexed point query 5–36 ms, LIKE 17–63 ms | indicative, NOT V-14 |
+| Offline (airplane mode on, Wi-Fi off) | PASS |
+| FTS5 | **FAIL — native SIGABRT** (Scudo invalid chunk state in `libexpo-sqlite.so`) in 4 variants, including an unkeyed database; cause not isolated |
+| Emulator / iOS / 16 KB release build / real volume (V-14) | NOT VERIFIED |
+
+Node tests (`node:sqlite` fake connection) cover the migrator, key handling and serialized transactions: 18/18. They prove logic, not the native library.
+
+### 8.2 Architecture
+
+`packages/mobile-db`: `connection.ts` (serialized connection: FIFO lock, BEGIN IMMEDIATE/COMMIT/ROLLBACK, nested transactions refused), `migrator.ts` + `migrations.ts`, `key.ts` (`KeyStore`, `KeyMissingError`), `expo.ts` (the only import of `expo-sqlite`). `apps/mobile/src/db` supplies the secure-store key store and the app database name.
+
+### 8.3 Future local model (design; P-20: no cost/margin column anywhere)
+
+`sync_metadata` (cursor/watermark per dataset, last sync, protocol version) · `customers` · `products` (normalized search columns, indexed) · `pricing_context` (prices as delivered; missing price ≠ 0) · `negotiation_config` (discount authority, payment terms) · `local_order_drafts` · `local_order_items` · `local_discounts` · `outbox` · `sync_conflicts`. Cache is server-authoritative and replaced by scoped bundles; cleanup never deletes rows referenced by a pending outbox command.
+
+### 8.4 Outbox, idempotency, conflicts
+
+- Columns: local id, `operation_id` (unique), type, payload, created_at, attempts, state (`pending|sending|accepted|rejected|needs_review|conflict`), last_error, `idempotency_key` (unique), `base_version`.
+- The idempotency key is the `clientRequestId` already used by online `POST /orders`, minted once when the operation is created and reused on every retry, so a resend after a dropped connection returns the stored outcome instead of creating a second order. Same key with a different payload is an idempotency conflict, never a second effect.
+- `base_version` carries the `expectedVersion` the edit was made against; a mismatch becomes state `conflict` (user resolves), never blind last-write-wins. A stale price goes through `revisao_preco` (P-09). The server revalidates everything (P-08). Sankhya delivery stays downstream in the server `integration_outbox`; the two outboxes are never merged.
+- A `sending` row found at startup is an unknown outcome and is resent with the same key.
+
+### 8.5 Auth and secret storage
+
+The local database never holds a password, refresh token, integration secret or ERP credential. Only the database key lives in `expo-secure-store`. The current mobile session is the interim native HttpOnly cookie (app code stores no token); AUTH-1/2 remain PROPOSED. Revocation wipes the database file and key.
+
+### 8.6 Security review — `GET /products/{code}`
+
+No cost/margin exposure found in the code path. MEDIUM: no server integration test asserts absence of cost/margin keys in `/products`, `/products/{code}` and `/product-resolutions` for every role; to be added as a separate commit.
+
+### 8.7 Running the app on a phone (LAN dev only)
+
+From `apps/mobile`: `EXPO_PUBLIC_API_URL=http://<PC LAN IPv4>:3000 npx expo start --dev-client --port 8081 --lan`; install with `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`; open the app, or `adb reverse tcp:8081 tcp:8081` and `am start -a android.intent.action.VIEW -d "exp+plac-sales-force://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081"`. The API must listen on the LAN interface with a Windows Firewall rule for the private profile only; never localhost from the phone, never exposed to the internet. Cleartext HTTP to the LAN IP and cookie/CORS behavior on the dev build were NOT verified in this spike.
