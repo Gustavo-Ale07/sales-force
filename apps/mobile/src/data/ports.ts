@@ -73,8 +73,28 @@ export interface CustomerRepository {
   sellers?(): Promise<readonly CustomerSellerOption[]>;
 }
 
+/** Catalog filters, available only where they can run in the local database (`groups` present). */
+export interface ProductFilters {
+  readonly groupCodes?: readonly number[];
+  /** `priced` = has a list price; `none` = "Sem preço". */
+  readonly priceState?: "priced" | "none";
+}
+
+export interface ProductPageRequest extends PageRequest {
+  readonly filters?: ProductFilters;
+}
+
+/** A catalog group present on this device. The ERP mirror has no group hierarchy, so the list is flat. */
+export interface ProductGroupOption {
+  readonly code: number;
+  readonly name: string | null;
+  readonly count: number;
+}
+
 export interface ProductRepository {
-  list(request: PageRequest): Promise<Page<ProductListItem>>;
+  list(request: ProductPageRequest): Promise<Page<ProductListItem>>;
+  /** Groups of the catalog available on this device (for the group filter). Only where the local cache can compute it. */
+  groups?(): Promise<readonly ProductGroupOption[]>;
   /**
    * A single product by code, detail fields included. Used to resolve the catalog group (`groupCode`/`groupName`)
    * of a cart line reopened from a saved draft (`lineFromOrderItem`), which does not carry it — mirrors

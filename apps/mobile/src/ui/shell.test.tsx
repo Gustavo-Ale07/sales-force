@@ -216,6 +216,22 @@ describe("Shell", () => {
     expect(calls).toBe(1);
   });
 
+  it("keeps the catalog search and the Lista view when the seller leaves the tab and comes back", async () => {
+    const products: ProductRepository = fakeProducts({ list: async () => pageOf([product(5, { description: "Copo 200 ml" })]) });
+    await render(
+      <Shell dependencies={fakeDependencies({ auth: signedIn(), repositories: { customers: { list: async () => pageOf([]) }, products, orders: fakeOrders() } })} />,
+    );
+    await fireEvent.press(await screen.findByRole("tab", { name: "Catálogo" }));
+    await screen.findByText("Copo 200 ml");
+    await fireEvent.changeText(screen.getByPlaceholderText("Buscar por código ou descrição"), "copo");
+    await fireEvent.press(screen.getByRole("radio", { name: "Lista" }));
+    await fireEvent.press(screen.getByRole("tab", { name: "Perfil" }));
+    await fireEvent.press(screen.getByRole("tab", { name: "Catálogo" }));
+    expect(screen.getByDisplayValue("copo")).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "Lista" }).props.accessibilityState.checked).toBe(true);
+    expect(screen.getByText("Copo 200 ml")).toBeTruthy();
+  });
+
   it("shows the account, version and a real manual sync in Perfil", async () => {
     const pending: SyncStatus = { phase: "idle", pending: 2, needsAttention: 0, lastSyncedAt: "2026-09-30T15:30:00.000Z", lastError: null };
     const { offline, syncNow } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() }, pending);

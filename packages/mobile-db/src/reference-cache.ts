@@ -57,6 +57,27 @@ export interface ProductLike {
   readonly brand?: string | null;
   readonly groupCode?: number | null;
   readonly groupName?: string | null;
+  /** Only `state` is read here (price-state filter); the rest of the list price is opaque to the cache. */
+  readonly listPrice?: { readonly state: string };
+}
+
+/**
+ * Catalog filters that run in SQLite over the cached rows (no schema change; `group_code` is already indexed).
+ * `priced` = a price row exists (an explicit zero row included); `none` = no price resolved ("Sem preço").
+ */
+export interface ProductCacheFilters {
+  readonly groupCodes?: readonly number[];
+  readonly priceState?: "priced" | "none";
+}
+
+export interface ProductCacheRequest extends CachePageRequest {
+  readonly filters?: ProductCacheFilters;
+}
+
+export interface ProductGroupEntry {
+  readonly code: number;
+  readonly name: string | null;
+  readonly count: number;
 }
 
 export interface CachePageRequest {
@@ -217,8 +238,28 @@ export async function customerSellers(tx: SqlExecutor): Promise<CustomerSellerOp
   return rows.map((row) => ({ code: Number(row.seller_code), name: row.seller_name === null ? null : String(row.seller_name), count: Number(row.n) }));
 }
 
-export function searchProducts<T extends ProductLike>(tx: SqlExecutor, request: CachePageRequest): Promise<CachePage<T>> {
-  return searchTable<T>(tx, "cache_product", request);
+function productClause(search: string, filters: ProductCacheFilters | undefined): { where: string; params: (string | number)[] } {
+  const { conditions, params } = searchConditions(search);
+  if (filters?.groupCodes !== undefined && filters.groupCodes.length > 0) {
+    conditions.push(`group_code IN (${filters.groupCodes.map(() => "?").join(", ")})`);
+    params.push(...filters.groupCodes);
+  }
+  if (filters?.priceState === "priced") conditions.push("json_extract(data, '$.listPrice.state') IN ('priced', 'zero')");
+  else if (filters?.priceState === "none") conditions.push("COALESCE(json_extract(data, '$.listPrice.state'), 'none') = 'none'");
+  return { where: whereOf(conditions), params };
+}
+
+export function searchProducts<T extends ProductLike>(tx: SqlExecutor, request: ProductCacheRequest): Promise<CachePage<T>> {
+  return searchTable<T>(tx, "cache_product", request, productClause(request.search, request.filters));
+}
+
+/** Groups present in the cached catalog (flat: the ERP mirror has no group hierarchy), for the group filter. */
+export async function productGroups(tx: SqlExecutor): Promise<ProductGroupEntry[]> {
+  const rows = await tx.query<SqlRow>(
+    `SELECT group_code, max(json_extract(data, '$.groupName')) AS group_name, count(*) AS n
+     FROM cache_product WHERE group_code IS NOT NULL GROUP BY group_code ORDER BY lower(group_name), group_code`,
+  );
+  return rows.map((row) => ({ code: Number(row.group_code), name: row.group_name === null ? null : String(row.group_name), count: Number(row.n) }));
 }
 
 export async function getCachedProduct<T extends ProductLike>(tx: SqlExecutor, code: number): Promise<T | null> {

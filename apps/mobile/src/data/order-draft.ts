@@ -3,6 +3,7 @@ import {
   buildOrderItem,
   computeDiscountSummary,
   computeLineTotal,
+  compareDecimalStrings,
   computeOrderTotals,
   isLineOrderable,
   subtractTotals,
@@ -102,6 +103,20 @@ export function incrementLineQuantity(line: EditorLine): EditorLine {
   const parsed = parseQuantityInput(line.quantityText);
   const next = sumQuantities([parsed.ok ? parsed.value : "0", "1"]);
   return { ...line, quantityText: next.replace(".", ",") };
+}
+
+export type LineDecrement = { kind: "remove" } | { kind: "set"; quantityText: string };
+
+/**
+ * "−" on a catalog card: one unit less. At one unit (or less) the product leaves the cart; a whole quantity loses one;
+ * a fractional quantity above one or an invalid text returns null (no guessing: it is edited in the cart).
+ */
+export function decrementLineQuantity(line: EditorLine): LineDecrement | null {
+  const parsed = parseQuantityInput(line.quantityText);
+  if (!parsed.ok) return null;
+  if (compareDecimalStrings(parsed.value, "1") <= 0) return { kind: "remove" };
+  if (!/^\d+$/.test(parsed.value)) return null;
+  return { kind: "set", quantityText: (BigInt(parsed.value) - 1n).toString() };
 }
 
 export function lineFromProduct(product: ProductListItem, key: string): EditorLine {

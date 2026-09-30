@@ -237,7 +237,7 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
             )}
           </Pane>
           <Pane active={tab === "catalog"} visited={visited.has("catalog")}>
-            <ProductsScreen products={repositories.products} onUnauthenticated={expire} />
+            <ProductsScreen products={repositories.products} onUnauthenticated={expire} connectivity={connectivityState} />
           </Pane>
           <Pane active={tab === "profile"} visited={visited.has("profile")}>
             <ProfileScreen

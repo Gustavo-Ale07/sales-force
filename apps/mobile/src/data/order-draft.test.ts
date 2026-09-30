@@ -8,6 +8,7 @@ import {
   groupKeyOf,
   groupOfLine,
   groupRowsOf,
+  decrementLineQuantity,
   incrementLineQuantity,
   isLinePriceOrderable,
   lineAmountsOf,
@@ -481,5 +482,22 @@ describe("summarizeCart", () => {
 
   it("is empty for an empty cart", () => {
     expect(summarizeCart([], [])).toEqual({ lineCount: 0, quantities: [], invalidLineCount: 0 });
+  });
+});
+
+describe("decrementLineQuantity", () => {
+  it("removes the line when one unit (or less) is left", () => {
+    expect(decrementLineQuantity(line({ quantityText: "1" }))).toEqual({ kind: "remove" });
+    expect(decrementLineQuantity(line({ quantityText: "0,5" }))).toEqual({ kind: "remove" });
+  });
+
+  it("subtracts one unit from a whole quantity", () => {
+    expect(decrementLineQuantity(line({ quantityText: "3" }))).toEqual({ kind: "set", quantityText: "2" });
+    expect(decrementLineQuantity(line({ quantityText: "10" }))).toEqual({ kind: "set", quantityText: "9" });
+  });
+
+  it("does not guess for a fractional quantity above one or an invalid text (edited in the cart instead)", () => {
+    expect(decrementLineQuantity(line({ quantityText: "2,5" }))).toBeNull();
+    expect(decrementLineQuantity(line({ quantityText: "abc" }))).toBeNull();
   });
 });

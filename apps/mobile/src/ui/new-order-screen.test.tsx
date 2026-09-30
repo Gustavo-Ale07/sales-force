@@ -72,6 +72,29 @@ describe("NewOrderScreen", () => {
     expect(screen.getAllByText("R$ 10,00")).toHaveLength(3);
   });
 
+  it("shows the current customer discreetly and steps the quantity from the catalog card, removing the line at one unit", async () => {
+    await pickCustomerAndOpenProducts();
+    expect(screen.getByText("Cliente")).toBeTruthy();
+    await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Copo 200 ml, já no carrinho, adicionar outra unidade" }));
+    expect(screen.getByLabelText("Quantidade no carrinho: 2")).toBeTruthy();
+    await pressAndSettle(screen.getByRole("button", { name: "Diminuir quantidade de Copo 200 ml" }));
+    expect(screen.getByLabelText("Quantidade no carrinho: 1")).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Carrinho (1)" })).toBeTruthy();
+    await pressAndSettle(screen.getByRole("button", { name: "Remover Copo 200 ml do carrinho" }));
+    expect(screen.getByRole("tab", { name: "Carrinho" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" })).toBeTruthy();
+  });
+
+  it("keeps the catalog search when going to the cart and back to the products", async () => {
+    await pickCustomerAndOpenProducts();
+    fireEvent.changeText(screen.getByLabelText("Buscar produto por descrição ou código"), "copo");
+    await waitFor(() => expect(screen.getByDisplayValue("copo")).toBeTruthy());
+    await pressAndSettle(screen.getByRole("tab", { name: "Carrinho" }), 600);
+    await pressAndSettle(screen.getByRole("tab", { name: "Produtos" }));
+    await waitFor(() => expect(screen.getByDisplayValue("copo")).toBeTruthy());
+  });
+
   it("adding the same product again increases its quantity instead of duplicating the line", async () => {
     await pickCustomerAndOpenProducts();
     const addButton = screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" });

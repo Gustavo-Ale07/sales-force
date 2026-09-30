@@ -7,6 +7,7 @@ import {
   customerLetters,
   customerSellers,
   searchCustomers,
+  productGroups,
   searchProducts,
   setMeta,
   type OfflineEnv,
@@ -62,6 +63,10 @@ export function createOfflineFirstRepositories(deps: {
         if (!(await cacheReady())) return remote.products.list(request);
         const page = await searchProducts<ProductListItem>(db, request);
         return { items: page.items, page: page.page, pageSize: page.pageSize, total: page.total };
+      },
+      async groups() {
+        if (!(await cacheReady())) return [];
+        return productGroups(db);
       },
       async get(code) {
         if (await cacheReady()) {

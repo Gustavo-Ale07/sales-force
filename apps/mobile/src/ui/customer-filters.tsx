@@ -22,6 +22,29 @@ export function countActiveFilters(filters: CustomerFilters): number {
 
 const STATUS_LABEL = { active: "Ativos", inactive: "Inativos", blocked: "Bloqueados" } as const;
 
+export interface FilterChip {
+  readonly key: string;
+  readonly label: string;
+  readonly remove: () => void;
+}
+
+/** Removable chips plus "Limpar filtros"; renders nothing without a chip. Shared by the customer and catalog filters. */
+export function ChipRow({ chips, onClear }: { chips: readonly FilterChip[]; onClear: () => void }) {
+  if (chips.length === 0) return null;
+  return (
+    <View style={styles.chips}>
+      {chips.map((chip) => (
+        <Pressable key={chip.key} style={styles.chip} onPress={chip.remove} accessibilityRole="button" accessibilityLabel={`Remover filtro ${chip.label}`}>
+          <Text style={styles.chipText}>{`${chip.label} ×`}</Text>
+        </Pressable>
+      ))}
+      <Pressable style={styles.clear} onPress={onClear} accessibilityRole="button" accessibilityLabel="Limpar filtros">
+        <Text style={styles.clearText}>Limpar filtros</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 /** One chip per active filter, each removable, plus "Limpar filtros". Nothing renders without an active filter. */
 export function FilterChips({
   filters,
@@ -32,7 +55,7 @@ export function FilterChips({
   sellers: readonly CustomerSellerOption[];
   onChange: (next: CustomerFilters) => void;
 }) {
-  const chips: Array<{ key: string; label: string; remove: () => void }> = [];
+  const chips: FilterChip[] = [];
   if (filters.status !== undefined) chips.push({ key: "status", label: STATUS_LABEL[filters.status], remove: () => onChange({ ...filters, status: undefined }) });
   if (filters.sellerCode !== undefined) {
     const seller = sellers.find((option) => option.code === filters.sellerCode);
@@ -41,22 +64,10 @@ export function FilterChips({
   if (filters.hasPriceTable !== undefined) {
     chips.push({ key: "table", label: filters.hasPriceTable ? "Com tabela de preço" : "Sem tabela de preço", remove: () => onChange({ ...filters, hasPriceTable: undefined }) });
   }
-  if (chips.length === 0) return null;
-  return (
-    <View style={styles.chips}>
-      {chips.map((chip) => (
-        <Pressable key={chip.key} style={styles.chip} onPress={chip.remove} accessibilityRole="button" accessibilityLabel={`Remover filtro ${chip.label}`}>
-          <Text style={styles.chipText}>{`${chip.label} ×`}</Text>
-        </Pressable>
-      ))}
-      <Pressable style={styles.clear} onPress={() => onChange({})} accessibilityRole="button" accessibilityLabel="Limpar filtros">
-        <Text style={styles.clearText}>Limpar filtros</Text>
-      </Pressable>
-    </View>
-  );
+  return <ChipRow chips={chips} onClear={() => onChange({})} />;
 }
 
-function Sheet({ visible, onClose, title, children }: { visible: boolean; onClose: () => void; title: string; children: ReactNode }) {
+export function Sheet({ visible, onClose, title, children }: { visible: boolean; onClose: () => void; title: string; children: ReactNode }) {
   const insets = useInsets();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
@@ -70,7 +81,7 @@ function Sheet({ visible, onClose, title, children }: { visible: boolean; onClos
   );
 }
 
-function Options<V>({ label, options, value, onSelect }: { label: string; options: ReadonlyArray<{ value: V; label: string }>; value: V; onSelect: (value: V) => void }) {
+export function Options<V>({ label, options, value, onSelect }: { label: string; options: ReadonlyArray<{ value: V; label: string }>; value: V; onSelect: (value: V) => void }) {
   return (
     <View style={styles.group} accessibilityRole="radiogroup" accessibilityLabel={label}>
       <Text style={styles.groupTitle}>{label}</Text>

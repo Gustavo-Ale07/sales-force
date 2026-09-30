@@ -27,11 +27,15 @@ export interface PagedListViewProps<T, R extends PageRequest = PageRequest> {
   readonly emptyHint?: string;
   /** Shown when a search text matched nothing. */
   readonly noResultText?: (search: string) => string;
+  /** Second line under the no-result title; defaults to the customer wording. */
+  readonly noResultHint?: string;
   /** When set, a compact header (title + count line) replaces the plain "N resultado(s)" line above the list. */
   readonly title?: string;
   /** Count line under the title; `searching` is true while a search text is applied. */
   readonly describeCount?: (total: number, searching: boolean) => string;
   readonly loadingText?: string;
+  /** Number of columns (grid mode); the list is remounted when it changes, the loaded items are kept. */
+  readonly columns?: number;
   readonly onUnauthenticated: () => void;
 }
 
@@ -49,9 +53,11 @@ export function PagedListView<T, R extends PageRequest = PageRequest>({
   emptyText,
   emptyHint,
   noResultText,
+  noResultHint = "Confira o nome, o código ou o documento.",
   title,
   describeCount,
   loadingText,
+  columns = 1,
   onUnauthenticated,
 }: PagedListViewProps<T, R>) {
   const [text, setText] = useState("");
@@ -111,6 +117,8 @@ export function PagedListView<T, R extends PageRequest = PageRequest>({
 
       {list.status === "ready" && (
         <FlatList
+          key={`columns-${columns}`}
+          numColumns={columns}
           data={list.items}
           keyExtractor={keyOf}
           renderItem={({ item }) => renderItem(item)}
@@ -125,7 +133,7 @@ export function PagedListView<T, R extends PageRequest = PageRequest>({
             <View style={styles.centered}>
               <Text style={styles.emptyTitle}>{searching && noResultText !== undefined ? noResultText(search) : filteredEmptyText !== undefined ? filteredEmptyText : emptyText}</Text>
               {!searching && filteredEmptyText === undefined && emptyHint !== undefined && <Text style={styles.centeredText}>{emptyHint}</Text>}
-              {searching && noResultText !== undefined && <Text style={styles.centeredText}>Confira o nome, o código ou o documento.</Text>}
+              {searching && noResultText !== undefined && <Text style={styles.centeredText}>{noResultHint}</Text>}
             </View>
           }
           ListHeaderComponent={

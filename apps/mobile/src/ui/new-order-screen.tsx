@@ -4,6 +4,7 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View
 import { ApiRequestError } from "../data/api";
 import { describeDataError, type DataErrorInfo } from "../data/errors";
 import {
+  decrementLineQuantity,
   incrementLineQuantity,
   isLinePriceOrderable,
   lineFromOrderItem,
@@ -23,6 +24,7 @@ import { CustomerPicker } from "./customer-picker";
 import { DiscountSheet } from "./discount-sheet";
 import { GroupDiscountSheet } from "./group-discount-sheet";
 import { ProductPicker } from "./product-picker";
+import type { ProductOrderActions } from "./product-views";
 
 type Step = "customer" | "products" | "cart";
 
@@ -229,7 +231,12 @@ export function NewOrderScreen({
   }, [repositories.orders, onUnauthenticated]);
 
   const preview = useMemo(() => previewDraft(lines), [lines]);
-  const cartProductCodes = useMemo(() => new Set(lines.map((line) => line.productCode)), [lines]);
+  const productActions = useMemo<ProductOrderActions>(() => {
+    const quantities = new Map(lines.map((line) => [line.productCode, line.quantityText]));
+    return { quantityOf: (code) => quantities.get(code), onAdd: addProduct, onDecrement: decrementProduct };
+    // addProduct/decrementProduct only use functional state updates, so they are safe to capture per `lines` change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines]);
   const blockedLineCount = useMemo(() => {
     if (config.status !== "ready") return 0;
     return preview.lines.filter((linePreview, index) => {
@@ -332,6 +339,17 @@ export function NewOrderScreen({
       const existing = current.find((line) => line.productCode === product.code);
       if (existing) return current.map((line) => (line.key === existing.key ? incrementLineQuantity(line) : line));
       return [...current, lineFromProduct(product, nextKey())];
+    });
+  }
+
+  function decrementProduct(product: ProductListItem) {
+    setLines((current) => {
+      const existing = current.find((line) => line.productCode === product.code);
+      if (!existing) return current;
+      const step = decrementLineQuantity(existing);
+      if (step === null) return current;
+      if (step.kind === "remove") return current.filter((line) => line.key !== existing.key);
+      return current.map((line) => (line.key === existing.key ? { ...line, quantityText: step.quantityText } : line));
     });
   }
 
@@ -478,9 +496,12 @@ export function NewOrderScreen({
   return (
     <View style={styles.flex}>
       <View style={styles.customerBar}>
-        <Text style={styles.customerName} numberOfLines={1}>
-          {customer?.name}
-        </Text>
+        <View style={styles.customerInfo}>
+          <Text style={styles.customerCaption}>Cliente</Text>
+          <Text style={styles.customerName} numberOfLines={1}>
+            {customer?.name}
+          </Text>
+        </View>
         {editingOrder === null && (
           <Pressable onPress={changeCustomer} accessibilityRole="button" accessibilityLabel="Trocar cliente">
             <Text style={styles.changeCustomer}>Trocar</Text>
@@ -509,14 +530,15 @@ export function NewOrderScreen({
         </Pressable>
       </View>
 
-      {step === "products" ? (
+      {/* Kept mounted (only hidden) in the cart step, so the catalog search, filters and Grade/Lista survive the round trip. */}
+      <View style={step === "products" ? styles.flex : styles.hidden}>
         <ProductPicker
           products={repositories.products}
-          cartProductCodes={cartProductCodes}
-          onAdd={addProduct}
+          actions={productActions}
           onUnauthenticated={onUnauthenticated}
         />
-      ) : (
+      </View>
+      {step !== "products" && (
         <View style={styles.flex}>
           {lines.length > 0 && (
             <View style={styles.cartToolbar}>
@@ -657,6 +679,7 @@ export function NewOrderScreen({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  hidden: { display: "none" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl, gap: spacing.sm },
   stepTitle: { fontSize: 16, fontWeight: "700", color: colors.text, padding: spacing.lg, paddingBottom: 0 },
   customerBar: {
@@ -669,7 +692,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  customerName: { flex: 1, fontSize: 15, fontWeight: "700", color: colors.text },
+  customerInfo: { flex: 1 },
+  customerCaption: { fontSize: 11, color: colors.textMuted },
+  customerName: { fontSize: 15, fontWeight: "700", color: colors.text },
   changeCustomer: { color: colors.navy, fontWeight: "700", fontSize: 13 },
   pills: { flexDirection: "row", gap: spacing.sm, padding: spacing.md },
   pill: { flex: 1, alignItems: "center", paddingVertical: spacing.sm, borderRadius: 20, backgroundColor: colors.background },
