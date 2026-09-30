@@ -2,16 +2,27 @@
   "name": "@salesforce/mobile-db",
   "version": "0.0.0",
   "private": true,
-  "description": "Local database of the mobile app. STUB: no encrypted SQLite library is selected until spike S7 (V-09)",
+  "description": "Encrypted local database of the mobile app (MOB-2): SQL port, migrations, key management. The SQLite library is confined to ./expo",
   "type": "module",
   "sideEffects": false,
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./expo": "./src/expo.ts"
+  },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "expo-file-system": "~57.0.7",
+    "expo-sqlite": "~57.0.3"
   },
   "devDependencies": {
     "@salesforce/config": "workspace:*",
-    "typescript": "~6.0.3"
+    "@types/node": "22.20.3",
+    "typescript": "~6.0.3",
+    "vitest": "5.0.1"
   }
 }

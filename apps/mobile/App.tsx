@@ -3,6 +3,7 @@ import { StatusBar, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { apiConfig } from "./src/config";
 import { createAppDependencies } from "./src/dependencies";
+import { S7DiagnosticsScreen } from "./src/dev/s7-diagnostics-screen";
 import { colors, spacing } from "./src/theme";
 import { Shell } from "./src/ui/shell";
 
@@ -19,13 +20,16 @@ function ConfigError({ reason }: { reason: "missing" | "invalid" }) {
   );
 }
 
+/** Spike S7 (V-09): build-time flag, never set in a real build. Inlined by Expo at bundle time. */
+const S7_DIAGNOSTICS = process.env.EXPO_PUBLIC_S7_DIAGNOSTICS === "1";
+
 export default function App() {
   const dependencies = useMemo(() => (apiConfig.ok ? createAppDependencies(apiConfig.baseUrl) : null), []);
   return (
     <SafeAreaProvider>
       <StatusBar barStyle="light-content" backgroundColor={colors.navy} />
       <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
-        {dependencies !== null ? <Shell dependencies={dependencies} /> : <ConfigError reason={apiConfig.ok ? "invalid" : apiConfig.reason} />}
+        {S7_DIAGNOSTICS ? <S7DiagnosticsScreen /> : dependencies !== null ? <Shell dependencies={dependencies} /> : <ConfigError reason={apiConfig.ok ? "invalid" : apiConfig.reason} />}
       </SafeAreaView>
     </SafeAreaProvider>
   );

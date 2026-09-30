@@ -16,6 +16,10 @@
     },
     "extra": {
       "notice": "Identificadores de pacote provisorios de desenvolvimento; o identificador definitivo depende da conta de loja (MOB-3) e nao foi decidido."
-    }
+    },
+    "plugins": [
+      ["expo-sqlite", { "useSQLCipher": true }],
+      "expo-secure-store"
+    ]
   }
 }
