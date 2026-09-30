@@ -7,6 +7,11 @@ export * from "./connection";
 export * from "./key";
 export { migrations } from "./migrations";
 export * from "./migrator";
+export * from "./offline-env";
+export * from "./reference-cache";
+export * from "./local-orders";
+export * from "./order-sync";
+export * from "./sync-manager";
 
 export type LocalStorageStatus =
   | { readonly available: false; readonly reason: "encrypted_library_not_selected" }

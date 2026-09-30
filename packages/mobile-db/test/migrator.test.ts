@@ -96,3 +96,19 @@ describe("outbox foundation schema (v1)", () => {
     await expect(insert("l3", "o3", "k3", "bogus")).rejects.toThrow();
   });
 });
+
+describe("production schema v1 → v2 (expand-only)", () => {
+  it("keeps existing outbox rows and adds the offline columns", async () => {
+    const db = openNodeDatabase();
+    await runMigrations(db, migrations.slice(0, 1));
+    await db.execute(
+      "INSERT INTO outbox (local_id, operation_id, idempotency_key, type, payload, created_at, updated_at) VALUES ('a', 'op-a', 'key-a', 'x', '{}', 't', 't')",
+    );
+    const report = await runMigrations(db, migrations);
+    expect(report).toMatchObject({ from: 1, to: migrations.length });
+    const rows = await db.query<{ idempotency_key: string; draft_local_id: string | null; next_attempt_at: string | null }>(
+      "SELECT idempotency_key, draft_local_id, next_attempt_at FROM outbox",
+    );
+    expect(rows).toEqual([{ idempotency_key: "key-a", draft_local_id: null, next_attempt_at: null }]);
+  });
+});
