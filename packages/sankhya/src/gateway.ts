@@ -10,6 +10,7 @@ import type {
   Seller,
   Customer,
 } from '@salesforce/domain';
+import type { ReadScope } from './read-scope.js';
 
 /**
  * `SankhyaGateway`: the ERP boundary (P-02, P-03, STACK-2). Inputs and outputs are Sales Force-shaped
@@ -61,6 +62,8 @@ export interface GatewayDescription {
 
 export interface ReadOptions {
   readonly signal?: AbortSignal;
+  /** Installation-derived limits (see ReadScope); omitted = no limits beyond placeholder exclusion. */
+  readonly scope?: ReadScope;
 }
 
 /**

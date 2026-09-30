@@ -430,10 +430,14 @@ describe('orders', () => {
 });
 
 describe('integration_outbox', () => {
+  let eligibleOrder: string;
+  beforeAll(async () => {
+    eligibleOrder = await newOrder(await newAccount(), await newConfig(), { datasetOrigin: 'sankhya', erpEnvironment: 'sandbox' });
+  });
   const base = () => ({
     id: uuid(),
     aggregateType: 'sales_order',
-    aggregateId: uuid(),
+    aggregateId: eligibleOrder,
     operation: 'submit',
     payload: {},
   });
@@ -465,5 +469,60 @@ describe('integration_outbox', () => {
       UNIQUE,
       'integration_outbox_origin_id_uq',
     );
+  });
+
+  it('refuses an order that is legacy, fake, unbound or missing (ERP gate)', async () => {
+    const acc = await newAccount();
+    const cfg = await newConfig();
+    const legacy = await newOrder(acc, cfg); // column default: legacy_dev
+    const fake = await newOrder(acc, cfg, { datasetOrigin: 'fake' });
+    const unbound = await newOrder(acc, cfg, { datasetOrigin: 'sankhya' });
+    for (const aggregateId of [legacy, fake, unbound, uuid()]) {
+      await expectPgError(
+        h.db.insert(integrationOutbox).values({ ...base(), aggregateId }),
+        CHECK,
+        'integration_outbox_order_gate',
+      );
+    }
+  });
+});
+
+describe('sales_order ERP binding', () => {
+  it('defaults to legacy_dev, which can only be draft or cancelled', async () => {
+    const acc = await newAccount();
+    const cfg = await newConfig();
+    const id = await newOrder(acc, cfg);
+    const [row] = await h.db.select().from(salesOrder).where(eq(salesOrder.id, id));
+    expect(row?.datasetOrigin).toBe('legacy_dev');
+    expect(row?.erpEnvironment).toBeNull();
+    for (const status of ['queued', 'sent', 'rejected', 'unknown']) {
+      await expectPgError(
+        h.db.update(salesOrder).set({ status }).where(eq(salesOrder.id, id)),
+        CHECK,
+        'sales_order_erp_eligibility_chk',
+      );
+    }
+    await h.db.update(salesOrder).set({ status: 'cancelled' }).where(eq(salesOrder.id, id));
+  });
+
+  it('checks the origin vocabulary and forbids an environment on non-Sankhya data', async () => {
+    const acc = await newAccount();
+    const cfg = await newConfig();
+    await expectPgError(newOrder(acc, cfg, { datasetOrigin: 'demo' }), CHECK, 'sales_order_dataset_origin_chk');
+    await expectPgError(newOrder(acc, cfg, { datasetOrigin: 'fake', erpEnvironment: 'sandbox' }), CHECK, 'sales_order_erp_environment_chk');
+    await expectPgError(newOrder(acc, cfg, { datasetOrigin: 'sankhya', erpEnvironment: '' }), CHECK, 'sales_order_erp_environment_chk');
+  });
+
+  it('the binding is immutable once stamped', async () => {
+    const acc = await newAccount();
+    const cfg = await newConfig();
+    const id = await newOrder(acc, cfg, { datasetOrigin: 'fake' });
+    await expectPgError(
+      h.db.update(salesOrder).set({ datasetOrigin: 'sankhya', erpEnvironment: 'sandbox' }).where(eq(salesOrder.id, id)),
+      CHECK,
+      'sales_order_binding_immutable',
+    );
+    // Ordinary edits are unaffected.
+    await h.db.update(salesOrder).set({ notes: 'x' }).where(eq(salesOrder.id, id));
   });
 });

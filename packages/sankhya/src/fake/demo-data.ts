@@ -236,7 +236,14 @@ interface ProductBuild {
 }
 
 function buildProducts(rng: Prng): { groups: ProductGroup[]; products: ProductBuild[] } {
-  const groups: ProductGroup[] = GROUP_SPECS.map((spec, index) => ({ code: GROUP_FIRST_CODE + index, name: spec.name }));
+  const groups: ProductGroup[] = GROUP_SPECS.map((spec, index) => ({
+    code: GROUP_FIRST_CODE + index,
+    name: spec.name,
+    parentCode: null,
+    degree: 1,
+    analytic: true,
+    active: true,
+  }));
   const usedDescriptions = new Set<string>();
   const products: ProductBuild[] = [];
   let code = PRODUCT_FIRST_CODE;

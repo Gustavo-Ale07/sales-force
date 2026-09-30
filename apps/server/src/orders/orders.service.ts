@@ -10,6 +10,7 @@ import type {
 } from '@salesforce/contracts';
 import {
   canTransitionOrder,
+  datasetOriginForConfigurationSource,
   isCustomerInScope,
   isOrderEditable,
   normalizeDecimalString,
@@ -151,6 +152,11 @@ export class OrdersService {
           clientRequestId: body.clientRequestId,
           clientRequestHash: fingerprint,
           configVersionId: context.configVersionId,
+          // Stamped by the server from the configuration the draft was priced against, never from the
+          // request (SNK-6). The ERP environment stays unbound until an installation-level identity
+          // for it is decided: an unbound order is never eligible for the ERP.
+          datasetOrigin: datasetOriginForConfigurationSource(context.configuration.source.kind),
+          erpEnvironment: null,
           createdAt: at,
           updatedAt: at,
         },

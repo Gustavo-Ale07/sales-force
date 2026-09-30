@@ -19,6 +19,7 @@ const ALL_MIGRATIONS = [
   '0002_sales_order_client_request_hash',
   '0003_customer_order_template',
   '0004_sales_order_item_discount_percent',
+  '0005_sales_order_erp_binding',
 ];
 const N = ALL_MIGRATIONS.length;
 
@@ -99,10 +100,10 @@ describe('migrations', () => {
     // Previous release: journal without 0004.
     const journalPath = path.join(dir, 'meta', '_journal.json');
     const journal = JSON.parse(await readFile(journalPath, 'utf8')) as { entries: { tag: string }[] };
-    journal.entries = journal.entries.filter((e) => e.tag !== '0004_sales_order_item_discount_percent');
+    journal.entries = journal.entries.filter((e) => e.tag !== '0004_sales_order_item_discount_percent' && e.tag !== '0005_sales_order_erp_binding');
     await writeFile(journalPath, JSON.stringify(journal));
     const prev = await runMigrations(url, { ...quiet, migrationsDir: dir });
-    expect(prev.applied).toEqual(ALL_MIGRATIONS.slice(0, -1));
+    expect(prev.applied).toEqual(ALL_MIGRATIONS.slice(0, -2));
     expect(await query(url, `SELECT to_regclass('public.customer_order_template') AS t`)).toEqual([{ t: 'customer_order_template' }]);
 
     // Existing rows must survive untouched.
@@ -116,8 +117,8 @@ describe('migrations', () => {
 
     // Deploy the new release: only the new migration runs.
     const next = await runMigrations(url, quiet);
-    expect(next.applied).toEqual(['0004_sales_order_item_discount_percent']);
-    expect(next.alreadyApplied).toBe(N - 1);
+    expect(next.applied).toEqual(['0004_sales_order_item_discount_percent', '0005_sales_order_erp_binding']);
+    expect(next.alreadyApplied).toBe(N - 2);
     expect(await query(url, `SELECT id FROM sales_order`)).toEqual([{ id: ord }]);
     // The existing line is kept as it was, with no discount.
     expect(await query(url, `SELECT quantity::text AS q, estimated_line_total::text AS t, discount_percent::text AS d FROM sales_order_item`)).toEqual([{ q: '2.0000', t: '10.00', d: '0.00' }]);
@@ -132,6 +133,62 @@ describe('migrations', () => {
     expect(statements[0]).toMatch(/^ALTER TABLE "sales_order_item" ADD COLUMN "discount_percent" numeric\(5, 2\) DEFAULT '0' NOT NULL;$/);
     expect(statements[1]).toMatch(/^ALTER TABLE "sales_order_item" ADD CONSTRAINT "sales_order_item_discount_percent_chk" CHECK /);
     expect(file).not.toMatch(/DROP|RENAME|TYPE|TRUNCATE|DELETE/i);
+  });
+
+  it('0005 is additive: existing orders become legacy_dev, the ERP gate holds at the database', async () => {
+    const url = await pgc.createDatabase();
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'sf-migrations-'));
+    await cp(defaultMigrationsDir, dir, { recursive: true });
+    const journalPath = path.join(dir, 'meta', '_journal.json');
+    const journal = JSON.parse(await readFile(journalPath, 'utf8')) as { entries: { tag: string }[] };
+    journal.entries = journal.entries.filter((e) => e.tag !== '0005_sales_order_erp_binding');
+    await writeFile(journalPath, JSON.stringify(journal));
+    await runMigrations(url, { ...quiet, migrationsDir: dir });
+
+    const acc = '018f0000-0000-7000-8000-000000000001';
+    const cfg = '018f0000-0000-7000-8000-000000000002';
+    const ord = '018f0000-0000-7000-8000-000000000003';
+    const sankhyaOrd = '018f0000-0000-7000-8000-00000000000b';
+    const unboundOrd = '018f0000-0000-7000-8000-00000000000d';
+    const outboxId = '018f0000-0000-7000-8000-00000000000f';
+    const insertOutbox = (id: string, aggregateId: string) =>
+      query(url, `INSERT INTO integration_outbox (id, aggregate_type, aggregate_id, operation, payload) VALUES ($1, 'sales_order', $2, 'submit', '{}')`, [id, aggregateId]);
+    await query(url, `INSERT INTO account (id, email, display_name, password_hash, role) VALUES ($1, 'u@example.test', 'U', 'x', 'seller')`, [acc]);
+    await query(url, `INSERT INTO installation_configuration_version (id, version_label, source_kind, payload, content_hash, synced_at) VALUES ($1, 'v', 'demo', '{}', 'h', now())`, [cfg]);
+    await query(url, `INSERT INTO sales_order (id, customer_code, created_by_account_id, client_request_id, config_version_id) VALUES ($1, 1, $2, $3, $4)`, [ord, acc, '018f0000-0000-7000-8000-000000000004', cfg]);
+    await query(url, `INSERT INTO sales_order (id, customer_code, created_by_account_id, client_request_id, config_version_id, status) VALUES ($1, 2, $2, $3, $4, 'cancelled')`, ['018f0000-0000-7000-8000-000000000006', acc, '018f0000-0000-7000-8000-000000000007', cfg]);
+
+    const next = await runMigrations(url, quiet);
+    expect(next.applied).toEqual(['0005_sales_order_erp_binding']);
+    // Backfill: every pre-existing order is legacy and unbound; nothing else changed.
+    expect(await query(url, `SELECT dataset_origin, erp_environment, status FROM sales_order ORDER BY customer_code`)).toEqual([
+      { dataset_origin: 'legacy_dev', erp_environment: null, status: 'draft' },
+      { dataset_origin: 'legacy_dev', erp_environment: null, status: 'cancelled' },
+    ]);
+
+    // A legacy order can never be queued/sent, whatever writes it.
+    await expect(query(url, `UPDATE sales_order SET status = 'queued' WHERE id = $1`, [ord])).rejects.toThrow(/sales_order_erp_eligibility_chk/);
+    await expect(query(url, `UPDATE sales_order SET status = 'sent' WHERE id = $1`, [ord])).rejects.toThrow(/sales_order_erp_eligibility_chk/);
+    // ... cannot be re-labelled as a Sankhya order (immutable binding) ...
+    await expect(query(url, `UPDATE sales_order SET dataset_origin = 'sankhya', erp_environment = 'sandbox' WHERE id = $1`, [ord])).rejects.toThrow(/immutable/);
+    // ... and cannot enter the outbox; neither can an order that does not exist.
+    await expect(insertOutbox('018f0000-0000-7000-8000-000000000008', ord)).rejects.toThrow(/not eligible for ERP submission/);
+    await expect(insertOutbox('018f0000-0000-7000-8000-000000000009', '018f0000-0000-7000-8000-00000000000a')).rejects.toThrow(/not eligible for ERP submission/);
+
+    // A bound Sankhya order is accepted; a Sankhya order with no environment is not.
+    await query(url, `INSERT INTO sales_order (id, customer_code, created_by_account_id, client_request_id, config_version_id, dataset_origin, erp_environment) VALUES ($1, 3, $2, $3, $4, 'sankhya', 'sandbox')`, [sankhyaOrd, acc, '018f0000-0000-7000-8000-00000000000c', cfg]);
+    await query(url, `INSERT INTO sales_order (id, customer_code, created_by_account_id, client_request_id, config_version_id, dataset_origin) VALUES ($1, 4, $2, $3, $4, 'sankhya')`, [unboundOrd, acc, '018f0000-0000-7000-8000-00000000000e', cfg]);
+    await insertOutbox(outboxId, sankhyaOrd);
+    await expect(insertOutbox('018f0000-0000-7000-8000-000000000010', unboundOrd)).rejects.toThrow(/not eligible for ERP submission/);
+    await expect(query(url, `UPDATE sales_order SET status = 'queued' WHERE id = $1`, [unboundOrd])).rejects.toThrow(/sales_order_erp_eligibility_chk/);
+    await query(url, `UPDATE sales_order SET status = 'queued' WHERE id = $1`, [sankhyaOrd]);
+    // Defensive re-check at claim time: an outbox row re-pointed to a legacy order cannot be claimed.
+    await expect(query(url, `UPDATE integration_outbox SET aggregate_id = $1, status = 'processing' WHERE id = $2`, [ord, outboxId])).rejects.toThrow(/not eligible for ERP submission/);
+
+    // Additive guard: no table/column drop, no data removal, no rewrite of existing constraints.
+    const file = await readFile(path.join(defaultMigrationsDir, '0005_sales_order_erp_binding.sql'), 'utf8');
+    expect(file).not.toMatch(/DROP\s+(TABLE|COLUMN|CONSTRAINT)|TRUNCATE|DELETE\s+FROM|RENAME|ALTER\s+COLUMN/i);
+    expect(file).not.toMatch(/UPDATE\s+"?sales_order"?\s+SET/i);
   });
 
   it('two concurrent runners do not corrupt the database (advisory lock)', async () => {
@@ -185,19 +242,19 @@ describe('migrations', () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), 'sf-migrations-'));
     await cp(defaultMigrationsDir, dir, { recursive: true });
     await writeFile(
-      path.join(dir, '0005_broken.sql'),
+      path.join(dir, '0006_broken.sql'),
       'CREATE TABLE ok_table (id int);\n--> statement-breakpoint\nCREATE TABLE ok_table (id int);\n',
     );
     const journalPath = path.join(dir, 'meta', '_journal.json');
     const journal = JSON.parse(await readFile(journalPath, 'utf8')) as {
       entries: { idx: number; version: string; when: number; tag: string; breakpoints: boolean }[];
     };
-    journal.entries.push({ idx: N, version: '7', when: Date.now(), tag: '0005_broken', breakpoints: true });
+    journal.entries.push({ idx: N, version: '7', when: Date.now(), tag: '0006_broken', breakpoints: true });
     await writeFile(journalPath, JSON.stringify(journal));
 
     const err = await runMigrations(url, { ...quiet, migrationsDir: dir }).catch((e) => e);
     expect(err).toBeInstanceOf(MigrationError);
-    expect((err as Error).message).toMatch(/0005_broken failed and was rolled back/);
+    expect((err as Error).message).toMatch(/0006_broken failed and was rolled back/);
     expect(await query(url, `SELECT to_regclass('public.ok_table') AS t`)).toEqual([{ t: null }]);
     const recorded = await query<{ tag: string }>(url, `SELECT tag FROM schema_migration ORDER BY idx`);
     expect(recorded.map((r) => r.tag)).toEqual(ALL_MIGRATIONS);
@@ -224,7 +281,7 @@ describe('migrations', () => {
       await runMigrations(url, quiet);
       expect(await readiness(handle.pool)).toEqual({
         appliedCount: N,
-        lastId: '0004_sales_order_item_discount_percent',
+        lastId: '0005_sales_order_erp_binding',
         expectedCount: N,
         upToDate: true,
       });

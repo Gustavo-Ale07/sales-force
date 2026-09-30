@@ -1,4 +1,12 @@
-import type { InstallationConfiguration, PriceTable, ProductGroup } from '@salesforce/domain';
+import type {
+  InstallationConfiguration,
+  ListPrice,
+  PriceTable,
+  PriceTableVersion,
+  Product,
+  ProductGroup,
+} from '@salesforce/domain';
+import { assertSafeScope, selectEffectiveVersions } from '../read-scope.js';
 import {
   UnavailableConfigurationSource,
   type ConfigurationSource,
@@ -23,9 +31,11 @@ import {
 import { assertBaseUrlAllowed, assertRequestUrlAllowed } from './host-guard.js';
 import {
   CUSTOMER_SPEC,
-  LIST_PRICE_SPEC,
-  PRICE_TABLE_VERSION_SPEC,
-  PRODUCT_SPEC,
+  PRODUCT_GROUP_SPEC,
+  listPriceSpec,
+  priceTableSpec,
+  priceTableVersionSpec,
+  productSpec,
   RowReader,
   SELLER_SPEC,
   compareKeys,
@@ -69,8 +79,8 @@ export interface RealSankhyaGatewayOptions {
  * VALIDATED (env) in the Sandbox, Oracle dialect F-19). Requests are serialized (limits unmeasured,
  * S0.2). Snapshot completeness is verified with a row count and strictly increasing keys; a mismatch
  * is a retryable `temporary` error (data may have changed between pages), never silent.
- * NOT implemented (NEEDS VALIDATION): price tables and product groups (label columns unvalidated),
- * installation configuration from Sankhya (U-10), derived-table percentages (S2.3), submitOrder.
+ * NOT implemented (NEEDS VALIDATION): installation configuration from Sankhya (U-10), derived-table
+ * percentages (S2.3), CODTABALT, submitOrder.
  */
 export class RealSankhyaGateway implements SankhyaGateway {
   readonly #origin: string;
@@ -83,6 +93,7 @@ export class RealSankhyaGateway implements SankhyaGateway {
   readonly #requestTimeoutMs: number;
   readonly #dbUtcOffsetMinutes: number;
   readonly #configurationSource: ConfigurationSource;
+  readonly #now: () => number;
   #queue: Promise<unknown> = Promise.resolve();
 
   constructor(options: RealSankhyaGatewayOptions) {
@@ -99,6 +110,7 @@ export class RealSankhyaGateway implements SankhyaGateway {
     this.#requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
     this.#dbUtcOffsetMinutes = options.dbUtcOffsetMinutes ?? DEFAULT_DB_UTC_OFFSET_MINUTES;
     this.#configurationSource = options.configurationSource ?? new UnavailableConfigurationSource();
+    this.#now = options.now ?? Date.now;
     this.#tokens = new TokenProvider({
       origin: this.#origin,
       credentials: options.credentials,
@@ -112,9 +124,7 @@ export class RealSankhyaGateway implements SankhyaGateway {
     const reads = Object.fromEntries(
       READ_ENTITIES.map((entity) => {
         const supported =
-          entity === 'configuration'
-            ? !(this.#configurationSource instanceof UnavailableConfigurationSource)
-            : entity !== 'priceTables' && entity !== 'productGroups';
+          entity === 'configuration' ? !(this.#configurationSource instanceof UnavailableConfigurationSource) : true;
         return [entity, supported ? 'supported' : 'not_implemented'];
       }),
     ) as GatewayDescription['capabilities']['reads'];
@@ -141,28 +151,63 @@ export class RealSankhyaGateway implements SankhyaGateway {
   readCustomers(options?: ReadOptions) {
     return this.#paged(CUSTOMER_SPEC, options);
   }
-  readProducts(options?: ReadOptions) {
-    return this.#paged(PRODUCT_SPEC, options);
-  }
-  readPriceTableVersions(options?: ReadOptions) {
-    return this.#paged(PRICE_TABLE_VERSION_SPEC, options);
-  }
-  readListPrices(options?: ReadOptions) {
-    return this.#paged(LIST_PRICE_SPEC, options);
+  readProducts(options?: ReadOptions): Snapshot<Product> {
+    assertSafeScope(options?.scope);
+    if (options?.scope?.products?.usageValues.length === 0) return emptySnapshot();
+    return this.#paged(productSpec(options?.scope), options);
   }
 
   readProductGroups(options?: ReadOptions): Snapshot<ProductGroup> {
-    void options;
-    return notImplementedSnapshot(
-      'readProductGroups: the product-group description column is not validated - NEEDS VALIDATION (spike §9.35, §9.42; query the data dictionary in an authorized environment).',
-    );
+    return this.#paged(PRODUCT_GROUP_SPEC, options);
   }
 
   readPriceTables(options?: ReadOptions): Snapshot<PriceTable> {
-    void options;
-    return notImplementedSnapshot(
-      'readPriceTables: the price-table name/active columns are not validated and derived-table fields live per version (F-38, F-41) - NEEDS VALIDATION (spike §9.35, §9.42, S2.3).',
-    );
+    assertSafeScope(options?.scope);
+    if (options?.scope?.priceTableCodes?.length === 0) return emptySnapshot();
+    return this.#paged(priceTableSpec(options?.scope), options);
+  }
+
+  /**
+   * Without `scope.priceTableCodes`: every stored version. With it: only the configured tables, and per
+   * table only the current version (latest DTVIGOR up to now) plus future ones, so superseded prices
+   * never mix with current ones.
+   */
+  readPriceTableVersions(options?: ReadOptions): Snapshot<PriceTableVersion> {
+    assertSafeScope(options?.scope);
+    const codes = options?.scope?.priceTableCodes;
+    if (codes?.length === 0) return emptySnapshot();
+    if (codes === undefined) return this.#paged(priceTableVersionSpec(undefined), options);
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const gateway = this;
+    return {
+      async *[Symbol.asyncIterator]() {
+        const effective = await gateway.#effectiveVersions(options);
+        if (effective.length > 0) yield effective;
+      },
+    };
+  }
+
+  readListPrices(options?: ReadOptions): Snapshot<ListPrice> {
+    assertSafeScope(options?.scope);
+    const codes = options?.scope?.priceTableCodes;
+    if (codes === undefined) return this.#paged(listPriceSpec(undefined), options);
+    if (codes.length === 0) return emptySnapshot();
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const gateway = this;
+    return {
+      async *[Symbol.asyncIterator]() {
+        const versions = await gateway.#effectiveVersions(options);
+        if (versions.length === 0) return;
+        yield* gateway.#paged(listPriceSpec(versions.map((v) => v.versionId)), options);
+      },
+    };
+  }
+
+  async #effectiveVersions(options: ReadOptions | undefined): Promise<PriceTableVersion[]> {
+    const all: PriceTableVersion[] = [];
+    for await (const batch of this.#paged(priceTableVersionSpec(options?.scope), options)) all.push(...batch);
+    const now = options?.scope?.now ?? new Date(this.#now()).toISOString();
+    return selectEffectiveVersions(all, now);
   }
 
   /** SNK-4 / SNK-5 / SNK-6: intentionally unimplemented; performs no HTTP call. */
@@ -345,11 +390,11 @@ export function parseQueryResponse(response: HttpResponse, expectedColumns: read
   return { rows: rows as readonly (readonly unknown[])[] };
 }
 
-function notImplementedSnapshot<T>(message: string): Snapshot<T> {
+function emptySnapshot<T>(): Snapshot<T> {
   return {
     // eslint-disable-next-line require-yield
     async *[Symbol.asyncIterator]() {
-      throw new NotImplementedError(message);
+      return;
     },
   };
 }

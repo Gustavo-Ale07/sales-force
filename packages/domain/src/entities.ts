@@ -37,6 +37,13 @@ export interface Customer {
 export interface ProductGroup {
   readonly code: number;
   readonly name: string;
+  /** Parent group code; null for a top-level group (the ERP root sentinel is never a parent code). */
+  readonly parentCode: number | null;
+  /** Hierarchy degree as recorded by the ERP (1 = top level). */
+  readonly degree: number;
+  /** Analytic flag as recorded (the group itself holds products). */
+  readonly analytic: boolean;
+  readonly active: boolean;
 }
 
 export interface Product {
@@ -46,6 +53,8 @@ export interface Product {
   /** Raw usage code as mirrored. Whether it makes the product sellable is decided by configuration only. */
   readonly usageCode: string | null;
   readonly groupCode: number | null;
+  /** Raw value of the installation-configured mobility source field; undefined = not requested, null = blank. */
+  readonly mobilityCode?: string | null;
   readonly unit: string;
   readonly brand: string | null;
   readonly reference: string | null;

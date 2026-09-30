@@ -42,7 +42,7 @@ export function toConfigurationSummary(configuration: InstallationConfiguration)
         orderable: configuration.products.productWithoutPrice.orderable,
       },
     },
-    pricing: { ...configuration.pricing },
+    pricing: toPricingSummary(configuration.pricing),
     financial: { ...configuration.financial },
     features: { ...configuration.features },
   };
@@ -98,5 +98,14 @@ export function buildConfigurationResponse(
       .sort((a, b) => a.entity.localeCompare(b.entity)),
     gateway: { mode: integration.gatewayMode },
     integration,
+  };
+}
+
+function toPricingSummary(pricing: InstallationConfiguration['pricing']) {
+  const { mobilePriceTableCodes, alternativeTable, ...rest } = pricing;
+  return {
+    ...rest,
+    ...(mobilePriceTableCodes === undefined ? {} : { mobilePriceTableCodes: [...mobilePriceTableCodes] }),
+    ...(alternativeTable === undefined ? {} : { alternativeTable: { ...alternativeTable } }),
   };
 }

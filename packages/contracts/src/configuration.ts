@@ -34,7 +34,58 @@ export type CustomerWithoutPriceTablePolicy = z.infer<typeof CustomerWithoutPric
 export const FallbackStrategySchema = named('FallbackStrategy', z.enum(['none', 'fixed_table']));
 export type FallbackStrategy = z.infer<typeof FallbackStrategySchema>;
 
-const SourceSchema = z.strictObject({
+export const FieldSupportSchema = named(
+  'FieldSupport',
+  z.enum(['SUPPORTED', 'READ_ONLY', 'IGNORED_UNTIL_NEEDED']),
+);
+export const MobilityFilterValidationSchema = named(
+  'MobilityFilterValidation',
+  z.enum(['pending_validation', 'validated']),
+);
+export const MobilityFilterModeSchema = named(
+  'MobilityFilterMode',
+  z.enum(['disabled', 'enforced']),
+);
+export const AlternativeTableValidationSchema = named(
+  'AlternativeTableValidation',
+  z.enum(['needs_validation', 'validated']),
+);
+
+const FieldSupportMapSchema = z.record(z.string().min(1).max(60), FieldSupportSchema);
+
+export const OrderLayoutConfigurationSchema = named(
+  'OrderLayoutConfiguration',
+  z.strictObject({
+    layoutNumber: codeInt().nullable(),
+    fieldSupport: z.strictObject({
+      header: FieldSupportMapSchema,
+      items: FieldSupportMapSchema,
+      unlistedFields: FieldSupportSchema,
+    }),
+  }),
+);
+
+/** `sourceField` is a column NAME later used by the gateway: strictly validated, never free text. */
+export const MobilityFilterSchema = named(
+  'MobilityFilter',
+  z.strictObject({
+    sourceField: z.string().regex(/^[A-Z][A-Z0-9_]{0,29}$/),
+    allowedValues: z.array(z.string().min(1).max(20)).min(1),
+    validation: MobilityFilterValidationSchema,
+    mode: MobilityFilterModeSchema,
+  }),
+);
+
+export const AlternativeTableSchema = named(
+  'AlternativeTable',
+  z.strictObject({
+    tableCode: codeInt(),
+    validation: AlternativeTableValidationSchema,
+    active: z.boolean(),
+  }),
+);
+
+const SourceSchema =z.strictObject({
   kind: ConfigurationSourceKindSchema,
   version: z.string().min(1).max(200),
   syncedAt: IsoTimestampSchema,
@@ -43,6 +94,7 @@ const SourceSchema = z.strictObject({
 const GeneralSchema = z.strictObject({
   enabled: z.boolean(),
   enabledCompanyCodes: z.array(codeInt()),
+  defaultCompanyCode: codeInt().nullable().optional(),
 });
 
 export const NegotiationTypeSchema = named(
@@ -52,6 +104,9 @@ export const NegotiationTypeSchema = named(
 
 const SalesSchema = z.strictObject({
   orderTopCode: codeInt().nullable(),
+  eligibleOrderTopCodes: z.array(codeInt()).optional(),
+  orderStockLocationCode: codeInt().nullable().optional(),
+  orderLayout: OrderLayoutConfigurationSchema.optional(),
   quotationTopCode: codeInt().nullable(),
   defaultNegotiationTypeCode: codeInt().nullable(),
   negotiationTypes: z.array(NegotiationTypeSchema),
@@ -75,6 +130,7 @@ const ProductsSchema = z.strictObject({
   sellableUsageValues: z.array(z.string().min(1).max(20)),
   showInactive: z.boolean(),
   productWithoutPrice: z.strictObject({ visible: z.boolean(), orderable: z.boolean() }),
+  mobilityFilter: MobilityFilterSchema.optional(),
 });
 
 const PricingSchema = z.strictObject({
@@ -83,6 +139,8 @@ const PricingSchema = z.strictObject({
   fallbackTableCode: codeInt().nullable(),
   catalogReferenceTableCode: codeInt().nullable(),
   missingPrice: z.literal('no_price_state'),
+  mobilePriceTableCodes: z.array(codeInt()).optional(),
+  alternativeTable: AlternativeTableSchema.optional(),
 });
 
 const FinancialSchema = z.strictObject({

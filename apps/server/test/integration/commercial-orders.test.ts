@@ -317,6 +317,38 @@ describe('replace, discard, submit', () => {
     expect(response.body.code).toBe('order_not_editable');
   });
 
+  it('stamps the ERP binding on the server; the client cannot set it; such an order can never enter the outbox', async () => {
+    const db = ctx.database.handle.db;
+    for (const forged of [
+      { datasetOrigin: 'sankhya' },
+      { erpEnvironment: 'sandbox' },
+      { dataset_origin: 'sankhya', erp_environment: 'sandbox' },
+    ]) {
+      const refused = await create('seller1', draftBody(forged));
+      expect(refused.status).toBe(400);
+      expect(refused.body.code).toBe('validation_failed');
+    }
+    const created = await create('seller1', draftBody());
+    expect(created.status).toBe(201);
+    // The binding is not part of any response.
+    expect(JSON.stringify(created.body)).not.toMatch(/datasetOrigin|erpEnvironment|dataset_origin/);
+    const [row] = await db.select().from(salesOrder).where(eq(salesOrder.id, created.body.id));
+    // The demo configuration is not a Sankhya source: fake data, environment unbound.
+    expect(row?.datasetOrigin).toBe('fake');
+    expect(row?.erpEnvironment).toBeNull();
+    await expect(
+      db.insert(integrationOutbox).values({
+        id: randomUUID(),
+        aggregateType: 'sales_order',
+        aggregateId: created.body.id,
+        operation: 'submit',
+        payload: {},
+      }),
+    ).rejects.toThrow();
+    await expect(db.update(salesOrder).set({ status: 'queued' }).where(eq(salesOrder.id, created.body.id))).rejects.toThrow();
+    expect(await db.select().from(integrationOutbox)).toHaveLength(0);
+  });
+
   it('submit is ALWAYS 409 erp_submission_disabled: no outbox row, no status change, attempt audited', async () => {
     const created = await create('seller1', draftBody());
     const id = created.body.id;

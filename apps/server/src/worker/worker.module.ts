@@ -3,6 +3,7 @@ import type { DbHandle } from '@salesforce/db';
 import type { Logger } from '../observability/logger.js';
 import { InfrastructureModule, type InfrastructureDeps } from '../platform/infrastructure.module.js';
 import { CLOCK, DATABASE_HANDLE, LOGGER, type Clock } from '../platform/tokens.js';
+import { loadCurrentReadScope } from '../sync/mirror-scope.js';
 import { MirrorSyncService } from '../sync/mirror-sync.service.js';
 import type { MirrorGateway } from '../sync/mirror-entities.js';
 import type { MirrorSchedules } from '../sync/schedules.js';
@@ -34,7 +35,7 @@ export class WorkerModule {
               options,
               ...(mirror === undefined
                 ? {}
-                : { mirror: { service: new MirrorSyncService({ db, gateway: mirror.gateway, logger, now }), schedules: mirror.schedules } }),
+                : { mirror: { service: new MirrorSyncService({ db, gateway: mirror.gateway, logger, now, readScope: () => loadCurrentReadScope(db.db) }), schedules: mirror.schedules } }),
             }),
           inject: [LOGGER, DATABASE_HANDLE, CLOCK],
         },

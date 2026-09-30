@@ -456,6 +456,13 @@ export interface components {
         };
         /** @enum {string} */
         AccountRole: "admin" | "manager" | "seller";
+        AlternativeTable: {
+            tableCode: number;
+            validation: components["schemas"]["AlternativeTableValidation"];
+            active: boolean;
+        };
+        /** @enum {string} */
+        AlternativeTableValidation: "needs_validation" | "validated";
         AnonymousSession: {
             /** @constant */
             authenticated: false;
@@ -497,9 +504,13 @@ export interface components {
             general: {
                 enabled: boolean;
                 enabledCompanyCodes: number[];
+                defaultCompanyCode?: number | null;
             };
             sales: {
                 orderTopCode: number | null;
+                eligibleOrderTopCodes?: number[];
+                orderStockLocationCode?: number | null;
+                orderLayout?: components["schemas"]["OrderLayoutConfiguration"];
                 quotationTopCode: number | null;
                 defaultNegotiationTypeCode: number | null;
                 negotiationTypes: components["schemas"]["NegotiationType"][];
@@ -525,6 +536,7 @@ export interface components {
                     visible: boolean;
                     orderable: boolean;
                 };
+                mobilityFilter?: components["schemas"]["MobilityFilter"];
             };
             pricing: {
                 /** @constant */
@@ -534,6 +546,8 @@ export interface components {
                 catalogReferenceTableCode: number | null;
                 /** @constant */
                 missingPrice: "no_price_state";
+                mobilePriceTableCodes?: number[];
+                alternativeTable?: components["schemas"]["AlternativeTable"];
             };
             financial: {
                 showFinancialArea: boolean;
@@ -636,6 +650,8 @@ export interface components {
             [key: string]: boolean;
         };
         /** @enum {string} */
+        FieldSupport: "SUPPORTED" | "READ_ONLY" | "IGNORED_UNTIL_NEEDED";
+        /** @enum {string} */
         GatewayMode: "fake" | "live";
         HealthResponse: {
             /** @constant */
@@ -707,6 +723,16 @@ export interface components {
             kind: "percent";
             value: components["schemas"]["DecimalString"];
         };
+        MobilityFilter: {
+            sourceField: string;
+            allowedValues: string[];
+            validation: components["schemas"]["MobilityFilterValidation"];
+            mode: components["schemas"]["MobilityFilterMode"];
+        };
+        /** @enum {string} */
+        MobilityFilterMode: "disabled" | "enforced";
+        /** @enum {string} */
+        MobilityFilterValidation: "pending_validation" | "validated";
         NegotiationType: {
             code: number;
             label: string;
@@ -769,6 +795,18 @@ export interface components {
             productCode: number;
             quantity: components["schemas"]["DecimalString"];
             discountPercent?: components["schemas"]["DecimalString"];
+        };
+        OrderLayoutConfiguration: {
+            layoutNumber: number | null;
+            fieldSupport: {
+                header: {
+                    [key: string]: components["schemas"]["FieldSupport"];
+                };
+                items: {
+                    [key: string]: components["schemas"]["FieldSupport"];
+                };
+                unlistedFields: components["schemas"]["FieldSupport"];
+            };
         };
         OrderListItem: {
             /** Format: uuid */

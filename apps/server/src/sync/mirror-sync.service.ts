@@ -1,5 +1,5 @@
 import { schema, type DbHandle } from '@salesforce/db';
-import { isSankhyaGatewayError } from '@salesforce/sankhya';
+import { isSankhyaGatewayError, type ReadScope } from '@salesforce/sankhya';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { errorLogFields, type Logger } from '../observability/logger.js';
 import type { Clock } from '../platform/tokens.js';
@@ -41,6 +41,11 @@ export interface MirrorSyncDeps {
   readonly gateway: MirrorGateway;
   readonly logger: Logger;
   readonly now: Clock;
+  /**
+   * Derives the read scope from the current installation configuration before each run. Absent = unscoped
+   * reads (fake/demo and tests). A rejection fails the run: it never falls back to an unscoped read.
+   */
+  readonly readScope?: () => Promise<ReadScope>;
 }
 
 /** Serializes async work inside one process. */
@@ -161,9 +166,11 @@ export class MirrorSyncService {
     await prepareSeenTable(session);
 
     const stats: RunStats = { read: 0, created: 0, updated: 0, reactivated: 0, unchanged: 0, deactivated: 0 };
+    const scope = this.deps.readScope === undefined ? undefined : await this.deps.readScope();
     const context = {
       gateway,
       description,
+      ...(scope === undefined ? {} : { scope }),
       warn: (message: string) => logger.warn({ entity }, message),
       ...(signal === undefined ? {} : { signal }),
     };

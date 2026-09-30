@@ -4,6 +4,7 @@ import { createLogger } from './observability/logger.js';
 import { runMain } from './process.js';
 import { isReservedSyncEntity } from './platform/worker-heartbeat.js';
 import { isMirrorEntity, MIRROR_ENTITIES, type MirrorEntity } from './sync/mirror-entities.js';
+import { loadCurrentReadScope } from './sync/mirror-scope.js';
 import { MirrorSyncService } from './sync/mirror-sync.service.js';
 
 /**
@@ -27,7 +28,13 @@ runMain('sync-once', async () => {
   const out = (line: string) => process.stdout.write(`${line}\n`);
   try {
     out(`gateway: ${gatewayDescription.mode} (${gatewayDescription.environmentKind})`);
-    const service = new MirrorSyncService({ db, gateway, logger, now: () => new Date() });
+    const service = new MirrorSyncService({
+      db,
+      gateway,
+      logger,
+      now: () => new Date(),
+      readScope: () => loadCurrentReadScope(db.db),
+    });
     const { results, failures } = await service.runAll(entities);
     for (const result of results) {
       const stats = result.stats;

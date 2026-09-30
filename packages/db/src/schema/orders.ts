@@ -27,6 +27,10 @@ export const orderStatuses = [
 ] as const;
 export type OrderStatus = (typeof orderStatuses)[number];
 
+/** Dataset an order was priced against. `legacy_dev` is also the column default: fail closed for writers that do not stamp it. */
+export const datasetOrigins = ['legacy_dev', 'fake', 'sankhya'] as const;
+export type DatasetOrigin = (typeof datasetOrigins)[number];
+
 export const priceStates = ['priced', 'zero', 'none'] as const;
 export type PriceState = (typeof priceStates)[number];
 
@@ -60,10 +64,24 @@ export const salesOrder = pgTable(
     configVersionId: uuid('config_version_id')
       .notNull()
       .references(() => installationConfigurationVersion.id),
+    /** Server-stamped at creation, never client input, immutable (trigger). Only 'sankhya' can ever be sent to the ERP. */
+    datasetOrigin: text('dataset_origin').notNull().default('legacy_dev'),
+    /** ERP environment the dataset came from (dev, sandbox, homologation, production); NULL = unbound, never eligible. */
+    erpEnvironment: text('erp_environment'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    check('sales_order_dataset_origin_chk', sql`${t.datasetOrigin} in (${inList(datasetOrigins)})`),
+    check(
+      'sales_order_erp_environment_chk',
+      sql`${t.erpEnvironment} is null or (${t.erpEnvironment} <> '' and ${t.datasetOrigin} = 'sankhya')`,
+    ),
+    // Structural ERP gate: no ERP-side status (queued/sent/rejected/unknown) exists for an order that is not a bound Sankhya order.
+    check(
+      'sales_order_erp_eligibility_chk',
+      sql`${t.status} not in ('queued', 'sent', 'rejected', 'unknown') or (${t.datasetOrigin} = 'sankhya' and ${t.erpEnvironment} is not null)`,
+    ),
     check('sales_order_status_chk', sql`${t.status} in (${inList(orderStatuses)})`),
     check('sales_order_estimated_total_chk', sql`${t.estimatedTotal} >= 0`),
     check('sales_order_version_chk', sql`${t.version} >= 1`),

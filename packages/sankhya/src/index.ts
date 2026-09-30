@@ -1,6 +1,7 @@
 export * from './errors.js';
 export { Secret } from './secret.js';
 export * from './gateway.js';
+export { selectEffectiveVersions, type ReadScope } from './read-scope.js';
 export {
   BootstrapFileConfigurationSource,
   NO_CONFIGURATION_SOURCE_MESSAGE,

@@ -129,6 +129,9 @@ services:
       SANKHYA_CLIENT_ID: ${SANKHYA_CLIENT_ID:-}
       SANKHYA_CLIENT_SECRET: ${SANKHYA_CLIENT_SECRET:-}
       SANKHYA_X_TOKEN: ${SANKHYA_X_TOKEN:-}
+      # Scheduled mirror jobs. Empty = the worker default (on for the fake gateway; MANDATORY and explicit in live
+      # mode). Keep false against a real Sankhya until sync is run manually (sync:once).
+      SYNC_MIRROR_ENABLED: ${SYNC_MIRROR_ENABLED:-}
     command: ["node", "dist/main-worker.js"]
     healthcheck:
       test:

@@ -33,6 +33,9 @@ export interface ClockRef {
 
 const TOKEN_LIFETIME_SECONDS = 300;
 
+/** `TGFGRU.CODGRUPAI` of a root group (validated on the PLAC TESTE base). Not a real group code. */
+export const ROOT_GROUP_SENTINEL = -999_999_999;
+
 function flag(value: boolean): 'S' | 'N' {
   return value ? 'S' : 'N';
 }
@@ -78,6 +81,15 @@ export function erpTablesFromDataset(dataset: DemoDataset, dbUtcOffsetMinutes = 
       MARCA: p.brand,
       REFERENCIA: p.reference,
     })),
+    TGFGRU: dataset.productGroups.map((g) => ({
+      CODGRUPOPROD: g.code,
+      DESCRGRUPOPROD: g.name,
+      CODGRUPAI: g.parentCode === null ? ROOT_GROUP_SENTINEL : g.parentCode,
+      GRAU: g.degree,
+      ANALITICO: flag(g.analytic),
+      ATIVO: flag(g.active),
+    })),
+    TGFNTA: dataset.priceTables.map((t) => ({ CODTAB: t.code, NOMETAB: t.name, ATIVO: flag(t.active) })),
     TGFTAB: dataset.priceTableVersions.map((v) => ({
       NUTAB: v.versionId,
       CODTAB: v.tableCode,
@@ -113,6 +125,12 @@ function whereMatches(row: ErpRow, where: string | undefined): boolean {
     if (flagMatch) return row[flagMatch[1] as string] === flagMatch[2];
     const positive = /^(\w+) > 0$/.exec(term);
     if (positive) return Number(row[positive[1] as string]) > 0;
+    const inList = /^(\w+) IN \((.+)\)$/.exec(term);
+    if (inList) {
+      const allowed = (inList[2] as string).split(',').map((v) => v.trim());
+      const cell = row[inList[1] as string];
+      return allowed.some((v) => (v.startsWith("'") ? cell === v.slice(1, -1) : Number(cell) === Number(v)));
+    }
     throw new Error(`mock cannot interpret WHERE: ${where}`);
   });
 }

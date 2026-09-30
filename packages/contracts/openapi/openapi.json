@@ -2206,6 +2206,34 @@
           "seller"
         ]
       },
+      "AlternativeTable": {
+        "type": "object",
+        "properties": {
+          "tableCode": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "validation": {
+            "$ref": "#/components/schemas/AlternativeTableValidation"
+          },
+          "active": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "tableCode",
+          "validation",
+          "active"
+        ],
+        "additionalProperties": false
+      },
+      "AlternativeTableValidation": {
+        "type": "string",
+        "enum": [
+          "needs_validation",
+          "validated"
+        ]
+      },
       "AnonymousSession": {
         "type": "object",
         "properties": {
@@ -2365,6 +2393,17 @@
                   "type": "integer",
                   "minimum": 0
                 }
+              },
+              "defaultCompanyCode": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "required": [
@@ -2386,6 +2425,27 @@
                     "type": "null"
                   }
                 ]
+              },
+              "eligibleOrderTopCodes": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "orderStockLocationCode": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "orderLayout": {
+                "$ref": "#/components/schemas/OrderLayoutConfiguration"
               },
               "quotationTopCode": {
                 "anyOf": [
@@ -2513,6 +2573,9 @@
                   "orderable"
                 ],
                 "additionalProperties": false
+              },
+              "mobilityFilter": {
+                "$ref": "#/components/schemas/MobilityFilter"
               }
             },
             "required": [
@@ -2557,6 +2620,16 @@
               "missingPrice": {
                 "type": "string",
                 "const": "no_price_state"
+              },
+              "mobilePriceTableCodes": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "alternativeTable": {
+                "$ref": "#/components/schemas/AlternativeTable"
               }
             },
             "required": [
@@ -3087,6 +3160,14 @@
           "type": "boolean"
         }
       },
+      "FieldSupport": {
+        "type": "string",
+        "enum": [
+          "SUPPORTED",
+          "READ_ONLY",
+          "IGNORED_UNTIL_NEEDED"
+        ]
+      },
       "GatewayMode": {
         "type": "string",
         "enum": [
@@ -3426,6 +3507,51 @@
           }
         ]
       },
+      "MobilityFilter": {
+        "type": "object",
+        "properties": {
+          "sourceField": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{0,29}$"
+          },
+          "allowedValues": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20
+            }
+          },
+          "validation": {
+            "$ref": "#/components/schemas/MobilityFilterValidation"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/MobilityFilterMode"
+          }
+        },
+        "required": [
+          "sourceField",
+          "allowedValues",
+          "validation",
+          "mode"
+        ],
+        "additionalProperties": false
+      },
+      "MobilityFilterMode": {
+        "type": "string",
+        "enum": [
+          "disabled",
+          "enforced"
+        ]
+      },
+      "MobilityFilterValidation": {
+        "type": "string",
+        "enum": [
+          "pending_validation",
+          "validated"
+        ]
+      },
       "NegotiationType": {
         "type": "object",
         "properties": {
@@ -3756,6 +3882,63 @@
         "required": [
           "productCode",
           "quantity"
+        ],
+        "additionalProperties": false
+      },
+      "OrderLayoutConfiguration": {
+        "type": "object",
+        "properties": {
+          "layoutNumber": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fieldSupport": {
+            "type": "object",
+            "properties": {
+              "header": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                },
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/FieldSupport"
+                }
+              },
+              "items": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                },
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/FieldSupport"
+                }
+              },
+              "unlistedFields": {
+                "$ref": "#/components/schemas/FieldSupport"
+              }
+            },
+            "required": [
+              "header",
+              "items",
+              "unlistedFields"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "layoutNumber",
+          "fieldSupport"
         ],
         "additionalProperties": false
       },

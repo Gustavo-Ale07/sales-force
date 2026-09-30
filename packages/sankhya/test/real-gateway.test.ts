@@ -111,8 +111,8 @@ describe('capabilities and NotImplemented paths', () => {
       sellers: 'supported',
       customers: 'supported',
       products: 'supported',
-      productGroups: 'not_implemented',
-      priceTables: 'not_implemented',
+      productGroups: 'supported',
+      priceTables: 'supported',
       priceTableVersions: 'supported',
       listPrices: 'supported',
     });
@@ -130,13 +130,6 @@ describe('capabilities and NotImplemented paths', () => {
   it('submitOrder performs no HTTP call at all', async () => {
     const { gateway, mock } = setup();
     await expect(gateway.submitOrder({ originId: 'o-1', customerCode: 1, sellerCode: null, items: [] })).rejects.toBeInstanceOf(NotImplementedError);
-    expect(mock.calls).toHaveLength(0);
-  });
-
-  it('not-implemented reads make no HTTP call', async () => {
-    const { gateway, mock } = setup();
-    await expect(collect(gateway.readPriceTables())).rejects.toBeInstanceOf(NotImplementedError);
-    await expect(collect(gateway.readProductGroups())).rejects.toBeInstanceOf(NotImplementedError);
     expect(mock.calls).toHaveLength(0);
   });
 });

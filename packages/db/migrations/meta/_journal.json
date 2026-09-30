@@ -36,6 +36,13 @@
       "when": 1790365547350,
       "tag": "0004_sales_order_item_discount_percent",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790798569961,
+      "tag": "0005_sales_order_erp_binding",
+      "breakpoints": true
     }
   ]
 }

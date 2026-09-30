@@ -3,13 +3,16 @@ import type {
   DecimalString,
   IsoTimestamp,
   ListPrice,
+  PriceTable,
   PriceTableVersion,
   Product,
+  ProductGroup,
   Seller,
 } from '@salesforce/domain';
 import { decimalFromCell } from '../decimal.js';
 import { SankhyaGatewayError } from '../errors.js';
 import type { ReadEntity } from '../gateway.js';
+import type { ReadScope } from '../read-scope.js';
 
 /**
  * ERP row -> Sales Force type mapping. This is the ONLY place in the repository that names ERP tables
@@ -212,6 +215,93 @@ export const PRODUCT_SPEC: EntitySpec<Product> = {
   keyOf: (product) => [product.code],
 };
 
+/** `TGFGRU.CODGRUPAI` of a root group (validated on the ERP test base): a sentinel, not a parent code. */
+const ROOT_GROUP_PARENT = -999_999_999;
+
+/**
+ * TGFGRU (validated on the ERP test base: data dictionary + sample). PK CODGRUPOPROD. `CODGRUPOPROD = 0`
+ * is the "<SEM GRUPO>" placeholder and is never mirrored. `CODGRUPAI = -999999999` marks a root group
+ * (parent `null`). The group image column is never selected.
+ */
+export const PRODUCT_GROUP_SPEC: EntitySpec<ProductGroup> = {
+  entity: 'productGroups',
+  table: 'TGFGRU',
+  select: ['CODGRUPOPROD', 'DESCRGRUPOPROD', 'CODGRUPAI', 'GRAU', 'ANALITICO', 'ATIVO'],
+  columns: ['CODGRUPOPROD', 'DESCRGRUPOPROD', 'CODGRUPAI', 'GRAU', 'ANALITICO', 'ATIVO'],
+  where: 'CODGRUPOPROD > 0',
+  orderBy: 'CODGRUPOPROD',
+  map: (row) => {
+    const parent = row.nullableInt('CODGRUPAI');
+    return {
+      code: row.int('CODGRUPOPROD'),
+      name: row.text('DESCRGRUPOPROD'),
+      parentCode: parent === null || parent === ROOT_GROUP_PARENT ? null : parent,
+      degree: row.int('GRAU'),
+      analytic: row.flag('ANALITICO'),
+      active: row.flag('ATIVO'),
+    };
+  },
+  keyOf: (group) => [group.code],
+};
+
+function withWhere(clause: string | undefined): { where?: string } {
+  return clause === undefined ? {} : { where: clause };
+}
+
+/** `<column> IN (..)` from the configured codes; `undefined` = no scope. Codes were validated as integers. */
+function tableCodeClause(column: string, scope: ReadScope | undefined): string | undefined {
+  const codes = scope?.priceTableCodes;
+  if (codes === undefined) return undefined;
+  // An empty list never reaches the ERP (the gateway short-circuits); `IN ()` is invalid SQL.
+  return `${column} IN (${codes.join(',')})`;
+}
+
+/**
+ * TGFNTA (validated: CODTAB, NOMETAB, ATIVO). PK CODTAB; table 0 is a valid table (proven fallback).
+ * Which tables are mirrored is decided by the installation configuration (`scope.priceTableCodes`),
+ * never here. Derived-table fields (`CODTABORIG`/`PERCENTUAL`) live per version (F-41) and are not read.
+ */
+export function priceTableSpec(scope: ReadScope | undefined): EntitySpec<PriceTable> {
+  return {
+    entity: 'priceTables',
+    table: 'TGFNTA',
+    select: ['CODTAB', 'NOMETAB', 'ATIVO'],
+    columns: ['CODTAB', 'NOMETAB', 'ATIVO'],
+    ...withWhere(tableCodeClause('CODTAB', scope)),
+    orderBy: 'CODTAB',
+    map: (row) => ({
+      code: row.int('CODTAB'),
+      name: row.text('NOMETAB'),
+      active: row.flag('ATIVO'),
+      originTableCode: null,
+      percent: null,
+    }),
+    keyOf: (table) => [table.code],
+  };
+}
+
+/** TGFPRO restricted by the installation configuration (see `ReadScope.products`). */
+export function productSpec(scope: ReadScope | undefined): EntitySpec<Product> {
+  const filter = scope?.products;
+  if (filter === undefined) return PRODUCT_SPEC;
+  const terms = ['CODPROD > 0'];
+  if (filter.activeOnly !== false) terms.push("ATIVO = 'S'");
+  terms.push(`USOPROD IN (${filter.usageValues.map((v) => `'${v}'`).join(',')})`);
+  const mobilityField = filter.mobilitySourceField ?? null;
+  const columns = mobilityField === null ? PRODUCT_SPEC.columns : [...PRODUCT_SPEC.columns, 'MOBILITY'];
+  const select = mobilityField === null ? PRODUCT_SPEC.select : [...PRODUCT_SPEC.select, `${mobilityField} AS MOBILITY`];
+  return {
+    ...PRODUCT_SPEC,
+    select,
+    columns,
+    where: terms.join(' AND '),
+    map: (row, context) => {
+      const product = PRODUCT_SPEC.map(row, context);
+      return mobilityField === null ? product : { ...product, mobilityCode: row.nullableText('MOBILITY') };
+    },
+  };
+}
+
 /**
  * TGFTAB (F-38, F-39). PK NUTAB. `DTVIGOR` is read as `TO_CHAR(..., 'YYYY-MM-DD')` (Oracle dialect,
  * F-19) and interpreted as the start of that day in the DB clock zone; time-of-day and the behavior
@@ -233,6 +323,11 @@ export const PRICE_TABLE_VERSION_SPEC: EntitySpec<PriceTableVersion> = {
   keyOf: (version) => [version.versionId],
 };
 
+/** Versions of the configured tables only (all of them; the gateway then keeps the effective ones). */
+export function priceTableVersionSpec(scope: ReadScope | undefined): EntitySpec<PriceTableVersion> {
+  return { ...PRICE_TABLE_VERSION_SPEC, ...withWhere(tableCodeClause('CODTAB', scope)) };
+}
+
 /**
  * TGFEXC (F-27, F-38, F-42). Full PK is (NUTAB, CODPROD, CODLOCAL, CONTROLE). The mirror keys rows by
  * (version, product); `CODLOCAL` and `CONTROLE` were 0 / blank on every Sandbox row, so any other
@@ -253,6 +348,12 @@ export const LIST_PRICE_SPEC: EntitySpec<ListPrice> = {
   },
   keyOf: (price) => [price.versionId, price.productCode],
 };
+
+/** Prices of the given versions only (ids the gateway itself read; never empty). */
+export function listPriceSpec(versionIds: readonly number[] | undefined): EntitySpec<ListPrice> {
+  if (versionIds === undefined) return LIST_PRICE_SPEC;
+  return { ...LIST_PRICE_SPEC, where: `NUTAB IN (${versionIds.join(',')})` };
+}
 
 export function compareKeys(a: readonly number[], b: readonly number[]): number {
   for (let i = 0; i < Math.max(a.length, b.length); i += 1) {

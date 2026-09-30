@@ -11,6 +11,7 @@ import {
   type SubmitOrderRequest,
   type SubmitOrderResult,
 } from '../gateway.js';
+import { assertSafeScope, selectEffectiveVersions } from '../read-scope.js';
 import { DEMO_CONFIGURATION } from './demo-configuration.js';
 import { getDemoDataset, type DemoDataset } from './demo-data.js';
 
@@ -82,19 +83,42 @@ export class FakeGateway implements SankhyaGateway {
     return this.#snapshot('customers', this.#dataset.customers, options);
   }
   readProducts(options?: ReadOptions) {
-    return this.#snapshot('products', this.#dataset.products, options);
+    assertSafeScope(options?.scope);
+    const filter = options?.scope?.products;
+    const rows =
+      filter === undefined
+        ? this.#dataset.products
+        : this.#dataset.products.filter(
+            (p) => (filter.activeOnly === false || p.active) && p.usageCode !== null && filter.usageValues.includes(p.usageCode),
+          );
+    return this.#snapshot('products', rows, options);
   }
   readProductGroups(options?: ReadOptions) {
     return this.#snapshot('productGroups', this.#dataset.productGroups, options);
   }
   readPriceTables(options?: ReadOptions) {
-    return this.#snapshot('priceTables', this.#dataset.priceTables, options);
+    assertSafeScope(options?.scope);
+    const codes = options?.scope?.priceTableCodes;
+    const rows = codes === undefined ? this.#dataset.priceTables : this.#dataset.priceTables.filter((t) => codes.includes(t.code));
+    return this.#snapshot('priceTables', rows, options);
   }
   readPriceTableVersions(options?: ReadOptions) {
-    return this.#snapshot('priceTableVersions', this.#dataset.priceTableVersions, options);
+    return this.#snapshot('priceTableVersions', this.#versions(options), options);
   }
   readListPrices(options?: ReadOptions) {
-    return this.#snapshot('listPrices', this.#dataset.listPrices, options);
+    const scoped = options?.scope?.priceTableCodes !== undefined;
+    const ids = new Set(this.#versions(options).map((v) => v.versionId));
+    const rows = scoped ? this.#dataset.listPrices.filter((p) => ids.has(p.versionId)) : this.#dataset.listPrices;
+    return this.#snapshot('listPrices', rows, options);
+  }
+
+  /** Same rule as the real gateway: configured tables only, current version per table plus future ones. */
+  #versions(options?: ReadOptions) {
+    assertSafeScope(options?.scope);
+    const codes = options?.scope?.priceTableCodes;
+    if (codes === undefined) return this.#dataset.priceTableVersions;
+    const inScope = this.#dataset.priceTableVersions.filter((v) => codes.includes(v.tableCode));
+    return selectEffectiveVersions(inScope, options?.scope?.now ?? new Date().toISOString());
   }
 
   /** SNK-4 / SNK-5 / SNK-6: intentionally unimplemented, no side effect. */

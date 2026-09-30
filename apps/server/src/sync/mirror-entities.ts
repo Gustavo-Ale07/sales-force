@@ -12,6 +12,7 @@ import {
   type GatewayDescription,
   type ReadEntity,
   type ReadOptions,
+  type ReadScope,
   type SankhyaReadPort,
   type Snapshot,
 } from '@salesforce/sankhya';
@@ -60,6 +61,8 @@ export interface MirrorRow {
 
 export interface MirrorReadContext {
   readonly gateway: MirrorGateway;
+  /** Installation-derived read limits (see `deriveReadScope`); absent = unscoped read. */
+  readonly scope?: ReadScope;
   readonly description: GatewayDescription;
   readonly signal?: AbortSignal;
   readonly warn: (message: string) => void;
@@ -162,7 +165,10 @@ function mapped<T>(
 }
 
 function readOptions(context: MirrorReadContext): ReadOptions {
-  return context.signal === undefined ? {} : { signal: context.signal };
+  return {
+    ...(context.signal === undefined ? {} : { signal: context.signal }),
+    ...(context.scope === undefined ? {} : { scope: context.scope }),
+  };
 }
 
 const sellers: MirrorEntitySpec = {

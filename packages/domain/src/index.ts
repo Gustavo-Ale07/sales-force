@@ -7,3 +7,5 @@ export * from './pricing.js';
 export * from './scope.js';
 export * from './ordering.js';
 export * from './templates.js';
+export * from './erp-eligibility.js';
+export * from './product-mobility.js';
