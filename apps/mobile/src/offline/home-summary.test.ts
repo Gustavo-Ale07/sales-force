@@ -45,10 +45,20 @@ describe("pickResumableDraft", () => {
     expect(picked?.localId).toBe("wait");
   });
 
-  it("takes the most recently edited among equals, and still offers a delivered draft when it is all there is", () => {
+  it("takes the most recently edited among equals", () => {
     expect(
       pickResumableDraft([draft("old", "local_only", "2026-09-28T12:00:00Z"), draft("recent", "local_only", "2026-09-30T12:00:00Z")])?.localId,
     ).toBe("recent");
-    expect(pickResumableDraft([draft("only", "synced", "2026-09-30T12:00:00Z")])?.localId).toBe("only");
+  });
+
+  it("never offers a synced order: the Central has no Continuar for it", () => {
+    expect(pickResumableDraft([draft("only", "synced", "2026-09-30T12:00:00Z")])).toBeNull();
+    expect(pickResumableDraft([draft("sent", "synced", "2026-09-30T12:00:00Z"), draft("old", "local_only", "2026-09-01T12:00:00Z")])?.localId).toBe("old");
+  });
+
+  it("offers every state that can really be continued", () => {
+    for (const status of ["local_only", "pending_sync", "syncing", "sync_error", "conflict", "needs_review"] as const) {
+      expect(pickResumableDraft([draft("x", status, "2026-09-30T12:00:00Z")])?.localId).toBe("x");
+    }
   });
 });

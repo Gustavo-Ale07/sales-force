@@ -1,6 +1,7 @@
 import type { DraftRecord, DraftStatus } from "@salesforce/mobile-db";
+import { saleActions } from "./sales-status";
 
-/** Lower rank = more relevant to resume: something the seller must act on, then unsent work, then already delivered drafts. */
+/** Lower rank = more relevant to resume: something the seller must act on, then unsent work. Orders already synced are never offered (they have no Continuar in the Central). */
 const RESUME_RANK: Record<DraftStatus, number> = {
   conflict: 0,
   needs_review: 0,
@@ -15,6 +16,7 @@ const RESUME_RANK: Record<DraftStatus, number> = {
 export function pickResumableDraft(drafts: readonly DraftRecord[]): DraftRecord | null {
   let best: DraftRecord | null = null;
   for (const draft of drafts) {
+    if (!saleActions(draft).continue) continue;
     if (best === null) {
       best = draft;
       continue;
