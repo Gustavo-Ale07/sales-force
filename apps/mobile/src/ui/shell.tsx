@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { BackHandler, KeyboardAvoidingView, Pressable, StatusBar, StyleSheet, Text, View } from "react-native";
+import { Alert, BackHandler, KeyboardAvoidingView, Pressable, StatusBar, StyleSheet, Text, View } from "react-native";
 import { useConnectivity } from "../connectivity/use-connectivity";
 import type { Account } from "../auth/auth-port";
 import type { AppDependencies } from "../dependencies";
 import type { CustomerListItem } from "../data/ports";
+import { lineFromProduct, type EditorLine } from "../data/order-draft";
 import { evaluateOfflineAccess } from "../offline/session";
 import { useSyncStatus } from "../offline/use-sync";
 import { colors, spacing } from "../theme";
@@ -11,7 +12,7 @@ import { BottomNav, type MainTab } from "./bottom-nav";
 import { BrandLogo, SplashView } from "./brand";
 import { CustomerDetailScreen } from "./customer-detail-screen";
 import { CustomersScreen } from "./customers-screen";
-import { DraftsScreen } from "./drafts-screen";
+import { SalesScreen } from "./sales-screen";
 import { HomeScreen } from "./home-screen";
 import { LoginScreen } from "./login-screen";
 import { NewOrderScreen } from "./new-order-screen";
@@ -54,9 +55,10 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
   const [tab, setTab] = useState<MainTab>("home");
   const [visited, setVisited] = useState<ReadonlySet<MainTab>>(() => new Set<MainTab>(["home"]));
   const [salesView, setSalesView] = useState<SalesView>("orders");
+  const [salesReset, setSalesReset] = useState(0);
   const [resumeLocalId, setResumeLocalId] = useState<string | null>(null);
   const [customerDetail, setCustomerDetail] = useState<CustomerListItem | null>(null);
-  const [startRequest, setStartRequest] = useState<{ nonce: number; customer: Pick<CustomerListItem, "code" | "name"> } | null>(null);
+  const [startRequest, setStartRequest] = useState<{ nonce: number; customer: Pick<CustomerListItem, "code" | "name">; lines?: readonly EditorLine[] } | null>(null);
   const connectivityState = useConnectivity(connectivity);
   const account = session.phase === "authenticated" ? session.account : null;
   // One set of services per signed-in account: cache-backed reads, local drafts and the sync manager.
@@ -157,6 +159,33 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
     setSalesView("newOrder");
     selectTab("sales");
   };
+  /** Duplicate: a new order with the same customer and items at today's list price; never the same identifiers (the save makes new ones). */
+  const duplicateSale = (localId: string) => {
+    const local = services?.localOrders;
+    if (local === undefined) return;
+    void (async () => {
+      try {
+        const opened = await local.open(localId);
+        if (opened === null) return;
+        const lines = await Promise.all(
+          opened.lines.map(async (line, index) => {
+            try {
+              const product = await repositories.products.get(line.productCode);
+              return { ...lineFromProduct(product, `copy-${index}`), quantityText: line.quantityText };
+            } catch {
+              // Product not in this device's catalog any more: keep the line without a price ("Sem preço"), never the old one.
+              return { ...line, key: `copy-${index}`, discountText: "", price: { state: "none" as const, tableCode: null, versionId: null, noPriceReason: "no_price_row" as const } };
+            }
+          }),
+        );
+        setStartRequest({ nonce: Date.now(), customer: { code: opened.draft.customerCode, name: opened.draft.customerName }, lines });
+        setSalesView("newOrder");
+        selectTab("sales");
+      } catch {
+        Alert.alert("Não foi possível duplicar", "Tente novamente.");
+      }
+    })();
+  };
   const syncView = { status: syncStatus, connectivity: connectivityState, onSyncNow: syncNow };
 
   return (
@@ -212,11 +241,14 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
                   <Pressable
                     key={key}
                     style={[styles.segment, salesView === key && styles.segmentActive]}
-                    onPress={() => setSalesView(key)}
+                    onPress={() => {
+                      setSalesView(key);
+                      if (key === "orders") setSalesReset((n) => n + 1);
+                    }}
                     accessibilityRole="tab"
                     accessibilityState={{ selected: salesView === key }}
                   >
-                    <Text style={[styles.segmentText, salesView === key && styles.segmentTextActive]}>{key === "orders" ? "Pedidos" : "Novo pedido"}</Text>
+                    <Text style={[styles.segmentText, salesView === key && styles.segmentTextActive]}>{key === "orders" ? "Minhas vendas" : "Novo pedido"}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -232,7 +264,18 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
             </View>
             {services !== null && (
               <View style={salesView === "orders" ? styles.paneActive : styles.paneHidden}>
-                <DraftsScreen localOrders={services.localOrders} syncStatus={syncStatus} onOpen={openDraft} />
+                <SalesScreen
+                  localOrders={services.localOrders}
+                  customers={repositories.customers}
+                  syncStatus={syncStatus}
+                  connectivity={connectivityState}
+                  onUnauthenticated={expire}
+                  onNewSale={() => setSalesView("newOrder")}
+                  onContinue={openDraft}
+                  onDuplicate={duplicateSale}
+                  onSyncNow={syncNow}
+                  resetSignal={salesReset}
+                />
               </View>
             )}
           </Pane>

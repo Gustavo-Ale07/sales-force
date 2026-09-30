@@ -10,6 +10,7 @@ export * from "./migrator";
 export * from "./offline-env";
 export * from "./reference-cache";
 export * from "./local-orders";
+export * from "./sales-query";
 export * from "./order-sync";
 export * from "./sync-manager";
 

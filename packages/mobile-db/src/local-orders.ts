@@ -107,7 +107,7 @@ export interface OrderCommandPayload {
 
 /* ---------- row mapping ---------- */
 
-const DRAFT_COLUMNS = `d.local_id, d.owner_account_id, d.client_request_id, d.customer_code, d.customer_name,
+export const DRAFT_COLUMNS = `d.local_id, d.owner_account_id, d.client_request_id, d.customer_code, d.customer_name,
   d.negotiation_type_code, d.notes, d.status, d.remote_id, d.remote_version, d.remote_draft_number, d.estimated_total,
   d.last_error, d.price_review, d.server_snapshot, d.created_at, d.updated_at,
   (SELECT count(*) FROM local_order_item i WHERE i.draft_local_id = d.local_id) AS item_count`;
@@ -119,7 +119,7 @@ function nullableString(value: unknown): string | null {
   return value === null || value === undefined ? null : String(value);
 }
 
-function toDraft(row: SqlRow): DraftRecord {
+export function toDraft(row: SqlRow): DraftRecord {
   return {
     localId: String(row.local_id),
     ownerAccountId: String(row.owner_account_id),

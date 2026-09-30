@@ -16,7 +16,8 @@ import {
   type SqlDatabase,
 } from "@salesforce/mobile-db";
 import { discountTextOf, parseDiscountInput, parseQuantityInput, type EditorLine } from "../data/order-draft";
-import type { ListPriceContext } from "../data/ports";
+import type { ListPriceContext, Page } from "../data/ports";
+import { listSales, summarizeSales, type SalesFilters, type SalesRow, type SalesSummary } from "./sales";
 
 export interface SaveLocalDraftInput {
   /** `null` = a new draft. */
@@ -36,6 +37,12 @@ export interface OpenedLocalDraft {
 export interface LocalOrdersPort {
   save(input: SaveLocalDraftInput): Promise<DraftRecord>;
   list(): Promise<DraftRecord[]>;
+  /** One page of the sales list (Central de Vendas): filtered, counted and paged in SQLite. */
+  listSales(filters: SalesFilters, request: { search: string; page: number; pageSize: number }): Promise<Page<SalesRow>>;
+  /** Counters and value of the same filters, for the summary above the list. */
+  summarizeSales(filters: SalesFilters, search: string): Promise<SalesSummary>;
+  /** One draft with its stored state, or `null` (used by the sale detail). */
+  get(localId: string): Promise<DraftRecord | null>;
   open(localId: string): Promise<OpenedLocalDraft | null>;
   discard(localId: string): Promise<void>;
   acknowledgePriceReview(localId: string): Promise<void>;
@@ -112,6 +119,12 @@ export function createLocalOrdersPort(deps: {
       return draft;
     },
     list: () => listDrafts(db, ownerAccountId),
+    listSales: (filters, request) => listSales(db, ownerAccountId, filters, request, env.now()),
+    summarizeSales: (filters, search) => summarizeSales(db, ownerAccountId, filters, search, env.now()),
+    async get(localId) {
+      const draft = await getDraft(db, localId);
+      return draft !== null && draft.ownerAccountId === ownerAccountId ? draft : null;
+    },
     async open(localId) {
       const draft = await getDraft(db, localId);
       if (draft === null || draft.ownerAccountId !== ownerAccountId) return null;

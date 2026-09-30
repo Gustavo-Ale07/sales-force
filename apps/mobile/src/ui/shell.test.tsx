@@ -7,6 +7,7 @@ import {
   fakeAuth,
   fakeConnectivity,
   fakeDependencies,
+  fakeLocalOrders,
   fakeOrders,
   fakeProducts,
   networkError,
@@ -32,16 +33,7 @@ function fakeOffline(remembered: RememberedSession | null, status: SyncStatus = 
     session: { load: async () => remembered, remember: async () => undefined, forget },
     forAccount: () => ({
       repositories: fakeDependencies().repositories,
-      localOrders: {
-        save: async () => {
-          throw new Error("unused");
-        },
-        list: async () => [],
-        open: async () => null,
-        discard: async () => undefined,
-        acknowledgePriceReview: async () => undefined,
-        resolveConflict: async () => undefined,
-      },
+      localOrders: fakeLocalOrders(),
       sync,
     }),
   };
@@ -251,8 +243,8 @@ describe("Shell", () => {
     await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
     await fireEvent.press(await screen.findByRole("tab", { name: "Perfil" }));
     await fireEvent.press(screen.getByRole("button", { name: "Ver pedidos salvos neste aparelho" }));
-    expect(await screen.findByText("Nenhum pedido salvo neste aparelho.")).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Vendas" }).props.accessibilityState.selected).toBe(true);
+    expect(await screen.findByText("Nenhuma venda pendente.")).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Minhas vendas" }).props.accessibilityState.selected).toBe(true);
   });
 
   it("says so when the seller enters offline with the saved session", async () => {

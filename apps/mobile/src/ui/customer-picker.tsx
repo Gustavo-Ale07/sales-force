@@ -4,9 +4,9 @@ import { colors, spacing } from "../theme";
 import { describeCustomerStatus } from "./customers-screen";
 import { PagedListView } from "./paged-list-view";
 
-function PickRow({ customer, onSelect }: { customer: CustomerListItem; onSelect: (customer: CustomerListItem) => void }) {
+function PickRow({ customer, onSelect, allowUnavailable }: { customer: CustomerListItem; onSelect: (customer: CustomerListItem) => void; allowUnavailable: boolean }) {
   const status = describeCustomerStatus(customer);
-  const disabled = status !== null;
+  const disabled = status !== null && !allowUnavailable;
   return (
     <Pressable
       style={({ pressed }) => [styles.row, disabled && styles.rowDisabled, pressed && !disabled && styles.rowPressed]}
@@ -32,15 +32,17 @@ export interface CustomerPickerProps {
   readonly customers: CustomerRepository;
   readonly onSelect: (customer: CustomerListItem) => void;
   readonly onUnauthenticated: () => void;
+  /** Filtering past orders must reach blocked/inactive customers too; only starting an order excludes them. */
+  readonly allowUnavailable?: boolean;
 }
 
 /** Step 1 of the new-order flow: pick the customer the draft is for. Blocked/inactive customers cannot be selected. */
-export function CustomerPicker({ customers, onSelect, onUnauthenticated }: CustomerPickerProps) {
+export function CustomerPicker({ customers, onSelect, onUnauthenticated, allowUnavailable = false }: CustomerPickerProps) {
   return (
     <PagedListView
       load={(request) => customers.list(request)}
       keyOf={(customer) => String(customer.code)}
-      renderItem={(customer) => <PickRow customer={customer} onSelect={onSelect} />}
+      renderItem={(customer) => <PickRow customer={customer} onSelect={onSelect} allowUnavailable={allowUnavailable} />}
       searchLabel="Buscar cliente por nome ou código"
       emptyText="Nenhum cliente encontrado na sua carteira."
       onUnauthenticated={onUnauthenticated}

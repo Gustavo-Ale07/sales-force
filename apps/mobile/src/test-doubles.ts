@@ -1,6 +1,9 @@
+import type { DraftRecord } from "@salesforce/mobile-db";
 import type { Account, AuthPort } from "./auth/auth-port";
 import type { ConnectivityPort, ConnectivityState } from "./connectivity/connectivity";
 import type { AppDependencies } from "./dependencies";
+import type { LocalOrdersPort } from "./offline/local-orders";
+import type { SalesFilters } from "./offline/sales";
 import { ApiRequestError } from "./data/api";
 import type {
   CreateOrderRequest,
@@ -172,4 +175,83 @@ export function fakeDependencies(overrides: Partial<AppDependencies> = {}): AppD
     connectivity: fakeConnectivity().port,
     ...overrides,
   };
+}
+
+/** A saved order as the local store returns it; every field overridable. */
+export function draftRecord(overrides: Partial<DraftRecord> = {}): DraftRecord {
+  return {
+    localId: "local-1",
+    ownerAccountId: "acct-1",
+    clientRequestId: "req-1",
+    customerCode: 10,
+    customerName: "Padaria Central",
+    negotiationTypeCode: null,
+    notes: null,
+    status: "pending_sync",
+    remoteId: null,
+    remoteVersion: null,
+    remoteDraftNumber: null,
+    estimatedTotal: null,
+    lastError: null,
+    priceReview: null,
+    serverSnapshot: null,
+    createdAt: "2026-09-30T12:00:00.000Z",
+    updatedAt: "2026-09-30T12:00:00.000Z",
+    itemCount: 2,
+    ...overrides,
+  };
+}
+
+const UNSENT: readonly DraftRecord["status"][] = ["local_only", "pending_sync", "syncing", "sync_error", "conflict", "needs_review"];
+
+/**
+ * In-memory stand-in for the local orders port. Filtering mirrors the SQL (group, status, customer, text), so UI tests
+ * exercise the same contract; the SQL itself is tested in `packages/mobile-db`.
+ */
+export function fakeLocalOrders(drafts: DraftRecord[] = [], overrides: Partial<LocalOrdersPort> = {}): LocalOrdersPort & { drafts: DraftRecord[] } {
+  const state = { drafts: [...drafts] };
+  const matching = (filters: SalesFilters, search: string) => {
+    const text = search.trim().toLowerCase();
+    return state.drafts.filter((d) => {
+      const unsent = UNSENT.includes(d.status);
+      if ((filters.group === "unsent") !== unsent) return false;
+      if (filters.statuses.length > 0 && !filters.statuses.includes(d.status)) return false;
+      if (filters.customer !== null && d.customerCode !== filters.customer.code) return false;
+      if (text === "") return true;
+      return d.customerName.toLowerCase().includes(text) || String(d.customerCode) === text || String(d.remoteDraftNumber) === text;
+    });
+  };
+  const valueOf = (d: DraftRecord) => ({ amount: d.estimatedTotal, partial: d.estimatedTotal === null });
+  const port: LocalOrdersPort = {
+    save: async () => {
+      throw new Error("unused");
+    },
+    list: async () => state.drafts,
+    listSales: async (filters, request) => {
+      const all = matching(filters, request.search);
+      const start = (request.page - 1) * request.pageSize;
+      return { items: all.slice(start, start + request.pageSize).map((draft) => ({ draft, value: valueOf(draft) })), page: request.page, pageSize: request.pageSize, total: all.length };
+    },
+    summarizeSales: async (filters, search) => {
+      const all = matching(filters, search);
+      const other = (group: SalesFilters["group"]) => matching({ ...filters, group }, search).length;
+      const amounts = all.flatMap((d) => (d.estimatedTotal === null ? [] : [d.estimatedTotal]));
+      return {
+        count: all.length,
+        amount: amounts.length === 0 ? null : amounts.reduce((sum, v) => (Number(sum) + Number(v)).toFixed(2)),
+        partial: all.some((d) => d.estimatedTotal === null),
+        lastUpdatedAt: all.map((d) => d.updatedAt).sort().at(-1) ?? null,
+        counts: { unsent: other("unsent"), sent: other("sent") },
+      };
+    },
+    get: async (localId) => state.drafts.find((d) => d.localId === localId) ?? null,
+    open: async () => null,
+    discard: async (localId) => {
+      state.drafts = state.drafts.filter((d) => d.localId !== localId);
+    },
+    acknowledgePriceReview: async () => undefined,
+    resolveConflict: async () => undefined,
+    ...overrides,
+  };
+  return Object.defineProperty(port, "drafts", { get: () => state.drafts }) as LocalOrdersPort & { drafts: DraftRecord[] };
 }

@@ -91,7 +91,8 @@ export interface NewOrderScreenProps {
   readonly resumeLocalId?: string | null;
   readonly onResumeConsumed?: () => void;
   /** "Novo pedido" from a customer sheet: start (or continue) an order for this customer. Handled once per `nonce`. */
-  readonly startRequest?: { readonly nonce: number; readonly customer: PickedCustomer } | null;
+  /** With `lines` (a duplicated sale) the cart opens pre-filled as a brand-new order; an order in progress is never replaced silently. */
+  readonly startRequest?: { readonly nonce: number; readonly customer: PickedCustomer; readonly lines?: readonly EditorLine[] } | null;
   readonly onStartConsumed?: () => void;
 }
 
@@ -149,6 +150,7 @@ export function NewOrderScreen({
   });
   const startNonce = startRequest?.nonce ?? null;
   const startCustomer = startRequest?.customer ?? null;
+  const startLines = startRequest?.lines;
   useEffect(() => {
     if (startNonce === null || startCustomer === null) return;
     onStartConsumed?.();
@@ -156,14 +158,19 @@ export function NewOrderScreen({
     const begin = () => {
       resetOrder();
       setCustomer(startCustomer);
-      setStep("products");
+      if (startLines === undefined) {
+        setStep("products");
+        return;
+      }
+      setLines(startLines.map((line) => ({ ...line, key: nextKey() })));
+      setStep("cart");
     };
     // Nothing at risk: an empty cart, or an order already saved (its success screen is showing).
     if (current.lines.length === 0 || current.finished) {
       begin();
       return;
     }
-    if (current.customer?.code === startCustomer.code) {
+    if (startLines === undefined && current.customer?.code === startCustomer.code) {
       setStep("products");
       return;
     }

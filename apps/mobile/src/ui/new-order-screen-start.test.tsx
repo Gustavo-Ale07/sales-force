@@ -103,3 +103,26 @@ describe("NewOrderScreen started from a customer sheet", () => {
     expect(screen.getByText("Mercado Sul")).toBeTruthy();
   });
 });
+
+describe("NewOrderScreen started from a duplicated sale", () => {
+  const copy = [{ key: "copy-0", productCode: 5, description: "Copo 200 ml", unit: "UN", quantityText: "3", discountText: "", price: { state: "priced" as const, unitPrice: "10.00", tableCode: 1, versionId: 1 } }];
+
+  it("opens the cart pre-filled as a new, unsaved order", async () => {
+    await render(element({ startRequest: { nonce: 1, customer: padaria, lines: copy } }));
+    await settle();
+    expect(screen.getByRole("tab", { name: "Carrinho (1)" })).toBeTruthy();
+    expect(screen.getByText("Copo 200 ml")).toBeTruthy();
+    expect(screen.getByText("Padaria Central")).toBeTruthy();
+  });
+
+  it("never replaces an order in progress silently, even for the same customer", async () => {
+    const alert = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
+    const view = await render(element());
+    await pressAndSettle(await screen.findByText("Padaria Central"));
+    await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
+    await view.rerender(element({ startRequest: { nonce: 2, customer: padaria, lines: copy } }));
+    await settle();
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("tab", { name: "Carrinho (1)" })).toBeTruthy();
+  });
+});

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import type { DraftRecord, SyncStatus } from "@salesforce/mobile-db";
 import type { LocalOrdersPort } from "../offline/local-orders";
-import { account, pageOf } from "../test-doubles";
+import { account, fakeLocalOrders, pageOf } from "../test-doubles";
 import { HomeScreen, type HomeScreenProps } from "./home-screen";
 
 const idle: SyncStatus = { phase: "idle", pending: 0, needsAttention: 0, lastSyncedAt: null, lastError: null };
@@ -30,16 +30,7 @@ function draft(localId: string, customerName: string, status: DraftRecord["statu
 }
 
 function localOrdersOf(drafts: DraftRecord[]): LocalOrdersPort {
-  return {
-    save: async () => {
-      throw new Error("unused");
-    },
-    list: async () => drafts,
-    open: async () => null,
-    discard: async () => undefined,
-    acknowledgePriceReview: async () => undefined,
-    resolveConflict: async () => undefined,
-  };
+  return fakeLocalOrders(drafts);
 }
 
 async function renderHome(overrides: Partial<HomeScreenProps> = {}) {
