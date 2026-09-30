@@ -85,6 +85,19 @@ describe('RealSankhyaGateway equals the FakeGateway on the validated reads', () 
     const codes = (await collect(gateway.readCustomers())).rows.map((c) => c.code);
     expect(codes).not.toContain(999_999);
   });
+
+  it('ignores the ERP placeholder rows with code 0 (customer and product) and keeps the snapshot complete', async () => {
+    const tables = erpTablesFromDataset(dataset);
+    tables['TGFPAR']?.push({ CODPARC: 0, CLIENTE: 'S', NOMEPARC: '<placeholder>', RAZAOSOCIAL: null, CGC_CPF: null, ATIVO: 'S', BLOQUEAR: 'N', CODVEND: 0, CODTAB: null, LIMCRED: 0 });
+    tables['TGFPRO']?.push({ CODPROD: 0, DESCRPROD: '<sem descrição>', ATIVO: 'S', USOPROD: 'V', CODGRUPOPROD: 0, CODVOL: '0', MARCA: null, REFERENCIA: null });
+    const { gateway } = setup({ tables });
+    const customers = (await collect(gateway.readCustomers())).rows.map((c) => c.code);
+    const products = (await collect(gateway.readProducts())).rows.map((p) => p.code);
+    expect(customers).not.toContain(0);
+    expect(products).not.toContain(0);
+    expect(customers).toHaveLength(dataset.customers.length);
+    expect(products).toHaveLength(dataset.products.length);
+  });
 });
 
 describe('capabilities and NotImplemented paths', () => {

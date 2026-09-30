@@ -165,7 +165,8 @@ export const CUSTOMER_SPEC: EntitySpec<Customer> = {
   table: 'TGFPAR',
   select: ['CODPARC', 'NOMEPARC', 'RAZAOSOCIAL', 'CGC_CPF', 'ATIVO', 'BLOQUEAR', 'CODVEND', 'CODTAB', 'LIMCRED'],
   columns: ['CODPARC', 'NOMEPARC', 'RAZAOSOCIAL', 'CGC_CPF', 'ATIVO', 'BLOQUEAR', 'CODVEND', 'CODTAB', 'LIMCRED'],
-  where: "CLIENTE = 'S'",
+  // `CODPARC = 0` is the ERP placeholder row (flagged CLIENTE = 'S' in the Sandbox, 2026-09-30): never mirrored.
+  where: "CLIENTE = 'S' AND CODPARC > 0",
   orderBy: 'CODPARC',
   map: (row) => {
     const tradeName = row.nullableText('NOMEPARC');
@@ -195,6 +196,8 @@ export const PRODUCT_SPEC: EntitySpec<Product> = {
   table: 'TGFPRO',
   select: ['CODPROD', 'DESCRPROD', 'ATIVO', 'USOPROD', 'CODGRUPOPROD', 'CODVOL', 'MARCA', 'REFERENCIA'],
   columns: ['CODPROD', 'DESCRPROD', 'ATIVO', 'USOPROD', 'CODGRUPOPROD', 'CODVOL', 'MARCA', 'REFERENCIA'],
+  // `CODPROD = 0` is the ERP placeholder row ("<sem descrição>", Sandbox 2026-09-30): never mirrored.
+  where: 'CODPROD > 0',
   orderBy: 'CODPROD',
   map: (row) => ({
     code: row.int('CODPROD'),

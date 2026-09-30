@@ -108,9 +108,13 @@ function compareValues(a: unknown, b: unknown): number {
 
 function whereMatches(row: ErpRow, where: string | undefined): boolean {
   if (where === undefined) return true;
-  const match = /^(\w+) = '(\w)'$/.exec(where);
-  if (!match) throw new Error(`mock cannot interpret WHERE: ${where}`);
-  return row[match[1] as string] === match[2];
+  return where.split(' AND ').every((term) => {
+    const flagMatch = /^(\w+) = '(\w)'$/.exec(term);
+    if (flagMatch) return row[flagMatch[1] as string] === flagMatch[2];
+    const positive = /^(\w+) > 0$/.exec(term);
+    if (positive) return Number(row[positive[1] as string]) > 0;
+    throw new Error(`mock cannot interpret WHERE: ${where}`);
+  });
 }
 
 /** `"TO_CHAR(DTVIGOR, 'YYYY-MM-DD') AS DTVIGOR"` -> `{ expression, alias, column }`. */
