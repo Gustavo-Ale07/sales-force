@@ -48,6 +48,24 @@ describe("LoginScreen", () => {
   });
 });
 
+describe("LoginScreen identity and password", () => {
+  it("shows Force with the app version, and lets the seller reveal the password", async () => {
+    await render(<LoginScreen auth={fakeAuth()} onAuthenticated={jest.fn()} />);
+    expect(screen.getByText("Force")).toBeTruthy();
+    expect(screen.getByText(/^Force · v[0-9]/)).toBeTruthy();
+    expect(screen.queryByText(/Servidor/)).toBeNull();
+    expect(screen.getByLabelText("Senha").props.secureTextEntry).toBe(true);
+    await fireEvent.press(screen.getByRole("button", { name: "Mostrar senha" }));
+    expect(screen.getByLabelText("Senha").props.secureTextEntry).toBe(false);
+    expect(screen.getByRole("button", { name: "Ocultar senha" })).toBeTruthy();
+  });
+
+  it("explains that signing in needs a connection when the device is offline", async () => {
+    await render(<LoginScreen auth={fakeAuth()} onAuthenticated={jest.fn()} connectivity="offline" />);
+    expect(screen.getByText(/Conecte-se à internet para entrar/)).toBeTruthy();
+  });
+});
+
 describe("describeLoginFailure", () => {
   it("includes the retry delay when the server sent one", () => {
     expect(describeLoginFailure({ ok: false, reason: "rate_limited", retryAfterSeconds: 45 })).toContain("45 segundos");

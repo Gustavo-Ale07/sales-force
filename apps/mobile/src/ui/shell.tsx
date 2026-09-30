@@ -1,38 +1,57 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { KeyboardAvoidingView, Pressable, StatusBar, StyleSheet, Text, View } from "react-native";
 import { useConnectivity } from "../connectivity/use-connectivity";
 import type { Account } from "../auth/auth-port";
 import type { AppDependencies } from "../dependencies";
 import { evaluateOfflineAccess } from "../offline/session";
 import { useSyncStatus } from "../offline/use-sync";
 import { colors, spacing } from "../theme";
-import { ConnectivityBadge } from "./connectivity-badge";
+import { BottomNav, type MainTab } from "./bottom-nav";
+import { BrandLogo, SplashView } from "./brand";
 import { CustomersScreen } from "./customers-screen";
 import { DraftsScreen } from "./drafts-screen";
+import { HomeScreen } from "./home-screen";
 import { LoginScreen } from "./login-screen";
 import { NewOrderScreen } from "./new-order-screen";
 import { ProductsScreen } from "./products-screen";
-import { SyncIndicator } from "./sync-indicator";
+import { ProfileScreen } from "./profile-screen";
+import { HeaderSyncStatus } from "./sync-status";
+import { useInsets } from "./use-insets";
+import { useKeyboardVisible } from "./use-keyboard-visible";
 
-type Session = { readonly phase: "checking" } | { readonly phase: "anonymous" } | { readonly phase: "authenticated"; readonly account: Account };
-type Tab = "customers" | "products" | "newOrder" | "drafts";
-
-const TAB_LABEL: Record<Tab, string> = { customers: "Clientes", products: "Catálogo", newOrder: "Novo pedido", drafts: "Pedidos" };
+type Session =
+  | { readonly phase: "checking" }
+  | { readonly phase: "anonymous" }
+  | { readonly phase: "authenticated"; readonly account: Account; readonly offlineEntry: boolean };
+type SalesView = "orders" | "newOrder";
 
 /** Offline banner: lists and drafts come from the encrypted database on this device (MOB-6). */
-export function OfflineNotice() {
+export function OfflineNotice({ message = "Sem conexão. Exibindo os dados salvos neste aparelho." }: { message?: string }) {
   return (
     <View style={styles.offlineNotice} accessibilityRole="alert">
-      <Text style={styles.offlineText}>Sem conexão. Exibindo os dados salvos neste aparelho.</Text>
+      <Text style={styles.offlineText}>{message}</Text>
     </View>
   );
 }
 
-/** Session gate + the two read-only lists. Everything it touches comes through `dependencies` (ports). */
+/**
+ * A tab body. It mounts on first visit and then stays mounted (hidden), so a cart, a scroll position or a
+ * half-typed search survive moving between tabs.
+ */
+function Pane({ active, visited, children }: { active: boolean; visited: boolean; children: ReactNode }) {
+  if (!visited) return null;
+  return <View style={active ? styles.paneActive : styles.paneHidden}>{children}</View>;
+}
+
+/** Session gate + the signed-in shell (header, tab bodies, bottom navigation). Everything comes through `dependencies` (ports). */
 export function Shell({ dependencies }: { dependencies: AppDependencies }) {
   const { auth, connectivity, offline } = dependencies;
+  const insets = useInsets();
+  const keyboardVisible = useKeyboardVisible();
   const [session, setSession] = useState<Session>({ phase: "checking" });
-  const [tab, setTab] = useState<Tab>("customers");
+  const [tab, setTab] = useState<MainTab>("home");
+  const [visited, setVisited] = useState<ReadonlySet<MainTab>>(() => new Set<MainTab>(["home"]));
+  const [salesView, setSalesView] = useState<SalesView>("orders");
   const [resumeLocalId, setResumeLocalId] = useState<string | null>(null);
   const connectivityState = useConnectivity(connectivity);
   const account = session.phase === "authenticated" ? session.account : null;
@@ -41,6 +60,15 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
   const repositories = services?.repositories ?? dependencies.repositories;
   const syncStatus = useSyncStatus(services?.sync ?? null, connectivityState);
   const clearResume = useCallback(() => setResumeLocalId(null), []);
+  const syncNow = useCallback(() => {
+    void services?.sync.sync("manual");
+  }, [services]);
+
+  const selectTab = useCallback((next: MainTab) => {
+    setTab(next);
+    setVisited((current) => (current.has(next) ? current : new Set(current).add(next)));
+  }, []);
+
   useEffect(() => {
     let active = true;
     auth
@@ -53,7 +81,7 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
         }
         // Online authentication: remember the account (non-secret fields) for the offline gate.
         void offline?.session.remember(found).catch(() => undefined);
-        setSession({ phase: "authenticated", account: found });
+        setSession({ phase: "authenticated", account: found, offlineEntry: false });
       })
       .catch(async () => {
         // Could not reach the server. With a remembered account inside the offline window the seller keeps working
@@ -64,7 +92,7 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
         } catch {
           // an unreadable remembered session is the same as none
         }
-        if (active) setSession(access.allowed ? { phase: "authenticated", account: access.session.account } : { phase: "anonymous" });
+        if (active) setSession(access.allowed ? { phase: "authenticated", account: access.session.account, offlineEntry: true } : { phase: "anonymous" });
       });
     return () => {
       active = false;
@@ -81,104 +109,128 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
     }
     // Forget the remembered account; drafts and unsent orders stay on the device for the next sign-in.
     await offline?.session.forget().catch(() => undefined);
+    setTab("home");
+    setVisited(new Set<MainTab>(["home"]));
+    setSalesView("orders");
     setSession({ phase: "anonymous" });
   }
 
-  if (session.phase === "checking") {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.navy} />
-      </View>
-    );
-  }
+  if (session.phase === "checking") return <SplashView />;
 
   if (session.phase === "anonymous") {
     return (
-      <View style={styles.flex}>
-        <View style={styles.loginStatus}>
-          <ConnectivityBadge state={connectivityState} />
-        </View>
-        <LoginScreen auth={auth} onAuthenticated={(signedIn) => {
-            void offline?.session.remember(signedIn).catch(() => undefined);
-            setSession({ phase: "authenticated", account: signedIn });
-          }} />
-      </View>
+      <LoginScreen
+        auth={auth}
+        connectivity={connectivityState}
+        onAuthenticated={(signedIn) => {
+          void offline?.session.remember(signedIn).catch(() => undefined);
+          setSession({ phase: "authenticated", account: signedIn, offlineEntry: false });
+        }}
+      />
     );
   }
 
+  const openDraft = (localId: string) => {
+    setResumeLocalId(localId);
+    setSalesView("newOrder");
+    selectTab("sales");
+  };
+  const syncView = { status: syncStatus, connectivity: connectivityState, onSyncNow: syncNow };
+
   return (
     <View style={styles.flex}>
-      <View style={styles.header}>
-        <View style={styles.headerText}>
-          <Text style={styles.title}>PLAC Sales Force</Text>
-          <Text style={styles.subtitle} numberOfLines={1}>
-            {session.account.displayName}
-          </Text>
+      <StatusBar barStyle="light-content" />
+      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
+        <BrandLogo height={26} />
+        <View style={styles.headerSpacer} />
+        {services !== null && <HeaderSyncStatus {...syncView} />}
+      </View>
+      {connectivityState === "offline" && (
+        <OfflineNotice
+          message={session.offlineEntry ? "Modo offline: você entrou com a sessão salva neste aparelho." : "Sem conexão. Exibindo os dados salvos neste aparelho."}
+        />
+      )}
+      {/* Android is edge-to-edge: the window no longer resizes for the keyboard, so the body avoids it itself. */}
+      <KeyboardAvoidingView style={styles.flex} behavior="padding">
+        <View style={styles.flex}>
+          <Pane active={tab === "home"} visited={visited.has("home")}>
+            <HomeScreen account={session.account} />
+          </Pane>
+          <Pane active={tab === "customers"} visited={visited.has("customers")}>
+            <CustomersScreen customers={repositories.customers} onUnauthenticated={expire} />
+          </Pane>
+          <Pane active={tab === "sales"} visited={visited.has("sales")}>
+            {services !== null && (
+              <View style={styles.segments} accessibilityRole="tablist">
+                {(["orders", "newOrder"] as const).map((key) => (
+                  <Pressable
+                    key={key}
+                    style={[styles.segment, salesView === key && styles.segmentActive]}
+                    onPress={() => setSalesView(key)}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: salesView === key }}
+                  >
+                    <Text style={[styles.segmentText, salesView === key && styles.segmentTextActive]}>{key === "orders" ? "Pedidos" : "Novo pedido"}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+            <View style={salesView === "newOrder" || services === null ? styles.paneActive : styles.paneHidden}>
+              <NewOrderScreen
+                repositories={repositories}
+                onUnauthenticated={expire}
+                {...(services === null ? {} : { localOrders: services.localOrders, resumeLocalId, onResumeConsumed: clearResume })}
+              />
+            </View>
+            {services !== null && (
+              <View style={salesView === "orders" ? styles.paneActive : styles.paneHidden}>
+                <DraftsScreen localOrders={services.localOrders} syncStatus={syncStatus} onOpen={openDraft} />
+              </View>
+            )}
+          </Pane>
+          <Pane active={tab === "catalog"} visited={visited.has("catalog")}>
+            <ProductsScreen products={repositories.products} onUnauthenticated={expire} />
+          </Pane>
+          <Pane active={tab === "profile"} visited={visited.has("profile")}>
+            <ProfileScreen
+              account={session.account}
+              {...syncView}
+              {...(services === null
+                ? {}
+                : {
+                    onOpenLocalOrders: () => {
+                      setSalesView("orders");
+                      selectTab("sales");
+                    },
+                  })}
+              onSignOut={() => void signOut()}
+            />
+          </Pane>
         </View>
-        <ConnectivityBadge state={connectivityState} />
-        <Pressable onPress={() => void signOut()} accessibilityRole="button" accessibilityLabel="Sair">
-          <Text style={styles.signOut}>Sair</Text>
-        </Pressable>
-      </View>
-      {services !== null && <SyncIndicator status={syncStatus} connectivity={connectivityState} onRetry={() => void services.sync.sync("manual")} />}
-      {connectivityState === "offline" && <OfflineNotice />}
-      <View style={styles.tabs} accessibilityRole="tablist">
-        {(Object.keys(TAB_LABEL) as Tab[]).filter((key) => key !== "drafts" || services !== null).map((key) => (
-          <Pressable
-            key={key}
-            style={[styles.tab, tab === key && styles.tabActive]}
-            onPress={() => setTab(key)}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: tab === key }}
-          >
-            <Text style={[styles.tabText, tab === key && styles.tabTextActive]}>{TAB_LABEL[key]}</Text>
-          </Pressable>
-        ))}
-      </View>
-      {tab === "customers" && <CustomersScreen customers={repositories.customers} onUnauthenticated={expire} />}
-      {tab === "products" && <ProductsScreen products={repositories.products} onUnauthenticated={expire} />}
-      {tab === "newOrder" && (
-        <NewOrderScreen
-          repositories={repositories}
-          onUnauthenticated={expire}
-          {...(services === null ? {} : { localOrders: services.localOrders, resumeLocalId, onResumeConsumed: clearResume })}
-        />
-      )}
-      {tab === "drafts" && services !== null && (
-        <DraftsScreen
-          localOrders={services.localOrders}
-          syncStatus={syncStatus}
-          onOpen={(localId) => {
-            setResumeLocalId(localId);
-            setTab("newOrder");
-          }}
-        />
-      )}
+        {!keyboardVisible && <BottomNav active={tab} onSelect={selectTab} badges={{ sales: syncStatus.pending > 0 || syncStatus.needsAttention > 0 }} />}
+      </KeyboardAvoidingView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.background },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background },
-  loginStatus: { alignItems: "flex-end", padding: spacing.md, backgroundColor: colors.background },
+  paneActive: { flex: 1 },
+  paneHidden: { display: "none" },
   header: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
     backgroundColor: colors.navy,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingBottom: spacing.sm,
   },
-  headerText: { flex: 1 },
-  title: { color: colors.onNavy, fontSize: 16, fontWeight: "800" },
-  subtitle: { color: colors.onNavy, fontSize: 12, opacity: 0.8 },
-  signOut: { color: colors.onNavy, fontSize: 14, fontWeight: "700", paddingHorizontal: spacing.sm },
+  headerSpacer: { flex: 1 },
   offlineNotice: { backgroundColor: colors.errorBackground, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   offlineText: { color: colors.text, fontSize: 13 },
-  tabs: { flexDirection: "row", backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
-  tab: { flex: 1, alignItems: "center", paddingVertical: spacing.md, borderBottomWidth: 3, borderBottomColor: "transparent" },
-  tabActive: { borderBottomColor: colors.red },
-  tabText: { fontSize: 15, fontWeight: "600", color: colors.textMuted },
-  tabTextActive: { color: colors.navy },
+  segments: { flexDirection: "row", backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
+  segment: { flex: 1, alignItems: "center", paddingVertical: spacing.md, borderBottomWidth: 3, borderBottomColor: "transparent" },
+  segmentActive: { borderBottomColor: colors.red },
+  segmentText: { fontSize: 15, fontWeight: "600", color: colors.textMuted },
+  segmentTextActive: { color: colors.navy },
 });

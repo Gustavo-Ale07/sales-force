@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, StatusBar, StyleSheet, Text, View } from "react-native";
+import { StatusBar, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { apiConfig } from "./src/config";
 import { openAppDatabase } from "./src/db/app-database";
 import { createAppDependencies, type AppDependencies } from "./src/dependencies";
 import { S7DiagnosticsScreen } from "./src/dev/s7-diagnostics-screen";
 import { colors, spacing } from "./src/theme";
+import { SplashView } from "./src/ui/brand";
 import { Shell } from "./src/ui/shell";
 
 function ConfigError({ reason }: { reason: "missing" | "invalid" }) {
@@ -60,32 +61,36 @@ function useBoot(): Boot {
 
 export default function App() {
   const boot = useBoot();
+  // Screens own their insets (header, bottom navigation, login); only the plain status screens need the wrapper.
+  const safe = (content: React.ReactNode) => (
+    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+      {content}
+    </SafeAreaView>
+  );
   return (
     <SafeAreaProvider>
-      <StatusBar barStyle="light-content" backgroundColor={colors.navy} />
-      <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
+      <StatusBar barStyle="dark-content" />
+      <View style={styles.root}>
         {S7_DIAGNOSTICS ? (
-          <S7DiagnosticsScreen />
+          safe(<S7DiagnosticsScreen />)
         ) : !apiConfig.ok ? (
-          <ConfigError reason={apiConfig.reason} />
+          safe(<ConfigError reason={apiConfig.reason} />)
         ) : boot.phase === "ready" ? (
           <Shell dependencies={boot.dependencies} />
         ) : boot.phase === "failed" ? (
-          <DatabaseError />
+          safe(<DatabaseError />)
         ) : (
-          <View style={styles.boot}>
-            <ActivityIndicator color={colors.navy} />
-          </View>
+          <SplashView />
         )}
-      </SafeAreaView>
+      </View>
     </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.navy },
+  root: { flex: 1, backgroundColor: colors.background },
+  safe: { flex: 1, backgroundColor: colors.background },
   configError: { flex: 1, justifyContent: "center", padding: spacing.xl, backgroundColor: colors.background, gap: spacing.md },
-  boot: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background },
   configTitle: { fontSize: 20, fontWeight: "700", color: colors.text },
   configText: { fontSize: 15, color: colors.textMuted },
 });
