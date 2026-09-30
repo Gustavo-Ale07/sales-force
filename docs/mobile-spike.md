@@ -189,3 +189,22 @@ No cost/margin exposure found in the code path. MEDIUM: no server integration te
 ### 8.7 Running the app on a phone (LAN dev only)
 
 From `apps/mobile`: `EXPO_PUBLIC_API_URL=http://<PC LAN IPv4>:3000 npx expo start --dev-client --port 8081 --lan`; install with `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`; open the app, or `adb reverse tcp:8081 tcp:8081` and `am start -a android.intent.action.VIEW -d "exp+plac-sales-force://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081"`. The API must listen on the LAN interface with a Windows Firewall rule for the private profile only; never localhost from the phone, never exposed to the internet. Cleartext HTTP to the LAN IP and cookie/CORS behavior on the dev build were NOT verified in this spike.
+
+### 8.8 Offline slice on the real device — result (2026-09-30, SM-M556B, LAN dev API)
+
+Validated by hand on the phone with the compose dev API on the private LAN address (no production, no Sankhya):
+
+| Step | Result |
+|---|---|
+| Login over cleartext HTTP to the LAN IP, cookie session, initial sync, 250 customers and the catalog cached | OK (closes the "cleartext HTTP / cookie" gap of §8.7 for the dev build) |
+| Airplane mode on (`airplane_mode_on=1`, no active network) | Cached customers and products browsable, "Sem conexão — alterações salvas neste dispositivo" |
+| Offline: customer, product, quantity 3, discount 10 %, save | Saved locally, "Aguardando envio"; total R$ 873,96 computed by `@salesforce/domain` |
+| Force-stop, reopen offline | Offline session accepted (AUTH-2 gate, PROPOSED); draft, item, quantity, discount and total intact |
+| Airplane mode off | Sync ran unattended; app shows "✓ Sincronizado" and "Pedido nº 6 · R$ 873,96" |
+| Backend | `sales_order` 5 → 6; one `POST /orders` in the API log; item 70572 × 3, 323.690000, 10.00 %, total 873.96; `client_request_id` unique (6 orders, 6 distinct ids) |
+
+Not observable from outside: the local outbox/`remote_id` rows (SQLCipher); the accepted state and local→remote link are evidenced by the draft showing the server number and "Sincronizado", and by `packages/mobile-db` tests. The lost-response retry is covered by tests only, not forced on the device. `integration_outbox` stays empty: ERP submission remains disabled (SNK-5 gates).
+
+Open findings: the on-screen keyboard covers the quantity/discount fields in the cart (no keyboard avoidance); the drafts list shows no total while the order is unsent; full-snapshot pull (V-14); cached prices come from the reference table, not the customer's table.
+
+Server: `/products` integration tests against Docker PostgreSQL passed 38/38 (2 files), including the no-cost/margin assertion for every role (P-20).
