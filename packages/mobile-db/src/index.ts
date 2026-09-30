@@ -13,14 +13,12 @@ export * from "./local-orders";
 export * from "./order-sync";
 export * from "./sync-manager";
 
-export type LocalStorageStatus =
-  | { readonly available: false; readonly reason: "encrypted_library_not_selected" }
-  | { readonly available: true };
+export type LocalStorageStatus = { readonly available: true };
 
 /**
- * Static capability flag kept for the shell badge. The library is validated by S7 but offline storage is not wired
- * into the app yet (next slice), so this still reports unavailable until then.
+ * Static capability flag kept for the shell. The encrypted database (MOB-6) is the app's only local store; when it
+ * cannot be opened the app refuses to start rather than falling back to plaintext or to online-only.
  */
 export function getLocalStorageStatus(): LocalStorageStatus {
-  return { available: false, reason: "encrypted_library_not_selected" };
+  return { available: true };
 }

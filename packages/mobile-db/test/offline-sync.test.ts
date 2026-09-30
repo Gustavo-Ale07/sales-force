@@ -74,6 +74,8 @@ class FakeServer implements OrderTransport {
         quantity: line.quantity,
         unitListPrice: unit,
         priceState: unit === null ? ("none" as const) : ("priced" as const),
+        priceTableCode: 1,
+        priceVersionId: 1,
         discountPercent: line.discountPercent ?? "0",
       };
     });
@@ -423,7 +425,15 @@ describe("offline price (P-09)", () => {
     await push();
     const draft = await getDraft(db, id);
     expect(draft?.status).toBe("needs_review");
-    expect(draft?.priceReview).toEqual([{ productCode: 1, description: "Produto 1", cachedUnitPrice: "10.00", serverUnitPrice: "12.50" }]);
+    expect(draft?.priceReview).toEqual([
+      {
+        productCode: 1,
+        description: "Produto 1",
+        cachedUnitPrice: "10.00",
+        serverUnitPrice: "12.50",
+        serverPriceJson: JSON.stringify({ state: "priced", unitPrice: "12.50", tableCode: 1, versionId: 1 }),
+      },
+    ]);
     expect(JSON.parse((await getDraftItems(db, id))[0]?.priceJson ?? "{}").unitPrice).toBe("10.00"); // still what the seller saw
     expect((await countOutbox(db, OWNER)).needsAttention).toBe(1);
   });

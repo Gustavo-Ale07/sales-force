@@ -32,6 +32,8 @@ export interface RemoteOrderItem {
   /** `null` = "Sem preço" (a missing price is never 0). */
   readonly unitListPrice: string | null;
   readonly priceState: "priced" | "zero" | "none";
+  readonly priceTableCode: number | null;
+  readonly priceVersionId: number | null;
   readonly discountPercent: string;
 }
 
@@ -159,6 +161,14 @@ async function refreshDraftStatus(tx: SqlExecutor, localId: string): Promise<voi
 
 /* ---------- price review ---------- */
 
+/** Stored price context of a server line (same shape the editor keeps; a missing price is never 0). */
+export function priceContextOf(item: RemoteOrderItem): string {
+  if (item.priceState !== "none" && item.unitListPrice !== null && item.priceTableCode !== null && item.priceVersionId !== null) {
+    return JSON.stringify({ state: item.priceState, unitPrice: item.unitListPrice, tableCode: item.priceTableCode, versionId: item.priceVersionId });
+  }
+  return JSON.stringify({ state: "none", tableCode: item.priceTableCode, versionId: item.priceVersionId, noPriceReason: "no_price_row" });
+}
+
 function samePrice(a: string | null, b: string | null): boolean {
   if (a === null || b === null) return a === b;
   return Number(a) === Number(b);
@@ -178,6 +188,7 @@ export function comparePrices(payload: OrderCommandPayload, remote: RemoteOrder)
         description: cached.description,
         cachedUnitPrice: cached.unitPrice,
         serverUnitPrice: serverPrice,
+        serverPriceJson: priceContextOf(server),
       });
     }
   }
@@ -410,10 +421,7 @@ export async function acknowledgePriceReview(db: SqlDatabase, env: OfflineEnv, d
     for (const item of items) {
       const entry = review.get(item.productCode);
       if (entry === undefined) continue;
-      const price = JSON.stringify(
-        entry.serverUnitPrice === null ? { state: "none", unitPrice: null } : { state: "priced", unitPrice: entry.serverUnitPrice },
-      );
-      await tx.execute("UPDATE local_order_item SET price_json = ? WHERE draft_local_id = ? AND position = ?", [price, draftLocalId, item.position]);
+      await tx.execute("UPDATE local_order_item SET price_json = ? WHERE draft_local_id = ? AND position = ?", [entry.serverPriceJson, draftLocalId, item.position]);
     }
     await tx.execute("DELETE FROM outbox WHERE draft_local_id = ? AND state = 'needs_review'", [draftLocalId]);
     await tx.execute("UPDATE local_order_draft SET price_review = NULL WHERE local_id = ?", [draftLocalId]);
@@ -471,7 +479,7 @@ export async function resolveConflict(
           unit: item.unit,
           quantity: item.quantity,
           discountPercent: item.discountPercent,
-          priceJson: JSON.stringify({ state: item.priceState, unitPrice: item.unitListPrice }),
+          priceJson: priceContextOf(item),
           groupCode: known?.groupCode ?? null,
           groupName: known?.groupName ?? null,
         };

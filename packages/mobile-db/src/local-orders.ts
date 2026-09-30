@@ -70,6 +70,8 @@ export interface PriceReviewEntry {
   readonly cachedUnitPrice: string | null;
   /** Unit price the server resolved; null = "Sem preço". */
   readonly serverUnitPrice: string | null;
+  /** Full server price context (JSON), adopted when the seller acknowledges the review. */
+  readonly serverPriceJson: string;
 }
 
 export interface DraftItemRecord extends DraftItemInput {
