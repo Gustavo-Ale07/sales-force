@@ -255,8 +255,16 @@ describe('products and prices', () => {
   });
 
   it('never carries cost, margin or commission fields', async () => {
-    const list = await ctx.call('seller1', 'GET', '/products?pageSize=100');
-    expect(restrictedKeys(list.body)).toEqual([]);
+    for (const who of ['admin', 'manager', 'seller1', 'seller2'] as const) {
+      const list = await ctx.call(who, 'GET', '/products?pageSize=100');
+      expect(list.status, who).toBe(200);
+      expect(restrictedKeys(list.body), who).toEqual([]);
+      const code = list.body.items[0]?.code;
+      expect(code, who).toBeDefined();
+      const detail = await ctx.call(who, 'GET', `/products/${code}`);
+      expect(detail.status, who).toBe(200);
+      expect(restrictedKeys(detail.body), who).toEqual([]);
+    }
   });
 });
 
