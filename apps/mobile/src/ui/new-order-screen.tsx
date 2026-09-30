@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { DraftRecord } from "@salesforce/mobile-db";
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ApiRequestError } from "../data/api";
 import { describeDataError, type DataErrorInfo } from "../data/errors";
@@ -14,6 +15,7 @@ import {
 } from "../data/order-draft";
 import type { CustomerListItem, OrderDetail, OrderEntryConfiguration, OrderRepository, ProductListItem, Repositories } from "../data/ports";
 import { formatBrl } from "../lib/money";
+import { describeDraftStatus, type LocalOrdersPort } from "../offline/local-orders";
 import { newClientRequestId } from "../lib/uuid";
 import { colors, spacing } from "../theme";
 import { CartView } from "./cart-view";
@@ -78,6 +80,14 @@ function describeSaveFailure(error: unknown): SaveFailure {
 export interface NewOrderScreenProps {
   readonly repositories: Pick<Repositories, "customers" | "products" | "orders">;
   readonly onUnauthenticated: () => void;
+  /**
+   * When present, "Salvar" writes the draft to this device (encrypted DB + outbox) and the sync manager delivers it,
+   * online or not. Without it the screen keeps its online-only behavior (POST/PUT straight to the API).
+   */
+  readonly localOrders?: LocalOrdersPort;
+  /** A local draft chosen in the "Pedidos" tab; loaded once, then `onResumeConsumed` clears it. */
+  readonly resumeLocalId?: string | null;
+  readonly onResumeConsumed?: () => void;
 }
 
 /**
@@ -88,7 +98,7 @@ export interface NewOrderScreenProps {
  * entry are out of this slice; reopening an existing draft is only reachable from this screen's own success
  * step (there is no order-list screen yet — see the mobile-engineer report).
  */
-export function NewOrderScreen({ repositories, onUnauthenticated }: NewOrderScreenProps) {
+export function NewOrderScreen({ repositories, onUnauthenticated, localOrders, resumeLocalId = null, onResumeConsumed }: NewOrderScreenProps) {
   const [step, setStep] = useState<Step>("customer");
   const [customer, setCustomer] = useState<PickedCustomer | null>(null);
   const [lines, setLines] = useState<readonly EditorLine[]>([]);
@@ -114,6 +124,35 @@ export function NewOrderScreen({ repositories, onUnauthenticated }: NewOrderScre
   const [saving, setSaving] = useState(false);
   const [saveFailure, setSaveFailure] = useState<SaveFailure | null>(null);
   const [savedOrder, setSavedOrder] = useState<OrderDetail | null>(null);
+  /** The device-local draft being edited (offline-first path); `null` for a fresh order. */
+  const [localDraft, setLocalDraft] = useState<DraftRecord | null>(null);
+  const [savedLocal, setSavedLocal] = useState<DraftRecord | null>(null);
+
+  useEffect(() => {
+    if (resumeLocalId === null || localOrders === undefined) return undefined;
+    let active = true;
+    localOrders
+      .open(resumeLocalId)
+      .then((opened) => {
+        if (!active) return;
+        onResumeConsumed?.();
+        if (opened === null) return;
+        setLocalDraft(opened.draft);
+        setCustomer({ code: opened.draft.customerCode, name: opened.draft.customerName });
+        setLines(opened.lines);
+        setSavedLocal(null);
+        setSaveFailure(null);
+        setStep("cart");
+      })
+      .catch(() => {
+        if (!active) return;
+        onResumeConsumed?.();
+        setSaveFailure({ title: "Não foi possível abrir o pedido", messages: ["Tente novamente."], reloadable: false });
+      });
+    return () => {
+      active = false;
+    };
+  }, [resumeLocalId, localOrders, onResumeConsumed]);
 
   useEffect(() => {
     let active = true;
@@ -153,6 +192,8 @@ export function NewOrderScreen({ repositories, onUnauthenticated }: NewOrderScre
     setCustomer(null);
     setLines([]);
     setSavedOrder(null);
+    setSavedLocal(null);
+    setLocalDraft(null);
     setSaveFailure(null);
     setEditingOrder(null);
     setSelectionMode(false);
@@ -265,6 +306,33 @@ export function NewOrderScreen({ repositories, onUnauthenticated }: NewOrderScre
     if (customer === null || saving) return;
     setSaving(true);
     setSaveFailure(null);
+    if (localOrders !== undefined) {
+      try {
+        const saved = await localOrders.save({
+          localId: localDraft?.localId ?? null,
+          customer,
+          negotiationTypeCode:
+            localDraft !== null
+              ? localDraft.negotiationTypeCode
+              : config.status === "ready"
+                ? config.value.sales.defaultNegotiationTypeCode
+                : null,
+          notes: localDraft?.notes ?? null,
+          lines,
+        });
+        setLocalDraft(saved);
+        setSavedLocal(saved);
+      } catch {
+        setSaveFailure({
+          title: "Não foi possível salvar o pedido neste aparelho",
+          messages: ["Este pedido não pode mais ser alterado aqui. Abra-o em Pedidos para ver a situação."],
+          reloadable: false,
+        });
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     try {
       const body = {
         customerCode: customer.code,
@@ -300,6 +368,22 @@ export function NewOrderScreen({ repositories, onUnauthenticated }: NewOrderScre
     } finally {
       setSaving(false);
     }
+  }
+
+  if (savedLocal !== null) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.successTitle}>Pedido salvo neste aparelho</Text>
+        <Text style={styles.successMeta}>{savedLocal.customerName}</Text>
+        <Text style={styles.successMeta}>{describeDraftStatus(savedLocal.status)}</Text>
+        <Pressable style={styles.primaryButton} onPress={resetOrder} accessibilityRole="button" accessibilityLabel="Novo pedido">
+          <Text style={styles.primaryButtonText}>Novo pedido</Text>
+        </Pressable>
+        <Pressable style={styles.secondaryButton} onPress={() => setSavedLocal(null)} accessibilityRole="button" accessibilityLabel="Editar pedido">
+          <Text style={styles.secondaryButtonText}>Editar pedido</Text>
+        </Pressable>
+      </View>
+    );
   }
 
   if (savedOrder !== null) {
@@ -471,12 +555,12 @@ export function NewOrderScreen({ repositories, onUnauthenticated }: NewOrderScre
           onPress={() => void save()}
           disabled={lines.length === 0 || !preview.valid || blockedLineCount > 0 || saving}
           accessibilityRole="button"
-          accessibilityLabel={editingOrder !== null ? "Salvar alterações" : "Salvar rascunho"}
+          accessibilityLabel={editingOrder !== null || localDraft !== null ? "Salvar alterações" : "Salvar rascunho"}
         >
           {saving ? (
             <ActivityIndicator color={colors.onNavy} />
           ) : (
-            <Text style={styles.primaryButtonText}>{editingOrder !== null ? "Salvar alterações" : "Salvar rascunho"}</Text>
+            <Text style={styles.primaryButtonText}>{editingOrder !== null || localDraft !== null ? "Salvar alterações" : "Salvar rascunho"}</Text>
           )}
         </Pressable>
       </View>

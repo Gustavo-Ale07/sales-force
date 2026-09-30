@@ -13,7 +13,46 @@ import {
   product,
   unauthenticatedError,
 } from "../test-doubles";
+import type { SyncManager, SyncStatus } from "@salesforce/mobile-db";
+import type { OfflineServices } from "../offline/services";
+import type { RememberedSession } from "../offline/session";
 import { Shell } from "./shell";
+
+function fakeOffline(remembered: RememberedSession | null) {
+  const status: SyncStatus = { phase: "idle", pending: 0, needsAttention: 0, lastSyncedAt: null, lastError: null };
+  const sync: SyncManager = {
+    sync: async () => status,
+    getStatus: () => status,
+    subscribe: () => () => undefined,
+    refresh: async () => status,
+  };
+  const forget = jest.fn(async () => undefined);
+  const offline: OfflineServices = {
+    session: { load: async () => remembered, remember: async () => undefined, forget },
+    forAccount: () => ({
+      repositories: fakeDependencies().repositories,
+      localOrders: {
+        save: async () => {
+          throw new Error("unused");
+        },
+        list: async () => [],
+        open: async () => null,
+        discard: async () => undefined,
+        acknowledgePriceReview: async () => undefined,
+        resolveConflict: async () => undefined,
+      },
+      sync,
+    }),
+  };
+  return { offline, forget };
+}
+
+const unreachable = () =>
+  fakeAuth({
+    getSession: async () => {
+      throw networkError();
+    },
+  });
 
 const signedIn = () => fakeAuth({ getSession: async () => account });
 
@@ -31,6 +70,28 @@ describe("Shell", () => {
     });
     await render(<Shell dependencies={fakeDependencies({ auth })} />);
     expect(await screen.findByText("Entrar no Sales Force")).toBeTruthy();
+  });
+
+  it("opens offline with the remembered account when the server is unreachable", async () => {
+    const { offline } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() });
+    await render(<Shell dependencies={fakeDependencies({ auth: unreachable(), offline })} />);
+    expect(await screen.findByText("Ana Vendedora")).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Pedidos" })).toBeTruthy();
+    expect(screen.getByText("✓ Sincronizado")).toBeTruthy();
+  });
+
+  it("asks for an online login when the remembered account is older than the offline window", async () => {
+    const stale = new Date(Date.now() - 30 * 86_400_000).toISOString();
+    const { offline } = fakeOffline({ account, lastOnlineAt: stale });
+    await render(<Shell dependencies={fakeDependencies({ auth: unreachable(), offline })} />);
+    expect(await screen.findByText("Entrar no Sales Force")).toBeTruthy();
+  });
+
+  it("forgets the remembered account on sign-out", async () => {
+    const { offline, forget } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() });
+    await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
+    await fireEvent.press(await screen.findByRole("button", { name: "Sair" }));
+    await waitFor(() => expect(forget).toHaveBeenCalled());
   });
 
   it("lists the customers of an existing session and switches to the catalog", async () => {
@@ -84,11 +145,11 @@ describe("Shell", () => {
     const connectivity = fakeConnectivity("online");
     await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), connectivity: connectivity.port })} />);
     expect(await screen.findByText("Online")).toBeTruthy();
-    expect(screen.queryByText(/Esta versão ainda não guarda dados no aparelho/)).toBeNull();
+    expect(screen.queryByText(/Exibindo os dados salvos neste aparelho/)).toBeNull();
 
     await act(async () => connectivity.emit("offline"));
     await waitFor(() => expect(screen.getByText("Sem conexão")).toBeTruthy());
-    expect(screen.getByText(/Esta versão ainda não guarda dados no aparelho/)).toBeTruthy();
+    expect(screen.getByText(/Exibindo os dados salvos neste aparelho/)).toBeTruthy();
   });
 
   it("shows a retryable error when the list cannot be loaded offline", async () => {
