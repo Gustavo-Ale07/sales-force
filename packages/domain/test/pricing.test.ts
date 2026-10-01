@@ -121,6 +121,48 @@ describe('resolveCustomerPriceTable', () => {
       resolveCustomerPriceTable(makeCustomer({ priceTableCode: 0 }), makeConfig()),
     ).toEqual({ kind: 'table', code: 0, source: 'customer' });
   });
+
+  describe('customer table outside the configured mobile price tables', () => {
+    const withMobile = (
+      mobile: readonly number[] | undefined,
+      strategy: InstallationConfiguration['pricing']['fallbackStrategy'],
+      fallback: number | null,
+    ): InstallationConfiguration =>
+      makeConfig((c) => ({
+        ...c,
+        customers: { ...c.customers, customerWithoutPriceTable: 'use_fallback_table' },
+        pricing: {
+          ...c.pricing,
+          fallbackStrategy: strategy,
+          fallbackTableCode: fallback,
+          ...(mobile === undefined ? {} : { mobilePriceTableCodes: mobile }),
+        },
+      }));
+
+    it('never resolves to an excluded table: uses the fallback table instead', () => {
+      expect(
+        resolveCustomerPriceTable(makeCustomer({ priceTableCode: 7 }), withMobile([0, 3, 5], 'fixed_table', 0)),
+      ).toEqual({ kind: 'table', code: 0, source: 'fallback' });
+    });
+
+    it('without a usable fallback the excluded table is not used either -> no_resolved_table', () => {
+      expect(
+        resolveCustomerPriceTable(makeCustomer({ priceTableCode: 7 }), withMobile([0, 3, 5], 'none', null)),
+      ).toEqual({ kind: 'no_resolved_table' });
+    });
+
+    it('a customer table that is configured keeps winning over the fallback', () => {
+      expect(
+        resolveCustomerPriceTable(makeCustomer({ priceTableCode: 5 }), withMobile([0, 3, 5], 'fixed_table', 0)),
+      ).toEqual({ kind: 'table', code: 5, source: 'customer' });
+    });
+
+    it('is not applied when the configuration lists no mobile tables at all (legacy/demo)', () => {
+      expect(
+        resolveCustomerPriceTable(makeCustomer({ priceTableCode: 7 }), withMobile(undefined, 'fixed_table', 0)),
+      ).toEqual({ kind: 'table', code: 7, source: 'customer' });
+    });
+  });
 });
 
 describe('findEffectiveVersion', () => {

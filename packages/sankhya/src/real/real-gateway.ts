@@ -187,18 +187,29 @@ export class RealSankhyaGateway implements SankhyaGateway {
     };
   }
 
+  /**
+   * Prices are delivered only once the WHOLE snapshot was read and validated: a row that breaks the
+   * contract (for example a negative `VLRVENDA`) or a count mismatch rejects the snapshot before the
+   * caller sees any batch, so a price run never replaces prices partially. The set is small (one
+   * current version per mobile table), so buffering it is cheap.
+   */
   readListPrices(options?: ReadOptions): Snapshot<ListPrice> {
     assertSafeScope(options?.scope);
     const codes = options?.scope?.priceTableCodes;
-    if (codes === undefined) return this.#paged(listPriceSpec(undefined), options);
-    if (codes.length === 0) return emptySnapshot();
+    if (codes?.length === 0) return emptySnapshot();
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const gateway = this;
     return {
       async *[Symbol.asyncIterator]() {
-        const versions = await gateway.#effectiveVersions(options);
-        if (versions.length === 0) return;
-        yield* gateway.#paged(listPriceSpec(versions.map((v) => v.versionId)), options);
+        let spec = listPriceSpec(undefined);
+        if (codes !== undefined) {
+          const versions = await gateway.#effectiveVersions(options);
+          if (versions.length === 0) return;
+          spec = listPriceSpec(versions.map((v) => v.versionId));
+        }
+        const batches: (readonly ListPrice[])[] = [];
+        for await (const batch of gateway.#paged(spec, options)) batches.push(batch);
+        yield* batches;
       },
     };
   }

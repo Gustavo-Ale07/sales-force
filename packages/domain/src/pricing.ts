@@ -50,15 +50,23 @@ export function isProductVisible(
  * Price table for a customer (CFG-4/5): the customer's own table; when absent, the fallback only
  * if both the customer policy and the pricing fallback strategy say so and a table is configured;
  * otherwise "no resolved table". A missing table is never guessed.
+ *
+ * A customer table that the installation does not mirror (`pricing.mobilePriceTableCodes` is configured
+ * and does not list it) is treated like an absent one: the excluded table is never used and the
+ * mobile list is never widened silently. Without that list (legacy/demo configuration) nothing changes.
  */
 export function resolveCustomerPriceTable(
   customer: Pick<Customer, 'priceTableCode'>,
   config: InstallationConfiguration,
 ): ResolvedPriceTable {
-  if (customer.priceTableCode !== null) {
+  const { pricing, customers } = config;
+  const mobileTables = pricing.mobilePriceTableCodes;
+  if (
+    customer.priceTableCode !== null &&
+    (mobileTables === undefined || mobileTables.includes(customer.priceTableCode))
+  ) {
     return { kind: 'table', code: customer.priceTableCode, source: 'customer' };
   }
-  const { pricing, customers } = config;
   if (
     customers.customerWithoutPriceTable === 'use_fallback_table' &&
     pricing.fallbackStrategy === 'fixed_table' &&

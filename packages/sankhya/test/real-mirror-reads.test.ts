@@ -59,6 +59,20 @@ describe('readProductGroups (TGFGRU)', () => {
     expect(sql).not.toMatch(/IMAGEM/);
   });
 
+  it('treats a real group whose parent is the placeholder 0 as a data anomaly and rejects the snapshot', async () => {
+    const { gateway } = gatewayOver({
+      TGFGRU: [
+        { CODGRUPOPROD: 10, DESCRGRUPOPROD: 'Raiz', CODGRUPAI: ROOT_GROUP_SENTINEL, GRAU: 1, ANALITICO: 'N', ATIVO: 'S' },
+        { CODGRUPOPROD: 20, DESCRGRUPOPROD: 'Anomalo', CODGRUPAI: 0, GRAU: 2, ANALITICO: 'S', ATIVO: 'S' },
+      ],
+    });
+    const failure = (await rows(gateway.readProductGroups()).catch((e: unknown) => e)) as SankhyaGatewayError;
+    expect(failure).toBeInstanceOf(SankhyaGatewayError);
+    expect(failure).toMatchObject({ kind: 'validation', code: 'invalid_row', retryable: false });
+    expect(failure.message).toContain('CODGRUPAI');
+    expect(failure.message).not.toContain('Anomalo');
+  });
+
   it('rejects a malformed flag instead of guessing', async () => {
     const { gateway } = gatewayOver({
       TGFGRU: [{ CODGRUPOPROD: 5, DESCRGRUPOPROD: 'X', CODGRUPAI: ROOT_GROUP_SENTINEL, GRAU: 1, ANALITICO: 'X', ATIVO: 'S' }],

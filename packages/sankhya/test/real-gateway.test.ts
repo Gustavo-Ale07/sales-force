@@ -370,6 +370,28 @@ describe('completeness and fail-closed validation', () => {
     }
   });
 
+  it('a negative price on a later page rejects the whole price snapshot before any batch is delivered', async () => {
+    const columns = ['NUTAB', 'CODPROD', 'CODLOCAL', 'CONTROLE', 'VLRVENDA'];
+    const { gateway, mock } = setup({ pageSize: 2 });
+    mock.forced.push(
+      ok(columns, [[502, 1, 0, ' ', 10], [502, 2, 0, ' ', 11]]),
+      ok(columns, [[502, 3, 0, ' ', -5]]),
+    );
+    const delivered: unknown[] = [];
+    const failure = await (async () => {
+      try {
+        for await (const batch of gateway.readListPrices()) delivered.push(batch);
+        return undefined;
+      } catch (error) {
+        return error as SankhyaGatewayError;
+      }
+    })();
+    expect(failure).toMatchObject({ kind: 'validation', code: 'invalid_row', retryable: false });
+    expect(failure?.message).toContain('VLRVENDA');
+    // Nothing was handed to the caller, so nothing can have been persisted from a rejected snapshot.
+    expect(delivered).toEqual([]);
+  });
+
   it('"no price" and an explicit zero stay different: a missing row is never returned as zero', async () => {
     const { gateway } = setup();
     const rows = (await collect(gateway.readListPrices())).rows;

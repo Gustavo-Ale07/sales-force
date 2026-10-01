@@ -62,6 +62,11 @@ export class RowReader {
     });
   }
 
+  /** Rejects the snapshot for a business-level anomaly a mapper detected (never echoes the value). */
+  reject(column: string, problem: string): never {
+    return this.#fail(column, problem);
+  }
+
   #cell(column: string): unknown {
     const position = this.#columns.indexOf(column);
     if (position < 0) this.#fail(column, 'is not part of the query');
@@ -232,6 +237,10 @@ export const PRODUCT_GROUP_SPEC: EntitySpec<ProductGroup> = {
   orderBy: 'CODGRUPOPROD',
   map: (row) => {
     const parent = row.nullableInt('CODGRUPAI');
+    // Group 0 is the "<SEM GRUPO>" placeholder and is never mirrored, so nothing may hang below it. A
+    // real group pointing at 0 is a data anomaly (the validated root marker is the sentinel): reject
+    // instead of creating a reference to a group that does not exist.
+    if (parent === 0) row.reject('CODGRUPAI', 'points to the placeholder group 0 as its parent (data anomaly)');
     return {
       code: row.int('CODGRUPOPROD'),
       name: row.text('DESCRGRUPOPROD'),
