@@ -9,6 +9,8 @@ export { migrations } from "./migrations";
 export * from "./migrator";
 export * from "./offline-env";
 export * from "./reference-cache";
+export * from "./dataset-identity";
+export * from "./inspect";
 export * from "./local-orders";
 export * from "./sales-query";
 export * from "./order-sync";

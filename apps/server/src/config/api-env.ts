@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DATASET_ID_SLUG_PATTERN, ENVIRONMENT_SLUG_PATTERN, type DatasetIdentity } from '@salesforce/contracts';
 import { passwordHashFields, passwordHashProblems } from './auth-env.js';
 import {
   databaseUrlField,
@@ -47,6 +48,19 @@ export const ApiEnvSchema = z.object({
   ALLOWED_ORIGINS: z.string().optional(),
   ...passwordHashFields,
 
+  /**
+   * Explicit installation dataset identity (DEV-phase working mechanism, not a secret). Both or none
+   * (checked below). Never derived from any SANKHYA_* setting: the API does not read those.
+   */
+  SF_ERP_ENVIRONMENT: z
+    .string()
+    .regex(ENVIRONMENT_SLUG_PATTERN, { error: 'must be a slug: lowercase letters, digits, - or _ (max 32), e.g. sandbox.' })
+    .optional(),
+  SF_DATASET_ID: z
+    .string()
+    .regex(DATASET_ID_SLUG_PATTERN, { error: 'must be a slug of 3-64 characters: lowercase letters, digits, . - or _, e.g. acme-sandbox-real-1.' })
+    .optional(),
+
   // HTTP server hardening.
   /**
    * Reverse-proxy hops or proxy CIDRs trusted for X-Forwarded-For (default outside production: none).
@@ -91,6 +105,8 @@ function originProblems(raw: string | undefined, nodeEnv: string): { origins: st
 /** The API environment plus the parsed origin allow-list (validated together, reported at once). */
 export interface ParsedApiEnv extends ApiEnv {
   readonly allowedOrigins: readonly string[];
+  /** `null` when the installation declares no dataset identity. */
+  readonly dataset: DatasetIdentity | null;
 }
 
 export function parseApiEnv(source: EnvSource): ParsedApiEnv {
@@ -113,8 +129,18 @@ export function parseApiEnv(source: EnvSource): ParsedApiEnv {
     }
     const origins = originProblems(parsed.ALLOWED_ORIGINS, parsed.NODE_ENV);
     allowedOrigins = origins.origins;
+    if (parsed.SF_ERP_ENVIRONMENT !== undefined && parsed.SF_DATASET_ID === undefined) {
+      problems.push('SF_DATASET_ID: is required when SF_ERP_ENVIRONMENT is set (set both or neither).');
+    }
+    if (parsed.SF_DATASET_ID !== undefined && parsed.SF_ERP_ENVIRONMENT === undefined) {
+      problems.push('SF_ERP_ENVIRONMENT: is required when SF_DATASET_ID is set (set both or neither).');
+    }
     problems.push(...origins.problems, ...passwordHashProblems(parsed));
     return problems;
   });
-  return { ...env, allowedOrigins };
+  const dataset =
+    env.SF_ERP_ENVIRONMENT !== undefined && env.SF_DATASET_ID !== undefined
+      ? { environment: env.SF_ERP_ENVIRONMENT, datasetId: env.SF_DATASET_ID }
+      : null;
+  return { ...env, allowedOrigins, dataset };
 }

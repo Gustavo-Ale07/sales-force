@@ -1,12 +1,24 @@
 import { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { colors, spacing } from "../theme";
-import { runS7Diagnostics, type StepResult } from "./s7-diagnostics";
+import { inspectAppDatabase, runS7Diagnostics, type StepResult } from "./s7-diagnostics";
 
 /** DEV-ONLY screen for spike S7 (see s7-diagnostics.ts). Logs every step as `S7RESULT {json}` for adb logcat. */
 export function S7DiagnosticsScreen() {
   const [results, setResults] = useState<StepResult[]>([]);
   const [finished, setFinished] = useState<boolean | null>(null);
+  const [localState, setLocalState] = useState<string | null>(null);
+
+  function inspectLocal() {
+    setLocalState("Lendo…");
+    inspectAppDatabase()
+      .then((report) => {
+        const json = JSON.stringify(report, null, 2);
+        console.log(`LOCALSTATE ${JSON.stringify(report)}`);
+        setLocalState(json);
+      })
+      .catch((error: unknown) => setLocalState(`Falha: ${String(error)}`));
+  }
 
   useEffect(() => {
     let active = true;
@@ -31,6 +43,10 @@ export function S7DiagnosticsScreen() {
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Diagnóstico S7 / V-09</Text>
       <Text style={styles.status}>{finished === null ? "Executando…" : finished ? "TODOS OS PASSOS OK" : "HÁ FALHAS"}</Text>
+      <Pressable style={styles.button} onPress={inspectLocal} accessibilityRole="button" accessibilityLabel="Inspecionar dados locais">
+        <Text style={styles.buttonText}>Inspecionar dados locais (somente leitura)</Text>
+      </Pressable>
+      {localState === null ? null : <Text style={styles.detail}>{localState}</Text>}
       {results.map((result) => (
         <View key={result.name} style={styles.card}>
           <Text style={[styles.step, result.ok ? styles.ok : styles.fail]}>{`${result.ok ? "OK" : "FALHA"} · ${result.name} · ${result.ms} ms`}</Text>
@@ -46,6 +62,8 @@ const styles = StyleSheet.create({
   content: { padding: spacing.lg, gap: spacing.md },
   title: { fontSize: 20, fontWeight: "700", color: colors.text },
   status: { fontSize: 16, fontWeight: "700", color: colors.text },
+  button: { borderWidth: 1, borderColor: colors.text, borderRadius: 8, minHeight: 44, alignItems: "center", justifyContent: "center" },
+  buttonText: { fontSize: 14, fontWeight: "700", color: colors.text },
   card: { gap: spacing.xs },
   step: { fontSize: 14, fontWeight: "700" },
   ok: { color: "#1b7f3b" },

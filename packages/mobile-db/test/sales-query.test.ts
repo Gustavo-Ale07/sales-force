@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { countDraftsByGroup, migrations, queryDrafts, runMigrations, saveOrderDraft, SENT_STATUSES, UNSENT_STATUSES, type DraftStatus, type OfflineEnv, type SqlDatabase } from "../src/index";
+import { confirm } from "./helpers";
 import { openNodeDatabase } from "./node-sqlite-connection";
 
 const OWNER = "acct-1";
@@ -30,6 +31,7 @@ async function draft(customerCode: number, customerName: string, status: DraftSt
 beforeEach(async () => {
   db = openNodeDatabase();
   await runMigrations(db, migrations);
+  await confirm(db);
   clock = Date.parse("2026-09-30T12:00:00.000Z");
   seq = 0;
 });

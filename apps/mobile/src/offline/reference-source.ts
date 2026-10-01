@@ -1,6 +1,6 @@
-import type { ReferenceSource } from "@salesforce/mobile-db";
+import type { DatasetIdentity, ReferenceSource } from "@salesforce/mobile-db";
 import { callApi, type ApiClient } from "../data/api";
-import type { CustomerListItem, ProductListItem } from "../data/ports";
+import type { CustomerListItem, OrderEntryConfiguration, ProductListItem } from "../data/ports";
 import { toTransportError } from "./transport";
 
 const PAGE_SIZE = 100; // MAX_PAGE_SIZE of the contract
@@ -13,6 +13,17 @@ async function fetchAllPages<T>(fetchPage: (page: number) => Promise<{ items: re
     all.push(...result.items);
     if (result.items.length === 0 || all.length >= result.total) return all;
   }
+}
+
+/**
+ * The ONE place the server's dataset declaration is mapped to the sync engine's identity. `null` (the server cannot
+ * tell, or an old/cached configuration without the field) means "unknown": callers fail closed.
+ */
+export function datasetIdentityOf(configuration: Pick<OrderEntryConfiguration, "dataset"> | null | undefined): DatasetIdentity | null {
+  const dataset = configuration?.dataset;
+  if (dataset === null || dataset === undefined) return null;
+  if (typeof dataset.environment !== "string" || dataset.environment === "" || typeof dataset.datasetId !== "string" || dataset.datasetId === "") return null;
+  return { environment: dataset.environment, datasetId: dataset.datasetId };
 }
 
 /**
@@ -46,5 +57,6 @@ export function createReferenceSource(api: ApiClient): ReferenceSource {
         ),
       ),
     fetchEntryConfiguration: () => guard(() => callApi(() => api.GET("/order-entry/configuration"))),
+    fetchDatasetIdentity: () => guard(async () => datasetIdentityOf(await callApi(() => api.GET("/order-entry/configuration")))),
   };
 }

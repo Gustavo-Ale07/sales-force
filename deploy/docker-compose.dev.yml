@@ -90,6 +90,9 @@ services:
       ALLOWED_ORIGINS: http://localhost:${WEB_HOST_PORT:-8080},http://127.0.0.1:${WEB_HOST_PORT:-8080}
       # One trusted hop: the web container's nginx (it overwrites X-Forwarded-For).
       TRUST_PROXY: "1"
+      # Explicit dataset identity (non-secret; both or none). Bump SF_DATASET_ID when the data logically changes.
+      SF_ERP_ENVIRONMENT: ${SF_ERP_ENVIRONMENT:-sandbox}
+      SF_DATASET_ID: ${SF_DATASET_ID:-plac-sandbox-real-1}
       # No SANKHYA_* here: the API never reads Sankhya settings (STACK-2/STACK-3).
     command: ["node", "dist/main-api.js"]
     # Debugging only; the browser goes through the web container. Loopback binding, optional.

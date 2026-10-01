@@ -7,6 +7,8 @@ export const DATABASE_HANDLE = Symbol('DATABASE_HANDLE');
 export const CLOCK = Symbol('CLOCK');
 /** How long `/ready` results are reused (milliseconds; 0 disables the cache). */
 export const READINESS_CACHE_TTL_MS = Symbol('READINESS_CACHE_TTL_MS');
+/** Installation dataset identity from the validated API environment (`DatasetIdentity | null`). */
+export const DATASET_IDENTITY = Symbol('DATASET_IDENTITY');
 
 /** Injected time source; tests replace it (no hidden `Date.now()` in application services). */
 export type Clock = () => Date;

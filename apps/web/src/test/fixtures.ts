@@ -242,6 +242,7 @@ export const configuration: ApiSchema<"ConfigurationResponse"> = {
 
 /** Mirrors the fields `getOrderEntryConfiguration` slices out of the full configuration, for the order-editor screen. */
 export const orderEntryConfiguration: ApiSchema<"OrderEntryConfiguration"> = {
+  dataset: null,
   general: { enabled: true },
   sales: {
     defaultNegotiationTypeCode: 3,

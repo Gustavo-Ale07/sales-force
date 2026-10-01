@@ -3,7 +3,8 @@ import {
   discardLocalDraft,
   getDraft,
   getDraftItems,
-  listDrafts,
+  listOperationalDrafts,
+  readExpectedDataset,
   resolveConflict,
   saveOrderDraft,
   type ConflictResolution,
@@ -118,9 +119,10 @@ export function createLocalOrdersPort(deps: {
       if (draft === null) throw new Error("Rascunho não encontrado após salvar.");
       return draft;
     },
-    list: () => listDrafts(db, ownerAccountId),
-    listSales: (filters, request) => listSales(db, ownerAccountId, filters, request, env.now()),
-    summarizeSales: (filters, search) => summarizeSales(db, ownerAccountId, filters, search, env.now()),
+    // Only normal work for the confirmed dataset: legacy / other-dataset orders are not resumable orders (they surface as attention items).
+    list: async () => listOperationalDrafts(db, ownerAccountId, await readExpectedDataset(db)),
+    listSales: async (filters, request) => listSales(db, ownerAccountId, filters, request, env.now(), await readExpectedDataset(db)),
+    summarizeSales: async (filters, search) => summarizeSales(db, ownerAccountId, filters, search, env.now(), await readExpectedDataset(db)),
     async get(localId) {
       const draft = await getDraft(db, localId);
       return draft !== null && draft.ownerAccountId === ownerAccountId ? draft : null;

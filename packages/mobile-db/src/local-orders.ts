@@ -1,4 +1,13 @@
 import type { SqlDatabase, SqlExecutor, SqlRow } from "./connection";
+import {
+  DatasetUnavailableError,
+  isOperationalEligibility,
+  operationalDraftSql,
+  readExpectedDataset,
+  sameDataset,
+  type DatasetIdentity,
+  type Eligibility,
+} from "./dataset-identity";
 import { isoNow, type OfflineEnv } from "./offline-env";
 
 /**
@@ -61,6 +70,9 @@ export interface DraftRecord {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly itemCount: number;
+  /** Dataset the draft was priced against; `null` = LEGACY_LOCAL (created before dataset identity existed). */
+  readonly dataset: DatasetIdentity | null;
+  readonly eligibility: Eligibility;
 }
 
 export interface PriceReviewEntry {
@@ -92,6 +104,8 @@ export interface OutboxRecord {
   readonly nextAttemptAt: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
+  readonly dataset: DatasetIdentity | null;
+  readonly eligibility: Eligibility;
 }
 
 /** What an order command carries: the request body the API accepts, plus the price snapshot used for price review. */
@@ -109,7 +123,7 @@ export interface OrderCommandPayload {
 
 export const DRAFT_COLUMNS = `d.local_id, d.owner_account_id, d.client_request_id, d.customer_code, d.customer_name,
   d.negotiation_type_code, d.notes, d.status, d.remote_id, d.remote_version, d.remote_draft_number, d.estimated_total,
-  d.last_error, d.price_review, d.server_snapshot, d.created_at, d.updated_at,
+  d.last_error, d.price_review, d.server_snapshot, d.created_at, d.updated_at, d.dataset_environment, d.dataset_id, d.eligibility,
   (SELECT count(*) FROM local_order_item i WHERE i.draft_local_id = d.local_id) AS item_count`;
 
 function nullableNumber(value: unknown): number | null {
@@ -117,6 +131,12 @@ function nullableNumber(value: unknown): number | null {
 }
 function nullableString(value: unknown): string | null {
   return value === null || value === undefined ? null : String(value);
+}
+
+export function datasetOf(row: SqlRow): DatasetIdentity | null {
+  return row.dataset_environment === null || row.dataset_environment === undefined || row.dataset_id === null || row.dataset_id === undefined
+    ? null
+    : { environment: String(row.dataset_environment), datasetId: String(row.dataset_id) };
 }
 
 export function toDraft(row: SqlRow): DraftRecord {
@@ -139,6 +159,8 @@ export function toDraft(row: SqlRow): DraftRecord {
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
     itemCount: Number(row.item_count),
+    dataset: datasetOf(row),
+    eligibility: String(row.eligibility) as Eligibility,
   };
 }
 
@@ -157,6 +179,8 @@ export function toOutbox(row: SqlRow): OutboxRecord {
     nextAttemptAt: nullableString(row.next_attempt_at),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
+    dataset: datasetOf(row),
+    eligibility: String(row.eligibility) as Eligibility,
   };
 }
 
@@ -172,6 +196,19 @@ export async function listDrafts(db: SqlExecutor, ownerAccountId: string): Promi
   const rows = await db.query<SqlRow>(
     `SELECT ${DRAFT_COLUMNS} FROM local_order_draft d WHERE d.owner_account_id = ? ORDER BY d.updated_at DESC, d.local_id`,
     [ownerAccountId],
+  );
+  return rows.map(toDraft);
+}
+
+/**
+ * The drafts that are normal work for the CONFIRMED dataset (resume, home). Drafts of another dataset, legacy drafts
+ * and quarantined ones are not listed here; they surface only through the attention counter.
+ */
+export async function listOperationalDrafts(db: SqlExecutor, ownerAccountId: string, dataset: DatasetIdentity | null): Promise<DraftRecord[]> {
+  const operational = operationalDraftSql(dataset);
+  const rows = await db.query<SqlRow>(
+    `SELECT ${DRAFT_COLUMNS} FROM local_order_draft d WHERE d.owner_account_id = ? AND ${operational.sql} ORDER BY d.updated_at DESC, d.local_id`,
+    [ownerAccountId, ...operational.params],
   );
   return rows.map(toDraft);
 }
@@ -205,21 +242,33 @@ export interface OutboxCounts {
   readonly needsAttention: number;
 }
 
-/** Counts for the sync indicator. `needsAttention` = rejected, conflict or price review that the seller must look at. */
-export async function countOutbox(db: SqlExecutor, ownerAccountId: string): Promise<OutboxCounts> {
+/**
+ * Counts for the sync indicator. `needsAttention` = rejected, conflict, price review or not-eligible commands the
+ * seller must look at. `pending`/`sending` count only work that can actually be sent: with a confirmed `dataset` given, a
+ * command of another dataset (or a legacy one) is never "pending", whatever state it is still stored in.
+ */
+export async function countOutbox(db: SqlExecutor, ownerAccountId: string, dataset?: DatasetIdentity | null): Promise<OutboxCounts> {
   const rows = await db.query<SqlRow>(
-    `SELECT o.state AS state, count(*) AS n FROM outbox o
-     JOIN local_order_draft d ON d.local_id = o.draft_local_id
+    `SELECT o.state AS state, o.dataset_environment AS dataset_environment, o.dataset_id AS dataset_id, o.eligibility AS eligibility, count(*) AS n
+     FROM outbox o JOIN local_order_draft d ON d.local_id = o.draft_local_id
      WHERE d.owner_account_id = ? AND o.state IN ('pending', 'sending', 'rejected', 'conflict', 'needs_review')
-     GROUP BY o.state`,
+     GROUP BY o.state, o.dataset_environment, o.dataset_id, o.eligibility`,
     [ownerAccountId],
   );
-  const by = new Map(rows.map((row) => [String(row.state), Number(row.n)]));
-  return {
-    pending: by.get("pending") ?? 0,
-    sending: by.get("sending") ?? 0,
-    needsAttention: (by.get("rejected") ?? 0) + (by.get("conflict") ?? 0) + (by.get("needs_review") ?? 0),
-  };
+  const counts = { pending: 0, sending: 0, needsAttention: 0 };
+  for (const row of rows) {
+    const n = Number(row.n);
+    const state = String(row.state);
+    if (state === "pending" || state === "sending") {
+      const own = datasetOf(row);
+      const sendable = own !== null && isOperationalEligibility(String(row.eligibility)) && (dataset === undefined || dataset === null || sameDataset(own, dataset));
+      if (sendable) counts[state] += n;
+      else counts.needsAttention += n;
+    } else {
+      counts.needsAttention += n;
+    }
+  }
+  return counts;
 }
 
 /* ---------- payload ---------- */
@@ -272,13 +321,34 @@ async function insertItems(tx: SqlExecutor, localId: string, items: readonly Dra
 async function insertOp(
   tx: SqlExecutor,
   env: OfflineEnv,
-  op: { type: OutboxType; idempotencyKey: string; payload: OrderCommandPayload; baseVersion: number | null; draftLocalId: string },
+  op: {
+    type: OutboxType;
+    idempotencyKey: string;
+    payload: OrderCommandPayload;
+    baseVersion: number | null;
+    draftLocalId: string;
+    /** Identity stamped on the command: the draft's own (never re-stamped from the current dataset). */
+    dataset: DatasetIdentity | null;
+  },
 ): Promise<void> {
   const now = isoNow(env);
   await tx.execute(
-    `INSERT INTO outbox (local_id, operation_id, idempotency_key, type, payload, state, attempts, base_version, draft_local_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?, ?, ?)`,
-    [env.newId(), env.newId(), op.idempotencyKey, op.type, JSON.stringify(op.payload), op.baseVersion, op.draftLocalId, now, now],
+    `INSERT INTO outbox (local_id, operation_id, idempotency_key, type, payload, state, attempts, base_version, draft_local_id, created_at, updated_at, dataset_environment, dataset_id, eligibility)
+     VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      env.newId(),
+      env.newId(),
+      op.idempotencyKey,
+      op.type,
+      JSON.stringify(op.payload),
+      op.baseVersion,
+      op.draftLocalId,
+      now,
+      now,
+      op.dataset?.environment ?? null,
+      op.dataset?.datasetId ?? null,
+      op.dataset === null ? "unchecked" : "eligible",
+    ],
   );
 }
 
@@ -311,21 +381,30 @@ export async function saveOrderDraft(db: SqlDatabase, env: OfflineEnv, input: Sa
     const now = isoNow(env);
     const payload = buildPayload(input);
 
+    // The dataset the server last confirmed: a new draft is stamped with it (it was priced against that data). Without a
+    // confirmed identity nothing is created: the order could not be tied to a dataset.
+    const confirmed = await readExpectedDataset(tx);
+
     if (input.localId === undefined) {
+      if (confirmed === null) throw new DatasetUnavailableError();
       const localId = env.newId();
       const key = env.newId();
       await tx.execute(
-        `INSERT INTO local_order_draft (local_id, owner_account_id, client_request_id, customer_code, customer_name, negotiation_type_code, notes, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending_sync', ?, ?)`,
-        [localId, input.ownerAccountId, key, input.customerCode, input.customerName, input.negotiationTypeCode, input.notes, now, now],
+        `INSERT INTO local_order_draft (local_id, owner_account_id, client_request_id, customer_code, customer_name, negotiation_type_code, notes, status, created_at, updated_at, dataset_environment, dataset_id, eligibility)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending_sync', ?, ?, ?, ?, 'eligible')`,
+        [localId, input.ownerAccountId, key, input.customerCode, input.customerName, input.negotiationTypeCode, input.notes, now, now, confirmed.environment, confirmed.datasetId],
       );
       await insertItems(tx, localId, input.items);
-      await insertOp(tx, env, { type: "order.create", idempotencyKey: key, payload, baseVersion: null, draftLocalId: localId });
+      await insertOp(tx, env, { type: "order.create", idempotencyKey: key, payload, baseVersion: null, draftLocalId: localId, dataset: confirmed });
       return localId;
     }
 
     const draft = await getDraft(tx, input.localId);
     if (draft === null || draft.ownerAccountId !== input.ownerAccountId) throw new DraftNotEditableError("Rascunho não encontrado neste aparelho.");
+    // A draft of another dataset (or a legacy one) is never edited: its commands would carry the old identity and be refused.
+    if (!isOperationalEligibility(draft.eligibility) || !sameDataset(draft.dataset, confirmed)) {
+      throw new DraftNotEditableError("Este pedido é de outro conjunto de dados e não pode ser alterado.");
+    }
     const allOps = await listOutbox(tx, draft.localId);
     const create = allOps.filter((op) => op.type === "order.create").at(-1);
     const createRejected = create?.state === "rejected";
@@ -346,11 +425,11 @@ export async function saveOrderDraft(db: SqlDatabase, env: OfflineEnv, input: Sa
       } else if (createRejected) {
         // Definite rejection: the server holds nothing for this key. Start over with a new command and key.
         clientRequestId = env.newId();
-        await insertOp(tx, env, { type: "order.create", idempotencyKey: clientRequestId, payload, baseVersion: null, draftLocalId: draft.localId });
+        await insertOp(tx, env, { type: "order.create", idempotencyKey: clientRequestId, payload, baseVersion: null, draftLocalId: draft.localId, dataset: draft.dataset });
       } else if (laterReplaces.length > 0) {
         await setOpPayload(tx, env, laterReplaces.at(-1) as OutboxRecord, payload);
       } else {
-        await insertOp(tx, env, { type: "order.replace", idempotencyKey: env.newId(), payload, baseVersion: null, draftLocalId: draft.localId });
+        await insertOp(tx, env, { type: "order.replace", idempotencyKey: env.newId(), payload, baseVersion: null, draftLocalId: draft.localId, dataset: draft.dataset });
       }
     } else if (last !== undefined && last.type === "order.replace" && last.state === "pending" && last.attempts === 0) {
       await setOpPayload(tx, env, last, payload);
@@ -365,6 +444,7 @@ export async function saveOrderDraft(db: SqlDatabase, env: OfflineEnv, input: Sa
         payload,
         baseVersion: draft.remoteVersion,
         draftLocalId: draft.localId,
+        dataset: draft.dataset,
       });
       if (last !== undefined && last.state === "needs_review") status = "needs_review";
     }

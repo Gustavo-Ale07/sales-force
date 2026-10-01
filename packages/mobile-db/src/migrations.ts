@@ -104,4 +104,21 @@ export const migrations: readonly Migration[] = [
       `CREATE INDEX outbox_draft_created_idx ON outbox (draft_local_id, created_at)`,
     ],
   },
+  {
+    // Dataset isolation (fake / real / sandbox / production must never mix). Expand-only: three columns on each of the
+    // two tables that hold seller work. Existing rows get NULL identity = LEGACY_LOCAL (never sent, never deleted).
+    // `eligibility` is the outcome of the push guard; 'unchecked' is the state before any check. No table is rebuilt.
+    version: 3,
+    name: "dataset_identity_and_eligibility",
+    statements: [
+      `ALTER TABLE local_order_draft ADD COLUMN dataset_environment TEXT`,
+      `ALTER TABLE local_order_draft ADD COLUMN dataset_id TEXT`,
+      `ALTER TABLE local_order_draft ADD COLUMN eligibility TEXT NOT NULL DEFAULT 'unchecked'
+        CHECK (eligibility IN ('unchecked', 'eligible', 'legacy_local', 'environment_mismatch', 'dataset_mismatch', 'owner_mismatch'))`,
+      `ALTER TABLE outbox ADD COLUMN dataset_environment TEXT`,
+      `ALTER TABLE outbox ADD COLUMN dataset_id TEXT`,
+      `ALTER TABLE outbox ADD COLUMN eligibility TEXT NOT NULL DEFAULT 'unchecked'
+        CHECK (eligibility IN ('unchecked', 'eligible', 'legacy_local', 'environment_mismatch', 'dataset_mismatch', 'owner_mismatch'))`,
+    ],
+  },
 ];

@@ -18,6 +18,41 @@ function problemsOf(action: () => unknown): readonly string[] {
   throw new Error('expected an EnvValidationError');
 }
 
+describe('API dataset identity environment', () => {
+  it('is null when neither variable is set (empty counts as unset)', () => {
+    expect(parseApiEnv({ ...DEV }).dataset).toBeNull();
+    expect(parseApiEnv({ ...DEV, SF_ERP_ENVIRONMENT: '', SF_DATASET_ID: '  ' }).dataset).toBeNull();
+  });
+
+  it('exposes the identity when both are valid', () => {
+    expect(parseApiEnv({ ...DEV, SF_ERP_ENVIRONMENT: 'sandbox', SF_DATASET_ID: 'plac-sandbox-real-1' }).dataset).toEqual({
+      environment: 'sandbox',
+      datasetId: 'plac-sandbox-real-1',
+    });
+  });
+
+  it('fails with an actionable message when only one is set', () => {
+    expect(problemsOf(() => parseApiEnv({ ...DEV, SF_ERP_ENVIRONMENT: 'sandbox' }))).toEqual([
+      expect.stringMatching(/^SF_DATASET_ID: .*SF_ERP_ENVIRONMENT/),
+    ]);
+    expect(problemsOf(() => parseApiEnv({ ...DEV, SF_DATASET_ID: 'plac-sandbox-real-1' }))).toEqual([
+      expect.stringMatching(/^SF_ERP_ENVIRONMENT: .*SF_DATASET_ID/),
+    ]);
+  });
+
+  it.each([
+    ['SF_ERP_ENVIRONMENT', 'Sandbox'],
+    ['SF_ERP_ENVIRONMENT', 'x'.repeat(33)],
+    ['SF_ERP_ENVIRONMENT', 'sand box'],
+    ['SF_DATASET_ID', 'ab'],
+    ['SF_DATASET_ID', 'UPPER-case'],
+    ['SF_DATASET_ID', 'x'.repeat(65)],
+  ])('rejects a bad slug in %s (%s)', (key, value) => {
+    const valid = { SF_ERP_ENVIRONMENT: 'sandbox', SF_DATASET_ID: 'plac-sandbox-real-1' };
+    expect(problemsOf(() => parseApiEnv({ ...DEV, ...valid, [key]: value }))).toEqual([expect.stringMatching(new RegExp(`^${key}: `))]);
+  });
+});
+
 describe('API environment', () => {
   it('applies defaults and wraps the connection string in a Secret', () => {
     const env = parseApiEnv({ ...DEV });

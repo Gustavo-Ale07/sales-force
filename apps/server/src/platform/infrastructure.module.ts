@@ -1,8 +1,10 @@
 import { Global, Module, type DynamicModule } from '@nestjs/common';
+import type { DatasetIdentity } from '@salesforce/contracts';
 import type { DbHandle } from '@salesforce/db';
 import type { Logger } from '../observability/logger.js';
 import {
   CLOCK,
+  DATASET_IDENTITY,
   DATABASE,
   DATABASE_HANDLE,
   LOGGER,
@@ -17,6 +19,8 @@ export interface InfrastructureDeps {
   readonly clock?: Clock;
   /** `/ready` cache window (default 0 = every call checks; the API entry point sets a few seconds). */
   readonly readinessCacheTtlMs?: number;
+  /** Explicit dataset identity of the installation (default `null`: none declared). */
+  readonly dataset?: DatasetIdentity | null;
 }
 
 /**
@@ -34,6 +38,7 @@ export class InfrastructureModule {
       { provide: DATABASE, useValue: deps.db.db },
       { provide: CLOCK, useValue: deps.clock ?? systemClock },
       { provide: READINESS_CACHE_TTL_MS, useValue: deps.readinessCacheTtlMs ?? 0 },
+      { provide: DATASET_IDENTITY, useValue: deps.dataset ?? null },
     ];
     return {
       module: InfrastructureModule,

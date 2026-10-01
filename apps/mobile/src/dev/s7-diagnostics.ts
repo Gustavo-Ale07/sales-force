@@ -4,7 +4,7 @@ import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { File } from "expo-file-system";
 import * as SQLite from "expo-sqlite";
 import { Platform } from "react-native";
-import type { Migration } from "@salesforce/mobile-db";
+import { inspectLocalState, type LocalStateReport, type Migration } from "@salesforce/mobile-db";
 import { databaseFileUri, deleteDatabaseFile, openEncryptedDatabase } from "@salesforce/mobile-db/expo";
 import { openAppDatabase } from "../db/app-database";
 import { createSecureStoreKeyStore, secureRandomBytes } from "../db/secure-key-store";
@@ -68,6 +68,20 @@ async function step(name: string, body: () => Promise<string>, sink: (result: St
   } catch (error) {
     sink({ name, ok: false, detail: error instanceof Error ? `${error.name}: ${error.message}` : String(error), ms: Date.now() - started });
     return false;
+  }
+}
+
+/**
+ * Read-only report of the REAL app database for dataset isolation (counts, cache/draft/outbox identity and
+ * classification; never names, notes, tokens or the key). Opening the database applies pending migrations like any
+ * app start; the report itself only runs SELECT statements. Same dev gate as the rest of this file.
+ */
+export async function inspectAppDatabase(): Promise<LocalStateReport> {
+  const opened = await openAppDatabase();
+  try {
+    return await inspectLocalState(opened.database);
+  } finally {
+    await opened.database.close();
   }
 }
 

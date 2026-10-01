@@ -67,6 +67,7 @@ describe("NewOrderScreen discounts (mass and group apply, DISC-1/MOB-4)", () => 
     });
     const orders = fakeOrders({
       getEntryConfiguration: async () => ({
+        dataset: { environment: "production", datasetId: "mirror-real-001" },
         general: { enabled: true },
         sales: { defaultNegotiationTypeCode: null, negotiationTypes: [], orderBehavior: { allowDraftWithoutPrice: false } },
         products: { productWithoutPrice: { orderable: true } },
@@ -180,6 +181,7 @@ describe("NewOrderScreen catalog-group discount (MOB-4a: automatic bucketing by 
     });
     const orders = fakeOrders({
       getEntryConfiguration: async () => ({
+        dataset: { environment: "production", datasetId: "mirror-real-001" },
         general: { enabled: true },
         sales: { defaultNegotiationTypeCode: null, negotiationTypes: [], orderBehavior: { allowDraftWithoutPrice: false } },
         products: { productWithoutPrice: { orderable: true } },

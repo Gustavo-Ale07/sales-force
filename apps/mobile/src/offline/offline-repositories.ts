@@ -1,7 +1,10 @@
 import {
   META_KEYS,
-  countCached,
+  confirmDataset,
   getCachedProduct,
+  isCacheReady,
+  readExpectedDataset,
+  sameDataset,
   getMeta,
   isoNow,
   customerLetters,
@@ -14,6 +17,7 @@ import {
   type SqlDatabase,
 } from "@salesforce/mobile-db";
 import { ApiRequestError } from "../data/api";
+import { datasetIdentityOf } from "./reference-source";
 import type { CustomerListItem, OrderEntryConfiguration, ProductListItem, Repositories } from "../data/ports";
 
 /**
@@ -30,11 +34,8 @@ export function createOfflineFirstRepositories(deps: {
 }): Repositories {
   const { db, env, ownerAccountId, remote } = deps;
 
-  async function cacheReady(): Promise<boolean> {
-    if ((await getMeta(db, META_KEYS.cacheOwner)) !== ownerAccountId) return false;
-    const counts = await countCached(db);
-    return counts.customers > 0 || counts.products > 0;
-  }
+  /** Owner + environment + dataset id + rows (see `isCacheReady`); every cache reader below goes through it. */
+  const cacheReady = () => isCacheReady(db, ownerAccountId);
 
   return {
     customers: {
@@ -81,12 +82,19 @@ export function createOfflineFirstRepositories(deps: {
       async getEntryConfiguration() {
         try {
           const fresh = await remote.orders.getEntryConfiguration();
+          // An online answer is the server's confirmation of the dataset (null = it cannot tell: nothing is current).
+          await confirmDataset(db, datasetIdentityOf(fresh), isoNow(env));
           await setMeta(db, META_KEYS.entryConfiguration, JSON.stringify(fresh), isoNow(env));
           return fresh;
         } catch (error) {
           if (error instanceof ApiRequestError && error.isNetwork) {
             const cached = await getMeta(db, META_KEYS.entryConfiguration);
-            if (cached !== null && cached !== "null") return JSON.parse(cached) as OrderEntryConfiguration;
+            if (cached !== null && cached !== "null") {
+              // Offline, a cached configuration is used only when it declares the confirmed dataset; one saved before
+              // dataset identity existed (no `dataset`) is unknown and fails closed.
+              const parsed = JSON.parse(cached) as OrderEntryConfiguration;
+              if (sameDataset(datasetIdentityOf(parsed), await readExpectedDataset(db))) return parsed;
+            }
           }
           throw error;
         }

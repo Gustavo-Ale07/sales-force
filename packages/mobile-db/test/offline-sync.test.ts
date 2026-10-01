@@ -28,6 +28,7 @@ import {
   type SqlDatabase,
   type TransportErrorKind,
 } from "../src/index";
+import { confirm, REAL } from "./helpers";
 import { openNodeDatabase } from "./node-sqlite-connection";
 
 const OWNER = "acct-1";
@@ -149,11 +150,12 @@ let server: FakeServer;
 beforeEach(async () => {
   db = openNodeDatabase();
   await runMigrations(db, migrations);
+  await confirm(db);
   env = makeEnv();
   server = new FakeServer();
 });
 
-const push = (options = {}) => pushOutbox(db, env, server, OWNER, { respectBackoff: false, ...options });
+const push = (options = {}) => pushOutbox(db, env, server, OWNER, { respectBackoff: false, currentDataset: REAL, ...options });
 
 describe("saveOrderDraft", () => {
   it("writes draft, items and one create command atomically", async () => {
@@ -252,18 +254,18 @@ describe("error classification and retries", () => {
   it("transient server error backs off exponentially and keeps the command", async () => {
     const id = await saveOrderDraft(db, env, input([item(1)]));
     server.failWith = "server";
-    await pushOutbox(db, env, server, OWNER, { respectBackoff: true });
+    await pushOutbox(db, env, server, OWNER, { respectBackoff: true, currentDataset: REAL });
     let [op] = await listOutbox(db, id);
     expect(op).toMatchObject({ state: "pending", attempts: 1 });
     expect(op?.nextAttemptAt).toBe(new Date(env.now().getTime() + 5_000).toISOString());
 
     // Inside the backoff window an automatic run sends nothing.
     const before = server.requests.length;
-    await pushOutbox(db, env, server, OWNER, { respectBackoff: true });
+    await pushOutbox(db, env, server, OWNER, { respectBackoff: true, currentDataset: REAL });
     expect(server.requests).toHaveLength(before);
 
     env.advance(5_001);
-    await pushOutbox(db, env, server, OWNER, { respectBackoff: true });
+    await pushOutbox(db, env, server, OWNER, { respectBackoff: true, currentDataset: REAL });
     [op] = await listOutbox(db, id);
     expect(op?.attempts).toBe(2);
     expect(op?.nextAttemptAt).toBe(new Date(env.now().getTime() + 10_000).toISOString());
@@ -366,7 +368,7 @@ describe("ordering and chaining", () => {
     const a = await saveOrderDraft(db, env, input([item(1)]));
     const b = await saveOrderDraft(db, env, input([item(2)]));
     await db.execute("UPDATE outbox SET next_attempt_at = ? WHERE draft_local_id = ?", ["2999-01-01T00:00:00.000Z", a]);
-    const result = await pushOutbox(db, env, server, OWNER, { respectBackoff: true });
+    const result = await pushOutbox(db, env, server, OWNER, { respectBackoff: true, currentDataset: REAL });
     expect(result.accepted).toBe(1);
     expect((await getDraft(db, b))?.status).toBe("synced");
     expect((await getDraft(db, a))?.status).toBe("pending_sync");
@@ -488,6 +490,7 @@ describe("reference pull", () => {
       return [{ code: 10, description: "Parafuso Sextavado", groupCode: 2 }];
     },
     fetchEntryConfiguration: async () => ({ negotiationTypes: [] }),
+    fetchDatasetIdentity: async () => REAL,
   });
 
   it("replaces the cache atomically and searches without accents", async () => {
@@ -504,7 +507,7 @@ describe("reference pull", () => {
 });
 
 describe("sync manager", () => {
-  const source: ReferenceSource = { fetchCustomers: async () => [], fetchProducts: async () => [], fetchEntryConfiguration: async () => null };
+  const source: ReferenceSource = { fetchCustomers: async () => [], fetchProducts: async () => [], fetchEntryConfiguration: async () => null, fetchDatasetIdentity: async () => REAL };
 
   it("reports offline without losing the draft, then syncs on the next run", async () => {
     await saveOrderDraft(db, env, input([item(1)]));

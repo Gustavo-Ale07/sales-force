@@ -10,6 +10,7 @@ import {
   type OutboxRecord,
   type PriceReviewEntry,
 } from "./local-orders";
+import { classifyEligibility, ineligibleMessage, type DatasetIdentity, type IneligibleReason } from "./dataset-identity";
 import { isoNow, type OfflineEnv } from "./offline-env";
 
 /**
@@ -143,7 +144,8 @@ export function deriveDraftStatus(ops: readonly OutboxRecord[]): { status: Draft
   const laterActive = lastRejected === undefined ? false : ops.some((op) => op.state !== "rejected" && op.createdAt > lastRejected.createdAt);
   if (lastRejected !== undefined && !laterActive) return { status: "sync_error", lastError: lastRejected.lastError };
   const review = ops.find((op) => op.state === "needs_review");
-  if (review !== undefined) return { status: "needs_review", lastError: null };
+  // A quarantined (not eligible) command explains itself; a plain price review carries no text.
+  if (review !== undefined) return { status: "needs_review", lastError: review.lastError };
   if (ops.some((op) => op.state === "sending")) return { status: "syncing", lastError: null };
   const pending = ops.filter((op) => op.state === "pending");
   if (pending.length > 0) {
@@ -197,7 +199,7 @@ export function comparePrices(payload: OrderCommandPayload, remote: RemoteOrder)
 
 /* ---------- push ---------- */
 
-export type PushStop = "idle" | "offline" | "auth" | "limit";
+export type PushStop = "idle" | "offline" | "auth" | "limit" | "dataset_unconfirmed";
 
 export interface PushResult {
   readonly attempted: number;
@@ -205,9 +207,16 @@ export interface PushResult {
   /** Commands that failed in this run (transient non-network failures, conflicts, rejections). */
   readonly failed: number;
   readonly stoppedBy: PushStop;
+  /** Commands moved to `needs_review` because they do not belong to the current account/dataset (never sent). */
+  readonly quarantined?: number;
 }
 
 export interface PushOptions {
+  /**
+   * The dataset the server confirmed for this session. REQUIRED for anything to be sent: `null`/absent = unknown, so
+   * nothing is delivered (fail closed). Every command is compared with it right before its request.
+   */
+  readonly currentDataset?: DatasetIdentity | null;
   /** Skip commands whose backoff has not elapsed (automatic timer). Manual/reconnect syncs pass `false`. */
   readonly respectBackoff?: boolean;
   readonly maxOperations?: number;
@@ -219,7 +228,7 @@ const DEFAULT_MAX_OPERATIONS = 50;
 /** Commands that were mid-flight when the app died have an unknown outcome: return them to `pending` (frozen, attempts kept). */
 export async function recoverInterrupted(db: SqlDatabase, env: OfflineEnv): Promise<number> {
   return db.transaction(async (tx) => {
-    const stuck = await tx.query<SqlRow>("SELECT local_id, draft_local_id FROM outbox WHERE state = 'sending'");
+    const stuck = await tx.query<SqlRow>("SELECT local_id, draft_local_id FROM outbox WHERE state = 'sending' AND eligibility IN ('unchecked', 'eligible')");
     for (const row of stuck) {
       await tx.execute(
         "UPDATE outbox SET state = 'pending', last_error = ?, next_attempt_at = NULL, updated_at = ? WHERE local_id = ?",
@@ -259,7 +268,7 @@ async function nextEligible(db: SqlExecutor, env: OfflineEnv, ownerAccountId: st
 
 async function markSending(db: SqlDatabase, env: OfflineEnv, op: OutboxRecord): Promise<void> {
   await db.transaction(async (tx) => {
-    await tx.execute("UPDATE outbox SET state = 'sending', attempts = attempts + 1, updated_at = ? WHERE local_id = ?", [isoNow(env), op.localId]);
+    await tx.execute("UPDATE outbox SET state = 'sending', attempts = attempts + 1, eligibility = 'eligible', updated_at = ? WHERE local_id = ?", [isoNow(env), op.localId]);
     if (op.draftLocalId !== null) await refreshDraftStatus(tx, op.draftLocalId);
   });
 }
@@ -338,6 +347,43 @@ async function applyConflict(db: SqlDatabase, env: OfflineEnv, op: OutboxRecord,
 }
 
 /**
+ * Takes every unsent command of a draft out of delivery for good: `needs_review` + the reason, draft mirrored. Nothing is
+ * deleted and nothing here ever re-queues it (only an explicit future seller action could).
+ */
+async function quarantineDraft(db: SqlDatabase, env: OfflineEnv, draftLocalId: string, reason: IneligibleReason): Promise<void> {
+  await db.transaction(async (tx) => {
+    const now = isoNow(env);
+    await tx.execute(
+      `UPDATE outbox SET state = 'needs_review', eligibility = ?, last_error = ?, next_attempt_at = NULL, updated_at = ?
+       WHERE draft_local_id = ? AND state IN ('pending', 'sending', 'conflict', 'needs_review')`,
+      [reason, ineligibleMessage(reason), now, draftLocalId],
+    );
+    await tx.execute("UPDATE local_order_draft SET eligibility = ? WHERE local_id = ?", [reason, draftLocalId]);
+    await refreshDraftStatus(tx, draftLocalId);
+  });
+}
+
+/** Moves every draft of the owner with unresolved commands that is definitely not eligible (legacy, other dataset) out of delivery. */
+async function quarantineIneligible(db: SqlDatabase, env: OfflineEnv, ownerAccountId: string, current: DatasetIdentity | null): Promise<number> {
+  const rows = await db.query<SqlRow>(
+    `SELECT DISTINCT d.local_id AS local_id FROM local_order_draft d JOIN outbox o ON o.draft_local_id = d.local_id
+     WHERE d.owner_account_id = ? AND o.state IN ('pending', 'sending', 'conflict', 'needs_review') AND d.eligibility IN ('unchecked', 'eligible')`,
+    [ownerAccountId],
+  );
+  let count = 0;
+  for (const row of rows) {
+    const draft = await getDraft(db, String(row.local_id));
+    if (draft === null) continue;
+    const verdict = classifyEligibility({ rowOwnerAccountId: draft.ownerAccountId, currentOwnerAccountId: ownerAccountId, rowDataset: draft.dataset, current });
+    if (verdict !== "eligible" && verdict !== "unconfirmed") {
+      await quarantineDraft(db, env, draft.localId, verdict);
+      count += 1;
+    }
+  }
+  return count;
+}
+
+/**
  * Sends pending commands in creation order, per draft, one at a time (no bursts). Stops at the first sign that the
  * network is unusable so a dead connection costs one attempt, not one per queued command.
  */
@@ -353,13 +399,28 @@ export async function pushOutbox(
   let attempted = 0;
   let accepted = 0;
   let failed = 0;
+  let quarantined = 0;
+  const current = options.currentDataset ?? null;
+  quarantined += await quarantineIneligible(db, env, ownerAccountId, current);
 
   while (attempted < max) {
     const op = await nextEligible(db, env, ownerAccountId, respectBackoff);
-    if (op === null) return { attempted, accepted, failed, stoppedBy: "idle" };
+    if (op === null) return { attempted, accepted, failed, stoppedBy: "idle", quarantined };
     const draft = await getDraft(db, op.draftLocalId as string);
     if (draft === null) {
       await db.execute("DELETE FROM outbox WHERE local_id = ?", [op.localId]);
+      continue;
+    }
+    // PUSH GUARD: nothing reaches the transport unless the command (and its draft) belong to this account and to the
+    // dataset the server confirmed. A row without identity is LEGACY_LOCAL; a mismatch is permanent, never retried.
+    const verdicts = [draft.dataset, op.dataset].map((rowDataset) =>
+      classifyEligibility({ rowOwnerAccountId: draft.ownerAccountId, currentOwnerAccountId: ownerAccountId, rowDataset, current }),
+    );
+    const blocking = verdicts.find((verdict) => verdict !== "eligible");
+    if (blocking === "unconfirmed") return { attempted, accepted, failed, stoppedBy: "dataset_unconfirmed", quarantined };
+    if (blocking !== undefined) {
+      await quarantineDraft(db, env, draft.localId, blocking);
+      quarantined += 1;
       continue;
     }
     attempted += 1;
@@ -383,13 +444,13 @@ export async function pushOutbox(
       if (failure === "transient") {
         await applyTransient(db, env, sent, error);
         failed += 1;
-        if (error.kind === "network") return { attempted, accepted, failed, stoppedBy: "offline" };
+        if (error.kind === "network") return { attempted, accepted, failed, stoppedBy: "offline", quarantined };
         continue;
       }
       if (failure === "auth") {
         await applyAuth(db, env, sent, error);
         failed += 1;
-        return { attempted, accepted, failed, stoppedBy: "auth" };
+        return { attempted, accepted, failed, stoppedBy: "auth", quarantined };
       }
       if (failure === "conflict") {
         let snapshot: RemoteOrder | null = null;
@@ -406,7 +467,7 @@ export async function pushOutbox(
       failed += 1;
     }
   }
-  return { attempted, accepted, failed, stoppedBy: "limit" };
+  return { attempted, accepted, failed, stoppedBy: "limit", quarantined };
 }
 
 /* ---------- seller actions on sync outcomes ---------- */
@@ -423,7 +484,7 @@ export async function acknowledgePriceReview(db: SqlDatabase, env: OfflineEnv, d
       if (entry === undefined) continue;
       await tx.execute("UPDATE local_order_item SET price_json = ? WHERE draft_local_id = ? AND position = ?", [entry.serverPriceJson, draftLocalId, item.position]);
     }
-    await tx.execute("DELETE FROM outbox WHERE draft_local_id = ? AND state = 'needs_review'", [draftLocalId]);
+    await tx.execute("DELETE FROM outbox WHERE draft_local_id = ? AND state = 'needs_review' AND eligibility IN ('unchecked', 'eligible')", [draftLocalId]);
     await tx.execute("UPDATE local_order_draft SET price_review = NULL WHERE local_id = ?", [draftLocalId]);
     await refreshDraftStatus(tx, draftLocalId);
   });

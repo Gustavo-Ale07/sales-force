@@ -625,6 +625,10 @@ export interface components {
             kind: "all" | "sellers";
             sellerCodes: number[];
         };
+        DatasetIdentity: {
+            environment: string;
+            datasetId: string;
+        };
         DecimalString: string;
         ErpSubmissionDisabledError: {
             /** @constant */
@@ -762,6 +766,7 @@ export interface components {
             totals: components["schemas"]["OrderTotals"];
         };
         OrderEntryConfiguration: {
+            dataset: components["schemas"]["DatasetIdentity"] | null;
             general: {
                 enabled: boolean;
             };

@@ -299,6 +299,10 @@ export const META_KEYS = {
   productsSyncedAt: "cache.products.synced_at",
   entryConfiguration: "cache.entry_configuration",
   cacheOwner: "cache.owner_account_id",
+  cacheDatasetEnvironment: "cache.dataset_environment",
+  cacheDatasetId: "cache.dataset_id",
+  expectedDatasetEnvironment: "session.expected_dataset_environment",
+  expectedDatasetId: "session.expected_dataset_id",
   account: "session.last_account",
   lastAuthAt: "session.last_online_at",
 } as const;

@@ -234,9 +234,26 @@ export type ConfigurationSummary = z.infer<typeof ConfigurationSummarySchema>;
  * so nothing broader (customers, pricing, financial, sync/integration state) is ever assembled for a
  * non-admin request.
  */
+/** Shared by the API environment validation and the response contract (one definition, no drift). */
+export const ENVIRONMENT_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]{0,31}$/;
+export const DATASET_ID_SLUG_PATTERN = /^[a-z0-9][a-z0-9._-]{2,63}$/;
+
+export const DatasetIdentitySchema = named(
+  'DatasetIdentity',
+  z.strictObject({
+    /** ERP environment slug of the installation's data (e.g. `sandbox`). Not a secret. */
+    environment: z.string().regex(ENVIRONMENT_SLUG_PATTERN),
+    /** Logical dataset id; bumped whenever the dataset changes (fake to real, new mirror source, sandbox to production). */
+    datasetId: z.string().regex(DATASET_ID_SLUG_PATTERN),
+  }),
+);
+export type DatasetIdentity = z.infer<typeof DatasetIdentitySchema>;
+
 export const OrderEntryConfigurationSchema = named(
   'OrderEntryConfiguration',
   z.object({
+    /** Explicit installation dataset identity (`null` while the installation does not declare one). */
+    dataset: DatasetIdentitySchema.nullable(),
     general: z.strictObject({ enabled: z.boolean() }),
     sales: z.strictObject({
       defaultNegotiationTypeCode: codeInt().nullable(),

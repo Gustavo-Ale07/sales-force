@@ -74,6 +74,7 @@ export function fakeProducts(overrides: Partial<ProductRepository> = {}): Produc
 
 export function orderEntryConfiguration(overrides: Partial<OrderEntryConfiguration> = {}): OrderEntryConfiguration {
   return {
+    dataset: { environment: "production", datasetId: "mirror-real-001" },
     general: { enabled: true },
     sales: { defaultNegotiationTypeCode: null, negotiationTypes: [], orderBehavior: { allowDraftWithoutPrice: false } },
     products: { productWithoutPrice: { orderable: false } },
@@ -198,6 +199,8 @@ export function draftRecord(overrides: Partial<DraftRecord> = {}): DraftRecord {
     createdAt: "2026-09-30T12:00:00.000Z",
     updatedAt: "2026-09-30T12:00:00.000Z",
     itemCount: 2,
+    dataset: { environment: "production", datasetId: "mirror-real-001" },
+    eligibility: "eligible",
     ...overrides,
   };
 }

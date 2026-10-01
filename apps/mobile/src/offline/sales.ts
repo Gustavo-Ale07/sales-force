@@ -4,6 +4,7 @@ import {
   queryDrafts,
   type DraftFilter,
   type DraftRecord,
+  type DatasetIdentity,
   type DraftStatus,
   type SalesGroup,
   type SqlDatabase,
@@ -99,10 +100,11 @@ async function valueOf(db: SqlDatabase, draft: DraftRecord): Promise<SalesValue>
   return saleValue(draft, linesFromDraftItems(await getDraftItems(db, draft.localId)));
 }
 
-function filterOf(ownerAccountId: string, filters: SalesFilters, text: string, now: Date): DraftFilter {
+function filterOf(ownerAccountId: string, filters: SalesFilters, text: string, now: Date, dataset: DatasetIdentity | null): DraftFilter {
   const { from, before } = periodRange(filters, now);
   return {
     ownerAccountId,
+    dataset,
     group: filters.group,
     ...(filters.statuses.length > 0 ? { statuses: filters.statuses } : {}),
     ...(filters.customer === null ? {} : { customerCode: filters.customer.code }),
@@ -118,16 +120,24 @@ export async function listSales(
   filters: SalesFilters,
   request: { search: string; page: number; pageSize: number },
   now: Date,
+  dataset: DatasetIdentity | null,
 ): Promise<Page<SalesRow>> {
   const offset = (request.page - 1) * request.pageSize;
-  const { rows, total } = await queryDrafts(db, filterOf(ownerAccountId, filters, request.search, now), { limit: request.pageSize, offset });
+  const { rows, total } = await queryDrafts(db, filterOf(ownerAccountId, filters, request.search, now, dataset), { limit: request.pageSize, offset });
   const items: SalesRow[] = [];
   for (const draft of rows) items.push({ draft, value: await valueOf(db, draft) });
   return { items, page: request.page, pageSize: request.pageSize, total };
 }
 
-export async function summarizeSales(db: SqlDatabase, ownerAccountId: string, filters: SalesFilters, search: string, now: Date): Promise<SalesSummary> {
-  const filter = filterOf(ownerAccountId, filters, search, now);
+export async function summarizeSales(
+  db: SqlDatabase,
+  ownerAccountId: string,
+  filters: SalesFilters,
+  search: string,
+  now: Date,
+  dataset: DatasetIdentity | null,
+): Promise<SalesSummary> {
+  const filter = filterOf(ownerAccountId, filters, search, now, dataset);
   const { group: _group, ...withoutGroup } = filter;
   const counts = await countDraftsByGroup(db, withoutGroup);
   const amounts: string[] = [];

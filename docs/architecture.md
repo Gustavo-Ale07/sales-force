@@ -203,6 +203,7 @@ data migrations ─► separate, tracked, run as their own controlled step
 - `packages/domain` receives configuration as typed input (for example `configuration.product.sellableUsageValues`). It never reads Sankhya or the database and holds no customer-specific literals.
 - Covered: account → seller mapping, allowed product-use values, customer-without-price-table policy (until configured, `CODTAB` null = no resolved price table), missing-price visibility/orderability, company, order/quotation TOP, payment defaults. Not covered: secrets (P-22, SEC-1), discount authority (P-10), authorization (P-21).
 - The source of configuration before the Sankhya-side model exists is UNDECIDED (U-11); nothing is hardcoded meanwhile.
+- **Dataset identity — DEV-phase working mechanism (PROPOSED, not a decision).** Optional API variables `SF_ERP_ENVIRONMENT` (slug, e.g. `sandbox`) and `SF_DATASET_ID` (slug, e.g. `plac-sandbox-real-1`), both or none (startup fails otherwise; none = `null`). Not secrets; the API still reads no `SANKHYA_*`. They are returned as `dataset` (`{ environment, datasetId }` or `null`) by `GET /order-entry/configuration` so clients can detect a change of installation data (fake/real, user, environment) instead of mixing datasets. Bump `SF_DATASET_ID` whenever the dataset logically changes (fake to real, new mirror source, sandbox to production), never per sync. The dev Compose file sets defaults.
 
 ---
 

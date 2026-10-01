@@ -3067,6 +3067,24 @@
         ],
         "additionalProperties": false
       },
+      "DatasetIdentity": {
+        "type": "object",
+        "properties": {
+          "environment": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$"
+          },
+          "datasetId": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]{2,63}$"
+          }
+        },
+        "required": [
+          "environment",
+          "datasetId"
+        ],
+        "additionalProperties": false
+      },
       "DecimalString": {
         "type": "string",
         "maxLength": 40,
@@ -3700,6 +3718,16 @@
       "OrderEntryConfiguration": {
         "type": "object",
         "properties": {
+          "dataset": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DatasetIdentity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "general": {
             "type": "object",
             "properties": {
@@ -3775,6 +3803,7 @@
           }
         },
         "required": [
+          "dataset",
           "general",
           "sales",
           "products"

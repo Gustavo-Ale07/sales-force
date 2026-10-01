@@ -1,4 +1,4 @@
-import type { ConfigurationResponse, ConfigurationSummary, OrderEntryConfiguration, SyncState } from '@salesforce/contracts';
+import type { ConfigurationResponse, ConfigurationSummary, DatasetIdentity, OrderEntryConfiguration, SyncState } from '@salesforce/contracts';
 import type { syncState } from '@salesforce/db';
 import type { InstallationConfiguration } from '@salesforce/domain';
 import { summarizeIntegration } from '../platform/integration-summary.js';
@@ -54,8 +54,12 @@ export function toConfigurationSummary(configuration: InstallationConfiguration)
  * configuration — never built from `toConfigurationSummary` — so nothing broader (customers,
  * pricing, financial, sync/integration state) is ever assembled in memory for a non-admin request.
  */
-export function toOrderEntryConfiguration(configuration: InstallationConfiguration): OrderEntryConfiguration {
+export function toOrderEntryConfiguration(
+  configuration: InstallationConfiguration,
+  dataset: DatasetIdentity | null,
+): OrderEntryConfiguration {
   return {
+    dataset: dataset === null ? null : { environment: dataset.environment, datasetId: dataset.datasetId },
     general: { enabled: configuration.general.enabled },
     sales: {
       defaultNegotiationTypeCode: configuration.sales.defaultNegotiationTypeCode,

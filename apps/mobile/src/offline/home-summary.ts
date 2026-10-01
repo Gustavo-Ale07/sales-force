@@ -1,4 +1,4 @@
-import type { DraftRecord, DraftStatus } from "@salesforce/mobile-db";
+import { isOperationalEligibility, type DraftRecord, type DraftStatus } from "@salesforce/mobile-db";
 import { saleActions } from "./sales-status";
 
 /** Lower rank = more relevant to resume: something the seller must act on, then unsent work. Orders already synced are never offered (they have no Continuar in the Central). */
@@ -17,6 +17,8 @@ export function pickResumableDraft(drafts: readonly DraftRecord[]): DraftRecord 
   let best: DraftRecord | null = null;
   for (const draft of drafts) {
     if (!saleActions(draft).continue) continue;
+    // Work of another dataset / legacy work is never offered as a normal order to resume.
+    if (!isOperationalEligibility(draft.eligibility)) continue;
     if (best === null) {
       best = draft;
       continue;

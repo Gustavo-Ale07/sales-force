@@ -25,12 +25,14 @@ afterAll(async () => {
   await postgres.stop();
 });
 
-async function setupApp(): Promise<{ ctx: AuthApp; database: MigratedDatabase }> {
+const DATASET = { environment: 'sandbox', datasetId: 'plac-sandbox-real-1' } as const;
+
+async function setupApp(dataset: typeof DATASET | null = null): Promise<{ ctx: AuthApp; database: MigratedDatabase }> {
   const database = await createMigratedDatabase(postgres);
   opened.push(() => database.handle.close());
   const repository = new InstallationConfigurationRepository(database.handle.db);
   await repository.saveSnapshot(DEMO_CONFIGURATION, new Date('2026-09-18T00:00:00.000Z'));
-  const ctx = await startAuthApp(postgres, opened, { database });
+  const ctx = await startAuthApp(postgres, opened, { database, dataset });
   return { ctx, database };
 }
 
@@ -41,7 +43,7 @@ describe('GET /api/v1/order-entry/configuration (getOrderEntryConfiguration)', (
   it.each(['seller', 'manager', 'admin'] as const)(
     'gives a signed-in %s exactly the order-entry slice, nothing more',
     async (role) => {
-      const { ctx } = await setupApp();
+      const { ctx } = await setupApp(DATASET);
       await createTestAccount(ctx.database.handle, { email: `oe-${role}@example.test`, role });
       const cookie = await loginCookie(ctx, `oe-${role}@example.test`, TEST_PASSWORD);
 
@@ -51,6 +53,7 @@ describe('GET /api/v1/order-entry/configuration (getOrderEntryConfiguration)', (
       const body: unknown = response.json();
       const parsed = OrderEntryConfigurationSchema.parse(body);
       expect(parsed).toEqual({
+        dataset: { environment: 'sandbox', datasetId: 'plac-sandbox-real-1' },
         general: { enabled: true },
         sales: {
           defaultNegotiationTypeCode: 2,
@@ -64,7 +67,7 @@ describe('GET /api/v1/order-entry/configuration (getOrderEntryConfiguration)', (
       });
 
       // The actual security property: no admin/integration-scoped key ever leaks into this payload.
-      expect(Object.keys(body as Record<string, unknown>).sort()).toEqual(['general', 'products', 'sales']);
+      expect(Object.keys(body as Record<string, unknown>).sort()).toEqual(['dataset', 'general', 'products', 'sales']);
       const asRecord = body as Record<string, unknown>;
       expect(asRecord).not.toHaveProperty('syncStates');
       expect(asRecord).not.toHaveProperty('gateway');
@@ -81,6 +84,15 @@ describe('GET /api/v1/order-entry/configuration (getOrderEntryConfiguration)', (
       expect(Object.keys(asRecord)).not.toContain('schemaVersion');
     },
   );
+
+  it('returns dataset null when the installation declares no identity', async () => {
+    const { ctx } = await setupApp(null);
+    await createTestAccount(ctx.database.handle, { email: 'oe-null@example.test', role: 'seller' });
+    const cookie = await loginCookie(ctx, 'oe-null@example.test', TEST_PASSWORD);
+    const response = await ctx.app.inject({ method: 'GET', url: ORDER_ENTRY_URL, headers: { cookie } });
+    expect(response.statusCode).toBe(200);
+    expect((response.json() as Record<string, unknown>)['dataset']).toBeNull();
+  });
 
   it('is 401 without a session', async () => {
     const { ctx } = await setupApp();

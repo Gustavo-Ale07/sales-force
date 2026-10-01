@@ -26,6 +26,8 @@ function draft(localId: string, customerName: string, status: DraftRecord["statu
     createdAt: updatedAt,
     updatedAt,
     itemCount,
+    dataset: { environment: "production", datasetId: "mirror-real-001" },
+    eligibility: "eligible",
   };
 }
 

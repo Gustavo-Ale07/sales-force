@@ -24,6 +24,7 @@ runMain('api', async () => {
     logger,
     db,
     auth: authConfigFromEnv(env),
+    dataset: env.dataset,
     readinessCacheTtlMs: env.READINESS_CACHE_TTL_MS,
     trustProxy: env.TRUST_PROXY,
     limits: {

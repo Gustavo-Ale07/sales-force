@@ -1,4 +1,5 @@
 import type { SqlDatabase } from "./connection";
+import { DatasetIdentityError, confirmDataset, readExpectedDataset, sameDataset, writeCacheDataset, type DatasetIdentity } from "./dataset-identity";
 import { countOutbox } from "./local-orders";
 import { isoNow, type OfflineEnv } from "./offline-env";
 import { pushOutbox, recoverInterrupted, TransportError, type OrderTransport, type PushOptions } from "./order-sync";
@@ -13,6 +14,8 @@ export interface ReferenceSource {
   fetchProducts(): Promise<readonly ProductLike[]>;
   /** Order-entry configuration as the API delivers it (JSON-serializable); `null` when the server has none. */
   fetchEntryConfiguration(): Promise<unknown>;
+  /** Dataset the server serves (`null` = the server cannot tell: fail closed, nothing is cached or sent). */
+  fetchDatasetIdentity(): Promise<DatasetIdentity | null>;
 }
 
 export interface PullResult {
@@ -26,9 +29,17 @@ export interface PullResult {
  * implemented (SYNC-2 PROPOSED, V-07/V-14 open).
  */
 export async function pullReferenceData(db: SqlDatabase, env: OfflineEnv, source: ReferenceSource, ownerAccountId: string): Promise<PullResult> {
+  // The identity is read before AND after the data: the snapshot is only trusted when the server declared the same
+  // dataset on both sides (a dataset switch in the middle of a pull would otherwise mix two datasets in one cache).
+  const before = await source.fetchDatasetIdentity();
+  if (before === null) throw new DatasetIdentityError();
   const [customers, products, configuration] = await Promise.all([source.fetchCustomers(), source.fetchProducts(), source.fetchEntryConfiguration()]);
+  const after = await source.fetchDatasetIdentity();
+  if (!sameDataset(before, after)) throw new DatasetIdentityError("O conjunto de dados do servidor mudou durante a atualização.");
   const now = isoNow(env);
   await db.transaction(async (tx) => {
+    await writeCacheDataset(tx, before, now);
+    await confirmDataset(tx, before, now);
     await replaceCustomers(tx, customers);
     await replaceProducts(tx, products);
     await setMeta(tx, META_KEYS.customersSyncedAt, now, now);
@@ -76,6 +87,7 @@ export interface SyncManager {
 }
 
 function describePullFailure(error: unknown): { phase: SyncPhase; message: string } {
+  if (error instanceof DatasetIdentityError) return { phase: "error", message: error.message };
   if (error instanceof TransportError) {
     if (error.kind === "network") return { phase: "offline", message: "Sem conexão — alterações salvas neste dispositivo" };
     if (error.kind === "auth") return { phase: "auth_required", message: "Sua sessão expirou. Entre novamente para sincronizar." };
@@ -95,22 +107,49 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
   };
 
   const counters = async (): Promise<{ pending: number; needsAttention: number }> => {
-    const counts = await countOutbox(deps.db, deps.ownerAccountId);
+    const counts = await countOutbox(deps.db, deps.ownerAccountId, await readExpectedDataset(deps.db));
     return { pending: counts.pending + counts.sending, needsAttention: counts.needsAttention };
   };
 
   const run = async (reason: SyncReason, pull: boolean): Promise<SyncStatus> => {
     publish({ ...status, phase: "syncing", ...(await counters()) });
-    const pushOptions: PushOptions = {
-      respectBackoff: reason === "timer",
-      ...(deps.onUnexpectedError === undefined ? {} : { onUnexpectedError: deps.onUnexpectedError }),
-    };
     let phase: SyncPhase = "idle";
     let lastError: string | null = null;
     try {
       await recoverInterrupted(deps.db, deps.env);
-      const pushed = await pushOutbox(deps.db, deps.env, deps.transport, deps.ownerAccountId, pushOptions);
-      if (pushed.stoppedBy === "offline") {
+      // Confirm the dataset with the server before anything is sent (only when there is something to send or to pull).
+      let confirmed = true;
+      if (pull || (await counters()).pending > 0) {
+        try {
+          const identity = await deps.source.fetchDatasetIdentity();
+          await confirmDataset(deps.db, identity, isoNow(deps.env));
+          if (identity === null) {
+            confirmed = false;
+            phase = "error";
+            lastError = "Não foi possível confirmar o conjunto de dados do servidor. Envio bloqueado.";
+          }
+        } catch (error) {
+          confirmed = false;
+          const failure = describePullFailure(error);
+          phase = failure.phase;
+          lastError = failure.message;
+          if (!(error instanceof TransportError)) deps.onUnexpectedError?.(error);
+        }
+      }
+      const pushOptions: PushOptions = {
+        respectBackoff: reason === "timer",
+        currentDataset: await readExpectedDataset(deps.db),
+        ...(deps.onUnexpectedError === undefined ? {} : { onUnexpectedError: deps.onUnexpectedError }),
+      };
+      const pushed = confirmed
+        ? await pushOutbox(deps.db, deps.env, deps.transport, deps.ownerAccountId, pushOptions)
+        : { attempted: 0, accepted: 0, failed: 0, stoppedBy: "idle" as const };
+      if (!confirmed) {
+        // phase/lastError already set by the failed confirmation
+      } else if (pushed.stoppedBy === "dataset_unconfirmed") {
+        phase = "error";
+        lastError = "Não foi possível confirmar o conjunto de dados do servidor. Envio bloqueado.";
+      } else if (pushed.stoppedBy === "offline") {
         phase = "offline";
         lastError = "Sem conexão — alterações salvas neste dispositivo";
       } else if (pushed.stoppedBy === "auth") {

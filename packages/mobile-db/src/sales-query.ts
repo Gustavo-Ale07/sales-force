@@ -1,4 +1,5 @@
 import type { SqlExecutor, SqlRow, SqlValue } from "./connection";
+import { operationalDraftSql, type DatasetIdentity } from "./dataset-identity";
 import { DRAFT_COLUMNS, toDraft, type DraftRecord, type DraftStatus } from "./local-orders";
 import { escapeLike } from "./offline-env";
 
@@ -15,6 +16,11 @@ export const SENT_STATUSES: readonly DraftStatus[] = ["synced"];
 
 export interface DraftFilter {
   readonly ownerAccountId: string;
+  /**
+   * When present (the app always passes it), only drafts that are normal work for this confirmed dataset are listed;
+   * `null` (no confirmed dataset) lists none. Omitted = raw query (tests, diagnostics).
+   */
+  readonly dataset?: DatasetIdentity | null;
   readonly group?: SalesGroup;
   readonly statuses?: readonly DraftStatus[];
   readonly customerCode?: number;
@@ -32,6 +38,11 @@ function marks(values: readonly unknown[]): string {
 function whereOf(filter: DraftFilter): { sql: string; params: SqlValue[] } {
   const clauses = ["d.owner_account_id = ?"];
   const params: SqlValue[] = [filter.ownerAccountId];
+  if (filter.dataset !== undefined) {
+    const operational = operationalDraftSql(filter.dataset);
+    clauses.push(operational.sql);
+    params.push(...operational.params);
+  }
   if (filter.group !== undefined) {
     const statuses = filter.group === "unsent" ? UNSENT_STATUSES : SENT_STATUSES;
     clauses.push(`d.status IN (${marks(statuses)})`);

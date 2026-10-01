@@ -1,6 +1,6 @@
 import { Controller, Get, Module, Post, type Type } from '@nestjs/common';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { routes, type RouteDefinition } from '@salesforce/contracts';
+import { routes, type DatasetIdentity, type RouteDefinition } from '@salesforce/contracts';
 import type { LightMyRequestResponse } from 'fastify';
 import { ApiModule } from '../../src/api/api.module.js';
 import { createApiApp, type CreateApiAppOptions } from '../../src/api/create-app.js';
@@ -81,6 +81,8 @@ export interface AuthAppOptions {
   /** Adds the probe controller (unbound handler, ungranted session route). */
   readonly withProbes?: boolean;
   readonly database?: MigratedDatabase;
+  /** Installation dataset identity (default none). */
+  readonly dataset?: DatasetIdentity | null;
 }
 
 /** The API with the real identity module over a fresh migrated database and a hand-driven clock. */
@@ -103,7 +105,7 @@ export async function startAuthApp(
   ];
   if (extraControllers.length > 0) {
     @Module({
-      imports: [ApiModule.register({ logger, db: database.handle, clock: clock.fn }, auth)],
+      imports: [ApiModule.register({ logger, db: database.handle, clock: clock.fn, dataset: options.dataset ?? null }, auth)],
       controllers: extraControllers,
     })
     class ProbedApiModule {}
@@ -115,6 +117,7 @@ export async function startAuthApp(
     db: database.handle,
     clock: clock.fn,
     auth,
+    dataset: options.dataset ?? null,
     ...(options.trustProxy === undefined ? {} : { trustProxy: options.trustProxy }),
     ...(rootModule === undefined ? {} : { rootModule }),
   });
