@@ -151,6 +151,13 @@ const orderDetailRoute = createRoute({
   component: lazyRouteComponent(() => import("./routes/orders-route"), "OrderRoute"),
 });
 
+const profileRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/perfil",
+  staticData: { crumb: "Meu perfil" },
+  component: lazyRouteComponent(() => import("./routes/profile"), "ProfilePage"),
+});
+
 const integrationRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/integracao",
@@ -193,6 +200,7 @@ const appChildren = [
   customersRoute.addChildren([customersIndexRoute, customerDetailRoute]),
   productsRoute,
   ordersRoute.addChildren([ordersIndexRoute, newOrderRoute, orderDetailRoute]),
+  profileRoute,
   integrationRoute,
 ];
 

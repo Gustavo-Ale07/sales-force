@@ -6,8 +6,11 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  toast,
 } from "@salesforce/ui";
-import { LogOut } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
+import { LogOut, RefreshCw, UserRound } from "lucide-react";
 import type { AuthUser } from "../lib/auth-client";
 
 export interface UserMenuProps {
@@ -17,7 +20,21 @@ export interface UserMenuProps {
 
 /** User menu slot. Without a session (design route) it renders nothing. */
 export function UserMenu({ user, onLogout }: UserMenuProps) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   if (!user) return null;
+  /**
+   * Explicit data reload: refetches what is on screen and marks everything else stale, so the next visit reads the
+   * server again. It re-reads Sales Force; it does not ask the ERP for anything (there is no such endpoint).
+   */
+  const reloadData = async () => {
+    try {
+      await queryClient.invalidateQueries(undefined, { throwOnError: true });
+      toast({ title: "Dados atualizados", description: "As telas foram recarregadas a partir do Sales Force.", tone: "success" });
+    } catch {
+      toast({ title: "Não foi possível atualizar os dados", description: "Verifique a conexão e tente novamente.", tone: "danger" });
+    }
+  };
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -31,6 +48,15 @@ export function UserMenu({ user, onLogout }: UserMenuProps) {
           <span className="block truncate font-medium text-fg">{user.name}</span>
           <span className="block truncate">{user.email}</span>
         </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => void navigate({ to: "/perfil" })}>
+          <UserRound size={16} strokeWidth={1.75} aria-hidden="true" />
+          Meu perfil
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => void reloadData()}>
+          <RefreshCw size={16} strokeWidth={1.75} aria-hidden="true" />
+          Atualizar dados
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onLogout}>
           <LogOut size={16} strokeWidth={1.75} aria-hidden="true" />

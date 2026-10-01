@@ -39,6 +39,7 @@ import { CustomerContextBar } from "../components/customer-context-bar";
 import { CustomerFichaDialog } from "../components/customer-ficha";
 import { CustomerPicker, type PickedCustomer } from "../components/customer-picker";
 import { DiscardOrderDialog } from "../components/discard-order-dialog";
+import { DuplicateOrderButton } from "../components/duplicate-order-button";
 import { GroupDiscountDialog, MassDiscountDialog } from "../components/discount-dialogs";
 import { NO_PRICE_TEXT, PriceCell } from "../components/price-cell";
 import { INITIAL_PRODUCT_FILTERS, ProductBrowser, type ProductFilters } from "../components/product-browser";
@@ -50,7 +51,7 @@ import { orderEntryConfigurationQueryOptions, customerQueryOptions, orderQueryOp
 import { useApi } from "../lib/app-context";
 import { useLoadedDataset, requireDataset } from "../lib/dataset";
 import { describeApiError } from "../lib/error-message";
-import { orderReference, orderStatusLabels } from "../lib/labels";
+import { orderReference, orderReviewLabel, orderReviewReasons, orderStatusHints, orderStatusLabels } from "../lib/labels";
 import {
   describeIssue,
   discountProblemMessages,
@@ -495,6 +496,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
       <PageHeader
         title={order ? orderReference(order) : "Novo pedido"}
         badges={status ? <StatusBadge tone={status.tone}>{status.label}</StatusBadge> : undefined}
+        actions={order ? <DuplicateOrderButton order={order} disabled={dirty} /> : undefined}
       />
 
       {customer ? <CustomerContextBar customerCode={customer.code} customerName={customer.name} onOpenFicha={() => setFichaOpen(true)} /> : null}
@@ -505,9 +507,14 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
           A instalação ainda não está habilitada para pedidos. Você pode consultar, mas não salvar rascunhos.
         </Alert>
       ) : null}
+      {order?.review ? (
+        <Alert tone="warning" title={orderReviewLabel}>
+          {orderReviewReasons[order.review.customerBlock]} O envio ao ERP fica bloqueado até o cliente voltar a estar disponível; nada no rascunho foi alterado.
+        </Alert>
+      ) : null}
       {readOnly ? (
         <Alert tone="info" title="Somente leitura">
-          Este pedido está como “{status?.label}” e não pode mais ser editado.
+          Este pedido está como “{status?.label}” e não pode mais ser editado. {order ? orderStatusHints[order.status] : null}
         </Alert>
       ) : null}
       {save.isError ? <FailureAlert failure={describeSaveFailure(save.error)} onReload={order ? reload : undefined} /> : null}
@@ -910,8 +917,8 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
               variant="secondary"
               leftIcon={<Send size={14} aria-hidden="true" />}
               loading={submit.isPending}
-              disabled={dirty}
-              title={dirty ? "Salve o rascunho antes de enviar" : undefined}
+              disabled={dirty || order.review !== null}
+              title={order.review ? "Rascunho requer revisão: o cliente não pode receber pedidos" : dirty ? "Salve o rascunho antes de enviar" : undefined}
               onClick={() => {
                 setSubmitMessage(null);
                 submit.mutate();
