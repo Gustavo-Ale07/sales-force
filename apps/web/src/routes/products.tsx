@@ -33,6 +33,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { CustomerPicker } from "../components/customer-picker";
 import { PriceCell } from "../components/price-cell";
+import { ProductImage } from "../components/product-image";
 import { QueryError } from "../components/query-error";
 import {
   customerQueryOptions,
@@ -81,6 +82,7 @@ function ProductDetailPanel({ code, customerCode }: { code: number; customerCode
   const context = product.priceContext;
   return (
     <div className="flex flex-col gap-3">
+      <ProductImage image={product.image} description={product.description} name={titleCase(product.description)} variant="full" className="self-center" />
       <div className="flex flex-wrap items-center gap-1.5">
         <Badge tone={product.active ? "success" : "neutral"}>{product.active ? "Ativo" : "Inativo"}</Badge>
         <Badge tone={product.sellable ? "info" : "neutral"}>{product.sellable ? "Disponível para venda" : "Não vendável"}</Badge>
@@ -258,8 +260,13 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
                 <TableRow key={product.code} interactive onActivate={() => onSearchChange(compact({ ...params, product: product.code }))}>
                   <TableCell className="tabular-nums text-fg-muted">{product.code}</TableCell>
                   <TableCell wrap className="min-w-[12rem]">
-                    <span className="font-medium">{titleCase(product.description)}</span>
-                    {product.reference ? <span className="block text-fg-muted">Ref. {product.reference}</span> : null}
+                    <span className="flex items-center gap-2">
+                      <ProductImage image={product.image} description={product.description} name={titleCase(product.description)} />
+                      <span className="min-w-0">
+                        <span className="font-medium">{titleCase(product.description)}</span>
+                        {product.reference ? <span className="block text-fg-muted">Ref. {product.reference}</span> : null}
+                      </span>
+                    </span>
                   </TableCell>
                   <TableCell>{product.groupName ?? "—"}</TableCell>
                   <TableCell>{product.unit}</TableCell>
