@@ -242,26 +242,54 @@ describe('AuthService.loginExternal', () => {
     expect(tight.verifier.calls).toHaveLength(calls);
   });
 
-  it('logs in a user without a seller link, and the central scope rule then denies with no_seller_scope (never all)', async () => {
+  it.each([
+    ['the seller account has no seller link at all', { email: 'nobody@example.test', login: 'NOBODY', role: 'seller', directorySeller: null }, 'no_link'],
+    ['the directory reports a seller but the account has no link', { email: 'nolink@example.test', login: 'NOLINK', role: 'seller', directorySeller: 103 }, 'no_link'],
+    ['the directory seller code differs from the Force link', { email: 'mis@example.test', login: 'MIS', role: 'seller', sellerCode: 103, directorySeller: 999 }, 'mismatch'],
+    ['the directory seller code is invalid (0) for a linked seller', { email: 'inv@example.test', login: 'INV', role: 'seller', sellerCode: 103, directorySeller: 0 }, 'mismatch'],
+    ['a manager has no link but the directory reports a seller', { email: 'mgr@example.test', login: 'MGR', role: 'manager', directorySeller: 55 }, 'no_link'],
+  ] as const)('fails closed (403 link_reconciliation_required, no session, audited) when %s', async (_label, opts, reason) => {
     const ctx = await setup();
-    await provision(ctx, { email: 'nobody@example.test', login: 'NOBODY', role: 'seller', directorySeller: null });
-    const { user } = await ctx.service.loginExternal({ login: 'NOBODY', password: EXT_PASSWORD }, META);
-    expect(user.sellerCodes).toEqual([]);
-    const outcome = resolveCustomerScopeOutcome(toScopeActor(user), DEMO_CONFIGURATION);
-    expect(outcome).toEqual({ ok: false, reason: 'no_seller_scope' });
+    const acc = await provision(ctx, opts);
+    const err = await failure(ctx.service.loginExternal({ login: opts.login, password: EXT_PASSWORD }, META));
+    expect(err.code).toBe('link_reconciliation_required');
+    expect(err.status).toBe(403);
+    expect(await ctx.db.select().from(session)).toHaveLength(0);
+    const [row] = await audit(ctx, 'auth.login.link_mismatch');
+    expect(row?.actorAccountId).toBe(acc.id);
+    expect(row?.detail).toMatchObject({ reason });
+    // No PII and no seller codes in the audit row, the error or the logs.
+    const dump = JSON.stringify({ row, message: err.message, details: err.details, logs: ctx.capture.lines() });
+    for (const needle of [opts.email, 'Directory Name', '999']) expect(dump).not.toContain(needle);
+    expect(await audit(ctx, 'auth.login.success')).toHaveLength(0);
   });
 
-  it('never grants scope from the directory seller code: an invalid or conflicting code is ignored and flagged', async () => {
-    const ctx = await setup();
-    await provision(ctx, { email: 'inv@example.test', login: 'INV', role: 'seller', directorySeller: 0 });
+  it('does not count a link mismatch as a failed password (valid credentials never feed the lockout)', async () => {
+    const ctx = await setup({ maxFailures: 2 });
     await provision(ctx, { email: 'mis@example.test', login: 'MIS', role: 'seller', sellerCode: 103, directorySeller: 999 });
-    const inv = await ctx.service.loginExternal({ login: 'INV', password: EXT_PASSWORD }, META);
-    const mis = await ctx.service.loginExternal({ login: 'MIS', password: EXT_PASSWORD }, META);
-    expect(inv.user.sellerCodes).toEqual([]);
-    expect(mis.user.sellerCodes).toEqual([103]);
-    const details = (await audit(ctx, 'auth.login.success')).map((row) => row.detail as Record<string, unknown>);
-    expect(details.some((d) => d['sellerCodeInvalid'] === true)).toBe(true);
-    expect(details.some((d) => d['sellerCodeMismatch'] === true)).toBe(true);
+    for (let i = 0; i < 4; i += 1) {
+      expect((await failure(ctx.service.loginExternal({ login: 'MIS', password: EXT_PASSWORD }, META))).code).toBe('link_reconciliation_required');
+    }
+  });
+
+  it('admin and manager without a directory seller code log in without any seller link', async () => {
+    const ctx = await setup();
+    await provision(ctx, { email: 'mgr@example.test', login: 'MGR', role: 'manager', directorySeller: null });
+    await provision(ctx, { email: 'adm@example.test', login: 'ADM', role: 'admin', directorySeller: 0 });
+    for (const login of ['MGR', 'ADM']) {
+      const { user } = await ctx.service.loginExternal({ login, password: EXT_PASSWORD }, META);
+      expect(user.sellerCodes).toEqual([]);
+    }
+  });
+
+  it('a seller whose link equals the directory code logs in with that scope only (never from the directory)', async () => {
+    const ctx = await setup();
+    await provision(ctx, { email: 'ok@example.test', login: 'OK', role: 'seller', sellerCode: 103, directorySeller: 103 });
+    const { user } = await ctx.service.loginExternal({ login: 'OK', password: EXT_PASSWORD }, META);
+    expect(user.sellerCodes).toEqual([103]);
+    const identityStrategy = { ...DEMO_CONFIGURATION, customers: { ...DEMO_CONFIGURATION.customers, portfolioOwnership: { strategy: 'customer_seller_field' as const } } };
+    const outcome = resolveCustomerScopeOutcome(toScopeActor(user), identityStrategy);
+    expect(outcome).toEqual({ ok: true, scope: { kind: 'sellers', sellerCodes: [103] } });
   });
 
   it('never creates an account from an external identity', async () => {

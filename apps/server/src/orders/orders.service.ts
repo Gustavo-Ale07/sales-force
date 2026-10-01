@@ -11,8 +11,8 @@ import type {
 } from '@salesforce/contracts';
 import {
   canTransitionOrder,
+  customerOrderBlock,
   datasetOriginForConfigurationSource,
-  isValidSellerCode,
   isCustomerInScope,
   isOrderEditable,
   normalizeDecimalString,
@@ -24,7 +24,7 @@ import { AppError } from '../http/app-error.js';
 import { AUDIT_ACTIONS, AuditService, type AuditDetail } from '../iam/audit.service.js';
 import type { CurrentUser } from '../iam/current-user.js';
 import { PolicyService, type AccessContext } from '../iam/policy.service.js';
-import { MirrorRepository, type CustomerRow } from '../mirror/mirror.repository.js';
+import { isBlockedRaw, MirrorRepository, type CustomerRow, type CustomerStateRow } from '../mirror/mirror.repository.js';
 import { assertDatasetMatches } from '../platform/dataset-guard.js';
 import { uuidv7 } from '../platform/ids.js';
 import { CLOCK, DATASET_IDENTITY, type Clock } from '../platform/tokens.js';
@@ -67,9 +67,20 @@ export interface RepeatLastOrderResult {
  * UNDECIDED). Nothing is ever sent to the ERP: `submit` always ends in `erp_submission_disabled`
  * (SNK-4, SNK-6) and touches neither the outbox nor the gateway.
  */
-/** F4: a draft is always attributed to the customer's seller; without a valid one there is nobody to attribute it to. */
-function assertCustomerHasSeller(customer: { readonly sellerCode: number | null }): void {
-  if (!isValidSellerCode(customer.sellerCode)) throw new AppError('customer_without_seller');
+/**
+ * A draft is created or changed only for an eligible customer (domain `customerOrderBlock`): active, not
+ * blocked and with a valid seller (F4: nobody is chosen on the order, the customer's seller is the
+ * attribution). Inactive/blocked -> 409 `customer_ineligible`; no valid seller -> 409 `customer_without_seller`.
+ */
+function assertCustomerEligible(customer: CustomerRow): void {
+  const block = customerOrderBlock({
+    active: customer.active,
+    blocked: isBlockedRaw(customer.blockedRaw),
+    sellerCode: customer.sellerCode,
+  });
+  if (block === null) return;
+  if (block === 'customer_without_seller') throw new AppError('customer_without_seller');
+  throw new AppError('customer_ineligible', { details: { reason: block } });
 }
 
 /**
@@ -153,7 +164,7 @@ export class OrdersService {
     if (existing !== null) return { order: await this.replayOf(existing, user, fingerprint, context.scope), replayed: true };
 
     const customer = await this.customers.requireVisible(context.scope, body.customerCode);
-    assertCustomerHasSeller(customer);
+    assertCustomerEligible(customer);
     const draft = await this.buildValid(context, customer, body);
     const at = this.clock();
 
@@ -218,7 +229,7 @@ export class OrdersService {
     assertDatasetMatches(this.dataset, body.expectedDataset);
     const context = await this.policy.accessContext(user);
     const customer = await this.customers.requireVisible(context.scope, customerCode);
-    assertCustomerHasSeller(customer);
+    assertCustomerEligible(customer);
 
     // Idempotency comes first, before any resolution of "the latest order" or reclassification of its
     // lines: both depend on mutable state (order history, catalog, prices), so a legitimate retry of
@@ -317,7 +328,7 @@ export class OrdersService {
     assertOriginMatchesConfiguration(current.datasetOrigin, context.configuration.source.kind);
 
     const customer = await this.customers.requireVisible(context.scope, body.customerCode);
-    assertCustomerHasSeller(customer);
+    assertCustomerEligible(customer);
     const draft = await this.buildValid(context, customer, body);
     const at = this.clock();
 
@@ -389,6 +400,18 @@ export class OrdersService {
   async submit(user: CurrentUser, id: string): Promise<never> {
     const { scope } = await this.policy.accessContext(user);
     const order = await this.loadVisible(scope, id);
+    // The server revalidates the customer NOW, not at draft time: a draft whose customer became ineligible
+    // is refused and flagged (needs_review), never sent and never silently altered.
+    const [state] = [...(await this.mirror.customerStates([order.customerCode])).values()];
+    const block = customerOrderBlock(state === undefined || !state.live ? null : this.eligibilityOf(state));
+    if (block !== null) {
+      await this.audit.record({
+        action: AUDIT_ACTIONS.orderSubmitCustomerIneligible,
+        actorAccountId: user.accountId,
+        detail: { ...this.auditDetail(order, 0), reason: block },
+      });
+      throw new AppError('customer_ineligible', { details: { reason: block } });
+    }
     await this.audit.record({
       action: AUDIT_ACTIONS.orderSubmitAttempted,
       actorAccountId: user.accountId,
@@ -445,12 +468,23 @@ export class OrdersService {
     return outcome;
   }
 
+  private eligibilityOf(state: CustomerStateRow): { active: boolean; blocked: boolean; sellerCode: number | null } {
+    return { active: state.active, blocked: isBlockedRaw(state.blockedRaw), sellerCode: state.sellerCode };
+  }
+
   private async detailOf(order: OrderRow): Promise<OrderDetail> {
-    const [items, names] = await Promise.all([
+    const [items, states] = await Promise.all([
       this.orders.itemsOf(order.id),
-      this.mirror.customerNames([order.customerCode]),
+      this.mirror.customerStates([order.customerCode]),
     ]);
-    return toOrderDetail(order, items, names.get(order.customerCode) ?? null);
+    const state = states.get(order.customerCode);
+    return toOrderDetail(order, items, {
+      customerName: state?.name ?? null,
+      customerActive: state?.active ?? null,
+      customerBlockedRaw: state?.blockedRaw ?? null,
+      customerSellerCode: state?.sellerCode ?? null,
+      customerLive: state?.live ?? null,
+    });
   }
 
   /** Identifiers and counts only: no notes, no free text. */

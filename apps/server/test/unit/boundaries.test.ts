@@ -22,7 +22,7 @@ const posix = (path: string) => relative(serverRoot, path).split(sep).join('/');
 
 describe('process boundaries (STACK-2, STACK-3)', () => {
   it('reads Sankhya settings and builds the gateway only in worker code (and the dev seed)', () => {
-    const allowed = ['src/config/worker-env.ts', 'src/config/api-env.ts', 'src/seed.ts'];
+    const allowed = ['src/config/worker-env.ts', 'src/config/api-env.ts', 'src/seed.ts', 'src/config/seed-env.ts'];
     const offenders = srcFiles
       .filter((file) => /SANKHYA_|SF_CONFIG_FILE|createGateway/.test(readFileSync(file, 'utf8')))
       .map(posix)

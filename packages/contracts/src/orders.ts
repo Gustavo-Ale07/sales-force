@@ -15,12 +15,38 @@ import {
   querySearch,
 } from './primitives.js';
 
-/** Only `draft` and `cancelled` are reachable today; the rest exist for the persistence layer. */
+/**
+ * Only `draft` and `cancelled` are reachable today; the rest exist for the persistence layer and are
+ * ERP-delivery states that no code path produces while ERP submission is disabled (SNK-4, SNK-6):
+ * `queued` = awaiting ERP, `sent` = the ERP accepted it (synced with the ERP), `rejected`, `unknown`.
+ * "Confirmed by the ERP" and "invoiced" have NO status here: nothing mirrors them yet, so they must
+ * never be shown. `status` is also never `needs_review`: review is the derived `review` field.
+ */
 export const OrderStatusSchema = named(
   'OrderStatus',
   z.enum(['draft', 'cancelled', 'queued', 'sent', 'rejected', 'unknown']),
 );
 export type OrderStatus = z.infer<typeof OrderStatusSchema>;
+
+/**
+ * A draft that can no longer be sent as it stands. Derived by the server on every read from the CURRENT
+ * customer data (never persisted, never a silent change of the draft or of `status`): `needs_review`
+ * with `reason: customer_ineligible`; `customerBlock` says why the customer is ineligible.
+ */
+export const OrderReviewSchema = named(
+  'OrderReview',
+  z.object({
+    status: z.literal('needs_review'),
+    reason: z.literal('customer_ineligible'),
+    customerBlock: z.enum([
+      'customer_unavailable',
+      'customer_inactive',
+      'customer_blocked',
+      'customer_without_seller',
+    ]),
+  }),
+);
+export type OrderReview = z.infer<typeof OrderReviewSchema>;
 
 /** Stable codes of the domain draft invariants, reported in `ApiError.details.issues[].code`. */
 export const DraftIssueCodeSchema = named(
@@ -105,6 +131,8 @@ export const OrderListItemSchema = named(
     isPartial: z.boolean(),
     /** ERP order number once the order exists there; always `null` while submission is disabled. */
     erpNumber: z.number().int().nullable(),
+    /** `null` unless the draft needs review (its customer became ineligible). Clients show it and block sending. */
+    review: OrderReviewSchema.nullable(),
     version: z.number().int().min(1),
     createdAt: IsoTimestampSchema,
     updatedAt: IsoTimestampSchema,

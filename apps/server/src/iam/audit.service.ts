@@ -18,6 +18,8 @@ export const AUDIT_ACTIONS = {
   accountSellerLinked: 'account.seller_linked',
   /** A scoped request was refused because the account has no valid seller link (ids only, no PII). */
   noSellerScope: 'authz.no_seller_scope',
+  /** External login refused: the directory seller does not agree with the account link (no codes, no PII). */
+  loginLinkMismatch: 'auth.login.link_mismatch',
   orderCreated: 'order.created',
   orderReplaced: 'order.replaced',
   orderDiscarded: 'order.discarded',
@@ -30,6 +32,8 @@ export const AUDIT_ACTIONS = {
   orderRepeatedFromLast: 'order.repeated_from_last',
   /** An ERP submission was requested; it is refused while submission is disabled (SNK-4/SNK-6). */
   orderSubmitAttempted: 'order.submit_attempted',
+  /** A draft was refused on submission because its customer is no longer eligible (ids and reason only). */
+  orderSubmitCustomerIneligible: 'order.submit_customer_ineligible',
 } as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
 

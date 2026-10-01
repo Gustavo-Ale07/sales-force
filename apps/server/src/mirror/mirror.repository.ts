@@ -48,6 +48,16 @@ export interface CustomerRow {
   readonly syncedAt: Date;
 }
 
+export interface CustomerStateRow {
+  readonly code: number;
+  readonly name: string;
+  readonly active: boolean;
+  readonly blockedRaw: string | null;
+  readonly sellerCode: number | null;
+  /** Not deleted and flagged as a customer. */
+  readonly live: boolean;
+}
+
 export type CustomerStatusFilter = 'active' | 'inactive' | 'blocked';
 
 export interface CustomerListFilter {
@@ -235,6 +245,28 @@ export class MirrorRepository {
       .from(erpCustomer)
       .where(inArray(erpCustomer.code, usable));
     return new Map(rows.map((row) => [row.code, row.name]));
+  }
+
+  /**
+   * Current eligibility-relevant state of customers by code, WITHOUT a scope: only for orders the caller
+   * already selected through the scope (order read model, submission revalidation). A code with no row
+   * is absent from the map (= unavailable). Never exposes more than name, status flags and seller code.
+   */
+  async customerStates(codes: readonly number[]): Promise<Map<number, CustomerStateRow>> {
+    const usable = [...new Set(codes.filter(fitsPgInt))];
+    if (usable.length === 0) return new Map();
+    const rows = await this.db
+      .select({
+        code: erpCustomer.code,
+        name: erpCustomer.name,
+        active: erpCustomer.active,
+        blockedRaw: erpCustomer.blockedRaw,
+        sellerCode: erpCustomer.sellerCode,
+        live: sql<boolean>`(${erpCustomer.deletedAt} is null and ${erpCustomer.isCustomer})`,
+      })
+      .from(erpCustomer)
+      .where(inArray(erpCustomer.code, usable));
+    return new Map(rows.map((row) => [row.code, row]));
   }
 
   async countCustomers(scope: CustomerScope): Promise<CustomerCounts> {

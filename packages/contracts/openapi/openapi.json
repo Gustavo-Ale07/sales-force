@@ -3263,6 +3263,8 @@
           "dataset_mismatch",
           "no_seller_scope",
           "customer_without_seller",
+          "customer_ineligible",
+          "link_reconciliation_required",
           "rate_limited",
           "service_unavailable",
           "internal_error"
@@ -3797,6 +3799,16 @@
               }
             ]
           },
+          "review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrderReview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "version": {
             "type": "integer",
             "minimum": 1
@@ -3845,6 +3857,7 @@
           "itemCount",
           "isPartial",
           "erpNumber",
+          "review",
           "version",
           "createdAt",
           "updatedAt",
@@ -4171,6 +4184,16 @@
               }
             ]
           },
+          "review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrderReview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "version": {
             "type": "integer",
             "minimum": 1
@@ -4194,6 +4217,7 @@
           "itemPreview",
           "isPartial",
           "erpNumber",
+          "review",
           "version",
           "createdAt",
           "updatedAt"
@@ -4206,6 +4230,34 @@
           "any",
           "all"
         ]
+      },
+      "OrderReview": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "needs_review"
+          },
+          "reason": {
+            "type": "string",
+            "const": "customer_ineligible"
+          },
+          "customerBlock": {
+            "type": "string",
+            "enum": [
+              "customer_unavailable",
+              "customer_inactive",
+              "customer_blocked",
+              "customer_without_seller"
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "reason",
+          "customerBlock"
+        ],
+        "additionalProperties": false
       },
       "OrderSort": {
         "type": "string",

@@ -2,6 +2,7 @@ import { Secret } from '@salesforce/sankhya';
 import { describe, expect, it } from 'vitest';
 import { parseApiEnv } from '../../src/config/api-env.js';
 import { EnvValidationError, isLoopbackDatabaseUrl, withoutEmptyValues } from '../../src/config/env.js';
+import { parseSeedEnv } from '../../src/config/seed-env.js';
 import { loadWorkerConfig } from '../../src/config/worker-env.js';
 
 const DATABASE_URL = 'postgres://user:hunter2-not-a-real-password@127.0.0.1:5432/db';
@@ -260,5 +261,70 @@ describe('production boot defaults (F7)', () => {
   it('Worker: an empty SANKHYA_MODE counts as unset; development keeps the fake default', () => {
     expect(problemsOf(() => loadWorkerConfig({ ...WORKER_PROD, SANKHYA_MODE: '  ' })).join('\n')).toMatch(/SANKHYA_MODE: is required/);
     expect(loadWorkerConfig({ DATABASE_URL, NODE_ENV: 'development' }).gatewayDescription.mode).toBe('fake');
+  });
+});
+
+describe('production/staging boot refusals, fail closed (revalidation)', () => {
+  const PROD = { DATABASE_URL, NODE_ENV: 'production', TRUST_PROXY: '1', ALLOWED_ORIGINS: 'https://app.example.com' } as const;
+  const DATASET = { SF_ERP_ENVIRONMENT: 'production', SF_DATASET_ID: 'plac-prod-1' } as const;
+
+  it('API: there is no way to boot production on dev auth, with or without the opt-in', () => {
+    for (const extra of [{}, { ALLOW_DEV_AUTH: '1' }, { AUTH_MODE: 'dev' }, { AUTH_MODE: 'dev', ALLOW_DEV_AUTH: '1' }]) {
+      const problems = problemsOf(() => parseApiEnv({ ...PROD, ...DATASET, ...extra }));
+      expect(problems.some((problem) => problem.startsWith('AUTH_MODE: the dev mode is refused'))).toBe(true);
+    }
+  });
+
+  it('API: an unknown auth mode (e.g. a bypass) is refused, never defaulted open', () => {
+    for (const mode of ['none', 'off', 'DEV', 'disabled']) {
+      expect(problemsOf(() => parseApiEnv({ ...PROD, ...DATASET, AUTH_MODE: mode })).some((problem) => problem.startsWith('AUTH_MODE:'))).toBe(true);
+    }
+  });
+
+  it('API: the dataset identity is required in production even when everything else is valid', () => {
+    for (const partial of [{}, { SF_ERP_ENVIRONMENT: 'production' }, { SF_DATASET_ID: 'plac-prod-1' }]) {
+      const problems = problemsOf(() => parseApiEnv({ ...PROD, ...partial }));
+      expect(problems.some((problem) => problem.startsWith('SF_'))).toBe(true);
+    }
+  });
+
+  it('Worker: the fake gateway is refused in production whatever the spelling, and only the exact opt-in value lifts it', () => {
+    for (const mode of ['fake', 'FAKE', 'Fake']) {
+      expect(problemsOf(() => loadWorkerConfig({ DATABASE_URL, NODE_ENV: 'production', SANKHYA_MODE: mode })).join('\n')).toMatch(/fake gateway is refused/);
+    }
+    for (const optIn of ['true', 'yes', '0', 'TRUE']) {
+      expect(
+        problemsOf(() => loadWorkerConfig({ DATABASE_URL, NODE_ENV: 'production', SANKHYA_MODE: 'fake', ALLOW_FAKE_GATEWAY: optIn })).join('\n'),
+      ).toMatch(/fake gateway is refused/);
+    }
+  });
+
+  it('Worker: an unknown gateway mode in production is refused, never replaced by the fake', () => {
+    expect(() => loadWorkerConfig({ DATABASE_URL, NODE_ENV: 'production', SANKHYA_MODE: 'sandbox-ish' })).toThrow(EnvValidationError);
+  });
+});
+
+describe('development seed environment (no seed dependency in production)', () => {
+  const SEED_PASSWORD = 'Sturdy-Test-Passphrase-42';
+  const base = { DATABASE_URL, SEED_DEV_PASSWORD: SEED_PASSWORD } as const;
+
+  it('refuses NODE_ENV=production, even against a loopback database', () => {
+    expect(problemsOf(() => parseSeedEnv({ ...base, NODE_ENV: 'production' })).join('\n')).toMatch(/refuses to run when NODE_ENV=production/);
+  });
+
+  it('refuses a missing NODE_ENV (no default) and a non-loopback database', () => {
+    expect(problemsOf(() => parseSeedEnv({ ...base })).join('\n')).toMatch(/NODE_ENV/);
+    expect(
+      problemsOf(() => parseSeedEnv({ ...base, NODE_ENV: 'development', DATABASE_URL: 'postgres://u:p@db.example.com:5432/x' })).join('\n'),
+    ).toMatch(/loopback/);
+  });
+
+  it('refuses a missing or weak password: there is no default seed password', () => {
+    expect(problemsOf(() => parseSeedEnv({ DATABASE_URL, NODE_ENV: 'development' })).join('\n')).toMatch(/SEED_DEV_PASSWORD/);
+    expect(problemsOf(() => parseSeedEnv({ ...base, NODE_ENV: 'development', SEED_DEV_PASSWORD: 'short' })).join('\n')).toMatch(/password policy/);
+  });
+
+  it('accepts development on a loopback database with a strong password', () => {
+    expect(parseSeedEnv({ ...base, NODE_ENV: 'development' }).NODE_ENV).toBe('development');
   });
 });

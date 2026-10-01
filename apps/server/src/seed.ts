@@ -1,14 +1,12 @@
 import { createDb } from '@salesforce/db';
 import { normalizeEmail } from '@salesforce/domain';
 import { BootstrapFileConfigurationSource, DEMO_ACCOUNTS, DEMO_CONFIGURATION } from '@salesforce/sankhya';
-import { z } from 'zod';
 import { createOperatorAccountService } from './cli/operator.js';
 import { operatorIdentity } from './cli/operator-identity.js';
-import { passwordHashFields, passwordHashParamsOf } from './config/auth-env.js';
+import { passwordHashParamsOf } from './config/auth-env.js';
 import { InstallationConfigurationRepository } from './configuration/configuration.repository.js';
 import { validateInstallationConfiguration } from './configuration/validate.js';
-import { databaseUrlField, isLoopbackDatabaseUrl, nodeEnvField, parseEnv } from './config/env.js';
-import { checkPasswordPolicy } from './iam/password-policy.js';
+import { parseSeedEnv } from './config/seed-env.js';
 import { runMain } from './process.js';
 
 /**
@@ -25,29 +23,8 @@ import { runMain } from './process.js';
  * password is not reset). Seller links come from the stored configuration (CFG-2), never from a
  * literal or from `TSIUSU.CODVEND`.
  */
-const SeedEnvSchema = z.object({
-  NODE_ENV: nodeEnvField,
-  DATABASE_URL: databaseUrlField,
-  SF_CONFIG_FILE: z.string().min(1).optional(),
-  SEED_DEV_PASSWORD: z.string({ error: 'is required: there is no default seed password (set it in your .env).' }),
-  ...passwordHashFields,
-});
-
 runMain('seed', async () => {
-  const env = parseEnv('seed', SeedEnvSchema, process.env, (parsed) => {
-    const problems: string[] = [];
-    if (parsed.NODE_ENV === 'production') {
-      problems.push('NODE_ENV: the development seed refuses to run when NODE_ENV=production.');
-    }
-    if (!isLoopbackDatabaseUrl(parsed.DATABASE_URL.reveal())) {
-      problems.push('DATABASE_URL: the development seed only runs against a loopback database (localhost, 127.x.x.x, ::1).');
-    }
-    const violations = checkPasswordPolicy(parsed.SEED_DEV_PASSWORD);
-    if (violations.length > 0) {
-      problems.push(`SEED_DEV_PASSWORD: does not satisfy the password policy (${violations.join(', ')}).`);
-    }
-    return problems;
-  });
+  const env = parseSeedEnv(process.env);
 
   const source =
     env.SF_CONFIG_FILE === undefined

@@ -36,9 +36,18 @@ export const BUSINESS_TIME_ZONE = 'America/Sao_Paulo';
 /** Lines shown as a glance in the list. */
 const ITEM_PREVIEW_SIZE = 3;
 
-export interface OrderListRow {
-  readonly order: OrderRow;
+/** Current mirror state of an order's customer; `null` columns (no join row) mean the customer is gone. */
+export interface OrderCustomerState {
   readonly customerName: string | null;
+  readonly customerActive: boolean | null;
+  readonly customerBlockedRaw: string | null;
+  readonly customerSellerCode: number | null;
+  /** True only for a live (not deleted) mirror row of a customer. */
+  readonly customerLive: boolean | null;
+}
+
+export interface OrderListRow extends OrderCustomerState {
+  readonly order: OrderRow;
   readonly itemCount: number;
   /** Descriptions of the first lines (matching lines first when filtered by product). */
   readonly itemPreview: readonly string[];
@@ -218,6 +227,10 @@ export class OrdersRepository {
         .select({
           order: salesOrder,
           customerName: erpCustomer.name,
+          customerActive: erpCustomer.active,
+          customerBlockedRaw: erpCustomer.blockedRaw,
+          customerSellerCode: erpCustomer.sellerCode,
+          customerLive: sql<boolean | null>`(${erpCustomer.code} is not null and ${erpCustomer.deletedAt} is null and ${erpCustomer.isCustomer})`,
           itemCount: sql<number>`(select count(*)::int from ${salesOrderItem} where ${salesOrderItem.orderId} = ${salesOrder.id})`,
           itemPreview: sql<string[]>`array(select ${salesOrderItem.productDescription} from ${salesOrderItem} where ${salesOrderItem.orderId} = ${salesOrder.id} order by ${previewFirst}${salesOrderItem.lineNo} limit ${sql.raw(String(ITEM_PREVIEW_SIZE))})`,
           unpricedCount: sql<number>`(select count(*)::int from ${salesOrderItem} where ${salesOrderItem.orderId} = ${salesOrder.id} and ${salesOrderItem.priceState} = 'none')`,

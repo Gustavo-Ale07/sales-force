@@ -30,7 +30,9 @@ export function isValidSellerCode(code: unknown): code is number {
  * allow-list: admin/manager see everything; a seller needs at least one VALID seller link (code >= 1)
  * from the source the strategy names, otherwise `no_seller_scope` (never 'all', whatever the
  * strategy, `all_visible` included); any other role is denied. Team trees are a later concern.
- * - `all_visible`: a linked seller (identity link or configuration link) sees every customer.
+ * Global scope comes ONLY from an explicit administrative/managerial role, never from a seller link.
+ * - `all_visible`: a seller's scope is the union of the identity links and the configuration links
+ *   (it no longer widens anyone: a seller never sees the whole portfolio).
  * - `customer_seller_field`: customers whose seller is one of `actor.linkedSellerCodes`.
  * - `explicit_account_links`: customers whose seller is one of the sellers the configuration links
  *   to the account e-mail (`customers.accountSellerLinks`).
@@ -56,7 +58,6 @@ export function resolveCustomerScopeOutcome(
     ),
   );
   if (codes.length === 0) return { ok: false, reason: 'no_seller_scope' };
-  if (strategy === 'all_visible') return { ok: true, scope: { kind: 'all' } };
   return { ok: true, scope: { kind: 'sellers', sellerCodes: codes } };
 }
 

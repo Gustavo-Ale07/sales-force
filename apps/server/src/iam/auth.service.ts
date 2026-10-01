@@ -319,12 +319,30 @@ export class AuthService implements OnModuleInit {
     if (found.status !== 'active') return this.failExternal('external_account_disabled', found.id, failCtx);
     if (!isChannelAllowed(found.role, 'web')) return this.failExternal('external_channel_not_permitted', found.id, failCtx);
 
-    // 4. Success. Scope comes only from the account's own seller link (never from the directory); the
-    // directory's code is checked and any disagreement is audited.
+    // 4. Link reconciliation, fail closed. Scope comes only from the account's own seller link (never
+    // from the directory), and the directory must agree with it: no session is opened on a disagreement
+    // (seller without a link, directory seller different from the link, or a seller code the directory
+    // reports for an account that has no such link). Seller accounts must be linked and agree exactly;
+    // admin/manager need no link but may not contradict one. Credentials were valid, so this is not
+    // counted as a failed login; it is audited (account id and reason only) and needs reconciliation.
     const sellerCodes = await this.accounts.sellerCodesOf(found.id);
     const directoryCode = identity.sellerCode;
-    const sellerCodeInvalid = directoryCode !== null && !isValidSellerCode(directoryCode);
-    const sellerCodeMismatch = isValidSellerCode(directoryCode) && !sellerCodes.includes(directoryCode);
+    const linked = sellerCodes.filter(isValidSellerCode);
+    let linkProblem: 'no_link' | 'mismatch' | null = null;
+    if (found.role === 'seller') {
+      if (linked.length === 0) linkProblem = 'no_link';
+      else if (!isValidSellerCode(directoryCode) || !linked.includes(directoryCode)) linkProblem = 'mismatch';
+    } else if (isValidSellerCode(directoryCode) && !linked.includes(directoryCode)) {
+      linkProblem = linked.length === 0 ? 'no_link' : 'mismatch';
+    }
+    if (linkProblem !== null) {
+      await this.audit.record({
+        action: AUDIT_ACTIONS.loginLinkMismatch,
+        actorAccountId: found.id,
+        detail: { ...auditMeta, reason: linkProblem, method: 'external' },
+      });
+      throw new AppError('link_reconciliation_required');
+    }
 
     await this.throttle.clear(loginKey);
     const token = generateSessionToken();
@@ -338,8 +356,6 @@ export class AuthService implements OnModuleInit {
         ...auditMeta,
         sessionId,
         method: 'external',
-        ...(sellerCodeInvalid ? { sellerCodeInvalid: true } : {}),
-        ...(sellerCodeMismatch ? { sellerCodeMismatch: true } : {}),
       },
     });
     await this.maybePurge(now);

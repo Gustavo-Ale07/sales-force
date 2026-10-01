@@ -174,6 +174,7 @@ Rules:
 - Controllers are thin; business rules live in `packages/domain`; orchestration lives in application services.
 - Each module's schema lives in its own file group in `packages/db`.
 - Cross-module reporting (Phase 2 dashboards) reads through read-only SQL views owned by a reporting module.
+- Seller scope (design note, not implemented): global scope comes only from the admin/manager role, never from a seller link; an operational seller always acts with their own link(s). A manager acting for a seller would be an explicit, audited choice by an authorized manager or admin; a seller never chooses another seller. No impersonation exists in Phase 0.
 
 ### 5.3 Jobs — APPROVED (STACK-6); connection details NEEDS VALIDATION (V-16)
 

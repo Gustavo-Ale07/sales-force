@@ -31,9 +31,21 @@ const admin: ScopeActor = { role: 'admin', accountEmail: 'adm@example.test', lin
 describe('customer scope by portfolioOwnership strategy', () => {
   describe('all_visible', () => {
     const config = configWith('all_visible');
-    it.each([seller([900]), manager, admin])('$role sees everyone', (actor) => {
+    it.each([manager, admin])('$role (administrative/managerial) sees everyone', (actor) => {
       expect(resolveCustomerScope(actor, config)).toEqual({ kind: 'all' });
       expect(canActorSeeCustomer(actor, makeCustomer({ sellerCode: null }), config)).toBe(true);
+    });
+    it('a linked operational seller is NEVER global: scope comes from the link only', () => {
+      const actor = seller([900]);
+      expect(resolveCustomerScope(actor, config)).toEqual({ kind: 'sellers', sellerCodes: [900] });
+      expect(canActorSeeCustomer(actor, makeCustomer({ sellerCode: 900 }), config)).toBe(true);
+      expect(canActorSeeCustomer(actor, makeCustomer({ sellerCode: 901 }), config)).toBe(false);
+      expect(canActorSeeCustomer(actor, makeCustomer({ sellerCode: null }), config)).toBe(false);
+      expect(canActorSeeCustomer(actor, makeCustomer({ sellerCode: 0 }), config)).toBe(false);
+    });
+    it('a seller linked through configuration only is still a seller scope', () => {
+      const withLink = configWith('all_visible', [{ accountEmail: 'vend@example.test', sellerCode: 905 }]);
+      expect(resolveCustomerScope(seller([]), withLink)).toEqual({ kind: 'sellers', sellerCodes: [905] });
     });
     it('never widens a seller without a valid seller link (F1)', () => {
       for (const actor of [seller([]), seller([0]), seller([-3, 1.5])]) {
@@ -135,6 +147,29 @@ describe('customer scope by portfolioOwnership strategy', () => {
       const scope = { kind: 'sellers', sellerCodes: [0] } as const;
       expect(isCustomerInScope({ sellerCode: 0 }, scope)).toBe(false);
       expect(isCustomerInScope({ sellerCode: null }, scope)).toBe(false);
+    });
+  });
+
+  describe('profile x strategy matrix: only admin/manager are global, whatever the strategy', () => {
+    const strategies = ['all_visible', 'customer_seller_field', 'explicit_account_links'] as const;
+    const linkCfg = [{ accountEmail: 'vend@example.test', sellerCode: 900 }];
+    const roles = ['seller', 'manager', 'admin'] as const;
+    it.each(strategies.flatMap((s) => roles.map((r) => [s, r] as const)))('%s / %s', (strategy, role) => {
+      const config = configWith(strategy, linkCfg);
+      const actor: ScopeActor = { role, accountEmail: 'vend@example.test', linkedSellerCodes: [900] };
+      const outcome = resolveCustomerScopeOutcome(actor, config);
+      if (role === 'seller') {
+        expect(outcome).toEqual({ ok: true, scope: { kind: 'sellers', sellerCodes: [900] } });
+        expect(canActorSeeCustomer(actor, makeCustomer({ sellerCode: 901 }), config)).toBe(false);
+      } else {
+        expect(outcome).toEqual({ ok: true, scope: { kind: 'all' } });
+      }
+    });
+    it.each(strategies)('a seller with only the seller code 0 / null customers never gets a global portfolio (%s)', (strategy) => {
+      const config = configWith(strategy, linkCfg);
+      const actor = seller([900]);
+      expect(canActorSeeCustomer(actor, makeCustomer({ sellerCode: 0 }), config)).toBe(false);
+      expect(canActorSeeCustomer(actor, makeCustomer({ sellerCode: null }), config)).toBe(false);
     });
   });
 

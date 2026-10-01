@@ -20,6 +20,10 @@ export const DEFAULT_ERROR_MESSAGES: Readonly<Record<ErrorCode, string>> = {
     'Sua conta ainda não está vinculada a um vendedor. Peça ao administrador para vincular um código de vendedor.',
   customer_without_seller:
     'Este cliente não tem vendedor definido e não pode receber pedidos. Peça ao administrador para ajustar o cadastro no ERP.',
+  customer_ineligible:
+    'Este cliente está inativo ou bloqueado e não pode receber pedidos. Confira o cadastro no ERP antes de continuar.',
+  link_reconciliation_required:
+    'Não foi possível concluir o acesso: o vínculo da sua conta com o vendedor precisa ser conferido. Peça ao administrador para reconciliar o vínculo.',
   rate_limited: 'Muitas tentativas. Aguarde um momento e tente novamente.',
   service_unavailable: 'Serviço temporariamente indisponível. Tente novamente em instantes.',
   internal_error: 'Erro interno. Informe o código da requisição ao suporte.',

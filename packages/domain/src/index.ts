@@ -5,6 +5,7 @@ export * from './status.js';
 export * from './configuration.js';
 export * from './pricing.js';
 export * from './scope.js';
+export * from './customer-eligibility.js';
 export * from './ordering.js';
 export * from './templates.js';
 export * from './erp-eligibility.js';

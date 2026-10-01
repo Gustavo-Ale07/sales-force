@@ -219,6 +219,16 @@ describe('order requests', () => {
     expect(ApiErrorSchema.safeParse({ code: 'customer_without_seller', message: 'x' }).success).toBe(true);
   });
 
+  it('serves customer_ineligible as a 409 error code', () => {
+    expect(ERROR_HTTP_STATUS.customer_ineligible).toBe(409);
+    expect(ApiErrorSchema.safeParse({ code: 'customer_ineligible', message: 'x', details: { reason: 'customer_inactive' } }).success).toBe(true);
+  });
+
+  it('serves link_reconciliation_required as 403', () => {
+    expect(ERROR_HTTP_STATUS.link_reconciliation_required).toBe(403);
+    expect(ApiErrorSchema.safeParse({ code: 'link_reconciliation_required', message: 'x' }).success).toBe(true);
+  });
+
   it('rejects client-sent prices and totals on lines and on the order (unrecognized keys)', () => {
     for (const key of ['unitPrice', 'unitListPrice', 'price', 'estimatedLineTotal', 'total']) {
       expect(
@@ -281,6 +291,7 @@ describe('order requests', () => {
       itemCount: 2,
       isPartial: true,
       erpNumber: null,
+      review: null,
       version: 1,
       createdAt: TS,
       updatedAt: TS,
@@ -319,6 +330,14 @@ describe('order requests', () => {
     expect(OrderDetailSchema.parse(detail)).toEqual(detail);
     expect(OrderDetailSchema.safeParse({ ...detail, status: 'shipped' }).success).toBe(false);
     expect(OrderDetailSchema.safeParse({ ...detail, estimatedTotal: 25 }).success).toBe(false);
+    // A draft whose customer became ineligible is flagged for review (derived; never a silent status change).
+    const flagged = {
+      ...detail,
+      review: { status: 'needs_review', reason: 'customer_ineligible', customerBlock: 'customer_blocked' },
+    };
+    expect(OrderDetailSchema.parse(flagged)).toEqual(flagged);
+    expect(OrderDetailSchema.safeParse({ ...flagged, review: { ...flagged.review, reason: 'other' } }).success).toBe(false);
+    expect(OrderDetailSchema.safeParse({ ...detail, review: undefined }).success).toBe(false);
   });
 });
 
