@@ -1,5 +1,5 @@
-import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
-import { normalizeEmail } from '@salesforce/domain';
+import { Inject, Injectable, Optional, type OnModuleInit } from '@nestjs/common';
+import { isValidSellerCode, normalizeEmail } from '@salesforce/domain';
 import type { LoginResponse as AuthenticatedSession } from '@salesforce/contracts';
 import { AppError } from '../http/app-error.js';
 import { errorLogFields, type Logger } from '../observability/logger.js';
@@ -11,7 +11,14 @@ import { AUDIT_ACTIONS, AuditService } from './audit.service.js';
 import type { AuthConfig } from './auth-config.js';
 import type { CurrentUser } from './current-user.js';
 import { HashLimiter } from './hash-limiter.js';
-import { AUTH_CONFIG, PASSWORD_HASHER } from './iam-tokens.js';
+import {
+  CredentialSecret,
+  type ExternalAccountLinks,
+  type ExternalIdentity,
+  type ExternalIdentityVerifier,
+  type ExternalVerifyResult,
+} from './external-identity.js';
+import { AUTH_CONFIG, EXTERNAL_ACCOUNT_LINKS, EXTERNAL_IDENTITY_VERIFIER, PASSWORD_HASHER } from './iam-tokens.js';
 import type { PasswordHasher } from './password-hasher.js';
 import { isChannelAllowed, type Channel } from './policy.js';
 import { SessionRepository } from './session.repository.js';
@@ -19,6 +26,7 @@ import {
   constantTimeEqualHex,
   emailFingerprint,
   emailThrottleKey,
+  externalLoginThrottleKey,
   generateSessionToken,
   hashSessionToken,
   ipThrottleKey,
@@ -47,11 +55,29 @@ export interface ResolvedSession {
 }
 
 /** Why a login attempt failed. Recorded in the audit trail only; the client always sees the same error. */
-export type LoginFailureReason = 'unknown_account' | 'bad_password' | 'account_disabled' | 'channel_not_permitted';
+export type LoginFailureReason =
+  | 'unknown_account'
+  | 'bad_password'
+  | 'account_disabled'
+  | 'channel_not_permitted'
+  | 'external_invalid_credentials'
+  | 'external_unmapped'
+  | 'external_inactive'
+  | 'external_account_disabled'
+  | 'external_channel_not_permitted'
+  | 'external_unavailable'
+  | 'external_rate_limited';
 
 const PURGE_INTERVAL_MS = 10 * 60 * 1000;
 /** Installation-wide counter of failed password checks (`auth_throttle`); one row, fixed window. */
 const GLOBAL_FAILURES_KEY = 'global:login-failures';
+/** Same, for external-directory logins: kept apart so one flow cannot exhaust the other's budget. */
+const EXTERNAL_GLOBAL_FAILURES_KEY = 'global:external-login-failures';
+const EXTERNAL_LOGIN_MAX = 254;
+const EXTERNAL_PASSWORD_MAX = 1024;
+const EXTERNAL_RATE_LIMIT_RETRY_AFTER_SECONDS = 30;
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 const GLOBAL_WINDOW_MS = 60_000;
 /** A login refused because every Argon2id slot is busy is worth retrying almost at once. */
 const SATURATED_RETRY_AFTER_SECONDS = 1;
@@ -79,6 +105,8 @@ export class AuthService implements OnModuleInit {
   #lastPurgeAt = 0;
   readonly #hashSlots: HashLimiter;
   readonly #refusalSampler: AuditSampler;
+  /** Verifier calls in flight at once (bounds the load one flood can put on the directory). */
+  readonly #verifySlots: HashLimiter;
 
   constructor(
     @Inject(AUTH_CONFIG) private readonly config: AuthConfig,
@@ -89,8 +117,11 @@ export class AuthService implements OnModuleInit {
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(LOGGER) private readonly logger: Logger,
+    @Optional() @Inject(EXTERNAL_IDENTITY_VERIFIER) private readonly externalVerifier?: ExternalIdentityVerifier,
+    @Optional() @Inject(EXTERNAL_ACCOUNT_LINKS) private readonly externalLinks?: ExternalAccountLinks,
   ) {
     this.#hashSlots = new HashLimiter(config.login.maxConcurrentHashes);
+    this.#verifySlots = new HashLimiter(config.login.maxConcurrentHashes);
     this.#refusalSampler = new AuditSampler(config.login.blockedAuditWindowMs);
   }
 
@@ -189,6 +220,146 @@ export class AuthService implements OnModuleInit {
   }
 
   /**
+   * Login with the credentials of an EXTERNAL directory (the ERP user), verified through the
+   * `ExternalIdentityVerifier` port. Not wired to any route or to `AUTH_MODE`; refused (503) unless
+   * `config.externalLogin.enabled` and both ports are present, which no real runtime provides today.
+   *
+   * Order: input shape -> throttles (address, login hash, installation) -> verifier -> explicit
+   * account link -> account status/channel -> new opaque session. Throttles are checked BEFORE the
+   * verifier so a locked login never reaches the directory. A directory outage fails closed (503, no
+   * session): there is no local-hash fallback. Every credential-class failure ends in the same
+   * `invalid_credentials` after at least `minFailureMs`. Accounts are never created or promoted here,
+   * and the directory's seller code never grants scope (the account's own seller link does).
+   */
+  async loginExternal(
+    input: { login: string; password: string },
+    meta: RequestMeta,
+    signal?: AbortSignal,
+  ): Promise<LoginResult> {
+    const settings = this.config.externalLogin;
+    const verifier = this.externalVerifier;
+    const links = this.externalLinks;
+    if (settings?.enabled !== true || verifier === undefined || links === undefined) {
+      throw new AppError('service_unavailable');
+    }
+    const login = input.login.trim();
+    if (login === '' || login.length > EXTERNAL_LOGIN_MAX || input.password === '' || input.password.length > EXTERNAL_PASSWORD_MAX) {
+      throw new AppError('validation_failed');
+    }
+
+    const startedAt = Date.now();
+    const now = this.clock();
+    const normalized = login.toLowerCase();
+    const loginKey = externalLoginThrottleKey(normalized);
+    const ipKey = ipThrottleKey(meta.ip);
+    const auditMeta = { ip: meta.ip, userAgent: meta.userAgent?.slice(0, USER_AGENT_MAX) ?? null, requestId: meta.requestId };
+
+    // 1. Refusals before the verifier is called (it is a remote, rate-limited, shared dependency).
+    const [ipState, loginState, globalState] = await Promise.all([
+      this.throttle.find(ipKey),
+      this.throttle.find(loginKey),
+      this.throttle.find(EXTERNAL_GLOBAL_FAILURES_KEY),
+    ]);
+    const ipLock = activeLockUntil(ipState, now);
+    const loginLock = activeLockUntil(loginState, now);
+    if (ipLock !== null || loginLock !== null) {
+      const until = [ipLock, loginLock].filter((value): value is Date => value !== null).reduce((a, b) => (a > b ? a : b));
+      await this.refuse(ipLock !== null ? 'ip' : 'account', retryAfterSeconds(until, now), normalized, auditMeta, now);
+    }
+    if (
+      globalState !== null &&
+      now.getTime() - globalState.windowStartedAt.getTime() < GLOBAL_WINDOW_MS &&
+      globalState.failures >= this.config.login.globalMaxFailuresPerMinute
+    ) {
+      const windowEnd = new Date(globalState.windowStartedAt.getTime() + GLOBAL_WINDOW_MS);
+      await this.refuse('global', retryAfterSeconds(windowEnd, now), normalized, auditMeta, now);
+    }
+    const releaseSlot = this.#verifySlots.tryAcquire();
+    if (releaseSlot === null) {
+      await this.refuse('saturated', SATURATED_RETRY_AFTER_SECONDS, normalized, auditMeta, now);
+    }
+
+    // 2. Verify. The password lives in an opaque holder from here on; any verifier error is an outage.
+    const timeout = AbortSignal.timeout(settings.verifyTimeoutMs);
+    const effective = signal === undefined ? timeout : AbortSignal.any([signal, timeout]);
+    let result: ExternalVerifyResult;
+    try {
+      result = await verifier.verify({ login, password: new CredentialSecret(input.password) }, effective);
+    } catch (error) {
+      this.logger.warn({ ...errorLogFields(error) }, 'external identity verification failed; refusing the login (fail closed)');
+      result = { fail: 'unavailable' };
+    } finally {
+      releaseSlot?.();
+    }
+
+    if ('fail' in result) {
+      if (result.fail === 'unavailable') {
+        await this.recordExternalNotice('external_unavailable', normalized, auditMeta, now);
+        throw new AppError('service_unavailable');
+      }
+      if (result.fail === 'rate_limited') {
+        await this.recordExternalNotice('external_rate_limited', normalized, auditMeta, now);
+        throw new AppError('rate_limited', { retryAfterSeconds: EXTERNAL_RATE_LIMIT_RETRY_AFTER_SECONDS });
+      }
+      return this.failExternal(result.fail === 'unmapped' ? 'external_unmapped' : 'external_invalid_credentials', null, {
+        normalized, loginKey, ipKey, now, auditMeta, startedAt, minFailureMs: settings.minFailureMs,
+      });
+    }
+
+    // 3. Directory user -> existing Force account, by explicit link only.
+    const identity: ExternalIdentity = result.ok;
+    const failCtx = { normalized, loginKey, ipKey, now, auditMeta, startedAt, minFailureMs: settings.minFailureMs };
+    if (identity.active !== true) return this.failExternal('external_inactive', null, failCtx);
+    if (typeof identity.externalUserId !== 'string' || identity.externalUserId === '') {
+      return this.failExternal('external_unmapped', null, failCtx);
+    }
+    const accountId = await links.findAccountId(identity.externalUserId);
+    const found = accountId === null ? null : await this.accounts.findById(accountId);
+    if (found === null) return this.failExternal('external_unmapped', null, failCtx);
+    if (found.status !== 'active') return this.failExternal('external_account_disabled', found.id, failCtx);
+    if (!isChannelAllowed(found.role, 'web')) return this.failExternal('external_channel_not_permitted', found.id, failCtx);
+
+    // 4. Success. Scope comes only from the account's own seller link (never from the directory); the
+    // directory's code is checked and any disagreement is audited.
+    const sellerCodes = await this.accounts.sellerCodesOf(found.id);
+    const directoryCode = identity.sellerCode;
+    const sellerCodeInvalid = directoryCode !== null && !isValidSellerCode(directoryCode);
+    const sellerCodeMismatch = isValidSellerCode(directoryCode) && !sellerCodes.includes(directoryCode);
+
+    await this.throttle.clear(loginKey);
+    const token = generateSessionToken();
+    const sessionId = uuidv7(now.getTime());
+    const expiresAt = new Date(now.getTime() + Math.min(this.config.sessionIdleMs, this.config.sessionAbsoluteMs));
+    await this.sessions.create({ id: sessionId, accountId: found.id, tokenHash: hashSessionToken(token), createdAt: now, expiresAt });
+    await this.audit.record({
+      action: AUDIT_ACTIONS.loginSuccess,
+      actorAccountId: found.id,
+      detail: {
+        ...auditMeta,
+        sessionId,
+        method: 'external',
+        ...(sellerCodeInvalid ? { sellerCodeInvalid: true } : {}),
+        ...(sellerCodeMismatch ? { sellerCodeMismatch: true } : {}),
+      },
+    });
+    await this.maybePurge(now);
+
+    return {
+      token,
+      user: {
+        accountId: found.id,
+        email: found.email,
+        displayName: found.displayName,
+        role: found.role,
+        sellerCodes,
+        sessionId,
+        sessionExpiresAt: expiresAt,
+        channel: 'web',
+      },
+    };
+  }
+
+  /**
    * Resolves the session behind a cookie value, or `null`. Checked on every request: token known,
    * not revoked, not expired (idle or absolute), account active. Slides the expiry (rewritten at
    * most once per `sessionTouchIntervalMs`). The channel rule is the policy's job (`authorizeRoute`).
@@ -266,6 +437,58 @@ export class AuthService implements OnModuleInit {
     };
   }
 
+  /** A credential-class external failure: counted, audited, padded to the minimum duration, uniform error. */
+  private async failExternal(
+    reason: LoginFailureReason,
+    accountId: string | null,
+    ctx: {
+      normalized: string;
+      loginKey: string;
+      ipKey: string;
+      now: Date;
+      auditMeta: { ip: string; userAgent: string | null; requestId: string };
+      startedAt: number;
+      minFailureMs: number;
+    },
+  ): Promise<never> {
+    await this.recordFailure({
+      reason,
+      accountId,
+      email: ctx.normalized,
+      emailKey: ctx.loginKey,
+      ipKey: ctx.ipKey,
+      now: ctx.now,
+      auditMeta: ctx.auditMeta,
+      globalKey: EXTERNAL_GLOBAL_FAILURES_KEY,
+    });
+    const remaining = ctx.minFailureMs - (Date.now() - ctx.startedAt);
+    if (remaining > 0) await sleep(remaining);
+    throw new AppError('invalid_credentials');
+  }
+
+  /**
+   * An outage or an upstream rate limit is not a credential failure: no counter moves (so an outage
+   * cannot lock users out), and the audit row is sampled like refused attempts.
+   */
+  private async recordExternalNotice(
+    reason: 'external_unavailable' | 'external_rate_limited',
+    normalized: string,
+    auditMeta: { ip: string; userAgent: string | null; requestId: string },
+    now: Date,
+  ): Promise<void> {
+    const sample = this.#refusalSampler.observe(reason, now);
+    if (!sample.record) return;
+    try {
+      await this.audit.record({
+        action: AUDIT_ACTIONS.loginFailure,
+        actorAccountId: null,
+        detail: { ...auditMeta, reason, emailFingerprint: emailFingerprint(normalized), attemptsInWindow: sample.count },
+      });
+    } catch (error) {
+      this.logger.warn({ ...errorLogFields(error), reason }, 'could not record an external login notice');
+    }
+  }
+
   private async recordFailure(input: {
     reason: LoginFailureReason;
     accountId: string | null;
@@ -274,10 +497,11 @@ export class AuthService implements OnModuleInit {
     ipKey: string;
     now: Date;
     auditMeta: { ip: string; userAgent: string | null; requestId: string };
+    globalKey?: string;
   }): Promise<void> {
     const account = await this.throttle.recordFailure(input.emailKey, input.now, this.config.throttle.account);
     const ip = await this.throttle.recordFailure(input.ipKey, input.now, this.config.throttle.ip);
-    await this.throttle.bumpWindow(GLOBAL_FAILURES_KEY, input.now, GLOBAL_WINDOW_MS);
+    await this.throttle.bumpWindow(input.globalKey ?? GLOBAL_FAILURES_KEY, input.now, GLOBAL_WINDOW_MS);
 
     await this.audit.record({
       action: AUDIT_ACTIONS.loginFailure,

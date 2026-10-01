@@ -37,6 +37,11 @@ export function ipThrottleKey(address: string): string {
   return `ip:${throttleAddress(address)}`;
 }
 
+/** Throttle key of an external login name: hashed and namespaced apart from e-mail keys. */
+export function externalLoginThrottleKey(normalizedLogin: string): string {
+  return `extlogin:${createHash('sha256').update(normalizedLogin, 'utf8').digest('hex')}`;
+}
+
 export function emailFingerprint(normalizedEmail: string): string {
   return createHash('sha256').update(normalizedEmail, 'utf8').digest('hex').slice(0, 16);
 }

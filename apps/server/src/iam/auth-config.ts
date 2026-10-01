@@ -31,6 +31,20 @@ export interface AuthConfig {
   };
   /** Denial-of-service limits of the login endpoint (independent of the per-key lockouts above). */
   readonly login: LoginLimits;
+  /**
+   * External (ERP directory) login. UNDEFINED everywhere today: `authConfigFromEnv` never enables it,
+   * so it is refused in every real runtime, production included. Enabling needs an owner decision
+   * (STACK-2 exception) and a real verifier; tests enable it explicitly.
+   */
+  readonly externalLogin?: ExternalLoginConfig;
+}
+
+export interface ExternalLoginConfig {
+  readonly enabled: boolean;
+  /** Upper bound of one verification (the caller's signal can only shorten it). */
+  readonly verifyTimeoutMs: number;
+  /** Failed external logins answer no sooner than this, so timing does not tell the failure causes apart. */
+  readonly minFailureMs: number;
 }
 
 export interface LoginLimits {
