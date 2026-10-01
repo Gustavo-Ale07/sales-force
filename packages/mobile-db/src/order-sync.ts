@@ -10,7 +10,7 @@ import {
   type OutboxRecord,
   type PriceReviewEntry,
 } from "./local-orders";
-import { classifyEligibility, ineligibleMessage, type DatasetIdentity, type IneligibleReason } from "./dataset-identity";
+import { classifyEligibility, ineligibleMessage, readExpectedDataset, sameDataset, type DatasetIdentity, type IneligibleReason } from "./dataset-identity";
 import { isoNow, type OfflineEnv } from "./offline-env";
 
 /**
@@ -400,12 +400,17 @@ export async function pushOutbox(
   let accepted = 0;
   let failed = 0;
   let quarantined = 0;
-  const current = options.currentDataset ?? null;
-  quarantined += await quarantineIneligible(db, env, ownerAccountId, current);
+  const startedUnder = options.currentDataset ?? null;
+  quarantined += await quarantineIneligible(db, env, ownerAccountId, startedUnder);
 
   while (attempted < max) {
+    // The confirmation can change mid-run (a config fetch elsewhere, a null answer): re-read it before EVERY command.
+    // Vanished or different from the one this run started under = stop; nothing further is sent (retryable, not quarantined).
     const op = await nextEligible(db, env, ownerAccountId, respectBackoff);
     if (op === null) return { attempted, accepted, failed, stoppedBy: "idle", quarantined };
+    const fresh = await readExpectedDataset(db);
+    if (fresh === null || !sameDataset(fresh, startedUnder)) return { attempted, accepted, failed, stoppedBy: "dataset_unconfirmed", quarantined };
+    const current = fresh;
     const draft = await getDraft(db, op.draftLocalId as string);
     if (draft === null) {
       await db.execute("DELETE FROM outbox WHERE local_id = ?", [op.localId]);

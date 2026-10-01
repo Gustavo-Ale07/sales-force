@@ -50,7 +50,7 @@ function item(productCode: number, quantity = "2", unitPrice: string | null = "1
   return { productCode, description: `Produto ${productCode}`, unit: "UN", quantity, discountPercent, priceJson: price(unitPrice), groupCode: 1, groupName: "Grupo" };
 }
 function input(items: DraftItemInput[], extra: Partial<SaveDraftInput> = {}): SaveDraftInput {
-  return { ownerAccountId: OWNER, customerCode: 77, customerName: "Cliente", negotiationTypeCode: null, notes: null, items, ...extra };
+  return { ownerAccountId: OWNER, customerCode: 77, customerName: "Cliente", negotiationTypeCode: null, notes: null, items, loadedDataset: REAL, ...extra };
 }
 
 /** In-memory stand-in for the API's idempotent create and version-checked replace. */

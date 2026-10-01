@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { DatasetUnavailableError, type DraftRecord } from "@salesforce/mobile-db";
+import { DatasetChangedError, DatasetUnavailableError, type DraftRecord } from "@salesforce/mobile-db";
+import { datasetIdentityOf } from "../offline/reference-source";
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ApiRequestError } from "../data/api";
 import { describeDataError, type DataErrorInfo } from "../data/errors";
@@ -395,6 +396,7 @@ export function NewOrderScreen({
                 : null,
           notes: localDraft?.notes ?? null,
           lines,
+          loadedDataset: config.status === "ready" ? datasetIdentityOf(config.value) : null,
         });
         setLocalDraft(saved);
         setSavedLocal(saved);
@@ -402,7 +404,7 @@ export function NewOrderScreen({
         setSaveFailure({
           title: "Não foi possível salvar o pedido neste aparelho",
           messages: [
-            error instanceof DatasetUnavailableError
+            error instanceof DatasetUnavailableError || error instanceof DatasetChangedError
               ? error.message
               : "Este pedido não pode mais ser alterado aqui. Abra-o em Pedidos para ver a situação.",
           ],

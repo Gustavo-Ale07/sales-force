@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  DatasetChangedError,
   DatasetIdentityError,
   DatasetUnavailableError,
   DraftNotEditableError,
@@ -95,7 +96,7 @@ const sourceOf = (identity: () => DatasetIdentity | null, onData?: () => void): 
 });
 
 const item = { productCode: 1, description: "P", unit: "UN", quantity: "1", discountPercent: "0", priceJson: JSON.stringify({ state: "priced", unitPrice: "10.00" }), groupCode: null, groupName: null };
-const draftInput = (owner = A) => ({ ownerAccountId: owner, customerCode: 5, customerName: "Cliente", negotiationTypeCode: null, notes: null, items: [item] });
+const draftInput = (owner = A, loaded: DatasetIdentity | null = REAL) => ({ ownerAccountId: owner, customerCode: 5, customerName: "Cliente", negotiationTypeCode: null, notes: null, items: [item], loadedDataset: loaded });
 
 /** A row exactly as the pre-v3 app wrote it (no identity columns): draft + pending create. */
 async function insertLegacy(target: SqlExecutor, owner: string, suffix: string, state = "pending"): Promise<string> {
@@ -229,6 +230,41 @@ describe("migration v3", () => {
 });
 
 describe("push guard", () => {
+  it("re-reads the confirmed dataset before every command: a flip mid-run stops the run, the rest is not POSTed and stays retryable", async () => {
+    await confirm(db, REAL);
+    await saveOrderDraft(db, env, draftInput());
+    await saveOrderDraft(db, env, draftInput());
+    const spy = new SpyTransport();
+    const original = spy.createOrder.bind(spy);
+    spy.createOrder = async (key, request) => {
+      const result = await original(key, request);
+      await confirm(db, FAKE); // the confirmation changes after the first POST
+      return result;
+    };
+    const result = await pushOutbox(db, env, spy, A, { respectBackoff: false, currentDataset: REAL });
+    expect(spy.calls).toHaveLength(1);
+    expect(result.stoppedBy).toBe("dataset_unconfirmed");
+    const rest = (await listOutbox(db)).filter((op) => op.state === "pending");
+    expect(rest).toHaveLength(1);
+    expect(rest[0]).toMatchObject({ attempts: 0, dataset: REAL });
+  });
+
+  it("a confirmation that vanishes mid-run stops the run too", async () => {
+    await confirm(db, REAL);
+    await saveOrderDraft(db, env, draftInput());
+    await saveOrderDraft(db, env, draftInput());
+    const spy = new SpyTransport();
+    const original = spy.createOrder.bind(spy);
+    spy.createOrder = async (key, request) => {
+      const result = await original(key, request);
+      await confirm(db, null);
+      return result;
+    };
+    const result = await pushOutbox(db, env, spy, A, { respectBackoff: false, currentDataset: REAL });
+    expect(spy.calls).toHaveLength(1);
+    expect(result.stoppedBy).toBe("dataset_unconfirmed");
+  });
+
   it("E/F: a legacy draft and its outbox row never reach the transport, in this run or later ones", async () => {
     await confirm(db);
     const id = await insertLegacy(db, A, "1");
@@ -260,9 +296,9 @@ describe("push guard", () => {
 
   it("fake-dataset and other-environment commands are refused with the matching reason", async () => {
     await confirm(db, FAKE);
-    const fakeId = await saveOrderDraft(db, env, draftInput());
+    const fakeId = await saveOrderDraft(db, env, draftInput(A, FAKE));
     await confirm(db, SANDBOX);
-    const sandboxId = await saveOrderDraft(db, env, draftInput());
+    const sandboxId = await saveOrderDraft(db, env, draftInput(A, SANDBOX));
     await confirm(db, REAL);
     const spy = new SpyTransport();
     const result = await pushOutbox(db, env, spy, A, { respectBackoff: false, currentDataset: REAL });
@@ -327,6 +363,21 @@ describe("push guard", () => {
 });
 
 describe("creating and editing drafts", () => {
+  it("rejects a save whose editor was loaded under another dataset than the one confirmed now; nothing is stamped", async () => {
+    await confirm(db, REAL);
+    const loadedUnder = REAL; // editor opened under A...
+    await confirm(db, FAKE); // ...then the confirmation flips
+    await expect(saveOrderDraft(db, env, draftInput(A, loadedUnder))).rejects.toBeInstanceOf(DatasetChangedError);
+    expect(await listDrafts(db, A)).toEqual([]);
+    expect(await listOutbox(db)).toEqual([]);
+  });
+
+  it("rejects a save without a loaded dataset", async () => {
+    await confirm(db, REAL);
+    await expect(saveOrderDraft(db, env, draftInput(A, null))).rejects.toBeInstanceOf(DatasetUnavailableError);
+    expect(await listDrafts(db, A)).toEqual([]);
+  });
+
   it("cannot create a draft when no dataset was ever confirmed; nothing is written", async () => {
     await expect(saveOrderDraft(db, env, draftInput())).rejects.toBeInstanceOf(DatasetUnavailableError);
     expect(await listDrafts(db, A)).toEqual([]);
@@ -335,7 +386,7 @@ describe("creating and editing drafts", () => {
 
   it("a draft of another dataset or a legacy draft cannot be edited", async () => {
     await confirm(db, FAKE);
-    const fakeId = await saveOrderDraft(db, env, draftInput());
+    const fakeId = await saveOrderDraft(db, env, draftInput(A, FAKE));
     const legacyId = await insertLegacy(db, A, "1");
     await confirm(db, REAL);
     await expect(saveOrderDraft(db, env, { ...draftInput(), localId: fakeId })).rejects.toBeInstanceOf(DraftNotEditableError);
@@ -354,7 +405,7 @@ describe("creating and editing drafts", () => {
 describe("operational views and counters", () => {
   it("only drafts of the confirmed dataset are listed as operational; the rest are counted as needing attention", async () => {
     await confirm(db, FAKE);
-    await saveOrderDraft(db, env, draftInput());
+    await saveOrderDraft(db, env, draftInput(A, FAKE));
     await insertLegacy(db, A, "1");
     await confirm(db, REAL);
     const real = await saveOrderDraft(db, env, draftInput());
@@ -402,7 +453,7 @@ describe("sync manager with dataset confirmation", () => {
 
   it("when the server switches dataset, old commands are quarantined, not sent, and the cache is replaced", async () => {
     await confirm(db, FAKE);
-    await saveOrderDraft(db, env, draftInput());
+    await saveOrderDraft(db, env, draftInput(A, FAKE));
     const spy = new SpyTransport();
     const manager = createSyncManager({ db, env, transport: spy, source: sourceOf(() => REAL), ownerAccountId: A });
     const status = await manager.sync("manual");
@@ -435,7 +486,7 @@ describe("inspectLocalState", () => {
 
   it("executes only SELECT/PRAGMA and changes nothing", async () => {
     await confirm(db, FAKE);
-    await saveOrderDraft(db, env, draftInput());
+    await saveOrderDraft(db, env, draftInput(A, FAKE));
     await insertLegacy(db, A, "1");
     const before = JSON.stringify([await listDrafts(db, A), await listOutbox(db)]);
     const { executor, sql } = recording(db);
@@ -447,7 +498,7 @@ describe("inspectLocalState", () => {
 
   it("reports identity, classification and no secrets or personal text", async () => {
     await confirm(db, FAKE);
-    await saveOrderDraft(db, env, { ...draftInput(), notes: "observação confidencial", customerName: "Nome Secreto Ltda" });
+    await saveOrderDraft(db, env, { ...draftInput(A, FAKE), notes: "observação confidencial", customerName: "Nome Secreto Ltda" });
     await insertLegacy(db, A, "1");
     await confirm(db, REAL);
     await pullReferenceData(db, env, sourceOf(() => REAL), A);

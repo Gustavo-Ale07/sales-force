@@ -1,5 +1,6 @@
 import type { SqlDatabase, SqlExecutor, SqlRow } from "./connection";
 import {
+  DatasetChangedError,
   DatasetUnavailableError,
   isOperationalEligibility,
   operationalDraftSql,
@@ -49,6 +50,11 @@ export interface SaveDraftInput {
   readonly negotiationTypeCode: number | null;
   readonly notes: string | null;
   readonly items: readonly DraftItemInput[];
+  /**
+   * The dataset the editor's prices/customer came from (read when the editor opened). The save is rejected when it is
+   * missing or differs from the dataset confirmed now: an order is never stamped with a dataset it was not priced under.
+   */
+  readonly loadedDataset: DatasetIdentity | null;
 }
 
 export interface DraftRecord {
@@ -385,7 +391,13 @@ export async function saveOrderDraft(db: SqlDatabase, env: OfflineEnv, input: Sa
     // confirmed identity nothing is created: the order could not be tied to a dataset.
     const confirmed = await readExpectedDataset(tx);
 
+    const assertLoadedUnderConfirmed = () => {
+      if (confirmed === null || input.loadedDataset === null) throw new DatasetUnavailableError();
+      if (!sameDataset(input.loadedDataset, confirmed)) throw new DatasetChangedError();
+    };
+
     if (input.localId === undefined) {
+      assertLoadedUnderConfirmed();
       if (confirmed === null) throw new DatasetUnavailableError();
       const localId = env.newId();
       const key = env.newId();
@@ -405,6 +417,7 @@ export async function saveOrderDraft(db: SqlDatabase, env: OfflineEnv, input: Sa
     if (!isOperationalEligibility(draft.eligibility) || !sameDataset(draft.dataset, confirmed)) {
       throw new DraftNotEditableError("Este pedido é de outro conjunto de dados e não pode ser alterado.");
     }
+    assertLoadedUnderConfirmed();
     const allOps = await listOutbox(tx, draft.localId);
     const create = allOps.filter((op) => op.type === "order.create").at(-1);
     const createRejected = create?.state === "rejected";

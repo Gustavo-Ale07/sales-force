@@ -36,6 +36,14 @@ export class DatasetUnavailableError extends Error {
   }
 }
 
+/** The data the editor was loaded under is no longer the dataset the server confirmed: saving would stamp an order with the wrong identity. */
+export class DatasetChangedError extends Error {
+  constructor(message = "Os dados do servidor mudaram desde que você abriu este pedido. Volte e abra o pedido novamente para continuar.") {
+    super(message);
+    this.name = "DatasetChangedError";
+  }
+}
+
 export function sameDataset(a: DatasetIdentity | null, b: DatasetIdentity | null): boolean {
   return a !== null && b !== null && a.environment === b.environment && a.datasetId === b.datasetId;
 }

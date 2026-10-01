@@ -11,6 +11,7 @@ import {
   type DraftItemInput,
   type DraftItemRecord,
   type DraftRecord,
+  type DatasetIdentity,
   type DraftStatus,
   type OfflineEnv,
   type OrderTransport,
@@ -27,6 +28,8 @@ export interface SaveLocalDraftInput {
   readonly negotiationTypeCode: number | null;
   readonly notes: string | null;
   readonly lines: readonly EditorLine[];
+  /** The dataset the editor was loaded under (from the entry configuration it showed); `null` = unknown, the save is refused. */
+  readonly loadedDataset: DatasetIdentity | null;
 }
 
 export interface OpenedLocalDraft {
@@ -113,13 +116,14 @@ export function createLocalOrdersPort(deps: {
         negotiationTypeCode: input.negotiationTypeCode,
         notes: input.notes,
         items: toDraftItems(input.lines),
+        loadedDataset: input.loadedDataset,
       });
       const draft = await getDraft(db, id);
       onChanged();
       if (draft === null) throw new Error("Rascunho não encontrado após salvar.");
       return draft;
     },
-    // Only normal work for the confirmed dataset: legacy / other-dataset orders are not resumable orders (they surface as attention items).
+    // Only normal work for the confirmed dataset: legacy / other-dataset orders are not resumable orders (they are not listed on any screen; they are only counted in the sync indicator's attention counter).
     list: async () => listOperationalDrafts(db, ownerAccountId, await readExpectedDataset(db)),
     listSales: async (filters, request) => listSales(db, ownerAccountId, filters, request, env.now(), await readExpectedDataset(db)),
     summarizeSales: async (filters, search) => summarizeSales(db, ownerAccountId, filters, search, env.now(), await readExpectedDataset(db)),

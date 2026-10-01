@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { countDraftsByGroup, migrations, queryDrafts, runMigrations, saveOrderDraft, SENT_STATUSES, UNSENT_STATUSES, type DraftStatus, type OfflineEnv, type SqlDatabase } from "../src/index";
+import { REAL } from "./helpers";
 import { confirm } from "./helpers";
 import { openNodeDatabase } from "./node-sqlite-connection";
 
@@ -18,6 +19,7 @@ async function draft(customerCode: number, customerName: string, status: DraftSt
     negotiationTypeCode: null,
     notes: null,
     items: [{ productCode: 1, description: "P", unit: "UN", quantity: "1", discountPercent: "0", priceJson: "{}", groupCode: null, groupName: null }],
+    loadedDataset: REAL,
   });
   await db.execute("UPDATE local_order_draft SET status = ?, remote_draft_number = ?, remote_id = ? WHERE local_id = ?", [
     status,
