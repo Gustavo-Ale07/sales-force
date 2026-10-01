@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { DraftRecord } from "@salesforce/mobile-db";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import { lineAmountsOf, previewDraft, type EditorLine } from "../data/order-draft";
@@ -81,7 +81,14 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, onBack, o
       </View>
     );
   }
-  if (loaded === null) return <View style={styles.center} />;
+  if (loaded === null) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator color={colors.navy} accessibilityLabel="Carregando venda" />
+        <Text style={styles.message}>Carregando venda...</Text>
+      </View>
+    );
+  }
 
   const { draft, lines } = loaded;
   const actions = saleActions(draft);

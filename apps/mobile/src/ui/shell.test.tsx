@@ -4,6 +4,7 @@ import type { CustomerRepository, ProductRepository } from "../data/ports";
 import {
   account,
   customer,
+  draftRecord,
   fakeAuth,
   fakeConnectivity,
   fakeDependencies,
@@ -16,11 +17,16 @@ import {
   unauthenticatedError,
 } from "../test-doubles";
 import type { SyncManager, SyncStatus } from "@salesforce/mobile-db";
+import type { LocalOrdersPort } from "../offline/local-orders";
 import type { OfflineServices } from "../offline/services";
 import type { RememberedSession } from "../offline/session";
 import { Shell } from "./shell";
 
-function fakeOffline(remembered: RememberedSession | null, status: SyncStatus = { phase: "idle", pending: 0, needsAttention: 0, lastSyncedAt: null, lastError: null }) {
+function fakeOffline(
+  remembered: RememberedSession | null,
+  status: SyncStatus = { phase: "idle", pending: 0, needsAttention: 0, lastSyncedAt: null, lastError: null },
+  localOrders: LocalOrdersPort = fakeLocalOrders(),
+) {
   const syncNow = jest.fn(async () => status);
   const sync: SyncManager = {
     sync: syncNow,
@@ -33,7 +39,7 @@ function fakeOffline(remembered: RememberedSession | null, status: SyncStatus = 
     session: { load: async () => remembered, remember: async () => undefined, forget },
     forAccount: () => ({
       repositories: fakeDependencies().repositories,
-      localOrders: fakeLocalOrders(),
+      localOrders,
       sync,
     }),
   };
@@ -134,16 +140,98 @@ describe("Shell", () => {
     expect(await screen.findByLabelText("E-mail")).toBeTruthy();
   });
 
-  it("signs out even when the logout call fails", async () => {
-    const auth = fakeAuth({
-      getSession: async () => account,
-      logout: async () => {
+  describe("when the server logout fails", () => {
+    /** Presses Sair, accepts the sign-out confirmation, and answers the failure alert with the button `choose` (if any). */
+    async function signOutFailing(logout: jest.Mock, choose: string | null) {
+      const auth = fakeAuth({ getSession: async () => account, logout });
+      const { offline, forget } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() });
+      await render(<Shell dependencies={fakeDependencies({ auth, offline })} />);
+      const alert = jest.spyOn(Alert, "alert").mockImplementation((title, _message, buttons) => {
+        if (title === "Sair do Force") buttons?.find((button) => button.style === "destructive")?.onPress?.();
+        else if (choose !== null) buttons?.find((button) => button.text === choose)?.onPress?.();
+      });
+      await fireEvent.press(await screen.findByRole("tab", { name: "Perfil" }));
+      await fireEvent.press(screen.getByRole("button", { name: "Sair" }));
+      return { alert, forget };
+    }
+
+    it("tells the seller, stays signed in, and keeps every local record untouched", async () => {
+      const logout = jest.fn(async () => {
         throw networkError();
-      },
+      });
+      const { alert, forget } = await signOutFailing(logout, null);
+      await waitFor(() => expect(alert).toHaveBeenCalledWith("Não foi possível encerrar a sessão", expect.stringMatching(/continuar aberta.*pedidos salvos neste aparelho não serão apagados/s), expect.any(Array)));
+      expect(forget).not.toHaveBeenCalled();
+      expect(screen.queryByLabelText("E-mail")).toBeNull(); // still signed in, no silent pretend sign-out
+      expect(screen.getByRole("button", { name: "Sair" })).toBeTruthy();
+      alert.mockRestore();
     });
-    await render(<Shell dependencies={fakeDependencies({ auth })} />);
-    await signOutFromProfile();
-    expect(await screen.findByLabelText("E-mail")).toBeTruthy();
+
+    it("can be retried, and signs out once the server confirms", async () => {
+      let calls = 0;
+      const logout = jest.fn(async () => {
+        calls += 1;
+        if (calls === 1) throw networkError();
+      });
+      const { alert, forget } = await signOutFailing(logout, "Tentar novamente");
+      expect(await screen.findByLabelText("E-mail")).toBeTruthy();
+      expect(logout).toHaveBeenCalledTimes(2);
+      expect(forget).toHaveBeenCalled();
+      alert.mockRestore();
+    });
+
+    it("lets the seller leave this device anyway, explicitly", async () => {
+      const logout = jest.fn(async () => {
+        throw networkError();
+      });
+      const { alert, forget } = await signOutFailing(logout, "Sair mesmo assim");
+      expect(await screen.findByLabelText("E-mail")).toBeTruthy();
+      expect(forget).toHaveBeenCalled();
+      alert.mockRestore();
+    });
+  });
+
+  describe("retained (quarantined) orders", () => {
+    const retained = {
+      draft: draftRecord({ localId: "old-1", customerName: "Padaria Antiga", dataset: null, eligibility: "legacy_local", status: "needs_review", itemCount: 2 }),
+      reason: "legacy_local" as const,
+      canDiscard: true,
+    };
+    const attention: SyncStatus = { phase: "idle", pending: 0, needsAttention: 1, lastSyncedAt: null, lastError: null };
+    const withRetained = () => fakeLocalOrders([], { listQuarantined: async () => [retained], countQuarantined: async () => 1 });
+
+    it("is reachable from the sync panel in Perfil and lists the order with its reason", async () => {
+      const { offline } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() }, attention, withRetained());
+      await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
+      await fireEvent.press(await screen.findByRole("tab", { name: "Perfil" }));
+      await fireEvent.press(await screen.findByRole("button", { name: "Ver pedidos antigos retidos" }));
+      expect(await screen.findByText("Padaria Antiga")).toBeTruthy();
+      expect(screen.getByText("Criado antes da verificação de dados; não será enviado ao Force.")).toBeTruthy();
+    });
+
+    it("is reachable from the header sync sheet", async () => {
+      const { offline } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() }, attention, withRetained());
+      await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
+      await fireEvent.press(await screen.findByRole("button", { name: /Status de sincronização/ }));
+      await fireEvent.press(await screen.findByRole("button", { name: "Ver pedidos antigos retidos" }));
+      expect(await screen.findByText("Padaria Antiga")).toBeTruthy();
+    });
+
+    it("does not show the entry when nothing is retained", async () => {
+      const { offline } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() });
+      await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
+      await fireEvent.press(await screen.findByRole("tab", { name: "Perfil" }));
+      expect(screen.queryByRole("button", { name: "Ver pedidos antigos retidos" })).toBeNull();
+    });
+
+    it("closes with Voltar and the Perfil is shown again", async () => {
+      const { offline } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() }, attention, withRetained());
+      await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
+      await fireEvent.press(await screen.findByRole("tab", { name: "Perfil" }));
+      await fireEvent.press(await screen.findByRole("button", { name: "Ver pedidos antigos retidos" }));
+      await fireEvent.press(await screen.findByRole("button", { name: "Voltar" }));
+      await waitFor(() => expect(screen.queryByText("Padaria Antiga")).toBeNull());
+    });
   });
 
   it("tells the truth about offline: no data is kept on the device yet", async () => {

@@ -1,9 +1,13 @@
 import {
   acknowledgePriceReview,
+  countQuarantinedDrafts,
   discardLocalDraft,
+  discardQuarantinedDraft,
   getDraft,
   getDraftItems,
+  getQuarantinedDraft,
   listOperationalDrafts,
+  listQuarantinedDrafts,
   readExpectedDataset,
   resolveConflict,
   saveOrderDraft,
@@ -15,6 +19,8 @@ import {
   type DraftStatus,
   type OfflineEnv,
   type OrderTransport,
+  type QuarantinedDraftDetail,
+  type QuarantinedDraftRecord,
   type SqlDatabase,
 } from "@salesforce/mobile-db";
 import { discountTextOf, parseDiscountInput, parseQuantityInput, type EditorLine } from "../data/order-draft";
@@ -49,6 +55,12 @@ export interface LocalOrdersPort {
   get(localId: string): Promise<DraftRecord | null>;
   open(localId: string): Promise<OpenedLocalDraft | null>;
   discard(localId: string): Promise<void>;
+  /** Retained (quarantined) drafts: never sent, never listed as operational work. Read-only plus an explicit local discard. */
+  listQuarantined(): Promise<QuarantinedDraftRecord[]>;
+  countQuarantined(): Promise<number>;
+  openQuarantined(localId: string): Promise<QuarantinedDraftDetail | null>;
+  /** Local-only delete of a never-sent retained draft; throws `DraftDiscardError` otherwise. There is no resend/convert counterpart. */
+  discardQuarantined(localId: string): Promise<void>;
   acknowledgePriceReview(localId: string): Promise<void>;
   resolveConflict(localId: string, resolution: ConflictResolution): Promise<void>;
 }
@@ -138,6 +150,13 @@ export function createLocalOrdersPort(deps: {
     },
     async discard(localId) {
       await discardLocalDraft(db, ownerAccountId, localId);
+      onChanged();
+    },
+    listQuarantined: () => listQuarantinedDrafts(db, ownerAccountId),
+    countQuarantined: () => countQuarantinedDrafts(db, ownerAccountId),
+    openQuarantined: (localId) => getQuarantinedDraft(db, ownerAccountId, localId),
+    async discardQuarantined(localId) {
+      await discardQuarantinedDraft(db, ownerAccountId, localId);
       onChanged();
     },
     async acknowledgePriceReview(localId) {

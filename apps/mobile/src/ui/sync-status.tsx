@@ -28,6 +28,9 @@ export interface SyncViewProps {
   readonly connectivity: ConnectivityState;
   /** Runs the real sync manager (manual). */
   readonly onSyncNow: () => void;
+  /** Retained ("Pedidos antigos retidos") orders on this device; the link shows only when there are some and a handler is given. */
+  readonly quarantinedCount?: number;
+  readonly onOpenQuarantine?: () => void;
 }
 
 /** Compact header status: a dot and one short word. Tapping opens the details. */
@@ -51,7 +54,7 @@ function Row({ label, value, valueColor }: { label: string; value: string; value
 }
 
 /** Status, last sync, pending count and the manual action. Shared by the header sheet and Perfil. */
-export function SyncPanel({ status, connectivity, onSyncNow }: SyncViewProps) {
+export function SyncPanel({ status, connectivity, onSyncNow, quarantinedCount = 0, onOpenQuarantine }: SyncViewProps) {
   const { text, tone } = describeSyncStatus(status, connectivity);
   const syncing = status.phase === "syncing";
   const offline = connectivity === "offline";
@@ -62,6 +65,15 @@ export function SyncPanel({ status, connectivity, onSyncNow }: SyncViewProps) {
       <Row label="Última sincronização" value={formatDateTime(status.lastSyncedAt)} />
       <Row label="Alterações pendentes" value={String(status.pending)} />
       {status.needsAttention > 0 && <Row label="Pedidos que precisam de atenção" value={String(status.needsAttention)} valueColor={colors.red} />}
+      {quarantinedCount > 0 && onOpenQuarantine !== undefined && (
+        <View style={styles.quarantine}>
+          <Text style={styles.quarantineText}>Pedidos antigos retidos não são enviados ao Force. Você pode consultá-los ou descartá-los.</Text>
+          <Pressable style={styles.quarantineLink} onPress={onOpenQuarantine} accessibilityRole="button" accessibilityLabel="Ver pedidos antigos retidos">
+            <Text style={styles.quarantineLinkText}>{`Pedidos antigos retidos (${quarantinedCount})`}</Text>
+            <Text style={styles.quarantineLinkText}>›</Text>
+          </Pressable>
+        </View>
+      )}
       {status.phase === "error" && <Text style={styles.errorNote}>A última tentativa falhou. Suas alterações continuam salvas neste aparelho.</Text>}
       {status.phase === "auth_required" && <Text style={styles.errorNote}>Sua sessão expirou. Saia e entre novamente para sincronizar.</Text>}
       <Pressable
@@ -100,13 +112,26 @@ export function HeaderSyncStatus(view: SyncViewProps) {
   return (
     <>
       <SyncStatusChip status={view.status} connectivity={view.connectivity} onPress={() => setOpen(true)} />
-      <SyncDetailsSheet visible={open} onClose={() => setOpen(false)} {...view} onSyncNow={view.onSyncNow} />
+      <SyncDetailsSheet
+        visible={open}
+        onClose={() => setOpen(false)}
+        {...view}
+        onSyncNow={view.onSyncNow}
+        {...(view.onOpenQuarantine === undefined
+          ? {}
+          : {
+              onOpenQuarantine: () => {
+                setOpen(false);
+                view.onOpenQuarantine?.();
+              },
+            })}
+      />
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  chip: { flexDirection: "row", alignItems: "center", gap: spacing.xs + 2, backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md, minHeight: 32 },
+  chip: { flexDirection: "row", alignItems: "center", gap: spacing.xs + 2, backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md, minHeight: 44 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   chipText: { fontSize: 12, fontWeight: "700", color: colors.text },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
@@ -121,5 +146,9 @@ const styles = StyleSheet.create({
   syncButton: { backgroundColor: colors.navy, borderRadius: 8, minHeight: 48, alignItems: "center", justifyContent: "center", marginTop: spacing.sm },
   syncButtonDisabled: { opacity: 0.5 },
   syncButtonText: { color: colors.onNavy, fontSize: 15, fontWeight: "700" },
+  quarantine: { gap: spacing.xs, borderRadius: 6, backgroundColor: colors.errorBackground, padding: spacing.sm },
+  quarantineText: { fontSize: 13, color: colors.text },
+  quarantineLink: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", minHeight: 44 },
+  quarantineLinkText: { fontSize: 14, fontWeight: "700", color: colors.navy },
   hint: { fontSize: 12, color: colors.textMuted, textAlign: "center" },
 });

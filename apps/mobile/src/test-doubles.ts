@@ -252,6 +252,10 @@ export function fakeLocalOrders(drafts: DraftRecord[] = [], overrides: Partial<L
     discard: async (localId) => {
       state.drafts = state.drafts.filter((d) => d.localId !== localId);
     },
+    listQuarantined: async () => [],
+    countQuarantined: async () => 0,
+    openQuarantined: async () => null,
+    discardQuarantined: async () => undefined,
     acknowledgePriceReview: async () => undefined,
     resolveConflict: async () => undefined,
     ...overrides,

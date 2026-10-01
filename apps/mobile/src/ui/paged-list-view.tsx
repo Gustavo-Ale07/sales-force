@@ -109,7 +109,7 @@ export function PagedListView<T, R extends PageRequest = PageRequest>({
       {list.status === "error" && list.error !== null && (
         <View style={styles.notice} accessibilityRole="alert">
           <Text style={styles.noticeText}>{list.error.message}</Text>
-          <Pressable onPress={list.reload} accessibilityRole="button" accessibilityLabel="Tentar novamente">
+          <Pressable style={styles.retryTarget} onPress={list.reload} accessibilityRole="button" accessibilityLabel="Tentar novamente">
             <Text style={styles.retry}>Tentar novamente</Text>
           </Pressable>
         </View>
@@ -172,6 +172,7 @@ const styles = StyleSheet.create({
   emptyTitle: { textAlign: "center", color: colors.text, fontSize: 16, fontWeight: "700" },
   notice: { backgroundColor: colors.errorBackground, borderRadius: 8, padding: spacing.lg, gap: spacing.sm },
   noticeText: { color: colors.text, fontSize: 14 },
+  retryTarget: { minHeight: 44, justifyContent: "center" },
   retry: { color: colors.red, fontWeight: "700", fontSize: 14 },
   count: { color: colors.textMuted, fontSize: 12, marginBottom: spacing.sm },
   footerError: { color: colors.red, fontSize: 13, paddingVertical: spacing.sm },

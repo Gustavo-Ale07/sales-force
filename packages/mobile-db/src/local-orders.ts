@@ -8,6 +8,7 @@ import {
   sameDataset,
   type DatasetIdentity,
   type Eligibility,
+  type IneligibleReason,
 } from "./dataset-identity";
 import { isoNow, type OfflineEnv } from "./offline-env";
 
@@ -217,6 +218,76 @@ export async function listOperationalDrafts(db: SqlExecutor, ownerAccountId: str
     [ownerAccountId, ...operational.params],
   );
   return rows.map(toDraft);
+}
+
+/* ---------- quarantine (retained legacy / ineligible drafts) ---------- */
+
+/**
+ * A draft held back for good: created before the dataset check (no identity) or priced under another dataset/owner.
+ * It is never sent, never converted to eligible and never re-queued; the seller can only read it and, if it was never
+ * sent, discard it locally.
+ */
+export interface QuarantinedDraftRecord {
+  readonly draft: DraftRecord;
+  readonly reason: IneligibleReason;
+  /** `true` only when the server cannot have seen it (no remote id, no attempted non-rejected command). */
+  readonly canDiscard: boolean;
+}
+
+export interface QuarantinedDraftDetail {
+  readonly record: QuarantinedDraftRecord;
+  readonly items: DraftItemRecord[];
+}
+
+const UNRESOLVED_STATES = ["pending", "sending", "conflict", "needs_review"] as const;
+
+/** `true` when no command of the draft can have reached the server: no remote id and every command either unattempted or definitively rejected. */
+export function isNeverSent(draft: Pick<DraftRecord, "remoteId">, ops: readonly Pick<OutboxRecord, "attempts" | "state">[]): boolean {
+  return draft.remoteId === null && ops.every((op) => op.attempts === 0 || op.state === "rejected");
+}
+
+/**
+ * Pure classification: why (if at all) a draft is in quarantine. A stored non-operational eligibility is its own reason;
+ * a draft with no dataset identity that still has unresolved commands is legacy even before the push guard stamped it.
+ */
+export function quarantineReasonOf(draft: Pick<DraftRecord, "eligibility" | "dataset">, hasUnresolvedOps: boolean): IneligibleReason | null {
+  if (!isOperationalEligibility(draft.eligibility)) return draft.eligibility as IneligibleReason;
+  return draft.dataset === null && hasUnresolvedOps ? "legacy_local" : null;
+}
+
+const QUARANTINE_WHERE = `d.owner_account_id = ? AND (
+    d.eligibility NOT IN ('unchecked', 'eligible')
+    OR (d.dataset_environment IS NULL AND EXISTS (
+      SELECT 1 FROM outbox o WHERE o.draft_local_id = d.local_id AND o.state IN (${UNRESOLVED_STATES.map((s) => `'${s}'`).join(", ")}))))`;
+
+async function toQuarantined(db: SqlExecutor, draft: DraftRecord): Promise<QuarantinedDraftRecord | null> {
+  const ops = await listOutbox(db, draft.localId);
+  const reason = quarantineReasonOf(draft, ops.some((op) => (UNRESOLVED_STATES as readonly string[]).includes(op.state)));
+  return reason === null ? null : { draft, reason, canDiscard: isNeverSent(draft, ops) };
+}
+
+/** The owner's quarantined drafts, newest first. Read-only: nothing here touches a draft or its commands. */
+export async function listQuarantinedDrafts(db: SqlExecutor, ownerAccountId: string): Promise<QuarantinedDraftRecord[]> {
+  const rows = await db.query<SqlRow>(`SELECT ${DRAFT_COLUMNS} FROM local_order_draft d WHERE ${QUARANTINE_WHERE} ORDER BY d.created_at DESC, d.local_id`, [ownerAccountId]);
+  const result: QuarantinedDraftRecord[] = [];
+  for (const row of rows) {
+    const record = await toQuarantined(db, toDraft(row));
+    if (record !== null) result.push(record);
+  }
+  return result;
+}
+
+export async function countQuarantinedDrafts(db: SqlExecutor, ownerAccountId: string): Promise<number> {
+  const rows = await db.query<SqlRow>(`SELECT count(*) AS n FROM local_order_draft d WHERE ${QUARANTINE_WHERE}`, [ownerAccountId]);
+  return Number(rows[0]?.n ?? 0);
+}
+
+/** One quarantined draft with its items (read-only detail); `null` when it is not quarantined, not found or not the owner's. */
+export async function getQuarantinedDraft(db: SqlExecutor, ownerAccountId: string, localId: string): Promise<QuarantinedDraftDetail | null> {
+  const draft = await getDraft(db, localId);
+  if (draft === null || draft.ownerAccountId !== ownerAccountId) return null;
+  const record = await toQuarantined(db, draft);
+  return record === null ? null : { record, items: await getDraftItems(db, localId) };
 }
 
 export async function getDraftItems(db: SqlExecutor, localId: string): Promise<DraftItemRecord[]> {

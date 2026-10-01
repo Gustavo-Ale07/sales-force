@@ -18,6 +18,7 @@ import { LoginScreen } from "./login-screen";
 import { NewOrderScreen } from "./new-order-screen";
 import { ProductsScreen } from "./products-screen";
 import { ProfileScreen } from "./profile-screen";
+import { QuarantineScreen } from "./quarantine-screen";
 import { HeaderSyncStatus } from "./sync-status";
 import { useInsets } from "./use-insets";
 import { useKeyboardVisible } from "./use-keyboard-visible";
@@ -57,6 +58,9 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
   const [salesView, setSalesView] = useState<SalesView>("orders");
   const [salesReset, setSalesReset] = useState(0);
   const [resumeLocalId, setResumeLocalId] = useState<string | null>(null);
+  const [quarantineOpen, setQuarantineOpen] = useState(false);
+  const [quarantinedCount, setQuarantinedCount] = useState(0);
+  const [quarantineTick, setQuarantineTick] = useState(0);
   const [customerDetail, setCustomerDetail] = useState<CustomerListItem | null>(null);
   const [startRequest, setStartRequest] = useState<{ nonce: number; customer: Pick<CustomerListItem, "code" | "name">; lines?: readonly EditorLine[] } | null>(null);
   const connectivityState = useConnectivity(connectivity);
@@ -68,6 +72,30 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
   const clearResume = useCallback(() => setResumeLocalId(null), []);
   const clearStart = useCallback(() => setStartRequest(null), []);
   const inDetail = customerDetail !== null && tab === "customers";
+  // Retained (quarantined) orders: re-counted whenever the sync counters move or the seller changes them.
+  const localOrdersForCount = services?.localOrders ?? null;
+  useEffect(() => {
+    if (localOrdersForCount === null) return undefined;
+    let current = true;
+    localOrdersForCount
+      .countQuarantined()
+      .then((count) => current && setQuarantinedCount(count))
+      .catch(() => undefined);
+    return () => {
+      current = false;
+    };
+  }, [localOrdersForCount, syncStatus.needsAttention, syncStatus.pending, syncStatus.phase, quarantineTick]);
+  const closeQuarantine = useCallback(() => setQuarantineOpen(false), []);
+  const quarantineChanged = useCallback(() => setQuarantineTick((n) => n + 1), []);
+  // Hardware back closes the retained-orders screen first.
+  useEffect(() => {
+    if (!quarantineOpen) return undefined;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      setQuarantineOpen(false);
+      return true;
+    });
+    return () => subscription.remove();
+  }, [quarantineOpen]);
   // Hardware back closes the customer sheet before anything else.
   useEffect(() => {
     if (!inDetail) return undefined;
@@ -118,14 +146,33 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
 
   const expire = useCallback(() => setSession({ phase: "anonymous" }), []);
 
+  /**
+   * Explicit sign-out. A failed server logout is never swallowed: the session may still be valid on the server, so the
+   * seller is told and chooses (retry / stay / leave this device anyway). Nothing local is deleted either way: drafts and
+   * the outbox stay for the next sign-in (data-loss risk; wiping is an owner decision).
+   */
   async function signOut() {
     try {
       await auth.logout();
     } catch {
-      // The server session may outlive a failed call, but the screen must not keep showing private data.
+      Alert.alert(
+        "Não foi possível encerrar a sessão",
+        "Sua sessão no servidor pode continuar aberta. Tente novamente quando houver conexão. Seus pedidos salvos neste aparelho não serão apagados.",
+        [
+          { text: "Cancelar", style: "cancel" },
+          { text: "Tentar novamente", onPress: () => void signOut() },
+          { text: "Sair mesmo assim", style: "destructive", onPress: () => void leaveDevice() },
+        ],
+      );
+      return;
     }
+    await leaveDevice();
+  }
+
+  async function leaveDevice() {
     // Forget the remembered account; drafts and unsent orders stay on the device for the next sign-in.
     await offline?.session.forget().catch(() => undefined);
+    setQuarantineOpen(false);
     setTab("home");
     setVisited(new Set<MainTab>(["home"]));
     setSalesView("orders");
@@ -186,7 +233,12 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
       }
     })();
   };
-  const syncView = { status: syncStatus, connectivity: connectivityState, onSyncNow: syncNow };
+  const syncView = {
+    status: syncStatus,
+    connectivity: connectivityState,
+    onSyncNow: syncNow,
+    ...(services === null ? {} : { quarantinedCount, onOpenQuarantine: () => setQuarantineOpen(true) }),
+  };
 
   return (
     <View style={styles.flex}>
@@ -297,6 +349,11 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
               onSignOut={() => void signOut()}
             />
           </Pane>
+          {quarantineOpen && services !== null && (
+            <View style={styles.overlay}>
+              <QuarantineScreen localOrders={services.localOrders} onBack={closeQuarantine} onChanged={quarantineChanged} />
+            </View>
+          )}
         </View>
         {!keyboardVisible && <BottomNav active={tab} onSelect={selectTab} badges={{ sales: syncStatus.pending > 0 || syncStatus.needsAttention > 0 }} />}
       </KeyboardAvoidingView>
@@ -308,6 +365,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.background },
   paneActive: { flex: 1 },
   paneHidden: { display: "none" },
+  overlay: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, backgroundColor: colors.background },
   header: {
     flexDirection: "row",
     alignItems: "center",

@@ -10,14 +10,16 @@ import { colors, spacing } from "./src/theme";
 import { SplashView } from "./src/ui/brand";
 import { Shell } from "./src/ui/shell";
 
-function ConfigError({ reason }: { reason: "missing" | "invalid" }) {
+function ConfigError({ reason }: { reason: "missing" | "invalid" | "insecure" }) {
   return (
     <View style={styles.configError}>
       <Text style={styles.configTitle}>Servidor não configurado</Text>
       <Text style={styles.configText}>
         {reason === "missing"
           ? "Defina EXPO_PUBLIC_API_URL com o endereço do servidor (por exemplo http://192.168.0.10:3000) e gere o aplicativo novamente."
-          : "EXPO_PUBLIC_API_URL deve ser apenas o endereço do servidor (http:// ou https://, sem caminho)."}
+          : reason === "insecure"
+            ? "Este aplicativo só aceita um servidor com https://. Defina EXPO_PUBLIC_API_URL com um endereço https:// e gere o aplicativo novamente."
+            : "EXPO_PUBLIC_API_URL deve ser apenas o endereço do servidor (http:// ou https://, sem caminho)."}
       </Text>
     </View>
   );

@@ -2,7 +2,9 @@ import type { SqlDatabase, SqlExecutor, SqlRow } from "./connection";
 import {
   getDraft,
   getDraftItems,
+  isNeverSent,
   listOutbox,
+  quarantineReasonOf,
   toOutbox,
   type DraftItemInput,
   type DraftStatus,
@@ -597,10 +599,27 @@ export async function discardLocalDraft(db: SqlDatabase, ownerAccountId: string,
     const draft = await getDraft(tx, localId);
     if (draft === null || draft.ownerAccountId !== ownerAccountId) return;
     const ops = await listOutbox(tx, localId);
-    const neverSent = draft.remoteId === null && ops.every((op) => op.attempts === 0 || op.state === "rejected");
-    if (!neverSent) {
+    if (!isNeverSent(draft, ops)) {
       throw new DraftDiscardError("Este pedido já foi enviado ao servidor e não pode ser descartado aqui.");
     }
+    await tx.execute("DELETE FROM outbox WHERE draft_local_id = ?", [localId]);
+    await tx.execute("DELETE FROM local_order_item WHERE draft_local_id = ?", [localId]);
+    await tx.execute("DELETE FROM local_order_draft WHERE local_id = ?", [localId]);
+  });
+}
+
+/**
+ * Explicit, local-only removal of a retained (quarantined) draft. Unlike `discardLocalDraft` it refuses anything that is
+ * not in quarantine, so an operational order can never be dropped through this path. It never contacts the server.
+ */
+export async function discardQuarantinedDraft(db: SqlDatabase, ownerAccountId: string, localId: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    const draft = await getDraft(tx, localId);
+    if (draft === null || draft.ownerAccountId !== ownerAccountId) return;
+    const ops = await listOutbox(tx, localId);
+    const unresolved = ops.some((op) => ["pending", "sending", "conflict", "needs_review"].includes(op.state));
+    if (quarantineReasonOf(draft, unresolved) === null) throw new DraftDiscardError("Este pedido não está retido e não pode ser descartado aqui.");
+    if (!isNeverSent(draft, ops)) throw new DraftDiscardError("Este pedido já foi enviado ao servidor e não pode ser descartado aqui.");
     await tx.execute("DELETE FROM outbox WHERE draft_local_id = ?", [localId]);
     await tx.execute("DELETE FROM local_order_item WHERE draft_local_id = ?", [localId]);
     await tx.execute("DELETE FROM local_order_draft WHERE local_id = ?", [localId]);
