@@ -53,24 +53,8 @@ services:
       - -c
       - node node_modules/@salesforce/db/dist/migrate/cli.js && node dist/queue-install.js
 
-  # One-shot, development only. The seed refuses any non-loopback database (guard in apps/server
-  # src/seed.ts, unchanged), so it shares the postgres container's network namespace and reaches the
-  # database as 127.0.0.1. It is not started by anything else and never runs against a shared database.
-  seed:
-    <<: *server-image
-    restart: "no"
-    network_mode: "service:postgres"
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-    environment:
-      NODE_ENV: development
-      DATABASE_URL: postgres://${POSTGRES_USER:-salesforce}:${POSTGRES_PASSWORD:-salesforce_local_dev}@127.0.0.1:5432/${POSTGRES_DB:-salesforce}
-      # LOCAL-ONLY password of the synthetic demo accounts (*.local). Deliberately NO default: a password
-      # written in a tracked file is a known password. Set your own (12+ characters) in deploy/.env.
-      SEED_DEV_PASSWORD: ${SEED_DEV_PASSWORD:?set SEED_DEV_PASSWORD in deploy/.env}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-    command: ["node", "dist/seed.js"]
+  # The one-shot dev `seed` lives in deploy/docker-compose.seed.yml (an overlay), so this file never
+  # interpolates SEED_DEV_PASSWORD: one-off commands of other services (e.g. the mirror) do not need it.
 
   api:
     <<: *server-image

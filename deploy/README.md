@@ -9,11 +9,13 @@ PostgreSQL, secrets, deploy pipeline) are a separate work package (OPS-3) and us
 
 ```sh
 cp deploy/.env.example deploy/.env   # then set SEED_DEV_PASSWORD (git-ignored file)
-docker compose -f deploy/docker-compose.dev.yml up --build
+docker compose -f deploy/docker-compose.dev.yml up --build -d
+docker compose -f deploy/docker-compose.dev.yml -f deploy/docker-compose.seed.yml run --rm seed   # demo accounts (dev only)
 ```
 
-`SEED_DEV_PASSWORD` is required and has no default: choose a local password of 12 or more characters
-(not a common one). Compose refuses to start, for any command, while it is unset.
+`SEED_DEV_PASSWORD` is required by the seed overlay (`deploy/docker-compose.seed.yml`) and has no default:
+choose a local password of 12 or more characters (not a common one). The overlay is separate so every other
+command on `docker-compose.dev.yml` (up, one-off mirror runs) does not need the variable.
 
 Open <http://localhost:8080> and sign in with a seeded demo account, for example
 `admin@demo.salesforce.local` (also `gerente@`, `vendedor1@`, `vendedor2@`, same domain) and the
@@ -28,7 +30,7 @@ if you want to drop the local database).
 |---|---|---|
 | `postgres` | PostgreSQL 17, named volume `pgdata` | `127.0.0.1:55432` |
 | `migrate` | One-shot: SQL migrations (advisory-lock protected, DATA-2), then the pg-boss schema and queues. Idempotent | none |
-| `seed` | One-shot, development only: installation configuration and demo accounts. Idempotent | none |
+| `seed` | One-shot, development only, in the overlay `docker-compose.seed.yml` (run it explicitly): installation configuration and demo accounts. Idempotent | none |
 | `api` | NestJS/Fastify API; healthcheck `GET /api/v1/health` | `127.0.0.1:3000` (debugging only) |
 | `worker` | Worker process; healthcheck = its loopback `GET /health` inside the container; `SANKHYA_MODE=fake` | none |
 | `web` | nginx serving the SPA build; `/api` proxied to `api` so the browser is same-origin | `127.0.0.1:8080` |

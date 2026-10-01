@@ -1,0 +1,30 @@
+# Development-only overlay that adds the one-shot `seed` service to the dev stack:
+#
+#   docker compose -f deploy/docker-compose.dev.yml -f deploy/docker-compose.seed.yml run --rm seed
+#
+# It is a separate file on purpose: the required SEED_DEV_PASSWORD is interpolated only when this overlay
+# is included, so every other command on docker-compose.dev.yml works without it. The password policy is
+# unchanged: there is no default value, an empty value is refused by the compose `:?` check and again by
+# apps/server/src/seed.ts (password policy, loopback-only database guard).
+#
+# The seed refuses any non-loopback database, so it shares the postgres container's network namespace and
+# reaches the database as 127.0.0.1. Never used for staging or production (the seed refuses NODE_ENV=production).
+services:
+  seed:
+    image: sales-force-server:dev
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.server
+    restart: "no"
+    network_mode: "service:postgres"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgres://${POSTGRES_USER:-salesforce}:${POSTGRES_PASSWORD:-salesforce_local_dev}@127.0.0.1:5432/${POSTGRES_DB:-salesforce}
+      # LOCAL-ONLY password of the synthetic demo accounts (*.local). Deliberately NO default: a password
+      # written in a tracked file is a known password. Set your own (12+ characters) in deploy/.env.
+      SEED_DEV_PASSWORD: ${SEED_DEV_PASSWORD:?set SEED_DEV_PASSWORD in deploy/.env}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    command: ["node", "dist/seed.js"]
