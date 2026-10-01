@@ -2,7 +2,7 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 import { erpCustomer } from '@salesforce/db';
 import { describe, expect, it } from 'vitest';
 import { orderFingerprint, type FingerprintInput } from '../../src/orders/order-fingerprint.js';
-import { PG_INT_MAX, containsText, digitsOf, eqInt, escapeLike, fitsPgInt, inInts, offsetOf } from '../../src/platform/sql.js';
+import { PG_INT_MAX, containsText, digitsOf, eqInt, escapeLike, fitsPgInt, inInts, inSellerCodes, offsetOf } from '../../src/platform/sql.js';
 
 const dialect = new PgDialect();
 const render = (fragment: Parameters<PgDialect['sqlToQuery']>[0]) => dialect.sqlToQuery(fragment);
@@ -71,6 +71,12 @@ describe('platform/sql helpers', () => {
     expect(query.params).toEqual([1, 2]);
     expect(render(inInts(erpCustomer.code, [])).sql).toBe('false');
     expect(render(inInts(erpCustomer.code, [PG_INT_MAX + 1])).sql).toBe('false');
+  });
+
+  it('inSellerCodes never matches seller 0, negatives or fractions (F2)', () => {
+    expect(render(inSellerCodes(erpCustomer.sellerCode, [0, -1, 1.5, 7, 7])).params).toEqual([7]);
+    expect(render(inSellerCodes(erpCustomer.sellerCode, [0])).sql).toBe('false');
+    expect(render(inSellerCodes(erpCustomer.sellerCode, [])).sql).toBe('false');
   });
 
   it('escapeLike neutralizes wildcards and the escape character', () => {

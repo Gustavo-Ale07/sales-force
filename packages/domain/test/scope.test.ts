@@ -4,6 +4,7 @@ import {
   defaultUnconfiguredConfiguration,
   isCustomerInScope,
   resolveCustomerScope,
+  resolveCustomerScopeOutcome,
   type InstallationConfiguration,
   type PortfolioOwnershipStrategy,
   type ScopeActor,
@@ -30,9 +31,16 @@ const admin: ScopeActor = { role: 'admin', accountEmail: 'adm@example.test', lin
 describe('customer scope by portfolioOwnership strategy', () => {
   describe('all_visible', () => {
     const config = configWith('all_visible');
-    it.each([seller(), manager, admin])('$role sees everyone', (actor) => {
+    it.each([seller([900]), manager, admin])('$role sees everyone', (actor) => {
       expect(resolveCustomerScope(actor, config)).toEqual({ kind: 'all' });
       expect(canActorSeeCustomer(actor, makeCustomer({ sellerCode: null }), config)).toBe(true);
+    });
+    it('never widens a seller without a valid seller link (F1)', () => {
+      for (const actor of [seller([]), seller([0]), seller([-3, 1.5])]) {
+        expect(resolveCustomerScope(actor, config)).toEqual({ kind: 'sellers', sellerCodes: [] });
+        expect(resolveCustomerScopeOutcome(actor, config)).toEqual({ ok: false, reason: 'no_seller_scope' });
+        expect(canActorSeeCustomer(actor, makeCustomer({ sellerCode: 900 }), config)).toBe(false);
+      }
     });
   });
 
@@ -90,6 +98,43 @@ describe('customer scope by portfolioOwnership strategy', () => {
     it('manager and admin see everything', () => {
       expect(canActorSeeCustomer(manager, makeCustomer({ sellerCode: 999 }), config)).toBe(true);
       expect(canActorSeeCustomer(admin, makeCustomer({ sellerCode: null }), config)).toBe(true);
+    });
+  });
+
+  describe('outcome (F1/F2)', () => {
+    it.each(['all_visible', 'customer_seller_field', 'explicit_account_links'] as const)(
+      'seller without a valid link is no_seller_scope under %s',
+      (strategy) => {
+        const config = configWith(strategy, [{ accountEmail: 'vend@example.test', sellerCode: 0 }]);
+        expect(resolveCustomerScopeOutcome(seller([0]), config)).toEqual({ ok: false, reason: 'no_seller_scope' });
+        expect(resolveCustomerScopeOutcome(seller([]), config)).toEqual({ ok: false, reason: 'no_seller_scope' });
+      },
+    );
+    it('seller with a valid link gets sellers (invalid codes dropped)', () => {
+      expect(resolveCustomerScopeOutcome(seller([0, 900]), configWith('customer_seller_field'))).toEqual({
+        ok: true,
+        scope: { kind: 'sellers', sellerCodes: [900] },
+      });
+    });
+    it('admin and manager are all', () => {
+      expect(resolveCustomerScopeOutcome(manager, configWith('customer_seller_field'))).toEqual({
+        ok: true,
+        scope: { kind: 'all' },
+      });
+      expect(resolveCustomerScopeOutcome(admin, configWith('explicit_account_links'))).toEqual({
+        ok: true,
+        scope: { kind: 'all' },
+      });
+    });
+    it('any other role is denied, never all', () => {
+      const rogue = { role: 'representative', accountEmail: 'x@example.test', linkedSellerCodes: [900] } as unknown as ScopeActor;
+      expect(resolveCustomerScopeOutcome(rogue, configWith('all_visible'))).toEqual({ ok: false, reason: 'role_not_permitted' });
+      expect(resolveCustomerScope(rogue, configWith('all_visible'))).toEqual({ kind: 'sellers', sellerCodes: [] });
+    });
+    it('a customer whose seller is 0 is invisible to a seller linked to 0 (F2)', () => {
+      const scope = { kind: 'sellers', sellerCodes: [0] } as const;
+      expect(isCustomerInScope({ sellerCode: 0 }, scope)).toBe(false);
+      expect(isCustomerInScope({ sellerCode: null }, scope)).toBe(false);
     });
   });
 

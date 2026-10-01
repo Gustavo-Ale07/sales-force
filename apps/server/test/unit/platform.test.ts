@@ -65,9 +65,10 @@ describe('integration summary', () => {
     expect(summary.lastSuccessAt).toBe(NOW.toISOString());
   });
 
-  it('falls back to the default mode when the heartbeat cursor is malformed', () => {
+  it('reports an unknown mode (never fake) when the heartbeat cursor is malformed or absent', () => {
     const broken = row({ entity: WORKER_HEARTBEAT_ENTITY, cursor: { gatewayMode: 'turbo' } });
-    expect(summarizeIntegration([broken], NOW).gatewayMode).toBe('fake');
+    expect(summarizeIntegration([broken], NOW).gatewayMode).toBe('unknown');
+    expect(summarizeIntegration([], NOW).gatewayMode).toBe('unknown');
   });
 });
 

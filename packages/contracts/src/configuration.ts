@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { InstallationConfiguration as DomainInstallationConfiguration } from '@salesforce/domain';
 import { validateConfigurationConsistency } from '@salesforce/domain';
 import { IntegrationSummarySchema, GatewayModeSchema } from './health.js';
-import { IsoTimestampSchema, codeInt, named } from './primitives.js';
+import { IsoTimestampSchema, codeInt, named, sellerCodeInt } from './primitives.js';
 import type { Assert, DeepMutable, Equals, Mutual } from './type-utils.js';
 
 /**
@@ -116,7 +116,7 @@ const SalesSchema = z.strictObject({
 
 export const AccountSellerLinkSchema = named(
   'AccountSellerLink',
-  z.strictObject({ accountEmail: z.email().max(254), sellerCode: codeInt() }),
+  z.strictObject({ accountEmail: z.email().max(254), sellerCode: sellerCodeInt() }),
 );
 
 const CustomersSchema = z.strictObject({

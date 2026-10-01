@@ -89,6 +89,8 @@ export class TemplatesService {
   /* ---------- create (idempotent) ---------- */
 
   async create(user: CurrentUser, customerCode: number, body: CreateOrderTemplateRequest): Promise<TemplateResult> {
+    // First after the route guard, also for a replay: a template is priced and saved against one dataset.
+    assertDatasetMatches(this.dataset, body.expectedDataset);
     const { scope } = await this.policy.accessContext(user);
     const customer = await this.customers.requireVisible(scope, customerCode);
     const parsed = this.parse(body);
@@ -163,6 +165,7 @@ export class TemplatesService {
   /* ---------- replace / delete ---------- */
 
   async replace(user: CurrentUser, id: string, body: ReplaceOrderTemplateRequest): Promise<OrderTemplateDetail> {
+    assertDatasetMatches(this.dataset, body.expectedDataset);
     const { scope } = await this.policy.accessContext(user);
     const current = await this.loadVisible(scope, id);
     const parsed = this.parse(body);

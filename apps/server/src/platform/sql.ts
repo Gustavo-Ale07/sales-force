@@ -1,3 +1,4 @@
+import { isValidSellerCode } from '@salesforce/domain';
 import { ilike, sql, type Column, type SQL } from 'drizzle-orm';
 
 /** Largest value of a PostgreSQL `integer` column: a bigger code can never match a row (and would raise a DB error). */
@@ -21,6 +22,11 @@ export function inInts(column: Column, values: readonly number[]): SQL {
     usable.map((value) => sql`${value}`),
     sql`, `,
   )})`;
+}
+
+/** Seller-scope variant of `inInts`: only valid seller codes (>= 1) can match; 0 is never a seller (F2). */
+export function inSellerCodes(column: Column, values: readonly number[]): SQL {
+  return inInts(column, values.filter(isValidSellerCode));
 }
 
 /** Escapes LIKE wildcards so a search term is always matched literally. */

@@ -1,8 +1,12 @@
 import { z } from 'zod';
 import { IsoTimestampSchema, named } from './primitives.js';
 
-/** Data source of the ERP gateway. `live` is off by default and never wired to spike credentials. */
-export const GatewayModeSchema = named('GatewayMode', z.enum(['fake', 'live']));
+/**
+ * Data source of the ERP gateway as REPORTED. `live` is off by default and never wired to spike
+ * credentials. `unknown` = no valid worker report (never presented as `fake`); a worker itself only
+ * ever runs `fake` or `live`.
+ */
+export const GatewayModeSchema = named('GatewayMode', z.enum(['fake', 'live', 'unknown']));
 export type GatewayMode = z.infer<typeof GatewayModeSchema>;
 
 /**

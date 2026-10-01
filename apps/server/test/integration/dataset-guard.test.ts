@@ -223,12 +223,36 @@ describe('POST /order-templates/{id}/use', () => {
     expect((await ctx.call('seller1', 'POST', url, { clientRequestId: randomUUID(), expectedDataset: TEST_DATASET })).status).toBe(201);
   });
 
-  it('saving a template (not an order) is not guarded', async () => {
-    const response = await ctx.call('seller1', 'POST', `/customers/${customer}/order-templates`, {
-      clientRequestId: randomUUID(),
-      name: 'Sem dataset',
-      items: [{ productCode, quantity: '1' }],
-    });
-    expect(response.status).toBe(201);
+  it('F8: saving or replacing a template is guarded like an order (mismatch 409 without a write, missing 400)', async () => {
+    const create = (expectedDataset: unknown) =>
+      ctx.call('seller1', 'POST', `/customers/${customer}/order-templates`, {
+        clientRequestId: randomUUID(),
+        expectedDataset,
+        name: 'Guardado',
+        items: [{ productCode, quantity: '1' }],
+      });
+    for (const dataset of [OTHER_ID, OTHER_ENV]) {
+      const response = await create(dataset);
+      expect(response.status).toBe(409);
+      expect(response.body.code).toBe('dataset_mismatch');
+    }
+    expect((await create(undefined)).status).toBe(400);
+    const created = await create(TEST_DATASET);
+    expect(created.status).toBe(201);
+
+    const replace = (expectedDataset: unknown) =>
+      ctx.call('seller1', 'PUT', `/order-templates/${created.body.id}`, {
+        expectedDataset,
+        name: 'Guardado 2',
+        items: [{ productCode, quantity: '3' }],
+        expectedVersion: created.body.version,
+      });
+    for (const dataset of [OTHER_ID, OTHER_ENV]) {
+      const response = await replace(dataset);
+      expect(response.status).toBe(409);
+      expect(response.body.code).toBe('dataset_mismatch');
+    }
+    expect((await replace(undefined)).status).toBe(400);
+    expect((await replace(TEST_DATASET)).status).toBe(200);
   });
 });

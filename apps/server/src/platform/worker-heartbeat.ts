@@ -27,7 +27,8 @@ export function isReservedSyncEntity(entity: string): boolean {
 }
 
 export const WorkerHeartbeatCursorSchema = z.object({
-  gatewayMode: GatewayModeSchema,
+  // A worker only ever runs fake or live: `unknown` is what the API reports when it has no valid heartbeat.
+  gatewayMode: GatewayModeSchema.exclude(['unknown']),
   startedAt: IsoTimestampSchema,
 });
 export type WorkerHeartbeatCursor = z.infer<typeof WorkerHeartbeatCursorSchema>;

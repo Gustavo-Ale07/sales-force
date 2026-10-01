@@ -212,6 +212,13 @@ describe('order requests', () => {
     expect(ApiErrorSchema.safeParse({ code: 'dataset_mismatch', message: 'x' }).success).toBe(true);
   });
 
+  it('serves no_seller_scope as 403 and customer_without_seller as 409', () => {
+    expect(ERROR_HTTP_STATUS.no_seller_scope).toBe(403);
+    expect(ERROR_HTTP_STATUS.customer_without_seller).toBe(409);
+    expect(ApiErrorSchema.safeParse({ code: 'no_seller_scope', message: 'x' }).success).toBe(true);
+    expect(ApiErrorSchema.safeParse({ code: 'customer_without_seller', message: 'x' }).success).toBe(true);
+  });
+
   it('rejects client-sent prices and totals on lines and on the order (unrecognized keys)', () => {
     for (const key of ['unitPrice', 'unitListPrice', 'price', 'estimatedLineTotal', 'total']) {
       expect(

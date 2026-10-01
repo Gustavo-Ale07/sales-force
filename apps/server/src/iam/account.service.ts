@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { AccountRole, AccountStatus, Database } from '@salesforce/db';
-import { normalizeEmail } from '@salesforce/domain';
+import { isValidSellerCode, normalizeEmail } from '@salesforce/domain';
 import { uuidv7 } from '../platform/ids.js';
 import { CLOCK, DATABASE, type Clock } from '../platform/tokens.js';
 import { AccountRepository } from './account.repository.js';
@@ -32,6 +32,13 @@ export class AccountNotFoundError extends Error {
   constructor() {
     super('Account not found.');
     this.name = 'AccountNotFoundError';
+  }
+}
+
+export class InvalidSellerCodeError extends Error {
+  constructor() {
+    super('A seller code must be an integer of 1 or more (0 is the "no seller" placeholder, never a seller).');
+    this.name = 'InvalidSellerCodeError';
   }
 }
 
@@ -151,6 +158,7 @@ export class AccountService {
     configVersionId: string,
     actor: ActorRef = CLI_ACTOR,
   ): Promise<void> {
+    if (!isValidSellerCode(sellerCode)) throw new InvalidSellerCodeError();
     await this.db.transaction(async (tx) => {
       await this.accounts.upsertSellerLink({ accountId, sellerCode, configVersionId }, tx);
       await this.audit.record(

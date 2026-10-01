@@ -169,6 +169,7 @@ export interface ConfigurationIssue {
     | 'default_negotiation_type_unknown'
     | 'duplicate_negotiation_type'
     | 'duplicate_account_seller_link'
+    | 'account_seller_link_invalid_seller'
     | 'order_top_not_eligible'
     | 'duplicate_eligible_order_top'
     | 'default_company_not_enabled'
@@ -210,6 +211,10 @@ export function validateConfigurationConsistency(
       code: 'default_negotiation_type_unknown',
       path: 'sales.defaultNegotiationTypeCode',
     });
+  }
+
+  if (customers.accountSellerLinks.some((l) => !Number.isSafeInteger(l.sellerCode) || l.sellerCode < 1)) {
+    issues.push({ code: 'account_seller_link_invalid_seller', path: 'customers.accountSellerLinks' });
   }
 
   const linkKeys = customers.accountSellerLinks.map(

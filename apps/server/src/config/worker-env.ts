@@ -92,6 +92,15 @@ export function loadWorkerConfig(source: EnvSource): WorkerConfig {
       // Scheduled mirror jobs against a REAL Sankhya are never on by default: the request limits are
       // still unmeasured (spike S0.2). Live mode must say `SYNC_MIRROR_ENABLED=true|false` explicitly.
       const values = withoutEmptyValues(source);
+      if (parsed.NODE_ENV === 'production') {
+        // Production never falls back to the synthetic gateway by omission (F7).
+        const mode = values['SANKHYA_MODE']?.toLowerCase();
+        if (mode === undefined) {
+          extra.push("SANKHYA_MODE: is required when NODE_ENV=production ('live', or 'fake' with the explicit ALLOW_FAKE_GATEWAY=1); there is no silent default.");
+        } else if (mode === 'fake' && values['ALLOW_FAKE_GATEWAY'] !== '1') {
+          extra.push('SANKHYA_MODE: the synthetic fake gateway is refused when NODE_ENV=production unless ALLOW_FAKE_GATEWAY=1 is set explicitly.');
+        }
+      }
       if (values['SANKHYA_MODE']?.toLowerCase() === 'live' && values['SYNC_MIRROR_ENABLED'] === undefined) {
         extra.push(
           'SYNC_MIRROR_ENABLED: must be set explicitly (true or false) when SANKHYA_MODE=live; ' +

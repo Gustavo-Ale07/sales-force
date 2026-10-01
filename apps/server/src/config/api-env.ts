@@ -135,7 +135,16 @@ export function parseApiEnv(source: EnvSource): ParsedApiEnv {
     if (parsed.SF_DATASET_ID !== undefined && parsed.SF_ERP_ENVIRONMENT === undefined) {
       problems.push('SF_ERP_ENVIRONMENT: is required when SF_DATASET_ID is set (set both or neither).');
     }
-    problems.push(...origins.problems, ...passwordHashProblems(parsed));
+    if (parsed.NODE_ENV === 'production') {
+      // An undeclared dataset disables the expectedDataset guard (every client would pass it): never in production.
+      if (parsed.SF_ERP_ENVIRONMENT === undefined) {
+        problems.push('SF_ERP_ENVIRONMENT: is required when NODE_ENV=production (the installation must declare its dataset identity).');
+      }
+      if (parsed.SF_DATASET_ID === undefined) {
+        problems.push('SF_DATASET_ID: is required when NODE_ENV=production (the installation must declare its dataset identity).');
+      }
+    }
+    problems.push(...origins.problems,...passwordHashProblems(parsed));
     return problems;
   });
   const dataset =

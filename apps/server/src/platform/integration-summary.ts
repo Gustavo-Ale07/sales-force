@@ -12,11 +12,10 @@ import {
 type SyncStateRow = typeof syncState.$inferSelect;
 
 /**
- * Reported when the mode is unknown (no heartbeat yet, or the database is unreachable). `fake` is the
- * safe default of the gateway factory; the accompanying message states that nothing was reported.
- * NEEDS a decision if the contract should allow an explicit unknown value.
+ * Reported when the mode is unknown (no valid heartbeat yet, or the database is unreachable): never
+ * presented as `fake`, which would claim a synthetic data source nobody confirmed.
  */
-export const UNKNOWN_GATEWAY_MODE: GatewayMode = 'fake';
+export const UNKNOWN_GATEWAY_MODE: GatewayMode = 'unknown';
 
 /**
  * Integration state for the UI pill and `/ready`, from `sync_state` alone (the API never asks the

@@ -43,8 +43,8 @@ export function readyStatusFrom(input: {
 /**
  * What a caller without a session may learn from `/ready` (a load balancer or probe): the verdict and
  * whether the database and the migrations are fine, nothing else. Migration counts, failing entity
- * names, the last success time and the free-text message stay behind a session. The contract has no
- * "unknown" gateway mode, so the neutral placeholder stands in for it (NEEDS a contract decision).
+ * names, the last success time and the free-text message stay behind a session. The gateway mode is
+ * withheld as `unknown`.
  */
 export function coarseReadiness(full: ReadyResponse): ReadyResponse {
   return {

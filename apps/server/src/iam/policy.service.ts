@@ -1,11 +1,15 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
-  resolveCustomerScope,
+  resolveCustomerScopeOutcome,
   type CustomerScope,
   type InstallationConfiguration,
 } from '@salesforce/domain';
 import { ConfigurationVersionService } from '../configuration/configuration-version.service.js';
 import { InstallationConfigurationService } from '../configuration/configuration.service.js';
+import { AppError } from '../http/app-error.js';
+import { CLOCK, type Clock } from '../platform/tokens.js';
+import { AUDIT_ACTIONS, AuditService } from './audit.service.js';
+import { AuditSampler } from './audit-sampler.js';
 import type { CurrentUser } from './current-user.js';
 import { authorizeRoute, toScopeActor, type PolicyDecision } from './policy.js';
 
@@ -19,16 +23,21 @@ export interface AccessContext {
 
 /**
  * The single entry point application code uses for access decisions (AUTH-4, PROPOSED). Route
- * access comes from the pure `policy.ts`; the data scope from `resolveCustomerScope` in the domain,
- * evaluated against the current installation configuration. Endpoints that read scoped data ask
- * `accessContext(user)` (or `customerScope(user)`) and push the scope into the query; none may build
- * its own filter.
+ * access comes from the pure `policy.ts`; the data scope from `resolveCustomerScopeOutcome` in the
+ * domain, evaluated against the current installation configuration. Endpoints that read scoped data
+ * ask `accessContext(user)` (or `customerScope(user)`) and push the scope into the query; none may
+ * build its own filter.
  */
 @Injectable()
 export class PolicyService {
+  /** Bounds the audit rows of a repeatedly refused account (a 5-minute window per account). */
+  readonly #denials = new AuditSampler(5 * 60_000);
+
   constructor(
     @Inject(InstallationConfigurationService) private readonly configuration: InstallationConfigurationService,
     @Inject(ConfigurationVersionService) private readonly versions: ConfigurationVersionService,
+    @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
   authorizeRoute(user: CurrentUser, operationId: string): PolicyDecision {
@@ -37,7 +46,7 @@ export class PolicyService {
 
   async customerScope(user: CurrentUser): Promise<CustomerScope> {
     const { configuration } = await this.configuration.current();
-    return resolveCustomerScope(toScopeActor(user), configuration);
+    return this.scopeOrDeny(user, configuration);
   }
 
   /**
@@ -50,7 +59,26 @@ export class PolicyService {
     return {
       configuration,
       configVersionId: versionId,
-      scope: resolveCustomerScope(toScopeActor(user), configuration),
+      scope: await this.scopeOrDeny(user, configuration),
     };
+  }
+
+  /**
+   * The scope, or the refusal: a seller without a valid seller link is `no_seller_scope` (403) on every
+   * scoped route, never an empty or wide scope; any other unknown role is a plain `forbidden`. The
+   * refusal is audited with the account id only (sampled per account, no personal data).
+   */
+  private async scopeOrDeny(user: CurrentUser, configuration: InstallationConfiguration): Promise<CustomerScope> {
+    const outcome = resolveCustomerScopeOutcome(toScopeActor(user), configuration);
+    if (outcome.ok) return outcome.scope;
+    const sample = this.#denials.observe(user.accountId, this.clock());
+    if (sample.record) {
+      await this.audit.record({
+        action: AUDIT_ACTIONS.noSellerScope,
+        actorAccountId: user.accountId,
+        detail: { reason: outcome.reason, role: user.role, occurrences: sample.count },
+      });
+    }
+    throw new AppError(outcome.reason === 'no_seller_scope' ? 'no_seller_scope' : 'forbidden');
   }
 }

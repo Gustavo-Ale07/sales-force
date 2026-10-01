@@ -12,6 +12,7 @@ import type {
 import {
   canTransitionOrder,
   datasetOriginForConfigurationSource,
+  isValidSellerCode,
   isCustomerInScope,
   isOrderEditable,
   normalizeDecimalString,
@@ -66,6 +67,21 @@ export interface RepeatLastOrderResult {
  * UNDECIDED). Nothing is ever sent to the ERP: `submit` always ends in `erp_submission_disabled`
  * (SNK-4, SNK-6) and touches neither the outbox nor the gateway.
  */
+/** F4: a draft is always attributed to the customer's seller; without a valid one there is nobody to attribute it to. */
+function assertCustomerHasSeller(customer: { readonly sellerCode: number | null }): void {
+  if (!isValidSellerCode(customer.sellerCode)) throw new AppError('customer_without_seller');
+}
+
+/**
+ * F5: the origin stamp is immutable, so a replace can only be refused, never re-stamped. A draft priced
+ * against another kind of dataset (fake vs sankhya) must not be repriced under the current one;
+ * `legacy_dev` drafts are never ERP-eligible and stay editable.
+ */
+function assertOriginMatchesConfiguration(stamped: string, sourceKind: string): void {
+  if (stamped === 'legacy_dev') return;
+  if (stamped !== datasetOriginForConfigurationSource(sourceKind)) throw new AppError('dataset_mismatch');
+}
+
 function discountedLines(items: readonly { readonly discountPercent: string }[]): number {
   return items.filter((item) => item.discountPercent !== '0').length;
 }
@@ -137,6 +153,7 @@ export class OrdersService {
     if (existing !== null) return { order: await this.replayOf(existing, user, fingerprint, context.scope), replayed: true };
 
     const customer = await this.customers.requireVisible(context.scope, body.customerCode);
+    assertCustomerHasSeller(customer);
     const draft = await this.buildValid(context, customer, body);
     const at = this.clock();
 
@@ -201,6 +218,7 @@ export class OrdersService {
     assertDatasetMatches(this.dataset, body.expectedDataset);
     const context = await this.policy.accessContext(user);
     const customer = await this.customers.requireVisible(context.scope, customerCode);
+    assertCustomerHasSeller(customer);
 
     // Idempotency comes first, before any resolution of "the latest order" or reclassification of its
     // lines: both depend on mutable state (order history, catalog, prices), so a legitimate retry of
@@ -296,8 +314,10 @@ export class OrdersService {
     const context = await this.policy.accessContext(user);
     const current = await this.loadVisible(context.scope, id);
     this.assertEditable(current, body.expectedVersion);
+    assertOriginMatchesConfiguration(current.datasetOrigin, context.configuration.source.kind);
 
     const customer = await this.customers.requireVisible(context.scope, body.customerCode);
+    assertCustomerHasSeller(customer);
     const draft = await this.buildValid(context, customer, body);
     const at = this.clock();
 
@@ -308,6 +328,7 @@ export class OrdersService {
       // scope, and then it must look exactly like a missing one (never a version_conflict that shows it exists).
       this.assertInScope(context.scope, locked);
       this.assertEditable(locked, body.expectedVersion);
+      assertOriginMatchesConfiguration(locked.datasetOrigin, context.configuration.source.kind);
 
       const row = await this.orders.updateOrder(
         id,

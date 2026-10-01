@@ -16,6 +16,10 @@ export const DEFAULT_ERROR_MESSAGES: Readonly<Record<ErrorCode, string>> = {
   erp_submission_disabled: 'O envio de pedidos ao ERP ainda não está habilitado.',
   dataset_mismatch:
     'Este pedido foi iniciado com outro conjunto de dados e não pode ser salvo aqui. Atualize o aplicativo, confira o pedido e refaça-o.',
+  no_seller_scope:
+    'Sua conta ainda não está vinculada a um vendedor. Peça ao administrador para vincular um código de vendedor.',
+  customer_without_seller:
+    'Este cliente não tem vendedor definido e não pode receber pedidos. Peça ao administrador para ajustar o cadastro no ERP.',
   rate_limited: 'Muitas tentativas. Aguarde um momento e tente novamente.',
   service_unavailable: 'Serviço temporariamente indisponível. Tente novamente em instantes.',
   internal_error: 'Erro interno. Informe o código da requisição ao suporte.',

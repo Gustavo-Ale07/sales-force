@@ -20,6 +20,7 @@ const ALL_MIGRATIONS = [
   '0003_customer_order_template',
   '0004_sales_order_item_discount_percent',
   '0005_sales_order_erp_binding',
+  '0006_account_seller_link_seller_code_check',
 ];
 const N = ALL_MIGRATIONS.length;
 
@@ -100,10 +101,10 @@ describe('migrations', () => {
     // Previous release: journal without 0004.
     const journalPath = path.join(dir, 'meta', '_journal.json');
     const journal = JSON.parse(await readFile(journalPath, 'utf8')) as { entries: { tag: string }[] };
-    journal.entries = journal.entries.filter((e) => e.tag !== '0004_sales_order_item_discount_percent' && e.tag !== '0005_sales_order_erp_binding');
+    journal.entries = journal.entries.filter((e) => e.tag !== '0004_sales_order_item_discount_percent' && e.tag !== '0005_sales_order_erp_binding' && e.tag !== '0006_account_seller_link_seller_code_check');
     await writeFile(journalPath, JSON.stringify(journal));
     const prev = await runMigrations(url, { ...quiet, migrationsDir: dir });
-    expect(prev.applied).toEqual(ALL_MIGRATIONS.slice(0, -2));
+    expect(prev.applied).toEqual(ALL_MIGRATIONS.slice(0, -3));
     expect(await query(url, `SELECT to_regclass('public.customer_order_template') AS t`)).toEqual([{ t: 'customer_order_template' }]);
 
     // Existing rows must survive untouched.
@@ -117,8 +118,8 @@ describe('migrations', () => {
 
     // Deploy the new release: only the new migration runs.
     const next = await runMigrations(url, quiet);
-    expect(next.applied).toEqual(['0004_sales_order_item_discount_percent', '0005_sales_order_erp_binding']);
-    expect(next.alreadyApplied).toBe(N - 2);
+    expect(next.applied).toEqual(ALL_MIGRATIONS.slice(-3));
+    expect(next.alreadyApplied).toBe(N - 3);
     expect(await query(url, `SELECT id FROM sales_order`)).toEqual([{ id: ord }]);
     // The existing line is kept as it was, with no discount.
     expect(await query(url, `SELECT quantity::text AS q, estimated_line_total::text AS t, discount_percent::text AS d FROM sales_order_item`)).toEqual([{ q: '2.0000', t: '10.00', d: '0.00' }]);
@@ -141,7 +142,7 @@ describe('migrations', () => {
     await cp(defaultMigrationsDir, dir, { recursive: true });
     const journalPath = path.join(dir, 'meta', '_journal.json');
     const journal = JSON.parse(await readFile(journalPath, 'utf8')) as { entries: { tag: string }[] };
-    journal.entries = journal.entries.filter((e) => e.tag !== '0005_sales_order_erp_binding');
+    journal.entries = journal.entries.filter((e) => e.tag !== '0005_sales_order_erp_binding' && e.tag !== '0006_account_seller_link_seller_code_check');
     await writeFile(journalPath, JSON.stringify(journal));
     await runMigrations(url, { ...quiet, migrationsDir: dir });
 
@@ -159,7 +160,7 @@ describe('migrations', () => {
     await query(url, `INSERT INTO sales_order (id, customer_code, created_by_account_id, client_request_id, config_version_id, status) VALUES ($1, 2, $2, $3, $4, 'cancelled')`, ['018f0000-0000-7000-8000-000000000006', acc, '018f0000-0000-7000-8000-000000000007', cfg]);
 
     const next = await runMigrations(url, quiet);
-    expect(next.applied).toEqual(['0005_sales_order_erp_binding']);
+    expect(next.applied).toEqual(['0005_sales_order_erp_binding', '0006_account_seller_link_seller_code_check']);
     // Backfill: every pre-existing order is legacy and unbound; nothing else changed.
     expect(await query(url, `SELECT dataset_origin, erp_environment, status FROM sales_order ORDER BY customer_code`)).toEqual([
       { dataset_origin: 'legacy_dev', erp_environment: null, status: 'draft' },
@@ -189,6 +190,36 @@ describe('migrations', () => {
     const file = await readFile(path.join(defaultMigrationsDir, '0005_sales_order_erp_binding.sql'), 'utf8');
     expect(file).not.toMatch(/DROP\s+(TABLE|COLUMN|CONSTRAINT)|TRUNCATE|DELETE\s+FROM|RENAME|ALTER\s+COLUMN/i);
     expect(file).not.toMatch(/UPDATE\s+"?sales_order"?\s+SET/i);
+  });
+
+  it('0006 is expand-only: a legacy seller 0 link survives, new links to seller 0 are refused', async () => {
+    const url = await pgc.createDatabase();
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'sf-migrations-'));
+    await cp(defaultMigrationsDir, dir, { recursive: true });
+    const journalPath = path.join(dir, 'meta', '_journal.json');
+    const journal = JSON.parse(await readFile(journalPath, 'utf8')) as { entries: { tag: string }[] };
+    journal.entries = journal.entries.filter((e) => e.tag !== '0006_account_seller_link_seller_code_check');
+    await writeFile(journalPath, JSON.stringify(journal));
+    await runMigrations(url, { ...quiet, migrationsDir: dir });
+
+    const acc = '018f0000-0000-7000-8000-000000000001';
+    const acc2 = '018f0000-0000-7000-8000-000000000011';
+    const cfg = '018f0000-0000-7000-8000-000000000002';
+    await query(url, `INSERT INTO account (id, email, display_name, password_hash, role) VALUES ($1, 'u@example.test', 'U', 'x', 'seller'), ($2, 'v@example.test', 'V', 'x', 'seller')`, [acc, acc2]);
+    await query(url, `INSERT INTO installation_configuration_version (id, version_label, source_kind, payload, content_hash, synced_at) VALUES ($1, 'v', 'demo', '{}', 'h', now())`, [cfg]);
+    // A pre-0006 row with the placeholder code (what the migration must not choke on).
+    await query(url, `INSERT INTO account_seller_link (account_id, seller_code, config_version_id) VALUES ($1, 0, $2)`, [acc, cfg]);
+
+    const next = await runMigrations(url, quiet);
+    expect(next.applied).toEqual(['0006_account_seller_link_seller_code_check']);
+    expect(await query(url, `SELECT seller_code FROM account_seller_link`)).toEqual([{ seller_code: 0 }]);
+    await expect(query(url, `INSERT INTO account_seller_link (account_id, seller_code, config_version_id) VALUES ($1, 0, $2)`, [acc2, cfg])).rejects.toThrow(/account_seller_link_seller_code_chk/);
+    await expect(query(url, `INSERT INTO account_seller_link (account_id, seller_code, config_version_id) VALUES ($1, -2, $2)`, [acc2, cfg])).rejects.toThrow(/account_seller_link_seller_code_chk/);
+    await query(url, `INSERT INTO account_seller_link (account_id, seller_code, config_version_id) VALUES ($1, 103, $2)`, [acc2, cfg]);
+
+    const file = await readFile(path.join(defaultMigrationsDir, '0006_account_seller_link_seller_code_check.sql'), 'utf8');
+    expect(file).toMatch(/ADD CONSTRAINT .* CHECK .* NOT VALID;?$/);
+    expect(file).not.toMatch(/DROP|TRUNCATE|DELETE|RENAME|ALTERs+COLUMN|UPDATE/i);
   });
 
   it('two concurrent runners do not corrupt the database (advisory lock)', async () => {
@@ -281,7 +312,7 @@ describe('migrations', () => {
       await runMigrations(url, quiet);
       expect(await readiness(handle.pool)).toEqual({
         appliedCount: N,
-        lastId: '0005_sales_order_erp_binding',
+        lastId: '0006_account_seller_link_seller_code_check',
         expectedCount: N,
         upToDate: true,
       });

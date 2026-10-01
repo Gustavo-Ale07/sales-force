@@ -398,7 +398,7 @@ export const routes = {
     tags: ['order-templates'],
     summary: 'Save a recurring order template for a customer',
     description:
-      'A saved list of product + quantity (1 to 500 lines, each product once); no price, discount or note. Idempotent on `clientRequestId` per account: 201 when created, 200 with the same template on a replay of the same payload, 409 idempotency_conflict when the id was used with a different payload. 409 conflict (details.reason `template_limit_reached`) beyond 50 live templates for the customer; 409 conflict (`template_name_taken`) when a live template of the customer already has that name, ignoring case. Body up to 128 kB.',
+      'A saved list of product + quantity (1 to 500 lines, each product once); no price, discount or note. Idempotent on `clientRequestId` per account: 201 when created, 200 with the same template on a replay of the same payload, 409 idempotency_conflict when the id was used with a different payload. 409 conflict (details.reason `template_limit_reached`) beyond 50 live templates for the customer; 409 conflict (`template_name_taken`) when a live template of the customer already has that name, ignoring case. `expectedDataset` is required: 409 dataset_mismatch (nothing is written) when it differs from the dataset the server declares, or the server declares none. Body up to 128 kB.',
     auth: 'session',
     request: { params: CustomerPathSchema, body: CreateOrderTemplateRequestSchema },
     maxBodyBytes: 128 * 1024,
@@ -427,7 +427,7 @@ export const routes = {
     tags: ['order-templates'],
     summary: 'Replace an order template (optimistic concurrency)',
     description:
-      'Full replace of name and lines; the customer never changes. 409 version_conflict when `expectedVersion` is stale; 409 conflict (`template_name_taken`) on a name collision. Body up to 128 kB.',
+      'Full replace of name and lines; the customer never changes. 409 version_conflict when `expectedVersion` is stale; 409 conflict (`template_name_taken`) on a name collision. `expectedDataset` is required: 409 dataset_mismatch (the template is not changed) when it differs from the dataset the server declares, or the server declares none. Body up to 128 kB.',
     auth: 'session',
     request: { params: OrderTemplatePathSchema, body: ReplaceOrderTemplateRequestSchema },
     maxBodyBytes: 128 * 1024,

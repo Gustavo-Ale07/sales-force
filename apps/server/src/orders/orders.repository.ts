@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { erpCustomer, salesOrder, salesOrderItem, type Database } from '@salesforce/db';
 import type { CustomerScope, OrderItem } from '@salesforce/domain';
 import { and, asc, desc, eq, ne, or, sql, type SQL } from 'drizzle-orm';
-import { containsText, digitsOf, eqInt, fitsPgInt, inInts, offsetOf } from '../platform/sql.js';
+import { containsText, digitsOf, eqInt, fitsPgInt, inInts, inSellerCodes, offsetOf } from '../platform/sql.js';
 import { DATABASE } from '../platform/tokens.js';
 
 export type OrderRow = typeof salesOrder.$inferSelect;
@@ -87,7 +87,7 @@ function matchingLinesFirst(codes: readonly number[] | undefined): SQL {
 }
 
 function scopeCondition(scope: CustomerScope): SQL | undefined {
-  return scope.kind === 'all' ? undefined : inInts(salesOrder.sellerCode, scope.sellerCodes);
+  return scope.kind === 'all' ? undefined : inSellerCodes(salesOrder.sellerCode, scope.sellerCodes);
 }
 
 @Injectable()

@@ -109,9 +109,8 @@ describe('API environment', () => {
   });
 
   it('refuses AUTH_MODE=dev in production, even with the opt-in', () => {
-    expect(problemsOf(() => parseApiEnv({ DATABASE_URL, NODE_ENV: 'production', TRUST_PROXY: '1', ALLOW_DEV_AUTH: '1', ALLOWED_ORIGINS: 'https://app.example.com' }))).toEqual([
-      expect.stringMatching(/^AUTH_MODE: .*production/),
-    ]);
+    const problems = problemsOf(() => parseApiEnv({ DATABASE_URL, NODE_ENV: 'production', TRUST_PROXY: '1', ALLOW_DEV_AUTH: '1', ALLOWED_ORIGINS: 'https://app.example.com' }));
+    expect(problems.filter((problem) => !problem.startsWith('SF_'))).toEqual([expect.stringMatching(/^AUTH_MODE: .*production/)]);
   });
 
   it('refuses the dev auth mode without the explicit ALLOW_DEV_AUTH=1 opt-in', () => {
@@ -225,5 +224,41 @@ describe('Worker environment', () => {
 
   it('rejects an unknown gateway mode', () => {
     expect(problemsOf(() => loadWorkerConfig({ ...WORKER, SANKHYA_MODE: 'turbo' })).join('\n')).toMatch(/SANKHYA_MODE/);
+  });
+});
+
+describe('production boot defaults (F7)', () => {
+  // Production has no authentication mode yet (only `dev`, refused there), so the parse always fails in
+  // production today: the assertions are on the SF_* problems alone.
+  const API_PROD = { DATABASE_URL, NODE_ENV: 'production', TRUST_PROXY: '1', ALLOWED_ORIGINS: 'https://app.example.com' } as const;
+  const datasetProblems = (env: Record<string, string>) =>
+    problemsOf(() => parseApiEnv(env)).filter((problem) => problem.startsWith('SF_'));
+
+  it('API: SF_ERP_ENVIRONMENT and SF_DATASET_ID are required in production', () => {
+    const problems = datasetProblems({ ...API_PROD }).join('\n');
+    expect(problems).toMatch(/SF_ERP_ENVIRONMENT: is required when NODE_ENV=production/);
+    expect(problems).toMatch(/SF_DATASET_ID: is required when NODE_ENV=production/);
+    expect(datasetProblems({ ...API_PROD, SF_ERP_ENVIRONMENT: '  ', SF_DATASET_ID: '' })).toHaveLength(2);
+  });
+
+  it('API: no dataset problem in production once the identity is declared; still optional elsewhere', () => {
+    expect(datasetProblems({ ...API_PROD, SF_ERP_ENVIRONMENT: 'production', SF_DATASET_ID: 'plac-prod-1' })).toEqual([]);
+    expect(parseApiEnv({ ...DEV }).dataset).toBeNull();
+  });
+
+  const WORKER_PROD = { DATABASE_URL, NODE_ENV: 'production' } as const;
+
+  it('Worker: SANKHYA_MODE must be explicit in production (no silent fake default)', () => {
+    expect(problemsOf(() => loadWorkerConfig({ ...WORKER_PROD })).join('\n')).toMatch(/SANKHYA_MODE: is required when NODE_ENV=production/);
+  });
+
+  it('Worker: fake is refused in production unless ALLOW_FAKE_GATEWAY=1', () => {
+    expect(problemsOf(() => loadWorkerConfig({ ...WORKER_PROD, SANKHYA_MODE: 'fake' })).join('\n')).toMatch(/ALLOW_FAKE_GATEWAY=1/);
+    expect(loadWorkerConfig({ ...WORKER_PROD, SANKHYA_MODE: 'fake', ALLOW_FAKE_GATEWAY: '1' }).gatewayDescription.mode).toBe('fake');
+  });
+
+  it('Worker: an empty SANKHYA_MODE counts as unset; development keeps the fake default', () => {
+    expect(problemsOf(() => loadWorkerConfig({ ...WORKER_PROD, SANKHYA_MODE: '  ' })).join('\n')).toMatch(/SANKHYA_MODE: is required/);
+    expect(loadWorkerConfig({ DATABASE_URL, NODE_ENV: 'development' }).gatewayDescription.mode).toBe('fake');
   });
 });

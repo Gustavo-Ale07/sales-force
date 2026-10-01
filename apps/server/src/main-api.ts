@@ -4,6 +4,7 @@ import { createApiApp } from './api/create-app.js';
 import { parseApiEnv } from './config/api-env.js';
 import { authConfigFromEnv } from './iam/auth-config.js';
 import { createLogger } from './observability/logger.js';
+import { demoAccountsWarning } from './platform/demo-accounts-check.js';
 import { applyPoolLimits } from './platform/pool-limits.js';
 import { installProcessGuards, logPoolErrors, runMain } from './process.js';
 
@@ -39,4 +40,9 @@ runMain('api', async () => {
   });
   await app.listen({ host: env.API_HOST, port: env.API_PORT });
   logger.info({ host: env.API_HOST, port: env.API_PORT, nodeEnv: env.NODE_ENV, trustProxy: env.TRUST_PROXY !== false }, 'api listening');
+  // Startup warning only (F12): demo accounts carry a known development password. Counts, never e-mails.
+  const demo = await demoAccountsWarning(db.db, env.NODE_ENV);
+  if (demo !== null && demo.count > 0) {
+    logger.warn({ demoAccounts: demo.count }, 'production database contains demo accounts (*.demo.salesforce.local): disable or remove them before real use');
+  }
 });

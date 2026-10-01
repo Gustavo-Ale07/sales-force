@@ -80,6 +80,8 @@ export const accountSellerLink = pgTable(
     // Serves: seller-scope resolution ("which accounts are linked to seller X").
     index('account_seller_link_seller_code_idx').on(t.sellerCode),
     index('account_seller_link_config_version_id_idx').on(t.configVersionId),
+    // 0 is the "no seller" placeholder, never a seller: a link to it must not grant a scope (F2).
+    check('account_seller_link_seller_code_chk', sql`${t.sellerCode} >= 1`),
   ],
 );
 

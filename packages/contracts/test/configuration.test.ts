@@ -1,6 +1,7 @@
 import { defaultUnconfiguredConfiguration } from '@salesforce/domain';
 import { describe, expect, it } from 'vitest';
 import {
+  AccountSellerLinkSchema,
   ConfigurationResponseSchema,
   ConfigurationSummarySchema,
   InstallationConfigurationSchema,
@@ -113,6 +114,15 @@ describe('InstallationConfigurationSchema', () => {
         },
       }));
       expect(issuesOf(config).map((i) => i.message)).toEqual(['duplicate_account_seller_link']);
+    });
+
+    it.each([0, -1, 1.5])('rejects an account/seller link with seller code %s (>= 1 required)', (sellerCode) => {
+      const config = makeConfig((c) => ({
+        ...c,
+        customers: { ...c.customers, accountSellerLinks: [{ accountEmail: 'vendedor@example.test', sellerCode }] },
+      }));
+      expect(AccountSellerLinkSchema.safeParse(config.customers.accountSellerLinks[0]).success).toBe(false);
+      expect(issuesOf(config).length).toBeGreaterThan(0);
     });
   });
 });

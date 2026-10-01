@@ -8,7 +8,7 @@ import {
 import type { CustomerScope, TemplateItem } from '@salesforce/domain';
 import { and, asc, eq, isNull, ne, sql } from 'drizzle-orm';
 import type { Executor } from '../orders/orders.repository.js';
-import { fitsPgInt, inInts } from '../platform/sql.js';
+import { fitsPgInt, inSellerCodes } from '../platform/sql.js';
 import { DATABASE } from '../platform/tokens.js';
 
 export type TemplateRow = typeof customerOrderTemplate.$inferSelect;
@@ -38,7 +38,7 @@ export class TemplatesRepository {
   }
 
   private customerScopeCondition(scope: CustomerScope) {
-    return scope.kind === 'all' ? undefined : inInts(erpCustomer.sellerCode, scope.sellerCodes);
+    return scope.kind === 'all' ? undefined : inSellerCodes(erpCustomer.sellerCode, scope.sellerCodes);
   }
 
   /* ---------- locks ---------- */

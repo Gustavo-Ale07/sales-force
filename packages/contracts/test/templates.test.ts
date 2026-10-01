@@ -35,33 +35,42 @@ describe('order template routes', () => {
 
 describe('create / replace template requests', () => {
   it('trim the name and accept 1 to 500 lines', () => {
-    const parsed = CreateOrderTemplateRequestSchema.parse({ clientRequestId: id, name: '  Reposição  ', items: [item] });
+    const parsed = CreateOrderTemplateRequestSchema.parse({ clientRequestId: id, expectedDataset: DATASET, name: '  Reposição  ', items: [item] });
     expect(parsed.name).toBe('Reposição');
-    expect(CreateOrderTemplateRequestSchema.safeParse({ clientRequestId: id, name: 'a', items: many(500) }).success).toBe(true);
-    expect(CreateOrderTemplateRequestSchema.safeParse({ clientRequestId: id, name: 'a', items: many(501) }).success).toBe(false);
-    expect(CreateOrderTemplateRequestSchema.safeParse({ clientRequestId: id, name: 'a', items: [] }).success).toBe(false);
+    expect(CreateOrderTemplateRequestSchema.safeParse({ clientRequestId: id, expectedDataset: DATASET, name: 'a', items: many(500) }).success).toBe(true);
+    expect(CreateOrderTemplateRequestSchema.safeParse({ clientRequestId: id, expectedDataset: DATASET, name: 'a', items: many(501) }).success).toBe(false);
+    expect(CreateOrderTemplateRequestSchema.safeParse({ clientRequestId: id, expectedDataset: DATASET, name: 'a', items: [] }).success).toBe(false);
   });
 
   it('bound the name: 1..80, no control characters', () => {
-    const attempt = (name: unknown) => CreateOrderTemplateRequestSchema.safeParse({ clientRequestId: id, name, items: [item] }).success;
+    const attempt = (name: unknown) => CreateOrderTemplateRequestSchema.safeParse({ clientRequestId: id, expectedDataset: DATASET, name, items: [item] }).success;
     expect(attempt('a'.repeat(80))).toBe(true);
     expect(attempt('a'.repeat(81))).toBe(false);
     for (const bad of ['', '   ', 'a\nb', 'a\u0000b', 'a\u007fb', 7, null]) expect(attempt(bad), String(bad)).toBe(false);
   });
 
   it('never accept a price, discount, note or unknown key (strict), on the request or on a line', () => {
-    const base = { clientRequestId: id, name: 'a', items: [item] };
+    const base = { clientRequestId: id, expectedDataset: DATASET, name: 'a', items: [item] };
     expect(CreateOrderTemplateRequestSchema.safeParse({ ...base, notes: 'x' }).success).toBe(false);
     expect(CreateOrderTemplateRequestSchema.safeParse({ ...base, items: [{ ...item, unitPrice: '1' }] }).success).toBe(false);
     expect(CreateOrderTemplateRequestSchema.safeParse({ ...base, items: [{ ...item, discountPercent: '1' }] }).success).toBe(false);
     expect(CreateOrderTemplateRequestSchema.safeParse({ ...base, items: [{ productCode: 1, quantity: 2 }] }).success).toBe(false);
   });
 
+  it('require expectedDataset on create and replace (no default, strict shape)', () => {
+    expect(CreateOrderTemplateRequestSchema.safeParse({ clientRequestId: id, name: 'a', items: [item] }).success).toBe(false);
+    expect(ReplaceOrderTemplateRequestSchema.safeParse({ expectedVersion: 1, name: 'a', items: [item] }).success).toBe(false);
+    for (const bad of [null, {}, { environment: 'sandbox' }, { ...DATASET, extra: 1 }]) {
+      expect(CreateOrderTemplateRequestSchema.safeParse({ clientRequestId: id, expectedDataset: bad, name: 'a', items: [item] }).success).toBe(false);
+      expect(ReplaceOrderTemplateRequestSchema.safeParse({ expectedVersion: 1, expectedDataset: bad, name: 'a', items: [item] }).success).toBe(false);
+    }
+  });
+
   it('replace carries expectedVersion and no clientRequestId', () => {
-    expect(ReplaceOrderTemplateRequestSchema.safeParse({ expectedVersion: 1, name: 'a', items: [item] }).success).toBe(true);
+    expect(ReplaceOrderTemplateRequestSchema.safeParse({ expectedVersion: 1, expectedDataset: DATASET, name: 'a', items: [item] }).success).toBe(true);
     expect(ReplaceOrderTemplateRequestSchema.safeParse({ name: 'a', items: [item] }).success).toBe(false);
-    expect(ReplaceOrderTemplateRequestSchema.safeParse({ expectedVersion: 0, name: 'a', items: [item] }).success).toBe(false);
-    expect(ReplaceOrderTemplateRequestSchema.safeParse({ expectedVersion: 1, clientRequestId: id, name: 'a', items: [item] }).success).toBe(false);
+    expect(ReplaceOrderTemplateRequestSchema.safeParse({ expectedVersion: 0, expectedDataset: DATASET, name: 'a', items: [item] }).success).toBe(false);
+    expect(ReplaceOrderTemplateRequestSchema.safeParse({ expectedVersion: 1, clientRequestId: id, expectedDataset: DATASET, name: 'a', items: [item] }).success).toBe(false);
   });
 
   it('use takes a client request id and the expected dataset', () => {

@@ -11,7 +11,7 @@ import {
 import type { CustomerScope, PriceTableVersion } from '@salesforce/domain';
 import { and, asc, desc, eq, inArray, isNotNull, isNull, not, or, sql, type SQL } from 'drizzle-orm';
 import { DATABASE } from '../platform/tokens.js';
-import { containsText, digitsOf, eqInt, fitsPgInt, inInts, offsetOf } from '../platform/sql.js';
+import { containsText, digitsOf, eqInt, fitsPgInt, inSellerCodes, offsetOf } from '../platform/sql.js';
 
 /**
  * Read side of the ERP mirror (`erp_*`). The mirror tables are written only by the worker's sync
@@ -104,7 +104,7 @@ export interface CustomerCounts {
 }
 
 function scopeCondition(scope: CustomerScope): SQL | undefined {
-  return scope.kind === 'all' ? undefined : inInts(erpCustomer.sellerCode, scope.sellerCodes);
+  return scope.kind === 'all' ? undefined : inSellerCodes(erpCustomer.sellerCode, scope.sellerCodes);
 }
 
 @Injectable()
@@ -120,7 +120,7 @@ export class MirrorRepository {
   }): Promise<SellerRow[]> {
     const conditions = [
       isNull(erpSeller.deletedAt),
-      input.scope.kind === 'all' ? undefined : inInts(erpSeller.code, input.scope.sellerCodes),
+      input.scope.kind === 'all' ? undefined : inSellerCodes(erpSeller.code, input.scope.sellerCodes),
       input.active === undefined ? undefined : eq(erpSeller.active, input.active),
       input.search === undefined ? undefined : containsText(erpSeller.name, input.search),
     ];

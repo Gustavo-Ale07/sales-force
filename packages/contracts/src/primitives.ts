@@ -34,6 +34,8 @@ export const IsoTimestampSchema = named('IsoTimestamp', z.iso.datetime({ offset:
 
 /** Integer business code mirrored from the ERP (seller, customer, product, table...). */
 export const codeInt = (): z.ZodNumber => z.number().int().min(0);
+/** A seller code (Sankhya CODVEND) used to GRANT access: >= 1; 0 is the "no seller" placeholder, never a seller. */
+export const sellerCodeInt = (): z.ZodNumber => z.number().int().min(1);
 
 export const UuidSchema = z.uuid();
 

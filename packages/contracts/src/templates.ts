@@ -72,6 +72,7 @@ export const CreateOrderTemplateRequestSchema = named(
   'CreateOrderTemplateRequest',
   z.strictObject({
     clientRequestId: UuidSchema,
+    expectedDataset: expectedDatasetField,
     name: TemplateNameSchema,
     items: templateItemsSchema,
   }),
@@ -83,6 +84,7 @@ export const ReplaceOrderTemplateRequestSchema = named(
   'ReplaceOrderTemplateRequest',
   z.strictObject({
     expectedVersion: z.number().int().min(1),
+    expectedDataset: expectedDatasetField,
     name: TemplateNameSchema,
     items: templateItemsSchema,
   }),

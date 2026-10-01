@@ -117,7 +117,7 @@ export class WorkerRuntime {
       }
 
       const heartbeatCursor: WorkerHeartbeatCursor = {
-        gatewayMode: GatewayModeSchema.parse(options.gatewayMode),
+        gatewayMode: GatewayModeSchema.exclude(['unknown']).parse(options.gatewayMode),
         startedAt: this.deps.now().toISOString(),
       };
       const heartbeat = new SyncHeartbeatJob(this.deps.db.db, heartbeatCursor, (at) => this.health.recordBeat(at));

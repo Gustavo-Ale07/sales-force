@@ -18,6 +18,8 @@ const DATASET_GUARDED = [
   new RegExp('^PUT /orders/[^/]+$'),
   new RegExp('^POST /customers/[^/]+/orders/repeat-last$'),
   new RegExp('^POST /order-templates/[^/]+/use$'),
+  new RegExp('^POST /customers/[^/]+/order-templates$'),
+  new RegExp('^PUT /order-templates/[^/]+$'),
 ];
 
 /**

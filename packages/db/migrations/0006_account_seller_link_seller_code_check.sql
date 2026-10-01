@@ -1,0 +1,1 @@
+ALTER TABLE "account_seller_link" ADD CONSTRAINT "account_seller_link_seller_code_chk" CHECK ("account_seller_link"."seller_code" >= 1) NOT VALID;

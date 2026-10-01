@@ -16,6 +16,8 @@ export const AUDIT_ACTIONS = {
   accountPasswordChanged: 'account.password_changed',
   accountStatusChanged: 'account.status_changed',
   accountSellerLinked: 'account.seller_linked',
+  /** A scoped request was refused because the account has no valid seller link (ids only, no PII). */
+  noSellerScope: 'authz.no_seller_scope',
   orderCreated: 'order.created',
   orderReplaced: 'order.replaced',
   orderDiscarded: 'order.discarded',

@@ -145,7 +145,7 @@ describe('GET /api/v1/ready', () => {
       expect(response.statusCode).toBe(200);
       const body = ReadyResponseSchema.parse(response.json());
       // The placeholder mode, not the worker's `live`; no entity names, message, timestamp or counts.
-      expect(body.integration.gatewayMode).toBe('fake');
+      expect(body.integration.gatewayMode).toBe('unknown');
       expect(body.integration.failingEntities).toEqual([]);
       expect(body.integration.message).toBeNull();
       expect(body.integration.lastSuccessAt).toBeNull();
@@ -161,11 +161,11 @@ describe('GET /api/v1/ready', () => {
     expect(ReadyResponseSchema.parse((await readyWith(app, cookie)).json()).integration.gatewayMode).toBe('live');
 
     await database.handle.pool.query('update session set revoked_at = now() where account_id = $1', [admin.id]);
-    expect(ReadyResponseSchema.parse((await readyWith(app, cookie)).json()).integration.gatewayMode).toBe('fake');
+    expect(ReadyResponseSchema.parse((await readyWith(app, cookie)).json()).integration.gatewayMode).toBe('unknown');
 
     const fresh = await loginCookie({ app }, 'ready-gone@example.test', TEST_PASSWORD);
     await database.handle.pool.query("update account set status = 'disabled' where id = $1", [admin.id]);
-    expect(ReadyResponseSchema.parse((await readyWith(app, fresh)).json()).integration.gatewayMode).toBe('fake');
+    expect(ReadyResponseSchema.parse((await readyWith(app, fresh)).json()).integration.gatewayMode).toBe('unknown');
   });
 
   it('does not slide the session when it only peeks at the role for /ready', async () => {

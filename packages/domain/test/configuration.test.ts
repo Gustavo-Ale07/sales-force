@@ -95,4 +95,12 @@ describe('validateConfigurationConsistency', () => {
     }));
     expect(validateConfigurationConsistency(cfg).map((i) => i.code)).toEqual(['duplicate_account_seller_link']);
   });
+
+  it.each([0, -1, 1.5])('flags an account-seller link with an invalid seller code %s', (sellerCode) => {
+    const cfg = makeConfig((c) => ({
+      ...c,
+      customers: { ...c.customers, accountSellerLinks: [{ accountEmail: 'a@example.test', sellerCode }] },
+    }));
+    expect(validateConfigurationConsistency(cfg).map((i) => i.code)).toEqual(['account_seller_link_invalid_seller']);
+  });
 });
