@@ -43,7 +43,7 @@ const SaleRowView = memo(function SaleRowView({ row, onOpen }: { row: SalesRow; 
       </View>
       <Text style={styles.meta} numberOfLines={1}>{describeSaleMeta(draft)}</Text>
       <View style={styles.rowBottom}>
-        <SaleBadgeView status={draft.status} remoteId={draft.remoteId} />
+        <SaleBadgeView status={draft.status} remoteId={draft.remoteId} lastError={draft.lastError} />
         {value.partial && value.amount !== null && <Text style={styles.partial}>Valor parcial</Text>}
       </View>
       {attention !== null && <Text style={styles.attention}>{attention}</Text>}

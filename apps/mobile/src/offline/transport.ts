@@ -13,6 +13,7 @@ export function toTransportError(error: unknown): TransportError {
   if (code === "order_not_editable") return new TransportError("not_editable", error.message, status);
   if (code === "idempotency_conflict") return new TransportError("idempotency_conflict", error.message, status);
   if (code === "dataset_mismatch") return new TransportError("dataset_mismatch", error.message, status);
+  if (code === "customer_ineligible") return new TransportError("customer_ineligible", error.message, status);
   if (status === 401) return new TransportError("auth", error.message, status);
   if (status === 404) return new TransportError("not_found", error.message, status);
   if (status === 429) return new TransportError("rate_limit", error.message, status);

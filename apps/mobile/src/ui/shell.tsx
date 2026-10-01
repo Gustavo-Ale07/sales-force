@@ -149,7 +149,8 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
 
   /**
    * Explicit sign-out. A failed server logout is never swallowed: the session may still be valid on the server, so the
-   * seller is told and chooses (retry / stay / leave this device anyway). Nothing local is deleted either way: drafts and
+   * seller is told and STAYS signed in (retry or cancel). There is deliberately no "leave anyway" path: it would look like
+   * a sign-out while the server session is still open. Nothing local is deleted either way: drafts and
    * the outbox stay for the next sign-in (data-loss risk; wiping is an owner decision).
    */
   async function signOut() {
@@ -162,7 +163,6 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
         [
           { text: "Cancelar", style: "cancel" },
           { text: "Tentar novamente", onPress: () => void signOut() },
-          { text: "Sair mesmo assim", style: "destructive", onPress: () => void leaveDevice() },
         ],
       );
       return;

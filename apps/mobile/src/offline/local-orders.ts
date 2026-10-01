@@ -180,7 +180,7 @@ export function describeDraftStatus(status: DraftStatus): string {
     case "syncing":
       return "Enviando...";
     case "synced":
-      return "Sincronizado";
+      return "Enviado ao Force";
     case "sync_error":
       return "Erro ao sincronizar";
     case "conflict":

@@ -42,11 +42,29 @@ describe("resolveApiBaseUrl cleartext policy", () => {
 });
 
 describe("allowsCleartext", () => {
-  it("is on in development, or in a release bundle only with the explicit DEV test-build flag", () => {
-    expect(allowsCleartext({ dev: true, cleartextFlag: undefined })).toBe(true);
-    expect(allowsCleartext({ dev: false, cleartextFlag: undefined })).toBe(false);
-    expect(allowsCleartext({ dev: false, cleartextFlag: "0" })).toBe(false);
-    expect(allowsCleartext({ dev: false, cleartextFlag: "true" })).toBe(false);
-    expect(allowsCleartext({ dev: false, cleartextFlag: "1" })).toBe(true);
+  const off = { dev: false, cleartextFlag: undefined, buildProfile: undefined };
+
+  it("is on in development (__DEV__)", () => {
+    expect(allowsCleartext({ ...off, dev: true })).toBe(true);
+  });
+
+  it("in a release bundle needs BOTH the cleartext flag and the explicit dev profile", () => {
+    expect(allowsCleartext({ ...off, cleartextFlag: "1", buildProfile: "dev" })).toBe(true);
+    expect(allowsCleartext({ ...off, cleartextFlag: "1" })).toBe(false);
+    expect(allowsCleartext({ ...off, buildProfile: "dev" })).toBe(false);
+  });
+
+  it("fails closed for production, staging, unknown profiles and non-exact flag values", () => {
+    for (const buildProfile of ["production", "staging", "preview", "", "development "]) {
+      expect(allowsCleartext({ ...off, cleartextFlag: "1", buildProfile })).toBe(false);
+    }
+    for (const cleartextFlag of ["0", "true", "yes", ""]) {
+      expect(allowsCleartext({ ...off, cleartextFlag, buildProfile: "dev" })).toBe(false);
+    }
+  });
+
+  it("refuses an http origin in a release bundle built for staging or production even with the flag set", () => {
+    const staging = allowsCleartext({ ...off, cleartextFlag: "1", buildProfile: "staging" });
+    expect(resolveApiBaseUrl("http://10.0.0.5:3000", { allowCleartext: staging })).toEqual({ ok: false, reason: "insecure" });
   });
 });

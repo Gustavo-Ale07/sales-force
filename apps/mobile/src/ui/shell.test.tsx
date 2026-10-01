@@ -1,6 +1,6 @@
 import { Alert } from "react-native";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
-import type { CustomerRepository, ProductRepository } from "../data/ports";
+import type { CustomerRepository, ProductRepository, Repositories } from "../data/ports";
 import {
   account,
   customer,
@@ -20,12 +20,15 @@ import type { SyncManager, SyncStatus } from "@salesforce/mobile-db";
 import type { LocalOrdersPort } from "../offline/local-orders";
 import type { OfflineServices } from "../offline/services";
 import type { RememberedSession } from "../offline/session";
+import type { ProductImageStore } from "../images/image-store";
 import { Shell } from "./shell";
 
 function fakeOffline(
   remembered: RememberedSession | null,
   status: SyncStatus = { phase: "idle", pending: 0, needsAttention: 0, lastSyncedAt: null, lastError: null },
   localOrders: LocalOrdersPort = fakeLocalOrders(),
+  productImages?: ProductImageStore,
+  repositories: Repositories = fakeDependencies().repositories,
 ) {
   const syncNow = jest.fn(async () => status);
   const sync: SyncManager = {
@@ -38,9 +41,10 @@ function fakeOffline(
   const offline: OfflineServices = {
     session: { load: async () => remembered, remember: async () => undefined, forget },
     forAccount: () => ({
-      repositories: fakeDependencies().repositories,
+      repositories,
       localOrders,
       sync,
+      ...(productImages === undefined ? {} : { productImages }),
     }),
   };
   return { offline, forget, syncNow };
@@ -101,6 +105,34 @@ describe("Shell", () => {
     await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
     await signOutFromProfile();
     await waitFor(() => expect(forget).toHaveBeenCalled());
+  });
+
+  describe("thumbnail cache lifecycle", () => {
+    const imageStore = () => ({ resolve: jest.fn(async () => null), purge: jest.fn(async () => undefined) });
+    const idle: SyncStatus = { phase: "idle", pending: 0, needsAttention: 0, lastSyncedAt: null, lastError: null };
+
+    it("is purged on an explicit sign-out", async () => {
+      const images = imageStore();
+      const { offline } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() }, idle, fakeLocalOrders(), images);
+      await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
+      await signOutFromProfile();
+      await waitFor(() => expect(images.purge).toHaveBeenCalledTimes(1));
+    });
+
+    it("is NOT purged (and the remembered account is kept) when the session merely expires for the same owner", async () => {
+      const images = imageStore();
+      const customers: CustomerRepository = {
+        list: async () => {
+          throw unauthenticatedError();
+        },
+      };
+      const { offline, forget } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() }, idle, fakeLocalOrders(), images, { customers, products: fakeProducts(), orders: fakeOrders() });
+      await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
+      await fireEvent.press(await screen.findByRole("tab", { name: "Clientes" }));
+      expect(await screen.findByLabelText("E-mail")).toBeTruthy();
+      expect(images.purge).not.toHaveBeenCalled();
+      expect(forget).not.toHaveBeenCalled();
+    });
   });
 
   it("lists the customers of an existing session and switches to the catalog", async () => {
@@ -180,12 +212,33 @@ describe("Shell", () => {
       alert.mockRestore();
     });
 
-    it("lets the seller leave this device anyway, explicitly", async () => {
+    it("offers only Cancelar and Tentar novamente: there is no way to pretend the sign-out worked", async () => {
       const logout = jest.fn(async () => {
         throw networkError();
       });
-      const { alert, forget } = await signOutFailing(logout, "Sair mesmo assim");
+      const { alert, forget } = await signOutFailing(logout, null);
+      await waitFor(() => expect(alert).toHaveBeenCalledWith("Não foi possível encerrar a sessão", expect.any(String), expect.any(Array)));
+      const failure = alert.mock.calls.find(([title]) => title === "Não foi possível encerrar a sessão");
+      const labels = (failure?.[2] ?? []).map((button) => button.text);
+      expect(labels).toEqual(["Cancelar", "Tentar novamente"]);
+      expect((failure?.[2] ?? []).some((button) => button.style === "destructive")).toBe(false);
+      expect(forget).not.toHaveBeenCalled();
+      alert.mockRestore();
+    });
+
+    it("stays signed in after Cancelar and a later attempt can still succeed", async () => {
+      let calls = 0;
+      const logout = jest.fn(async () => {
+        calls += 1;
+        if (calls === 1) throw networkError();
+      });
+      const { alert, forget } = await signOutFailing(logout, "Cancelar");
+      await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
+      expect(screen.queryByLabelText("E-mail")).toBeNull();
+      expect(forget).not.toHaveBeenCalled();
+      await fireEvent.press(screen.getByRole("button", { name: "Sair" }));
       expect(await screen.findByLabelText("E-mail")).toBeTruthy();
+      expect(logout).toHaveBeenCalledTimes(2);
       expect(forget).toHaveBeenCalled();
       alert.mockRestore();
     });

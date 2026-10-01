@@ -46,5 +46,6 @@ export function createAccountProductImages(deps: { db: SqlDatabase; api: ApiClie
     fetchThumbnail: createThumbnailFetcher(deps.api),
     scope: createImageScope(deps.db, deps.ownerAccountId),
     now: deps.now,
+    ownerAccountId: deps.ownerAccountId,
   });
 }

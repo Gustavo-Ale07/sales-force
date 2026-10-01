@@ -6,13 +6,15 @@ const image = (version: string) => ({ version });
 function setup(
   overrides: {
     scope?: () => Promise<string | null>;
+    ownerAccountId?: string;
+    memory?: ReturnType<typeof memoryImageFileSystem>;
     fetch?: (code: number) => Promise<ImageFetchOutcome>;
     maxTotalBytes?: number;
     timeoutMs?: number;
     failureRetryMs?: number;
   } = {},
 ) {
-  const memory = memoryImageFileSystem();
+  const memory = overrides.memory ?? memoryImageFileSystem();
   const calls: number[] = [];
   let clock = 1_000;
   const store: ProductImageStore = createProductImageStore({
@@ -23,6 +25,7 @@ function setup(
     },
     scope: overrides.scope ?? (async () => "owner-1|production|ds-1"),
     now: () => (clock += 1),
+    ...(overrides.ownerAccountId === undefined ? {} : { ownerAccountId: overrides.ownerAccountId }),
     ...(overrides.maxTotalBytes === undefined ? {} : { maxTotalBytes: overrides.maxTotalBytes }),
     timeoutMs: overrides.timeoutMs ?? 50,
     failureRetryMs: overrides.failureRetryMs ?? 60_000,
@@ -146,6 +149,29 @@ describe("product image store", () => {
     scope = "owner-2|production|ds-3";
     expect(await store.resolve(2, image("v1"), { online: false })).toBeNull();
     expect(imageFiles(memory)).toEqual([]);
+  });
+
+  it("another account on the device purges the previous owner files even before its own data is confirmed", async () => {
+    const memory = memoryImageFileSystem();
+    const first = setup({ memory, ownerAccountId: "owner-1" });
+    await first.store.resolve(1, image("v1"), { online: true });
+    expect(imageFiles(memory)).toHaveLength(1);
+    // Account 2 signs in on the same device: its scope is unknown (cache not filled yet) so nothing can be served, yet the files of account 1 must go.
+    const second = setup({ memory, ownerAccountId: "owner-2", scope: async () => null });
+    expect(await second.store.resolve(1, image("v1"), { online: false })).toBeNull();
+    expect(imageFiles(memory)).toEqual([]);
+  });
+
+  it("the SAME owner keeps the files while the dataset is momentarily unconfirmed (e.g. after a session expiry)", async () => {
+    const memory = memoryImageFileSystem();
+    const first = setup({ memory, ownerAccountId: "owner-1" });
+    const uri = await first.store.resolve(1, image("v1"), { online: true });
+    let scope: string | null = null;
+    const again = setup({ memory, ownerAccountId: "owner-1", scope: async () => scope });
+    expect(await again.store.resolve(1, image("v1"), { online: false })).toBeNull(); // not served without a confirmed scope
+    expect(imageFiles(memory)).toHaveLength(1); // but not deleted
+    scope = "owner-1|production|ds-1";
+    expect(await again.store.resolve(1, image("v1"), { online: false })).toBe(uri); // back for the same owner, no refetch
   });
 
   it("without a confirmed scope (unknown dataset) it shows and stores nothing", async () => {

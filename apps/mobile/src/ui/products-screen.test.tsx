@@ -101,7 +101,8 @@ describe("ProductsScreen (Catálogo)", () => {
     const box = screen.getByPlaceholderText("Buscar por código ou descrição");
     await fireEvent.changeText(box, "4");
     await waitFor(() => expect(screen.queryByText("Tinta Azul 18L")).toBeNull());
-    expect(screen.getByText("Pincel 2in")).toBeTruthy();
+    // findBy, not getBy: while the debounced search reloads, the old rows can disappear before the new ones are painted.
+    expect(await screen.findByText("Pincel 2in")).toBeTruthy();
     await fireEvent.changeText(box, "zzz");
     expect(await screen.findByText("Nenhum produto encontrado para “zzz”.")).toBeTruthy();
   });

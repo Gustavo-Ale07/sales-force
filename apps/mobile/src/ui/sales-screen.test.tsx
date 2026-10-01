@@ -97,7 +97,7 @@ describe("SalesScreen — groups", () => {
     await fireEvent.press(await screen.findByRole("tab", { name: /Enviados/ }));
     expect(await screen.findByText("Eva Empório")).toBeTruthy();
     expect(screen.queryByText("Ana Mercearia")).toBeNull();
-    expect(screen.getByText("Sincronizado")).toBeTruthy();
+    expect(screen.getByText("Enviado ao Force")).toBeTruthy();
     expect(screen.getByText(/Pedido nº 77/)).toBeTruthy();
     expect(screen.getByText("R$ 300,00")).toBeTruthy();
     expect(screen.queryByText(/ERP|Sankhya/)).toBeNull();
@@ -307,7 +307,7 @@ describe("SalesScreen — reconnection", () => {
     expect(screen.getByLabelText("Buscar venda").props.value).toBe("ana");
     await fireEvent.press(screen.getByRole("tab", { name: /Enviados/ }));
     const row = await screen.findByRole("button", { name: /Ana Mercearia/ });
-    expect(within(row).getByText("Sincronizado")).toBeTruthy();
+    expect(within(row).getByText("Enviado ao Force")).toBeTruthy();
     expect(screen.getAllByText("Ana Mercearia")).toHaveLength(1);
   });
 });

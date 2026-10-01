@@ -11,11 +11,16 @@ export interface ApiConfigOptions {
 
 /**
  * Cleartext HTTP is allowed in development (`__DEV__`) and, for a standalone DEV test build against a LAN API, only
- * through the explicit `EXPO_PUBLIC_ALLOW_CLEARTEXT=1` flag (the same opt-in that `plugins/with-dev-cleartext.js`
- * requires natively as `SF_ALLOW_CLEARTEXT=1`). A production/release build sets neither, so `http:` is refused.
+ * when BOTH `EXPO_PUBLIC_ALLOW_CLEARTEXT=1` and `EXPO_PUBLIC_BUILD_PROFILE=dev` are set (the counterparts of
+ * `SF_ALLOW_CLEARTEXT=1` + `SF_BUILD_PROFILE=dev` required by `plugins/with-dev-cleartext.js`). Fail-closed: the dev
+ * profile must be named; production, staging and any unknown or missing profile are refused `http:`.
  */
-export function allowsCleartext(build: { readonly dev: boolean; readonly cleartextFlag: string | undefined }): boolean {
-  return build.dev || build.cleartextFlag === "1";
+export function allowsCleartext(build: {
+  readonly dev: boolean;
+  readonly cleartextFlag: string | undefined;
+  readonly buildProfile: string | undefined;
+}): boolean {
+  return build.dev || (build.cleartextFlag === "1" && build.buildProfile === "dev");
 }
 
 /**
@@ -37,7 +42,7 @@ export function resolveApiBaseUrl(rawOrigin: string | undefined, options: ApiCon
 
 function defaultAllowCleartext(): boolean {
   // Expo replaces `process.env.EXPO_PUBLIC_*` literally at bundle time; keep this exact member expression.
-  return allowsCleartext({ dev: __DEV__, cleartextFlag: process.env.EXPO_PUBLIC_ALLOW_CLEARTEXT });
+  return allowsCleartext({ dev: __DEV__, cleartextFlag: process.env.EXPO_PUBLIC_ALLOW_CLEARTEXT, buildProfile: process.env.EXPO_PUBLIC_BUILD_PROFILE });
 }
 
 // Expo replaces `process.env.EXPO_PUBLIC_*` literally at bundle time; keep this exact member expression.

@@ -2,25 +2,29 @@
 //
 // Why: a standalone (release) build points at the DEV API over the LAN (http://<pc-ip>:3000, no TLS); Android blocks
 // cleartext HTTP in release unless the manifest allows it (only the debug manifest does).
-// When: active only when SF_ALLOW_CLEARTEXT=1 at `expo prebuild` time. Without it this plugin is a no-op, so the
-// default configuration and any production-like build keep cleartext traffic blocked.
-// Local DEV test build (never a store/production build):
-//   SF_ALLOW_CLEARTEXT=1 EXPO_PUBLIC_ALLOW_CLEARTEXT=1 EXPO_PUBLIC_API_URL=http://<pc-ip>:3000 npx expo prebuild --platform android --clean
-//   then gradlew assembleRelease (EXPO_PUBLIC_* are inlined at bundle time). EXPO_PUBLIC_ALLOW_CLEARTEXT is what lets the
-//   release JS bundle accept an http: API origin (src/config.ts); without it the app refuses http outside __DEV__.
-// Guard: the prebuild FAILS when cleartext is requested together with a production/release profile
-// (EAS_BUILD_PROFILE or APP_ENV set to "production"/"release").
+// When: active only when SF_ALLOW_CLEARTEXT=1 AND SF_BUILD_PROFILE=dev at `expo prebuild` time. Fail-closed: the dev
+// profile must be named explicitly (production/staging are never detected, they are simply not "dev"); any other
+// combination makes the prebuild FAIL, and without SF_ALLOW_CLEARTEXT the manifest explicitly forbids cleartext.
+// Local DEV test build (never a store/staging/production build):
+//   SF_ALLOW_CLEARTEXT=1 SF_BUILD_PROFILE=dev EXPO_PUBLIC_ALLOW_CLEARTEXT=1 EXPO_PUBLIC_BUILD_PROFILE=dev \
+//   EXPO_PUBLIC_API_URL=http://<pc-ip>:3000 npx expo prebuild --platform android --clean
+//   then gradlew assembleRelease (EXPO_PUBLIC_* are inlined at bundle time). The two EXPO_PUBLIC_* flags are what let the
+//   release JS bundle accept an http: API origin (src/config.ts); without both it refuses http outside __DEV__.
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- Expo config plugins are CommonJS
 const { withAndroidManifest } = require("expo/config-plugins");
 
-const RELEASE_PROFILES = new Set(["production", "release"]);
+const DEV_PROFILES = new Set(["dev", "development"]);
 
 /** Returns the reason a cleartext build must not proceed, or `null`. Pure: takes the environment as a parameter. */
 function cleartextBuildProblem(env) {
-  if (env.SF_ALLOW_CLEARTEXT !== "1") return null;
-  const profiles = [env.EAS_BUILD_PROFILE, env.APP_ENV].filter((value) => typeof value === "string").map((value) => value.toLowerCase());
-  if (profiles.some((profile) => RELEASE_PROFILES.has(profile))) {
-    return "SF_ALLOW_CLEARTEXT=1 is set on a production/release build profile. Cleartext HTTP is for local DEV test builds only; unset it (release builds require https).";
+  const requested = env.SF_ALLOW_CLEARTEXT;
+  if (requested === undefined || requested === "") return null;
+  const refusal = (why) => `SF_ALLOW_CLEARTEXT is set but ${why}. Cleartext HTTP is for local DEV test builds only (SF_ALLOW_CLEARTEXT=1 with SF_BUILD_PROFILE=dev); production and staging builds require https.`;
+  if (requested !== "1") return refusal(`its value is not exactly "1"`);
+  if (typeof env.SF_BUILD_PROFILE !== "string" || env.SF_BUILD_PROFILE.toLowerCase() !== "dev") return refusal("SF_BUILD_PROFILE=dev is not set");
+  for (const name of ["EAS_BUILD_PROFILE", "APP_ENV"]) {
+    const value = env[name];
+    if (typeof value === "string" && value !== "" && !DEV_PROFILES.has(value.toLowerCase())) return refusal(`${name} is "${value}", not a dev profile`);
   }
   return null;
 }
@@ -28,9 +32,9 @@ function cleartextBuildProblem(env) {
 function withDevCleartext(config) {
   const problem = cleartextBuildProblem(process.env);
   if (problem !== null) throw new Error(problem);
-  if (process.env.SF_ALLOW_CLEARTEXT !== "1") return config;
+  const enabled = process.env.SF_ALLOW_CLEARTEXT === "1";
   return withAndroidManifest(config, (mod) => {
-    mod.modResults.manifest.application[0].$["android:usesCleartextTraffic"] = "true";
+    mod.modResults.manifest.application[0].$["android:usesCleartextTraffic"] = enabled ? "true" : "false";
     return mod;
   });
 }

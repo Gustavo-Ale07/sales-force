@@ -24,6 +24,16 @@ import { isoNow, type OfflineEnv } from "./offline-env";
  * - No cost or margin field exists in these shapes (P-20).
  */
 
+/**
+ * Seller-facing wording of a draft held back because its customer is no longer available. It doubles as the marker the
+ * screens use to label the state (`isCustomerUnavailableMessage`): no schema column is needed and the draft keeps its status machinery.
+ */
+export const CUSTOMER_UNAVAILABLE_MESSAGE = "Cliente indisponível — revise o rascunho";
+
+export function isCustomerUnavailableMessage(lastError: string | null): boolean {
+  return lastError === CUSTOMER_UNAVAILABLE_MESSAGE;
+}
+
 export type DraftStatus = "local_only" | "pending_sync" | "syncing" | "synced" | "sync_error" | "conflict" | "needs_review";
 export type OutboxState = "pending" | "sending" | "accepted" | "rejected" | "needs_review" | "conflict";
 export type OutboxType = "order.create" | "order.replace";
@@ -326,11 +336,11 @@ export interface OutboxCounts {
  */
 export async function countOutbox(db: SqlExecutor, ownerAccountId: string, dataset?: DatasetIdentity | null): Promise<OutboxCounts> {
   const rows = await db.query<SqlRow>(
-    `SELECT o.state AS state, o.dataset_environment AS dataset_environment, o.dataset_id AS dataset_id, o.eligibility AS eligibility, count(*) AS n
+    `SELECT o.state AS state, o.dataset_environment AS dataset_environment, o.dataset_id AS dataset_id, o.eligibility AS eligibility, (o.last_error = ?) AS held, count(*) AS n
      FROM outbox o JOIN local_order_draft d ON d.local_id = o.draft_local_id
      WHERE d.owner_account_id = ? AND o.state IN ('pending', 'sending', 'rejected', 'conflict', 'needs_review')
-     GROUP BY o.state, o.dataset_environment, o.dataset_id, o.eligibility`,
-    [ownerAccountId],
+     GROUP BY o.state, o.dataset_environment, o.dataset_id, o.eligibility, (o.last_error = ?)`,
+    [CUSTOMER_UNAVAILABLE_MESSAGE, ownerAccountId, CUSTOMER_UNAVAILABLE_MESSAGE],
   );
   const counts = { pending: 0, sending: 0, needsAttention: 0 };
   for (const row of rows) {
@@ -338,7 +348,8 @@ export async function countOutbox(db: SqlExecutor, ownerAccountId: string, datas
     const state = String(row.state);
     if (state === "pending" || state === "sending") {
       const own = datasetOf(row);
-      const sendable = own !== null && isOperationalEligibility(String(row.eligibility)) && (dataset === undefined || dataset === null || sameDataset(own, dataset));
+      const held = Number(row.held) === 1;
+      const sendable = !held && own !== null && isOperationalEligibility(String(row.eligibility)) && (dataset === undefined || dataset === null || sameDataset(own, dataset));
       if (sendable) counts[state] += n;
       else counts.needsAttention += n;
     } else {

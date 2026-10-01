@@ -111,6 +111,7 @@ export function orderDetail(overrides: Partial<OrderDetail> = {}): OrderDetail {
     itemCount: 0,
     isPartial: false,
     erpNumber: null,
+    review: null,
     version: 1,
     createdAt: "2026-09-29T12:00:00.000Z",
     updatedAt: "2026-09-29T12:00:00.000Z",

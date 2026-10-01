@@ -35,6 +35,12 @@ export interface ProductImageStoreDeps {
    */
   readonly scope: () => Promise<string | null>;
   readonly now: () => number;
+  /**
+   * The signed-in account. Files that belong to ANOTHER owner are deleted on first use, even while this account's scope is
+   * still unknown. The same owner's files are never deleted by an unconfirmed scope or an expired session (they are only
+   * not served until the scope is confirmed again).
+   */
+  readonly ownerAccountId?: string;
   readonly maxTotalBytes?: number;
   readonly maxImageBytes?: number;
   readonly maxConcurrent?: number;
@@ -138,6 +144,20 @@ export function createProductImageStore(deps: ProductImageStoreDeps): ProductIma
     return index;
   }
 
+  let foreignChecked = false;
+  /** Once per store: drops files whose index says they belong to a different owner. Call under the lock. */
+  async function dropForeignOwner(): Promise<void> {
+    if (foreignChecked || deps.ownerAccountId === undefined) return;
+    foreignChecked = true;
+    if (index === null) index = parseIndex(await fs.readText(INDEX).catch(() => null));
+    if (index !== null && !index.scope.startsWith(`${deps.ownerAccountId}|`)) {
+      await fs.clear().catch(() => undefined);
+      index = null;
+      absent.clear();
+      failedUntil.clear();
+    }
+  }
+
   async function currentScope(): Promise<string | null> {
     try {
       return await deps.scope();
@@ -218,6 +238,7 @@ export function createProductImageStore(deps: ProductImageStoreDeps): ProductIma
   return {
     async resolve(code, image, options) {
       try {
+        await exclusive(dropForeignOwner);
         const scope = await currentScope();
         if (scope === null) return null;
         const hit = await exclusive(async () => {

@@ -1,5 +1,6 @@
 import type { SqlDatabase, SqlExecutor, SqlRow } from "./connection";
 import {
+  CUSTOMER_UNAVAILABLE_MESSAGE,
   getDraft,
   getDraftItems,
   isNeverSent,
@@ -14,6 +15,7 @@ import {
 } from "./local-orders";
 import { classifyEligibility, ineligibleMessage, readExpectedDataset, sameDataset, type DatasetIdentity, type IneligibleReason } from "./dataset-identity";
 import { isoNow, type OfflineEnv } from "./offline-env";
+import { isCustomerUnavailable } from "./reference-cache";
 
 /**
  * Push side of the offline slice: delivers outbox order commands to the server, one request at a time, and applies
@@ -63,7 +65,9 @@ export type TransportErrorKind =
   | "not_editable"
   | "idempotency_conflict"
   | "not_found"
-  | "dataset_mismatch";
+  | "dataset_mismatch"
+  /** The server refused because the customer is no longer eligible (inactive, blocked, unavailable). */
+  | "customer_ineligible";
 
 export class TransportError extends Error {
   constructor(
@@ -102,6 +106,7 @@ export function classifyFailure(kind: TransportErrorKind): FailureClass {
     case "not_editable":
     case "idempotency_conflict":
     case "not_found":
+    case "customer_ineligible":
       return "permanent";
     case "dataset_mismatch":
       return "dataset";
@@ -137,6 +142,8 @@ export function describeFailure(error: TransportError): string {
       return "Este envio já foi registrado com outros dados e não pôde ser repetido.";
     case "dataset_mismatch":
       return ineligibleMessage("dataset_mismatch");
+    case "customer_ineligible":
+      return CUSTOMER_UNAVAILABLE_MESSAGE;
     case "validation":
       return error.message !== "" ? error.message : "O servidor recusou este pedido. Revise os dados.";
   }
@@ -248,14 +255,20 @@ export async function recoverInterrupted(db: SqlDatabase, env: OfflineEnv): Prom
   });
 }
 
-async function nextEligible(db: SqlExecutor, env: OfflineEnv, ownerAccountId: string, respectBackoff: boolean): Promise<OutboxRecord | null> {
+async function nextEligible(
+  db: SqlExecutor,
+  env: OfflineEnv,
+  ownerAccountId: string,
+  respectBackoff: boolean,
+  heldDrafts: ReadonlySet<string>,
+): Promise<OutboxRecord | null> {
   const rows = await db.query<SqlRow>(
     `SELECT o.* FROM outbox o JOIN local_order_draft d ON d.local_id = o.draft_local_id
      WHERE d.owner_account_id = ? AND o.state IN ('pending', 'sending', 'conflict')
      ORDER BY o.created_at, o.rowid`,
     [ownerAccountId],
   );
-  const blocked = new Set<string>();
+  const blocked = new Set<string>(heldDrafts);
   const nowIso = isoNow(env);
   for (const row of rows) {
     const op = toOutbox(row);
@@ -371,6 +384,17 @@ async function quarantineDraft(db: SqlDatabase, env: OfflineEnv, draftLocalId: s
   });
 }
 
+/** Marks every unsent command of the draft as held for an unavailable customer (state `pending`, no attempt counted). */
+async function holdForCustomer(db: SqlDatabase, env: OfflineEnv, draftLocalId: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      "UPDATE outbox SET last_error = ?, next_attempt_at = NULL, updated_at = ? WHERE draft_local_id = ? AND state = 'pending' AND attempts = 0",
+      [CUSTOMER_UNAVAILABLE_MESSAGE, isoNow(env), draftLocalId],
+    );
+    await refreshDraftStatus(tx, draftLocalId);
+  });
+}
+
 /** Moves every draft of the owner with unresolved commands that is definitely not eligible (legacy, other dataset) out of delivery. */
 async function quarantineIneligible(db: SqlDatabase, env: OfflineEnv, ownerAccountId: string, current: DatasetIdentity | null): Promise<number> {
   const rows = await db.query<SqlRow>(
@@ -408,13 +432,14 @@ export async function pushOutbox(
   let accepted = 0;
   let failed = 0;
   let quarantined = 0;
+  const heldDrafts = new Set<string>();
   const startedUnder = options.currentDataset ?? null;
   quarantined += await quarantineIneligible(db, env, ownerAccountId, startedUnder);
 
   while (attempted < max) {
     // The confirmation can change mid-run (a config fetch elsewhere, a null answer): re-read it before EVERY command.
     // Vanished or different from the one this run started under = stop; nothing further is sent (retryable, not quarantined).
-    const op = await nextEligible(db, env, ownerAccountId, respectBackoff);
+    const op = await nextEligible(db, env, ownerAccountId, respectBackoff, heldDrafts);
     if (op === null) return { attempted, accepted, failed, stoppedBy: "idle", quarantined };
     const fresh = await readExpectedDataset(db);
     if (fresh === null || !sameDataset(fresh, startedUnder)) return { attempted, accepted, failed, stoppedBy: "dataset_unconfirmed", quarantined };
@@ -434,6 +459,14 @@ export async function pushOutbox(
     if (blocking !== undefined) {
       await quarantineDraft(db, env, draft.localId, blocking);
       quarantined += 1;
+      continue;
+    }
+    // CUSTOMER GUARD (indicative; the server stays authoritative): a customer the cache says is inactive or blocked is
+    // not sent to. The command is kept untouched (same key, same payload, zero attempts) and re-evaluated on every run,
+    // so it goes out by itself if the customer becomes available again. Nothing is converted, rewritten or deleted.
+    if (await isCustomerUnavailable(db, draft.customerCode)) {
+      await holdForCustomer(db, env, draft.localId);
+      heldDrafts.add(draft.localId);
       continue;
     }
     // The guard above proved op.dataset equals the confirmed dataset; the request states the ROW's own identity.

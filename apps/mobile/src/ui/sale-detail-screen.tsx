@@ -134,7 +134,7 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, onBack, o
           <Text style={styles.customer}>{draft.customerName}</Text>
           <Text style={styles.meta}>{`Cliente ${draft.customerCode}`}</Text>
           <View style={styles.statusLine}>
-            <SaleBadgeView status={draft.status} remoteId={draft.remoteId} />
+            <SaleBadgeView status={draft.status} remoteId={draft.remoteId} lastError={draft.lastError} />
             <Text style={styles.meta}>{draft.remoteDraftNumber !== null ? `Pedido nº ${draft.remoteDraftNumber}` : "Sem número ainda"}</Text>
           </View>
           <Text style={styles.explanation}>{saleExplanation(draft)}</Text>
