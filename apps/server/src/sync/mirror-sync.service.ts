@@ -5,6 +5,7 @@ import { errorLogFields, type Logger } from '../observability/logger.js';
 import type { Clock } from '../platform/tokens.js';
 import { TransientJobError } from '../worker/job-contract.js';
 import { withEntityLock } from './entity-lock.js';
+import { MirrorScopeUnavailableError } from './mirror-scope.js';
 import { describeSyncFailure, type SyncFailure } from './failure.js';
 import {
   MIRROR_ENTITIES,
@@ -167,6 +168,19 @@ export class MirrorSyncService {
 
     const stats: RunStats = { read: 0, created: 0, updated: 0, reactivated: 0, unchanged: 0, deactivated: 0 };
     const scope = this.deps.readScope === undefined ? undefined : await this.deps.readScope();
+    // Fail closed against a real ERP: an absent scope, or one without the price-table list, would read
+    // every table (including internal/cost tables) instead of the configured mobile ones.
+    if (
+      description.mode === 'live' &&
+      (scope === undefined ||
+        scope.priceTableCodes === undefined ||
+        scope.priceTableCodes.length === 0 ||
+        (scope.products?.usageValues ?? []).length === 0)
+    ) {
+      throw new MirrorScopeUnavailableError(
+        'Live mirror requires a configured read scope with non-empty products.sellableUsageValues and pricing.mobilePriceTableCodes; refusing an unscoped read.',
+      );
+    }
     const context = {
       gateway,
       description,

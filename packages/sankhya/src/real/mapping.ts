@@ -352,7 +352,8 @@ export const LIST_PRICE_SPEC: EntitySpec<ListPrice> = {
 /** Prices of the given versions only (ids the gateway itself read; never empty). */
 export function listPriceSpec(versionIds: readonly number[] | undefined): EntitySpec<ListPrice> {
   if (versionIds === undefined) return LIST_PRICE_SPEC;
-  return { ...LIST_PRICE_SPEC, where: `NUTAB IN (${versionIds.join(',')})` };
+  // CODPROD = 0 is the ERP placeholder row: never mirrored.
+  return { ...LIST_PRICE_SPEC, where: `NUTAB IN (${versionIds.join(',')}) AND CODPROD > 0` };
 }
 
 export function compareKeys(a: readonly number[], b: readonly number[]): number {

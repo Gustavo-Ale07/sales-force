@@ -88,9 +88,11 @@ class ScriptedGateway extends FakeGateway {
   failWith: Partial<Record<ReadEntity, () => SankhyaGatewayError | undefined>> = {};
   gate: { entity: ReadEntity; entered: () => void; release: Promise<void> } | null = null;
   unsupported: ReadEntity[] = [];
+  liveMode = false;
 
   override describe(): GatewayDescription {
     const base = super.describe();
+    if (this.liveMode) return { ...base, mode: 'live' };
     const reads = { ...base.capabilities.reads };
     for (const entity of this.unsupported) reads[entity] = 'not_implemented';
     return { ...base, capabilities: { ...base.capabilities, reads } };
@@ -279,6 +281,30 @@ describe('mirror sync (RF-SNK-1/2/8 subset, WP 0.8)', () => {
     expect(state?.status).toBe('failed');
     expect(state?.lastErrorClass).toBe('permanent');
     expect(state?.lastErrorMessage).toMatch(/^not_implemented/);
+  });
+
+  it('fails closed against a live ERP when the read scope is absent or has no price-table list (never an unscoped read)', async () => {
+    const database = await migrated();
+    const gateway = new ScriptedGateway({ batchSize: 50 });
+    gateway.liveMode = true;
+    const logger = createLogger({ level: 'silent', service: 'worker' });
+    const noScope = new MirrorSyncService({ db: database.handle, gateway, logger, now: () => new Date() });
+    const noTables = new MirrorSyncService({
+      db: database.handle,
+      gateway,
+      logger,
+      now: () => new Date(),
+      readScope: async () => ({ products: { usageValues: ['V'], activeOnly: true } }),
+    });
+    for (const service of [noScope, noTables]) {
+      const { failures } = await service.runAll(['priceTables', 'listPrices']);
+      expect(failures).toHaveLength(2);
+      expect(failures.every((f) => f.failure.errorClass === 'unclassified')).toBe(true); // not retried automatically
+    }
+    expect(gateway.calls.priceTables ?? 0).toBe(0);
+    expect(gateway.calls.listPrices ?? 0).toBe(0);
+    expect(await count(database, TABLES.priceTables)).toBe(0);
+    expect(await count(database, TABLES.listPrices)).toBe(0);
   });
 
   it('does not double-write when two runs of the same entity overlap: the second skips', async () => {
