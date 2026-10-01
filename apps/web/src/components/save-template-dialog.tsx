@@ -4,6 +4,7 @@ import { useRef, useState, type FormEvent } from "react";
 import { createOrderTemplate } from "../lib/api-mutations";
 import { queryKeys } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
+import { requireDataset, useLoadedDataset } from "../lib/dataset";
 import { MAX_TEMPLATE_NAME_LENGTH, describeTemplateError } from "../lib/order-templates";
 
 export interface SaveTemplateItem {
@@ -43,6 +44,7 @@ function SaveTemplateContent({
 }: Omit<SaveTemplateDialogProps, "open" | "onOpenChange"> & { onClose: () => void }) {
   const api = useApi();
   const queryClient = useQueryClient();
+  const loadedDataset = useLoadedDataset();
   const [name, setName] = useState("");
   const [showProblem, setShowProblem] = useState(false);
   // One key per dialog opening: a retry after a lost response resends the same key and cannot create a second template.
@@ -55,10 +57,11 @@ function SaveTemplateContent({
 
   const save = useMutation({
     mutationFn: () => {
+      const expectedDataset = requireDataset(loadedDataset);
       const requestItems = items.map((item) => ({ productCode: item.productCode, quantity: item.quantity }));
       const payload = JSON.stringify([trimmed, requestItems]);
       if (requestRef.current?.payload !== payload) requestRef.current = { payload, id: newUuid() };
-      return createOrderTemplate(api, customer.code, { clientRequestId: requestRef.current.id, name: trimmed, items: requestItems });
+      return createOrderTemplate(api, customer.code, { clientRequestId: requestRef.current.id, expectedDataset, name: trimmed, items: requestItems });
     },
     onSuccess: async (saved) => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.orderTemplates(customer.code) });

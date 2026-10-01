@@ -257,7 +257,7 @@ describe("Cliente: Pedidos recorrentes", () => {
 
       await waitFor(() => expect(callsTo(calls, "PUT", `/order-templates/${TEMPLATE_ID}`)).toHaveLength(1));
       const [put] = callsTo(calls, "PUT", `/order-templates/${TEMPLATE_ID}`);
-      expect(put?.body).toEqual({ expectedVersion: 1, name: "Reposição semanal", items: [{ productCode: 2001, quantity: "7" }] });
+      expect(put?.body).toEqual({ expectedDataset: testDataset, expectedVersion: 1, name: "Reposição semanal", items: [{ productCode: 2001, quantity: "7" }] });
       expectNoMoneyKeys(put?.body);
       await waitFor(() => expect(screen.queryByRole("dialog", { name: "Editar modelo recorrente" })).not.toBeInTheDocument());
       expect(await screen.findByText("Modelo atualizado")).toBeInTheDocument();
@@ -278,6 +278,7 @@ describe("Cliente: Pedidos recorrentes", () => {
       await user.click(within(dialog).getByRole("button", { name: "Salvar modelo" }));
       await waitFor(() => expect(callsTo(calls, "PUT", `/order-templates/${TEMPLATE_ID}`)).toHaveLength(1));
       expect(callsTo(calls, "PUT", `/order-templates/${TEMPLATE_ID}`)[0]?.body).toEqual({
+        expectedDataset: testDataset,
         expectedVersion: 1,
         name: "Reposição mensal",
         items: [
@@ -521,6 +522,7 @@ describe("Editor de pedido: Salvar como recorrente", () => {
     expect(body.clientRequestId).toMatch(UUID);
     expect(body).toEqual({
       clientRequestId: body.clientRequestId,
+      expectedDataset: testDataset,
       name: "Reposição mensal",
       items: [
         { productCode: 2001, quantity: "1" },

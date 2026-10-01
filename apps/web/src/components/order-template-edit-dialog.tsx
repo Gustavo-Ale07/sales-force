@@ -25,6 +25,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, 
 import { replaceOrderTemplate, resolveProducts } from "../lib/api-mutations";
 import { orderTemplateQueryOptions, queryKeys } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
+import { requireDataset, useLoadedDataset } from "../lib/dataset";
 import { errorStatus } from "../lib/http-error";
 import { parseQuantityInput, quantityProblemMessages } from "../lib/order-draft";
 import { MAX_TEMPLATE_ITEMS, MAX_TEMPLATE_NAME_LENGTH, describeTemplateError } from "../lib/order-templates";
@@ -173,6 +174,7 @@ interface EditFormProps {
 function EditForm({ detail, customerCode, descriptions, onReload, reloading, onClose, onFooterChange }: EditFormProps) {
   const api = useApi();
   const queryClient = useQueryClient();
+  const loadedDataset = useLoadedDataset();
   const counter = useRef(0);
   const nextKey = () => `tline-${(counter.current += 1)}`;
 
@@ -196,6 +198,7 @@ function EditForm({ detail, customerCode, descriptions, onReload, reloading, onC
   const save = useMutation({
     mutationFn: () =>
       replaceOrderTemplate(api, detail.id, {
+        expectedDataset: requireDataset(loadedDataset),
         expectedVersion: detail.version,
         name: trimmedName,
         // Product and quantity only: the server never accepts (and this UI never holds) a price.
