@@ -149,6 +149,9 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
       } else if (pushed.stoppedBy === "dataset_unconfirmed") {
         phase = "error";
         lastError = "Não foi possível confirmar o conjunto de dados do servidor. Envio bloqueado.";
+      } else if (pushed.stoppedBy === "dataset_mismatch") {
+        phase = "error";
+        lastError = "O servidor recusou um pedido por ser de outro conjunto de dados. Envio pausado.";
       } else if (pushed.stoppedBy === "offline") {
         phase = "offline";
         lastError = "Sem conexão — alterações salvas neste dispositivo";

@@ -298,7 +298,7 @@ export const routes = {
     tags: ['orders'],
     summary: 'Create a draft order',
     description:
-      'Idempotent on `clientRequestId`: 201 when created, 200 with the original order on a replay of the same payload, 409 idempotency_conflict when the id was used with a different payload. Prices are always computed server-side.',
+      'Idempotent on `clientRequestId`: 201 when created, 200 with the original order on a replay of the same payload, 409 idempotency_conflict when the id was used with a different payload. Prices are always computed server-side. `expectedDataset` is required: 409 dataset_mismatch (nothing is written) when it differs from the dataset the server declares, or the server declares none.',
     auth: 'session',
     request: { body: CreateOrderRequestSchema },
     responses: {
@@ -325,7 +325,7 @@ export const routes = {
     tags: ['orders'],
     summary: 'Replace a draft (optimistic concurrency)',
     description:
-      'Full replace. 409 version_conflict when `expectedVersion` is stale; 409 order_not_editable when the order is not a draft. The server recomputes prices and totals.',
+      'Full replace. 409 version_conflict when `expectedVersion` is stale; 409 order_not_editable when the order is not a draft. The server recomputes prices and totals. `expectedDataset` is required: 409 dataset_mismatch (the order is not changed) when it differs from the dataset the server declares, or the server declares none.',
     auth: 'session',
     request: { params: OrderPathSchema, body: ReplaceOrderRequestSchema },
     responses: { 200: { description: 'Rascunho atualizado', schema: OrderDetailSchema } },
@@ -367,7 +367,7 @@ export const routes = {
     tags: ['orders'],
     summary: "Create a new draft from the customer's most recent order ('Repetir último pedido')",
     description:
-      "Creates a NEW, independent draft from the customer's most recent NON-cancelled order recorded in Sales Force (never from Sankhya/ERP history, which is not mirrored here), through the same path as `createOrder`, using `clientRequestId` as the draft request id (201 created; 200 with the original draft on a replay of the same request). Only `productCode` and `quantity` are copied from the source order; no price, discount or note. Each line is revalidated against the current catalog and the customer price context; lines whose product is removed, inactive, hidden, not sellable or without a usable price are left out and reported in `skippedLines`, never priced by guess. The new draft is assigned to the customer's CURRENT seller, which may differ from the source order's seller. 409 conflict (details.reason `no_previous_order`) when the customer has no previous order in Sales Force at all. 409 conflict (details.reason `no_usable_lines`, with `skippedLines`) when no line of the source order can be used: no draft is created. The source order is never modified.",
+      "Creates a NEW, independent draft from the customer's most recent NON-cancelled order recorded in Sales Force (never from Sankhya/ERP history, which is not mirrored here), through the same path as `createOrder`, using `clientRequestId` as the draft request id (201 created; 200 with the original draft on a replay of the same request). Only `productCode` and `quantity` are copied from the source order; no price, discount or note. Each line is revalidated against the current catalog and the customer price context; lines whose product is removed, inactive, hidden, not sellable or without a usable price are left out and reported in `skippedLines`, never priced by guess. The new draft is assigned to the customer's CURRENT seller, which may differ from the source order's seller. 409 conflict (details.reason `no_previous_order`) when the customer has no previous order in Sales Force at all. 409 conflict (details.reason `no_usable_lines`, with `skippedLines`) when no line of the source order can be used: no draft is created. The source order is never modified. `expectedDataset` is required: 409 dataset_mismatch (nothing is written) when it differs from the dataset the server declares, or the server declares none.",
     auth: 'session',
     request: { params: CustomerPathSchema, body: RepeatLastOrderRequestSchema },
     maxBodyBytes: 2 * 1024,
@@ -453,7 +453,7 @@ export const routes = {
     tags: ['order-templates'],
     summary: 'Create a new draft order from a template',
     description:
-      'Creates a NEW draft for the template customer through the same path as `createOrder`, using `clientRequestId` as the draft request id (201 created; 200 with the original draft on a replay of the same request). Each line is revalidated against the current catalog and the customer price context; lines whose product is removed, inactive, hidden, not sellable or without a usable price are left out and reported in `skippedLines`, never priced by guess. 409 conflict (details.reason `no_usable_lines`, with `skippedLines`) when no line can be used: no draft is created. The draft is independent of the template afterwards.',
+      'Creates a NEW draft for the template customer through the same path as `createOrder`, using `clientRequestId` as the draft request id (201 created; 200 with the original draft on a replay of the same request). Each line is revalidated against the current catalog and the customer price context; lines whose product is removed, inactive, hidden, not sellable or without a usable price are left out and reported in `skippedLines`, never priced by guess. 409 conflict (details.reason `no_usable_lines`, with `skippedLines`) when no line can be used: no draft is created. The draft is independent of the template afterwards. `expectedDataset` is required: 409 dataset_mismatch (nothing is written) when it differs from the dataset the server declares, or the server declares none.',
     auth: 'session',
     request: { params: OrderTemplatePathSchema, body: UseOrderTemplateRequestSchema },
     maxBodyBytes: 2 * 1024,

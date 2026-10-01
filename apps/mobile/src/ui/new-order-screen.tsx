@@ -59,6 +59,14 @@ function describeSaveFailure(error: unknown): SaveFailure {
         reloadable: true,
       };
     }
+    if (error.code === "dataset_mismatch") {
+      return {
+        title: "Os dados do servidor mudaram",
+        messages: ["Este pedido foi aberto com outro conjunto de dados e não foi salvo. Volte e abra o pedido novamente para continuar."],
+        correlationId: error.correlationId,
+        reloadable: false,
+      };
+    }
     if (error.code === "idempotency_conflict") {
       return {
         title: "Não foi possível salvar",
@@ -75,6 +83,9 @@ function describeSaveFailure(error: unknown): SaveFailure {
         reloadable: false,
       };
     }
+  }
+  if (error instanceof DatasetUnavailableError) {
+    return { title: "Não foi possível salvar o rascunho", messages: [error.message], reloadable: false };
   }
   const info: DataErrorInfo = describeDataError(error);
   return { title: "Não foi possível salvar o rascunho", messages: [info.message], correlationId: info.correlationId, reloadable: false };
@@ -416,7 +427,12 @@ export function NewOrderScreen({
       return;
     }
     try {
+      // The server compares this with its own dataset before any write: it states the dataset this editor loaded under.
+      // Without it nothing is sent (never "whatever is current at POST time").
+      const expectedDataset = config.status === "ready" ? datasetIdentityOf(config.value) : null;
+      if (expectedDataset === null) throw new DatasetUnavailableError();
       const body = {
+        expectedDataset,
         customerCode: customer.code,
         // Editing an existing draft keeps its negotiation type and notes as loaded (not editable in this slice);
         // a fresh draft uses the installation default.

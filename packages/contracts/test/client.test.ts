@@ -44,6 +44,7 @@ describe('generated typed client', () => {
     await client.POST('/orders', {
       body: {
         clientRequestId: UUID_A,
+        expectedDataset: { environment: 'sandbox', datasetId: 'plac-sandbox-real-1' },
         customerCode: 5001,
         negotiationTypeCode: null,
         notes: null,

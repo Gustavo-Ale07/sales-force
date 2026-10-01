@@ -145,6 +145,7 @@ describe("NewOrderScreen", () => {
     expect(screen.getByText("Pedido nº 42 · Padaria Central")).toBeTruthy();
     expect(captured).toEqual({
       clientRequestId: expect.any(String),
+      expectedDataset: { environment: "production", datasetId: "mirror-real-001" },
       customerCode: 10,
       negotiationTypeCode: 3,
       notes: null,
@@ -219,6 +220,50 @@ describe("NewOrderScreen", () => {
     await pressAndSettle(screen.getByRole("button", { name: "Salvar rascunho" }));
 
     expect(screen.getByText(/Sem conexão com o servidor/)).toBeTruthy();
+  });
+
+  it("sends the dataset the editor loaded under, not a later one", async () => {
+    let captured: CreateOrderRequest | undefined;
+    let reads = 0;
+    const orders = fakeOrders({
+      getEntryConfiguration: async () => {
+        reads += 1;
+        return orderEntryConfiguration({ dataset: reads === 1 ? { environment: "production", datasetId: "mirror-real-001" } : { environment: "sandbox", datasetId: "other" } });
+      },
+      create: async (request) => {
+        captured = request;
+        return orderDetail({ draftNumber: 1, customerCode: 10, customerName: "Padaria Central" });
+      },
+    });
+    await pickCustomerAndOpenProducts({ orders });
+    await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
+    await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Salvar rascunho" }));
+    expect(captured?.expectedDataset).toEqual({ environment: "production", datasetId: "mirror-real-001" });
+  });
+
+  it("refuses to send when the editor has no dataset identity", async () => {
+    const create = jest.fn(async () => orderDetail({ draftNumber: 1, customerCode: 10 }));
+    const orders = fakeOrders({ getEntryConfiguration: async () => orderEntryConfiguration({ dataset: null }), create });
+    await pickCustomerAndOpenProducts({ orders });
+    await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
+    await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Salvar rascunho" }));
+    expect(create).not.toHaveBeenCalled();
+    expect(screen.getByText(/Conecte-se à internet para criar pedidos/)).toBeTruthy();
+  });
+
+  it("explains a 409 dataset_mismatch in pt-BR", async () => {
+    const orders = fakeOrders({
+      create: async () => {
+        throw new ApiRequestError({ status: 409, code: "dataset_mismatch", message: "x" });
+      },
+    });
+    await pickCustomerAndOpenProducts({ orders });
+    await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
+    await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Salvar rascunho" }));
+    expect(screen.getByText("Os dados do servidor mudaram")).toBeTruthy();
   });
 
   it("blocks saving and explains why when a no-price line is not orderable in this installation", async () => {

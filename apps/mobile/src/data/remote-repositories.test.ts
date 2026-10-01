@@ -137,6 +137,7 @@ describe("remote repositories", () => {
   it("creates a draft order sending only product, quantity and discount, never a price", async () => {
     const request = {
       clientRequestId: "0190a0c0-0000-7000-8000-000000000099",
+      expectedDataset: { environment: "production", datasetId: "mirror-real-001" },
       customerCode: 10,
       negotiationTypeCode: null,
       notes: null,
@@ -165,6 +166,7 @@ describe("remote repositories", () => {
     await expect(
       repositories.orders.create({
         clientRequestId: "0190a0c0-0000-7000-8000-000000000099",
+        expectedDataset: { environment: "production", datasetId: "mirror-real-001" },
         customerCode: 10,
         negotiationTypeCode: null,
         notes: null,
@@ -190,6 +192,7 @@ describe("remote repositories", () => {
   it("replaces a draft with optimistic concurrency, never an idempotency key (PUT /orders/{id})", async () => {
     const request = {
       expectedVersion: 1,
+      expectedDataset: { environment: "production", datasetId: "mirror-real-001" },
       customerCode: 10,
       negotiationTypeCode: null,
       notes: null,
@@ -214,6 +217,7 @@ describe("remote repositories", () => {
     await expect(
       repositories.orders.replace("order-1", {
         expectedVersion: 1,
+        expectedDataset: { environment: "production", datasetId: "mirror-real-001" },
         customerCode: 10,
         negotiationTypeCode: null,
         notes: null,

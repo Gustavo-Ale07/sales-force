@@ -240,9 +240,12 @@ export const configuration: ApiSchema<"ConfigurationResponse"> = {
   integration: integrationFake,
 };
 
+/** Dataset identity the fake server declares by default. */
+export const testDataset: ApiSchema<"DatasetIdentity"> = { environment: "sandbox", datasetId: "test-dataset-1" };
+
 /** Mirrors the fields `getOrderEntryConfiguration` slices out of the full configuration, for the order-editor screen. */
 export const orderEntryConfiguration: ApiSchema<"OrderEntryConfiguration"> = {
-  dataset: null,
+  dataset: testDataset,
   general: { enabled: true },
   sales: {
     defaultNegotiationTypeCode: 3,

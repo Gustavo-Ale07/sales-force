@@ -12,6 +12,7 @@ export function toTransportError(error: unknown): TransportError {
   if (code === "version_conflict") return new TransportError("version_conflict", error.message, status);
   if (code === "order_not_editable") return new TransportError("not_editable", error.message, status);
   if (code === "idempotency_conflict") return new TransportError("idempotency_conflict", error.message, status);
+  if (code === "dataset_mismatch") return new TransportError("dataset_mismatch", error.message, status);
   if (status === 401) return new TransportError("auth", error.message, status);
   if (status === 404) return new TransportError("not_found", error.message, status);
   if (status === 429) return new TransportError("rate_limit", error.message, status);
@@ -63,11 +64,27 @@ export function createOrderTransport(api: ApiClient): OrderTransport {
     }
   };
   return {
-    createOrder: (clientRequestId, request) =>
-      guard(async () => toRemoteOrder(await callApi(() => api.POST("/orders", { body: { clientRequestId, ...request, items: [...request.items] } })))),
-    replaceOrder: (id, expectedVersion, request) =>
+    // `expectedDataset` is the identity stored on the outbox row (what the draft originated under), never "the current one".
+    createOrder: (clientRequestId, request, expectedDataset) =>
       guard(async () =>
-        toRemoteOrder(await callApi(() => api.PUT("/orders/{id}", { params: { path: { id } }, body: { expectedVersion, ...request, items: [...request.items] } }))),
+        toRemoteOrder(
+          await callApi(() =>
+            api.POST("/orders", {
+              body: { clientRequestId, expectedDataset: { environment: expectedDataset.environment, datasetId: expectedDataset.datasetId }, ...request, items: [...request.items] },
+            }),
+          ),
+        ),
+      ),
+    replaceOrder: (id, expectedVersion, request, expectedDataset) =>
+      guard(async () =>
+        toRemoteOrder(
+          await callApi(() =>
+            api.PUT("/orders/{id}", {
+              params: { path: { id } },
+              body: { expectedVersion, expectedDataset: { environment: expectedDataset.environment, datasetId: expectedDataset.datasetId }, ...request, items: [...request.items] },
+            }),
+          ),
+        ),
       ),
     getOrder: (id) => guard(async () => toRemoteOrder(await callApi(() => api.GET("/orders/{id}", { params: { path: { id } } })))),
   };

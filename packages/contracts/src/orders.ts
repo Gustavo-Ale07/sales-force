@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ListPriceStateSchema } from './catalog.js';
+import { DatasetIdentitySchema } from './configuration.js';
 import {
   DecimalStringSchema,
   IsoTimestampSchema,
@@ -169,6 +170,13 @@ export const OrderPathSchema = z.object({ id: UuidSchema });
 export const MAX_ORDER_ITEMS = 500;
 
 /**
+ * Dataset trust boundary: every request that creates or changes an order from client-chosen data states the dataset
+ * (`GET /order-entry/configuration` -> `dataset`) the data originated from. The server compares it with its own declared
+ * identity BEFORE any write and answers 409 `dataset_mismatch` (also when it declares none). Required, no default.
+ */
+export const expectedDatasetField = DatasetIdentitySchema;
+
+/**
  * A requested line: product, quantity and an optional discount percentage. Prices, totals and descriptions are always
  * resolved server-side from the mirror; a client-sent price is rejected (unrecognized key), never
  * silently ignored (P-09).
@@ -197,6 +205,7 @@ export const CreateOrderRequestSchema = named(
   'CreateOrderRequest',
   z.strictObject({
     clientRequestId: UuidSchema,
+    expectedDataset: expectedDatasetField,
     ...orderDraftFields,
   }),
 );
@@ -207,6 +216,7 @@ export const ReplaceOrderRequestSchema = named(
   'ReplaceOrderRequest',
   z.strictObject({
     expectedVersion: z.number().int().min(1),
+    expectedDataset: expectedDatasetField,
     ...orderDraftFields,
   }),
 );
@@ -218,6 +228,6 @@ export type ReplaceOrderRequest = z.infer<typeof ReplaceOrderRequestSchema>;
  */
 export const RepeatLastOrderRequestSchema = named(
   'RepeatLastOrderRequest',
-  z.strictObject({ clientRequestId: UuidSchema }),
+  z.strictObject({ clientRequestId: UuidSchema, expectedDataset: expectedDatasetField }),
 );
 export type RepeatLastOrderRequest = z.infer<typeof RepeatLastOrderRequestSchema>;

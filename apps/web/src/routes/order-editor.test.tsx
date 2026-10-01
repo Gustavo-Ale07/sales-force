@@ -13,6 +13,7 @@ import {
   orderDetail,
   orderItem,
   pricedList,
+  testDataset,
   product,
   productsPage,
 } from "../test/fixtures";
@@ -565,6 +566,7 @@ describe("Novo pedido", () => {
     expect(created?.body).toMatchObject({ customerCode: 1001, items: [{ productCode: 2001, quantity: "2" }] });
     expect(JSON.stringify(created?.body)).not.toMatch(/price|preco|total/i);
     expect(created?.body).toHaveProperty("clientRequestId", expect.stringMatching(/^[0-9a-f-]{36}$/));
+    expect(created?.body).toHaveProperty("expectedDataset", testDataset);
     expect(await screen.findByRole("heading", { name: /^Rascunho nº 12/ })).toBeInTheDocument();
   });
 
@@ -764,6 +766,7 @@ describe("Rascunho existente", () => {
     expect(await screen.findByText("Rascunho salvo")).toBeInTheDocument();
     const [put] = callsTo(calls, "PUT", `/orders/${ORDER_ID}`);
     expect(put?.body).toMatchObject({ expectedVersion: 1, customerCode: 1001, items: [{ productCode: 2001, quantity: "3" }] });
+    expect(put?.body).toHaveProperty("expectedDataset", testDataset);
     expect(await screen.findByTestId("order-total")).toHaveTextContent("37,50");
   });
 

@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type {
   CreateOrderTemplateRequest,
+  DatasetIdentity,
   OrderTemplateDetail,
   OrderTemplatesResponse,
   ReplaceOrderTemplateRequest,
@@ -25,8 +26,9 @@ import { PolicyService } from '../iam/policy.service.js';
 import { DraftBuilder } from '../orders/draft-builder.js';
 import type { Executor } from '../orders/orders.repository.js';
 import { OrdersService } from '../orders/orders.service.js';
+import { assertDatasetMatches } from '../platform/dataset-guard.js';
 import { uuidv7 } from '../platform/ids.js';
-import { CLOCK, type Clock } from '../platform/tokens.js';
+import { CLOCK, DATASET_IDENTITY, type Clock } from '../platform/tokens.js';
 import { toTemplate, toTemplateDetail } from './template.mapper.js';
 import { templateFingerprint } from './template-fingerprint.js';
 import { TemplatesRepository, type TemplateRow } from './templates.repository.js';
@@ -67,6 +69,7 @@ export class TemplatesService {
     @Inject(DraftBuilder) private readonly builder: DraftBuilder,
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(DATASET_IDENTITY) private readonly dataset: DatasetIdentity | null,
   ) {}
 
   /* ---------- reads ---------- */
@@ -230,6 +233,7 @@ export class TemplatesService {
    * with none left nothing is created. No negotiation type, note or price is carried over: the template has none.
    */
   async use(user: CurrentUser, id: string, body: UseOrderTemplateRequest): Promise<UseTemplateResult> {
+    assertDatasetMatches(this.dataset, body.expectedDataset);
     const context = await this.policy.accessContext(user);
     const template = await this.loadVisible(context.scope, id);
     const customer = await this.customers.requireVisible(context.scope, template.customerCode);
@@ -256,6 +260,7 @@ export class TemplatesService {
       user,
       {
         clientRequestId: body.clientRequestId,
+        expectedDataset: body.expectedDataset,
         customerCode: customer.code,
         negotiationTypeCode: null,
         notes: null,

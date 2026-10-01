@@ -1,6 +1,6 @@
 import { screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { ORDER_ID, customerDetail, orderDetail, ordersPage } from "../test/fixtures";
+import { ORDER_ID, customerDetail, orderDetail, ordersPage, testDataset } from "../test/fixtures";
 import { apiError, callsTo, renderApp, type Handlers, type MockRequest } from "../test/harness";
 
 /** "Repetir último pedido" (Fase C, plan §25.9): reachable from the customer page in one click. Only product +
@@ -42,7 +42,8 @@ describe("Cliente: Repetir último pedido", () => {
     await waitFor(() => expect(router.state.location.pathname).toBe(`/pedidos/${ORDER_ID}`));
 
     const [request] = callsTo(calls, "POST", "/customers/1001/orders/repeat-last");
-    expect(Object.keys(request?.body as object)).toEqual(["clientRequestId"]);
+    expect(Object.keys(request?.body as object).sort()).toEqual(["clientRequestId", "expectedDataset"]);
+      expect((request?.body as { expectedDataset: unknown }).expectedDataset).toEqual(testDataset);
     expect((request?.body as { clientRequestId: string }).clientRequestId).toMatch(UUID);
 
     expect(await screen.findByText("Rascunho criado a partir do último pedido registrado no Sales Force")).toBeInTheDocument();

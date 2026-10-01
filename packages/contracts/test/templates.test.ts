@@ -9,6 +9,8 @@ import {
   routes,
 } from '../src/index.js';
 
+const DATASET = { environment: 'sandbox', datasetId: 'plac-sandbox-real-1' };
+
 const id = '019a0000-0000-7000-8000-000000000001';
 const item = { productCode: 10, quantity: '2.5' };
 const many = (n: number) => Array.from({ length: n }, (_, i) => ({ productCode: i + 1, quantity: '1' }));
@@ -62,10 +64,11 @@ describe('create / replace template requests', () => {
     expect(ReplaceOrderTemplateRequestSchema.safeParse({ expectedVersion: 1, clientRequestId: id, name: 'a', items: [item] }).success).toBe(false);
   });
 
-  it('use takes only a client request id', () => {
-    expect(UseOrderTemplateRequestSchema.safeParse({ clientRequestId: id }).success).toBe(true);
+  it('use takes a client request id and the expected dataset', () => {
+    expect(UseOrderTemplateRequestSchema.safeParse({ clientRequestId: id, expectedDataset: DATASET }).success).toBe(true);
+    expect(UseOrderTemplateRequestSchema.safeParse({ clientRequestId: id }).success).toBe(false);
     expect(UseOrderTemplateRequestSchema.safeParse({}).success).toBe(false);
-    expect(UseOrderTemplateRequestSchema.safeParse({ clientRequestId: id, customerCode: 1 }).success).toBe(false);
+    expect(UseOrderTemplateRequestSchema.safeParse({ clientRequestId: id, expectedDataset: DATASET, customerCode: 1 }).success).toBe(false);
   });
 });
 
@@ -86,10 +89,11 @@ describe('repeat last order route', () => {
     expect(routes.repeatLastOrder.maxBodyBytes).toBeLessThanOrEqual(4 * 1024);
   });
 
-  it('the request takes only a client request id (same shape as useOrderTemplate)', () => {
-    expect(RepeatLastOrderRequestSchema.safeParse({ clientRequestId: id }).success).toBe(true);
+  it('the request takes a client request id and the expected dataset (same shape as useOrderTemplate)', () => {
+    expect(RepeatLastOrderRequestSchema.safeParse({ clientRequestId: id, expectedDataset: DATASET }).success).toBe(true);
+    expect(RepeatLastOrderRequestSchema.safeParse({ clientRequestId: id }).success).toBe(false);
     expect(RepeatLastOrderRequestSchema.safeParse({}).success).toBe(false);
-    expect(RepeatLastOrderRequestSchema.safeParse({ clientRequestId: id, customerCode: 1 }).success).toBe(false);
+    expect(RepeatLastOrderRequestSchema.safeParse({ clientRequestId: id, expectedDataset: DATASET, customerCode: 1 }).success).toBe(false);
   });
 
   it('the response reports skipped lines with the same stable reason vocabulary as useOrderTemplate', () => {

@@ -27,6 +27,7 @@ import { useRef, useState } from "react";
 import { createOrderFromTemplate, deleteOrderTemplate } from "../lib/api-mutations";
 import { orderTemplatesQueryOptions, queryKeys } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
+import { requireDataset, useLoadedDataset } from "../lib/dataset";
 import { errorStatus } from "../lib/http-error";
 import { formatCount } from "../lib/labels";
 import { describeTemplateError, skippedLinesOf } from "../lib/order-templates";
@@ -111,6 +112,7 @@ export function OrderTemplatesCard({ customerCode }: OrderTemplatesCardProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const query = useQuery(orderTemplatesQueryOptions(api, customerCode));
+  const loadedDataset = useLoadedDataset();
   const [editing, setEditing] = useState<OrderTemplate | null>(null);
   const [deleting, setDeleting] = useState<OrderTemplate | null>(null);
 
@@ -120,12 +122,14 @@ export function OrderTemplatesCard({ customerCode }: OrderTemplatesCardProps) {
   const requestIds = useRef(new Map<string, string>());
   const use = useMutation({
     mutationFn: (template: OrderTemplate) => {
+      // Unknown dataset blocks the action before a request id is even reserved.
+      const expectedDataset = requireDataset(loadedDataset);
       let clientRequestId = requestIds.current.get(template.id);
       if (!clientRequestId) {
         clientRequestId = newUuid();
         requestIds.current.set(template.id, clientRequestId);
       }
-      return createOrderFromTemplate(api, template.id, { clientRequestId });
+      return createOrderFromTemplate(api, template.id, { clientRequestId, expectedDataset });
     },
     onError: (error, template) => {
       const status = errorStatus(error);

@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type {
   CreateOrderRequest,
+  DatasetIdentity,
   OrderDetail,
   OrdersQuery,
   OrdersResponse,
@@ -23,8 +24,9 @@ import { AUDIT_ACTIONS, AuditService, type AuditDetail } from '../iam/audit.serv
 import type { CurrentUser } from '../iam/current-user.js';
 import { PolicyService, type AccessContext } from '../iam/policy.service.js';
 import { MirrorRepository, type CustomerRow } from '../mirror/mirror.repository.js';
+import { assertDatasetMatches } from '../platform/dataset-guard.js';
 import { uuidv7 } from '../platform/ids.js';
-import { CLOCK, type Clock } from '../platform/tokens.js';
+import { CLOCK, DATASET_IDENTITY, type Clock } from '../platform/tokens.js';
 import { DraftBuilder, type DraftOutcome } from './draft-builder.js';
 import { orderFingerprint } from './order-fingerprint.js';
 import { toOrderDetail, toOrderListItem } from './order.mapper.js';
@@ -78,6 +80,7 @@ export class OrdersService {
     @Inject(DraftBuilder) private readonly builder: DraftBuilder,
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(DATASET_IDENTITY) private readonly dataset: DatasetIdentity | null,
   ) {}
 
   /* ---------- reads ---------- */
@@ -125,6 +128,8 @@ export class OrdersService {
   /* ---------- create (idempotent) ---------- */
 
   async create(user: CurrentUser, body: CreateOrderRequest, hooks: CreateHooks = {}): Promise<CreateResult> {
+    // After authN/authZ (route guard), before everything else: also for a replay of an existing clientRequestId.
+    assertDatasetMatches(this.dataset, body.expectedDataset);
     const context = await this.policy.accessContext(user);
     const fingerprint = orderFingerprint(body);
 
@@ -193,6 +198,7 @@ export class OrdersService {
    * to protect, and nothing about this flow can change it.
    */
   async repeatLast(user: CurrentUser, customerCode: number, body: RepeatLastOrderRequest): Promise<RepeatLastOrderResult> {
+    assertDatasetMatches(this.dataset, body.expectedDataset);
     const context = await this.policy.accessContext(user);
     const customer = await this.customers.requireVisible(context.scope, customerCode);
 
@@ -244,6 +250,7 @@ export class OrdersService {
       user,
       {
         clientRequestId: body.clientRequestId,
+        expectedDataset: body.expectedDataset,
         customerCode: customer.code,
         negotiationTypeCode: null,
         notes: null,
@@ -285,6 +292,7 @@ export class OrdersService {
   /* ---------- replace / discard ---------- */
 
   async replace(user: CurrentUser, id: string, body: ReplaceOrderRequest): Promise<OrderDetail> {
+    assertDatasetMatches(this.dataset, body.expectedDataset);
     const context = await this.policy.accessContext(user);
     const current = await this.loadVisible(context.scope, id);
     this.assertEditable(current, body.expectedVersion);

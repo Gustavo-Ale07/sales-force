@@ -1142,7 +1142,7 @@
           "orders"
         ],
         "summary": "Create a draft order",
-        "description": "Idempotent on `clientRequestId`: 201 when created, 200 with the original order on a replay of the same payload, 409 idempotency_conflict when the id was used with a different payload. Prices are always computed server-side.",
+        "description": "Idempotent on `clientRequestId`: 201 when created, 200 with the original order on a replay of the same payload, 409 idempotency_conflict when the id was used with a different payload. Prices are always computed server-side. `expectedDataset` is required: 409 dataset_mismatch (nothing is written) when it differs from the dataset the server declares, or the server declares none.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1305,7 +1305,7 @@
           "orders"
         ],
         "summary": "Replace a draft (optimistic concurrency)",
-        "description": "Full replace. 409 version_conflict when `expectedVersion` is stale; 409 order_not_editable when the order is not a draft. The server recomputes prices and totals.",
+        "description": "Full replace. 409 version_conflict when `expectedVersion` is stale; 409 order_not_editable when the order is not a draft. The server recomputes prices and totals. `expectedDataset` is required: 409 dataset_mismatch (the order is not changed) when it differs from the dataset the server declares, or the server declares none.",
         "parameters": [
           {
             "name": "id",
@@ -1554,7 +1554,7 @@
           "orders"
         ],
         "summary": "Create a new draft from the customer's most recent order ('Repetir último pedido')",
-        "description": "Creates a NEW, independent draft from the customer's most recent NON-cancelled order recorded in Sales Force (never from Sankhya/ERP history, which is not mirrored here), through the same path as `createOrder`, using `clientRequestId` as the draft request id (201 created; 200 with the original draft on a replay of the same request). Only `productCode` and `quantity` are copied from the source order; no price, discount or note. Each line is revalidated against the current catalog and the customer price context; lines whose product is removed, inactive, hidden, not sellable or without a usable price are left out and reported in `skippedLines`, never priced by guess. The new draft is assigned to the customer's CURRENT seller, which may differ from the source order's seller. 409 conflict (details.reason `no_previous_order`) when the customer has no previous order in Sales Force at all. 409 conflict (details.reason `no_usable_lines`, with `skippedLines`) when no line of the source order can be used: no draft is created. The source order is never modified.",
+        "description": "Creates a NEW, independent draft from the customer's most recent NON-cancelled order recorded in Sales Force (never from Sankhya/ERP history, which is not mirrored here), through the same path as `createOrder`, using `clientRequestId` as the draft request id (201 created; 200 with the original draft on a replay of the same request). Only `productCode` and `quantity` are copied from the source order; no price, discount or note. Each line is revalidated against the current catalog and the customer price context; lines whose product is removed, inactive, hidden, not sellable or without a usable price are left out and reported in `skippedLines`, never priced by guess. The new draft is assigned to the customer's CURRENT seller, which may differ from the source order's seller. 409 conflict (details.reason `no_previous_order`) when the customer has no previous order in Sales Force at all. 409 conflict (details.reason `no_usable_lines`, with `skippedLines`) when no line of the source order can be used: no draft is created. The source order is never modified. `expectedDataset` is required: 409 dataset_mismatch (nothing is written) when it differs from the dataset the server declares, or the server declares none.",
         "parameters": [
           {
             "name": "code",
@@ -2062,7 +2062,7 @@
           "order-templates"
         ],
         "summary": "Create a new draft order from a template",
-        "description": "Creates a NEW draft for the template customer through the same path as `createOrder`, using `clientRequestId` as the draft request id (201 created; 200 with the original draft on a replay of the same request). Each line is revalidated against the current catalog and the customer price context; lines whose product is removed, inactive, hidden, not sellable or without a usable price are left out and reported in `skippedLines`, never priced by guess. 409 conflict (details.reason `no_usable_lines`, with `skippedLines`) when no line can be used: no draft is created. The draft is independent of the template afterwards.",
+        "description": "Creates a NEW draft for the template customer through the same path as `createOrder`, using `clientRequestId` as the draft request id (201 created; 200 with the original draft on a replay of the same request). Each line is revalidated against the current catalog and the customer price context; lines whose product is removed, inactive, hidden, not sellable or without a usable price are left out and reported in `skippedLines`, never priced by guess. 409 conflict (details.reason `no_usable_lines`, with `skippedLines`) when no line can be used: no draft is created. The draft is independent of the template afterwards. `expectedDataset` is required: 409 dataset_mismatch (nothing is written) when it differs from the dataset the server declares, or the server declares none.",
         "parameters": [
           {
             "name": "id",
@@ -2694,6 +2694,9 @@
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
+          "expectedDataset": {
+            "$ref": "#/components/schemas/DatasetIdentity"
+          },
           "customerCode": {
             "type": "integer",
             "minimum": 0
@@ -2730,6 +2733,7 @@
         },
         "required": [
           "clientRequestId",
+          "expectedDataset",
           "customerCode",
           "negotiationTypeCode",
           "notes",
@@ -3124,6 +3128,7 @@
           "order_not_editable",
           "installation_not_enabled",
           "erp_submission_disabled",
+          "dataset_mismatch",
           "rate_limited",
           "service_unavailable",
           "internal_error"
@@ -4653,10 +4658,14 @@
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "expectedDataset": {
+            "$ref": "#/components/schemas/DatasetIdentity"
           }
         },
         "required": [
-          "clientRequestId"
+          "clientRequestId",
+          "expectedDataset"
         ],
         "additionalProperties": false
       },
@@ -4685,6 +4694,9 @@
           "expectedVersion": {
             "type": "integer",
             "minimum": 1
+          },
+          "expectedDataset": {
+            "$ref": "#/components/schemas/DatasetIdentity"
           },
           "customerCode": {
             "type": "integer",
@@ -4722,6 +4734,7 @@
         },
         "required": [
           "expectedVersion",
+          "expectedDataset",
           "customerCode",
           "negotiationTypeCode",
           "notes",
@@ -4974,10 +4987,14 @@
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "expectedDataset": {
+            "$ref": "#/components/schemas/DatasetIdentity"
           }
         },
         "required": [
-          "clientRequestId"
+          "clientRequestId",
+          "expectedDataset"
         ],
         "additionalProperties": false
       },

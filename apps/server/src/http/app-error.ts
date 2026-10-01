@@ -14,6 +14,8 @@ export const DEFAULT_ERROR_MESSAGES: Readonly<Record<ErrorCode, string>> = {
   order_not_editable: 'Este pedido não pode mais ser editado.',
   installation_not_enabled: 'A instalação ainda não foi habilitada. Contate o administrador.',
   erp_submission_disabled: 'O envio de pedidos ao ERP ainda não está habilitado.',
+  dataset_mismatch:
+    'Este pedido foi iniciado com outro conjunto de dados e não pode ser salvo aqui. Atualize o aplicativo, confira o pedido e refaça-o.',
   rate_limited: 'Muitas tentativas. Aguarde um momento e tente novamente.',
   service_unavailable: 'Serviço temporariamente indisponível. Tente novamente em instantes.',
   internal_error: 'Erro interno. Informe o código da requisição ao suporte.',

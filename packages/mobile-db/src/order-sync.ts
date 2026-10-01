@@ -60,7 +60,8 @@ export type TransportErrorKind =
   | "version_conflict"
   | "not_editable"
   | "idempotency_conflict"
-  | "not_found";
+  | "not_found"
+  | "dataset_mismatch";
 
 export class TransportError extends Error {
   constructor(
@@ -75,14 +76,15 @@ export class TransportError extends Error {
 
 /** HTTP surface of the order commands. The adapter in `apps/mobile` maps `ApiRequestError` to `TransportError`. */
 export interface OrderTransport {
-  createOrder(clientRequestId: string, request: OrderCommandPayload["request"]): Promise<RemoteOrder>;
-  replaceOrder(id: string, expectedVersion: number, request: OrderCommandPayload["request"]): Promise<RemoteOrder>;
+  /** `expectedDataset` is ALWAYS the identity stored on the outbox row (the dataset the draft originated under), never the current one. */
+  createOrder(clientRequestId: string, request: OrderCommandPayload["request"], expectedDataset: DatasetIdentity): Promise<RemoteOrder>;
+  replaceOrder(id: string, expectedVersion: number, request: OrderCommandPayload["request"], expectedDataset: DatasetIdentity): Promise<RemoteOrder>;
   getOrder(id: string): Promise<RemoteOrder>;
 }
 
 /* ---------- error classification ---------- */
 
-export type FailureClass = "transient" | "auth" | "permanent" | "conflict";
+export type FailureClass = "transient" | "auth" | "permanent" | "conflict" | "dataset";
 
 export function classifyFailure(kind: TransportErrorKind): FailureClass {
   switch (kind) {
@@ -99,6 +101,8 @@ export function classifyFailure(kind: TransportErrorKind): FailureClass {
     case "idempotency_conflict":
     case "not_found":
       return "permanent";
+    case "dataset_mismatch":
+      return "dataset";
   }
 }
 
@@ -129,6 +133,8 @@ export function describeFailure(error: TransportError): string {
       return "O pedido não existe mais no servidor.";
     case "idempotency_conflict":
       return "Este envio já foi registrado com outros dados e não pôde ser repetido.";
+    case "dataset_mismatch":
+      return ineligibleMessage("dataset_mismatch");
     case "validation":
       return error.message !== "" ? error.message : "O servidor recusou este pedido. Revise os dados.";
   }
@@ -199,7 +205,7 @@ export function comparePrices(payload: OrderCommandPayload, remote: RemoteOrder)
 
 /* ---------- push ---------- */
 
-export type PushStop = "idle" | "offline" | "auth" | "limit" | "dataset_unconfirmed";
+export type PushStop = "idle" | "offline" | "auth" | "limit" | "dataset_unconfirmed" | "dataset_mismatch";
 
 export interface PushResult {
   readonly attempted: number;
@@ -428,6 +434,8 @@ export async function pushOutbox(
       quarantined += 1;
       continue;
     }
+    // The guard above proved op.dataset equals the confirmed dataset; the request states the ROW's own identity.
+    const sentUnder = op.dataset as DatasetIdentity;
     attempted += 1;
     await markSending(db, env, op);
     const sent: OutboxRecord = { ...op, attempts: op.attempts + 1 };
@@ -435,10 +443,10 @@ export async function pushOutbox(
     try {
       let remote: RemoteOrder;
       if (op.type === "order.create") {
-        remote = await transport.createOrder(op.idempotencyKey, op.payload.request);
+        remote = await transport.createOrder(op.idempotencyKey, op.payload.request, sentUnder);
       } else {
         if (draft.remoteId === null || draft.remoteVersion === null) throw new TransportError("validation", "O pedido ainda não foi criado no servidor.");
-        remote = await transport.replaceOrder(draft.remoteId, draft.remoteVersion, op.payload.request);
+        remote = await transport.replaceOrder(draft.remoteId, draft.remoteVersion, op.payload.request, sentUnder);
       }
       await applyAccepted(db, env, sent, remote);
       accepted += 1;
@@ -456,6 +464,14 @@ export async function pushOutbox(
         await applyAuth(db, env, sent, error);
         failed += 1;
         return { attempted, accepted, failed, stoppedBy: "auth", quarantined };
+      }
+      if (failure === "dataset") {
+        // The server refused before any effect: this draft belongs to another dataset. Permanent for the draft (quarantine,
+        // never re-queued); the run stops so no other command is POSTed until the dataset is re-confirmed.
+        await quarantineDraft(db, env, draft.localId, "dataset_mismatch");
+        quarantined += 1;
+        failed += 1;
+        return { attempted, accepted, failed, stoppedBy: "dataset_mismatch", quarantined };
       }
       if (failure === "conflict") {
         let snapshot: RemoteOrder | null = null;

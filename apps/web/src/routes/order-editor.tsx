@@ -48,6 +48,7 @@ import { ApiRequestError } from "../lib/api";
 import { ERP_SUBMISSION_DISABLED, createOrder, replaceOrder, submitOrder } from "../lib/api-mutations";
 import { orderEntryConfigurationQueryOptions, customerQueryOptions, orderQueryOptions, queryKeys } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
+import { useLoadedDataset, requireDataset } from "../lib/dataset";
 import { describeApiError } from "../lib/error-message";
 import { orderReference, orderStatusLabels } from "../lib/labels";
 import {
@@ -185,6 +186,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
   const api = useApi();
   const queryClient = useQueryClient();
   const config = useQuery(orderEntryConfigurationQueryOptions(api));
+  const loadedDataset = useLoadedDataset();
 
   const readOnly = order !== null && order.status !== "draft";
   const lineCounter = useRef(0);
@@ -298,10 +300,12 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
 
   const save = useMutation({
     mutationFn: async () => {
-      if (order) return replaceOrder(api, order.id, { expectedVersion: order.version, ...body });
+      // The dataset this editor loaded under; unknown identity blocks the write before any request.
+      const expectedDataset = requireDataset(loadedDataset);
+      if (order) return replaceOrder(api, order.id, { expectedVersion: order.version, expectedDataset, ...body });
       const payload = JSON.stringify(body);
       if (requestIdRef.current?.payload !== payload) requestIdRef.current = { payload, id: newUuid() };
-      return createOrder(api, { clientRequestId: requestIdRef.current.id, ...body });
+      return createOrder(api, { clientRequestId: requestIdRef.current.id, expectedDataset, ...body });
     },
     onSuccess: async (saved) => {
       queryClient.setQueryData(queryKeys.order(saved.id), saved);

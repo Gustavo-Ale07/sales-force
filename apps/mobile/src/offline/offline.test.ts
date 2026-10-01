@@ -5,7 +5,7 @@ import { account, product } from "../test-doubles";
 import { linesFromDraftItems, toDraftItems } from "./local-orders";
 import { MAX_OFFLINE_DAYS, evaluateOfflineAccess } from "./session";
 import { describeSyncStatus } from "./sync-status-text";
-import { toTransportError } from "./transport";
+import { createOrderTransport, toTransportError } from "./transport";
 
 const idle: SyncStatus = { phase: "idle", pending: 0, needsAttention: 0, lastSyncedAt: null, lastError: null };
 
@@ -17,6 +17,7 @@ describe("toTransportError", () => {
     expect(kindOf({ status: 409, code: "version_conflict", message: "x" })).toBe("version_conflict");
     expect(kindOf({ status: 409, code: "order_not_editable", message: "x" })).toBe("not_editable");
     expect(kindOf({ status: 409, code: "idempotency_conflict", message: "x" })).toBe("idempotency_conflict");
+    expect(kindOf({ status: 409, code: "dataset_mismatch", message: "x" })).toBe("dataset_mismatch");
     expect(kindOf({ status: 401, message: "x" })).toBe("auth");
     expect(kindOf({ status: 429, message: "x" })).toBe("rate_limit");
     expect(kindOf({ status: 503, message: "x" })).toBe("server");
@@ -26,6 +27,30 @@ describe("toTransportError", () => {
   it("never lets a raw technical message reach the seller for validation failures", () => {
     const error = toTransportError(new ApiRequestError({ status: 422, message: "Network request failed" }));
     expect(error.message).not.toMatch(/Network request failed/);
+  });
+});
+
+describe("createOrderTransport (expectedDataset on the wire)", () => {
+  const dataset = { environment: "production", datasetId: "mirror-real-001" };
+  const request = { customerCode: 10, negotiationTypeCode: null, notes: null, items: [{ productCode: 5, quantity: "1" }] } as const;
+  const orderBody = {
+    id: "0190a0c0-0000-7000-8000-000000000001", version: 1, draftNumber: 1, customerCode: 10, customerName: "x", negotiationTypeCode: null, notes: null, estimatedTotal: "0.00", items: [],
+  };
+  const fakeApi = (bodies: unknown[]) => {
+    const ok = async (_path: string, init: { body: unknown }) => {
+      bodies.push(init.body);
+      return { data: orderBody, response: { ok: true, status: 200, headers: new Headers() } };
+    };
+    return { POST: ok, PUT: ok, GET: ok } as never;
+  };
+
+  it("create and replace carry exactly the dataset passed from the outbox row", async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    const transport = createOrderTransport(fakeApi(bodies));
+    await transport.createOrder("0190a0c0-0000-7000-8000-0000000000aa", request, dataset);
+    await transport.replaceOrder("0190a0c0-0000-7000-8000-000000000001", 1, request, dataset);
+    expect(bodies[0]).toMatchObject({ clientRequestId: "0190a0c0-0000-7000-8000-0000000000aa", expectedDataset: dataset });
+    expect(bodies[1]).toMatchObject({ expectedVersion: 1, expectedDataset: dataset });
   });
 });
 

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { OrderDetailSchema } from './orders.js';
+import { OrderDetailSchema, expectedDatasetField } from './orders.js';
 import { DecimalStringSchema, IsoTimestampSchema, UuidSchema, codeInt, named } from './primitives.js';
 
 /**
@@ -92,7 +92,7 @@ export type ReplaceOrderTemplateRequest = z.infer<typeof ReplaceOrderTemplateReq
 /** `POST /order-templates/{id}/use`. One `clientRequestId` per user action (it becomes the draft's own request id). */
 export const UseOrderTemplateRequestSchema = named(
   'UseOrderTemplateRequest',
-  z.strictObject({ clientRequestId: UuidSchema }),
+  z.strictObject({ clientRequestId: UuidSchema, expectedDataset: expectedDatasetField }),
 );
 export type UseOrderTemplateRequest = z.infer<typeof UseOrderTemplateRequestSchema>;
 

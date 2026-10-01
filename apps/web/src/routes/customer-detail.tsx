@@ -10,6 +10,7 @@ import { TemplateSkippedNotice } from "../components/template-skipped-notice";
 import { repeatLastOrder } from "../lib/api-mutations";
 import { customerQueryOptions, queryKeys } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
+import { requireDataset, useLoadedDataset } from "../lib/dataset";
 import { errorStatus } from "../lib/http-error";
 import { describeTemplateError, skippedLinesOf } from "../lib/order-templates";
 import { CustomerStatus } from "./customers";
@@ -29,13 +30,16 @@ function useRepeatLastOrder(customerCode: number) {
   const api = useApi();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const loadedDataset = useLoadedDataset();
   // Kept while the previous attempt ended in an unknown outcome (network error, 5xx, 429), so a retry after a
   // lost response cannot create a second draft; dropped on success and on every definitive answer (404, 409).
   const requestId = useRef<string | null>(null);
   return useMutation({
     mutationFn: () => {
+      // Unknown dataset blocks the action before a request id is even reserved.
+      const expectedDataset = requireDataset(loadedDataset);
       if (!requestId.current) requestId.current = newUuid();
-      return repeatLastOrder(api, customerCode, { clientRequestId: requestId.current });
+      return repeatLastOrder(api, customerCode, { clientRequestId: requestId.current, expectedDataset });
     },
     onError: (error) => {
       const status = errorStatus(error);

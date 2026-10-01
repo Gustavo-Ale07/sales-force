@@ -1,3 +1,4 @@
+import { describeDatasetError } from "./dataset-error";
 import { errorStatus, isHttpError } from "./http-error";
 
 export interface ErrorDescription {
@@ -11,6 +12,8 @@ export interface ErrorDescription {
  * for client errors that need action (validation, conflicts); server failures get a fixed text.
  */
 export function describeApiError(error: unknown, fallbackTitle = "Não foi possível concluir a operação"): ErrorDescription {
+  const dataset = describeDatasetError(error);
+  if (dataset) return dataset;
   const correlationId = isHttpError(error) ? error.correlationId : undefined;
   const status = errorStatus(error);
   if (status === 0) {

@@ -13,6 +13,7 @@ import {
   orderTemplatesPage,
   ordersPage,
   pricedList,
+  testDataset,
   product,
   productsPage,
 } from "../test/fixtures";
@@ -106,7 +107,8 @@ describe("Cliente: Pedidos recorrentes", () => {
       await waitFor(() => expect(router.state.location.pathname).toBe(`/pedidos/${ORDER_ID}`));
 
       const [request] = callsTo(calls, "POST", `/order-templates/${TEMPLATE_ID}/use`);
-      expect(Object.keys(request?.body as object)).toEqual(["clientRequestId"]);
+      expect(Object.keys(request?.body as object).sort()).toEqual(["clientRequestId", "expectedDataset"]);
+      expect((request?.body as { expectedDataset: unknown }).expectedDataset).toEqual(testDataset);
       expect((request?.body as { clientRequestId: string }).clientRequestId).toMatch(UUID);
 
       const notice = await screen.findByRole("alert", { name: "Itens do modelo que ficaram de fora" });

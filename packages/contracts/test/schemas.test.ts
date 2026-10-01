@@ -173,6 +173,8 @@ describe('list price context', () => {
   });
 });
 
+const DATASET = { environment: 'sandbox', datasetId: 'plac-sandbox-real-1' };
+
 describe('order requests', () => {
   const draft = {
     customerCode: 5001,
@@ -182,16 +184,32 @@ describe('order requests', () => {
   };
 
   it('parses create and replace requests', () => {
-    expect(CreateOrderRequestSchema.parse({ clientRequestId: UUID_A, ...draft })).toEqual({
+    expect(CreateOrderRequestSchema.parse({ clientRequestId: UUID_A, expectedDataset: DATASET, ...draft })).toEqual({
       clientRequestId: UUID_A,
+      expectedDataset: DATASET,
       ...draft,
     });
-    expect(ReplaceOrderRequestSchema.parse({ expectedVersion: 2, ...draft }).expectedVersion).toBe(
+    expect(ReplaceOrderRequestSchema.parse({ expectedVersion: 2, expectedDataset: DATASET, ...draft }).expectedVersion).toBe(
       2,
     );
     expect(
-      CreateOrderRequestSchema.parse({ clientRequestId: UUID_B, ...draft, items: [] }).items,
+      CreateOrderRequestSchema.parse({ clientRequestId: UUID_B, expectedDataset: DATASET, ...draft, items: [] }).items,
     ).toEqual([]);
+  });
+
+  it('requires expectedDataset on create and replace (no default, strict shape)', () => {
+    const create = { clientRequestId: UUID_A, ...draft };
+    expect(CreateOrderRequestSchema.safeParse(create).success).toBe(false);
+    expect(ReplaceOrderRequestSchema.safeParse({ expectedVersion: 1, ...draft }).success).toBe(false);
+    for (const bad of [null, {}, { environment: 'sandbox' }, { datasetId: 'plac-sandbox-real-1' }, { ...DATASET, extra: 1 }, { environment: 'Sandbox', datasetId: 'x' }]) {
+      expect(CreateOrderRequestSchema.safeParse({ ...create, expectedDataset: bad }).success).toBe(false);
+      expect(ReplaceOrderRequestSchema.safeParse({ expectedVersion: 1, ...draft, expectedDataset: bad }).success).toBe(false);
+    }
+  });
+
+  it('serves dataset_mismatch as a 409 error code', () => {
+    expect(ERROR_HTTP_STATUS.dataset_mismatch).toBe(409);
+    expect(ApiErrorSchema.safeParse({ code: 'dataset_mismatch', message: 'x' }).success).toBe(true);
   });
 
   it('rejects client-sent prices and totals on lines and on the order (unrecognized keys)', () => {
@@ -210,7 +228,7 @@ describe('order requests', () => {
   });
 
   it('rejects malformed requests', () => {
-    const create = { clientRequestId: UUID_A, ...draft };
+    const create = { clientRequestId: UUID_A, expectedDataset: DATASET, ...draft };
     expect(CreateOrderRequestSchema.safeParse({ ...create, clientRequestId: 'abc' }).success).toBe(
       false,
     );
@@ -238,8 +256,8 @@ describe('order requests', () => {
         items: Array.from({ length: 501 }, () => ({ productCode: 1, quantity: '1' })),
       }).success,
     ).toBe(false);
-    expect(ReplaceOrderRequestSchema.safeParse({ ...draft }).success).toBe(false);
-    expect(ReplaceOrderRequestSchema.safeParse({ expectedVersion: 0, ...draft }).success).toBe(
+    expect(ReplaceOrderRequestSchema.safeParse({ expectedDataset: DATASET, ...draft }).success).toBe(false);
+    expect(ReplaceOrderRequestSchema.safeParse({ expectedVersion: 0, expectedDataset: DATASET, ...draft }).success).toBe(
       false,
     );
   });

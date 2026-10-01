@@ -24,6 +24,7 @@ import {
   replaceCustomers,
   replaceProducts,
   runMigrations,
+  TransportError,
   saveOrderDraft,
   searchCustomers,
   searchProducts,
@@ -51,8 +52,14 @@ const env: OfflineEnv = { now: () => new Date(clock), newId: () => `id-${String(
 /** Spy transport: records every call; the test asserts on `calls`. */
 class SpyTransport implements OrderTransport {
   calls: string[] = [];
-  async createOrder(key: string, request: OrderCommandPayload["request"]): Promise<RemoteOrder> {
+  /** The `expectedDataset` carried by each request, in order. */
+  sentDatasets: DatasetIdentity[] = [];
+  /** Answer the next request(s) with this error instead of an order. */
+  failWith: TransportError | null = null;
+  async createOrder(key: string, request: OrderCommandPayload["request"], expectedDataset: DatasetIdentity): Promise<RemoteOrder> {
     this.calls.push(`POST ${key}`);
+    this.sentDatasets.push(expectedDataset);
+    if (this.failWith !== null) throw this.failWith;
     return {
       id: "order-1",
       version: 1,
@@ -75,9 +82,14 @@ class SpyTransport implements OrderTransport {
       })),
     };
   }
-  async replaceOrder(): Promise<RemoteOrder> {
-    this.calls.push("PUT");
-    throw new Error("not used");
+  async replaceOrder(id: string, _expectedVersion: number, request: OrderCommandPayload["request"], expectedDataset: DatasetIdentity): Promise<RemoteOrder> {
+    this.calls.push(`PUT ${id}`);
+    this.sentDatasets.push(expectedDataset);
+    if (this.failWith !== null) throw this.failWith;
+    const created = await this.createOrder("replace", request, expectedDataset);
+    this.calls.pop();
+    this.sentDatasets.pop();
+    return { ...created, id };
   }
   async getOrder(): Promise<RemoteOrder> {
     this.calls.push("GET");
@@ -236,8 +248,8 @@ describe("push guard", () => {
     await saveOrderDraft(db, env, draftInput());
     const spy = new SpyTransport();
     const original = spy.createOrder.bind(spy);
-    spy.createOrder = async (key, request) => {
-      const result = await original(key, request);
+    spy.createOrder = async (key, request, dataset) => {
+      const result = await original(key, request, dataset);
       await confirm(db, FAKE); // the confirmation changes after the first POST
       return result;
     };
@@ -255,8 +267,8 @@ describe("push guard", () => {
     await saveOrderDraft(db, env, draftInput());
     const spy = new SpyTransport();
     const original = spy.createOrder.bind(spy);
-    spy.createOrder = async (key, request) => {
-      const result = await original(key, request);
+    spy.createOrder = async (key, request, dataset) => {
+      const result = await original(key, request, dataset);
       await confirm(db, null);
       return result;
     };
@@ -519,5 +531,71 @@ describe("inspectLocalState", () => {
     expect(report.outbox.find((o) => o.draftLocalId === real)?.lastError).toHaveLength(120);
     expect(report.outbox.map((o) => o.classification).sort()).toEqual(["legacy_local", "mismatch", "operational"]);
     expect(() => JSON.parse(json)).not.toThrow();
+  });
+});
+
+describe("expectedDataset on the wire (server is the second barrier)", () => {
+  it("create carries the identity stored on the draft/outbox row, and so does a later replace", async () => {
+    await confirm(db, REAL);
+    const id = await saveOrderDraft(db, env, draftInput(A, REAL));
+    const spy = new SpyTransport();
+    await pushOutbox(db, env, spy, A, { respectBackoff: false, currentDataset: REAL });
+    await saveOrderDraft(db, env, { ...draftInput(A, REAL), localId: id });
+    await pushOutbox(db, env, spy, A, { respectBackoff: false, currentDataset: REAL });
+    expect(spy.calls.map((c) => c.split(" ")[0])).toEqual(["POST", "PUT"]);
+    expect(spy.sentDatasets).toEqual([REAL, REAL]);
+  });
+
+  it("a draft stamped with another dataset than the confirmed one is never POSTed (not sent with the current identity either)", async () => {
+    await confirm(db, FAKE);
+    await saveOrderDraft(db, env, draftInput(A, FAKE));
+    await confirm(db, REAL);
+    const spy = new SpyTransport();
+    await pushOutbox(db, env, spy, A, { respectBackoff: false, currentDataset: REAL });
+    expect(spy.calls).toEqual([]);
+    expect(spy.sentDatasets).toEqual([]);
+  });
+
+  it("a row without identity (legacy_local) is quarantined and nothing is sent", async () => {
+    await confirm(db, REAL);
+    await insertLegacy(db, A, "1");
+    const spy = new SpyTransport();
+    await pushOutbox(db, env, spy, A, { respectBackoff: false, currentDataset: REAL });
+    expect(spy.sentDatasets).toEqual([]);
+  });
+
+  it("409 dataset_mismatch: the draft is quarantined, the run stops, later commands stay pending and nothing is retried", async () => {
+    await confirm(db, REAL);
+    const first = await saveOrderDraft(db, env, draftInput());
+    const second = await saveOrderDraft(db, env, draftInput());
+    const spy = new SpyTransport();
+    spy.failWith = new TransportError("dataset_mismatch", "dataset_mismatch", 409);
+    const result = await pushOutbox(db, env, spy, A, { respectBackoff: false, currentDataset: REAL });
+    expect(result).toMatchObject({ attempted: 1, accepted: 0, failed: 1, stoppedBy: "dataset_mismatch", quarantined: 1 });
+    expect(spy.calls).toHaveLength(1);
+    const ops = await listOutbox(db);
+    expect(ops.find((o) => o.draftLocalId === first)).toMatchObject({ state: "needs_review", eligibility: "dataset_mismatch", nextAttemptAt: null });
+    expect(await getDraft(db, first)).toMatchObject({ status: "needs_review", eligibility: "dataset_mismatch", lastError: "Pedido de outro conjunto de dados — não será enviado." });
+    expect(ops.find((o) => o.draftLocalId === second)).toMatchObject({ state: "pending", attempts: 0, eligibility: "eligible" });
+
+    // next run: the quarantined command is never retried; the untouched one goes out normally
+    spy.failWith = null;
+    const again = await pushOutbox(db, env, spy, A, { respectBackoff: false, currentDataset: REAL });
+    expect(again).toMatchObject({ attempted: 1, accepted: 1 });
+    expect(spy.calls).toHaveLength(2);
+    expect((await getDraft(db, first))?.eligibility).toBe("dataset_mismatch");
+    expect((await listOutbox(db)).find((o) => o.draftLocalId === first)?.state).toBe("needs_review");
+  });
+
+  it("409 dataset_mismatch on a replace quarantines the draft as well", async () => {
+    await confirm(db, REAL);
+    const id = await saveOrderDraft(db, env, draftInput());
+    const spy = new SpyTransport();
+    await pushOutbox(db, env, spy, A, { respectBackoff: false, currentDataset: REAL });
+    await saveOrderDraft(db, env, { ...draftInput(), localId: id });
+    spy.failWith = new TransportError("dataset_mismatch", "dataset_mismatch", 409);
+    const result = await pushOutbox(db, env, spy, A, { respectBackoff: false, currentDataset: REAL });
+    expect(result.stoppedBy).toBe("dataset_mismatch");
+    expect(await getDraft(db, id)).toMatchObject({ status: "needs_review", eligibility: "dataset_mismatch" });
   });
 });

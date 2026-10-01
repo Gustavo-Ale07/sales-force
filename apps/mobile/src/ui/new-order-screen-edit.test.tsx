@@ -84,6 +84,7 @@ describe("NewOrderScreen — reopening a saved draft for editing (PUT /orders/{i
       id: "0190a0c0-0000-7000-8000-000000000099",
       request: {
         expectedVersion: 1,
+        expectedDataset: { environment: "production", datasetId: "mirror-real-001" },
         customerCode: 10,
         negotiationTypeCode: 3,
         notes: "Entrega pela manhã",
