@@ -11,6 +11,7 @@ import { useApi } from "../lib/app-context";
 import { requireDataset, useLoadedDataset } from "../lib/dataset";
 import { errorStatus } from "../lib/http-error";
 import { describeApiError } from "../lib/error-message";
+import { orderReviewReasons } from "../lib/labels";
 import { describeIssue } from "../lib/order-draft";
 
 type OrderDetail = ApiSchema<"OrderDetail">;
@@ -40,6 +41,22 @@ function skipAfterRefusal(all: OrderDetail["items"], sent: OrderDetail["items"],
   const sentCodes = new Set(sent.map((item) => item.productCode));
   const alreadySkipped = all.filter((item) => !sentCodes.has(item.productCode)).map((item) => item.productCode);
   return new Set([...alreadySkipped, ...refused.map((item) => item.productCode)]);
+}
+
+/** 409 answers meaning the customer can no longer receive orders; nothing was created. */
+function customerRefusalText(error: unknown): string | null {
+  if (!(error instanceof ApiRequestError) || error.status !== 409) return null;
+  if (error.code === "customer_ineligible") {
+    return "O cliente deste pedido não pode receber novos pedidos agora (bloqueado, inativo ou fora da sua carteira). Nenhum rascunho foi criado.";
+  }
+  if (error.code === "customer_without_seller") {
+    return "O cliente deste pedido está sem vendedor vinculado. Nenhum rascunho foi criado.";
+  }
+  return null;
+}
+
+function errorCorrelation(error: unknown): string | undefined {
+  return error instanceof ApiRequestError ? error.correlationId : undefined;
 }
 
 export interface DuplicateOrderButtonProps {
@@ -108,7 +125,13 @@ export function DuplicateOrderButton({ order, disabled }: DuplicateOrderButtonPr
   // The failing error refers to the items of the attempt that was sent, which are `sentItems`.
   const blockedItems = blocked.flatMap((index) => (sentItems[index] ? [sentItems[index]] : []));
   const canDropBlocked = blockedItems.length > 0 && blockedItems.length < sentItems.length;
-  const failure = mutation.isError ? describeApiError(mutation.error, "Não foi possível duplicar o pedido") : null;
+  const customerRefusal = mutation.isError ? customerRefusalText(mutation.error) : null;
+  const failure = mutation.isError
+    ? customerRefusal
+      ? { title: "Cliente indisponível para novos pedidos", description: customerRefusal, correlationId: errorCorrelation(mutation.error) }
+      : describeApiError(mutation.error, "Não foi possível duplicar o pedido")
+    : null;
+  const reviewReason = order.review ? orderReviewReasons[order.review.customerBlock] : null;
 
   return (
     <>
@@ -116,8 +139,14 @@ export function DuplicateOrderButton({ order, disabled }: DuplicateOrderButtonPr
         variant="secondary"
         leftIcon={<Copy size={14} aria-hidden="true" />}
         loading={mutation.isPending}
-        disabled={disabled || mutation.isPending || order.items.length === 0}
-        title={disabled ? "Salve as alterações antes de duplicar o pedido" : undefined}
+        disabled={disabled || mutation.isPending || order.items.length === 0 || reviewReason !== null}
+        title={
+          reviewReason
+            ? `Pedido requer revisão: ${reviewReason}`
+            : disabled
+              ? "Salve as alterações antes de duplicar o pedido"
+              : undefined
+        }
         onClick={() => mutation.mutate(new Set())}
       >
         Duplicar pedido

@@ -112,8 +112,30 @@ describe("Pedido: Duplicar pedido", () => {
       }),
     });
     await user.click(await screen.findByRole("button", { name: "Duplicar pedido" }));
-    expect(await screen.findByText("O cliente está bloqueado.")).toBeInTheDocument();
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Cliente indisponível para novos pedidos");
+    expect(alert).toHaveTextContent("não pode receber novos pedidos agora");
+    expect(alert).toHaveTextContent("Nenhum rascunho foi criado.");
     expect(screen.queryByRole("button", { name: "Duplicar sem esses itens" })).not.toBeInTheDocument();
+  });
+
+  it("explains a customer_without_seller refusal in pt-BR", async () => {
+    const { user } = renderApp(`/pedidos/${ORDER_ID}`, {
+      handlers: editorHandlers(orderDetail(), { "POST /orders": apiError(409, "customer_without_seller", "raw english") }),
+    });
+    await user.click(await screen.findByRole("button", { name: "Duplicar pedido" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("está sem vendedor vinculado");
+    expect(alert).not.toHaveTextContent("raw english");
+  });
+
+  it("disables duplication, with the review reason, when the source order requires review", async () => {
+    const review = { status: "needs_review", reason: "customer_ineligible", customerBlock: "customer_blocked" } as const;
+    const { calls } = renderApp(`/pedidos/${ORDER_ID}`, { handlers: editorHandlers(orderDetail({ review })) });
+    const button = await screen.findByRole("button", { name: "Duplicar pedido" });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("title", expect.stringContaining("O cliente deste rascunho está bloqueado."));
+    expect(callsTo(calls, "POST", "/orders")).toHaveLength(0);
   });
 });
 
