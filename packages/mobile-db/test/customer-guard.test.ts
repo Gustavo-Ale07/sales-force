@@ -196,4 +196,48 @@ describe("server answer customer_ineligible", () => {
     expect(await getDraft(db, id)).toMatchObject({ status: "sync_error", lastError: CUSTOMER_UNAVAILABLE_MESSAGE });
     expect(await getDraftItems(db, id)).toHaveLength(1);
   });
+
+  it("keeps the root reason through the create+replace cascade: still the unavailable-customer state", async () => {
+    const id = await saveOrderDraft(db, env, input(77));
+    server.failWith = "network";
+    await push();
+    await saveOrderDraft(db, env, { ...input(77), localId: id });
+    const queued = await listOutbox(db, id);
+    expect(queued.map((op) => op.type)).toEqual(["order.create", "order.replace"]);
+    server.failWith = "customer_ineligible";
+    await push();
+    const ops = await listOutbox(db, id);
+    expect(ops.map((op) => op.state)).toEqual(["rejected", "rejected"]);
+    expect(ops.map((op) => op.lastError)).toEqual([CUSTOMER_UNAVAILABLE_MESSAGE, CUSTOMER_UNAVAILABLE_MESSAGE]);
+    const draft = await getDraft(db, id);
+    expect(draft).toMatchObject({ status: "sync_error", lastError: CUSTOMER_UNAVAILABLE_MESSAGE });
+    expect(isCustomerUnavailableMessage(draft?.lastError ?? null)).toBe(true);
+  });
+
+  it("derives the draft reason from the first rejected command even when a cascade op carries other text", async () => {
+    const id = await saveOrderDraft(db, env, input(77));
+    server.failWith = "network";
+    await push();
+    await saveOrderDraft(db, env, { ...input(77), localId: id });
+    server.failWith = "validation";
+    await push();
+    const draft = await getDraft(db, id);
+    expect(draft).toMatchObject({ status: "sync_error", lastError: "recusado" });
+  });
+
+  it("holds a pending command that already had attempts (transient failure earlier) when the customer becomes unavailable", async () => {
+    const id = await saveOrderDraft(db, env, input(77));
+    server.failWith = "network";
+    await push();
+    server.failWith = null;
+    const [afterFail] = await listOutbox(db, id);
+    expect(afterFail?.attempts).toBe(1);
+    await cache([{ code: 77, name: "C", blocked: true }]);
+    server.requests.length = 0;
+    await push();
+    expect(server.requests).toEqual([]);
+    const [op] = await listOutbox(db, id);
+    expect(op).toMatchObject({ state: "pending", attempts: 1, lastError: CUSTOMER_UNAVAILABLE_MESSAGE });
+    expect(await getDraft(db, id)).toMatchObject({ status: "sync_error", lastError: CUSTOMER_UNAVAILABLE_MESSAGE });
+  });
 });

@@ -22,6 +22,7 @@ describe("toTransportError", () => {
     expect(kindOf({ status: 429, message: "x" })).toBe("rate_limit");
     expect(kindOf({ status: 503, message: "x" })).toBe("server");
     expect(kindOf({ status: 409, code: "customer_ineligible", message: "x" })).toBe("customer_ineligible");
+    expect(kindOf({ status: 409, code: "customer_without_seller", message: "x" })).toBe("customer_ineligible");
     expect(kindOf({ status: 422, message: "x" })).toBe("validation");
   });
 

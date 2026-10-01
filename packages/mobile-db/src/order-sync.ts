@@ -155,9 +155,15 @@ export function describeFailure(error: TransportError): string {
 export function deriveDraftStatus(ops: readonly OutboxRecord[]): { status: DraftStatus; lastError: string | null } {
   const conflict = ops.find((op) => op.state === "conflict");
   if (conflict !== undefined) return { status: "conflict", lastError: conflict.lastError };
-  const lastRejected = [...ops].reverse().find((op) => op.state === "rejected");
+  const lastRejectedIndex = ops.map((op) => op.state).lastIndexOf("rejected");
+  const lastRejected = lastRejectedIndex < 0 ? undefined : ops[lastRejectedIndex];
   const laterActive = lastRejected === undefined ? false : ops.some((op) => op.state !== "rejected" && op.createdAt > lastRejected.createdAt);
-  if (lastRejected !== undefined && !laterActive) return { status: "sync_error", lastError: lastRejected.lastError };
+  if (lastRejected !== undefined && !laterActive) {
+    // The reason is the ROOT of the trailing run of rejected commands: later ones are cascade fallout of the first.
+    let rootIndex = lastRejectedIndex;
+    while (rootIndex > 0 && ops[rootIndex - 1]?.state === "rejected") rootIndex -= 1;
+    return { status: "sync_error", lastError: (ops[rootIndex] ?? lastRejected).lastError };
+  }
   const review = ops.find((op) => op.state === "needs_review");
   // A quarantined (not eligible) command explains itself; a plain price review carries no text.
   if (review !== undefined) return { status: "needs_review", lastError: review.lastError };
@@ -348,7 +354,13 @@ async function applyPermanent(db: SqlDatabase, env: OfflineEnv, op: OutboxRecord
       // Nothing exists on the server for this key, so commands queued behind it have nothing to apply to.
       await tx.execute(
         `UPDATE outbox SET state = 'rejected', last_error = ?, updated_at = ? WHERE draft_local_id = ? AND state = 'pending' AND local_id <> ?`,
-        ["O envio inicial deste pedido foi recusado; esta alteração não foi enviada.", now, op.draftLocalId, op.localId],
+        [
+          // An unavailable customer stays the stated reason for the whole chain; other causes keep the generic text.
+          error.kind === "customer_ineligible" ? CUSTOMER_UNAVAILABLE_MESSAGE : "O envio inicial deste pedido foi recusado; esta alteração não foi enviada.",
+          now,
+          op.draftLocalId,
+          op.localId,
+        ],
       );
     }
     await refreshDraftStatus(tx, op.draftLocalId as string);
@@ -388,7 +400,7 @@ async function quarantineDraft(db: SqlDatabase, env: OfflineEnv, draftLocalId: s
 async function holdForCustomer(db: SqlDatabase, env: OfflineEnv, draftLocalId: string): Promise<void> {
   await db.transaction(async (tx) => {
     await tx.execute(
-      "UPDATE outbox SET last_error = ?, next_attempt_at = NULL, updated_at = ? WHERE draft_local_id = ? AND state = 'pending' AND attempts = 0",
+      "UPDATE outbox SET last_error = ?, next_attempt_at = NULL, updated_at = ? WHERE draft_local_id = ? AND state = 'pending'",
       [CUSTOMER_UNAVAILABLE_MESSAGE, isoNow(env), draftLocalId],
     );
     await refreshDraftStatus(tx, draftLocalId);
