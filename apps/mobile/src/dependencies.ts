@@ -4,6 +4,7 @@ import { createDeviceConnectivity, type ConnectivityPort } from "./connectivity/
 import { createMobileApiClient } from "./data/api";
 import type { Repositories } from "./data/ports";
 import { createRemoteRepositories } from "./data/remote-repositories";
+import { createExpoImageFileSystem } from "./images/expo-image-fs";
 import { createOfflineServices, type OfflineServices } from "./offline/services";
 import type { SqlDatabase } from "@salesforce/mobile-db";
 
@@ -24,6 +25,6 @@ export function createAppDependencies(baseUrl: string, db: SqlDatabase): AppDepe
     auth: createHttpAuth(api),
     repositories: remote,
     connectivity: createDeviceConnectivity(),
-    offline: createOfflineServices({ db, api, remote }),
+    offline: createOfflineServices({ db, api, remote, imageFileSystem: createExpoImageFileSystem() }),
   };
 }

@@ -5,6 +5,7 @@ import type { Account } from "../auth/auth-port";
 import type { AppDependencies } from "../dependencies";
 import type { CustomerListItem } from "../data/ports";
 import { lineFromProduct, type EditorLine } from "../data/order-draft";
+import { ProductImageProvider } from "../images/product-image-context";
 import { evaluateOfflineAccess } from "../offline/session";
 import { useSyncStatus } from "../offline/use-sync";
 import { colors, spacing } from "../theme";
@@ -172,6 +173,8 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
   async function leaveDevice() {
     // Forget the remembered account; drafts and unsent orders stay on the device for the next sign-in.
     await offline?.session.forget().catch(() => undefined);
+    // Thumbnails are a cache of the signed-in account's catalog: gone with the sign-out (they are re-fetchable).
+    await services?.productImages?.purge().catch(() => undefined);
     setQuarantineOpen(false);
     setTab("home");
     setVisited(new Set<MainTab>(["home"]));
@@ -254,6 +257,7 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
         />
       )}
       {/* Android is edge-to-edge: the window no longer resizes for the keyboard, so the body avoids it itself. */}
+      <ProductImageProvider store={services?.productImages ?? null} online={connectivityState !== "offline"}>
       <KeyboardAvoidingView style={styles.flex} behavior="padding">
         <View style={styles.flex}>
           <Pane active={tab === "home"} visited={visited.has("home")}>
@@ -357,6 +361,7 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
         </View>
         {!keyboardVisible && <BottomNav active={tab} onSelect={selectTab} badges={{ sales: syncStatus.pending > 0 || syncStatus.needsAttention > 0 }} />}
       </KeyboardAvoidingView>
+      </ProductImageProvider>
     </View>
   );
 }

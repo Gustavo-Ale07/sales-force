@@ -4,6 +4,8 @@ import type { ProductListItem, ProductPageRequest, ProductRepository } from "../
 import { fakeProducts, networkError, pageOf, product } from "../test-doubles";
 import { ProductBrowser } from "./product-browser";
 import type { ProductOrderActions } from "./product-views";
+import { ProductImageProvider } from "../images/product-image-context";
+import type { ProductImageStore } from "../images/image-store";
 import { ProductsScreen } from "./products-screen";
 
 const noop = () => undefined;
@@ -176,9 +178,16 @@ describe("ProductsScreen (Catálogo)", () => {
     expect(screen.getByText("R$ 0,00")).toBeTruthy();
   });
 
-  it("shows a neutral placeholder (initials) for every product: no image source exists", async () => {
-    await render(<ProductsScreen products={catalog()} onUnauthenticated={noop} />);
+  it("shows a neutral placeholder (initials) for every product without image metadata, and never calls the image store", async () => {
+    const resolve = jest.fn(async () => null);
+    const store: ProductImageStore = { resolve, purge: async () => undefined };
+    await render(
+      <ProductImageProvider store={store} online>
+        <ProductsScreen products={catalog()} onUnauthenticated={noop} />
+      </ProductImageProvider>,
+    );
     await screen.findByText("Tinta Azul 18L");
+    expect(resolve).not.toHaveBeenCalled();
     expect(screen.getAllByText("TI", { includeHiddenElements: true })).toHaveLength(2);
     expect(screen.getByText("PI", { includeHiddenElements: true })).toBeTruthy();
   });

@@ -2,6 +2,9 @@ import { createSyncManager, type OfflineEnv, type SqlDatabase, type SyncManager 
 import type { Account } from "../auth/auth-port";
 import type { ApiClient } from "../data/api";
 import type { Repositories } from "../data/ports";
+import type { ImageFileSystem } from "../images/image-fs";
+import type { ProductImageStore } from "../images/image-store";
+import { createAccountProductImages } from "../images/product-images";
 import { newClientRequestId } from "../lib/uuid";
 import { createLocalOrdersPort, type LocalOrdersPort } from "./local-orders";
 import { createOfflineFirstRepositories } from "./offline-repositories";
@@ -14,6 +17,8 @@ export interface AccountServices {
   readonly repositories: Repositories;
   readonly localOrders: LocalOrdersPort;
   readonly sync: SyncManager;
+  /** Authenticated, bounded thumbnail files of this account (absent when the build has no image file system). */
+  readonly productImages?: ProductImageStore;
 }
 
 export interface OfflineServices {
@@ -26,6 +31,7 @@ export function createOfflineServices(deps: {
   readonly api: ApiClient;
   readonly remote: Repositories;
   readonly env?: OfflineEnv;
+  readonly imageFileSystem?: ImageFileSystem;
   readonly onUnexpectedError?: (error: unknown) => void;
 }): OfflineServices {
   const env: OfflineEnv = deps.env ?? { now: () => new Date(), newId: newClientRequestId };
@@ -60,6 +66,17 @@ export function createOfflineServices(deps: {
           },
         }),
         sync,
+        ...(deps.imageFileSystem === undefined
+          ? {}
+          : {
+              productImages: createAccountProductImages({
+                db: deps.db,
+                api: deps.api,
+                fs: deps.imageFileSystem,
+                ownerAccountId: account.id,
+                now: () => env.now().getTime(),
+              }),
+            }),
       };
       managers.set(account.id, services);
       return services;

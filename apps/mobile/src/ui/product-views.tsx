@@ -1,6 +1,7 @@
-import { memo } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { memo, useEffect, useState } from "react";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import type { ProductListItem } from "../data/ports";
+import { useProductImages } from "../images/product-image-context";
 import { describeListPrice } from "../lib/money";
 import { colors, spacing } from "../theme";
 
@@ -15,14 +16,37 @@ export interface ProductOrderActions {
 }
 
 /**
- * No product image exists in the ERP mirror or in the cache (spike W-14: image UNAVAILABLE, blobs live in object
- * storage, P-17), so every product shows this neutral placeholder. Nothing is fetched and nothing is invented.
+ * Product thumbnail. The initials placeholder is the base state and the final one whenever there is no image
+ * (`image` null/absent), the server says 404, the request fails or times out, the bytes are not a valid image, or the
+ * device is offline and the thumbnail was never stored. When `image` metadata is present the thumbnail is resolved
+ * lazily by the mounted row (virtualized lists mount only visible rows) through the authenticated store and shown from
+ * an app-private file, never from a bare remote uri or base64. A row that unmounts cancels a download not yet started.
  */
-function Thumb({ product, size }: { product: ProductListItem; size: "card" | "row" }) {
+function ProductThumb({ product, size }: { product: ProductListItem; size: "card" | "row" }) {
+  const { store, online } = useProductImages();
+  const version = product.image?.version;
+  const key = `${product.code}|${version ?? ""}`;
+  const [resolved, setResolved] = useState<{ readonly key: string; readonly uri: string } | null>(null);
+  const [failedKey, setFailedKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (store === null || version === undefined) return undefined;
+    const controller = new AbortController();
+    void store.resolve(product.code, { version }, { online, signal: controller.signal }).then((uri) => {
+      if (!controller.signal.aborted) setResolved(uri === null ? null : { key, uri });
+    });
+    return () => controller.abort();
+  }, [store, online, product.code, version, key]);
+
+  const uri = resolved !== null && resolved.key === key && failedKey !== key ? resolved.uri : null;
   const initials = product.description.trim().slice(0, 2).toUpperCase();
   return (
     <View style={[styles.thumb, size === "card" ? styles.thumbCard : styles.thumbRow]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      <Text style={[styles.thumbText, size === "row" && styles.thumbTextRow]}>{initials}</Text>
+      {uri === null ? (
+        <Text style={[styles.thumbText, size === "row" && styles.thumbTextRow]}>{initials}</Text>
+      ) : (
+        <Image source={{ uri }} style={styles.thumbImage} resizeMode="cover" onError={() => setFailedKey(key)} testID={`product-thumb-${product.code}`} />
+      )}
     </View>
   );
 }
@@ -85,7 +109,7 @@ function CardImpl({ product, quantity, actions }: ViewProps) {
   const noPrice = product.listPrice.state === "none";
   return (
     <View style={styles.card} accessible={actions === undefined} accessibilityLabel={actions === undefined ? describe(product, quantity) : undefined}>
-      <Thumb product={product} size="card" />
+      <ProductThumb product={product} size="card" />
       <Text style={styles.cardName} numberOfLines={2}>{product.description}</Text>
       <Text style={styles.meta} numberOfLines={1}>{`Cód. ${product.code} · ${product.unit}`}</Text>
       {product.groupName !== null && <Text style={styles.group} numberOfLines={1}>{product.groupName}</Text>}
@@ -103,7 +127,7 @@ function RowImpl({ product, quantity, actions }: ViewProps) {
   const noPrice = product.listPrice.state === "none";
   return (
     <View style={styles.row} accessible={actions === undefined} accessibilityLabel={actions === undefined ? describe(product, quantity) : undefined}>
-      <Thumb product={product} size="row" />
+      <ProductThumb product={product} size="row" />
       <View style={styles.rowInfo}>
         <Text style={styles.rowName} numberOfLines={2}>{product.description}</Text>
         <Text style={styles.meta} numberOfLines={1}>{`Código ${product.code} · ${product.unit}${product.groupName !== null ? ` · ${product.groupName}` : ""}`}</Text>
@@ -120,9 +144,10 @@ export const ProductCard = memo(CardImpl);
 export const ProductRow = memo(RowImpl);
 
 const styles = StyleSheet.create({
-  thumb: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  thumb: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   thumbCard: { height: 56, borderRadius: 8, alignSelf: "stretch" },
   thumbRow: { width: 48, height: 48, borderRadius: 8 },
+  thumbImage: { width: "100%", height: "100%" },
   thumbText: { fontSize: 22, fontWeight: "800", color: colors.textMuted },
   thumbTextRow: { fontSize: 16 },
   card: { flex: 1, backgroundColor: colors.surface, borderRadius: 10, borderWidth: 1, borderColor: colors.border, padding: spacing.sm, margin: spacing.xs, gap: 2 },
