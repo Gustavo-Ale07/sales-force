@@ -1,6 +1,12 @@
 import { Global, Module, type DynamicModule } from '@nestjs/common';
 import type { DatasetIdentity } from '@salesforce/contracts';
 import type { DbHandle } from '@salesforce/db';
+import {
+  DEFAULT_PRODUCT_IMAGE_SETTINGS,
+  NoImageSource,
+  type ProductImageSettings,
+  type ProductImageSource,
+} from '../catalog/product-image.js';
 import type { Logger } from '../observability/logger.js';
 import {
   CLOCK,
@@ -8,6 +14,8 @@ import {
   DATABASE,
   DATABASE_HANDLE,
   LOGGER,
+  PRODUCT_IMAGE_SETTINGS,
+  PRODUCT_IMAGE_SOURCE,
   READINESS_CACHE_TTL_MS,
   systemClock,
   type Clock,
@@ -21,6 +29,9 @@ export interface InfrastructureDeps {
   readonly readinessCacheTtlMs?: number;
   /** Explicit dataset identity of the installation (default `null`: none declared). */
   readonly dataset?: DatasetIdentity | null;
+  /** Product image source (default: `NoImageSource`, no product has an image). */
+  readonly productImageSource?: ProductImageSource;
+  readonly productImageSettings?: Partial<ProductImageSettings>;
 }
 
 /**
@@ -39,6 +50,8 @@ export class InfrastructureModule {
       { provide: CLOCK, useValue: deps.clock ?? systemClock },
       { provide: READINESS_CACHE_TTL_MS, useValue: deps.readinessCacheTtlMs ?? 0 },
       { provide: DATASET_IDENTITY, useValue: deps.dataset ?? null },
+      { provide: PRODUCT_IMAGE_SOURCE, useValue: deps.productImageSource ?? new NoImageSource() },
+      { provide: PRODUCT_IMAGE_SETTINGS, useValue: { ...DEFAULT_PRODUCT_IMAGE_SETTINGS, ...deps.productImageSettings } },
     ];
     return {
       module: InfrastructureModule,

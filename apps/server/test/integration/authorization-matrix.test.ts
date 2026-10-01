@@ -32,6 +32,7 @@ const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>
   listProductGroups: { admin: 'allow', manager: 'allow', seller: 'allow' },
   listProducts: { admin: 'allow', manager: 'allow', seller: 'allow' },
   getProduct: { admin: 'allow', manager: 'allow', seller: 'allow' },
+  getProductImage: { admin: 'allow', manager: 'allow', seller: 'allow' },
   // ASSUMPTION (pending owner confirmation): a read of the same catalog as listProducts, open to every role.
   resolveProducts: { admin: 'allow', manager: 'allow', seller: 'allow' },
   listOrders: { admin: 'allow', manager: 'allow', seller: 'allow' },

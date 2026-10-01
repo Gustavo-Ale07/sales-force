@@ -117,7 +117,8 @@ export async function createApiApp(options: CreateApiAppOptions): Promise<NestFa
   // carry session state or scoped business data, and the error and cookie responses must not be stored.
   fastify.addHook('onSend', (_request, reply, payload, done) => {
     void reply.header('x-content-type-options', 'nosniff');
-    void reply.header('cache-control', 'no-store');
+    // A route may set its own policy (private product images); every other response is never stored.
+    if (!reply.hasHeader('cache-control')) void reply.header('cache-control', 'no-store');
     done(null, payload);
   });
 

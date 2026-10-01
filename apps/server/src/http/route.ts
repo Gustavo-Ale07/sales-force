@@ -122,6 +122,8 @@ function validateResponse(
     request.log.error({ operationId: route.operationId, status }, 'response status is not declared by the contract');
     throw new AppError('internal_error');
   }
+  // Binary routes write their own reply (no JSON body to validate).
+  if (declared.binary !== undefined) return value;
   if (declared.schema === undefined) return undefined;
   const result = declared.schema.safeParse(value);
   if (!result.success) {

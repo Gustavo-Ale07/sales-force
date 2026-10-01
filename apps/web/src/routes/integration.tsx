@@ -47,6 +47,7 @@ const syncStatusLabels: Record<ApiSchema<"SyncStatus">, { label: string; tone: T
 const gatewayLabels: Record<ApiSchema<"GatewayMode">, string> = {
   fake: "Demonstração (dados de exemplo)",
   live: "ERP conectado",
+  unknown: "Indisponível (sem sinal do worker)",
 };
 
 const sourceLabels: Record<ApiSchema<"ConfigurationSourceKind">, string> = {

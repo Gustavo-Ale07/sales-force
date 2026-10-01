@@ -71,6 +71,7 @@ describe.each([
     ['dashboard', 'GET', '/dashboard', undefined],
     ['repeat-last', 'POST', '/customers/1/orders/repeat-last', body],
     ['sellers', 'GET', '/sellers', undefined],
+    ['product image', 'GET', '/products/1/image', undefined],
   ];
 
   it.each(routes)('%s -> 403 no_seller_scope', async (_name, method, url, payload) => {

@@ -900,6 +900,134 @@
         }
       }
     },
+    "/products/{code}/image": {
+      "get": {
+        "operationId": "getProductImage",
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Product image (binary)",
+        "description": "Same access as the catalog: a product the caller cannot see is 404, a seller without a seller link is 403 no_seller_scope. 404 also when the product has no image. The server serves only png, jpeg or webp content it has verified (never svg/html), with `nosniff`, `Content-Disposition: inline` and `Cache-Control: private`. `ETag` is derived from the opaque image version; send it back in `If-None-Match` to get 304. 503 when the image source is unavailable (retry later). The client never supplies a URL or path.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "variant",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": "thumb",
+              "$ref": "#/components/schemas/ProductImageVariant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Imagem",
+            "headers": {
+              "ETag": {
+                "description": "Entity tag derived from the opaque image version",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "private, max-age (revalidate with If-None-Match)",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Disposition": {
+                "description": "inline",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Imagem inalterada (If-None-Match)"
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Serviço indisponível",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/product-resolutions": {
       "post": {
         "operationId": "resolveProducts",
@@ -4385,6 +4513,16 @@
           "listPrice": {
             "$ref": "#/components/schemas/ListPriceContext"
           },
+          "image": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProductImage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "usageCode": {
             "type": [
               "string",
@@ -4443,6 +4581,35 @@
         ],
         "additionalProperties": false
       },
+      "ProductImage": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "thumbnailUrl": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "thumbnailUrl",
+          "url"
+        ],
+        "additionalProperties": false
+      },
+      "ProductImageVariant": {
+        "type": "string",
+        "enum": [
+          "thumb",
+          "full"
+        ]
+      },
       "ProductListItem": {
         "type": "object",
         "properties": {
@@ -4493,6 +4660,16 @@
           },
           "listPrice": {
             "$ref": "#/components/schemas/ListPriceContext"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProductImage"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [

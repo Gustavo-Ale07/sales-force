@@ -266,6 +266,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products/{code}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Product image (binary)
+         * @description Same access as the catalog: a product the caller cannot see is 404, a seller without a seller link is 403 no_seller_scope. 404 also when the product has no image. The server serves only png, jpeg or webp content it has verified (never svg/html), with `nosniff`, `Content-Disposition: inline` and `Cache-Control: private`. `ETag` is derived from the opaque image version; send it back in `If-None-Match` to get 304. 503 when the image source is unavailable (retry later). The client never supplies a URL or path.
+         */
+        get: operations["getProductImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/product-resolutions": {
         parameters: {
             query?: never;
@@ -898,6 +918,7 @@ export interface components {
             groupCode: number | null;
             groupName: string | null;
             listPrice: components["schemas"]["ListPriceContext"];
+            image?: components["schemas"]["ProductImage"] | null;
             usageCode: string | null;
             priceContext: components["schemas"]["PriceContext"];
         };
@@ -908,6 +929,13 @@ export interface components {
         ProductGroupsResponse: {
             items: components["schemas"]["ProductGroup"][];
         };
+        ProductImage: {
+            version: string;
+            thumbnailUrl: string;
+            url: string;
+        };
+        /** @enum {string} */
+        ProductImageVariant: "thumb" | "full";
         ProductListItem: {
             code: number;
             description: string;
@@ -919,6 +947,7 @@ export interface components {
             groupCode: number | null;
             groupName: string | null;
             listPrice: components["schemas"]["ListPriceContext"];
+            image?: components["schemas"]["ProductImage"] | null;
         };
         ProductResolutionItem: {
             identifier: string;
@@ -1634,6 +1663,90 @@ export interface operations {
             };
             /** @description Recurso não encontrado (ou fora do escopo do usuário) */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    getProductImage: {
+        parameters: {
+            query?: {
+                variant?: components["schemas"]["ProductImageVariant"];
+            };
+            header?: never;
+            path: {
+                code: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Imagem */
+            200: {
+                headers: {
+                    /** @description Entity tag derived from the opaque image version */
+                    ETag?: string;
+                    /** @description private, max-age (revalidate with If-None-Match) */
+                    "Cache-Control"?: string;
+                    /** @description inline */
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                    "image/webp": string;
+                };
+            };
+            /** @description Imagem inalterada (If-None-Match) */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Serviço indisponível */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

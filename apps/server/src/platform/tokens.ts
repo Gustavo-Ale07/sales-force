@@ -10,6 +10,11 @@ export const READINESS_CACHE_TTL_MS = Symbol('READINESS_CACHE_TTL_MS');
 /** Installation dataset identity from the validated API environment (`DatasetIdentity | null`). */
 export const DATASET_IDENTITY = Symbol('DATASET_IDENTITY');
 
+/** `ProductImageSource` (default: no images). */
+export const PRODUCT_IMAGE_SOURCE = Symbol('PRODUCT_IMAGE_SOURCE');
+/** `ProductImageSettings` (timeout, cache age, size caps). */
+export const PRODUCT_IMAGE_SETTINGS = Symbol('PRODUCT_IMAGE_SETTINGS');
+
 /** Injected time source; tests replace it (no hidden `Date.now()` in application services). */
 export type Clock = () => Date;
 export const systemClock: Clock = () => new Date();

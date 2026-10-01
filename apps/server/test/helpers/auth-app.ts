@@ -4,6 +4,7 @@ import { routes, type DatasetIdentity, type RouteDefinition } from '@salesforce/
 import type { LightMyRequestResponse } from 'fastify';
 import { ApiModule } from '../../src/api/api.module.js';
 import { createApiApp, type CreateApiAppOptions } from '../../src/api/create-app.js';
+import type { ProductImageSettings, ProductImageSource } from '../../src/catalog/product-image.js';
 import { ApiRoute } from '../../src/http/route.js';
 import type { AuthConfig } from '../../src/iam/auth-config.js';
 import { createLogger } from '../../src/observability/logger.js';
@@ -83,6 +84,8 @@ export interface AuthAppOptions {
   readonly database?: MigratedDatabase;
   /** Installation dataset identity (default none). */
   readonly dataset?: DatasetIdentity | null;
+  readonly productImageSource?: ProductImageSource;
+  readonly productImageSettings?: Partial<ProductImageSettings>;
 }
 
 /** The API with the real identity module over a fresh migrated database and a hand-driven clock. */
@@ -98,6 +101,10 @@ export async function startAuthApp(
   const logger = createLogger({ level: 'info', service: 'api', destination: capture.stream });
   const auth = testAuthConfig(options.authOverrides);
 
+  const imageDeps = {
+    ...(options.productImageSource === undefined ? {} : { productImageSource: options.productImageSource }),
+    ...(options.productImageSettings === undefined ? {} : { productImageSettings: options.productImageSettings }),
+  };
   let rootModule: CreateApiAppOptions['rootModule'];
   const extraControllers: Type<unknown>[] = [
     ...(options.withProbes === true ? [ProbeController] : []),
@@ -105,7 +112,7 @@ export async function startAuthApp(
   ];
   if (extraControllers.length > 0) {
     @Module({
-      imports: [ApiModule.register({ logger, db: database.handle, clock: clock.fn, dataset: options.dataset ?? null }, auth)],
+      imports: [ApiModule.register({ logger, db: database.handle, clock: clock.fn, dataset: options.dataset ?? null, ...imageDeps }, auth)],
       controllers: extraControllers,
     })
     class ProbedApiModule {}
@@ -118,6 +125,7 @@ export async function startAuthApp(
     clock: clock.fn,
     auth,
     dataset: options.dataset ?? null,
+    ...imageDeps,
     ...(options.trustProxy === undefined ? {} : { trustProxy: options.trustProxy }),
     ...(rootModule === undefined ? {} : { rootModule }),
   });

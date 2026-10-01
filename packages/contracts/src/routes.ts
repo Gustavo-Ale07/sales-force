@@ -4,6 +4,7 @@ import {
   ProductDetailQuerySchema,
   ProductDetailSchema,
   ProductGroupsResponseSchema,
+  ProductImageQuerySchema,
   ProductPathSchema,
   ProductsQuerySchema,
   ProductsResponseSchema,
@@ -58,6 +59,10 @@ export interface RouteResponse {
   readonly description: string;
   /** Omitted for responses without a body (e.g. 204). */
   readonly schema?: z.ZodType;
+  /** A binary body (e.g. an image) instead of JSON: the allowed `Content-Type`s. Mutually exclusive with `schema`. */
+  readonly binary?: { readonly contentTypes: readonly string[] };
+  /** Documented response headers: name -> description. */
+  readonly headers?: Readonly<Record<string, string>>;
 }
 
 export interface RouteRequest {
@@ -264,6 +269,30 @@ export const routes = {
     request: { params: ProductPathSchema, query: ProductDetailQuerySchema },
     responses: { 200: { description: 'Produto', schema: ProductDetailSchema } },
     errors: [400, 401, 403, 404],
+  }),
+  getProductImage: defineRoute({
+    operationId: 'getProductImage',
+    method: 'get',
+    path: '/products/{code}/image',
+    tags: ['catalog'],
+    summary: 'Product image (binary)',
+    description:
+      'Same access as the catalog: a product the caller cannot see is 404, a seller without a seller link is 403 no_seller_scope. 404 also when the product has no image. The server serves only png, jpeg or webp content it has verified (never svg/html), with `nosniff`, `Content-Disposition: inline` and `Cache-Control: private`. `ETag` is derived from the opaque image version; send it back in `If-None-Match` to get 304. 503 when the image source is unavailable (retry later). The client never supplies a URL or path.',
+    auth: 'session',
+    request: { params: ProductPathSchema, query: ProductImageQuerySchema },
+    responses: {
+      200: {
+        description: 'Imagem',
+        binary: { contentTypes: ['image/png', 'image/jpeg', 'image/webp'] },
+        headers: {
+          ETag: 'Entity tag derived from the opaque image version',
+          'Cache-Control': 'private, max-age (revalidate with If-None-Match)',
+          'Content-Disposition': 'inline',
+        },
+      },
+      304: { description: 'Imagem inalterada (If-None-Match)' },
+    },
+    errors: [400, 401, 403, 404, 503],
   }),
   resolveProducts: defineRoute({
     operationId: 'resolveProducts',

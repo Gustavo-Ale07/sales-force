@@ -98,6 +98,32 @@ export const ProductsQuerySchema = z.object({
 });
 export type ProductsQuery = z.infer<typeof ProductsQuerySchema>;
 
+/* ---------- product image (source-agnostic; bytes are never in JSON) ---------- */
+
+export const ProductImageVariantSchema = named('ProductImageVariant', z.enum(['thumb', 'full']));
+export type ProductImageVariant = z.infer<typeof ProductImageVariantSchema>;
+
+/** Largest accepted value of an image `version` (opaque token; also the base of the HTTP ETag). */
+export const MAX_PRODUCT_IMAGE_VERSION_LENGTH = 128;
+
+/**
+ * Metadata of a product image. The bytes are served by `GET /products/{code}/image` (never inlined in a
+ * list). `version` is opaque and changes whenever the image changes: clients cache by it and must not parse it.
+ * The URLs are relative API paths built by the server; a client never composes or supplies one.
+ */
+export const ProductImageSchema = named(
+  'ProductImage',
+  z.object({
+    version: z.string().min(1).max(MAX_PRODUCT_IMAGE_VERSION_LENGTH),
+    thumbnailUrl: z.string(),
+    url: z.string(),
+  }),
+);
+export type ProductImage = z.infer<typeof ProductImageSchema>;
+
+export const ProductImageQuerySchema = z.object({ variant: ProductImageVariantSchema.default('thumb') });
+export type ProductImageQuery = z.infer<typeof ProductImageQuerySchema>;
+
 export const ProductListItemSchema = named(
   'ProductListItem',
   z.object({
@@ -112,6 +138,8 @@ export const ProductListItemSchema = named(
     groupCode: codeInt().nullable(),
     groupName: z.string().nullable(),
     listPrice: ListPriceContextSchema,
+    /** `null` (or absent) = the product has no image; the catalog works without one. */
+    image: ProductImageSchema.nullable().optional(),
   }),
 );
 export type ProductListItem = z.infer<typeof ProductListItemSchema>;

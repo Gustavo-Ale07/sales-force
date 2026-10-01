@@ -109,11 +109,21 @@ function parameters(
 const JSON_CONTENT = 'application/json';
 
 function responseObject(response: RouteResponse, components: ComponentCollector): JsonObject {
-  if (!response.schema) return { description: response.description };
-  return {
-    description: response.description,
-    content: { [JSON_CONTENT]: { schema: convert(response.schema, 'output', components) } },
-  };
+  const base: JsonObject = { description: response.description };
+  if (response.headers !== undefined) {
+    const headers: JsonObject = {};
+    for (const [name, description] of Object.entries(response.headers)) {
+      headers[name] = { description, schema: { type: 'string' } };
+    }
+    base['headers'] = headers;
+  }
+  if (response.binary !== undefined) {
+    const content: JsonObject = {};
+    for (const type of response.binary.contentTypes) content[type] = { schema: { type: 'string', format: 'binary' } };
+    return { ...base, content };
+  }
+  if (!response.schema) return base;
+  return { ...base, content: { [JSON_CONTENT]: { schema: convert(response.schema, 'output', components) } } };
 }
 
 function operation(route: RouteDefinition, components: ComponentCollector): JsonObject {

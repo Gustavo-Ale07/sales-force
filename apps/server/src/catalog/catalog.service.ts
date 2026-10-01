@@ -3,6 +3,7 @@ import {
   MAX_PRODUCT_RESOLUTION_CANDIDATES,
   type ProductDetail,
   type ProductGroupsResponse,
+  type ProductImage,
   type ProductListItem,
   type ProductResolutionItem,
   type ProductsQuery,
@@ -24,6 +25,7 @@ import {
 import { fitsPgInt } from '../platform/sql.js';
 import { CLOCK, type Clock } from '../platform/tokens.js';
 import { PricingService, toListPriceContext, type PriceBook } from './pricing.service.js';
+import { ProductImageService } from './product-image.service.js';
 
 /** Mirror row to the domain's product (`unit` is nullable in the mirror, required in the domain shape). */
 export function toDomainProduct(row: ProductRow): Product {
@@ -67,6 +69,7 @@ export class CatalogService {
     @Inject(MirrorRepository) private readonly mirror: MirrorRepository,
     @Inject(CustomersService) private readonly customers: CustomersService,
     @Inject(PricingService) private readonly pricing: PricingService,
+    @Inject(ProductImageService) private readonly images: ProductImageService,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -87,7 +90,12 @@ export class CatalogService {
     return this.pricing.open(scope, this.clock());
   }
 
-  private toListItem(row: PricedProductRow, book: PriceBook, config: InstallationConfiguration): ProductListItem {
+  private toListItem(
+    row: PricedProductRow,
+    book: PriceBook,
+    config: InstallationConfiguration,
+    image: ProductImage | null,
+  ): ProductListItem {
     const product = toDomainProduct(row);
     return {
       code: row.code,
@@ -100,6 +108,7 @@ export class CatalogService {
       groupCode: row.groupCode,
       groupName: row.groupName,
       listPrice: toListPriceContext(this.pricing.priceOf(book, row.code, row.unitPrice)),
+      image,
     };
   }
 
@@ -118,8 +127,9 @@ export class CatalogService {
       book.versionId,
       { page: query.page, pageSize: query.pageSize },
     );
+    const imagesByCode = await this.images.metadataFor(rows.map((row) => row.code));
     return {
-      items: rows.map((row) => this.toListItem(row, book, context.configuration)),
+      items: rows.map((row) => this.toListItem(row, book, context.configuration, imagesByCode.get(row.code) ?? null)),
       page: query.page,
       pageSize: query.pageSize,
       total,
@@ -132,12 +142,28 @@ export class CatalogService {
     const book = await this.bookFor(context, customerCode);
     const row = await this.mirror.findProduct(code, book.versionId);
     if (row === null) throw new AppError('not_found');
-    const item = this.toListItem(row, book, context.configuration);
+    const image = (await this.images.metadataFor([row.code])).get(row.code) ?? null;
+    const item = this.toListItem(row, book, context.configuration, image);
     // A product the configuration hides from the catalog is not found here either.
     if (!isProductVisible(toDomainProduct(row), context.configuration, item.listPrice.state)) {
       throw new AppError('not_found');
     }
     return { ...item, usageCode: row.usageCode, priceContext: await this.pricing.priceContext(book) };
+  }
+
+  /**
+   * Access check of a product-bound resource (its image): same rules as `get` (seller scope, visibility under the
+   * configuration), nothing priced. Throws `no_seller_scope` / `not_found`; the product code is never trusted.
+   */
+  async requireVisibleProduct(user: CurrentUser, code: number): Promise<void> {
+    const context = await this.policy.accessContext(user);
+    const book = await this.bookFor(context, undefined);
+    const row = await this.mirror.findProduct(code, book.versionId);
+    if (row === null) throw new AppError('not_found');
+    const item = this.toListItem(row, book, context.configuration, null);
+    if (!isProductVisible(toDomainProduct(row), context.configuration, item.listPrice.state)) {
+      throw new AppError('not_found');
+    }
   }
 
   /**
@@ -155,8 +181,9 @@ export class CatalogService {
 
     const byCode = new Map<number, ProductListItem>();
     const byReference = new Map<string, ProductListItem[]>();
+    const imagesByCode = await this.images.metadataFor(rows.map((row) => row.code));
     for (const row of rows) {
-      const item = this.toListItem(row, book, context.configuration);
+      const item = this.toListItem(row, book, context.configuration, imagesByCode.get(row.code) ?? null);
       if (!isProductVisible(toDomainProduct(row), context.configuration, item.listPrice.state)) continue;
       byCode.set(row.code, item);
       if (row.reference !== null) byReference.set(row.reference, [...(byReference.get(row.reference) ?? []), item]);

@@ -60,6 +60,8 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   listProductGroups: { roles: EVERY_ROLE },
   listProducts: { roles: EVERY_ROLE },
   getProduct: { roles: EVERY_ROLE },
+  // Same catalog read as getProduct (product visibility and seller scope are enforced by the handler).
+  getProductImage: { roles: EVERY_ROLE },
   // ASSUMPTION (pending owner confirmation): resolving pasted/imported product identifiers is a read of the
   // same catalog as listProducts, so it is open to every role; the customer scope still applies to prices.
   resolveProducts: { roles: EVERY_ROLE },
