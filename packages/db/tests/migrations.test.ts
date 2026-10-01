@@ -216,10 +216,19 @@ describe('migrations', () => {
     await expect(query(url, `INSERT INTO account_seller_link (account_id, seller_code, config_version_id) VALUES ($1, 0, $2)`, [acc2, cfg])).rejects.toThrow(/account_seller_link_seller_code_chk/);
     await expect(query(url, `INSERT INTO account_seller_link (account_id, seller_code, config_version_id) VALUES ($1, -2, $2)`, [acc2, cfg])).rejects.toThrow(/account_seller_link_seller_code_chk/);
     await query(url, `INSERT INTO account_seller_link (account_id, seller_code, config_version_id) VALUES ($1, 103, $2)`, [acc2, cfg]);
+    // UPDATEs are checked against the new row version, even on a NOT VALID constraint:
+    // moving a valid link to an invalid code is refused; the legacy row cannot be touched at all
+    // (any UPDATE that keeps seller_code < 1 fails) until it is fixed to a valid code.
+    await expect(query(url, `UPDATE account_seller_link SET seller_code = 0 WHERE account_id = $1`, [acc2])).rejects.toThrow(/account_seller_link_seller_code_chk/);
+    await expect(query(url, `UPDATE account_seller_link SET seller_code = 0 WHERE account_id = $1`, [acc])).rejects.toThrow(/account_seller_link_seller_code_chk/);
+    expect(await query(url, `SELECT seller_code FROM account_seller_link ORDER BY seller_code`)).toEqual([{ seller_code: 0 }, { seller_code: 103 }]);
+    // Fixing the legacy row to a real seller code is allowed (the reconciliation path).
+    await query(url, `UPDATE account_seller_link SET seller_code = 104 WHERE account_id = $1`, [acc]);
+    expect(await query(url, `SELECT count(*)::int AS n FROM account_seller_link WHERE seller_code < 1`)).toEqual([{ n: 0 }]);
 
     const file = await readFile(path.join(defaultMigrationsDir, '0006_account_seller_link_seller_code_check.sql'), 'utf8');
     expect(file).toMatch(/ADD CONSTRAINT .* CHECK .* NOT VALID;?$/);
-    expect(file).not.toMatch(/DROP|TRUNCATE|DELETE|RENAME|ALTERs+COLUMN|UPDATE/i);
+    expect(file).not.toMatch(/DROP|TRUNCATE|DELETE|RENAME|ALTER\s+COLUMN|UPDATE/i);
   });
 
   it('two concurrent runners do not corrupt the database (advisory lock)', async () => {
