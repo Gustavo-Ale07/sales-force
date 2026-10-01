@@ -4,7 +4,7 @@ import { createApiApp } from './api/create-app.js';
 import { parseApiEnv } from './config/api-env.js';
 import { authConfigFromEnv } from './iam/auth-config.js';
 import { createLogger } from './observability/logger.js';
-import { demoAccountsWarning } from './platform/demo-accounts-check.js';
+import { enforceDemoAccountsPolicy } from './platform/demo-accounts-check.js';
 import { applyPoolLimits } from './platform/pool-limits.js';
 import { installProcessGuards, logPoolErrors, runMain } from './process.js';
 
@@ -20,6 +20,14 @@ runMain('api', async () => {
   // Bounded waits: no request queues forever for a connection, no statement runs unbounded (A7).
   applyPoolLimits(db.pool, { connectionTimeoutMs: env.DB_CONNECTION_TIMEOUT_MS, statementTimeoutMs: env.DB_STATEMENT_TIMEOUT_MS });
   logPoolErrors(db, logger);
+  // Demo accounts carry a known development password: production refuses to boot with any unless
+  // SF_ALLOW_DEMO_ACCOUNTS=true. Checked before the app is built or the port opened.
+  try {
+    await enforceDemoAccountsPolicy(db.db, env.NODE_ENV, process.env['SF_ALLOW_DEMO_ACCOUNTS'] === 'true', logger);
+  } catch (error) {
+    await db.close();
+    throw error;
+  }
 
   const app = await createApiApp({
     logger,
@@ -40,9 +48,4 @@ runMain('api', async () => {
   });
   await app.listen({ host: env.API_HOST, port: env.API_PORT });
   logger.info({ host: env.API_HOST, port: env.API_PORT, nodeEnv: env.NODE_ENV, trustProxy: env.TRUST_PROXY !== false }, 'api listening');
-  // Startup warning only (F12): demo accounts carry a known development password. Counts, never e-mails.
-  const demo = await demoAccountsWarning(db.db, env.NODE_ENV);
-  if (demo !== null && demo.count > 0) {
-    logger.warn({ demoAccounts: demo.count }, 'production database contains demo accounts (*.demo.salesforce.local): disable or remove them before real use');
-  }
 });

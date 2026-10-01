@@ -248,12 +248,12 @@ describe('AuthService.loginExternal', () => {
     ['the directory seller code differs from the Force link', { email: 'mis@example.test', login: 'MIS', role: 'seller', sellerCode: 103, directorySeller: 999 }, 'mismatch'],
     ['the directory seller code is invalid (0) for a linked seller', { email: 'inv@example.test', login: 'INV', role: 'seller', sellerCode: 103, directorySeller: 0 }, 'mismatch'],
     ['a manager has no link but the directory reports a seller', { email: 'mgr@example.test', login: 'MGR', role: 'manager', directorySeller: 55 }, 'no_link'],
-  ] as const)('fails closed (403 link_reconciliation_required, no session, audited) when %s', async (_label, opts, reason) => {
+  ] as const)('fails closed (uniform 401 invalid_credentials, no session, audited with the reason) when %s', async (_label, opts, reason) => {
     const ctx = await setup();
     const acc = await provision(ctx, opts);
     const err = await failure(ctx.service.loginExternal({ login: opts.login, password: EXT_PASSWORD }, META));
-    expect(err.code).toBe('link_reconciliation_required');
-    expect(err.status).toBe(403);
+    expect(err.code).toBe('invalid_credentials');
+    expect(err.status).toBe(401);
     expect(await ctx.db.select().from(session)).toHaveLength(0);
     const [row] = await audit(ctx, 'auth.login.link_mismatch');
     expect(row?.actorAccountId).toBe(acc.id);
@@ -264,12 +264,43 @@ describe('AuthService.loginExternal', () => {
     expect(await audit(ctx, 'auth.login.success')).toHaveLength(0);
   });
 
-  it('does not count a link mismatch as a failed password (valid credentials never feed the lockout)', async () => {
+  it('counts a link mismatch like a failed login (same error as a wrong password, then the login locks)', async () => {
     const ctx = await setup({ maxFailures: 2 });
     await provision(ctx, { email: 'mis@example.test', login: 'MIS', role: 'seller', sellerCode: 103, directorySeller: 999 });
-    for (let i = 0; i < 4; i += 1) {
-      expect((await failure(ctx.service.loginExternal({ login: 'MIS', password: EXT_PASSWORD }, META))).code).toBe('link_reconciliation_required');
-    }
+    const wrong = await failure(ctx.service.loginExternal({ login: 'MIS', password: 'bad-bad-bad' }, META));
+    const mismatch = await failure(ctx.service.loginExternal({ login: 'MIS', password: EXT_PASSWORD }, META));
+    expect({ code: mismatch.code, status: mismatch.status, message: mismatch.message }).toEqual({
+      code: wrong.code,
+      status: wrong.status,
+      message: wrong.message,
+    });
+    const keys = (await ctx.db.select().from(authThrottle)).map((row) => row.key);
+    expect(keys.filter((key) => key.startsWith('extlogin:')).length).toBeGreaterThanOrEqual(1);
+    // Two failures reached the per-login limit: the next attempt is refused before the directory.
+    const calls = ctx.verifier.calls.length;
+    expect((await failure(ctx.service.loginExternal({ login: 'MIS', password: EXT_PASSWORD }, META))).code).toBe('rate_limited');
+    expect(ctx.verifier.calls).toHaveLength(calls);
+  });
+
+  it('pads a link mismatch to minFailureMs like any other credential failure', async () => {
+    const ctx = await setup();
+    const config = testAuthConfig({ externalLogin: { enabled: true, verifyTimeoutMs: 200, minFailureMs: 150 } });
+    const service = new AuthService(
+      config,
+      new Argon2idPasswordHasher(config.passwordHash),
+      new AccountRepository(ctx.db),
+      new SessionRepository(ctx.db),
+      new ThrottleRepository(ctx.db),
+      new AuditService(ctx.db, ctx.clock.fn),
+      ctx.clock.fn,
+      createLogger({ level: 'info', service: 'api', destination: captureLogs().stream }),
+      ctx.verifier,
+      ctx.links,
+    );
+    await provision(ctx, { email: 'mis@example.test', login: 'MIS', role: 'seller', sellerCode: 103, directorySeller: 999 });
+    const started = Date.now();
+    expect((await failure(service.loginExternal({ login: 'MIS', password: EXT_PASSWORD }, META))).code).toBe('invalid_credentials');
+    expect(Date.now() - started).toBeGreaterThanOrEqual(140);
   });
 
   it('admin and manager without a directory seller code log in without any seller link', async () => {

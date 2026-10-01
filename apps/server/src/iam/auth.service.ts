@@ -65,6 +65,7 @@ export type LoginFailureReason =
   | 'external_inactive'
   | 'external_account_disabled'
   | 'external_channel_not_permitted'
+  | 'external_link_mismatch'
   | 'external_unavailable'
   | 'external_rate_limited';
 
@@ -225,7 +226,7 @@ export class AuthService implements OnModuleInit {
    * `config.externalLogin.enabled` and both ports are present, which no real runtime provides today.
    *
    * Order: input shape -> throttles (address, login hash, installation) -> verifier -> explicit
-   * account link -> account status/channel -> new opaque session. Throttles are checked BEFORE the
+   * account link -> account status/channel -> link reconciliation -> new opaque session. Throttles are checked BEFORE the
    * verifier so a locked login never reaches the directory. A directory outage fails closed (503, no
    * session): there is no local-hash fallback. Every credential-class failure ends in the same
    * `invalid_credentials` after at least `minFailureMs`. Accounts are never created or promoted here,
@@ -324,7 +325,8 @@ export class AuthService implements OnModuleInit {
     // (seller without a link, directory seller different from the link, or a seller code the directory
     // reports for an account that has no such link). Seller accounts must be linked and agree exactly;
     // admin/manager need no link but may not contradict one. Credentials were valid, so this is not
-    // counted as a failed login; it is audited (account id and reason only) and needs reconciliation.
+    // reveal that: the client gets the same uniform invalid_credentials as a wrong password (padded, and
+    // counted against the per-login/IP throttles). The specific reason lives only in the audit rows.
     const sellerCodes = await this.accounts.sellerCodesOf(found.id);
     const directoryCode = identity.sellerCode;
     const linked = sellerCodes.filter(isValidSellerCode);
@@ -336,12 +338,16 @@ export class AuthService implements OnModuleInit {
       linkProblem = linked.length === 0 ? 'no_link' : 'mismatch';
     }
     if (linkProblem !== null) {
-      await this.audit.record({
-        action: AUDIT_ACTIONS.loginLinkMismatch,
-        actorAccountId: found.id,
-        detail: { ...auditMeta, reason: linkProblem, method: 'external' },
-      });
-      throw new AppError('link_reconciliation_required');
+      try {
+        await this.audit.record({
+          action: AUDIT_ACTIONS.loginLinkMismatch,
+          actorAccountId: found.id,
+          detail: { ...auditMeta, reason: linkProblem, method: 'external' },
+        });
+      } catch (error) {
+        this.logger.warn({ ...errorLogFields(error) }, 'could not record an external link mismatch');
+      }
+      return this.failExternal('external_link_mismatch', found.id, failCtx);
     }
 
     await this.throttle.clear(loginKey);

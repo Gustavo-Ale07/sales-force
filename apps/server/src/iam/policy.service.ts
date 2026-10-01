@@ -7,7 +7,8 @@ import {
 import { ConfigurationVersionService } from '../configuration/configuration-version.service.js';
 import { InstallationConfigurationService } from '../configuration/configuration.service.js';
 import { AppError } from '../http/app-error.js';
-import { CLOCK, type Clock } from '../platform/tokens.js';
+import { errorLogFields, type Logger } from '../observability/logger.js';
+import { CLOCK, LOGGER, type Clock } from '../platform/tokens.js';
 import { AUDIT_ACTIONS, AuditService } from './audit.service.js';
 import { AuditSampler } from './audit-sampler.js';
 import type { CurrentUser } from './current-user.js';
@@ -38,6 +39,7 @@ export class PolicyService {
     @Inject(ConfigurationVersionService) private readonly versions: ConfigurationVersionService,
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(LOGGER) private readonly logger: Logger,
   ) {}
 
   authorizeRoute(user: CurrentUser, operationId: string): PolicyDecision {
@@ -73,11 +75,16 @@ export class PolicyService {
     if (outcome.ok) return outcome.scope;
     const sample = this.#denials.observe(user.accountId, this.clock());
     if (sample.record) {
-      await this.audit.record({
-        action: AUDIT_ACTIONS.noSellerScope,
-        actorAccountId: user.accountId,
-        detail: { reason: outcome.reason, role: user.role, occurrences: sample.count },
-      });
+      try {
+        await this.audit.record({
+          action: AUDIT_ACTIONS.noSellerScope,
+          actorAccountId: user.accountId,
+          detail: { reason: outcome.reason, role: user.role, occurrences: sample.count },
+        });
+      } catch (error) {
+        // Fail closed: the denial stands even when its audit row cannot be written.
+        this.logger.warn({ ...errorLogFields(error), reason: outcome.reason }, 'could not record a scope denial');
+      }
     }
     throw new AppError(outcome.reason === 'no_seller_scope' ? 'no_seller_scope' : 'forbidden');
   }
