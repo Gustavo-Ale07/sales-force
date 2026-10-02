@@ -511,6 +511,20 @@ export class AuthService implements OnModuleInit {
     }
   }
 
+  /**
+   * Failure-path audit writes are best effort: if the audit store is down the caller still gets the
+   * uniform `invalid_credentials` (never a 500 that tells a probe apart), after the counters moved.
+   * Only the error class/fields and the failure reason are logged (no login, e-mail or address).
+   * It calls the store directly, so a failing write cannot recurse into the failure path.
+   */
+  private async recordAuditBestEffort(reason: LoginFailureReason, event: Parameters<AuditService['record']>[0]): Promise<void> {
+    try {
+      await this.audit.record(event);
+    } catch (error) {
+      this.logger.error({ ...errorLogFields(error), reason }, 'could not record a login failure audit event (the login is still refused)');
+    }
+  }
+
   private async recordFailure(input: {
     reason: LoginFailureReason;
     accountId: string | null;
@@ -525,7 +539,7 @@ export class AuthService implements OnModuleInit {
     const ip = await this.throttle.recordFailure(input.ipKey, input.now, this.config.throttle.ip);
     await this.throttle.bumpWindow(input.globalKey ?? GLOBAL_FAILURES_KEY, input.now, GLOBAL_WINDOW_MS);
 
-    await this.audit.record({
+    await this.recordAuditBestEffort(input.reason, {
       action: AUDIT_ACTIONS.loginFailure,
       actorAccountId: input.accountId,
       detail: {
@@ -536,7 +550,7 @@ export class AuthService implements OnModuleInit {
       },
     });
     if (account.lockedNow) {
-      await this.audit.record({
+      await this.recordAuditBestEffort(input.reason, {
         action: AUDIT_ACTIONS.lockout,
         actorAccountId: input.accountId,
         detail: {
@@ -549,7 +563,7 @@ export class AuthService implements OnModuleInit {
       });
     }
     if (ip.lockedNow) {
-      await this.audit.record({
+      await this.recordAuditBestEffort(input.reason, {
         action: AUDIT_ACTIONS.lockout,
         actorAccountId: null,
         detail: { scope: 'ip', ip: input.auditMeta.ip, lockedUntil: ip.state.lockedUntil?.toISOString() ?? null },

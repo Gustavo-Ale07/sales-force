@@ -303,6 +303,84 @@ describe('AuthService.loginExternal', () => {
     expect(Date.now() - started).toBeGreaterThanOrEqual(140);
   });
 
+  describe('when the audit store fails during a refused login', () => {
+    class ThrowingAudit extends AuditService {
+      attempts = 0;
+      override async record(): Promise<never> {
+        this.attempts += 1;
+        throw new Error('audit store down: connection to 10.9.9.9 refused for ana@example.test');
+      }
+    }
+    function withBrokenAudit(ctx: Ctx, minFailureMs = 0) {
+      const config = testAuthConfig({ externalLogin: { enabled: true, verifyTimeoutMs: 200, minFailureMs } });
+      const brokenAudit = new ThrowingAudit(ctx.db, ctx.clock.fn);
+      const capture = captureLogs();
+      const service = new AuthService(
+        config,
+        new Argon2idPasswordHasher(config.passwordHash),
+        new AccountRepository(ctx.db),
+        new SessionRepository(ctx.db),
+        new ThrottleRepository(ctx.db),
+        brokenAudit,
+        ctx.clock.fn,
+        createLogger({ level: 'debug', service: 'api', destination: capture.stream }),
+        ctx.verifier,
+        ctx.links,
+      );
+      return { service, brokenAudit, capture };
+    }
+
+    it.each([
+      ['wrong password', { email: 'a@example.test', login: 'A', sellerCode: 103 }, 'bad-bad-bad'],
+      ['unmapped directory user', { email: 'b@example.test', login: 'B', sellerCode: 103 }, 'UNMAPPED'],
+      ['inactive directory user', { email: 'c@example.test', login: 'C', sellerCode: 103, active: false }, EXT_PASSWORD],
+      ['disabled account', { email: 'd@example.test', login: 'D', sellerCode: 103 }, 'DISABLED'],
+      ['link mismatch', { email: 'e@example.test', login: 'E', role: 'seller', sellerCode: 103, directorySeller: 999 }, EXT_PASSWORD],
+    ] as const)('still answers the uniform invalid_credentials and counts the failure: %s', async (label, opts, password) => {
+      const ctx = await setup();
+      const acc = await provision(ctx, opts);
+      if (password === 'UNMAPPED') ctx.links.links.clear();
+      if (password === 'DISABLED') await ctx.db.update(account).set({ status: 'disabled' }).where(eq(account.id, acc.id));
+      const { service, brokenAudit, capture } = withBrokenAudit(ctx);
+      const real = password === 'UNMAPPED' || password === 'DISABLED' ? EXT_PASSWORD : password;
+
+      const err = await failure(service.loginExternal({ login: opts.login, password: real }, META));
+      expect({ code: err.code, status: err.status }).toEqual({ code: 'invalid_credentials', status: 401 });
+      expect(brokenAudit.attempts).toBeGreaterThanOrEqual(1);
+      expect(await ctx.db.select().from(session)).toHaveLength(0);
+      // The throttle still moved (fail closed): per-login counter exists.
+      const keys = (await ctx.db.select().from(authThrottle)).map((row) => row.key);
+      expect(keys.filter((key) => key.startsWith('extlogin:')).length, label).toBeGreaterThanOrEqual(1);
+      // Logged internally by class only: no login, e-mail, address or driver message.
+      const logs = JSON.stringify(capture.lines());
+      expect(logs).toContain('could not record');
+      for (const needle of [opts.email, 'ana@', '10.9.9.9', 'connection to', opts.login === 'A' ? 'ext-A' : 'ext-' + opts.login]) {
+        expect(logs).not.toContain(needle);
+      }
+    });
+
+    it('keeps the lockout counting: the login still locks after maxFailures', async () => {
+      const ctx = await setup();
+      await provision(ctx, { email: 'mis@example.test', login: 'MIS', role: 'seller', sellerCode: 103, directorySeller: 999 });
+      const { service } = withBrokenAudit(ctx);
+      const codes: string[] = [];
+      for (let i = 0; i < 8; i += 1) {
+        codes.push((await failure(service.loginExternal({ login: 'MIS', password: EXT_PASSWORD }, META))).code);
+      }
+      expect(codes[0]).toBe('invalid_credentials');
+      expect(codes).toContain('rate_limited');
+    });
+
+    it('keeps the minFailureMs padding', async () => {
+      const ctx = await setup();
+      await provision(ctx, { email: 'mis@example.test', login: 'MIS', role: 'seller', sellerCode: 103, directorySeller: 999 });
+      const { service } = withBrokenAudit(ctx, 150);
+      const started = Date.now();
+      expect((await failure(service.loginExternal({ login: 'MIS', password: EXT_PASSWORD }, META))).code).toBe('invalid_credentials');
+      expect(Date.now() - started).toBeGreaterThanOrEqual(140);
+    });
+  });
+
   it('admin and manager without a directory seller code log in without any seller link', async () => {
     const ctx = await setup();
     await provision(ctx, { email: 'mgr@example.test', login: 'MGR', role: 'manager', directorySeller: null });
