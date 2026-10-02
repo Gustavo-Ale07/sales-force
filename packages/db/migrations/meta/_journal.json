@@ -50,6 +50,13 @@
       "when": 1790874528502,
       "tag": "0006_account_seller_link_seller_code_check",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790942524070,
+      "tag": "0007_account_role_technical",
+      "breakpoints": true
     }
   ]
 }

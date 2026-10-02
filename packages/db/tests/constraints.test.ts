@@ -154,6 +154,7 @@ describe('iam', () => {
 
   it('checks role and status', async () => {
     await expectPgError(newAccount(undefined, 'owner'), CHECK, 'account_role_chk');
+    for (const role of ['admin', 'manager', 'seller', 'technical']) await newAccount(undefined, role);
     await expectPgError(
       h.db.insert(account).values({
         id: uuid(),

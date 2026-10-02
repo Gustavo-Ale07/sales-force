@@ -14,7 +14,12 @@ import {
 import { inList } from './_util.js';
 import { installationConfigurationVersion } from './platform.js';
 
-export const accountRoles = ['admin', 'manager', 'seller'] as const;
+/**
+ * `technical` (owner 2026-10-02) is a profile separate from `admin`: platform operation, no
+ * commercial scope. Like `admin` it carries no seller link (enforced for `technical` by the
+ * database, migration 0007; `admin` is still app-level only).
+ */
+export const accountRoles = ['admin', 'manager', 'seller', 'technical'] as const;
 export type AccountRole = (typeof accountRoles)[number];
 
 export const accountStatuses = ['active', 'disabled'] as const;
