@@ -9,7 +9,7 @@ import { OrdersRepository } from '../../src/orders/orders.repository.js';
 import { restrictedKeys, startCommercialApp, type CommercialApp, type Json, type Who } from '../helpers/commercial-app.js';
 import { TEST_ORIGIN, TEST_PASSWORD, createTestAccount } from '../helpers/auth.js';
 import { loginCookie, startAuthApp } from '../helpers/auth-app.js';
-import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
+import { startPostgres, type TestPostgres, closeAllThenStop } from '../helpers/postgres.js';
 
 const dataset = getDemoDataset();
 const SELLER_1 = 103;
@@ -43,8 +43,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  for (const close of opened.reverse()) await close();
-  await postgres.stop();
+  await closeAllThenStop(opened, postgres);
 });
 
 const draftBody = (overrides: Record<string, unknown> = {}, customerCode = customer1) => ({

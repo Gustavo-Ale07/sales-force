@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { TEST_ORIGIN, TEST_PASSWORD, createTestAccount } from '../helpers/auth.js';
 import { loginCookie } from '../helpers/auth-app.js';
 import { TEST_DATASET, startCommercialApp, type CommercialApp, type Json } from '../helpers/commercial-app.js';
-import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
+import { startPostgres, type TestPostgres, closeAllThenStop } from '../helpers/postgres.js';
 
 /**
  * F1: a seller without a valid seller link is denied with 403 `no_seller_scope` on every scoped route,
@@ -20,8 +20,7 @@ beforeAll(async () => {
   postgres = await startPostgres();
 });
 afterAll(async () => {
-  for (const close of opened.reverse()) await close();
-  await postgres.stop();
+  await closeAllThenStop(opened, postgres);
 });
 
 const UNLINKED_EMAIL = 'sem-vinculo@example.test';

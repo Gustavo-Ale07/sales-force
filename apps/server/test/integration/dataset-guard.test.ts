@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { TEST_ORIGIN, TEST_PASSWORD } from '../helpers/auth.js';
 import { loginCookie, startAuthApp, type AuthApp } from '../helpers/auth-app.js';
 import { TEST_DATASET, startCommercialApp, type CommercialApp, type Json } from '../helpers/commercial-app.js';
-import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
+import { startPostgres, type TestPostgres, closeAllThenStop } from '../helpers/postgres.js';
 
 /**
  * Dataset trust boundary (docs/architecture.md section 5.5): an order-mutating request names the dataset
@@ -44,8 +44,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  for (const close of opened.reverse()) await close();
-  await postgres.stop();
+  await closeAllThenStop(opened, postgres);
 });
 
 const orderBody = (expectedDataset: unknown, clientRequestId: string = randomUUID()) => ({

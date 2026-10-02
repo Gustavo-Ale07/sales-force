@@ -4,7 +4,7 @@ import { getDemoDataset } from '@salesforce/sankhya';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startCommercialApp, type CommercialApp, type Json } from '../helpers/commercial-app.js';
-import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
+import { startPostgres, type TestPostgres, closeAllThenStop } from '../helpers/postgres.js';
 
 /**
  * F4: a draft needs a customer with a valid seller (`customer_without_seller`, 409); nobody chooses a
@@ -32,8 +32,7 @@ beforeAll(async () => {
   items = list.slice(0, 2).map((p) => ({ productCode: p.code, quantity: '1' }));
 });
 afterAll(async () => {
-  for (const close of opened.reverse()) await close();
-  await postgres.stop();
+  await closeAllThenStop(opened, postgres);
 });
 
 const body = (customerCode: number) => ({ clientRequestId: randomUUID(), customerCode, negotiationTypeCode: null, notes: null, items });

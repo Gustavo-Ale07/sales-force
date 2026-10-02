@@ -4,7 +4,7 @@ import { DEMO_CONFIGURATION, getDemoDataset } from '@salesforce/sankhya';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { TEST_ORIGIN } from '../helpers/auth.js';
 import { restrictedKeys, startCommercialApp, type CommercialApp, type Json } from '../helpers/commercial-app.js';
-import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
+import { startPostgres, type TestPostgres, closeAllThenStop } from '../helpers/postgres.js';
 
 /**
  * POST /product-resolutions: exact, batched product lookup for the order editor's paste/import.
@@ -75,8 +75,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  for (const close of opened.reverse()) await close();
-  await postgres.stop();
+  await closeAllThenStop(opened, postgres);
 });
 
 const resolve = (who: 'admin' | 'manager' | 'seller1' | 'seller2', identifiers: unknown, customerCode?: unknown) =>

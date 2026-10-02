@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createDb, runMigrations, type DbHandle } from '@salesforce/db';
+import { runMigrations, type DbHandle } from '@salesforce/db';
 import { DEMO_ACCOUNTS, DEMO_ACCOUNT_EMAILS, DEMO_CONFIGURATION, FakeGateway, Secret, getDemoDataset } from '@salesforce/sankhya';
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -18,7 +18,7 @@ import { TEST_HASH_PARAMS, TEST_ORIGIN, TEST_PASSWORD } from '../helpers/auth.js
 import { loginCookie, startAuthApp, type AuthApp } from '../helpers/auth-app.js';
 import { TEST_DATASET } from '../helpers/commercial-app.js';
 import { storeConfiguration } from '../helpers/commercial-fixture.js';
-import { startPostgres, type MigratedDatabase, type TestPostgres } from '../helpers/postgres.js';
+import { createTestDb, startPostgres, type MigratedDatabase, type TestPostgres, closeAllThenStop } from '../helpers/postgres.js';
 
 /**
  * Real runtime paths under the least-privilege roles of deploy/staging/db-roles.sql (owner decision
@@ -59,7 +59,7 @@ async function applyRolesSql(): Promise<void> {
 }
 
 const handleFor = (role: Role, applicationName: string): DbHandle => {
-  const handle = createDb(roleUrl(role), { max: 4, applicationName });
+  const handle = createTestDb(roleUrl(role), { max: 4, applicationName });
   closers.push(() => handle.close());
   return handle;
 };
@@ -138,8 +138,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  for (const close of closers.reverse()) await close();
-  await postgres?.stop();
+  await closeAllThenStop(closers, postgres);
 });
 
 describe('worker runtime as force_worker', () => {

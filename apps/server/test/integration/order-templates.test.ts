@@ -10,7 +10,7 @@ import { getDemoDataset } from '@salesforce/sankhya';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { restrictedKeys, startCommercialApp, type CommercialApp, type Json, type Who } from '../helpers/commercial-app.js';
-import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
+import { startPostgres, type TestPostgres, closeAllThenStop } from '../helpers/postgres.js';
 
 const dataset = getDemoDataset();
 const SELLER_1 = 103;
@@ -41,8 +41,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  for (const close of opened.reverse()) await close();
-  await postgres.stop();
+  await closeAllThenStop(opened, postgres);
 });
 
 const sql = (text: string, params: unknown[] = []) => ctx.database.handle.pool.query(text, params);

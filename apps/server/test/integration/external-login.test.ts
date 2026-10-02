@@ -16,7 +16,7 @@ import { DEMO_CONFIGURATION } from '@salesforce/sankhya';
 import { storeConfiguration } from '../helpers/commercial-fixture.js';
 import { TestClock, createTestAccount, testAuthConfig, TEST_HASH_PARAMS } from '../helpers/auth.js';
 import { FakeExternalIdentityVerifier, InMemoryExternalAccountLinks } from '../helpers/external-identity.js';
-import { captureLogs, createMigratedDatabase, startPostgres, type TestPostgres } from '../helpers/postgres.js';
+import { captureLogs, createMigratedDatabase, startPostgres, type TestPostgres, closeAllThenStop } from '../helpers/postgres.js';
 
 let postgres: TestPostgres;
 const opened: (() => Promise<unknown>)[] = [];
@@ -26,8 +26,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  for (const close of opened.reverse()) await close();
-  await postgres.stop();
+  await closeAllThenStop(opened, postgres);
 });
 
 const META = { ip: '203.0.113.9', userAgent: 'vitest', requestId: 'req-1' } as const;

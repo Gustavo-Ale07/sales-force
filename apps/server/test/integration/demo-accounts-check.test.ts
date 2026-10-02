@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { demoAccountsWarning, enforceDemoAccountsPolicy, isDemoAccountEmail } from '../../src/platform/demo-accounts-check.js';
 import { createTestAccount } from '../helpers/auth.js';
-import { createMigratedDatabase, startPostgres, type MigratedDatabase, type TestPostgres } from '../helpers/postgres.js';
+import { createMigratedDatabase, startPostgres, type MigratedDatabase, type TestPostgres, closeAllThenStop } from '../helpers/postgres.js';
 
 /** F12: a production start warns (never fails) when demo accounts exist. */
 
@@ -28,8 +28,7 @@ describe('demoAccountsWarning', () => {
     await createTestAccount(database.handle, { email: 'real@empresa.example', role: 'manager' });
   });
   afterAll(async () => {
-    await database.handle.close();
-    await postgres.stop();
+    await closeAllThenStop([() => database.handle.close()], postgres);
   });
 
   it('in production: reports the count and never the e-mails', async () => {

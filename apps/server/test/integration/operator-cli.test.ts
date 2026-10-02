@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { TEST_PASSWORD } from '../helpers/auth.js';
 import { login, startAuthApp } from '../helpers/auth-app.js';
-import { createMigratedDatabase, startPostgres, type TestPostgres } from '../helpers/postgres.js';
+import { createMigratedDatabase, startPostgres, type TestPostgres, closeAllThenStop } from '../helpers/postgres.js';
 
 const run = promisify(execFile);
 const SERVER_ROOT = new URL('../..', import.meta.url);
@@ -48,8 +48,7 @@ beforeAll(async () => {
 }, 120_000);
 
 afterAll(async () => {
-  for (const close of opened.reverse()) await close();
-  await postgres.stop();
+  await closeAllThenStop(opened, postgres);
 });
 
 describe('seed guards (fail closed, before touching the database)', () => {

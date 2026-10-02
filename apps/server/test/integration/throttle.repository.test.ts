@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { applyFailure, type ThrottleRule, type ThrottleState } from '../../src/iam/throttle-policy.js';
 import { ThrottleRepository } from '../../src/iam/throttle.repository.js';
-import { createMigratedDatabase, startPostgres, type TestPostgres } from '../helpers/postgres.js';
+import { createMigratedDatabase, startPostgres, type TestPostgres, closeAllThenStop } from '../helpers/postgres.js';
 
 let postgres: TestPostgres;
 const opened: (() => Promise<unknown>)[] = [];
@@ -13,8 +13,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  for (const close of opened.reverse()) await close();
-  await postgres.stop();
+  await closeAllThenStop(opened, postgres);
 });
 
 async function repository() {

@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { InstallationConfigurationRepository } from '../../src/configuration/configuration.repository.js';
 import { createTestAccount, TEST_PASSWORD } from '../helpers/auth.js';
 import { loginCookie, startAuthApp, type AuthApp } from '../helpers/auth-app.js';
-import { createMigratedDatabase, startPostgres, type MigratedDatabase, type TestPostgres } from '../helpers/postgres.js';
+import { createMigratedDatabase, startPostgres, type MigratedDatabase, type TestPostgres, closeAllThenStop } from '../helpers/postgres.js';
 
 /**
  * `GET /order-entry/configuration` (getOrderEntryConfiguration): the minimal slice the "Novo pedido"
@@ -21,8 +21,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  for (const close of opened.reverse()) await close();
-  await postgres.stop();
+  await closeAllThenStop(opened, postgres);
 });
 
 const DATASET = { environment: 'sandbox', datasetId: 'plac-sandbox-real-1' } as const;

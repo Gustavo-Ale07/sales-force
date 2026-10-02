@@ -9,7 +9,7 @@ import { AuthService } from '../../src/iam/auth.service.js';
 import { readCookie } from '../../src/iam/cookies.js';
 import { TEST_ORIGIN, TEST_PASSWORD, WRONG_PASSWORD, createTestAccount, setCookieHeaders } from '../helpers/auth.js';
 import { login, loginCookie, startAuthApp, type AuthApp } from '../helpers/auth-app.js';
-import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
+import { startPostgres, type TestPostgres, closeAllThenStop } from '../helpers/postgres.js';
 
 /** `AUTH_MODE=local`: Force-local Argon2id login for the admin and technical profiles only (AUTH-5, ROLE-1; production-capable). */
 let postgres: TestPostgres;
@@ -20,8 +20,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  for (const close of opened.reverse()) await close();
-  await postgres.stop();
+  await closeAllThenStop(opened, postgres);
 });
 
 const boot = () => startAuthApp(postgres, opened, { authOverrides: { authMode: 'local', allowedRoles: LOCAL_MODE_ROLES } });

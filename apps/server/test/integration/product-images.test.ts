@@ -6,7 +6,7 @@ import { TEST_ORIGIN, TEST_PASSWORD, createTestAccount } from '../helpers/auth.j
 import { loginCookie } from '../helpers/auth-app.js';
 import { restrictedKeys, startCommercialApp, type CommercialApp, type Json } from '../helpers/commercial-app.js';
 import { FakeImageSource, HTML_BYTES, SVG_BYTES, jpegBytes, pngBytes, webpBytes } from '../helpers/image-fixtures.js';
-import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
+import { startPostgres, type TestPostgres, closeAllThenStop } from '../helpers/postgres.js';
 
 const dataset = getDemoDataset();
 const activeProducts = dataset.products.filter((p) => p.active);
@@ -28,8 +28,7 @@ beforeAll(async () => {
   });
 });
 afterAll(async () => {
-  for (const close of opened.reverse()) await close();
-  await postgres.stop();
+  await closeAllThenStop(opened, postgres);
 });
 
 function reset(): void {

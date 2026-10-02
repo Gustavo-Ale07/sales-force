@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { applyPoolLimits } from '../../src/platform/pool-limits.js';
-import { createMigratedDatabase, startPostgres, type TestPostgres } from '../helpers/postgres.js';
+import { createMigratedDatabase, startPostgres, type TestPostgres, closeAllThenStop } from '../helpers/postgres.js';
 
 let postgres: TestPostgres;
 const opened: (() => Promise<unknown>)[] = [];
@@ -10,8 +10,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  for (const close of opened.reverse()) await close();
-  await postgres.stop();
+  await closeAllThenStop(opened, postgres);
 });
 
 describe('applyPoolLimits (A7: bounded database work)', () => {

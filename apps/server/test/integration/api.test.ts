@@ -21,8 +21,7 @@ import {
   createMigratedDatabase,
   startPostgres,
   type MigratedDatabase,
-  type TestPostgres,
-} from '../helpers/postgres.js';
+  type TestPostgres, closeAllThenStop } from '../helpers/postgres.js';
 
 let postgres: TestPostgres;
 const opened: (() => Promise<unknown>)[] = [];
@@ -32,8 +31,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  for (const close of opened.reverse()) await close();
-  await postgres.stop();
+  await closeAllThenStop(opened, postgres);
 });
 
 async function apiOver(database: MigratedDatabase, options: { level?: string; readinessCacheTtlMs?: number; clock?: () => Date } = {}) {

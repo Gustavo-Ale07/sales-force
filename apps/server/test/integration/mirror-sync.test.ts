@@ -19,7 +19,7 @@ import { mirrorSchedulesFromSettings } from '../../src/sync/schedules.js';
 import { installQueues } from '../../src/worker/queue-installer.js';
 import { QUEUE_NAMES, QUEUE_REGISTRY, type QueueSpec } from '../../src/worker/queues.js';
 import { WorkerRuntime } from '../../src/worker/runtime.js';
-import { captureLogs, createMigratedDatabase, startPostgres, type MigratedDatabase, type TestPostgres } from '../helpers/postgres.js';
+import { captureLogs, createMigratedDatabase, startPostgres, type MigratedDatabase, type TestPostgres, closeAllThenStop } from '../helpers/postgres.js';
 
 const TABLES: Record<MirrorEntity, string> = {
   sellers: 'erp_seller',
@@ -38,8 +38,10 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  for (const database of databases) await database.handle.close();
-  await postgres.stop();
+  await closeAllThenStop(
+    databases.map((database) => () => database.handle.close()),
+    postgres,
+  );
 });
 
 async function migrated(): Promise<MigratedDatabase> {

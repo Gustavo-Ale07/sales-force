@@ -11,7 +11,7 @@ import {
 import { validateInstallationConfiguration } from '../../src/configuration/validate.js';
 import { AppError } from '../../src/http/app-error.js';
 import { createLogger } from '../../src/observability/logger.js';
-import { createMigratedDatabase, startPostgres, type MigratedDatabase, type TestPostgres } from '../helpers/postgres.js';
+import { createMigratedDatabase, startPostgres, type MigratedDatabase, type TestPostgres, closeAllThenStop } from '../helpers/postgres.js';
 
 let postgres: TestPostgres;
 const databases: MigratedDatabase[] = [];
@@ -21,8 +21,10 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  for (const database of databases) await database.handle.close();
-  await postgres.stop();
+  await closeAllThenStop(
+    databases.map((database) => () => database.handle.close()),
+    postgres,
+  );
 });
 
 async function setup() {

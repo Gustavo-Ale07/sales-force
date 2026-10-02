@@ -15,7 +15,7 @@ import {
   tokenOf,
 } from '../helpers/auth.js';
 import { login, loginCookie, startAuthApp, type AuthApp } from '../helpers/auth-app.js';
-import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
+import { startPostgres, type TestPostgres, closeAllThenStop } from '../helpers/postgres.js';
 
 let postgres: TestPostgres;
 const opened: (() => Promise<unknown>)[] = [];
@@ -25,8 +25,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  for (const close of opened.reverse()) await close();
-  await postgres.stop();
+  await closeAllThenStop(opened, postgres);
 });
 
 const boot = (options: Parameters<typeof startAuthApp>[2] = {}) => startAuthApp(postgres, opened, options);
