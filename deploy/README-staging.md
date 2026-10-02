@@ -93,11 +93,12 @@ changing the routing.
   Whether the provider lets the owner run `db-roles.sql` (GRANT/REVOKE on the database and schema) is NEEDS
   VALIDATION per provider. Never weaken verification to pass a TLS error.
 - **Least-privilege roles (owner decision 2026-10-02).** `deploy/staging/db-roles.sql` defines `force_migrator`
-  (owns the schema, DDL, used by the one-shot jobs and, today, by backup/restore-check), `force_api` and
-  `force_worker` (DML only on what each needs, see the matrix in the file). None is a superuser. Each service has
-  its own `DATABASE_URL` in its own env file. **The PostgreSQL superuser is used by no application service.**
-  A dedicated read-only backup role (`force_backup`) is not created yet (listed as undetermined in `db-roles.sql`):
-  until then dumps run as the owner role.
+  (owns the schema, DDL, used by the one-shot migration jobs only), `force_api` and `force_worker` (DML only on
+  what each needs, see the matrix in the file) and `force_backup` (read-only: `pg_read_all_data`, no write, no
+  DDL; used by `backup` and by the live-side read of `restore-check`, `backup.env`). None is a superuser. Each
+  service has its own `DATABASE_URL` in its own env file. **The PostgreSQL superuser is used by no application
+  service.** The restore target is a scratch database with its own credential (`restore-test.env`), created once
+  by the administrator; `force_backup` never gets write access or `CREATEDB`.
 - Never a public or unrestricted database endpoint. Never production data in staging without approved
   sanitization (P-15). Staging holds no seed or demo accounts.
 - Volume and VPS share one failure domain: losing the VPS loses the database and any dump stored only on it
@@ -105,9 +106,11 @@ changing the routing.
 
 ### Role bootstrap (once, by the owner)
 
-`db-roles` runs `psql` as the database administrator with the three passwords supplied from `db-admin.env`
-(outside the repository, never in the compose file or the arguments). Generate three different passwords
-(`openssl rand -hex 32`), put them in `db-admin.env` and in the matching `DATABASE_URL`s.
+`db-roles` runs `psql` as the database administrator with the four passwords supplied from `db-admin.env`
+(outside the repository, never in the compose file or the arguments). Generate four different passwords
+(`openssl rand -hex 32`), put them in `db-admin.env` and in the matching `DATABASE_URL`s (`migrate.env`,
+`api.env`, `worker.env`, `backup.env`). An installation that already ran the earlier three-role bootstrap adds
+`FORCE_BACKUP_PASSWORD` and re-runs `db-roles` (idempotent) before the next `backup`.
 
 ```sh
 $SFC --profile self-hosted-db up -d postgres                 # database exists
@@ -129,13 +132,14 @@ repository, owner-only permissions:
 
 | File | Read by | Content |
 |---|---|---|
-| `migrate.env` | migrate, migrate-safe, backup, restore-check | `DATABASE_URL` as `force_migrator` |
+| `migrate.env` | migrate, migrate-safe | `DATABASE_URL` as `force_migrator` |
+| `backup.env` | backup (and migrate-safe through it), restore-check (live side) | `DATABASE_URL` as the read-only `force_backup` |
 | `api.env` | api | `DATABASE_URL` as `force_api`, API-only settings |
 | `worker.env` | worker | `DATABASE_URL` as `force_worker`; `SANKHYA_*` (empty while fake) |
 | `verifier.env` | verifier | `VERIFIER_SHARED_SECRET` (nothing else) |
 | `edge.env` | edge | `ACME_EMAIL` |
 | `postgres.env` | postgres (default database) | `POSTGRES_*` (superuser) |
-| `db-admin.env` | db-roles (owner, one time) | admin connection + the three role passwords |
+| `db-admin.env` | db-roles (owner, one time) | admin connection + the four role passwords |
 | `restore-test.env` | restore-check | `RESTORE_TEST_DATABASE_URL` (disposable DB) |
 | `offsite.env` | offsite | S3 endpoint/bucket/keys, age recipient (pending infrastructure) |
 
@@ -283,7 +287,18 @@ $SFC --profile offsite run --rm offsite                             # uploads th
   seconds. The dump verifies `pg_restore --list` and writes a SHA-256 checksum next to it; retention keeps the
   newest 14 locally.
 - **A dump counts as a backup only after `restore-check` passed on it** (OPS-2). Point `RESTORE_TEST_DATABASE_URL`
-  at a scratch database (a second database in the same `postgres` container is fine).
+  at a scratch database (a second database in the same `postgres` container is fine) that the administrator
+  created once, owned by its own role (see `restore-test.env.example`); it is never `force_backup` or
+  `force_migrator`. On success `restore-check` writes `<dump>.restore-ok` (a copy of the dump's checksum line).
+- **Ops containers** (`backup`, `restore-check`, `offsite`, `db-roles`) run as `SF_OPS_USER` (compose env: the
+  `uid:gid` of the deploy user that owns `SF_BACKUP_DIR` and the checked-out `deploy/` files), with all
+  capabilities dropped and no new privileges: without `CAP_DAC_OVERRIDE` root could not read the 0600 dumps of
+  another user, so they do not run as root. `edge` keeps only `NET_BIND_SERVICE` (its mounted `Caddyfile` must be
+  world-readable, 0644); `web` runs with a read-only root filesystem and a tmpfs `/tmp`.
+- **Optional off-site gate:** `OFFSITE_REQUIRE_RESTORE_MARKER=1` in `offsite.env` makes `offsite` upload a dump only
+  when its `<dump>.restore-ok` exists and matches the dump's `.sha256` (default `0`: no gate). The job streams the
+  `age` ciphertext to the upload instead of staging it locally, so its tmpfs is capped at 16 MB whatever the dump
+  size.
 - **Restore-check guards**, all before anything is restored (`ops-restore-check.sh`): both URLs go through a strict
   parser (`ops-lib.sh`) that accepts only `postgres://USER:PASSWORD@HOST[:PORT]/DBNAME`, with a database name of
   `A-Za-z0-9_.-`, a bracketed IPv6 host, no `@` or `/` in the path, no host lists, and a query limited to `sslmode`,
@@ -314,7 +329,7 @@ $SFC --profile offsite run --rm offsite                             # uploads th
   from the VPS).
 - Restoring staging itself: stop `api` and `worker`, restore into the (empty) database with `pg_restore --clean
   --if-exists --no-owner --dbname "$DATABASE_URL" <dump>` run from a postgres client container of the same major
-  as the owner role, run `db-roles` again (the dump is taken `--no-privileges`), start `api` and `worker`, check
+  as the owner role (`migrate.env`: `force_backup` is read-only and cannot restore), run `db-roles` again (the dump is taken `--no-privileges`), start `api` and `worker`, check
   `/api/v1/ready`. For a managed PITR restore use the provider's procedure (NEEDS VALIDATION per provider, V-04)
   and point the `DATABASE_URL`s at the restored instance.
 - `ops-restore-check.sh` asserts only generic facts (checksum, restore succeeds, tables exist). A
@@ -350,18 +365,31 @@ superuser, login works), `ops-offsite-sync.sh` (refusals; plain and age-encrypte
 by size; wrong key rejected). `docker compose config -q` passes for the default set and with all profiles, and the
 Caddyfile validates.
 
+Also exercised afterwards (PostgreSQL 16 Alpine, Alpine with `age` and a stub `aws`, `caddy:2`, an nginx-unprivileged
+web image, all removed): the four-role bootstrap and `force_backup` (read-only, `pg_dump` works, writes denied) as uid
+1001 with `--cap-drop ALL --security-opt no-new-privileges --read-only` and a tmpfs; `backup` and `restore-check`
+with that profile against a named volume owned by 1001 (restore into a separate scratch role/database, `.restore-ok`
+written); the offsite job as uid 1001 with a 16 MB tmpfs and a 43 MB dump (age streamed, verified by download; gate on
+with a valid, stale and missing marker; a failing `age` detected); Caddy with `cap_drop ALL` + `NET_BIND_SERVICE`
+(binds 80, writes its volumes, access log without `Proxy-Authorization`, cookies or any query string); the web image
+with a read-only root filesystem and a tmpfs `/tmp` (config.json served). Root without `CAP_DAC_OVERRIDE` was shown
+unable to read a 0600 dump owned by another uid, which is why the ops containers do not run as root.
+
 **Not exercised:** a started staging stack of any kind; the server images built through this compose file; the
 `migrate-safe` dependency chain at run time; the `offsite` job on `amazon/aws-cli` or against a real provider (it
 was run on Alpine's `aws-cli` only; the AWS-checksum variables set in the script are for S3-compatible providers
 that reject the new default checksums); the authoritative identity check against a real second name for the same
 database (stubbed); TLS issuance; the verifier container and its network isolation (the HTTP service itself is
-unit-tested); the read-only/`cap_drop` settings at runtime.
+unit-tested); the `cap_drop`/read-only settings of `api`, `worker`, `verifier` and `migrate` (server image) at
+runtime; `Dockerfile.web` itself rebuilt end to end (the symlink change was proven on a derived image); the real
+`aws` CLI under uid 1001 with `HOME=/tmp` (only a stub was used); `db-roles.sql` with `force_backup` on a managed provider.
 
 ## Open questions for the owner
 
 1. DNS for `force-staging.sistemasplac.com.br` and the VPS (provider, sizing, firewall).
 2. Off-VPS backup destination, credentials and the age recipient public key; who runs the monthly restore-check.
-3. Whether a dedicated read-only backup role (`force_backup`) should replace running dumps as the owner role.
+3. Restore-target role and scratch database: created once by the administrator (see `restore-test.env.example`);
+   who owns that step on the chosen scratch server.
 4. Who deploys, from where, and the SSH key custody (see "SSH and deploy user"); OPS-3 deploy transport remains
    PROPOSED, including the docker-group trade-off.
 5. Brand files mount (`/brand`) is not wired in staging; add when a staging brand is wanted.

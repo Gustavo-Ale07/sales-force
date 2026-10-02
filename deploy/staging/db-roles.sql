@@ -5,13 +5,20 @@
 --                   object. Used by the one-shot jobs only, never by a long-running service.
 --   force_api       Runtime of the API process (and the operator account CLI that runs in the api container).
 --   force_worker    Runtime of the Worker process (mirror sync, heartbeat, pg-boss) and `sync-once`.
+--   force_backup    READ ONLY: `backup` (pg_dump) and the live-side identity read of `restore-check`. Created NOLOGIN, then
+--                   made LOGIN with its password. CONNECT on the database + membership in pg_read_all_data (SELECT on
+--                   every table/sequence, USAGE on every schema, also on objects created later). INHERIT is required for
+--                   that membership to apply, so this is the one role without NOINHERIT; it is a member of no other role.
+--                   No write, no DDL, no CREATE, no TEMPORARY, no ownership, no BYPASSRLS (the schema uses no row-level
+--                   security; if it ever does, pg_dump as this role fails loudly instead of dumping a partial copy).
 -- No role here is a superuser and no credential is shared between services. The admin who runs this file
--- (CREATEROLE + ability to GRANT on the database) is not one of the three and must not be used by any service.
+-- (CREATEROLE + ability to GRANT on the database) is not one of the four and must not be used by any service.
 --
 -- USAGE (idempotent: safe to re-run before the first migration, after any migration and after queue:install).
 -- Passwords are supplied at run time and are NOT in this file. psql substitutes them as quoted literals:
 --   psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 \
 --        -v migrator_password="$MIGRATOR_PW" -v api_password="$API_PW" -v worker_password="$WORKER_PW" \
+--        -v backup_password="$BACKUP_PW" \
 --        -f deploy/staging/db-roles.sql
 --   (a pre-hashed SCRAM verifier, `SCRAM-SHA-256$...`, is accepted as the value and keeps the clear password out of
 --    server statement logs; a missing variable stops the script before anything is changed.)
@@ -74,9 +81,12 @@
 --      drops). With migrate=false/createSchema=false the worker only needs DML in the tests run so far; verify on
 --      the staging pg-boss version after the first long run (apps/server restricted-roles test covers start,
 --      work, schedule, heartbeat and graceful stop).
---   4. Backup/restore: ops-backup.sh and the restore check still use whatever DATABASE_URL they are given. A fifth
---      role (e.g. force_backup with pg_read_all_data, no write) is the least-privilege answer; not created here
---      because it was not requested.
+--   4. Backup/restore: `backup` and the live side of `restore-check` use force_backup (backup.env). The RESTORE
+--      TARGET is a different matter and is NOT created here: it is a scratch database, usually on another server,
+--      with its own credential (restore-test.env) that owns that scratch database and has no access to the live
+--      one. On the same server, the administrator creates, once and separately (never force_backup, never
+--      force_migrator): CREATE ROLE force_restore LOGIN PASSWORD '...'; CREATE DATABASE sf_restore_test OWNER
+--      force_restore; REVOKE ALL ON DATABASE sf_restore_test FROM PUBLIC. force_backup gets no write anywhere.
 --   5. Managed providers (V-04/V-15) may not allow GRANT CREATE ON DATABASE or REVOKE on the public schema from the
 --      provided admin; validate this file on the provider before relying on it.
 
@@ -93,6 +103,10 @@
 \if :{?worker_password}
 \else
   DO $$ BEGIN RAISE EXCEPTION 'db-roles.sql: set -v worker_password=... (a clear password or a SCRAM verifier)'; END $$;
+\endif
+\if :{?backup_password}
+\else
+  DO $$ BEGIN RAISE EXCEPTION 'db-roles.sql: set -v backup_password=... (a clear password or a SCRAM verifier)'; END $$;
 \endif
 \if :{?adopt_existing}
 \else
@@ -118,14 +132,39 @@ BEGIN
 END
 $roles$;
 
+-- force_backup: NOLOGIN first, LOGIN only together with its password (below). INHERIT so that pg_read_all_data applies.
+DO $backup_role$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'force_backup') THEN
+    CREATE ROLE force_backup NOLOGIN;
+  END IF;
+  ALTER ROLE force_backup NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS INHERIT;
+END
+$backup_role$;
+
 ALTER ROLE force_migrator PASSWORD :'migrator_password';
 ALTER ROLE force_api PASSWORD :'api_password';
 ALTER ROLE force_worker PASSWORD :'worker_password';
+ALTER ROLE force_backup LOGIN PASSWORD :'backup_password';
+
+-- The only membership force_backup has is pg_read_all_data; drop any other one granted by hand.
+DO $membership$
+DECLARE m record;
+BEGIN
+  FOR m IN SELECT r.rolname FROM pg_auth_members am JOIN pg_roles r ON r.oid = am.roleid
+            WHERE am.member = 'force_backup'::regrole AND r.rolname <> 'pg_read_all_data'
+  LOOP
+    EXECUTE format('REVOKE %I FROM force_backup', m.rolname);
+  END LOOP;
+END
+$membership$;
+GRANT pg_read_all_data TO force_backup;
 
 -- 2. Database level: nobody connects by default; only the three roles do. CREATE lets the migrator install
 --    pg_trgm (a trusted extension) and the pgboss schema. TEMPORARY only for the worker.
 REVOKE ALL ON DATABASE :"dbname" FROM PUBLIC;
-REVOKE ALL ON DATABASE :"dbname" FROM force_api, force_worker, force_migrator;
+REVOKE ALL ON DATABASE :"dbname" FROM force_api, force_worker, force_migrator, force_backup;
+GRANT CONNECT ON DATABASE :"dbname" TO force_backup;
 GRANT CONNECT, CREATE, TEMPORARY ON DATABASE :"dbname" TO force_migrator;
 GRANT CONNECT ON DATABASE :"dbname" TO force_api;
 GRANT CONNECT, TEMPORARY ON DATABASE :"dbname" TO force_worker;
@@ -134,13 +173,13 @@ GRANT CONNECT, TEMPORARY ON DATABASE :"dbname" TO force_worker;
 --    owned by the migrator, so default privileges can be attached before pg-boss installs into it
 --    (pg-boss uses CREATE SCHEMA IF NOT EXISTS).
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
-REVOKE ALL ON SCHEMA public FROM force_api, force_worker, force_migrator;
+REVOKE ALL ON SCHEMA public FROM force_api, force_worker, force_migrator, force_backup;
 GRANT USAGE, CREATE ON SCHEMA public TO force_migrator;
 GRANT USAGE ON SCHEMA public TO force_api, force_worker;
 
 CREATE SCHEMA IF NOT EXISTS pgboss AUTHORIZATION force_migrator;
 REVOKE ALL ON SCHEMA pgboss FROM PUBLIC;
-REVOKE ALL ON SCHEMA pgboss FROM force_api, force_worker;
+REVOKE ALL ON SCHEMA pgboss FROM force_api, force_worker, force_backup;
 GRANT USAGE ON SCHEMA pgboss TO force_worker;
 
 -- 4. Optional adoption of objects created earlier by another role (see header). Owners only.
@@ -172,10 +211,10 @@ $adopt$;
 
 -- 5. Reset, then grant exactly the matrix (idempotent). Resetting revokes anything granted by hand since.
 REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC;
-REVOKE ALL ON ALL TABLES IN SCHEMA public FROM force_api, force_worker;
-REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM PUBLIC, force_api, force_worker;
-REVOKE ALL ON ALL TABLES IN SCHEMA pgboss FROM PUBLIC, force_api, force_worker;
-REVOKE ALL ON ALL SEQUENCES IN SCHEMA pgboss FROM PUBLIC, force_api, force_worker;
+REVOKE ALL ON ALL TABLES IN SCHEMA public FROM force_api, force_worker, force_backup;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM PUBLIC, force_api, force_worker, force_backup;
+REVOKE ALL ON ALL TABLES IN SCHEMA pgboss FROM PUBLIC, force_api, force_worker, force_backup;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA pgboss FROM PUBLIC, force_api, force_worker, force_backup;
 
 -- public: the matrix, as data. A table that does not exist yet (this file run before the first migration) is
 -- skipped; re-running the file after the migrations grants it.
@@ -234,8 +273,9 @@ GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pgboss TO force_worker;
 
 -- 6. Default privileges for what force_migrator creates later.
 --    public: none for api/worker (deny by default, see NEW TABLES); previous defaults are cleared.
-ALTER DEFAULT PRIVILEGES FOR ROLE force_migrator IN SCHEMA public REVOKE ALL ON TABLES FROM force_api, force_worker;
-ALTER DEFAULT PRIVILEGES FOR ROLE force_migrator IN SCHEMA public REVOKE ALL ON SEQUENCES FROM force_api, force_worker;
+ALTER DEFAULT PRIVILEGES FOR ROLE force_migrator IN SCHEMA public REVOKE ALL ON TABLES FROM force_api, force_worker, force_backup;
+ALTER DEFAULT PRIVILEGES FOR ROLE force_migrator IN SCHEMA public REVOKE ALL ON SEQUENCES FROM force_api, force_worker, force_backup;
+--    (force_backup reads everything, new objects included, through pg_read_all_data, not through grants.)
 --    pgboss: everything the migrator installs there is the worker's to use (DML only).
 ALTER DEFAULT PRIVILEGES FOR ROLE force_migrator IN SCHEMA pgboss GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO force_worker;
 ALTER DEFAULT PRIVILEGES FOR ROLE force_migrator IN SCHEMA pgboss GRANT USAGE, SELECT ON SEQUENCES TO force_worker;

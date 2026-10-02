@@ -16,6 +16,7 @@ const PASSWORDS = {
   force_migrator: `m-${randomBytes(6).toString('hex')}`,
   force_api: `a-${randomBytes(6).toString('hex')}`,
   force_worker: `w-${randomBytes(6).toString('hex')}`,
+  force_backup: `b-${randomBytes(6).toString('hex')}`,
 };
 type Role = keyof typeof PASSWORDS;
 type Priv = 'SELECT' | 'INSERT' | 'UPDATE' | 'DELETE' | 'TRUNCATE' | 'REFERENCES' | 'TRIGGER';
@@ -78,6 +79,7 @@ async function applyRolesSql(database: string, extra: string[] = [], omit: strin
     migrator_password: PASSWORDS.force_migrator,
     api_password: PASSWORDS.force_api,
     worker_password: PASSWORDS.force_worker,
+    backup_password: PASSWORDS.force_backup,
   }).filter(([k]) => !omit.includes(k));
   return pgc.container.exec([
     'psql', '-U', pgc.container.getUsername(), '-d', database, '-v', 'ON_ERROR_STOP=1',
@@ -113,11 +115,44 @@ describe('db-roles.sql', () => {
       adminDbUrl,
       `SELECT rolname, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls, rolcanlogin, rolinherit FROM pg_roles WHERE rolname LIKE 'force\\_%' ORDER BY rolname`,
     );
-    expect(rows.map((r) => r.rolname)).toEqual(['force_api', 'force_migrator', 'force_worker']);
+    expect(rows.map((r) => r.rolname)).toEqual(['force_api', 'force_backup', 'force_migrator', 'force_worker']);
     for (const r of rows) {
-      expect(r).toMatchObject({ rolsuper: false, rolcreatedb: false, rolcreaterole: false, rolreplication: false, rolbypassrls: false, rolcanlogin: true, rolinherit: false });
+      // force_backup needs INHERIT for its pg_read_all_data membership to apply; the others are NOINHERIT.
+      expect(r).toMatchObject({ rolsuper: false, rolcreatedb: false, rolcreaterole: false, rolreplication: false, rolbypassrls: false, rolcanlogin: true, rolinherit: r.rolname === 'force_backup' });
     }
-    expect(await as(adminDbUrl, `SELECT 1 FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.member WHERE r.rolname LIKE 'force\\_%'`)).toEqual([]);
+    // The only membership of any force_* role is force_backup -> pg_read_all_data.
+    expect(await as(adminDbUrl, `SELECT m.rolname AS member, g.rolname AS grp FROM pg_auth_members am JOIN pg_roles m ON m.oid = am.member JOIN pg_roles g ON g.oid = am.roleid WHERE m.rolname LIKE 'force\\_%'`)).toEqual([{ member: 'force_backup', grp: 'pg_read_all_data' }]);
+  });
+
+  it('backup: reads every table (also ones added later) and pg_dump works; cannot write, DDL, create or connect elsewhere', async () => {
+    for (const sql of ['SELECT count(*) FROM account', 'SELECT count(*) FROM audit_log', 'SELECT count(*) FROM integration_outbox', 'SELECT count(*) FROM schema_migration']) {
+      expect(await sqlState('force_backup', sql), sql).toBeUndefined();
+    }
+    await as(roleUrl('force_migrator'), 'CREATE TABLE t_backup_later (id int); CREATE TABLE pgboss.t_backup_later (id int)');
+    expect(await sqlState('force_backup', 'SELECT * FROM pgboss.t_backup_later')).toBeUndefined();
+    expect(await sqlState('force_backup', 'SELECT * FROM t_backup_later')).toBeUndefined();
+    await as(roleUrl('force_migrator'), 'DROP TABLE t_backup_later; DROP TABLE pgboss.t_backup_later');
+    for (const sql of [
+      `INSERT INTO audit_log DEFAULT VALUES`,
+      'UPDATE account SET email = email',
+      'DELETE FROM session',
+      'TRUNCATE session',
+      'CREATE TABLE t_ddl (id int)',
+      'CREATE TEMPORARY TABLE t_tmp (id int)',
+      'CREATE SCHEMA s_ddl',
+      'DROP TABLE account',
+      'ALTER TABLE account ADD COLUMN x int',
+      'CREATE TABLE pgboss.t_ddl (id int)',
+    ]) {
+      expect(await sqlState('force_backup', sql), sql).toBe(DENIED);
+    }
+    const dump = await pgc.container.exec(['pg_dump', '-h', 'localhost', '-U', 'force_backup', '-d', dbName, '--format=custom', '--no-owner', '--no-privileges', '--file=/tmp/backup-role.dump'], {
+      env: { PGPASSWORD: PASSWORDS.force_backup },
+    });
+    expect(dump.exitCode, dump.output).toBe(0);
+    const listed = await pgc.container.exec(['pg_restore', '--list', '/tmp/backup-role.dump']);
+    expect(listed.exitCode, listed.output).toBe(0);
+    expect(listed.output).toMatch(/TABLE public account/);
   });
 
   it('matches the documented privilege matrix table by table (and covers every table)', async () => {

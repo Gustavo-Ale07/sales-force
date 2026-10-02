@@ -14,10 +14,11 @@
 #   `db-roles` bootstrap by the owner (profile ops-admin) -> migrate (one-shot) -> api + worker (+ verifier)
 #   -> web -> edge. Processes never migrate on start (DATA-2).
 # - Database roles (least privilege): migrate = force_migrator (migrate.env), api = force_api (api.env),
-#   worker = force_worker (worker.env). Each service gets ONLY its own DATABASE_URL. The PostgreSQL superuser
+#   worker = force_worker (worker.env), backup and restore-check (live side) = force_backup (backup.env, read-only).
+#   Each service gets ONLY its own DATABASE_URL. The PostgreSQL superuser
 #   (postgres.env / db-admin.env) is used by no application service: only by the postgres container itself
 #   and by the owner's one-time `db-roles` job.
-# - Staging behaves like production: NODE_ENV=production on every server container, admin-only local login
+# - Staging behaves like production: NODE_ENV=production on every server container, local login for admin and technical only
 #   (API_AUTH_MODE=local / WEB_AUTH_MODE=local), operational login off, no demo accounts, no seed. The API
 #   refuses dev authentication and demo accounts and requires TRUST_PROXY / ALLOWED_ORIGINS / dataset
 #   identity; the worker refuses the fake gateway unless ALLOW_FAKE_GATEWAY=1 is explicit.
@@ -38,6 +39,12 @@ x-logging: &logging
     max-file: "5"
     compress: "true"
 
+# Every container drops ALL capabilities and cannot gain privileges. Exceptions are explicit: edge adds back only
+# NET_BIND_SERVICE; postgres (the database container) keeps the capabilities its entrypoint needs to chown the data
+# directory and drop to the postgres user.
+# Ops containers (backup, restore-check, db-roles, offsite) run as SF_OPS_USER (uid:gid of the deploy user, set in
+# compose.env): without CAP_DAC_OVERRIDE a root process cannot read or write files owned by someone else, so they
+# run as the owner of SF_BACKUP_DIR and of the checked-out scripts instead of as root.
 x-hardening: &hardening
   security_opt:
     - no-new-privileges:true
@@ -118,7 +125,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       API_HOST: 0.0.0.0
       API_PORT: "3000"
-      # Explicit, no default. Staging value: `local` (admin-only Argon2id login; operational login stays off).
+      # Explicit, no default. Staging value: `local` (admin and technical Argon2id login; operational login stays off).
       # `dev` is refused by the API in production.
       AUTH_MODE: ${API_AUTH_MODE:?API_AUTH_MODE must be set explicitly}
       # The browser origin is the public staging host (TLS terminated by the edge).
@@ -221,8 +228,12 @@ services:
       dockerfile: deploy/Dockerfile.web
     restart: unless-stopped
     logging: *logging
-    security_opt:
-      - no-new-privileges:true
+    <<: *hardening
+    # nginx-unprivileged runs as the nginx user; config.json is a symlink into /tmp (Dockerfile.web), the only
+    # place written at start, so the root filesystem is read-only.
+    read_only: true
+    tmpfs:
+      - /tmp
     depends_on:
       api:
         condition: service_healthy
@@ -238,8 +249,12 @@ services:
     image: ${CADDY_IMAGE:?CADDY_IMAGE must be an explicit pinned image reference (tag or digest)}
     restart: unless-stopped
     logging: *logging
-    security_opt:
-      - no-new-privileges:true
+    <<: *hardening
+    # Binds 80/443 (HTTP-01, HTTPS) and writes only to its two volumes, as root that owns them: the one capability
+    # it needs is NET_BIND_SERVICE. The mounted Caddyfile must be world-readable (0644): root without
+    # CAP_DAC_OVERRIDE cannot read a file owned by another user with a restrictive mode.
+    cap_add:
+      - NET_BIND_SERVICE
     depends_on:
       web:
         condition: service_started
@@ -268,8 +283,9 @@ services:
   # ---- Operations (profiles `ops`, `ops-admin`, `offsite`; run explicitly with `run --rm`, never started by `up`) ----
 
   # Logical dump of the staging database (custom format) into ${SF_BACKUP_DIR}. Uses the postgres client of the
-  # SAME major as the server (PG_MAJOR). Connects as the table-owner role (migrate.env, force_migrator): a dump
-  # must read every table, and no runtime role may (a dedicated read-only backup role is pending, db-roles.sql).
+  # SAME major as the server (PG_MAJOR). Connects as the READ-ONLY role force_backup (backup.env: pg_read_all_data,
+  # no write, no DDL; db-roles.sql), never as the owner role. Runs as SF_OPS_USER, all capabilities dropped,
+  # read-only root filesystem (it writes only to /backups).
   # With the self-hosted database it is the only recovery source; with a managed database it complements
   # provider PITR (OPS-2). Run it BEFORE every migration (README-staging.md "Build and deploy").
   backup:
@@ -277,10 +293,13 @@ services:
     image: postgres:${PG_MAJOR:?PG_MAJOR must match production (DATA-1, V-15)}
     restart: "no"
     logging: *logging
-    security_opt:
-      - no-new-privileges:true
+    <<: *hardening
+    user: ${SF_OPS_USER:?SF_OPS_USER must be the uid:gid that owns SF_BACKUP_DIR (the deploy user), e.g. 1001:1001}
+    read_only: true
+    tmpfs:
+      - /tmp
     env_file:
-      - ${SF_SECRETS_DIR}/migrate.env
+      - ${SF_SECRETS_DIR}/backup.env
     volumes:
       - ./staging/ops-lib.sh:/ops/ops-lib.sh:ro
       - ./staging/ops-backup.sh:/ops/ops-backup.sh:ro
@@ -304,20 +323,28 @@ services:
   # Restore test: restores the newest dump into a SCRATCH database (RESTORE_TEST_DATABASE_URL, from
   # restore-test.env) and runs sanity checks. Refuses to run when the target is, or resolves to, the live
   # database (parsed names, restore/test/scratch marker, and the server identity of both connections).
+  # The live side is read with force_backup (backup.env, read-only); the restore itself writes ONLY with the
+  # restore-test.env credential (a role that owns the scratch database, usually on another server, with no access
+  # to the live one; the scratch database is created once by the administrator, never by this job). /backups is
+  # writable only so that a successful run can write <dump>.restore-ok (the optional off-site gate); the script
+  # never modifies a dump.
   restore-check:
     profiles: ["ops"]
     image: postgres:${PG_MAJOR:?PG_MAJOR must match production (DATA-1, V-15)}
     restart: "no"
     logging: *logging
-    security_opt:
-      - no-new-privileges:true
+    <<: *hardening
+    user: ${SF_OPS_USER:?SF_OPS_USER must be the uid:gid that owns SF_BACKUP_DIR (the deploy user), e.g. 1001:1001}
+    read_only: true
+    tmpfs:
+      - /tmp
     env_file:
-      - ${SF_SECRETS_DIR}/migrate.env
+      - ${SF_SECRETS_DIR}/backup.env
       - ${SF_SECRETS_DIR}/restore-test.env
     volumes:
       - ./staging/ops-lib.sh:/ops/ops-lib.sh:ro
       - ./staging/ops-restore-check.sh:/ops/ops-restore-check.sh:ro
-      - ${SF_BACKUP_DIR}:/backups:ro
+      - ${SF_BACKUP_DIR}:/backups
     networks: [backend]
     entrypoint: ["sh", "/ops/ops-restore-check.sh"]
 
@@ -339,8 +366,13 @@ services:
     logging: *logging
     <<: *hardening
     read_only: true
+    # Small on purpose: the dump is never staged locally (ops-offsite-sync.sh streams it); only checksums and
+    # FIFOs live here. Runs as SF_OPS_USER to read the 0600 dumps without CAP_DAC_OVERRIDE.
+    user: ${SF_OPS_USER:?SF_OPS_USER must be the uid:gid that owns SF_BACKUP_DIR (the deploy user), e.g. 1001:1001}
     tmpfs:
-      - /tmp
+      - /tmp:size=16m
+    environment:
+      HOME: /tmp
     env_file:
       - ${SF_SECRETS_DIR}/offsite.env
     volumes:
@@ -349,7 +381,7 @@ services:
     networks: [egress]
     entrypoint: ["sh", "/ops/ops-offsite-sync.sh"]
 
-  # One-time bootstrap of the least-privilege roles (force_api, force_worker, force_migrator), run BY THE OWNER as
+  # One-time bootstrap of the least-privilege roles (force_api, force_worker, force_migrator, force_backup), run BY THE OWNER as
   # the database administrator (db-admin.env, outside the repository), after the database exists and BEFORE the
   # first `migrate`. Idempotent. Passwords come from db-admin.env through a tmpfs preamble, never from this file
   # nor the process arguments. Profile `ops-admin` is separate from `ops` so that routine backup/restore runs
@@ -359,8 +391,8 @@ services:
     image: postgres:${PG_MAJOR:?PG_MAJOR must match production (DATA-1, V-15)}
     restart: "no"
     logging: *logging
-    security_opt:
-      - no-new-privileges:true
+    <<: *hardening
+    user: ${SF_OPS_USER:?SF_OPS_USER must be the uid:gid that owns SF_BACKUP_DIR (the deploy user), e.g. 1001:1001}
     read_only: true
     tmpfs:
       - /tmp

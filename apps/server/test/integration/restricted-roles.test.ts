@@ -31,6 +31,7 @@ const PASSWORDS = {
   force_migrator: `m-${randomBytes(6).toString('hex')}`,
   force_api: `a-${randomBytes(6).toString('hex')}`,
   force_worker: `w-${randomBytes(6).toString('hex')}`,
+  force_backup: `b-${randomBytes(6).toString('hex')}`,
 } as const;
 type Role = keyof typeof PASSWORDS;
 
@@ -51,6 +52,7 @@ async function applyRolesSql(): Promise<void> {
   const result = await postgres.container.exec([
     'psql', '-U', postgres.container.getUsername(), '-d', new URL(databaseUrl).pathname.slice(1), '-v', 'ON_ERROR_STOP=1',
     '-v', `migrator_password=${PASSWORDS.force_migrator}`, '-v', `api_password=${PASSWORDS.force_api}`, '-v', `worker_password=${PASSWORDS.force_worker}`,
+    '-v', `backup_password=${PASSWORDS.force_backup}`,
     '-f', target,
   ]);
   expect(result.exitCode, result.output).toBe(0);
