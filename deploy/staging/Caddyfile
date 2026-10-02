@@ -1,7 +1,9 @@
-# Staging edge (OPS-3 PROPOSED). Real HTTPS via ACME; STAGING_DOMAIN is a placeholder until the owner supplies
-# the domain. Public vs restricted access is an owner choice (README-staging.md). TLS terminates here; the API and the web container only speak plain HTTP on
-# the private `edge` network. STAGING_DOMAIN comes from the container environment (compose env file);
-# ACME contact email from edge.env (outside the repository).
+# Staging edge (OPS-3 PROPOSED). Real HTTPS: automatic ACME certificates (Let's Encrypt, HTTP-01 on the public
+# ports 80/443; no IP allow-list or VPN, the mobile app reaches this host over the internet). STAGING_DOMAIN is the
+# planned force-staging.sistemasplac.com.br (production later force.sistemasplac.com.br); DNS is not created yet.
+# TLS terminates here; the API and the web container only speak plain HTTP on the private `edge` network. The
+# internal verifier is on its own internal network and is never routed from here. STAGING_DOMAIN comes from the
+# container environment (compose env file); ACME contact email from edge.env (outside the repository).
 {
 	email {$ACME_EMAIL}
 	# Staging uses the real Let's Encrypt CA; for repeated rehearsals add the staging CA to avoid rate limits:

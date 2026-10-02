@@ -10,16 +10,24 @@
 # - Images are pinned by explicit reference (tag or digest), no `latest` default. Initial path: built ON the
 #   VPS from a checked-out git tag/commit (`docker compose build`; the tags carry the SHA, see README-staging.md
 #   "Build and deploy"); a registry reference works unchanged if one is adopted later (OPS-3 PROPOSED).
-# - Start-up order: [postgres, profile self-hosted-db = the default initial staging database] -> migrate
-#   (one-shot) -> api + worker -> web -> edge. Processes never migrate on start (DATA-2).
+# - Start-up order: [postgres, profile self-hosted-db = the default initial staging database] -> one-time
+#   `db-roles` bootstrap by the owner (profile ops-admin) -> migrate (one-shot) -> api + worker (+ verifier)
+#   -> web -> edge. Processes never migrate on start (DATA-2).
+# - Database roles (least privilege): migrate = force_migrator (migrate.env), api = force_api (api.env),
+#   worker = force_worker (worker.env). Each service gets ONLY its own DATABASE_URL. The PostgreSQL superuser
+#   (postgres.env / db-admin.env) is used by no application service: only by the postgres container itself
+#   and by the owner's one-time `db-roles` job.
 # - Staging behaves like production: NODE_ENV=production on every server container, admin-only local login
 #   (API_AUTH_MODE=local / WEB_AUTH_MODE=local), operational login off, no demo accounts, no seed. The API
 #   refuses dev authentication and demo accounts and requires TRUST_PROXY / ALLOWED_ORIGINS / dataset
 #   identity; the worker refuses the fake gateway unless ALLOW_FAKE_GATEWAY=1 is explicit.
-# - No verifier service: the dedicated external verifier (STACK-2 option C) is chosen in direction but NOT
-#   implemented; it will be added here only when it exists.
-# - Sankhya settings exist ONLY in the worker env file (STACK-2). Staging never reaches Sankhya production
-#   (SNK-3): the gateway itself refuses SANKHYA_ENVIRONMENT=production.
+# - `verifier`: the dedicated internal identity verifier (STACK-2 option C, owner decision 2026-10-02).
+#   STRUCTURE ONLY: VERIFIER_MODE=disabled (the real Sankhya adapter is blocked), uniform denial. Internal-only
+#   network (`verifier`, internal: true: no published port, not on `edge`, no outbound traffic), reachable by
+#   the API alone. It has its own secret file (verifier.env) and no database or Sankhya settings; the API holds
+#   no Sankhya credentials; the worker receives none of the verifier secrets and never sees user passwords.
+# - Sankhya settings for sync exist ONLY in the worker env file (STACK-2). Staging never reaches Sankhya
+#   production (SNK-3): the gateway itself refuses SANKHYA_ENVIRONMENT=production.
 # - No seed, no demo accounts: docker-compose.seed.yml is never combined with this file.
 name: salesforce-staging
 
@@ -48,6 +56,21 @@ x-server: &server
   tmpfs:
     - /tmp
 
+# One-shot migration job, shared by `migrate` (deploy path) and `migrate-safe` (ops: dump first).
+x-migrate: &migrate
+  <<: *server
+  restart: "no"
+  env_file:
+    - ${SF_SECRETS_DIR:?SF_SECRETS_DIR must point outside the repository}/migrate.env
+  environment:
+    NODE_ENV: production
+    LOG_LEVEL: ${LOG_LEVEL:-info}
+  networks: [backend]
+  command:
+    - sh
+    - -c
+    - node node_modules/@salesforce/db/dist/migrate/cli.js && node dist/queue-install.js
+
 services:
   # DEFAULT initial staging database (owner decision): PostgreSQL isolated on the same VPS, started with
   # `--profile self-hosted-db`. Managed PostgreSQL >= 16 (same major as production, DATA-1) remains the target
@@ -73,23 +96,13 @@ services:
   # One-shot: reviewed SQL migrations (advisory-lock protected, DATA-2), then the pg-boss schema and queues.
   # Idempotent. api and worker wait for it to complete successfully; a failure stops the rollout.
   # The self-hosted postgres dependency is optional so a managed database needs no container.
+  # Runs as force_migrator (migrate.env), the only role that may change the schema.
   migrate:
-    <<: *server
-    restart: "no"
+    <<: *migrate
     depends_on:
       postgres:
         condition: service_healthy
         required: false
-    env_file:
-      - ${SF_SECRETS_DIR}/database.env
-    environment:
-      NODE_ENV: production
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-    networks: [backend]
-    command:
-      - sh
-      - -c
-      - node node_modules/@salesforce/db/dist/migrate/cli.js && node dist/queue-install.js
 
   api:
     <<: *server
@@ -98,7 +111,7 @@ services:
       migrate:
         condition: service_completed_successfully
     env_file:
-      - ${SF_SECRETS_DIR}/database.env
+      # DATABASE_URL (force_api) and API-only settings. No Sankhya setting, no verifier-side secret.
       - ${SF_SECRETS_DIR}/api.env
     environment:
       NODE_ENV: production
@@ -118,7 +131,9 @@ services:
       # No SF_ALLOW_DEMO_ACCOUNTS and no ALLOW_DEV_AUTH: staging has no demo data and no dev authentication.
       # No SANKHYA_*: the API never reads Sankhya settings (STACK-2/3).
     command: ["node", "dist/main-api.js"]
-    networks: [backend, edge]
+    # `verifier`: the API is the only caller of the internal identity verifier (nothing calls it yet; the
+    # client lands with the external-login work).
+    networks: [backend, edge, verifier]
     healthcheck:
       # Liveness. Readiness (database, migrations, integration) is GET /api/v1/ready (503 when not_ready),
       # polled by the external monitor and by the rollout checks in the runbook, not by the container.
@@ -139,7 +154,7 @@ services:
       migrate:
         condition: service_completed_successfully
     env_file:
-      - ${SF_SECRETS_DIR}/database.env
+      # DATABASE_URL (force_worker) and the Sankhya settings. Not on the `verifier` network, no verifier secret.
       - ${SF_SECRETS_DIR}/worker.env
     environment:
       NODE_ENV: production
@@ -165,6 +180,36 @@ services:
       interval: 15s
       timeout: 4s
       start_period: 20s
+      retries: 6
+
+  # Internal identity verifier (STACK-2 option C). STRUCTURE ONLY: disabled mode answers a uniform denial; the
+  # `live` mode is refused at boot (the Sankhya adapter is blocked). Same image, own entry point, own secret file.
+  # Not published, not on `edge`, on an internal-only network: it cannot be reached from outside and cannot reach
+  # the internet (a future live adapter needs a reviewed egress path restricted to the Sankhya hosts). No database,
+  # no Sankhya settings: the process refuses to boot when it is given any.
+  verifier:
+    <<: *server
+    restart: unless-stopped
+    env_file:
+      - ${SF_SECRETS_DIR}/verifier.env
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      VERIFIER_MODE: disabled
+      # Container interface on the internal network; there is no published port and no other network.
+      VERIFIER_HOST: 0.0.0.0
+      VERIFIER_PORT: "3002"
+    command: ["node", "dist/main-verifier.js"]
+    networks: [verifier]
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3002/health').then((r)=>process.exit(r.ok?0:1),()=>process.exit(1))"
+      interval: 15s
+      timeout: 4s
+      start_period: 15s
       retries: 6
 
   # Static SPA behind the edge. Not published; its own /api proxy is bypassed (the edge routes /api/* directly
@@ -220,11 +265,13 @@ services:
       start_period: 10s
       retries: 5
 
-  # ---- Operations (profile `ops`; run explicitly with `run --rm`, never started by `up`) ----
+  # ---- Operations (profiles `ops`, `ops-admin`, `offsite`; run explicitly with `run --rm`, never started by `up`) ----
 
   # Logical dump of the staging database (custom format) into ${SF_BACKUP_DIR}. Uses the postgres client of the
-  # SAME major as the server (PG_MAJOR). With the self-hosted database it is the only recovery source;
-  # with a managed database it complements provider PITR (OPS-2).
+  # SAME major as the server (PG_MAJOR). Connects as the table-owner role (migrate.env, force_migrator): a dump
+  # must read every table, and no runtime role may (a dedicated read-only backup role is pending, db-roles.sql).
+  # With the self-hosted database it is the only recovery source; with a managed database it complements
+  # provider PITR (OPS-2). Run it BEFORE every migration (README-staging.md "Build and deploy").
   backup:
     profiles: ["ops"]
     image: postgres:${PG_MAJOR:?PG_MAJOR must match production (DATA-1, V-15)}
@@ -233,15 +280,30 @@ services:
     security_opt:
       - no-new-privileges:true
     env_file:
-      - ${SF_SECRETS_DIR}/database.env
+      - ${SF_SECRETS_DIR}/migrate.env
     volumes:
+      - ./staging/ops-lib.sh:/ops/ops-lib.sh:ro
       - ./staging/ops-backup.sh:/ops/ops-backup.sh:ro
       - ${SF_BACKUP_DIR:?SF_BACKUP_DIR must be a host directory outside the repository}:/backups
     networks: [backend]
     entrypoint: ["sh", "/ops/ops-backup.sh"]
 
+  # Pre-migration safety net as ONE command: `run --rm migrate-safe` first runs `backup` (a failing dump stops
+  # here, nothing is migrated), then the same one-shot migration as `migrate`. The deploy runbook uses it; the
+  # first deploy (no database yet) uses plain `migrate`. Needs the database up (profile self-hosted-db).
+  migrate-safe:
+    <<: *migrate
+    profiles: ["ops"]
+    depends_on:
+      backup:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+        required: false
+
   # Restore test: restores the newest dump into a SCRATCH database (RESTORE_TEST_DATABASE_URL, from
-  # restore-test.env) and runs sanity checks. Refuses to run when the target equals DATABASE_URL.
+  # restore-test.env) and runs sanity checks. Refuses to run when the target is, or resolves to, the live
+  # database (parsed names, restore/test/scratch marker, and the server identity of both connections).
   restore-check:
     profiles: ["ops"]
     image: postgres:${PG_MAJOR:?PG_MAJOR must match production (DATA-1, V-15)}
@@ -250,19 +312,76 @@ services:
     security_opt:
       - no-new-privileges:true
     env_file:
-      - ${SF_SECRETS_DIR}/database.env
+      - ${SF_SECRETS_DIR}/migrate.env
       - ${SF_SECRETS_DIR}/restore-test.env
     volumes:
+      - ./staging/ops-lib.sh:/ops/ops-lib.sh:ro
       - ./staging/ops-restore-check.sh:/ops/ops-restore-check.sh:ro
       - ${SF_BACKUP_DIR}:/backups:ro
     networks: [backend]
     entrypoint: ["sh", "/ops/ops-restore-check.sh"]
+
+  # Off-VPS copy (second failure domain): uploads the newest VERIFIED dump and its .sha256 to an S3-compatible
+  # bucket, optionally encrypted client-side with an age public key, and verifies the stored copy. The image is
+  # built from deploy/staging/Dockerfile.offsite (aws-cli + age on a pinned Alpine, OFFSITE_BASE_IMAGE); a
+  # prebuilt, pinned image can replace it through OFFSITE_IMAGE. Needs outbound internet only (network `egress`),
+  # no database access and no other secret than offsite.env. The bucket and credentials are PENDING
+  # infrastructure: nothing here names a real location.
+  offsite:
+    profiles: ["offsite"]
+    image: ${OFFSITE_IMAGE:?OFFSITE_IMAGE must be an explicit pinned image reference (tag or digest)}
+    build:
+      context: ./staging
+      dockerfile: Dockerfile.offsite
+      args:
+        BASE_IMAGE: ${OFFSITE_BASE_IMAGE:?OFFSITE_BASE_IMAGE must be an explicit pinned image reference (tag or digest)}
+    restart: "no"
+    logging: *logging
+    <<: *hardening
+    read_only: true
+    tmpfs:
+      - /tmp
+    env_file:
+      - ${SF_SECRETS_DIR}/offsite.env
+    volumes:
+      - ./staging/ops-offsite-sync.sh:/ops/ops-offsite-sync.sh:ro
+      - ${SF_BACKUP_DIR}:/backups:ro
+    networks: [egress]
+    entrypoint: ["sh", "/ops/ops-offsite-sync.sh"]
+
+  # One-time bootstrap of the least-privilege roles (force_api, force_worker, force_migrator), run BY THE OWNER as
+  # the database administrator (db-admin.env, outside the repository), after the database exists and BEFORE the
+  # first `migrate`. Idempotent. Passwords come from db-admin.env through a tmpfs preamble, never from this file
+  # nor the process arguments. Profile `ops-admin` is separate from `ops` so that routine backup/restore runs
+  # can never pull the administrator credential in.
+  db-roles:
+    profiles: ["ops-admin"]
+    image: postgres:${PG_MAJOR:?PG_MAJOR must match production (DATA-1, V-15)}
+    restart: "no"
+    logging: *logging
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    env_file:
+      - ${SF_SECRETS_DIR}/db-admin.env
+    volumes:
+      - ./staging/ops-db-roles.sh:/ops/ops-db-roles.sh:ro
+      - ./staging/db-roles.sql:/ops/db-roles.sql:ro
+    networks: [backend]
+    entrypoint: ["sh", "/ops/ops-db-roles.sh"]
 
 networks:
   # Private: the database (container or managed) and the processes that talk to it.
   backend: {}
   # Edge <-> web/api only.
   edge: {}
+  # API <-> verifier only. `internal`: no published ports and no route to the outside (STACK-2 option C).
+  verifier:
+    internal: true
+  # Outbound-only network of the off-site copy job (no other service is attached).
+  egress: {}
 
 volumes:
   pgdata:
