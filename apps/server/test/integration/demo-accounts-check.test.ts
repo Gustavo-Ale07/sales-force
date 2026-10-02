@@ -48,8 +48,12 @@ describe('demoAccountsWarning', () => {
 
   describe('enforceDemoAccountsPolicy', () => {
     const logger = () => {
-      const lines: { fields: object; message: string }[] = [];
-      return { lines, warn: (fields: object, message: string) => lines.push({ fields, message }) };
+      const lines: { level: 'warn' | 'error'; fields: object; message: string }[] = [];
+      return {
+        lines,
+        warn: (fields: object, message: string) => lines.push({ level: 'warn', fields, message }),
+        error: (fields: object, message: string) => lines.push({ level: 'error', fields, message }),
+      };
     };
 
     it('production with a demo account: refuses to boot, naming no e-mail', async () => {
@@ -73,11 +77,36 @@ describe('demoAccountsWarning', () => {
       expect(log.lines).toHaveLength(0);
     });
 
-    it('production, query failure: warns and boots', async () => {
+    it('production, query failure: refuses to boot (fail closed) without exposing driver details', async () => {
+      const log = logger();
+      const broken = { select: () => { throw new Error('password authentication failed for user "pg_secret_user" at 10.0.0.5'); } } as never;
+      const error = await enforceDemoAccountsPolicy(broken, 'production', false, log).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toContain('refusing to start');
+      for (const needle of ['pg_secret_user', '10.0.0.5', 'password authentication']) {
+        expect((error as Error).message).not.toContain(needle);
+        expect(JSON.stringify(log.lines)).not.toContain(needle);
+      }
+      expect(log.lines.some((line) => line.level === 'error')).toBe(true);
+    });
+
+    it('production, query failure with the explicit override: boots with a clear warning', async () => {
       const log = logger();
       const broken = { select: () => { throw new Error('boom'); } } as never;
-      await enforceDemoAccountsPolicy(broken, 'production', false, log);
-      expect(log.lines).toHaveLength(1);
+      await enforceDemoAccountsPolicy(broken, 'production', true, log);
+      expect(log.lines.filter((line) => line.level === 'warn')).toHaveLength(1);
+      expect(log.lines.find((line) => line.level === 'warn')?.message).toContain('NOT verified');
+    });
+
+    it('production, check ok and no demo account: boots silently', async () => {
+      const clean = await createMigratedDatabase(postgres);
+      try {
+        const log = logger();
+        await enforceDemoAccountsPolicy(clean.handle.db, 'production', false, log);
+        expect(log.lines).toHaveLength(0);
+      } finally {
+        await clean.handle.close();
+      }
     });
   });
 });

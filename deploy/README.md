@@ -18,7 +18,10 @@ choose a local password of 12 or more characters (not a common one). The overlay
 command on `docker-compose.dev.yml` (up, one-off mirror runs) does not need the variable.
 
 With `NODE_ENV=production` the API refuses to start while the database contains demo accounts
-(`*.demo.salesforce.local`); `SF_ALLOW_DEMO_ACCOUNTS=true` overrides this explicitly (warning logged). The dev
+(`*.demo.salesforce.local`); `SF_ALLOW_DEMO_ACCOUNTS=true` overrides this explicitly (warning logged). The check
+is fail-closed: if it cannot run (for example the query fails), the API also refuses to start, with a generic
+message (details only in the internal log); the same override covers that case, with a warning that demo
+accounts were not verified absent. The dev
 compose runs with `NODE_ENV=development`, so the check does not apply there.
 
 Open <http://localhost:8080> and sign in with a seeded demo account, for example
