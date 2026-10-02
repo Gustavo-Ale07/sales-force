@@ -138,7 +138,9 @@ jobs:
           # The key must parse without being printed (public part is derived, nothing is echoed).
           ssh-keygen -y -f "$HOME/.ssh/deploy_key" > /dev/null
 
-      # The remote command is a fixed path with one validated argument. Output of the VPS is the deploy log.
+      # The key is pinned on the VPS to a root-owned forced-command wrapper that accepts only `deploy <40-hex sha>` and
+      # `print-deployed-sha`; the deploy itself runs detached there (an SSH drop or a cancelled run does not stop it).
+      # The output of the VPS is the deploy log.
       - name: Deploy exact commit on the VPS
         env:
           VPS_HOST: ${{ secrets.PLAC_VPS_HOST }}
@@ -152,7 +154,7 @@ jobs:
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null \
             -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=20 \
             "$VPS_USER@$VPS_HOST" \
-            "/opt/force-staging/repo/deploy/scripts/deploy-staging.sh $GITHUB_SHA"
+            "deploy $GITHUB_SHA"
 
       - name: Verify the VPS reports the deployed commit
         env:
@@ -166,7 +168,7 @@ jobs:
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null \
             -o ConnectTimeout=20 \
             "$VPS_USER@$VPS_HOST" \
-            "/opt/force-staging/repo/deploy/scripts/deploy-staging.sh --print-deployed-sha")
+            "print-deployed-sha")
           echo "expected=$GITHUB_SHA"
           echo "reported=$reported"
           [ "$reported" = "$GITHUB_SHA" ] || { echo "DEPLOYED_SHA does not match the commit being deployed" >&2; exit 1; }

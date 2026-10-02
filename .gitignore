@@ -106,3 +106,7 @@ desktop.ini
 # Per-installation brand assets (deploy/README.md): mounted read-only into the web container,
 # never part of the image or the repository.
 deploy/brand/
+# SSH deploy key material must never be committed (generate it outside the repository: deploy/README-cicd.md)
+plac_deploy_key*
+id_ed25519*
+*_deploy_key*
