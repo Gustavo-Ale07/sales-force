@@ -1,0 +1,178 @@
+# STAGING-only auto-deploy (CI gate -> SSH -> deploy exact commit on the company VPS).
+# Mechanism implemented as PROPOSED in OPS-3 (Caddy / SSH deploy), pending owner confirmation.
+# Runbook: deploy/README-cicd.md. Never runs for pull requests or forks, never for main, never deploys production.
+#
+# Secrets (transport only, environment `staging`, used ONLY by the deploy job): PLAC_VPS_HOST, PLAC_VPS_PORT,
+# PLAC_VPS_USER, PLAC_VPS_SSH_KEY, PLAC_VPS_HOST_KEY. No Sankhya, database or application secret is stored in GitHub.
+name: deploy-staging
+
+on:
+  push:
+    branches: [feat/sales-force-evolution]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One staging deploy at a time (no concurrent migrations). A running deploy is never cancelled.
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    name: ci (gate)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      # Fail closed: a manual run is accepted only from the staging branch (the push trigger is already limited to it).
+      - name: Refuse any ref other than the staging branch
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/feat/sales-force-evolution" ]; then
+            echo "refusing: staging deploys run only from refs/heads/feat/sales-force-evolution" >&2
+            exit 1
+          fi
+
+      # actions/checkout v6.1.0 (commit resolved with `git ls-remote` on the public repository, 2026-10-02)
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+
+      # actions/setup-node v6.5.0 (commit resolved with `git ls-remote` on the public repository, 2026-10-02)
+      - name: Setup Node (from .nvmrc)
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version-file: .nvmrc
+
+      # pnpm comes from the `packageManager` field through Corepack (no third-party action). No dependency cache:
+      # nothing restored from a shared cache can influence the gate.
+      - name: Enable pnpm (Corepack)
+        run: |
+          corepack enable
+          pnpm --version
+
+      # Dependency lifecycle scripts stay denied by pnpm-workspace.yaml (allowBuilds).
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (workspace packages need each other's dist; also proves the Docker build inputs)
+        run: pnpm run build
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: OpenAPI is current
+        run: pnpm --filter @salesforce/contracts run openapi:check
+
+      # Critical tests that need no Docker/Testcontainers (the DB-backed suites run on developer machines).
+      - name: Test domain, contracts, sankhya, mobile-db
+        run: |
+          pnpm --filter @salesforce/domain run test
+          pnpm --filter @salesforce/contracts run test
+          pnpm --filter @salesforce/sankhya run test
+          pnpm --filter @salesforce/mobile-db run test
+
+      - name: Test server (unit suite only)
+        run: pnpm --filter @salesforce/server exec vitest run test/unit
+
+      - name: Deploy scripts - syntax and shellcheck
+        run: |
+          set -eu
+          for f in deploy/scripts/*.sh deploy/staging/*.sh; do bash -n "$f"; done
+          # New deploy scripts: warnings fail. Pre-existing ops scripts (POSIX sh): errors only.
+          shellcheck --severity=warning deploy/scripts/*.sh
+          shellcheck --severity=error deploy/staging/*.sh
+
+      - name: Compose config with the example env files (fictional values)
+        run: bash deploy/scripts/ci-compose-check.sh "$RUNNER_TEMP/compose-check"
+
+  deploy:
+    name: deploy (staging)
+    needs: ci
+    # Second guard, evaluated before any secret is available to a step.
+    if: github.ref == 'refs/heads/feat/sales-force-evolution'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    environment: staging
+    steps:
+      - name: Deploy metadata
+        run: |
+          echo "environment=staging"
+          echo "sha=$GITHUB_SHA"
+          echo "started_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+      - name: Validate inputs
+        env:
+          VPS_HOST: ${{ secrets.PLAC_VPS_HOST }}
+          VPS_PORT: ${{ secrets.PLAC_VPS_PORT }}
+          VPS_USER: ${{ secrets.PLAC_VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.PLAC_VPS_SSH_KEY }}
+          VPS_HOST_KEY: ${{ secrets.PLAC_VPS_HOST_KEY }}
+        run: |
+          set -eu
+          [ "$GITHUB_REF" = "refs/heads/feat/sales-force-evolution" ] || { echo "refusing: wrong ref" >&2; exit 1; }
+          printf '%s' "$GITHUB_SHA" | grep -Eq '^[0-9a-f]{40}$' || { echo "invalid sha" >&2; exit 1; }
+          [ -n "$VPS_HOST" ] && [ -n "$VPS_PORT" ] && [ -n "$VPS_USER" ] && [ -n "$VPS_SSH_KEY" ] && [ -n "$VPS_HOST_KEY" ] \
+            || { echo "a transport secret is missing in environment 'staging'" >&2; exit 1; }
+          printf '%s' "$VPS_PORT" | grep -Eq '^[0-9]{1,5}$' || { echo "PLAC_VPS_PORT must be numeric" >&2; exit 1; }
+          printf '%s' "$VPS_HOST" | grep -Eq '^[A-Za-z0-9._:-]{1,253}$' || { echo "PLAC_VPS_HOST has unexpected characters" >&2; exit 1; }
+          printf '%s' "$VPS_USER" | grep -Eq '^[a-z_][a-z0-9_-]{0,31}$' || { echo "PLAC_VPS_USER has unexpected characters" >&2; exit 1; }
+
+      - name: Prepare SSH (key and pinned host key only)
+        env:
+          VPS_SSH_KEY: ${{ secrets.PLAC_VPS_SSH_KEY }}
+          VPS_HOST_KEY: ${{ secrets.PLAC_VPS_HOST_KEY }}
+        run: |
+          set -eu
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          printf '%s\n' "$VPS_SSH_KEY" > "$HOME/.ssh/deploy_key"
+          chmod 600 "$HOME/.ssh/deploy_key"
+          printf '%s\n' "$VPS_HOST_KEY" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          # The key must parse without being printed (public part is derived, nothing is echoed).
+          ssh-keygen -y -f "$HOME/.ssh/deploy_key" > /dev/null
+
+      # The remote command is a fixed path with one validated argument. Output of the VPS is the deploy log.
+      - name: Deploy exact commit on the VPS
+        env:
+          VPS_HOST: ${{ secrets.PLAC_VPS_HOST }}
+          VPS_PORT: ${{ secrets.PLAC_VPS_PORT }}
+          VPS_USER: ${{ secrets.PLAC_VPS_USER }}
+        run: |
+          set -eu
+          printf '%s' "$GITHUB_SHA" | grep -Eq '^[0-9a-f]{40}$'
+          ssh -p "$VPS_PORT" -i "$HOME/.ssh/deploy_key" \
+            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null \
+            -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=20 \
+            "$VPS_USER@$VPS_HOST" \
+            "/opt/force-staging/repo/deploy/scripts/deploy-staging.sh $GITHUB_SHA"
+
+      - name: Verify the VPS reports the deployed commit
+        env:
+          VPS_HOST: ${{ secrets.PLAC_VPS_HOST }}
+          VPS_PORT: ${{ secrets.PLAC_VPS_PORT }}
+          VPS_USER: ${{ secrets.PLAC_VPS_USER }}
+        run: |
+          set -eu
+          reported=$(ssh -p "$VPS_PORT" -i "$HOME/.ssh/deploy_key" \
+            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null \
+            -o ConnectTimeout=20 \
+            "$VPS_USER@$VPS_HOST" \
+            "/opt/force-staging/repo/deploy/scripts/deploy-staging.sh --print-deployed-sha")
+          echo "expected=$GITHUB_SHA"
+          echo "reported=$reported"
+          [ "$reported" = "$GITHUB_SHA" ] || { echo "DEPLOYED_SHA does not match the commit being deployed" >&2; exit 1; }
+          echo "finished_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+      - name: Remove SSH material
+        if: always()
+        run: |
+          rm -f "$HOME/.ssh/deploy_key" "$HOME/.ssh/known_hosts"

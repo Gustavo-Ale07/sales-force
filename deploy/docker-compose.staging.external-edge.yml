@@ -1,0 +1,14 @@
+# Optional override for hosts where Caddy must NOT own ports 80/443 (SF_EDGE_MODE=external): an existing reverse
+# proxy on the host terminates TLS and forwards to loopback-only ports published here. Used with the base file:
+#   docker compose -f deploy/docker-compose.staging.yml -f deploy/docker-compose.staging.external-edge.yml ...
+# The `edge` service is not started in this mode (deploy-staging.sh names the services explicitly).
+# The external proxy must replicate deploy/staging/Caddyfile routing: /api/* -> api (one trusted hop, TRUST_PROXY=1,
+# it must set X-Forwarded-For itself and drop any client-supplied value), everything else -> web.
+# Loopback only: never published on a public interface. Ports are non-secret host settings in compose.env.
+services:
+  api:
+    ports:
+      - "127.0.0.1:${SF_API_LOCAL_PORT:-13000}:3000"
+  web:
+    ports:
+      - "127.0.0.1:${SF_WEB_LOCAL_PORT:-18080}:8080"
