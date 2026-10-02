@@ -6,12 +6,11 @@ APPROVED. Where this document chooses something PROPOSED it says so.
 
 ## Blockers before the first start (owner)
 
-1. **No production-capable authentication mode exists.** The API accepts only `AUTH_MODE=dev`, and refuses it
-   when `NODE_ENV=production` (`apps/server/src/config/api-env.ts`). Staging must run `NODE_ENV=production`
-   (demo-account boot refusal, secure cookies, mandatory `TRUST_PROXY` / `ALLOWED_ORIGINS` / dataset identity),
-   so the `api` container **cannot boot** until the standard authentication mode ships. The compose file
-   requires `API_AUTH_MODE` explicitly (no default) and `WEB_AUTH_MODE` explicitly; the only value the API
-   schema accepts today is `dev`. Do not work around it by setting `NODE_ENV=development` in staging.
+1. **Authentication mode (resolved for admin-only access).** Set `API_AUTH_MODE=local` and `WEB_AUTH_MODE=local`:
+   Force-local Argon2id login for the `admin` profile only; seller/manager accounts are refused with the uniform
+   `invalid_credentials`, there is no external login. `dev` is refused when `NODE_ENV=production`
+   (`apps/server/src/config/api-env.ts`); never set `NODE_ENV=development` or `ALLOW_DEV_AUTH` in staging.
+   Operational (seller) login stays unavailable until the external verifier exists (STACK-2, not decided).
 2. Hosting provider, managed PostgreSQL product and PG major are NEEDS VALIDATION (V-04, V-15).
 3. Image registry and deploy transport (OPS-3) are PROPOSED; this compose takes full image references.
 

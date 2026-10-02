@@ -3,7 +3,7 @@
 # installation name, the auth mode and the brand are per installation and never baked into the bundle. No
 # secret belongs here: the file is public.
 #   INSTALLATION_NAME  shown in the shell and on the login page (default: "Sales Force"; 1-60 chars)
-#   WEB_AUTH_MODE      dev | standard (REQUIRED, no default; the server refuses dev auth in production anyway)
+#   WEB_AUTH_MODE      dev | standard | local (REQUIRED, no default; the server refuses dev auth in production anyway)
 #   BRAND_LOGO_URL     optional, /brand/<file>.(png|svg|webp|jpg|jpeg): horizontal logo (already carries the name)
 #   BRAND_MARK_URL     optional, same shape: square mark (favicon; next to the name when there is no logo)
 #   BRAND_ACCENT       optional, #rrggbb: accent color (the web app falls back to the default when white text
@@ -15,7 +15,7 @@ set -eu
 name="${INSTALLATION_NAME:-Sales Force}"
 mode="${WEB_AUTH_MODE:-}"
 if [ -z "$mode" ]; then
-  echo "40-runtime-config: WEB_AUTH_MODE is required (dev | standard); there is no default." >&2
+  echo "40-runtime-config: WEB_AUTH_MODE is required (dev | standard | local); there is no default." >&2
   exit 1
 fi
 logo="${BRAND_LOGO_URL:-}"
@@ -23,8 +23,8 @@ mark="${BRAND_MARK_URL:-}"
 accent="${BRAND_ACCENT:-}"
 
 case "$mode" in
-  dev|standard) ;;
-  *) echo "40-runtime-config: WEB_AUTH_MODE must be 'dev' or 'standard'." >&2; exit 1 ;;
+  dev|standard|local) ;;
+  *) echo "40-runtime-config: WEB_AUTH_MODE must be 'dev', 'standard' or 'local'." >&2; exit 1 ;;
 esac
 
 # Strip control characters, then JSON-escape backslash and double quote.

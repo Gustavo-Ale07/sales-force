@@ -57,6 +57,11 @@ Defined in `project-spec.md` §2: Admin, Diretoria, Gerente, Vendedor interno, R
 
 ## 3. Authentication (P-11, AUTH-1)
 
+### 3.0 Authentication modes (implementation note, owner-approved for staging while the Sankhya adapter is blocked)
+
+- `AUTH_MODE=dev`: development only (needs `ALLOW_DEV_AUTH=1`; refused when `NODE_ENV=production`).
+- `AUTH_MODE=local`: valid in production. Local Argon2id login for the `admin` profile only (the role model has no separate "technical" role). Seller/manager accounts fail with the same uniform `invalid_credentials` after the same work and count toward the same lockout and throttles (audit reason `mode_role_not_permitted`); their existing sessions stop resolving. No external login route, no `ALLOW_DEV_AUTH` (setting it is a boot error), no demo bypass. Unknown modes fail boot. Operational login through an external verifier (STACK-2 option C) is not implemented and needs a new mode and an owner decision.
+
 ### 3.1 Credentials
 
 - Email + password. No 2FA (accepted risk, §12).
