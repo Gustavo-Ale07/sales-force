@@ -28,6 +28,12 @@ describe("runtime config", () => {
       brand: { logoUrl: null, markUrl: null, accent: null },
     });
   });
+  it("accepts the local auth mode and still falls back to dev for unknown values", () => {
+    expect(parseRuntimeConfig({ installationName: "Acme", authMode: "local" }).authMode).toBe("local");
+    for (const authMode of ["LOCAL", "external", "", null, 1]) {
+      expect(parseRuntimeConfig({ installationName: "Acme", authMode }).authMode).toBe("dev");
+    }
+  });
   it("reads the installation brand and drops each invalid part on its own", () => {
     const parsed = parseRuntimeConfig({
       installationName: "Acme",

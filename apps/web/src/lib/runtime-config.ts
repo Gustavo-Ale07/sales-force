@@ -6,7 +6,8 @@
  */
 import { defaultBrand, parseAccent, parseBrandAsset, type Brand } from "./brand";
 
-export type AuthMode = "dev" | "standard";
+/** `local`: Force-local login (admin profile) with no dev banners; the login page only ever offers the local form. */
+export type AuthMode = "dev" | "standard" | "local";
 
 export interface RuntimeConfig {
   /** Name shown in the shell and on the login page. Installation-specific, never hard-coded in code. */
@@ -38,7 +39,7 @@ export function parseRuntimeConfig(input: unknown): RuntimeConfig {
   const name = typeof raw.installationName === "string" ? raw.installationName.trim() : "";
   return {
     installationName: name.length > 0 && name.length <= 60 ? name : defaultRuntimeConfig.installationName,
-    authMode: raw.authMode === "standard" ? "standard" : "dev",
+    authMode: raw.authMode === "standard" || raw.authMode === "local" ? raw.authMode : "dev",
     brand: parseBrand(raw.brand),
   };
 }

@@ -109,6 +109,15 @@ describe("login page", () => {
     expect(screen.queryByText(DEV_AUTH_NOTICE)).not.toBeInTheDocument();
   });
 
+  it("in local auth mode shows no dev banner and offers only the e-mail/password form", async () => {
+    renderApp("/login", { signedIn: false, config: { authMode: "local" } });
+    expect(await screen.findByRole("heading", { name: "Bem-vindo(a)!" })).toBeInTheDocument();
+    expect(screen.queryByText(DEV_AUTH_NOTICE)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/E-mail/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Senha/)).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Entrar/ })).toHaveLength(1);
+  });
+
   it("reports wrong credentials with an alert and clears the password", async () => {
     const { user, calls } = renderApp("/login", {
       signedIn: false,
