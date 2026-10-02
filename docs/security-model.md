@@ -60,7 +60,7 @@ Defined in `project-spec.md` §2: Admin, Diretoria, Gerente, Vendedor interno, R
 ### 3.0 Authentication modes (implementation note, owner-approved for staging while the Sankhya adapter is blocked)
 
 - `AUTH_MODE=dev`: development only (needs `ALLOW_DEV_AUTH=1`; refused when `NODE_ENV=production`).
-- `AUTH_MODE=local`: valid in production. Local Argon2id login for the `admin` profile only (the role model has no separate "technical" role). Seller/manager accounts fail with the same uniform `invalid_credentials` after the same work and count toward the same lockout and throttles (audit reason `mode_role_not_permitted`); their existing sessions stop resolving. No external login route, no `ALLOW_DEV_AUTH` (setting it is a boot error), no demo bypass. Unknown modes fail boot. Operational login through an external verifier (STACK-2 option C) is not implemented and needs a new mode and an owner decision.
+- `AUTH_MODE=local`: valid in production. Local Argon2id login for the `admin` and `technical` profiles only (AUTH-5, ROLE-1; `technical` is not equivalent to `admin`). Never local login for operational sellers. Seller/manager accounts fail with the same uniform `invalid_credentials` after the same work and count toward the same lockout and throttles (audit reason `mode_role_not_permitted`); their existing sessions stop resolving. No external login route, no `ALLOW_DEV_AUTH` (setting it is a boot error), no demo bypass. Unknown modes fail boot. Operational login goes through a dedicated internal verifier (STACK-2a, option C, APPROVED 2026-10-02): Web/Mobile → API → verifier → Sankhya; internal network only, password only in memory, timeout, throttle, fail closed, minimal response, no Sankhya token to the API/client. Only structure/configuration exists now; the real adapter is `BLOCKED_EXTERNAL_SECRET`, it needs its own mode, and `AUTH_READY_FOR_STAGING_OPERATIONAL = NO` until it is wired.
 
 ### 3.1 Credentials
 
@@ -72,7 +72,8 @@ Defined in `project-spec.md` §2: Admin, Diretoria, Gerente, Vendedor interno, R
 - Progressive lockout: 5 failures → 15 minutes locked; repeated lockouts → admin unlock (RF-IAM-2).
   - **[UNDECIDED — Phase 0 security review]** number of lockouts that requires admin unlock.
   - Note (accepted by design, Phase 0 review round 2026-10): in external (directory) login, a valid directory credential whose account/seller link fails reconciliation (`external_link_mismatch`) is refused with the same uniform `invalid_credentials` and counts toward the per-login and per-IP lockout like a wrong password. The distinct reason is only in the audit row. Consequence: a misconfigured link can lock that login; an admin fixes the link and unlocks.
-  - Failure-path audit writes are best effort: if the audit store fails during a refused login, the client still gets the uniform `invalid_credentials` (counters already moved, minimum-duration padding kept) and only the error class is logged.
+  - Failure-path audit writes are best effort (AUDIT-1): if the audit store fails during a refused login, the client still gets the uniform `invalid_credentials` (counters already moved, minimum-duration padding kept) and only the error class is logged; throttle and lockout never depend on audit persistence.
+  - **Exception — successful privileged login (AUDIT-1, APPROVED 2026-10-02):** for a successful local admin/technical login the audit record is mandatory and fail closed: if it cannot be recorded, no privileged session is created. Implementation note: the code applies this stricter rule to every successful login (any mode or role), via one transaction for session and audit row; the decision text is the minimum.
 - Password reset by email: single-use link valid for 30 minutes (RF-IAM-3).
 - **[PROPOSED]** Login and reset responses do not reveal whether an email is registered.
 
@@ -195,7 +196,7 @@ Defined in `project-spec.md` §2: Admin, Diretoria, Gerente, Vendedor interno, R
 - **Secrets:**
   - provided per environment through environment configuration outside the repository;
   - never in client bundles, logs, fixtures or error reports;
-  - Sankhya credentials exist only in the worker runtime unless a later explicitly approved use case requires API-side access (STACK-2);
+  - Sankhya credentials exist only in the worker runtime and, for authentication only, the dedicated internal verifier (STACK-2, amended by STACK-2a); never in the API, web or mobile;
   - backed up in an encrypted store outside the servers ([PROPOSED], with OPS-3 in Round 7).
 - **Database network access (OPS-1, batch 3):** private networking between production compute and PostgreSQL is preferred; an IP-allow-listed TLS endpoint is only a fallback when the provider offers no appropriate private networking, with firewall limited to fixed application IPs, mandatory TLS certificate verification, strong unique rotated credentials, all other sources rejected, and security-review approval. PostgreSQL openly exposed to the internet (e.g. `0.0.0.0/0` + password) is REJECTED. Production and staging credentials are separate (OPS-1, P-15).
 - **Schema changes (DATA-2):** migrations run only through the controlled, concurrency-protected migration step; direct schema synchronization (`drizzle-kit push` or equivalent) never touches staging with valuable data, pilot or production.

@@ -50,7 +50,7 @@ This document describes the **working architecture proposal**. Most of it depend
 ```
 
 - The web app and the mobile app talk **only** to `server:api` (P-03).
-- Sankhya credentials exist only in the worker runtime (STACK-2); API-side access requires a later approved use case (synchronous allowlist, SNK-1 PROPOSED).
+- Sankhya credentials exist only in the worker runtime and, for authentication only, the dedicated internal verifier (STACK-2, amended by STACK-2a: Web/Mobile → API → verifier → Sankhya; verifier internal-only, never public); API-side access requires a later approved use case (synchronous allowlist, SNK-1 PROPOSED).
 - PostgreSQL holds application data, the Sankhya mirror, job queues (pg-boss) and the audit log.
 
 ---
@@ -62,7 +62,7 @@ Principles and their statuses are listed in `decisions.md` §2. The ones that sh
 | Principle | Structural consequence |
 |---|---|
 | P-02 ownership | Mirror tables are read-only for application code; CRM tables are owned by Sales Force modules |
-| P-03 Sankhya boundary | Only `packages/sankhya` knows Sankhya formats; Sankhya credentials exist only in the worker (STACK-2) |
+| P-03 Sankhya boundary | Only `packages/sankhya` knows Sankhya formats; Sankhya credentials exist only in the worker and, for authentication, the internal verifier (STACK-2, STACK-2a) |
 | P-04 modular monolith | One server codebase with explicit modules; no network hops between modules |
 | P-05 pure domain | `packages/domain` has no framework or I/O; used by server and mobile |
 | P-08 server authority | Clients may pre-validate; the server decides |
@@ -152,7 +152,8 @@ One modular codebase, two independent runtime entry points, run as separate proc
 | Process | Responsibilities | Secrets |
 |---|---|---|
 | API | HTTP endpoints, authentication, authorization, business orchestration, sync endpoints, inbound webhooks (later phases), OpenAPI generation (exact responsibilities per later rounds) | No Sankhya credentials (STACK-2) |
-| Worker | pg-boss job handlers and schedules: Sankhya mirror, integration outbox delivery, reconciliation, email, imports, PDF generation, notifications; AI batches (Phase 3) | Sankhya credentials (only here) |
+| Worker | pg-boss job handlers and schedules: Sankhya mirror, integration outbox delivery, reconciliation, email, imports, PDF generation, notifications; AI batches (Phase 3) | Sankhya credentials (worker; authentication credentials live only in the internal verifier, STACK-2a) |
+| Internal verifier (STACK-2a) | Verifies operational user credentials against Sankhya for the API; internal network only; password in memory only; fail closed; minimal response. Structure/configuration only now; real adapter `BLOCKED_EXTERNAL_SECRET` | Sankhya authentication credentials (only here); never delivered to API/clients |
 
 Shared across both: application modules, domain orchestration, contracts, database access, authorization policies, observability infrastructure. Each module registers only what its process needs. Background processing never blocks HTTP requests.
 

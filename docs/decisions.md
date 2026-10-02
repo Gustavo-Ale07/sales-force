@@ -47,6 +47,7 @@ Phase 0 blocking decisions are taken in rounds. A round closes only when the pro
 | 6 | STACK-5, STACK-4, MOB-1, MOB-2, STACK-1 | **Closed 2026-09-18** — STACK-1, STACK-5 APPROVED; STACK-4, MOB-1, MOB-2 APPROVED in direction; V-01 and V-03 to be resolved during WP 0.2, V-02 with the first real endpoint, V-09 (MOB-2 library) NEEDS VALIDATION |
 | 7 | SNK-1, SNK-2, OPS-3, OPS-4, OPS-5 | Not started |
 | Owner rulings | PROD-1, CFG-1…CFG-6, SNK-5, SNK-6, SEC-1, DOC-1 (§3.8) | **Closed 2026-09-18** — taken after Sandbox spikes S1–S3; physical Sankhya configuration model, origin-id field definition and configuration bootstrap remain open (U-10…U-12) |
+| Owner rulings 2026-10-02 | AUTH-5, STACK-2a, ROLE-1, AUDIT-1, ENV-1, MOB-7 (§3.11) | **Closed 2026-10-02** — staging auth, verifier topology (amends STACK-2), staging infrastructure, Android identity; real verifier adapter and backup location remain blocked/pending |
 
 > **Correction 2026-09-16.** An earlier uncommitted draft of this file marked every Round 2–7 item as APPROVED. That was wrong: only Round 1 was closed. Those items are recorded below as PROPOSED, with their content kept as the proposal to be discussed in their rounds.
 
@@ -263,7 +264,7 @@ Each entry: status · decision or proposal · rationale · consequences · valid
   ```
 
   They may share application modules, domain orchestration, contracts, database access, authorization policies and observability infrastructure.
-- **Security rule:** Sankhya credentials exist only in the worker runtime unless a later explicitly approved use case requires API-side access.
+- **Security rule:** Sankhya credentials exist only in the worker runtime unless a later explicitly approved use case requires API-side access. *(Amended 2026-10-02 by STACK-2a, §3.11: authentication-only credentials also live in a dedicated internal verifier; never in the API.)*
 - **Rationale:** one codebase; one architectural module graph; less duplicated wiring (R54); background processing cannot block HTTP requests; worker-specific secrets stay unavailable to the API process; easier maintenance for a small team.
 - Architecture documentation only — the `apps/server` structure is not created before `BEGIN IMPLEMENTATION`.
 - **Supersedes:** spec §7.2 `apps/api` + `apps/worker`.
@@ -540,6 +541,47 @@ Recorded from the project owner's instructions of 2026-09-18, after the Sandbox 
 - **Context:** mobile Slice 2 (apps/mobile) shipped a manual multi-select "apply one percent to the selected lines" as its first cut of "group discount," flagged by code review as behaviorally different from web's `GroupDiscountDialog` (`apps/web/src/components/discount-dialogs.tsx`), which automatically buckets cart lines by product catalog group (`groupCode`/`groupName`) and lets the user set a different percentage per group in one action.
 - **Decision:** mobile's "group discount" must implement the same catalog-group bucketing as web — automatic grouping by product `groupCode`/`groupName`, one percentage per group, not a manual ad-hoc line selection. The manual multi-select UI shipped in Slice 2 does not satisfy DOD-1/MOB-4 group-discount parity and is superseded by this entry; it may be kept only if repurposed as a distinct, separately-labeled capability (not presented as "group discount"), at the implementer's discretion, since nothing here forbids an additional manual-selection convenience.
 - **Refines:** MOB-4, DOD-1 (§3.10). Group-discount parity for DISC-1/MOB-4 remains PARTIAL until this is implemented and reviewed.
+
+### 3.11 APPROVED — Owner rulings on staging authentication, verifier topology, staging infrastructure and Android identity (2026-10-02)
+
+Recorded from the project owner's explicit approval of 2026-10-02. Only structure and configuration are authorized for the verifier; the real Sankhya adapter stays `BLOCKED_EXTERNAL_SECRET`. Nothing here approves production credentials, DNS changes, deploys or production data.
+
+#### AUTH-5 · `AUTH_MODE=local` for admin and technical profiles only; readiness gates
+- **Status:** APPROVED 2026-10-02 (owner ruling)
+- **Decision:** `AUTH_MODE=local` is production-valid and is used in staging while operational Sankhya authentication is blocked. It authenticates **only** the `admin` and `technical` (ROLE-1) profiles with local Argon2id. There is never local login for operational sellers (nor managers); no demo bypass, no `ALLOW_DEV_AUTH`. Operational production still depends on real external authentication (STACK-2a).
+- **Readiness gates:** `AUTH_READY_FOR_STAGING_ADMIN = YES` once local admin/technical login is validated. `AUTH_READY_FOR_STAGING_OPERATIONAL = NO` until a real `ExternalIdentityVerifier` is wired. Operational seller: no demo, no `AUTH_MODE=local`.
+- **Refines:** AUTH-1, P-11; formalizes the implementation note in `security-model.md` §3.0.
+
+#### STACK-2a · STACK-2 amendment — dedicated internal verifier (option C)
+- **Status:** APPROVED 2026-10-02 (owner ruling) · amends the security rule of STACK-2
+- **Decision:** operational login flow is Web/Mobile → Force API → **internal verifier** → Sankhya. The verifier is a dedicated internal component. The API does not hold the Sankhya integration credentials used by the verifier; the worker never receives user passwords for authentication. Verifier requirements: internal network only, never public; user password only in memory, never persisted or logged; timeout; throttle; fail closed; minimal response (identity result only); no Sankhya token delivered to the API or any client.
+- **Scope now:** structure and configuration only. The real Sankhya adapter stays `BLOCKED_EXTERNAL_SECRET`.
+- **Amends STACK-2:** "Sankhya credentials exist only in the worker runtime unless a later explicitly approved use case requires API-side access" now reads: Sankhya credentials exist only in the worker runtime and, for authentication only, the verifier runtime; never in the API, web or mobile. The two-entry-point topology of STACK-2 is otherwise unchanged; the verifier is an additional internal runtime with its own credentials. STACK-2's rationale (secrets unavailable to the API) is preserved. P-03 and SNK-1 unchanged (clients never call Sankhya; no API-side Sankhya access is created).
+
+#### ROLE-1 · `technical` profile, separate from `admin`
+- **Status:** APPROVED 2026-10-02 (owner ruling)
+- **Decision:** new profile/role `technical`, not equivalent to `admin`. It may access health, diagnostics, integration status, sync status and permitted technical configuration. It does **not** automatically get global portfolio scope, commercial changes, discount authority, impersonation or full administration. The role set becomes `admin | manager | seller | technical`. Data scope remains per resource permission under the central policy module (AUTH-4 PROPOSED); P-20/P-21 unchanged.
+
+#### AUDIT-1 · Login audit failure policy (successful privileged vs invalid login)
+- **Status:** APPROVED 2026-10-02 (owner ruling)
+- **Decision:** (a) **Successful local admin/technical login:** the audit record is mandatory; if it cannot be recorded, **no privileged session is created** (fail closed). (b) **Invalid login:** an audit failure must not change the response into something enumerable, break the throttle, break lockout, reveal account existence or remove time padding; throttle and lockout work independently of audit persistence. The two paths differ deliberately.
+- **Supersedes** the earlier "failure-path audit writes are best effort" note in `security-model.md` §3.1 only for successful privileged logins; the best-effort rule stays for refused logins.
+
+#### ENV-1 · Staging domain, access, database, backup and SSH
+- **Status:** APPROVED 2026-10-02 (owner ruling) · real backup location pending infrastructure · refines OPS-1, OPS-2, OPS-3 (PROPOSED), P-15
+- **Domains:** staging `force-staging.sistemasplac.com.br`; future production `force.sistemasplac.com.br`. No DNS changes by the implementation mission.
+- **Access:** staging is reached over real HTTPS; it must not depend on IP allow-list, VPN, LAN, Metro, ADB, `adb reverse` or cleartext traffic; protection is authentication and authorization.
+- **Database:** staging PostgreSQL is initially isolated on the VPS with separate roles `force_api`, `force_worker`, `force_migrator` (least privilege; no shared superuser credential). Same PostgreSQL major as everywhere (DATA-1). Self-hosting staging does not change OPS-1's managed-PostgreSQL direction for production.
+- **Backup (staging):** RPO 24 h accepted for staging only (OPS-2 production targets unchanged; production policy later); backup immediately before relevant migrations; daily dump with hash, retention and periodic restore-check; copy to a second failure domain outside the VPS through an S3-compatible (or equivalent) storage interface. The real location is pending infrastructure; no fictional bucket is documented. A backup counts only after a tested restore (OPS-2).
+- **SSH:** dedicated deploy/ops user, key authentication, no private key in the repository, no password flow, no root for routine deploy, least privilege.
+
+#### MOB-7 · Android staging identity and signing
+- **Status:** APPROVED 2026-10-02 (owner ruling) · production signing key is a separate, later decision
+- **Decision:** staging application id `br.com.plac.salesforce.staging`; future production `br.com.plac.salesforce` or a definitive id documented before launch. The staging profile is HTTPS only against the force-staging URL, with a standalone bundle: no Metro, dev-client, cleartext, LAN IP or debug signing key. Staging has its own signing; `debug.keystore` is never used; keystores, passwords and EAS credentials are never committed; EAS-managed credentials for staging are allowed if documented. Refines MOB-1, SEC-1, P-22.
+
+#### Status notes (no new rule)
+- **R35/R36** remain PENDING_BUSINESS_DECISION (UNDECIDED); not blocking staging infrastructure. DISC-1 unchanged.
+- **Photos:** the photos infrastructure remains valid; the real source stays `BLOCKED_EXTERNAL_SECRET`; no fixture or fake may declare `PHOTOS_READY`.
 
 ---
 
