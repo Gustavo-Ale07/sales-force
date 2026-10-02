@@ -1,0 +1,25 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": { "APP_VARIANT": "development" }
+    },
+    "staging": {
+      "distribution": "internal",
+      "autoIncrement": true,
+      "android": { "buildType": "apk", "gradleCommand": ":app:assembleRelease" },
+      "env": {
+        "APP_VARIANT": "staging",
+        "SF_BUILD_PROFILE": "staging",
+        "EXPO_PUBLIC_BUILD_PROFILE": "staging",
+        "EXPO_PUBLIC_API_URL": "https://force-staging.sistemasplac.com.br"
+      }
+    }
+  }
+}
