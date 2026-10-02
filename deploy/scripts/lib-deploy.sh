@@ -3,8 +3,9 @@
 # No secret is read or printed here: only the non-secret deploy settings (see deploy/README-cicd.md).
 # shellcheck shell=bash
 
-sf_log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
-sf_die() { printf '%s ERROR: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; exit 1; }
+# A closed output pipe (SSH drop) must never abort a running deploy: callers ignore SIGPIPE and the write error is swallowed.
+sf_log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" || true; }
+sf_die() { printf '%s ERROR: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2 || true; exit 1; }
 
 # 40 lowercase hex characters, nothing else. Called before the value is used anywhere.
 sf_validate_sha() {
@@ -83,23 +84,51 @@ sf_state_get() {
   [ -r "$SF_STATE_FILE" ] || return 0
   val="$(sed -n "s/^${key}=//p" "$SF_STATE_FILE" | tail -n 1)"
   case "$key" in
-    DEPLOYED_SHA | PREVIOUS_SHA | ROLLED_BACK_FROM)
+    DEPLOYED_SHA | PREVIOUS_SHA | ROLLED_BACK_FROM | ATTEMPTED_SHA)
       if sf_validate_sha "$val"; then printf '%s' "$val"; fi
       ;;
     *) printf '%s' "$val" ;;
   esac
 }
 
-sf_state_write() { # deployed previous rolled_back_from
+# Atomic write of the whole state. DEPLOYED_SHA is always the last FULLY successful deploy (or "none");
+# ATTEMPTED_SHA + MIGRATED=yes mark a run whose migration started: the schema may already be at that commit.
+# Arguments: deployed previous rolled_back_from attempted migrated(yes|no)
+sf_state_write() {
   local tmp="$SF_STATE_FILE.tmp.$$"
   {
     printf 'DEPLOYED_SHA=%s\n' "$1"
     printf 'DEPLOYED_AT=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     printf 'PREVIOUS_SHA=%s\n' "$2"
     printf 'ROLLED_BACK_FROM=%s\n' "${3:-none}"
+    printf 'ATTEMPTED_SHA=%s\n' "${4:-none}"
+    printf 'MIGRATED=%s\n' "${5:-no}"
   } > "$tmp"
   mv -f "$tmp" "$SF_STATE_FILE"
-  printf '%s %s previous=%s rolled_back_from=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "${3:-none}" >> "$SF_LOGS_DIR/deploy-history.log"
+  printf '%s deployed=%s previous=%s rolled_back_from=%s attempted=%s migrated=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "${3:-none}" "${4:-none}" "${5:-no}" >> "$SF_LOGS_DIR/deploy-history.log"
+}
+
+# Does a migration text create objects the application roles need grants on? Whitespace is normalised first
+# (newlines, tabs, runs of spaces), case-insensitive. Reads the SQL text on stdin.
+sf_sql_creates_objects() {
+  local text
+  text="$(tr '\n\t\r' '   ' | tr -s ' ')"
+  grep -Eqi 'create (or replace )?(unlogged |temp |temporary )?(table|sequence|view|materialized view|schema|type) ' <<< "$text "
+}
+
+# Refuses to continue when the running postgres container's definition differs from the target commit's (it would be
+# recreated by `up`, which must never happen before the backup). Starts it when absent or stopped-but-identical.
+sf_postgres_guard() {
+  local cid running_hash wanted_hash
+  cid="$(sf_compose ps -aq postgres 2> /dev/null || true)"
+  if [ -n "$cid" ]; then
+    running_hash="$(docker inspect --format '{{index .Config.Labels "com.docker.compose.config-hash"}}' "$cid" 2> /dev/null || true)"
+    wanted_hash="$(sf_compose config --hash postgres 2> /dev/null | awk '{print $2}' || true)"
+    if [ -z "$running_hash" ] || [ -z "$wanted_hash" ] || [ "$running_hash" != "$wanted_hash" ]; then
+      sf_die "the postgres container definition (image / PG_MAJOR / env files) differs from the one running (or cannot be compared). It is NOT recreated by this deploy. Take a backup, recreate it by hand if intended (deploy/README-staging.md), then re-run. Nothing was changed."
+    fi
+  fi
+  sf_compose up -d --no-deps --wait --wait-timeout 120 postgres
 }
 
 # Exclusive lock shared by deploy and rollback. Fails at once when held (never waits).
@@ -121,7 +150,7 @@ sf_wait_healthy() {
   local svc="$1" deadline cid status
   deadline=$(( $(date +%s) + SF_HEALTH_TIMEOUT ))
   while :; do
-    cid="$(sf_compose ps -q "$svc" 2> /dev/null | head -n 1)"
+    cid="$(sf_compose ps -q "$svc" 2> /dev/null || true)"
     if [ -n "$cid" ]; then
       status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$cid" 2> /dev/null || echo unknown)"
       case "$status" in

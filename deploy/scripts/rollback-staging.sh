@@ -12,8 +12,14 @@
 # automatically (P-16). The operator may override only by naming the newer SHA explicitly:
 #   ROLLBACK_ACK_MIGRATIONS=<DEPLOYED_SHA> rollback-staging.sh <previous sha>
 # That acknowledges that the OLD application version runs against the NEWER schema; it is a human judgement.
+#
+# State machine: DEPLOYED_SHA is the last fully successful deploy. When a deploy failed after its migration started
+# (ATTEMPTED_SHA + MIGRATED=yes) the schema may be at ATTEMPTED_SHA, so that commit is the "current schema" used for
+# the migration comparison, and the default target becomes the last good DEPLOYED_SHA (allowed even though it is the
+# running one: it re-starts the last good application). HUP/PIPE are ignored so an SSH drop cannot interrupt it.
 set -euo pipefail
 umask 077
+trap '' HUP PIPE
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=deploy/scripts/lib-deploy.sh
@@ -25,7 +31,7 @@ TARGET_SHA=""
 on_exit() {
   local rc=$?
   [ "$rc" -eq 0 ] && return 0
-  printf '\n' >&2
+  printf '\n' >&2 || true
   sf_log "ROLLBACK FAILED at stage: $STAGE (exit $rc). The database was not touched." >&2
   exit "$rc"
 }
@@ -46,13 +52,30 @@ main() {
 
   STAGE="configuration"
   sf_init
-  local current
-  current="$(sf_state_get DEPLOYED_SHA)"
-  TARGET_SHA="${arg:-${DEPLOY_SHA:-$(sf_state_get PREVIOUS_SHA)}}"
+  local deployed attempted migrated marker="no" current default_target
+  deployed="$(sf_state_get DEPLOYED_SHA)"
+  attempted="$(sf_state_get ATTEMPTED_SHA)"
+  migrated="$(sf_state_get MIGRATED)"
+  [ -n "$deployed" ] || sf_die "no DEPLOYED_SHA recorded in $SF_STATE_FILE; nothing to roll back from"
+  # "current" = the commit whose schema may be applied.
+  current="$deployed"
+  if [ "$migrated" = "yes" ] && [ -n "$attempted" ]; then
+    marker="yes"
+    current="$attempted"
+    default_target="$deployed"
+  else
+    default_target="$(sf_state_get PREVIOUS_SHA)"
+  fi
+  TARGET_SHA="${arg:-${DEPLOY_SHA:-$default_target}}"
   [ -n "$TARGET_SHA" ] || sf_die "no rollback target: pass a SHA (no valid PREVIOUS_SHA in the state file)"
   sf_validate_sha "$TARGET_SHA" || sf_die "rollback target must be exactly 40 lowercase hex characters"
-  [ -n "$current" ] || sf_die "no DEPLOYED_SHA recorded in $SF_STATE_FILE; nothing to roll back from"
-  [ "$current" != "$TARGET_SHA" ] || sf_die "target equals the deployed commit; nothing to do"
+  if [ "$TARGET_SHA" = "$current" ]; then
+    sf_die "target equals the commit whose schema is applied; nothing to do"
+  fi
+  if [ "$TARGET_SHA" = "$deployed" ] && [ "$marker" = "no" ]; then
+    sf_die "target equals the deployed commit; nothing to do"
+  fi
+  sf_log "deployed(last good)=$deployed schema_commit=$current failed_deploy_marker=$marker target=$TARGET_SHA"
   SF_TARGET_SHORT="${TARGET_SHA:0:12}"
 
   if [ "$dry" = "1" ]; then
@@ -62,6 +85,7 @@ main() {
       sf_log "lock acquired (released at exit): $SF_LOCK_FILE"
     fi
     sf_log "environment=staging rollback from=$current to=$TARGET_SHA image_tag=$SF_TARGET_SHORT project=$SF_COMPOSE_PROJECT"
+    sf_log "schema_commit=$current marker=$marker"
     sf_log "edge_mode=$SF_EDGE_MODE db_mode=$SF_DB_MODE migrations_ack=$([ "${ROLLBACK_ACK_MIGRATIONS:-}" = "$current" ] && echo yes || echo no)"
     sf_log "plan: migration-set comparison; checkout --detach; compose config -q; build only missing images;"
     sf_log "      up -d --no-deps $(sf_app_services); wait healthy; /api/v1/ready; write state. Database untouched."
@@ -76,7 +100,7 @@ main() {
 
   STAGE="verify commits"
   git -C "$SF_REPO_DIR" cat-file -e "$TARGET_SHA^{commit}" || sf_die "target commit $TARGET_SHA is not in the local repository (git fetch first)"
-  git -C "$SF_REPO_DIR" cat-file -e "$current^{commit}" || sf_die "deployed commit $current is not in the local repository"
+  git -C "$SF_REPO_DIR" cat-file -e "$current^{commit}" || sf_die "commit $current (schema state) is not in the local repository"
   if ! git -C "$SF_REPO_DIR" diff --quiet || ! git -C "$SF_REPO_DIR" diff --cached --quiet; then
     sf_die "the working tree at $SF_REPO_DIR has local changes; refusing"
   fi
@@ -116,6 +140,7 @@ main() {
   local svc
   for svc in $(sf_app_services); do sf_wait_healthy "$svc"; done
   if [ "$SF_EDGE_MODE" = "caddy" ]; then
+    STAGE="edge"
     sf_compose up -d --no-deps edge
     sf_wait_healthy edge
   fi
@@ -123,7 +148,12 @@ main() {
   sf_wait_ready
 
   STAGE="record state"
-  sf_state_write "$TARGET_SHA" "none" "$current"
+  if [ -n "$changed" ]; then
+    # Acknowledged: the old application runs on the newer schema; keep the marker so a later rollback still compares against it.
+    sf_state_write "$TARGET_SHA" "none" "$current" "$current" "yes"
+  else
+    sf_state_write "$TARGET_SHA" "none" "$current" "none" "no"
+  fi
   sf_log "ROLLBACK OK environment=staging DEPLOYED_SHA=$TARGET_SHA rolled_back_from=$current (database untouched)"
 }
 
