@@ -5,7 +5,13 @@ node_modules/
 # Environment variables
 .env
 .env.*
+*.env
+*.env.local
 !.env.example
+!*.env.example
+
+# Real installation configuration (never versioned; examples only)
+deploy/**/installation.json
 
 # Build
 dist/
