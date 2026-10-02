@@ -1,6 +1,6 @@
 import type { Account } from "../auth/auth-port";
 
-const ROLE_LABEL: Record<Account["role"], string> = { admin: "Administrador", manager: "Gerente", seller: "Vendedor" };
+const ROLE_LABEL: Record<Account["role"], string> = { admin: "Administrador", manager: "Gerente", seller: "Vendedor", technical: "Técnico" };
 
 export function roleLabel(account: Account): string {
   return ROLE_LABEL[account.role];
