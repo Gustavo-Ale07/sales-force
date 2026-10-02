@@ -97,15 +97,37 @@ new key outside the repo, re-run `bootstrap-vps.sh apply` with the new public ke
 | Build | `pnpm run build` | workspace packages need each other's `dist`; also proves what the Docker build compiles |
 | Typecheck, lint | `pnpm run typecheck`, `pnpm run lint` | all workspaces (`-r --if-present`) |
 | Contracts | `pnpm --filter @salesforce/contracts run openapi:check` | generated OpenAPI is current (STACK-5) |
-| Critical tests | `domain` (includes the boundary check), `contracts`, `sankhya`, `mobile-db`, and `server` **unit** suite (`vitest run test/unit`, 221 tests, ~25 s locally) | pure rules, contracts, gateway and the server unit logic; none needs Docker |
+| Critical tests | `domain` (includes the boundary check), `contracts`, `sankhya`, `mobile-db`, and `server` **unit** suite (`vitest run test/unit`, 221 tests) | pure rules, contracts, gateway and the server unit logic; none needs Docker |
 | Shell | `bash -n` on all deploy scripts; `shellcheck` warning level on `deploy/scripts`, error level on the older `deploy/staging/*.sh` | the deploy path is shell |
 | Compose | `deploy/scripts/ci-compose-check.sh`: `docker compose config -q` for the base file, all profiles, and the external-edge override, with the `*.env.example` files copied to a scratch dir (fictional values) | interpolation and file presence |
+| DB tests | `pnpm --filter @salesforce/db run test` (Testcontainers: migrations, constraints, roles; 4 files, 60 tests) | the pipeline runs migrations, so the migrations are proven against real PostgreSQL first (owner requirement) |
+| Server integration | `pnpm --filter @salesforce/server exec vitest run test/integration` (Testcontainers; 24 files, 536 tests: auth, authorization matrix, commercial, worker, mirror, ...) | the API and worker against real PostgreSQL (DATA-1 major 17), fake Sankhya gateway only |
 
-Not in the gate (cost): the server integration suites and `packages/db` tests need Docker/Testcontainers (24 files, minutes
-each run); the web per-file run, mobile `jest` and the Expo bundle check. They remain developer-machine checks.
+Order is cheap checks first, Docker suites last. The two Docker suites reuse the runner's Docker daemon, need no secret and
+no third-party action. Each test file starts its own `postgres:17` container; files run sequentially
+(`fileParallelism: false` in both vitest configs, `testTimeout` 60 s, `hookTimeout` 180 s), so no vitest config was changed
+for CI. The suites pull `postgres:17` (major pinned, minor floating) and the Testcontainers `ryuk` reaper image from Docker
+Hub at run time: a Docker Hub outage or rate limit fails the gate (closed, never silently skipped). Timeouts: job 45 min,
+db step 10 min, integration step 25 min.
 
-**Recommended next gate (open owner decisions, nothing below is implemented):**
-- the DB-backed suites (server integration, `packages/db`, sync/authorization matrices) with Testcontainers in CI;
+**Time (measurements on the developer machine, Windows + Docker Desktop, images already cached; estimate for GitHub's 2 vCPU
+runner)**
+
+| Step | Measured locally | Estimate on a 2 vCPU runner |
+|---|---|---|
+| Install (frozen lockfile, no cache) | not measured | 1 to 2 min |
+| Build / typecheck / lint | 32 s / 31 s / 35 s | 1 to 2 min each |
+| openapi check, non-Docker unit suites, server unit | 5 s, 16 s, 26 s | up to 2 min together |
+| `packages/db` tests | 66 s (4 files, 60 tests, all passed) | 1.5 to 3 min |
+| Server integration | 546 s (24 files, 536 tests, all passed) | 12 to 20 min |
+| Total gate | about 12 min measured plus install | roughly 20 to 32 min (estimate, not measured) |
+
+The estimates are guesses until the workflow runs on GitHub. The workflow has **never run on GitHub**: neither the gate
+nor the deploy has been exercised there, so the first run may reveal runner-only problems (image pull time, memory).
+
+Not in the gate: the web per-file run, mobile `jest` and the Expo bundle check (developer-machine checks).
+
+**Open items (nothing below is implemented):**
 - dependency scanning (for example `pnpm audit` and/or a lockfile scanner) as a blocking or advisory step;
 - pinning pnpm: Corepack resolves `packageManager` (`pnpm@11.23.0`) but the integrity hash (sha512 suffix) is not set, so the
   pnpm binary itself is not hash-pinned. Adding it is an open item and `package.json` was deliberately not changed.
