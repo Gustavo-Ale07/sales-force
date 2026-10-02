@@ -79,6 +79,22 @@ fi
 
 PGPASSWORD="$target_pass"
 export PGPASSWORD
+# The scratch database is reused by every run. pg_restore --clean cannot drop the inherited constraints of
+# partitioned tables (pgboss.queue_stats_*) left by the previous restore, so the second run would always fail.
+# Start from an empty scratch database instead: drop every non-system schema (the guards above already proved
+# this is not the live database), then make sure `public` exists again.
+PGOPTIONS='-c client_min_messages=warning' psql "$target_url" -X -q -v ON_ERROR_STOP=1 <<'SQL'
+DO $do$
+DECLARE s text;
+BEGIN
+  FOR s IN SELECT nspname FROM pg_namespace
+           WHERE nspname NOT LIKE 'pg\_%' AND nspname <> 'information_schema' LOOP
+    EXECUTE format('DROP SCHEMA %I CASCADE', s);
+  END LOOP;
+  CREATE SCHEMA IF NOT EXISTS public;
+END
+$do$;
+SQL
 start="$(date +%s)"
 pg_restore --clean --if-exists --exit-on-error --no-owner --no-privileges --dbname="$target_url" "$dump"
 end="$(date +%s)"
