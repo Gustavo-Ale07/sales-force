@@ -2401,7 +2401,8 @@
       "AuthMode": {
         "type": "string",
         "enum": [
-          "dev"
+          "dev",
+          "local"
         ]
       },
       "AuthenticatedSession": {

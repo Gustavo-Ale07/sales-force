@@ -1,3 +1,5 @@
+import type { AuthMode } from '@salesforce/contracts';
+import type { AccountRole } from '@salesforce/domain';
 import type { ParsedApiEnv } from '../config/api-env.js';
 import { passwordHashParamsOf, type PasswordHashParams } from '../config/auth-env.js';
 import type { ThrottleRule } from './throttle-policy.js';
@@ -10,8 +12,14 @@ const HOUR_MS = 60 * MINUTE_MS;
  * Modules never read `process.env` (see `InfrastructureModule`).
  */
 export interface AuthConfig {
-  /** `dev` is the only mode that exists (contracts `AuthMode`). Never production. */
-  readonly authMode: 'dev';
+  /** `dev` never runs in production; `local` is the production-capable admin-only local login (contracts `AuthMode`). */
+  readonly authMode: AuthMode;
+  /**
+   * Roles allowed to hold a session in this mode. `undefined` = every role (dev). `local` allows only
+   * `admin`: other roles fail login with the uniform `invalid_credentials` and any older session of
+   * theirs stops resolving. Widening it needs an owner decision (external verifier, STACK-2).
+   */
+  readonly allowedRoles?: readonly AccountRole[];
   /** `Secure` cookie attribute: required everywhere except local development. */
   readonly secureCookies: boolean;
   /** Origins allowed to send state-changing requests (CSRF Origin check). */
@@ -56,6 +64,12 @@ export interface LoginLimits {
   readonly blockedAuditWindowMs: number;
 }
 
+/**
+ * Profiles that may log in with `AUTH_MODE=local`. The role model has no separate "technical" role:
+ * `admin` is the administrative/technical profile (it alone holds integration/configuration routes).
+ */
+export const LOCAL_MODE_ROLES: readonly AccountRole[] = Object.freeze<AccountRole[]>(['admin']);
+
 /** RF-IAM-2: 5 failures lock for 15 minutes; repeated lockouts double the duration (cap 24 h). */
 export const DEFAULT_ACCOUNT_THROTTLE: ThrottleRule = {
   maxFailures: 5,
@@ -74,7 +88,8 @@ export const DEFAULT_IP_THROTTLE: ThrottleRule = {
 
 export function authConfigFromEnv(env: ParsedApiEnv): AuthConfig {
   return {
-    authMode: 'dev',
+    authMode: env.AUTH_MODE,
+    ...(env.AUTH_MODE === 'local' ? { allowedRoles: LOCAL_MODE_ROLES } : {}),
     secureCookies: env.NODE_ENV !== 'development',
     allowedOrigins: env.allowedOrigins,
     sessionIdleMs: env.SESSION_IDLE_TIMEOUT_MINUTES * MINUTE_MS,

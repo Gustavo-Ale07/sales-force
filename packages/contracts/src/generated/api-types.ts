@@ -494,7 +494,7 @@ export interface components {
             details?: components["schemas"]["ErrorDetails"];
         };
         /** @enum {string} */
-        AuthMode: "dev";
+        AuthMode: "dev" | "local";
         AuthenticatedSession: {
             /** @constant */
             authenticated: true;

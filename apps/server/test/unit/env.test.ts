@@ -1,6 +1,7 @@
 import { Secret } from '@salesforce/sankhya';
 import { describe, expect, it } from 'vitest';
 import { parseApiEnv } from '../../src/config/api-env.js';
+import { authConfigFromEnv } from '../../src/iam/auth-config.js';
 import { EnvValidationError, isLoopbackDatabaseUrl, withoutEmptyValues } from '../../src/config/env.js';
 import { parseSeedEnv } from '../../src/config/seed-env.js';
 import { loadWorkerConfig } from '../../src/config/worker-env.js';
@@ -275,8 +276,28 @@ describe('production/staging boot refusals, fail closed (revalidation)', () => {
     }
   });
 
+  it('API: AUTH_MODE=local boots in production without any dev opt-in, and refuses leftover ALLOW_DEV_AUTH', () => {
+    const env = parseApiEnv({ ...PROD, ...DATASET, AUTH_MODE: 'local' });
+    expect(env.AUTH_MODE).toBe('local');
+    for (const value of ['1', '0', 'true']) {
+      const problems = problemsOf(() => parseApiEnv({ ...PROD, ...DATASET, AUTH_MODE: 'local', ALLOW_DEV_AUTH: value }));
+      expect(problems).toEqual([expect.stringMatching(/^ALLOW_DEV_AUTH: must not be set when AUTH_MODE=local/)]);
+    }
+    expect(parseApiEnv({ DATABASE_URL, NODE_ENV: 'development', AUTH_MODE: 'local' }).AUTH_MODE).toBe('local');
+  });
+
+  it('API: the auth config of local mode admits only the admin profile; dev admits every role', () => {
+    const local = authConfigFromEnv(parseApiEnv({ ...PROD, ...DATASET, AUTH_MODE: 'local' }));
+    expect(local.authMode).toBe('local');
+    expect(local.allowedRoles).toEqual(['admin']);
+    expect(local.externalLogin).toBeUndefined();
+    const dev = authConfigFromEnv(parseApiEnv({ DATABASE_URL, NODE_ENV: 'development', ALLOW_DEV_AUTH: '1' }));
+    expect(dev.authMode).toBe('dev');
+    expect(dev.allowedRoles).toBeUndefined();
+  });
+
   it('API: an unknown auth mode (e.g. a bypass) is refused, never defaulted open', () => {
-    for (const mode of ['none', 'off', 'DEV', 'disabled']) {
+    for (const mode of ['none', 'off', 'DEV', 'LOCAL', 'standard', 'external', 'disabled']) {
       expect(problemsOf(() => parseApiEnv({ ...PROD, ...DATASET, AUTH_MODE: mode })).some((problem) => problem.startsWith('AUTH_MODE:'))).toBe(true);
     }
   });

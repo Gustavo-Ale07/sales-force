@@ -36,9 +36,10 @@ export const ApiEnvSchema = z.object({
   /** Failed password checks per minute the whole installation tolerates, every client together (login DoS budget). */
   LOGIN_GLOBAL_MAX_PER_MINUTE: integerField({ min: 10, max: 100_000 }, 300),
 
-  // Authentication. Only `dev` exists today and it needs an explicit opt-in (ALLOW_DEV_AUTH=1) on
-  // top of a non-production NODE_ENV (both checked below).
-  AUTH_MODE: z.enum(['dev'], { error: "must be 'dev' (the only mode that exists today)." }).default('dev'),
+  // Authentication. `dev` needs an explicit opt-in (ALLOW_DEV_AUTH=1) on top of a non-production
+  // NODE_ENV (both checked below). `local` is the production-capable mode: Force-local Argon2id login
+  // for the admin profile only; no external verifier, no dev shortcut. Unknown values are refused.
+  AUTH_MODE: z.enum(['dev', 'local'], { error: "must be 'dev' or 'local'." }).default('dev'),
   ALLOW_DEV_AUTH: z.string().optional(),
   /** Idle expiry of a session; every request within the window slides it (security model §3.2: 12 h). */
   SESSION_IDLE_TIMEOUT_MINUTES: integerField({ min: 5, max: 10_080 }, 720),
@@ -120,6 +121,10 @@ export function parseApiEnv(source: EnvSource): ParsedApiEnv {
       if (parsed.ALLOW_DEV_AUTH !== '1') {
         problems.push('ALLOW_DEV_AUTH: the dev authentication mode needs the explicit opt-in ALLOW_DEV_AUTH=1.');
       }
+    }
+    if (parsed.AUTH_MODE === 'local' && parsed.ALLOW_DEV_AUTH !== undefined) {
+      // No dev-only switch may travel with the production-capable mode (a leftover must not look harmless).
+      problems.push('ALLOW_DEV_AUTH: must not be set when AUTH_MODE=local (it only applies to the dev mode).');
     }
     if (parsed.NODE_ENV === 'production' && (source['TRUST_PROXY'] ?? '').trim() === '') {
       problems.push(

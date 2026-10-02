@@ -60,6 +60,7 @@ export type LoginFailureReason =
   | 'bad_password'
   | 'account_disabled'
   | 'channel_not_permitted'
+  | 'mode_role_not_permitted'
   | 'external_invalid_credentials'
   | 'external_unmapped'
   | 'external_inactive'
@@ -179,6 +180,7 @@ export class AuthService implements OnModuleInit {
     else if (!passwordOk) failure = 'bad_password';
     else if (found.status !== 'active') failure = 'account_disabled';
     else if (!isChannelAllowed(found.role, 'web')) failure = 'channel_not_permitted';
+    else if (!this.roleMayHoldSession(found.role)) failure = 'mode_role_not_permitted';
 
     if (failure !== null || found === null) {
       await this.recordFailure({ reason: failure ?? 'unknown_account', accountId: found?.id ?? null, email, emailKey, ipKey, now, auditMeta });
@@ -394,6 +396,7 @@ export class AuthService implements OnModuleInit {
 
     const now = this.clock();
     if (row.revokedAt !== null || row.expiresAt.getTime() <= now.getTime() || row.status !== 'active') return null;
+    if (!this.roleMayHoldSession(row.role)) return null;
 
     let expiresAt = row.expiresAt;
     let renewed = false;
@@ -430,7 +433,7 @@ export class AuthService implements OnModuleInit {
     const row = await this.sessions.findByTokenHash(tokenHash);
     if (row === null || !constantTimeEqualHex(row.tokenHash, tokenHash)) return null;
     const live = row.revokedAt === null && row.expiresAt.getTime() > this.clock().getTime() && row.status === 'active';
-    return live ? { role: row.role } : null;
+    return live && this.roleMayHoldSession(row.role) ? { role: row.role } : null;
   }
 
   async logout(user: CurrentUser, meta: RequestMeta): Promise<void> {
@@ -441,6 +444,12 @@ export class AuthService implements OnModuleInit {
       actorAccountId: user.accountId,
       detail: { sessionId: user.sessionId, ip: meta.ip, requestId: meta.requestId },
     });
+  }
+
+  /** Mode restriction on top of the channel rule: `local` admits only its allowed roles (undefined = every role). */
+  private roleMayHoldSession(role: string): boolean {
+    const allowed = this.config.allowedRoles;
+    return allowed === undefined || (allowed as readonly string[]).includes(role);
   }
 
   /** The contract body of an authenticated session. Explicit fields only: the domain type is never serialized. */
