@@ -29,6 +29,7 @@ STAGE="start"
 CHECKED_OUT="no"
 MIGRATION_STARTED="no"
 LAST_GOOD=""
+SCHEMA_COMMIT=""
 PREVIOUS_SHA="none"
 DEPLOY_SHA=""
 
@@ -150,23 +151,43 @@ main() {
 
   # A deploy only moves forward from the last good one (a late or replayed run must not install older code over a
   # newer schema). Going back is rollback-staging.sh. Manual override only by naming the target SHA.
+  # With a failed-deploy marker (MIGRATED=yes) the schema may be at ATTEMPTED_SHA: the target must then descend from (or
+  # equal) BOTH the last good deploy and the attempted commit, and the marker is never overwritten by an older or
+  # unrelated commit.
   STAGE="forward check"
-  if [ -n "$LAST_GOOD" ] && [ "$LAST_GOOD" != "$DEPLOY_SHA" ]; then
-    if ! git -C "$SF_REPO_DIR" cat-file -e "$LAST_GOOD^{commit}" 2> /dev/null \
-      || ! git -C "$SF_REPO_DIR" merge-base --is-ancestor "$LAST_GOOD" "$DEPLOY_SHA"; then
+  local attempted migrated marker_sha="" keep_marker="no" base
+  attempted="$(sf_state_get ATTEMPTED_SHA)"
+  migrated="$(sf_state_get MIGRATED)"
+  SCHEMA_COMMIT="$LAST_GOOD"
+  if [ "$migrated" = "yes" ] && [ -n "$attempted" ]; then
+    SCHEMA_COMMIT="$attempted"
+    marker_sha="$attempted"
+    sf_log "failed-deploy marker present: schema may be at $attempted (last good: ${LAST_GOOD:-none})"
+  fi
+  for base in "$LAST_GOOD" "$marker_sha"; do
+    [ -n "$base" ] || continue
+    if ! sf_is_ancestor_or_equal "$base" "$DEPLOY_SHA"; then
       if [ "${DEPLOY_ACK_NONFORWARD:-}" = "$DEPLOY_SHA" ]; then
-        sf_log "WARNING: $DEPLOY_SHA does not descend from the last good $LAST_GOOD; DEPLOY_ACK_NONFORWARD names it (manual-only override)."
+        sf_log "WARNING: $DEPLOY_SHA does not descend from $base; DEPLOY_ACK_NONFORWARD names it (manual-only override)."
+        [ "$base" != "$marker_sha" ] || keep_marker="yes"
       else
-        sf_die "commit $DEPLOY_SHA does not descend from the last good deploy $LAST_GOOD (older or diverged commit). Use deploy/scripts/rollback-staging.sh to go back, or, manually and knowingly, DEPLOY_ACK_NONFORWARD=$DEPLOY_SHA. Nothing was changed."
+        sf_die "commit $DEPLOY_SHA does not descend from $base (last good deploy or failed-deploy marker; older or diverged commit). Use deploy/scripts/rollback-staging.sh to go back, or, manually and knowingly, DEPLOY_ACK_NONFORWARD=$DEPLOY_SHA. Nothing was changed."
       fi
     fi
-  fi
+  done
 
+  sf_log "schema_commit=${SCHEMA_COMMIT:-none} keep_marker=$keep_marker"
   STAGE="migration pre-check"
   local needs_roles="no" status path text
   if [ "$first" = "no" ] && [ "$PREVIOUS_SHA" != "none" ]; then
     local changes
+    # Diff from the last good deploy AND, when a failed-deploy marker exists, from the schema commit too: a failed
+    # attempt may have created objects whose grants never ran, so the union is the safe set to inspect.
     changes="$(git -C "$SF_REPO_DIR" diff --name-status --no-renames "$PREVIOUS_SHA" "$DEPLOY_SHA" -- 'packages/db/migrations/*.sql' || true)"
+    if [ -n "$marker_sha" ] && [ "$marker_sha" != "$PREVIOUS_SHA" ] && git -C "$SF_REPO_DIR" cat-file -e "$marker_sha^{commit}" 2> /dev/null; then
+      changes="$changes"$'\n'"$(git -C "$SF_REPO_DIR" diff --name-status --no-renames "$marker_sha" "$DEPLOY_SHA" -- 'packages/db/migrations/*.sql' || true)"
+      changes="$(sort -u <<< "$changes")"
+    fi
     while IFS=$'\t' read -r status path; do
       [ -n "$status" ] || continue
       case "$status" in
@@ -227,7 +248,12 @@ main() {
 
   STAGE="state marker"
   MIGRATION_STARTED="yes"
-  sf_state_write "${LAST_GOOD:-none}" "$PREVIOUS_SHA" "none" "$DEPLOY_SHA" "yes"
+  # Never replace an existing marker with an older/unrelated commit (override case): keep it.
+  if [ "$keep_marker" = "yes" ]; then
+    sf_state_write "${LAST_GOOD:-none}" "$PREVIOUS_SHA" "none" "$marker_sha" "yes"
+  else
+    sf_state_write "${LAST_GOOD:-none}" "$PREVIOUS_SHA" "none" "$DEPLOY_SHA" "yes"
+  fi
   STAGE="migrate"
   sf_compose run --rm -T migrate
 
@@ -251,7 +277,11 @@ main() {
   sf_wait_ready
 
   STAGE="record state"
-  sf_state_write "$DEPLOY_SHA" "$PREVIOUS_SHA" "none" "none" "no"
+  if [ "$keep_marker" = "yes" ]; then
+    sf_state_write "$DEPLOY_SHA" "$PREVIOUS_SHA" "none" "$marker_sha" "yes"
+  else
+    sf_state_write "$DEPLOY_SHA" "$PREVIOUS_SHA" "none" "none" "no"
+  fi
   sf_log "DEPLOY OK environment=staging DEPLOYED_SHA=$DEPLOY_SHA PREVIOUS_SHA=$PREVIOUS_SHA"
 }
 

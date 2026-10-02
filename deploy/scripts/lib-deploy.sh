@@ -108,6 +108,13 @@ sf_state_write() {
   printf '%s deployed=%s previous=%s rolled_back_from=%s attempted=%s migrated=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "${3:-none}" "${4:-none}" "${5:-no}" >> "$SF_LOGS_DIR/deploy-history.log"
 }
 
+# True when $1 equals $2 or is an ancestor of it (a commit missing locally counts as "no").
+sf_is_ancestor_or_equal() {
+  [ "$1" != "$2" ] || return 0
+  git -C "$SF_REPO_DIR" cat-file -e "$1^{commit}" 2> /dev/null || return 1
+  git -C "$SF_REPO_DIR" merge-base --is-ancestor "$1" "$2"
+}
+
 # Does a migration text create objects the application roles need grants on? Whitespace is normalised first
 # (newlines, tabs, runs of spaces), case-insensitive. Reads the SQL text on stdin.
 sf_sql_creates_objects() {
@@ -143,6 +150,19 @@ sf_require_tools() {
   command -v git > /dev/null 2>&1 || sf_die "git not found"
   command -v docker > /dev/null 2>&1 || sf_die "docker not found"
   docker compose version > /dev/null 2>&1 || sf_die "docker compose plugin not found"
+  # `!reset` (external-edge override) and `config --hash` (postgres guard) need Docker Compose >= 2.24.
+  local cv cmaj cmin
+  cv="$(docker compose version --short 2> /dev/null || true)"
+  cv="${cv#v}"
+  cmaj="${cv%%.*}"
+  cmin="${cv#*.}"
+  cmin="${cmin%%.*}"
+  case "$cmaj$cmin" in
+    '' | *[!0-9]*) sf_die "cannot read the Docker Compose version (got '$cv'); Docker Compose >= 2.24 is required" ;;
+  esac
+  if [ "$cmaj" -lt 2 ] || { [ "$cmaj" -eq 2 ] && [ "$cmin" -lt 24 ]; }; then
+    sf_die "Docker Compose $cv is too old: >= 2.24 is required (\`!reset\` override and \`config --hash\`). Upgrade the compose plugin from your distribution's official instructions."
+  fi
 }
 
 # Waits until one service container reports healthy. Fails on unhealthy/exited or timeout.

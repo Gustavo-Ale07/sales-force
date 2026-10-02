@@ -31,6 +31,8 @@ set -euo pipefail
 umask 022
 
 say() { printf '%s\n' "$*"; }
+# Root writes inside directories the deploy user controls must never follow a symlink: check right before each use.
+nolink() { [ ! -L "$1" ] || die "$1 is a symlink; refusing (a root write could be redirected)"; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------------------------------- detect
@@ -118,17 +120,29 @@ do_apply() {
     grep -Eq '^[A-Za-z0-9.:,/*?!-]+$' <<< "$allow_from" || die "invalid --allow-from pattern"
   fi
   local wrapper_src wrapper_dst="/usr/local/sbin/force-staging-deploy"
-  wrapper_src="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/force-staging-ssh-entry.sh"
-  [ -r "$wrapper_src" ] || die "forced-command wrapper source not found: $wrapper_src"
+  local script_dir real_root
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  wrapper_src="$script_dir/force-staging-ssh-entry.sh"
+  [ -r "$wrapper_src" ] && [ ! -L "$wrapper_src" ] || die "forced-command wrapper source not found or a symlink: $wrapper_src"
+  # The wrapper is installed as root: its source must come from a TRUSTED checkout, never the deploy-writable clone.
+  real_root="$(readlink -m "$root")"
+  case "$script_dir/" in
+    "$real_root"/* | "$root"/*) die "this script (and the wrapper source it installs) lives under $root, the deploy-user-writable tree. Run apply from a separate trusted checkout (for example one owned by root or by the operator) and review the source before running it." ;;
+  esac
 
   # Existing user: must not be a general/privileged account unless explicitly allowed (read-only checks, before any change).
   local groups
   if id "$user" > /dev/null 2>&1; then
     [ "$(id -u "$user")" -ne 0 ] || die "user $user has uid 0"
     groups="$(id -nG "$user")"
-    if [ "$(id -u "$user")" -lt 1000 ] || grep -Eqw 'sudo|wheel|admin' <<< "$groups"; then
-      [ "$allow_priv" = "yes" ] || die "user $user already exists and is privileged (uid < 1000 or in sudo/wheel/admin). Use a dedicated new user, or pass --allow-existing-privileged-user knowingly. Nothing was changed."
+    local sudoers_hit=""
+    sudoers_hit="$(grep -rlsw -- "$user" /etc/sudoers /etc/sudoers.d 2> /dev/null || true)"
+    if [ "$(id -u "$user")" -lt 1000 ] || grep -Eqw 'sudo|wheel|admin|lxd|disk' <<< "$groups" || [ -n "$sudoers_hit" ]; then
+      [ "$allow_priv" = "yes" ] || die "user $user already exists and is privileged (uid < 1000, in sudo/wheel/admin/lxd/disk, or named in sudoers). Use a dedicated new user, or pass --allow-existing-privileged-user knowingly. Nothing was changed."
       say "WARNING: proceeding with a privileged existing user (explicit flag)"
+    fi
+    if [ "$docker_group" != "yes" ] && grep -Eqw docker <<< "$groups"; then
+      say "WARNING: existing user $user is already in the docker group (root-equivalent) without the acknowledging flag"
     fi
   fi
   # Existing root directory that this script did not create.
@@ -161,6 +175,7 @@ do_apply() {
 
   say "plan (user=$user root=$root docker_group=$docker_group edge_mode=${SF_EDGE_MODE})"
   say "  create system-style login user '$user' (no password, no sudo) if absent"
+  say "  (running from the trusted checkout $script_dir, outside $root)"
   say "  create $root/{repo,config,data,backups,logs} (config 0700, all owned by $user)"
   say "  install the root-owned wrapper $wrapper_dst (root:root 0755) from $wrapper_src, pinned to --root $root"
   say "  install the deploy public key into ~$user/.ssh/authorized_keys as: ${allow_from:+from=\"$allow_from\",}command=\"$wrapper_dst\",restrict <key>"
@@ -193,12 +208,27 @@ do_apply() {
   fi
 
   # -- directories
+  # Each path is checked for a symlink immediately before it is used. Residual: a race between check and use by a
+  # hostile deploy user is not excluded by shell tooling, so the deploy user is not trusted with a pre-existing tree
+  # (--adopt-existing-root is a knowing choice).
+  local d tmpm
+  nolink "$root"
   install -d -m 0750 -o "$user" -g "$user" "$root"
-  : > "$root/.sf-bootstrap"
-  chown "$user:$user" "$root/.sf-bootstrap"
-  for d in repo data backups logs; do install -d -m 0750 -o "$user" -g "$user" "$root/$d"; done
+  nolink "$root"
+  tmpm="$(mktemp "$root/.sf-bootstrap.XXXXXX")" # O_EXCL: never opens an existing file or symlink
+  chown -h "$user:$user" "$tmpm"
+  mv -f "$tmpm" "$root/.sf-bootstrap" # rename replaces a symlink, never follows it
+  for d in repo data backups logs; do
+    nolink "$root/$d"
+    install -d -m 0750 -o "$user" -g "$user" "$root/$d"
+    nolink "$root/$d"
+  done
+  nolink "$root/config"
   install -d -m 0700 -o "$user" -g "$user" "$root/config"
+  nolink "$root/config"
+  nolink "$root/config/secrets"
   install -d -m 0700 -o "$user" -g "$user" "$root/config/secrets"
+  nolink "$root/config/secrets"
   say "directories ready under $root (config and config/secrets are 0700)"
 
   # -- authorized_keys
@@ -213,10 +243,12 @@ do_apply() {
   mv -f "$tmpw" "$wrapper_dst"
   say "wrapper installed: $wrapper_dst (root:root 0755)"
 
-  [ ! -L "$home/.ssh" ] || die "$home/.ssh is a symlink; refusing"
+  nolink "$home"
+  nolink "$home/.ssh"
   install -d -m 0700 -o "$user" -g "$user" "$home/.ssh"
+  nolink "$home/.ssh"
   local ak="$home/.ssh/authorized_keys" opts
-  [ ! -L "$ak" ] || die "$ak is a symlink; refusing"
+  nolink "$ak"
   opts="command=\"$wrapper_dst\",restrict"
   [ -z "$allow_from" ] || opts="from=\"$allow_from\",$opts"
   # Rewrite via a temp file: keep every other line, drop any line that already carries this key (with or without
@@ -228,9 +260,10 @@ do_apply() {
     if [ -s "$tmpa" ] && [ -n "$(tail -c1 "$tmpa")" ]; then printf '\n' >> "$tmpa"; fi
   fi
   printf '%s %s\n' "$opts" "$key_line" >> "$tmpa"
-  chown "$user:$user" "$tmpa"
+  chown -h "$user:$user" "$tmpa"
   chmod 0600 "$tmpa"
-  mv -f "$tmpa" "$ak"
+  nolink "$home/.ssh"
+  mv -f "$tmpa" "$ak" # rename: replaces a symlink at the destination, never follows it
   say "deploy key installed with options: $opts"
 
   say ""

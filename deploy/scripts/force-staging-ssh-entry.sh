@@ -11,6 +11,9 @@
 # The installed copy has SF_ROOT_FIXED rewritten by apply (the --root value); the default below is the standard layout.
 set -euo pipefail
 umask 077
+# Fixed PATH: the client cannot influence which date/tail/sed/setsid/find/mktemp run.
+PATH="/usr/local/bin:/usr/bin:/bin"
+export PATH
 
 readonly SF_ROOT_FIXED="/opt/force-staging"
 readonly REPO_SCRIPT="$SF_ROOT_FIXED/repo/deploy/scripts/deploy-staging.sh"
@@ -32,8 +35,10 @@ case "$cmd" in
     sha="${cmd#deploy }"
     is_sha "$sha" || deny
     [ -d "$LOGS_DIR" ] || deny
-    log="$LOGS_DIR/deploy-$(date -u +%Y%m%dT%H%M%SZ)-${sha:0:12}.log"
-    : > "$log"
+    # Retention: deploy logs older than 30 days are removed (regular files of this name pattern only, no recursion).
+    find "$LOGS_DIR" -maxdepth 1 -type f -name 'deploy-*.log' -mtime +30 -delete 2> /dev/null || true
+    # mktemp: exclusive creation, never reuses or follows an existing name.
+    log="$(mktemp --suffix=.log "$LOGS_DIR/deploy-$(date -u +%Y%m%dT%H%M%SZ)-${sha:0:12}.XXXXXX")" || deny
     # Positional parameters only: the SHA is never part of a shell text.
     setsid "${clean_env[@]}" bash -c '"$@"; rc=$?; echo "SF_EXIT=$rc"; exit "$rc"' _ "$REPO_SCRIPT" "$sha" \
       >> "$log" 2>&1 < /dev/null &
