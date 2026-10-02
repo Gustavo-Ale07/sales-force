@@ -274,6 +274,10 @@ use `docker system prune -a` on this host.
 
 Never combine with `docker-compose.seed.yml` or `docker-compose.dev.yml`.
 
+**Automated path (PROPOSED, never run):** `deploy/README-cicd.md` describes a GitHub Actions deploy of staging over SSH
+that runs these same steps through `deploy/scripts/deploy-staging.sh` (SHA-tagged images, `backup` then `migrate`,
+health and `/api/v1/ready` checks) and an application-only `deploy/scripts/rollback-staging.sh`. The manual commands above remain valid.
+
 ## SSH and deploy user (OPS-3 PROPOSED; nothing is changed on the VPS by this repository)
 
 Strategy the owner applies by hand when the VPS exists:
