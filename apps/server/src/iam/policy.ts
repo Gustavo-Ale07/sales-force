@@ -44,8 +44,9 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   // Any authenticated account may end its own session.
   logout: { roles: ACCOUNT_ROLES },
   // "Usuários, integrações, configurações: Admin" (project-spec 8.2) plus the `technical` profile (ROLE-1: integration
-  // and sync status, technical configuration; this is the only route that exposes them). ASSUMPTION:
-  // the contract lists 403 for this route but names no role; admin-only is the least privilege.
+  // and sync status, technical configuration; this is the only route that exposes them). The detail of `/ready`
+  // follows this same grant (health.controller.ts), so it is visible to admin and technical only; manager, seller
+  // and anonymous callers get the coarse verdict. The least-privilege set (INTEGRATION_ROLES) is the rule.
   getConfiguration: { roles: INTEGRATION_ROLES },
   // Minimal order-entry slice (never syncStates/gateway/integration/customers/pricing/financial):
   // open to every role that can create an order (seller/manager/admin), unlike getConfiguration above.

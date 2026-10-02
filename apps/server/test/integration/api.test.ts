@@ -11,6 +11,7 @@ import { createDb, MIGRATION_TABLE } from '@salesforce/db';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createApiApp } from '../../src/api/create-app.js';
 import { ApiRoute, Contract } from '../../src/http/route.js';
+import { authorizeRoute } from '../../src/iam/policy.js';
 import { createLogger } from '../../src/observability/logger.js';
 import { recordWorkerHeartbeat } from '../../src/platform/worker-heartbeat.js';
 import { createTestAccount, TEST_PASSWORD, TestClock, testAuthConfig } from '../helpers/auth.js';
@@ -134,7 +135,7 @@ describe('GET /api/v1/ready', () => {
   });
 
   it.each(['seller', 'manager'] as const)(
-    'gives a signed-in %s only the coarse verdict: integration detail is admin-only (getConfiguration)',
+    'gives a signed-in %s only the coarse verdict: integration detail is for admin and technical only (getConfiguration)',
     async (role) => {
       const { app, database } = await freshApi();
       await recordWorkerHeartbeat(database.handle.db, { gatewayMode: 'live', startedAt: new Date().toISOString() }, new Date());
@@ -152,6 +153,26 @@ describe('GET /api/v1/ready', () => {
       expect(body.checks.migrations).toMatchObject({ applied: null, expected: null });
     },
   );
+
+  it('shows the /ready detail to exactly the roles the central policy grants getConfiguration (matrix pin)', async () => {
+    const { app, database } = await freshApi();
+    await recordWorkerHeartbeat(database.handle.db, { gatewayMode: 'live', startedAt: new Date().toISOString() }, new Date());
+    const sees = async (cookie?: string): Promise<boolean> => {
+      const body = ReadyResponseSchema.parse((await readyWith(app, cookie)).json());
+      return body.integration.gatewayMode === 'live';
+    };
+    const observed: Record<string, boolean> = { anonymous: await sees() };
+    for (const role of ['admin', 'technical', 'manager', 'seller'] as const) {
+      await createTestAccount(database.handle, { email: `matrix-${role}@example.test`, role });
+      observed[role] = await sees(await loginCookie({ app }, `matrix-${role}@example.test`, TEST_PASSWORD));
+    }
+    // Pinned literally: widening or narrowing the grant must be a deliberate change of this test too.
+    expect(observed).toEqual({ anonymous: false, admin: true, technical: true, manager: false, seller: false });
+    // And tied to the policy table itself: the detail never drifts from the getConfiguration grant.
+    for (const role of ['admin', 'technical', 'manager', 'seller'] as const) {
+      expect(observed[role], role).toBe(authorizeRoute({ role, channel: 'web' }, 'getConfiguration').allowed);
+    }
+  });
 
   it('gives an admin whose session was revoked, or whose account was disabled, only the coarse verdict', async () => {
     const { app, database } = await freshApi();
