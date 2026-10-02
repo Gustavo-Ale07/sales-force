@@ -20,10 +20,12 @@
     "sync:once": "tsx --env-file-if-exists=../../.env src/sync-once.ts",
     "start:sync-once": "node dist/sync-once.js",
     "seed": "tsx --env-file-if-exists=../../.env src/seed.ts",
+    "config:bootstrap": "tsx --env-file-if-exists=../../.env src/config-bootstrap.ts",
     "account": "tsx --env-file-if-exists=../../.env src/account-cli.ts",
     "create-user": "tsx --env-file-if-exists=../../.env src/account-cli.ts create",
     "bootstrap-admin": "tsx --env-file-if-exists=../../.env src/account-cli.ts create --role admin",
-    "start:account": "node dist/account-cli.js"
+    "start:account": "node dist/account-cli.js",
+    "start:config-bootstrap": "node dist/config-bootstrap.js"
   },
   "dependencies": {
     "@nestjs/common": "12.0.3",

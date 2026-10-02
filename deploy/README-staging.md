@@ -167,6 +167,39 @@ runs as `force_api`, which holds INSERT/UPDATE on the account tables. Keep `SF_A
 secrets file. Without an admin nobody can sign in under `AUTH_MODE=local`. (The exact invocation has not been run
 against a started staging stack: verify it on first boot.)
 
+## Installation configuration (first start, U-11 bootstrap file)
+
+A fresh database has **no configuration snapshot**: `GET /api/v1/configuration` serves the conservative disabled
+default (`contentHash: null`, `source.version: "unconfigured"`), every commercial route answers `409
+installation_not_enabled`, and the worker's mirror jobs fail (`No current installation configuration`, recorded as
+`unclassified` in `sync_state` and in the dead-letter queue). The development seed (`pnpm db:seed`) is the only other
+writer of the snapshot and refuses `NODE_ENV=production` and any non-loopback database, so staging uses a one-shot
+command, **`config-bootstrap`** (`apps/server/src/config-bootstrap.ts`), which reuses the seed's loader
+(`BootstrapFileConfigurationSource`) and the `InstallationConfigurationSchema` contract:
+
+```sh
+$SFC --profile self-hosted-db run --rm --no-deps \
+  -v /etc/salesforce/staging/installation.json:/config/installation.json:ro \
+  -e INSTALLATION_CONFIG_FILE=/config/installation.json \
+  migrate node dist/config-bootstrap.js
+```
+
+- **Runs as `force_migrator`** (the `migrate` service and its `migrate.env`): `force_api` and `force_worker` hold no
+  write grant on `installation_configuration_version`, on purpose. The command refuses `NODE_ENV` other than
+  `production`, validates the file with the contract schema and the domain consistency rules, and refuses a file that
+  carries a demo account address (`DEMO_ACCOUNTS`) or `features.demoMetrics`. The source is always `bootstrap-file`.
+- **Idempotent:** the same content is a no-op (`installation configuration unchanged (sha256:...)`; the hash ignores
+  `syncedAt`). Changed content becomes the new current version and the previous versions are kept. Re-run it whenever
+  the file changes; the API and worker read the snapshot on every use, so no restart is needed.
+- **The file is the owner's:** its content (company, TOP, negotiation types, seller links, price-table policy, sellable
+  usage values) is customer configuration governed from Sankhya (CFG-1..6) and is **not in this repository**. It holds
+  configuration only, never a secret. Keep it outside the repository next to the env files. U-11 (the long-term source
+  before the Sankhya-side model exists) stays UNDECIDED: this command is the mechanism, not that decision.
+- **Deterministic order for a fresh installation:** `postgres` -> `db-roles` -> `migrate` -> `db-roles` ->
+  **`config-bootstrap`** -> first admin (below) -> `up -d` -> `/api/v1/ready`. Starting `worker` before the
+  configuration only produces the failed mirror jobs described above (they repeat on the next schedule once the
+  configuration exists).
+
 ## Sankhya (SNK-3)
 
 `SANKHYA_MODE` is required (no implicit default); `compose.env.example` sets `fake` with the explicit
@@ -375,14 +408,25 @@ with a valid, stale and missing marker; a failing `age` detected); Caddy with `c
 with a read-only root filesystem and a tmpfs `/tmp` (config.json served). Root without `CAP_DAC_OVERRIDE` was shown
 unable to read a 0600 dump owned by another uid, which is why the ops containers do not run as root.
 
-**Not exercised:** a started staging stack of any kind; the server images built through this compose file; the
-`migrate-safe` dependency chain at run time; the `offsite` job on `amazon/aws-cli` or against a real provider (it
-was run on Alpine's `aws-cli` only; the AWS-checksum variables set in the script are for S3-compatible providers
-that reject the new default checksums); the authoritative identity check against a real second name for the same
-database (stubbed); TLS issuance; the verifier container and its network isolation (the HTTP service itself is
-unit-tested); the `cap_drop`/read-only settings of `api`, `worker`, `verifier` and `migrate` (server image) at
-runtime; `Dockerfile.web` itself rebuilt end to end (the symlink change was proven on a derived image); the real
-`aws` CLI under uid 1001 with `HOME=/tmp` (only a stub was used); `db-roles.sql` with `force_backup` on a managed provider.
+Pre-deploy certification (2026-10-02, compose project `sfcert`, fictional secrets outside the repository, no real
+domain, DNS, ACME or Sankhya): the server and web images built through this compose file; `postgres` -> `db-roles` ->
+`migrate` -> `db-roles` -> `config-bootstrap` -> first admin and technical account (stdin path) -> `api`, `worker`,
+`web`, `verifier` all healthy with `NODE_ENV=production`, `read_only`, `cap_drop ALL`, `no-new-privileges`; logins,
+`/ready` detail, 403s for the technical account on commercial routes; the verifier reachable only from `api`
+(`internal` network, no egress); the worker as `force_worker` (pg-boss under aggressive maintenance timers for 4 minutes
+without a DDL permission error, scheduled mirror jobs completing after the configuration load); `WEB_AUTH_MODE`
+refused when unset or invalid; `backup` as `force_backup`; `restore-check` (run repeatedly against the same scratch
+database); `migrate-safe` ordering (a failing backup stops the migration, exit 1, no partial dump); `offsite` against
+a local `rclone serve s3` stub with age (decrypts to the same sha256), the restore-marker gate refused and then
+accepted, a tampered dump refused by `offsite` and `restore-check`, the 16 MB tmpfs and read-only mounts.
+The edge was proven with the real Caddyfile in a separate container on `localhost` (no ACME).
+
+**Not exercised:** the compose `edge` service with a real domain (ACME/TLS issuance); the `offsite` job on
+`amazon/aws-cli` or against a real provider (Alpine's `aws-cli` and an rclone stub only; the AWS-checksum variables
+set in the script are for S3-compatible providers that reject the new default checksums); the authoritative identity
+check against a real second name for the same database (stubbed); the real `aws` CLI under uid 1001 with
+`HOME=/tmp`; `db-roles.sql` with `force_backup` on a managed provider; backup bind-mount ownership on a real Linux VPS
+(the rehearsal used a Windows bind mount); any live Sankhya login or sync.
 
 ## Open questions for the owner
 
