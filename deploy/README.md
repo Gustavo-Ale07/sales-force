@@ -17,6 +17,10 @@ docker compose -f deploy/docker-compose.dev.yml -f deploy/docker-compose.seed.ym
 choose a local password of 12 or more characters (not a common one). The overlay is separate so every other
 command on `docker-compose.dev.yml` (up, one-off mirror runs) does not need the variable.
 
+With `NODE_ENV=production` the API refuses to start while the database contains demo accounts
+(`*.demo.salesforce.local`); `SF_ALLOW_DEMO_ACCOUNTS=true` overrides this explicitly (warning logged). The dev
+compose runs with `NODE_ENV=development`, so the check does not apply there.
+
 Open <http://localhost:8080> and sign in with a seeded demo account, for example
 `admin@demo.salesforce.local` (also `gerente@`, `vendedor1@`, `vendedor2@`, same domain) and the
 password you put in `deploy/.env`.
