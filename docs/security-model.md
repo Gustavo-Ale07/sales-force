@@ -66,6 +66,8 @@ Defined in `project-spec.md` §2: Admin, Diretoria, Gerente, Vendedor interno, R
   - **[UNDECIDED — Phase 0 security review]** behavior when the breach API is unavailable.
 - Progressive lockout: 5 failures → 15 minutes locked; repeated lockouts → admin unlock (RF-IAM-2).
   - **[UNDECIDED — Phase 0 security review]** number of lockouts that requires admin unlock.
+  - Note (accepted by design, Phase 0 review round 2026-10): in external (directory) login, a valid directory credential whose account/seller link fails reconciliation (`external_link_mismatch`) is refused with the same uniform `invalid_credentials` and counts toward the per-login and per-IP lockout like a wrong password. The distinct reason is only in the audit row. Consequence: a misconfigured link can lock that login; an admin fixes the link and unlocks.
+  - Failure-path audit writes are best effort: if the audit store fails during a refused login, the client still gets the uniform `invalid_credentials` (counters already moved, minimum-duration padding kept) and only the error class is logged.
 - Password reset by email: single-use link valid for 30 minutes (RF-IAM-3).
 - **[PROPOSED]** Login and reset responses do not reveal whether an email is registered.
 
