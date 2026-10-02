@@ -32,7 +32,8 @@ export async function enforceDemoAccountsPolicy(
     count = await countDemoAccounts(db);
   } catch (error) {
     // Details stay in the internal log; the thrown error deliberately carries no cause.
-    logger.error({ ...errorLogFields(error) }, 'demo accounts check failed in production');
+    const code = allowListedErrorCode(error);
+    logger.error({ ...errorLogFields(error), ...(code === null ? {} : { errorCode: code }) }, 'demo accounts check failed in production');
   }
   if (count === null) {
     if (!allowDemoAccounts) {
@@ -50,6 +51,22 @@ export async function enforceDemoAccountsPolicy(
     );
   }
   logger.warn({ demoAccounts: count }, 'production database contains demo accounts (*.demo.salesforce.local), allowed explicitly by SF_ALLOW_DEMO_ACCOUNTS');
+}
+
+const SAFE_ERROR_CODE = /^[A-Z0-9_]{2,30}$/;
+
+/**
+ * Node error code (ECONNREFUSED) or Postgres SQLSTATE (28P01) of the failure, only if it has that shape.
+ * Looks one level into `cause` (the ORM wraps the driver error). Never the message, the cause itself or any host.
+ */
+function allowListedErrorCode(error: unknown): string | null {
+  const candidates: unknown[] = [error, error instanceof Error ? error.cause : undefined];
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'object' || candidate === null) continue;
+    const code = (candidate as { code?: unknown }).code;
+    if (typeof code === 'string' && SAFE_ERROR_CODE.test(code)) return code;
+  }
+  return null;
 }
 
 async function countDemoAccounts(db: Database): Promise<number> {

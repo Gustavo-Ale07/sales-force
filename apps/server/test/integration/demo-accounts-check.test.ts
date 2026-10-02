@@ -90,6 +90,29 @@ describe('demoAccountsWarning', () => {
       expect(log.lines.some((line) => line.level === 'error')).toBe(true);
     });
 
+    it.each([
+      ['a Node error code', Object.assign(new Error('connect ECONNREFUSED 10.0.0.5:5432'), { code: 'ECONNREFUSED' }), 'ECONNREFUSED'],
+      ['a SQLSTATE on the wrapped cause', new Error('Failed query: select ... host=db.internal', { cause: Object.assign(new Error('password authentication failed for user "pg_secret_user"'), { code: '28P01' }) }), '28P01'],
+    ])('production, query failure: logs only the allow-listed code (%s), never driver text', async (_label, thrown, expected) => {
+      const log = logger();
+      const broken = { select: () => { throw thrown; } } as never;
+      await enforceDemoAccountsPolicy(broken, 'production', false, log).catch(() => undefined);
+      const errorLine = log.lines.find((line) => line.level === 'error');
+      expect(errorLine?.fields).toMatchObject({ errorCode: expected });
+      for (const needle of ['pg_secret_user', '10.0.0.5', 'db.internal', 'password authentication', 'Failed query']) {
+        expect(JSON.stringify(log.lines)).not.toContain(needle);
+      }
+    });
+
+    it('production, query failure: a code that does not match the allow-list shape is dropped', async () => {
+      const log = logger();
+      const broken = { select: () => { throw Object.assign(new Error('x'), { code: 'host db.internal: refused' }); } } as never;
+      await enforceDemoAccountsPolicy(broken, 'production', false, log).catch(() => undefined);
+      const errorLine = log.lines.find((line) => line.level === 'error');
+      expect(errorLine?.fields).not.toHaveProperty('errorCode');
+      expect(JSON.stringify(log.lines)).not.toContain('db.internal');
+    });
+
     it('production, query failure with the explicit override: boots with a clear warning', async () => {
       const log = logger();
       const broken = { select: () => { throw new Error('boom'); } } as never;
