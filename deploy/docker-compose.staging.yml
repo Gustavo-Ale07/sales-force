@@ -1,0 +1,255 @@
+# STAGING stack (configuration only; nothing here deploys anything). Runbook: deploy/README-staging.md.
+#
+#   docker compose --env-file <SF_STAGING_COMPOSE_ENV> -f deploy/docker-compose.staging.yml config -q
+#   docker compose --env-file <SF_STAGING_COMPOSE_ENV> -f deploy/docker-compose.staging.yml up -d
+#
+# Rules this file encodes (OPS-1/2/3, DATA-1/2, STACK-2/6, SNK-3, P-15):
+# - No secret and no customer value is written here. Non-secret, per-installation values are interpolated
+#   from the compose env file; secrets live in per-role env files OUTSIDE the repository, under
+#   ${SF_SECRETS_DIR} (examples with placeholders: deploy/staging/*.env.example).
+# - Images are pinned by explicit reference (tag or digest): there is no `build:` and no `latest` default.
+# - Start-up order: [postgres, only with the self-hosted-db profile] -> migrate (one-shot) -> api + worker ->
+#   web -> edge. Processes never migrate on start (DATA-2).
+# - NODE_ENV=production on every server container: the API refuses dev authentication and demo accounts
+#   and requires TRUST_PROXY / ALLOWED_ORIGINS / dataset identity; the worker refuses the fake gateway
+#   unless ALLOW_FAKE_GATEWAY=1 is explicit.
+# - Sankhya settings exist ONLY in the worker env file (STACK-2). Staging never reaches Sankhya production
+#   (SNK-3): the gateway itself refuses SANKHYA_ENVIRONMENT=production.
+# - No seed, no demo accounts: docker-compose.seed.yml is never combined with this file.
+name: salesforce-staging
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+    compress: "true"
+
+x-hardening: &hardening
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
+x-server: &server
+  image: ${SERVER_IMAGE:?SERVER_IMAGE must be an explicit pinned image reference (tag or digest)}
+  logging: *logging
+  <<: *hardening
+  read_only: true
+  tmpfs:
+    - /tmp
+
+services:
+  # Staging-only fallback (OPS-1): used ONLY with `--profile self-hosted-db`. The preferred staging database
+  # is a managed PostgreSQL >= 16 (same major as production, DATA-1) reached through DATABASE_URL. This
+  # container has no WAL archiving and no PITR: its recovery point is the last logical dump (staging may
+  # accept a looser RPO, OPS-2). Never a production pattern. No published port: reachable only on `backend`.
+  postgres:
+    profiles: ["self-hosted-db"]
+    image: postgres:${PG_MAJOR:?PG_MAJOR must match production (DATA-1, V-15)}
+    restart: unless-stopped
+    logging: *logging
+    env_file:
+      - ${SF_SECRETS_DIR:?SF_SECRETS_DIR must point outside the repository}/postgres.env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  # One-shot: reviewed SQL migrations (advisory-lock protected, DATA-2), then the pg-boss schema and queues.
+  # Idempotent. api and worker wait for it to complete successfully; a failure stops the rollout.
+  # The self-hosted postgres dependency is optional so a managed database needs no container.
+  migrate:
+    <<: *server
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+    env_file:
+      - ${SF_SECRETS_DIR}/database.env
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    networks: [backend]
+    command:
+      - sh
+      - -c
+      - node node_modules/@salesforce/db/dist/migrate/cli.js && node dist/queue-install.js
+
+  api:
+    <<: *server
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - ${SF_SECRETS_DIR}/database.env
+      - ${SF_SECRETS_DIR}/api.env
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      API_HOST: 0.0.0.0
+      API_PORT: "3000"
+      # Explicit, no default. Only `dev` exists in the server today and the API refuses it in production:
+      # until a production authentication mode ships, this service cannot boot (see README-staging.md §Blockers).
+      AUTH_MODE: ${API_AUTH_MODE:?API_AUTH_MODE must be set explicitly}
+      # The browser origin is the public staging host (TLS terminated by the edge).
+      ALLOWED_ORIGINS: https://${STAGING_DOMAIN:?STAGING_DOMAIN is required}
+      # Exactly one trusted hop: the edge (Caddy) proxies /api/* straight to the API and sets the client address.
+      TRUST_PROXY: "1"
+      # Dataset identity of THIS staging installation (non-secret; never the production identity).
+      SF_ERP_ENVIRONMENT: ${SF_ERP_ENVIRONMENT:?SF_ERP_ENVIRONMENT is required in production mode}
+      SF_DATASET_ID: ${SF_DATASET_ID:?SF_DATASET_ID is required in production mode}
+      # No SF_ALLOW_DEMO_ACCOUNTS and no ALLOW_DEV_AUTH: staging has no demo data and no dev authentication.
+      # No SANKHYA_*: the API never reads Sankhya settings (STACK-2/3).
+    command: ["node", "dist/main-api.js"]
+    networks: [backend, edge]
+    healthcheck:
+      # Liveness. Readiness (database, migrations, integration) is GET /api/v1/ready (503 when not_ready),
+      # polled by the external monitor and by the rollout checks in the runbook, not by the container.
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/v1/health').then((r)=>process.exit(r.ok?0:1),()=>process.exit(1))"
+      interval: 10s
+      timeout: 4s
+      start_period: 20s
+      retries: 6
+
+  worker:
+    <<: *server
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - ${SF_SECRETS_DIR}/database.env
+      - ${SF_SECRETS_DIR}/worker.env
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      WORKER_HEALTH_HOST: 127.0.0.1
+      WORKER_HEALTH_PORT: "3001"
+      # SNK-3: `fake` by default; `live` only against a non-production Sankhya, with credentials in worker.env
+      # (SANKHYA_ENVIRONMENT sandbox|homologation; production is refused by the gateway). Production mode
+      # requires the explicit fake opt-in below, which is only meaningful while SANKHYA_MODE=fake.
+      SANKHYA_MODE: ${SANKHYA_MODE:-fake}
+      ALLOW_FAKE_GATEWAY: ${ALLOW_FAKE_GATEWAY:-1}
+      # Mandatory and explicit in live mode (scheduled mirror never starts against a real Sankhya by default).
+      SYNC_MIRROR_ENABLED: ${SYNC_MIRROR_ENABLED:-}
+    command: ["node", "dist/main-worker.js"]
+    networks: [backend]
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3001/health').then((r)=>process.exit(r.ok?0:1),()=>process.exit(1))"
+      interval: 15s
+      timeout: 4s
+      start_period: 20s
+      retries: 6
+
+  # Static SPA behind the edge. Not published; its own /api proxy is bypassed (the edge routes /api/* directly
+  # to the API so the API sees the real client address through a single trusted hop).
+  web:
+    image: ${WEB_IMAGE:?WEB_IMAGE must be an explicit pinned image reference (tag or digest)}
+    restart: unless-stopped
+    logging: *logging
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      INSTALLATION_NAME: ${INSTALLATION_NAME:-Sales Force}
+      # Explicit, no default (the web container refuses to start without it). `standard` is the production
+      # mode; the API side is gated by API_AUTH_MODE above.
+      WEB_AUTH_MODE: ${WEB_AUTH_MODE:?WEB_AUTH_MODE must be set explicitly (dev|standard)}
+    networks: [edge]
+
+  # TLS edge (OPS-3 PROPOSED: Caddy). Automatic ACME certificates; storage in the caddy_data volume.
+  edge:
+    image: ${CADDY_IMAGE:?CADDY_IMAGE must be an explicit pinned image reference (tag or digest)}
+    restart: unless-stopped
+    logging: *logging
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      web:
+        condition: service_started
+      api:
+        condition: service_healthy
+    env_file:
+      - ${SF_SECRETS_DIR}/edge.env
+    environment:
+      STAGING_DOMAIN: ${STAGING_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./staging/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 15s
+      timeout: 3s
+      start_period: 10s
+      retries: 5
+
+  # ---- Operations (profile `ops`; run explicitly with `run --rm`, never started by `up`) ----
+
+  # Logical dump of the staging database (custom format) into ${SF_BACKUP_DIR}. Uses the postgres client of the
+  # SAME major as the server (PG_MAJOR). Complements, never replaces, provider PITR (OPS-2).
+  backup:
+    profiles: ["ops"]
+    image: postgres:${PG_MAJOR:?PG_MAJOR must match production (DATA-1, V-15)}
+    restart: "no"
+    logging: *logging
+    security_opt:
+      - no-new-privileges:true
+    env_file:
+      - ${SF_SECRETS_DIR}/database.env
+    volumes:
+      - ./staging/ops-backup.sh:/ops/ops-backup.sh:ro
+      - ${SF_BACKUP_DIR:?SF_BACKUP_DIR must be a host directory outside the repository}:/backups
+    networks: [backend]
+    entrypoint: ["sh", "/ops/ops-backup.sh"]
+
+  # Restore test: restores the newest dump into a SCRATCH database (RESTORE_TEST_DATABASE_URL, from
+  # restore-test.env) and runs sanity checks. Refuses to run when the target equals DATABASE_URL.
+  restore-check:
+    profiles: ["ops"]
+    image: postgres:${PG_MAJOR:?PG_MAJOR must match production (DATA-1, V-15)}
+    restart: "no"
+    logging: *logging
+    security_opt:
+      - no-new-privileges:true
+    env_file:
+      - ${SF_SECRETS_DIR}/database.env
+      - ${SF_SECRETS_DIR}/restore-test.env
+    volumes:
+      - ./staging/ops-restore-check.sh:/ops/ops-restore-check.sh:ro
+      - ${SF_BACKUP_DIR}:/backups:ro
+    networks: [backend]
+    entrypoint: ["sh", "/ops/ops-restore-check.sh"]
+
+networks:
+  # Private: the database (container or managed) and the processes that talk to it.
+  backend: {}
+  # Edge <-> web/api only.
+  edge: {}
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

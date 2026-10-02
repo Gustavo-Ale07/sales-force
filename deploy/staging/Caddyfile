@@ -1,0 +1,54 @@
+# Staging edge (OPS-3 PROPOSED). TLS terminates here; the API and the web container only speak plain HTTP on
+# the private `edge` network. STAGING_DOMAIN comes from the container environment (compose env file);
+# ACME contact email from edge.env (outside the repository).
+{
+	email {$ACME_EMAIL}
+	# Staging uses the real Let's Encrypt CA; for repeated rehearsals add the staging CA to avoid rate limits:
+	#   acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+	admin 127.0.0.1:2019
+}
+
+{$STAGING_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=86400"
+		X-Robots-Tag "noindex, nofollow"
+		-Server
+	}
+
+	request_body {
+		max_size 1MB
+	}
+
+	# /api/* goes straight to the API: one trusted hop (TRUST_PROXY=1). Caddy replaces any client-sent
+	# X-Forwarded-For (no trusted_proxies configured) with the real remote address.
+	@api path /api/*
+	handle @api {
+		reverse_proxy api:3000 {
+			header_up X-Forwarded-For {remote_host}
+			health_uri /api/v1/health
+			health_interval 15s
+		}
+	}
+
+	# Everything else: the SPA container (it sets its own CSP and security headers).
+	handle {
+		reverse_proxy web:8080
+	}
+
+	log {
+		output stdout
+		# Never log credentials: Caddy's default access log includes request headers (Cookie, Authorization).
+		format filter {
+			request>headers>Cookie delete
+			request>headers>Authorization delete
+			request>headers>X-Token delete
+			response>headers>Set-Cookie delete
+			request>uri query {
+				delete token
+			}
+			wrap json
+		}
+	}
+}
