@@ -37,6 +37,7 @@ const verifierEnvSchema = z.object({
   VERIFIER_BODY_LIMIT_BYTES: integerField({ min: 256, max: 16_384 }, 2048),
   VERIFIER_TIMEOUT_MS: integerField({ min: 100, max: 30_000 }, 5000),
   VERIFIER_THROTTLE_MAX: integerField({ min: 1, max: 10_000 }, 30),
+  VERIFIER_PREAUTH_THROTTLE_MAX: integerField({ min: 1, max: 100_000 }, 300),
   VERIFIER_THROTTLE_WINDOW_MS: integerField({ min: 1000, max: 3_600_000 }, 60_000),
   VERIFIER_MAX_CONCURRENCY: integerField({ min: 1, max: 64 }, 4),
 });
@@ -51,12 +52,26 @@ export interface VerifierConfig {
   readonly bodyLimitBytes: number;
   readonly timeoutMs: number;
   readonly throttleMax: number;
+  /** Budget per window for requests that fail authentication (separate from, and larger than, `throttleMax`). */
+  readonly preAuthThrottleMax: number;
   readonly throttleWindowMs: number;
   readonly maxConcurrency: number;
 }
 
 /** Variable name prefixes this process must never be given (compared case-insensitively, key only). */
-const FORBIDDEN_PREFIXES = ['sankhya', 'database_url', 'db_', 'pg', 'session_', 'smtp_', 'sentry_'];
+const FORBIDDEN_PREFIXES = [
+  'sankhya',
+  'database_url',
+  'db_',
+  'pg',
+  'postgres',
+  'session_',
+  'smtp_',
+  'sentry_',
+  'aws_',
+  'offsite',
+  'erp',
+];
 
 export type SecretFileReader = (path: string) => string;
 
@@ -114,6 +129,7 @@ export function parseVerifierEnv(
     bodyLimitBytes: env.VERIFIER_BODY_LIMIT_BYTES,
     timeoutMs: env.VERIFIER_TIMEOUT_MS,
     throttleMax: env.VERIFIER_THROTTLE_MAX,
+    preAuthThrottleMax: env.VERIFIER_PREAUTH_THROTTLE_MAX,
     throttleWindowMs: env.VERIFIER_THROTTLE_WINDOW_MS,
     maxConcurrency: env.VERIFIER_MAX_CONCURRENCY,
   };

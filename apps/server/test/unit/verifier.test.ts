@@ -34,6 +34,7 @@ async function start(
   overrides: Partial<{
     timeoutMs: number;
     throttleMax: number;
+    preAuthThrottleMax: number;
     bodyLimitBytes: number;
     verification: IdentityVerification;
   }> = {},
@@ -45,6 +46,7 @@ async function start(
       ...config,
       timeoutMs: overrides.timeoutMs ?? config.timeoutMs,
       throttleMax: overrides.throttleMax ?? config.throttleMax,
+      preAuthThrottleMax: overrides.preAuthThrottleMax ?? config.preAuthThrottleMax,
       bodyLimitBytes: overrides.bodyLimitBytes ?? config.bodyLimitBytes,
     },
     logger: createLogger({ level: 'debug', service: 'verifier', destination: logs.stream }),
@@ -206,6 +208,33 @@ describe('verifier endpoint (disabled mode, STACK-2 option C)', () => {
     expect(statuses).toEqual([403, 403, 429, 429]);
   });
 
+  it('authenticates before the main throttle: unauthenticated floods never starve the legitimate caller', async () => {
+    const verify = vi.fn(disabledVerification.verify);
+    const { url } = await start({ throttleMax: 2, preAuthThrottleMax: 5, verification: { verify } });
+    const bad: number[] = [];
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const response = await fetch(`${url}/internal/verify`, {
+        method: 'POST',
+        headers: { authorization: 'Bearer wrong-secret-wrong-secret-wrong-secret!', 'content-type': 'application/json' },
+        body: credentials,
+      });
+      bad.push(response.status);
+      const text = await response.text();
+      expect(text).toBe(response.status === 429 ? '{"ok":false,"code":"rate_limited"}' : '{"ok":false,"code":"unauthorized"}');
+    }
+    // The pre-auth bucket (5) is bounded: guessing the secret is rate limited too.
+    expect(bad).toEqual([401, 401, 401, 401, 401, 429, 429, 429]);
+    // The main bucket (2) is untouched by the flood.
+    const good: number[] = [];
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const response = await fetch(`${url}/internal/verify`, { method: 'POST', headers: auth, body: credentials });
+      good.push(response.status);
+      await response.text();
+    }
+    expect(good).toEqual([403, 403, 429]);
+    expect(verify).toHaveBeenCalledTimes(2);
+  });
+
   it('exposes only /health (no auth, no detail) and answers 404 elsewhere', async () => {
     const { url } = await start();
     const health = await fetch(`${url}/health`);
@@ -300,7 +329,18 @@ describe('verifier environment (fail closed on boot)', () => {
   });
 
   it('refuses Sankhya, database, session and similar settings in the verifier process', () => {
-    for (const key of ['SANKHYA_CLIENT_SECRET', 'SANKHYA_MODE', 'DATABASE_URL', 'DB_POOL_MAX', 'PGPASSWORD', 'SESSION_SECRET']) {
+    for (const key of [
+      'SANKHYA_CLIENT_SECRET',
+      'SANKHYA_MODE',
+      'DATABASE_URL',
+      'DB_POOL_MAX',
+      'PGPASSWORD',
+      'SESSION_SECRET',
+      'POSTGRES_PASSWORD',
+      'AWS_SECRET_ACCESS_KEY',
+      'OFFSITE_S3_BUCKET',
+      'ERP_BASE_URL',
+    ]) {
       const refused = problemsOf(() => parseVerifierEnv({ ...baseEnv, [key]: 'value-that-must-not-leak-9911' }));
       expect(refused.problems.join('\n'), key).toContain(key);
       expect(refused.message).not.toContain('value-that-must-not-leak-9911');

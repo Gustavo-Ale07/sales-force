@@ -26,12 +26,20 @@ import { VerifierThrottle } from './throttle.js';
 export interface VerifierServerOptions {
   readonly config: Pick<
     VerifierConfig,
-    'sharedSecret' | 'bodyLimitBytes' | 'timeoutMs' | 'throttleMax' | 'throttleWindowMs' | 'maxConcurrency'
+    | 'sharedSecret'
+    | 'bodyLimitBytes'
+    | 'timeoutMs'
+    | 'throttleMax'
+    | 'preAuthThrottleMax'
+    | 'throttleWindowMs'
+    | 'maxConcurrency'
   >;
   readonly logger: Logger;
   readonly verification?: IdentityVerification;
   readonly now?: () => number;
 }
+
+const PRE_AUTH_MAX_CONCURRENCY = 64;
 
 const STATUS_BY_CODE = {
   unauthorized: 401,
@@ -131,6 +139,13 @@ export function createVerifierServer(options: VerifierServerOptions): Server {
     config.maxConcurrency,
     options.now ?? Date.now,
   );
+  // Unauthenticated requests: answered synchronously (nothing is awaited), so concurrency is not the limit.
+  const preAuthThrottle = new VerifierThrottle(
+    config.preAuthThrottleMax,
+    config.throttleWindowMs,
+    PRE_AUTH_MAX_CONCURRENCY,
+    options.now ?? Date.now,
+  );
 
   const handle = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
     const started = Date.now();
@@ -155,7 +170,27 @@ export function createVerifierServer(options: VerifierServerOptions): Server {
       return;
     }
 
-    // Throttle first: it also bounds attempts to guess the shared secret.
+    // Authenticate BEFORE the main throttle: a caller without the shared secret must never consume the budget of
+    // the legitimate caller (the API), or anyone on the internal network could starve logins. Unauthenticated
+    // requests are bounded by their own, larger pre-auth bucket, which also limits secret-guessing attempts.
+    if (!secretsMatch(bearerToken(request), expectedSecret)) {
+      const releasePreAuth = preAuthThrottle.tryAcquire();
+      if (!releasePreAuth) {
+        fail(response, 'rate_limited', true);
+        request.resume();
+        finish('rate_limited_preauth');
+        return;
+      }
+      try {
+        fail(response, 'unauthorized', true);
+        request.resume();
+        finish('unauthorized');
+      } finally {
+        releasePreAuth();
+      }
+      return;
+    }
+
     const release = throttle.tryAcquire();
     if (!release) {
       fail(response, 'rate_limited', true);
@@ -164,13 +199,6 @@ export function createVerifierServer(options: VerifierServerOptions): Server {
       return;
     }
     try {
-      if (!secretsMatch(bearerToken(request), expectedSecret)) {
-        fail(response, 'unauthorized', true);
-        request.resume();
-        finish('unauthorized');
-        return;
-      }
-
       let raw: Buffer;
       try {
         raw = await withDeadline(config.timeoutMs, () => readBody(request, config.bodyLimitBytes));
