@@ -54,7 +54,9 @@ changing the routing.
   isolated from production (separate host and credentials). There is no WAL archiving and no PITR.
 - **Target:** managed PostgreSQL >= 16, same major as production, private networking only, PITR, separate
   credentials (V-04, V-15). Move by omitting the profile and pointing `DATABASE_URL` at it with
-  `sslmode=verify-full` (how the provider CA is supplied is NEEDS VALIDATION at that rollout).
+  `sslmode=verify-full` and, when the provider uses a private CA, `&sslrootcert=<mounted CA file>` with that file
+  mounted read-only in migrate, api, worker, backup and restore-check (see `database.env.example`; how each
+  provider publishes its CA is NEEDS VALIDATION at that rollout). Never weaken verification to pass a TLS error.
 - Never a public or unrestricted database endpoint. Never production data in staging without approved
   sanitization (P-15). Staging holds no seed or demo accounts.
 - Volume and VPS share one failure domain: losing the VPS loses the database and any dump stored only on it.
@@ -84,10 +86,14 @@ Staging has no seed and no demo accounts, so the first admin is created once, by
 from the built server image (password read from stdin, never on the command line; never reuse a demo password):
 
 ```sh
-docker compose -f deploy/docker-compose.staging.yml run --rm --no-deps -e ALLOW_REMOTE_DB=1 \
-  api node dist/account-cli.js create --email <admin address> --name "<name>" --role admin --password-stdin
+export SFC="docker compose --env-file /etc/salesforce/staging/compose.env -f deploy/docker-compose.staging.yml"  # same as "Deploy"
+<secrets-manager command that prints the new admin password> \
+  | $SFC run --rm -T --no-deps -e ALLOW_REMOTE_DB=1 \
+      api node dist/account-cli.js create --email <admin address> --name "<name>" --role admin --password-stdin
 ```
 
+`-T` disables the pseudo-terminal so the piped password reaches stdin; the password comes from a secrets manager
+or password-manager CLI through the pipe, never typed as an argument and not left in shell history.
 `ALLOW_REMOTE_DB=1` is needed only when `DATABASE_URL` is not loopback (the compose network host is not).
 Keep `SF_ALLOW_DEMO_ACCOUNTS` out of every secrets file. Without an admin nobody can sign in under
 `AUTH_MODE=local`. (The exact invocation has not been run against a started staging stack: verify it on first boot.)
@@ -179,8 +185,14 @@ $SFC --profile self-hosted-db --profile ops run --rm restore-check  # restores t
 - **Restore-check is required and scheduled**, not optional: run it monthly, after any migration that changes
   structure and after the first dump, from a cron/timer, and record date, dump name and elapsed seconds
   (compare with RTO). **A dump counts as a backup only after `restore-check` passed on it** (OPS-2). Point
-  `RESTORE_TEST_DATABASE_URL` at a scratch database (a second database in the same `postgres` container is fine;
-  it must differ from `DATABASE_URL`, the script refuses otherwise).
+  `RESTORE_TEST_DATABASE_URL` at a scratch database (a second database in the same `postgres` container is fine).
+  The script refuses, before restoring anything, when the target has the same parsed host, port and database name
+  as `DATABASE_URL` (or uses `host=`/`port=`/`dbname=` URL overrides), and when the target database **name does not
+  contain `restore`, `test` or `scratch`** (e.g. `sf_staging_restore_test`). An optional dump-name argument must be a
+  plain `sf-staging-*.dump` name (no `/`, no `..`). Passwords reach `pg_dump`/`pg_restore` through `PGPASSWORD`, not
+  the argument list; percent-encode reserved characters in the URL credentials.
+- The `.sha256` next to each dump holds the dump's file name, so `sha256sum -c <dump>.sha256` verifies from the
+  directory the pair was copied to (older `.sha256` files with an absolute path still verify in the container).
 - Restoring staging itself: stop `api` and `worker`, restore into the (empty) database with `pg_restore --clean
   --if-exists --no-owner --dbname "$DATABASE_URL" <dump>` run from a postgres client container of the same major,
   start `api` and `worker`, check `/api/v1/ready`. For a managed PITR restore use the provider's procedure
