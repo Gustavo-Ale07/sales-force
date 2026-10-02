@@ -33,7 +33,7 @@ afterAll(async () => {
 const META = { ip: '203.0.113.9', userAgent: 'vitest', requestId: 'req-1' } as const;
 const EXT_PASSWORD = 'Ext-Directory-Passphrase-99';
 
-async function setup(options: { enabled?: boolean; wire?: boolean; maxFailures?: number } = {}) {
+async function setup(options: { enabled?: boolean; wire?: boolean; maxFailures?: number; allowedRoles?: readonly ('admin' | 'manager' | 'seller')[] } = {}) {
   const database = await createMigratedDatabase(postgres);
   opened.push(() => database.handle.close());
   const db = database.handle.db;
@@ -43,6 +43,7 @@ async function setup(options: { enabled?: boolean; wire?: boolean; maxFailures?:
   const base = testAuthConfig();
   const config = testAuthConfig({
     ...(options.enabled === false ? {} : { externalLogin: { enabled: true, verifyTimeoutMs: 200, minFailureMs: 0 } }),
+    ...(options.allowedRoles === undefined ? {} : { authMode: 'local' as const, allowedRoles: options.allowedRoles }),
     ...(options.maxFailures === undefined
       ? {}
       : { throttle: { ...base.throttle, account: { ...base.throttle.account, maxFailures: options.maxFailures } } }),
@@ -262,6 +263,24 @@ describe('AuthService.loginExternal', () => {
     const dump = JSON.stringify({ row, message: err.message, details: err.details, logs: ctx.capture.lines() });
     for (const needle of [opts.email, 'Directory Name', '999']) expect(dump).not.toContain(needle);
     expect(await audit(ctx, 'auth.login.success')).toHaveLength(0);
+  });
+
+  it('under local mode (admin only) refuses a seller uniformly and opens no session, but admits an admin', async () => {
+    const ctx = await setup({ allowedRoles: ['admin'] });
+    const seller = await provision(ctx, { email: 'ana@example.test', login: 'ANA', sellerCode: 103 });
+    await provision(ctx, { email: 'adm@example.test', login: 'ADM', role: 'admin' });
+
+    const refused = await failure(ctx.service.loginExternal({ login: 'ANA', password: EXT_PASSWORD }, META));
+    expect(refused.code).toBe('invalid_credentials');
+    expect(refused.status).toBe(401);
+    expect(await ctx.db.select().from(session)).toHaveLength(0);
+    const [row] = await audit(ctx, 'auth.login.failure');
+    expect(row?.actorAccountId).toBe(seller.id);
+    expect(row?.detail).toMatchObject({ reason: 'external_mode_role_not_permitted' });
+
+    const admitted = await ctx.service.loginExternal({ login: 'ADM', password: EXT_PASSWORD }, META);
+    expect(admitted.user.role).toBe('admin');
+    expect(await ctx.db.select().from(session)).toHaveLength(1);
   });
 
   it('counts a link mismatch like a failed login (same error as a wrong password, then the login locks)', async () => {

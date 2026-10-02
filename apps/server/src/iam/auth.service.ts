@@ -66,6 +66,7 @@ export type LoginFailureReason =
   | 'external_inactive'
   | 'external_account_disabled'
   | 'external_channel_not_permitted'
+  | 'external_mode_role_not_permitted'
   | 'external_link_mismatch'
   | 'external_unavailable'
   | 'external_rate_limited';
@@ -321,6 +322,8 @@ export class AuthService implements OnModuleInit {
     if (found === null) return this.failExternal('external_unmapped', null, failCtx);
     if (found.status !== 'active') return this.failExternal('external_account_disabled', found.id, failCtx);
     if (!isChannelAllowed(found.role, 'web')) return this.failExternal('external_channel_not_permitted', found.id, failCtx);
+    // Same mode restriction as the password login and the session reads: a role the mode does not admit never gets a session.
+    if (!this.roleMayHoldSession(found.role)) return this.failExternal('external_mode_role_not_permitted', found.id, failCtx);
 
     // 4. Link reconciliation, fail closed. Scope comes only from the account's own seller link (never
     // from the directory), and the directory must agree with it: no session is opened on a disagreement

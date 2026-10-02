@@ -1,9 +1,14 @@
-import { ApiErrorSchema, SessionResponseSchema } from '@salesforce/contracts';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { ApiErrorSchema, SESSION_COOKIE_NAME, SessionResponseSchema, routes } from '@salesforce/contracts';
 import { auditLog } from '@salesforce/db';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_ACCOUNT_THROTTLE, LOCAL_MODE_ROLES } from '../../src/iam/auth-config.js';
+import { AuthService } from '../../src/iam/auth.service.js';
+import { readCookie } from '../../src/iam/cookies.js';
 import { TEST_PASSWORD, WRONG_PASSWORD, createTestAccount, setCookieHeaders } from '../helpers/auth.js';
-import { JSON_HEADERS, login, loginCookie, startAuthApp, type AuthApp } from '../helpers/auth-app.js';
+import { login, loginCookie, startAuthApp, type AuthApp } from '../helpers/auth-app.js';
 import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
 
 /** `AUTH_MODE=local`: Force-local Argon2id login for the admin profile only (production-capable). */
@@ -94,11 +99,37 @@ describe('AUTH_MODE=local', () => {
     expect(response.json()).toEqual({ authenticated: false, authMode: 'local' });
   });
 
-  it('exposes no external login route', async () => {
+  it('peekSession (used by /ready) rejects a session of an operational account that predates the mode', async () => {
+    const dev = await startAuthApp(postgres, opened);
+    await createTestAccount(dev.database.handle, { email: 'seller@example.test', role: 'seller' }, dev.clock.fn);
+    await createTestAccount(dev.database.handle, { email: 'admin@example.test', role: 'admin' }, dev.clock.fn);
+    const sellerToken = readCookie(await loginCookie(dev, 'seller@example.test', TEST_PASSWORD), SESSION_COOKIE_NAME);
+    const adminToken = readCookie(await loginCookie(dev, 'admin@example.test', TEST_PASSWORD), SESSION_COOKIE_NAME);
+
+    // Same database, mode switched to local.
+    const local = await startAuthApp(postgres, opened, {
+      database: dev.database,
+      authOverrides: { authMode: 'local', allowedRoles: LOCAL_MODE_ROLES },
+    });
+    const service = local.app.get(AuthService);
+    expect(await service.peekSession(sellerToken)).toBeNull();
+    expect(await service.peekSession(adminToken)).toEqual({ role: 'admin' });
+  });
+
+  it('exposes no external login route: no controller references loginExternal and no registered route mentions external', async () => {
     const ctx = await boot();
-    for (const url of ['/api/v1/auth/login-external', '/api/v1/auth/external/login', '/api/v1/auth/login/external']) {
-      const response = await ctx.app.inject({ method: 'POST', url, headers: JSON_HEADERS, payload: JSON.stringify({ login: 'x', password: 'y' }) });
-      expect(response.statusCode).toBe(404);
+    const routeTable = ctx.app.getHttpAdapter().getInstance().printRoutes({ commonPrefix: false });
+    expect(routeTable.length).toBeGreaterThan(0);
+    expect(routeTable.toLowerCase()).not.toContain('external');
+    expect(routeTable).toContain('login');
+
+    const srcRoot = fileURLToPath(new URL('../../src/', import.meta.url));
+    const controllers = readdirSync(srcRoot, { recursive: true, encoding: 'utf8' }).filter((name) => /controller\.ts$/.test(name));
+    expect(controllers.length).toBeGreaterThan(0);
+    for (const name of controllers) {
+      expect(readFileSync(join(srcRoot, name), 'utf8'), name).not.toMatch(/loginExternal|ExternalIdentityVerifier/);
     }
+    // Contract registry has no external-login operation either.
+    expect(Object.values(routes).map((route) => `${route.operationId} ${route.path}`.toLowerCase()).filter((text) => text.includes('external'))).toEqual([]);
   });
 });
