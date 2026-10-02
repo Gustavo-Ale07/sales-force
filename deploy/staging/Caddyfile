@@ -46,11 +46,11 @@
 		format filter {
 			request>headers>Cookie delete
 			request>headers>Authorization delete
+			request>headers>Proxy-Authorization delete
 			request>headers>X-Token delete
 			response>headers>Set-Cookie delete
-			request>uri query {
-				delete token
-			}
+			# Path only: the whole query string (tokens, reset codes, search terms) is dropped, not just `token`.
+			request>uri regexp `\?.*$` ""
 			wrap json
 		}
 	}
