@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { canSeeIntegration } from "@salesforce/contracts";
+import { canSeeIntegration, canUseCommercial } from "@salesforce/contracts";
 import { toast } from "@salesforce/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -68,6 +68,11 @@ const appRoute = createRoute({
     const user = await context.queryClient.ensureQueryData(sessionQueryOptions(context.authClient));
     if (!user) {
       throw redirect({ to: "/login", search: { redirect: safeRedirect(location.href) } });
+    }
+    // ROLE-1: the technical profile has no commercial area; it lands on the integration page. Convenience only:
+    // the server denies every commercial route to it.
+    if (!canUseCommercial(user.role) && location.pathname !== "/integracao" && location.pathname !== "/perfil") {
+      throw redirect({ to: "/integracao" });
     }
   },
 });

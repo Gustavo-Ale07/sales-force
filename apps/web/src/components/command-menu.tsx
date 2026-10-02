@@ -2,6 +2,7 @@ import { CommandPalette, type CommandItem } from "@salesforce/ui";
 import { useNavigate } from "@tanstack/react-router";
 import { Plus, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { canUseCommercial } from "@salesforce/contracts";
 import { navItemsFor } from "./nav-items";
 
 const isApple = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/i.test(navigator.platform);
@@ -36,14 +37,19 @@ export function CommandMenu({ role }: { role: string | undefined }) {
         keywords: to.replace(/\//g, " "),
         onSelect: () => void navigate({ to }),
       })),
-      {
-        id: "action-new-order",
-        group: "Ações",
-        label: "Novo pedido",
-        icon: <Plus size={18} strokeWidth={1.75} />,
-        keywords: "criar nova venda rascunho",
-        onSelect: () => void navigate({ to: "/pedidos/novo" }),
-      },
+      // ROLE-1: the technical profile has no commercial area (the server denies it as well).
+      ...(role === undefined || canUseCommercial(role)
+        ? [
+            {
+              id: "action-new-order",
+              group: "Ações",
+              label: "Novo pedido",
+              icon: <Plus size={18} strokeWidth={1.75} />,
+              keywords: "criar nova venda rascunho",
+              onSelect: () => void navigate({ to: "/pedidos/novo" }),
+            },
+          ]
+        : []),
     ],
     [role, navigate],
   );

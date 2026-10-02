@@ -1,4 +1,4 @@
-import { canSeeIntegration } from "@salesforce/contracts";
+import { canSeeIntegration, canUseCommercial } from "@salesforce/contracts";
 import { List, Plug, ShoppingCart, Target, Users, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
@@ -25,8 +25,11 @@ const allNavItems: NavItem[] = [
 
 /**
  * Navigation for a role. Integração is only for who may see it; with no role (the dev design page) it is
- * left out. Visibility here is convenience only: the server enforces access.
+ * left out. The commercial areas are not for the technical profile (ROLE-1): it sees Integração only. Visibility
+ * here is convenience only: the server enforces access.
  */
 export function navItemsFor(role: string | undefined): NavItem[] {
-  return allNavItems.filter((item) => !item.integrationOnly || (role !== undefined && canSeeIntegration(role)));
+  return allNavItems.filter((item) =>
+    item.integrationOnly ? role !== undefined && canSeeIntegration(role) : role === undefined || canUseCommercial(role),
+  );
 }

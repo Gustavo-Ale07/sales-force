@@ -6,7 +6,7 @@
  */
 import { defaultBrand, parseAccent, parseBrandAsset, type Brand } from "./brand";
 
-/** `local`: Force-local login (admin profile) with no dev banners; the login page only ever offers the local form. */
+/** `local`: Force-local login (admin and technical profiles) with no dev banners; the login page only ever offers the local form. */
 export type AuthMode = "dev" | "standard" | "local";
 
 export interface RuntimeConfig {

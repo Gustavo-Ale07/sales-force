@@ -6,6 +6,7 @@ const roleLabels: Record<AccountRole, string> = {
   admin: "Administrador",
   manager: "Gerente",
   seller: "Vendedor",
+  technical: "Técnico",
 };
 
 export function toAuthUser(account: Account): AuthUser {

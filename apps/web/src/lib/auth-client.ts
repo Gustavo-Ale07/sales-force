@@ -13,7 +13,7 @@ export interface AuthUser {
   id: string;
   name: string;
   email: string;
-  /** Contract role (`admin`, `manager`, `seller`). Convenience for the UI only; the server enforces access. */
+  /** Contract role (`admin`, `manager`, `seller`, `technical`). Convenience for the UI only; the server enforces access. */
   role: AccountRole;
   /** Human-readable profile name (pt-BR). */
   roleLabel?: string;
