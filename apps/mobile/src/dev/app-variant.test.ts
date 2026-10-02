@@ -32,6 +32,7 @@ describe("app variant", () => {
     const out = variant.applyVariant(base, STG);
     expect(out.android.package).toBe("br.com.plac.salesforce.staging");
     expect(out.android.allowBackup).toBe(false);
+    expect(out.android.blockedPermissions).toEqual(["android.permission.SYSTEM_ALERT_WINDOW"]);
     expect(out.ios.bundleIdentifier).toBe("br.com.plac.salesforce.staging");
     expect(out.name).toBe("Sales Force STG");
     expect(out.scheme).toBe("salesforce-stg");

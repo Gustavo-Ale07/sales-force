@@ -1,6 +1,6 @@
 # Staging build (Android) — Sales Force STG
 
-Status: owner-approved 2026-10-02 for staging only. Nothing here has been executed by the agent (no Expo login, no EAS build, no credentials). Production identity and signing are a separate, later decision and are intentionally NOT configured (no `production` profile in `eas.json`, and `APP_VARIANT=production` fails the config).
+Status: owner-approved 2026-10-02 for staging only. The agent has not executed any Expo login, EAS build or credential step; the offline checks under "Offline verification" were run locally. Production identity and signing are a separate, later decision and are intentionally NOT configured (no `production` profile in `eas.json`, and `APP_VARIANT=production` fails the config).
 
 ## Identity and variants
 
@@ -33,6 +33,20 @@ The `staging` profile in `eas.json` sets `APP_VARIANT`, `SF_BUILD_PROFILE=stagin
 - Never commit keystores, passwords, key aliases/passwords, `credentials.json` or Google service files (`.gitignore` covers `*.jks`, `*.keystore`, `credentials.json`, `google-services.json`, `GoogleService-Info.plist`, `*.p8`, `*.p12`). Do not use `credentialsSource: local`.
 - Production signing (Play App Signing vs. own key) is a separate decision.
 
+## Release signing fail-closed check
+
+`expo prebuild` generates `buildTypes.release { signingConfig signingConfigs.debug }` (verified on the generated `app/build.gradle`; `app/debug.keystore` is also generated). On EAS with managed credentials EAS replaces that signing config before Gradle runs. To make sure a staging APK can never ship debug-signed, `plugins/with-staging-signing-guard.js` (active only when `APP_VARIANT=staging` at prebuild) appends a `gradle.taskGraph.whenReady` check that throws when an `:app` `assemble|bundle|package` Release task is scheduled and the release signing config is `debug`, uses `debug.keystore`, or is missing. Verified locally: `gradlew --offline :app:assembleRelease` on a throwaway prebuild fails with "Staging release build refused", and passes the check once a non-debug config is set. The staging variant also blocks `SYSTEM_ALERT_WINDOW` (dev-menu overlay).
+
+## Offline verification (2026-10-02, throwaway copy, repo untouched)
+
+- Prebuild manifest (staging): `usesCleartextTraffic="false"`, `allowBackup="false"`, no `debuggable`, label "Sales Force STG", scheme `salesforce-stg`, `applicationId`/`namespace` `br.com.plac.salesforce.staging`.
+- `expo-dev-client`/`expo-dev-launcher`/`expo-dev-menu` are still autolinked (dependency of the app) but the launcher is compiled as the no-op `disableInRelease` variant in release (`expo.devlauncher.configureInRelease` is unset; never set it). The dev-client URL scheme `exp+plac-sales-force` remains in the manifest. Fully removing the module from staging would need a separate package/profile decision.
+- `expo export --platform android` works offline. Bundle scan: no 127.0.0.1, 192.168., 10.0.2.2, demo domain or demo password. Only `http://localhost:8081` (React Native dev-server fallback, dead in release) and JSON-schema `http://json-schema.org` URLs appear. The whole `app.json` is embedded because `src/app-info.ts` imports it for the version, so the base (dev) package id and the provisional-id notice string ship in the bundle (cosmetic, no secret).
+
+## Blocker for the final artifact (needs external EAS configuration that does not exist yet)
+
+`eas login` (company Expo account), `eas init` (project id/owner in config), the managed Android keystore (`eas credentials`), and the remote `versionCode` (`appVersionSource: remote`, initialised on first build). Until then no signed staging APK can be produced.
+
 ## Steps the owner must do (not executed by the agent)
 
 1. Use an Expo account owned by the company (not personal); enable MFA on it before anything else.
@@ -48,4 +62,4 @@ Validate locally without Expo servers: `APP_VARIANT=staging EXPO_PUBLIC_API_URL=
 
 ## Not covered
 
-iOS (needs Apple account/EAS credentials; the bundle id is set, nothing else), Play Store, production profile, OTA updates channel, Sentry. No build was run, so the built APK's manifest and signature are unverified.
+iOS (needs Apple account/EAS credentials; the bundle id is set, nothing else), Play Store, production profile, OTA updates channel, Sentry. No APK was built and signed: the final manifest and signature are unverified until the EAS build exists (check the signer fingerprint with `apksigner verify --print-certs` against the recorded keystore).

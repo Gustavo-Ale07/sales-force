@@ -73,7 +73,7 @@ function applyVariant(config, env = process.env) {
     name: STAGING.name,
     scheme: STAGING.scheme,
     ios: { ...config.ios, bundleIdentifier: STAGING.applicationId },
-    android: { ...config.android, package: STAGING.applicationId, allowBackup: false },
+    android: { ...config.android, package: STAGING.applicationId, allowBackup: false, blockedPermissions: [...new Set([...(config.android?.blockedPermissions ?? []), "android.permission.SYSTEM_ALERT_WINDOW"])] },
     extra: { ...extra, appVariant: "staging" },
   };
 }

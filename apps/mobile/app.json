@@ -34,7 +34,8 @@
           "resizeMode": "contain"
         }
       ],
-      "./plugins/with-dev-cleartext.js"
+      "./plugins/with-dev-cleartext.js",
+      "./plugins/with-staging-signing-guard.js"
     ]
   }
 }
