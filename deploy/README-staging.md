@@ -1,6 +1,6 @@
 # Staging stack (SB-1) — configuration and runbook
 
-Status: **configuration only, never deployed or started**. `deploy/docker-compose.staging.yml` plus
+Status: **never deployed to a VPS; validated only on a disposable local stack (2026-10-02 certification)**. `deploy/docker-compose.staging.yml` plus
 `deploy/staging/*`. OPS-3 (Caddy, SSH deploy) is PROPOSED; OPS-1/OPS-2/DATA-1/DATA-2/STACK-2/SNK-3 are
 APPROVED. Where this document chooses something PROPOSED it says so. Owner decisions of 2026-10-02 applied here:
 dedicated internal verifier (STACK-2 option C, structure only), least-privilege database roles, staging RPO of 24 h
@@ -164,10 +164,10 @@ export SFC="docker compose --env-file /etc/salesforce/staging/compose.env -f dep
 or password-manager CLI through the pipe, never typed as an argument and not left in shell history.
 `ALLOW_REMOTE_DB=1` is needed only when `DATABASE_URL` is not loopback (the compose network host is not). The CLI
 runs as `force_api`, which holds INSERT/UPDATE on the account tables. Keep `SF_ALLOW_DEMO_ACCOUNTS` out of every
-secrets file. Without an admin nobody can sign in under `AUTH_MODE=local`. (The exact invocation has not been run
-against a started staging stack: verify it on first boot.)
+secrets file. Without an admin nobody can sign in under `AUTH_MODE=local`. (The invocation was run against a
+disposable local stack in the 2026-10-02 certification; repeat it on the VPS.)
 
-## Installation configuration (first start, U-11 bootstrap file)
+## Installation configuration (first start)
 
 A fresh database has **no configuration snapshot**: `GET /api/v1/configuration` serves the conservative disabled
 default (`contentHash: null`, `source.version: "unconfigured"`), every commercial route answers `409
@@ -230,9 +230,9 @@ Set-Cookie. The verifier is never routed through Caddy.
 - Logs: pino JSON on stdout; Docker `json-file` with rotation (10 MB x 5, compressed) on every service.
   Correlation IDs and scrubbing are application behavior (OPS-4). Central aggregation is deferred (R65).
 - Containers run with `no-new-privileges`; server containers also `cap_drop: ALL`, read-only root filesystem and
-  `tmpfs /tmp`. These were **not exercised at runtime**: confirm on the first staging boot and relax only with a
-  recorded reason.
-- Verifier isolation check on first boot (not exercised): `$SFC ps` must show no published port for `verifier`;
+  `tmpfs /tmp`. These were exercised on a disposable local stack (2026-10-02 certification): confirm again on the
+  first VPS boot and relax only with a recorded reason.
+- Verifier isolation check on first boot (exercised locally; repeat on the VPS): `$SFC ps` must show no published port for `verifier`;
   `$SFC exec api node -e "fetch('http://verifier:3002/health').then(r=>console.log(r.status))"` answers 200;
   `$SFC exec edge wget -qO- http://verifier:3002/health` and `$SFC exec worker ...` must fail (name not resolved).
 
@@ -260,8 +260,10 @@ curl -fsS https://$STAGING_DOMAIN/api/v1/ready
 **Pre-migration backup is part of every deploy**, not an optional courtesy. `migrate-safe` makes it one command
 (`backup` is a compose dependency that must complete successfully); doing it by hand is equivalent:
 `run --rm backup`, check it printed `wrote ...`, then `run --rm migrate`. Exception: the very first deploy has no
-database content yet, use plain `migrate` (see "Role bootstrap" for the first-deploy order). `migrate-safe` has been
-validated as configuration only (`config -q`), not run against a started stack.
+database content yet, use plain `migrate` (see "Role bootstrap" for the first-deploy order). `migrate-safe` was exercised on a
+disposable local stack in the 2026-10-02 certification (a failing backup stops the migration); repeat it on the VPS.
+`restore-check` drops every non-system schema of its scratch database: it relies entirely on the identity guards
+above it, so never point its URL at a database you care about.
 
 Note: `migrate`, `api`, `worker` and `verifier` share the one server image, so building `migrate` builds it
 once. No registry `pull` is part of this path (`$SFC pull edge` only fetches the Caddy image).

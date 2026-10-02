@@ -3,7 +3,7 @@ import { databaseUrlField, nodeEnvField, parseEnv, type EnvSource } from './env.
 
 /**
  * Environment of the one-shot `config-bootstrap` command (staging / production): loads a validated installation
- * configuration file as the current snapshot (CFG-1, U-11 bootstrap file). It is not the development seed:
+ * configuration file as the current snapshot (CFG-1; the long-term source of the file stays open, U-11). It is not the development seed:
  *
  * - `NODE_ENV` is required and must be `production` (development uses `pnpm db:seed`, which refuses production);
  * - `INSTALLATION_CONFIG_FILE` is required (a path inside the container; mount the file read-only);

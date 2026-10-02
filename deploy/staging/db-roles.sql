@@ -70,9 +70,10 @@
 --   table needs no new grant.
 --
 -- UNDETERMINED (reported to the owner, not guessed):
---   1. Who writes installation_configuration_version in staging. Only the dev `seed` writes it (and it refuses
---      staging/production); the API only reads. Until a staging configuration-import path exists, load the snapshot
---      with force_migrator (or an admin session). If the API or worker is meant to write it, add INSERT, UPDATE here.
+--   1. Who writes installation_configuration_version in staging: the one-shot `config-bootstrap` command
+--      (apps/server) run as force_migrator; the dev `seed` refuses staging/production and the API only reads.
+--      The long-term source of the configuration file stays open (U-11). If the API or worker is meant to write it,
+--      add INSERT, UPDATE here.
 --   2. integration_outbox: no code path inserts or claims rows yet (ERP submission is disabled, SNK-4/S0). When the
 --      API enqueues on order submit it will need INSERT (+ SELECT) and the worker SELECT, UPDATE for delivery; the
 --      integration_outbox_order_gate trigger also reads sales_order as the invoking role (api has SELECT; the
