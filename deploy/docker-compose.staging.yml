@@ -149,8 +149,9 @@ services:
       # SNK-3: `fake` by default; `live` only against a non-production Sankhya, with credentials in worker.env
       # (SANKHYA_ENVIRONMENT sandbox|homologation; production is refused by the gateway). Production mode
       # requires the explicit fake opt-in below, which is only meaningful while SANKHYA_MODE=fake.
-      SANKHYA_MODE: ${SANKHYA_MODE:-fake}
-      ALLOW_FAKE_GATEWAY: ${ALLOW_FAKE_GATEWAY:-1}
+      # Both come from compose.env (fake + ALLOW_FAKE_GATEWAY=1 in the example): no implicit fake gateway.
+      SANKHYA_MODE: ${SANKHYA_MODE:?SANKHYA_MODE must be set explicitly (fake or live)}
+      ALLOW_FAKE_GATEWAY: ${ALLOW_FAKE_GATEWAY:-}
       # Mandatory and explicit in live mode (scheduled mirror never starts against a real Sankhya by default).
       SYNC_MIRROR_ENABLED: ${SYNC_MIRROR_ENABLED:-}
     command: ["node", "dist/main-worker.js"]

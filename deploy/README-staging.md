@@ -78,9 +78,24 @@ Examples with placeholders: `deploy/staging/*.env.example` (named so the reposit
 does not hide them). Rotating a secret = edit the file, `up -d` the affected service. An encrypted off-server
 secrets backup is PROPOSED in OPS-2 and not designed here: keep a copy in the team's password manager.
 
+## First admin account
+
+Staging has no seed and no demo accounts, so the first admin is created once, by hand, with the account CLI
+from the built server image (password read from stdin, never on the command line; never reuse a demo password):
+
+```sh
+docker compose -f deploy/docker-compose.staging.yml run --rm --no-deps -e ALLOW_REMOTE_DB=1 \
+  api node dist/account-cli.js create --email <admin address> --name "<name>" --role admin --password-stdin
+```
+
+`ALLOW_REMOTE_DB=1` is needed only when `DATABASE_URL` is not loopback (the compose network host is not).
+Keep `SF_ALLOW_DEMO_ACCOUNTS` out of every secrets file. Without an admin nobody can sign in under
+`AUTH_MODE=local`. (The exact invocation has not been run against a started staging stack: verify it on first boot.)
+
 ## Sankhya (SNK-3)
 
-Default `SANKHYA_MODE=fake`. Live mode only against a non-production Sankhya (`SANKHYA_ENVIRONMENT`
+`SANKHYA_MODE` is required (no implicit default); `compose.env.example` sets `fake` with the explicit
+`ALLOW_FAKE_GATEWAY=1` (staging then serves synthetic data). Live mode only against a non-production Sankhya (`SANKHYA_ENVIRONMENT`
 `sandbox`|`homologation`; the gateway refuses `production`), with `SANKHYA_ALLOWED_HOSTS` set, `SYNC_MIRROR_ENABLED`
 explicit, and the owner's authorization. ERP order submission stays disabled (SNK-4/SNK-5 gates). Credentials
 only in `worker.env`.
