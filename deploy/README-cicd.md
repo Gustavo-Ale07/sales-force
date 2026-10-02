@@ -163,6 +163,13 @@ migrations between target and that commit, and, with a marker, accepts the last 
 last good application). The ack names the schema commit. On success the marker is cleared unless an acknowledged migration
 difference remains, in which case it is kept so a later rollback still compares against it.
 
+With a marker present (`MIGRATED=yes`) a deploy must target a **descendant-or-equal of both** `DEPLOYED_SHA` and `ATTEMPTED_SHA`
+(otherwise it refuses and points to `rollback-staging.sh` or the manual `DEPLOY_ACK_NONFORWARD=<exact sha>`); the migration and
+db-roles pre-check inspects the union of the diffs from the last good deploy and from the attempted commit; an existing marker
+is never overwritten by an older or unrelated commit (kept until a deploy that descends from it succeeds). Retrying the failed
+commit itself is allowed. The rollback target is **operator-trusted**: `rollback-staging.sh` does not judge whether an arbitrary
+older commit is safe beyond the migration comparison and its ack.
+
 ### Detached run: what survives an SSH drop
 
 The wrapper starts the deploy with `setsid`, output to the log file, and only follows the log. The scripts also ignore `HUP`
@@ -177,6 +184,24 @@ waiting after its 40-minute timeout even though the deploy may still finish: rea
 The deploy never recreates `postgres` before the backup. If the target commit's postgres definition (image, `PG_MAJOR`, env files:
 compose config hash) differs from the running container, it refuses with a message; recreate it by hand (README-staging) after a
 backup and re-run. First deploy and an absent container are the only cases where it is started by the script.
+
+**Acknowledging a mismatch (manual, nothing automated):** 1. confirm why it differs (`git diff <last good> <target> -- deploy/ docker-compose` and `compose.env`
+changes, new image or `PG_MAJOR`; a major upgrade needs the dump/restore procedure of README-staging, never an in-place recreate);
+2. take a backup now (`docker compose -p salesforce-staging --env-file /opt/force-staging/config/compose.env -f deploy/docker-compose.staging.yml --profile ops run --rm backup`);
+3. recreate postgres by hand with the same project and env file (`... up -d --no-deps --force-recreate postgres`), check it is healthy and the data is intact;
+4. re-run the deploy; the guard now sees the new definition as the running one. The workflow never does steps 1-3.
+
+### Deploy-writable code and compose version
+
+The forced command executes `deploy-staging.sh` from the clone the deploy user can write (residual risk above); the wrapper itself
+and `bootstrap-vps.sh` are different: `apply` must run **from a separate trusted checkout**, not from `$root`, because it installs
+the wrapper source as root (it refuses when the script lives under `--root`). `apply` also refuses symlinks at `$root`, its
+subdirectories, `~/.ssh` and `authorized_keys` and uses exclusive temp files plus rename (residual: a race between check and use
+by a hostile deploy user cannot be excluded with shell tools; do not adopt a tree that user already controls). The deploy scripts need
+**Docker Compose >= 2.24** (`!reset`, `config --hash`) and fail early with a clear message otherwise. Wrapper logs are created with
+`mktemp`; logs older than 30 days (`deploy-*.log`) are pruned at the start of each deploy. Existing users in
+sudo/wheel/admin/lxd/disk or named in `/etc/sudoers*` are refused unless `--allow-existing-privileged-user`; membership of `docker`
+without the acknowledging flag only warns.
 
 ### Database objects needing `db-roles`
 
