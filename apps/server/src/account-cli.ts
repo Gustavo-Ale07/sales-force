@@ -55,7 +55,7 @@ runMain('account-cli', async () => {
   });
   const [command] = positionals;
   if (command !== 'create' && command !== 'set-password' && command !== 'unlock') {
-    fail('usage: account <create|set-password|unlock> --email <address> [--name <display name>] [--role admin|manager|seller] [--password-stdin]');
+    fail('usage: account <create|set-password|unlock> --email <address> [--name <display name>] [--role admin|manager|seller|technical] [--password-stdin]');
   }
   const email = values.email ?? fail('--email is required');
   if (!z.email().max(254).safeParse(email).success) fail('--email is not a valid e-mail address');
@@ -79,8 +79,8 @@ runMain('account-cli', async () => {
     const { accounts, repository } = createOperatorAccountService(db, passwordHashParamsOf(env), undefined, operatorIdentity(process.env));
     try {
       if (command === 'create') {
-        const role = values.role ?? fail('--role is required (admin, manager or seller)');
-        if (!(ACCOUNT_ROLES as readonly string[]).includes(role)) fail('--role must be admin, manager or seller');
+        const role = values.role ?? fail('--role is required (admin, manager, seller or technical)');
+        if (!(ACCOUNT_ROLES as readonly string[]).includes(role)) fail('--role must be admin, manager, seller or technical');
         const name = values.name ?? fail('--name is required');
         const id = await accounts.createAccount({ email, displayName: name, password, role: role as AccountRole });
         process.stdout.write(`account created: ${id} (${role})\n`);

@@ -13,7 +13,7 @@ import { buildConfigurationResponse, toOrderEntryConfiguration } from './configu
 import { InstallationConfigurationService } from './configuration.service.js';
 
 /**
- * `GET /configuration`: admin only (central policy, `getConfiguration`); the access guard has
+ * `GET /configuration`: admin and technical (central policy, `getConfiguration`; ROLE-1); the access guard has
  * already authenticated and authorized the caller. When nothing is stored the response carries the
  * conservative disabled configuration and `contentHash: null` (never an invented default).
  *

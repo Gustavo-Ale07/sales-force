@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { account, session, type AccountRole, type AccountStatus, type Database } from '@salesforce/db';
 import { and, eq, isNull, lt, or } from 'drizzle-orm';
 import { DATABASE } from '../platform/tokens.js';
+import type { AuditWriter } from './audit.service.js';
 
 export interface SessionWithAccount {
   readonly sessionId: string;
@@ -39,6 +40,27 @@ export class SessionRepository {
       createdAt: values.createdAt,
       lastSeenAt: values.createdAt,
       expiresAt: values.expiresAt,
+    });
+  }
+
+  /**
+   * Creates the session and runs `writeAudit` in the SAME transaction (AUDIT-1): if the audit row cannot
+   * be written the session row is rolled back, so no session exists whose token could ever be used.
+   */
+  async createWithAudit(
+    values: { id: string; accountId: string; tokenHash: string; createdAt: Date; expiresAt: Date },
+    writeAudit: (writer: AuditWriter) => Promise<void>,
+  ): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await tx.insert(session).values({
+        id: values.id,
+        accountId: values.accountId,
+        tokenHash: values.tokenHash,
+        createdAt: values.createdAt,
+        lastSeenAt: values.createdAt,
+        expiresAt: values.expiresAt,
+      });
+      await writeAudit(tx);
     });
   }
 

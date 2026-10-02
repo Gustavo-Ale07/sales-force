@@ -1,5 +1,5 @@
-import { INTEGRATION_ROLES } from '@salesforce/contracts';
-import type { AccountRole, ScopeActor } from '@salesforce/domain';
+import { COMMERCIAL_ROLES, INTEGRATION_ROLES } from '@salesforce/contracts';
+import { ACCOUNT_ROLES, type AccountRole, type ScopeActor } from '@salesforce/domain';
 import type { CurrentUser } from './current-user.js';
 
 /**
@@ -24,13 +24,16 @@ export const ROLE_CHANNELS: Readonly<Record<AccountRole, readonly Channel[]>> = 
   admin: ['web', 'mobile'],
   manager: ['web', 'mobile'],
   seller: ['web', 'mobile'],
+  // ROLE-1: platform operation only; no mobile use is granted (deny by default).
+  technical: ['web'],
 };
 
 export interface RoutePolicy {
   readonly roles: readonly AccountRole[];
 }
 
-const EVERY_ROLE: readonly AccountRole[] = ['admin', 'manager', 'seller'];
+/** The commercial profiles (ROLE-1: never `technical`). */
+const EVERY_ROLE: readonly AccountRole[] = COMMERCIAL_ROLES;
 
 /**
  * Explicit grants by `operationId`. Endpoints of later stages are added here together with their
@@ -39,8 +42,9 @@ const EVERY_ROLE: readonly AccountRole[] = ['admin', 'manager', 'seller'];
  */
 export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   // Any authenticated account may end its own session.
-  logout: { roles: EVERY_ROLE },
-  // "Usuários, integrações, configurações: Admin" (project-spec 8.2, default matrix). ASSUMPTION:
+  logout: { roles: ACCOUNT_ROLES },
+  // "Usuários, integrações, configurações: Admin" (project-spec 8.2) plus the `technical` profile (ROLE-1: integration
+  // and sync status, technical configuration; this is the only route that exposes them). ASSUMPTION:
   // the contract lists 403 for this route but names no role; admin-only is the least privilege.
   getConfiguration: { roles: INTEGRATION_ROLES },
   // Minimal order-entry slice (never syncStates/gateway/integration/customers/pricing/financial):

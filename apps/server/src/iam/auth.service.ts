@@ -188,9 +188,8 @@ export class AuthService implements OnModuleInit {
       throw new AppError('invalid_credentials');
     }
 
-    // 3. Success: forget the failures of this e-mail (the address counter is not reset by a success),
-    // upgrade the hash if the cost parameters moved, open the session.
-    await this.throttle.clear(emailKey);
+    // 3. Success: upgrade the hash if the cost parameters moved, open the session, then forget the failures
+    // of this e-mail (the address counter is not reset by a success).
     if (this.hasher.needsRehash(found.passwordHash)) {
       try {
         await this.accounts.updatePasswordHash(found.id, await this.hasher.hash(input.password));
@@ -202,12 +201,11 @@ export class AuthService implements OnModuleInit {
     const token = generateSessionToken();
     const sessionId = uuidv7(now.getTime());
     const expiresAt = new Date(now.getTime() + Math.min(this.config.sessionIdleMs, this.config.sessionAbsoluteMs));
-    await this.sessions.create({ id: sessionId, accountId: found.id, tokenHash: hashSessionToken(token), createdAt: now, expiresAt });
-    await this.audit.record({
-      action: AUDIT_ACTIONS.loginSuccess,
-      actorAccountId: found.id,
-      detail: { ...auditMeta, sessionId },
-    });
+    await this.openAuditedSession(
+      { id: sessionId, accountId: found.id, tokenHash: hashSessionToken(token), createdAt: now, expiresAt },
+      { ...auditMeta, sessionId },
+    );
+    await this.throttle.clear(emailKey);
     await this.maybePurge(now);
 
     const user: CurrentUser = {
@@ -355,20 +353,14 @@ export class AuthService implements OnModuleInit {
       return this.failExternal('external_link_mismatch', found.id, failCtx);
     }
 
-    await this.throttle.clear(loginKey);
     const token = generateSessionToken();
     const sessionId = uuidv7(now.getTime());
     const expiresAt = new Date(now.getTime() + Math.min(this.config.sessionIdleMs, this.config.sessionAbsoluteMs));
-    await this.sessions.create({ id: sessionId, accountId: found.id, tokenHash: hashSessionToken(token), createdAt: now, expiresAt });
-    await this.audit.record({
-      action: AUDIT_ACTIONS.loginSuccess,
-      actorAccountId: found.id,
-      detail: {
-        ...auditMeta,
-        sessionId,
-        method: 'external',
-      },
-    });
+    await this.openAuditedSession(
+      { id: sessionId, accountId: found.id, tokenHash: hashSessionToken(token), createdAt: now, expiresAt },
+      { ...auditMeta, sessionId, method: 'external' },
+    );
+    await this.throttle.clear(loginKey);
     await this.maybePurge(now);
 
     return {
@@ -447,6 +439,30 @@ export class AuthService implements OnModuleInit {
       actorAccountId: user.accountId,
       detail: { sessionId: user.sessionId, ip: meta.ip, requestId: meta.requestId },
     });
+  }
+
+  /**
+   * Successful login (AUDIT-1, APPROVED 2026-10-02): the `auth.login.success` audit row is MANDATORY and is
+   * written in the same transaction as the session row. If either write fails nothing is committed: no
+   * session row, so no cookie is issued (the caller never reaches the token), and the client gets a
+   * generic 503 `service_unavailable`. Only the error class is logged (never the account, e-mail or address),
+   * and no throttle counter moves: it is not a credential failure and must not be an enumerable difference
+   * (it only ever happens after the credentials were fully verified). This is the opposite of the refused-login
+   * path, where audit is best effort (`recordAuditBestEffort`). Applied to every successful login whatever the
+   * mode or role, so the dev mode behaves the same as `local`.
+   */
+  private async openAuditedSession(
+    values: { id: string; accountId: string; tokenHash: string; createdAt: Date; expiresAt: Date },
+    detail: Parameters<AuditService['record']>[0]['detail'],
+  ): Promise<void> {
+    try {
+      await this.sessions.createWithAudit(values, (writer) =>
+        this.audit.record({ action: AUDIT_ACTIONS.loginSuccess, actorAccountId: values.accountId, detail }, writer),
+      );
+    } catch (error) {
+      this.logger.error({ ...errorLogFields(error) }, 'could not record the mandatory login audit event; no session was created (fail closed)');
+      throw new AppError('service_unavailable');
+    }
   }
 
   /** Mode restriction on top of the channel rule: `local` admits only its allowed roles (undefined = every role). */

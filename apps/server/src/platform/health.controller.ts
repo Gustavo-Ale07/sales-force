@@ -23,7 +23,7 @@ export class HealthController {
   /**
    * Readiness: 200 when `ready` or `degraded`, 503 when `not_ready`. Public, so an anonymous caller
    * gets only the coarse verdict; the detail (migration counts, failing entities, messages) needs a live
-   * session whose role may read the configuration (integration is admin-only). The check itself is cached and shared (`ReadinessService`).
+   * session whose role may read the configuration (integration: admin and technical, ROLE-1). The check itself is cached and shared (`ReadinessService`).
    */
   @ApiRoute(routes.getReady)
   async ready(

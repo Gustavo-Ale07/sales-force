@@ -286,10 +286,10 @@ describe('production/staging boot refusals, fail closed (revalidation)', () => {
     expect(parseApiEnv({ DATABASE_URL, NODE_ENV: 'development', AUTH_MODE: 'local' }).AUTH_MODE).toBe('local');
   });
 
-  it('API: the auth config of local mode admits only the admin profile; dev admits every role', () => {
+  it('API: the auth config of local mode admits only the admin and technical profiles; dev admits every role', () => {
     const local = authConfigFromEnv(parseApiEnv({ ...PROD, ...DATASET, AUTH_MODE: 'local' }));
     expect(local.authMode).toBe('local');
-    expect(local.allowedRoles).toEqual(['admin']);
+    expect(local.allowedRoles).toEqual(['admin', 'technical']);
     expect(local.externalLogin).toBeUndefined();
     const dev = authConfigFromEnv(parseApiEnv({ DATABASE_URL, NODE_ENV: 'development', ALLOW_DEV_AUTH: '1' }));
     expect(dev.authMode).toBe('dev');

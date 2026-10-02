@@ -19,37 +19,37 @@ import { startPostgres, type TestPostgres } from '../helpers/postgres.js';
  */
 type Expectation = 'allow' | 'deny';
 const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>>> = {
-  logout: { admin: 'allow', manager: 'allow', seller: 'allow' },
-  getConfiguration: { admin: 'allow', manager: 'deny', seller: 'deny' },
+  logout: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'allow' },
+  getConfiguration: { admin: 'allow', manager: 'deny', seller: 'deny', technical: 'allow' },
   // Minimal order-entry slice: every role that can create an order needs it (unlike getConfiguration above).
-  getOrderEntryConfiguration: { admin: 'allow', manager: 'allow', seller: 'allow' },
+  getOrderEntryConfiguration: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   // Commercial routes (Stage 3A). The three roles that exist may use them; the external
   // representative role does not exist yet (AUTH-3 PROPOSED) and gets no grant until the owner decides.
-  getDashboard: { admin: 'allow', manager: 'allow', seller: 'allow' },
-  listSellers: { admin: 'allow', manager: 'allow', seller: 'allow' },
-  listCustomers: { admin: 'allow', manager: 'allow', seller: 'allow' },
-  getCustomer: { admin: 'allow', manager: 'allow', seller: 'allow' },
-  listProductGroups: { admin: 'allow', manager: 'allow', seller: 'allow' },
-  listProducts: { admin: 'allow', manager: 'allow', seller: 'allow' },
-  getProduct: { admin: 'allow', manager: 'allow', seller: 'allow' },
-  getProductImage: { admin: 'allow', manager: 'allow', seller: 'allow' },
+  getDashboard: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  listSellers: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  listCustomers: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  getCustomer: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  listProductGroups: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  listProducts: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  getProduct: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  getProductImage: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   // ASSUMPTION (pending owner confirmation): a read of the same catalog as listProducts, open to every role.
-  resolveProducts: { admin: 'allow', manager: 'allow', seller: 'allow' },
-  listOrders: { admin: 'allow', manager: 'allow', seller: 'allow' },
-  createOrder: { admin: 'allow', manager: 'allow', seller: 'allow' },
-  getOrder: { admin: 'allow', manager: 'allow', seller: 'allow' },
-  replaceOrder: { admin: 'allow', manager: 'allow', seller: 'allow' },
-  discardOrder: { admin: 'allow', manager: 'allow', seller: 'allow' },
-  submitOrder: { admin: 'allow', manager: 'allow', seller: 'allow' },
-  repeatLastOrder: { admin: 'allow', manager: 'allow', seller: 'allow' },
+  resolveProducts: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  listOrders: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  createOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  getOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  replaceOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  discardOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  submitOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  repeatLastOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   // Recurring order templates (Phase E). ASSUMPTION (owner ruling in the plan): every role reaches them; which
   // templates it sees is the customer's seller scope (IDOR tests: order-templates.test.ts).
-  listOrderTemplates: { admin: 'allow', manager: 'allow', seller: 'allow' },
-  createOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow' },
-  getOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow' },
-  replaceOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow' },
-  deleteOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow' },
-  useOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow' },
+  listOrderTemplates: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  createOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  getOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  replaceOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  deleteOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  useOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
 };
 
 const sessionRoutes = (Object.values(routes) as RouteDefinition[]).filter((route) => route.auth === 'session');

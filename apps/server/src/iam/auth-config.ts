@@ -12,11 +12,11 @@ const HOUR_MS = 60 * MINUTE_MS;
  * Modules never read `process.env` (see `InfrastructureModule`).
  */
 export interface AuthConfig {
-  /** `dev` never runs in production; `local` is the production-capable admin-only local login (contracts `AuthMode`). */
+  /** `dev` never runs in production; `local` is the production-capable local login for admin and technical only (AUTH-5; contracts `AuthMode`). */
   readonly authMode: AuthMode;
   /**
    * Roles allowed to hold a session in this mode. `undefined` = every role (dev). `local` allows only
-   * `admin`: other roles fail login with the uniform `invalid_credentials` and any older session of
+   * `admin` and `technical` (LOCAL_MODE_ROLES): other roles fail login with the uniform `invalid_credentials` and any older session of
    * theirs stops resolving. Widening it needs an owner decision (external verifier, STACK-2).
    */
   readonly allowedRoles?: readonly AccountRole[];
@@ -65,10 +65,10 @@ export interface LoginLimits {
 }
 
 /**
- * Profiles that may log in with `AUTH_MODE=local`. The role model has no separate "technical" role:
- * `admin` is the administrative/technical profile (it alone holds integration/configuration routes).
+ * Profiles that may log in with `AUTH_MODE=local` (AUTH-5, ROLE-1): `admin` and `technical`. `technical` is not an
+ * `admin`: it only reads health, diagnostics, integration and sync status (see `policy.ts`).
  */
-export const LOCAL_MODE_ROLES: readonly AccountRole[] = Object.freeze<AccountRole[]>(['admin']);
+export const LOCAL_MODE_ROLES: readonly AccountRole[] = Object.freeze<AccountRole[]>(['admin', 'technical']);
 
 /** RF-IAM-2: 5 failures lock for 15 minutes; repeated lockouts double the duration (cap 24 h). */
 export const DEFAULT_ACCOUNT_THROTTLE: ThrottleRule = {

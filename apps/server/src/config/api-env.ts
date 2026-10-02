@@ -38,7 +38,7 @@ export const ApiEnvSchema = z.object({
 
   // Authentication. `dev` needs an explicit opt-in (ALLOW_DEV_AUTH=1) on top of a non-production
   // NODE_ENV (both checked below). `local` is the production-capable mode: Force-local Argon2id login
-  // for the admin profile only; no external verifier, no dev shortcut. Unknown values are refused.
+  // for the admin and technical profiles only (AUTH-5, ROLE-1); no external verifier, no dev shortcut. Unknown values are refused.
   AUTH_MODE: z.enum(['dev', 'local'], { error: "must be 'dev' or 'local'." }).default('dev'),
   ALLOW_DEV_AUTH: z.string().optional(),
   /** Idle expiry of a session; every request within the window slides it (security model §3.2: 12 h). */
