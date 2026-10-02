@@ -14,6 +14,10 @@
 #      criterion for that reason. If either identity cannot be read, the script refuses.
 # pg_restore --clean drops the objects it recreates in the target, so point it only at a disposable database.
 # Passwords go to libpq through the environment of each single command, not in process arguments.
+# DATABASE_URL (backup.env) is the READ-ONLY role force_backup and is used only for the identity read of the live
+# side; every write goes to RESTORE_TEST_DATABASE_URL (restore-test.env: a role that owns the scratch database and
+# has no access to the live one). The scratch database must already exist: this script never creates one.
+# On success it writes <dump>.restore-ok (needs /backups writable, see the compose service).
 # Prints elapsed seconds (RTO <= 4 h target; staging: informational).
 set -eu
 
@@ -84,3 +88,11 @@ end="$(date +%s)"
 tables="$(psql "$target_url" -X -At -c "SELECT count(*) FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog','information_schema')")"
 [ "$tables" -gt 0 ] || { echo "ops-restore-check: restored database has no tables." >&2; exit 1; }
 echo "ops-restore-check: OK $(basename "$dump"): $tables tables, restored in $((end - start)) s"
+
+# Success marker for THIS dump: <dump>.restore-ok holds the dump's checksum line, so ops-offsite-sync.sh (optional
+# gate OFFSITE_REQUIRE_RESTORE_MARKER=1) uploads only a dump whose restore was verified, and a marker can never
+# vouch for a different file. Written last, atomically, and only after every check above passed (set -e).
+marker="$dump.restore-ok"
+cp -- "$dump.sha256" "$marker.partial"
+mv -- "$marker.partial" "$marker"
+echo "ops-restore-check: wrote $(basename "$marker")"

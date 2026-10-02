@@ -15,6 +15,9 @@
 #   OFFSITE_ALLOW_UNENCRYPTED=1  explicit owner acceptance to upload the plain dump (provider-side encryption only).
 #                                Without a recipient AND without this opt-in the script refuses.
 #   OFFSITE_VERIFY               download (default: re-download and compare sha256) or size (compare ContentLength only)
+#   OFFSITE_REQUIRE_RESTORE_MARKER=1  optional hard gate, default 0 (off): upload only when <dump>.restore-ok exists and
+#                                matches the dump's .sha256 (written by ops-restore-check.sh after a successful restore).
+#                                With 0 the script only reminds you that a copy counts after a restore-check.
 #
 # Steps: refuse on missing config -> pick the newest dump -> `sha256sum -c` against its .sha256 (an unverified
 # dump is never uploaded) -> [encrypt] -> upload dump + checksum -> verify the uploaded copy -> report.
@@ -75,23 +78,51 @@ base="$(basename "$dump")"
 [ -f "$dump.sha256" ] || fail "$base has no .sha256."
 (cd /backups && sha256sum -c "$base.sha256" > /dev/null) || fail "$base does not match its .sha256; not uploaded."
 
+# Optional hard gate (default off): upload only a dump on which ops-restore-check passed. restore-check writes
+# <dump>.restore-ok (a copy of the dump's .sha256 line) after a successful restore; here the marker must exist AND
+# match the checksum of the dump being uploaded. Anything but 0 or 1 is refused.
+gate="${OFFSITE_REQUIRE_RESTORE_MARKER:-0}"
+case "$gate" in 0|1) ;; *) fail "OFFSITE_REQUIRE_RESTORE_MARKER must be 0 or 1." ;; esac
+if [ "$gate" = "1" ]; then
+  [ -f "$dump.restore-ok" ] || fail "OFFSITE_REQUIRE_RESTORE_MARKER=1 and $base has no .restore-ok (run restore-check on this dump first)."
+  [ "$(cat "$dump.restore-ok")" = "$(cat "$dump.sha256")" ] || fail "$base.restore-ok does not match the dump's .sha256 (stale marker); run restore-check again."
+fi
+
+# Only small files live in $work (checksums, FIFOs): the dump itself is never copied to local storage, so the
+# tmpfs of this service stays tiny whatever the dump size. With age the ciphertext is STREAMED to the upload.
 work="$(mktemp -d /tmp/sf-offsite.XXXXXX)"
 trap 'rm -rf -- "$work"' EXIT
 trap 'exit 1' INT TERM
 
-payload="$dump"
-object="$base"
-if [ -n "$recipient" ]; then
-  age -r "$recipient" -o "$work/$base.age" "$dump"
-  payload="$work/$base.age"
-  object="$base.age"
-fi
-payload_sum="$(sha256sum "$payload" | cut -d ' ' -f 1)"
-payload_size="$(wc -c < "$payload" | tr -d ' ')"
-key_payload="${prefix}${object}"
 key_sum="${prefix}${base}.sha256"
-
-s3 s3 cp "$payload" "s3://$OFFSITE_S3_BUCKET/$key_payload" --only-show-errors
+if [ -n "$recipient" ]; then
+  object="$base.age"
+  key_payload="${prefix}${object}"
+  # Upper bound of the ciphertext (age adds a 16-byte tag per 64 KiB chunk plus a small header); only used by
+  # the AWS CLI to size multipart parts of a stream of unknown length.
+  plain_size="$(wc -c < "$dump" | tr -d ' ')"
+  expected_size=$((plain_size + plain_size / 4096 + 8192))
+  # The bytes that are sent are hashed and counted in the same pass (encryption is not reproducible, so it
+  # cannot be repeated to compute them afterwards). An age failure must not hide behind a truncated upload.
+  mkfifo "$work/sum.fifo" "$work/count.fifo"
+  sha256sum < "$work/sum.fifo" | cut -d ' ' -f 1 > "$work/payload.sum" &
+  sum_pid=$!
+  wc -c < "$work/count.fifo" | tr -d ' ' > "$work/payload.size" &
+  count_pid=$!
+  { age -r "$recipient" "$dump" || : > "$work/age.failed"; } \
+    | tee "$work/sum.fifo" "$work/count.fifo" \
+    | s3 s3 cp - "s3://$OFFSITE_S3_BUCKET/$key_payload" --expected-size "$expected_size" --only-show-errors
+  wait "$sum_pid" && wait "$count_pid" || fail "could not hash the encrypted stream."
+  [ ! -e "$work/age.failed" ] || fail "age failed; delete the partial object $key_payload from the bucket."
+  payload_sum="$(cat "$work/payload.sum")"
+  payload_size="$(cat "$work/payload.size")"
+else
+  object="$base"
+  key_payload="${prefix}${object}"
+  payload_sum="$(cut -d ' ' -f 1 < "$dump.sha256")"
+  payload_size="$(wc -c < "$dump" | tr -d ' ')"
+  s3 s3 cp "$dump" "s3://$OFFSITE_S3_BUCKET/$key_payload" --only-show-errors
+fi
 s3 s3 cp "$dump.sha256" "s3://$OFFSITE_S3_BUCKET/$key_sum" --only-show-errors
 
 # Verification of what is actually stored, not of what we sent.
