@@ -1,13 +1,13 @@
 import { z } from 'zod';
 import { IsoTimestampSchema, UuidSchema, codeInt, named } from './primitives.js';
 
-export const AccountRoleSchema = named('AccountRole', z.enum(['admin', 'manager', 'seller']));
+export const AccountRoleSchema = named('AccountRole', z.enum(['admin', 'manager', 'seller', 'technical']));
 export type AccountRole = z.infer<typeof AccountRoleSchema>;
 
 /**
  * `dev`: isolated development authentication, never production. `local`: Force-local Argon2id login
- * restricted to the admin profile (valid in production; operational accounts are refused until an
- * external verifier mode exists). AUTH-x PROPOSED.
+ * restricted to the admin and technical profiles (AUTH-5, ROLE-1; valid in production; operational
+ * accounts are refused until an external verifier mode exists).
  */
 export const AuthModeSchema = named('AuthMode', z.enum(['dev', 'local']));
 export type AuthMode = z.infer<typeof AuthModeSchema>;

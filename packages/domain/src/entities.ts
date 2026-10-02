@@ -10,8 +10,9 @@ export type IsoTimestamp = string;
 /** ISO-8601 calendar date, e.g. `2026-01-31`. */
 export type IsoDate = string;
 
-export type AccountRole = 'admin' | 'manager' | 'seller';
-export const ACCOUNT_ROLES: readonly AccountRole[] = ['admin', 'manager', 'seller'];
+/** `technical` (ROLE-1) is a platform-operation profile: not an `admin`, no commercial scope. */
+export type AccountRole = 'admin' | 'manager' | 'seller' | 'technical';
+export const ACCOUNT_ROLES: readonly AccountRole[] = ['admin', 'manager', 'seller', 'technical'];
 
 export interface Seller {
   readonly code: number;

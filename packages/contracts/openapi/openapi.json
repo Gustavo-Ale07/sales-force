@@ -2331,7 +2331,8 @@
         "enum": [
           "admin",
           "manager",
-          "seller"
+          "seller",
+          "technical"
         ]
       },
       "AlternativeTable": {

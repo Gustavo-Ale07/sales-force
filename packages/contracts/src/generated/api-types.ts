@@ -475,7 +475,7 @@ export interface components {
             sellerCodes: number[];
         };
         /** @enum {string} */
-        AccountRole: "admin" | "manager" | "seller";
+        AccountRole: "admin" | "manager" | "seller" | "technical";
         AlternativeTable: {
             tableCode: number;
             validation: components["schemas"]["AlternativeTableValidation"];

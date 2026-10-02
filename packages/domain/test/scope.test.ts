@@ -138,6 +138,12 @@ describe('customer scope by portfolioOwnership strategy', () => {
         scope: { kind: 'all' },
       });
     });
+    it('technical (ROLE-1) gets no portfolio scope, whatever the strategy or links', () => {
+      for (const strategy of ['all_visible', 'customer_seller_field', 'explicit_account_links'] as const) {
+        const tech: ScopeActor = { role: 'technical', accountEmail: 'x@example.test', linkedSellerCodes: [900] };
+        expect(resolveCustomerScopeOutcome(tech, configWith(strategy))).toEqual({ ok: false, reason: 'role_not_permitted' });
+      }
+    });
     it('any other role is denied, never all', () => {
       const rogue = { role: 'representative', accountEmail: 'x@example.test', linkedSellerCodes: [900] } as unknown as ScopeActor;
       expect(resolveCustomerScopeOutcome(rogue, configWith('all_visible'))).toEqual({ ok: false, reason: 'role_not_permitted' });
