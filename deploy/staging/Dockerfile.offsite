@@ -1,0 +1,12 @@
+# syntax=docker/dockerfile:1
+#
+# Image of the `offsite` job (deploy/staging/ops-offsite-sync.sh): AWS CLI v2 for the S3-compatible upload and
+# `age` for optional client-side encryption (public-key recipient only; the private key never lives on the VPS).
+# BASE_IMAGE must be pinned by the owner (tag or digest, from compose.env OFFSITE_BASE_IMAGE): an Alpine release
+# that ships the `aws-cli` and `age` packages. Package versions follow that Alpine release. Built on the VPS like
+# the other images; any equivalent prebuilt image providing `aws` and `age` can replace it via OFFSITE_IMAGE.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+RUN apk add --no-cache aws-cli age \
+ && aws --version \
+ && age --version
