@@ -65,7 +65,7 @@ Two images, generic names, built from the repository root:
   image default, so the image never enables development authentication by itself: only the compose file
   sets `NODE_ENV=development` and `ALLOW_DEV_AUTH=1`.
 - `sales-force-web` (`deploy/Dockerfile.web`): static build served by unprivileged nginx. `/config.json`
-  is generated at container start from `INSTALLATION_NAME` (default `Sales Force`), `WEB_AUTH_MODE` and the
+  is generated at container start from `INSTALLATION_NAME` (default `Sales Force`), `WEB_AUTH_MODE` (`dev`, `standard` or `local`; staging uses `local`) and the
   optional brand (`BRAND_LOGO_URL`, `BRAND_MARK_URL`, `BRAND_ACCENT`); no environment value is baked into the
   bundle. The brand is per installation: the logo and mark are files the installation mounts read-only at
   `/usr/share/nginx/html/brand/` (never in the image or the repository), referenced as `/brand/<file>.(png|svg|

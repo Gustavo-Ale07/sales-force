@@ -7,12 +7,17 @@
 # - No secret and no customer value is written here. Non-secret, per-installation values are interpolated
 #   from the compose env file; secrets live in per-role env files OUTSIDE the repository, under
 #   ${SF_SECRETS_DIR} (examples with placeholders: deploy/staging/*.env.example).
-# - Images are pinned by explicit reference (tag or digest): there is no `build:` and no `latest` default.
-# - Start-up order: [postgres, only with the self-hosted-db profile] -> migrate (one-shot) -> api + worker ->
-#   web -> edge. Processes never migrate on start (DATA-2).
-# - NODE_ENV=production on every server container: the API refuses dev authentication and demo accounts
-#   and requires TRUST_PROXY / ALLOWED_ORIGINS / dataset identity; the worker refuses the fake gateway
-#   unless ALLOW_FAKE_GATEWAY=1 is explicit.
+# - Images are pinned by explicit reference (tag or digest), no `latest` default. Initial path: built ON the
+#   VPS from a checked-out git tag/commit (`docker compose build`; the tags carry the SHA, see README-staging.md
+#   "Build and deploy"); a registry reference works unchanged if one is adopted later (OPS-3 PROPOSED).
+# - Start-up order: [postgres, profile self-hosted-db = the default initial staging database] -> migrate
+#   (one-shot) -> api + worker -> web -> edge. Processes never migrate on start (DATA-2).
+# - Staging behaves like production: NODE_ENV=production on every server container, admin-only local login
+#   (API_AUTH_MODE=local / WEB_AUTH_MODE=local), operational login off, no demo accounts, no seed. The API
+#   refuses dev authentication and demo accounts and requires TRUST_PROXY / ALLOWED_ORIGINS / dataset
+#   identity; the worker refuses the fake gateway unless ALLOW_FAKE_GATEWAY=1 is explicit.
+# - No verifier service: the dedicated external verifier (STACK-2 option C) is chosen in direction but NOT
+#   implemented; it will be added here only when it exists.
 # - Sankhya settings exist ONLY in the worker env file (STACK-2). Staging never reaches Sankhya production
 #   (SNK-3): the gateway itself refuses SANKHYA_ENVIRONMENT=production.
 # - No seed, no demo accounts: docker-compose.seed.yml is never combined with this file.
@@ -33,6 +38,10 @@ x-hardening: &hardening
 
 x-server: &server
   image: ${SERVER_IMAGE:?SERVER_IMAGE must be an explicit pinned image reference (tag or digest)}
+  # Used only by `docker compose build` on the VPS; the tag in SERVER_IMAGE carries the git SHA.
+  build:
+    context: ..
+    dockerfile: deploy/Dockerfile.server
   logging: *logging
   <<: *hardening
   read_only: true
@@ -40,10 +49,11 @@ x-server: &server
     - /tmp
 
 services:
-  # Staging-only fallback (OPS-1): used ONLY with `--profile self-hosted-db`. The preferred staging database
-  # is a managed PostgreSQL >= 16 (same major as production, DATA-1) reached through DATABASE_URL. This
-  # container has no WAL archiving and no PITR: its recovery point is the last logical dump (staging may
-  # accept a looser RPO, OPS-2). Never a production pattern. No published port: reachable only on `backend`.
+  # DEFAULT initial staging database (owner decision): PostgreSQL isolated on the same VPS, started with
+  # `--profile self-hosted-db`. Managed PostgreSQL >= 16 (same major as production, DATA-1) remains the target
+  # (V-04, V-15) and needs no container: omit the profile and point DATABASE_URL at it. This container has no
+  # WAL archiving and no PITR: its recovery point is the last logical dump, so RPO <= 15 min is NOT met
+  # (README-staging.md "Backup and restore"). Never a production pattern. No published port: only `backend`.
   postgres:
     profiles: ["self-hosted-db"]
     image: postgres:${PG_MAJOR:?PG_MAJOR must match production (DATA-1, V-15)}
@@ -95,8 +105,8 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       API_HOST: 0.0.0.0
       API_PORT: "3000"
-      # Explicit, no default. Only `dev` exists in the server today and the API refuses it in production:
-      # until a production authentication mode ships, this service cannot boot (see README-staging.md §Blockers).
+      # Explicit, no default. Staging value: `local` (admin-only Argon2id login; operational login stays off).
+      # `dev` is refused by the API in production.
       AUTH_MODE: ${API_AUTH_MODE:?API_AUTH_MODE must be set explicitly}
       # The browser origin is the public staging host (TLS terminated by the edge).
       ALLOWED_ORIGINS: https://${STAGING_DOMAIN:?STAGING_DOMAIN is required}
@@ -160,6 +170,9 @@ services:
   # to the API so the API sees the real client address through a single trusted hop).
   web:
     image: ${WEB_IMAGE:?WEB_IMAGE must be an explicit pinned image reference (tag or digest)}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
     restart: unless-stopped
     logging: *logging
     security_opt:
@@ -169,12 +182,12 @@ services:
         condition: service_healthy
     environment:
       INSTALLATION_NAME: ${INSTALLATION_NAME:-Sales Force}
-      # Explicit, no default (the web container refuses to start without it). `standard` is the production
-      # mode; the API side is gated by API_AUTH_MODE above.
-      WEB_AUTH_MODE: ${WEB_AUTH_MODE:?WEB_AUTH_MODE must be set explicitly (dev|standard)}
+      # Explicit, no default (the web container refuses to start without it). Staging value: `local`
+      # (local login form only, no dev banner); must match API_AUTH_MODE.
+      WEB_AUTH_MODE: ${WEB_AUTH_MODE:?WEB_AUTH_MODE must be set explicitly, staging value is local}
     networks: [edge]
 
-  # TLS edge (OPS-3 PROPOSED: Caddy). Automatic ACME certificates; storage in the caddy_data volume.
+  # TLS edge (OPS-3 PROPOSED: Caddy). Real HTTPS: automatic ACME certificates; storage in the caddy_data volume.
   edge:
     image: ${CADDY_IMAGE:?CADDY_IMAGE must be an explicit pinned image reference (tag or digest)}
     restart: unless-stopped
@@ -209,7 +222,8 @@ services:
   # ---- Operations (profile `ops`; run explicitly with `run --rm`, never started by `up`) ----
 
   # Logical dump of the staging database (custom format) into ${SF_BACKUP_DIR}. Uses the postgres client of the
-  # SAME major as the server (PG_MAJOR). Complements, never replaces, provider PITR (OPS-2).
+  # SAME major as the server (PG_MAJOR). With the self-hosted database it is the only recovery source;
+  # with a managed database it complements provider PITR (OPS-2).
   backup:
     profiles: ["ops"]
     image: postgres:${PG_MAJOR:?PG_MAJOR must match production (DATA-1, V-15)}

@@ -1,4 +1,5 @@
-# Staging edge (OPS-3 PROPOSED). TLS terminates here; the API and the web container only speak plain HTTP on
+# Staging edge (OPS-3 PROPOSED). Real HTTPS via ACME; STAGING_DOMAIN is a placeholder until the owner supplies
+# the domain. Public vs restricted access is an owner choice (README-staging.md). TLS terminates here; the API and the web container only speak plain HTTP on
 # the private `edge` network. STAGING_DOMAIN comes from the container environment (compose env file);
 # ACME contact email from edge.env (outside the repository).
 {
