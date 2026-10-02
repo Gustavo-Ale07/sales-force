@@ -2,7 +2,9 @@
 
 Status: **configuration only, never deployed or started**. `deploy/docker-compose.staging.yml` plus
 `deploy/staging/*`. OPS-3 (Caddy, SSH deploy) is PROPOSED; OPS-1/OPS-2/DATA-1/DATA-2/STACK-2/SNK-3 are
-APPROVED. Where this document chooses something PROPOSED it says so.
+APPROVED. Where this document chooses something PROPOSED it says so. Owner decisions of 2026-10-02 applied here:
+dedicated internal verifier (STACK-2 option C, structure only), least-privilege database roles, staging RPO of 24 h
+with an off-VPS copy, real HTTPS on the planned `force-staging` host, SSH deploy by a dedicated non-root user.
 
 **Staging behaves like production** (owner decision): `NODE_ENV=production`, `API_AUTH_MODE=local` and
 `WEB_AUTH_MODE=local`, real HTTPS, no demo sellers, no seed overlay, no `SF_ALLOW_DEMO_ACCOUNTS`, no
@@ -10,36 +12,68 @@ APPROVED. Where this document chooses something PROPOSED it says so.
 
 ## Authentication
 
-`local` = Argon2id login for the `admin` profile only; seller/manager accounts are refused with the uniform
-`invalid_credentials` and there is no external login (operational login is OFF). `dev` is refused when
-`NODE_ENV=production` (`apps/server/src/config/api-env.ts`). Operational (seller) login stays unavailable until the
-external verifier exists: STACK-2 option C (a dedicated verifier) is chosen in direction but **not implemented**,
-so the compose file has no verifier service; it will be added when the verifier exists.
+`local` = Argon2id login for the administrative/technical profiles only (the role gate is enforced in code, not by
+this stack); there is no external login (operational login is OFF). `dev` is refused when `NODE_ENV=production`
+(`apps/server/src/config/api-env.ts`). Operational (seller) login stays unavailable until the real Sankhya
+verifier exists.
+
+### Internal verifier (STACK-2 option C, structure only)
+
+`Web/Mobile -> Force API -> internal verifier -> Sankhya`. The `verifier` service is the same server image with its
+own entry point (`dist/main-verifier.js`) and its own secret file (`verifier.env`):
+
+- **Internal only:** network `verifier` (`internal: true`: no route to or from the outside), **no published port**,
+  not on `edge`; the API is the only other member. The worker is not on it and gets none of the verifier
+  secrets; the API holds no Sankhya credential; the worker never receives a user password.
+- **Disabled mode only:** `VERIFIER_MODE=disabled` is set by the compose file. The real Sankhya adapter is
+  **BLOCKED_EXTERNAL_SECRET**: `live` is refused at boot as "not implemented", unknown modes are refused, and the
+  process refuses to boot if it finds any Sankhya, database, session, SMTP or Sentry setting. `POST
+  /internal/verify` answers a uniform denial (`{"ok":false,"code":"denied"}`, 403); there is no success path in
+  this build.
+- **Caller authentication:** shared secret (`VERIFIER_SHARED_SECRET`, >= 32 characters, `Authorization: Bearer`),
+  compared in constant time; wrong or missing secret = 401 with a minimal body.
+- **Hardening:** body limit (2 KiB default), 5 s deadline, in-process throttle (30 requests/minute, 4 concurrent),
+  bodies and headers never logged, password only in memory for the duration of the request (JavaScript strings
+  cannot be wiped: best effort), fail closed on every error.
+- **Not wired yet:** the API client for the verifier is part of the external-login work. `api.env.example` carries
+  the reserved `VERIFIER_URL` / `VERIFIER_SHARED_SECRET` lines (not read by the API today).
+- A live adapter will need, by a separate reviewed change: the validated Sankhya login mechanism (spike), a minimal
+  credential subset in `verifier.env`, a restricted egress path to the Sankhya hosts only (the `verifier` network
+  has none today), a per-login failure budget below Sankhya's own lockout threshold, and a security review.
 
 ## Open before the first start (owner)
 
-1. Domain name (`STAGING_DOMAIN` is a placeholder) and whether staging is public or allow-listed (see TLS).
-2. VPS provider and host sizing; the host's firewall must expose only 80/443 (and SSH from known addresses).
-3. Where the off-VPS copy of dumps goes (see Backup) and who runs the restore-check.
+1. DNS for `force-staging.sistemasplac.com.br` (planned `STAGING_DOMAIN`; production later
+   `force.sistemasplac.com.br`) is **not created**; no DNS change was made. The record must point at the VPS before
+   the first start.
+2. VPS provider and host sizing; the host firewall exposes 80/443 publicly and SSH only as in "SSH and deploy user".
+3. The off-VPS backup location (bucket, credentials, age recipient key) is **pending infrastructure**; nothing in
+   the repository names one. Who runs the restore-check.
 4. Managed PostgreSQL remains the target (V-04, V-15); not a blocker for the initial staging.
+5. The one-time role bootstrap (`db-roles`) is run by the owner with the database administrator credential.
 
 ## Topology
 
 ```
-Internet :80/:443 -> edge (Caddy, TLS) -+-> /api/*  -> api:3000   (network edge+backend)
+Internet :80/:443 -> edge (Caddy, TLS) -+-> /api/*  -> api:3000   (networks edge+backend+verifier)
                                         +-> else    -> web:8080   (network edge)
-backend network (private): api, worker, migrate, backup/restore-check, postgres (default) -> DATABASE_URL
+verifier network (internal, no outbound): api <-> verifier:3002
+backend network (private): api, worker, migrate, backup/restore-check/db-roles, postgres (default) -> DATABASE_URL
+egress network (outbound only): offsite job
 ```
 
 | Service | Role |
 |---|---|
-| `migrate` | One-shot, same server image: `migrate/cli.js` (advisory-lock protected SQL migrations) then `queue-install.js`. `api` and `worker` start only on `service_completed_successfully`. |
-| `api` | `dist/main-api.js`, `NODE_ENV=production`. No `SANKHYA_*`, no `SF_ALLOW_DEMO_ACCOUNTS`, no `ALLOW_DEV_AUTH`. |
-| `worker` | `dist/main-worker.js`. Only service with Sankhya settings (`worker.env`). `SANKHYA_MODE=fake` + explicit `ALLOW_FAKE_GATEWAY=1` by default (production mode refuses a silent fake). |
+| `migrate` | One-shot, same server image, **as `force_migrator`** (`migrate.env`): `migrate/cli.js` (advisory-lock protected SQL migrations) then `queue-install.js`. `api` and `worker` start only on `service_completed_successfully`. |
+| `api` | `dist/main-api.js`, `NODE_ENV=production`, **as `force_api`** (`api.env`). No `SANKHYA_*`, no demo/dev flags. |
+| `worker` | `dist/main-worker.js`, **as `force_worker`** (`worker.env`). Only service with Sankhya settings. `SANKHYA_MODE=fake` + explicit `ALLOW_FAKE_GATEWAY=1` by default. |
+| `verifier` | Internal identity verifier, disabled mode (see above). `verifier.env`. |
 | `web` | Static SPA (nginx). `WEB_AUTH_MODE` required. Not published. |
 | `edge` | Caddy: the only published ports (80, 443, 443/udp). |
-| `postgres` | Profile `self-hosted-db`: the default initial staging database. |
-| `backup`, `restore-check` | Profile `ops`, run with `run --rm`. |
+| `postgres` | Profile `self-hosted-db`: the default initial staging database (superuser from `postgres.env`, used by nothing else but the owner's bootstrap). |
+| `backup`, `restore-check`, `migrate-safe` | Profile `ops`, run with `run --rm`. |
+| `offsite` | Profile `offsite`: off-VPS copy of the newest verified dump. |
+| `db-roles` | Profile `ops-admin`: one-time role bootstrap by the owner. |
 
 Edge routing choice: Caddy sends `/api/*` straight to the API (one trusted hop, `TRUST_PROXY=1`, client address
 from Caddy). Going through the web container's nginx would add a second hop and make the API see the proxy
@@ -50,16 +84,42 @@ changing the routing.
 
 - **Default initial staging database:** PostgreSQL in the `postgres` container on the same VPS, started with
   `--profile self-hosted-db`: private `backend` network only, **no published port**, named volume, same major as
-  production (`PG_MAJOR`, V-15), staging-only credentials, `DATABASE_URL` targeting host `postgres`. It is
-  isolated from production (separate host and credentials). There is no WAL archiving and no PITR.
+  production (`PG_MAJOR`, V-15), staging-only credentials. It is isolated from production (separate host and
+  credentials). There is no WAL archiving and no PITR.
 - **Target:** managed PostgreSQL >= 16, same major as production, private networking only, PITR, separate
-  credentials (V-04, V-15). Move by omitting the profile and pointing `DATABASE_URL` at it with
+  credentials (V-04, V-15). Move by omitting the profile and pointing the three `DATABASE_URL`s at it with
   `sslmode=verify-full` and, when the provider uses a private CA, `&sslrootcert=<mounted CA file>` with that file
-  mounted read-only in migrate, api, worker, backup and restore-check (see `database.env.example`; how each
-  provider publishes its CA is NEEDS VALIDATION at that rollout). Never weaken verification to pass a TLS error.
+  mounted read-only in migrate, migrate-safe, api, worker, backup and restore-check (see `migrate.env.example`).
+  Whether the provider lets the owner run `db-roles.sql` (GRANT/REVOKE on the database and schema) is NEEDS
+  VALIDATION per provider. Never weaken verification to pass a TLS error.
+- **Least-privilege roles (owner decision 2026-10-02).** `deploy/staging/db-roles.sql` defines `force_migrator`
+  (owns the schema, DDL, used by the one-shot jobs and, today, by backup/restore-check), `force_api` and
+  `force_worker` (DML only on what each needs, see the matrix in the file). None is a superuser. Each service has
+  its own `DATABASE_URL` in its own env file. **The PostgreSQL superuser is used by no application service.**
+  A dedicated read-only backup role (`force_backup`) is not created yet (listed as undetermined in `db-roles.sql`):
+  until then dumps run as the owner role.
 - Never a public or unrestricted database endpoint. Never production data in staging without approved
   sanitization (P-15). Staging holds no seed or demo accounts.
-- Volume and VPS share one failure domain: losing the VPS loses the database and any dump stored only on it.
+- Volume and VPS share one failure domain: losing the VPS loses the database and any dump stored only on it
+  (see the off-VPS copy below).
+
+### Role bootstrap (once, by the owner)
+
+`db-roles` runs `psql` as the database administrator with the three passwords supplied from `db-admin.env`
+(outside the repository, never in the compose file or the arguments). Generate three different passwords
+(`openssl rand -hex 32`), put them in `db-admin.env` and in the matching `DATABASE_URL`s.
+
+```sh
+$SFC --profile self-hosted-db up -d postgres                 # database exists
+$SFC --profile ops-admin run --rm db-roles                   # 1: roles, schema pgboss, grants for existing tables
+$SFC --profile self-hosted-db run --rm migrate               # 2: tables are created by force_migrator
+$SFC --profile ops-admin run --rm db-roles                   # 3: grants for the tables that now exist (idempotent)
+```
+
+Step 3 is required because `db-roles.sql` skips tables that do not exist yet; **re-run it after any release whose
+migration adds a table** (new tables are deny-by-default for api and worker until the grant matrix names them).
+The script refuses a missing variable, an application role as the administrator, weak or reused passwords and
+unexpected characters; it was exercised against a throwaway PostgreSQL 17 (see "Validation status").
 
 ## Secrets (P-22, SEC-1)
 
@@ -69,16 +129,20 @@ repository, owner-only permissions:
 
 | File | Read by | Content |
 |---|---|---|
-| `database.env` | migrate, api, worker, backup, restore-check | `DATABASE_URL` |
-| `api.env` | api | API-only overrides (may be empty; must exist) |
-| `worker.env` | worker | `SANKHYA_*` (empty while fake) |
+| `migrate.env` | migrate, migrate-safe, backup, restore-check | `DATABASE_URL` as `force_migrator` |
+| `api.env` | api | `DATABASE_URL` as `force_api`, API-only settings |
+| `worker.env` | worker | `DATABASE_URL` as `force_worker`; `SANKHYA_*` (empty while fake) |
+| `verifier.env` | verifier | `VERIFIER_SHARED_SECRET` (nothing else) |
 | `edge.env` | edge | `ACME_EMAIL` |
-| `postgres.env` | postgres (default database) | `POSTGRES_*` |
+| `postgres.env` | postgres (default database) | `POSTGRES_*` (superuser) |
+| `db-admin.env` | db-roles (owner, one time) | admin connection + the three role passwords |
 | `restore-test.env` | restore-check | `RESTORE_TEST_DATABASE_URL` (disposable DB) |
+| `offsite.env` | offsite | S3 endpoint/bucket/keys, age recipient (pending infrastructure) |
 
 Examples with placeholders: `deploy/staging/*.env.example` (named so the repository `.gitignore` rule `.env.*`
-does not hide them). Rotating a secret = edit the file, `up -d` the affected service. An encrypted off-server
-secrets backup is PROPOSED in OPS-2 and not designed here: keep a copy in the team's password manager.
+does not hide them). Rotating a secret = edit the file, `up -d` the affected service (a rotated role password also
+needs `db-roles`). An encrypted off-server secrets backup is PROPOSED in OPS-2 and not designed here: keep a copy
+in the team's password manager.
 
 ## First admin account
 
@@ -86,7 +150,7 @@ Staging has no seed and no demo accounts, so the first admin is created once, by
 from the built server image (password read from stdin, never on the command line; never reuse a demo password):
 
 ```sh
-export SFC="docker compose --env-file /etc/salesforce/staging/compose.env -f deploy/docker-compose.staging.yml"  # same as "Deploy"
+export SFC="docker compose --env-file /etc/salesforce/staging/compose.env -f deploy/docker-compose.staging.yml"  # same as "Build and deploy"
 <secrets-manager command that prints the new admin password> \
   | $SFC run --rm -T --no-deps -e ALLOW_REMOTE_DB=1 \
       api node dist/account-cli.js create --email <admin address> --name "<name>" --role admin --password-stdin
@@ -94,35 +158,35 @@ export SFC="docker compose --env-file /etc/salesforce/staging/compose.env -f dep
 
 `-T` disables the pseudo-terminal so the piped password reaches stdin; the password comes from a secrets manager
 or password-manager CLI through the pipe, never typed as an argument and not left in shell history.
-`ALLOW_REMOTE_DB=1` is needed only when `DATABASE_URL` is not loopback (the compose network host is not).
-Keep `SF_ALLOW_DEMO_ACCOUNTS` out of every secrets file. Without an admin nobody can sign in under
-`AUTH_MODE=local`. (The exact invocation has not been run against a started staging stack: verify it on first boot.)
+`ALLOW_REMOTE_DB=1` is needed only when `DATABASE_URL` is not loopback (the compose network host is not). The CLI
+runs as `force_api`, which holds INSERT/UPDATE on the account tables. Keep `SF_ALLOW_DEMO_ACCOUNTS` out of every
+secrets file. Without an admin nobody can sign in under `AUTH_MODE=local`. (The exact invocation has not been run
+against a started staging stack: verify it on first boot.)
 
 ## Sankhya (SNK-3)
 
 `SANKHYA_MODE` is required (no implicit default); `compose.env.example` sets `fake` with the explicit
 `ALLOW_FAKE_GATEWAY=1` (staging then serves synthetic data). Live mode only against a non-production Sankhya (`SANKHYA_ENVIRONMENT`
 `sandbox`|`homologation`; the gateway refuses `production`), with `SANKHYA_ALLOWED_HOSTS` set, `SYNC_MIRROR_ENABLED`
-explicit, and the owner's authorization. ERP order submission stays disabled (SNK-4/SNK-5 gates). Credentials
-only in `worker.env`.
+explicit, and the owner's authorization. ERP order submission stays disabled (SNK-4/SNK-5 gates). Sync credentials
+only in `worker.env`; the verifier and the API never hold them.
 
 ## TLS and certificates (real HTTPS)
 
-Caddy obtains and renews Let's Encrypt certificates automatically (HTTP-01/TLS-ALPN; needs a public DNS name and
-ports 80/443 reachable). State lives in the `caddy_data` volume: back it up or accept re-issuance (mind rate
-limits; the Caddyfile documents the ACME staging CA for rehearsals). HSTS is `max-age=86400` (short on purpose
-for staging; no preload).
-
-Owner choice, public vs restricted: **public** (default of this file: anyone can reach the login page, admin-only
-login, rate limits and lockout apply) or **allow-list** (host firewall/provider firewall restricting 80/443 to known
-addresses; ACME HTTP-01 then needs port 80 open to the CA, so use DNS-01 or an internal CA instead; that needs a
-Caddy DNS plugin build and is not configured here). `X-Robots-Tag: noindex` is set. Access logs strip Cookie,
-Authorization, X-Token and Set-Cookie.
+Owner decision: **real HTTPS, public**. Caddy obtains and renews Let's Encrypt certificates automatically
+(ACME HTTP-01 / TLS-ALPN) for `STAGING_DOMAIN` (planned `force-staging.sistemasplac.com.br`), which needs the
+public DNS record and ports 80 and 443 reachable from the internet. **The mobile app must not depend on an IP
+allow-list or a VPN**, so there is no allow-list mode in this stack (a DNS-01 variant would need a Caddy DNS
+plugin build and is not configured). State lives in the `caddy_data` volume: back it up or accept re-issuance
+(mind rate limits; the Caddyfile documents the ACME staging CA for rehearsals). HSTS is `max-age=86400` (short on
+purpose for staging; no preload). Anyone can reach the login page: login is restricted by role in code, and rate
+limits and lockout apply. `X-Robots-Tag: noindex` is set. Access logs strip Cookie, Authorization, X-Token and
+Set-Cookie. The verifier is never routed through Caddy.
 
 ## Health, readiness, logs
 
-- Liveness: API `GET /api/v1/health` (container healthcheck); worker loopback `GET /health` (container
-  healthcheck); web `/` (image HEALTHCHECK); edge admin `127.0.0.1:2019` (container healthcheck).
+- Liveness: API `GET /api/v1/health` (container healthcheck); worker loopback `GET /health`; verifier loopback
+  `GET /health`; web `/` (image HEALTHCHECK); edge admin `127.0.0.1:2019`.
 - Readiness: API `GET /api/v1/ready` (200 ready/degraded, 503 not_ready; anonymous callers get only the coarse
   verdict). Use it in rollout checks and for the external uptime monitor (OPS-4 PROPOSED):
   `curl -fsS https://$STAGING_DOMAIN/api/v1/ready`.
@@ -131,12 +195,16 @@ Authorization, X-Token and Set-Cookie.
 - Containers run with `no-new-privileges`; server containers also `cap_drop: ALL`, read-only root filesystem and
   `tmpfs /tmp`. These were **not exercised at runtime**: confirm on the first staging boot and relax only with a
   recorded reason.
+- Verifier isolation check on first boot (not exercised): `$SFC ps` must show no published port for `verifier`;
+  `$SFC exec api node -e "fetch('http://verifier:3002/health').then(r=>console.log(r.status))"` answers 200;
+  `$SFC exec edge wget -qO- http://verifier:3002/health` and `$SFC exec worker ...` must fail (name not resolved).
 
 ## Build and deploy (on the VPS, no external registry)
 
 Images are built on the VPS from a checked-out git tag or commit. The image tag carries the commit SHA, so a
 running version is always traceable and the previous images remain for rollback. No registry is required (a
 registry reference in `SERVER_IMAGE`/`WEB_IMAGE` keeps working if one is adopted later; OPS-3 stays PROPOSED).
+The deploy runs as the dedicated deploy user (next section).
 
 ```sh
 export SFC="docker compose --env-file /etc/salesforce/staging/compose.env -f deploy/docker-compose.staging.yml"
@@ -144,15 +212,22 @@ git fetch --tags && git checkout <tag-or-sha>          # detached, exact version
 export SHA=$(git rev-parse --short=12 HEAD)
 # set in compose.env:  SERVER_IMAGE=sales-force-server:$SHA   WEB_IMAGE=sales-force-web:$SHA
 $SFC config -q                                         # interpolation, required variables, file presence
-$SFC --profile self-hosted-db --profile ops run --rm backup   # dump BEFORE changing anything
 $SFC build migrate web                                 # see note
-$SFC --profile self-hosted-db run --rm migrate         # explicit; `up` also runs it first via depends_on
+# MANDATORY pre-migration backup, then the migration, in one command: if the dump fails nothing is migrated.
+$SFC --profile self-hosted-db --profile ops run --rm migrate-safe
+$SFC --profile ops-admin run --rm db-roles             # ONLY if the release adds a table (grants for new tables)
 $SFC --profile self-hosted-db up -d
 curl -fsS https://$STAGING_DOMAIN/api/v1/ready
 ```
 
-Note: `migrate`, `api` and `worker` share the one server image, so building `migrate` builds it once. No registry
-`pull` is part of this path (`$SFC pull edge` only fetches the Caddy image). The one-shot `backup` needs the database running: on the very first deploy skip it.
+**Pre-migration backup is part of every deploy**, not an optional courtesy. `migrate-safe` makes it one command
+(`backup` is a compose dependency that must complete successfully); doing it by hand is equivalent:
+`run --rm backup`, check it printed `wrote ...`, then `run --rm migrate`. Exception: the very first deploy has no
+database content yet, use plain `migrate` (see "Role bootstrap" for the first-deploy order). `migrate-safe` has been
+validated as configuration only (`config -q`), not run against a started stack.
+
+Note: `migrate`, `api`, `worker` and `verifier` share the one server image, so building `migrate` builds it
+once. No registry `pull` is part of this path (`$SFC pull edge` only fetches the Caddy image).
 
 Tag retention: keep at least the last 5 server/web image tags (`docker image ls sales-force-server`); prune
 older ones manually with `docker image rm` only after confirming the current and previous tags are kept. Never
@@ -160,43 +235,88 @@ use `docker system prune -a` on this host.
 
 Never combine with `docker-compose.seed.yml` or `docker-compose.dev.yml`.
 
+## SSH and deploy user (OPS-3 PROPOSED; nothing is changed on the VPS by this repository)
+
+Strategy the owner applies by hand when the VPS exists:
+
+- **A dedicated, non-root deploy/ops user** (for example `sfdeploy`), used for builds, `docker compose`, backups
+  and restore checks. No routine work as root; no `sudo` rights for this user. The user owns
+  `/etc/salesforce/staging` (0700; secret files 0600) and `SF_BACKUP_DIR`.
+- **SSH key authentication only:** a key pair generated on the operator's machine (or held in a secrets manager),
+  public key in the deploy user's `authorized_keys`; `PasswordAuthentication no`, `PermitRootLogin no`,
+  `AllowUsers sfdeploy <admin>`; no password flow for that account (`passwd -l`). **No private key is stored in the
+  repository, in CI variables checked into Git, or on the VPS.** A CI-driven deploy (GitHub Actions over SSH) is
+  PROPOSED and would use a separate, deploy-only key kept in the CI secret store and a forced command or restricted
+  key options; it is not set up here.
+- **Least privilege, honestly:** to run Docker the user must be in the `docker` group, which is **root-equivalent
+  on the host** (anyone who controls it can mount the host filesystem into a container). That is accepted for
+  staging only because the account is single-purpose, key-only, not shared, and its login is audited (`auth.log`).
+  Alternatives, with their costs: rootless Docker for that user (no root-equivalence, but binding ports 80/443
+  needs `net.ipv4.ip_unprivileged_port_start=80` and some compose features behave differently, not validated here),
+  or a small sudo-allowed wrapper that runs only the fixed deploy commands (moves the risk into the wrapper). For
+  production this choice is to be revisited (OPS-3 is PROPOSED).
+- **Host firewall:** 80/443 public (ACME HTTP-01 and the app), 22 from known addresses where possible (not a
+  substitute for key-only auth), nothing else (no PostgreSQL port, no verifier port: both stay on private
+  networks).
+- Keep the host patched (unattended security updates) and enable SSH login audit; both are host tasks outside this
+  repository.
+
 ## Backup and restore (OPS-2)
 
-**Honest status against the targets.** RPO <= 15 min and RTO <= 4 h are production targets (OPS-2). With the
-default self-hosted database, **this setup does not meet RPO <= 15 min**: the only recovery source is a logical
-dump, so the real RPO is the time since the last good dump, i.e. up to the dump interval (daily dump = up to
-about 24 h of data lost; if the dump is only on the VPS and the VPS is lost, everything since the last off-VPS
-copy). Dumps every 15 minutes would not be a sound answer (load, size, no point-in-time choice). Meeting 15 min
-needs continuous WAL archiving to storage outside the VPS (e.g. pgBackRest or WAL-G to private S3-compatible
-storage) or a managed PostgreSQL with PITR (V-04): neither is configured here. OPS-2 allows staging a looser
-target; this is the recorded staging position, to be confirmed by the owner. RTO is **unmeasured** until the
-first `restore-check` run; record its elapsed seconds.
+**Honest status against the targets.** RPO <= 15 min and RTO <= 4 h are production targets (OPS-2). For staging the
+owner accepted **RPO = 24 h** (2026-10-02): a daily dump, copied off the VPS. With the default self-hosted database
+there is no WAL archiving and no PITR, so up to about 24 h of staging data can be lost, and if the VPS is lost, everything since
+the last off-VPS copy. Dumps every 15 minutes would not be a sound answer. Meeting 15 min needs continuous WAL
+archiving to storage outside the VPS (pgBackRest or WAL-G to private S3-compatible storage) or a managed
+PostgreSQL with PITR (V-04): neither is configured here, and the production RPO is not met by this setup. RTO is
+**unmeasured** until the first `restore-check` run; record its elapsed seconds.
 
 ```sh
 $SFC --profile self-hosted-db --profile ops run --rm backup         # pg_dump -Fc -> $SF_BACKUP_DIR/sf-staging-<UTC>.dump (+ .sha256), 14 kept (BACKUP_KEEP)
 $SFC --profile self-hosted-db --profile ops run --rm restore-check  # restores the newest dump into RESTORE_TEST_DATABASE_URL and checks it
+$SFC --profile offsite run --rm offsite                             # uploads the newest verified dump + .sha256 off the VPS
 ```
 
-- **Schedule** `backup` from the host (cron/systemd timer), at least daily and before every deploy. The dump
-  verifies `pg_restore --list` and writes a SHA-256 checksum next to it; retention keeps the newest 14.
-- **Off-VPS copy (owner item):** copy `$SF_BACKUP_DIR` (dump and `.sha256`) to a second failure domain (other
-  provider/account, access separated from the VPS) and verify the checksum after copying. The destination,
-  credentials and encryption are not defined here.
-- **Restore-check is required and scheduled**, not optional: run it monthly, after any migration that changes
-  structure and after the first dump, from a cron/timer, and record date, dump name and elapsed seconds
-  (compare with RTO). **A dump counts as a backup only after `restore-check` passed on it** (OPS-2). Point
-  `RESTORE_TEST_DATABASE_URL` at a scratch database (a second database in the same `postgres` container is fine).
-  The script refuses, before restoring anything, when the target has the same parsed host, port and database name
-  as `DATABASE_URL` (or uses `host=`/`port=`/`dbname=` URL overrides), and when the target database **name does not
-  contain `restore`, `test` or `scratch`** (e.g. `sf_staging_restore_test`). An optional dump-name argument must be a
-  plain `sf-staging-*.dump` name (no `/`, no `..`). Passwords reach `pg_dump`/`pg_restore` through `PGPASSWORD`, not
-  the argument list; percent-encode reserved characters in the URL credentials.
-- The `.sha256` next to each dump holds the dump's file name, so `sha256sum -c <dump>.sha256` verifies from the
-  directory the pair was copied to (older `.sha256` files with an absolute path still verify in the container).
+- **Schedule** (host cron or systemd timer, as the deploy user): `backup` daily and before every migration (the
+  deploy runs it through `migrate-safe`), then `offsite` right after it succeeds; `restore-check` at least monthly,
+  after the first dump, and after any migration that changes structure. Record date, dump name and elapsed
+  seconds. The dump verifies `pg_restore --list` and writes a SHA-256 checksum next to it; retention keeps the
+  newest 14 locally.
+- **A dump counts as a backup only after `restore-check` passed on it** (OPS-2). Point `RESTORE_TEST_DATABASE_URL`
+  at a scratch database (a second database in the same `postgres` container is fine).
+- **Restore-check guards**, all before anything is restored (`ops-restore-check.sh`): both URLs go through a strict
+  parser (`ops-lib.sh`) that accepts only `postgres://USER:PASSWORD@HOST[:PORT]/DBNAME`, with a database name of
+  `A-Za-z0-9_.-`, a bracketed IPv6 host, no `@` or `/` in the path, no host lists, and a query limited to `sslmode`,
+  `sslrootcert`, `connect_timeout` (no `%`, so no `host=`/`port=`/`dbname=`/`password=` override in any spelling);
+  the parsed host/port/database of the target must differ from `DATABASE_URL`; the target database name must contain
+  `restore`, `test` or `scratch` and **the live database name must not**; and, authoritatively, after connecting to
+  both, the pair (`pg_control_system().system_identifier`, `current_database()`) of the two connections must
+  differ, else it refuses (it also refuses when either identity cannot be read). Same cluster with another
+  database is allowed (the pair differs), so the system identifier alone is not the criterion. An optional
+  dump-name argument must be a plain `sf-staging-*.dump` name (no `/`, no `..`). `ops-backup.sh` applies the same
+  URL parser. Passwords reach `pg_dump`/`pg_restore`/`psql` through the environment of each command, not
+  the argument list; percent-encode reserved characters in URL credentials (hex passwords need none).
+- **Off-VPS copy (second failure domain), through an S3-compatible interface** (`ops-offsite-sync.sh`, `offsite`
+  profile). Chosen mechanism: AWS CLI v2 against `OFFSITE_S3_ENDPOINT` (works with any S3-compatible service, no
+  vendor SDK), in an image built from `deploy/staging/Dockerfile.offsite` on a pinned Alpine (`OFFSITE_BASE_IMAGE`;
+  a prebuilt pinned image can replace it via `OFFSITE_IMAGE`). **Client-side encryption with `age`** (public-key
+  recipient `OFFSITE_AGE_RECIPIENT`; the private key stays with the owner, never on the VPS) is included in that
+  image; the job refuses to upload unless a recipient is set or the owner explicitly sets
+  `OFFSITE_ALLOW_UNENCRYPTED=1` (provider-side encryption only). It uploads only a dump whose `.sha256` verifies,
+  then checks the stored copy: size and, by default, a re-download whose SHA-256 must equal the local one
+  (`OFFSITE_VERIFY=size` to skip the download). It refuses to run if the endpoint, bucket or keys are unset, never
+  prints keys, and uses no instance-metadata probing. **Retention is the bucket's lifecycle policy**, on purpose
+  not this job: give the key write+read but not delete/overwrite (and enable versioning or object lock if the
+  provider has it) so a compromised VPS cannot destroy the off-site copies. Restoring from off-site: download the
+  `.dump` (decrypt `.age` with the private key), put it and its `.sha256` in `SF_BACKUP_DIR`, run `restore-check`.
+  **The real location and credentials are pending infrastructure** (owner item): nothing here names a bucket or
+  provider; choose one that meets the OPS-1/STACK-7 criteria (private, Brazil preferred, separate account/provider
+  from the VPS).
 - Restoring staging itself: stop `api` and `worker`, restore into the (empty) database with `pg_restore --clean
-  --if-exists --no-owner --dbname "$DATABASE_URL" <dump>` run from a postgres client container of the same major,
-  start `api` and `worker`, check `/api/v1/ready`. For a managed PITR restore use the provider's procedure
-  (NEEDS VALIDATION per provider, V-04) and point `DATABASE_URL` at the restored instance.
+  --if-exists --no-owner --dbname "$DATABASE_URL" <dump>` run from a postgres client container of the same major
+  as the owner role, run `db-roles` again (the dump is taken `--no-privileges`), start `api` and `worker`, check
+  `/api/v1/ready`. For a managed PITR restore use the provider's procedure (NEEDS VALIDATION per provider, V-04)
+  and point the `DATABASE_URL`s at the restored instance.
 - `ops-restore-check.sh` asserts only generic facts (checksum, restore succeeds, tables exist). A
   business-level check against the deployed migration journal is still to be added after the first real run.
 
@@ -210,22 +330,40 @@ $SFC --profile self-hosted-db --profile ops run --rm restore-check  # restores t
   moves happen in a separate step (migrate), and destructive changes ship one release later (contract), after
   the previous version can no longer be rolled back to. A contract migration or data-loss change needs the
   owner (CLAUDE.md §4) and a fresh dump verified by `restore-check` first.
-- Before every deploy: take a dump (`backup`). Run `migrate` before recreating `api`/`worker`; if it fails the
-  old containers keep running, because they have not been recreated.
+- Before every deploy: the pre-migration dump (`migrate-safe`). `migrate` runs before `api`/`worker` are
+  recreated; if it fails the old containers keep running, because they have not been recreated.
 - If the database must be restored to undo a bad migration, use the restore procedure above; the dump's
   version must match the image you roll back to.
 
 ## Mobile
 
-Not part of this stack. Mobile staging notes, if useful later, live under `.claude/work/` (working notes, not
-decisions); nothing here changes for mobile.
+Not part of this stack. The mobile app reaches the public HTTPS host and must not depend on an allow-list or VPN.
+Mobile staging notes, if useful later, live under `.claude/work/` (working notes, not decisions).
+
+## Validation status (what was and was not exercised)
+
+Exercised against throwaway containers (PostgreSQL 17 on a private Docker network, an `rclone serve s3` S3 endpoint,
+Alpine with `aws-cli` + `age`; all removed afterwards): `ops-backup.sh` (dump, listing check, checksum, retention,
+URL refusals), `ops-restore-check.sh` (successful restore, every guard refusal listed above, checksum mismatch,
+identity guard with a stubbed `psql`), `ops-db-roles.sh` with `db-roles.sql` (refusals; roles created, no
+superuser, login works), `ops-offsite-sync.sh` (refusals; plain and age-encrypted upload verified by download and
+by size; wrong key rejected). `docker compose config -q` passes for the default set and with all profiles, and the
+Caddyfile validates.
+
+**Not exercised:** a started staging stack of any kind; the server images built through this compose file; the
+`migrate-safe` dependency chain at run time; the `offsite` job on `amazon/aws-cli` or against a real provider (it
+was run on Alpine's `aws-cli` only; the AWS-checksum variables set in the script are for S3-compatible providers
+that reject the new default checksums); the authoritative identity check against a real second name for the same
+database (stubbed); TLS issuance; the verifier container and its network isolation (the HTTP service itself is
+unit-tested); the read-only/`cap_drop` settings at runtime.
 
 ## Open questions for the owner
 
-1. Domain name, and public vs allow-list access for staging (TLS section).
-2. Confirm the staging recovery position (dump-only, RPO = dump interval) or fund WAL archiving / managed
-   PostgreSQL (V-04, V-15) for staging.
-3. Destination, credentials and encryption of the off-VPS dump copy; who runs the monthly restore-check.
-4. VPS provider/sizing and who deploys (SSH access) and from where; OPS-3 deploy transport remains PROPOSED.
+1. DNS for `force-staging.sistemasplac.com.br` and the VPS (provider, sizing, firewall).
+2. Off-VPS backup destination, credentials and the age recipient public key; who runs the monthly restore-check.
+3. Whether a dedicated read-only backup role (`force_backup`) should replace running dumps as the owner role.
+4. Who deploys, from where, and the SSH key custody (see "SSH and deploy user"); OPS-3 deploy transport remains
+   PROPOSED, including the docker-group trade-off.
 5. Brand files mount (`/brand`) is not wired in staging; add when a staging brand is wanted.
-6. Operational (seller) login on staging waits for the external verifier (STACK-2 option C, not implemented).
+6. Operational (seller) login on staging waits for the real Sankhya verifier adapter (BLOCKED_EXTERNAL_SECRET).
+7. Managed PostgreSQL remains the target (V-04, V-15), including whether the provider allows the role bootstrap.
