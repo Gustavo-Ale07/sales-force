@@ -23,7 +23,7 @@ jobs:
   ci:
     name: ci (gate)
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       # Fail closed: a manual run is accepted only from the staging branch (the push trigger is already limited to it).
       - name: Refuse any ref other than the staging branch
@@ -68,7 +68,7 @@ jobs:
       - name: OpenAPI is current
         run: pnpm --filter @salesforce/contracts run openapi:check
 
-      # Critical tests that need no Docker/Testcontainers (the DB-backed suites run on developer machines).
+      # Critical tests that need no Docker/Testcontainers (the DB-backed suites run in the last two steps).
       - name: Test domain, contracts, sankhya, mobile-db
         run: |
           pnpm --filter @salesforce/domain run test
@@ -89,6 +89,18 @@ jobs:
 
       - name: Compose config with the example env files (fictional values)
         run: bash deploy/scripts/ci-compose-check.sh "$RUNNER_TEMP/compose-check"
+
+      # DB-backed suites (Testcontainers on the runner's Docker daemon; the owner requires them in the gate because the
+      # pipeline runs migrations). They pull `postgres:17` (major pinned, Docker Hub) and the Testcontainers `ryuk`
+      # reaper image from the network at run time; no secret is involved, and Sankhya is never reached (fake gateway).
+      # Files already run sequentially (fileParallelism: false in both vitest configs), one PostgreSQL container per file.
+      - name: Test db (migrations, constraints, roles - Testcontainers)
+        timeout-minutes: 10
+        run: pnpm --filter @salesforce/db run test
+
+      - name: Test server (integration suites - Testcontainers)
+        timeout-minutes: 25
+        run: pnpm --filter @salesforce/server exec vitest run test/integration
 
   deploy:
     name: deploy (staging)
