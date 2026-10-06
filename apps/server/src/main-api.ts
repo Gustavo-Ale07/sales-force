@@ -1,7 +1,11 @@
 import 'reflect-metadata';
 import { createDb } from '@salesforce/db';
 import { createApiApp } from './api/create-app.js';
+import { DEFAULT_PRODUCT_IMAGE_SETTINGS } from './catalog/product-image.js';
 import { parseApiEnv } from './config/api-env.js';
+import { FilesystemObjectStore } from './media/object-store.js';
+import { checkProductMediaStore } from './media/store-check.js';
+import { StoredProductImageSource } from './media/stored-product-image.source.js';
 import { authConfigFromEnv } from './iam/auth-config.js';
 import { createLogger } from './observability/logger.js';
 import { enforceDemoAccountsPolicy } from './platform/demo-accounts-check.js';
@@ -29,6 +33,8 @@ runMain('api', async () => {
     throw error;
   }
 
+  if (env.PRODUCT_MEDIA_DIR !== undefined) await checkProductMediaStore(db.db, env.PRODUCT_MEDIA_DIR, logger);
+
   const app = await createApiApp({
     logger,
     db,
@@ -36,6 +42,19 @@ runMain('api', async () => {
     dataset: env.dataset,
     readinessCacheTtlMs: env.READINESS_CACHE_TTL_MS,
     trustProxy: env.TRUST_PROXY,
+    // Product photos: read-only view of what the worker stored (never the ERP). Unset = no product has an image.
+    ...(env.PRODUCT_MEDIA_DIR === undefined
+      ? {}
+      : {
+          productImageSource: new StoredProductImageSource(db.db, new FilesystemObjectStore(env.PRODUCT_MEDIA_DIR), {
+            thumbMaxBytes: env.PRODUCT_MEDIA_THUMB_MAX_BYTES,
+            maxBytes: env.PRODUCT_MEDIA_MAX_BYTES,
+          }),
+          productImageSettings: {
+            ...DEFAULT_PRODUCT_IMAGE_SETTINGS,
+            maxBytes: { thumb: env.PRODUCT_MEDIA_THUMB_MAX_BYTES, full: env.PRODUCT_MEDIA_MAX_BYTES },
+          },
+        }),
     limits: {
       requestTimeoutMs: env.REQUEST_TIMEOUT_MS,
       keepAliveTimeoutMs: env.KEEP_ALIVE_TIMEOUT_MS,

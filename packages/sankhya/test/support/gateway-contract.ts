@@ -129,6 +129,8 @@ export function runGatewayContract(label: string, subject: ContractSubject): voi
         'readPriceTables',
         'readPriceTableVersions',
         'readListPrices',
+        'readProductMediaSignatures',
+        'readProductMediaBytes',
         'submitOrder',
       ]);
       const names = new Set<string>();

@@ -20,17 +20,30 @@ export type LockOutcome<T> = { readonly acquired: false } | { readonly acquired:
  * Session-level locks and the run's temporary table need a real session: they do not work behind a
  * transaction-pooling proxy (DATA-1 requires private, direct connections to PostgreSQL).
  */
-export async function withEntityLock<T>(
+export function withEntityLock<T>(
   pool: pg.Pool,
   entity: MirrorEntity,
   work: (client: pg.PoolClient) => Promise<T>,
 ): Promise<LockOutcome<T>> {
+  return withAdvisoryLock(pool, MIRROR_LOCK_NAMESPACE, mirrorLockObjectId(entity), work);
+}
+
+/**
+ * Generic form of `withEntityLock`: a SESSION-level advisory lock on the key pair `(namespace, objectId)`.
+ * Each job family owns its own namespace (the mirror sync `SFMS`, the product photo sync `SFPM`), so
+ * the key spaces never collide.
+ */
+export async function withAdvisoryLock<T>(
+  pool: pg.Pool,
+  namespace: number,
+  objectId: number,
+  work: (client: pg.PoolClient) => Promise<T>,
+): Promise<LockOutcome<T>> {
   const client = await pool.connect();
-  const objectId = mirrorLockObjectId(entity);
   let locked = false;
   try {
     const result = await client.query<{ locked: boolean }>('select pg_try_advisory_lock($1, $2) as locked', [
-      MIRROR_LOCK_NAMESPACE,
+      namespace,
       objectId,
     ]);
     locked = result.rows[0]?.locked === true;
@@ -39,7 +52,7 @@ export async function withEntityLock<T>(
   } finally {
     if (locked) {
       // Explicit unlock first: a destroyed connection frees the lock only once the server notices.
-      await client.query('select pg_advisory_unlock($1, $2)', [MIRROR_LOCK_NAMESPACE, objectId]).catch(() => undefined);
+      await client.query('select pg_advisory_unlock($1, $2)', [namespace, objectId]).catch(() => undefined);
     }
     // The connection is always destroyed, never pooled again: it carried session state (the advisory
     // lock, the run's temporary table) that must not leak into other work.

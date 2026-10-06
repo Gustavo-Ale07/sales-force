@@ -69,6 +69,9 @@ export class CatalogController {
       .header('content-type', served.contentType)
       .header('content-length', served.bytes.length)
       .header('content-disposition', 'inline')
+      // Hardening of bytes that came from an external system: never active content, never embedded cross-site.
+      .header('content-security-policy', "default-src 'none'; sandbox")
+      .header('cross-origin-resource-policy', 'same-site')
       .header('etag', served.etag)
       .header('cache-control', cacheControl)
       .send(Buffer.from(served.bytes.buffer, served.bytes.byteOffset, served.bytes.byteLength));

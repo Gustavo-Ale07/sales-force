@@ -15,6 +15,8 @@ export const QUEUE_NAMES = {
   deadLetter: 'platform.dead-letter',
   /** Scheduled proof of life of the worker and of the queue (no business effect). */
   syncHeartbeat: 'sync.heartbeat',
+  /** Product photo synchronization (ERP -> object store). Registered and scheduled only when enabled by configuration. */
+  mediaProducts: 'media.products',
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -68,4 +70,6 @@ export const QUEUE_REGISTRY: readonly QueueSpec[] = [
   },
   // Mirror synchronization: one queue per entity (`sync.mirror.<entity>`).
   ...MIRROR_ENTITIES.map((entity): QueueSpec => ({ name: mirrorQueueName(entity), options: MIRROR_QUEUE_OPTIONS })),
+  // Product photos: a first full run can take long, hence the larger `expireInSeconds` (2 h).
+  { name: QUEUE_NAMES.mediaProducts, options: { ...MIRROR_QUEUE_OPTIONS, expireInSeconds: 7200 } },
 ];

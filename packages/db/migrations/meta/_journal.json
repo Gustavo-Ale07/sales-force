@@ -64,6 +64,20 @@
       "when": 1791203787812,
       "tag": "0008_account_external_user_id",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791219579156,
+      "tag": "0009_product_media",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791226899398,
+      "tag": "0010_product_media_thumbnail",
+      "breakpoints": true
     }
   ]
 }

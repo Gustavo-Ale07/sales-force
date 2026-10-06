@@ -1,6 +1,16 @@
 export * from './errors.js';
 export { Secret } from './secret.js';
 export * from './gateway.js';
+export {
+  MAX_MEDIA_SIGNATURE_PAGE,
+  MEDIA_CHUNK_BYTES,
+  MEDIA_SAMPLE_BYTES,
+  mediaFingerprintOfBytes,
+  type ProductMediaSignature,
+  type ReadProductMediaBytesOptions,
+  type ReadProductMediaSignaturesOptions,
+  type SankhyaProductMediaPort,
+} from './media.js';
 export { selectEffectiveVersions, type ReadScope } from './read-scope.js';
 export {
   BootstrapFileConfigurationSource,
@@ -13,7 +23,8 @@ export {
 } from './configuration-source.js';
 export { createGateway, type CreateGatewayDependencies, type GatewayEnvironment } from './factory.js';
 
-export { FakeGateway, type FakeGatewayFault, type FakeGatewayOptions } from './fake/fake-gateway.js';
+export { FakeGateway, type FakeGatewayFault, type FakeGatewayMediaOptions, type FakeGatewayOptions } from './fake/fake-gateway.js';
+export { syntheticProductImage, type SyntheticImageKind } from './fake/media-fixtures.js';
 export { DEMO_ACCOUNTS, DEMO_ACCOUNT_EMAILS, type DemoAccount } from './fake/accounts.js';
 export {
   DEMO_CONFIGURATION,

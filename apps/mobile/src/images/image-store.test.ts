@@ -110,6 +110,40 @@ describe("product image store", () => {
     }
   });
 
+  it("a WebP thumbnail is stored byte-for-byte under a neutral .img name and served from cache offline", async () => {
+    const { store, memory, calls } = setup({ fetch: async () => ok(WEBP) });
+    const uri = await store.resolve(1, image("v1"), { online: true });
+    expect(uri).toMatch(/^file:\/\/\/images\/p1-\d+\.img$/);
+    expect(imageFiles(memory)).toHaveLength(1);
+    expect(memory.files.get(imageFiles(memory)[0] as string)).toEqual(WEBP);
+    expect(await store.resolve(1, image("v1"), { online: false })).toBe(uri);
+    expect(calls).toEqual([1]);
+  });
+
+  it("a version change after a remembered 404 (thumbnail appeared) refetches, stores and serves the image", async () => {
+    let outcome: ImageFetchOutcome = { kind: "absent" };
+    const { store, memory, calls } = setup({ fetch: async () => outcome });
+    expect(await store.resolve(1, image("orig-only"), { online: true })).toBeNull();
+    expect(await store.resolve(1, image("orig-only"), { online: true })).toBeNull();
+    expect(calls).toEqual([1]); // the 404 is remembered for the same version
+    outcome = ok(WEBP);
+    const uri = await store.resolve(1, image("orig+thumb"), { online: true });
+    expect(uri).not.toBeNull();
+    expect(calls).toEqual([1, 1]);
+    expect(imageFiles(memory)).toHaveLength(1);
+    expect(await store.resolve(1, image("orig+thumb"), { online: false })).toBe(uri);
+  });
+
+  it("holds hundreds of realistic thumbnails (20 KiB) inside the default 20 MiB budget and evicts only beyond it", async () => {
+    const thumb = new Uint8Array(20 * 1024);
+    thumb.set(WEBP);
+    const { store, memory } = setup({ fetch: async () => ok(thumb) });
+    for (let code = 1; code <= 1100; code += 1) await store.resolve(code, image("v"), { online: true });
+    expect(imageFiles(memory)).toHaveLength(1024); // 20 MiB / 20 KiB
+    expect(await store.resolve(1100, image("v"), { online: false })).not.toBeNull();
+    expect(await store.resolve(1, image("v"), { online: false })).toBeNull(); // oldest evicted
+  });
+
   it("a changed version replaces the file and deletes the old one", async () => {
     const { store, memory, calls } = setup();
     const v1 = await store.resolve(1, image("v1"), { online: true });

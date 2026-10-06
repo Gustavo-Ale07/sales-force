@@ -60,6 +60,28 @@ describe("Novo pedido", () => {
     expect(screen.getByRole("button", { name: "Salvar rascunho" })).toBeDisabled();
   });
 
+  it("the product picker requests thumbnails with the version, and a placeholder without image", async () => {
+    const image = { version: "h2", thumbnailUrl: "/api/v1/products/2001/image?variant=thumb", url: "/api/v1/products/2001/image?variant=full" };
+    const { user } = renderApp("/pedidos/novo?customer=1001", {
+      handlers: newOrderHandlers({
+        "GET /products": {
+          body: productsPage([
+            product({ code: 2001, description: "Balão látex 9 pol. vermelho", image }),
+            product({ code: 2002, description: "Vela lisa" }),
+          ]),
+        },
+      }),
+    });
+    const produtos = await screen.findByRole("button", { name: "Produtos" });
+    if (produtos.getAttribute("aria-pressed") !== "true") await user.click(produtos);
+    const img = await screen.findByRole("img", { name: "Balão látex 9 pol. vermelho" });
+    expect(img).toHaveAttribute("src", "/api/v1/products/2001/image?variant=thumb&v=h2");
+    const row = screen.getByText("Vela lisa").closest("tr") as HTMLElement;
+    expect(within(row).queryByRole("img")).toBeNull();
+    expect(within(row).getByText("VL")).toBeInTheDocument();
+    expect(document.querySelectorAll('img[src*="variant=full"]')).toHaveLength(0);
+  });
+
   it("computes the totals with the domain, showing 'Sem preço' and a partial total", async () => {
     const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: newOrderHandlers() });
     await addProduct(user, "Balão");

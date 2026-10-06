@@ -46,6 +46,7 @@
 --                                         + column UPDATE (synced_at) on erp_customer for force_api only: templates.repository takes
 --                                           SELECT ... FOR SHARE on the customer row, and PostgreSQL requires an UPDATE privilege for any
 --                                           row lock. Smallest grant that satisfies it; no other erp_* column is writable by the API.
+--   product_media                         S           S I U D     worker product-photo job writes metadata (DELETE: orphan cleanup); API reads it to serve photos
 --   sales_order                           S I U       -              orders.repository (status moves are UPDATEs)
 --   sales_order_item                      S I U D     -              orders.repository (lines are replaced: DELETE + INSERT)
 --   customer_order_template               S I U       -              templates.repository
@@ -242,6 +243,7 @@ BEGIN
       ('erp_price_table',                    'force_api',    'SELECT'),
       ('erp_price_table_version',            'force_api',    'SELECT'),
       ('erp_list_price',                     'force_api',    'SELECT'),
+      ('product_media',                      'force_api',    'SELECT'),
       ('installation_configuration_version', 'force_worker', 'SELECT'),
       ('sync_state',                         'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_seller',                         'force_worker', 'SELECT, INSERT, UPDATE'),
@@ -249,7 +251,8 @@ BEGIN
       ('erp_product',                        'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_price_table',                    'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_price_table_version',            'force_worker', 'SELECT, INSERT, UPDATE'),
-      ('erp_list_price',                     'force_worker', 'SELECT, INSERT, UPDATE')
+      ('erp_list_price',                     'force_worker', 'SELECT, INSERT, UPDATE'),
+      ('product_media',                      'force_worker', 'SELECT, INSERT, UPDATE, DELETE')
     ) AS m(tbl, grantee, privs)
   LOOP
     IF to_regclass(format('public.%I', g.tbl)) IS NOT NULL THEN

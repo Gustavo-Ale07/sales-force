@@ -57,6 +57,8 @@ describe('GET /products/{code}/image', () => {
     expect(response.headers['content-type']).toBe('image/png'); // sniffed, not the source label
     expect(response.headers['x-content-type-options']).toBe('nosniff');
     expect(response.headers['content-disposition']).toBe('inline');
+    expect(response.headers['content-security-policy']).toBe("default-src 'none'; sandbox");
+    expect(response.headers['cross-origin-resource-policy']).toBe('same-site');
     expect(response.headers['cache-control']).toBe('private, max-age=600');
     expect(response.headers['etag']).toBe(imageEtag('thumb', 'v1'));
     expect(response.rawPayload.equals(Buffer.from(bytes))).toBe(true);

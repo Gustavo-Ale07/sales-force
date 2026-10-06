@@ -32,8 +32,16 @@ describe("ProductImage", () => {
     expect(screen.getByText("V")).toBeInTheDocument();
   });
 
-  it("falls back to the placeholder when the image fails to load (404 or transient 503)", () => {
+  it("shows the placeholder directly when the thumbnail fails, without requesting the full image", () => {
     const { container } = render(<ProductImage image={image} description="Balão Metalizado" />);
+    fireEvent.error(screen.getByRole("img"));
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.innerHTML).not.toContain("variant=full");
+    expect(screen.getByText("BM")).toBeInTheDocument();
+  });
+
+  it("falls back to the placeholder when the full image fails to load (404 or transient 503)", () => {
+    const { container } = render(<ProductImage image={image} description="Balão Metalizado" variant="full" />);
     fireEvent.error(screen.getByRole("img"));
     expect(container.querySelector("img")).toBeNull();
     expect(screen.getByText("BM")).toBeInTheDocument();

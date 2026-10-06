@@ -7,6 +7,7 @@ import {
 import { z } from 'zod';
 import { DEFAULT_MIRROR_CRONS } from '../sync/schedules.js';
 import { validateInstallationConfiguration } from '../configuration/validate.js';
+import { mediaDirField, mediaDirProblems, mediaMaxBytesField } from './media-env.js';
 import {
   databaseUrlField,
   EnvValidationError,
@@ -63,6 +64,40 @@ export const WorkerEnvSchema = z.object({
   SYNC_CRON_PRICES: cronField(DEFAULT_MIRROR_CRONS.prices),
   /** How long a graceful shutdown waits for running jobs before giving up. */
   WORKER_SHUTDOWN_TIMEOUT_MS: integerField({ min: 1000, max: 600_000 }, 30_000),
+
+  /**
+   * Product photo pipeline (`media.products`): reads photos from the ERP and stores them in the object
+   * store. Off by default; `true` requires `PRODUCT_MEDIA_DIR`. The photo reads are as unmeasured as the
+   * mirror ones (spike S0.2), so a real ERP never starts this by omission: the default is `false`.
+   */
+  PRODUCT_MEDIA_SYNC_ENABLED: z
+    .enum(['true', 'false'], { error: "must be 'true' or 'false'." })
+    .default('false')
+    .transform((value) => value === 'true'),
+  /** Absolute path of the persistent directory of the interim filesystem object store (a mounted volume). */
+  PRODUCT_MEDIA_DIR: mediaDirField,
+  PRODUCT_MEDIA_MAX_BYTES: mediaMaxBytesField,
+  /** PROPOSED frequency (daily, 03:30): the photo read cost against the ERP is unmeasured. */
+  PRODUCT_MEDIA_SYNC_CRON: cronField('30 3 * * *'),
+  /** Images downloaded at once (each is a sequence of chunked ERP reads). */
+  PRODUCT_MEDIA_SYNC_CONCURRENCY: integerField({ min: 1, max: 8 }, 2),
+  /** Also confirm that the stored object still exists for unchanged products (repairs a lost object). */
+  PRODUCT_MEDIA_VERIFY_OBJECTS: z
+    .enum(['true', 'false'], { error: "must be 'true' or 'false'." })
+    .default('true')
+    .transform((value) => value === 'true'),
+  /**
+   * The photo pipeline stores only what a LIVE gateway returned. Storing the synthetic fake gateway's images
+   * (development, tests, a staging running the fake) needs this explicit opt-in, and it is only honoured when the
+   * worker already allows the fake gateway (checked below). Switching gateway mode needs a reset of the volume
+   * and of `product_media` (docs/implementation/product-media.md).
+   */
+  PRODUCT_MEDIA_ALLOW_FAKE_GATEWAY: z
+    .enum(['true', 'false'], { error: "must be 'true' or 'false'." })
+    .default('false')
+    .transform((value) => value === 'true'),
+  /** Consecutive runs a product may fail with the ERP unavailable before it is parked as `source_unavailable`. */
+  PRODUCT_MEDIA_SOURCE_FAILURE_LIMIT: integerField({ min: 1, max: 20 }, 3),
 });
 
 export type WorkerEnv = z.output<typeof WorkerEnvSchema>;
@@ -106,6 +141,13 @@ export function loadWorkerConfig(source: EnvSource): WorkerConfig {
           'SYNC_MIRROR_ENABLED: must be set explicitly (true or false) when SANKHYA_MODE=live; ' +
             'scheduled mirror jobs never start against a real Sankhya by default (spike S0.2 open).',
         );
+      }
+      extra.push(...mediaDirProblems(parsed.PRODUCT_MEDIA_DIR));
+      if (parsed.PRODUCT_MEDIA_SYNC_ENABLED && parsed.PRODUCT_MEDIA_DIR === undefined) {
+        extra.push('PRODUCT_MEDIA_DIR: is required when PRODUCT_MEDIA_SYNC_ENABLED=true (persistent directory of the photo store).');
+      }
+      if (parsed.PRODUCT_MEDIA_ALLOW_FAKE_GATEWAY && parsed.NODE_ENV === 'production' && values['ALLOW_FAKE_GATEWAY'] !== '1') {
+        extra.push('PRODUCT_MEDIA_ALLOW_FAKE_GATEWAY: is only honoured when the worker already allows the fake gateway (ALLOW_FAKE_GATEWAY=1).');
       }
       return extra;
     });

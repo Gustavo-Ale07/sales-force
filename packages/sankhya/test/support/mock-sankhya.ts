@@ -1,3 +1,4 @@
+import { mediaSampleOffsets, mediaSampleWidth, toHex } from '../../src/media.js';
 import type { DemoDataset } from '../../src/fake/demo-data.js';
 import type { HttpRequest, HttpResponse, HttpTransport } from '../../src/real/transport.js';
 
@@ -107,6 +108,10 @@ export function erpTablesFromDataset(dataset: DemoDataset, dbUtcOffsetMinutes = 
 
 const SELECT_RE =
   /^SELECT (.+) FROM (\w+)(?: WHERE (.+?))? ORDER BY (.+?) OFFSET (\d+) ROWS FETCH NEXT (\d+) ROWS ONLY$/;
+const MEDIA_SIGNATURES_RE =
+  /^SELECT CODPROD, DBMS_LOB\.GETLENGTH\(IMAGEM\) AS LEN, .+ FROM TGFPRO WHERE (.+) AND CODPROD > (\d+) AND IMAGEM IS NOT NULL AND DBMS_LOB\.GETLENGTH\(IMAGEM\) > 0 ORDER BY CODPROD FETCH FIRST (\d+) ROWS ONLY$/;
+const MEDIA_CHUNK_RE = /^SELECT RAWTOHEX\(DBMS_LOB\.SUBSTR\(IMAGEM, (\d+), (\d+)\)\) AS H FROM TGFPRO WHERE CODPROD = (\d+)$/;
+const MEDIA_LENGTH_RE = /^SELECT DBMS_LOB\.GETLENGTH\(IMAGEM\) AS LEN FROM TGFPRO WHERE CODPROD = (\d+)$/;
 const COUNT_RE = /^SELECT COUNT\(\*\) AS TOTAL FROM (\w+)(?: WHERE (.+))?$/;
 
 function keyColumns(orderBy: string): string[] {
@@ -159,6 +164,8 @@ export class MockSankhya {
   readonly forced: ForcedResponse[] = [];
   /** Runs before each query is answered (tests mutate data or count concurrency here). */
   beforeQuery: ((sql: string) => void | Promise<void>) | undefined;
+  /** Synthetic image bytes per CODPROD (the TGFPRO.IMAGEM BLOB stand-in). Mutable by tests. */
+  blobs = new Map<number, Uint8Array>();
   authCount = 0;
   maxInFlight = 0;
   #inFlight = 0;
@@ -242,6 +249,40 @@ export class MockSankhya {
   }
 
   #answer(sql: string): HttpResponse {
+    const signatures = MEDIA_SIGNATURES_RE.exec(sql);
+    if (signatures) {
+      const [, where, after, limit] = signatures as unknown as [string, string, string, string];
+      const rows = (this.tables['TGFPRO'] ?? [])
+        .filter(
+          (row) =>
+            whereMatches(row, where) &&
+            Number(row['CODPROD']) > Number(after) &&
+            (this.blobs.get(Number(row['CODPROD']))?.length ?? 0) > 0,
+        )
+        .sort((a, b) => Number(a['CODPROD']) - Number(b['CODPROD']))
+        .slice(0, Number(limit))
+        .map((row) => {
+          const bytes = this.blobs.get(Number(row['CODPROD'])) as Uint8Array;
+          const windows = mediaSampleOffsets(bytes.length).map((o) =>
+            toHex(bytes.subarray(o - 1, o - 1 + mediaSampleWidth(bytes.length, o))).toUpperCase(),
+          );
+          return [row['CODPROD'], bytes.length, ...windows];
+        });
+      return ok(['CODPROD', 'LEN', 'W0', 'W1', 'W2', 'W3', 'W4'], rows);
+    }
+    const chunk = MEDIA_CHUNK_RE.exec(sql);
+    if (chunk) {
+      const [, n, offset, code] = chunk as unknown as [string, string, string, string];
+      const bytes = this.blobs.get(Number(code));
+      if (bytes === undefined) return ok(['H'], []);
+      const start = Number(offset) - 1;
+      return ok(['H'], [[toHex(bytes.subarray(start, start + Number(n))).toUpperCase()]]);
+    }
+    const length = MEDIA_LENGTH_RE.exec(sql);
+    if (length) {
+      const bytes = this.blobs.get(Number(length[1]));
+      return ok(['LEN'], bytes === undefined ? [] : [[bytes.length]]);
+    }
     const count = COUNT_RE.exec(sql);
     if (count) {
       const rows = (this.tables[count[1] as string] ?? []).filter((row) => whereMatches(row, count[2]));

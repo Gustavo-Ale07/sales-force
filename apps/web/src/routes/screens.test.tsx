@@ -231,6 +231,19 @@ describe("Catálogo (products)", () => {
     expect(callsTo(calls, "GET", "/products")[0]?.search.get("customerCode")).toBe("1001");
   });
 
+  it("lists thumbnails only (with the version), and a placeholder for a product without image", async () => {
+    const image = { version: "h1", thumbnailUrl: "/api/v1/products/2001/image?variant=thumb", url: "/api/v1/products/2001/image?variant=full" };
+    renderApp("/produtos", {
+      handlers: { ...groups, "GET /products": { body: productsPage([product({ image }), product({ code: 2002, description: "Vela lisa" })]) } },
+    });
+    const img = await screen.findByRole("img", { name: "Balão látex 9 pol. vermelho" });
+    expect(img).toHaveAttribute("src", "/api/v1/products/2001/image?variant=thumb&v=h1");
+    const row = screen.getByText("Vela lisa").closest("tr") as HTMLElement;
+    expect(within(row).queryByRole("img")).toBeNull();
+    expect(within(row).getByText("VL")).toBeInTheDocument();
+    expect(document.querySelectorAll('img[src*="variant=full"]')).toHaveLength(0);
+  });
+
   it("renders neither cost nor margin anywhere", async () => {
     renderApp("/produtos", { handlers: { ...groups, "GET /products": { body: productsPage([product()]) } } });
     await screen.findByText("Balão látex 9 pol. vermelho");

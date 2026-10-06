@@ -41,6 +41,7 @@ const EXPECTED: Record<string, { api: Priv[]; worker: Priv[] }> = {
   customer_order_template: { api: SIU, worker: [] },
   customer_order_template_item: { api: SIUD, worker: [] },
   integration_outbox: { api: [], worker: [] },
+  product_media: { api: S, worker: SIUD },
   schema_migration: { api: S, worker: [] },
   ...Object.fromEntries(MIRROR.map((t) => [t, { api: S, worker: SIU }])),
 };

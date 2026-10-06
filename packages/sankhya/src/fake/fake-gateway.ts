@@ -1,5 +1,14 @@
 import type { InstallationConfiguration } from '@salesforce/domain';
-import { NotImplementedError, type SankhyaGatewayError } from '../errors.js';
+import { NotImplementedError, SankhyaGatewayError } from '../errors.js';
+import {
+  assertBytesOptions,
+  assertSignaturesOptions,
+  mediaChangedDuringRead,
+  mediaFingerprintOfBytes,
+  type ProductMediaSignature,
+  type ReadProductMediaBytesOptions,
+  type ReadProductMediaSignaturesOptions,
+} from '../media.js';
 import {
   READ_ENTITIES,
   SUBMIT_ORDER_NOT_IMPLEMENTED_MESSAGE,
@@ -30,9 +39,24 @@ export interface FakeGatewayOptions {
   readonly configuration?: InstallationConfiguration;
   /** Injected failures, to test consumers against incomplete snapshots and error classes. */
   readonly faults?: readonly FakeGatewayFault[];
+  /** Synthetic product photos and their failure injection (default: no photos). */
+  readonly media?: FakeGatewayMediaOptions;
 }
 
 const DEFAULT_BATCH_SIZE = 100;
+
+export interface FakeGatewayMediaOptions {
+  /**
+   * Image bytes per product code. The Map is read LIVE, so a test may mutate it between calls to
+   * simulate an image that changed. Codes that are not products of the dataset are ignored; empty
+   * bytes mean "no photo" (like the ERP).
+   */
+  readonly images?: ReadonlyMap<number, Uint8Array>;
+  /** Per-product failure raised by readProductMediaBytes for that product. */
+  readonly failures?: ReadonlyMap<number, SankhyaGatewayError>;
+  /** When true both media reads reject with a retryable unavailable error. */
+  readonly unavailable?: boolean;
+}
 
 /**
  * Deterministic in-memory gateway serving SYNTHETIC data. Used in development, CI and the demo
@@ -43,6 +67,7 @@ export class FakeGateway implements SankhyaGateway {
   readonly #dataset: DemoDataset;
   readonly #configuration: InstallationConfiguration;
   readonly #faults: readonly FakeGatewayFault[];
+  readonly #media: FakeGatewayMediaOptions;
 
   constructor(options: FakeGatewayOptions = {}) {
     const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
@@ -53,6 +78,7 @@ export class FakeGateway implements SankhyaGateway {
     this.#dataset = options.dataset ?? getDemoDataset();
     this.#configuration = options.configuration ?? DEMO_CONFIGURATION;
     this.#faults = options.faults ?? [];
+    this.#media = options.media ?? {};
   }
 
   describe(): GatewayDescription {
@@ -110,6 +136,50 @@ export class FakeGateway implements SankhyaGateway {
     const ids = new Set(this.#versions(options).map((v) => v.versionId));
     const rows = scoped ? this.#dataset.listPrices.filter((p) => ids.has(p.versionId)) : this.#dataset.listPrices;
     return this.#snapshot('listPrices', rows, options);
+  }
+
+  async readProductMediaSignatures(options: ReadProductMediaSignaturesOptions): Promise<readonly ProductMediaSignature[]> {
+    const after = assertSignaturesOptions(options);
+    assertSafeScope(options.scope);
+    options.signal?.throwIfAborted();
+    this.#failIfMediaUnavailable();
+    const filter = options.scope?.products;
+    const images = this.#media.images;
+    if (images === undefined) return [];
+    return this.#dataset.products
+      .filter(
+        (p) =>
+          p.code > after &&
+          (filter === undefined ||
+            ((filter.activeOnly === false || p.active) && p.usageCode !== null && filter.usageValues.includes(p.usageCode))),
+      )
+      .flatMap((p) => {
+        const bytes = images.get(p.code);
+        return bytes !== undefined && bytes.length > 0
+          ? [{ productCode: p.code, byteLength: bytes.length, fingerprint: mediaFingerprintOfBytes(bytes) }]
+          : [];
+      })
+      .sort((a, b) => a.productCode - b.productCode)
+      .slice(0, options.limit);
+  }
+
+  async readProductMediaBytes(options: ReadProductMediaBytesOptions): Promise<Uint8Array> {
+    assertBytesOptions(options);
+    options.signal?.throwIfAborted();
+    this.#failIfMediaUnavailable();
+    const failure = this.#media.failures?.get(options.productCode);
+    if (failure !== undefined) throw failure;
+    const bytes = this.#media.images?.get(options.productCode);
+    if (bytes === undefined || bytes.length !== options.expectedLength) {
+      throw mediaChangedDuringRead(options.productCode, 'length differs from the announced one');
+    }
+    return Uint8Array.from(bytes);
+  }
+
+  #failIfMediaUnavailable(): void {
+    if (this.#media.unavailable === true) {
+      throw new SankhyaGatewayError('unavailable', { code: 'fake_unavailable', message: 'Synthetic ERP outage (fake gateway).' });
+    }
   }
 
   /** Same rule as the real gateway: configured tables only, current version per table plus future ones. */

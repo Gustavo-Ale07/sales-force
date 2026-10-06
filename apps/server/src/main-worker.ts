@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { createDb } from '@salesforce/db';
 import { loadWorkerConfig } from './config/worker-env.js';
+import { FilesystemObjectStore } from './media/object-store.js';
 import { mirrorSchedulesFromSettings } from './sync/schedules.js';
 import { createLogger } from './observability/logger.js';
 import { NestPinoLogger } from './observability/nest-logger.js';
@@ -32,6 +33,21 @@ runMain('worker', async () => {
         gatewayMode: gatewayDescription.mode,
       },
       { gateway, schedules: mirrorSchedulesFromSettings(env) },
+      env.PRODUCT_MEDIA_SYNC_ENABLED && env.PRODUCT_MEDIA_DIR !== undefined
+        ? {
+            gateway,
+            store: new FilesystemObjectStore(env.PRODUCT_MEDIA_DIR),
+            cron: env.PRODUCT_MEDIA_SYNC_CRON,
+            settings: {
+              maxBytes: env.PRODUCT_MEDIA_MAX_BYTES,
+              verifyObjects: env.PRODUCT_MEDIA_VERIFY_OBJECTS,
+              pageSize: 100,
+              concurrency: env.PRODUCT_MEDIA_SYNC_CONCURRENCY,
+              allowFakeGateway: env.PRODUCT_MEDIA_ALLOW_FAKE_GATEWAY,
+              sourceFailureLimit: env.PRODUCT_MEDIA_SOURCE_FAILURE_LIMIT,
+            },
+          }
+        : undefined,
     ),
     { logger: new NestPinoLogger(logger), abortOnError: false },
   );

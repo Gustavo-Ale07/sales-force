@@ -19,6 +19,8 @@
     "queue:install": "tsx --env-file-if-exists=../../.env src/queue-install.ts",
     "sync:once": "tsx --env-file-if-exists=../../.env src/sync-once.ts",
     "start:sync-once": "node dist/sync-once.js",
+    "product-media:bootstrap": "tsx --env-file-if-exists=../../.env src/product-media-bootstrap.ts",
+    "start:product-media-bootstrap": "node dist/product-media-bootstrap.js",
     "seed": "tsx --env-file-if-exists=../../.env src/seed.ts",
     "config:bootstrap": "tsx --env-file-if-exists=../../.env src/config-bootstrap.ts",
     "account": "tsx --env-file-if-exists=../../.env src/account-cli.ts",
@@ -43,6 +45,7 @@
     "pino": "10.3.1",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",
+    "sharp": "0.35.5",
     "zod": "4.6.5"
   },
   "devDependencies": {

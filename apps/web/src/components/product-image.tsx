@@ -37,12 +37,15 @@ export interface ProductImageProps {
 
 export function ProductImage({ image, description, name, variant = "thumb", className }: ProductImageProps) {
   // The failure is remembered for the exact src: a new version (new src) is tried again.
-  const [failedSrc, setFailedSrc] = useState<string | null>(null);
-  const src = image ? productImageSrc(image, variant) : null;
+  // No fallback to the full original: the server generates a thumbnail for every photo, and the
+  // original must never be shipped into list boxes. A failed request shows the initials placeholder.
+  const [failed, setFailed] = useState<string[]>([]);
+  const primary = image ? productImageSrc(image, variant) : null;
+  const src = primary !== null && !failed.includes(primary) ? primary : null;
   const size = SIZES[variant];
   const box = `${variant === "thumb" ? "rounded" : "rounded-md"} border border-line bg-surface-2 shrink-0 ${className ?? ""}`;
 
-  if (src && src !== failedSrc) {
+  if (src) {
     return (
       <img
         src={src}
@@ -51,7 +54,7 @@ export function ProductImage({ image, description, name, variant = "thumb", clas
         height={size}
         loading="lazy"
         decoding="async"
-        onError={() => setFailedSrc(src)}
+        onError={() => setFailed((current) => [...current, src])}
         className={`${box} object-contain`}
         style={{ width: size, height: size }}
       />

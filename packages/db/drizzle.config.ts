@@ -11,6 +11,7 @@ export default defineConfig({
     './src/schema/orders.ts',
     './src/schema/integration.ts',
     './src/schema/templates.ts',
+    './src/schema/media.ts',
   ],
   out: './migrations',
 });

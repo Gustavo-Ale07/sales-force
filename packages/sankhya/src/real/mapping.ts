@@ -12,6 +12,7 @@ import type {
 import { decimalFromCell } from '../decimal.js';
 import { SankhyaGatewayError } from '../errors.js';
 import type { ReadEntity } from '../gateway.js';
+import { MEDIA_SAMPLE_BYTES, MEDIA_SAMPLE_PERCENTS } from '../media.js';
 import type { ReadScope } from '../read-scope.js';
 
 /**
@@ -371,4 +372,44 @@ export function compareKeys(a: readonly number[], b: readonly number[]): number 
     if (difference !== 0) return difference;
   }
   return 0;
+}
+
+// ---- product photo (TGFPRO.IMAGEM) transport (spike F-54, F-55) ------------------------------------
+// The BLOB is never part of PRODUCT_SPEC / productSpec: it is read only by the statements below, in
+// 2000-byte hex chunks (the SQL RAW limit), through the same `DbExplorerSP.executeQuery` flow.
+
+const MEDIA_LEN = 'DBMS_LOB.GETLENGTH(IMAGEM)';
+export const PRODUCT_MEDIA_SIGNATURE_COLUMNS: readonly string[] = ['CODPROD', 'LEN', 'W0', 'W1', 'W2', 'W3', 'W4'];
+export const PRODUCT_MEDIA_CHUNK_COLUMNS: readonly string[] = ['H'];
+export const PRODUCT_MEDIA_LENGTH_COLUMNS: readonly string[] = ['LEN'];
+
+/**
+ * One batched, keyset-paged statement: same product WHERE as `productSpec(scope)`, plus the length and
+ * five sampled 32-byte windows per row (offsets mirror `mediaSampleOffsets`). Only integers we validated
+ * are interpolated. Never selects the BLOB itself.
+ */
+export function productMediaSignaturesSql(scope: ReadScope | undefined, afterCode: number, limit: number): string {
+  const where = productSpec(scope).where ?? 'CODPROD > 0';
+  const window = (offset: string) => `RAWTOHEX(DBMS_LOB.SUBSTR(IMAGEM, ${MEDIA_SAMPLE_BYTES}, ${offset}))`;
+  const offsets = [
+    '1',
+    ...MEDIA_SAMPLE_PERCENTS.map((p) => `GREATEST(1, TRUNC(${MEDIA_LEN} * ${p} / 100))`),
+    `GREATEST(1, ${MEDIA_LEN} - ${MEDIA_SAMPLE_BYTES - 1})`,
+  ];
+  const windows = offsets.map((offset, i) => `${window(offset)} AS W${i}`);
+  return (
+    `SELECT CODPROD, ${MEDIA_LEN} AS LEN, ${windows.join(', ')} FROM TGFPRO` +
+    ` WHERE ${where} AND CODPROD > ${afterCode} AND IMAGEM IS NOT NULL AND ${MEDIA_LEN} > 0` +
+    ` ORDER BY CODPROD FETCH FIRST ${limit} ROWS ONLY`
+  );
+}
+
+/** The proven chunk statement (F-54): `offset` is 1-based, `bytes` <= 2000. */
+export function productMediaChunkSql(productCode: number, offset: number, bytes: number): string {
+  return `SELECT RAWTOHEX(DBMS_LOB.SUBSTR(IMAGEM, ${bytes}, ${offset})) AS H FROM TGFPRO WHERE CODPROD = ${productCode}`;
+}
+
+/** Final length re-check after assembling the chunks (detects an image replaced while reading). */
+export function productMediaLengthSql(productCode: number): string {
+  return `SELECT ${MEDIA_LEN} AS LEN FROM TGFPRO WHERE CODPROD = ${productCode}`;
 }

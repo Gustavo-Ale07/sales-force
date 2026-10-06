@@ -10,6 +10,7 @@ import type {
   Seller,
   Customer,
 } from '@salesforce/domain';
+import type { SankhyaProductMediaPort } from './media.js';
 import type { ReadScope } from './read-scope.js';
 
 /**
@@ -128,7 +129,7 @@ export interface SankhyaWritePort {
   submitOrder(request: SubmitOrderRequest): Promise<SubmitOrderResult>;
 }
 
-export interface SankhyaGateway extends SankhyaReadPort, SankhyaWritePort {
+export interface SankhyaGateway extends SankhyaReadPort, SankhyaProductMediaPort, SankhyaWritePort {
   describe(): GatewayDescription;
 }
 

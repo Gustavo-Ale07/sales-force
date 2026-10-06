@@ -2,6 +2,13 @@ import { z } from 'zod';
 import { DATASET_ID_SLUG_PATTERN, ENVIRONMENT_SLUG_PATTERN, type DatasetIdentity } from '@salesforce/contracts';
 import { passwordHashFields, passwordHashProblems } from './auth-env.js';
 import {
+  DEFAULT_PRODUCT_MEDIA_THUMB_MAX_BYTES,
+  MIN_PRODUCT_MEDIA_THUMB_MAX_BYTES,
+  mediaDirField,
+  mediaDirProblems,
+  mediaMaxBytesField,
+} from './media-env.js';
+import {
   databaseUrlField,
   integerField,
   logLevelField,
@@ -61,6 +68,15 @@ export const ApiEnvSchema = z.object({
     .string()
     .regex(DATASET_ID_SLUG_PATTERN, { error: 'must be a slug of 3-64 characters: lowercase letters, digits, . - or _, e.g. acme-sandbox-real-1.' })
     .optional(),
+
+  /**
+   * Product photos: absolute path of the persistent directory the worker fills (mounted read-only into
+   * the API). Unset = no product has an image. The API only reads it; it never calls the ERP.
+   */
+  PRODUCT_MEDIA_DIR: mediaDirField,
+  PRODUCT_MEDIA_MAX_BYTES: mediaMaxBytesField,
+  /** Largest generated thumbnail the API reads and serves (the worker bounds its rendition at 256 KiB; keep this >= that). */
+  PRODUCT_MEDIA_THUMB_MAX_BYTES: integerField({ min: MIN_PRODUCT_MEDIA_THUMB_MAX_BYTES, max: 5 * 1024 * 1024 }, DEFAULT_PRODUCT_MEDIA_THUMB_MAX_BYTES),
 
   // HTTP server hardening.
   /**
@@ -149,7 +165,7 @@ export function parseApiEnv(source: EnvSource): ParsedApiEnv {
         problems.push('SF_DATASET_ID: is required when NODE_ENV=production (the installation must declare its dataset identity).');
       }
     }
-    problems.push(...origins.problems,...passwordHashProblems(parsed));
+    problems.push(...origins.problems,...passwordHashProblems(parsed), ...mediaDirProblems(parsed.PRODUCT_MEDIA_DIR));
     return problems;
   });
   const dataset =

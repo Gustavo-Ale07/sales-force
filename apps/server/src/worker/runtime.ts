@@ -14,7 +14,9 @@ import { createBatchHandler } from './job-runner.js';
 import { MIRROR_ENTITIES, mirrorQueueName } from '../sync/mirror-entities.js';
 import type { MirrorSyncService } from '../sync/mirror-sync.service.js';
 import type { MirrorSchedules } from '../sync/schedules.js';
+import type { ProductMediaSyncService } from '../media/product-media-sync.service.js';
 import { MirrorSyncJob } from './jobs/mirror-sync.job.js';
+import { ProductMediaSyncJob } from './jobs/product-media-sync.job.js';
 import { SyncHeartbeatJob } from './jobs/sync-heartbeat.job.js';
 import { QUEUE_NAMES, QUEUE_REGISTRY, type QueueSpec } from './queues.js';
 
@@ -56,6 +58,12 @@ export interface WorkerRuntimeDeps {
    * each entity (`null` = not scheduled). Absent = no mirror jobs (the API-less unit tests).
    */
   readonly mirror?: { readonly service: MirrorSyncService; readonly schedules: MirrorSchedules };
+  /**
+   * Product photo synchronization. Present only when PRODUCT_MEDIA_SYNC_ENABLED=true: the handler is then
+   * registered and `media.products` scheduled with `cron`. Absent = no handler, and a schedule stored by an
+   * earlier configuration is dropped.
+   */
+  readonly media?: { readonly service: ProductMediaSyncService; readonly cron: string };
 }
 
 /**
@@ -123,7 +131,9 @@ export class WorkerRuntime {
       const heartbeat = new SyncHeartbeatJob(this.deps.db.db, heartbeatCursor, (at) => this.health.recordBeat(at));
       const { mirror } = this.deps;
       const mirrorHandlers = mirror === undefined ? [] : MIRROR_ENTITIES.map((entity) => new MirrorSyncJob(entity, mirror.service));
-      const handlers: readonly JobHandler<unknown>[] = [heartbeat, ...mirrorHandlers, ...(this.deps.extraHandlers ?? [])];
+      const { media } = this.deps;
+      const mediaHandlers = media === undefined ? [] : [new ProductMediaSyncJob(media.service)];
+      const handlers: readonly JobHandler<unknown>[] = [heartbeat, ...mirrorHandlers, ...mediaHandlers, ...(this.deps.extraHandlers ?? [])];
 
       for (const handler of handlers) {
         await boss.work(
@@ -152,6 +162,15 @@ export class WorkerRuntime {
         }
       }
 
+      if (queues.some((spec) => spec.name === QUEUE_NAMES.mediaProducts)) {
+        if (media === undefined) {
+          // Disabled: drop a schedule stored by an earlier configuration.
+          await boss.unschedule(QUEUE_NAMES.mediaProducts);
+        } else {
+          await boss.schedule(QUEUE_NAMES.mediaProducts, media.cron, {});
+        }
+      }
+
       this.health.markStarted();
       // First beat right away, so the API sees the worker (and its gateway mode) without waiting a minute.
       const firstBeat = this.deps.now();
@@ -168,7 +187,7 @@ export class WorkerRuntime {
 
     this.#started = true;
     logger.info(
-      { gatewayMode: options.gatewayMode, heartbeatCron: options.heartbeatCron, mirrorSchedules },
+      { gatewayMode: options.gatewayMode, heartbeatCron: options.heartbeatCron, mirrorSchedules, mediaCron: this.deps.media?.cron ?? null },
       'worker started',
     );
   }

@@ -8,6 +8,18 @@ import type {
 } from '@salesforce/domain';
 import { assertSafeScope, selectEffectiveVersions } from '../read-scope.js';
 import {
+  MEDIA_CHUNK_BYTES,
+  assertBytesOptions,
+  assertSignaturesOptions,
+  mediaChangedDuringRead,
+  mediaFingerprint,
+  mediaSampleOffsets,
+  mediaSampleWidth,
+  type ProductMediaSignature,
+  type ReadProductMediaBytesOptions,
+  type ReadProductMediaSignaturesOptions,
+} from '../media.js';
+import {
   UnavailableConfigurationSource,
   type ConfigurationSource,
 } from '../configuration-source.js';
@@ -35,6 +47,12 @@ import {
   listPriceSpec,
   priceTableSpec,
   priceTableVersionSpec,
+  PRODUCT_MEDIA_CHUNK_COLUMNS,
+  PRODUCT_MEDIA_LENGTH_COLUMNS,
+  PRODUCT_MEDIA_SIGNATURE_COLUMNS,
+  productMediaChunkSql,
+  productMediaLengthSql,
+  productMediaSignaturesSql,
   productSpec,
   RowReader,
   SELLER_SPEC,
@@ -219,6 +237,94 @@ export class RealSankhyaGateway implements SankhyaGateway {
     for await (const batch of this.#paged(priceTableVersionSpec(options?.scope), options)) all.push(...batch);
     const now = options?.scope?.now ?? new Date(this.#now()).toISOString();
     return selectEffectiveVersions(all, now);
+  }
+
+  // ---- product photos (F-54, F-55) --------------------------------------------------------------
+
+  /** One batched SELECT per page (keyset on the product code); the image itself is never selected. */
+  async readProductMediaSignatures(options: ReadProductMediaSignaturesOptions): Promise<readonly ProductMediaSignature[]> {
+    const after = assertSignaturesOptions(options);
+    assertSafeScope(options.scope);
+    options.signal?.throwIfAborted();
+    if (options.scope?.products?.usageValues.length === 0) return [];
+    const page = await this.#query(
+      productMediaSignaturesSql(options.scope, after, options.limit),
+      PRODUCT_MEDIA_SIGNATURE_COLUMNS,
+      options.signal,
+    );
+    if (page.rows.length > options.limit) {
+      throw new SankhyaGatewayError('validation', {
+        code: 'invalid_gateway_response',
+        message: 'The ERP returned more product photo rows than requested.',
+      });
+    }
+    const result: ProductMediaSignature[] = [];
+    let previous = after;
+    for (const [index, cells] of page.rows.entries()) {
+      const row = new RowReader('products', PRODUCT_MEDIA_SIGNATURE_COLUMNS, cells, index);
+      const productCode = row.int('CODPROD');
+      const byteLength = row.int('LEN');
+      if (productCode <= previous) {
+        throw new SankhyaGatewayError('temporary', {
+          code: 'snapshot_inconsistent',
+          message: 'products: photo rows came back duplicated or out of order. The page was rejected; retry.',
+        });
+      }
+      previous = productCode;
+      if (byteLength < 1) row.reject('LEN', 'is not a positive size');
+      const windows = mediaSampleOffsets(byteLength).map((offset, i) => {
+        const hex = row.text(`W${i}`);
+        if (!/^[0-9a-fA-F]*$/.test(hex) || hex.length !== mediaSampleWidth(byteLength, offset) * 2) {
+          row.reject(`W${i}`, 'is not the expected hex window');
+        }
+        return hex;
+      });
+      result.push({ productCode, byteLength, fingerprint: mediaFingerprint(byteLength, windows) });
+    }
+    return result;
+  }
+
+  /**
+   * Sequential 2000-byte hex chunks through the serialized request path, verified against the announced
+   * length and re-checked against the ERP length at the end. Nothing partial is ever returned.
+   */
+  async readProductMediaBytes(options: ReadProductMediaBytesOptions): Promise<Uint8Array> {
+    assertBytesOptions(options);
+    const { productCode, expectedLength, signal } = options;
+    signal?.throwIfAborted();
+    const bytes = new Uint8Array(expectedLength);
+    let filled = 0;
+    while (filled < expectedLength) {
+      signal?.throwIfAborted();
+      const want = Math.min(MEDIA_CHUNK_BYTES, expectedLength - filled);
+      const page = await this.#query(productMediaChunkSql(productCode, filled + 1, want), PRODUCT_MEDIA_CHUNK_COLUMNS, signal);
+      const cell = page.rows.length === 1 ? page.rows[0]?.[0] : undefined;
+      if (page.rows.length > 1) {
+        throw new SankhyaGatewayError('validation', {
+          code: 'invalid_gateway_response',
+          message: `Product ${productCode}: the ERP returned more than one row for a single image chunk (offset ${filled + 1}).`,
+        });
+      }
+      if (typeof cell !== 'string') throw mediaChangedDuringRead(productCode, `no data at offset ${filled + 1}`);
+      if (cell.length !== want * 2 || !/^[0-9a-fA-F]*$/.test(cell)) {
+        if (cell.length < want * 2 && /^[0-9a-fA-F]*$/.test(cell) && cell.length % 2 === 0) {
+          throw mediaChangedDuringRead(productCode, `short chunk at offset ${filled + 1}`);
+        }
+        throw new SankhyaGatewayError('validation', {
+          code: 'invalid_media_chunk',
+          message: `Product ${productCode}: the image chunk at offset ${filled + 1} is not hex data of the expected size.`,
+        });
+      }
+      for (let i = 0; i < want; i += 1) bytes[filled + i] = Number.parseInt(cell.slice(i * 2, i * 2 + 2), 16);
+      filled += want;
+    }
+    signal?.throwIfAborted();
+    const check = await this.#query(productMediaLengthSql(productCode), PRODUCT_MEDIA_LENGTH_COLUMNS, signal);
+    const length = new RowReader('products', PRODUCT_MEDIA_LENGTH_COLUMNS, check.rows[0] ?? [], 0).nullableInt('LEN');
+    if (check.rows.length !== 1 || length !== expectedLength) {
+      throw mediaChangedDuringRead(productCode, 'the stored length differs after reading');
+    }
+    return bytes;
   }
 
   /** SNK-4 / SNK-5 / SNK-6: intentionally unimplemented; performs no HTTP call. */

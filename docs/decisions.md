@@ -583,6 +583,16 @@ Recorded from the project owner's explicit approval of 2026-10-02. Only structur
 - **R35/R36** remain PENDING_BUSINESS_DECISION (UNDECIDED); not blocking staging infrastructure. DISC-1 unchanged.
 - **Photos:** the photos infrastructure remains valid; the real source stays `BLOCKED_EXTERNAL_SECRET`; no fixture or fake may declare `PHOTOS_READY`.
 
+### 3.12 APPROVED — Owner ruling on product photo thumbnails (2026-10-06)
+
+Recorded from the project owner's instruction of 2026-10-06 (details and runbook: `docs/implementation/product-media.md`; Sankhya photo facts: `docs/sankhya-spike.md`).
+
+#### MEDIA-1 · Product photo thumbnails generated with Sharp
+- **Status:** APPROVED 2026-10-06
+- **Decision:** the worker generates a real thumbnail for every stored product photo with `sharp` pinned to the exact version `0.35.5` (`apps/server` only; prebuilt binaries, lifecycle/build scripts stay disabled). Rendition: longest side 256 px, `fit: inside`, **no upscaling**, EXIF orientation applied then **all metadata removed**, **WebP quality 80**, output limit 256 KiB (larger output is refused, never served as a fallback). Original and thumbnail are separate objects; web list and mobile use the thumbnail and never fall back to the full image.
+- **Consequence:** changing the library version, size, format, quality or output limit is a new decision. The staging branding icons are accepted as they are (`icon-512.png` is an upscale of a 173 px source: visual debt in `docs/implementation/web-assets.md`, not a blocker).
+- **Not decided here:** the interim filesystem volume store for photos (STACK-7 still requires managed S3-compatible storage) remains pending owner acceptance, as stated in `docs/implementation/product-media.md`.
+
 ---
 
 ## 4. Status of the specification's decisions (spec §4)
