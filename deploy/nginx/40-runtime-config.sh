@@ -2,7 +2,7 @@
 # Writes /usr/share/nginx/html/config.json from the container environment at start (STACK-5): the
 # installation name, the auth mode and the brand are per installation and never baked into the bundle. No
 # secret belongs here: the file is public.
-#   INSTALLATION_NAME  shown in the shell and on the login page (default: "Sales Force"; 1-60 chars)
+#   INSTALLATION_NAME  shown in the shell and on the login page (default: "Force PLAC";1-60 chars)
 #   WEB_AUTH_MODE      dev | standard | local (REQUIRED, no default; the server refuses dev auth in production anyway)
 #   BRAND_LOGO_URL     optional, /brand/<file>.(png|svg|webp|jpg|jpeg): horizontal logo (already carries the name)
 #   BRAND_MARK_URL     optional, same shape: square mark (favicon; next to the name when there is no logo)
@@ -12,7 +12,7 @@
 # The web app validates every brand value again; this script refuses the malformed ones early.
 set -eu
 
-name="${INSTALLATION_NAME:-Sales Force}"
+name="${INSTALLATION_NAME:-Force PLAC}"
 mode="${WEB_AUTH_MODE:-}"
 if [ -z "$mode" ]; then
   echo "40-runtime-config: WEB_AUTH_MODE is required (dev | standard | local); there is no default." >&2

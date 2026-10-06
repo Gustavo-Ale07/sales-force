@@ -151,7 +151,7 @@ describe("Meu perfil e atualização de dados", () => {
     expect(screen.getByText("Vendedores vinculados")).toBeInTheDocument();
     expect(screen.getByText("7")).toBeInTheDocument();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-    await waitFor(() => expect(document.title).toBe("Meu perfil — Sales Force"));
+    await waitFor(() => expect(document.title).toBe("Meu perfil — Force PLAC"));
   });
 
   it("says plainly when the account has no seller link", async () => {

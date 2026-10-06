@@ -22,7 +22,7 @@ export interface RuntimeConfig {
 }
 
 export const defaultRuntimeConfig: RuntimeConfig = {
-  installationName: "Sales Force",
+  installationName: "Force PLAC",
   authMode: "dev",
   brand: defaultBrand,
 };

@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearch } from "@tanstack/react-router";
 import { Eye, EyeOff, LockKeyhole, User } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import loginHeroUrl from "../assets/login/login-hero.png";
 import { Brand } from "../components/brand";
 import { DevAuthBanner } from "../components/dev-auth-banner";
 import { useAppServices } from "../lib/app-context";
@@ -252,7 +253,7 @@ function LoginHero() {
       className="relative hidden overflow-hidden bg-[#0b1442] lg:block lg:min-h-full"
     >
       <img
-        src="/assets/login/login-hero.png"
+        src={loginHeroUrl}
         alt=""
         width={1374}
         height={1145}

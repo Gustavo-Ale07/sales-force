@@ -24,7 +24,7 @@ describe("session guard", () => {
     expect(await screen.findByRole("heading", { name: "Clientes", level: 1 })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Clientes" })).toHaveAttribute("aria-current", "page");
     expect(screen.queryByRole("navigation", { name: /Trilha/i })).not.toBeInTheDocument();
-    await waitFor(() => expect(document.title).toBe("Clientes — Sales Force"));
+    await waitFor(() => expect(document.title).toBe("Clientes — Force PLAC"));
   });
 
   it("uses the installation name from the runtime configuration, never a built-in brand", async () => {
