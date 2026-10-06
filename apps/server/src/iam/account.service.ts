@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { AccountRole, AccountStatus, Database } from '@salesforce/db';
-import { isValidSellerCode, normalizeEmail } from '@salesforce/domain';
+import { isValidSellerCode, normalizeUsername } from '@salesforce/domain';
 import { uuidv7 } from '../platform/ids.js';
 import { CLOCK, DATABASE, type Clock } from '../platform/tokens.js';
 import { AccountRepository } from './account.repository.js';
@@ -8,7 +8,7 @@ import { AUDIT_ACTIONS, AuditService, type AuditDetail } from './audit.service.j
 import { PASSWORD_HASHER } from './iam-tokens.js';
 import type { PasswordHasher } from './password-hasher.js';
 import { checkPasswordPolicy, describePasswordViolations, type PasswordViolation } from './password-policy.js';
-import { emailThrottleKey } from './session-crypto.js';
+import { loginNameThrottleKey } from './session-crypto.js';
 import { SessionRepository } from './session.repository.js';
 import { ThrottleRepository } from './throttle.repository.js';
 
@@ -23,8 +23,19 @@ export class PasswordPolicyError extends Error {
 
 export class AccountAlreadyExistsError extends Error {
   constructor() {
-    super('An account with this e-mail already exists.');
+    super('An account with this user name already exists.');
     this.name = 'AccountAlreadyExistsError';
+  }
+}
+
+/**
+ * An account linked to an ERP directory user (`account.external_user_id`) signs in with its ERP credentials and never
+ * holds a local password: setting one would create a second, unmanaged way in.
+ */
+export class ExternalAccountPasswordError extends Error {
+  constructor() {
+    super('This account signs in with its ERP (Sankhya) credentials and cannot have a local password. Change the password in the ERP instead.');
+    this.name = 'ExternalAccountPasswordError';
   }
 }
 
@@ -86,7 +97,7 @@ export class AccountService {
 
   /** Creates an active account. Throws `PasswordPolicyError` / `AccountAlreadyExistsError`. Returns the id. */
   async createAccount(
-    input: { email: string; displayName: string; password: string; role: AccountRole },
+    input: { username: string; displayName: string; password: string; role: AccountRole },
     actor: ActorRef = CLI_ACTOR,
   ): Promise<string> {
     const violations = checkPasswordPolicy(input.password);
@@ -95,11 +106,12 @@ export class AccountService {
     const passwordHash = await this.hasher.hash(input.password);
     const now = this.clock();
     const id = uuidv7(now.getTime());
-    const email = normalizeEmail(input.email);
+    // Stored lower-cased: login matching is case-insensitive (the unique index is on lower(column)).
+    const username = normalizeUsername(input.username).toLowerCase();
 
     await this.db.transaction(async (tx) => {
       const inserted = await this.accounts.insert(
-        { id, email, displayName: input.displayName.trim(), passwordHash, role: input.role, createdAt: now },
+        { id, username, displayName: input.displayName.trim(), passwordHash, role: input.role, createdAt: now },
         tx,
       );
       if (!inserted) throw new AccountAlreadyExistsError();
@@ -111,16 +123,22 @@ export class AccountService {
     return id;
   }
 
-  /** Replaces the password and ends every live session of the account (the "session version" bump). */
+  /**
+   * Replaces the password and ends every live session of the account (the "session version" bump). Throws
+   * `ExternalAccountPasswordError` for an account linked to an ERP directory user (checked before hashing and again
+   * inside the write, so a link made meanwhile is not overtaken).
+   */
   async setPassword(accountId: string, password: string, actor: ActorRef = CLI_ACTOR): Promise<void> {
     const violations = checkPasswordPolicy(password);
     if (violations.length > 0) throw new PasswordPolicyError(violations);
-    if ((await this.accounts.findById(accountId)) === null) throw new AccountNotFoundError();
+    const existing = await this.accounts.findById(accountId);
+    if (existing === null) throw new AccountNotFoundError();
+    if (existing.externalUserId !== null) throw new ExternalAccountPasswordError();
 
     const passwordHash = await this.hasher.hash(password);
     const now = this.clock();
     await this.db.transaction(async (tx) => {
-      await this.accounts.updatePasswordHash(accountId, passwordHash, tx);
+      if (!(await this.accounts.updatePasswordHash(accountId, passwordHash, tx))) throw new ExternalAccountPasswordError();
       const revoked = await this.sessions.revokeAllForAccount(accountId, now, tx);
       await this.audit.record(
         {
@@ -168,10 +186,10 @@ export class AccountService {
     });
   }
 
-  /** Clears the lockout of an e-mail address (operator action). Returns false when there was nothing to clear. */
-  async unlock(email: string, actor: ActorRef = CLI_ACTOR): Promise<boolean> {
-    const found = await this.accounts.findByEmail(email);
-    const cleared = await this.throttle.clear(emailThrottleKey(normalizeEmail(email)));
+  /** Clears the lockout of a login name (operator action). Returns false when there was nothing to clear. */
+  async unlock(username: string, actor: ActorRef = CLI_ACTOR): Promise<boolean> {
+    const found = await this.accounts.findByUsername(username);
+    const cleared = await this.throttle.clear(loginNameThrottleKey(normalizeUsername(username).toLowerCase()));
     await this.audit.record({
       action: AUDIT_ACTIONS.unlock,
       actorAccountId: actor.accountId,

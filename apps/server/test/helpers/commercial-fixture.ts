@@ -116,14 +116,14 @@ export async function seedDemoAccounts(
   const ids: Record<string, string> = {};
   for (const demo of DEMO_ACCOUNTS) {
     ids[demo.email] = await accounts.createAccount({
-      email: demo.email,
+      username: demo.email,
       displayName: demo.displayName,
       role: demo.role,
       password: options.password ?? TEST_PASSWORD,
     });
   }
   for (const link of configuration.customers.accountSellerLinks) {
-    const account = await repository.findByEmail(link.accountEmail);
+    const account = await repository.findByUsername(link.accountEmail);
     if (account === null) continue;
     await accounts.linkSeller(account.id, link.sellerCode, configVersionId);
   }

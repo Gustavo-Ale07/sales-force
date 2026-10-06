@@ -24,8 +24,8 @@ describe('demoAccountsWarning', () => {
   beforeAll(async () => {
     postgres = await startPostgres();
     database = await createMigratedDatabase(postgres);
-    await createTestAccount(database.handle, { email: 'admin@demo.salesforce.local', role: 'admin' });
-    await createTestAccount(database.handle, { email: 'real@empresa.example', role: 'manager' });
+    await createTestAccount(database.handle, { username: 'admin@demo.salesforce.local', role: 'admin' });
+    await createTestAccount(database.handle, { username: 'real@empresa.example', role: 'manager' });
   });
   afterAll(async () => {
     await closeAllThenStop([() => database.handle.close()], postgres);

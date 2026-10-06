@@ -19,7 +19,8 @@ export type AuthMode = z.infer<typeof AuthModeSchema>;
 export const LoginRequestSchema = named(
   'LoginRequest',
   z.strictObject({
-    email: z.email().max(254),
+    /** Login name (Sankhya user or a local admin/technical identifier). Trimmed only: no e-mail format, no case change. */
+    username: z.string().trim().min(1).max(254),
     password: z.string().min(1).max(256),
   }),
 );
@@ -29,7 +30,8 @@ export const AccountSchema = named(
   'Account',
   z.object({
     id: UuidSchema,
-    email: z.email(),
+    /** The account's login identifier (user name; not an e-mail address: no format check). Opaque `sankhya:<id>` for handles created from the ERP directory. */
+    username: z.string().min(1),
     displayName: z.string(),
     role: AccountRoleSchema,
     /** Seller codes linked to the account by configuration (CFG-2). Empty for accounts without links. */

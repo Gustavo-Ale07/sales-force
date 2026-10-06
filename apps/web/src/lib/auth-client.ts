@@ -12,7 +12,7 @@ import { queryOptions } from "@tanstack/react-query";
 export interface AuthUser {
   id: string;
   name: string;
-  email: string;
+  username: string;
   /** Contract role (`admin`, `manager`, `seller`, `technical`). Convenience for the UI only; the server enforces access. */
   role: AccountRole;
   /** Human-readable profile name (pt-BR). */
@@ -22,12 +22,12 @@ export interface AuthUser {
 }
 
 export interface LoginCredentials {
-  email: string;
+  username: string;
   password: string;
 }
 
 export type LoginFailureReason =
-  /** Wrong e-mail or password (same message whether or not the e-mail exists). */
+  /** Wrong username or password (same message whether or not the username exists). */
   | "invalid_credentials"
   /** Progressive lockout after repeated failures. */
   | "locked"

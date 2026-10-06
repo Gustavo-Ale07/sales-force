@@ -10,7 +10,8 @@ import type { Channel } from './policy.js';
  */
 export interface CurrentUser {
   readonly accountId: string;
-  readonly email: string;
+  /** Login identifier (user name). */
+  readonly username: string;
   readonly displayName: string;
   readonly role: AccountRole;
   /** Seller codes linked by configuration (CFG-2); never `TSIUSU.CODVEND` by rule. */

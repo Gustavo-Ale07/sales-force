@@ -1,5 +1,5 @@
 import { Inject, Injectable, Optional, type OnModuleInit } from '@nestjs/common';
-import { isValidSellerCode, normalizeEmail } from '@salesforce/domain';
+import { isValidSellerCode, normalizeUsername } from '@salesforce/domain';
 import type { LoginResponse as AuthenticatedSession } from '@salesforce/contracts';
 import { AppError } from '../http/app-error.js';
 import { errorLogFields, type Logger } from '../observability/logger.js';
@@ -24,14 +24,15 @@ import { isChannelAllowed, type Channel } from './policy.js';
 import { SessionRepository } from './session.repository.js';
 import {
   constantTimeEqualHex,
-  emailFingerprint,
-  emailThrottleKey,
   externalLoginThrottleKey,
   generateSessionToken,
   hashSessionToken,
   ipThrottleKey,
   looksLikeSessionToken,
+  loginNameFingerprint,
+  loginNameThrottleKey,
 } from './session-crypto.js';
+import { failureFloor, padFailure } from './failure-floor.js';
 import { activeLockUntil } from './throttle-policy.js';
 import { ThrottleRepository } from './throttle.repository.js';
 
@@ -58,6 +59,7 @@ export interface ResolvedSession {
 export type LoginFailureReason =
   | 'unknown_account'
   | 'bad_password'
+  | 'external_account_local_login'
   | 'account_disabled'
   | 'channel_not_permitted'
   | 'mode_role_not_permitted'
@@ -68,6 +70,7 @@ export type LoginFailureReason =
   | 'external_channel_not_permitted'
   | 'external_mode_role_not_permitted'
   | 'external_link_mismatch'
+  | 'external_seller_inactive'
   | 'external_unavailable'
   | 'external_rate_limited';
 
@@ -80,7 +83,6 @@ const EXTERNAL_LOGIN_MAX = 254;
 const EXTERNAL_PASSWORD_MAX = 1024;
 const EXTERNAL_RATE_LIMIT_RETRY_AFTER_SECONDS = 30;
 
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 const GLOBAL_WINDOW_MS = 60_000;
 /** A login refused because every Argon2id slot is busy is worth retrying almost at once. */
 const SATURATED_RETRY_AFTER_SECONDS = 1;
@@ -98,10 +100,11 @@ function retryAfterSeconds(until: Date, now: Date): number {
  * throttling arithmetic is in `throttle-policy.ts`, the password rules in `password-policy.ts`, who
  * may do what in `policy.ts`.
  *
- * Enumeration: an unknown e-mail, a wrong password, a disabled account and a channel-restricted
+ * Enumeration: an unknown user name, a wrong password, a disabled account and a channel-restricted
  * account all end in the same `invalid_credentials` after the same work (a full Argon2id
- * verification, the same counters); lockout is keyed by the e-mail hash so it applies identically
- * to registered and unregistered addresses.
+ * verification, the same counters); lockout is keyed by the login-name hash so it applies identically
+ * to registered and unregistered names. With the directory login enabled every failure path also answers no sooner
+ * than `externalLogin.minFailureMs` (measured from the start of the attempt), so latency does not tell them apart.
  */
 @Injectable()
 export class AuthService implements OnModuleInit {
@@ -133,25 +136,38 @@ export class AuthService implements OnModuleInit {
     await this.hasher.warmUp();
   }
 
-  async login(input: { email: string; password: string }, meta: RequestMeta): Promise<LoginResult> {
+  /**
+   * Login by user name + password. Order: the LOCAL account (admin/technical, Argon2id) first; a name that is not a
+   * local account usable in this mode goes to the external directory flow when it is enabled (`loginExternal`),
+   * which is how a directory-linked (seller) account signs in (an unlinked local seller account still verifies its local password when the role is allowed in the mode). A wrong password or a disabled LOCAL account
+   * never falls through to the directory: the local verdict is final. With the directory disabled the failure is
+   * the same uniform `invalid_credentials`. An account linked to a directory user (`externalUserId`) never verifies a
+   * local hash: it is treated like an unknown name (dummy verification) and goes to the directory when enabled.
+   */
+  async login(input: { username: string; password: string }, meta: RequestMeta): Promise<LoginResult> {
+    const startedAt = failureFloor.now();
     const now = this.clock();
-    const email = normalizeEmail(input.email);
-    const emailKey = emailThrottleKey(email);
+    const username = normalizeUsername(input.username);
+    // Local accounts are matched case-insensitively (unique index on lower of the legacy login column); the directory always receives `username` exactly as typed.
+    const loginName = username.toLowerCase();
+    const loginKey = loginNameThrottleKey(loginName);
     const ipKey = ipThrottleKey(meta.ip);
     const auditMeta = { ip: meta.ip, userAgent: meta.userAgent?.slice(0, USER_AGENT_MAX) ?? null, requestId: meta.requestId };
+    // Minimum failure duration, only while the directory login is on (otherwise behaviour is unchanged).
+    const floorMs = this.config.externalLogin?.enabled === true ? this.config.externalLogin.minFailureMs : 0;
 
     // 1. Refusals before any password work (bounds the CPU and the writes an attacker can cause):
     // a locked key, an exhausted installation-wide failure budget, or no free Argon2id slot.
-    const [ipState, emailState, globalState] = await Promise.all([
+    const [ipState, loginState, globalState] = await Promise.all([
       this.throttle.find(ipKey),
-      this.throttle.find(emailKey),
+      this.throttle.find(loginKey),
       this.throttle.find(GLOBAL_FAILURES_KEY),
     ]);
     const ipLock = activeLockUntil(ipState, now);
-    const emailLock = activeLockUntil(emailState, now);
-    if (ipLock !== null || emailLock !== null) {
-      const until = [ipLock, emailLock].filter((value): value is Date => value !== null).reduce((a, b) => (a > b ? a : b));
-      await this.refuse(ipLock !== null ? 'ip' : 'account', retryAfterSeconds(until, now), email, auditMeta, now);
+    const loginLock = activeLockUntil(loginState, now);
+    if (ipLock !== null || loginLock !== null) {
+      const until = [ipLock, loginLock].filter((value): value is Date => value !== null).reduce((a, b) => (a > b ? a : b));
+      await this.refuse(ipLock !== null ? 'ip' : 'account', retryAfterSeconds(until, now), loginName, auditMeta, now);
     }
     if (
       globalState !== null &&
@@ -159,34 +175,50 @@ export class AuthService implements OnModuleInit {
       globalState.failures >= this.config.login.globalMaxFailuresPerMinute
     ) {
       const windowEnd = new Date(globalState.windowStartedAt.getTime() + GLOBAL_WINDOW_MS);
-      await this.refuse('global', retryAfterSeconds(windowEnd, now), email, auditMeta, now);
+      await this.refuse('global', retryAfterSeconds(windowEnd, now), loginName, auditMeta, now);
     }
     const releaseSlot = this.#hashSlots.tryAcquire();
     if (releaseSlot === null) {
-      await this.refuse('saturated', SATURATED_RETRY_AFTER_SECONDS, email, auditMeta, now);
+      await this.refuse('saturated', SATURATED_RETRY_AFTER_SECONDS, loginName, auditMeta, now);
     }
 
     // 2. Verify. An unknown account verifies against a throw-away hash (same cost). The slot covers
     // the account lookup and the hash: those are what a flood would pile up.
-    let found: Awaited<ReturnType<AccountRepository['findByEmail']>>;
+    let found: Awaited<ReturnType<AccountRepository['findByUsername']>>;
     let passwordOk: boolean;
     try {
-      found = await this.accounts.findByEmail(email);
-      passwordOk = await this.hasher.verify(found?.passwordHash ?? null, input.password);
+      found = await this.accounts.findByUsername(loginName);
+      // An account linked to a directory user has no local password: its stored hash is never checked (dummy work instead).
+      passwordOk = await this.hasher.verify(found !== null && found.externalUserId === null ? found.passwordHash : null, input.password);
     } finally {
       releaseSlot?.();
     }
     let failure: LoginFailureReason | null = null;
     if (found === null) failure = 'unknown_account';
+    else if (found.externalUserId !== null) failure = 'external_account_local_login';
     else if (!passwordOk) failure = 'bad_password';
     else if (found.status !== 'active') failure = 'account_disabled';
     else if (!isChannelAllowed(found.role, 'web')) failure = 'channel_not_permitted';
     else if (!this.roleMayHoldSession(found.role)) failure = 'mode_role_not_permitted';
 
+    // Only a name with no local account (or one linked to a directory user) reaches the directory: a local verdict (wrong
+    // password, disabled account, role not admitted) is final and a local password is never forwarded.
+    if (
+      (failure === 'unknown_account' || failure === 'external_account_local_login') &&
+      this.config.externalLogin?.enabled === true &&
+      this.externalVerifier !== undefined &&
+      this.externalLinks !== undefined
+    ) {
+      return this.runExternalLogin({ login: username, password: input.password }, meta, undefined, startedAt);
+    }
+
     if (failure !== null || found === null) {
-      await this.recordFailure({ reason: failure ?? 'unknown_account', accountId: found?.id ?? null, email, emailKey, ipKey, now, auditMeta });
+      await this.recordFailure({ reason: failure ?? 'unknown_account', accountId: found?.id ?? null, loginName, loginKey, ipKey, now, auditMeta });
+      await padFailure(startedAt, floorMs);
       throw new AppError('invalid_credentials');
     }
+    // Defense in depth: nothing below may ever run for an account linked to a directory user.
+    if (found.externalUserId !== null) throw new AppError('invalid_credentials');
 
     // 3. Success: upgrade the hash if the cost parameters moved, open the session, then forget the failures
     // of this e-mail (the address counter is not reset by a success).
@@ -205,12 +237,12 @@ export class AuthService implements OnModuleInit {
       { id: sessionId, accountId: found.id, tokenHash: hashSessionToken(token), createdAt: now, expiresAt },
       { ...auditMeta, sessionId },
     );
-    await this.throttle.clear(emailKey);
+    await this.throttle.clear(loginKey);
     await this.maybePurge(now);
 
     const user: CurrentUser = {
       accountId: found.id,
-      email: found.email,
+      username: found.username,
       displayName: found.displayName,
       role: found.role,
       sellerCodes: await this.accounts.sellerCodesOf(found.id),
@@ -238,6 +270,16 @@ export class AuthService implements OnModuleInit {
     meta: RequestMeta,
     signal?: AbortSignal,
   ): Promise<LoginResult> {
+    return this.runExternalLogin(input, meta, signal, failureFloor.now());
+  }
+
+  /** `startedAt` is when the whole attempt began (a local lookup may precede the directory call), so the floor covers both. */
+  private async runExternalLogin(
+    input: { login: string; password: string },
+    meta: RequestMeta,
+    signal: AbortSignal | undefined,
+    startedAt: number,
+  ): Promise<LoginResult> {
     const settings = this.config.externalLogin;
     const verifier = this.externalVerifier;
     const links = this.externalLinks;
@@ -249,7 +291,6 @@ export class AuthService implements OnModuleInit {
       throw new AppError('validation_failed');
     }
 
-    const startedAt = Date.now();
     const now = this.clock();
     const normalized = login.toLowerCase();
     const loginKey = externalLoginThrottleKey(normalized);
@@ -315,7 +356,22 @@ export class AuthService implements OnModuleInit {
     if (typeof identity.externalUserId !== 'string' || identity.externalUserId === '') {
       return this.failExternal('external_unmapped', null, failCtx);
     }
-    const accountId = await links.findAccountId(identity.externalUserId);
+    let accountId = await links.findAccountId(identity.externalUserId);
+    if (
+      accountId === null &&
+      (settings.linkMode ?? 'PRE_LINKED') === 'VERIFIED_AUTO_PROVISION' &&
+      isValidSellerCode(identity.sellerCode) &&
+      this.roleMayHoldSession('seller')
+    ) {
+      // Explicit VERIFIED_AUTO_PROVISION only (never the default). First sign-in of a verified directory user: only a `seller` account is ever provisioned, and only for an
+      // active, still unlinked mirrored seller (the port enforces it). Anything else stays an unmapped failure.
+      try {
+        accountId = await links.provisionSeller({ externalUserId: identity.externalUserId, sellerCode: identity.sellerCode, now });
+      } catch (error) {
+        this.logger.warn({ ...errorLogFields(error) }, 'could not provision the seller account of an external login');
+        accountId = null;
+      }
+    }
     const found = accountId === null ? null : await this.accounts.findById(accountId);
     if (found === null) return this.failExternal('external_unmapped', null, failCtx);
     if (found.status !== 'active') return this.failExternal('external_account_disabled', found.id, failCtx);
@@ -352,6 +408,15 @@ export class AuthService implements OnModuleInit {
       }
       return this.failExternal('external_link_mismatch', found.id, failCtx);
     }
+    // Authentication is not authorization: a seller whose ERP record is inactive, deleted or gone from the mirror
+    // never gets a session, however valid the directory credentials are.
+    if (found.role === 'seller') {
+      let sellersActive = true;
+      for (const code of linked) {
+        if (!(await links.isSellerActive(code))) sellersActive = false;
+      }
+      if (!sellersActive) return this.failExternal('external_seller_inactive', found.id, failCtx);
+    }
 
     const token = generateSessionToken();
     const sessionId = uuidv7(now.getTime());
@@ -367,7 +432,7 @@ export class AuthService implements OnModuleInit {
       token,
       user: {
         accountId: found.id,
-        email: found.email,
+        username: found.username,
         displayName: found.displayName,
         role: found.role,
         sellerCodes,
@@ -406,7 +471,7 @@ export class AuthService implements OnModuleInit {
       renewed,
       user: {
         accountId: row.accountId,
-        email: row.email,
+        username: row.username,
         displayName: row.displayName,
         role: row.role,
         sellerCodes: await this.accounts.sellerCodesOf(row.accountId),
@@ -478,7 +543,7 @@ export class AuthService implements OnModuleInit {
       authMode: this.config.authMode,
       account: {
         id: user.accountId,
-        email: user.email,
+        username: user.username,
         displayName: user.displayName,
         role: user.role,
         sellerCodes: [...user.sellerCodes],
@@ -504,15 +569,14 @@ export class AuthService implements OnModuleInit {
     await this.recordFailure({
       reason,
       accountId,
-      email: ctx.normalized,
-      emailKey: ctx.loginKey,
+      loginName: ctx.normalized,
+      loginKey: ctx.loginKey,
       ipKey: ctx.ipKey,
       now: ctx.now,
       auditMeta: ctx.auditMeta,
       globalKey: EXTERNAL_GLOBAL_FAILURES_KEY,
     });
-    const remaining = ctx.minFailureMs - (Date.now() - ctx.startedAt);
-    if (remaining > 0) await sleep(remaining);
+    await padFailure(ctx.startedAt, ctx.minFailureMs);
     throw new AppError('invalid_credentials');
   }
 
@@ -532,7 +596,7 @@ export class AuthService implements OnModuleInit {
       await this.audit.record({
         action: AUDIT_ACTIONS.loginFailure,
         actorAccountId: null,
-        detail: { ...auditMeta, reason, emailFingerprint: emailFingerprint(normalized), attemptsInWindow: sample.count },
+        detail: { ...auditMeta, reason, emailFingerprint: loginNameFingerprint(normalized), attemptsInWindow: sample.count },
       });
     } catch (error) {
       this.logger.warn({ ...errorLogFields(error), reason }, 'could not record an external login notice');
@@ -556,14 +620,14 @@ export class AuthService implements OnModuleInit {
   private async recordFailure(input: {
     reason: LoginFailureReason;
     accountId: string | null;
-    email: string;
-    emailKey: string;
+    loginName: string;
+    loginKey: string;
     ipKey: string;
     now: Date;
     auditMeta: { ip: string; userAgent: string | null; requestId: string };
     globalKey?: string;
   }): Promise<void> {
-    const account = await this.throttle.recordFailure(input.emailKey, input.now, this.config.throttle.account);
+    const account = await this.throttle.recordFailure(input.loginKey, input.now, this.config.throttle.account);
     const ip = await this.throttle.recordFailure(input.ipKey, input.now, this.config.throttle.ip);
     await this.throttle.bumpWindow(input.globalKey ?? GLOBAL_FAILURES_KEY, input.now, GLOBAL_WINDOW_MS);
 
@@ -574,7 +638,7 @@ export class AuthService implements OnModuleInit {
         ...input.auditMeta,
         reason: input.reason,
         // Attacker-chosen text is never stored: a short fingerprint lets an investigator correlate.
-        ...(input.accountId === null ? { emailFingerprint: emailFingerprint(input.email) } : {}),
+        ...(input.accountId === null ? { emailFingerprint: loginNameFingerprint(input.loginName) } : {}),
       },
     });
     if (account.lockedNow) {
@@ -586,7 +650,7 @@ export class AuthService implements OnModuleInit {
           lockoutCount: account.state.lockoutCount,
           lockedUntil: account.state.lockedUntil?.toISOString() ?? null,
           ip: input.auditMeta.ip,
-          emailFingerprint: emailFingerprint(input.email),
+          emailFingerprint: loginNameFingerprint(input.loginName),
         },
       });
     }
@@ -609,7 +673,7 @@ export class AuthService implements OnModuleInit {
   private async refuse(
     scope: RefusalScope,
     retryAfter: number,
-    email: string,
+    loginName: string,
     auditMeta: { ip: string; userAgent: string | null; requestId: string },
     now: Date,
   ): Promise<never> {
@@ -619,7 +683,7 @@ export class AuthService implements OnModuleInit {
         await this.audit.record({
           action: AUDIT_ACTIONS.loginBlocked,
           actorAccountId: null,
-          detail: { ...auditMeta, scope, emailFingerprint: emailFingerprint(email), attemptsInWindow: sample.count },
+          detail: { ...auditMeta, scope, emailFingerprint: loginNameFingerprint(loginName), attemptsInWindow: sample.count },
         });
       } catch (error) {
         this.logger.warn({ ...errorLogFields(error), scope }, 'could not record a refused login attempt');

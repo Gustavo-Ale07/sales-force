@@ -12,7 +12,7 @@ export interface SessionWithAccount {
   readonly expiresAt: Date;
   readonly lastSeenAt: Date;
   readonly revokedAt: Date | null;
-  readonly email: string;
+  readonly username: string;
   readonly displayName: string;
   readonly role: AccountRole;
   readonly status: AccountStatus;
@@ -74,7 +74,7 @@ export class SessionRepository {
         expiresAt: session.expiresAt,
         lastSeenAt: session.lastSeenAt,
         revokedAt: session.revokedAt,
-        email: account.email,
+        username: account.email, // legacy column name
         displayName: account.displayName,
         role: account.role,
         status: account.status,

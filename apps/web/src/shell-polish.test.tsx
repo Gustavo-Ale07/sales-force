@@ -108,7 +108,7 @@ describe("login screen", () => {
     expect(screen.getByText("Acesse sua conta para continuar.")).toBeInTheDocument();
     expect(screen.getByText("Plataforma comercial")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: /Venda com agilidade/ })).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Usuário")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Digite seu usuário")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Senha")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Entrar" })).toBeInTheDocument();
     expect(screen.queryByText(/^Sales Force$/i)).not.toBeInTheDocument();

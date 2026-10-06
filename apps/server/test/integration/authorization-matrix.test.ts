@@ -65,7 +65,7 @@ beforeAll(async () => {
   // decide, then the real handler runs (an empty installation answers 409, never 401/403).
   ctx = await startAuthApp(postgres, opened);
   for (const role of ACCOUNT_ROLES) {
-    await createTestAccount(ctx.database.handle, { email: `${role}@example.test`, role }, ctx.clock.fn);
+    await createTestAccount(ctx.database.handle, { username: `${role}@example.test`, role }, ctx.clock.fn);
     cookies[role] = await loginCookie(ctx, `${role}@example.test`, TEST_PASSWORD);
   }
 });

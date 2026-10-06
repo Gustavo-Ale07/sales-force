@@ -68,7 +68,7 @@ type Ctx = Awaited<ReturnType<typeof setup>>;
 
 /** A Force account + a directory user + the explicit link between them. */
 async function provision(ctx: Ctx, opts: { email: string; login: string; role?: 'seller' | 'manager' | 'admin'; sellerCode?: number | null; active?: boolean; directorySeller?: number | null }) {
-  const created = await createTestAccount(ctx.database.handle, { email: opts.email, role: opts.role ?? 'seller' }, ctx.clock.fn);
+  const created = await createTestAccount(ctx.database.handle, { username: opts.email, role: opts.role ?? 'seller' }, ctx.clock.fn);
   if (opts.sellerCode !== undefined && opts.sellerCode !== null) {
     const configVersionId = await storeConfiguration(ctx.database.handle);
     const { accounts } = createOperatorAccountService(ctx.database.handle, TEST_HASH_PARAMS, ctx.clock.fn);

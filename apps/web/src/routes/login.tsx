@@ -12,16 +12,13 @@ import { safeRedirect } from "../lib/safe-redirect";
 type LoginFailure = Extract<LoginResult, { ok: false }>;
 
 interface FieldErrors {
-  email?: string;
+  username?: string;
   password?: string;
 }
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-export function validateLogin(email: string, password: string): FieldErrors {
+export function validateLogin(username: string, password: string): FieldErrors {
   const errors: FieldErrors = {};
-  if (email.trim().length === 0) errors.email = "Informe o e-mail.";
-  else if (!EMAIL_PATTERN.test(email.trim())) errors.email = "Informe um e-mail válido, como nome@empresa.com.br.";
+  if (username.trim().length === 0) errors.username = "Informe o usuário.";
   if (password.length === 0) errors.password = "Informe a senha.";
   return errors;
 }
@@ -35,7 +32,7 @@ function minutesText(seconds?: number): string {
 function FailureAlert({ failure }: { failure: LoginFailure }) {
   switch (failure.reason) {
     case "invalid_credentials":
-      return <Alert tone="danger" title="E-mail ou senha incorretos." />;
+      return <Alert tone="danger" title="Usuário ou senha inválidos." />;
     case "locked":
       return (
         <Alert tone="danger" title="Acesso temporariamente bloqueado.">
@@ -56,11 +53,9 @@ function FailureAlert({ failure }: { failure: LoginFailure }) {
       );
     case "unavailable":
       return (
-        <Alert tone="danger" title="Não foi possível entrar agora.">
-          O serviço de autenticação está indisponível. Tente novamente em instantes.
+        <Alert tone="danger" title="Não foi possível realizar a autenticação no momento. Tente novamente.">
           {failure.correlationId ? (
             <>
-              {" "}
               Código de correlação: <span className="font-mono">{failure.correlationId}</span>
             </>
           ) : null}
@@ -83,16 +78,16 @@ export function LoginPage() {
     document.title = config.installationName;
   }, [config.installationName]);
 
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [failure, setFailure] = useState<LoginFailure | null>(null);
-  const emailRef = useRef<HTMLInputElement>(null);
+  const usernameRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
 
   const login = useMutation({
-    mutationFn: () => authClient.login({ email: email.trim(), password }),
+    mutationFn: () => authClient.login({ username: username.trim(), password }),
     onSuccess: (result) => {
       if (result.ok) {
         setFailure(null);
@@ -103,7 +98,7 @@ export function LoginPage() {
       setFailure(result);
       setPassword("");
       // Keep the keyboard user in the form: retry from the most likely wrong field.
-      (result.reason === "invalid_credentials" ? passwordRef : emailRef).current?.focus();
+      (result.reason === "invalid_credentials" ? passwordRef : usernameRef).current?.focus();
     },
     onError: () => {
       setFailure({ ok: false, reason: "unavailable" });
@@ -115,9 +110,9 @@ export function LoginPage() {
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (login.isPending) return;
-    const fieldErrors = validateLogin(email, password);
+    const fieldErrors = validateLogin(username, password);
     setErrors(fieldErrors);
-    if (fieldErrors.email) return emailRef.current?.focus();
+    if (fieldErrors.username) return usernameRef.current?.focus();
     if (fieldErrors.password) return passwordRef.current?.focus();
     setFailure(null);
     login.mutate();
@@ -151,33 +146,32 @@ export function LoginPage() {
               {failure ? <FailureAlert failure={failure} /> : null}
 
               <div className="mt-[18px] flex flex-col gap-1.5">
-                <label htmlFor="login-email" className="sr-only">
-                  Usuário (E-mail)
+                <label htmlFor="login-username" className="sr-only">
+                  Usuário
                 </label>
                 <Input
-                  id="login-email"
-                  ref={emailRef}
-                  type="email"
-                  name="email"
+                  id="login-username"
+                  ref={usernameRef}
+                  type="text"
+                  name="username"
                   className={LOGIN_FIELD}
                   autoComplete="username"
                   autoCapitalize="none"
                   spellCheck={false}
-                  inputMode="email"
-                  placeholder="Usuário"
-                  aria-invalid={errors.email ? true : undefined}
-                  aria-describedby={errors.email ? "login-email-error" : undefined}
+                  placeholder="Digite seu usuário"
+                  aria-invalid={errors.username ? true : undefined}
+                  aria-describedby={errors.username ? "login-username-error" : undefined}
                   startSlot={<User size={35} strokeWidth={1.2} className="-ml-1 text-[#0b1a3d]" aria-hidden="true" />}
-                  value={email}
+                  value={username}
                   onChange={(event) => {
-                    setEmail(event.target.value);
-                    if (errors.email) setErrors((current) => ({ ...current, email: undefined }));
+                    setUsername(event.target.value);
+                    if (errors.username) setErrors((current) => ({ ...current, username: undefined }));
                     if (locked) setFailure(null);
                   }}
                 />
-                {errors.email ? (
-                  <p id="login-email-error" role="alert" className="m-0 text-xs text-danger">
-                    {errors.email}
+                {errors.username ? (
+                  <p id="login-username-error" role="alert" className="m-0 text-xs text-danger">
+                    {errors.username}
                   </p>
                 ) : null}
               </div>

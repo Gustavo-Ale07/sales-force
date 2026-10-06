@@ -21,7 +21,7 @@ import type {
 /** In-memory ports for component tests: no network, no native modules. */
 export const account: Account = {
   id: "0190a0c0-0000-7000-8000-000000000001",
-  email: "ana@plac.com.br",
+  username: "ana.vendas",
   displayName: "Ana Vendedora",
   role: "seller",
   sellerCodes: [7],

@@ -1,10 +1,11 @@
 /**
  * Boundary for verifying a login/password pair against an EXTERNAL identity source (the ERP user
- * directory). Only the port lives here: there is no real implementation yet.
+ * directory). The port lives here; the only implementation is `SankhyaIdentityVerifier`, which talks to the
+ * internal verifier process (STACK-2a) and never to Sankhya itself.
  *
- * Status: the real mechanism is UNPROVEN (BLOCKER-SNK-CREDENTIALS) and STACK-2 confines Sankhya
- * credentials to the worker, so a real adapter needs an owner decision (STACK-2 exception) before it
- * exists. Nothing in this file calls Sankhya or knows its formats (SNK-1, P-02).
+ * Status: the human-authentication mechanism of Sankhya is NOT DEFINED in the project ("Falta definir o
+ * mecanismo oficial de autenticação humana do Sankhya."). The verifier's live adapter does not exist, so
+ * today it answers a uniform denial. Nothing in this file calls Sankhya or knows its formats (SNK-1, P-02).
  */
 
 /** A password that must not leak through logging, JSON or string conversion. Memory only, never persisted. */
@@ -66,10 +67,19 @@ export interface ExternalIdentityVerifier {
 }
 
 /**
- * Explicit link between an external user and an existing Sales Force account. Accounts are never
- * created from an external identity (no auto-provisioning of privileged accounts). Where the link is
- * stored and who maintains it is an owner decision (no table exists yet).
+ * Link between an external user and a Sales Force account, plus the seller facts the login rule needs.
+ * Identity is the stable directory id only (never the login text). Only a non-privileged `seller` account may
+ * be provisioned from a verified identity, and only for a seller that exists, is active and unlinked in the
+ * mirror; admin/manager/technical accounts are never created here. Implementation: `DrizzleExternalAccountLinks`.
  */
 export interface ExternalAccountLinks {
   findAccountId(externalUserId: string): Promise<string | null>;
+  /** True when the mirrored seller exists, is not deleted and is active in the ERP. */
+  isSellerActive(sellerCode: number): Promise<boolean>;
+  /**
+   * Creates the seller account of a verified directory user and links it to its seller. Returns the new
+   * account id, or `null` when a precondition fails (seller missing/inactive, already linked to another
+   * account, installation configuration missing). Idempotent under a race: the loser gets the winner's id.
+   */
+  provisionSeller(input: { externalUserId: string; sellerCode: number; now: Date }): Promise<string | null>;
 }

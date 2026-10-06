@@ -72,7 +72,7 @@ async function signOutFromProfile() {
 describe("Shell", () => {
   it("shows the login form when there is no session", async () => {
     await render(<Shell dependencies={fakeDependencies()} />);
-    expect(await screen.findByLabelText("E-mail")).toBeTruthy();
+    expect(await screen.findByLabelText("Usuário")).toBeTruthy();
   });
 
   it("falls back to the login form when the session probe cannot reach the server", async () => {
@@ -82,7 +82,7 @@ describe("Shell", () => {
       },
     });
     await render(<Shell dependencies={fakeDependencies({ auth })} />);
-    expect(await screen.findByLabelText("E-mail")).toBeTruthy();
+    expect(await screen.findByLabelText("Usuário")).toBeTruthy();
   });
 
   it("opens offline with the remembered account when the server is unreachable", async () => {
@@ -97,7 +97,7 @@ describe("Shell", () => {
     const stale = new Date(Date.now() - 30 * 86_400_000).toISOString();
     const { offline } = fakeOffline({ account, lastOnlineAt: stale });
     await render(<Shell dependencies={fakeDependencies({ auth: unreachable(), offline })} />);
-    expect(await screen.findByLabelText("E-mail")).toBeTruthy();
+    expect(await screen.findByLabelText("Usuário")).toBeTruthy();
   });
 
   it("forgets the remembered account on sign-out", async () => {
@@ -129,7 +129,7 @@ describe("Shell", () => {
       const { offline, forget } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() }, idle, fakeLocalOrders(), images, { customers, products: fakeProducts(), orders: fakeOrders() });
       await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
       await fireEvent.press(await screen.findByRole("tab", { name: "Clientes" }));
-      expect(await screen.findByLabelText("E-mail")).toBeTruthy();
+      expect(await screen.findByLabelText("Usuário")).toBeTruthy();
       expect(images.purge).not.toHaveBeenCalled();
       expect(forget).not.toHaveBeenCalled();
     });
@@ -169,7 +169,7 @@ describe("Shell", () => {
       />,
     );
     await fireEvent.press(await screen.findByRole("tab", { name: "Clientes" }));
-    expect(await screen.findByLabelText("E-mail")).toBeTruthy();
+    expect(await screen.findByLabelText("Usuário")).toBeTruthy();
   });
 
   describe("when the server logout fails", () => {
@@ -194,7 +194,7 @@ describe("Shell", () => {
       const { alert, forget } = await signOutFailing(logout, null);
       await waitFor(() => expect(alert).toHaveBeenCalledWith("Não foi possível encerrar a sessão", expect.stringMatching(/continuar aberta.*pedidos salvos neste aparelho não serão apagados/s), expect.any(Array)));
       expect(forget).not.toHaveBeenCalled();
-      expect(screen.queryByLabelText("E-mail")).toBeNull(); // still signed in, no silent pretend sign-out
+      expect(screen.queryByLabelText("Usuário")).toBeNull(); // still signed in, no silent pretend sign-out
       expect(screen.getByRole("button", { name: "Sair" })).toBeTruthy();
       alert.mockRestore();
     });
@@ -206,7 +206,7 @@ describe("Shell", () => {
         if (calls === 1) throw networkError();
       });
       const { alert, forget } = await signOutFailing(logout, "Tentar novamente");
-      expect(await screen.findByLabelText("E-mail")).toBeTruthy();
+      expect(await screen.findByLabelText("Usuário")).toBeTruthy();
       expect(logout).toHaveBeenCalledTimes(2);
       expect(forget).toHaveBeenCalled();
       alert.mockRestore();
@@ -234,10 +234,10 @@ describe("Shell", () => {
       });
       const { alert, forget } = await signOutFailing(logout, "Cancelar");
       await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
-      expect(screen.queryByLabelText("E-mail")).toBeNull();
+      expect(screen.queryByLabelText("Usuário")).toBeNull();
       expect(forget).not.toHaveBeenCalled();
       await fireEvent.press(screen.getByRole("button", { name: "Sair" }));
-      expect(await screen.findByLabelText("E-mail")).toBeTruthy();
+      expect(await screen.findByLabelText("Usuário")).toBeTruthy();
       expect(logout).toHaveBeenCalledTimes(2);
       expect(forget).toHaveBeenCalled();
       alert.mockRestore();
@@ -371,7 +371,7 @@ describe("Shell", () => {
     await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
     await fireEvent.press(await screen.findByRole("tab", { name: "Perfil" }));
     expect(screen.getAllByText("Vendedor").length).toBeGreaterThan(0);
-    expect(screen.getByText("ana@plac.com.br")).toBeTruthy();
+    expect(screen.getByText("ana.vendas")).toBeTruthy();
     expect(screen.getByText("Versão")).toBeTruthy();
     expect(screen.getByText("Alterações pendentes")).toBeTruthy();
     syncNow.mockClear();

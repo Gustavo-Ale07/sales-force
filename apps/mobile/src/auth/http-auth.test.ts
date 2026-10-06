@@ -5,7 +5,7 @@ import { createHttpAuth } from "./http-auth";
 const BASE = "http://api.test/api/v1";
 const account = {
   id: "0190a0c0-0000-7000-8000-000000000001",
-  email: "ana@plac.com.br",
+  username: "ana.vendas",
   displayName: "Ana",
   role: "seller",
   sellerCodes: [7],
@@ -20,13 +20,14 @@ function authWith(respond: Responder) {
 describe("createHttpAuth", () => {
   it("posts the credentials to /auth/login and returns the account", async () => {
     const { auth, requests } = authWith(() => ({ status: 200, body: session }));
-    const result = await auth.login({ email: "ana@plac.com.br", password: "segredo" });
+    const result = await auth.login({ username: "usuario.teste", password: "segredo" });
     expect(result).toEqual({ ok: true, account });
     expect(requests[0]).toMatchObject({
       method: "POST",
       url: `${BASE}/auth/login`,
-      body: { email: "ana@plac.com.br", password: "segredo" },
+      body: { username: "usuario.teste", password: "segredo" },
     });
+    expect(requests[0]?.body).not.toHaveProperty("email");
     // A native client sends no Origin header; the server's CSRF layer accepts that case (see the mobile plan).
     expect(requests[0]?.headers.get("origin")).toBeNull();
   });
@@ -38,7 +39,7 @@ describe("createHttpAuth", () => {
     [503, { ok: false, reason: "unavailable" }],
   ])("maps a login answered with HTTP %i", async (status, expected) => {
     const { auth } = authWith(() => ({ status, body: { code: "x", message: "y" } }));
-    await expect(auth.login({ email: "a@b.co", password: "p" })).resolves.toEqual(expected);
+    await expect(auth.login({ username: "ana", password: "p" })).resolves.toEqual(expected);
   });
 
   it("reports the retry delay of a rate-limited login", async () => {
@@ -47,7 +48,7 @@ describe("createHttpAuth", () => {
       body: { code: "rate_limited", message: "x" },
       headers: { "retry-after": "30" },
     }));
-    await expect(auth.login({ email: "a@b.co", password: "p" })).resolves.toEqual({
+    await expect(auth.login({ username: "ana", password: "p" })).resolves.toEqual({
       ok: false,
       reason: "rate_limited",
       retryAfterSeconds: 30,
@@ -56,7 +57,7 @@ describe("createHttpAuth", () => {
 
   it("maps a transport failure during login to 'unavailable'", async () => {
     const { auth } = authWith(() => new Error("network down"));
-    await expect(auth.login({ email: "a@b.co", password: "p" })).resolves.toEqual({
+    await expect(auth.login({ username: "ana", password: "p" })).resolves.toEqual({
       ok: false,
       reason: "unavailable",
     });

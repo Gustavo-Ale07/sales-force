@@ -468,8 +468,7 @@ export interface components {
         Account: {
             /** Format: uuid */
             id: string;
-            /** Format: email */
-            email: string;
+            username: string;
             displayName: string;
             role: components["schemas"]["AccountRole"];
             sellerCodes: number[];
@@ -718,8 +717,7 @@ export interface components {
         /** @enum {string} */
         ListPriceState: "priced" | "zero" | "none";
         LoginRequest: {
-            /** Format: email */
-            email: string;
+            username: string;
             password: string;
         };
         Metric: {

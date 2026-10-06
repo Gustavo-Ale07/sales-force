@@ -36,12 +36,19 @@ export const account = pgTable(
     role: text('role').notNull(),
     status: text('status').notNull().default('active'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * Stable id of the user in the external directory (the ERP user code, as text), set only for accounts
+     * that sign in through the identity verifier. Null for local accounts (admin/technical). Never the login text.
+     */
+    externalUserId: text('external_user_id'),
   },
   (t) => [
     check('account_role_chk', sql`${t.role} in (${inList(accountRoles)})`),
     check('account_status_chk', sql`${t.status} in (${inList(accountStatuses)})`),
     // Case-insensitive unique email. Serves: login lookup by lower(email).
     uniqueIndex('account_email_lower_uq').on(sql`lower(${t.email})`),
+    // Serves: external login (find the account of a verified directory user). One account per directory user.
+    uniqueIndex('account_external_user_id_uq').on(t.externalUserId).where(sql`${t.externalUserId} is not null`),
   ],
 );
 

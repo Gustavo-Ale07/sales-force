@@ -43,7 +43,7 @@ describe('GET /api/v1/order-entry/configuration (getOrderEntryConfiguration)', (
     'gives a signed-in %s exactly the order-entry slice, nothing more',
     async (role) => {
       const { ctx } = await setupApp(DATASET);
-      await createTestAccount(ctx.database.handle, { email: `oe-${role}@example.test`, role });
+      await createTestAccount(ctx.database.handle, { username: `oe-${role}@example.test`, role });
       const cookie = await loginCookie(ctx, `oe-${role}@example.test`, TEST_PASSWORD);
 
       const response = await ctx.app.inject({ method: 'GET', url: ORDER_ENTRY_URL, headers: { cookie } });
@@ -86,7 +86,7 @@ describe('GET /api/v1/order-entry/configuration (getOrderEntryConfiguration)', (
 
   it('returns dataset null when the installation declares no identity', async () => {
     const { ctx } = await setupApp(null);
-    await createTestAccount(ctx.database.handle, { email: 'oe-null@example.test', role: 'seller' });
+    await createTestAccount(ctx.database.handle, { username: 'oe-null@example.test', role: 'seller' });
     const cookie = await loginCookie(ctx, 'oe-null@example.test', TEST_PASSWORD);
     const response = await ctx.app.inject({ method: 'GET', url: ORDER_ENTRY_URL, headers: { cookie } });
     expect(response.statusCode).toBe(200);
@@ -103,7 +103,7 @@ describe('GET /api/v1/order-entry/configuration (getOrderEntryConfiguration)', (
 describe('GET /api/v1/configuration stays admin-only (regression guard)', () => {
   it.each(['seller', 'manager'] as const)('is still 403 for %s', async (role) => {
     const { ctx } = await setupApp();
-    await createTestAccount(ctx.database.handle, { email: `cfg-${role}@example.test`, role });
+    await createTestAccount(ctx.database.handle, { username: `cfg-${role}@example.test`, role });
     const cookie = await loginCookie(ctx, `cfg-${role}@example.test`, TEST_PASSWORD);
 
     const response = await ctx.app.inject({ method: 'GET', url: CONFIGURATION_URL, headers: { cookie } });
@@ -112,7 +112,7 @@ describe('GET /api/v1/configuration stays admin-only (regression guard)', () => 
 
   it('is still 200 for admin, with the full admin payload', async () => {
     const { ctx } = await setupApp();
-    await createTestAccount(ctx.database.handle, { email: 'cfg-admin@example.test', role: 'admin' });
+    await createTestAccount(ctx.database.handle, { username: 'cfg-admin@example.test', role: 'admin' });
     const cookie = await loginCookie(ctx, 'cfg-admin@example.test', TEST_PASSWORD);
 
     const response = await ctx.app.inject({ method: 'GET', url: CONFIGURATION_URL, headers: { cookie } });

@@ -13,7 +13,7 @@ export function toAuthUser(account: Account): AuthUser {
   return {
     id: account.id,
     name: account.displayName,
-    email: account.email,
+    username: account.username,
     role: account.role,
     roleLabel: roleLabels[account.role],
     sellerCodes: account.sellerCodes,

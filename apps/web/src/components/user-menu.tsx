@@ -46,7 +46,7 @@ export function UserMenu({ user, onLogout }: UserMenuProps) {
       <DropdownMenuContent>
         <DropdownMenuLabel>
           <span className="block truncate font-medium text-fg">{user.name}</span>
-          <span className="block truncate">{user.email}</span>
+          <span className="block truncate">{user.username}</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => void navigate({ to: "/perfil" })}>

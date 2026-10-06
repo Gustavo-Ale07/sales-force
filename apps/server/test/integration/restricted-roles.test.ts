@@ -126,10 +126,10 @@ beforeAll(async () => {
   // The account CLI service runs in the api container (README-staging): it creates the accounts as force_api.
   const { accounts, repository } = createOperatorAccountService(apiDb, TEST_HASH_PARAMS);
   for (const demo of DEMO_ACCOUNTS) {
-    await accounts.createAccount({ email: demo.email, displayName: demo.displayName, role: demo.role, password: TEST_PASSWORD });
+    await accounts.createAccount({ username: demo.email, displayName: demo.displayName, role: demo.role, password: TEST_PASSWORD });
   }
   for (const link of DEMO_CONFIGURATION.customers.accountSellerLinks) {
-    const account = await repository.findByEmail(link.accountEmail);
+    const account = await repository.findByUsername(link.accountEmail);
     if (account !== null) await accounts.linkSeller(account.id, link.sellerCode, configVersionId);
   }
 
@@ -241,7 +241,7 @@ describe('API as force_api', () => {
 
   it('serves the account CLI operations as force_api: password change, lockout clear, deactivate and reactivate, logout', async () => {
     const { accounts, repository } = createOperatorAccountService(apiDb, TEST_HASH_PARAMS);
-    const account = await repository.findByEmail(DEMO_ACCOUNT_EMAILS.seller2);
+    const account = await repository.findByUsername(DEMO_ACCOUNT_EMAILS.seller2);
     expect(account).not.toBeNull();
     const id = account?.id as string;
     const seller2 = await loginCookie(api, DEMO_ACCOUNT_EMAILS.seller2, TEST_PASSWORD);

@@ -214,6 +214,19 @@ describe('Argon2id password hasher', () => {
     await expect(hasher.verify('$argon2id$v=19$m=64,t=1,p=1$bad$bad', 'x')).resolves.toBe(false);
   });
 
+  it('spends a full verification on a malformed stored hash, like on an unknown account (no timing signal)', async () => {
+    const heavy = new Argon2idPasswordHasher({ memoryKib: 16384, timeCost: 3, parallelism: 1 });
+    await heavy.warmUp();
+    const timed = async (stored: string | null): Promise<number> => {
+      const started = performance.now();
+      await heavy.verify(stored, 'anything-at-all-123');
+      return performance.now() - started;
+    };
+    const unknown = Math.min(await timed(null), await timed(null), await timed(null));
+    const malformed = Math.min(await timed('!external-directory-account'), await timed('!external-directory-account'), await timed('not-a-hash'));
+    expect(malformed).toBeGreaterThan(unknown * 0.5);
+  });
+
   it('asks for a rehash when the stored parameters are weaker', async () => {
     const stored = await hasher.hash('Correct-Horse-Battery-1');
     expect(hasher.needsRehash(stored)).toBe(false);

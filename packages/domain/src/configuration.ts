@@ -185,6 +185,14 @@ export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+/**
+ * Login name as typed: outer whitespace trimmed, NOTHING else (no case change, no domain, no e-mail rules). The ERP
+ * user name is forwarded to the directory exactly like this; only LOCAL account matching and throttle keys lowercase it.
+ */
+export function normalizeUsername(username: string): string {
+  return username.trim();
+}
+
 /** Internal-consistency checks of a configuration snapshot. Empty list = consistent. */
 export function validateConfigurationConsistency(
   config: InstallationConfiguration,

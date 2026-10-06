@@ -89,7 +89,7 @@ describe("logout", () => {
 
 describe("login page", () => {
   const typeCredentials = async (user: ReturnType<typeof renderApp>["user"], password = "segredo") => {
-    await user.type(await screen.findByLabelText(/E-mail/), "ana@example.test");
+    await user.type(await screen.findByLabelText("Usuário"), "  ana.teste  ");
     await user.type(screen.getByLabelText(/Senha/), password);
     await user.click(screen.getByRole("button", { name: "Entrar" }));
   };
@@ -98,8 +98,8 @@ describe("login page", () => {
     const { user, calls } = renderApp("/login", { signedIn: false });
     expect(await screen.findByText(DEV_AUTH_NOTICE)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Entrar" }));
-    expect(await screen.findByText("Informe o e-mail.")).toBeInTheDocument();
-    expect(screen.getByLabelText(/E-mail/)).toHaveFocus();
+    expect(await screen.findByText("Informe o usuário.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Usuário")).toHaveFocus();
     expect(callsTo(calls, "POST", "/auth/login")).toHaveLength(0);
   });
 
@@ -109,11 +109,14 @@ describe("login page", () => {
     expect(screen.queryByText(DEV_AUTH_NOTICE)).not.toBeInTheDocument();
   });
 
-  it("in local auth mode shows no dev banner and offers only the e-mail/password form", async () => {
+  it("in local auth mode shows no dev banner and offers only the username/password form", async () => {
     renderApp("/login", { signedIn: false, config: { authMode: "local" } });
     expect(await screen.findByRole("heading", { name: "Bem-vindo(a)!" })).toBeInTheDocument();
     expect(screen.queryByText(DEV_AUTH_NOTICE)).not.toBeInTheDocument();
-    expect(screen.getByLabelText(/E-mail/)).toBeInTheDocument();
+    const username = screen.getByLabelText("Usuário");
+    expect(username).toHaveAttribute("type", "text");
+    expect(username).toHaveAttribute("autocomplete", "username");
+    expect(username).toHaveAttribute("placeholder", "Digite seu usuário");
     expect(screen.getByLabelText(/Senha/)).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /Entrar/ })).toHaveLength(1);
   });
@@ -124,9 +127,9 @@ describe("login page", () => {
       handlers: { "POST /auth/login": apiError(401, "invalid_credentials", "Credenciais inválidas.") },
     });
     await typeCredentials(user, "senha-errada");
-    expect(await screen.findByRole("alert")).toHaveTextContent("E-mail ou senha incorretos.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Usuário ou senha inválidos.");
     expect(screen.getByLabelText(/Senha/)).toHaveValue("");
-    expect(callsTo(calls, "POST", "/auth/login")[0]?.body).toEqual({ email: "ana@example.test", password: "senha-errada" });
+    expect(callsTo(calls, "POST", "/auth/login")[0]?.body).toEqual({ username: "ana.teste", password: "senha-errada" });
   });
 
   it("shows the Retry-After wait when rate limited", async () => {
@@ -148,7 +151,7 @@ describe("login page", () => {
     await typeCredentials(user);
     const alert = await screen.findByRole("alert");
     expect(alert).not.toHaveTextContent("Este perfil acessa somente pelo aplicativo móvel.");
-    expect(alert).toHaveTextContent("Não foi possível entrar agora.");
+    expect(alert).toHaveTextContent("Não foi possível realizar a autenticação no momento. Tente novamente.");
   });
 
   it("shows the unavailable state on a server failure", async () => {
@@ -157,7 +160,10 @@ describe("login page", () => {
       handlers: { "POST /auth/login": apiError(503, "service_unavailable", "Indisponível.", { requestId: "req-login-1" }) },
     });
     await typeCredentials(user);
-    expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível entrar agora.");
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Não foi possível realizar a autenticação no momento. Tente novamente.");
+    expect(alert).toHaveTextContent("req-login-1");
+    expect(alert).not.toHaveTextContent("serviço de autenticação está indisponível");
   });
 
   it("signs in and goes to the safe redirect target", async () => {

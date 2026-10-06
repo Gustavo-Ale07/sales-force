@@ -26,7 +26,7 @@ afterAll(async () => {
 const UNLINKED_EMAIL = 'sem-vinculo@example.test';
 
 async function unlinkedSeller(ctx: CommercialApp): Promise<{ id: string; send: (method: 'GET' | 'POST', url: string, body?: unknown) => Promise<{ status: number; body: Json }> }> {
-  const account = await createTestAccount(ctx.database.handle, { email: UNLINKED_EMAIL, role: 'seller' }, ctx.clock.fn);
+  const account = await createTestAccount(ctx.database.handle, { username: UNLINKED_EMAIL, role: 'seller' }, ctx.clock.fn);
   const cookie = await loginCookie(ctx, UNLINKED_EMAIL, TEST_PASSWORD);
   return {
     id: account.id,

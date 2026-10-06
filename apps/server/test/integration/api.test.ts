@@ -60,7 +60,7 @@ const READY_URL = '/api/v1/ready';
 
 /** A signed-in administrator's cookie: /ready shows detail only to an active session. */
 async function adminCookie(app: NestFastifyApplication, database: MigratedDatabase): Promise<string> {
-  await createTestAccount(database.handle, { email: 'ready-admin@example.test', role: 'admin' });
+  await createTestAccount(database.handle, { username: 'ready-admin@example.test', role: 'admin' });
   return loginCookie({ app }, 'ready-admin@example.test', TEST_PASSWORD);
 }
 
@@ -138,7 +138,7 @@ describe('GET /api/v1/ready', () => {
       const { app, database } = await freshApi();
       await recordWorkerHeartbeat(database.handle.db, { gatewayMode: 'live', startedAt: new Date().toISOString() }, new Date());
       await database.handle.pool.query(`insert into sync_state (entity, status) values ('customers', 'failed')`);
-      await createTestAccount(database.handle, { email: `ready-${role}@example.test`, role });
+      await createTestAccount(database.handle, { username: `ready-${role}@example.test`, role });
       const cookie = await loginCookie({ app }, `ready-${role}@example.test`, TEST_PASSWORD);
       const response = await readyWith(app, cookie);
       expect(response.statusCode).toBe(200);
@@ -161,7 +161,7 @@ describe('GET /api/v1/ready', () => {
     };
     const observed: Record<string, boolean> = { anonymous: await sees() };
     for (const role of ['admin', 'technical', 'manager', 'seller'] as const) {
-      await createTestAccount(database.handle, { email: `matrix-${role}@example.test`, role });
+      await createTestAccount(database.handle, { username: `matrix-${role}@example.test`, role });
       observed[role] = await sees(await loginCookie({ app }, `matrix-${role}@example.test`, TEST_PASSWORD));
     }
     // Pinned literally: widening or narrowing the grant must be a deliberate change of this test too.
@@ -175,7 +175,7 @@ describe('GET /api/v1/ready', () => {
   it('gives an admin whose session was revoked, or whose account was disabled, only the coarse verdict', async () => {
     const { app, database } = await freshApi();
     await recordWorkerHeartbeat(database.handle.db, { gatewayMode: 'live', startedAt: new Date().toISOString() }, new Date());
-    const admin = await createTestAccount(database.handle, { email: 'ready-gone@example.test', role: 'admin' });
+    const admin = await createTestAccount(database.handle, { username: 'ready-gone@example.test', role: 'admin' });
     const cookie = await loginCookie({ app }, 'ready-gone@example.test', TEST_PASSWORD);
     expect(ReadyResponseSchema.parse((await readyWith(app, cookie)).json()).integration.gatewayMode).toBe('live');
 

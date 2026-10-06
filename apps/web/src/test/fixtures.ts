@@ -4,7 +4,7 @@ import type { ApiSchema } from "@salesforce/contracts/client";
 
 export const account: ApiSchema<"Account"> = {
   id: "0190a000-0000-7000-8000-000000000001",
-  email: "ana@example.test",
+  username: "ana.vendas",
   displayName: "Ana Souza",
   role: "seller",
   sellerCodes: [7],

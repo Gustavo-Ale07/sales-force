@@ -49,7 +49,7 @@ async function breakAudit(ctx: AuthApp, actions: readonly string[]): Promise<() 
 describe('AUTH_MODE=local', () => {
   it('lets an admin in and reports authMode local', async () => {
     const ctx = await boot();
-    await createTestAccount(ctx.database.handle, { email: 'admin@example.test', role: 'admin' }, ctx.clock.fn);
+    await createTestAccount(ctx.database.handle, { username: 'admin@example.test', role: 'admin' }, ctx.clock.fn);
     const response = await login(ctx, 'admin@example.test', TEST_PASSWORD);
     expect(response.statusCode).toBe(200);
     expect(SessionResponseSchema.parse(response.json())).toMatchObject({ authenticated: true, authMode: 'local', account: { role: 'admin' } });
@@ -57,7 +57,7 @@ describe('AUTH_MODE=local', () => {
 
   it('lets a technical profile in: role technical, no seller link', async () => {
     const ctx = await boot();
-    await createTestAccount(ctx.database.handle, { email: 'tech@example.test', role: 'technical' }, ctx.clock.fn);
+    await createTestAccount(ctx.database.handle, { username: 'tech@example.test', role: 'technical' }, ctx.clock.fn);
     const response = await login(ctx, 'tech@example.test', TEST_PASSWORD);
     expect(response.statusCode).toBe(200);
     expect(setCookieHeaders(response).length).toBeGreaterThan(0);
@@ -74,9 +74,9 @@ describe('AUTH_MODE=local', () => {
 
   it('refuses seller and manager with the correct password, identically to a wrong password or an unknown e-mail', async () => {
     const ctx = await boot();
-    await createTestAccount(ctx.database.handle, { email: 'seller@example.test', role: 'seller' }, ctx.clock.fn);
-    await createTestAccount(ctx.database.handle, { email: 'manager@example.test', role: 'manager' }, ctx.clock.fn);
-    await createTestAccount(ctx.database.handle, { email: 'admin@example.test', role: 'admin' }, ctx.clock.fn);
+    await createTestAccount(ctx.database.handle, { username: 'seller@example.test', role: 'seller' }, ctx.clock.fn);
+    await createTestAccount(ctx.database.handle, { username: 'manager@example.test', role: 'manager' }, ctx.clock.fn);
+    await createTestAccount(ctx.database.handle, { username: 'admin@example.test', role: 'admin' }, ctx.clock.fn);
 
     const attempts = [
       await login(ctx, 'seller@example.test', TEST_PASSWORD, { remoteAddress: '10.9.0.1' }),
@@ -99,7 +99,7 @@ describe('AUTH_MODE=local', () => {
 
   it('applies the account lockout to a refused operational account like any other failure', async () => {
     const ctx = await boot();
-    await createTestAccount(ctx.database.handle, { email: 'seller@example.test', role: 'seller' }, ctx.clock.fn);
+    await createTestAccount(ctx.database.handle, { username: 'seller@example.test', role: 'seller' }, ctx.clock.fn);
     for (let attempt = 1; attempt <= DEFAULT_ACCOUNT_THROTTLE.maxFailures; attempt += 1) {
       const response = await login(ctx, 'seller@example.test', TEST_PASSWORD, { remoteAddress: `10.9.1.${attempt}` });
       expect(response.statusCode).toBe(401);
@@ -111,7 +111,7 @@ describe('AUTH_MODE=local', () => {
 
   it('applies the account lockout to an admin with a wrong password, then blocks the right one', async () => {
     const ctx = await boot();
-    await createTestAccount(ctx.database.handle, { email: 'admin@example.test', role: 'admin' }, ctx.clock.fn);
+    await createTestAccount(ctx.database.handle, { username: 'admin@example.test', role: 'admin' }, ctx.clock.fn);
     for (let attempt = 1; attempt <= DEFAULT_ACCOUNT_THROTTLE.maxFailures; attempt += 1) {
       await login(ctx, 'admin@example.test', WRONG_PASSWORD, { remoteAddress: `10.9.2.${attempt}` });
     }
@@ -120,7 +120,7 @@ describe('AUTH_MODE=local', () => {
 
   it('does not resolve a session of an operational account that predates the mode', async () => {
     const dev = await startAuthApp(postgres, opened);
-    await createTestAccount(dev.database.handle, { email: 'seller@example.test', role: 'seller' }, dev.clock.fn);
+    await createTestAccount(dev.database.handle, { username: 'seller@example.test', role: 'seller' }, dev.clock.fn);
     const cookie = await loginCookie(dev, 'seller@example.test', TEST_PASSWORD);
 
     const local = await startAuthApp(postgres, opened, {
@@ -133,8 +133,8 @@ describe('AUTH_MODE=local', () => {
 
   it('peekSession (used by /ready) rejects a session of an operational account that predates the mode', async () => {
     const dev = await startAuthApp(postgres, opened);
-    await createTestAccount(dev.database.handle, { email: 'seller@example.test', role: 'seller' }, dev.clock.fn);
-    await createTestAccount(dev.database.handle, { email: 'admin@example.test', role: 'admin' }, dev.clock.fn);
+    await createTestAccount(dev.database.handle, { username: 'seller@example.test', role: 'seller' }, dev.clock.fn);
+    await createTestAccount(dev.database.handle, { username: 'admin@example.test', role: 'admin' }, dev.clock.fn);
     const sellerToken = readCookie(await loginCookie(dev, 'seller@example.test', TEST_PASSWORD), SESSION_COOKIE_NAME);
     const adminToken = readCookie(await loginCookie(dev, 'admin@example.test', TEST_PASSWORD), SESSION_COOKIE_NAME);
 
@@ -170,7 +170,7 @@ describe('AUTH_MODE=local', () => {
       'opens no session and no cookie for a %s when the success audit cannot be written, and works once it can',
       async (role) => {
         const ctx = await boot();
-        await createTestAccount(ctx.database.handle, { email: `${role}@example.test`, role }, ctx.clock.fn);
+        await createTestAccount(ctx.database.handle, { username: `${role}@example.test`, role }, ctx.clock.fn);
         const restore = await breakAudit(ctx, ['auth.login.success']);
 
         const response = await login(ctx, `${role}@example.test`, TEST_PASSWORD);
@@ -197,7 +197,7 @@ describe('AUTH_MODE=local', () => {
 
     it('writes the success audit row with the session id', async () => {
       const ctx = await boot();
-      const tech = await createTestAccount(ctx.database.handle, { email: 'tech@example.test', role: 'technical' }, ctx.clock.fn);
+      const tech = await createTestAccount(ctx.database.handle, { username: 'tech@example.test', role: 'technical' }, ctx.clock.fn);
       expect((await login(ctx, 'tech@example.test', TEST_PASSWORD)).statusCode).toBe(200);
       const [row] = (await ctx.database.handle.db.select().from(auditLog)).filter((r) => r.action === 'auth.login.success');
       const [stored] = await ctx.database.handle.db.select().from(session);
@@ -207,7 +207,7 @@ describe('AUTH_MODE=local', () => {
 
     it('does not affect logout, which stays available and audited', async () => {
       const ctx = await boot();
-      await createTestAccount(ctx.database.handle, { email: 'tech@example.test', role: 'technical' }, ctx.clock.fn);
+      await createTestAccount(ctx.database.handle, { username: 'tech@example.test', role: 'technical' }, ctx.clock.fn);
       const cookie = await loginCookie(ctx, 'tech@example.test', TEST_PASSWORD);
       const restore = await breakAudit(ctx, ['auth.login.success']);
       const out = await ctx.app.inject({
@@ -225,12 +225,12 @@ describe('AUTH_MODE=local', () => {
   describe('AUDIT-1: an invalid login is independent of audit persistence (best effort)', () => {
     it('answers the same 401 body, moves the throttle and locks out although every failure audit write throws', async () => {
       const healthy = await boot();
-      await createTestAccount(healthy.database.handle, { email: 'admin@example.test', role: 'admin' }, healthy.clock.fn);
+      await createTestAccount(healthy.database.handle, { username: 'admin@example.test', role: 'admin' }, healthy.clock.fn);
       const reference = await login(healthy, 'admin@example.test', WRONG_PASSWORD, { remoteAddress: '10.8.0.1' });
 
       const ctx = await boot();
-      await createTestAccount(ctx.database.handle, { email: 'admin@example.test', role: 'admin' }, ctx.clock.fn);
-      await createTestAccount(ctx.database.handle, { email: 'seller@example.test', role: 'seller' }, ctx.clock.fn);
+      await createTestAccount(ctx.database.handle, { username: 'admin@example.test', role: 'admin' }, ctx.clock.fn);
+      await createTestAccount(ctx.database.handle, { username: 'seller@example.test', role: 'seller' }, ctx.clock.fn);
       await breakAudit(ctx, ['auth.login.failure', 'auth.lockout', 'auth.login.blocked']);
 
       const wrong = await login(ctx, 'admin@example.test', WRONG_PASSWORD, { remoteAddress: '10.8.0.1' });

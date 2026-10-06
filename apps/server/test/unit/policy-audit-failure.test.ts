@@ -8,7 +8,7 @@ import { PolicyService } from '../../src/iam/policy.service.js';
 
 const user: CurrentUser = {
   accountId: '0190e1a0-0000-7000-8000-000000000001',
-  email: 'x@example.test',
+  username: 'x@example.test',
   displayName: 'X',
   role: 'seller',
   sellerCodes: [],

@@ -6,7 +6,7 @@ import { createOperatorAccountService } from './cli/operator.js';
 import { operatorIdentity } from './cli/operator-identity.js';
 import { passwordHashFields, passwordHashParamsOf, passwordHashProblems } from './config/auth-env.js';
 import { databaseUrlField, isLoopbackDatabaseUrl, nodeEnvField, parseEnv } from './config/env.js';
-import { AccountAlreadyExistsError, AccountNotFoundError, PasswordPolicyError } from './iam/account.service.js';
+import { AccountAlreadyExistsError, AccountNotFoundError, ExternalAccountPasswordError, PasswordPolicyError } from './iam/account.service.js';
 import { runMain } from './process.js';
 
 /**
@@ -55,10 +55,11 @@ runMain('account-cli', async () => {
   });
   const [command] = positionals;
   if (command !== 'create' && command !== 'set-password' && command !== 'unlock') {
-    fail('usage: account <create|set-password|unlock> --email <address> [--name <display name>] [--role admin|manager|seller|technical] [--password-stdin]');
+    fail('usage: account <create|set-password|unlock> --email <login name> [--name <display name>] [--role admin|manager|seller|technical] [--password-stdin]');
   }
-  const email = values.email ?? fail('--email is required');
-  if (!z.email().max(254).safeParse(email).success) fail('--email is not a valid e-mail address');
+  // The `--email` flag is the operator-facing name kept for compatibility; the value is the login identifier (user name).
+  const loginName = values.email ?? fail('--email is required');
+  if (!z.string().trim().min(1).max(254).safeParse(loginName).success) fail('--email must be a non-empty login name of at most 254 characters');
 
   const env = parseEnv('account-cli', CliEnvSchema, process.env, (parsed) => {
     const problems = passwordHashProblems(parsed);
@@ -82,19 +83,19 @@ runMain('account-cli', async () => {
         const role = values.role ?? fail('--role is required (admin, manager, seller or technical)');
         if (!(ACCOUNT_ROLES as readonly string[]).includes(role)) fail('--role must be admin, manager, seller or technical');
         const name = values.name ?? fail('--name is required');
-        const id = await accounts.createAccount({ email, displayName: name, password, role: role as AccountRole });
+        const id = await accounts.createAccount({ username: loginName, displayName: name, password, role: role as AccountRole });
         process.stdout.write(`account created: ${id} (${role})\n`);
       } else if (command === 'set-password') {
-        const found = await repository.findByEmail(email);
+        const found = await repository.findByUsername(loginName);
         if (found === null) throw new AccountNotFoundError();
         await accounts.setPassword(found.id, password);
         process.stdout.write('password changed; every session of the account was ended\n');
       } else {
-        const cleared = await accounts.unlock(email);
+        const cleared = await accounts.unlock(loginName);
         process.stdout.write(cleared ? 'lockout cleared\n' : 'no lockout was recorded for this address\n');
       }
     } catch (error) {
-      if (error instanceof PasswordPolicyError || error instanceof AccountAlreadyExistsError || error instanceof AccountNotFoundError) {
+      if (error instanceof PasswordPolicyError || error instanceof AccountAlreadyExistsError || error instanceof AccountNotFoundError || error instanceof ExternalAccountPasswordError) {
         // Actionable and secret-free: the policy text names rules, not the password.
         fail(error.message);
       }

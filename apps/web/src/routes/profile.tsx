@@ -64,7 +64,7 @@ export function ProfilePage() {
           <CardBody>
             <KeyValueList>
               <KeyValue label="Nome">{user.name}</KeyValue>
-              <KeyValue label="E-mail">{user.email}</KeyValue>
+              <KeyValue label="Usuário">{user.username}</KeyValue>
               <KeyValue label="Perfil de acesso">{user.roleLabel ?? user.role}</KeyValue>
             </KeyValueList>
           </CardBody>

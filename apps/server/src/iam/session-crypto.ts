@@ -27,9 +27,12 @@ export function looksLikeSessionToken(value: string): boolean {
   return /^[A-Za-z0-9_-]{43}$/.test(value);
 }
 
-/** Throttle key of an e-mail: hashed, so unknown e-mails (attacker-chosen text) are never stored in clear. */
-export function emailThrottleKey(normalizedEmail: string): string {
-  return `email:${createHash('sha256').update(normalizedEmail, 'utf8').digest('hex')}`;
+/**
+ * Throttle key of a login name: hashed, so unknown names (attacker-chosen text) are never stored in clear. The
+ * persisted prefix stays `email:` (legacy: rows already in `auth_throttle`, and tests, rely on that format).
+ */
+export function loginNameThrottleKey(normalizedLoginName: string): string {
+  return `email:${createHash('sha256').update(normalizedLoginName, 'utf8').digest('hex')}`;
 }
 
 /** Throttle key of a client address: IPv4 as is, IPv6 aggregated by /64 (see `throttleAddress`). */
@@ -42,6 +45,7 @@ export function externalLoginThrottleKey(normalizedLogin: string): string {
   return `extlogin:${createHash('sha256').update(normalizedLogin, 'utf8').digest('hex')}`;
 }
 
-export function emailFingerprint(normalizedEmail: string): string {
-  return createHash('sha256').update(normalizedEmail, 'utf8').digest('hex').slice(0, 16);
+/** Short correlation hash of a login name for audit rows (persisted under the legacy detail key `emailFingerprint`). */
+export function loginNameFingerprint(normalizedLoginName: string): string {
+  return createHash('sha256').update(normalizedLoginName, 'utf8').digest('hex').slice(0, 16);
 }

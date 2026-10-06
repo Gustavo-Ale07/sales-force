@@ -57,7 +57,7 @@ export function ProfileScreen({ account, onOpenLocalOrders, onSignOut, ...sync }
 
       <Section title="Minha conta">
         <InfoRow label="Nome" value={account.displayName} />
-        <InfoRow label="E-mail" value={account.email} />
+        <InfoRow label="Usuário" value={account.username} />
         <InfoRow label="Perfil" value={roleLabel(account)} />
       </Section>
 

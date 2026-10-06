@@ -41,7 +41,22 @@ export class FakeExternalIdentityVerifier implements ExternalIdentityVerifier {
 
 export class InMemoryExternalAccountLinks implements ExternalAccountLinks {
   readonly links = new Map<string, string>();
+  /** Seller codes reported inactive (every other code is active). */
+  readonly inactiveSellers = new Set<number>();
+  /** Provisioning calls received, and the id handed back (null = refuse). */
+  readonly provisioned: { externalUserId: string; sellerCode: number }[] = [];
+  provisionResult: string | null = null;
+
   findAccountId(externalUserId: string): Promise<string | null> {
     return Promise.resolve(this.links.get(externalUserId) ?? null);
+  }
+
+  isSellerActive(sellerCode: number): Promise<boolean> {
+    return Promise.resolve(!this.inactiveSellers.has(sellerCode));
+  }
+
+  provisionSeller(input: { externalUserId: string; sellerCode: number; now: Date }): Promise<string | null> {
+    this.provisioned.push({ externalUserId: input.externalUserId, sellerCode: input.sellerCode });
+    return Promise.resolve(this.provisionResult);
   }
 }

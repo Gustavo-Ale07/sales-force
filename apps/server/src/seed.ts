@@ -45,9 +45,9 @@ runMain('seed', async () => {
     const { accounts, repository } = createOperatorAccountService(db, passwordHashParamsOf(env), undefined, operatorIdentity(process.env));
     let created = 0;
     for (const demo of DEMO_ACCOUNTS) {
-      if ((await repository.findByEmail(demo.email)) !== null) continue;
+      if ((await repository.findByUsername(demo.email)) !== null) continue;
       await accounts.createAccount({
-        email: demo.email,
+        username: demo.email,
         displayName: demo.displayName,
         role: demo.role,
         password: env.SEED_DEV_PASSWORD,
@@ -59,15 +59,15 @@ runMain('seed', async () => {
     // Seller links named by the stored configuration (CFG-2). One seller per account in the schema.
     const current = await configurations.findCurrent();
     if (current === null) throw new Error('the configuration snapshot was not found after being stored');
-    const byEmail = new Map<string, Set<number>>();
+    const byLoginName = new Map<string, Set<number>>();
     for (const link of configuration.customers.accountSellerLinks) {
-      const email = normalizeEmail(link.accountEmail);
-      byEmail.set(email, (byEmail.get(email) ?? new Set()).add(link.sellerCode));
+      const loginName = normalizeEmail(link.accountEmail);
+      byLoginName.set(loginName, (byLoginName.get(loginName) ?? new Set()).add(link.sellerCode));
     }
     let linked = 0;
     let skipped = 0;
-    for (const [email, sellerCodes] of byEmail) {
-      const account = await repository.findByEmail(email);
+    for (const [loginName, sellerCodes] of byLoginName) {
+      const account = await repository.findByUsername(loginName);
       const [sellerCode] = [...sellerCodes];
       if (account === null || sellerCode === undefined || sellerCodes.size !== 1) {
         skipped += 1;

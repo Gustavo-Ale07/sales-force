@@ -381,16 +381,26 @@ describe('error envelope', () => {
 
 describe('auth', () => {
   it('login request is strict and bounded', () => {
-    expect(LoginRequestSchema.parse({ email: 'a@example.test', password: 'x' }).email).toBe(
-      'a@example.test',
-    );
-    expect(LoginRequestSchema.safeParse({ email: 'nope', password: 'x' }).success).toBe(false);
-    expect(LoginRequestSchema.safeParse({ email: 'a@example.test', password: '' }).success).toBe(
+    // A username, not an e-mail: no format check (Sankhya logins such as `gustavo`, `SAMUEL`, `usuario.teste`).
+    for (const username of ['gustavo', 'SAMUEL', 'plac123', 'usuario.teste', 'admin@example.test']) {
+      expect(LoginRequestSchema.parse({ username, password: 'x' }).username).toBe(username);
+    }
+    // Only trimmed; the password is never touched.
+    expect(LoginRequestSchema.parse({ username: '  gustavo  ', password: ' x ' })).toEqual({
+      username: 'gustavo',
+      password: ' x ',
+    });
+    expect(LoginRequestSchema.safeParse({ username: '   ', password: 'x' }).success).toBe(false);
+    expect(LoginRequestSchema.safeParse({ username: 'a'.repeat(255), password: 'x' }).success).toBe(
       false,
     );
+    expect(LoginRequestSchema.safeParse({ username: 'gustavo', password: '' }).success).toBe(false);
+    // The old contract is gone: `email` is an unknown key.
     expect(
-      LoginRequestSchema.safeParse({ email: 'a@example.test', password: 'x', remember: true })
-        .success,
+      LoginRequestSchema.safeParse({ email: 'a@example.test', password: 'x' }).success,
+    ).toBe(false);
+    expect(
+      LoginRequestSchema.safeParse({ username: 'gustavo', password: 'x', remember: true }).success,
     ).toBe(false);
   });
 
@@ -401,7 +411,7 @@ describe('auth', () => {
     });
     const account = {
       id: UUID_A,
-      email: 'a@example.test',
+      username: 'plac123',
       displayName: 'Ana',
       role: 'seller',
       sellerCodes: [900],
@@ -415,6 +425,11 @@ describe('auth', () => {
       SessionResponseSchema.safeParse({ ...session, account: { ...account, role: 'root' } })
         .success,
     ).toBe(false);
+    // The account identifier is a user name (no e-mail format), and the old `email` key is gone.
+    const withHandle = { ...session, account: { ...account, username: 'sankhya:4501' } };
+    expect(SessionResponseSchema.parse(withHandle)).toEqual(withHandle);
+    const withoutUsername = { id: account.id, displayName: account.displayName, role: account.role, sellerCodes: account.sellerCodes };
+    expect(SessionResponseSchema.safeParse({ ...session, account: { ...withoutUsername, email: 'a@example.test' } }).success).toBe(false);
   });
 });
 

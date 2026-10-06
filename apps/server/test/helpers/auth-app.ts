@@ -139,7 +139,7 @@ export const JSON_HEADERS = { 'content-type': 'application/json', origin: TEST_O
 
 export function login(
   { app }: Pick<AuthApp, 'app'>,
-  email: string,
+  username: string,
   password: string,
   extra: { headers?: Record<string, string>; remoteAddress?: string } = {},
 ): Promise<LightMyRequestResponse> {
@@ -147,14 +147,14 @@ export function login(
     method: 'POST',
     url: '/api/v1/auth/login',
     headers: { ...JSON_HEADERS, ...extra.headers },
-    payload: JSON.stringify({ email, password }),
+    payload: JSON.stringify({ username, password }),
     ...(extra.remoteAddress === undefined ? {} : { remoteAddress: extra.remoteAddress }),
   });
 }
 
 /** Logs in and returns the `cookie` header value for follow-up requests. */
-export async function loginCookie(app: Pick<AuthApp, 'app'>, email: string, password: string): Promise<string> {
-  const response = await login(app, email, password);
+export async function loginCookie(app: Pick<AuthApp, 'app'>, username: string, password: string): Promise<string> {
+  const response = await login(app, username, password);
   if (response.statusCode !== 200) throw new Error(`login failed with ${response.statusCode}: ${response.body.slice(0, 300)}`);
   return sessionCookieOf(response);
 }

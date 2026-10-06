@@ -36,7 +36,14 @@ export interface OfflineSessionStore {
 function isAccount(value: unknown): value is Account {
   if (typeof value !== "object" || value === null) return false;
   const record = value as Record<string, unknown>;
-  return typeof record.id === "string" && typeof record.email === "string" && typeof record.displayName === "string";
+  return typeof record.id === "string" && typeof record.username === "string" && typeof record.displayName === "string";
+}
+
+/** A record remembered before the contract renamed `email` to `username` is read as the same login identifier. */
+function upgradeLegacyAccount(value: unknown): unknown {
+  if (typeof value !== "object" || value === null) return value;
+  const { email, ...rest } = value as Record<string, unknown>;
+  return "username" in rest || typeof email !== "string" ? value : { ...rest, username: email };
 }
 
 export function createOfflineSessionStore(db: SqlDatabase, env: OfflineEnv): OfflineSessionStore {
@@ -45,7 +52,7 @@ export function createOfflineSessionStore(db: SqlDatabase, env: OfflineEnv): Off
       const [rawAccount, lastOnlineAt] = await Promise.all([getMeta(db, META_KEYS.account), getMeta(db, META_KEYS.lastAuthAt)]);
       if (rawAccount === null || lastOnlineAt === null) return null;
       try {
-        const account: unknown = JSON.parse(rawAccount);
+        const account: unknown = upgradeLegacyAccount(JSON.parse(rawAccount));
         return isAccount(account) ? { account, lastOnlineAt } : null;
       } catch {
         return null;

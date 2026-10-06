@@ -114,6 +114,7 @@ export function authorizeRoute(
 }
 
 /** The identity module's view of an account, in the shape the domain scope rules expect. */
-export function toScopeActor(user: Pick<CurrentUser, 'role' | 'email' | 'sellerCodes'>): ScopeActor {
-  return { role: user.role, accountEmail: user.email, linkedSellerCodes: user.sellerCodes };
+export function toScopeActor(user: Pick<CurrentUser, 'role' | 'username' | 'sellerCodes'>): ScopeActor {
+  // The domain scope rules still call the login identifier `accountEmail`.
+  return { role: user.role, accountEmail: user.username, linkedSellerCodes: user.sellerCodes };
 }

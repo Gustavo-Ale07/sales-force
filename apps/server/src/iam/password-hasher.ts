@@ -67,7 +67,9 @@ export class Argon2idPasswordHasher implements PasswordHasher {
     try {
       return await argon2Verify({ password, hash: storedHash });
     } catch {
-      // A malformed stored hash must not become a 500 or a timing signal: it never verifies.
+      // A malformed stored hash (e.g. the unusable marker of a directory account) must not become a 500 or a timing
+      // signal: it never verifies, after the same work as an unknown account.
+      await argon2Verify({ password, hash: await this.#dummy() });
       return false;
     }
   }

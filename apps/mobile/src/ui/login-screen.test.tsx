@@ -3,8 +3,8 @@ import type { LoginResult } from "../auth/auth-port";
 import { account, fakeAuth } from "../test-doubles";
 import { LoginScreen, describeLoginFailure } from "./login-screen";
 
-async function fillAndSubmit(email: string, password: string) {
-  await fireEvent.changeText(screen.getByLabelText("E-mail"), email);
+async function fillAndSubmit(username: string, password: string) {
+  await fireEvent.changeText(screen.getByLabelText("Usuário"), username);
   await fireEvent.changeText(screen.getByLabelText("Senha"), password);
   await fireEvent.press(screen.getByRole("button", { name: "Entrar" }));
 }
@@ -15,24 +15,34 @@ describe("LoginScreen", () => {
     await render(<LoginScreen auth={fakeAuth({ login })} onAuthenticated={jest.fn()} />);
     await fillAndSubmit("", "");
     expect(login).not.toHaveBeenCalled();
-    expect(screen.getAllByText(/obrigat|inv[áa]lid|informe/i).length).toBeGreaterThan(0);
+    expect(screen.getByText("Informe o usuário.")).toBeTruthy();
   });
 
-  it("signs in with trimmed e-mail and untouched password, then reports the account", async () => {
+  it("uses a username field without e-mail keyboard hints", async () => {
+    await render(<LoginScreen auth={fakeAuth()} onAuthenticated={jest.fn()} />);
+    const field = screen.getByLabelText("Usuário");
+    expect(field.props.placeholder).toBe("Digite seu usuário");
+    expect(field.props.keyboardType).not.toBe("email-address");
+    expect(field.props.textContentType).toBe("username");
+    expect(field.props.autoComplete).toBe("username");
+    expect(screen.queryByLabelText("E-mail")).toBeNull();
+  });
+
+  it("signs in with trimmed username and untouched password, then reports the account", async () => {
     const login = jest.fn(async (): Promise<LoginResult> => ({ ok: true, account }));
     const onAuthenticated = jest.fn();
     await render(<LoginScreen auth={fakeAuth({ login })} onAuthenticated={onAuthenticated} />);
-    await fillAndSubmit("  ana@plac.com.br ", " senha com espaco ");
+    await fillAndSubmit("  usuario.teste ", " senha com espaco ");
     await waitFor(() => expect(onAuthenticated).toHaveBeenCalledWith(account));
-    expect(login).toHaveBeenCalledWith({ email: "ana@plac.com.br", password: " senha com espaco " });
+    expect(login).toHaveBeenCalledWith({ username: "usuario.teste", password: " senha com espaco " });
   });
 
   it("shows the server outcome for wrong credentials and stays on the form", async () => {
     const onAuthenticated = jest.fn();
     const auth = fakeAuth({ login: async () => ({ ok: false, reason: "invalid_credentials" }) });
     await render(<LoginScreen auth={auth} onAuthenticated={onAuthenticated} />);
-    await fillAndSubmit("ana@plac.com.br", "errada");
-    expect(await screen.findByText("E-mail ou senha inválidos.")).toBeTruthy();
+    await fillAndSubmit("SAMUEL", "errada");
+    expect(await screen.findByText("Usuário ou senha inválidos.")).toBeTruthy();
     expect(onAuthenticated).not.toHaveBeenCalled();
   });
 
@@ -43,8 +53,10 @@ describe("LoginScreen", () => {
       },
     });
     await render(<LoginScreen auth={auth} onAuthenticated={jest.fn()} />);
-    await fillAndSubmit("ana@plac.com.br", "segredo");
-    expect(await screen.findByText(describeLoginFailure({ ok: false, reason: "unavailable" }))).toBeTruthy();
+    await fillAndSubmit("gustavo", "segredo");
+    expect(
+      await screen.findByText("Não foi possível realizar a autenticação no momento. Tente novamente."),
+    ).toBeTruthy();
   });
 });
 
@@ -67,6 +79,13 @@ describe("LoginScreen identity and password", () => {
 });
 
 describe("describeLoginFailure", () => {
+  it("uses the generic credential and unavailable copy, revealing nothing about the account", () => {
+    expect(describeLoginFailure({ ok: false, reason: "invalid_credentials" })).toBe("Usuário ou senha inválidos.");
+    expect(describeLoginFailure({ ok: false, reason: "unavailable" })).toBe(
+      "Não foi possível realizar a autenticação no momento. Tente novamente.",
+    );
+  });
+
   it("includes the retry delay when the server sent one", () => {
     expect(describeLoginFailure({ ok: false, reason: "rate_limited", retryAfterSeconds: 45 })).toContain("45 segundos");
     expect(describeLoginFailure({ ok: false, reason: "rate_limited" })).toContain("Aguarde");

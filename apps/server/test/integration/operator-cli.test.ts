@@ -166,6 +166,16 @@ describe('seed and account CLI against a disposable database', () => {
     expect((await login(ctx, 'in@example.test', TEST_PASSWORD)).statusCode).toBe(200);
   }, 240_000);
 
+  it('accepts a login name that is not an e-mail address, and refuses an empty one', async () => {
+    const database = await createMigratedDatabase(postgres);
+    opened.push(() => database.handle.close());
+    const env = { NODE_ENV: 'development', DATABASE_URL: database.url, ACCOUNT_PASSWORD: TEST_PASSWORD, ...FAST_HASH };
+    const created = await runScript('account-cli.ts', env, ['create', '--email', 'admin.plac', '--name', 'Admin', '--role', 'admin']);
+    expect(created.code, created.stderr).toBe(0);
+    const empty = await runScript('account-cli.ts', env, ['create', '--email', '   ', '--name', 'X', '--role', 'admin']);
+    expect(empty.code).not.toBe(0);
+  });
+
   it('set-password ends every session of the account; unlock clears a lockout', async () => {
     const database = await createMigratedDatabase(postgres);
     opened.push(() => database.handle.close());

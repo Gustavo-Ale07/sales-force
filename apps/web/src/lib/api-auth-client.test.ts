@@ -15,7 +15,7 @@ describe("API-backed AuthClient", () => {
     await expect(client.getSession()).resolves.toEqual({
       id: account.id,
       name: "Ana Souza",
-      email: "ana@example.test",
+      username: "ana.vendas",
       role: "seller",
       roleLabel: "Vendedor",
       sellerCodes: [7],
@@ -34,10 +34,10 @@ describe("API-backed AuthClient", () => {
 
   it("sends the credentials in the body only", async () => {
     const { client, calls } = clientWith({ "POST /auth/login": session(true) });
-    const result = await client.login({ email: "ana@example.test", password: "segredo" });
+    const result = await client.login({ username: "ana.teste", password: "segredo" });
     expect(result.ok).toBe(true);
     const request = calls[0];
-    expect(request?.body).toEqual({ email: "ana@example.test", password: "segredo" });
+    expect(request?.body).toEqual({ username: "ana.teste", password: "segredo" });
     expect(request?.path).toBe("/auth/login");
     expect(request?.search.toString()).toBe("");
   });
@@ -49,19 +49,19 @@ describe("API-backed AuthClient", () => {
     [500, "unavailable"],
   ] as const)("maps a %s login response to %s", async (status, reason) => {
     const { client } = clientWith({ "POST /auth/login": apiError(status, "internal_error", "x", { requestId: "req-1" }) });
-    await expect(client.login({ email: "a@b.test", password: "x" })).resolves.toMatchObject({ ok: false, reason, correlationId: "req-1" });
+    await expect(client.login({ username: "usuario.teste", password: "x" })).resolves.toMatchObject({ ok: false, reason, correlationId: "req-1" });
   });
 
   it("never reports a CORS/origin rejection (403 forbidden) as a channel restriction", async () => {
     const { client } = clientWith({ "POST /auth/login": apiError(403, "forbidden", "x", { requestId: "req-1" }) });
-    const result = await client.login({ email: "a@b.test", password: "x" });
+    const result = await client.login({ username: "usuario.teste", password: "x" });
     expect(result).toMatchObject({ ok: false, reason: "unavailable", correlationId: "req-1" });
     expect(result).not.toMatchObject({ reason: "channel_forbidden" });
   });
 
   it("maps 429 to rate_limited with the Retry-After seconds", async () => {
     const { client } = clientWith({ "POST /auth/login": apiError(429, "rate_limited", "x", { headers: { "retry-after": "90" } }) });
-    await expect(client.login({ email: "a@b.test", password: "x" })).resolves.toMatchObject({
+    await expect(client.login({ username: "usuario.teste", password: "x" })).resolves.toMatchObject({
       ok: false,
       reason: "rate_limited",
       retryAfterSeconds: 90,
@@ -70,7 +70,7 @@ describe("API-backed AuthClient", () => {
 
   it("maps a network failure to unavailable", async () => {
     const client = createApiAuthClient(createWebApiClient({ origin: "http://localhost", fetch: () => Promise.reject(new Error("offline")) }));
-    await expect(client.login({ email: "a@b.test", password: "x" })).resolves.toMatchObject({ ok: false, reason: "unavailable" });
+    await expect(client.login({ username: "usuario.teste", password: "x" })).resolves.toMatchObject({ ok: false, reason: "unavailable" });
   });
 
   it("treats a 401 on logout as already signed out but surfaces other failures", async () => {
@@ -85,7 +85,7 @@ describe("browser storage", () => {
   it("never writes session or token data to web storage or cookies", async () => {
     const before = { local: localStorage.length, session: sessionStorage.length, cookie: document.cookie };
     const { client } = clientWith({ "POST /auth/login": session(true), "GET /auth/session": session(true) });
-    await client.login({ email: "ana@example.test", password: "segredo" });
+    await client.login({ username: "ana.teste", password: "segredo" });
     await client.getSession();
     expect({ local: localStorage.length, session: sessionStorage.length, cookie: document.cookie }).toEqual(before);
   });

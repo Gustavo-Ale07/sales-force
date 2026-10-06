@@ -2,6 +2,7 @@ import type { AuthMode } from '@salesforce/contracts';
 import type { AccountRole } from '@salesforce/domain';
 import type { ParsedApiEnv } from '../config/api-env.js';
 import { passwordHashParamsOf, type PasswordHashParams } from '../config/auth-env.js';
+import type { SecretValue } from './external-identity.js';
 import type { ThrottleRule } from './throttle-policy.js';
 
 const MINUTE_MS = 60_000;
@@ -47,12 +48,39 @@ export interface AuthConfig {
   readonly externalLogin?: ExternalLoginConfig;
 }
 
+/**
+ * How a verified directory user gets a Force account.
+ * - `PRE_LINKED` (DEFAULT, also when omitted): only an account already carrying that user's `external_user_id` (set by an
+ *   administrator) can sign in; a login never creates an account or a link. No directory user is trusted to self-register.
+ * - `VERIFIED_AUTO_PROVISION`: first sign-in of a verified, active directory user with a valid seller code creates a
+ *   restricted `seller` account (see `ExternalAccountLinks.provisionSeller`). Only reachable through explicit
+ *   configuration; `authConfigFromEnv` never sets it and no environment variable turns it on.
+ */
+export type ExternalLinkMode = 'PRE_LINKED' | 'VERIFIED_AUTO_PROVISION';
+
 export interface ExternalLoginConfig {
   readonly enabled: boolean;
+  /** Account linking policy; `PRE_LINKED` when omitted. */
+  readonly linkMode?: ExternalLinkMode;
   /** Upper bound of one verification (the caller's signal can only shorten it). */
   readonly verifyTimeoutMs: number;
   /** Failed external logins answer no sooner than this, so timing does not tell the failure causes apart. */
   readonly minFailureMs: number;
+  /** Internal verifier process (STACK-2a): base URL on the internal network and the shared Bearer secret. */
+  readonly verifier?: { readonly url: string; readonly sharedSecret: SecretValue };
+}
+
+/**
+ * Turns the directory login on for the `seller` profile (link mode `PRE_LINKED` unless `externalLogin.linkMode` says otherwise): `local` mode admits only admin/technical, so the seller role
+ * is added explicitly and only here. Manager and every other role stay refused until an owner decision (AUTH-5
+ * extension, flagged in docs/implementation/auth-username-flow.md). Never called by `authConfigFromEnv`: off by default.
+ */
+export function withExternalSellerLogin(config: AuthConfig, externalLogin: ExternalLoginConfig): AuthConfig {
+  return {
+    ...config,
+    externalLogin: { ...externalLogin, linkMode: externalLogin.linkMode ?? 'PRE_LINKED' },
+    ...(config.allowedRoles === undefined ? {} : { allowedRoles: [...config.allowedRoles, 'seller' as const] }),
+  };
 }
 
 export interface LoginLimits {

@@ -5,7 +5,7 @@ import type { z } from 'zod';
 export const DEFAULT_ERROR_MESSAGES: Readonly<Record<ErrorCode, string>> = {
   validation_failed: 'Os dados enviados são inválidos. Verifique os campos e tente novamente.',
   unauthenticated: 'Sessão ausente ou expirada. Entre novamente para continuar.',
-  invalid_credentials: 'E-mail ou senha inválidos.',
+  invalid_credentials: 'Usuário ou senha inválidos.',
   forbidden: 'Você não tem permissão para acessar este recurso.',
   not_found: 'Recurso não encontrado.',
   conflict: 'A operação conflita com o estado atual do recurso.',

@@ -2298,10 +2298,9 @@
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
-          "email": {
+          "username": {
             "type": "string",
-            "format": "email",
-            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+            "minLength": 1
           },
           "displayName": {
             "type": "string"
@@ -2319,7 +2318,7 @@
         },
         "required": [
           "id",
-          "email",
+          "username",
           "displayName",
           "role",
           "sellerCodes"
@@ -3522,11 +3521,10 @@
       "LoginRequest": {
         "type": "object",
         "properties": {
-          "email": {
+          "username": {
             "type": "string",
-            "maxLength": 254,
-            "format": "email",
-            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+            "minLength": 1,
+            "maxLength": 254
           },
           "password": {
             "type": "string",
@@ -3535,7 +3533,7 @@
           }
         },
         "required": [
-          "email",
+          "username",
           "password"
         ],
         "additionalProperties": false

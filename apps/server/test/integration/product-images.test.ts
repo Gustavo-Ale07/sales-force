@@ -188,7 +188,7 @@ describe('GET /products/{code}/image', () => {
   it('is 403 no_seller_scope for a seller without a seller link, before the source is asked', async () => {
     reset();
     source.images.set(CODE, { bytes: pngBytes(), version: 'v1' });
-    await createTestAccount(ctx.database.handle, { email: 'sem-vinculo-img@example.test', role: 'seller' }, ctx.clock.fn);
+    await createTestAccount(ctx.database.handle, { username: 'sem-vinculo-img@example.test', role: 'seller' }, ctx.clock.fn);
     const cookie = await loginCookie(ctx, 'sem-vinculo-img@example.test', TEST_PASSWORD);
     const response = await ctx.app.inject({ method: 'GET', url: `/api/v1/products/${CODE}/image`, headers: { origin: TEST_ORIGIN, cookie } });
     expect(response.statusCode).toBe(403);

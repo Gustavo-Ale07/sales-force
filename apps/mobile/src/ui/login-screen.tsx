@@ -13,13 +13,13 @@ type LoginFailure = Extract<LoginResult, { ok: false }>;
 export function describeLoginFailure(failure: LoginFailure): string {
   switch (failure.reason) {
     case "invalid_credentials":
-      return "E-mail ou senha inválidos.";
+      return "Usuário ou senha inválidos.";
     case "rate_limited":
       return failure.retryAfterSeconds !== undefined
         ? `Muitas tentativas. Tente novamente em ${failure.retryAfterSeconds} segundos.`
         : "Muitas tentativas. Aguarde alguns instantes e tente novamente.";
     case "unavailable":
-      return "Não foi possível entrar agora. Verifique sua conexão e tente novamente.";
+      return "Não foi possível realizar a autenticação no momento. Tente novamente.";
   }
 }
 
@@ -33,7 +33,7 @@ export interface LoginScreenProps {
 export function LoginScreen({ auth, onAuthenticated, connectivity }: LoginScreenProps) {
   const insets = useInsets();
   const passwordRef = useRef<TextInput>(null);
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<LoginFormErrors>({});
@@ -43,7 +43,7 @@ export function LoginScreen({ auth, onAuthenticated, connectivity }: LoginScreen
   async function submit() {
     if (submitting) return;
     setFailure(null);
-    const checked = validateLoginForm({ email, password });
+    const checked = validateLoginForm({ username, password });
     if (!checked.ok) {
       setErrors(checked.errors);
       return;
@@ -76,22 +76,23 @@ export function LoginScreen({ auth, onAuthenticated, connectivity }: LoginScreen
         </View>
 
         <View style={styles.form}>
-          <Text style={styles.label}>E-mail</Text>
+          <Text style={styles.label}>Usuário</Text>
           <TextInput
-            style={[styles.input, errors.email !== undefined && styles.inputError]}
-            value={email}
-            onChangeText={setEmail}
+            style={[styles.input, errors.username !== undefined && styles.inputError]}
+            value={username}
+            onChangeText={setUsername}
+            placeholder="Digite seu usuário"
+            placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
-            keyboardType="email-address"
             textContentType="username"
-            autoComplete="email"
+            autoComplete="username"
             returnKeyType="next"
             editable={!submitting}
             onSubmitEditing={() => passwordRef.current?.focus()}
-            accessibilityLabel="E-mail"
+            accessibilityLabel="Usuário"
           />
-          {errors.email !== undefined && <Text style={styles.fieldError}>{errors.email}</Text>}
+          {errors.username !== undefined && <Text style={styles.fieldError}>{errors.username}</Text>}
 
           <Text style={styles.label}>Senha</Text>
           <View style={[styles.passwordRow, errors.password !== undefined && styles.inputError]}>

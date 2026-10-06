@@ -43,24 +43,24 @@ export class TestClock {
 
 export interface TestAccount {
   readonly id: string;
-  readonly email: string;
+  readonly username: string;
   readonly role: AccountRole;
 }
 
 /** Creates an account through the same service the CLI uses (policy, hashing, audit). */
 export async function createTestAccount(
   handle: DbHandle,
-  input: { email: string; role: AccountRole; password?: string; displayName?: string },
+  input: { username: string; role: AccountRole; password?: string; displayName?: string },
   clock?: Clock,
 ): Promise<TestAccount> {
   const { accounts } = createOperatorAccountService(handle, TEST_HASH_PARAMS, clock);
   const id = await accounts.createAccount({
-    email: input.email,
+    username: input.username,
     displayName: input.displayName ?? `Test ${input.role}`,
     role: input.role,
     password: input.password ?? TEST_PASSWORD,
   });
-  return { id, email: input.email, role: input.role };
+  return { id, username: input.username, role: input.role };
 }
 
 export function setCookieHeaders(response: Pick<LightMyRequestResponse, 'headers'>): string[] {

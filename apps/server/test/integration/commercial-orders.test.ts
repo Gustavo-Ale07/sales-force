@@ -706,7 +706,7 @@ describe('installation not enabled', () => {
 
   it('no stored configuration at all is also installation_not_enabled, never a 500', async () => {
     const bare = await startAuthApp(postgres, opened);
-    await createTestAccount(bare.database.handle, { email: 'sem-config@example.test', role: 'manager' }, bare.clock.fn);
+    await createTestAccount(bare.database.handle, { username: 'sem-config@example.test', role: 'manager' }, bare.clock.fn);
     const cookie = await loginCookie(bare, 'sem-config@example.test', TEST_PASSWORD);
     const response = await bare.app.inject({ method: 'GET', url: '/api/v1/customers', headers: { cookie, origin: TEST_ORIGIN } });
     expect(response.statusCode).toBe(409);
