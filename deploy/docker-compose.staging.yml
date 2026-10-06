@@ -137,6 +137,13 @@ services:
       SF_DATASET_ID: ${SF_DATASET_ID:?SF_DATASET_ID is required in production mode}
       # No SF_ALLOW_DEMO_ACCOUNTS and no ALLOW_DEV_AUTH: staging has no demo data and no dev authentication.
       # No SANKHYA_*: the API never reads Sankhya settings (STACK-2/3).
+      # Product photos: read-only view of the volume the worker fills (INTERIM filesystem store, V-05/STACK-7).
+      PRODUCT_MEDIA_DIR: /var/lib/sales-force/product-media
+      PRODUCT_MEDIA_MAX_BYTES: ${PRODUCT_MEDIA_MAX_BYTES:-5242880}
+      # Largest GENERATED thumbnail served (the worker renders every photo's own 256 px WebP, bounded at 256 KiB).
+      PRODUCT_MEDIA_THUMB_MAX_BYTES: ${PRODUCT_MEDIA_THUMB_MAX_BYTES:-262144}
+    volumes:
+      - product_media:/var/lib/sales-force/product-media:ro
     command: ["node", "dist/main-api.js"]
     # `verifier`: the API is the only caller of the internal identity verifier (nothing calls it yet; the
     # client lands with the external-login work).
@@ -176,6 +183,18 @@ services:
       ALLOW_FAKE_GATEWAY: ${ALLOW_FAKE_GATEWAY:-}
       # Mandatory and explicit in live mode (scheduled mirror never starts against a real Sankhya by default).
       SYNC_MIRROR_ENABLED: ${SYNC_MIRROR_ENABLED:-}
+      # Product photos (ERP -> persistent volume). OFF by default: nothing is registered or scheduled until the
+      # owner enables it. The directory is the only writable path of the worker besides /tmp.
+      PRODUCT_MEDIA_SYNC_ENABLED: ${PRODUCT_MEDIA_SYNC_ENABLED:-false}
+      PRODUCT_MEDIA_DIR: /var/lib/sales-force/product-media
+      PRODUCT_MEDIA_MAX_BYTES: ${PRODUCT_MEDIA_MAX_BYTES:-5242880}
+      PRODUCT_MEDIA_SYNC_CRON: ${PRODUCT_MEDIA_SYNC_CRON:-30 3 * * *}
+      PRODUCT_MEDIA_SYNC_CONCURRENCY: ${PRODUCT_MEDIA_SYNC_CONCURRENCY:-2}
+      PRODUCT_MEDIA_VERIFY_OBJECTS: ${PRODUCT_MEDIA_VERIFY_OBJECTS:-true}
+      PRODUCT_MEDIA_ALLOW_FAKE_GATEWAY: ${PRODUCT_MEDIA_ALLOW_FAKE_GATEWAY:-false}
+      PRODUCT_MEDIA_SOURCE_FAILURE_LIMIT: ${PRODUCT_MEDIA_SOURCE_FAILURE_LIMIT:-3}
+    volumes:
+      - product_media:/var/lib/sales-force/product-media
     command: ["node", "dist/main-worker.js"]
     networks: [backend]
     healthcheck:
@@ -238,7 +257,7 @@ services:
       api:
         condition: service_healthy
     environment:
-      INSTALLATION_NAME: ${INSTALLATION_NAME:-Sales Force}
+      INSTALLATION_NAME: ${INSTALLATION_NAME:-Force PLAC}
       # Explicit, no default (the web container refuses to start without it). Staging value: `local`
       # (local login form only, no dev banner); must match API_AUTH_MODE.
       WEB_AUTH_MODE: ${WEB_AUTH_MODE:?WEB_AUTH_MODE must be set explicitly, staging value is local}
@@ -417,5 +436,8 @@ networks:
 
 volumes:
   pgdata:
+  # Product photos (INTERIM filesystem object store). Persistent, included in the host/volume backup scope;
+  # never part of an image or of the repository. Replaced by S3-compatible storage once V-05 closes.
+  product_media:
   caddy_data:
   caddy_config:

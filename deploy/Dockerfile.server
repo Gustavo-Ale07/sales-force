@@ -38,6 +38,11 @@ WORKDIR /app
 COPY --from=build --chown=node:node /out/package.json ./package.json
 COPY --from=build --chown=node:node /out/dist ./dist
 COPY --from=build --chown=node:node /out/node_modules ./node_modules
+# Mount point of the persistent product photo volume (PRODUCT_MEDIA_DIR). Created empty and owned by `node` so a
+# freshly created named volume mounted here inherits that ownership. Photos are NEVER baked into the image: the
+# worker fills the volume at run time (the API mounts it read-only). INTERIM store until the S3-compatible
+# provider is chosen (V-05, STACK-7).
+RUN mkdir -p /var/lib/sales-force/product-media && chown node:node /var/lib/sales-force/product-media
 USER node
 # No default command on purpose: the compose file chooses the role (api, worker or a one-shot job).
 CMD ["node", "dist/main-api.js"]

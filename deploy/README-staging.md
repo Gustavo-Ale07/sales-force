@@ -374,6 +374,10 @@ $SFC --profile offsite run --rm offsite                             # uploads th
 - `ops-restore-check.sh` asserts only generic facts (checksum, restore succeeds, tables exist). A
   business-level check against the deployed migration journal is still to be added after the first real run.
 
+### Product photo volume (`product_media`) - STAGING INTERIM ONLY
+
+The volume is not part of the PostgreSQL dump or PITR. `deploy/staging/ops-media-backup.sh` (`backup` / `verify` / `restore`) copies it into a verified, manifest-checked `.tar.gz`; it does not meet RPO/RTO and does not close the P-17 / STACK-7 S3 pendency. Procedure, restore rules and the SQL cross-check: `docs/implementation/product-media.md`.
+
 ## Rollback (P-16: expand -> migrate -> contract)
 
 - Rollback = previous tag: set `SERVER_IMAGE`/`WEB_IMAGE` in `compose.env` back to the previous SHA tags (still

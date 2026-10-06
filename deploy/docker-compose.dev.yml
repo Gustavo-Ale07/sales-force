@@ -78,6 +78,10 @@ services:
       SF_ERP_ENVIRONMENT: ${SF_ERP_ENVIRONMENT:-sandbox}
       SF_DATASET_ID: ${SF_DATASET_ID:-plac-sandbox-real-1}
       # No SANKHYA_* here: the API never reads Sankhya settings (STACK-2/STACK-3).
+      # Product photos: read-only view of the volume the worker fills (INTERIM filesystem store, V-05/STACK-7).
+      PRODUCT_MEDIA_DIR: /var/lib/sales-force/product-media
+    volumes:
+      - product_media:/var/lib/sales-force/product-media:ro
     command: ["node", "dist/main-api.js"]
     # Debugging only; the browser goes through the web container. Loopback binding, optional.
     ports:
@@ -119,6 +123,13 @@ services:
       # Scheduled mirror jobs. Empty = the worker default (on for the fake gateway; MANDATORY and explicit in live
       # mode). Keep false against a real Sankhya until sync is run manually (sync:once).
       SYNC_MIRROR_ENABLED: ${SYNC_MIRROR_ENABLED:-}
+      # Product photos: OFF by default (nothing registered or scheduled). `product-media:bootstrap` runs the first load.
+      PRODUCT_MEDIA_SYNC_ENABLED: ${PRODUCT_MEDIA_SYNC_ENABLED:-false}
+      # Dev runs the synthetic fake gateway: storing its images needs this explicit opt-in.
+      PRODUCT_MEDIA_ALLOW_FAKE_GATEWAY: ${PRODUCT_MEDIA_ALLOW_FAKE_GATEWAY:-true}
+      PRODUCT_MEDIA_DIR: /var/lib/sales-force/product-media
+    volumes:
+      - product_media:/var/lib/sales-force/product-media
     command: ["node", "dist/main-worker.js"]
     healthcheck:
       test:
@@ -142,7 +153,7 @@ services:
         condition: service_healthy
     environment:
       # Runtime config.json (public, no secrets). Not a customer name: an installation label.
-      INSTALLATION_NAME: ${INSTALLATION_NAME:-Sales Force}
+      INSTALLATION_NAME: ${INSTALLATION_NAME:-Force PLAC}
       WEB_AUTH_MODE: dev
       # Optional brand (see deploy/README.md); empty = the neutral default.
       BRAND_LOGO_URL: ${BRAND_LOGO_URL:-}
@@ -156,3 +167,4 @@ services:
 
 volumes:
   pgdata:
+  product_media:
