@@ -18,6 +18,8 @@ export interface SessionWithAccount {
   readonly status: AccountStatus;
   /** The account is linked to a directory (Sankhya) user: its session came from the external login, never a local password. */
   readonly external: boolean;
+  /** The stable directory id behind `external` (null for local accounts). Opaque code, not a secret. */
+  readonly externalUserId: string | null;
 }
 
 /** Sessions that ended this long ago are deleted by the opportunistic purge. */
@@ -87,7 +89,7 @@ export class SessionRepository {
       .where(eq(session.tokenHash, tokenHash));
     if (row === undefined) return null;
     const { externalUserId, ...rest } = row;
-    return { ...rest, role: rest.role as AccountRole, status: rest.status as AccountStatus, external: externalUserId !== null };
+    return { ...rest, externalUserId, role: rest.role as AccountRole, status: rest.status as AccountStatus, external: externalUserId !== null };
   }
 
   async touch(sessionId: string, lastSeenAt: Date, expiresAt: Date): Promise<void> {

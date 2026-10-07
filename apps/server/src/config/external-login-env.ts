@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { z } from 'zod';
+import { integerField } from './env.js';
 
 /**
  * API-side settings of the directory (Sankhya user) login (AUTH-5, STACK-2a). The API holds NO Sankhya setting: it only
@@ -13,20 +14,36 @@ export const externalLoginFields = {
   VERIFIER_URL: z.string().optional(),
   VERIFIER_SHARED_SECRET: z.string().optional(),
   VERIFIER_SHARED_SECRET_FILE: z.string().min(1).optional(),
+  /**
+   * `1` = a verified directory user whose ERP record carries an active seller gets a `seller` account and link on first login
+   * (CFG-2), reconciled on every later login. Default `0` (PRE_LINKED: only administrator-linked accounts sign in). Needs the login.
+   */
+  EXTERNAL_AUTO_PROVISION: z.enum(['0', '1'], { error: "must be '0' or '1'." }).default('0'),
+  /** Must be `1` before EXTERNAL_AUTO_PROVISION=1: the owner confirmed (probe) that the decoded login id equals TSIUSU.CODUSU. Otherwise a wrong id means a wrong seller scope. */
+  EXTERNAL_IDUSU_IS_CODUSU_VALIDATED: z.enum(['0', '1'], { error: "must be '0' or '1'." }).default('0'),
+  /** Oldest the mirror of the user -> seller relation may be before an automatic link is refused (fail closed). */
+  EXTERNAL_DIRECTORY_MAX_AGE_MINUTES: integerField({ min: 5, max: 1440 }, 120),
 };
 
 export const MIN_VERIFIER_SECRET_LENGTH = 32;
 
 interface ExternalLoginInput {
   readonly EXTERNAL_LOGIN_ENABLED: '0' | '1';
+  readonly EXTERNAL_AUTO_PROVISION?: '0' | '1' | undefined;
+  readonly EXTERNAL_IDUSU_IS_CODUSU_VALIDATED?: '0' | '1' | undefined;
   readonly VERIFIER_URL?: string | undefined;
   readonly VERIFIER_SHARED_SECRET?: string | undefined;
   readonly VERIFIER_SHARED_SECRET_FILE?: string | undefined;
 }
 
 export function externalLoginProblems(parsed: ExternalLoginInput): string[] {
-  if (parsed.EXTERNAL_LOGIN_ENABLED !== '1') return [];
+  if (parsed.EXTERNAL_LOGIN_ENABLED !== '1') {
+    return parsed.EXTERNAL_AUTO_PROVISION === '1' ? ['EXTERNAL_AUTO_PROVISION: needs EXTERNAL_LOGIN_ENABLED=1.'] : [];
+  }
   const problems: string[] = [];
+  if (parsed.EXTERNAL_AUTO_PROVISION === '1' && parsed.EXTERNAL_IDUSU_IS_CODUSU_VALIDATED !== '1') {
+    problems.push('EXTERNAL_AUTO_PROVISION: needs EXTERNAL_IDUSU_IS_CODUSU_VALIDATED=1 (validate the login id against TSIUSU.CODUSU with the sandbox probe first).');
+  }
   if (parsed.VERIFIER_URL === undefined || parsed.VERIFIER_URL.trim() === '') {
     problems.push('VERIFIER_URL: is required when EXTERNAL_LOGIN_ENABLED=1.');
   } else {

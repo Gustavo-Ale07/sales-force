@@ -105,6 +105,9 @@ export class FakeGateway implements SankhyaGateway {
   readSellers(options?: ReadOptions) {
     return this.#snapshot('sellers', this.#dataset.sellers, options);
   }
+  readDirectoryUsers(options?: ReadOptions) {
+    return this.#snapshot('directoryUsers', this.#dataset.directoryUsers, options);
+  }
   readCustomers(options?: ReadOptions) {
     return this.#snapshot('customers', this.#dataset.customers, options);
   }

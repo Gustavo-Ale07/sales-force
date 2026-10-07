@@ -100,6 +100,7 @@ describe('mapping', () => {
       priceTables: dataset.priceTables.length,
       priceTableVersions: dataset.priceTableVersions.length,
       listPrices: dataset.listPrices.length,
+      directoryUsers: dataset.directoryUsers.length,
     };
     for (const entity of MIRROR_ENTITIES) {
       expect((await collect(entity, gateway)).length, entity).toBe(expected[entity]);
@@ -135,6 +136,7 @@ describe('mapping', () => {
         capabilities: { ...base.capabilities, reads: { ...base.capabilities.reads, productGroups: 'not_implemented' } },
       }),
       readSellers: (o) => gateway.readSellers(o),
+      readDirectoryUsers: (o) => gateway.readDirectoryUsers(o),
       readCustomers: (o) => gateway.readCustomers(o),
       readProducts: (o) => gateway.readProducts(o),
       readProductGroups: (o) => gateway.readProductGroups(o),
@@ -215,6 +217,7 @@ describe('schedules, queues and locks', () => {
     };
     expect(mirrorSchedulesFromSettings(settings)).toEqual({
       sellers: '1 * * * *',
+      directoryUsers: '1 * * * *',
       customers: '2 * * * *',
       products: '3 * * * *',
       priceTables: '4 * * * *',

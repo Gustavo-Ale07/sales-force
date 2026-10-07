@@ -140,6 +140,10 @@ services:
       # Directory (Sankhya user) login through the internal verifier (AUTH-5). OFF unless compose.env sets it to 1;
       # when on, the shared secret comes from api.env (same value as in verifier.env) and the API refuses to boot without it.
       EXTERNAL_LOGIN_ENABLED: ${EXTERNAL_LOGIN_ENABLED:-0}
+      # Seller accounts created/reconciled from the official ERP user -> seller relation at login (CFG-2). OFF unless compose.env says 1.
+      EXTERNAL_AUTO_PROVISION: ${EXTERNAL_AUTO_PROVISION:-0}
+      EXTERNAL_IDUSU_IS_CODUSU_VALIDATED: ${EXTERNAL_IDUSU_IS_CODUSU_VALIDATED:-0}
+      EXTERNAL_DIRECTORY_MAX_AGE_MINUTES: ${EXTERNAL_DIRECTORY_MAX_AGE_MINUTES:-120}
       VERIFIER_URL: http://verifier:3002
       # Product photos: read-only view of the volume the worker fills (INTERIM filesystem store, V-05/STACK-7).
       PRODUCT_MEDIA_DIR: /var/lib/sales-force/product-media

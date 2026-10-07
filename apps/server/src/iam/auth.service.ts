@@ -65,6 +65,7 @@ export type LoginFailureReason =
   | 'mode_role_not_permitted'
   | 'external_invalid_credentials'
   | 'external_unmapped'
+  | 'external_directory_refused'
   | 'external_inactive'
   | 'external_account_disabled'
   | 'external_channel_not_permitted'
@@ -75,6 +76,8 @@ export type LoginFailureReason =
   | 'external_rate_limited';
 
 const PURGE_INTERVAL_MS = 10 * 60 * 1000;
+/** Oldest mirror of the ERP user -> seller relation an automatic link is accepted on, unless the configuration says otherwise. */
+const DEFAULT_DIRECTORY_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 /** Installation-wide counter of failed password checks (`auth_throttle`); one row, fixed window. */
 const GLOBAL_FAILURES_KEY = 'global:login-failures';
 /** Same, for external-directory logins: kept apart so one flow cannot exhaust the other's budget. */
@@ -357,19 +360,23 @@ export class AuthService implements OnModuleInit {
       return this.failExternal('external_unmapped', null, failCtx);
     }
     let accountId = await links.findAccountId(identity.externalUserId);
-    if (
-      accountId === null &&
-      (settings.linkMode ?? 'PRE_LINKED') === 'VERIFIED_AUTO_PROVISION' &&
-      isValidSellerCode(identity.sellerCode) &&
-      this.roleMayHoldSession('seller')
-    ) {
-      // Explicit VERIFIED_AUTO_PROVISION only (never the default). First sign-in of a verified directory user: only a `seller` account is ever provisioned, and only for an
-      // active, still unlinked mirrored seller (the port enforces it). Anything else stays an unmapped failure.
+    if ((settings.linkMode ?? 'PRE_LINKED') === 'VERIFIED_AUTO_PROVISION' && this.roleMayHoldSession('seller')) {
+      // Explicit VERIFIED_AUTO_PROVISION only (never the default). The login proved the directory identity; the Force account and
+      // its seller link come ONLY from the official ERP user -> seller relation (mirrored), in one transaction: created on the first
+      // login, reconciled on later ones, refused (audited with the specific reason) on anything unproven. Manual links and non-seller
+      // roles are never touched. Whatever it says, the checks below still run.
       try {
-        accountId = await links.provisionSeller({ externalUserId: identity.externalUserId, sellerCode: identity.sellerCode, now });
+        const sync = await links.syncFromDirectory({
+          externalUserId: identity.externalUserId,
+          now,
+          maxMirrorAgeMs: settings.directoryMaxAgeMs ?? DEFAULT_DIRECTORY_MAX_AGE_MS,
+          allowCreate: true,
+        });
+        if (!sync.ok) return this.failExternal('external_directory_refused', sync.accountId, failCtx);
+        accountId = sync.accountId;
       } catch (error) {
-        this.logger.warn({ ...errorLogFields(error) }, 'could not provision the seller account of an external login');
-        accountId = null;
+        this.logger.warn({ ...errorLogFields(error) }, 'could not sync the seller account of an external login from the directory (fail closed)');
+        return this.failExternal('external_directory_refused', null, failCtx);
       }
     }
     const found = accountId === null ? null : await this.accounts.findById(accountId);
@@ -457,6 +464,9 @@ export class AuthService implements OnModuleInit {
     const now = this.clock();
     if (row.revokedAt !== null || row.expiresAt.getTime() <= now.getTime() || row.status !== 'active') return null;
     if (!this.roleMayHoldSession(row.role, row.external)) return null;
+    // An automatic seller link follows the ERP: re-checked at most once per touch interval (the revocation window, on top of the
+    // mirror refresh). Fail closed: a definitive change revokes the sessions; an old or missing mirror only denies this request.
+    if (row.external && row.role === 'seller' && !(await this.automaticLinkHolds(row.externalUserId, now, row.lastSeenAt))) return null;
 
     let expiresAt = row.expiresAt;
     let renewed = false;
@@ -480,6 +490,31 @@ export class AuthService implements OnModuleInit {
         channel,
       },
     };
+  }
+
+  /**
+   * True unless the account's AUTOMATIC seller link no longer holds against the official ERP relation. Only meaningful in
+   * VERIFIED_AUTO_PROVISION; always true otherwise or when the interval since the last check has not elapsed.
+   */
+  private async automaticLinkHolds(externalUserId: string | null, now: Date, lastSeenAt: Date): Promise<boolean> {
+    const settings = this.config.externalLogin;
+    const links = this.externalLinks;
+    if (settings === undefined || links === undefined || (settings.linkMode ?? 'PRE_LINKED') !== 'VERIFIED_AUTO_PROVISION') return true;
+    if (now.getTime() - lastSeenAt.getTime() < this.config.sessionTouchIntervalMs) return true;
+    try {
+      if (externalUserId === null) return true;
+      const sync = await links.syncFromDirectory({
+        externalUserId,
+        now,
+        maxMirrorAgeMs: settings.directoryMaxAgeMs ?? DEFAULT_DIRECTORY_MAX_AGE_MS,
+        allowCreate: false,
+      });
+      // `relinked` revokes the sessions inside the transaction: the user signs in again under the new scope.
+      return sync.ok && sync.action !== 'relinked';
+    } catch (error) {
+      this.logger.warn({ ...errorLogFields(error) }, 'could not re-check an automatic seller link; denying the request (fail closed)');
+      return false;
+    }
   }
 
   /**

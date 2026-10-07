@@ -128,6 +128,7 @@ export function runGatewayContract(label: string, subject: ContractSubject): voi
         'readProductGroups',
         'readPriceTables',
         'readPriceTableVersions',
+        'readDirectoryUsers',
         'readListPrices',
         'readProductMediaSignatures',
         'readProductMediaBytes',

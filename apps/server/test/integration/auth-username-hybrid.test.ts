@@ -1,4 +1,4 @@
-import { account, accountSellerLink, auditLog, erpSeller, installationConfigurationVersion, session } from '@salesforce/db';
+import { account, accountSellerLink, auditLog, erpDirectoryUser, erpSeller, installationConfigurationVersion, session, syncState } from '@salesforce/db';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { AppError } from '../../src/http/app-error.js';
@@ -89,11 +89,31 @@ async function addSeller(ctx: Ctx, code: number, name: string, opts: { active?: 
   });
 }
 
-function directoryUser(ctx: Ctx, login: string, codusu: number, codvend: number | null, active = true) {
+/** A directory user: what the verifier answers AND what the ERP relation mirror says (CODUSU -> CODVEND). */
+async function directoryUser(ctx: Ctx, login: string, codusu: number, codvend: number | null, active = true) {
   ctx.verifier.users.set(login, {
     password: SANKHYA_PASSWORD,
     identity: { externalUserId: String(codusu), displayName: '', sellerCode: codvend, active },
   });
+  await mirrorDirectoryUser(ctx, codusu, codvend);
+}
+
+async function mirrorDirectoryUser(ctx: Ctx, codusu: number, codvend: number | null, opts: { deleted?: boolean } = {}) {
+  const values = { sellerCode: codvend, contentHash: `d${codusu}-${codvend ?? 'x'}`, syncedAt: SYNCED, deletedAt: opts.deleted === true ? SYNCED : null };
+  await ctx.db.insert(erpDirectoryUser).values({ code: codusu, ...values }).onConflictDoUpdate({ target: erpDirectoryUser.code, set: values });
+  await markDirectoryFresh(ctx);
+}
+
+/** The relation mirror last succeeded at the test clock's "now" (a stale one is simulated by advancing the clock or passing `at`). */
+async function markDirectoryFresh(ctx: Ctx, at: Date = ctx.clock.fn()) {
+  await ctx.db
+    .insert(syncState)
+    .values({ entity: 'directoryUsers', status: 'idle', lastSuccessAt: at })
+    .onConflictDoUpdate({ target: syncState.entity, set: { lastSuccessAt: at } });
+}
+
+async function directoryAudit(ctx: Ctx, action: string): Promise<string[]> {
+  return (await ctx.db.select().from(auditLog).where(eq(auditLog.action, action))).map((r) => (r.detail as { reason: string }).reason);
 }
 
 async function failure(promise: Promise<unknown>): Promise<AppError> {
@@ -134,7 +154,7 @@ describe('AuthService.login (user name + password, hybrid)', () => {
   it('signs in a valid Sankhya user, provisioning a seller account linked by stable ids', async () => {
     const ctx = await setup(AUTO);
     await addSeller(ctx, 103, 'Vendedor Sintetico');
-    directoryUser(ctx, 'plac123', 4501, 103);
+    await directoryUser(ctx, 'plac123', 4501, 103);
 
     const result = await ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META);
 
@@ -152,7 +172,7 @@ describe('AuthService.login (user name + password, hybrid)', () => {
   it('opens a correct Force session (opaque token, only its hash stored) and reuses the account on the next login', async () => {
     const ctx = await setup(AUTO);
     await addSeller(ctx, 103, 'Vendedor Sintetico');
-    directoryUser(ctx, 'plac123', 4501, 103);
+    await directoryUser(ctx, 'plac123', 4501, 103);
     const first = await ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META);
     const second = await ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META);
 
@@ -170,7 +190,7 @@ describe('AuthService.login (user name + password, hybrid)', () => {
   it('refuses a wrong Sankhya password and a nonexistent Sankhya user with the same uniform error', async () => {
     const ctx = await setup(AUTO);
     await addSeller(ctx, 103, 'Vendedor Sintetico');
-    directoryUser(ctx, 'plac123', 4501, 103);
+    await directoryUser(ctx, 'plac123', 4501, 103);
     const wrong = await failure(ctx.service.login({ username: 'plac123', password: 'not-the-password' }, META));
     const missing = await failure(ctx.service.login({ username: 'ghost', password: SANKHYA_PASSWORD }, META));
     expect(wrong.code).toBe('invalid_credentials');
@@ -183,7 +203,7 @@ describe('AuthService.login (user name + password, hybrid)', () => {
   it('answers a Sankhya outage and a verifier crash with service_unavailable, never a session', async () => {
     const ctx = await setup(AUTO);
     await addSeller(ctx, 103, 'Vendedor Sintetico');
-    directoryUser(ctx, 'plac123', 4501, 103);
+    await directoryUser(ctx, 'plac123', 4501, 103);
     ctx.verifier.forced = { fail: 'unavailable' };
     expect((await failure(ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META))).code).toBe('service_unavailable');
     ctx.verifier.forced = 'throw';
@@ -194,23 +214,26 @@ describe('AuthService.login (user name + password, hybrid)', () => {
     expect(await ctx.db.select().from(account)).toHaveLength(0);
   });
 
-  it('refuses a verified user with no seller, creating no account', async () => {
+  it('refuses a verified user with no seller, creating no account (reason only in the audit)', async () => {
     const ctx = await setup(AUTO);
-    directoryUser(ctx, 'semvend', 4502, null);
+    await directoryUser(ctx, 'semvend', 4502, null);
     const err = await failure(ctx.service.login({ username: 'semvend', password: SANKHYA_PASSWORD }, META));
     expect(err.code).toBe('invalid_credentials');
+    expect(err.message).toBe('Usuário ou senha inválidos.');
     expect(await ctx.db.select().from(account)).toHaveLength(0);
+    expect(await ctx.db.select().from(session)).toHaveLength(0);
     const [row] = await ctx.db.select().from(auditLog).where(eq(auditLog.action, 'auth.login.failure'));
-    expect(row?.detail).toMatchObject({ reason: 'external_unmapped' });
+    expect(row?.detail).toMatchObject({ reason: 'external_directory_refused' });
+    expect(await directoryAudit(ctx, 'auth.directory.link_refused')).toEqual(['no_seller']);
   });
 
   it('refuses an inactive, deleted or unmirrored seller', async () => {
     const ctx = await setup(AUTO);
     await addSeller(ctx, 110, 'Inativo', { active: false });
     await addSeller(ctx, 111, 'Apagado', { deleted: true });
-    directoryUser(ctx, 'inativo', 4510, 110);
-    directoryUser(ctx, 'apagado', 4511, 111);
-    directoryUser(ctx, 'fantasma', 4512, 999);
+    await directoryUser(ctx, 'inativo', 4510, 110);
+    await directoryUser(ctx, 'apagado', 4511, 111);
+    await directoryUser(ctx, 'fantasma', 4512, 999);
     for (const login of ['inativo', 'apagado', 'fantasma']) {
       expect((await failure(ctx.service.login({ username: login, password: SANKHYA_PASSWORD }, META))).code).toBe('invalid_credentials');
     }
@@ -218,22 +241,29 @@ describe('AuthService.login (user name + password, hybrid)', () => {
     expect(await ctx.db.select().from(session)).toHaveLength(0);
   });
 
-  it('refuses an existing account whose seller became inactive after provisioning', async () => {
+  it('refuses an existing account whose seller became inactive after provisioning: link removed, sessions revoked', async () => {
     const ctx = await setup(AUTO);
     await addSeller(ctx, 103, 'Vendedor Sintetico');
-    directoryUser(ctx, 'plac123', 4501, 103);
-    await ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META);
+    await directoryUser(ctx, 'plac123', 4501, 103);
+    const first = await ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META);
     await ctx.db.update(erpSeller).set({ active: false }).where(eq(erpSeller.code, 103));
     const err = await failure(ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META));
     expect(err.code).toBe('invalid_credentials');
-    const reasons = (await ctx.db.select().from(auditLog).where(eq(auditLog.action, 'auth.login.failure'))).map((r) => (r.detail as { reason: string }).reason);
-    expect(reasons).toContain('external_seller_inactive');
+    expect(await directoryAudit(ctx, 'auth.directory.link_revoked')).toEqual(['seller_inactive']);
+    expect(await ctx.db.select().from(accountSellerLink)).toHaveLength(0);
+    const [live] = await ctx.db.select().from(session).where(eq(session.accountId, first.user.accountId));
+    expect(live?.revokedAt).not.toBeNull();
+    // Reactivated in the ERP: the same account follows it again, no second account.
+    await ctx.db.update(erpSeller).set({ active: true }).where(eq(erpSeller.code, 103));
+    const again = await ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META);
+    expect(again.user).toMatchObject({ accountId: first.user.accountId, sellerCodes: [103] });
+    expect(await ctx.db.select().from(account)).toHaveLength(1);
   });
 
   it('refuses a user not authorized for the Force: linked account that is disabled', async () => {
     const ctx = await setup(AUTO);
     await addSeller(ctx, 103, 'Vendedor Sintetico');
-    directoryUser(ctx, 'plac123', 4501, 103);
+    await directoryUser(ctx, 'plac123', 4501, 103);
     await ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META);
     await ctx.db.update(account).set({ status: 'disabled' }).where(eq(account.externalUserId, '4501'));
     const err = await failure(ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META));
@@ -243,30 +273,43 @@ describe('AuthService.login (user name + password, hybrid)', () => {
   it('refuses a directory-inactive user', async () => {
     const ctx = await setup(AUTO);
     await addSeller(ctx, 103, 'Vendedor Sintetico');
-    directoryUser(ctx, 'plac123', 4501, 103, false);
+    await directoryUser(ctx, 'plac123', 4501, 103, false);
     expect((await failure(ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META))).code).toBe('invalid_credentials');
     expect(await ctx.db.select().from(account)).toHaveLength(0);
   });
 
-  it('isolates sellers: a second directory user cannot take a seller already linked to another account', async () => {
+  it('isolates sellers: a user whose seller is already linked to another account is refused, and nothing is stolen', async () => {
     const ctx = await setup(AUTO);
     await addSeller(ctx, 103, 'Vendedor Um');
     await addSeller(ctx, 107, 'Vendedor Dois');
-    directoryUser(ctx, 'um', 4501, 103);
-    directoryUser(ctx, 'dois', 4502, 103); // claims the same seller
-    directoryUser(ctx, 'tres', 4503, 107);
-    const one = await ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META);
+    const owner = await preLink(ctx, { username: 'manual', externalUserId: '4501', sellerCode: 103 });
+    await directoryUser(ctx, 'dois', 4502, 103); // the ERP says user 4502 is seller 103, but a Force account already holds it
+    await directoryUser(ctx, 'tres', 4503, 107);
     expect((await failure(ctx.service.login({ username: 'dois', password: SANKHYA_PASSWORD }, META))).code).toBe('invalid_credentials');
+    expect(await directoryAudit(ctx, 'auth.directory.link_refused')).toEqual(['seller_claimed']);
     const three = await ctx.service.login({ username: 'tres', password: SANKHYA_PASSWORD }, META);
-    expect(one.user.sellerCodes).toEqual([103]);
     expect(three.user.sellerCodes).toEqual([107]);
-    expect(one.user.accountId).not.toBe(three.user.accountId);
+    const links = await ctx.db.select().from(accountSellerLink);
+    expect(links.find((l) => l.accountId === owner.id)).toMatchObject({ sellerCode: 103, source: 'manual' });
+    expect(await ctx.db.select().from(account)).toHaveLength(2);
+  });
+
+  it('refuses both users when the ERP ties two users to one seller (ambiguous), creating nothing', async () => {
+    const ctx = await setup(AUTO);
+    await addSeller(ctx, 103, 'Vendedor Um');
+    await directoryUser(ctx, 'um', 4501, 103);
+    await directoryUser(ctx, 'dois', 4502, 103);
+    for (const login of ['um', 'dois']) {
+      expect((await failure(ctx.service.login({ username: login, password: SANKHYA_PASSWORD }, META))).code).toBe('invalid_credentials');
+    }
+    expect(await directoryAudit(ctx, 'auth.directory.link_refused')).toEqual(['seller_ambiguous', 'seller_ambiguous']);
+    expect(await ctx.db.select().from(account)).toHaveLength(0);
   });
 
   it('never provisions a privileged role: the new account is a seller and an admin handle is not claimable', async () => {
     const ctx = await setup(AUTO);
     await addSeller(ctx, 103, 'Vendedor Sintetico');
-    directoryUser(ctx, 'plac123', 4501, 103);
+    await directoryUser(ctx, 'plac123', 4501, 103);
     await ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META);
     expect((await ctx.db.select().from(account)).every((row) => row.role === 'seller')).toBe(true);
     // The provisioned handle is not a usable local login (no password hash verifies).
@@ -277,7 +320,7 @@ describe('AuthService.login (user name + password, hybrid)', () => {
   it('never returns, stores or logs the password', async () => {
     const ctx = await setup(AUTO);
     await addSeller(ctx, 103, 'Vendedor Sintetico');
-    directoryUser(ctx, 'plac123', 4501, 103);
+    await directoryUser(ctx, 'plac123', 4501, 103);
     const result = await ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META);
     await failure(ctx.service.login({ username: 'plac123', password: 'wrong-secret-xyz' }, META));
     const everything = JSON.stringify({
@@ -306,7 +349,7 @@ describe('AuthService.login: restrictions of the directory path', () => {
     const ctx = await setup(AUTO);
     const admin = await createTestAccount(ctx.database.handle, { username: 'admin', role: 'admin' }, ctx.clock.fn);
     await ctx.db.update(account).set({ status: 'disabled' }).where(eq(account.id, admin.id));
-    directoryUser(ctx, 'admin', 4001, null);
+    await directoryUser(ctx, 'admin', 4001, null);
     const err = await failure(ctx.service.login({ username: 'admin', password: SANKHYA_PASSWORD }, META));
     expect(err.code).toBe('invalid_credentials');
     expect(ctx.verifier.calls).toHaveLength(0);
@@ -320,16 +363,31 @@ describe('AuthService.login: restrictions of the directory path', () => {
     expect(await ctx.db.select().from(account)).toHaveLength(0);
   });
 
-  it('refuses when the directory seller disagrees with the linked seller', async () => {
+  it('follows the ERP when it moves the user to another valid, unclaimed seller (old sessions revoked)', async () => {
     const ctx = await setup(AUTO);
     await addSeller(ctx, 103, 'Vendedor Um');
     await addSeller(ctx, 107, 'Vendedor Dois');
-    directoryUser(ctx, 'um', 4501, 103);
-    await ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META);
-    directoryUser(ctx, 'um', 4501, 107); // same stable id, now claims another seller
+    await directoryUser(ctx, 'um', 4501, 103);
+    const first = await ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META);
+    await directoryUser(ctx, 'um', 4501, 107); // the ERP now ties the same stable id to another seller
+    const second = await ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META);
+    expect(second.user).toMatchObject({ accountId: first.user.accountId, sellerCodes: [107] });
+    const [old] = await ctx.db.select().from(session).where(eq(session.id, first.user.sessionId));
+    expect(old?.revokedAt).not.toBeNull();
+    expect(await ctx.db.select().from(accountSellerLink)).toHaveLength(1);
+  });
+
+  it('refuses a stale or never-synchronized relation mirror without creating anything (fail closed)', async () => {
+    const ctx = await setup(AUTO);
+    await addSeller(ctx, 103, 'Vendedor Um');
+    await directoryUser(ctx, 'um', 4501, 103);
+    await markDirectoryFresh(ctx, new Date(ctx.clock.fn().getTime() - 3 * 60 * 60 * 1000)); // older than the 2 h default
     expect((await failure(ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META))).code).toBe('invalid_credentials');
-    const reasons = (await ctx.db.select().from(auditLog).where(eq(auditLog.action, 'auth.login.failure'))).map((r) => (r.detail as { reason: string }).reason);
-    expect(reasons).toContain('external_link_mismatch');
+    expect(await directoryAudit(ctx, 'auth.directory.link_refused')).toEqual(['directory_stale']);
+    expect(await ctx.db.select().from(account)).toHaveLength(0);
+    await ctx.db.delete(syncState);
+    expect((await failure(ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META))).code).toBe('invalid_credentials');
+    expect(await ctx.db.select().from(account)).toHaveLength(0);
   });
 
   it('never promotes or reuses a pre-linked admin account from directory data', async () => {
@@ -337,7 +395,7 @@ describe('AuthService.login: restrictions of the directory path', () => {
     await addSeller(ctx, 103, 'Vendedor Sintetico');
     const admin = await createTestAccount(ctx.database.handle, { username: 'admin', role: 'admin' }, ctx.clock.fn);
     await ctx.db.update(account).set({ externalUserId: '9000' }).where(eq(account.id, admin.id));
-    directoryUser(ctx, 'someone', 9000, 103);
+    await directoryUser(ctx, 'someone', 9000, 103);
     expect((await failure(ctx.service.login({ username: 'someone', password: SANKHYA_PASSWORD }, META))).code).toBe('invalid_credentials');
     const [row] = await ctx.db.select().from(account).where(eq(account.id, admin.id));
     expect(row?.role).toBe('admin');
@@ -347,7 +405,7 @@ describe('AuthService.login: restrictions of the directory path', () => {
   it('is idempotent when the same directory user signs in concurrently for the first time', async () => {
     const ctx = await setup(AUTO);
     await addSeller(ctx, 103, 'Vendedor Sintetico');
-    directoryUser(ctx, 'plac123', 4501, 103);
+    await directoryUser(ctx, 'plac123', 4501, 103);
     const results = await Promise.allSettled([
       ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META),
       ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META),
@@ -358,24 +416,25 @@ describe('AuthService.login: restrictions of the directory path', () => {
     expect(await ctx.db.select().from(accountSellerLink)).toHaveLength(1);
   });
 
-  it('lets exactly one of two directory users claim the same seller concurrently', async () => {
+  it('keeps one account and one link when many first logins race, for different sellers too', async () => {
     const ctx = await setup(AUTO);
-    await addSeller(ctx, 103, 'Vendedor Sintetico');
-    directoryUser(ctx, 'um', 4501, 103);
-    directoryUser(ctx, 'dois', 4502, 103);
+    await addSeller(ctx, 103, 'Vendedor Um');
+    await addSeller(ctx, 107, 'Vendedor Dois');
+    await directoryUser(ctx, 'um', 4501, 103);
+    await directoryUser(ctx, 'dois', 4502, 107);
     const results = await Promise.allSettled([
-      ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META),
-      ctx.service.login({ username: 'dois', password: SANKHYA_PASSWORD }, META),
+      ...Array.from({ length: 4 }, () => ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META)),
+      ...Array.from({ length: 4 }, () => ctx.service.login({ username: 'dois', password: SANKHYA_PASSWORD }, META)),
     ]);
-    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
-    expect(await ctx.db.select().from(account)).toHaveLength(1);
-    expect(await ctx.db.select().from(accountSellerLink)).toHaveLength(1);
+    expect(results.every((r) => r.status === 'fulfilled')).toBe(true);
+    expect(await ctx.db.select().from(account)).toHaveLength(2);
+    expect(await ctx.db.select().from(accountSellerLink)).toHaveLength(2);
   });
 
   it('forwards the user name to the directory as typed (trimmed only, case kept)', async () => {
     const ctx = await setup(AUTO);
     await addSeller(ctx, 103, 'Vendedor Sintetico');
-    directoryUser(ctx, 'SAMUEL', 4501, 103);
+    await directoryUser(ctx, 'SAMUEL', 4501, 103);
     const ok = await ctx.service.login({ username: '  SAMUEL  ', password: SANKHYA_PASSWORD }, META);
     expect(ok.user.sellerCodes).toEqual([103]);
     expect(ctx.verifier.calls.at(-1)?.login).toBe('SAMUEL');
@@ -393,11 +452,98 @@ async function preLink(ctx: Ctx, opts: { username: string; externalUserId: strin
   return created;
 }
 
+describe('revocation of an automatic link on an established session', () => {
+  const PAST_TOUCH = 61_000; // sessionTouchIntervalMs is 60 s
+
+  async function signedIn() {
+    const ctx = await setup(AUTO);
+    await addSeller(ctx, 103, 'Vendedor Um');
+    await directoryUser(ctx, 'um', 4501, 103);
+    const login = await ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META);
+    return { ctx, login };
+  }
+
+  it('keeps a session working while the ERP relation still holds', async () => {
+    const { ctx, login } = await signedIn();
+    ctx.clock.advance(PAST_TOUCH);
+    expect((await ctx.service.resolveSession(login.token))?.user).toMatchObject({ role: 'seller', sellerCodes: [103] });
+  });
+
+  it('ends the session when the seller is deactivated in the ERP, and removes the link', async () => {
+    const { ctx, login } = await signedIn();
+    await ctx.db.update(erpSeller).set({ active: false }).where(eq(erpSeller.code, 103));
+    ctx.clock.advance(PAST_TOUCH);
+    expect(await ctx.service.resolveSession(login.token)).toBeNull();
+    expect(await ctx.db.select().from(accountSellerLink)).toHaveLength(0);
+    expect(await directoryAudit(ctx, 'auth.directory.link_revoked')).toEqual(['seller_inactive']);
+  });
+
+  it('ends the session when the ERP drops the user -> seller relation', async () => {
+    const { ctx, login } = await signedIn();
+    await mirrorDirectoryUser(ctx, 4501, null);
+    ctx.clock.advance(PAST_TOUCH);
+    expect(await ctx.service.resolveSession(login.token)).toBeNull();
+    expect(await ctx.db.select().from(accountSellerLink)).toHaveLength(0);
+  });
+
+  it('ends the session when the ERP moves the user to another seller (the user signs in again under the new scope)', async () => {
+    const { ctx, login } = await signedIn();
+    await addSeller(ctx, 107, 'Vendedor Dois');
+    await mirrorDirectoryUser(ctx, 4501, 107);
+    ctx.clock.advance(PAST_TOUCH);
+    expect(await ctx.service.resolveSession(login.token)).toBeNull();
+    await directoryUser(ctx, 'um', 4501, 107);
+    const again = await ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META);
+    expect(again.user.sellerCodes).toEqual([107]);
+  });
+
+  it('fails closed on a stale mirror without changing the link, and recovers when the mirror is fresh again', async () => {
+    const { ctx, login } = await signedIn();
+    ctx.clock.advance(3 * 60 * 60 * 1000);
+    expect(await ctx.service.resolveSession(login.token)).toBeNull();
+    expect(await ctx.db.select().from(accountSellerLink)).toHaveLength(1);
+    expect(await directoryAudit(ctx, 'auth.directory.link_revoked')).toEqual([]);
+    await markDirectoryFresh(ctx);
+    const again = await ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META);
+    expect(again.user.sellerCodes).toEqual([103]);
+  });
+
+  it('does not re-grant a link an operator removed (a re-check never inserts)', async () => {
+    const { ctx, login } = await signedIn();
+    await ctx.db.delete(accountSellerLink);
+    ctx.clock.advance(PAST_TOUCH);
+    await ctx.service.resolveSession(login.token);
+    expect(await ctx.db.select().from(accountSellerLink)).toHaveLength(0);
+  });
+
+  it('an administrator override (upsertSellerLink) turns an automatic link into a manual one the ERP no longer moves', async () => {
+    const { ctx, login } = await signedIn();
+    await addSeller(ctx, 107, 'Vendedor Dois');
+    const [version] = await ctx.db.select({ id: accountSellerLink.configVersionId }).from(accountSellerLink);
+    await new AccountRepository(ctx.db).upsertSellerLink({ accountId: login.user.accountId, sellerCode: 107, configVersionId: version!.id });
+    ctx.clock.advance(PAST_TOUCH);
+    expect(await ctx.service.resolveSession(login.token)).not.toBeNull();
+    expect(await ctx.db.select().from(accountSellerLink)).toMatchObject([{ sellerCode: 107, source: 'manual' }]);
+  });
+
+  it('never re-checks (or revokes) a manual link', async () => {
+    const ctx = await setup(AUTO);
+    await addSeller(ctx, 103, 'Vendedor Um');
+    await directoryUser(ctx, 'um', 4501, 103);
+    await preLink(ctx, { username: 'manual', externalUserId: '4501', sellerCode: 103 });
+    const login = await ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META);
+    await mirrorDirectoryUser(ctx, 4501, null);
+    ctx.clock.advance(PAST_TOUCH);
+    expect(await ctx.service.resolveSession(login.token)).not.toBeNull();
+    expect(await ctx.db.select().from(accountSellerLink)).toHaveLength(1);
+  });
+});
+
 describe('link mode: PRE_LINKED is the default and never creates accounts', () => {
   it.each([[undefined], ['PRE_LINKED' as const]])('a directory user without a linked account is refused and nothing is created (mode %s)', async (linkMode) => {
     const ctx = await setup(linkMode === undefined ? {} : { linkMode });
     await addSeller(ctx, 103, 'Vendedor Sintetico');
-    directoryUser(ctx, 'plac123', 4501, 103);
+    await directoryUser(ctx, 'plac123', 4501, 103);
     const err = await failure(ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META));
     expect(err.code).toBe('invalid_credentials');
     expect(err.message).toBe('Usuário ou senha inválidos.');
@@ -408,13 +554,13 @@ describe('link mode: PRE_LINKED is the default and never creates accounts', () =
     expect(row?.detail).toMatchObject({ reason: 'external_unmapped' });
   });
 
-  it('never calls provisionSeller in PRE_LINKED', async () => {
+  it('never calls syncFromDirectory in PRE_LINKED', async () => {
     const ctx = await setup();
     await addSeller(ctx, 103, 'Vendedor Sintetico');
-    directoryUser(ctx, 'plac123', 4501, 103);
+    await directoryUser(ctx, 'plac123', 4501, 103);
     let called = 0;
-    const original = ctx.links.provisionSeller.bind(ctx.links);
-    ctx.links.provisionSeller = (input) => {
+    const original = ctx.links.syncFromDirectory.bind(ctx.links);
+    ctx.links.syncFromDirectory = (input) => {
       called += 1;
       return original(input);
     };
@@ -426,7 +572,7 @@ describe('link mode: PRE_LINKED is the default and never creates accounts', () =
     const ctx = await setup();
     await addSeller(ctx, 103, 'Vendedor Sintetico');
     const linked = await preLink(ctx, { username: 'plac123', externalUserId: '4501', sellerCode: 103 });
-    directoryUser(ctx, 'plac123', 4501, 103);
+    await directoryUser(ctx, 'plac123', 4501, 103);
     const result = await ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META);
     expect(result.user).toMatchObject({ accountId: linked.id, role: 'seller', sellerCodes: [103] });
     expect(await ctx.db.select().from(account)).toHaveLength(1);
@@ -436,7 +582,7 @@ describe('link mode: PRE_LINKED is the default and never creates accounts', () =
     const ctx = await setup();
     await addSeller(ctx, 103, 'Vendedor Sintetico');
     await preLink(ctx, { username: 'plac123', externalUserId: '4501', sellerCode: 103 });
-    directoryUser(ctx, 'plac123', 4501, 103);
+    await directoryUser(ctx, 'plac123', 4501, 103);
     expect((await failure(ctx.service.login({ username: 'plac123', password: TEST_PASSWORD }, META))).code).toBe('invalid_credentials');
   });
 });
@@ -445,7 +591,7 @@ describe('external accounts never get a local password', () => {
   it('refuses setPassword on a provisioned seller, keeping its hash, sessions and audit untouched', async () => {
     const ctx = await setup(AUTO);
     await addSeller(ctx, 103, 'Vendedor Sintetico');
-    directoryUser(ctx, 'plac123', 4501, 103);
+    await directoryUser(ctx, 'plac123', 4501, 103);
     const first = await ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META);
     const [before] = await ctx.db.select().from(account).where(eq(account.id, first.user.accountId));
     const { accounts } = createOperatorAccountService(ctx.database.handle, TEST_HASH_PARAMS, ctx.clock.fn);
@@ -498,7 +644,7 @@ describe('external accounts never get a local password', () => {
   it('the unusable handle of a provisioned account never signs in locally', async () => {
     const ctx = await setup(AUTO);
     await addSeller(ctx, 103, 'Vendedor Sintetico');
-    directoryUser(ctx, 'plac123', 4501, 103);
+    await directoryUser(ctx, 'plac123', 4501, 103);
     await ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META);
     for (const password of ['!external-directory-account', TEST_PASSWORD, SANKHYA_PASSWORD]) {
       expect((await failure(ctx.service.login({ username: 'sankhya:4501', password }, META))).code).toBe('invalid_credentials');
@@ -542,7 +688,7 @@ describe('failure latency floor (directory enabled only)', () => {
   it('pads an invalid directory password for an existing directory user', async () => {
     const ctx = await setup({ minFailureMs: 250, ...AUTO });
     await addSeller(ctx, 103, 'Vendedor Sintetico');
-    directoryUser(ctx, 'plac123', 4501, 103);
+    await directoryUser(ctx, 'plac123', 4501, 103);
     freeze();
     await failure(ctx.service.login({ username: 'plac123', password: WRONG_PASSWORD }, META));
     expect(sleeps).toEqual([250]);

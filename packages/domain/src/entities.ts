@@ -20,6 +20,15 @@ export interface Seller {
   readonly active: boolean;
 }
 
+/**
+ * The official ERP user -> seller relation (the user's own seller registration). Identity is the stable user code, never a
+ * name or e-mail; `sellerCode` is `null` when the user has no seller. No personal data, credential or permission here.
+ */
+export interface DirectoryUser {
+  readonly code: number;
+  readonly sellerCode: number | null;
+}
+
 export interface Customer {
   readonly code: number;
   readonly name: string;

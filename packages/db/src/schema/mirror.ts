@@ -45,6 +45,24 @@ export const erpSeller = pgTable(
   ],
 );
 
+/**
+ * Official ERP user -> seller relation (TSIUSU.CODUSU / CODVEND), the ONLY user data mirrored: no name, e-mail, credential or
+ * permission column exists. Read by the identity module to provision and reconcile seller accounts; never exposed by an endpoint.
+ */
+export const erpDirectoryUser = pgTable(
+  'erp_directory_user',
+  {
+    code: integer('code').primaryKey(),
+    /** `null` = the ERP user has no seller. */
+    sellerCode: integer('seller_code'),
+    ...mirrorColumns(),
+  },
+  (t) => [
+    // Serves: "which ERP users claim seller X" (ambiguity check at provisioning and reconciliation).
+    index('erp_directory_user_seller_code_idx').on(t.sellerCode).where(sql`${t.deletedAt} is null`),
+  ],
+);
+
 export const erpCustomer = pgTable(
   'erp_customer',
   {

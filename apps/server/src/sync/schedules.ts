@@ -25,7 +25,7 @@ export type MirrorSchedules = Readonly<Record<MirrorEntity, string | null>>;
 
 export function mirrorSchedulesFromSettings(settings: MirrorScheduleSettings): MirrorSchedules {
   if (!settings.SYNC_MIRROR_ENABLED) {
-    return { sellers: null, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null };
+    return { sellers: null, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: null };
   }
   return {
     sellers: settings.SYNC_CRON_SELLERS,
@@ -35,5 +35,7 @@ export function mirrorSchedulesFromSettings(settings: MirrorScheduleSettings): M
     priceTables: settings.SYNC_CRON_PRICES,
     priceTableVersions: settings.SYNC_CRON_PRICES,
     listPrices: settings.SYNC_CRON_PRICES,
+    // The user -> seller relation moves with the seller list: one knob.
+    directoryUsers: settings.SYNC_CRON_SELLERS,
   };
 }

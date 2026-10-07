@@ -1,4 +1,5 @@
 import type {
+  DirectorySyncOutcome,
   ExternalAccountLinks,
   ExternalCredentials,
   ExternalIdentity,
@@ -43,9 +44,9 @@ export class InMemoryExternalAccountLinks implements ExternalAccountLinks {
   readonly links = new Map<string, string>();
   /** Seller codes reported inactive (every other code is active). */
   readonly inactiveSellers = new Set<number>();
-  /** Provisioning calls received, and the id handed back (null = refuse). */
-  readonly provisioned: { externalUserId: string; sellerCode: number }[] = [];
-  provisionResult: string | null = null;
+  /** Directory syncs received, and what to answer (default: refuse, nothing is created). */
+  readonly synced: { externalUserId: string; allowCreate: boolean }[] = [];
+  syncResult: DirectorySyncOutcome = { ok: false, refusal: 'user_missing', accountId: null, revoked: false };
 
   findAccountId(externalUserId: string): Promise<string | null> {
     return Promise.resolve(this.links.get(externalUserId) ?? null);
@@ -55,8 +56,8 @@ export class InMemoryExternalAccountLinks implements ExternalAccountLinks {
     return Promise.resolve(!this.inactiveSellers.has(sellerCode));
   }
 
-  provisionSeller(input: { externalUserId: string; sellerCode: number; now: Date }): Promise<string | null> {
-    this.provisioned.push({ externalUserId: input.externalUserId, sellerCode: input.sellerCode });
-    return Promise.resolve(this.provisionResult);
+  syncFromDirectory(input: { externalUserId: string; now: Date; maxMirrorAgeMs: number; allowCreate: boolean }): Promise<DirectorySyncOutcome> {
+    this.synced.push({ externalUserId: input.externalUserId, allowCreate: input.allowCreate });
+    return Promise.resolve(this.syncResult);
   }
 }

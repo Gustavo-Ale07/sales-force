@@ -58,9 +58,9 @@ export interface AuthConfig {
  * How a verified directory user gets a Force account.
  * - `PRE_LINKED` (DEFAULT, also when omitted): only an account already carrying that user's `external_user_id` (set by an
  *   administrator) can sign in; a login never creates an account or a link. No directory user is trusted to self-register.
- * - `VERIFIED_AUTO_PROVISION`: first sign-in of a verified, active directory user with a valid seller code creates a
- *   restricted `seller` account (see `ExternalAccountLinks.provisionSeller`). Only reachable through explicit
- *   configuration; `authConfigFromEnv` never sets it and no environment variable turns it on.
+ * - `VERIFIED_AUTO_PROVISION`: first sign-in of a verified, active directory user whose OFFICIAL ERP record ties it to one active,
+ *   unclaimed seller creates a restricted `seller` account and link (see `ExternalAccountLinks.syncFromDirectory`); later logins
+ *   reconcile it. Reached only by `EXTERNAL_AUTO_PROVISION=1` (default `0`) or explicit test configuration.
  */
 export type ExternalLinkMode = 'PRE_LINKED' | 'VERIFIED_AUTO_PROVISION';
 
@@ -68,6 +68,8 @@ export interface ExternalLoginConfig {
   readonly enabled: boolean;
   /** Account linking policy; `PRE_LINKED` when omitted. */
   readonly linkMode?: ExternalLinkMode;
+  /** Oldest mirror of the ERP user -> seller relation an automatic link is accepted on; older = refused (default 2 h). */
+  readonly directoryMaxAgeMs?: number;
   /** Upper bound of one verification (the caller's signal can only shorten it). */
   readonly verifyTimeoutMs: number;
   /** Failed external logins answer no sooner than this, so timing does not tell the failure causes apart. */
@@ -132,6 +134,8 @@ export function authConfigFromEnv(env: ParsedApiEnv): AuthConfig {
   if (env.externalVerifier === null) return base;
   return withExternalSellerLogin(base, {
     enabled: true,
+    ...(env.EXTERNAL_AUTO_PROVISION === '1' ? { linkMode: 'VERIFIED_AUTO_PROVISION' as const } : {}),
+    directoryMaxAgeMs: env.EXTERNAL_DIRECTORY_MAX_AGE_MINUTES * MINUTE_MS,
     verifyTimeoutMs: EXTERNAL_VERIFY_TIMEOUT_MS,
     minFailureMs: EXTERNAL_MIN_FAILURE_MS,
     verifier: { url: env.externalVerifier.url, sharedSecret: new CredentialSecret(env.externalVerifier.sharedSecret) },

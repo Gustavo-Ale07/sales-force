@@ -106,10 +106,11 @@ export class AccountRepository {
   ): Promise<void> {
     await writer
       .insert(accountSellerLink)
-      .values(link)
+      .values({ ...link, source: 'manual' })
       .onConflictDoUpdate({
         target: accountSellerLink.accountId,
-        set: { sellerCode: link.sellerCode, configVersionId: link.configVersionId },
+        // Configuration/administration is authoritative: an overridden automatic link becomes manual and the ERP sync stops managing it.
+        set: { sellerCode: link.sellerCode, configVersionId: link.configVersionId, source: 'manual' },
       });
   }
 }

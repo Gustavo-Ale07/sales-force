@@ -4,6 +4,7 @@ export * from './entities.js';
 export * from './status.js';
 export * from './configuration.js';
 export * from './pricing.js';
+export * from './directory-seller.js';
 export * from './scope.js';
 export * from './customer-eligibility.js';
 export * from './ordering.js';

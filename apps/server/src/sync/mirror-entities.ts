@@ -1,12 +1,13 @@
 import {
   erpCustomer,
+  erpDirectoryUser,
   erpListPrice,
   erpPriceTable,
   erpPriceTableVersion,
   erpProduct,
   erpSeller,
 } from '@salesforce/db';
-import type { Customer, ListPrice, PriceTable, PriceTableVersion, Product, Seller } from '@salesforce/domain';
+import type { Customer, DirectoryUser, ListPrice, PriceTable, PriceTableVersion, Product, Seller } from '@salesforce/domain';
 import {
   SankhyaGatewayError,
   type GatewayDescription,
@@ -33,6 +34,8 @@ export const MIRROR_ENTITIES = [
   'priceTables',
   'priceTableVersions',
   'listPrices',
+  // Appended last: the entity lock key is the position in this list (never reorder).
+  'directoryUsers',
 ] as const satisfies readonly ReadEntity[];
 
 export type MirrorEntity = (typeof MIRROR_ENTITIES)[number];
@@ -292,6 +295,23 @@ const listPrices: MirrorEntitySpec = {
     })),
 };
 
+
+/**
+ * Official ERP user -> seller relation. Only the user code and the seller code are mirrored. A user that disappears from the
+ * source is soft-deleted by the mirror writer, which is how the identity module notices a removed ERP user.
+ */
+const directoryUsers: MirrorEntitySpec = {
+  entity: 'directoryUsers',
+  requires: ['directoryUsers'],
+  table: erpDirectoryUser,
+  keyProps: ['code'],
+  read: (context) =>
+    mapped<DirectoryUser>(context.gateway.readDirectoryUsers(readOptions(context)), (row) => ({
+      key: [keyColumn('directoryUsers', 'code', row.code)],
+      content: { sellerCode: row.sellerCode === null ? null : keyColumn('directoryUsers', 'sellerCode', row.sellerCode) },
+    })),
+};
+
 export const MIRROR_SPECS: Readonly<Record<MirrorEntity, MirrorEntitySpec>> = {
   sellers,
   customers,
@@ -299,4 +319,5 @@ export const MIRROR_SPECS: Readonly<Record<MirrorEntity, MirrorEntitySpec>> = {
   priceTables,
   priceTableVersions,
   listPrices,
+  directoryUsers,
 };

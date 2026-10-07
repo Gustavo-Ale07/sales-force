@@ -1,3 +1,5 @@
+import type { DirectoryRefusal } from '@salesforce/domain';
+
 /**
  * Boundary for verifying a login/password pair against an EXTERNAL identity source (the ERP user
  * directory). The port lives here; the only implementation is `SankhyaIdentityVerifier`, which talks to the
@@ -65,20 +67,39 @@ export interface ExternalIdentityVerifier {
   verify(credentials: ExternalCredentials, signal: AbortSignal): Promise<ExternalVerifyResult>;
 }
 
+/** What the official-relation sync did for one directory user (never carries PII). */
+export type DirectorySyncOutcome =
+  | {
+      readonly ok: true;
+      readonly accountId: string;
+      /** `created`: new seller account + link; `linked`: existing account got its automatic link; `relinked`: the ERP moved the seller;
+       *  `unchanged`: link already current; `not_managed`: not an automatic seller account (manual link or another role): untouched. */
+      readonly action: 'created' | 'linked' | 'relinked' | 'unchanged' | 'not_managed';
+    }
+  | {
+      readonly ok: false;
+      readonly refusal: DirectoryRefusal;
+      /** The account the refusal concerns, when there is one. */
+      readonly accountId: string | null;
+      /** True when an automatic link was removed and the account's sessions were revoked because of it. */
+      readonly revoked: boolean;
+    };
+
 /**
  * Link between an external user and a Sales Force account, plus the seller facts the login rule needs.
  * Identity is the stable directory id only (never the login text). Only a non-privileged `seller` account may
- * be provisioned from a verified identity, and only for a seller that exists, is active and unlinked in the
- * mirror; admin/manager/technical accounts are never created here. Implementation: `DrizzleExternalAccountLinks`.
+ * be provisioned from a verified identity, and only from the OFFICIAL ERP user -> seller relation (CFG-2): admin/manager/technical
+ * accounts are never created or changed here, and a manual (administrator) link is never touched. Implementation: `DrizzleExternalAccountLinks`.
  */
 export interface ExternalAccountLinks {
   findAccountId(externalUserId: string): Promise<string | null>;
   /** True when the mirrored seller exists, is not deleted and is active in the ERP. */
   isSellerActive(sellerCode: number): Promise<boolean>;
   /**
-   * Creates the seller account of a verified directory user and links it to its seller. Returns the new
-   * account id, or `null` when a precondition fails (seller missing/inactive, already linked to another
-   * account, installation configuration missing). Idempotent under a race: the loser gets the winner's id.
+   * Creates or reconciles the seller account of a verified directory user from the mirrored official relation, in ONE transaction
+   * (row lock on the seller, unique constraints), so concurrent first logins yield one account and one link. Fails closed: a stale or
+   * missing mirror, no seller, inactive/ambiguous/claimed seller or any conflict is a refusal, never a guess. A definitive refusal on an
+   * automatic link removes that link and revokes the account's sessions; a stale mirror changes nothing. Idempotent.
    */
-  provisionSeller(input: { externalUserId: string; sellerCode: number; now: Date }): Promise<string | null>;
+  syncFromDirectory(input: { externalUserId: string; now: Date; maxMirrorAgeMs: number; allowCreate: boolean }): Promise<DirectorySyncOutcome>;
 }

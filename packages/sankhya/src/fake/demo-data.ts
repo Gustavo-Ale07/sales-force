@@ -1,5 +1,6 @@
 import type {
   Customer,
+  DirectoryUser,
   ListPrice,
   PriceTable,
   PriceTableVersion,
@@ -33,6 +34,8 @@ export interface DemoSellerManagerLink {
 export interface DemoDataset {
   readonly sellers: readonly Seller[];
   readonly sellerManagerLinks: readonly DemoSellerManagerLink[];
+  /** Synthetic ERP users: one per seller (codes 9001...), plus one user without a seller. */
+  readonly directoryUsers: readonly DirectoryUser[];
   readonly customers: readonly Customer[];
   readonly productGroups: readonly ProductGroup[];
   readonly products: readonly Product[];
@@ -82,6 +85,17 @@ function buildSellers(): { sellers: Seller[]; links: DemoSellerManagerLink[] } {
     managerSellerCode: seller.code <= 102 ? null : seller.code <= 106 ? 101 : 102,
   }));
   return { sellers, links };
+}
+
+export const DEMO_DIRECTORY_USER_FIRST_CODE = 9001;
+/** A synthetic ERP user that has no seller (a valid login that must get no commercial access). */
+export const DEMO_DIRECTORY_USER_WITHOUT_SELLER = 9100;
+
+function buildDirectoryUsers(sellers: readonly Seller[]): DirectoryUser[] {
+  return [
+    ...sellers.map((seller, index) => ({ code: DEMO_DIRECTORY_USER_FIRST_CODE + index, sellerCode: seller.code })),
+    { code: DEMO_DIRECTORY_USER_WITHOUT_SELLER, sellerCode: null },
+  ];
 }
 
 // ---- customers ----------------------------------------------------------------------------------
@@ -396,6 +410,7 @@ export function generateDemoDataset(seed: number = DEMO_SEED): DemoDataset {
   return deepFreeze({
     sellers,
     sellerManagerLinks: links,
+    directoryUsers: buildDirectoryUsers(sellers),
     customers,
     productGroups: groups,
     products: products.map((p) => p.product),

@@ -20,6 +20,15 @@ describe('API external login settings (AUTH-5)', () => {
     expect(externalLoginProblems({ ...on, VERIFIER_SHARED_SECRET: secret })).toEqual([]);
   });
 
+  it('automatic provisioning is an explicit opt-in that needs the external login', () => {
+    expect(externalLoginProblems({ EXTERNAL_LOGIN_ENABLED: '0', EXTERNAL_AUTO_PROVISION: '1' })).toEqual([
+      'EXTERNAL_AUTO_PROVISION: needs EXTERNAL_LOGIN_ENABLED=1.',
+    ]);
+    expect(externalLoginProblems({ ...on, VERIFIER_SHARED_SECRET: secret, EXTERNAL_AUTO_PROVISION: '1' }).join(' ')).toMatch(/IDUSU_IS_CODUSU_VALIDATED/);
+    expect(externalLoginProblems({ ...on, VERIFIER_SHARED_SECRET: secret, EXTERNAL_AUTO_PROVISION: '1', EXTERNAL_IDUSU_IS_CODUSU_VALIDATED: '1' })).toEqual([]);
+    expect(externalLoginProblems({ EXTERNAL_LOGIN_ENABLED: '0' })).toEqual([]);
+  });
+
   it('refuses a short secret without echoing it, and reads a secret file', () => {
     expect(() => externalVerifierOf({ ...on, VERIFIER_SHARED_SECRET: 'short' })).toThrow(/at least 32/);
     try {

@@ -190,7 +190,9 @@ export class ExternalAccountService {
   }
 
   /** Row lock serializes two operators claiming the same seller (`seller_code` has no unique index). */
-  private async lockUsableSeller(tx: Pick<Database, 'select'>, sellerCode: number): Promise<void> {
+  private async lockUsableSeller(tx: Pick<Database, 'select' | 'execute'>, sellerCode: number): Promise<void> {
+    // Same key as the directory sync (drizzle-external-account-links.ts): an operator claim and an automatic claim on one seller serialize.
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${'seller-link:' + String(sellerCode)}, 0))`);
     const [seller] = await tx
       .select({ code: erpSeller.code })
       .from(erpSeller)

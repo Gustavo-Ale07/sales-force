@@ -35,11 +35,12 @@
 --   table                                 force_api   force_worker   evidence
 --   account                               S I U       -              iam/account.repository (create, rehash, status), session join, demo-accounts check; account CLI
 --   session                               S I U D     -              iam/session.repository
---   account_seller_link                   S I U       -              account.repository (upsert); account CLI
+--   account_seller_link                   S I U D     -              account.repository (upsert); account CLI; D: removal of an automatic (sankhya_auto) link when the ERP relation ends
 --   auth_throttle                         S I U D     -              iam/throttle.repository (clear on success/unlock, purge)
 --   audit_log                             I           -              iam/audit.service. Append-only: no S/U/D (never read by code)
 --   installation_configuration_version    S           S              configuration.repository (read); worker mirror-scope. Writers: see UNDETERMINED 1
 --   sync_state                            S           S I U          worker: sync-state, heartbeat. API reads (integration summary, /configuration)
+--   erp_directory_user (ERP user code + seller code only),
 --   erp_seller, erp_customer, erp_product,
 --   erp_price_table, erp_price_table_version,
 --   erp_list_price                        S           S I U          worker mirror-writer upserts + soft delete (no DELETE). API is read-only (mirror.repository)
@@ -226,7 +227,7 @@ BEGIN
   FOR g IN
     SELECT * FROM (VALUES
       ('account',                            'force_api',    'SELECT, INSERT, UPDATE'),
-      ('account_seller_link',                'force_api',    'SELECT, INSERT, UPDATE'),
+      ('account_seller_link',                'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
       ('session',                            'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
       ('auth_throttle',                      'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
       ('sales_order_item',                   'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
@@ -238,6 +239,7 @@ BEGIN
       ('sync_state',                         'force_api',    'SELECT'),
       ('schema_migration',                   'force_api',    'SELECT'),
       ('erp_seller',                         'force_api',    'SELECT'),
+      ('erp_directory_user',                 'force_api',    'SELECT'),
       ('erp_customer',                       'force_api',    'SELECT'),
       ('erp_product',                        'force_api',    'SELECT'),
       ('erp_price_table',                    'force_api',    'SELECT'),
@@ -247,6 +249,7 @@ BEGIN
       ('installation_configuration_version', 'force_worker', 'SELECT'),
       ('sync_state',                         'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_seller',                         'force_worker', 'SELECT, INSERT, UPDATE'),
+      ('erp_directory_user',                 'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_customer',                       'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_product',                        'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_price_table',                    'force_worker', 'SELECT, INSERT, UPDATE'),

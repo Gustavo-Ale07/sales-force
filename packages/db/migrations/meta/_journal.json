@@ -78,6 +78,13 @@
       "when": 1791226899398,
       "tag": "0010_product_media_thumbnail",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791398136162,
+      "tag": "0011_directory_user_mirror",
+      "breakpoints": true
     }
   ]
 }

@@ -87,10 +87,16 @@ export const accountSellerLink = pgTable(
     configVersionId: uuid('config_version_id')
       .notNull()
       .references(() => installationConfigurationVersion.id),
+    /**
+     * Who set the link: `manual` (an administrator, authoritative, never changed by a sync) or `sankhya_auto` (derived from the
+     * official ERP user -> seller relation at first login; the reconciliation may move or revoke it when the ERP changes).
+     */
+    source: text('source').notNull().default('manual'),
   },
   (t) => [
     // Serves: seller-scope resolution ("which accounts are linked to seller X").
     index('account_seller_link_seller_code_idx').on(t.sellerCode),
+    check('account_seller_link_source_chk', sql`${t.source} in ('manual', 'sankhya_auto')`),
     index('account_seller_link_config_version_id_idx').on(t.configVersionId),
     // 0 is the "no seller" placeholder, never a seller: a link to it must not grant a scope (F2).
     check('account_seller_link_seller_code_chk', sql`${t.sellerCode} >= 1`),

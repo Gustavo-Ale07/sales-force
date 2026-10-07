@@ -1,6 +1,7 @@
 import type {
   Customer,
   DecimalString,
+  DirectoryUser,
   IsoTimestamp,
   ListPrice,
   PriceTable,
@@ -160,6 +161,27 @@ export const SELLER_SPEC: EntitySpec<Seller> = {
   orderBy: 'CODVEND',
   map: (row) => ({ code: row.int('CODVEND'), name: row.text('APELIDO'), active: row.flag('ATIVO') }),
   keyOf: (seller) => [seller.code],
+};
+
+/**
+ * TSIUSU (§9.30; spike F-33/F-34: `CODVEND -> TGFVEN.CODVEND` FK, at most one seller per user). PK CODUSU. ONLY the user code
+ * and its seller code are read: no name, e-mail, password/hash, session or permission column ever enters the query.
+ * `CODVEND` 0/null = the user has no seller. Whether a user can be deactivated/blocked and which column says so is NEEDS
+ * VALIDATION (probe `.claude/work/sankhya-user-probe.mjs`); until then deactivation is detected only through the user row
+ * disappearing or its seller changing/becoming inactive.
+ */
+export const DIRECTORY_USER_SPEC: EntitySpec<DirectoryUser> = {
+  entity: 'directoryUsers',
+  table: 'TSIUSU',
+  select: ['CODUSU', 'CODVEND'],
+  columns: ['CODUSU', 'CODVEND'],
+  where: 'CODUSU > 0',
+  orderBy: 'CODUSU',
+  map: (row) => {
+    const sellerCode = row.nullableInt('CODVEND');
+    return { code: row.int('CODUSU'), sellerCode: sellerCode === null || sellerCode <= 0 ? null : sellerCode };
+  },
+  keyOf: (user) => [user.code],
 };
 
 /**
