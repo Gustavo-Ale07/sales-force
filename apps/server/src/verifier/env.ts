@@ -16,10 +16,9 @@ import {
  * Environment of the internal identity verifier process (STACK-2 option C). Separate from the API and
  * Worker schemas, fail closed on boot, values never echoed.
  *
- * The verifier reads no Sankhya setting and no database setting: the live adapter does not exist, so
- * `VERIFIER_MODE=live` is refused as "not implemented" and the presence of any Sankhya or database
- * variable in this process is itself a boot error (least privilege: a mis-wired secret file is caught
- * instead of silently held).
+ * The verifier reads no database setting and no Sankhya integration credential (no `SANKHYA_*`, OAuth client or
+ * X-Token): any such variable in this process is a boot error (least privilege). `VERIFIER_MODE=live` validates the
+ * user's own login against the Sankhya SANDBOX only and needs `VERIFIER_SANKHYA_BASE_URL` (a sandbox origin, SNK-3).
  */
 export const VERIFIER_MODES = ['disabled', 'live'] as const;
 export type VerifierMode = (typeof VERIFIER_MODES)[number];
@@ -40,12 +39,40 @@ const verifierEnvSchema = z.object({
   VERIFIER_PREAUTH_THROTTLE_MAX: integerField({ min: 1, max: 100_000 }, 300),
   VERIFIER_THROTTLE_WINDOW_MS: integerField({ min: 1000, max: 3_600_000 }, 60_000),
   VERIFIER_MAX_CONCURRENCY: integerField({ min: 1, max: 64 }, 4),
+  /** live only: origin of the Sankhya SANDBOX (https, no path). Never a production host (SNK-3). */
+  VERIFIER_SANKHYA_BASE_URL: z.string().optional(),
+  /** live only: `Usuario` field matched against the typed login (NEEDS VALIDATION against the Sandbox; see sankhya-spike). */
+  VERIFIER_SANKHYA_LOGIN_FIELD: z.string().regex(/^[A-Z][A-Z0-9_]{1,30}$/, { error: 'must be an upper-case Sankhya field name.' }).default('NOMEUSU'),
 });
+
+/** SNK-3: the verifier talks only to a Sankhya SANDBOX host (`<account>-teste.sankhyacloud.com.br`). */
+export const SANDBOX_HOST_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?-teste\.sankhyacloud\.com\.br$/;
+
+/** Checked sandbox origin or the reason it is refused (never echoes the value: it could carry a typo'd secret). */
+export function sandboxOriginProblem(raw: string | undefined): { origin: string } | { problem: string } {
+  if (raw === undefined || raw.trim() === '') return { problem: 'VERIFIER_SANKHYA_BASE_URL: is required when VERIFIER_MODE=live.' };
+  let url: URL;
+  try {
+    url = new URL(raw.trim());
+  } catch {
+    return { problem: 'VERIFIER_SANKHYA_BASE_URL: is not a valid URL.' };
+  }
+  if (url.protocol !== 'https:' || url.username !== '' || url.password !== '' || url.search !== '' || url.hash !== '' || url.port !== '' || (url.pathname !== '/' && url.pathname !== '')) {
+    return { problem: 'VERIFIER_SANKHYA_BASE_URL: must be an https origin without credentials, port, path, query or fragment.' };
+  }
+  const host = url.hostname.toLowerCase();
+  if (!SANDBOX_HOST_PATTERN.test(host)) {
+    return { problem: 'VERIFIER_SANKHYA_BASE_URL: only a Sankhya sandbox host (<account>-teste.sankhyacloud.com.br) is accepted (SNK-3).' };
+  }
+  return { origin: `https://${host}` };
+}
 
 export interface VerifierConfig {
   readonly nodeEnv: z.infer<typeof nodeEnvField>;
   readonly logLevel: z.infer<typeof logLevelField>;
-  readonly mode: 'disabled';
+  readonly mode: VerifierMode;
+  /** Present only in live mode. */
+  readonly sankhya: { readonly origin: string; readonly loginField: string } | null;
   readonly host: string;
   readonly port: number;
   readonly sharedSecret: Secret;
@@ -86,14 +113,17 @@ export function parseVerifierEnv(
   });
   if (forbidden.length > 0) {
     throw new EnvValidationError('verifier', [
-      `${forbidden.sort().join(', ')}: not accepted by the verifier (it holds no ERP, database or session settings; the ERP adapter is not implemented).`,
+      `${forbidden.sort().join(', ')}: not accepted by the verifier (it holds no ERP integration credential, database or session settings).`,
     ]);
   }
 
   const env = parseEnv('verifier', verifierEnvSchema, source, (parsed) => {
     const problems: string[] = [];
     if (parsed.VERIFIER_MODE === 'live') {
-      problems.push('VERIFIER_MODE: "live" is not implemented (the ERP adapter is blocked); use "disabled".');
+      const checked = sandboxOriginProblem(parsed.VERIFIER_SANKHYA_BASE_URL);
+      if ('problem' in checked) problems.push(checked.problem);
+    } else if (parsed.VERIFIER_SANKHYA_BASE_URL !== undefined && parsed.VERIFIER_SANKHYA_BASE_URL.trim() !== '') {
+      problems.push('VERIFIER_SANKHYA_BASE_URL: only applies when VERIFIER_MODE=live.');
     }
     const hasInline = parsed.VERIFIER_SHARED_SECRET !== undefined;
     const hasFile = parsed.VERIFIER_SHARED_SECRET_FILE !== undefined;
@@ -119,10 +149,12 @@ export function parseVerifierEnv(
     ]);
   }
 
+  const sandbox = env.VERIFIER_MODE === 'live' ? sandboxOriginProblem(env.VERIFIER_SANKHYA_BASE_URL) : null;
   return {
     nodeEnv: env.NODE_ENV,
     logLevel: env.LOG_LEVEL,
-    mode: 'disabled',
+    mode: env.VERIFIER_MODE,
+    sankhya: sandbox !== null && 'origin' in sandbox ? { origin: sandbox.origin, loginField: env.VERIFIER_SANKHYA_LOGIN_FIELD } : null,
     host: env.VERIFIER_HOST,
     port: env.VERIFIER_PORT,
     sharedSecret: new Secret(rawSecret),

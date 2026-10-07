@@ -22,7 +22,8 @@ const posix = (path: string) => relative(serverRoot, path).split(sep).join('/');
 
 describe('process boundaries (STACK-2, STACK-3)', () => {
   it('reads Sankhya settings and builds the gateway only in worker code (and the dev seed)', () => {
-    const allowed = ['src/config/worker-env.ts', 'src/config/api-env.ts', 'src/seed.ts', 'src/config/seed-env.ts'];
+    // `src/verifier/env.ts`: the internal verifier reads only its authentication-only Sandbox origin (STACK-2a, AUTH-5).
+    const allowed = ['src/config/worker-env.ts', 'src/config/api-env.ts', 'src/seed.ts', 'src/config/seed-env.ts', 'src/verifier/env.ts'];
     const offenders = srcFiles
       .filter((file) => /SANKHYA_|SF_CONFIG_FILE|createGateway/.test(readFileSync(file, 'utf8')))
       .map(posix)

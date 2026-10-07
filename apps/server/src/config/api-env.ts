@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { DATASET_ID_SLUG_PATTERN, ENVIRONMENT_SLUG_PATTERN, type DatasetIdentity } from '@salesforce/contracts';
 import { passwordHashFields, passwordHashProblems } from './auth-env.js';
+import { externalLoginFields, externalLoginProblems, externalVerifierOf, type ExternalVerifierSettings } from './external-login-env.js';
 import {
   DEFAULT_PRODUCT_MEDIA_THUMB_MAX_BYTES,
   MIN_PRODUCT_MEDIA_THUMB_MAX_BYTES,
@@ -9,6 +10,7 @@ import {
   mediaMaxBytesField,
 } from './media-env.js';
 import {
+  EnvValidationError,
   databaseUrlField,
   integerField,
   logLevelField,
@@ -55,6 +57,7 @@ export const ApiEnvSchema = z.object({
   /** Comma-separated origins allowed to send state-changing requests (CSRF Origin check). */
   ALLOWED_ORIGINS: z.string().optional(),
   ...passwordHashFields,
+  ...externalLoginFields,
 
   /**
    * Explicit installation dataset identity (DEV-phase working mechanism, not a secret). Both or none
@@ -124,6 +127,8 @@ export interface ParsedApiEnv extends ApiEnv {
   readonly allowedOrigins: readonly string[];
   /** `null` when the installation declares no dataset identity. */
   readonly dataset: DatasetIdentity | null;
+  /** Internal verifier of the directory (Sankhya user) login; `null` = that login is off. */
+  readonly externalVerifier: ExternalVerifierSettings | null;
 }
 
 export function parseApiEnv(source: EnvSource): ParsedApiEnv {
@@ -165,12 +170,18 @@ export function parseApiEnv(source: EnvSource): ParsedApiEnv {
         problems.push('SF_DATASET_ID: is required when NODE_ENV=production (the installation must declare its dataset identity).');
       }
     }
-    problems.push(...origins.problems,...passwordHashProblems(parsed), ...mediaDirProblems(parsed.PRODUCT_MEDIA_DIR));
+    problems.push(...origins.problems,...passwordHashProblems(parsed), ...externalLoginProblems(parsed), ...mediaDirProblems(parsed.PRODUCT_MEDIA_DIR));
     return problems;
   });
   const dataset =
     env.SF_ERP_ENVIRONMENT !== undefined && env.SF_DATASET_ID !== undefined
       ? { environment: env.SF_ERP_ENVIRONMENT, datasetId: env.SF_DATASET_ID }
       : null;
-  return { ...env, allowedOrigins, dataset };
+  let externalVerifier: ExternalVerifierSettings | null;
+  try {
+    externalVerifier = externalVerifierOf(env);
+  } catch (error) {
+    throw new EnvValidationError('API', [error instanceof Error ? error.message : 'VERIFIER_SHARED_SECRET: unusable.']);
+  }
+  return { ...env, allowedOrigins, dataset, externalVerifier };
 }

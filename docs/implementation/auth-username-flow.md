@@ -65,3 +65,28 @@ A coluna continua `account.email` (índice único em `lower(email)`) e guarda o 
 ## Testes
 
 `apps/server/test/integration/auth-username-hybrid.test.ts` (provisionamento sob `VERIFIED_AUTO_PROVISION`, `PRE_LINKED`, senha local de conta externa, piso de latência), `migration-0008.test.ts` (2), `packages/domain/test/normalize-username.test.ts`, contratos, web e mobile.
+
+## Login com a senha Sankhya — mecanismo do verifier `live` (2026-10-07, SANDBOX apenas)
+
+Browser → API → verifier interno → Sankhya **Sandbox** (`*-teste.sankhyacloud.com.br`; o verifier recusa qualquer outro host, SNK-3). Depois da validação a API cria a própria `sf_session`; a sessão Sankhya nunca sai do verifier e nunca vai ao browser. Código: `apps/server/src/verifier/sankhya-login.ts`.
+
+| # | Ponto | Resultado | Status |
+|---|---|---|---|
+| 1-3 | Endpoint / serviço / método | `POST {origin}/mge/service.sbr?serviceName=MobileLoginSP.login&outputType=json` | Passo 1 observado na sonda (rejeição CORE_E01434); login válido **não provado** nesta sessão |
+| 4-5 | Payload / headers | JSON `{serviceName, requestBody:{NOMUSU:{$},INTERNO:{$},KEEPCONNECTED:{$:'N'}}}`, `content-type: application/json`, sem token técnico | idem |
+| 6 | Cookie/sessão | sucesso devolve `responseBody.jsessionid.$`; usado só como cookie `JSESSIONID` nas chamadas seguintes, em memória | idem |
+| 7-8 | Identificação / CODUSU | `CRUDServiceProvider.loadRecords`, entidade `Usuario`, campos `CODUSU,CODVEND`, critério `this.<campo> = ?` com parâmetro ligado; exige exatamente 1 linha | **NEEDS VALIDATION** (coluna de login `NOMEUSU` por padrão, `VERIFIER_SANKHYA_LOGIN_FIELD`); falha fechada (503) se não resolver |
+| 9 | Senha humana | só no corpo do `MobileLoginSP.login`, em memória; nunca logada, auditada, cacheada ou devolvida | implementado e testado |
+| 10 | Credencial técnica | **não necessária** (a credencial humana é a única) | observado |
+| 11 | Inválida × indisponível | HTTP 200 + `status "0"` + `tsErrorCode` em `CORE_E01434` = credencial recusada (403 → "Usuário ou senha inválidos."); rede, timeout, HTTP ≠ 200, não-JSON, código desconhecido, identidade não resolvida = indisponível (503, fail closed) | implementado e testado |
+| 12 | Usuário desativado | Sankhya recusa o login; o código específico de bloqueio **não é conhecido** → cai em "indisponível" até ser observado. `TSIUSU` não tem flag ativo (F-34) | NEEDS VALIDATION |
+| 13 | Encerrar sessão Sankhya | `MobileLoginSP.logout` sempre, mesmo em falha (best effort) | implementado e testado |
+
+Prova com credencial real (sem eco, só estrutura no resultado): `! node .claude/work/auth-spike/sankhya-login-probe.mjs` (pede usuário e senha ocultos; só o host de teste).
+
+Ligar no staging (nada disso é feito automaticamente): mesmo `VERIFIER_SHARED_SECRET` em `api.env` e `verifier.env`; em `compose.env`: `EXTERNAL_LOGIN_ENABLED=1`, `VERIFIER_MODE=live`, `VERIFIER_SANKHYA_BASE_URL=https://<conta>-teste.sankhyacloud.com.br`, `VERIFIER_EGRESS_NETWORK=verifier_egress`.
+
+Riscos residuais registrados pela revisão de segurança (2026-10-07), a fechar antes de ligar o modo `live` no staging:
+- **Identidade não amarrada à sessão (médio):** CODUSU/CODVEND vêm de uma busca pelo login digitado em `VERIFIER_SANKHYA_LOGIN_FIELD`; só é seguro se essa coluna for a mesma que o Sankhya autentica (`NOMUSU`). Validar com a sonda antes de ligar; derivar o CODUSU da própria sessão assim que o Sandbox mostrar como.
+- **Egress sem filtro de rede (médio/baixo):** `verifier_egress` é saída aberta; só o allow-list de aplicação (`*-teste.sankhyacloud.com.br`) restringe o destino. Aceito para o Sandbox; exigir proxy/firewall restrito antes de qualquer uso além do Sandbox.
+- **Usuário bloqueado (baixo):** código desconhecido responde 503 (distinguível de senha errada); mapear para a negativa uniforme quando o código for observado.

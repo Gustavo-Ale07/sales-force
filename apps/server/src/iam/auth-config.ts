@@ -2,7 +2,7 @@ import type { AuthMode } from '@salesforce/contracts';
 import type { AccountRole } from '@salesforce/domain';
 import type { ParsedApiEnv } from '../config/api-env.js';
 import { passwordHashParamsOf, type PasswordHashParams } from '../config/auth-env.js';
-import type { SecretValue } from './external-identity.js';
+import { CredentialSecret, type SecretValue } from './external-identity.js';
 import type { ThrottleRule } from './throttle-policy.js';
 
 const MINUTE_MS = 60_000;
@@ -41,9 +41,9 @@ export interface AuthConfig {
   /** Denial-of-service limits of the login endpoint (independent of the per-key lockouts above). */
   readonly login: LoginLimits;
   /**
-   * External (ERP directory) login. UNDEFINED everywhere today: `authConfigFromEnv` never enables it,
-   * so it is refused in every real runtime, production included. Enabling needs an owner decision
-   * (STACK-2 exception) and a real verifier; tests enable it explicitly.
+   * External (ERP directory) login. UNDEFINED unless the installation sets `EXTERNAL_LOGIN_ENABLED=1` (with the
+   * internal verifier URL and shared secret): `authConfigFromEnv` then enables it for the `seller` profile only
+   * (AUTH-5, STACK-2a); the admin/technical local login is unchanged.
    */
   readonly externalLogin?: ExternalLoginConfig;
 }
@@ -114,7 +114,22 @@ export const DEFAULT_IP_THROTTLE: ThrottleRule = {
   maxLockMs: 15 * MINUTE_MS,
 };
 
+/** Seller login with the user's Sankhya credentials, only when the installation switched it on (EXTERNAL_LOGIN_ENABLED=1). */
+const EXTERNAL_VERIFY_TIMEOUT_MS = 10_000;
+const EXTERNAL_MIN_FAILURE_MS = 400;
+
 export function authConfigFromEnv(env: ParsedApiEnv): AuthConfig {
+  const base = baseAuthConfig(env);
+  if (env.externalVerifier === null) return base;
+  return withExternalSellerLogin(base, {
+    enabled: true,
+    verifyTimeoutMs: EXTERNAL_VERIFY_TIMEOUT_MS,
+    minFailureMs: EXTERNAL_MIN_FAILURE_MS,
+    verifier: { url: env.externalVerifier.url, sharedSecret: new CredentialSecret(env.externalVerifier.sharedSecret) },
+  });
+}
+
+function baseAuthConfig(env: ParsedApiEnv): AuthConfig {
   return {
     authMode: env.AUTH_MODE,
     ...(env.AUTH_MODE === 'local' ? { allowedRoles: LOCAL_MODE_ROLES } : {}),

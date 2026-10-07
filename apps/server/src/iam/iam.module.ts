@@ -26,7 +26,7 @@ export class IamModule {
   static register(config: AuthConfig): DynamicModule {
     const external = config.externalLogin;
     // Directory login is wired only when explicitly enabled WITH a verifier endpoint; otherwise the optional ports stay
-    // absent and `loginExternal` fails closed. No real runtime enables it today (`authConfigFromEnv` never does).
+    // absent and `loginExternal` fails closed. Only `EXTERNAL_LOGIN_ENABLED=1` turns it on (`authConfigFromEnv`).
     const externalProviders: Provider[] =
       external?.enabled === true && external.verifier !== undefined
         ? [

@@ -289,9 +289,24 @@ describe('verifier environment (fail closed on boot)', () => {
     expect(JSON.stringify(config)).not.toContain(SECRET);
   });
 
-  it('refuses live mode as not implemented, and unknown modes', () => {
+  it('live mode needs a Sankhya SANDBOX origin (SNK-3); unknown modes are refused', () => {
     const live = problemsOf(() => parseVerifierEnv({ ...baseEnv, VERIFIER_MODE: 'live' }));
-    expect(live.problems.join('\n')).toMatch(/VERIFIER_MODE: "live" is not implemented/);
+    expect(live.problems.join('\n')).toMatch(/VERIFIER_SANKHYA_BASE_URL/);
+    for (const url of [
+      'https://placfestas.sankhyacloud.com.br',
+      'http://placfestas-teste.sankhyacloud.com.br',
+      'https://placfestas-teste.sankhyacloud.com.br/mge',
+      'https://evil.example.com',
+      'https://placfestas-teste-sankhyacloud.com.br',
+      'https://placfestas-teste.sankhyacloud.com.br.evil.com',
+    ]) {
+      const refused = problemsOf(() => parseVerifierEnv({ ...baseEnv, VERIFIER_MODE: 'live', VERIFIER_SANKHYA_BASE_URL: url }));
+      expect(refused.problems.join('\n'), url).toMatch(/VERIFIER_SANKHYA_BASE_URL/);
+    }
+    const ok = parseVerifierEnv({ ...baseEnv, VERIFIER_MODE: 'live', VERIFIER_SANKHYA_BASE_URL: 'https://placfestas-teste.sankhyacloud.com.br' });
+    expect(ok.mode).toBe('live');
+    const stray = problemsOf(() => parseVerifierEnv({ ...baseEnv, VERIFIER_SANKHYA_BASE_URL: 'https://placfestas-teste.sankhyacloud.com.br' }));
+    expect(stray.problems.join('\n')).toMatch(/VERIFIER_SANKHYA_BASE_URL/);
     for (const mode of ['fake', 'enabled', 'Live', 'true', 'dev']) {
       const unknown = problemsOf(() => parseVerifierEnv({ ...baseEnv, VERIFIER_MODE: mode }));
       expect(unknown.problems.join('\n'), mode).toMatch(/VERIFIER_MODE: must be one of/);

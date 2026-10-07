@@ -137,6 +137,10 @@ services:
       SF_DATASET_ID: ${SF_DATASET_ID:?SF_DATASET_ID is required in production mode}
       # No SF_ALLOW_DEMO_ACCOUNTS and no ALLOW_DEV_AUTH: staging has no demo data and no dev authentication.
       # No SANKHYA_*: the API never reads Sankhya settings (STACK-2/3).
+      # Directory (Sankhya user) login through the internal verifier (AUTH-5). OFF unless compose.env sets it to 1;
+      # when on, the shared secret comes from api.env (same value as in verifier.env) and the API refuses to boot without it.
+      EXTERNAL_LOGIN_ENABLED: ${EXTERNAL_LOGIN_ENABLED:-0}
+      VERIFIER_URL: http://verifier:3002
       # Product photos: read-only view of the volume the worker fills (INTERIM filesystem store, V-05/STACK-7).
       PRODUCT_MEDIA_DIR: /var/lib/sales-force/product-media
       PRODUCT_MEDIA_MAX_BYTES: ${PRODUCT_MEDIA_MAX_BYTES:-5242880}
@@ -145,8 +149,7 @@ services:
     volumes:
       - product_media:/var/lib/sales-force/product-media:ro
     command: ["node", "dist/main-api.js"]
-    # `verifier`: the API is the only caller of the internal identity verifier (nothing calls it yet; the
-    # client lands with the external-login work).
+    # `verifier`: the API is the only caller of the internal identity verifier.
     networks: [backend, edge, verifier]
     healthcheck:
       # Liveness. Readiness (database, migrations, integration) is GET /api/v1/ready (503 when not_ready),
@@ -208,11 +211,12 @@ services:
       start_period: 20s
       retries: 6
 
-  # Internal identity verifier (STACK-2 option C). STRUCTURE ONLY: disabled mode answers a uniform denial; the
-  # `live` mode is refused at boot (the Sankhya adapter is blocked). Same image, own entry point, own secret file.
-  # Not published, not on `edge`, on an internal-only network: it cannot be reached from outside and cannot reach
-  # the internet (a future live adapter needs a reviewed egress path restricted to the Sankhya hosts). No database,
-  # no Sankhya settings: the process refuses to boot when it is given any.
+  # Internal identity verifier (STACK-2 option C). `disabled` (default) answers a uniform denial; `live` validates the
+  # user's own Sankhya login against the Sankhya SANDBOX only (the process refuses any host that is not
+  # `<account>-teste.sankhyacloud.com.br`, SNK-3) and returns only the normalized identity. Same image, own entry point,
+  # own secret file. Not published, not on `edge`. By default it has NO route to the outside (internal-only network);
+  # live mode needs VERIFIER_EGRESS_NETWORK=verifier_egress in compose.env (outbound-only network, nothing else attached).
+  # No database, no worker Sankhya credentials: the process refuses to boot when it is given any.
   verifier:
     <<: *server
     restart: unless-stopped
@@ -221,12 +225,13 @@ services:
     environment:
       NODE_ENV: production
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      VERIFIER_MODE: disabled
+      VERIFIER_MODE: ${VERIFIER_MODE:-disabled}
+      VERIFIER_SANKHYA_BASE_URL: ${VERIFIER_SANKHYA_BASE_URL:-}
       # Container interface on the internal network; there is no published port and no other network.
       VERIFIER_HOST: 0.0.0.0
       VERIFIER_PORT: "3002"
     command: ["node", "dist/main-verifier.js"]
-    networks: [verifier]
+    networks: [verifier, "${VERIFIER_EGRESS_NETWORK:-verifier_noegress}"]
     healthcheck:
       test:
         - CMD
@@ -436,6 +441,11 @@ networks:
   # API <-> verifier only. `internal`: no published ports and no route to the outside (STACK-2 option C).
   verifier:
     internal: true
+  # Verifier-only. Default attachment of the verifier: no route out (internal).
+  verifier_noegress:
+    internal: true
+  # Verifier-only outbound path for the live Sankhya SANDBOX login (selected with VERIFIER_EGRESS_NETWORK).
+  verifier_egress: {}
   # Outbound-only network of the off-site copy job (no other service is attached).
   egress: {}
 
