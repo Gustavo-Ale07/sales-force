@@ -77,7 +77,8 @@ Browser → API → verifier interno → Sankhya **Sandbox** (`*-teste.sankhyacl
 | 1-3 | Endpoint / serviço / método | `POST {origin}/mge/service.sbr?serviceName=MobileLoginSP.login&outputType=json` | PROVADO |
 | 4-5 | Payload / headers | JSON `{serviceName, requestBody:{NOMUSU:{$},INTERNO:{$},KEEPCONNECTED:{$:'N'}}}`, `content-type: application/json`; sem token técnico | PROVADO |
 | 6 | Cookie/sessão | `responseBody.jsessionid`; só usado no logout, em memória | PROVADO |
-| 7-8 | Identificação / id estável | `responseBody.idusu`, na MESMA resposta que autenticou a senha (sem troca de identidade possível). Tratado como `externalUserId` (string de dígitos, 1–18, > 0, zeros à esquerda normalizados). **Que `idusu` = `TSIUSU.CODUSU` NÃO está provado** | PROVADO (existência); semântica NEEDS VALIDATION |
+| 7-8 | Identificação / id estável | `responseBody.idusu` (`{$: string}`), na MESMA resposta que autenticou a senha. É o **Base64 padrão do código decimal do usuário**, às vezes com whitespace de transporte (ex.: `"MA==
+"`). `decodeSankhyaUserId`: remove só espaço/TAB/CR/LF → Base64 estrito (alfabeto, padding, decode, re-encode e comparação) → texto `^[0-9]{1,18}$` → `externalUserId` EXATAMENTE esse texto (0 válido, sem `Number`/`parseInt`, sem tirar zeros, sem supor sequência). Estável entre dois logins (provado no TESTE com SUP, 2026-10-07). Que o código seja `TSIUSU.CODUSU` não está documentado | PROVADO (formato e estabilidade); semântica NEEDS VALIDATION |
 | 9 | Senha humana | só no corpo do login, em memória; nunca logada, auditada, cacheada ou devolvida | implementado e testado |
 | 10 | Credencial técnica | **não necessária** | PROVADO |
 | 11 | Inválida × indisponível | `status 0` + `CORE_E01434` = recusada (403 → "Usuário ou senha inválidos."); rede, timeout, HTTP ≠ 200, não-JSON, código desconhecido, sem `jsessionid` ou `idusu` válido = indisponível (503, fail closed) | implementado e testado |

@@ -1,6 +1,5 @@
 import {
   DENIAL,
-  EXTERNAL_USER_ID_PATTERN,
   type IdentityVerification,
   type VerifiedIdentity,
   type VerifyDenial,
@@ -20,7 +19,7 @@ import {
  *     stored. No second Sankhya call reads user data (a user session cannot call other gateway services without a
  *     Bearer token, observed).
  *
- * `idusu` is treated as the stable external user id only; that it equals `TSIUSU.CODUSU` is NOT proven. Seller links
+ * `idusu` (Base64 of a decimal code, see decodeSankhyaUserId) is the stable external user id; that it equals `TSIUSU.CODUSU` is not documented. Seller links
  * are never resolved here.
  *
  * Classification (fail closed): only a known credential-rejection code is a denial. Transport errors, timeouts,
@@ -33,6 +32,29 @@ export const CREDENTIAL_REJECTION_CODES: readonly string[] = ['CORE_E01434'];
 
 const GATEWAY_PATH = '/mge/service.sbr';
 const LOGOUT_TIMEOUT_MS = 2000;
+
+const TRANSPORT_WHITESPACE = /[ \t\r\n]/g;
+const STRICT_BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+const DECIMAL_USER_CODE = /^[0-9]{1,18}$/;
+
+/**
+ * `responseBody.idusu` is the standard Base64 of the decimal user code (owner-proved in the Sandbox, 2026-10-07), possibly
+ * with transport whitespace (e.g. a trailing newline). Steps: unwrap `{$: string}` (or a bare string) -> drop ONLY ASCII
+ * space/TAB/CR/LF -> strict canonical Base64 (alphabet, padding, decode, re-encode, compare) -> UTF-8 text must be 1..18 decimal
+ * digits. Returns that text EXACTLY (0 is valid, leading zeros kept, no numeric conversion) or null for any deviation.
+ */
+export function decodeSankhyaUserId(value: unknown): string | null {
+  const wrapped = asObject(value);
+  const raw = wrapped === null ? value : wrapped['$'];
+  if (wrapped !== null && Object.keys(wrapped).some((key) => key !== '$')) return null;
+  if (Array.isArray(value) || typeof raw !== 'string') return null;
+  const normalized = raw.replace(TRANSPORT_WHITESPACE, '');
+  if (normalized.length === 0 || normalized.length % 4 !== 0 || !STRICT_BASE64.test(normalized)) return null;
+  const decoded = Buffer.from(normalized, 'base64');
+  if (decoded.toString('base64') !== normalized) return null;
+  const text = decoded.toString('utf8');
+  return DECIMAL_USER_CODE.test(text) ? text : null;
+}
 
 export class SankhyaUnavailableError extends Error {
   constructor(readonly reason: string) {
@@ -99,15 +121,15 @@ export class SankhyaLoginVerification implements IdentityVerification {
         this.#outcome(`login_unclassified${code === null ? '' : `:${code.replace(/[^A-Za-z0-9_]/g, '').slice(0, 32)}`}`);
         throw new SankhyaUnavailableError('login_unclassified');
       }
-      const externalUserId = scalar(body?.['idusu'])?.trim() ?? null;
-      if (externalUserId === null || !EXTERNAL_USER_ID_PATTERN.test(externalUserId) || /^0+$/.test(externalUserId)) {
+      const externalUserId = decodeSankhyaUserId(body?.['idusu']);
+      if (externalUserId === null) {
         this.#outcome('identity_missing');
         throw new SankhyaUnavailableError('identity_missing');
       }
       this.#outcome('verified');
       return {
         ok: true,
-        externalUserId: externalUserId.replace(/^0+(?=\d)/, ''),
+        externalUserId,
         username: request.login.trim(),
         active: true,
         verifiedAt: this.#now().toISOString(),

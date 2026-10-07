@@ -17,7 +17,7 @@ export const verifyRequestSchema = z
   .strict();
 export type VerifyRequest = z.infer<typeof verifyRequestSchema>;
 
-/** Stable directory id: the Sankhya `idusu` rendered as a digit string. Its equality with `TSIUSU.CODUSU` is NOT proven. */
+/** Stable directory id: the decimal Sankhya user code decoded from `idusu` (see decodeSankhyaUserId); 0 is valid. Not documented as CODUSU. */
 export const EXTERNAL_USER_ID_PATTERN = /^[0-9]{1,18}$/;
 
 /** Minimal identity a live adapter may return: no Sankhya token, no ERP data, never cost or margin (P-20). */
