@@ -17,7 +17,6 @@ runMain('verifier', async () => {
     config.mode === 'live' && config.sankhya !== null
       ? new SankhyaLoginVerification({
           origin: config.sankhya.origin,
-          loginField: config.sankhya.loginField,
           onOutcome: (outcome) => logger.info({ outcome }, 'sankhya login verification'),
         })
       : undefined;

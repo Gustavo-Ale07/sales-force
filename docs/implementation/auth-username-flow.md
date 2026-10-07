@@ -70,23 +70,26 @@ A coluna continua `account.email` (índice único em `lower(email)`) e guarda o 
 
 Browser → API → verifier interno → Sankhya **Sandbox** (`*-teste.sankhyacloud.com.br`; o verifier recusa qualquer outro host, SNK-3). Depois da validação a API cria a própria `sf_session`; a sessão Sankhya nunca sai do verifier e nunca vai ao browser. Código: `apps/server/src/verifier/sankhya-login.ts`.
 
+**Provado no Sandbox (sonda do dono, 2026-10-07):** `MobileLoginSP.login` com usuário válido → HTTP 200, `status=1`, `responseBody` com chaves `callID, jsessionid, idusu`; logout `status=1`. Senha errada → HTTP 200, `status=0`, `CORE_E01434`. Qualquer outro serviço com a sessão do usuário (`CRUDServiceProvider.loadRecords`, `SessionManagerSP.getAttribute`) exige Bearer Token → **não há segunda consulta**.
+
 | # | Ponto | Resultado | Status |
 |---|---|---|---|
-| 1-3 | Endpoint / serviço / método | `POST {origin}/mge/service.sbr?serviceName=MobileLoginSP.login&outputType=json` | Passo 1 observado na sonda (rejeição CORE_E01434); login válido **não provado** nesta sessão |
-| 4-5 | Payload / headers | JSON `{serviceName, requestBody:{NOMUSU:{$},INTERNO:{$},KEEPCONNECTED:{$:'N'}}}`, `content-type: application/json`, sem token técnico | idem |
-| 6 | Cookie/sessão | sucesso devolve `responseBody.jsessionid.$`; usado só como cookie `JSESSIONID` nas chamadas seguintes, em memória | idem |
-| 7-8 | Identificação / CODUSU | `CRUDServiceProvider.loadRecords`, entidade `Usuario`, campos `CODUSU,CODVEND`, critério `this.<campo> = ?` com parâmetro ligado; exige exatamente 1 linha | **NEEDS VALIDATION** (coluna de login `NOMEUSU` por padrão, `VERIFIER_SANKHYA_LOGIN_FIELD`); falha fechada (503) se não resolver |
-| 9 | Senha humana | só no corpo do `MobileLoginSP.login`, em memória; nunca logada, auditada, cacheada ou devolvida | implementado e testado |
-| 10 | Credencial técnica | **não necessária** (a credencial humana é a única) | observado |
-| 11 | Inválida × indisponível | HTTP 200 + `status "0"` + `tsErrorCode` em `CORE_E01434` = credencial recusada (403 → "Usuário ou senha inválidos."); rede, timeout, HTTP ≠ 200, não-JSON, código desconhecido, identidade não resolvida = indisponível (503, fail closed) | implementado e testado |
-| 12 | Usuário desativado | Sankhya recusa o login; o código específico de bloqueio **não é conhecido** → cai em "indisponível" até ser observado. `TSIUSU` não tem flag ativo (F-34) | NEEDS VALIDATION |
-| 13 | Encerrar sessão Sankhya | `MobileLoginSP.logout` sempre, mesmo em falha (best effort) | implementado e testado |
+| 1-3 | Endpoint / serviço / método | `POST {origin}/mge/service.sbr?serviceName=MobileLoginSP.login&outputType=json` | PROVADO |
+| 4-5 | Payload / headers | JSON `{serviceName, requestBody:{NOMUSU:{$},INTERNO:{$},KEEPCONNECTED:{$:'N'}}}`, `content-type: application/json`; sem token técnico | PROVADO |
+| 6 | Cookie/sessão | `responseBody.jsessionid`; só usado no logout, em memória | PROVADO |
+| 7-8 | Identificação / id estável | `responseBody.idusu`, na MESMA resposta que autenticou a senha (sem troca de identidade possível). Tratado como `externalUserId` (string de dígitos, 1–18, > 0, zeros à esquerda normalizados). **Que `idusu` = `TSIUSU.CODUSU` NÃO está provado** | PROVADO (existência); semântica NEEDS VALIDATION |
+| 9 | Senha humana | só no corpo do login, em memória; nunca logada, auditada, cacheada ou devolvida | implementado e testado |
+| 10 | Credencial técnica | **não necessária** | PROVADO |
+| 11 | Inválida × indisponível | `status 0` + `CORE_E01434` = recusada (403 → "Usuário ou senha inválidos."); rede, timeout, HTTP ≠ 200, não-JSON, código desconhecido, sem `jsessionid` ou `idusu` válido = indisponível (503, fail closed) | implementado e testado |
+| 12 | Usuário desativado | código específico **desconhecido** → cai em indisponível até ser observado | NEEDS VALIDATION |
+| 13 | Encerrar sessão Sankhya | `MobileLoginSP.logout` sempre (best effort) | PROVADO + testado |
 
-Prova com credencial real (sem eco, só estrutura no resultado): `! node .claude/work/auth-spike/sankhya-login-probe.mjs` (pede usuário e senha ocultos; só o host de teste).
+Contrato do verifier: `{ ok:true, externalUserId, username, active:true, verifiedAt }`. O vendedor (CODVEND) **não** é resolvido no login: vem do vínculo da conta (PRE_LINKED), nunca por nome nem pelo login.
 
-Ligar no staging (nada disso é feito automaticamente): mesmo `VERIFIER_SHARED_SECRET` em `api.env` e `verifier.env`; em `compose.env`: `EXTERNAL_LOGIN_ENABLED=1`, `VERIFIER_MODE=live`, `VERIFIER_SANKHYA_BASE_URL=https://<conta>-teste.sankhyacloud.com.br`, `VERIFIER_EGRESS_NETWORK=verifier_egress`.
+Prova com credencial real (só estrutura, sem valores; dois logins para checar a estabilidade de `idusu`): `! node .claude/work/auth-spike/sankhya-login-probe.mjs`.
 
-Riscos residuais registrados pela revisão de segurança (2026-10-07), a fechar antes de ligar o modo `live` no staging:
-- **Identidade não amarrada à sessão (médio):** CODUSU/CODVEND vêm de uma busca pelo login digitado em `VERIFIER_SANKHYA_LOGIN_FIELD`; só é seguro se essa coluna for a mesma que o Sankhya autentica (`NOMUSU`). Validar com a sonda antes de ligar; derivar o CODUSU da própria sessão assim que o Sandbox mostrar como.
-- **Egress sem filtro de rede (médio/baixo):** `verifier_egress` é saída aberta; só o allow-list de aplicação (`*-teste.sankhyacloud.com.br`) restringe o destino. Aceito para o Sandbox; exigir proxy/firewall restrito antes de qualquer uso além do Sandbox.
+Ligar no staging (somente após CI verde e autorização do dono): mesmo `VERIFIER_SHARED_SECRET` em `api.env` e `verifier.env`; em `compose.env`: `EXTERNAL_LOGIN_ENABLED=1`, `VERIFIER_MODE=live`, `VERIFIER_SANKHYA_BASE_URL=https://<conta>-teste.sankhyacloud.com.br`, `VERIFIER_EGRESS_NETWORK=verifier_egress`.
+
+Riscos residuais (revisão de segurança):
+- **Egress sem filtro de rede (médio/baixo):** `verifier_egress` é saída aberta; só o allow-list de aplicação restringe o destino. Aceito para o Sandbox; exigir proxy/firewall restrito antes de qualquer uso além dele.
 - **Usuário bloqueado (baixo):** código desconhecido responde 503 (distinguível de senha errada); mapear para a negativa uniforme quando o código for observado.

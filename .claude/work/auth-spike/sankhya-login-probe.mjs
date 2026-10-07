@@ -1,6 +1,6 @@
 // Sankhya TEST end-user login probe (MobileLoginSP.login). Spike only; NOT application code.
 // Reads username + password from the TTY (password not echoed) or, when stdin is piped, from two lines.
-// Prints ONLY: AUTH_SANKHYA_USER, HTTP status, functional status, jsessionId received YES/NO, logout outcome.
+// Prints ONLY structure: AUTH_SANKHYA_USER, HTTP, functional status, jsessionid/idusu received + idusu format YES/NO, logout, idusu stable across two logins YES/NO.
 // Never prints/stores the password, the request/response body or the session id. No redirects followed.
 import readline from 'node:readline';
 
@@ -54,7 +54,6 @@ if (process.stdin.isTTY) {
 username = (username ?? '').trim();
 if (!username || !password) { console.log('AUTH_SANKHYA_USER = FAIL\nmotivo: usuario/senha nao informados'); process.exit(2); }
 
-let out = { result: 'FAIL', http: 'n/a', functional: 'n/a', session: 'NO', logout: 'n/a', message: 'n/a', errCode: 'n/a', errLevel: 'n/a' };
 // Diagnostic fields only (statusMessage, tsError code/level). Sanitized: secrets never echoed, length-capped, single line.
 function clean(v, secrets) {
   if (v === undefined || v === null) return 'n/a';
@@ -62,47 +61,57 @@ function clean(v, secrets) {
   for (const x of secrets) if (x && x.length >= 3) t = t.split(x).join('[redacted]');
   return t.length > 200 ? t.slice(0, 200) + '...' : t;
 }
-let sessionId = null;
-try {
-  const body = { serviceName: 'MobileLoginSP.login', requestBody: { NOMUSU: { $: username }, INTERNO: { $: password }, KEEPCONNECTED: { $: 'N' } } };
-  const r = await post('/mge/service.sbr?serviceName=MobileLoginSP.login&outputType=json', body);
-  out.http = r.http;
-  out.functional = r.json === null ? 'resposta nao-JSON' : `status=${r.json.status ?? '?'}`;
-  const secrets = [password, username];
-  out.message = clean(r.json?.statusMessage, secrets);
-  out.errCode = clean(r.json?.tsError?.tsErrorCode, secrets);
-  out.errLevel = clean(r.json?.tsError?.tsErrorLevel, secrets);
-  const sid = r.json?.responseBody?.jsessionid?.$;
-  if (typeof sid === 'string' && sid.length > 0 && sid !== 'undefined') { sessionId = sid; out.session = 'YES'; out.result = 'PASS'; }
-} catch (e) {
-  out.functional = `erro de rede/timeout (${e?.name ?? 'Error'})`;
-} finally {
-  password = null; // drop the only reference; never written anywhere
-}
-// Identity lookup (UNVALIDATED until this runs with a real login): structure only, never prints CODUSU/CODVEND values.
-let identity = 'n/a (sem sessao)';
-if (sessionId) {
+const scalar = (v) => { const raw = v && typeof v === 'object' && !Array.isArray(v) ? v.$ : v; return typeof raw === 'string' || (typeof raw === 'number' && Number.isSafeInteger(raw)) ? String(raw).trim() : null; };
+
+// One login + logout. Returns structure only; `id` (the idusu value) stays in memory for the stability comparison and is never printed.
+async function loginOnce() {
+  const r = { http: 'n/a', functional: 'n/a', message: 'n/a', errCode: 'n/a', errLevel: 'n/a', session: 'NO', idusu: 'NO', idFormat: 'NO', logout: 'n/a', pass: false, id: null };
+  let sessionId = null;
   try {
-    const field = process.env.PROBE_LOGIN_FIELD || 'NOMEUSU';
-    if (!/^[A-Z][A-Z0-9_]{1,30}$/.test(field)) throw new Error('PROBE_LOGIN_FIELD invalido');
-    const body = { serviceName: 'CRUDServiceProvider.loadRecords', requestBody: { dataSet: { rootEntity: 'Usuario', includePresentationFields: 'N', offsetPage: '0', criteria: { expression: { $: `this.${field} = ?` }, parameter: [{ $: username, type: 'S' }] }, entity: { fieldset: { list: 'CODUSU,CODVEND' } } } } };
-    const r = await post(`/mge/service.sbr?serviceName=CRUDServiceProvider.loadRecords&outputType=json&mgeSession=${encodeURIComponent(sessionId)}`, body, sessionId);
-    const ent = r.json?.responseBody?.entities;
-    const rawRows = ent?.entity;
-    const rows = Array.isArray(rawRows) ? rawRows.length : rawRows ? 1 : 0;
-    const names = [].concat(ent?.metadata?.fields?.field ?? []).map((f) => f?.name).join(',');
-    const row = Array.isArray(rawRows) ? rawRows[0] : rawRows;
-    const i = (n) => [].concat(ent?.metadata?.fields?.field ?? []).findIndex((f) => f?.name === n);
-    const has = (n) => (i(n) >= 0 && row?.[`f${i(n)}`]?.$ !== undefined ? 'YES' : 'NO');
-    identity = `HTTP ${r.http} status=${r.json?.status ?? '?'} linhas=${rows} campos=[${names}] CODUSU=${has('CODUSU')} CODVEND=${has('CODVEND')} tsErrorCode=${clean(r.json?.tsError?.tsErrorCode, [username])}`;
-  } catch (e) { identity = `falhou (${e?.name ?? 'Error'})`; }
+    const body = { serviceName: 'MobileLoginSP.login', requestBody: { NOMUSU: { $: username }, INTERNO: { $: password }, KEEPCONNECTED: { $: 'N' } } };
+    const p = await post('/mge/service.sbr?serviceName=MobileLoginSP.login&outputType=json', body);
+    const secrets = [password, username];
+    r.http = p.http;
+    r.functional = p.json === null ? 'resposta nao-JSON' : `status=${p.json.status ?? '?'}`;
+    r.message = clean(p.json?.statusMessage, secrets);
+    r.errCode = clean(p.json?.tsError?.tsErrorCode, secrets);
+    r.errLevel = clean(p.json?.tsError?.tsErrorLevel, secrets);
+    const rb = p.json?.responseBody;
+    const sid = scalar(rb?.jsessionid);
+    if (sid && sid !== 'undefined') { sessionId = sid; r.session = 'YES'; }
+    const id = scalar(rb?.idusu);
+    if (id !== null && id !== '') { r.idusu = 'YES'; if (/^[0-9]{1,18}$/.test(id) && !/^0+$/.test(id)) { r.idFormat = 'YES'; r.id = id.replace(/^0+(?=\d)/, ''); } }
+    r.pass = r.session === 'YES' && String(p.json?.status) === '1';
+  } catch (e) {
+    r.functional = `erro de rede/timeout (${e?.name ?? 'Error'})`;
+  }
+  if (sessionId) {
+    try {
+      const l = await post(`/mge/service.sbr?serviceName=MobileLoginSP.logout&outputType=json&mgeSession=${encodeURIComponent(sessionId)}`, { serviceName: 'MobileLoginSP.logout', requestBody: {} }, sessionId);
+      r.logout = `HTTP ${l.http} status=${l.json?.status ?? '?'}`;
+    } catch (e) { r.logout = `falhou (${e?.name ?? 'Error'})`; }
+    sessionId = null;
+  }
+  return r;
 }
-out.identity = identity;
-if (sessionId) {
-  try {
-    const l = await post(`/mge/service.sbr?serviceName=MobileLoginSP.logout&outputType=json&mgeSession=${encodeURIComponent(sessionId)}`, { serviceName: 'MobileLoginSP.logout', requestBody: {} }, sessionId);
-    out.logout = `HTTP ${l.http} status=${l.json?.status ?? '?'}`;
-  } catch (e) { out.logout = `falhou (${e?.name ?? 'Error'})`; }
-  sessionId = null;
+
+const first = await loginOnce();
+let stable = 'n/a';
+if (first.pass && first.id !== null) {
+  const second = await loginOnce();
+  stable = second.pass && second.id === first.id ? 'YES' : 'NO';
 }
-console.log(`AUTH_SANKHYA_USER = ${out.result}\nHTTP = ${out.http}\nstatus funcional = ${out.functional}\nstatusMessage = ${out.message}\ntsErrorCode = ${out.errCode}\ntsErrorLevel = ${out.errLevel}\njsessionId recebido = ${out.session}\nidentidade (CODUSU/CODVEND) = ${out.identity}\nlogout = ${out.logout}`);
+password = null; // drop the only reference; never written anywhere
+console.log([
+  `AUTH_SANKHYA_USER = ${first.pass ? 'PASS' : 'FAIL'}`,
+  `HTTP = ${first.http}`,
+  `status funcional = ${first.functional}`,
+  `statusMessage = ${first.message}`,
+  `tsErrorCode = ${first.errCode}`,
+  `tsErrorLevel = ${first.errLevel}`,
+  `jsessionId recebido = ${first.session}`,
+  `idusu recebido = ${first.idusu}`,
+  `idusu formato valido = ${first.idFormat}`,
+  `logout = ${first.logout}`,
+  `idusu estavel entre dois logins = ${stable}`,
+].join('\n'));

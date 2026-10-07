@@ -15,7 +15,7 @@ export interface SankhyaIdentityVerifierOptions {
 
 /**
  * Client of the internal identity verifier process (STACK-2a). It never talks to Sankhya: the verifier owns the
- * (still undefined) human-authentication mechanism, and today answers a uniform denial.
+ * human-authentication mechanism (`MobileLoginSP.login` against the Sandbox) or answers a uniform denial.
  *
  * Mapping, fail closed: 200 + a valid identity -> identity; 403 denial -> invalid credentials; 429 -> rate limited;
  * everything else (network error, timeout, 4xx/5xx, malformed body) -> unavailable, never a credential verdict.
@@ -54,9 +54,10 @@ export class SankhyaIdentityVerifier implements ExternalIdentityVerifier {
       if (!parsed.success) return { fail: 'unavailable' };
       return {
         ok: {
-          externalUserId: String(parsed.data.codusu),
+          externalUserId: parsed.data.externalUserId,
           displayName: '',
-          sellerCode: parsed.data.codvend,
+          // The login does not tell the seller; the seller link comes from the account's pre-link, never from here.
+          sellerCode: null,
           active: parsed.data.active,
         },
       };

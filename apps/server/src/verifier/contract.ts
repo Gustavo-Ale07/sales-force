@@ -4,9 +4,8 @@ import { z } from 'zod';
  * Wire contract between the Force API and the internal identity verifier (STACK-2 option C). Local to the
  * verifier module on purpose: nothing here is published to web/mobile and `packages/contracts` is untouched.
  *
- * Status: STRUCTURE ONLY. No Sankhya adapter exists (the login mechanism is unproven, BLOCKED_EXTERNAL_SECRET),
- * so the only response the running service can produce is a denial. `verifiedIdentitySchema` documents the
- * minimal shape a future live adapter may return; nothing in this module can construct it.
+ * `verifiedIdentitySchema` is the minimal identity the live adapter returns (Sankhya Sandbox `MobileLoginSP.login` answers
+ * `idusu` in the same response that authenticated the password). Disabled mode can only deny.
  */
 
 /** Sent once per login attempt, in the body only (never URL, header or log context). */
@@ -18,13 +17,17 @@ export const verifyRequestSchema = z
   .strict();
 export type VerifyRequest = z.infer<typeof verifyRequestSchema>;
 
+/** Stable directory id: the Sankhya `idusu` rendered as a digit string. Its equality with `TSIUSU.CODUSU` is NOT proven. */
+export const EXTERNAL_USER_ID_PATTERN = /^[0-9]{1,18}$/;
+
 /** Minimal identity a live adapter may return: no Sankhya token, no ERP data, never cost or margin (P-20). */
 export const verifiedIdentitySchema = z
   .object({
     ok: z.literal(true),
-    codusu: z.number().int().positive(),
-    codvend: z.number().int().positive().nullable(),
-    active: z.boolean(),
+    externalUserId: z.string().regex(EXTERNAL_USER_ID_PATTERN),
+    /** The login text that was verified (as typed, trimmed). Not a display name: none is returned by the login. */
+    username: z.string().min(1).max(256),
+    active: z.literal(true),
     verifiedAt: z.iso.datetime(),
   })
   .strict();
@@ -49,9 +52,7 @@ export type VerifyDenial = z.infer<typeof verifyDenialSchema>;
 export type VerifiedIdentity = z.infer<typeof verifiedIdentitySchema>;
 
 /**
- * The port behind the endpoint. The disabled implementation (the only one that exists) always denies.
- * A live implementation is intentionally absent; adding one is a separate, reviewed change gated by the
- * Sankhya spike (SNK-3, V-11) and a security review.
+ * The port behind the endpoint: the disabled implementation always denies; the live one is `SankhyaLoginVerification`.
  */
 export interface IdentityVerification {
   verify(request: VerifyRequest, signal: AbortSignal): Promise<VerifiedIdentity | VerifyDenial>;

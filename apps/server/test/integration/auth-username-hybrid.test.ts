@@ -597,9 +597,9 @@ describe('SankhyaIdentityVerifier (client of the internal verifier)', () => {
     new SankhyaIdentityVerifier({ url: 'http://verifier:3002/', sharedSecret: secret, fetchImpl: (() => Promise.resolve(respond())) as unknown as typeof fetch });
 
   it('maps an identity, a denial, a rate limit and every other outcome fail-closed', async () => {
-    const identity = { ok: true, codusu: 4501, codvend: 103, active: true, verifiedAt: '2026-10-05T00:00:00.000Z' };
+    const identity = { ok: true, externalUserId: '4501', username: 'plac123', active: true, verifiedAt: '2026-10-05T00:00:00.000Z' };
     expect(await make(() => Response.json(identity)).verify(credentials, signal)).toEqual({
-      ok: { externalUserId: '4501', displayName: '', sellerCode: 103, active: true },
+      ok: { externalUserId: '4501', displayName: '', sellerCode: null, active: true },
     });
     expect(await make(() => Response.json({ ok: false, code: 'denied' }, { status: 403 })).verify(credentials, signal)).toEqual({ fail: 'invalid_credentials' });
     expect(await make(() => Response.json({ ok: false, code: 'rate_limited' }, { status: 429 })).verify(credentials, signal)).toEqual({ fail: 'rate_limited' });

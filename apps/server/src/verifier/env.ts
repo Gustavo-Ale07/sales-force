@@ -41,8 +41,6 @@ const verifierEnvSchema = z.object({
   VERIFIER_MAX_CONCURRENCY: integerField({ min: 1, max: 64 }, 4),
   /** live only: origin of the Sankhya SANDBOX (https, no path). Never a production host (SNK-3). */
   VERIFIER_SANKHYA_BASE_URL: z.string().optional(),
-  /** live only: `Usuario` field matched against the typed login (NEEDS VALIDATION against the Sandbox; see sankhya-spike). */
-  VERIFIER_SANKHYA_LOGIN_FIELD: z.string().regex(/^[A-Z][A-Z0-9_]{1,30}$/, { error: 'must be an upper-case Sankhya field name.' }).default('NOMEUSU'),
 });
 
 /** SNK-3: the verifier talks only to a Sankhya SANDBOX host (`<account>-teste.sankhyacloud.com.br`). */
@@ -72,7 +70,7 @@ export interface VerifierConfig {
   readonly logLevel: z.infer<typeof logLevelField>;
   readonly mode: VerifierMode;
   /** Present only in live mode. */
-  readonly sankhya: { readonly origin: string; readonly loginField: string } | null;
+  readonly sankhya: { readonly origin: string } | null;
   readonly host: string;
   readonly port: number;
   readonly sharedSecret: Secret;
@@ -154,7 +152,7 @@ export function parseVerifierEnv(
     nodeEnv: env.NODE_ENV,
     logLevel: env.LOG_LEVEL,
     mode: env.VERIFIER_MODE,
-    sankhya: sandbox !== null && 'origin' in sandbox ? { origin: sandbox.origin, loginField: env.VERIFIER_SANKHYA_LOGIN_FIELD } : null,
+    sankhya: sandbox !== null && 'origin' in sandbox ? { origin: sandbox.origin } : null,
     host: env.VERIFIER_HOST,
     port: env.VERIFIER_PORT,
     sharedSecret: new Secret(rawSecret),

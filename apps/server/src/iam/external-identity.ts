@@ -3,9 +3,8 @@
  * directory). The port lives here; the only implementation is `SankhyaIdentityVerifier`, which talks to the
  * internal verifier process (STACK-2a) and never to Sankhya itself.
  *
- * Status: the human-authentication mechanism of Sankhya is NOT DEFINED in the project ("Falta definir o
- * mecanismo oficial de autenticação humana do Sankhya."). The verifier's live adapter does not exist, so
- * today it answers a uniform denial. Nothing in this file calls Sankhya or knows its formats (SNK-1, P-02).
+ * Status: the human-authentication mechanism is `MobileLoginSP.login` on the Sankhya SANDBOX (owner-run probe, 2026-10-07),
+ * with a uniform denial while the verifier is disabled. Nothing in this file calls Sankhya or knows its formats (SNK-1, P-02).
  */
 
 /** A password that must not leak through logging, JSON or string conversion. Memory only, never persisted. */
