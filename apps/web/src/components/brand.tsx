@@ -45,7 +45,7 @@ export function Brand({
   const mark = useImageOk(markUrl);
   const dark = tone === "dark";
   // The secondary "Force" line is redundant when the installation name already carries the product name ("Force PLAC").
-  const showProductName = withProductName && !collapsed && !dark && !/force/i.test(name);
+  const showProductName = withProductName && !collapsed && !dark && !new RegExp(String.raw`\bforce\b`, "i").test(name);
 
   const logoImg = logoUrl !== null && logo.ok && !preferMark;
   const box = size === "lg" ? "size-9 rounded-lg text-xs" : "size-8 rounded-lg text-xs";
