@@ -7,6 +7,7 @@ import loginHeroUrl from "../assets/login/login-hero.png";
 import { Brand } from "../components/brand";
 import { DevAuthBanner } from "../components/dev-auth-banner";
 import { useAppServices } from "../lib/app-context";
+import { documentTitleBase } from "../lib/brand";
 import { sessionQueryKey, type LoginResult } from "../lib/auth-client";
 import { safeRedirect } from "../lib/safe-redirect";
 
@@ -76,7 +77,7 @@ export function LoginPage() {
   const search = useSearch({ strict: false }) as { redirect?: unknown };
 
   useEffect(() => {
-    document.title = config.installationName;
+    document.title = documentTitleBase(config.installationName);
   }, [config.installationName]);
 
   const [username, setUsername] = useState("");
@@ -284,16 +285,12 @@ function PanelLogo() {
   const { logoUrl } = config.brand;
   const [failed, setFailed] = useState(false);
   return (
-    <div className="flex flex-col items-center gap-2">
-      <div className="flex items-center justify-center lg:h-[114px] lg:[@media(max-height:720px)]:h-[84px]">
-        {logoUrl && !failed ? (
-          <img src={logoUrl} alt="" onError={() => setFailed(true)} className="h-auto max-h-[114px] w-[clamp(180px,14vw,232px)] object-contain [@media(max-height:720px)]:max-h-[84px]" />
-        ) : (
-          <Brand size="lg" showProductName={false} />
-        )}
-      </div>
-      {/* The plate carries only "PLAC": the product wordmark is real text so it is always present and accessible. */}
-      {logoUrl && !failed ? <p className="m-0 font-heading text-lg font-bold text-fg">{config.installationName}</p> : null}
+    <div className="flex items-center justify-center lg:h-[114px] lg:[@media(max-height:720px)]:h-[84px]">
+      {logoUrl && !failed ? (
+        <img src={logoUrl} alt={config.installationName} onError={() => setFailed(true)} className="h-auto max-h-[114px] w-[clamp(180px,14vw,232px)] object-contain [@media(max-height:720px)]:max-h-[84px]" />
+      ) : (
+        <Brand size="lg" showProductName={false} />
+      )}
     </div>
   );
 }

@@ -257,11 +257,11 @@ services:
       api:
         condition: service_healthy
     environment:
-      INSTALLATION_NAME: ${INSTALLATION_NAME:-Force PLAC}
+      INSTALLATION_NAME: ${INSTALLATION_NAME:-Force}
       # Brand files ship in the web image under /brand/ (apps/web/public/brand). Without these two the page falls back to
-      # the neutral square initial. Logo: horizontal plate; mark: SQUARE icon (favicon and sidebar), never plac-mark.png (173x148).
+      # the neutral square initial. Logo: horizontal plate; mark: the round PLAC symbol 256x256 (favicon and header), the approved localhost brand (bacdb79).
       BRAND_LOGO_URL: ${BRAND_LOGO_URL:-/brand/plac-logo.png}
-      BRAND_MARK_URL: ${BRAND_MARK_URL:-/brand/icon-192.png}
+      BRAND_MARK_URL: ${BRAND_MARK_URL:-/brand/plac-mark-round.png}
       BRAND_ACCENT: ${BRAND_ACCENT:-}
       # Explicit, no default (the web container refuses to start without it). Staging value: `local`
       # (local login form only, no dev banner); must match API_AUTH_MODE.

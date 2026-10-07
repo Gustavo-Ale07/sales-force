@@ -4,6 +4,7 @@ import { Link, useMatches, useRouterState } from "@tanstack/react-router";
 import { ArrowLeft, Menu } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useAppServices } from "../lib/app-context";
+import { documentTitleBase } from "../lib/brand";
 import type { AuthUser } from "../lib/auth-client";
 import { Brand } from "./brand";
 import { CommandMenu } from "./command-menu";
@@ -111,7 +112,8 @@ export function AppShell({ user, onLogout, children }: AppShellProps) {
 
   // WCAG 2.4.2: distinct page titles.
   useEffect(() => {
-    document.title = pageTitle ? `${pageTitle} — ${config.installationName}` : config.installationName;
+    const base = documentTitleBase(config.installationName);
+    document.title = pageTitle ? `${pageTitle} — ${base}` : base;
   }, [pageTitle, config.installationName]);
 
   // WCAG 2.4.3: after an in-app navigation move focus to the page content.

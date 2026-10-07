@@ -87,3 +87,8 @@ export function applyBrand(brand: Brand, root: HTMLElement = document.documentEl
     if (icon) icon.href = brand.markUrl;
   }
 }
+
+/** Browser-tab base title: the bare product name "Force" is shown as "Force PLAC" (the installation label stays "Force" in the header). */
+export function documentTitleBase(installationName: string): string {
+  return installationName === "Force" ? "Force PLAC" : installationName;
+}
