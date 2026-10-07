@@ -3,6 +3,26 @@
 Plan only. Nothing here is deployed, provisioned or approved. Status labels: **APPROVED** (binds) · **PROPOSED** · **NEEDS VALIDATION** · **OWNER** (owner decision required).
 Sources: P-15, SNK-3, SNK-4, SNK-6, SEC-1, OPS-1, OPS-2, OPS-6, DATA-1, DATA-2, STACK-2, STACK-6, STACK-7, V-04, V-05, V-15, V-16, U-13 (`docs/decisions.md`); OPS-3/OPS-4 are PROPOSED (Round 7, not started). Current repo state: `deploy/docker-compose.dev.yml` is local-only; no staging/production files exist (`deploy/README.md`).
 
+## 0. RECONCILIATION 2026-10-02 (supersedes any conflicting text below; sections 2-9 keep the original reasoning)
+
+Owner decisions of 2026-10-02 (recorded here only; NOT yet in `docs/decisions.md`): STACK-2 direction = option C (dedicated internal verifier, not implemented, needs the STACK-2 amendment); staging never uses `AUTH_MODE=dev` and behaves like production; while the real Sankhya adapter is blocked staging allows only local ADMIN login; no demo sellers; initial staging DB = PostgreSQL on the staging VPS (isolated, backup + tested restore); real HTTPS; no external registry (versioned build+deploy on the VPS); R35/R36 stay pending business decisions.
+
+Delivered in the repository (local commits, not pushed): `AUTH_MODE=local` (production-valid, admin-only; operational login refused uniformly; external login unrouted and role-gated) · `deploy/docker-compose.staging.yml` + `deploy/README-staging.md` + `deploy/staging/*` (migrate, api, worker, web, Caddy edge, self-hosted Postgres profile, backup and restore-check scripts, secrets by file outside the repo, images built on the VPS and tagged by SHA) · demo-accounts boot check fail-closed · failure audit best-effort with uniform 401.
+
+Differences from the original text below: section 2/4 (`never build:`, registry/GHCR) is replaced by build on the VPS with SHA tags (compose carries `build:` + required `image:`); section 3 option B (Postgres on the VPS) is now the chosen initial placement; section 9 AUTH items 1-3 are met by `local` (`WEB_AUTH_MODE=local`, not `standard`); no verifier service exists in the compose.
+
+Gate status:
+
+| Gate | Status | Why |
+|---|---|---|
+| INFRA_READY_FOR_STAGING | **NO** | Config exists and validates (`compose config`, `caddy validate`, backup/restore scripts exercised once on a throwaway Postgres 17), but nothing was ever started: no VPS, domain/DNS, ACME certificate, port scan, restore drill on the real stack, rollback rehearsal, readiness endpoint check, or Android staging key/profile (no `eas.json`). `docker compose build` unexercised. |
+| AUTH_READY_FOR_STAGING | **PARTIAL (admin-only)** | Admin-only local login meets criteria 1-3 and 6 in code and tests; first admin bootstrap documented but never run; seller login stays BLOCKED_EXTERNAL_SECRET (criterion 5) |
+| PHOTOS_READY_FOR_STAGING | **BLOCKED_EXTERNAL_SECRET** | Photo source unknown; needs Sankhya TEST dictionary access |
+| READY_FOR_STAGING | **NO** | INFRA not met; sellers cannot log in |
+| READY_FOR_PRODUCTION | **NO** | |
+
+Owner items still open: staging domain and public vs allow-list access (allow-list needs DNS-01/internal CA); off-VPS copy of dumps (destination, encryption, who runs the monthly restore check); accept dump-only recovery on staging (RPO about the dump interval, NOT 15 min; WAL archiving or managed PG would be needed) ; VPS provider/size/SSH deploy path; Android signing/distribution (SB-2, `eas.json`, application id); separate low-privilege DB role for api/worker (today the runtime uses the DB owner role); record `AUTH_MODE=local` and STACK-2 option C in `docs/decisions.md`; whether a distinct "technical" role is wanted (today admin | manager | seller, technical mapped to admin).
+
 ## 1. Approved constraints that frame staging
 
 - P-15 / OPS-1: staging isolated from production: own credentials, database, job queue, object storage, Sankhya environment. Separate failure domain.
@@ -108,9 +128,40 @@ Staging may be INFRA_READY while not AUTH_READY: in that state it may only host 
 8. Budget line for staging (OPS-6: staging cheaper, not at cost of backups/security) and whether U-13 must be settled first.
 9. Secrets store/encrypted backup approach.
 
+## 11. SB-2 Mobile staging strategy (PROPOSED; MOB-1/MOB-2 direction, OPS-3 EAS profile PROPOSED; NEEDS VALIDATION against the real Expo config)
+
+- **Variant:** a distinct staging variant installable side by side with development and production: own application id (e.g. suffix `.staging`, final id OWNER), own display name ("Sales Force STG"), own icon badge. Selected by the EAS build profile `staging`, not by runtime flags. Never share the application id with production (separate signing, data and push identity).
+- **API URL:** `https://` staging origin injected at build time from the profile (public configuration, not a secret). The build fails if the URL is not `https` or is empty, localhost, a private/LAN IP or an emulator alias (10.0.2.2).
+- **No cleartext:** `usesCleartextTraffic=false`, no network-security-config exception, no ATS exception; the dev-only cleartext flag (`SF_ALLOW_CLEARTEXT=1` with an explicit dev profile) must be absent from the staging profile. Evidence: prebuild/build log check plus inspecting the merged manifest of the built artifact.
+- **No dev tooling:** staging is a release build (no dev client, no Metro, no ADB reverse, no LAN IP), JS bundled into the binary. Development builds only for dev profile (no Expo Go, MOB-1).
+- **Versioning:** `versionName` = app semantic version `MAJOR.MINOR.PATCH` (same source version as the server release); `versionCode` = a strictly increasing integer owned by the build system, never hand-edited: EAS remote auto-increment per profile (recommended) or CI run number. Staging and production keep independent counters. Each staging build records versionName, versionCode, git SHA and target API origin (build log/release note). A versionCode, once uploaded, is never reused.
+- **Signing (nothing generated, stored or exposed now):**
+
+| Option | Pros | Cons |
+|---|---|---|
+| EAS-managed credentials (keystore generated and held by Expo for the staging profile) | No keystore on any laptop or in CI; least handling; fits MOB-1 EAS builds; credentials download/backup possible by the owner account | Depends on the Expo account (owner-owned, MFA required); vendor custody; production key policy still separate |
+| Own keystore (generated and kept by the owner/company) | Full custody, vendor-independent | Owner must store and back up the file and passwords securely; loss is unrecoverable for a published app; risk of leakage into repo/CI; more manual steps |
+
+RECOMMENDATION (PROPOSED): EAS-managed signing for the **staging** profile (disposable-by-design key, never the production key). Decide the production signing/Play App Signing separately and before the first real distribution; this does not bind it. Prerequisites OWNER: Expo organization account with MFA and at least two admins, distribution channel (EAS internal distribution or internal track), who may trigger builds. No keystore is created until the owner approves.
+- **Gate:** counts toward INFRA criterion 11 only when the HTTPS API exists. Admin-class login only until the real verifier is proven (VERIFIER_DESIGN section 9).
+
+## 12. Auth readiness note (PB-1) and pending business decisions
+
+- ADMIN/TECHNICAL = local Force login; OPERATIONAL = external verifier, real one OFF until Sankhya credentials and method are proven. Admin-only staging is structurally possible and what it can/cannot test is in VERIFIER_DESIGN section 9. Demo sellers never substitute real auth; no fake Sankhya auth in staging.
+- The verifier topology (API direct / worker synchronous / dedicated verifier) is an OWNER decision; recommendation C with a STACK-2 amendment (VERIFIER_DESIGN section 5.1).
+- **R35 / R36 (discount authority base and routing/ceiling)**: pending business decisions with the owner (UNDECIDED; DISC-1 interim stays). They do not block technical finalization, staging or mobile staging; they gate only full Phase 1 discount authority (P-10).
+
 ## Addendum — final security review
 
 - AUTH criterion "no demo accounts" must be enforced (boot refusal in production mode and/or a smoke-test assertion), not only a startup warning.
 - The mobile staging build must prove it carries no dev cleartext flags: the fail-closed guard (`SF_ALLOW_CLEARTEXT=1` + explicit dev profile) covers it; the build log/prebuild check is the evidence.
 - Never copy the dev compose defaults (known DB password) into a staging compose; staging requires `POSTGRES_PASSWORD` with the `:?` form and no default.
 - Revocation/forced logout must call the product-image cache purge when that path is built (LOW-2).
+
+## Addendum 2026-10-02 — last security pass (315f206, f1669ee, 20781c1): CRITICAL 0 / HIGH 0 / MEDIUM 0 / LOW 4 — acceptable
+Open LOW (operator-error guard in `deploy/staging/ops-restore-check.sh`, not attacker-reachable; fix before the first real restore drill):
+1. Percent-encoded query keys (`%64bname=`) bypass the override check -> reject any `%` in the query or allow-list keys (`sslmode`, `sslrootcert`, `connect_timeout`).
+2. Decoded DB name re-inserted into the URL (`x_restore%3Fdbname%3D...`) skips the guards -> build `target_url` from the raw name or restrict to `[A-Za-z0-9_.-]`.
+3. `ops-backup.sh` does not reject `password=`/host overrides in the query (shipped example does not use it).
+4. Parser edges: `@` in the path, bare IPv6 without port, SIGKILL leaves `.partial`, gawk UTF-8 `%c` decoding.
+Also: host aliases (localhost / 127.0.0.1 / service name) resolve to the same DB; the name-marker rule covers it only while the live DB name has no `restore|test|scratch` marker. Authoritative fix: compare `pg_control_system().system_identifier` between both connections before `pg_restore`.

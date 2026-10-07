@@ -1,7 +1,7 @@
 import { account, auditLog, authThrottle, session } from '@salesforce/db';
 import { resolveCustomerScopeOutcome } from '@salesforce/domain';
 import { eq } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createOperatorAccountService } from '../../src/cli/operator.js';
 import { AppError } from '../../src/http/app-error.js';
 import { AccountRepository } from '../../src/iam/account.repository.js';
@@ -24,6 +24,24 @@ const opened: (() => Promise<unknown>)[] = [];
 beforeAll(async () => {
   postgres = await startPostgres();
 });
+
+/**
+ * Every test opens its own database and pool; closing them per test keeps the number of server backends constant
+ * (they used to pile up until afterAll and approached max_connections near the last test). Close failures are not swallowed.
+ */
+async function closeOpenedHandles(): Promise<void> {
+  const failures: unknown[] = [];
+  for (const close of opened.splice(0).reverse()) {
+    try {
+      await close();
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  if (failures.length > 0) throw new AggregateError(failures, `closing the test databases failed (${failures.length})`);
+}
+
+afterEach(closeOpenedHandles);
 
 afterAll(async () => {
   await closeAllThenStop(opened, postgres);
@@ -92,7 +110,15 @@ async function failure(promise: Promise<unknown>): Promise<AppError> {
   try {
     await promise;
   } catch (error) {
-    expect(error).toBeInstanceOf(AppError);
+    if (!(error instanceof AppError)) {
+      // Only names and codes: the driver message carries the SQL parameters (credentials, identities).
+      const cause = (error as { cause?: { name?: unknown; code?: unknown } }).cause;
+      const code = (error as { code?: unknown }).code;
+      // eslint-disable-next-line preserve-caught-error -- the original error is deliberately dropped: its message quotes SQL parameters
+      throw new Error(
+        `unexpected non-AppError: name=${String((error as Error).name)} code=${typeof code === 'string' ? code : 'n/a'} cause.name=${String(cause?.name ?? 'n/a')} cause.code=${typeof cause?.code === 'string' ? cause.code : 'n/a'}`,
+      );
+    }
     return error as AppError;
   }
   throw new Error('expected a failure');

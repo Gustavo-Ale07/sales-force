@@ -47,13 +47,22 @@ client --(login, password over HTTPS)--> Force API --(internal call)--> Verifier
 
 STACK-2 (APPROVED): Sankhya credentials exist only in the worker runtime "unless a later explicitly approved use case requires API-side access". The design puts the credentials in a dedicated verifier, which is neither API nor Worker. Options:
 
-| Option | Reading of STACK-2 | Comment |
-|---|---|---|
-| A. Verifier as a third process/container of `apps/server` (own entry point, own secret subset) | STACK-2 literally names two entry points and "only in the worker"; this adds a third holder of credentials -> **wording amendment needed** | Keeps API credential-free (the intent of STACK-2: API compromise does not expose Sankhya credentials). Recommended |
-| B. Run verification inside the worker (API enqueues; worker answers) | Fits the letter of STACK-2 | Interactive login through a queue adds latency/complexity, puts a password into a job table/queue (pg-boss persists payloads) -> unacceptable for passwords; a synchronous RPC to the worker is a verifier in all but name |
-| C. Credentials in the API | Violates intent; would need the "later approved use case" clause | Not recommended |
+### 5.1 Technical comparison — RECOMMENDATION (PROPOSED), not a decision; the owner decides
 
-Recommendation: A, with an owner-approved **amendment of STACK-2** (new decision entry) stating: Sankhya credentials exist only in the worker and in the identity verifier; the verifier holds the minimal subset, is not publicly reachable, and the API holds none. The amendment is needed because this is an approved decision (CLAUDE.md section 4). Ready-to-approve text (draft only):
+Labels in this subsection (A/B/C) supersede the earlier labelling of this note: A = API direct, B = worker synchronous, C = dedicated verifier.
+
+| Criterion | A. API talks to Sankhya directly | B. Worker verifies synchronously (internal RPC; never via pg-boss, which persists payloads) | C. Dedicated internal verifier (third entry point of `apps/server`, own container) |
+|---|---|---|---|
+| Secret surface | Worst: `SANKHYA_*` in the internet-facing process; API compromise exposes ERP credentials (defeats STACK-2 intent) | Medium: no new holder, but the worker holds the full set (sync/outbox credentials) and now also handles user passwords and an interactive listener | Smallest: only the minimal identity subset, no DB/storage/session secrets; API holds none; worker unchanged |
+| Latency | Lowest (one hop) | One extra internal hop; shares CPU/event loop with sync jobs, so a heavy mirror run can delay logins | One extra internal hop, dedicated capacity, predictable; Sankhya latency dominates either way (5 s deadline NEEDS VALIDATION) |
+| Availability | Login depends only on API + Sankhya | Login coupled to worker health/restarts/long jobs; a stuck worker blocks logins | Independent failure domain; verifier down = new logins fail closed, existing sessions and sync unaffected |
+| Operational simplicity | Simplest | No new container, but an RPC endpoint and caller auth must still be built in the worker | One more container, health check, caller auth and secret subset; modest cost in Compose |
+| Isolation | None between web-facing code and ERP credentials | Password handling and delivery credentials share a runtime | Strong: network-internal, outbound allow-listed to Sankhya only, password never touches the worker or DB |
+| STACK-2 | Needs the "later approved use case" clause: amendment | Fits the letter (credentials only in worker) | Third holder of credentials: amendment needed |
+
+RECOMMENDATION (PROPOSED): C. It is the only option that keeps both the API and the delivery-capable worker away from user passwords and keeps the Sankhya credential subset minimal. B is the acceptable fallback if the owner wants zero new containers (accept the coupling and wider blast radius). A is not recommended. **If A or C is chosen, a STACK-2 amendment (new decision entry, owner approval) is required** before any implementation; B needs none but does need the security review (`security-model.md` section 15). Nothing is implemented while BLOCKER-SNK-CREDENTIALS exists. Reversibility: moderate (a process boundary).
+
+Draft amendment for option C: Sankhya credentials exist only in the worker and in the identity verifier; the verifier holds the minimal subset, is not publicly reachable, and the API holds none. The amendment is needed because STACK-2 is approved (CLAUDE.md section 4). Ready-to-approve text (draft only, not approved):
 
 > **STACK-2 amendment (proposal):** a third runtime entry point, Identity Verifier, may exist in `apps/server`, on an internal-only network, holding only the Sankhya credentials needed to verify a user's identity. It receives credentials only during authentication, never persists or logs them, fails closed, and returns a validated identity. The API still holds no Sankhya credentials. Reversibility: moderate (a process boundary).
 
@@ -86,6 +95,23 @@ Passwords are not stored, so re-verification of an existing session cannot use t
 5. Whether a read-only Sankhya service account exists/is permitted (V-11, S0.7) and who issues and rotates it.
 6. Verifier timeout and circuit-breaker values after latency is measured.
 7. Closing BLOCKER-SNK-CREDENTIALS (new credentials delivered through a secret store, not Git).
+
+## 9. Auth readiness by account class (PB-1) — PROPOSED / documentation of current state
+
+| Class | Authentication | Status |
+|---|---|---|
+| ADMIN / TECHNICAL | Local Force login (email + Argon2id password, P-11; lockout, audit). No Sankhya involvement | Needs the non-dev auth mode (today only `AUTH_MODE=dev`, refused in production mode) |
+| OPERATIONAL (sellers, managers, backoffice using Sankhya identity) | External verifier (this note). The **real verifier stays OFF** (port disabled, 503) until Sankhya credentials are reissued (SEC-1) and the login method is proven in non-production Sankhya (SNK-3, V-11) | Blocked: BLOCKER-SNK-CREDENTIALS |
+
+**Admin-only staging is structurally possible**, because the external flow is a separate branch (`loginExternal`) that is disabled and the local login does not depend on it. Requirements: non-dev local auth implemented, first-admin bootstrap with no default password (U-12 open), no seed/demo accounts, `SANKHYA_MODE=fake`, worker read-only, access restricted by allow-list (STAGING_READINESS_PLAN section 9).
+
+- **Can test:** infrastructure (HTTPS, proxy, migrate, health/readiness, backup/restore drill, rollback), local login/lockout/session/device-approval behaviour, admin screens and configuration, audit, the web build in `standard` mode, CORS/cookies/headers, the security review, the mobile staging build reaching the HTTPS API (admin-class login only, if the role allows mobile).
+- **Cannot test:** seller/operational login, CODVEND mapping and mismatch refusal, seller-scoped data and permissions with real identities, offline sync for sellers, revocation via mirror, anything depending on real Sankhya identity or ERP data. Scope/authorization tests for sellers stay in automated tests with the fake verifier.
+- **Rules:** demo sellers must NOT substitute real auth (no demo/seed accounts in staging; boot refusal in production mode). No fake Sankhya authentication in staging or production: the fake verifier exists only for automated tests and dev, never reachable from a staging deployment. An operational user in staging appears only after the real verifier is proven.
+
+## 10. Pending business decisions that do not block this design
+
+R35 (discount authority calculation base) and R36 (approval routing, absolute ceiling, substitute approver) are UNDECIDED business decisions, pending with the owner. They gate full Phase 1 discount authority (P-10) only; the interim per-item discount (DISC-1) is approved. They must not block technical finalization of auth, verifier design, staging or mobile staging. Never invent a rule for them.
 
 ## Addendum — final security review (MEDIUM-2 and gaps)
 

@@ -43,3 +43,14 @@ Documentar ainda: SF_ALLOW_DEMO_ACCOUNTS (lido de process.env; falta em .env.exa
 5. Rodar security-reviewer só sobre c0fd14d e bc86cce.
 6. Decidir com o dono: PB-1 (modo de auth não-dev), compose staging (SB-1), eas.json/package id (SB-2), emenda STACK-2 (VERIFIER_DESIGN.md), R35/R36.
 7. Proibido: push, merge, produção, escrita no Sankhya, abrir .env, pedir credenciais, pm clear/uninstall no M55.
+
+---
+# CHECKPOINT 2026-10-02 (rodada pré-staging)
+Local commits (not pushed) after 0d9690f: 3362f39, 8a7ea97, eee4492, 7aaf60b, ef3bde8, db9a943, 555243a, 408021e, 07605f1, 7b2894a, 315f206, f1669ee, 20781c1.
+Suites: domain 279, contracts 107, db 49, sankhya 156, server 692, web 405 (isolated), mobile-db 137, mobile 379; typecheck, lint, openapi:check clean. No flakes.
+Security final: 0/0/0, 4 LOW (restore-check guard, see STAGING_READINESS_PLAN.md addendum). Code review: 0 blockers.
+Gates: INFRA=NO · AUTH=PARTIAL (admin-only; auto-provision OFF by default (PRE_LINKED); external accounts have no local password; username login + restricted seller provisioning implemented but OFF, human Sankhya auth undefined — see CURRENT.md 2026-10-05) · PHOTOS=BLOCKED_EXTERNAL_SECRET (server pipeline coded 2026-10-05, uncommitted: media sync service + job `media.products` (off by default) + `product-media:bootstrap` CLI + StoredProductImageSource + interim filesystem object store + compose volume prepared; verified only against the fake gateway; no real Sankhya read, not deployed; filesystem store is INTERIM pending owner decision V-05/STACK-7; see docs/implementation/product-media.md) · STAGING=NO · PRODUCTION=NO. Code P0 = 0.
+## RESUME HERE
+1. Owner: record AUTH_MODE=local + STACK-2 option C in decisions.md; decide domain/access, off-VPS dumps, dump-only RPO, VPS/SSH, Android signing (eas.json), runtime DB role, technical role.
+2. Fix restore-check LOW 1-4; first real restore drill on a started staging stack.
+3. Matrix/sweep/plan notes are in .claude/work (PREPROD_FUNCTIONAL_MATRIX.md, FAKE_DEMO_SWEEP_2026-10-02.md, STAGING_READINESS_PLAN.md). Forbidden: push, merge, production, Sankhya writes, .env, asking for credentials.

@@ -1,0 +1,183 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "kind": "bootstrap-file",
+    "version": "plac-teste-2026-09-30",
+    "syncedAt": "2026-09-30T00:00:00.000Z"
+  },
+  "general": {
+    "enabled": true,
+    "enabledCompanyCodes": [
+      1
+    ],
+    "defaultCompanyCode": 1
+  },
+  "sales": {
+    "orderTopCode": 1001,
+    "quotationTopCode": 1000,
+    "defaultNegotiationTypeCode": null,
+    "negotiationTypes": [
+      {
+        "code": 1,
+        "label": "PARCELADO - 0/28/35/42/49"
+      },
+      {
+        "code": 2,
+        "label": "PARCELADO - 28/35/42/49/56"
+      },
+      {
+        "code": 3,
+        "label": "PARCELADO - 28/35/42/49/56/63"
+      },
+      {
+        "code": 4,
+        "label": "PARCELADO - 21/28/35/42/49/56/63"
+      },
+      {
+        "code": 5,
+        "label": "PARCELADO - 21/28/35/42/49/56"
+      },
+      {
+        "code": 6,
+        "label": "PARCELADO - 21/28/35/42/49"
+      },
+      {
+        "code": 11,
+        "label": "A VISTA"
+      },
+      {
+        "code": 12,
+        "label": "A PRAZO - 7 DIAS"
+      },
+      {
+        "code": 13,
+        "label": "A PRAZO - 14 DIAS"
+      },
+      {
+        "code": 14,
+        "label": "A PRAZO - 21 DIAS"
+      },
+      {
+        "code": 15,
+        "label": "A PRAZO - 28 DIAS"
+      },
+      {
+        "code": 16,
+        "label": "A PRAZO - 30"
+      },
+      {
+        "code": 18,
+        "label": "ENT + PARCELADO - 0/30"
+      },
+      {
+        "code": 25,
+        "label": "PARCELADO 28/35 DIAS"
+      },
+      {
+        "code": 26,
+        "label": "PARCELADO 28/35/42 DIAS"
+      },
+      {
+        "code": 56,
+        "label": "PARCELADO - 28/35/42/49"
+      },
+      {
+        "code": 59,
+        "label": "A PRAZO - 30/61/90 DIAS"
+      },
+      {
+        "code": 62,
+        "label": "A PRAZO - 31"
+      }
+    ],
+    "orderBehavior": {
+      "allowDraftWithoutPrice": false
+    },
+    "confirmationBehavior": "disabled",
+    "eligibleOrderTopCodes": [
+      1000,
+      1001,
+      1051,
+      2209
+    ],
+    "orderStockLocationCode": 209,
+    "orderLayout": {
+      "layoutNumber": 30,
+      "fieldSupport": {
+        "header": {
+          "DTNEG": "SUPPORTED",
+          "CODTIPOPER": "SUPPORTED",
+          "CODEMP": "SUPPORTED",
+          "CODPARC": "SUPPORTED",
+          "CODTIPVENDA": "SUPPORTED",
+          "OBSERVACAO": "SUPPORTED",
+          "CODPARCTRANSP": "SUPPORTED",
+          "NUNOTA": "READ_ONLY",
+          "STATUSNFE": "READ_ONLY"
+        },
+        "items": {
+          "CODPROD": "SUPPORTED",
+          "QTDNEG": "SUPPORTED",
+          "VLRUNIT": "SUPPORTED",
+          "PERCDESC": "SUPPORTED",
+          "VLRDESC": "SUPPORTED"
+        },
+        "unlistedFields": "IGNORED_UNTIL_NEEDED"
+      }
+    }
+  },
+  "customers": {
+    "portfolioOwnership": {
+      "strategy": "customer_seller_field"
+    },
+    "accountSellerLinks": [],
+    "customerWithoutPriceTable": "use_fallback_table",
+    "creditFeatures": {
+      "showCreditLimit": true
+    }
+  },
+  "products": {
+    "sellableUsageValues": [
+      "V",
+      "R"
+    ],
+    "showInactive": false,
+    "productWithoutPrice": {
+      "visible": true,
+      "orderable": false
+    },
+    "mobilityFilter": {
+      "sourceField": "AD_MOBILIDADE",
+      "allowedValues": [
+        "S"
+      ],
+      "validation": "pending_validation",
+      "mode": "disabled"
+    }
+  },
+  "pricing": {
+    "customerTableStrategy": "customer_table",
+    "fallbackStrategy": "fixed_table",
+    "fallbackTableCode": 0,
+    "catalogReferenceTableCode": null,
+    "missingPrice": "no_price_state",
+    "mobilePriceTableCodes": [
+      0,
+      3,
+      5,
+      6,
+      9
+    ],
+    "alternativeTable": {
+      "tableCode": 5,
+      "validation": "needs_validation",
+      "active": false
+    }
+  },
+  "financial": {
+    "showFinancialArea": false,
+    "overdueTitles": false,
+    "creditChecks": false
+  },
+  "features": {}
+}
