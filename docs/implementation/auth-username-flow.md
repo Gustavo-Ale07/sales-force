@@ -47,6 +47,8 @@ Em logins seguintes: vendedor inativo/removido no espelho → recusa (`external_
 
 O login prova apenas a identidade (`externalUserId`). O escopo de vendedor vem exclusivamente de `account` + `account_seller_link` + `erp_seller`: papel `seller` exige ao menos um vínculo, e todo vendedor vinculado deve existir, estar ativo e não removido no espelho; caso contrário, `invalid_credentials` (auditoria `no_link` / `external_seller_inactive`). `sellerCode: null` do verificador (o caso real) **não** é divergência; um `sellerCode` válido informado no futuro serve só como validação extra (divergência → `mismatch`). Admin/manager/technical não exigem vínculo. Nunca há vínculo automático nem por nome/login.
 
+**Portões de papel (2026-10-07).** Senha local: só `admin`/`technical` (e `seller` quando o login externo está ligado) — um `manager` local com senha continua recusado (`mode_role_not_permitted`). Sessão: `manager` pode manter sessão **somente** quando a conta tem `external_user_id` (papel “somente externo”, `AuthConfig.externalOnlyRoles`, definido só por `withExternalSellerLogin`); o login externo, `resolveSession` e `peekSession` aplicam o mesmo portão. Nenhuma permissão comercial do manager mudou (a política central continua decidindo).
+
 ### `account create-external` (operador)
 
 `pnpm --filter @salesforce/server account create-external --email <login> --name "<nome>" --role <papel> [--seller-code <n>] [--password-stdin]`

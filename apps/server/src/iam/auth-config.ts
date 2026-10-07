@@ -21,6 +21,12 @@ export interface AuthConfig {
    * theirs stops resolving. Widening it needs an owner decision (external verifier, STACK-2).
    */
   readonly allowedRoles?: readonly AccountRole[];
+  /**
+   * Roles that may hold a session ONLY when the account is linked to a directory (Sankhya) user and signed in through the
+   * external login, in addition to `allowedRoles`. They never authenticate with a local password. Only set together with
+   * the external login (`withExternalSellerLogin`); ignored when `allowedRoles` is undefined (every role is admitted).
+   */
+  readonly externalOnlyRoles?: readonly AccountRole[];
   /** `Secure` cookie attribute: required everywhere except local development. */
   readonly secureCookies: boolean;
   /** Origins allowed to send state-changing requests (CSRF Origin check). */
@@ -72,14 +78,17 @@ export interface ExternalLoginConfig {
 
 /**
  * Turns the directory login on for the `seller` profile (link mode `PRE_LINKED` unless `externalLogin.linkMode` says otherwise): `local` mode admits only admin/technical, so the seller role
- * is added explicitly and only here. Manager and every other role stay refused until an owner decision (AUTH-5
- * extension, flagged in docs/implementation/auth-username-flow.md). Never called by `authConfigFromEnv`: off by default.
+ * is added explicitly and only here. `manager` is admitted only as an external-only role: an account explicitly linked to a
+ * directory user may hold a session after the external login, a local manager never signs in with a password (it stays refused).
+ * Every other role stays refused until an owner decision (AUTH-5 extension, docs/implementation/auth-username-flow.md). Never called by `authConfigFromEnv`: off by default.
  */
 export function withExternalSellerLogin(config: AuthConfig, externalLogin: ExternalLoginConfig): AuthConfig {
   return {
     ...config,
     externalLogin: { ...externalLogin, linkMode: externalLogin.linkMode ?? 'PRE_LINKED' },
-    ...(config.allowedRoles === undefined ? {} : { allowedRoles: [...config.allowedRoles, 'seller' as const] }),
+    ...(config.allowedRoles === undefined
+      ? {}
+      : { allowedRoles: [...config.allowedRoles, 'seller' as const], externalOnlyRoles: [...(config.externalOnlyRoles ?? []), 'manager' as const] }),
   };
 }
 

@@ -377,7 +377,7 @@ export class AuthService implements OnModuleInit {
     if (found.status !== 'active') return this.failExternal('external_account_disabled', found.id, failCtx);
     if (!isChannelAllowed(found.role, 'web')) return this.failExternal('external_channel_not_permitted', found.id, failCtx);
     // Same mode restriction as the password login and the session reads: a role the mode does not admit never gets a session.
-    if (!this.roleMayHoldSession(found.role)) return this.failExternal('external_mode_role_not_permitted', found.id, failCtx);
+    if (!this.roleMayHoldSession(found.role, true)) return this.failExternal('external_mode_role_not_permitted', found.id, failCtx);
 
     // 4. Link reconciliation, fail closed. The login proves ONLY the directory identity; scope comes only from the
     // account's own seller link (never from the directory, a name or the login). A seller account must have a link.
@@ -456,7 +456,7 @@ export class AuthService implements OnModuleInit {
 
     const now = this.clock();
     if (row.revokedAt !== null || row.expiresAt.getTime() <= now.getTime() || row.status !== 'active') return null;
-    if (!this.roleMayHoldSession(row.role)) return null;
+    if (!this.roleMayHoldSession(row.role, row.external)) return null;
 
     let expiresAt = row.expiresAt;
     let renewed = false;
@@ -493,7 +493,7 @@ export class AuthService implements OnModuleInit {
     const row = await this.sessions.findByTokenHash(tokenHash);
     if (row === null || !constantTimeEqualHex(row.tokenHash, tokenHash)) return null;
     const live = row.revokedAt === null && row.expiresAt.getTime() > this.clock().getTime() && row.status === 'active';
-    return live && this.roleMayHoldSession(row.role) ? { role: row.role } : null;
+    return live && this.roleMayHoldSession(row.role, row.external) ? { role: row.role } : null;
   }
 
   async logout(user: CurrentUser, meta: RequestMeta): Promise<void> {
@@ -530,10 +530,15 @@ export class AuthService implements OnModuleInit {
     }
   }
 
-  /** Mode restriction on top of the channel rule: `local` admits only its allowed roles (undefined = every role). */
-  private roleMayHoldSession(role: string): boolean {
+  /**
+   * Mode restriction on top of the channel rule: `local` admits only its allowed roles (undefined = every role). The local
+   * password login never passes `external`, so `externalOnlyRoles` (manager) are reachable only through the directory login
+   * and for accounts linked to a directory user.
+   */
+  private roleMayHoldSession(role: string, external = false): boolean {
     const allowed = this.config.allowedRoles;
-    return allowed === undefined || (allowed as readonly string[]).includes(role);
+    if (allowed === undefined || (allowed as readonly string[]).includes(role)) return true;
+    return external && ((this.config.externalOnlyRoles ?? []) as readonly string[]).includes(role);
   }
 
   /** The contract body of an authenticated session. Explicit fields only: the domain type is never serialized. */
