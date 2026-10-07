@@ -87,6 +87,9 @@ jobs:
           shellcheck --severity=warning deploy/scripts/*.sh
           shellcheck --severity=error deploy/staging/*.sh
 
+      - name: Deploy scripts - postgres guard self-test (stubbed Compose, no Docker)
+        run: bash deploy/scripts/test-postgres-guard.sh
+
       - name: Compose config with the example env files (fictional values)
         run: bash deploy/scripts/ci-compose-check.sh "$RUNNER_TEMP/compose-check"
 

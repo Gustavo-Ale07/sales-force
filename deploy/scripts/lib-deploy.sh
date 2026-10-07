@@ -123,16 +123,42 @@ sf_sql_creates_objects() {
   grep -Eqi 'create (or replace )?(unlogged |temp |temporary )?(table|sequence|view|materialized view|schema|type) ' <<< "$text "
 }
 
-# Refuses to continue when the running postgres container's definition differs from the target commit's (it would be
-# recreated by `up`, which must never happen before the backup). Starts it when absent or stopped-but-identical.
+# Does Compose intend to leave the existing postgres container alone? Asks Compose itself (`up --dry-run`, the same
+# convergence logic the real `up` applies) instead of comparing `config --hash` with the container's
+# com.docker.compose.config-hash label: Compose versions before the fix of docker/compose PR #14002 ("resolve service
+# environment when computing --hash") do not resolve `env_file` in `config --hash`, so for a service with `env_file`
+# (postgres.env) the two hashes differ even when the container is converged, and the old comparison blocked every deploy.
+# Fail closed: only container events Running / Starting / Started are accepted, at least one must be present, and a
+# non-zero exit, an empty answer or any other event (Recreate, Recreated, Stopping, Removing, Creating, Error, anything
+# unknown) means "not converged or cannot tell". Reads nothing secret; the event text is returned on stdout.
+sf_postgres_converged() {
+  local out line state seen=0
+  out="$(sf_compose --ansi never --progress plain up -d --no-deps --dry-run postgres 2>&1)" || { printf '%s\n' "$out"; return 1; }
+  while IFS= read -r line; do
+    case "$line" in
+      *' Container '*)
+        state="${line##* Container }"
+        state="$(printf '%s' "$state" | awk '{print $2}')"
+        case "$state" in
+          Running | Starting | Started) seen=1 ;;
+          *) printf '%s\n' "$out"; return 1 ;;
+        esac
+        ;;
+    esac
+  done <<< "$out"
+  [ "$seen" -eq 1 ] || { printf '%s\n' "$out"; return 1; }
+  return 0
+}
+
+# Refuses to continue when Compose would recreate/replace the running postgres container (a changed image / PG_MAJOR /
+# env files definition; `up` would do it, which must never happen before the backup) or when that cannot be told.
+# Starts it when absent or stopped-but-identical.
 sf_postgres_guard() {
-  local cid running_hash wanted_hash
+  local cid detail
   cid="$(sf_compose ps -aq postgres 2> /dev/null || true)"
   if [ -n "$cid" ]; then
-    running_hash="$(docker inspect --format '{{index .Config.Labels "com.docker.compose.config-hash"}}' "$cid" 2> /dev/null || true)"
-    wanted_hash="$(sf_compose config --hash postgres 2> /dev/null | awk '{print $2}' || true)"
-    if [ -z "$running_hash" ] || [ -z "$wanted_hash" ] || [ "$running_hash" != "$wanted_hash" ]; then
-      sf_die "the postgres container definition (image / PG_MAJOR / env files) differs from the one running (or cannot be compared). It is NOT recreated by this deploy. Take a backup, recreate it by hand if intended (deploy/README-staging.md), then re-run. Nothing was changed."
+    if ! detail="$(sf_postgres_converged)"; then
+      sf_die "Compose would recreate or replace the postgres container (image / PG_MAJOR / env files differ from the one running), or its plan cannot be read. It is NOT recreated by this deploy. Take a backup, recreate it by hand if intended (deploy/README-staging.md), then re-run. Nothing was changed. Compose plan: $(printf '%s' "$detail" | tr '\n' ';' | tr -s ' ')"
     fi
   fi
   sf_compose up -d --no-deps --wait --wait-timeout 120 postgres
@@ -150,7 +176,7 @@ sf_require_tools() {
   command -v git > /dev/null 2>&1 || sf_die "git not found"
   command -v docker > /dev/null 2>&1 || sf_die "docker not found"
   docker compose version > /dev/null 2>&1 || sf_die "docker compose plugin not found"
-  # `!reset` (external-edge override) and `config --hash` (postgres guard) need Docker Compose >= 2.24.
+  # `!reset` (external-edge override) needs Docker Compose >= 2.24 (`up --dry-run`, used by the postgres guard, is older).
   local cv cmaj cmin
   cv="$(docker compose version --short 2> /dev/null || true)"
   cv="${cv#v}"
@@ -161,7 +187,7 @@ sf_require_tools() {
     '' | *[!0-9]*) sf_die "cannot read the Docker Compose version (got '$cv'); Docker Compose >= 2.24 is required" ;;
   esac
   if [ "$cmaj" -lt 2 ] || { [ "$cmaj" -eq 2 ] && [ "$cmin" -lt 24 ]; }; then
-    sf_die "Docker Compose $cv is too old: >= 2.24 is required (\`!reset\` override and \`config --hash\`). Upgrade the compose plugin from your distribution's official instructions."
+    sf_die "Docker Compose $cv is too old: >= 2.24 is required (\`!reset\` override). Upgrade the compose plugin from your distribution's official instructions."
   fi
 }
 

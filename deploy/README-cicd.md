@@ -17,7 +17,7 @@ push to feat/sales-force-evolution  (or manual run from that same branch)
          wrapper validates the command, starts deploy-staging.sh DETACHED with a log file, and follows the log
          lock -> PREVIOUS_SHA -> git fetch -> commit reachable from origin/feat/sales-force-evolution?
          -> moves forward from the last good deploy? -> checkout --detach -> compose config -q -> (edge ports check, caddy mode)
-         -> postgres guard (never recreated before the backup) -> build migrate+web tagged <sha12> -> backup
+         -> postgres guard (`up --dry-run`: never recreated before the backup) -> build migrate+web tagged <sha12> -> backup
          -> state marker (ATTEMPTED_SHA, MIGRATED=yes) -> migrate
          -> [db-roles if the release adds database objects and SF_RUN_DB_ROLES=1]
          -> up -d --no-deps api worker verifier web (+ edge) -> wait healthy -> /api/v1/ready -> write state, clear marker
@@ -220,7 +220,7 @@ and `bootstrap-vps.sh` are different: `apply` must run **from a separate trusted
 the wrapper source as root (it refuses when the script lives under `--root`). `apply` also refuses symlinks at `$root`, its
 subdirectories, `~/.ssh` and `authorized_keys` and uses exclusive temp files plus rename (residual: a race between check and use
 by a hostile deploy user cannot be excluded with shell tools; do not adopt a tree that user already controls). The deploy scripts need
-**Docker Compose >= 2.24** (`!reset`, `config --hash`) and fail early with a clear message otherwise. Wrapper logs are created with
+**Docker Compose >= 2.24** (`!reset` override) and fail early with a clear message otherwise. Wrapper logs are created with
 `mktemp`; logs older than 30 days (`deploy-*.log`) are pruned at the start of each deploy. Existing users in
 sudo/wheel/admin/lxd/disk or named in `/etc/sudoers*` are refused unless `--allow-existing-privileged-user`; membership of `docker`
 without the acknowledging flag only warns.
@@ -275,6 +275,19 @@ target, so the **first** automated deploy after the manual first install does no
    deploy of the real commit: `SF_FIRST_DEPLOY=1 /opt/force-staging/repo/deploy/scripts/deploy-staging.sh <sha>`. From then on pushes deploy automatically.
 7. Releases that add a table need `db-roles` after the migration: set `SF_RUN_DB_ROLES=1` for that deploy (needs `db-admin.env`
    on the host) or the deploy refuses before changing anything.
+
+### Postgres guard and the Compose `env_file` hash bug
+
+The guard refuses a deploy when Compose would recreate or replace the running `postgres` container (changed image, `PG_MAJOR` or env files),
+because `up` would do it before the backup. It asks Compose itself: `docker compose up -d --no-deps --dry-run postgres`, and accepts only
+container events `Running` / `Starting` / `Started`. A non-zero exit, an empty answer, no container event or any other event (`Recreate`,
+`Stopping`, `Removing`, `Error`, unknown) blocks (fail closed). Absent postgres is started as before.
+
+It does **not** compare `config --hash` with the container's `com.docker.compose.config-hash` label any more. Compose versions before the fix of
+docker/compose PR #14002 ("resolve service environment when computing --hash") do not resolve `env_file` in `config --hash`, while the
+container is created with it resolved; `postgres` uses `env_file: postgres.env`, so the two hashes differ for a converged container and the old guard
+blocked every deploy (seen on the VPS, Compose v5.0.0, 2026-10-07; data untouched). `up --dry-run` runs the same convergence logic as the real `up`,
+so the decision cannot drift from what `up` would do. There is no bypass switch. Self-test: `bash deploy/scripts/test-postgres-guard.sh` (CI).
 
 ## Rollback
 
