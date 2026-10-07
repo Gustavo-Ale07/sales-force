@@ -43,6 +43,16 @@ Só cria conta `seller`, em uma transação com vínculo e auditoria (`account.c
 
 Em logins seguintes: vendedor inativo/removido no espelho → recusa (`external_seller_inactive`); vendedor do diretório diferente do vinculado → `external_link_mismatch`; conta desativada → recusa. Dados do verificador nunca mudam o papel de conta existente.
 
+## Escopo de vendedor e pré-vínculo (`PRE_LINKED`)
+
+O login prova apenas a identidade (`externalUserId`). O escopo de vendedor vem exclusivamente de `account` + `account_seller_link` + `erp_seller`: papel `seller` exige ao menos um vínculo, e todo vendedor vinculado deve existir, estar ativo e não removido no espelho; caso contrário, `invalid_credentials` (auditoria `no_link` / `external_seller_inactive`). `sellerCode: null` do verificador (o caso real) **não** é divergência; um `sellerCode` válido informado no futuro serve só como validação extra (divergência → `mismatch`). Admin/manager/technical não exigem vínculo. Nunca há vínculo automático nem por nome/login.
+
+### `account create-external` (operador)
+
+`pnpm --filter @salesforce/server account create-external --email <login> --name "<nome>" --role <papel> [--seller-code <n>] [--password-stdin]`
+
+A senha Sankhya é lida do terminal sem eco (ou da primeira linha do stdin com `--password-stdin`), nunca de argumento, e validada pelo verificador interno (`VERIFIER_URL` + `VERIFIER_SHARED_SECRET[_FILE]`; a CLI não fala com o Sankhya). O `externalUserId` vem dessa autenticação real, nunca é digitado nem impresso. Cria somente (login existente, inclusive o admin local, é recusado): conta ativa com senha local inutilizável, `external_user_id`, vínculo explícito para `seller` (vendedor ativo, sem vínculo, versão de configuração corrente), auditoria `account.created`/`account.seller_linked` na mesma transação. Saída única: `external account created/linked successfully`.
+
 ## Dívida de nomenclatura (coluna física `account.email`)
 
 A coluna continua `account.email` (índice único em `lower(email)`) e guarda o identificador de login, não um e-mail. Para evitar uma refatoração de banco arriscada agora, o mapeamento ocorre só em `AccountRepository` (`AccountRecord.username`, `findByUsername`) e em `SessionRepository`; serviços, `CurrentUser`, DTOs e clientes usam `username`. Permanecem por compatibilidade de formato persistido: prefixo `email:` da chave de throttle (`loginNameThrottleKey`) e a chave de auditoria `emailFingerprint`; o rótulo do CLI `--email`; `ScopeActor.accountEmail` (domínio) e `demo-accounts-check` (e-mails reais de demonstração). Renomear a coluna é trabalho futuro em expand → migrate → contract (nova coluna `username` + índice `lower(username)`, dupla escrita, migração dos dados, leitura da nova, remoção da antiga), com migration testada em Testcontainers e decisão do dono.

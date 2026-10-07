@@ -379,11 +379,11 @@ export class AuthService implements OnModuleInit {
     // Same mode restriction as the password login and the session reads: a role the mode does not admit never gets a session.
     if (!this.roleMayHoldSession(found.role)) return this.failExternal('external_mode_role_not_permitted', found.id, failCtx);
 
-    // 4. Link reconciliation, fail closed. Scope comes only from the account's own seller link (never
-    // from the directory), and the directory must agree with it: no session is opened on a disagreement
-    // (seller without a link, directory seller different from the link, or a seller code the directory
-    // reports for an account that has no such link). Seller accounts must be linked and agree exactly;
-    // admin/manager need no link but may not contradict one. Credentials were valid, so this is not
+    // 4. Link reconciliation, fail closed. The login proves ONLY the directory identity; scope comes only from the
+    // account's own seller link (never from the directory, a name or the login). A seller account must have a link.
+    // A directory seller code is optional extra evidence (the live verifier gives none: `null` is not a mismatch):
+    // when present it must agree with the link, and for an account without that link it is a contradiction.
+    // admin/manager/technical need no link. Credentials were valid, so this is not
     // reveal that: the client gets the same uniform invalid_credentials as a wrong password (padded, and
     // counted against the per-login/IP throttles). The specific reason lives only in the audit rows.
     const sellerCodes = await this.accounts.sellerCodesOf(found.id);
@@ -392,8 +392,8 @@ export class AuthService implements OnModuleInit {
     let linkProblem: 'no_link' | 'mismatch' | null = null;
     if (found.role === 'seller') {
       if (linked.length === 0) linkProblem = 'no_link';
-      else if (!isValidSellerCode(directoryCode) || !linked.includes(directoryCode)) linkProblem = 'mismatch';
-    } else if (isValidSellerCode(directoryCode) && !linked.includes(directoryCode)) {
+    }
+    if (linkProblem === null && isValidSellerCode(directoryCode) && !linked.includes(directoryCode)) {
       linkProblem = linked.length === 0 ? 'no_link' : 'mismatch';
     }
     if (linkProblem !== null) {

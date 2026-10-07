@@ -246,7 +246,6 @@ describe('AuthService.loginExternal', () => {
     ['the seller account has no seller link at all', { email: 'nobody@example.test', login: 'NOBODY', role: 'seller', directorySeller: null }, 'no_link'],
     ['the directory reports a seller but the account has no link', { email: 'nolink@example.test', login: 'NOLINK', role: 'seller', directorySeller: 103 }, 'no_link'],
     ['the directory seller code differs from the Force link', { email: 'mis@example.test', login: 'MIS', role: 'seller', sellerCode: 103, directorySeller: 999 }, 'mismatch'],
-    ['the directory seller code is invalid (0) for a linked seller', { email: 'inv@example.test', login: 'INV', role: 'seller', sellerCode: 103, directorySeller: 0 }, 'mismatch'],
     ['a manager has no link but the directory reports a seller', { email: 'mgr@example.test', login: 'MGR', role: 'manager', directorySeller: 55 }, 'no_link'],
   ] as const)('fails closed (uniform 401 invalid_credentials, no session, audited with the reason) when %s', async (_label, opts, reason) => {
     const ctx = await setup();
@@ -262,6 +261,43 @@ describe('AuthService.loginExternal', () => {
     const dump = JSON.stringify({ row, message: err.message, details: err.details, logs: ctx.capture.lines() });
     for (const needle of [opts.email, 'Directory Name', '999']) expect(dump).not.toContain(needle);
     expect(await audit(ctx, 'auth.login.success')).toHaveLength(0);
+  });
+
+  it('a seller whose directory identity carries sellerCode:null logs in through its account_seller_link alone', async () => {
+    const ctx = await setup();
+    const acc = await provision(ctx, { email: 'ana@example.test', login: 'ANA', sellerCode: 103, directorySeller: null });
+    const result = await ctx.service.loginExternal({ login: 'ANA', password: EXT_PASSWORD }, META);
+    expect(result.user).toMatchObject({ accountId: acc.id, role: 'seller', sellerCodes: [103] });
+    expect(await audit(ctx, 'auth.login.link_mismatch')).toHaveLength(0);
+    expect(await ctx.db.select().from(session)).toHaveLength(1);
+  });
+
+  it('the session scope comes only from account_seller_link, never from the directory seller code', async () => {
+    const ctx = await setup();
+    await provision(ctx, { email: 'ana@example.test', login: 'ANA', sellerCode: 103, directorySeller: 0 });
+    const result = await ctx.service.loginExternal({ login: 'ANA', password: EXT_PASSWORD }, META);
+    expect(result.user.sellerCodes).toEqual([103]);
+  });
+
+  it('a linked seller that is inactive or deleted in the mirror fails closed even with sellerCode:null', async () => {
+    const ctx = await setup();
+    const acc = await provision(ctx, { email: 'ana@example.test', login: 'ANA', sellerCode: 103, directorySeller: null });
+    ctx.links.inactiveSellers.add(103);
+    const err = await failure(ctx.service.loginExternal({ login: 'ANA', password: EXT_PASSWORD }, META));
+    expect(err.code).toBe('invalid_credentials');
+    expect(err.status).toBe(401);
+    expect(await ctx.db.select().from(session)).toHaveLength(0);
+    const [row] = await audit(ctx, 'auth.login.failure');
+    expect(row?.actorAccountId).toBe(acc.id);
+    expect(row?.detail).toMatchObject({ reason: 'external_seller_inactive' });
+  });
+
+  it('admin, manager and technical accounts need no seller link and may carry sellerCode:null', async () => {
+    const ctx = await setup();
+    await provision(ctx, { email: 'adm@example.test', login: 'ADM', role: 'admin', directorySeller: null });
+    await provision(ctx, { email: 'mgr@example.test', login: 'MGR', role: 'manager', directorySeller: null });
+    expect((await ctx.service.loginExternal({ login: 'ADM', password: EXT_PASSWORD }, META)).user.role).toBe('admin');
+    expect((await ctx.service.loginExternal({ login: 'MGR', password: EXT_PASSWORD }, META)).user.role).toBe('manager');
   });
 
   it('under local mode (admin only) refuses a seller uniformly and opens no session, but admits an admin', async () => {

@@ -3,10 +3,17 @@ import { createDb } from '@salesforce/db';
 import { ACCOUNT_ROLES, type AccountRole } from '@salesforce/domain';
 import { z } from 'zod';
 import { createOperatorAccountService } from './cli/operator.js';
+import { readSecretLine } from './cli/read-secret.js';
 import { operatorIdentity } from './cli/operator-identity.js';
 import { passwordHashFields, passwordHashParamsOf, passwordHashProblems } from './config/auth-env.js';
+import { externalLoginFields, externalVerifierOf } from './config/external-login-env.js';
 import { databaseUrlField, isLoopbackDatabaseUrl, nodeEnvField, parseEnv } from './config/env.js';
 import { AccountAlreadyExistsError, AccountNotFoundError, ExternalAccountPasswordError, PasswordPolicyError } from './iam/account.service.js';
+import { AuditService } from './iam/audit.service.js';
+import { ExternalAccountError, ExternalAccountService } from './iam/external-account.service.js';
+import { SankhyaIdentityVerifier } from './iam/sankhya-identity-verifier.js';
+import { CredentialSecret } from './iam/external-identity.js';
+import { systemClock } from './platform/tokens.js';
 import { runMain } from './process.js';
 
 /**
@@ -15,6 +22,12 @@ import { runMain } from './process.js';
  *   pnpm --filter @salesforce/server account create --email a@b.c --name "Nome" --role admin
  *   pnpm --filter @salesforce/server account set-password --email a@b.c
  *   pnpm --filter @salesforce/server account unlock --email a@b.c
+ *   pnpm --filter @salesforce/server account create-external --email sup --name "Nome" --role seller --seller-code 103
+ *
+ * `create-external` creates a Force account linked to a Sankhya user (PRE_LINKED). The Sankhya password is read from the
+ * terminal without echo (or the first line of stdin with `--password-stdin`), checked through the internal verifier
+ * (VERIFIER_URL + VERIFIER_SHARED_SECRET[_FILE]; the CLI never talks to Sankhya), and the directory identity it returns is
+ * stored without ever being printed. Output is a single success line.
  *
  * The password is read from `ACCOUNT_PASSWORD`, or from standard input with `--password-stdin`
  * (first line). It is never a command-line argument (process lists and shell history keep those),
@@ -28,6 +41,9 @@ const CliEnvSchema = z.object({
   ACCOUNT_PASSWORD: z.string().optional(),
   ALLOW_REMOTE_DB: z.string().optional(),
   ...passwordHashFields,
+  VERIFIER_URL: externalLoginFields.VERIFIER_URL,
+  VERIFIER_SHARED_SECRET: externalLoginFields.VERIFIER_SHARED_SECRET,
+  VERIFIER_SHARED_SECRET_FILE: externalLoginFields.VERIFIER_SHARED_SECRET_FILE,
 });
 
 async function readFirstStdinLine(): Promise<string> {
@@ -51,11 +67,12 @@ runMain('account-cli', async () => {
       name: { type: 'string' },
       role: { type: 'string' },
       'password-stdin': { type: 'boolean', default: false },
+      'seller-code': { type: 'string' },
     },
   });
   const [command] = positionals;
-  if (command !== 'create' && command !== 'set-password' && command !== 'unlock') {
-    fail('usage: account <create|set-password|unlock> --email <login name> [--name <display name>] [--role admin|manager|seller|technical] [--password-stdin]');
+  if (command !== 'create' && command !== 'set-password' && command !== 'unlock' && command !== 'create-external') {
+    fail('usage: account <create|set-password|unlock|create-external> --email <login name> [--name <display name>] [--role admin|manager|seller|technical] [--seller-code <n>] [--password-stdin]');
   }
   // The `--email` flag is the operator-facing name kept for compatibility; the value is the login identifier (user name).
   const loginName = values.email ?? fail('--email is required');
@@ -70,7 +87,10 @@ runMain('account-cli', async () => {
   });
 
   let password = '';
-  if (command !== 'unlock') {
+  if (command === 'create-external') {
+    password = await readSecretLine('Sankhya password (not shown): ', values['password-stdin']);
+    if (password === '') fail('the Sankhya password is required (terminal prompt, or the first line of stdin with --password-stdin)');
+  } else if (command !== 'unlock') {
     password = values['password-stdin'] ? await readFirstStdinLine() : (env.ACCOUNT_PASSWORD ?? '');
     if (password === '') fail('a password is required: set ACCOUNT_PASSWORD or pipe it in with --password-stdin');
   }
@@ -79,7 +99,30 @@ runMain('account-cli', async () => {
   try {
     const { accounts, repository } = createOperatorAccountService(db, passwordHashParamsOf(env), undefined, operatorIdentity(process.env));
     try {
-      if (command === 'create') {
+      if (command === 'create-external') {
+        const role = values.role ?? fail('--role is required (admin, manager, seller or technical)');
+        const name = values.name ?? fail('--name is required');
+        const rawSeller = values['seller-code'];
+        if (rawSeller !== undefined && !/^[0-9]{1,9}$/.test(rawSeller)) fail('--seller-code must be a positive integer');
+        const verifierSettings = externalVerifierOf({
+          EXTERNAL_LOGIN_ENABLED: '1',
+          VERIFIER_URL: env.VERIFIER_URL,
+          VERIFIER_SHARED_SECRET: env.VERIFIER_SHARED_SECRET,
+          VERIFIER_SHARED_SECRET_FILE: env.VERIFIER_SHARED_SECRET_FILE,
+        }) ?? fail('VERIFIER_URL and VERIFIER_SHARED_SECRET (or _FILE) are required for create-external');
+        const external = new ExternalAccountService(
+          db.db,
+          new SankhyaIdentityVerifier({ url: verifierSettings.url, sharedSecret: new CredentialSecret(verifierSettings.sharedSecret) }),
+          new AuditService(db.db, systemClock),
+          systemClock,
+        ).attributeTo(operatorIdentity(process.env));
+        await external.createExternalAccount(
+          { username: loginName, displayName: name, role, sellerCode: rawSeller === undefined ? undefined : Number(rawSeller), password },
+          AbortSignal.timeout(20_000),
+        );
+        password = '';
+        process.stdout.write('external account created/linked successfully\n');
+      } else if (command === 'create') {
         const role = values.role ?? fail('--role is required (admin, manager, seller or technical)');
         if (!(ACCOUNT_ROLES as readonly string[]).includes(role)) fail('--role must be admin, manager, seller or technical');
         const name = values.name ?? fail('--name is required');
@@ -95,10 +138,12 @@ runMain('account-cli', async () => {
         process.stdout.write(cleared ? 'lockout cleared\n' : 'no lockout was recorded for this address\n');
       }
     } catch (error) {
-      if (error instanceof PasswordPolicyError || error instanceof AccountAlreadyExistsError || error instanceof AccountNotFoundError || error instanceof ExternalAccountPasswordError) {
+      if (error instanceof PasswordPolicyError || error instanceof AccountAlreadyExistsError || error instanceof AccountNotFoundError || error instanceof ExternalAccountPasswordError || error instanceof ExternalAccountError) {
         // Actionable and secret-free: the policy text names rules, not the password.
         fail(error.message);
       }
+      // Driver errors quote the SQL parameters (the Sankhya identity): never let one reach the output here.
+      if (command === 'create-external') fail('unexpected failure; the account may not have been created (details are withheld because they could contain the identity)');
       throw error;
     }
   } finally {

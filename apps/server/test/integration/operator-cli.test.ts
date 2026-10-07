@@ -1,10 +1,12 @@
 import { execFile } from 'node:child_process';
+import { createServer } from 'node:http';
 import { promisify } from 'node:util';
-import { account, auditLog, session } from '@salesforce/db';
+import { account, accountSellerLink, auditLog, session } from '@salesforce/db';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { TEST_PASSWORD } from '../helpers/auth.js';
 import { login, startAuthApp } from '../helpers/auth-app.js';
+import { seedDemoMirror, storeConfiguration } from '../helpers/commercial-fixture.js';
 import { createMigratedDatabase, startPostgres, type TestPostgres, closeAllThenStop } from '../helpers/postgres.js';
 
 const run = promisify(execFile);
@@ -224,6 +226,50 @@ describe('seed and account CLI against a disposable database', () => {
     const invalid = await runScript('account-cli.ts', { ...env, OPERATOR: 'x'.repeat(200) }, ['unlock', '--email', 'a1@example.test']);
     expect(invalid.code).not.toBe(0);
     expect(invalid.stderr).toMatch(/OPERATOR/);
+  }, 240_000);
+
+  it('create-external reads the Sankhya password from stdin, links the identity returned by the verifier and prints only one line', async () => {
+    const database = await createMigratedDatabase(postgres);
+    opened.push(() => database.handle.close());
+    await seedDemoMirror(database.handle);
+    await storeConfiguration(database.handle);
+    const SANKHYA_PW = 'Sankhya-Cli-Passphrase-31';
+    const SHARED = 'cli-shared-secret-'.padEnd(40, 'x');
+    const seen: string[] = [];
+    const stub = createServer((req, res) => {
+      let body = '';
+      req.on('data', (chunk) => (body += String(chunk)));
+      req.on('end', () => {
+        const parsed = JSON.parse(body) as { login: string; password: string };
+        seen.push(req.headers.authorization ?? '');
+        if (parsed.password !== SANKHYA_PW) return void res.writeHead(403).end('{}');
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, externalUserId: '4711', username: parsed.login, active: true, verifiedAt: '2026-10-07T12:00:00.000Z' }));
+      });
+    });
+    await new Promise<void>((resolve) => stub.listen(0, '127.0.0.1', resolve));
+    opened.push(() => new Promise((resolve) => stub.close(resolve)));
+    const port = (stub.address() as { port: number }).port;
+    const env = { NODE_ENV: 'development', DATABASE_URL: database.url, VERIFIER_URL: 'http://127.0.0.1:' + port, VERIFIER_SHARED_SECRET: SHARED, ...FAST_HASH };
+    const args = ['create-external', '--email', 'sup', '--name', 'Suporte', '--role', 'seller', '--seller-code', '103', '--password-stdin'];
+
+    const wrong = await runScript('account-cli.ts', env, args, 'not-the-sankhya-password\n');
+    expect(wrong.code).not.toBe(0);
+    expect(await database.handle.db.select().from(account)).toHaveLength(0);
+
+    const ok = await runScript('account-cli.ts', env, args, SANKHYA_PW + '\n');
+    expect(ok.code, ok.stderr).toBe(0);
+    expect(ok.stdout.trim()).toBe('external account created/linked successfully');
+    const [row] = await database.handle.db.select().from(account);
+    expect(row).toMatchObject({ email: 'sup', role: 'seller', status: 'active', externalUserId: '4711' });
+    expect((await database.handle.db.select().from(accountSellerLink)).map((l) => l.sellerCode)).toEqual([103]);
+    expect(seen.every((header) => header === 'Bearer ' + SHARED)).toBe(true);
+    const everything = ok.stdout + ok.stderr + wrong.stdout + wrong.stderr + JSON.stringify(await database.handle.db.select().from(auditLog));
+    for (const secret of [SANKHYA_PW, '4711', SHARED]) expect(everything).not.toContain(secret);
+
+    const again = await runScript('account-cli.ts', env, args, SANKHYA_PW + '\n');
+    expect(again.code).not.toBe(0);
+    expect(await database.handle.db.select().from(account)).toHaveLength(1);
   }, 240_000);
 
   it('records the operator on the seed accounts too', async () => {
