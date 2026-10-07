@@ -27,6 +27,11 @@ const opened: (() => Promise<unknown>)[] = [];
 beforeAll(async () => {
   postgres = await startPostgres();
 });
+// Every test builds its own database through setup(); its pool is closed as soon as the test ends (pass or fail),
+// so the file never holds more than one pool of the container's max_connections at a time.
+afterEach(async () => {
+  await closeAllThenStop(opened.splice(0), undefined);
+});
 afterAll(async () => {
   await closeAllThenStop(opened, postgres);
 });
