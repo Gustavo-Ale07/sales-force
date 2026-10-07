@@ -6,8 +6,9 @@
     <meta name="color-scheme" content="light" />
     <meta name="description" content="Force PLAC: catálogo, pedidos e clientes em um só lugar." />
     <meta name="theme-color" content="#1e2b8f" />
-    <!-- Default favicon: the official PLAC mark. brand.markUrl from /config.json replaces it at runtime. -->
-    <link rel="icon" type="image/png" href="/brand/plac-mark.png" />
+    <!-- Default favicon: the SQUARE PLAC icon (plac-mark.png is 173x148, not square, and gets stretched in the tab). brand.markUrl from /config.json replaces it at runtime. -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/brand/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/brand/icon-512.png" />
     <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Force PLAC</title>
@@ -17,7 +18,7 @@
       <!-- Boot screen: shown until the app mounts and replaces #root's content. Styled from the bundled stylesheet (the CSP forbids inline styles). -->
       <div class="sf-boot" role="status" aria-live="polite">
         <span class="sf-boot__mark" aria-hidden="true"></span>
-        <p class="sf-boot__text">Carregando o Sales Force…</p>
+        <p class="sf-boot__text">Carregando o Force PLAC…</p>
         <span class="sf-boot__bar" aria-hidden="true"></span>
       </div>
     </div>
