@@ -245,7 +245,7 @@ describe('AuthService.loginExternal', () => {
   it.each([
     ['the seller account has no seller link at all', { email: 'nobody@example.test', login: 'NOBODY', role: 'seller', directorySeller: null }, 'no_link'],
     ['the directory reports a seller but the account has no link', { email: 'nolink@example.test', login: 'NOLINK', role: 'seller', directorySeller: 103 }, 'no_link'],
-    ['the directory seller code differs from the Force link', { email: 'mis@example.test', login: 'MIS', role: 'seller', sellerCode: 103, directorySeller: 999 }, 'mismatch'],
+    ['the directory seller code differs from the Force link', { email: 'mis@example.test', login: 'MIS', role: 'seller', sellerCode: 103, directorySeller: 918273 }, 'mismatch'],
     ['a manager has no link but the directory reports a seller', { email: 'mgr@example.test', login: 'MGR', role: 'manager', directorySeller: 55 }, 'no_link'],
   ] as const)('fails closed (uniform 401 invalid_credentials, no session, audited with the reason) when %s', async (_label, opts, reason) => {
     const ctx = await setup();
@@ -259,7 +259,7 @@ describe('AuthService.loginExternal', () => {
     expect(row?.detail).toMatchObject({ reason });
     // No PII and no seller codes in the audit row, the error or the logs.
     const dump = JSON.stringify({ row, message: err.message, details: err.details, logs: ctx.capture.lines() });
-    for (const needle of [opts.email, 'Directory Name', '999']) expect(dump).not.toContain(needle);
+    for (const needle of [opts.email, 'Directory Name', '918273']) expect(dump).not.toContain(needle);
     expect(await audit(ctx, 'auth.login.success')).toHaveLength(0);
   });
 
@@ -320,7 +320,7 @@ describe('AuthService.loginExternal', () => {
 
   it('counts a link mismatch like a failed login (same error as a wrong password, then the login locks)', async () => {
     const ctx = await setup({ maxFailures: 2 });
-    await provision(ctx, { email: 'mis@example.test', login: 'MIS', role: 'seller', sellerCode: 103, directorySeller: 999 });
+    await provision(ctx, { email: 'mis@example.test', login: 'MIS', role: 'seller', sellerCode: 103, directorySeller: 918273 });
     const wrong = await failure(ctx.service.loginExternal({ login: 'MIS', password: 'bad-bad-bad' }, META));
     const mismatch = await failure(ctx.service.loginExternal({ login: 'MIS', password: EXT_PASSWORD }, META));
     expect({ code: mismatch.code, status: mismatch.status, message: mismatch.message }).toEqual({
@@ -351,7 +351,7 @@ describe('AuthService.loginExternal', () => {
       ctx.verifier,
       ctx.links,
     );
-    await provision(ctx, { email: 'mis@example.test', login: 'MIS', role: 'seller', sellerCode: 103, directorySeller: 999 });
+    await provision(ctx, { email: 'mis@example.test', login: 'MIS', role: 'seller', sellerCode: 103, directorySeller: 918273 });
     const started = Date.now();
     expect((await failure(service.loginExternal({ login: 'MIS', password: EXT_PASSWORD }, META))).code).toBe('invalid_credentials');
     expect(Date.now() - started).toBeGreaterThanOrEqual(140);
@@ -389,7 +389,7 @@ describe('AuthService.loginExternal', () => {
       ['unmapped directory user', { email: 'b@example.test', login: 'B', sellerCode: 103 }, 'UNMAPPED'],
       ['inactive directory user', { email: 'c@example.test', login: 'C', sellerCode: 103, active: false }, EXT_PASSWORD],
       ['disabled account', { email: 'd@example.test', login: 'D', sellerCode: 103 }, 'DISABLED'],
-      ['link mismatch', { email: 'e@example.test', login: 'E', role: 'seller', sellerCode: 103, directorySeller: 999 }, EXT_PASSWORD],
+      ['link mismatch', { email: 'e@example.test', login: 'E', role: 'seller', sellerCode: 103, directorySeller: 918273 }, EXT_PASSWORD],
     ] as const)('still answers the uniform invalid_credentials and counts the failure: %s', async (label, opts, password) => {
       const ctx = await setup();
       const acc = await provision(ctx, opts);
@@ -415,7 +415,7 @@ describe('AuthService.loginExternal', () => {
 
     it('keeps the lockout counting: the login still locks after maxFailures', async () => {
       const ctx = await setup();
-      await provision(ctx, { email: 'mis@example.test', login: 'MIS', role: 'seller', sellerCode: 103, directorySeller: 999 });
+      await provision(ctx, { email: 'mis@example.test', login: 'MIS', role: 'seller', sellerCode: 103, directorySeller: 918273 });
       const { service } = withBrokenAudit(ctx);
       const codes: string[] = [];
       for (let i = 0; i < 8; i += 1) {
@@ -427,7 +427,7 @@ describe('AuthService.loginExternal', () => {
 
     it('keeps the minFailureMs padding', async () => {
       const ctx = await setup();
-      await provision(ctx, { email: 'mis@example.test', login: 'MIS', role: 'seller', sellerCode: 103, directorySeller: 999 });
+      await provision(ctx, { email: 'mis@example.test', login: 'MIS', role: 'seller', sellerCode: 103, directorySeller: 918273 });
       const { service } = withBrokenAudit(ctx, 150);
       const started = Date.now();
       expect((await failure(service.loginExternal({ login: 'MIS', password: EXT_PASSWORD }, META))).code).toBe('invalid_credentials');
