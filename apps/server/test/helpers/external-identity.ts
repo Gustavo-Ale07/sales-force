@@ -52,6 +52,13 @@ export class InMemoryExternalAccountLinks implements ExternalAccountLinks {
     return Promise.resolve(this.links.get(externalUserId) ?? null);
   }
 
+  /** Accounts holding an automatic (`sankhya_auto`) link; any other account is treated as manual. */
+  readonly automaticAccounts = new Set<string>();
+
+  hasAutomaticLink(accountId: string): Promise<boolean> {
+    return Promise.resolve(this.automaticAccounts.has(accountId));
+  }
+
   isSellerActive(sellerCode: number): Promise<boolean> {
     return Promise.resolve(!this.inactiveSellers.has(sellerCode));
   }

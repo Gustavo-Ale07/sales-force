@@ -29,6 +29,8 @@ export interface LoginCredentials {
 export type LoginFailureReason =
   /** Wrong username or password (same message whether or not the username exists). */
   | "invalid_credentials"
+  /** Sankhya accepted the credentials but the Force access of this user is not configured (403 `access_not_configured`). */
+  | "access_not_configured"
   /** Progressive lockout after repeated failures. */
   | "locked"
   | "rate_limited"

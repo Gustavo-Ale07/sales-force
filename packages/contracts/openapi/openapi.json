@@ -3253,6 +3253,7 @@
           "validation_failed",
           "unauthenticated",
           "invalid_credentials",
+          "access_not_configured",
           "forbidden",
           "not_found",
           "conflict",

@@ -42,6 +42,11 @@ describe("createHttpAuth", () => {
     await expect(auth.login({ username: "ana", password: "p" })).resolves.toEqual(expected);
   });
 
+  it("maps 403 access_not_configured (valid Sankhya login, Force access not configured) to its own reason", async () => {
+    const { auth } = authWith(() => ({ status: 403, body: { code: "access_not_configured", message: "y" } }));
+    await expect(auth.login({ username: "ana", password: "p" })).resolves.toEqual({ ok: false, reason: "access_not_configured" });
+  });
+
   it("reports the retry delay of a rate-limited login", async () => {
     const { auth } = authWith(() => ({
       status: 429,

@@ -35,6 +35,9 @@ export function toAuthUser(account: Account): AuthUser {
  */
 export function mapLoginFailure(error: ApiRequestError): Extract<LoginResult, { ok: false }> {
   const correlationId = error.correlationId;
+  // 403 with this exact code is the server's own answer (Sankhya authenticated the user, Force access is not configured);
+  // any other 403 is the access guard and stays "unavailable".
+  if (error.status === 403 && error.code === "access_not_configured") return { ok: false, reason: "access_not_configured", correlationId };
   switch (error.status) {
     case 400:
     case 401:

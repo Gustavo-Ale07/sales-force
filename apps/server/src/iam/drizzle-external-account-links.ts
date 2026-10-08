@@ -49,6 +49,15 @@ export class DrizzleExternalAccountLinks implements ExternalAccountLinks {
     return row?.id ?? null;
   }
 
+  async hasAutomaticLink(accountId: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ sellerCode: accountSellerLink.sellerCode })
+      .from(accountSellerLink)
+      .where(and(eq(accountSellerLink.accountId, accountId), eq(accountSellerLink.source, 'sankhya_auto')))
+      .limit(1);
+    return row !== undefined;
+  }
+
   async isSellerActive(sellerCode: number): Promise<boolean> {
     const [row] = await this.db
       .select({ code: erpSeller.code })

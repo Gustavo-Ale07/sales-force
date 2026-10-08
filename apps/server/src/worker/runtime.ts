@@ -11,7 +11,7 @@ import {
 import { startHealthServer, WorkerHealth, type HealthServer } from './health.js';
 import type { JobHandler } from './job-contract.js';
 import { createBatchHandler } from './job-runner.js';
-import { MIRROR_ENTITIES, mirrorQueueName } from '../sync/mirror-entities.js';
+import { MIRROR_ENTITIES, mirrorQueueName, type MirrorEntity } from '../sync/mirror-entities.js';
 import type { MirrorSyncService } from '../sync/mirror-sync.service.js';
 import type { MirrorSchedules } from '../sync/schedules.js';
 import type { ProductMediaSyncService } from '../media/product-media-sync.service.js';
@@ -57,7 +57,12 @@ export interface WorkerRuntimeDeps {
    * Mirror synchronization (WP 0.8): the service that reads Sankhya (read port only) and the cron of
    * each entity (`null` = not scheduled). Absent = no mirror jobs (the API-less unit tests).
    */
-  readonly mirror?: { readonly service: MirrorSyncService; readonly schedules: MirrorSchedules };
+  readonly mirror?: {
+    readonly service: MirrorSyncService;
+    readonly schedules: MirrorSchedules;
+    /** Entities enqueued once at startup (the login directory), in this order. */
+    readonly startupSync?: readonly MirrorEntity[];
+  };
   /**
    * Product photo synchronization. Present only when PRODUCT_MEDIA_SYNC_ENABLED=true: the handler is then
    * registered and `media.products` scheduled with `cron`. Absent = no handler, and a schedule stored by an
@@ -160,6 +165,11 @@ export class WorkerRuntime {
           await boss.schedule(mirrorQueueName(entity), cron, {});
           mirrorSchedules[entity] = cron;
         }
+      }
+
+      for (const entity of mirror?.startupSync ?? []) {
+        await boss.send(mirrorQueueName(entity), {}, { singletonKey: 'startup', singletonSeconds: 300 });
+        logger.info({ entity }, 'startup mirror sync enqueued');
       }
 
       if (queues.some((spec) => spec.name === QUEUE_NAMES.mediaProducts)) {

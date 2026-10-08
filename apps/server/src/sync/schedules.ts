@@ -18,6 +18,17 @@ export interface MirrorScheduleSettings {
   readonly SYNC_CRON_CUSTOMERS: string;
   readonly SYNC_CRON_PRODUCTS: string;
   readonly SYNC_CRON_PRICES: string;
+  /** Targeted login-directory mirror (`sellers` + `directoryUsers` only). Independent of `SYNC_MIRROR_ENABLED`. */
+  readonly AUTH_DIRECTORY_SYNC_ENABLED?: boolean;
+  readonly AUTH_DIRECTORY_SYNC_CRON?: string;
+}
+
+/** The only entities the Sankhya-only login needs: the user -> seller relation and the seller list. Read-only. */
+export const AUTH_DIRECTORY_ENTITIES = ['sellers', 'directoryUsers'] as const satisfies readonly MirrorEntity[];
+
+/** Entities to enqueue once when the worker starts, so the first login never waits for the first cron tick. */
+export function startupSyncEntities(settings: Partial<MirrorScheduleSettings>): readonly MirrorEntity[] {
+  return settings.AUTH_DIRECTORY_SYNC_ENABLED === true ? AUTH_DIRECTORY_ENTITIES : [];
 }
 
 /** `null` = the entity has no schedule (disabled); it can still be run by hand (`sync:once`). */
@@ -25,6 +36,11 @@ export type MirrorSchedules = Readonly<Record<MirrorEntity, string | null>>;
 
 export function mirrorSchedulesFromSettings(settings: MirrorScheduleSettings): MirrorSchedules {
   if (!settings.SYNC_MIRROR_ENABLED) {
+    // Full mirror off: only the login directory may still run, and only sellers + directoryUsers (never customers, products or prices).
+    if (settings.AUTH_DIRECTORY_SYNC_ENABLED === true) {
+      const cron = settings.AUTH_DIRECTORY_SYNC_CRON ?? DEFAULT_MIRROR_CRONS.sellers;
+      return { sellers: cron, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: cron };
+    }
     return { sellers: null, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: null };
   }
   return {

@@ -37,7 +37,7 @@ afterAll(async () => {
 const META = { ip: '203.0.113.9', userAgent: 'vitest', requestId: 'req-1' } as const;
 const SANKHYA_PASSWORD = 'Sankhya-Synthetic-Pass-77';
 
-async function setup() {
+async function setup(linkMode?: 'VERIFIED_AUTO_PROVISION') {
   const database = await createMigratedDatabase(postgres);
   opened.push(() => database.handle.close());
   const db = database.handle.db;
@@ -47,6 +47,7 @@ async function setup() {
     enabled: true,
     verifyTimeoutMs: 200,
     minFailureMs: 0,
+    ...(linkMode === undefined ? {} : { linkMode }),
   });
   const verifier = new FakeExternalIdentityVerifier();
   const audit = new AuditService(db, clock.fn);
@@ -97,6 +98,19 @@ describe('external manager session (external-only role gate)', () => {
     expect(await ctx.db.select().from(session)).toHaveLength(1);
   });
 
+  it('with auto-provision on, an existing external manager (Sankhya CODUSU 0, no CODVEND) logs in: no seller sync, no seller link', async () => {
+    const ctx = await setup('VERIFIED_AUTO_PROVISION');
+    const manager = await externalAccount(ctx, 'sup', 'manager', '0');
+    const opened = await ctx.service.login({ username: 'SUP', password: SANKHYA_PASSWORD }, META);
+    expect(opened.user).toMatchObject({ accountId: manager.id, role: 'manager', sellerCodes: [] });
+    expect(await ctx.db.select().from(accountSellerLink)).toHaveLength(0);
+    expect(await ctx.db.select().from(account).where(eq(account.id, manager.id))).toMatchObject([{ role: 'manager' }]);
+    const failures = (await ctx.db.select().from(auditLog)).filter((row) => row.action === 'auth.login.failure');
+    expect(failures).toHaveLength(0);
+    // Still no seller authority on the session refresh.
+    expect((await ctx.service.resolveSession(opened.token, 'web'))?.user).toMatchObject({ role: 'manager', sellerCodes: [] });
+  });
+
   it('the external manager session stays valid on refresh (resolveSession and peekSession)', async () => {
     const ctx = await setup();
     await externalAccount(ctx, 'sup', 'manager', '4711');
@@ -137,7 +151,8 @@ describe('external manager session (external-only role gate)', () => {
 
     expect((await ctx.service.login({ username: 'ana', password: SANKHYA_PASSWORD }, META)).user).toMatchObject({ role: 'seller', sellerCodes: [103] });
     const refused = await failure(ctx.service.login({ username: 'bia', password: SANKHYA_PASSWORD }, META));
-    expect(refused.code).toBe('invalid_credentials');
+    expect(refused.code).toBe('access_not_configured');
+    expect(refused.status).toBe(403);
   });
 
   it('the local admin still logs in by password', async () => {

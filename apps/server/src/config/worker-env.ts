@@ -62,6 +62,16 @@ export const WorkerEnvSchema = z.object({
   SYNC_CRON_PRODUCTS: cronField(DEFAULT_MIRROR_CRONS.products),
   /** One schedule for the whole price model (price tables, versions, list prices). */
   SYNC_CRON_PRICES: cronField(DEFAULT_MIRROR_CRONS.prices),
+  /**
+   * Login-directory mirror: keeps ONLY `sellers` + `directoryUsers` fresh (read-only) so the Sankhya-only login can create and
+   * reconcile accounts. Off by default; works with `SYNC_MIRROR_ENABLED=false` and never enables another entity. When the full
+   * mirror is on, its own schedule already covers both entities and this switch only adds the startup sync.
+   */
+  AUTH_DIRECTORY_SYNC_ENABLED: z
+    .enum(['0', '1', 'true', 'false'], { error: "must be '1' or '0' (or 'true'/'false')." })
+    .default('0')
+    .transform((value) => value === '1' || value === 'true'),
+  AUTH_DIRECTORY_SYNC_CRON: cronField(DEFAULT_MIRROR_CRONS.sellers),
   /** How long a graceful shutdown waits for running jobs before giving up. */
   WORKER_SHUTDOWN_TIMEOUT_MS: integerField({ min: 1000, max: 600_000 }, 30_000),
 

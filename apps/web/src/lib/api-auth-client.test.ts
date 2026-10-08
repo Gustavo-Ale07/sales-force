@@ -52,6 +52,15 @@ describe("API-backed AuthClient", () => {
     await expect(client.login({ username: "usuario.teste", password: "x" })).resolves.toMatchObject({ ok: false, reason, correlationId: "req-1" });
   });
 
+  it("shows a valid Sankhya login without Force access as access_not_configured (403 with that exact code)", async () => {
+    const { client } = clientWith({ "POST /auth/login": apiError(403, "access_not_configured", "x", { requestId: "req-1" }) });
+    await expect(client.login({ username: "usuario.teste", password: "x" })).resolves.toMatchObject({
+      ok: false,
+      reason: "access_not_configured",
+      correlationId: "req-1",
+    });
+  });
+
   it("never reports a CORS/origin rejection (403 forbidden) as a channel restriction", async () => {
     const { client } = clientWith({ "POST /auth/login": apiError(403, "forbidden", "x", { requestId: "req-1" }) });
     const result = await client.login({ username: "usuario.teste", password: "x" });

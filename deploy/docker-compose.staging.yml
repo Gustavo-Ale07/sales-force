@@ -190,6 +190,10 @@ services:
       ALLOW_FAKE_GATEWAY: ${ALLOW_FAKE_GATEWAY:-}
       # Mandatory and explicit in live mode (scheduled mirror never starts against a real Sankhya by default).
       SYNC_MIRROR_ENABLED: ${SYNC_MIRROR_ENABLED:-}
+      # Login directory only: keeps `sellers` + `directoryUsers` fresh (read-only, enqueued once at startup, then on the cron) for the
+      # Sankhya-only login. Independent of SYNC_MIRROR_ENABLED and never enables customers, products, prices or media.
+      AUTH_DIRECTORY_SYNC_ENABLED: ${AUTH_DIRECTORY_SYNC_ENABLED:-0}
+      AUTH_DIRECTORY_SYNC_CRON: ${AUTH_DIRECTORY_SYNC_CRON:-*/15 * * * *}
       # Product photos (ERP -> persistent volume). OFF by default: nothing is registered or scheduled until the
       # owner enables it. The directory is the only writable path of the worker besides /tmp.
       PRODUCT_MEDIA_SYNC_ENABLED: ${PRODUCT_MEDIA_SYNC_ENABLED:-false}

@@ -658,7 +658,7 @@ export interface components {
             details?: components["schemas"]["ErrorDetails"];
         };
         /** @enum {string} */
-        ErrorCode: "validation_failed" | "unauthenticated" | "invalid_credentials" | "forbidden" | "not_found" | "conflict" | "version_conflict" | "idempotency_conflict" | "order_not_editable" | "installation_not_enabled" | "erp_submission_disabled" | "dataset_mismatch" | "no_seller_scope" | "customer_without_seller" | "customer_ineligible" | "link_reconciliation_required" | "rate_limited" | "service_unavailable" | "internal_error";
+        ErrorCode: "validation_failed" | "unauthenticated" | "invalid_credentials" | "access_not_configured" | "forbidden" | "not_found" | "conflict" | "version_conflict" | "idempotency_conflict" | "order_not_editable" | "installation_not_enabled" | "erp_submission_disabled" | "dataset_mismatch" | "no_seller_scope" | "customer_without_seller" | "customer_ineligible" | "link_reconciliation_required" | "rate_limited" | "service_unavailable" | "internal_error";
         ErrorDetails: {
             issues?: components["schemas"]["ErrorIssue"][];
         } & {

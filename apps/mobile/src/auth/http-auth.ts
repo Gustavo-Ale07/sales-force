@@ -8,6 +8,7 @@ import type { AuthPort, LoginResult } from "./auth-port";
  * refusal), so it is "unavailable", not a specific wrong reason.
  */
 export function mapLoginFailure(error: ApiRequestError): Extract<LoginResult, { ok: false }> {
+  if (error.status === 403 && error.code === "access_not_configured") return { ok: false, reason: "access_not_configured" };
   switch (error.status) {
     case 400:
     case 401:

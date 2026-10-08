@@ -93,6 +93,8 @@ export type DirectorySyncOutcome =
  */
 export interface ExternalAccountLinks {
   findAccountId(externalUserId: string): Promise<string | null>;
+  /** True when the account holds at least one AUTOMATIC (`sankhya_auto`) seller link; manual links never count. */
+  hasAutomaticLink(accountId: string): Promise<boolean>;
   /** True when the mirrored seller exists, is not deleted and is active in the ERP. */
   isSellerActive(sellerCode: number): Promise<boolean>;
   /**

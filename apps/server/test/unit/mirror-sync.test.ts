@@ -16,7 +16,7 @@ import {
   type MirrorRow,
 } from '../../src/sync/mirror-entities.js';
 import { mirrorLockObjectId } from '../../src/sync/entity-lock.js';
-import { DEFAULT_MIRROR_CRONS, mirrorSchedulesFromSettings } from '../../src/sync/schedules.js';
+import { DEFAULT_MIRROR_CRONS, mirrorSchedulesFromSettings, startupSyncEntities } from '../../src/sync/schedules.js';
 import { PermanentJobError, TransientJobError } from '../../src/worker/job-contract.js';
 import { QUEUE_NAMES, QUEUE_REGISTRY } from '../../src/worker/queues.js';
 
@@ -227,6 +227,29 @@ describe('schedules, queues and locks', () => {
     expect(Object.values(mirrorSchedulesFromSettings({ ...settings, SYNC_MIRROR_ENABLED: false })).every((cron) => cron === null)).toBe(
       true,
     );
+  });
+
+  it('the login-directory schedule runs ONLY sellers + directoryUsers, even with the full mirror off', () => {
+    const settings = {
+      SYNC_MIRROR_ENABLED: false,
+      SYNC_CRON_SELLERS: '1 * * * *',
+      SYNC_CRON_CUSTOMERS: '2 * * * *',
+      SYNC_CRON_PRODUCTS: '3 * * * *',
+      SYNC_CRON_PRICES: '4 * * * *',
+      AUTH_DIRECTORY_SYNC_ENABLED: true,
+      AUTH_DIRECTORY_SYNC_CRON: '*/15 * * * *',
+    };
+    const schedules = mirrorSchedulesFromSettings(settings);
+    expect(Object.entries(schedules).filter(([, cron]) => cron !== null).map(([entity]) => entity).sort()).toEqual(['directoryUsers', 'sellers']);
+    expect(schedules.sellers).toBe('*/15 * * * *');
+    expect(schedules.directoryUsers).toBe('*/15 * * * *');
+    expect(startupSyncEntities(settings)).toEqual(['sellers', 'directoryUsers']);
+  });
+
+  it('schedules nothing and runs no startup sync when the login directory sync is off', () => {
+    const settings = { SYNC_MIRROR_ENABLED: false, SYNC_CRON_SELLERS: '1 * * * *', SYNC_CRON_CUSTOMERS: '2 * * * *', SYNC_CRON_PRODUCTS: '3 * * * *', SYNC_CRON_PRICES: '4 * * * *' };
+    expect(Object.values(mirrorSchedulesFromSettings(settings)).every((cron) => cron === null)).toBe(true);
+    expect(startupSyncEntities(settings)).toEqual([]);
   });
 
   it('has valid 5-field default crons', () => {

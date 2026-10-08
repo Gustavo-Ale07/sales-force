@@ -14,6 +14,8 @@ export function describeLoginFailure(failure: LoginFailure): string {
   switch (failure.reason) {
     case "invalid_credentials":
       return "Usuário ou senha inválidos.";
+    case "access_not_configured":
+      return "Usuário autenticado, mas o acesso ao Force ainda não está configurado.";
     case "rate_limited":
       return failure.retryAfterSeconds !== undefined
         ? `Muitas tentativas. Tente novamente em ${failure.retryAfterSeconds} segundos.`

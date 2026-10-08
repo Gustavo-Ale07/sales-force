@@ -161,7 +161,7 @@ describe('AuthService.loginExternal', () => {
     expect(row?.detail).toMatchObject({ reason: 'external_invalid_credentials' });
   });
 
-  it('gives the same client-visible error for wrong password, unmapped, inactive and disabled accounts', async () => {
+  it('separates authentication from authorization: wrong password is 401, a valid Sankhya login without Force access is 403 access_not_configured', async () => {
     const ctx = await setup();
     await provision(ctx, { email: 'a@example.test', login: 'A' });
     await provision(ctx, { email: 'b@example.test', login: 'B', active: false });
@@ -175,7 +175,11 @@ describe('AuthService.loginExternal', () => {
       failure(ctx.service.loginExternal({ login: 'C', password: EXT_PASSWORD }, { ...META, ip: '10.0.0.3' })),
       failure(ctx.service.loginExternal({ login: 'D', password: EXT_PASSWORD }, { ...META, ip: '10.0.0.4' })),
     ]);
-    expect(new Set(errors.map((e) => `${e.code}|${e.message}|${e.status}`)).size).toBe(1);
+    expect(errors[0]).toMatchObject({ code: 'invalid_credentials', status: 401 });
+    // Authenticated but without proven Force access (inactive, disabled, no account): one uniform 403, no session.
+    expect(new Set(errors.slice(1).map((e) => `${e.code}|${e.message}|${e.status}`))).toEqual(
+      new Set(['access_not_configured|Usuário autenticado, mas o acesso ao Force ainda não está configurado.|403']),
+    );
     const reasons = (await audit(ctx, 'auth.login.failure')).map((row) => (row.detail as { reason: string }).reason).sort();
     expect(reasons).toEqual(['external_account_disabled', 'external_inactive', 'external_invalid_credentials', 'external_unmapped']);
     expect(await ctx.db.select().from(session)).toHaveLength(0);
@@ -273,12 +277,12 @@ describe('AuthService.loginExternal', () => {
     ['the directory reports a seller but the account has no link', { email: 'nolink@example.test', login: 'NOLINK', role: 'seller', directorySeller: 103 }, 'no_link'],
     ['the directory seller code differs from the Force link', { email: 'mis@example.test', login: 'MIS', role: 'seller', sellerCode: 103, directorySeller: 918273 }, 'mismatch'],
     ['a manager has no link but the directory reports a seller', { email: 'mgr@example.test', login: 'MGR', role: 'manager', directorySeller: 55 }, 'no_link'],
-  ] as const)('fails closed (uniform 401 invalid_credentials, no session, audited with the reason) when %s', async (_label, opts, reason) => {
+  ] as const)('fails closed (403 access_not_configured, no session, audited with the reason) when %s', async (_label, opts, reason) => {
     const ctx = await setup();
     const acc = await provision(ctx, opts);
     const err = await failure(ctx.service.loginExternal({ login: opts.login, password: EXT_PASSWORD }, META));
-    expect(err.code).toBe('invalid_credentials');
-    expect(err.status).toBe(401);
+    expect(err.code).toBe('access_not_configured');
+    expect(err.status).toBe(403);
     expect(await ctx.db.select().from(session)).toHaveLength(0);
     const [row] = await audit(ctx, 'auth.login.link_mismatch');
     expect(row?.actorAccountId).toBe(acc.id);
@@ -310,8 +314,8 @@ describe('AuthService.loginExternal', () => {
     const acc = await provision(ctx, { email: 'ana@example.test', login: 'ANA', sellerCode: 103, directorySeller: null });
     ctx.links.inactiveSellers.add(103);
     const err = await failure(ctx.service.loginExternal({ login: 'ANA', password: EXT_PASSWORD }, META));
-    expect(err.code).toBe('invalid_credentials');
-    expect(err.status).toBe(401);
+    expect(err.code).toBe('access_not_configured');
+    expect(err.status).toBe(403);
     expect(await ctx.db.select().from(session)).toHaveLength(0);
     const [row] = await audit(ctx, 'auth.login.failure');
     expect(row?.actorAccountId).toBe(acc.id);
@@ -332,8 +336,8 @@ describe('AuthService.loginExternal', () => {
     await provision(ctx, { email: 'adm@example.test', login: 'ADM', role: 'admin' });
 
     const refused = await failure(ctx.service.loginExternal({ login: 'ANA', password: EXT_PASSWORD }, META));
-    expect(refused.code).toBe('invalid_credentials');
-    expect(refused.status).toBe(401);
+    expect(refused.code).toBe('access_not_configured');
+    expect(refused.status).toBe(403);
     expect(await ctx.db.select().from(session)).toHaveLength(0);
     const [row] = await audit(ctx, 'auth.login.failure');
     expect(row?.actorAccountId).toBe(seller.id);
@@ -344,16 +348,13 @@ describe('AuthService.loginExternal', () => {
     expect(await ctx.db.select().from(session)).toHaveLength(1);
   });
 
-  it('counts a link mismatch like a failed login (same error as a wrong password, then the login locks)', async () => {
+  it('counts a link mismatch like a failed login (403 for the denied access, then the login locks)', async () => {
     const ctx = await setup({ maxFailures: 2 });
     await provision(ctx, { email: 'mis@example.test', login: 'MIS', role: 'seller', sellerCode: 103, directorySeller: 918273 });
     const wrong = await failure(ctx.service.loginExternal({ login: 'MIS', password: 'bad-bad-bad' }, META));
     const mismatch = await failure(ctx.service.loginExternal({ login: 'MIS', password: EXT_PASSWORD }, META));
-    expect({ code: mismatch.code, status: mismatch.status, message: mismatch.message }).toEqual({
-      code: wrong.code,
-      status: wrong.status,
-      message: wrong.message,
-    });
+    expect(wrong).toMatchObject({ code: 'invalid_credentials', status: 401 });
+    expect(mismatch).toMatchObject({ code: 'access_not_configured', status: 403 });
     const keys = (await ctx.db.select().from(authThrottle)).map((row) => row.key);
     expect(keys.filter((key) => key.startsWith('extlogin:')).length).toBeGreaterThanOrEqual(1);
     // Two failures reached the per-login limit: the next attempt is refused before the directory.
@@ -379,7 +380,7 @@ describe('AuthService.loginExternal', () => {
     );
     await provision(ctx, { email: 'mis@example.test', login: 'MIS', role: 'seller', sellerCode: 103, directorySeller: 918273 });
     const started = Date.now();
-    expect((await failure(service.loginExternal({ login: 'MIS', password: EXT_PASSWORD }, META))).code).toBe('invalid_credentials');
+    expect((await failure(service.loginExternal({ login: 'MIS', password: EXT_PASSWORD }, META))).code).toBe('access_not_configured');
     expect(Date.now() - started).toBeGreaterThanOrEqual(140);
   });
 
@@ -416,7 +417,7 @@ describe('AuthService.loginExternal', () => {
       ['inactive directory user', { email: 'c@example.test', login: 'C', sellerCode: 103, active: false }, EXT_PASSWORD],
       ['disabled account', { email: 'd@example.test', login: 'D', sellerCode: 103 }, 'DISABLED'],
       ['link mismatch', { email: 'e@example.test', login: 'E', role: 'seller', sellerCode: 103, directorySeller: 918273 }, EXT_PASSWORD],
-    ] as const)('still answers the uniform invalid_credentials and counts the failure: %s', async (label, opts, password) => {
+    ] as const)('still answers 401 (wrong password) or 403 (no Force access) and counts the failure: %s', async (label, opts, password) => {
       const ctx = await setup();
       const acc = await provision(ctx, opts);
       if (password === 'UNMAPPED') ctx.links.links.clear();
@@ -425,7 +426,9 @@ describe('AuthService.loginExternal', () => {
       const real = password === 'UNMAPPED' || password === 'DISABLED' ? EXT_PASSWORD : password;
 
       const err = await failure(service.loginExternal({ login: opts.login, password: real }, META));
-      expect({ code: err.code, status: err.status }).toEqual({ code: 'invalid_credentials', status: 401 });
+      expect({ code: err.code, status: err.status }).toEqual(
+        label === 'wrong password' ? { code: 'invalid_credentials', status: 401 } : { code: 'access_not_configured', status: 403 },
+      );
       expect(brokenAudit.attempts).toBeGreaterThanOrEqual(1);
       expect(await ctx.db.select().from(session)).toHaveLength(0);
       // The throttle still moved (fail closed): per-login counter exists.
@@ -447,7 +450,7 @@ describe('AuthService.loginExternal', () => {
       for (let i = 0; i < 8; i += 1) {
         codes.push((await failure(service.loginExternal({ login: 'MIS', password: EXT_PASSWORD }, META))).code);
       }
-      expect(codes[0]).toBe('invalid_credentials');
+      expect(codes[0]).toBe('access_not_configured');
       expect(codes).toContain('rate_limited');
     });
 
@@ -456,7 +459,7 @@ describe('AuthService.loginExternal', () => {
       await provision(ctx, { email: 'mis@example.test', login: 'MIS', role: 'seller', sellerCode: 103, directorySeller: 918273 });
       const { service } = withBrokenAudit(ctx, 150);
       const started = Date.now();
-      expect((await failure(service.loginExternal({ login: 'MIS', password: EXT_PASSWORD }, META))).code).toBe('invalid_credentials');
+      expect((await failure(service.loginExternal({ login: 'MIS', password: EXT_PASSWORD }, META))).code).toBe('access_not_configured');
       expect(Date.now() - started).toBeGreaterThanOrEqual(140);
     });
   });

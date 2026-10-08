@@ -214,12 +214,12 @@ describe('AuthService.login (user name + password, hybrid)', () => {
     expect(await ctx.db.select().from(account)).toHaveLength(0);
   });
 
-  it('refuses a verified user with no seller, creating no account (reason only in the audit)', async () => {
+  it('refuses a verified user with no seller (403 access_not_configured), creating no account (reason only in the audit)', async () => {
     const ctx = await setup(AUTO);
     await directoryUser(ctx, 'semvend', 4502, null);
     const err = await failure(ctx.service.login({ username: 'semvend', password: SANKHYA_PASSWORD }, META));
-    expect(err.code).toBe('invalid_credentials');
-    expect(err.message).toBe('Usuário ou senha inválidos.');
+    expect(err.code).toBe('access_not_configured');
+    expect(err.message).toBe('Usuário autenticado, mas o acesso ao Force ainda não está configurado.');
     expect(await ctx.db.select().from(account)).toHaveLength(0);
     expect(await ctx.db.select().from(session)).toHaveLength(0);
     const [row] = await ctx.db.select().from(auditLog).where(eq(auditLog.action, 'auth.login.failure'));
@@ -235,7 +235,7 @@ describe('AuthService.login (user name + password, hybrid)', () => {
     await directoryUser(ctx, 'apagado', 4511, 111);
     await directoryUser(ctx, 'fantasma', 4512, 999);
     for (const login of ['inativo', 'apagado', 'fantasma']) {
-      expect((await failure(ctx.service.login({ username: login, password: SANKHYA_PASSWORD }, META))).code).toBe('invalid_credentials');
+      expect((await failure(ctx.service.login({ username: login, password: SANKHYA_PASSWORD }, META))).code).toBe('access_not_configured');
     }
     expect(await ctx.db.select().from(account)).toHaveLength(0);
     expect(await ctx.db.select().from(session)).toHaveLength(0);
@@ -248,7 +248,7 @@ describe('AuthService.login (user name + password, hybrid)', () => {
     const first = await ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META);
     await ctx.db.update(erpSeller).set({ active: false }).where(eq(erpSeller.code, 103));
     const err = await failure(ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META));
-    expect(err.code).toBe('invalid_credentials');
+    expect(err.code).toBe('access_not_configured');
     expect(await directoryAudit(ctx, 'auth.directory.link_revoked')).toEqual(['seller_inactive']);
     expect(await ctx.db.select().from(accountSellerLink)).toHaveLength(0);
     const [live] = await ctx.db.select().from(session).where(eq(session.accountId, first.user.accountId));
@@ -267,14 +267,14 @@ describe('AuthService.login (user name + password, hybrid)', () => {
     await ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META);
     await ctx.db.update(account).set({ status: 'disabled' }).where(eq(account.externalUserId, '4501'));
     const err = await failure(ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META));
-    expect(err.code).toBe('invalid_credentials');
+    expect(err.code).toBe('access_not_configured');
   });
 
   it('refuses a directory-inactive user', async () => {
     const ctx = await setup(AUTO);
     await addSeller(ctx, 103, 'Vendedor Sintetico');
     await directoryUser(ctx, 'plac123', 4501, 103, false);
-    expect((await failure(ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META))).code).toBe('invalid_credentials');
+    expect((await failure(ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META))).code).toBe('access_not_configured');
     expect(await ctx.db.select().from(account)).toHaveLength(0);
   });
 
@@ -285,7 +285,7 @@ describe('AuthService.login (user name + password, hybrid)', () => {
     const owner = await preLink(ctx, { username: 'manual', externalUserId: '4501', sellerCode: 103 });
     await directoryUser(ctx, 'dois', 4502, 103); // the ERP says user 4502 is seller 103, but a Force account already holds it
     await directoryUser(ctx, 'tres', 4503, 107);
-    expect((await failure(ctx.service.login({ username: 'dois', password: SANKHYA_PASSWORD }, META))).code).toBe('invalid_credentials');
+    expect((await failure(ctx.service.login({ username: 'dois', password: SANKHYA_PASSWORD }, META))).code).toBe('access_not_configured');
     expect(await directoryAudit(ctx, 'auth.directory.link_refused')).toEqual(['seller_claimed']);
     const three = await ctx.service.login({ username: 'tres', password: SANKHYA_PASSWORD }, META);
     expect(three.user.sellerCodes).toEqual([107]);
@@ -300,7 +300,7 @@ describe('AuthService.login (user name + password, hybrid)', () => {
     await directoryUser(ctx, 'um', 4501, 103);
     await directoryUser(ctx, 'dois', 4502, 103);
     for (const login of ['um', 'dois']) {
-      expect((await failure(ctx.service.login({ username: login, password: SANKHYA_PASSWORD }, META))).code).toBe('invalid_credentials');
+      expect((await failure(ctx.service.login({ username: login, password: SANKHYA_PASSWORD }, META))).code).toBe('access_not_configured');
     }
     expect(await directoryAudit(ctx, 'auth.directory.link_refused')).toEqual(['seller_ambiguous', 'seller_ambiguous']);
     expect(await ctx.db.select().from(account)).toHaveLength(0);
@@ -359,7 +359,7 @@ describe('AuthService.login: restrictions of the directory path', () => {
     const ctx = await setup(AUTO);
     await addSeller(ctx, 103, 'Vendedor Sintetico');
     ctx.verifier.forced = { ok: { externalUserId: '', displayName: '', sellerCode: 103, active: true } };
-    expect((await failure(ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META))).code).toBe('invalid_credentials');
+    expect((await failure(ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META))).code).toBe('access_not_configured');
     expect(await ctx.db.select().from(account)).toHaveLength(0);
   });
 
@@ -382,11 +382,11 @@ describe('AuthService.login: restrictions of the directory path', () => {
     await addSeller(ctx, 103, 'Vendedor Um');
     await directoryUser(ctx, 'um', 4501, 103);
     await markDirectoryFresh(ctx, new Date(ctx.clock.fn().getTime() - 3 * 60 * 60 * 1000)); // older than the 2 h default
-    expect((await failure(ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META))).code).toBe('invalid_credentials');
+    expect((await failure(ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META))).code).toBe('access_not_configured');
     expect(await directoryAudit(ctx, 'auth.directory.link_refused')).toEqual(['directory_stale']);
     expect(await ctx.db.select().from(account)).toHaveLength(0);
     await ctx.db.delete(syncState);
-    expect((await failure(ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META))).code).toBe('invalid_credentials');
+    expect((await failure(ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META))).code).toBe('access_not_configured');
     expect(await ctx.db.select().from(account)).toHaveLength(0);
   });
 
@@ -396,7 +396,7 @@ describe('AuthService.login: restrictions of the directory path', () => {
     const admin = await createTestAccount(ctx.database.handle, { username: 'admin', role: 'admin' }, ctx.clock.fn);
     await ctx.db.update(account).set({ externalUserId: '9000' }).where(eq(account.id, admin.id));
     await directoryUser(ctx, 'someone', 9000, 103);
-    expect((await failure(ctx.service.login({ username: 'someone', password: SANKHYA_PASSWORD }, META))).code).toBe('invalid_credentials');
+    expect((await failure(ctx.service.login({ username: 'someone', password: SANKHYA_PASSWORD }, META))).code).toBe('access_not_configured');
     const [row] = await ctx.db.select().from(account).where(eq(account.id, admin.id));
     expect(row?.role).toBe('admin');
     expect(await ctx.db.select().from(accountSellerLink)).toHaveLength(0);
@@ -545,8 +545,8 @@ describe('link mode: PRE_LINKED is the default and never creates accounts', () =
     await addSeller(ctx, 103, 'Vendedor Sintetico');
     await directoryUser(ctx, 'plac123', 4501, 103);
     const err = await failure(ctx.service.login({ username: 'plac123', password: SANKHYA_PASSWORD }, META));
-    expect(err.code).toBe('invalid_credentials');
-    expect(err.message).toBe('Usuário ou senha inválidos.');
+    expect(err.code).toBe('access_not_configured');
+    expect(err.message).toBe('Usuário autenticado, mas o acesso ao Force ainda não está configurado.');
     expect(await ctx.db.select().from(account)).toHaveLength(0);
     expect(await ctx.db.select().from(accountSellerLink)).toHaveLength(0);
     expect(await ctx.db.select().from(session)).toHaveLength(0);

@@ -3,7 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { createDb } from '@salesforce/db';
 import { loadWorkerConfig } from './config/worker-env.js';
 import { FilesystemObjectStore } from './media/object-store.js';
-import { mirrorSchedulesFromSettings } from './sync/schedules.js';
+import { mirrorSchedulesFromSettings, startupSyncEntities } from './sync/schedules.js';
 import { createLogger } from './observability/logger.js';
 import { NestPinoLogger } from './observability/nest-logger.js';
 import { installProcessGuards, logPoolErrors, runMain } from './process.js';
@@ -32,7 +32,7 @@ runMain('worker', async () => {
         health: { host: env.WORKER_HEALTH_HOST, port: env.WORKER_HEALTH_PORT },
         gatewayMode: gatewayDescription.mode,
       },
-      { gateway, schedules: mirrorSchedulesFromSettings(env) },
+      { gateway, schedules: mirrorSchedulesFromSettings(env), startupSync: startupSyncEntities(env) },
       env.PRODUCT_MEDIA_SYNC_ENABLED && env.PRODUCT_MEDIA_DIR !== undefined
         ? {
             gateway,

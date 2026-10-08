@@ -6,6 +6,7 @@ import { CLOCK, DATABASE_HANDLE, LOGGER, type Clock } from '../platform/tokens.j
 import { loadCurrentReadScope } from '../sync/mirror-scope.js';
 import { MirrorSyncService } from '../sync/mirror-sync.service.js';
 import type { MirrorGateway } from '../sync/mirror-entities.js';
+import type { MirrorEntity } from '../sync/mirror-entities.js';
 import type { MirrorSchedules } from '../sync/schedules.js';
 import { ProductMediaSyncService, type MediaGateway, type ProductMediaSettings } from '../media/product-media-sync.service.js';
 import type { ObjectStore } from '../media/object-store.js';
@@ -32,7 +33,7 @@ export class WorkerModule {
   static register(
     deps: InfrastructureDeps,
     options: WorkerRuntimeOptions,
-    mirror?: { readonly gateway: MirrorGateway; readonly schedules: MirrorSchedules },
+    mirror?: { readonly gateway: MirrorGateway; readonly schedules: MirrorSchedules; readonly startupSync?: readonly MirrorEntity[] },
     media?: ProductMediaWiring,
   ): DynamicModule {
     return {
@@ -49,7 +50,7 @@ export class WorkerModule {
               options,
               ...(mirror === undefined
                 ? {}
-                : { mirror: { service: new MirrorSyncService({ db, gateway: mirror.gateway, logger, now, readScope: () => loadCurrentReadScope(db.db) }), schedules: mirror.schedules } }),
+                : { mirror: { service: new MirrorSyncService({ db, gateway: mirror.gateway, logger, now, readScope: () => loadCurrentReadScope(db.db) }), schedules: mirror.schedules, ...(mirror.startupSync === undefined ? {} : { startupSync: mirror.startupSync }) } }),
               ...(media === undefined
                 ? {}
                 : {

@@ -349,7 +349,7 @@ export class AuthService implements OnModuleInit {
       }
       return this.failExternal(result.fail === 'unmapped' ? 'external_unmapped' : 'external_invalid_credentials', null, {
         normalized, loginKey, ipKey, now, auditMeta, startedAt, minFailureMs: settings.minFailureMs,
-      });
+      }, 'credentials');
     }
 
     // 3. Directory user -> existing Force account, by explicit link only.
@@ -360,7 +360,14 @@ export class AuthService implements OnModuleInit {
       return this.failExternal('external_unmapped', null, failCtx);
     }
     let accountId = await links.findAccountId(identity.externalUserId);
-    if ((settings.linkMode ?? 'PRE_LINKED') === 'VERIFIED_AUTO_PROVISION' && this.roleMayHoldSession('seller')) {
+    // An existing admin/manager/technical account is not a seller account: the seller sync never applies to it (it needs no
+    // CODVEND and must not be refused for lacking one). Its own checks below still run.
+    const existingRole = accountId === null ? null : ((await this.accounts.findById(accountId))?.role ?? null);
+    if (
+      (settings.linkMode ?? 'PRE_LINKED') === 'VERIFIED_AUTO_PROVISION' &&
+      this.roleMayHoldSession('seller') &&
+      (existingRole === null || existingRole === 'seller')
+    ) {
       // Explicit VERIFIED_AUTO_PROVISION only (never the default). The login proved the directory identity; the Force account and
       // its seller link come ONLY from the official ERP user -> seller relation (mirrored), in one transaction: created on the first
       // login, reconciled on later ones, refused (audited with the specific reason) on anything unproven. Manual links and non-seller
@@ -372,7 +379,7 @@ export class AuthService implements OnModuleInit {
           maxMirrorAgeMs: settings.directoryMaxAgeMs ?? DEFAULT_DIRECTORY_MAX_AGE_MS,
           allowCreate: true,
         });
-        if (!sync.ok) return this.failExternal('external_directory_refused', sync.accountId, failCtx);
+        if (!sync.ok) return this.failExternal('external_directory_refused', sync.accountId, failCtx, 'access', sync.refusal);
         accountId = sync.accountId;
       } catch (error) {
         this.logger.warn({ ...errorLogFields(error) }, 'could not sync the seller account of an external login from the directory (fail closed)');
@@ -466,7 +473,7 @@ export class AuthService implements OnModuleInit {
     if (!this.roleMayHoldSession(row.role, row.external)) return null;
     // An automatic seller link follows the ERP: re-checked at most once per touch interval (the revocation window, on top of the
     // mirror refresh). Fail closed: a definitive change revokes the sessions; an old or missing mirror only denies this request.
-    if (row.external && row.role === 'seller' && !(await this.automaticLinkHolds(row.externalUserId, now, row.lastSeenAt))) return null;
+    if (row.external && row.role === 'seller' && !(await this.automaticLinkHolds(row.accountId, row.externalUserId, now, row.lastSeenAt))) return null;
 
     let expiresAt = row.expiresAt;
     let renewed = false;
@@ -496,13 +503,15 @@ export class AuthService implements OnModuleInit {
    * True unless the account's AUTOMATIC seller link no longer holds against the official ERP relation. Only meaningful in
    * VERIFIED_AUTO_PROVISION; always true otherwise or when the interval since the last check has not elapsed.
    */
-  private async automaticLinkHolds(externalUserId: string | null, now: Date, lastSeenAt: Date): Promise<boolean> {
+  private async automaticLinkHolds(accountId: string, externalUserId: string | null, now: Date, lastSeenAt: Date): Promise<boolean> {
     const settings = this.config.externalLogin;
     const links = this.externalLinks;
     if (settings === undefined || links === undefined || (settings.linkMode ?? 'PRE_LINKED') !== 'VERIFIED_AUTO_PROVISION') return true;
     if (now.getTime() - lastSeenAt.getTime() < this.config.sessionTouchIntervalMs) return true;
     try {
       if (externalUserId === null) return true;
+      // A manual (administrator) link is never governed by the mirror: only `sankhya_auto` links follow the ERP.
+      if (!(await links.hasAutomaticLink(accountId))) return true;
       const sync = await links.syncFromDirectory({
         externalUserId,
         now,
@@ -605,6 +614,10 @@ export class AuthService implements OnModuleInit {
       startedAt: number;
       minFailureMs: number;
     },
+    /** `credentials`: Sankhya rejected the login (401). `access`: Sankhya authenticated it but Force access is not proven (403). */
+    kind: 'credentials' | 'access' = 'access',
+    /** The specific technical cause (a directory refusal such as `no_seller`), kept in the audit row only. */
+    technical?: string,
   ): Promise<never> {
     await this.recordFailure({
       reason,
@@ -615,9 +628,10 @@ export class AuthService implements OnModuleInit {
       now: ctx.now,
       auditMeta: ctx.auditMeta,
       globalKey: EXTERNAL_GLOBAL_FAILURES_KEY,
+      technical,
     });
     await padFailure(ctx.startedAt, ctx.minFailureMs);
-    throw new AppError('invalid_credentials');
+    throw new AppError(kind === 'credentials' ? 'invalid_credentials' : 'access_not_configured');
   }
 
   /**
@@ -666,6 +680,7 @@ export class AuthService implements OnModuleInit {
     now: Date;
     auditMeta: { ip: string; userAgent: string | null; requestId: string };
     globalKey?: string;
+    technical?: string;
   }): Promise<void> {
     const account = await this.throttle.recordFailure(input.loginKey, input.now, this.config.throttle.account);
     const ip = await this.throttle.recordFailure(input.ipKey, input.now, this.config.throttle.ip);
@@ -677,6 +692,7 @@ export class AuthService implements OnModuleInit {
       detail: {
         ...input.auditMeta,
         reason: input.reason,
+        ...(input.technical === undefined ? {} : { technical: input.technical }),
         // Attacker-chosen text is never stored: a short fingerprint lets an investigator correlate.
         ...(input.accountId === null ? { emailFingerprint: loginNameFingerprint(input.loginName) } : {}),
       },

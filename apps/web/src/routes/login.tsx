@@ -35,6 +35,8 @@ function FailureAlert({ failure }: { failure: LoginFailure }) {
   switch (failure.reason) {
     case "invalid_credentials":
       return <Alert tone="danger" title="Usuário ou senha inválidos." />;
+    case "access_not_configured":
+      return <Alert tone="warning" title="Usuário autenticado, mas o acesso ao Force ainda não está configurado." />;
     case "locked":
       return (
         <Alert tone="danger" title="Acesso temporariamente bloqueado.">

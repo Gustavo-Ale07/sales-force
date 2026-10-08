@@ -123,6 +123,8 @@ services:
       # Scheduled mirror jobs. Empty = the worker default (on for the fake gateway; MANDATORY and explicit in live
       # mode). Keep false against a real Sankhya until sync is run manually (sync:once).
       SYNC_MIRROR_ENABLED: ${SYNC_MIRROR_ENABLED:-}
+      AUTH_DIRECTORY_SYNC_ENABLED: ${AUTH_DIRECTORY_SYNC_ENABLED:-0}
+      AUTH_DIRECTORY_SYNC_CRON: ${AUTH_DIRECTORY_SYNC_CRON:-*/15 * * * *}
       # Product photos: OFF by default (nothing registered or scheduled). `product-media:bootstrap` runs the first load.
       PRODUCT_MEDIA_SYNC_ENABLED: ${PRODUCT_MEDIA_SYNC_ENABLED:-false}
       # Dev runs the synthetic fake gateway: storing its images needs this explicit opt-in.
