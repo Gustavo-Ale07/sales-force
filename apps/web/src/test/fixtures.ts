@@ -97,7 +97,7 @@ export function productDetail(overrides: Partial<ApiSchema<"ProductDetail">> = {
   return { ...base, listPrice, usageCode: null, priceContext, ...overrides };
 }
 
-export function orderItem(overrides: Partial<ApiSchema<"OrderItem">> = {}): ApiSchema<"OrderItem"> {
+export function orderItem(overrides: Partial<ApiSchema<"OrderItemDetail">> = {}): ApiSchema<"OrderItemDetail"> {
   return {
     lineNo: 1,
     productCode: 2001,

@@ -43,6 +43,8 @@ export interface EditorLine {
   price: LinePrice;
   /** Product group, for the group discount. `undefined` = not known yet (a line loaded from a saved order); `code: null` = the product has no group. */
   group?: { code: number | null; name: string | null };
+  /** Photo metadata from the shared product media source (catalog and orders); `null`/absent = placeholder. */
+  image?: ApiSchema<"ProductImage"> | null;
 }
 
 export type QuantityProblem = "empty" | DecimalError | "dot_separator";
@@ -112,10 +114,11 @@ export function lineFromProduct(product: ProductRow, key: string): EditorLine {
     discountText: "",
     price: priceFromListPrice(product.listPrice),
     group: { code: product.groupCode, name: product.groupName },
+    image: product.image ?? null,
   };
 }
 
-export function lineFromOrderItem(item: ApiSchema<"OrderItem">, key: string): EditorLine {
+export function lineFromOrderItem(item: ApiSchema<"OrderItemDetail">, key: string): EditorLine {
   return {
     key,
     productCode: item.productCode,
@@ -129,6 +132,7 @@ export function lineFromOrderItem(item: ApiSchema<"OrderItem">, key: string): Ed
       tableCode: item.priceTableCode,
       versionId: item.priceVersionId,
     },
+    image: item.image ?? null,
   };
 }
 

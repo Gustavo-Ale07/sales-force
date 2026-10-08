@@ -19,6 +19,7 @@ import {
   presentSkips,
   type CustomerScope,
 } from '@salesforce/domain';
+import { ProductImageService } from '../catalog/product-image.service.js';
 import { CustomersService } from '../customers/customers.service.js';
 import { AppError } from '../http/app-error.js';
 import { AUDIT_ACTIONS, AuditService, type AuditDetail } from '../iam/audit.service.js';
@@ -106,6 +107,7 @@ export class OrdersService {
     @Inject(CustomersService) private readonly customers: CustomersService,
     @Inject(DraftBuilder) private readonly builder: DraftBuilder,
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(ProductImageService) private readonly images: ProductImageService,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(DATASET_IDENTITY) private readonly dataset: DatasetIdentity | null,
   ) {}
@@ -477,6 +479,8 @@ export class OrdersService {
       this.orders.itemsOf(order.id),
       this.mirror.customerStates([order.customerCode]),
     ]);
+    // Same media source as the catalog; best effort (a failure degrades to no photos, the order still works).
+    const images = await this.images.metadataFor([...new Set(items.map((item) => item.productCode))]);
     const state = states.get(order.customerCode);
     return toOrderDetail(order, items, {
       customerName: state?.name ?? null,
@@ -484,7 +488,7 @@ export class OrdersService {
       customerBlockedRaw: state?.blockedRaw ?? null,
       customerSellerCode: state?.sellerCode ?? null,
       customerLive: state?.live ?? null,
-    });
+    }, images);
   }
 
   /** Identifiers and counts only: no notes, no free text. */

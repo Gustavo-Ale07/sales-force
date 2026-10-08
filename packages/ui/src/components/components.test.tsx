@@ -157,4 +157,23 @@ describe("Combobox", () => {
     expect(box).toHaveValue("Comercial Serra");
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
+
+  it("renders the optional leading visual of each option without adding it to the search text", async () => {
+    render(
+      <Combobox
+        aria-label="Produto"
+        value={null}
+        onValueChange={() => undefined}
+        options={[
+          { value: "1", label: "4158 — Bandeja", leading: <img alt="foto 4158" src="/t/1" /> },
+          { value: "2", label: "9 — Vela", leading: <span data-testid="ph">V</span> },
+        ]}
+      />,
+    );
+    await userEvent.click(screen.getByRole("combobox", { name: "Produto" }));
+    expect(screen.getByAltText("foto 4158")).toBeInTheDocument();
+    expect(screen.getByTestId("ph")).toBeInTheDocument();
+    await userEvent.type(screen.getByRole("combobox", { name: "Produto" }), "vela");
+    expect(screen.getAllByRole("option")).toHaveLength(1);
+  });
 });

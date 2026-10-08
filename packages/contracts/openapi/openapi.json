@@ -3840,7 +3840,7 @@
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/OrderItem"
+              "$ref": "#/components/schemas/OrderItemDetail"
             }
           },
           "totals": {
@@ -3964,7 +3964,7 @@
         ],
         "additionalProperties": false
       },
-      "OrderItem": {
+      "OrderItemDetail": {
         "type": "object",
         "properties": {
           "lineNo": {
@@ -4026,6 +4026,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/DecimalString"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "image": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProductImage"
               },
               {
                 "type": "null"

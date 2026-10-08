@@ -37,6 +37,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEven
 import { BulkEntryDialog, type BulkEntryItem } from "../components/bulk-entry-dialog";
 import { CustomerContextBar } from "../components/customer-context-bar";
 import { CustomerFichaDialog } from "../components/customer-ficha";
+import { ProductImage } from "../components/product-image";
 import { CustomerPicker, type PickedCustomer } from "../components/customer-picker";
 import { DiscardOrderDialog } from "../components/discard-order-dialog";
 import { DuplicateOrderButton } from "../components/duplicate-order-button";
@@ -736,8 +737,13 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
                         )}
                         <TableCell numeric>{index + 1}</TableCell>
                         <TableCell wrap>
-                          <span className="font-medium">{titleCase(line.description)}</span>
-                          <span className="block text-fg-muted">Código {line.productCode}</span>
+                          <span className="flex items-center gap-2">
+                            <ProductImage image={line.image} description={line.description} name={titleCase(line.description)} />
+                            <span className="min-w-0">
+                              <span className="font-medium">{titleCase(line.description)}</span>
+                              <span className="block text-fg-muted">Código {line.productCode}</span>
+                            </span>
+                          </span>
                           {blocked ? <FieldError>Este item não pode ser pedido sem preço nesta instalação.</FieldError> : null}
                         </TableCell>
                         <TableCell>{line.unit}</TableCell>

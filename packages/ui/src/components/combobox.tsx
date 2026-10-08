@@ -1,5 +1,5 @@
 import { Check, ChevronDown } from "lucide-react";
-import { useId, useMemo, useRef, useState, type ComponentProps, type KeyboardEvent } from "react";
+import { useId, useMemo, useRef, useState, type ComponentProps, type KeyboardEvent, type ReactNode } from "react";
 import { cn } from "../lib/cn";
 import { controlBase } from "./input";
 import { Spinner } from "./spinner";
@@ -8,6 +8,8 @@ export interface ComboboxOption {
   value: string;
   label: string;
   description?: string;
+  /** Optional leading visual (e.g. a product thumbnail). Not part of the search text. */
+  leading?: ReactNode;
   disabled?: boolean;
 }
 
@@ -163,7 +165,8 @@ export function Combobox({
               onMouseEnter={() => setActive(index)}
               onClick={() => commit(option)}
             >
-              <span className="min-w-0">
+              {option.leading ? <span className="shrink-0">{option.leading}</span> : null}
+              <span className="min-w-0 flex-1">
                 <span className="block truncate">{option.label}</span>
                 {option.description ? <span className="block truncate text-xs text-fg-muted">{option.description}</span> : null}
               </span>

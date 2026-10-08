@@ -783,7 +783,7 @@ export interface components {
             updatedAt: components["schemas"]["IsoTimestamp"];
             negotiationTypeCode: number | null;
             notes: string | null;
-            items: components["schemas"]["OrderItem"][];
+            items: components["schemas"]["OrderItemDetail"][];
             totals: components["schemas"]["OrderTotals"];
         };
         OrderEntryConfiguration: {
@@ -804,7 +804,7 @@ export interface components {
                 };
             };
         };
-        OrderItem: {
+        OrderItemDetail: {
             lineNo: number;
             productCode: number;
             productDescription: string;
@@ -816,6 +816,7 @@ export interface components {
             priceVersionId: number | null;
             discountPercent: components["schemas"]["DecimalString"];
             estimatedLineTotal: components["schemas"]["DecimalString"] | null;
+            image?: components["schemas"]["ProductImage"] | null;
         };
         OrderItemInput: {
             productCode: number;

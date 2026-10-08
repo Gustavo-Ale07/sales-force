@@ -25,6 +25,7 @@ import { parseQuantityInput, quantityProblemMessages } from "../lib/order-draft"
 import type { ProductRow } from "../lib/price-types";
 import { useDebounced } from "../lib/use-debounced";
 import { PriceCell } from "./price-cell";
+import { ProductImage } from "./product-image";
 import { QueryError } from "./query-error";
 
 const PAGE_SIZE = 10;
@@ -197,8 +198,13 @@ export function ProductMultiSelect({
                     </TableCell>
                     <TableCell numeric>{product.code}</TableCell>
                     <TableCell wrap>
-                      <span className="font-medium">{titleCase(product.description)}</span>
-                      {product.groupName ? <span className="block text-fg-muted">{product.groupName}</span> : null}
+                      <span className="flex items-center gap-2">
+                        <ProductImage image={product.image} description={product.description} name={titleCase(product.description)} />
+                        <span className="min-w-0">
+                          <span className="font-medium">{titleCase(product.description)}</span>
+                          {product.groupName ? <span className="block text-fg-muted">{product.groupName}</span> : null}
+                        </span>
+                      </span>
                     </TableCell>
                     <TableCell>{product.unit}</TableCell>
                     <TableCell numeric>

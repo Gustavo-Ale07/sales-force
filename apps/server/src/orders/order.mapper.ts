@@ -1,4 +1,4 @@
-import type { OrderDetail, OrderItem as OrderItemDto, OrderListItem, OrderReview, OrderStatus } from '@salesforce/contracts';
+import type { OrderDetail, OrderItemDetail as OrderItemDto, OrderListItem, OrderReview, OrderStatus, ProductImage } from '@salesforce/contracts';
 import { computeOrderTotals, customerOrderBlock, normalizeDecimalString } from '@salesforce/domain';
 import { isBlockedRaw } from '../mirror/mirror.repository.js';
 import type { OrderCustomerState, OrderItemRow, OrderListRow, OrderRow } from './orders.repository.js';
@@ -48,7 +48,7 @@ export function toOrderListItem(row: OrderListRow): OrderListItem {
   };
 }
 
-function toItemDto(row: OrderItemRow): OrderItemDto {
+function toItemDto(row: OrderItemRow, image?: ProductImage): OrderItemDto {
   return {
     lineNo: row.lineNo,
     productCode: row.productCode,
@@ -61,12 +61,13 @@ function toItemDto(row: OrderItemRow): OrderItemDto {
     priceVersionId: row.priceVersionId,
     discountPercent: normalizeDecimalString(row.discountPercent),
     estimatedLineTotal: row.estimatedLineTotal,
+    ...(image === undefined ? {} : { image }),
   };
 }
 
 /** Order + its lines as the contract detail. Totals are recomputed by the domain from the stored lines. */
-export function toOrderDetail(order: OrderRow, items: readonly OrderItemRow[], customer: OrderCustomerState): OrderDetail {
-  const dtoItems = items.map(toItemDto);
+export function toOrderDetail(order: OrderRow, items: readonly OrderItemRow[], customer: OrderCustomerState, images: ReadonlyMap<number, ProductImage> = new Map()): OrderDetail {
+  const dtoItems = items.map((item) => toItemDto(item, images.get(item.productCode)));
   const totals = computeOrderTotals(dtoItems);
   return {
     id: order.id,

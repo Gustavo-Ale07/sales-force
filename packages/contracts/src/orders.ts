@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ListPriceStateSchema } from './catalog.js';
+import { ListPriceStateSchema, ProductImageSchema } from './catalog.js';
 import { DatasetIdentitySchema } from './configuration.js';
 import {
   DecimalStringSchema,
@@ -167,6 +167,16 @@ export const OrderItemSchema = named(
 );
 export type OrderItem = z.infer<typeof OrderItemSchema>;
 
+/** Order line in the detail response: the priced line plus the shared product media metadata (one source with the catalog). */
+export const OrderItemDetailSchema = named(
+  'OrderItemDetail',
+  OrderItemSchema.extend({
+    /** `null`/absent = no photo. Bytes are never inlined. */
+    image: ProductImageSchema.nullable().optional(),
+  }),
+);
+export type OrderItemDetail = z.infer<typeof OrderItemDetailSchema>;
+
 export const OrderTotalsSchema = named(
   'OrderTotals',
   z.object({
@@ -185,7 +195,7 @@ export const OrderDetailSchema = named(
     ...OrderListItemSchema.omit({ itemPreview: true }).shape,
     negotiationTypeCode: codeInt().nullable(),
     notes: z.string().nullable(),
-    items: z.array(OrderItemSchema),
+    items: z.array(OrderItemDetailSchema),
     totals: OrderTotalsSchema,
   }),
 );

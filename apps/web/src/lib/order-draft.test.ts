@@ -105,6 +105,18 @@ describe("lines", () => {
     expect(lineFromOrderItem(orderItem({ quantity: "2.5" }), "k").quantityText).toBe("2,5");
   });
 
+  it("carries the shared product photo metadata from a picked product and from a saved item, per product", () => {
+    const imageA = { version: "a1", thumbnailUrl: "/api/v1/products/1/image?variant=thumb", url: "/api/v1/products/1/image?variant=full" };
+    const imageB = { version: "b1", thumbnailUrl: "/api/v1/products/2/image?variant=thumb", url: "/api/v1/products/2/image?variant=full" };
+    const lineA = lineFromProduct(product({ code: 1, image: imageA }), "a");
+    const lineB = lineFromProduct(product({ code: 2, image: imageB }), "b");
+    expect(lineA.image).toEqual(imageA);
+    expect(lineB.image).toEqual(imageB);
+    expect(lineFromProduct(product({ code: 3 }), "c").image).toBeNull();
+    expect(lineFromOrderItem(orderItem({ productCode: 1, image: imageA }), "k").image).toEqual(imageA);
+    expect(lineFromOrderItem(orderItem({ productCode: 9 }), "k").image).toBeNull();
+  });
+
   it("round-trips list prices for display", () => {
     expect(listPriceOfLine(lineFromProduct(product({ listPrice: pricedList("12.5") }), "k").price)).toMatchObject({
       state: "priced",

@@ -10,6 +10,6 @@ import { PricingService } from './pricing.service.js';
   imports: [MirrorModule, CustomersModule],
   controllers: [CatalogController],
   providers: [CatalogService, PricingService, ProductImageService],
-  exports: [PricingService],
+  exports: [PricingService, ProductImageService],
 })
 export class CatalogModule {}

@@ -6,6 +6,7 @@ import { useApi } from "../lib/app-context";
 import type { ListPrice, ProductRow } from "../lib/price-types";
 import { useDebounced } from "../lib/use-debounced";
 import { NO_PRICE_TEXT } from "./price-cell";
+import { ProductImage } from "./product-image";
 
 export interface ProductPickerProps {
   /** Customer whose price table resolves the list prices shown in the options. */
@@ -42,6 +43,7 @@ export function ProductPicker({ customerCode, onSelect, disabled, ...aria }: Pro
         value: String(product.code),
         label: `${product.code} — ${product.description}`,
         description: `${product.unit} · ${priceText(product.listPrice)}`,
+        leading: <ProductImage image={product.image} description={product.description} />,
       })),
     [items],
   );

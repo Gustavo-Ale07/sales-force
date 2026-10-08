@@ -105,7 +105,7 @@ export interface ProductRepository {
 
 export type OrderEntryConfiguration = ApiSchema<"OrderEntryConfiguration">;
 export type OrderDetail = ApiSchema<"OrderDetail">;
-export type OrderItem = ApiSchema<"OrderItem">;
+export type OrderItem = ApiSchema<"OrderItemDetail">;
 export type CreateOrderRequest = ApiSchema<"CreateOrderRequest">;
 export type ReplaceOrderRequest = ApiSchema<"ReplaceOrderRequest">;
 
