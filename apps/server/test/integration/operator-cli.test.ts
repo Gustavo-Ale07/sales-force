@@ -4,6 +4,7 @@ import { promisify } from 'node:util';
 import { account, accountSellerLink, auditLog, session } from '@salesforce/db';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { UNUSABLE_PASSWORD_HASH } from '../../src/iam/drizzle-external-account-links.js';
 import { TEST_PASSWORD } from '../helpers/auth.js';
 import { login, startAuthApp } from '../helpers/auth-app.js';
 import { seedDemoMirror, storeConfiguration } from '../helpers/commercial-fixture.js';
@@ -104,6 +105,17 @@ describe('account CLI guards', () => {
     expect(admin.stderr).not.toMatch(/create-external/);
   }, 90_000);
 
+  it('AUTH-9: refuses a local password for a seller in every AUTH_MODE, before touching the database', async () => {
+    for (const authMode of [undefined, 'dev', 'local', 'external']) {
+      const env = { ...base, NODE_ENV: 'development', DATABASE_URL: LOOPBACK_URL, ...FAST_HASH, ...(authMode === undefined ? {} : { AUTH_MODE: authMode }) };
+      const result = await runScript('account-cli.ts', env, ['create', '--email', 'x', '--name', 'X', '--role', 'seller']);
+      expect(result.code).not.toBe(0);
+      expect(result.stderr).toMatch(/vendedor|seller/i);
+      expect(result.stderr).toMatch(/Sankhya/);
+      expect(result.stderr).not.toContain(TEST_PASSWORD);
+    }
+  }, 120_000);
+
   it('refuses when NODE_ENV is not set', async () => {
     const result = await runScript('account-cli.ts', { ...base, DATABASE_URL: LOOPBACK_URL }, create);
     expect(result.code).not.toBe(0);
@@ -150,6 +162,31 @@ describe('seed and account CLI against a disposable database', () => {
     const ctx = await startAuthApp(postgres, opened, { database });
     const response = await login(ctx, admin?.email ?? '', SEED_PASSWORD);
     expect(response.statusCode).toBe(200);
+  }, 180_000);
+
+  it('AUTH-9: the seed creates the demo sellers with no usable password, and set-password refuses a seller', async () => {
+    const database = await createMigratedDatabase(postgres);
+    opened.push(() => database.handle.close());
+    const env = { NODE_ENV: 'development', DATABASE_URL: database.url, SEED_DEV_PASSWORD: SEED_PASSWORD, ...FAST_HASH };
+    const seeded = await runScript('seed.ts', env);
+    expect(seeded.code, seeded.stderr).toBe(0);
+
+    const rows = await database.handle.db.select().from(account);
+    const sellers = rows.filter((row) => row.role === 'seller');
+    expect(sellers.length).toBeGreaterThan(0);
+    for (const seller of sellers) expect(seller.passwordHash).toBe(UNUSABLE_PASSWORD_HASH);
+    for (const other of rows.filter((row) => row.role !== 'seller')) expect(other.passwordHash).not.toBe(UNUSABLE_PASSWORD_HASH);
+
+    const ctx = await startAuthApp(postgres, opened, { database });
+    const response = await login(ctx, sellers[0]?.email ?? '', SEED_PASSWORD);
+    expect(response.statusCode).toBe(401);
+
+    const change = await runScript('account-cli.ts', { ...env, ACCOUNT_PASSWORD: TEST_PASSWORD }, ['set-password', '--email', sellers[0]?.email ?? '']);
+    expect(change.code).not.toBe(0);
+    expect(change.stderr).toMatch(/Sankhya/);
+    expect(change.stderr).not.toContain(TEST_PASSWORD);
+    const after = await database.handle.db.select().from(account);
+    expect(after.find((row) => row.id === sellers[0]?.id)?.passwordHash).toBe(UNUSABLE_PASSWORD_HASH);
   }, 180_000);
 
   it('creates an account from ACCOUNT_PASSWORD or stdin, audits it without the password, and enforces the policy', async () => {

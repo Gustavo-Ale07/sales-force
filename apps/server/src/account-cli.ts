@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { createOperatorAccountService } from './cli/operator.js';
 import { readSecretLine } from './cli/read-secret.js';
 import { operatorIdentity } from './cli/operator-identity.js';
-import { localPasswordRefusal } from './config/auth-mode-guard.js';
+import { localPasswordRefusal, sellerPasswordRefusal } from './config/auth-mode-guard.js';
 import { passwordHashFields, passwordHashParamsOf, passwordHashProblems } from './config/auth-env.js';
 import { externalLoginFields, externalVerifierOf } from './config/external-login-env.js';
 import { databaseUrlField, isLoopbackDatabaseUrl, nodeEnvField, parseEnv } from './config/env.js';
@@ -92,7 +92,7 @@ runMain('account-cli', async () => {
   // PB-1: the friendly refusal comes before anything is read or connected (AccountService enforces it again).
   if (command === 'create') {
     const requested = values.role;
-    const early = requested === undefined ? null : localPasswordRefusal(env.AUTH_MODE, requested);
+    const early = requested === undefined ? null : (sellerPasswordRefusal(requested) ?? localPasswordRefusal(env.AUTH_MODE, requested));
     if (early !== null) fail(early);
   }
 
@@ -135,7 +135,7 @@ runMain('account-cli', async () => {
       } else if (command === 'create') {
         const role = values.role ?? fail('--role is required (admin, manager, seller or technical)');
         if (!(ACCOUNT_ROLES as readonly string[]).includes(role)) fail('--role must be admin, manager, seller or technical');
-        const refusal = localPasswordRefusal(env.AUTH_MODE, role);
+        const refusal = sellerPasswordRefusal(role) ?? localPasswordRefusal(env.AUTH_MODE, role);
         if (refusal !== null) fail(refusal);
         const name = values.name ?? fail('--name is required');
         const id = await accounts.createAccount({ username: loginName, displayName: name, password, role: role as AccountRole });
@@ -143,6 +143,8 @@ runMain('account-cli', async () => {
       } else if (command === 'set-password') {
         const found = await repository.findByUsername(loginName);
         if (found === null) throw new AccountNotFoundError();
+        const sellerRefusal = sellerPasswordRefusal(found.role);
+        if (sellerRefusal !== null) fail(sellerRefusal);
         await accounts.setPassword(found.id, password);
         process.stdout.write('password changed; every session of the account was ended\n');
       } else {

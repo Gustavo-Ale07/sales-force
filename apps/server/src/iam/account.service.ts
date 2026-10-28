@@ -5,6 +5,7 @@ import { uuidv7 } from '../platform/ids.js';
 import { CLOCK, DATABASE, type Clock } from '../platform/tokens.js';
 import { AccountRepository } from './account.repository.js';
 import { AUDIT_ACTIONS, AuditService, type AuditDetail } from './audit.service.js';
+import { UNUSABLE_PASSWORD_HASH } from './drizzle-external-account-links.js';
 import { localPasswordRefusal } from '../config/auth-mode-guard.js';
 import { AUTH_CONFIG, PASSWORD_HASHER } from './iam-tokens.js';
 import type { PasswordHasher } from './password-hasher.js';
@@ -130,6 +131,32 @@ export class AccountService {
       if (!inserted) throw new AccountAlreadyExistsError();
       await this.audit.record(
         { action: AUDIT_ACTIONS.accountCreated, actorAccountId: actor.accountId, detail: this.detailOf(actor, { accountId: id, role: input.role }) },
+        tx,
+      );
+    });
+    return id;
+  }
+
+  /**
+   * AUTH-9 (D1): creates an active account whose password hash is the unusable marker (data only; no local sign-in is
+   * possible). Used by the development seed for the demo sellers, which open sessions through the direct-session fixture.
+   * Returns the id, or throws `AccountAlreadyExistsError`.
+   */
+  async createPasswordlessAccount(
+    input: { username: string; displayName: string; role: AccountRole },
+    actor: ActorRef = CLI_ACTOR,
+  ): Promise<string> {
+    const now = this.clock();
+    const id = uuidv7(now.getTime());
+    const username = normalizeUsername(input.username).toLowerCase();
+    await this.db.transaction(async (tx) => {
+      const inserted = await this.accounts.insert(
+        { id, username, displayName: input.displayName.trim(), passwordHash: UNUSABLE_PASSWORD_HASH, role: input.role, createdAt: now },
+        tx,
+      );
+      if (!inserted) throw new AccountAlreadyExistsError();
+      await this.audit.record(
+        { action: AUDIT_ACTIONS.accountCreated, actorAccountId: actor.accountId, detail: this.detailOf(actor, { accountId: id, role: input.role, localSignIn: false }) },
         tx,
       );
     });

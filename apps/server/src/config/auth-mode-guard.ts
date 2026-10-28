@@ -15,3 +15,16 @@ export function localPasswordRefusal(authMode: string | undefined, role: string)
     'or let the first Sankhya sign-in provision it; "account create" is for admin and technical only.'
   );
 }
+
+/**
+ * AUTH-9 (D1): a seller never has a local password, in any AUTH_MODE. The operator CLI refuses to create or change one;
+ * the development seed creates demo sellers as data only (no usable hash) and development sessions open through the
+ * session fixture, never through a fake verifier (AUTH-5).
+ */
+export function sellerPasswordRefusal(role: string): string | null {
+  if (role !== 'seller') return null;
+  return (
+    'a seller never has a local password: the seller signs in with the Sankhya credentials through the verifier. ' +
+    'Use "account create-external" to link the seller to the Sankhya user, or let the first Sankhya sign-in provision it.'
+  );
+}

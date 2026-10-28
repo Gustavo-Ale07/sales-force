@@ -46,12 +46,12 @@ runMain('seed', async () => {
     let created = 0;
     for (const demo of DEMO_ACCOUNTS) {
       if ((await repository.findByUsername(demo.email)) !== null) continue;
-      await accounts.createAccount({
-        username: demo.email,
-        displayName: demo.displayName,
-        role: demo.role,
-        password: env.SEED_DEV_PASSWORD,
-      });
+      // AUTH-9: a seller never has a local password (data only; dev sessions use the session fixture).
+      if (demo.role === 'seller') {
+        await accounts.createPasswordlessAccount({ username: demo.email, displayName: demo.displayName, role: demo.role });
+      } else {
+        await accounts.createAccount({ username: demo.email, displayName: demo.displayName, role: demo.role, password: env.SEED_DEV_PASSWORD });
+      }
       created += 1;
     }
     process.stdout.write(`demo accounts: ${created} created, ${DEMO_ACCOUNTS.length - created} already present\n`);
