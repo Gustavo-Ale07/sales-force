@@ -52,7 +52,8 @@ describe('test harness teardown', () => {
     const handles = await Promise.all(Array.from({ length: 12 }, (_, i) => warmPool(`harness-close-${i}`, 3)));
     expect(await backendsOf('harness-close-0')).toBe(3);
     for (const handle of handles) await handle.close();
-    for (let i = 0; i < 12; i++) expect(await backendsOf(`harness-close-${i}`), `harness-close-${i}`).toBe(0);
+    // The client sockets are closed once close() returns; the server reaps the backend asynchronously, so poll briefly.
+    for (let i = 0; i < 12; i++) await expect.poll(() => backendsOf(`harness-close-${i}`), { timeout: 5_000, interval: 50, message: `harness-close-${i}` }).toBe(0);
   });
 
   it('close() reports an error the pool emitted instead of leaving it unhandled', async () => {
