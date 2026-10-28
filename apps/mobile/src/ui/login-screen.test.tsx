@@ -55,7 +55,7 @@ describe("LoginScreen", () => {
     await render(<LoginScreen auth={auth} onAuthenticated={jest.fn()} />);
     await fillAndSubmit("gustavo", "segredo");
     expect(
-      await screen.findByText("Não foi possível realizar a autenticação no momento. Tente novamente."),
+      await screen.findByText("Não foi possível realizar a autenticação no momento. Tente novamente em instantes; quem já está conectado continua trabalhando."),
     ).toBeTruthy();
   });
 });
@@ -82,7 +82,7 @@ describe("describeLoginFailure", () => {
   it("uses the generic credential and unavailable copy, revealing nothing about the account", () => {
     expect(describeLoginFailure({ ok: false, reason: "invalid_credentials" })).toBe("Usuário ou senha inválidos.");
     expect(describeLoginFailure({ ok: false, reason: "unavailable" })).toBe(
-      "Não foi possível realizar a autenticação no momento. Tente novamente.",
+      "Não foi possível realizar a autenticação no momento. Tente novamente em instantes; quem já está conectado continua trabalhando.",
     );
   });
 

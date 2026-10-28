@@ -163,7 +163,10 @@ describe("login page", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Não foi possível realizar a autenticação no momento. Tente novamente.");
     expect(alert).toHaveTextContent("req-login-1");
-    expect(alert).not.toHaveTextContent("serviço de autenticação está indisponível");
+    // AUTH-6: an outage is told apart from wrong credentials, with what to do and what keeps working.
+    expect(alert).toHaveTextContent("serviço de autenticação está indisponível");
+    expect(alert).toHaveTextContent("quem já está conectado continua trabalhando");
+    expect(alert).not.toHaveTextContent("Usuário ou senha inválidos");
   });
 
   it("signs in and goes to the safe redirect target", async () => {

@@ -21,7 +21,7 @@ export function describeLoginFailure(failure: LoginFailure): string {
         ? `Muitas tentativas. Tente novamente em ${failure.retryAfterSeconds} segundos.`
         : "Muitas tentativas. Aguarde alguns instantes e tente novamente.";
     case "unavailable":
-      return "Não foi possível realizar a autenticação no momento. Tente novamente.";
+      return "Não foi possível realizar a autenticação no momento. Tente novamente em instantes; quem já está conectado continua trabalhando.";
   }
 }
 

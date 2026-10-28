@@ -58,8 +58,10 @@ function FailureAlert({ failure }: { failure: LoginFailure }) {
     case "unavailable":
       return (
         <Alert tone="danger" title="Não foi possível realizar a autenticação no momento. Tente novamente.">
+          O serviço de autenticação está indisponível. Tente novamente em instantes; quem já está conectado continua trabalhando.
           {failure.correlationId ? (
             <>
+              {" "}
               Código de correlação: <span className="font-mono">{failure.correlationId}</span>
             </>
           ) : null}
