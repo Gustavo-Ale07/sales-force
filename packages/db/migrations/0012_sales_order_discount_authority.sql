@@ -1,0 +1,2 @@
+ALTER TABLE "sales_order" ADD COLUMN "discount_authority" text DEFAULT 'not_evaluated' NOT NULL;--> statement-breakpoint
+ALTER TABLE "sales_order" ADD CONSTRAINT "sales_order_discount_authority_chk" CHECK ("sales_order"."discount_authority" in ('not_evaluated', 'within_authority', 'needs_manager', 'needs_director', 'blocked'));

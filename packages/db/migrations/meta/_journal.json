@@ -85,6 +85,13 @@
       "when": 1791398136162,
       "tag": "0011_directory_user_mirror",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793204404868,
+      "tag": "0012_sales_order_discount_authority",
+      "breakpoints": true
     }
   ]
 }

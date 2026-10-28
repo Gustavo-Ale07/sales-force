@@ -34,6 +34,13 @@ export type DatasetOrigin = (typeof datasetOrigins)[number];
 export const priceStates = ['priced', 'zero', 'none'] as const;
 export type PriceState = (typeof priceStates)[number];
 
+/**
+ * Where the order's discounts stand against the discount authority (DISC-2), stamped by the server on every
+ * draft write. `not_evaluated` is the column default: a row that predates the rule is never read as approved.
+ */
+export const discountAuthorityStatuses = ['not_evaluated', 'within_authority', 'needs_manager', 'needs_director', 'blocked'] as const;
+export type DiscountAuthorityStatus = (typeof discountAuthorityStatuses)[number];
+
 export const salesOrder = pgTable(
   'sales_order',
   {
@@ -51,6 +58,8 @@ export const salesOrder = pgTable(
     notes: text('notes'),
     /** Estimate from list prices only (sum of priced lines); the ERP computes the final value. */
     estimatedTotal: numeric('estimated_total', { precision: 14, scale: 2 }).notNull().default('0'),
+    /** Discount authority routing computed by the server from the stored lines and the saving account's role (DISC-2). */
+    discountAuthority: text('discount_authority').notNull().default('not_evaluated'),
     /** Optimistic concurrency counter. */
     version: integer('version').notNull().default(1),
     /** Client-generated idempotency key for creation. */
@@ -82,6 +91,7 @@ export const salesOrder = pgTable(
       'sales_order_erp_eligibility_chk',
       sql`${t.status} not in ('queued', 'sent', 'rejected', 'unknown') or (${t.datasetOrigin} = 'sankhya' and ${t.erpEnvironment} is not null)`,
     ),
+    check('sales_order_discount_authority_chk', sql`${t.discountAuthority} in (${inList(discountAuthorityStatuses)})`),
     check('sales_order_status_chk', sql`${t.status} in (${inList(orderStatuses)})`),
     check('sales_order_estimated_total_chk', sql`${t.estimatedTotal} >= 0`),
     check('sales_order_version_chk', sql`${t.version} >= 1`),
