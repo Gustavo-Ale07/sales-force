@@ -1,6 +1,6 @@
 # Staging stack (SB-1) — configuration and runbook
 
-Status: **never deployed to a VPS; validated only on a disposable local stack (2026-10-02 certification)**. `deploy/docker-compose.staging.yml` plus
+Status: **official staging base (SB-1 APPROVED 2026-10-28, decisions.md §3.13)**: this compose file and `deploy/staging/*.example` are versioned in Git; the real `compose.env` and every secret file exist only on the host and are never committed. Deployed to the staging VPS (release `7d7999b` onward, migration 0011 applied 2026-10-07); first certified on a disposable local stack (2026-10-02). `deploy/docker-compose.staging.yml` plus
 `deploy/staging/*`. OPS-3 (Caddy, SSH deploy) is PROPOSED; OPS-1/OPS-2/DATA-1/DATA-2/STACK-2/SNK-3 are
 APPROVED. Where this document chooses something PROPOSED it says so. Owner decisions of 2026-10-02 applied here:
 dedicated internal verifier (STACK-2 option C, structure only), least-privilege database roles, staging RPO of 24 h
