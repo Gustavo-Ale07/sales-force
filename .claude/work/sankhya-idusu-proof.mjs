@@ -1,6 +1,8 @@
 // SANDBOX-ONLY, READ-ONLY proof that decoded Sankhya login `idusu` == TSIUSU.CODUSU. SPIKE, NOT application code.
 //   node .claude/work/sankhya-idusu-proof.mjs
-// Host is fixed to the Sandbox; any other host exits. Secrets only at hidden prompts (never args, files, env or history).
+// Two Sandbox origins, as in staging: the tenant host (human MobileLoginSP.login, = VERIFIER_SANKHYA_BASE_URL) and the OAuth/gateway
+// API origin (/authenticate + /gateway/v1, = the worker's SANKHYA_BASE_URL; default is the Sandbox API base of docs/sankhya-spike.md §9.1;
+// override with the SAME env var the worker uses). Any other host, including the production api.sankhya.com.br, exits. Secrets only at hidden prompts (never args, files, env or history).
 // Method: for each test user, (1) real human login (MobileLoginSP.login, same call as the verifier) -> decode idusu exactly like
 // the verifier; (2) logout; (3) with the technical OAuth credentials read TSIUSU WHERE CODUSU = <decoded idusu> and compare that
 // row's own login column with the login that just authenticated. A match proves the id belongs to that very user (validation
@@ -9,6 +11,10 @@
 
 const BASE = 'https://placfestas-teste.sankhyacloud.com.br';
 if (new URL(BASE).host !== 'placfestas-teste.sankhyacloud.com.br') process.exit(2);
+const API_BASE = (process.env.SANKHYA_BASE_URL?.trim() || 'https://api.sandbox.sankhya.com.br').replace(/\/+$/, '');
+const API_HOST = new URL(API_BASE).host.toLowerCase();
+if (new URL(API_BASE).protocol !== 'https:' || ![ 'api.sandbox.sankhya.com.br', 'placfestas-teste.sankhyacloud.com.br' ].includes(API_HOST)) { console.error('API origin is not an allowed Sandbox host'); process.exit(2); }
+console.log('oauth/gateway origin host: ' + API_HOST);
 
 function ask(prompt, { secret }) {
   return new Promise((resolve) => {
@@ -63,13 +69,13 @@ async function humanLogin(login, password) {
 const clientId = await ask('Sandbox OAuth client id (hidden): ', { secret: true });
 const clientSecret = await ask('Sandbox OAuth client secret (hidden): ', { secret: true });
 const xToken = await ask('Sandbox X-Token (hidden): ', { secret: true });
-const authRes = await fetch(`${BASE}/authenticate`, {
+const authRes = await fetch(`${API_BASE}/authenticate`, {
   method: 'POST', redirect: 'manual',
   headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json', 'x-token': xToken },
   body: new URLSearchParams({ grant_type: 'client_credentials', client_id: clientId, client_secret: clientSecret }).toString(),
   signal: AbortSignal.timeout(20_000),
 });
-if (authRes.status !== 200) { console.error(`authenticate failed: HTTP ${authRes.status}`); process.exit(1); }
+if (authRes.status !== 200) { console.error(`authenticate failed: HTTP ${authRes.status} (host ${API_HOST}; set SANKHYA_BASE_URL to the worker value)`); process.exit(1); }
 const accessToken = (await authRes.json()).access_token;
 if (typeof accessToken !== 'string') { console.error('authenticate: no access_token'); process.exit(1); }
 
@@ -79,7 +85,7 @@ function guard(sql) {
   return s;
 }
 async function query(sql) {
-  const res = await fetch(`${BASE}/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`, {
+  const res = await fetch(`${API_BASE}/gateway/v1/mge/service.sbr?serviceName=DbExplorerSP.executeQuery&outputType=json`, {
     method: 'POST', redirect: 'manual',
     headers: { 'content-type': 'application/json', accept: 'application/json', authorization: `Bearer ${accessToken}` },
     body: JSON.stringify({ serviceName: 'DbExplorerSP.executeQuery', requestBody: { sql: guard(sql) } }),
