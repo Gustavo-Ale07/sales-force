@@ -14,6 +14,8 @@ export type DirectoryRefusal =
   | 'directory_stale'
   /** The user is not in the mirror (removed from the ERP, or not yet synchronized). */
   | 'user_missing'
+  /** The ERP says the user is blocked (AUTH-6 hook; only ever raised from a fresh mirror and a validated blocking field). */
+  | 'user_blocked'
   /** The user has no seller in the ERP. Valid credentials, no commercial access. */
   | 'no_seller'
   /** The seller is missing from the mirror, inactive or deleted in the ERP. */
@@ -31,6 +33,11 @@ export interface DirectoryFacts {
   /** `null` = the user is not in the mirror (or soft-deleted). */
   readonly user: { readonly sellerCode: number | null } | null;
   readonly sellerActive: boolean;
+  /**
+   * Whether the ERP blocks the user (AUTH-6 addendum). `null`/omitted = unknown: the blocking field of the ERP user is NOT validated yet
+   * (NEEDS VALIDATION), so unknown never blocks. Only an explicit `true` on a fresh mirror refuses.
+   */
+  readonly userBlocked?: boolean | null;
   /** Other non-deleted ERP users whose seller is this seller. */
   readonly otherUsersOfSeller: number;
   /** Other Force accounts (not the one being decided for) linked to this seller. */
@@ -53,6 +60,7 @@ export function parseDirectoryUserCode(externalUserId: string): number | null {
 export function decideDirectorySeller(facts: DirectoryFacts, maxMirrorAgeMs: number): DirectoryDecision {
   if (facts.mirrorAgeMs === null || facts.mirrorAgeMs > maxMirrorAgeMs) return { ok: false, refusal: 'directory_stale' };
   if (facts.user === null) return { ok: false, refusal: 'user_missing' };
+  if (facts.userBlocked === true) return { ok: false, refusal: 'user_blocked' };
   const sellerCode = facts.user.sellerCode;
   if (!isValidSellerCode(sellerCode)) return { ok: false, refusal: 'no_seller' };
   if (!facts.sellerActive) return { ok: false, refusal: 'seller_inactive' };

@@ -36,6 +36,23 @@ describe('decideDirectorySeller', () => {
     expect(decideDirectorySeller({ ...good, ...patch }, MAX)).toEqual({ ok: false, refusal });
   });
 
+  it('refuses a user the ERP reports as blocked, even when the seller relation is otherwise fine', () => {
+    expect(decideDirectorySeller({ ...good, userBlocked: true }, MAX)).toEqual({ ok: false, refusal: 'user_blocked' });
+  });
+
+  it('never blocks on an unknown or false blocking fact (the ERP field is not validated yet)', () => {
+    expect(decideDirectorySeller({ ...good, userBlocked: null }, MAX)).toEqual({ ok: true, sellerCode: 5 });
+    expect(decideDirectorySeller({ ...good, userBlocked: false }, MAX)).toEqual({ ok: true, sellerCode: 5 });
+  });
+
+  it('lets staleness win over a blocked fact: an old mirror proves nothing', () => {
+    expect(decideDirectorySeller({ ...good, userBlocked: true, mirrorAgeMs: MAX + 1 }, MAX)).toEqual({ ok: false, refusal: 'directory_stale' });
+  });
+
+  it('reports a missing user before a blocked one', () => {
+    expect(decideDirectorySeller({ ...good, user: null, userBlocked: true }, MAX)).toEqual({ ok: false, refusal: 'user_missing' });
+  });
+
   it('reports ambiguity before a claim by another account', () => {
     expect(decideDirectorySeller({ ...good, otherUsersOfSeller: 2, otherAccountsOfSeller: 1 }, MAX)).toEqual({ ok: false, refusal: 'seller_ambiguous' });
   });
