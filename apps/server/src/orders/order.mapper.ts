@@ -1,4 +1,4 @@
-import type { OrderDetail, OrderItemDetail as OrderItemDto, OrderListItem, OrderReview, OrderStatus, ProductImage } from '@salesforce/contracts';
+import type { DiscountAuthorityStatus, OrderDetail, OrderItemDetail as OrderItemDto, OrderListItem, OrderReview, OrderStatus, ProductImage } from '@salesforce/contracts';
 import { computeOrderTotals, customerOrderBlock, normalizeDecimalString } from '@salesforce/domain';
 import { isBlockedRaw } from '../mirror/mirror.repository.js';
 import type { OrderCustomerState, OrderItemRow, OrderListRow, OrderRow } from './orders.repository.js';
@@ -86,6 +86,7 @@ export function toOrderDetail(order: OrderRow, items: readonly OrderItemRow[], c
     updatedAt: order.updatedAt.toISOString(),
     negotiationTypeCode: order.negotiationTypeCode,
     notes: order.notes,
+    discountAuthority: order.discountAuthority as DiscountAuthorityStatus,
     items: dtoItems,
     totals,
   };

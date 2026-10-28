@@ -180,6 +180,8 @@ Convenção: `RF-<MÓDULO>-<n>`. A fase aparece entre colchetes.
   - acima do limite do gerente, aprova a **diretoria**.
 
   Configurados por perfil (padrão) com sobrescrita por usuário.
+
+  > **Implementado (DISC-2, 2026-10-28):** a base é o preço da tabela de preço do cliente (já resolvido na linha do pedido; preço ausente ou zero não é base e o desconto é recusado). O roteamento vendedor → gerente → diretor usa os limites por nível da configuração da instalação (`sales.discountAuthority.limits`, nunca literais; sem configuração, qualquer desconto é bloqueado). O servidor grava em cada rascunho `discountAuthority` (`within_authority`, `needs_manager`, `needs_director`, `blocked`; `not_evaluated` para rascunhos anteriores). Isto **não** é o fluxo de aprovação (RF-ORD-5): nenhum status `aguardando_aprovacao` existe e nada é aprovado automaticamente. **Em aberto:** teto absoluto e aprovador substituto (restante de R36) — acima do limite do diretor o desconto fica `blocked` (`ceiling_not_decided`); R37; qual papel de conta é o "diretor" (hoje só `seller` e `manager` estão na cadeia; `admin` e `technical` ficam fora e seus descontos ficam `blocked`); sobrescrita por usuário (esta fatia só tem limites por nível); inclusividade do limite (aqui `<=`, a confirmar).
 - **RF-CAT-4 [F1]** Custo e margem **nunca** chegam ao app nem às telas de representantes PJ.
 
 ### 5.4 Contas: leads, empresas e clientes (ACC)

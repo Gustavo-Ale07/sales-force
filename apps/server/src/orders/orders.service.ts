@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type {
   CreateOrderRequest,
   DatasetIdentity,
+  DiscountAuthorityStatus,
   OrderDetail,
   OrdersQuery,
   OrdersResponse,
@@ -12,12 +13,14 @@ import type {
 import {
   canTransitionOrder,
   customerOrderBlock,
+  evaluateOrderDiscountAuthority,
   datasetOriginForConfigurationSource,
   isCustomerInScope,
   isOrderEditable,
   normalizeDecimalString,
   presentSkips,
   type CustomerScope,
+  type InstallationConfiguration,
 } from '@salesforce/domain';
 import { ProductImageService } from '../catalog/product-image.service.js';
 import { CustomersService } from '../customers/customers.service.js';
@@ -183,6 +186,7 @@ export class OrdersService {
           negotiationTypeCode: body.negotiationTypeCode,
           notes: body.notes,
           estimatedTotal: draft.totals.estimatedTotal,
+          discountAuthority: this.discountAuthorityOf(user, draft, context.configuration),
           version: 1,
           clientRequestId: body.clientRequestId,
           clientRequestHash: fingerprint,
@@ -351,6 +355,7 @@ export class OrdersService {
           negotiationTypeCode: body.negotiationTypeCode,
           notes: body.notes,
           estimatedTotal: draft.totals.estimatedTotal,
+          discountAuthority: this.discountAuthorityOf(user, draft, context.configuration),
           version: locked.version + 1,
           configVersionId: context.configVersionId,
           updatedAt: at,
@@ -470,6 +475,19 @@ export class OrdersService {
     return outcome;
   }
 
+  /**
+   * Discount authority routing (DISC-2, P-10), decided by the domain from the lines the server priced and the
+   * saving account's role; never from client input. A refused discount is recorded as `blocked` and a discount
+   * above the actor's authority as the level that must approve. Nothing is ever auto-approved: the approval
+   * workflow and the absolute ceiling / substitute approver (R36) are not decided, so no state here means "approved".
+   */
+  private discountAuthorityOf(user: CurrentUser, draft: ValidDraft, configuration: InstallationConfiguration): DiscountAuthorityStatus {
+    const routing = evaluateOrderDiscountAuthority(draft.draft.items, user.role, configuration.sales.discountAuthority);
+    if (routing.decision === 'within_authority') return 'within_authority';
+    if (routing.decision === 'needs_approval') return routing.level === 'manager' ? 'needs_manager' : 'needs_director';
+    return 'blocked';
+  }
+
   private eligibilityOf(state: CustomerStateRow): { active: boolean; blocked: boolean; sellerCode: number | null } {
     return { active: state.active, blocked: isBlockedRaw(state.blockedRaw), sellerCode: state.sellerCode };
   }
@@ -500,7 +518,7 @@ export class OrdersService {
       version: order.version,
       itemCount,
       // Discounts are sensitive actions (CLAUDE.md §6): the trail shows that lines carry one, never the amounts.
-      ...(discountedLineCount > 0 ? { discountedLineCount } : {}),
+      ...(discountedLineCount > 0 ? { discountedLineCount, discountAuthority: order.discountAuthority } : {}),
     };
   }
 }
