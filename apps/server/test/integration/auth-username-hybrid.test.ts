@@ -647,6 +647,39 @@ describe('AUTH-6 hook: the ERP blocks the user (stubbed source, the real field i
   });
 });
 
+describe('AUTH-6: outage versus invalid credentials, and the local seller password', () => {
+  it('never opens a session for a local seller account from its valid local hash; the name goes to the directory, which refuses it', async () => {
+    const ctx = await setup(AUTO);
+    await createTestAccount(ctx.database.handle, { username: 'vendlocal', role: 'seller' }, ctx.clock.fn);
+    const err = await failure(ctx.service.login({ username: 'vendlocal', password: TEST_PASSWORD }, META));
+    expect(err.code).toBe('invalid_credentials');
+    expect(ctx.verifier.calls.map((c) => c.login)).toEqual(['vendlocal']);
+    expect(await ctx.db.select().from(session)).toHaveLength(0);
+  });
+
+  it('refuses a local seller account when the directory login is off, with the same uniform error', async () => {
+    const ctx = await setup({ external: false });
+    await createTestAccount(ctx.database.handle, { username: 'vendlocal', role: 'seller' }, ctx.clock.fn);
+    expect((await failure(ctx.service.login({ username: 'vendlocal', password: TEST_PASSWORD }, META))).code).toBe('invalid_credentials');
+    expect(await ctx.db.select().from(session)).toHaveLength(0);
+  });
+
+  it('refuses a NEW login with 503 service_unavailable (not 401) while the verifier is down, with no local fallback, and lets an existing session carry on', async () => {
+    const ctx = await setup(AUTO);
+    await addSeller(ctx, 103, 'Vendedor Um');
+    await directoryUser(ctx, 'um', 4501, 103);
+    const open = await ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META);
+    ctx.verifier.forced = { fail: 'unavailable' };
+    const err = await failure(ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META));
+    expect(err.code).toBe('service_unavailable');
+    expect(err.status).toBe(503);
+    const callsBefore = ctx.verifier.calls.length;
+    ctx.clock.advance(61_000);
+    expect((await ctx.service.resolveSession(open.token))?.user).toMatchObject({ role: 'seller', sellerCodes: [103] });
+    expect(ctx.verifier.calls).toHaveLength(callsBefore);
+  });
+});
+
 describe('link mode: PRE_LINKED is the default and never creates accounts', () => {
   it.each([[undefined], ['PRE_LINKED' as const]])('a directory user without a linked account is refused and nothing is created (mode %s)', async (linkMode) => {
     const ctx = await setup(linkMode === undefined ? {} : { linkMode });

@@ -1,7 +1,12 @@
 import { Controller, Get, Module, Post, type Type } from '@nestjs/common';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { routes, type DatasetIdentity, type RouteDefinition } from '@salesforce/contracts';
+import { SESSION_COOKIE_NAME, routes, type DatasetIdentity, type RouteDefinition } from '@salesforce/contracts';
+import { account } from '@salesforce/db';
 import type { LightMyRequestResponse } from 'fastify';
+import { sql } from 'drizzle-orm';
+import { SessionRepository } from '../../src/iam/session.repository.js';
+import { generateSessionToken, hashSessionToken } from '../../src/iam/session-crypto.js';
+import { uuidv7 } from '../../src/platform/ids.js';
 import { ApiModule } from '../../src/api/api.module.js';
 import { createApiApp, type CreateApiAppOptions } from '../../src/api/create-app.js';
 import type { ProductImageSettings, ProductImageSource } from '../../src/catalog/product-image.js';
@@ -152,9 +157,35 @@ export function login(
   });
 }
 
-/** Logs in and returns the `cookie` header value for follow-up requests. */
-export async function loginCookie(app: Pick<AuthApp, 'app'>, username: string, password: string): Promise<string> {
-  const response = await login(app, username, password);
+/**
+ * Logs in and returns the `cookie` header value for follow-up requests. AUTH-6: a `seller` never signs in with a local password, so
+ * for a local seller account (what the fixtures create) the session is opened directly, the way a completed Sankhya login would
+ * leave it. Every other profile goes through the real login endpoint. Tests of the login rules themselves use `login`.
+ */
+export async function loginCookie(
+  ctx: Pick<AuthApp, 'app'> & Partial<Pick<AuthApp, 'database' | 'clock'>>,
+  username: string,
+  password: string,
+): Promise<string> {
+  if (ctx.database !== undefined) {
+    const db = ctx.database.handle.db;
+    const [row] = await db.select({ id: account.id, role: account.role }).from(account).where(sql`lower(${account.email}) = ${username.toLowerCase()}`);
+    if (row?.role === 'seller') return openSessionCookie(ctx.database, row.id, ctx.clock?.fn() ?? new Date());
+  }
+  const response = await login(ctx, username, password);
   if (response.statusCode !== 200) throw new Error(`login failed with ${response.statusCode}: ${response.body.slice(0, 300)}`);
   return sessionCookieOf(response);
+}
+
+/** Inserts a live session for the account (test fixture only) and returns the cookie pair. */
+export async function openSessionCookie(database: MigratedDatabase, accountId: string, now: Date): Promise<string> {
+  const token = generateSessionToken();
+  await new SessionRepository(database.handle.db).create({
+    id: uuidv7(now.getTime()),
+    accountId,
+    tokenHash: hashSessionToken(token),
+    createdAt: now,
+    expiresAt: new Date(now.getTime() + 30 * 60_000),
+  });
+  return `${SESSION_COOKIE_NAME}=${token}`;
 }

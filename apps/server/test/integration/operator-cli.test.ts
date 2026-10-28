@@ -182,7 +182,7 @@ describe('seed and account CLI against a disposable database', () => {
     const database = await createMigratedDatabase(postgres);
     opened.push(() => database.handle.close());
     const env = { NODE_ENV: 'development', DATABASE_URL: database.url, ...FAST_HASH };
-    const created = await runScript('account-cli.ts', { ...env, ACCOUNT_PASSWORD: TEST_PASSWORD }, ['create', '--email', 'p@example.test', '--name', 'P', '--role', 'seller']);
+    const created = await runScript('account-cli.ts', { ...env, ACCOUNT_PASSWORD: TEST_PASSWORD }, ['create', '--email', 'p@example.test', '--name', 'P', '--role', 'admin']);
     expect(created.code, created.stderr).toBe(0);
 
     const ctx = await startAuthApp(postgres, opened, { database });

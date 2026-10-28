@@ -48,6 +48,42 @@ const logout = (ctx: AuthApp, cookie?: string, headers: Record<string, string> =
     headers: { origin: TEST_ORIGIN, ...(cookie === undefined ? {} : { cookie }), ...headers },
   });
 
+describe('AUTH-6: a seller never signs in with a local password', () => {
+  it('refuses a seller account with a valid local hash in dev mode, uniformly, with no session and no cookie', async () => {
+    const ctx = await boot();
+    await createTestAccount(ctx.database.handle, { username: 'vend@example.test', role: 'seller' }, ctx.clock.fn);
+    await createTestAccount(ctx.database.handle, { username: 'adm@example.test', role: 'admin' }, ctx.clock.fn);
+
+    const right = await login(ctx, 'vend@example.test', TEST_PASSWORD, { remoteAddress: '10.4.0.1' });
+    const wrong = await login(ctx, 'vend@example.test', WRONG_PASSWORD, { remoteAddress: '10.4.0.2' });
+    const ghost = await login(ctx, 'ghost@example.test', TEST_PASSWORD, { remoteAddress: '10.4.0.3' });
+    for (const attempt of [right, wrong, ghost]) {
+      expect(attempt.statusCode).toBe(401);
+      expect(setCookieHeaders(attempt)).toEqual([]);
+    }
+    const bodies = [right, wrong, ghost].map((a) => {
+      const error = ApiErrorSchema.parse(a.json());
+      return JSON.stringify({ code: error.code, message: error.message });
+    });
+    expect(new Set(bodies).size).toBe(1);
+    expect(JSON.parse(bodies[0] ?? '{}')).toMatchObject({ code: 'invalid_credentials' });
+    expect(await ctx.database.handle.db.select().from(session)).toHaveLength(0);
+    const reasons = (await auditRows(ctx, 'auth.login.failure')).map((row) => (row.detail as { reason: string }).reason).sort();
+    expect(reasons).toEqual(['seller_local_password', 'seller_local_password', 'unknown_account']);
+    // Other profiles are unaffected.
+    expect((await login(ctx, 'adm@example.test', TEST_PASSWORD, { remoteAddress: '10.4.0.4' })).statusCode).toBe(200);
+  });
+
+  it('counts the refused seller attempts against the same lockout as any failed login', async () => {
+    const ctx = await boot();
+    await createTestAccount(ctx.database.handle, { username: 'vend@example.test', role: 'seller' }, ctx.clock.fn);
+    for (let i = 0; i < DEFAULT_ACCOUNT_THROTTLE.maxFailures; i += 1) {
+      expect((await login(ctx, 'vend@example.test', TEST_PASSWORD, { remoteAddress: `10.4.1.${i + 1}` })).statusCode).toBe(401);
+    }
+    expect((await login(ctx, 'vend@example.test', TEST_PASSWORD, { remoteAddress: '10.4.1.99' })).statusCode).toBe(429);
+  });
+});
+
 describe('login', () => {
   it('opens a session: cookie flags, no token in the body, no-store, audit row', async () => {
     const ctx = await boot();
@@ -92,8 +128,8 @@ describe('login', () => {
 
   it('gives an identical answer for an unknown e-mail, a wrong password, a disabled account and an unreachable role', async () => {
     const ctx = await boot();
-    await createTestAccount(ctx.database.handle, { username: 'known@example.test', role: 'seller' }, ctx.clock.fn);
-    const disabled = await createTestAccount(ctx.database.handle, { username: 'off@example.test', role: 'seller' }, ctx.clock.fn);
+    await createTestAccount(ctx.database.handle, { username: 'known@example.test', role: 'admin' }, ctx.clock.fn);
+    const disabled = await createTestAccount(ctx.database.handle, { username: 'off@example.test', role: 'admin' }, ctx.clock.fn);
     await setStatus(ctx, disabled.id, 'disabled');
 
     const attempts = await Promise.all([
@@ -135,7 +171,7 @@ describe('login', () => {
 
   it('answers with the same 401 whether or not the e-mail is registered (and never leaks it in cookies)', async () => {
     const ctx = await boot();
-    await createTestAccount(ctx.database.handle, { username: 'known@example.test', role: 'seller' }, ctx.clock.fn);
+    await createTestAccount(ctx.database.handle, { username: 'known@example.test', role: 'admin' }, ctx.clock.fn);
     const [a, b] = await Promise.all([
       login(ctx, 'known@example.test', WRONG_PASSWORD),
       login(ctx, 'unknown@example.test', WRONG_PASSWORD),
@@ -148,7 +184,7 @@ describe('login', () => {
 describe('lockout and rate limit (RF-IAM-2)', () => {
   it('locks an account after five failures and blocks even the right password, with Retry-After', async () => {
     const ctx = await boot();
-    await createTestAccount(ctx.database.handle, { username: 'lock@example.test', role: 'seller' }, ctx.clock.fn);
+    await createTestAccount(ctx.database.handle, { username: 'lock@example.test', role: 'admin' }, ctx.clock.fn);
 
     for (let attempt = 1; attempt <= DEFAULT_ACCOUNT_THROTTLE.maxFailures; attempt += 1) {
       const response = await login(ctx, 'lock@example.test', WRONG_PASSWORD, { remoteAddress: `10.1.0.${attempt}` });
@@ -179,7 +215,7 @@ describe('lockout and rate limit (RF-IAM-2)', () => {
 
   it('lets the account in again when the lock ends, and doubles the next lock', async () => {
     const ctx = await boot();
-    await createTestAccount(ctx.database.handle, { username: 'lock@example.test', role: 'seller' }, ctx.clock.fn);
+    await createTestAccount(ctx.database.handle, { username: 'lock@example.test', role: 'admin' }, ctx.clock.fn);
     const fail = async (n: number, from: string) => {
       for (let i = 0; i < n; i += 1) await login(ctx, 'lock@example.test', WRONG_PASSWORD, { remoteAddress: `${from}.${i}` });
     };
@@ -200,7 +236,7 @@ describe('lockout and rate limit (RF-IAM-2)', () => {
 
   it('a success clears the failure counter of the account', async () => {
     const ctx = await boot();
-    await createTestAccount(ctx.database.handle, { username: 'reset@example.test', role: 'seller' }, ctx.clock.fn);
+    await createTestAccount(ctx.database.handle, { username: 'reset@example.test', role: 'admin' }, ctx.clock.fn);
     for (let i = 0; i < DEFAULT_ACCOUNT_THROTTLE.maxFailures - 1; i += 1) {
       await login(ctx, 'reset@example.test', WRONG_PASSWORD, { remoteAddress: `10.4.0.${i}` });
     }
@@ -511,7 +547,7 @@ describe('login denial-of-service limits (A1, A2, A6)', () => {
 
   it('stops password checks when the installation-wide failure budget is spent, without locking any account', async () => {
     const ctx = await boot({ authOverrides: limits({ globalMaxFailuresPerMinute: 5 }) });
-    await createTestAccount(ctx.database.handle, { username: 'victim@example.test', role: 'seller' }, ctx.clock.fn);
+    await createTestAccount(ctx.database.handle, { username: 'victim@example.test', role: 'admin' }, ctx.clock.fn);
     for (let i = 0; i < 5; i += 1) {
       const response = await login(ctx, `spray-${i}@example.test`, WRONG_PASSWORD, { remoteAddress: `198.51.100.${i + 1}` });
       expect(response.statusCode).toBe(401);
@@ -540,7 +576,7 @@ describe('login denial-of-service limits (A1, A2, A6)', () => {
   it('does not spend the failure budget on successful logins', async () => {
     const ctx = await boot({ authOverrides: limits({ globalMaxFailuresPerMinute: 3 }) });
     for (let i = 0; i < 6; i += 1) {
-      await createTestAccount(ctx.database.handle, { username: `ok-${i}@example.test`, role: 'seller' }, ctx.clock.fn);
+      await createTestAccount(ctx.database.handle, { username: `ok-${i}@example.test`, role: 'admin' }, ctx.clock.fn);
       expect((await login(ctx, `ok-${i}@example.test`, TEST_PASSWORD, { remoteAddress: `192.0.2.${i + 1}` })).statusCode).toBe(200);
     }
   });
@@ -580,7 +616,7 @@ describe('login denial-of-service limits (A1, A2, A6)', () => {
       verify.mockRestore();
     }
     // Slots are released: the next login is served normally.
-    await createTestAccount(ctx.database.handle, { username: 'after@example.test', role: 'seller' }, ctx.clock.fn);
+    await createTestAccount(ctx.database.handle, { username: 'after@example.test', role: 'admin' }, ctx.clock.fn);
     expect((await login(ctx, 'after@example.test', TEST_PASSWORD, { remoteAddress: '192.0.2.99' })).statusCode).toBe(200);
   });
 
@@ -597,7 +633,7 @@ describe('login denial-of-service limits (A1, A2, A6)', () => {
 
   it('writes a bounded number of audit rows for a flood of blocked attempts', async () => {
     const ctx = await boot();
-    await createTestAccount(ctx.database.handle, { username: 'flood@example.test', role: 'seller' }, ctx.clock.fn);
+    await createTestAccount(ctx.database.handle, { username: 'flood@example.test', role: 'admin' }, ctx.clock.fn);
     for (let i = 0; i < DEFAULT_ACCOUNT_THROTTLE.maxFailures; i += 1) {
       await login(ctx, 'flood@example.test', WRONG_PASSWORD, { remoteAddress: `10.6.0.${i}` });
     }

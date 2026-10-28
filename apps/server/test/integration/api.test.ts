@@ -61,7 +61,7 @@ const READY_URL = '/api/v1/ready';
 /** A signed-in administrator's cookie: /ready shows detail only to an active session. */
 async function adminCookie(app: NestFastifyApplication, database: MigratedDatabase): Promise<string> {
   await createTestAccount(database.handle, { username: 'ready-admin@example.test', role: 'admin' });
-  return loginCookie({ app }, 'ready-admin@example.test', TEST_PASSWORD);
+  return loginCookie({ app, database }, 'ready-admin@example.test', TEST_PASSWORD);
 }
 
 const readyWith = (app: NestFastifyApplication, cookie?: string) =>
@@ -139,7 +139,7 @@ describe('GET /api/v1/ready', () => {
       await recordWorkerHeartbeat(database.handle.db, { gatewayMode: 'live', startedAt: new Date().toISOString() }, new Date());
       await database.handle.pool.query(`insert into sync_state (entity, status) values ('customers', 'failed')`);
       await createTestAccount(database.handle, { username: `ready-${role}@example.test`, role });
-      const cookie = await loginCookie({ app }, `ready-${role}@example.test`, TEST_PASSWORD);
+      const cookie = await loginCookie({ app, database }, `ready-${role}@example.test`, TEST_PASSWORD);
       const response = await readyWith(app, cookie);
       expect(response.statusCode).toBe(200);
       const body = ReadyResponseSchema.parse(response.json());
@@ -162,7 +162,7 @@ describe('GET /api/v1/ready', () => {
     const observed: Record<string, boolean> = { anonymous: await sees() };
     for (const role of ['admin', 'technical', 'manager', 'seller'] as const) {
       await createTestAccount(database.handle, { username: `matrix-${role}@example.test`, role });
-      observed[role] = await sees(await loginCookie({ app }, `matrix-${role}@example.test`, TEST_PASSWORD));
+      observed[role] = await sees(await loginCookie({ app, database }, `matrix-${role}@example.test`, TEST_PASSWORD));
     }
     // Pinned literally: widening or narrowing the grant must be a deliberate change of this test too.
     expect(observed).toEqual({ anonymous: false, admin: true, technical: true, manager: false, seller: false });
@@ -176,13 +176,13 @@ describe('GET /api/v1/ready', () => {
     const { app, database } = await freshApi();
     await recordWorkerHeartbeat(database.handle.db, { gatewayMode: 'live', startedAt: new Date().toISOString() }, new Date());
     const admin = await createTestAccount(database.handle, { username: 'ready-gone@example.test', role: 'admin' });
-    const cookie = await loginCookie({ app }, 'ready-gone@example.test', TEST_PASSWORD);
+    const cookie = await loginCookie({ app, database }, 'ready-gone@example.test', TEST_PASSWORD);
     expect(ReadyResponseSchema.parse((await readyWith(app, cookie)).json()).integration.gatewayMode).toBe('live');
 
     await database.handle.pool.query('update session set revoked_at = now() where account_id = $1', [admin.id]);
     expect(ReadyResponseSchema.parse((await readyWith(app, cookie)).json()).integration.gatewayMode).toBe('unknown');
 
-    const fresh = await loginCookie({ app }, 'ready-gone@example.test', TEST_PASSWORD);
+    const fresh = await loginCookie({ app, database }, 'ready-gone@example.test', TEST_PASSWORD);
     await database.handle.pool.query("update account set status = 'disabled' where id = $1", [admin.id]);
     expect(ReadyResponseSchema.parse((await readyWith(app, fresh)).json()).integration.gatewayMode).toBe('unknown');
   });

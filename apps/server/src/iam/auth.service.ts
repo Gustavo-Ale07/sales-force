@@ -60,6 +60,7 @@ export type LoginFailureReason =
   | 'unknown_account'
   | 'bad_password'
   | 'external_account_local_login'
+  | 'seller_local_password'
   | 'account_disabled'
   | 'channel_not_permitted'
   | 'mode_role_not_permitted'
@@ -142,7 +143,8 @@ export class AuthService implements OnModuleInit {
   /**
    * Login by user name + password. Order: the LOCAL account (admin/technical, Argon2id) first; a name that is not a
    * local account usable in this mode goes to the external directory flow when it is enabled (`loginExternal`),
-   * which is how a directory-linked (seller) account signs in (an unlinked local seller account still verifies its local password when the role is allowed in the mode). A wrong password or a disabled LOCAL account
+   * which is how a directory-linked (seller) account signs in. AUTH-6: a `seller` never signs in with a local password, in any mode:
+   * a local account with that role is treated like an unknown name (dummy verification, directory when enabled). A wrong password or a disabled LOCAL account
    * never falls through to the directory: the local verdict is final. With the directory disabled the failure is
    * the same uniform `invalid_credentials`. An account linked to a directory user (`externalUserId`) never verifies a
    * local hash: it is treated like an unknown name (dummy verification) and goes to the directory when enabled.
@@ -191,14 +193,19 @@ export class AuthService implements OnModuleInit {
     let passwordOk: boolean;
     try {
       found = await this.accounts.findByUsername(loginName);
-      // An account linked to a directory user has no local password: its stored hash is never checked (dummy work instead).
-      passwordOk = await this.hasher.verify(found !== null && found.externalUserId === null ? found.passwordHash : null, input.password);
+      // An account linked to a directory user has no local password, and a seller never has one (AUTH-6): the stored hash is
+      // never checked (dummy work instead, same cost).
+      passwordOk = await this.hasher.verify(
+        found !== null && found.externalUserId === null && found.role !== 'seller' ? found.passwordHash : null,
+        input.password,
+      );
     } finally {
       releaseSlot?.();
     }
     let failure: LoginFailureReason | null = null;
     if (found === null) failure = 'unknown_account';
     else if (found.externalUserId !== null) failure = 'external_account_local_login';
+    else if (found.role === 'seller') failure = 'seller_local_password';
     else if (!passwordOk) failure = 'bad_password';
     else if (found.status !== 'active') failure = 'account_disabled';
     else if (!isChannelAllowed(found.role, 'web')) failure = 'channel_not_permitted';
@@ -207,7 +214,7 @@ export class AuthService implements OnModuleInit {
     // Only a name with no local account (or one linked to a directory user) reaches the directory: a local verdict (wrong
     // password, disabled account, role not admitted) is final and a local password is never forwarded.
     if (
-      (failure === 'unknown_account' || failure === 'external_account_local_login') &&
+      (failure === 'unknown_account' || failure === 'external_account_local_login' || failure === 'seller_local_password') &&
       this.config.externalLogin?.enabled === true &&
       this.externalVerifier !== undefined &&
       this.externalLinks !== undefined

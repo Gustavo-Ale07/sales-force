@@ -94,7 +94,7 @@ describe('AUTH_MODE=local', () => {
     });
     expect(new Set(bodies).size).toBe(1);
     expect(JSON.parse(bodies[0] ?? '{}')).toMatchObject({ code: 'invalid_credentials' });
-    expect(await failureReasons(ctx)).toEqual(['bad_password', 'mode_role_not_permitted', 'mode_role_not_permitted', 'unknown_account']);
+    expect(await failureReasons(ctx)).toEqual(['bad_password', 'mode_role_not_permitted', 'seller_local_password', 'unknown_account']);
   });
 
   it('applies the account lockout to a refused operational account like any other failure', async () => {
