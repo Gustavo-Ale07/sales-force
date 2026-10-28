@@ -117,3 +117,23 @@ Ligar no staging (somente após CI verde e autorização do dono): mesmo `VERIFI
 Riscos residuais (revisão de segurança):
 - **Egress sem filtro de rede (médio/baixo):** `verifier_egress` é saída aberta; só o allow-list de aplicação restringe o destino. Aceito para o Sandbox; exigir proxy/firewall restrito antes de qualquer uso além dele.
 - **Usuário bloqueado (baixo):** código desconhecido responde 503 (distinguível de senha errada); mapear para a negativa uniforme quando o código for observado.
+
+## Modo `AUTH_MODE=external` (PB-1, 2026-10-28)
+
+Modo não-dev alvo de produção. Vendedor/gerente (papéis operacionais) entram **somente** pelo verificador Sankhya; `admin`/`technical` **somente** com Argon2id local; sem senha local para papel operacional e sem bypass de demonstração. Implementação: `AUTH_MODE=external` em `config/api-env.ts`, `assertSafeAuthConfig` em `iam/auth-config.ts` (chamado também por `IamModule.register`), `config/auth-mode-guard.ts` (CLI/seed).
+
+| Modo | Uso | Login |
+|---|---|---|
+| `dev` | desenvolvimento local e ambientes descartáveis (`ALLOW_DEV_AUTH=1`, recusado em produção) | todos os papéis |
+| `local` | produção-válido (AUTH-5), usado hoje no staging | `admin`/`technical` locais; com `EXTERNAL_LOGIN_ENABLED=1` vira o híbrido temporário (não é o alvo) |
+| `external` | alvo (PB-1) | `admin`/`technical` locais; `seller`/`manager` só pelo verificador |
+
+**O boot recusa** (mensagens só com nomes de variáveis): `EXTERNAL_LOGIN_ENABLED` diferente de `1`; `VERIFIER_URL` ausente/inválida; segredo do verificador ausente, duplicado (`VERIFIER_SHARED_SECRET` e `_FILE`) ou < 32 caracteres; `EXTERNAL_AUTO_PROVISION=1` sem `EXTERNAL_IDUSU_IS_CODUSU_VALIDATED=1`; `ALLOW_DEV_AUTH` ou `SF_ALLOW_DEMO_ACCOUNTS` definidos; mais os guards de produção (`ALLOWED_ORIGINS`, `TRUST_PROXY`, identidade do dataset).
+
+**Contas locais operacionais:** `account create --role seller|manager` e o seed de desenvolvimento recusam rodar com `AUTH_MODE=external` (o CLI lê `AUTH_MODE` do ambiente; mensagem aponta `account create-external`). Em `dev`/`local` o seed e o CLI continuam funcionando como antes (o seed é só para dev local: contas de demonstração com senha local).
+
+**Troca no staging (decisão de deploy do dono; nada disso foi aplicado):** (1) segredo do verificador igual em `api.env` e `verifier.env`; (2) `compose.env`: `API_AUTH_MODE=external`, `WEB_AUTH_MODE=standard` (valor cosmético, sem banner dev), `EXTERNAL_LOGIN_ENABLED=1`, `VERIFIER_MODE=live`, `VERIFIER_SANKHYA_BASE_URL` do Sandbox, `VERIFIER_EGRESS_NETWORK=verifier_egress`; `EXTERNAL_AUTO_PROVISION` só após as provas (`EXTERNAL_IDUSU_IS_CODUSU_VALIDATED=1`, saúde do espelho, causa da recusa GUSTAVO — AUTH-7); (3) confirmar que nenhum `SF_ALLOW_DEMO_ACCOUNTS`/`ALLOW_DEV_AUTH` existe em `api.env`; (4) recriar `api` e `web`; (5) conferir `/ready` e um login admin local e um Sandbox; (6) reverter = voltar `API_AUTH_MODE=local` e `EXTERNAL_LOGIN_ENABLED=0`.
+
+**Sessões de vendedor local pré-existentes (passo opcional, só documentado, nada executado):** `roleMayHoldSession`/AUTH-6 já impedem novo login local de vendedor; para encerrar de imediato sessões antigas de contas de vendedor sem vínculo externo, o operador pode executar, depois de conferir com um `SELECT count(*)`, `UPDATE session SET revoked_at = now() WHERE revoked_at IS NULL AND account_id IN (SELECT id FROM account WHERE role = 'seller' AND external_user_id IS NULL);` (confirmar os nomes de coluna no schema da migration vigente antes de rodar; sem backup e janela combinados não executar).
+
+**Testes:** `test/unit/auth-external-mode.test.ts` (validação de boot, política de papéis, guard de CLI/seed) e `test/integration/auth-external-mode.test.ts` (login admin/technical local, manager/seller local recusados, indisponibilidade do verificador = 503).

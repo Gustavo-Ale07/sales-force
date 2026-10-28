@@ -8,7 +8,8 @@ with an off-VPS copy, real HTTPS on the planned `force-staging` host, SSH deploy
 
 **Staging behaves like production** (owner decision): `NODE_ENV=production`, `API_AUTH_MODE=local` and
 `WEB_AUTH_MODE=local`, real HTTPS, no demo sellers, no seed overlay, no `SF_ALLOW_DEMO_ACCOUNTS`, no
-`ALLOW_DEV_AUTH`, never `NODE_ENV=development`.
+`ALLOW_DEV_AUTH`, never `NODE_ENV=development`. (Current state. The target mode is `API_AUTH_MODE=external`, PB-1: see
+"Switching to `AUTH_MODE=external`" below; it is an owner deploy decision and is not applied.)
 
 ## Authentication
 
@@ -449,3 +450,24 @@ check against a real second name for the same database (stubbed); the real `aws`
 5. Brand files mount (`/brand`) is not wired in staging; add when a staging brand is wanted.
 6. Operational (seller) login on staging waits for the real Sankhya verifier adapter (BLOCKED_EXTERNAL_SECRET).
 7. Managed PostgreSQL remains the target (V-04, V-15), including whether the provider allows the role bootstrap.
+
+## Switching to `AUTH_MODE=external` (PB-1; owner deploy decision, not applied)
+
+`external` = operational users (seller, manager) only through the Sankhya verifier (STACK-2a/2b); local Argon2id for
+`admin`/`technical` only; no demo bypass. `local` stays valid (AUTH-5) and is the current staging value; `dev` is for
+local development and disposable environments only. Boot refuses the mode (variable names only, never values) when
+`EXTERNAL_LOGIN_ENABLED` is not `1`, `VERIFIER_URL`/the shared secret is missing or shorter than 32 characters,
+`EXTERNAL_AUTO_PROVISION=1` without `EXTERNAL_IDUSU_IS_CODUSU_VALIDATED=1`, or `ALLOW_DEV_AUTH` / `SF_ALLOW_DEMO_ACCOUNTS`
+is set. Steps, on the host only (no secret in Git; the real `compose.env` is never committed, SB-1):
+
+1. Same random `VERIFIER_SHARED_SECRET` (>= 32 characters) in `api.env` and `verifier.env`.
+2. `compose.env`: `API_AUTH_MODE=external`, `WEB_AUTH_MODE=standard`, `EXTERNAL_LOGIN_ENABLED=1`, `VERIFIER_MODE=live`,
+   `VERIFIER_SANKHYA_BASE_URL=<Sandbox>`, `VERIFIER_EGRESS_NETWORK=verifier_egress` (egress accepted for the Sandbox only;
+   restrict it by proxy/firewall before pointing the verifier anywhere else, STACK-2b). Keep `EXTERNAL_AUTO_PROVISION=0`
+   until the AUTH-7 proofs close.
+3. Check `api.env` has no `ALLOW_DEV_AUTH` and no `SF_ALLOW_DEMO_ACCOUNTS`.
+4. Recreate `api` and `web`; check `/ready`, one local admin login and one Sandbox operational login.
+5. The operator CLI refuses `account create --role seller|manager` in this mode; operational accounts come from
+   `account create-external` or the first verified sign-in. Optional one-shot revoke of old local-seller sessions: see
+   `docs/implementation/auth-username-flow.md` (documented only).
+6. Rollback: `API_AUTH_MODE=local`, `WEB_AUTH_MODE=local`, `EXTERNAL_LOGIN_ENABLED=0`, recreate `api` and `web`.

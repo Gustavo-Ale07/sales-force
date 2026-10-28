@@ -125,7 +125,8 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       API_HOST: 0.0.0.0
       API_PORT: "3000"
-      # Explicit, no default. Staging value: `local` (admin and technical Argon2id login; operational login stays off).
+      # Explicit, no default. Current staging value: `local` (admin and technical Argon2id login; operational login off).
+      # `external` (PB-1, the target) additionally REQUIRES EXTERNAL_LOGIN_ENABLED=1 plus the verifier settings below.
       # `dev` is refused by the API in production.
       AUTH_MODE: ${API_AUTH_MODE:?API_AUTH_MODE must be set explicitly}
       # The browser origin is the public staging host (TLS terminated by the edge).
@@ -277,7 +278,7 @@ services:
       BRAND_MARK_URL: ${BRAND_MARK_URL:-/brand/plac-mark-round.png}
       BRAND_ACCENT: ${BRAND_ACCENT:-}
       # Explicit, no default (the web container refuses to start without it). Staging value: `local`
-      # (local login form only, no dev banner); must match API_AUTH_MODE.
+      # (local login form only, no dev banner); must match API_AUTH_MODE (`local`), or `standard` when API_AUTH_MODE=external.
       WEB_AUTH_MODE: ${WEB_AUTH_MODE:?WEB_AUTH_MODE must be set explicitly, staging value is local}
     networks: [edge]
 
