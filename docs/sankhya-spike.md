@@ -930,3 +930,45 @@ Second, independent question from the same follow-up: **even with TOP semantics 
 - **NO-GO** on implementing a domain "document type" concept (Nota/Orçamento/Pedido de Venda as distinct, Sankhya-meaningful categories) now. Two independent blockers, either one sufficient alone: (1) TOP semantics for this classification were not reconfirmed this session (§9.44 — blocked, not a rejection, just not done); (2) even where TOP semantics are already known (TOP 1001 = pedido, `TIPMOV` P, F-44–F-52), Sales Force has no field or table to store or derive which Sankhya document type an order became, because the ERP order/invoice mirror does not exist and the write path itself is disabled (SNK-6) — there is structurally nothing to classify yet.
 - **What backend-engineer can safely do now:** nothing new toward Nota/Orçamento/Pedido distinctions. The only "type"-like thing Sales Force can honestly show today is its own `sales_order.status` (a draft's own lifecycle stage), which must not be labeled or presented as a Sankhya document type — doing so would misrepresent Sales Force's own drafts as if they were confirmed ERP documents.
 - **Prerequisites before revisiting this (both currently out of scope/undecided, do not invent either):** (a) a completed TOP-semantics session with live Sandbox credentials (§9.44); (b) an owner/architect decision on `roadmap.md` Q-02 to add an ERP sales-document mirror (a new entity in the Phase 0/Phase 1 mirror entity map, §4) — without it, there is no data source for a "document type" column to read from, however TOP is eventually labeled.
+
+### 9.46 Staging — observed state of the seller directory mirror and auto-provisioning (2026-10-28, owner-run read-only checks)
+
+Source: outputs pasted by the owner on 2026-10-28 (staging VPS, Sandbox only: `SANKHYA_MODE=live` points at the Sandbox, SNK-3 intact). Counts only; no names, ids or secrets recorded. **Observed facts; the idusu ↔ CODUSU formal proof is registered in §9.47.**
+
+| Fact | Observed |
+|---|---|
+| Switches in the running api | `EXTERNAL_LOGIN_ENABLED=1`, `EXTERNAL_AUTO_PROVISION=1`, `EXTERNAL_IDUSU_IS_CODUSU_VALIDATED=1`, `EXTERNAL_DIRECTORY_MAX_AGE_MINUTES=120` — auto-provisioning is **already ON** (earlier notes saying OFF are obsolete) |
+| When the switches were turned on | **Not datable from the repository or from this session** (no VPS access, no compose.env history). Hypothesis only: 2026-10-08 ≈ 15:06Z |
+| Mirror content | `erp_directory_user`: 68 users, 54 with `seller_code`; sellers: 83, 61 active |
+| Mirror freshness | worker syncing every 15 min; one-shot `sync-once` exit 0 with zero changes |
+| Refusal of the test seller | one `external_unmapped` at 2026-10-07T18:09:18Z (auto-provisioning was still off); zero login failures and zero directory refusals in the last 7 days |
+| Accounts | 2 `seller` accounts, both external, link source `sankhya_auto` — auto-provisioning worked |
+| Latest login (12:01Z) | success, external, role `manager`, `external_user_id` present, 0 seller links, verifier `outcome=verified` (200) |
+
+**Reading.**
+- The two auto-provisioned sellers are **empirical evidence** that the decoded login `idusu` equals `TSIUSU.CODUSU` (the mirror maps CODUSU → CODVEND and the links resolved to the right sellers). The **formal proof** ran later the same day and is registered in §9.47 (PROVED).
+- The cause of the 07/10 refusal is confirmed as `external_unmapped` (no Force account for that identity while auto-provisioning was off); it has not recurred.
+- Still **NEEDS VALIDATION**: the official blocked/inactive column of `TSIUSU` (a user blocked in the ERP is only caught if that field is known; revocation window ≈ mirror interval + 60 s), and refresh/logout/second-login behavior for an auto-provisioned seller.
+
+### 9.47 Staging — PROVED: decoded login `idusu` == `TSIUSU.CODUSU` (2026-10-28)
+
+**Status: PROVED (Sandbox, read-only), 2026-10-28.** Method: `.claude/work/prove-idusu-codusu-vps.sh` run by the owner on the staging VPS (owner-run; the assistant never ran it, no password or Sankhya contact on the assistant side). Two test users log in against the Sandbox verifier (`MobileLoginSP.login`, same call as the application); the `idusu` is decoded exactly like the verifier; then, inside the worker container with the technical credentials (Sandbox only: `SANKHYA_MODE=live`, `SANKHYA_ENVIRONMENT=sandbox`, base host allow-listed), `TSIUSU` is read by that CODUSU with single `SELECT`s and the row's own login column is compared with the login that authenticated. No production contact (SNK-3); no flag, compose.env or data was changed. Output carried codes and YES/NO only; no names, passwords, tokens or e-mails were recorded.
+
+| Check | User A (seller) | User B (negative control) |
+|---|---|---|
+| decoded `idusu` == `CODUSU` | YES | YES |
+| `TSIUSU` row login == authenticated login | YES | n/a |
+| `CODVEND` present | YES | NO |
+| seller exists and is active (`TGFVEN.ATIVO`) | YES | n/a |
+| users sharing that `CODVEND` | 1 | — |
+| expected application outcome | auto-provisioned seller | `403 access_not_configured` (no CODVEND, no seller) |
+
+Overall result: **OVERALL PROOF OK**. Verifier live on the Sandbox tenant host; worker live/sandbox.
+
+**Effect.** `EXTERNAL_IDUSU_IS_CODUSU_VALIDATED=1` (already on in staging, see §9.46) now rests on the formal proof, not only on empirical evidence; the earlier risk (flag declared before the proof) is closed. The proof covers two accounts of one Sandbox tenant; it does not replace the production-tenant check at pilot (NEEDS VALIDATION there).
+
+**Real seller login (owner-run, 2026-10-28T12:31:18Z):** `auth.login.success`, external, role `seller`, 1 seller link, session created, verifier status 200 `outcome=verified`. The 12:01Z login in §9.46 was the external manager account, a different account. The 2026-10-07 refusal (`external_unmapped`) was single, with auto-provisioning off at the time; zero failures in the last 7 days. Refresh, logout and second login were not part of the pasted evidence.
+
+**Still NEEDS VALIDATION:** the official blocked/inactive column of `TSIUSU` (checkpoint step 4; the owner will bring it from DBExplorer).
+
+**Note on the local probe.** `.claude/work/sankhya-idusu-proof.mjs` returned `authenticate failed: HTTP 404` when pointed at the tenant host: the human login uses the tenant host (`VERIFIER_SANKHYA_BASE_URL`), while `/authenticate` and `/gateway/v1` use the worker's `SANKHYA_BASE_URL`. The request shape (path, headers, body) was already identical to `packages/sankhya/src/real/token-provider.ts`; only the origin was wrong. The probe now takes that origin from `SANKHYA_BASE_URL` (default: Sandbox API base of §9.1, `api.sandbox.sankhya.com.br`) and refuses any other host, including production `api.sankhya.com.br`. The VPS script remains the proof of record.

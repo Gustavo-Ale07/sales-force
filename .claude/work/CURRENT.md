@@ -14,53 +14,31 @@ STATUS: ACTIVE — retomada em 2026-10-28. Fonte de verdade: este worktree (`fea
 | 4 | **Emenda STACK-2** (verificador como processo separado com credencial humana) | (a) confirmar que `STACK-2a` (2026-10-02) cobre o verificador atual; (b) emendar de novo | (a) | Doc diz uma coisa, a topologia faz outra |
 | 5 | **R35/R36** — base e roteamento da alçada de desconto | (a) base = tabela de preço do cliente, roteamento vendedor→gerente→diretor; (b) outra | (a) | Alçada não imposta no servidor (P-10) |
 | 6 | **Login verificado no Sankhya obrigatório para vendedor** | SIM = vendedor nunca entra por senha local; NÃO = permitir exceção | SIM | Contas locais de vendedor poderiam coexistir |
-| 7 | **Ferramenta para preencher `external_user_id`** no modo `PRE_LINKED` | (a) script de admin lendo o espelho `erp_directory_user`; (b) ligar `VERIFIED_AUTO_PROVISION` depois das provas; (c) nada | (b) após as provas do item "Só o dono roda"; (a) só se (b) falhar | Vendedores seguem recebendo 403 `access_not_configured` |
+| 7 | **Ferramenta para preencher `external_user_id`** no modo `PRE_LINKED` | **DECIDIDO (b)** — AUTH-7 | Já em (b) de fato: `VERIFIED_AUTO_PROVISION` ligado em staging (2 vendedores `sankhya_auto`); prova idusu ↔ CODUSU feita em 28/10 | — |
 | 8 | **Janela de compatibilidade e-mail → username** no `POST /auth/login` | (a) aceitar e-mail por N dias e avisar; (b) cortar já | (b) em staging (poucos usuários), (a) só se houver usuário real com e-mail | Dois formatos ativos; mais superfície de ataque |
 
 ## Só o dono roda
 
-Eu não rodo nada que peça senha ou fale com o Sankhya. Cole de volta somente o que está dito em cada bloco.
+Eu não rodo nada que peça senha ou fale com o Sankhya. Cole de volta somente o que está dito em cada bloco. Já colhido e provado: espelho, flags, recusa do GUSTAVO (`docs/sankhya-spike.md` §9.46) e a **prova idusu ↔ CODUSU (§9.47, 28/10, OVERALL PROOF OK)**; não repetir.
 
-### 1. Prova idusu ↔ CODUSU (terminal local, Sandbox, somente leitura)
-```
-cd C:\Dev\sales-force-evolution
-node .claude/work/sankhya-idusu-proof.mjs
-```
-Pede as senhas em prompt oculto. **Cole de volta:** tudo que o script imprime (só códigos e SIM/NÃO; nunca senha, token ou nome).
-Alternativa na VPS (mesma prova, dentro dos containers): `sudo bash prove-idusu-codusu-vps.sh` — **cole** o bloco D (resultado).
+### Etapa 4. Campo de bloqueio/inativo de TSIUSU — PENDENTE, sem coleta pronta
+Quando você quiser, eu preparo a sonda somente leitura (colunas de TSIUSU e valor para um usuário bloqueado conhecido no Sandbox). Sem isso, a revogação por bloqueio no ERP só vale pelo intervalo do espelho (15 min + 60 s) quando o vínculo some.
 
-### 2. Diagnóstico do espelho (VPS, somente leitura)
-```
-cd <pasta com .claude/work copiada para a VPS>
-sudo bash check-directory-mirror.sh
-```
-**Cole de volta:** a saída inteira (migration 0011 sim/não, contagens e data da última sincronização do espelho, valores das 4 chaves `EXTERNAL_*`).
-
-Se o espelho estiver vazio ou velho (única etapa que lê o Sandbox e grava só as tabelas do espelho):
-```
-sudo bash sync-sellers-directory-users-once.sh
-sudo bash check-directory-mirror.sh
-```
-**Cole:** a saída do segundo comando.
-
-### 3. Recusa do GUSTAVO SOUSA (VPS, somente leitura)
-```
-sudo bash trace-sup-login.sh
-docker compose -p salesforce-staging exec -T postgres sh -c 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -P pager=off' < staging-login-diagnosis.sql
-```
-(depois de o GUSTAVO tentar entrar uma vez). **Cole de volta:** as seções 1, 2 e 3 do SQL (motivos de falha por contagem, recusas de diretório com `user_code`/`seller_code`) e o resumo do `trace-sup-login.sh`. Não cole e-mails, hashes nem tokens (o script já não os imprime).
+### Etapa 6 — CONCLUÍDA em 28/10 (login real do GUSTAVO 12:31:18Z: seller, 1 vínculo, sessão criada)
+Opcional: `retry-seller-autoprovision.sh` cobre refresh, logout e novo login, que a evidência colada não mostra.
 
 ## Onde paramos (2026-10-28)
-- Commits locais desta sessão: `600a08f` (settings), `597f665` (arquivos soltos 07–08/10), `7658344` (senha fora do argv dos scripts), `24e4092` (checkpoint 08/10), `54a9f70` (teste cost/margin em /products). Nenhum push.
-- Código: HEAD funcional de 08/10 (`1ed8db3`, `e705f2f`). Gate sem Docker: typecheck/lint limpos; domain 292, contracts 114, sankhya 223, mobile-db 137, web 421, mobile 37 suítes verdes. **server e db não rodados (Docker Desktop desligado)**; o teste novo de /products nunca executou.
-- Não provado: idusu == CODUSU; campo de bloqueio de TSIUSU; causa da recusa do GUSTAVO; população real do espelho. Auto-provisionamento segue DESLIGADO.
-- Detalhes: `CHECKPOINT_2026-10-08.md` e `CHECKPOINT_2026-10-07_seller-auto-login.md`.
+- Commits locais (nenhum push): `600a08f`, `597f665`, `7658344`, `24e4092`, `54a9f70`, decisões do dono (`docs/decisions.md` §3.13), SB-2, SB-1, AUTH-8, `95f309e` (teste do harness), `b56cd8a` (sonda) e este fechamento.
+- **Staging está com as flags ligadas** (login externo, auto-provisionamento, idusu=CODUSU validado, idade máx. do diretório 120 min). Data de ativação não determinável; hipótese 08/10 ≈ 15:06Z.
+- **Prova idusu ↔ CODUSU: PROVADA em 28/10** (spike §9.47). Espelho saudável (68/54 usuários, 83/61 vendedores). Recusa do GUSTAVO = `external_unmapped` única em 07/10. 2 vendedores `sankhya_auto`.
+- Etapas 1, 2, 3, 5 e 6 concluídas. Só a 4 (campo de bloqueio de TSIUSU) está pendente; o dono traz do DBExplorer. Pendentes de decisão/plano: emenda STACK-2; planos em slices de PB-1, DISC-2 e AUTH-6.
+- Gate local: db 71 verdes; server 1111/1112 e a falha (harness) corrigida em `95f309e`; /products sem cost/margin passou em banco real.
 
 ## Por onde retomar
-1. Ligar Docker Desktop e rodar `pnpm --filter @salesforce/server test` e o teste do db; corrigir o teste novo se algum papel receber status inesperado.
-2. Você responde a tabela e roda os blocos "Só o dono roda"; cola as saídas.
-3. Com as provas: registrar fatos em `docs/sankhya-spike.md`; só então (com sua ordem) ligar `EXTERNAL_IDUSU_IS_CODUSU_VALIDATED` e `EXTERNAL_AUTO_PROVISION` em staging.
-4. Próxima fatia depois disso: rascunho offline + cache + outbox + sync (design §8.3/§8.4); pedidos ao Sankhya TESTE seguem desligados (SNK-6).
+1. Plano em slices das decisões 1 (PB-1), 5 (DISC-2) e 6 (AUTH-6), para aprovação antes de codar.
+2. Depois, o slice de rascunho offline, cache, outbox e sync (design §8.3/§8.4).
+3. Resposta sobre a emenda STACK-2; etapa 4 quando o dono trouxer o campo do DBExplorer (registro em `docs/sankhya-spike.md`).
+4. Pedidos ao Sankhya TESTE seguem desligados (SNK-6).
 
 ---
 
@@ -86,4 +64,4 @@ docker compose -p salesforce-staging exec -T postgres sh -c 'psql -X -U "$POSTGR
 ## 2026-10-07 — Login automático de vendedores
 
 - Checkpoint completo: `.claude/work/CHECKPOINT_2026-10-07_seller-auto-login.md` (ler primeiro).
-- Staging roda `7d7999b` (migration 0011 aplicada, db-roles OK, serviços saudáveis). Auto-provisionamento DESLIGADO; ligar só após provas (mirror, causa da recusa do GUSTAVO, sonda idusu↔CODUSU, campos de bloqueio). Não repetir o deploy. Pedidos ao Sankhya TESTE: próxima fase, não iniciada.
+- Staging roda `7d7999b` (migration 0011 aplicada, db-roles OK, serviços saudáveis). Auto-provisionamento estava DESLIGADO em 07/10 e foi ligado depois (ver "Onde paramos"); ligar só após provas (mirror, causa da recusa do GUSTAVO, sonda idusu↔CODUSU, campos de bloqueio). Não repetir o deploy. Pedidos ao Sankhya TESTE: próxima fase, não iniciada.
