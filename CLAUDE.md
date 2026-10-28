@@ -40,7 +40,7 @@ Breaking any requires a new approved decision. Full text: `grep -n` the ID in `d
 4. **P-20** External representatives never receive cost, margin or export capability — restricted data is not sent to their client at all.
 5. **P-07 / P-08** Offline-first mobile; offline commands idempotent, fully revalidated server-side (authorization, price, discount authority, credit, state, invariants).
 6. **P-09** Prices come from Sankhya-derived data; a changed price during offline use goes through `revisao_preco`; never silently replaced.
-7. **P-10** Discount authority seller → manager → director, configured in Sales Force, enforced server-side (base and routing UNDECIDED: R35, R36).
+7. **P-10** Discount authority seller → manager → director, configured in Sales Force, enforced server-side (base and routing decided 2026-10-28 in DISC-2; R36 ceiling and substitute approver, and R37, still open).
 8. **P-14** Pricing, credit, permissions, totals, state transitions, idempotency are deterministic, never delegated to AI; AI only via backend-controlled interfaces.
 9. **P-15 / SNK-3** Production and staging isolated; staging never touches Sankhya production; Sankhya production never used for dev/CI/staging — sole exception an owner-authorized read-only diagnostic inspection during a spike under every SNK-3 condition, logged in `sankhya-spike.md`. No production data in staging without approved sanitization; real order/partner writes validated in non-production Sankhya before the pilot.
 10. **SNK-4** No duplicate Sankhya writes: origin-id field checked before any retry; no heuristic matching; no real order write before S0 validation.

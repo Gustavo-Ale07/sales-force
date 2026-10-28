@@ -48,6 +48,7 @@ Phase 0 blocking decisions are taken in rounds. A round closes only when the pro
 | 7 | SNK-1, SNK-2, OPS-3, OPS-4, OPS-5 | Not started |
 | Owner rulings | PROD-1, CFG-1…CFG-6, SNK-5, SNK-6, SEC-1, DOC-1 (§3.8) | **Closed 2026-09-18** — taken after Sandbox spikes S1–S3; physical Sankhya configuration model, origin-id field definition and configuration bootstrap remain open (U-10…U-12) |
 | Owner rulings 2026-10-02 | AUTH-5, STACK-2a, ROLE-1, AUDIT-1, ENV-1, MOB-7 (§3.11) | **Closed 2026-10-02** — staging auth, verifier topology (amends STACK-2), staging infrastructure, Android identity; real verifier adapter and backup location remain blocked/pending |
+| Owner rulings 2026-10-28 | PB-1, SB-1, SB-2 (amends MOB-7), DISC-2, AUTH-6, AUTH-7, AUTH-8 (§3.13) | **Closed 2026-10-28** — STACK-2 amendment left to the owner; PB-1, DISC-2, AUTH-6 need a slice plan before code |
 
 > **Correction 2026-09-16.** An earlier uncommitted draft of this file marked every Round 2–7 item as APPROVED. That was wrong: only Round 1 was closed. Those items are recorded below as PROPOSED, with their content kept as the proposal to be discussed in their rounds.
 
@@ -575,7 +576,7 @@ Recorded from the project owner's explicit approval of 2026-10-02. Only structur
 - **Backup (staging):** RPO 24 h accepted for staging only (OPS-2 production targets unchanged; production policy later); backup immediately before relevant migrations; daily dump with hash, retention and periodic restore-check; copy to a second failure domain outside the VPS through an S3-compatible (or equivalent) storage interface. The real location is pending infrastructure; no fictional bucket is documented. A backup counts only after a tested restore (OPS-2).
 - **SSH:** dedicated deploy/ops user, key authentication, no private key in the repository, no password flow, no root for routine deploy, least privilege.
 
-#### MOB-7 · Android staging identity and signing
+#### MOB-7 · Android staging identity and signing (staging id amended 2026-10-28 by SB-2, §3.13)
 - **Status:** APPROVED 2026-10-02 (owner ruling) · production signing key is a separate, later decision
 - **Decision:** staging application id `br.com.plac.salesforce.staging`; future production `br.com.plac.salesforce` or a definitive id documented before launch. The staging profile is HTTPS only against the force-staging URL, with a standalone bundle: no Metro, dev-client, cleartext, LAN IP or debug signing key. Staging has its own signing; `debug.keystore` is never used; keystores, passwords and EAS credentials are never committed; EAS-managed credentials for staging are allowed if documented. Refines MOB-1, SEC-1, P-22.
 
@@ -594,6 +595,42 @@ Recorded from the project owner's instruction of 2026-10-06 (details and runbook
 - **Not decided here:** the interim filesystem volume store for photos (STACK-7 still requires managed S3-compatible storage) remains pending owner acceptance, as stated in `docs/implementation/product-media.md`.
 
 ---
+
+### 3.13 APPROVED — Owner rulings on non-dev auth mode, staging compose, mobile identity, discount authority and seller login (2026-10-28)
+
+Recorded from the owner's explicit answers of 2026-10-28 to the decisions table in `.claude/work/CURRENT.md`. Nothing here authorizes deploys, production data, flag changes in staging or Sankhya writes. Items marked "plan first" have no code yet.
+
+#### PB-1 · Non-dev authentication mode
+- **Status:** APPROVED 2026-10-28 (owner ruling: option a) · refines AUTH-5 · implementation: plan in slices first
+- **Decision:** create a non-dev `AUTH_MODE` with the Sankhya verifier (STACK-2a) for operational users and local Argon2id for `admin`/`technical` only. The temporary hybrid is not the target; no demo bypass.
+
+#### SB-1 · Staging compose is a versioned artifact
+- **Status:** APPROVED 2026-10-28 (owner ruling: option a)
+- **Decision:** `deploy/docker-compose.staging.yml` and `deploy/staging/*.example` are the official staging base, versioned in Git. The real `compose.env` and every secret file live only on the host and are never committed.
+
+#### SB-2 · Android application id and EAS staging profile (amends MOB-7)
+- **Status:** APPROVED 2026-10-28 (owner ruling: option a) · **amends the staging id of MOB-7**
+- **Decision:** production application id `br.com.plac.force`; the `staging` EAS profile uses the production id plus the suffix `.staging` → `br.com.plac.force.staging` (replaces `br.com.plac.salesforce.staging`). The development id `br.com.plac.salesforce.dev` is unchanged. The rest of MOB-7 stands (HTTPS only, standalone bundle, own signing, no debug keystore, no committed credentials). Changing a published id later means a new app: the production id is now fixed before launch.
+
+#### STACK-2 amendment — pending
+- **Status:** NEEDS OWNER ANSWER. The owner asked for the STACK-2a text and a one-line coverage assessment before answering; STACK-2a (§3.11) remains the only approved amendment. No change recorded.
+
+#### DISC-2 · Discount authority base and routing (resolves part of R35/R36)
+- **Status:** APPROVED 2026-10-28 (owner ruling: option a) · implementation: plan in slices first · refines P-10, DISC-1
+- **Decision:** the discount authority base is the customer's price table; routing is seller → manager → director, configured in Sales Force and enforced server-side (P-10, P-21).
+- **Still open:** absolute ceiling, substitute approver (R36 remainder) and R37. DISC-1 stays interim until those close.
+
+#### AUTH-6 · Operational sellers must authenticate against Sankhya
+- **Status:** APPROVED 2026-10-28 (owner ruling: SIM) · implementation: plan in slices first · extends AUTH-5
+- **Decision:** a seller never signs in with a local password. When Sankhya (the verifier) is unavailable: an existing session keeps working until it expires or is revoked; a new login is refused (fail closed, no local fallback).
+
+#### AUTH-7 · `external_user_id` fill tool (PRE_LINKED)
+- **Status:** APPROVED in direction 2026-10-28 (owner ruling: option b) · **waits for the idusu ↔ CODUSU proof**
+- **Decision:** the way to link sellers is `VERIFIED_AUTO_PROVISION` from the `erp_directory_user` mirror, enabled only after the proofs (`EXTERNAL_IDUSU_IS_CODUSU_VALIDATED`, mirror health, cause of the GUSTAVO refusal). No manual-link tool is built now.
+
+#### AUTH-8 · Login field is `username` only, no e-mail window
+- **Status:** APPROVED 2026-10-28 (owner ruling: option b) · already the implemented state
+- **Decision:** `POST /auth/login` accepts only `{ username, password }` (`strictObject`); `{ email }` bodies get 400 and there is no compatibility window. Refines P-16 for this contract.
 
 ## 4. Status of the specification's decisions (spec §4)
 
@@ -667,8 +704,8 @@ Kept for traceability. The binding text lives in the entry named in "Recorded in
 | R30 | Taxes (IPI/ICMS-ST) in quotations and proposals — spike S2 |
 | R31 | Real price resolution rule — spike S2 |
 | R33 | Price snapshot content for revision detection |
-| R35 | Discount authority calculation base (interim ceiling-free per-item discount shipped in Phase 0 — DISC-1, §3.9; full authority still gates Phase 1) |
-| R36 | Approval routing, absolute ceiling, substitute approver (unaffected by DISC-1) |
+| R35 | **Base decided 2026-10-28 (DISC-2): customer price table.** Discount authority calculation base (interim ceiling-free per-item discount shipped in Phase 0 — DISC-1, §3.9; full authority still gates Phase 1) |
+| R36 | **Routing seller → manager → director decided 2026-10-28 (DISC-2); ceiling and substitute approver still open.** Approval routing, absolute ceiling, substitute approver (unaffected by DISC-1) |
 | R37 | Credit exception approver and approval order |
 | R38 | Offline available-credit calculation |
 | R42 | Server history depth — decide before the first sales-document mirror load |
