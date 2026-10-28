@@ -48,7 +48,8 @@ export const ApiEnvSchema = z.object({
   // Authentication. `dev` needs an explicit opt-in (ALLOW_DEV_AUTH=1) on top of a non-production
   // NODE_ENV (both checked below). `local` is the production-capable mode: Force-local Argon2id login
   // for the admin and technical profiles only (AUTH-5, ROLE-1); no external verifier, no dev shortcut. Unknown values are refused.
-  AUTH_MODE: z.enum(['dev', 'local'], { error: "must be 'dev' or 'local'." }).default('dev'),
+  // `external` (PB-1) is the production target: the Sankhya verifier is mandatory for operational users, local Argon2id only for admin/technical.
+  AUTH_MODE: z.enum(['dev', 'local', 'external'], { error: "must be 'dev', 'local' or 'external'." }).default('dev'),
   ALLOW_DEV_AUTH: z.string().optional(),
   /** Idle expiry of a session; every request within the window slides it (security model §3.2: 12 h). */
   SESSION_IDLE_TIMEOUT_MINUTES: integerField({ min: 5, max: 10_080 }, 720),
@@ -143,9 +144,18 @@ export function parseApiEnv(source: EnvSource): ParsedApiEnv {
         problems.push('ALLOW_DEV_AUTH: the dev authentication mode needs the explicit opt-in ALLOW_DEV_AUTH=1.');
       }
     }
-    if (parsed.AUTH_MODE === 'local' && parsed.ALLOW_DEV_AUTH !== undefined) {
-      // No dev-only switch may travel with the production-capable mode (a leftover must not look harmless).
-      problems.push('ALLOW_DEV_AUTH: must not be set when AUTH_MODE=local (it only applies to the dev mode).');
+    if (parsed.AUTH_MODE !== 'dev' && parsed.ALLOW_DEV_AUTH !== undefined) {
+      // No dev-only switch may travel with a production-capable mode (a leftover must not look harmless).
+      problems.push(`ALLOW_DEV_AUTH: must not be set when AUTH_MODE=${parsed.AUTH_MODE} (it only applies to the dev mode).`);
+    }
+    if (parsed.AUTH_MODE === 'external') {
+      // PB-1: the verifier is mandatory (verifier URL / secret problems come from externalLoginProblems), no demo bypass.
+      if (parsed.EXTERNAL_LOGIN_ENABLED !== '1') {
+        problems.push('EXTERNAL_LOGIN_ENABLED: must be 1 when AUTH_MODE=external (the Sankhya verifier is mandatory for operational users).');
+      }
+      if (source['SF_ALLOW_DEMO_ACCOUNTS'] !== undefined) {
+        problems.push('SF_ALLOW_DEMO_ACCOUNTS: must not be set when AUTH_MODE=external (no demo accounts with a known password).');
+      }
     }
     if (parsed.NODE_ENV === 'production' && (source['TRUST_PROXY'] ?? '').trim() === '') {
       problems.push(

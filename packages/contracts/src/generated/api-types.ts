@@ -493,7 +493,7 @@ export interface components {
             details?: components["schemas"]["ErrorDetails"];
         };
         /** @enum {string} */
-        AuthMode: "dev" | "local";
+        AuthMode: "dev" | "local" | "external";
         AuthenticatedSession: {
             /** @constant */
             authenticated: true;

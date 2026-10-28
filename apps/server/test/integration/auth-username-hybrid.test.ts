@@ -637,7 +637,7 @@ describe('AUTH-6 hook: the ERP blocks the user (stubbed source, the real field i
     expect(await directoryAudit(ctx, 'auth.directory.link_revoked')).toEqual([]);
   });
 
-  it('refuses a new login of a blocked user on a fresh mirror (uniform error, reason only in the audit)', async () => {
+  it('refuses a new login of a blocked user on a fresh mirror with access_not_configured (reason only in the audit)', async () => {
     const { ctx, stub } = await signedIn();
     stub.answer = true;
     await markDirectoryFresh(ctx);

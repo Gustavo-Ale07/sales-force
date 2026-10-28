@@ -13,7 +13,7 @@ const HOUR_MS = 60 * MINUTE_MS;
  * Modules never read `process.env` (see `InfrastructureModule`).
  */
 export interface AuthConfig {
-  /** `dev` never runs in production; `local` is the production-capable local login for admin and technical only (AUTH-5; contracts `AuthMode`). */
+  /** `dev` never runs in production; `local` is the local login for admin and technical only (AUTH-5); `external` (PB-1) adds the mandatory Sankhya verifier for operational users (contracts `AuthMode`). */
   readonly authMode: AuthMode;
   /**
    * Roles allowed to hold a session in this mode. `undefined` = every role (dev). `local` allows only
@@ -131,8 +131,12 @@ const EXTERNAL_MIN_FAILURE_MS = 400;
 
 export function authConfigFromEnv(env: ParsedApiEnv): AuthConfig {
   const base = baseAuthConfig(env);
-  if (env.externalVerifier === null) return base;
-  return withExternalSellerLogin(base, {
+  if (env.externalVerifier === null) {
+    // `parseApiEnv` already refuses this; kept as a second lock so the mode can never run without its verifier.
+    if (env.AUTH_MODE === 'external') throw new Error('AUTH_MODE=external requires the Sankhya verifier (EXTERNAL_LOGIN_ENABLED=1 and VERIFIER_*).');
+    return base;
+  }
+  const config = withExternalSellerLogin(base, {
     enabled: true,
     ...(env.EXTERNAL_AUTO_PROVISION === '1' ? { linkMode: 'VERIFIED_AUTO_PROVISION' as const } : {}),
     directoryMaxAgeMs: env.EXTERNAL_DIRECTORY_MAX_AGE_MINUTES * MINUTE_MS,
@@ -140,12 +144,31 @@ export function authConfigFromEnv(env: ParsedApiEnv): AuthConfig {
     minFailureMs: EXTERNAL_MIN_FAILURE_MS,
     verifier: { url: env.externalVerifier.url, sharedSecret: new CredentialSecret(env.externalVerifier.sharedSecret) },
   });
+  assertSafeAuthConfig(config);
+  return config;
+}
+
+/**
+ * Invariants of `AUTH_MODE=external` (PB-1), checked where the configuration is built and where the IAM module is wired
+ * (so a hand-built config cannot weaken them). Messages name the setting, never a value. Other modes are not constrained here.
+ * - the directory login is enabled and has a verifier (operational users never fall back to a local password);
+ * - roles are limited, and `manager` is admitted only as an external-only role (a local password never opens a manager session);
+ * - `admin` and `technical` are the only roles whose local password is checked (a seller never is: AUTH-6).
+ */
+export function assertSafeAuthConfig(config: AuthConfig): void {
+  if (config.authMode !== 'external') return;
+  if (config.externalLogin?.enabled !== true || config.externalLogin.verifier === undefined) {
+    throw new Error('AUTH_MODE=external: the directory login with its verifier is mandatory.');
+  }
+  const allowed = config.allowedRoles;
+  if (allowed === undefined) throw new Error('AUTH_MODE=external: allowedRoles must be limited (a dev-wide role set is not allowed).');
+  if (allowed.includes('manager')) throw new Error('AUTH_MODE=external: manager must be an external-only role, never a local-password role.');
 }
 
 function baseAuthConfig(env: ParsedApiEnv): AuthConfig {
   return {
     authMode: env.AUTH_MODE,
-    ...(env.AUTH_MODE === 'local' ? { allowedRoles: LOCAL_MODE_ROLES } : {}),
+    ...(env.AUTH_MODE !== 'dev' ? { allowedRoles: LOCAL_MODE_ROLES } : {}),
     secureCookies: env.NODE_ENV !== 'development',
     allowedOrigins: env.allowedOrigins,
     sessionIdleMs: env.SESSION_IDLE_TIMEOUT_MINUTES * MINUTE_MS,

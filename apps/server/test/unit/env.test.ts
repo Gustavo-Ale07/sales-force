@@ -297,7 +297,7 @@ describe('production/staging boot refusals, fail closed (revalidation)', () => {
   });
 
   it('API: an unknown auth mode (e.g. a bypass) is refused, never defaulted open', () => {
-    for (const mode of ['none', 'off', 'DEV', 'LOCAL', 'standard', 'external', 'disabled']) {
+    for (const mode of ['none', 'off', 'DEV', 'LOCAL', 'standard', 'EXTERNAL', 'disabled']) {
       expect(problemsOf(() => parseApiEnv({ ...PROD, ...DATASET, AUTH_MODE: mode })).some((problem) => problem.startsWith('AUTH_MODE:'))).toBe(true);
     }
   });

@@ -7,7 +7,7 @@ import { AccountService } from './account.service.js';
 import { AuditService } from './audit.service.js';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
-import type { AuthConfig } from './auth-config.js';
+import { assertSafeAuthConfig, type AuthConfig } from './auth-config.js';
 import { DrizzleExternalAccountLinks } from './drizzle-external-account-links.js';
 import { AUTH_CONFIG, EXTERNAL_ACCOUNT_LINKS, EXTERNAL_IDENTITY_VERIFIER, PASSWORD_HASHER } from './iam-tokens.js';
 import { Argon2idPasswordHasher } from './password-hasher.js';
@@ -24,6 +24,7 @@ import { ThrottleRepository } from './throttle.repository.js';
 @Module({})
 export class IamModule {
   static register(config: AuthConfig): DynamicModule {
+    assertSafeAuthConfig(config);
     const external = config.externalLogin;
     // Directory login is wired only when explicitly enabled WITH a verifier endpoint; otherwise the optional ports stay
     // absent and `loginExternal` fails closed. Only `EXTERNAL_LOGIN_ENABLED=1` turns it on (`authConfigFromEnv`).

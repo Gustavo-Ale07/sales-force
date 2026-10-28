@@ -9,7 +9,7 @@ export type AccountRole = z.infer<typeof AccountRoleSchema>;
  * restricted to the admin and technical profiles (AUTH-5, ROLE-1; valid in production; operational
  * accounts are refused until an external verifier mode exists).
  */
-export const AuthModeSchema = named('AuthMode', z.enum(['dev', 'local']));
+export const AuthModeSchema = named('AuthMode', z.enum(['dev', 'local', 'external']));
 export type AuthMode = z.infer<typeof AuthModeSchema>;
 
 /**

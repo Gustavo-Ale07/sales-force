@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { createOperatorAccountService } from './cli/operator.js';
 import { readSecretLine } from './cli/read-secret.js';
 import { operatorIdentity } from './cli/operator-identity.js';
+import { localPasswordRefusal } from './config/auth-mode-guard.js';
 import { passwordHashFields, passwordHashParamsOf, passwordHashProblems } from './config/auth-env.js';
 import { externalLoginFields, externalVerifierOf } from './config/external-login-env.js';
 import { databaseUrlField, isLoopbackDatabaseUrl, nodeEnvField, parseEnv } from './config/env.js';
@@ -40,6 +41,8 @@ const CliEnvSchema = z.object({
   DATABASE_URL: databaseUrlField,
   ACCOUNT_PASSWORD: z.string().optional(),
   ALLOW_REMOTE_DB: z.string().optional(),
+  /** Only read to refuse local operational accounts under AUTH_MODE=external (PB-1). */
+  AUTH_MODE: z.string().optional(),
   ...passwordHashFields,
   VERIFIER_URL: externalLoginFields.VERIFIER_URL,
   VERIFIER_SHARED_SECRET: externalLoginFields.VERIFIER_SHARED_SECRET,
@@ -125,6 +128,8 @@ runMain('account-cli', async () => {
       } else if (command === 'create') {
         const role = values.role ?? fail('--role is required (admin, manager, seller or technical)');
         if (!(ACCOUNT_ROLES as readonly string[]).includes(role)) fail('--role must be admin, manager, seller or technical');
+        const refusal = localPasswordRefusal(env.AUTH_MODE, role);
+        if (refusal !== null) fail(refusal);
         const name = values.name ?? fail('--name is required');
         const id = await accounts.createAccount({ username: loginName, displayName: name, password, role: role as AccountRole });
         process.stdout.write(`account created: ${id} (${role})\n`);

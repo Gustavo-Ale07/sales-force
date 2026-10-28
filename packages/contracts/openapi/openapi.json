@@ -2402,7 +2402,8 @@
         "type": "string",
         "enum": [
           "dev",
-          "local"
+          "local",
+          "external"
         ]
       },
       "AuthenticatedSession": {
