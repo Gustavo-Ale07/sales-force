@@ -85,8 +85,7 @@ trap 'rm -rf "$T"; unset PW_S PW_U' EXIT
 esc() { local s="${1//\\/\\\\}"; printf '%s' "${s//\"/\\\"}"; }
 LOGIN_CODE=""; COOKIE=""; FLAGS=""
 login() { # user pass jar
-  LOGIN_CODE=$(curl -s -m 40 -o "$T/body" -D "$T/hdr" -c "$3" -w '%{http_code}' -H 'content-type: application/json' -H "Origin: $ORIGIN" \
-    -d "{\"username\":\"$(esc "$1")\",\"password\":\"$(esc "$2")\"}" "$BASE/auth/login")
+  LOGIN_CODE=$(printf '%s' "{\"username\":\"$(esc "$1")\",\"password\":\"$(esc "$2")\"}" | curl -s -m 40 -o "$T/body" -D "$T/hdr" -c "$3" -w '%{http_code}' -H 'content-type: application/json' -H "Origin: $ORIGIN" --data-binary @- "$BASE/auth/login")
   LOGIN_CODE="${LOGIN_CODE//[^0-9]/}"; LOGIN_CODE="${LOGIN_CODE:0:3}"   # status = digits only, never mixed with a body
   COOKIE=no; FLAGS=""
   if grep -qi '^set-cookie: sf_session=' "$T/hdr"; then COOKIE=yes

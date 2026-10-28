@@ -6,12 +6,13 @@ BASE=https://force.sistemasplac.com.br/api/v1
 ORIGIN=https://force.sistemasplac.com.br
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT; umask 077
 
-json() { printf '{"username":"%s","password":"%s"}' "$1" "$2"; }
+json() { printf '{"username":"%s","password":"%s"}' "$(esc "$1")" "$(esc "$2")"; }
 esc() { local s="${1//\\/\\\\}"; printf '%s' "${s//\"/\\\"}"; }
 
 login() { # label user pass jar
   local code
-  code=$(curl -s -m 40 -o "$T/body" -D "$T/hdr" -c "$4" -w '%{http_code}' -H 'content-type: application/json' -H "Origin: $ORIGIN" -d "$(json "$2" "$(esc "$3")")" "$BASE/auth/login")
+  # Body goes through stdin (printf is a builtin): the password never appears in a process argument list.
+  code=$(json "$2" "$3" | curl -s -m 40 -o "$T/body" -D "$T/hdr" -c "$4" -w '%{http_code}' -H 'content-type: application/json' -H "Origin: $ORIGIN" --data-binary @- "$BASE/auth/login")
   local cookie=no; grep -qi '^set-cookie: sf_session=' "$T/hdr" && cookie=yes
   local flags=""; grep -i '^set-cookie: sf_session=' "$T/hdr" | grep -qi 'httponly' && flags="HttpOnly"
   grep -i '^set-cookie: sf_session=' "$T/hdr" | grep -qi 'secure' && flags="$flags Secure"

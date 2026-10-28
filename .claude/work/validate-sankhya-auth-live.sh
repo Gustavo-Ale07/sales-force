@@ -32,8 +32,7 @@ trap 'rm -rf "$T"; unset PW' EXIT
 esc() { local s="${1//\\/\\\\}"; printf '%s' "${s//\"/\\\"}"; }
 CODE=""; AUTHOK=false; ROLE="-"; ERRCODE="-"
 login() { # user pass jar
-  CODE=$(curl -s -m 40 -o "$T/body" -c "$3" -w '%{http_code}' -H 'content-type: application/json' -H "Origin: $ORIGIN" \
-    -d "{\"username\":\"$(esc "$1")\",\"password\":\"$(esc "$2")\"}" "$BASE/auth/login")
+  CODE=$(printf '%s' "{\"username\":\"$(esc "$1")\",\"password\":\"$(esc "$2")\"}" | curl -s -m 40 -o "$T/body" -c "$3" -w '%{http_code}' -H 'content-type: application/json' -H "Origin: $ORIGIN" --data-binary @- "$BASE/auth/login")
   CODE="${CODE//[^0-9]/}"; CODE="${CODE:0:3}"
   AUTHOK=false; grep -q '"authenticated":true' "$T/body" && AUTHOK=true
   ERRCODE="$(sed -n 's/.*"code":"\([a-z_]*\)".*/\1/p' "$T/body" | head -n1)"; ERRCODE="${ERRCODE:--}"

@@ -13,7 +13,7 @@ PG="$(cid postgres)"; API="$(cid api)"
 psqlq() { local sql="${!#}"; set -- "${@:1:$#-1}"; printf '%s\n' "$sql" | docker exec -i -e PGOPTIONS='-c default_transaction_read_only=on' "$PG" sh -c 'psql -X -q -t -A -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -P pager=off "$@"' sh "$@"; }
 T="$(mktemp -d)"; umask 077
 trap 'rm -rf "$T"; unset PW' EXIT
-esc() { local s="${1//\/\\}"; printf '%s' "${s//\"/\\\"}"; }
+esc() { local s="${1//\\/\\\\}"; printf '%s' "${s//\"/\\\"}"; }
 
 echo "== 1. flags seen by the running api (read-only) =="
 FLAGS_OK=yes
@@ -24,8 +24,7 @@ done
 
 LOGIN_CODE=""; COOKIE=""; HO=""; SE=""
 login() { # user pass jar
-  LOGIN_CODE=$(curl -s -m 40 -o "$T/body" -D "$T/hdr" -c "$3" -w '%{http_code}' -H 'content-type: application/json' -H "Origin: $ORIGIN" \
-    -d "{\"username\":\"$(esc "$1")\",\"password\":\"$(esc "$2")\"}" "$BASE/auth/login")
+  LOGIN_CODE=$(printf '%s' "{\"username\":\"$(esc "$1")\",\"password\":\"$(esc "$2")\"}" | curl -s -m 40 -o "$T/body" -D "$T/hdr" -c "$3" -w '%{http_code}' -H 'content-type: application/json' -H "Origin: $ORIGIN" --data-binary @- "$BASE/auth/login")
   COOKIE=NO; HO=NO; SE=NO
   if grep -qi '^set-cookie: sf_session=' "$T/hdr"; then COOKIE=YES
     grep -i '^set-cookie: sf_session=' "$T/hdr" | grep -qi httponly && HO=YES
