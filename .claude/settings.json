@@ -12,7 +12,6 @@
     "deny": [
       "Read(docs/blueprint.html)",
       "Edit(docs/blueprint.html)",
-      "Write(docs/blueprint.html)",
       "Read(.env)",
       "Read(.env.*)",
       "Read(!.env.example)",
