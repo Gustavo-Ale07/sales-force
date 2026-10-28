@@ -614,7 +614,7 @@ Recorded from the owner's explicit answers of 2026-10-28 to the decisions table 
 
 #### STACK-2b · STACK-2a addendum — verifier adapter live, egress accepted for the Sandbox only
 - **Status:** APPROVED 2026-10-28 (owner ruling: option b) · amends STACK-2a
-- **Decision (owner text):** (1) The verifier's real adapter has operated since 07/10 against the Sandbox (placfestas-teste.sankhyacloud.com.br); the  state of STACK-2a is superseded. (2) The verifier's network egress () is open and that is accepted only for the Sandbox. Before pointing the verifier at any other environment, production included, the egress must be restricted by proxy or firewall to an explicit list of Sankhya hosts, verified at deploy. (3) The remaining STACK-2a requirements stand.
+- **Decision (owner text):** (1) The verifier's real adapter has operated since 07/10 against the Sandbox (placfestas-teste.sankhyacloud.com.br); the `BLOCKED_EXTERNAL_SECRET` state of STACK-2a is superseded. (2) The verifier's network egress (`verifier_egress`) is open and that is accepted only for the Sandbox. Before pointing the verifier at any other environment, production included, the egress must be restricted by proxy or firewall to an explicit list of Sankhya hosts, verified at deploy. (3) The remaining STACK-2a requirements stand.
 
 #### DISC-2 · Discount authority base and routing (resolves part of R35/R36)
 - **Status:** APPROVED 2026-10-28 (owner ruling: option a) · implementation: plan in slices first · refines P-10, DISC-1
@@ -624,7 +624,7 @@ Recorded from the owner's explicit answers of 2026-10-28 to the decisions table 
 #### AUTH-6 · Operational sellers must authenticate against Sankhya
 - **Status:** APPROVED 2026-10-28 (owner ruling: SIM) · implementation: plan in slices first · extends AUTH-5
 - **Decision:** a seller never signs in with a local password. When Sankhya (the verifier) is unavailable: an existing session keeps working until it expires or is revoked; a new login is refused (fail closed, no local fallback).
-- **Addendum 2026-10-28 (owner):** a stale directory mirror (beyond ) or a failing sync never revokes a  link nor drops a session. Revocation happens only on a successful directory read showing the user without CODVEND or blocked. The TSIUSU blocking field is not yet validated: the hook is prepared and tested with a stub until the owner brings the field from DBExplorer. Slice order: AUTH-6 → PB-1 → DISC-2 (DISC-2 only base + routing; R36 ceiling and R37 stay open); security-reviewer at the end of each slice.
+- **Addendum 2026-10-28 (owner):** a stale directory mirror (beyond `EXTERNAL_DIRECTORY_MAX_AGE_MINUTES`) or a failing sync never revokes a `sankhya_auto` link nor drops a session. Revocation happens only on a successful directory read showing the user without CODVEND or blocked. The TSIUSU blocking field is not yet validated: the hook is prepared and tested with a stub until the owner brings the field from DBExplorer. Slice order: AUTH-6 → PB-1 → DISC-2 (DISC-2 only base + routing; R36 ceiling and R37 stay open); security-reviewer at the end of each slice.
 
 #### AUTH-7 · `external_user_id` fill tool (PRE_LINKED)
 - **Status:** APPROVED in direction 2026-10-28 (owner ruling: option b) · **waits for the idusu ↔ CODUSU proof**
