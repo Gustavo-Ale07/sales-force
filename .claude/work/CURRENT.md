@@ -35,6 +35,7 @@ Opcional: `retry-seller-autoprovision.sh` cobre refresh, logout e novo login, qu
 - Gate local: db 71 verdes; server 1111/1112 e a falha (harness) corrigida em `95f309e`; /products sem cost/margin passou em banco real.
 
 ## Por onde retomar
+0. **Sessão 2026-10-28 encerrada a pedido do dono.** Ler `.claude/work/CHECKPOINT_2026-10-28.md` (feito, não feito, ordem D1-D12). Último commit: `28b1ceb` (D1). Próximo: D2/D3/D4, depois security-reviewer em `4719d39..1174453`.
 1. Plano em slices das decisões 1 (PB-1), 5 (DISC-2) e 6 (AUTH-6), para aprovação antes de codar.
 2. Depois, o slice de rascunho offline, cache, outbox e sync (design §8.3/§8.4).
 3. Resposta sobre a emenda STACK-2; etapa 4 quando o dono trouxer o campo do DBExplorer (registro em `docs/sankhya-spike.md`).
