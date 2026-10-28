@@ -30,10 +30,10 @@ describe("app variant", () => {
 
   it("configures staging identity and keeps the base config unmodified", () => {
     const out = variant.applyVariant(base, STG);
-    expect(out.android.package).toBe("br.com.plac.salesforce.staging");
+    expect(out.android.package).toBe("br.com.plac.force.staging");
     expect(out.android.allowBackup).toBe(false);
     expect(out.android.blockedPermissions).toEqual(["android.permission.SYSTEM_ALERT_WINDOW"]);
-    expect(out.ios.bundleIdentifier).toBe("br.com.plac.salesforce.staging");
+    expect(out.ios.bundleIdentifier).toBe("br.com.plac.force.staging");
     expect(out.name).toBe("Sales Force STG");
     expect(out.scheme).toBe("salesforce-stg");
     expect(out.extra).toEqual({ appVariant: "staging" });

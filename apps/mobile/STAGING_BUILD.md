@@ -7,12 +7,12 @@ Status: owner-approved 2026-10-02 for staging only. The agent has not executed a
 | | development (default) | staging |
 |---|---|---|
 | `APP_VARIANT` | unset / `development` | `staging` |
-| Android package / iOS bundle id | `br.com.plac.salesforce.dev` | `br.com.plac.salesforce.staging` |
+| Android package / iOS bundle id | `br.com.plac.salesforce.dev` | `br.com.plac.force.staging` |
 | Name / scheme | Force / `salesforce` | Sales Force STG / `salesforce-stg` |
 | API | LAN/dev (`EXPO_PUBLIC_API_URL`, http allowed only by the existing dev-only cleartext flags) | `https://force-staging.sistemasplac.com.br`, https only |
 | Bundle | dev client or local standalone (unchanged) | standalone release bundle: no Metro, no dev client |
 
-Production id (planned `br.com.plac.salesforce`, or a definitive id documented before launch) is not set anywhere. A Play/App Store id change later means a new app: decide before launch.
+Production id (owner ruling 2026-10-28: `br.com.plac.force`; staging = production id + `.staging`) is not set anywhere. A Play/App Store id change later means a new app: decide before launch.
 
 ## Build-time guard (fail-closed)
 
@@ -39,7 +39,7 @@ The `staging` profile in `eas.json` sets `APP_VARIANT`, `SF_BUILD_PROFILE=stagin
 
 ## Offline verification (2026-10-02, throwaway copy, repo untouched)
 
-- Prebuild manifest (staging): `usesCleartextTraffic="false"`, `allowBackup="false"`, no `debuggable`, label "Sales Force STG", scheme `salesforce-stg`, `applicationId`/`namespace` `br.com.plac.salesforce.staging`.
+- Prebuild manifest (staging): `usesCleartextTraffic="false"`, `allowBackup="false"`, no `debuggable`, label "Sales Force STG", scheme `salesforce-stg`, `applicationId`/`namespace` `br.com.plac.force.staging`.
 - `expo-dev-client`/`expo-dev-launcher`/`expo-dev-menu` are still autolinked (dependency of the app) but the launcher is compiled as the no-op `disableInRelease` variant in release (`expo.devlauncher.configureInRelease` is unset; never set it). The dev-client URL scheme `exp+plac-sales-force` remains in the manifest. Fully removing the module from staging would need a separate package/profile decision.
 - `expo export --platform android` works offline. Bundle scan: no 127.0.0.1, 192.168., 10.0.2.2, demo domain or demo password. Only `http://localhost:8081` (React Native dev-server fallback, dead in release) and JSON-schema `http://json-schema.org` URLs appear. The whole `app.json` is embedded because `src/app-info.ts` imports it for the version, so the base (dev) package id and the provisional-id notice string ship in the bundle (cosmetic, no secret).
 

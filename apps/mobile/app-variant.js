@@ -6,7 +6,7 @@
 const STAGING = {
   name: "Sales Force STG",
   scheme: "salesforce-stg",
-  applicationId: "br.com.plac.salesforce.staging",
+  applicationId: "br.com.plac.force.staging",
 };
 const VARIANTS = new Set(["development", "staging"]);
 
