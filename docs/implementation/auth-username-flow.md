@@ -134,6 +134,18 @@ Modo não-dev alvo de produção. Vendedor/gerente (papéis operacionais) entram
 
 **Troca no staging (decisão de deploy do dono; nada disso foi aplicado):** (1) segredo do verificador igual em `api.env` e `verifier.env`; (2) `compose.env`: `API_AUTH_MODE=external`, `WEB_AUTH_MODE=standard` (valor cosmético, sem banner dev), `EXTERNAL_LOGIN_ENABLED=1`, `VERIFIER_MODE=live`, `VERIFIER_SANKHYA_BASE_URL` do Sandbox, `VERIFIER_EGRESS_NETWORK=verifier_egress`; `EXTERNAL_AUTO_PROVISION` só após as provas (`EXTERNAL_IDUSU_IS_CODUSU_VALIDATED=1`, saúde do espelho, causa da recusa GUSTAVO — AUTH-7); (3) confirmar que nenhum `SF_ALLOW_DEMO_ACCOUNTS`/`ALLOW_DEV_AUTH` existe em `api.env`; (4) recriar `api` e `web`; (5) conferir `/ready` e um login admin local e um Sandbox; (6) reverter = voltar `API_AUTH_MODE=local` e `EXTERNAL_LOGIN_ENABLED=0`.
 
-**Sessões de vendedor local pré-existentes (passo opcional, só documentado, nada executado):** `roleMayHoldSession`/AUTH-6 já impedem novo login local de vendedor; para encerrar de imediato sessões antigas de contas de vendedor sem vínculo externo, o operador pode executar, depois de conferir com um `SELECT count(*)`, `UPDATE session SET revoked_at = now() WHERE revoked_at IS NULL AND account_id IN (SELECT id FROM account WHERE role = 'seller' AND external_user_id IS NULL);` (confirmar os nomes de coluna no schema da migration vigente antes de rodar; sem backup e janela combinados não executar).
+**Sessões de vendedor local pré-existentes:** desde esta fatia (AUTH-6, ruling A) uma sessão de `seller` cuja conta não está vinculada a um usuário do diretório (`external_user_id` nulo) deixa de resolver em qualquer modo (`roleMayHoldSession`); a linha continua na tabela até expirar. Passo opcional, só documentado (nada executado; combinar janela e backup antes), para revogá-las de imediato:
+
+```sql
+BEGIN;
+UPDATE session SET revoked_at = now()
+ WHERE revoked_at IS NULL
+   AND account_id IN (SELECT id FROM account WHERE role = 'seller' AND external_user_id IS NULL)
+RETURNING id;
+-- verificar a contagem de linhas retornadas; se não for a esperada: ROLLBACK;
+COMMIT;
+```
+
+**Defesa em profundidade (PB-1):** `assertSafeAuthConfig` roda em `authConfigFromEnv`, no construtor de `AuthService` e em `IamModule.register`; em `external` recusa também `VERIFIED_AUTO_PROVISION` sem a prova idusu = CODUSU na configuração. `AccountService.createAccount` recusa `seller`/`manager` quando o modo é `external` (o CLI mostra a mesma mensagem antes de ler a senha).
 
 **Testes:** `test/unit/auth-external-mode.test.ts` (validação de boot, política de papéis, guard de CLI/seed) e `test/integration/auth-external-mode.test.ts` (login admin/technical local, manager/seller local recusados, indisponibilidade do verificador = 503).

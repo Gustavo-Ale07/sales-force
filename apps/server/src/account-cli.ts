@@ -9,7 +9,7 @@ import { localPasswordRefusal } from './config/auth-mode-guard.js';
 import { passwordHashFields, passwordHashParamsOf, passwordHashProblems } from './config/auth-env.js';
 import { externalLoginFields, externalVerifierOf } from './config/external-login-env.js';
 import { databaseUrlField, isLoopbackDatabaseUrl, nodeEnvField, parseEnv } from './config/env.js';
-import { AccountAlreadyExistsError, AccountNotFoundError, ExternalAccountPasswordError, PasswordPolicyError } from './iam/account.service.js';
+import { AccountAlreadyExistsError, AccountNotFoundError, OperationalLocalAccountError, ExternalAccountPasswordError, PasswordPolicyError } from './iam/account.service.js';
 import { AuditService } from './iam/audit.service.js';
 import { ExternalAccountError, ExternalAccountService } from './iam/external-account.service.js';
 import { SankhyaIdentityVerifier } from './iam/sankhya-identity-verifier.js';
@@ -89,6 +89,13 @@ runMain('account-cli', async () => {
     return problems;
   });
 
+  // PB-1: the friendly refusal comes before anything is read or connected (AccountService enforces it again).
+  if (command === 'create') {
+    const requested = values.role;
+    const early = requested === undefined ? null : localPasswordRefusal(env.AUTH_MODE, requested);
+    if (early !== null) fail(early);
+  }
+
   let password = '';
   if (command === 'create-external') {
     password = await readSecretLine('Sankhya password (not shown): ', values['password-stdin']);
@@ -100,7 +107,7 @@ runMain('account-cli', async () => {
 
   const db = createDb(env.DATABASE_URL.reveal(), { max: 2, applicationName: 'salesforce-account-cli' });
   try {
-    const { accounts, repository } = createOperatorAccountService(db, passwordHashParamsOf(env), undefined, operatorIdentity(process.env));
+    const { accounts, repository } = createOperatorAccountService(db, passwordHashParamsOf(env), undefined, operatorIdentity(process.env), env.AUTH_MODE);
     try {
       if (command === 'create-external') {
         const role = values.role ?? fail('--role is required (admin, manager, seller or technical)');
@@ -143,7 +150,7 @@ runMain('account-cli', async () => {
         process.stdout.write(cleared ? 'lockout cleared\n' : 'no lockout was recorded for this address\n');
       }
     } catch (error) {
-      if (error instanceof PasswordPolicyError || error instanceof AccountAlreadyExistsError || error instanceof AccountNotFoundError || error instanceof ExternalAccountPasswordError || error instanceof ExternalAccountError) {
+      if (error instanceof PasswordPolicyError || error instanceof AccountAlreadyExistsError || error instanceof AccountNotFoundError || error instanceof ExternalAccountPasswordError || error instanceof OperationalLocalAccountError || error instanceof ExternalAccountError) {
         // Actionable and secret-free: the policy text names rules, not the password.
         fail(error.message);
       }

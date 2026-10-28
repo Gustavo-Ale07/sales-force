@@ -92,6 +92,18 @@ describe('account CLI guards', () => {
   const base = { ACCOUNT_PASSWORD: TEST_PASSWORD };
   const create = ['create', '--email', 'a@example.test', '--name', 'A', '--role', 'admin'];
 
+  it('PB-1: refuses a local seller or manager under AUTH_MODE=external before touching the database, but not an admin', async () => {
+    const env = { ...base, NODE_ENV: 'development', AUTH_MODE: 'external', DATABASE_URL: LOOPBACK_URL, ...FAST_HASH };
+    for (const role of ['seller', 'manager']) {
+      const result = await runScript('account-cli.ts', env, ['create', '--email', 'x', '--name', 'X', '--role', role]);
+      expect(result.code).not.toBe(0);
+      expect(result.stderr).toMatch(/create-external/);
+      expect(result.stderr).not.toContain(TEST_PASSWORD);
+    }
+    const admin = await runScript('account-cli.ts', env, ['create', '--email', 'x', '--name', 'X', '--role', 'admin']);
+    expect(admin.stderr).not.toMatch(/create-external/);
+  }, 90_000);
+
   it('refuses when NODE_ENV is not set', async () => {
     const result = await runScript('account-cli.ts', { ...base, DATABASE_URL: LOOPBACK_URL }, create);
     expect(result.code).not.toBe(0);

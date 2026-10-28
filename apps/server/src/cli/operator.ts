@@ -18,6 +18,8 @@ export function createOperatorAccountService(
   hash: PasswordHashParams,
   clock: Clock = systemClock,
   operator?: string,
+  /** The installation's AUTH_MODE as the tool sees it; `external` makes the service refuse local seller/manager accounts (PB-1). */
+  authMode?: string,
 ): { accounts: AccountService; repository: AccountRepository } {
   const repository = new AccountRepository(handle.db);
   const service = new AccountService(
@@ -28,6 +30,7 @@ export function createOperatorAccountService(
     new ThrottleRepository(handle.db),
     new AuditService(handle.db, clock),
     clock,
+    ...(authMode === undefined ? [] : [{ authMode }]),
   );
   if (operator !== undefined) service.attributeTo(operator);
   return { accounts: service, repository };

@@ -1,11 +1,12 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { AccountRole, AccountStatus, Database } from '@salesforce/db';
 import { isValidSellerCode, normalizeUsername } from '@salesforce/domain';
 import { uuidv7 } from '../platform/ids.js';
 import { CLOCK, DATABASE, type Clock } from '../platform/tokens.js';
 import { AccountRepository } from './account.repository.js';
 import { AUDIT_ACTIONS, AuditService, type AuditDetail } from './audit.service.js';
-import { PASSWORD_HASHER } from './iam-tokens.js';
+import { localPasswordRefusal } from '../config/auth-mode-guard.js';
+import { AUTH_CONFIG, PASSWORD_HASHER } from './iam-tokens.js';
 import type { PasswordHasher } from './password-hasher.js';
 import { checkPasswordPolicy, describePasswordViolations, type PasswordViolation } from './password-policy.js';
 import { loginNameThrottleKey } from './session-crypto.js';
@@ -18,6 +19,14 @@ export class PasswordPolicyError extends Error {
     super(describePasswordViolations(violations));
     this.name = 'PasswordPolicyError';
     this.violations = violations;
+  }
+}
+
+/** `AUTH_MODE=external` (PB-1): an operational account never gets a local password. Message is actionable and value-free. */
+export class OperationalLocalAccountError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'OperationalLocalAccountError';
   }
 }
 
@@ -82,6 +91,8 @@ export class AccountService {
     @Inject(ThrottleRepository) private readonly throttle: ThrottleRepository,
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(CLOCK) private readonly clock: Clock,
+    /** Only `authMode` is read: under `external` no seller/manager account is created with a local password (PB-1). */
+    @Optional() @Inject(AUTH_CONFIG) private readonly authConfig?: { readonly authMode: string },
   ) {}
 
   /** Attributes every audit row of this instance to the person running the script (operator CLI, seed). */
@@ -100,6 +111,8 @@ export class AccountService {
     input: { username: string; displayName: string; password: string; role: AccountRole },
     actor: ActorRef = CLI_ACTOR,
   ): Promise<string> {
+    const refusal = localPasswordRefusal(this.authConfig?.authMode, input.role);
+    if (refusal !== null) throw new OperationalLocalAccountError(refusal);
     const violations = checkPasswordPolicy(input.password);
     if (violations.length > 0) throw new PasswordPolicyError(violations);
 

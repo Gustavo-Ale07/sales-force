@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { AuthService } from '../../src/iam/auth.service.js';
+import { IamModule } from '../../src/iam/iam.module.js';
 import { parseApiEnv } from '../../src/config/api-env.js';
 import { localPasswordRefusal } from '../../src/config/auth-mode-guard.js';
 import { EnvValidationError } from '../../src/config/env.js';
@@ -47,6 +49,12 @@ describe('AUTH_MODE=external: startup validation', () => {
     const short = problemsOf(() => parseApiEnv({ ...EXTERNAL, VERIFIER_SHARED_SECRET: 'too-short' }));
     expect(short.join(' ')).toMatch(/VERIFIER_SHARED_SECRET/);
     expect(short.join(' ')).not.toContain('too-short');
+  });
+
+  it('refuses a verifier secret given both inline and as a file, naming only the variables', () => {
+    const problems = problemsOf(() => parseApiEnv({ ...EXTERNAL, VERIFIER_SHARED_SECRET_FILE: '/run/secrets/verifier' }));
+    expect(problems).toEqual([expect.stringMatching(/^VERIFIER_SHARED_SECRET \/ VERIFIER_SHARED_SECRET_FILE: set exactly one/)]);
+    expect(problems.join(' ')).not.toContain(SECRET);
   });
 
   it('refuses auto-provision without the idusu/CODUSU proof, and accepts it with the proof', () => {
@@ -110,6 +118,23 @@ describe('AUTH_MODE=external: resulting login policy', () => {
     expect(() => assertSafeAuthConfig({ ...good, allowedRoles: ['admin', 'technical', 'seller', 'manager'] })).toThrow(/external/);
     const { externalOnlyRoles: _only, ...withoutOnly } = good;
     expect(() => assertSafeAuthConfig({ ...withoutOnly, allowedRoles: ['admin', 'technical', 'seller'] })).not.toThrow();
+  });
+
+  it('assertSafeAuthConfig refuses VERIFIED_AUTO_PROVISION in external mode without the idusu proof carried on the config', () => {
+    const good = authConfigFromEnv(parseApiEnv({ ...EXTERNAL, EXTERNAL_AUTO_PROVISION: '1', EXTERNAL_IDUSU_IS_CODUSU_VALIDATED: '1' }));
+    expect(() => assertSafeAuthConfig(good)).not.toThrow();
+    const { idusuIsCodusuValidated: _proof, ...withoutProof } = good.externalLogin!;
+    expect(() => assertSafeAuthConfig({ ...good, externalLogin: withoutProof })).toThrow(/auto-provision/i);
+  });
+
+  it('the AuthService constructor runs the assertion, so every construction path is covered', () => {
+    const unsafe = testAuthConfig({ authMode: 'external', allowedRoles: LOCAL_MODE_ROLES });
+    expect(() => new AuthService(unsafe, {} as never, {} as never, {} as never, {} as never, {} as never, () => new Date(), {} as never)).toThrow(/external/);
+  });
+
+  it('IamModule.register runs the assertion', () => {
+    expect(() => IamModule.register(testAuthConfig({ authMode: 'external', allowedRoles: LOCAL_MODE_ROLES }))).toThrow(/external/);
+    expect(() => IamModule.register(config())).not.toThrow();
   });
 
   it('assertSafeAuthConfig leaves the old modes alone', () => {

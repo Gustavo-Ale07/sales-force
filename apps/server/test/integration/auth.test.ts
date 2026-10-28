@@ -480,7 +480,7 @@ describe('default deny', () => {
     const cookie = await loginCookie(ctx, 'rep@example.test', TEST_PASSWORD);
     // The role column has a CHECK; a role added by a later migration is simulated by dropping it here.
     await ctx.database.handle.db.execute(sql.raw('alter table account drop constraint account_role_chk'));
-    await ctx.database.handle.db.update(account).set({ role: 'external_representative' }).where(eq(account.id, rep.id));
+    await ctx.database.handle.db.update(account).set({ role: 'external_representative', externalUserId: null }).where(eq(account.id, rep.id));
 
     const denied = await logout(ctx, cookie);
     expect(denied.statusCode).toBe(403);

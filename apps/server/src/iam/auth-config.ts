@@ -74,6 +74,8 @@ export interface ExternalLoginConfig {
   readonly verifyTimeoutMs: number;
   /** Failed external logins answer no sooner than this, so timing does not tell the failure causes apart. */
   readonly minFailureMs: number;
+  /** Carries `EXTERNAL_IDUSU_IS_CODUSU_VALIDATED=1` (the owner's proof that the login id is TSIUSU.CODUSU); `AUTH_MODE=external` refuses auto-provision without it. */
+  readonly idusuIsCodusuValidated?: boolean;
   /** Internal verifier process (STACK-2a): base URL on the internal network and the shared Bearer secret. */
   readonly verifier?: { readonly url: string; readonly sharedSecret: SecretValue };
 }
@@ -139,6 +141,7 @@ export function authConfigFromEnv(env: ParsedApiEnv): AuthConfig {
   const config = withExternalSellerLogin(base, {
     enabled: true,
     ...(env.EXTERNAL_AUTO_PROVISION === '1' ? { linkMode: 'VERIFIED_AUTO_PROVISION' as const } : {}),
+    ...(env.EXTERNAL_IDUSU_IS_CODUSU_VALIDATED === '1' ? { idusuIsCodusuValidated: true } : {}),
     directoryMaxAgeMs: env.EXTERNAL_DIRECTORY_MAX_AGE_MINUTES * MINUTE_MS,
     verifyTimeoutMs: EXTERNAL_VERIFY_TIMEOUT_MS,
     minFailureMs: EXTERNAL_MIN_FAILURE_MS,
@@ -162,6 +165,9 @@ export function assertSafeAuthConfig(config: AuthConfig): void {
   }
   const allowed = config.allowedRoles;
   if (allowed === undefined) throw new Error('AUTH_MODE=external: allowedRoles must be limited (a dev-wide role set is not allowed).');
+  if (config.externalLogin.linkMode === 'VERIFIED_AUTO_PROVISION' && config.externalLogin.idusuIsCodusuValidated !== true) {
+    throw new Error('AUTH_MODE=external: auto-provision requires the idusu = CODUSU proof (EXTERNAL_IDUSU_IS_CODUSU_VALIDATED=1).');
+  }
   if (allowed.includes('manager')) throw new Error('AUTH_MODE=external: manager must be an external-only role, never a local-password role.');
 }
 

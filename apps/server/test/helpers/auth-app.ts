@@ -170,7 +170,11 @@ export async function loginCookie(
   if (ctx.database !== undefined) {
     const db = ctx.database.handle.db;
     const [row] = await db.select({ id: account.id, role: account.role }).from(account).where(sql`lower(${account.email}) = ${username.toLowerCase()}`);
-    if (row?.role === 'seller') return openSessionCookie(ctx.database, row.id, ctx.clock?.fn() ?? new Date());
+    if (row?.role === 'seller') {
+      // A seller session is valid only for an account linked to a directory user (AUTH-6): link the fixture the way a Sankhya login would.
+      await db.update(account).set({ externalUserId: sql`coalesce(${account.externalUserId}, 'test-ext-' || ${account.id}::text)` }).where(sql`${account.id} = ${row.id}`);
+      return openSessionCookie(ctx.database, row.id, ctx.clock?.fn() ?? new Date());
+    }
   }
   const response = await login(ctx, username, password);
   if (response.statusCode !== 200) throw new Error(`login failed with ${response.statusCode}: ${response.body.slice(0, 300)}`);

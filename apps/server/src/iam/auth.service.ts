@@ -8,7 +8,7 @@ import { CLOCK, LOGGER, type Clock } from '../platform/tokens.js';
 import { AccountRepository } from './account.repository.js';
 import { AuditSampler } from './audit-sampler.js';
 import { AUDIT_ACTIONS, AuditService } from './audit.service.js';
-import type { AuthConfig } from './auth-config.js';
+import { assertSafeAuthConfig, type AuthConfig } from './auth-config.js';
 import type { CurrentUser } from './current-user.js';
 import { HashLimiter } from './hash-limiter.js';
 import {
@@ -130,6 +130,7 @@ export class AuthService implements OnModuleInit {
     @Optional() @Inject(EXTERNAL_IDENTITY_VERIFIER) private readonly externalVerifier?: ExternalIdentityVerifier,
     @Optional() @Inject(EXTERNAL_ACCOUNT_LINKS) private readonly externalLinks?: ExternalAccountLinks,
   ) {
+    assertSafeAuthConfig(config);
     this.#hashSlots = new HashLimiter(config.login.maxConcurrentHashes);
     this.#verifySlots = new HashLimiter(config.login.maxConcurrentHashes);
     this.#refusalSampler = new AuditSampler(config.login.blockedAuditWindowMs);
@@ -372,7 +373,7 @@ export class AuthService implements OnModuleInit {
     const existingRole = accountId === null ? null : ((await this.accounts.findById(accountId))?.role ?? null);
     if (
       (settings.linkMode ?? 'PRE_LINKED') === 'VERIFIED_AUTO_PROVISION' &&
-      this.roleMayHoldSession('seller') &&
+      this.roleMayHoldSession('seller', true) &&
       (existingRole === null || existingRole === 'seller')
     ) {
       // Explicit VERIFIED_AUTO_PROVISION only (never the default). The login proved the directory identity; the Force account and
@@ -594,6 +595,9 @@ export class AuthService implements OnModuleInit {
    * and for accounts linked to a directory user.
    */
   private roleMayHoldSession(role: string, external = false): boolean {
+    // AUTH-6 (ruling A): a seller holds a session only when the account is linked to a directory user, in every mode. A session of a
+    // local-password seller opened before AUTH-6 stops resolving.
+    if (role === 'seller' && !external) return false;
     const allowed = this.config.allowedRoles;
     if (allowed === undefined || (allowed as readonly string[]).includes(role)) return true;
     return external && ((this.config.externalOnlyRoles ?? []) as readonly string[]).includes(role);

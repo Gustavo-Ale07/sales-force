@@ -244,8 +244,9 @@ describe('API as force_api', () => {
     const account = await repository.findByUsername(DEMO_ACCOUNT_EMAILS.seller2);
     expect(account).not.toBeNull();
     const id = account?.id as string;
-    const seller2 = await loginCookie(api, DEMO_ACCOUNT_EMAILS.seller2, TEST_PASSWORD);
+    // Before the (linked-as-external) fixture session: an account linked to a directory user cannot have a local password.
     await accounts.setPassword(id, 'Another-Sturdy-Passphrase-77');
+    const seller2 = await loginCookie(api, DEMO_ACCOUNT_EMAILS.seller2, 'Another-Sturdy-Passphrase-77');
     await accounts.setStatus(id, 'disabled'); // revokes sessions (session UPDATE)
     expect((await call('GET', '/auth/session', undefined, seller2)).body?.['authenticated']).toBe(false);
     await accounts.setStatus(id, 'active');
