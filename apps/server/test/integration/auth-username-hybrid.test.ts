@@ -10,7 +10,7 @@ import { withExternalSellerLogin, LOCAL_MODE_ROLES, type ExternalLinkMode } from
 import { failureFloor } from '../../src/iam/failure-floor.js';
 import { AuthService } from '../../src/iam/auth.service.js';
 import { DrizzleExternalAccountLinks } from '../../src/iam/drizzle-external-account-links.js';
-import { CredentialSecret } from '../../src/iam/external-identity.js';
+import { CredentialSecret, type DirectoryBlockSource } from '../../src/iam/external-identity.js';
 import { Argon2idPasswordHasher } from '../../src/iam/password-hasher.js';
 import { SankhyaIdentityVerifier } from '../../src/iam/sankhya-identity-verifier.js';
 import { SessionRepository } from '../../src/iam/session.repository.js';
@@ -43,7 +43,7 @@ const SYNCED = new Date('2026-09-18T00:00:00.000Z');
 /** Provisioning tests opt in explicitly: the default link mode is PRE_LINKED (no login ever creates an account). */
 const AUTO = { linkMode: 'VERIFIED_AUTO_PROVISION' } as const;
 
-async function setup(options: { external?: boolean; linkMode?: ExternalLinkMode; minFailureMs?: number } = {}) {
+async function setup(options: { external?: boolean; linkMode?: ExternalLinkMode; minFailureMs?: number; blockSource?: DirectoryBlockSource } = {}) {
   const database = await createMigratedDatabase(postgres);
   opened.push(() => database.handle.close());
   const db = database.handle.db;
@@ -60,7 +60,7 @@ async function setup(options: { external?: boolean; linkMode?: ExternalLinkMode;
       }) : base;
   const verifier = new FakeExternalIdentityVerifier();
   const audit = new AuditService(db, clock.fn);
-  const links = new DrizzleExternalAccountLinks(db, audit);
+  const links = new DrizzleExternalAccountLinks(db, audit, options.blockSource);
   const service = new AuthService(
     config,
     new Argon2idPasswordHasher(config.passwordHash),
@@ -497,15 +497,66 @@ describe('revocation of an automatic link on an established session', () => {
     expect(again.user.sellerCodes).toEqual([107]);
   });
 
-  it('fails closed on a stale mirror without changing the link, and recovers when the mirror is fresh again', async () => {
+  it('keeps the session and the link when the mirror is stale (AUTH-6 addendum: a stale mirror never revokes or denies)', async () => {
     const { ctx, login } = await signedIn();
-    ctx.clock.advance(3 * 60 * 60 * 1000);
-    expect(await ctx.service.resolveSession(login.token)).toBeNull();
+    await markDirectoryFresh(ctx, new Date(ctx.clock.fn().getTime() - 3 * 60 * 60 * 1000));
+    ctx.clock.advance(PAST_TOUCH);
+    expect((await ctx.service.resolveSession(login.token))?.user).toMatchObject({ role: 'seller', sellerCodes: [103] });
     expect(await ctx.db.select().from(accountSellerLink)).toHaveLength(1);
+    expect(await ctx.db.select().from(session).where(eq(session.id, login.user.sessionId))).toMatchObject([{ revokedAt: null }]);
     expect(await directoryAudit(ctx, 'auth.directory.link_revoked')).toEqual([]);
+  });
+
+  it('keeps the session when the mirror was never synchronized, even if the relation looks dropped', async () => {
+    const { ctx, login } = await signedIn();
+    await mirrorDirectoryUser(ctx, 4501, null);
+    await ctx.db.delete(syncState);
+    ctx.clock.advance(PAST_TOUCH);
+    expect(await ctx.service.resolveSession(login.token)).not.toBeNull();
+    expect(await ctx.db.select().from(accountSellerLink)).toHaveLength(1);
+  });
+
+  it('a stale mirror that shows a dropped relation changes nothing; once fresh again the same fact revokes', async () => {
+    const { ctx, login } = await signedIn();
+    await mirrorDirectoryUser(ctx, 4501, null);
+    await markDirectoryFresh(ctx, new Date(ctx.clock.fn().getTime() - 3 * 60 * 60 * 1000));
+    ctx.clock.advance(PAST_TOUCH);
+    expect(await ctx.service.resolveSession(login.token)).not.toBeNull();
     await markDirectoryFresh(ctx);
-    const again = await ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META);
-    expect(again.user.sellerCodes).toEqual([103]);
+    ctx.clock.advance(PAST_TOUCH);
+    expect(await ctx.service.resolveSession(login.token)).toBeNull();
+    expect(await directoryAudit(ctx, 'auth.directory.link_revoked')).toEqual(['no_seller']);
+  });
+
+  it('keeps the session when the directory re-check itself fails (a failure proves nothing)', async () => {
+    const { ctx, login } = await signedIn();
+    ctx.clock.advance(PAST_TOUCH);
+    const failing = Object.create(ctx.links) as typeof ctx.links;
+    failing.syncFromDirectory = () => Promise.reject(new Error('boom: database unavailable'));
+    const service = new AuthService(
+      withExternalSellerLogin(testAuthConfig({ authMode: 'local', allowedRoles: LOCAL_MODE_ROLES }), { enabled: true, linkMode: 'VERIFIED_AUTO_PROVISION', verifyTimeoutMs: 200, minFailureMs: 0 }),
+      new Argon2idPasswordHasher(TEST_HASH_PARAMS),
+      new AccountRepository(ctx.db),
+      new SessionRepository(ctx.db),
+      new ThrottleRepository(ctx.db),
+      new AuditService(ctx.db, ctx.clock.fn),
+      ctx.clock.fn,
+      createLogger({ level: 'debug', service: 'api', destination: ctx.capture.stream }),
+      ctx.verifier,
+      failing,
+    );
+    expect(await service.resolveSession(login.token)).not.toBeNull();
+    expect(ctx.verifier.calls.filter((c) => c.login === 'um')).toHaveLength(1);
+  });
+
+  it('never calls the verifier when resolving or refreshing a session', async () => {
+    const { ctx, login } = await signedIn();
+    const callsAfterLogin = ctx.verifier.calls.length;
+    ctx.clock.advance(PAST_TOUCH);
+    await ctx.service.resolveSession(login.token);
+    ctx.clock.advance(PAST_TOUCH);
+    await ctx.service.resolveSession(login.token);
+    expect(ctx.verifier.calls).toHaveLength(callsAfterLogin);
   });
 
   it('does not re-grant a link an operator removed (a re-check never inserts)', async () => {
@@ -536,6 +587,63 @@ describe('revocation of an automatic link on an established session', () => {
     ctx.clock.advance(PAST_TOUCH);
     expect(await ctx.service.resolveSession(login.token)).not.toBeNull();
     expect(await ctx.db.select().from(accountSellerLink)).toHaveLength(1);
+  });
+});
+
+describe('AUTH-6 hook: the ERP blocks the user (stubbed source, the real field is not validated)', () => {
+  const PAST_TOUCH = 61_000;
+  const blockedSource = (answer: boolean | null | 'throw'): DirectoryBlockSource => ({
+    isBlocked: () => (answer === 'throw' ? Promise.reject(new Error('boom')) : Promise.resolve(answer)),
+  });
+  /** The stub answer is switched after the first login, as the ERP would. */
+  async function signedIn() {
+    const stub = { answer: null as boolean | null | 'throw' };
+    const ctx = await setup({ ...AUTO, blockSource: { isBlocked: () => blockedSource(stub.answer).isBlocked(4501) } });
+    await addSeller(ctx, 103, 'Vendedor Um');
+    await directoryUser(ctx, 'um', 4501, 103);
+    const login = await ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META);
+    return { ctx, login, stub };
+  }
+
+  it('revokes the link and the sessions, with an audit reason, when a FRESH mirror says blocked', async () => {
+    const { ctx, login, stub } = await signedIn();
+    stub.answer = true;
+    ctx.clock.advance(PAST_TOUCH);
+    await markDirectoryFresh(ctx);
+    expect(await ctx.service.resolveSession(login.token)).toBeNull();
+    expect(await ctx.db.select().from(accountSellerLink)).toHaveLength(0);
+    expect(await directoryAudit(ctx, 'auth.directory.link_revoked')).toEqual(['user_blocked']);
+    const rows = await ctx.db.select().from(session).where(eq(session.id, login.user.sessionId));
+    expect(rows[0]?.revokedAt).not.toBeNull();
+  });
+
+  it.each([null, false, 'throw'] as const)('changes nothing when the blocking fact is %s', async (answer) => {
+    const { ctx, login, stub } = await signedIn();
+    stub.answer = answer;
+    ctx.clock.advance(PAST_TOUCH);
+    await markDirectoryFresh(ctx);
+    expect(await ctx.service.resolveSession(login.token)).not.toBeNull();
+    expect(await ctx.db.select().from(accountSellerLink)).toHaveLength(1);
+    expect(await directoryAudit(ctx, 'auth.directory.link_revoked')).toEqual([]);
+  });
+
+  it('changes nothing when blocked is reported on a STALE mirror', async () => {
+    const { ctx, login, stub } = await signedIn();
+    stub.answer = true;
+    await markDirectoryFresh(ctx, new Date(ctx.clock.fn().getTime() - 3 * 60 * 60 * 1000));
+    ctx.clock.advance(PAST_TOUCH);
+    expect(await ctx.service.resolveSession(login.token)).not.toBeNull();
+    expect(await ctx.db.select().from(accountSellerLink)).toHaveLength(1);
+    expect(await directoryAudit(ctx, 'auth.directory.link_revoked')).toEqual([]);
+  });
+
+  it('refuses a new login of a blocked user on a fresh mirror (uniform error, reason only in the audit)', async () => {
+    const { ctx, stub } = await signedIn();
+    stub.answer = true;
+    await markDirectoryFresh(ctx);
+    const error = await failure(ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META));
+    expect(error.code).toBe('access_not_configured');
+    expect(await directoryAudit(ctx, 'auth.directory.link_revoked')).toEqual(['user_blocked']);
   });
 });
 

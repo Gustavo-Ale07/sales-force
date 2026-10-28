@@ -105,3 +105,20 @@ export interface ExternalAccountLinks {
    */
   syncFromDirectory(input: { externalUserId: string; now: Date; maxMirrorAgeMs: number; allowCreate: boolean }): Promise<DirectorySyncOutcome>;
 }
+
+/**
+ * Where "the ERP blocks this user" comes from (AUTH-6 addendum). The blocking field of the Sankhya user table is NOT validated
+ * (NEEDS VALIDATION), so the only shipped implementation answers `null` (unknown), and unknown never blocks. A real
+ * implementation arrives only after the owner validates the field; it must read the local mirror, never call Sankhya from the API.
+ * `true` is honoured only on a fresh mirror (the domain decision checks staleness first).
+ */
+export interface DirectoryBlockSource {
+  isBlocked(userCode: number): Promise<boolean | null>;
+}
+
+/** Default until the blocking field is validated: nothing is known, so nothing is blocked. */
+export class UnvalidatedDirectoryBlockSource implements DirectoryBlockSource {
+  isBlocked(): Promise<boolean | null> {
+    return Promise.resolve(null);
+  }
+}

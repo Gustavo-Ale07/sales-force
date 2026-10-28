@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import {
   account,
   accountSellerLink,
@@ -14,7 +14,8 @@ import { and, count, eq, isNull, ne, sql } from 'drizzle-orm';
 import { uuidv7 } from '../platform/ids.js';
 import { DATABASE } from '../platform/tokens.js';
 import { AUDIT_ACTIONS, AuditService } from './audit.service.js';
-import type { DirectorySyncOutcome, ExternalAccountLinks } from './external-identity.js';
+import { UnvalidatedDirectoryBlockSource, type DirectoryBlockSource, type DirectorySyncOutcome, type ExternalAccountLinks } from './external-identity.js';
+import { DIRECTORY_BLOCK_SOURCE } from './iam-tokens.js';
 
 /** Not an Argon2id string: `PasswordHasher.verify` answers false on it, so a provisioned account has no local password. */
 export const UNUSABLE_PASSWORD_HASH = '!external-directory-account';
@@ -27,9 +28,10 @@ const DIRECTORY_ENTITY = 'directoryUsers';
 
 /**
  * Refusals that say the ERP relation really no longer supports the link (an automatic link is then removed and the sessions are
- * revoked). `directory_stale` is not one of them: an old or missing mirror proves nothing, so it only denies (fail closed) and changes nothing.
+ * revoked). `directory_stale` is not one of them: an old or missing mirror proves nothing, so it changes nothing (AUTH-6 addendum: an
+ * existing session keeps working; only a new login is refused). `user_blocked` is definitive but only ever arrives from a fresh mirror.
  */
-const DEFINITIVE: ReadonlySet<DirectoryRefusal> = new Set(['user_missing', 'no_seller', 'seller_inactive', 'seller_ambiguous', 'seller_claimed']);
+const DEFINITIVE: ReadonlySet<DirectoryRefusal> = new Set(['user_missing', 'no_seller', 'seller_inactive', 'seller_ambiguous', 'seller_claimed', 'user_blocked']);
 
 /**
  * `ExternalAccountLinks` over PostgreSQL. Identity is `account.external_user_id` (the stable ERP user code), never a name.
@@ -42,6 +44,7 @@ export class DrizzleExternalAccountLinks implements ExternalAccountLinks {
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     @Inject(AuditService) private readonly audit: AuditService,
+    @Optional() @Inject(DIRECTORY_BLOCK_SOURCE) private readonly blockSource: DirectoryBlockSource = new UnvalidatedDirectoryBlockSource(),
   ) {}
 
   async findAccountId(externalUserId: string): Promise<string | null> {
@@ -69,6 +72,10 @@ export class DrizzleExternalAccountLinks implements ExternalAccountLinks {
   async syncFromDirectory(input: { externalUserId: string; now: Date; maxMirrorAgeMs: number; allowCreate: boolean }): Promise<DirectorySyncOutcome> {
     const userCode = parseDirectoryUserCode(input.externalUserId);
     if (userCode === null) return { ok: false, refusal: 'invalid_identity', accountId: null, revoked: false };
+
+    // Unknown (null) never blocks, and a failing source is unknown, not blocked: only an explicit true counts (and the domain
+    // ignores it on a stale mirror).
+    const userBlocked = await this.blockSource.isBlocked(userCode).catch(() => null);
 
     return this.db.transaction(async (tx) => {
       const [mirrored] = await tx
@@ -139,7 +146,7 @@ export class DrizzleExternalAccountLinks implements ExternalAccountLinks {
       }
 
       const decision = decideDirectorySeller(
-        { user: reread === undefined ? null : { sellerCode: wantedSeller }, sellerActive, otherUsersOfSeller, otherAccountsOfSeller, mirrorAgeMs },
+        { user: reread === undefined ? null : { sellerCode: wantedSeller }, userBlocked, sellerActive, otherUsersOfSeller, otherAccountsOfSeller, mirrorAgeMs },
         input.maxMirrorAgeMs,
       );
 

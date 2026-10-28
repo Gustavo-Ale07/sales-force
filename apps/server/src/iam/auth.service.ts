@@ -472,7 +472,7 @@ export class AuthService implements OnModuleInit {
     if (row.revokedAt !== null || row.expiresAt.getTime() <= now.getTime() || row.status !== 'active') return null;
     if (!this.roleMayHoldSession(row.role, row.external)) return null;
     // An automatic seller link follows the ERP: re-checked at most once per touch interval (the revocation window, on top of the
-    // mirror refresh). Fail closed: a definitive change revokes the sessions; an old or missing mirror only denies this request.
+    // mirror refresh). Only a definitive change on a fresh mirror revokes the sessions; an old or missing mirror changes nothing (AUTH-6).
     if (row.external && row.role === 'seller' && !(await this.automaticLinkHolds(row.accountId, row.externalUserId, now, row.lastSeenAt))) return null;
 
     let expiresAt = row.expiresAt;
@@ -500,8 +500,15 @@ export class AuthService implements OnModuleInit {
   }
 
   /**
-   * True unless the account's AUTOMATIC seller link no longer holds against the official ERP relation. Only meaningful in
-   * VERIFIED_AUTO_PROVISION; always true otherwise or when the interval since the last check has not elapsed.
+   * False only when this re-check actually removed the account's AUTOMATIC seller link and revoked its sessions (a definitive
+   * refusal on a FRESH mirror: user gone, no seller, seller inactive/ambiguous/claimed, user blocked) or moved it to another
+   * seller (`relinked`: the user signs in again under the new scope). Only meaningful in VERIFIED_AUTO_PROVISION; true otherwise
+   * or when the touch interval has not elapsed.
+   *
+   * AUTH-6 addendum: a stale/never-synced mirror, a failing sync, or any error never ends an existing session. Not being able
+   * to prove a change is not a change; the session still expires on its own (idle/absolute) or when revoked. A database error
+   * here is treated the same way (the session row was just read from the same database; a revocation is a committed fact, never
+   * inferred from a failure). Refresh/session resolution never calls the verifier or Sankhya, only the local mirror.
    */
   private async automaticLinkHolds(accountId: string, externalUserId: string | null, now: Date, lastSeenAt: Date): Promise<boolean> {
     const settings = this.config.externalLogin;
@@ -518,11 +525,11 @@ export class AuthService implements OnModuleInit {
         maxMirrorAgeMs: settings.directoryMaxAgeMs ?? DEFAULT_DIRECTORY_MAX_AGE_MS,
         allowCreate: false,
       });
-      // `relinked` revokes the sessions inside the transaction: the user signs in again under the new scope.
-      return sync.ok && sync.action !== 'relinked';
+      if (sync.ok) return sync.action !== 'relinked';
+      return !sync.revoked;
     } catch (error) {
-      this.logger.warn({ ...errorLogFields(error) }, 'could not re-check an automatic seller link; denying the request (fail closed)');
-      return false;
+      this.logger.warn({ ...errorLogFields(error) }, 'could not re-check an automatic seller link; keeping the session (only a definitive ERP change ends it)');
+      return true;
     }
   }
 
