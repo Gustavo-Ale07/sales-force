@@ -117,6 +117,7 @@ export function orderDetail(overrides: Partial<OrderDetail> = {}): OrderDetail {
     updatedAt: "2026-09-29T12:00:00.000Z",
     negotiationTypeCode: null,
     notes: null,
+    discountAuthority: "within_authority",
     items: [],
     totals: { estimatedTotal: "0.00", lineCount: 0, unpricedLineCount: 0, isPartial: false },
     ...overrides,

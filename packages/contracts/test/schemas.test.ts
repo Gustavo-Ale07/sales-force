@@ -297,6 +297,7 @@ describe('order requests', () => {
       updatedAt: TS,
       negotiationTypeCode: null,
       notes: null,
+      discountAuthority: 'within_authority',
       items: [
         {
           lineNo: 1,
@@ -330,6 +331,8 @@ describe('order requests', () => {
     expect(OrderDetailSchema.parse(detail)).toEqual(detail);
     expect(OrderDetailSchema.safeParse({ ...detail, status: 'shipped' }).success).toBe(false);
     expect(OrderDetailSchema.safeParse({ ...detail, estimatedTotal: 25 }).success).toBe(false);
+    expect(OrderDetailSchema.safeParse({ ...detail, discountAuthority: 'approved' }).success).toBe(false);
+    expect(OrderDetailSchema.safeParse({ ...detail, discountAuthority: undefined }).success).toBe(false);
     // A draft whose customer became ineligible is flagged for review (derived; never a silent status change).
     const flagged = {
       ...detail,

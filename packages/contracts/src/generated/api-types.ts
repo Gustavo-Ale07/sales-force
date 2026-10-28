@@ -651,6 +651,8 @@ export interface components {
             datasetId: string;
         };
         DecimalString: string;
+        /** @enum {string} */
+        DiscountAuthorityStatus: "not_evaluated" | "within_authority" | "needs_manager" | "needs_director" | "blocked";
         ErpSubmissionDisabledError: {
             /** @constant */
             code: "erp_submission_disabled";
@@ -783,6 +785,7 @@ export interface components {
             updatedAt: components["schemas"]["IsoTimestamp"];
             negotiationTypeCode: number | null;
             notes: string | null;
+            discountAuthority: components["schemas"]["DiscountAuthorityStatus"];
             items: components["schemas"]["OrderItemDetail"][];
             totals: components["schemas"]["OrderTotals"];
         };

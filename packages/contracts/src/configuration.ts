@@ -102,6 +102,20 @@ export const NegotiationTypeSchema = named(
   z.strictObject({ code: codeInt(), label: z.string().min(1).max(200) }),
 );
 
+/** Maximum discount percentage per authority level, on the customer's price-table price (DISC-2). `null` = not configured. */
+const DiscountPercentLimitSchema = z.string().regex(/^\d{1,2}(\.\d{1,2})?$/).nullable();
+
+export const DiscountAuthorityConfigurationSchema = named(
+  'DiscountAuthorityConfiguration',
+  z.strictObject({
+    limits: z.strictObject({
+      seller: DiscountPercentLimitSchema,
+      manager: DiscountPercentLimitSchema,
+      director: DiscountPercentLimitSchema,
+    }),
+  }),
+);
+
 const SalesSchema = z.strictObject({
   orderTopCode: codeInt().nullable(),
   eligibleOrderTopCodes: z.array(codeInt()).optional(),
@@ -112,6 +126,8 @@ const SalesSchema = z.strictObject({
   negotiationTypes: z.array(NegotiationTypeSchema),
   orderBehavior: z.strictObject({ allowDraftWithoutPrice: z.boolean() }),
   confirmationBehavior: ConfirmationBehaviorSchema,
+  /** Absent = discount authority not configured: discounts are refused (fail closed). Not sent to clients. */
+  discountAuthority: DiscountAuthorityConfigurationSchema.optional(),
 });
 
 export const AccountSellerLinkSchema = named(
@@ -215,7 +231,7 @@ export const ConfigurationSummarySchema = named(
     schemaVersion: z.literal(1),
     source: SourceSchema,
     general: GeneralSchema,
-    sales: SalesSchema,
+    sales: SalesSchema.omit({ discountAuthority: true }),
     customers: CustomersSchema.omit({ accountSellerLinks: true }).extend({
       accountSellerLinkCount: z.number().int().min(0),
     }),

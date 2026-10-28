@@ -3228,6 +3228,16 @@
         "maxLength": 40,
         "pattern": "^\\d+(\\.\\d+)?$"
       },
+      "DiscountAuthorityStatus": {
+        "type": "string",
+        "enum": [
+          "not_evaluated",
+          "within_authority",
+          "needs_manager",
+          "needs_director",
+          "blocked"
+        ]
+      },
       "ErpSubmissionDisabledError": {
         "type": "object",
         "properties": {
@@ -3838,6 +3848,9 @@
               "null"
             ]
           },
+          "discountAuthority": {
+            "$ref": "#/components/schemas/DiscountAuthorityStatus"
+          },
           "items": {
             "type": "array",
             "items": {
@@ -3865,6 +3878,7 @@
           "updatedAt",
           "negotiationTypeCode",
           "notes",
+          "discountAuthority",
           "items",
           "totals"
         ],

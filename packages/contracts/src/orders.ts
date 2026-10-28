@@ -110,6 +110,18 @@ export const OrdersQuerySchema = z.object({
 });
 export type OrdersQuery = z.infer<typeof OrdersQuerySchema>;
 
+/**
+ * Where the order's discounts stand against the discount authority (DISC-2), computed server-side for the
+ * account that saved the draft. `not_evaluated`: the draft predates the rule. `blocked`: a discount the rule
+ * refuses (authority not configured, no usable price base, role outside the chain, above the highest level;
+ * the absolute ceiling is not decided). No cost, margin or limit value is part of it (P-20).
+ */
+export const DiscountAuthorityStatusSchema = named(
+  'DiscountAuthorityStatus',
+  z.enum(['not_evaluated', 'within_authority', 'needs_manager', 'needs_director', 'blocked']),
+);
+export type DiscountAuthorityStatus = z.infer<typeof DiscountAuthorityStatusSchema>;
+
 export const OrderListItemSchema = named(
   'OrderListItem',
   z.object({
@@ -159,7 +171,7 @@ export const OrderItemSchema = named(
     priceState: ListPriceStateSchema,
     priceTableCode: codeInt().nullable(),
     priceVersionId: codeInt().nullable(),
-    /** Percentage discount on the list price (`"0"` when none). Approval by authority is not modelled yet (P-10; R35/R36). */
+    /** Percentage discount on the list price (`"0"` when none). Whether it needs approval is `OrderDetail.discountAuthority` (DISC-2). */
     discountPercent: DecimalStringSchema,
     /** Estimate from the list price with the line discount; `null` when the price state is `none`. */
     estimatedLineTotal: DecimalStringSchema.nullable(),
@@ -195,6 +207,7 @@ export const OrderDetailSchema = named(
     ...OrderListItemSchema.omit({ itemPreview: true }).shape,
     negotiationTypeCode: codeInt().nullable(),
     notes: z.string().nullable(),
+    discountAuthority: DiscountAuthorityStatusSchema,
     items: z.array(OrderItemDetailSchema),
     totals: OrderTotalsSchema,
   }),

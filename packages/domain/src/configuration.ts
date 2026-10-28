@@ -65,7 +65,11 @@ export type DiscountAuthorityLevel = (typeof DISCOUNT_AUTHORITY_LEVELS)[number];
  * deliberately have no field here: the rule fails closed where it would need them.
  */
 export interface DiscountAuthorityConfiguration {
-  readonly limits: Readonly<Record<DiscountAuthorityLevel, string | null>>;
+  readonly limits: {
+    readonly seller: string | null;
+    readonly manager: string | null;
+    readonly director: string | null;
+  };
 }
 
 /** Known feature flags; unknown keys are allowed (open record). */
