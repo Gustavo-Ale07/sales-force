@@ -48,7 +48,7 @@ Phase 0 blocking decisions are taken in rounds. A round closes only when the pro
 | 7 | SNK-1, SNK-2, OPS-3, OPS-4, OPS-5 | Not started |
 | Owner rulings | PROD-1, CFG-1…CFG-6, SNK-5, SNK-6, SEC-1, DOC-1 (§3.8) | **Closed 2026-09-18** — taken after Sandbox spikes S1–S3; physical Sankhya configuration model, origin-id field definition and configuration bootstrap remain open (U-10…U-12) |
 | Owner rulings 2026-10-02 | AUTH-5, STACK-2a, ROLE-1, AUDIT-1, ENV-1, MOB-7 (§3.11) | **Closed 2026-10-02** — staging auth, verifier topology (amends STACK-2), staging infrastructure, Android identity; real verifier adapter and backup location remain blocked/pending |
-| Owner rulings 2026-10-28 | PB-1, SB-1, SB-2 (amends MOB-7), DISC-2, AUTH-6, AUTH-7, AUTH-8 (§3.13) | **Closed 2026-10-28** — STACK-2 amendment left to the owner; PB-1, DISC-2, AUTH-6 need a slice plan before code |
+| Owner rulings 2026-10-28 | PB-1, SB-1, SB-2 (amends MOB-7), DISC-2, AUTH-6, AUTH-7, AUTH-8 (§3.13) | **Closed 2026-10-28** — STACK-2b approved (verifier egress open, Sandbox only); PB-1, DISC-2, AUTH-6 need a slice plan before code |
 
 > **Correction 2026-09-16.** An earlier uncommitted draft of this file marked every Round 2–7 item as APPROVED. That was wrong: only Round 1 was closed. Those items are recorded below as PROPOSED, with their content kept as the proposal to be discussed in their rounds.
 
@@ -612,8 +612,9 @@ Recorded from the owner's explicit answers of 2026-10-28 to the decisions table 
 - **Status:** APPROVED 2026-10-28 (owner ruling: option a) · **amends the staging id of MOB-7**
 - **Decision:** production application id `br.com.plac.force`; the `staging` EAS profile uses the production id plus the suffix `.staging` → `br.com.plac.force.staging` (replaces `br.com.plac.salesforce.staging`). The development id `br.com.plac.salesforce.dev` is unchanged. The rest of MOB-7 stands (HTTPS only, standalone bundle, own signing, no debug keystore, no committed credentials). Changing a published id later means a new app: the production id is now fixed before launch.
 
-#### STACK-2 amendment — pending
-- **Status:** NEEDS OWNER ANSWER. The owner asked for the STACK-2a text and a one-line coverage assessment before answering; STACK-2a (§3.11) remains the only approved amendment. No change recorded.
+#### STACK-2b · STACK-2a addendum — verifier adapter live, egress accepted for the Sandbox only
+- **Status:** APPROVED 2026-10-28 (owner ruling: option b) · amends STACK-2a
+- **Decision (owner text):** (1) The verifier's real adapter has operated since 07/10 against the Sandbox (placfestas-teste.sankhyacloud.com.br); the  state of STACK-2a is superseded. (2) The verifier's network egress () is open and that is accepted only for the Sandbox. Before pointing the verifier at any other environment, production included, the egress must be restricted by proxy or firewall to an explicit list of Sankhya hosts, verified at deploy. (3) The remaining STACK-2a requirements stand.
 
 #### DISC-2 · Discount authority base and routing (resolves part of R35/R36)
 - **Status:** APPROVED 2026-10-28 (owner ruling: option a) · implementation: plan in slices first · refines P-10, DISC-1
@@ -623,6 +624,7 @@ Recorded from the owner's explicit answers of 2026-10-28 to the decisions table 
 #### AUTH-6 · Operational sellers must authenticate against Sankhya
 - **Status:** APPROVED 2026-10-28 (owner ruling: SIM) · implementation: plan in slices first · extends AUTH-5
 - **Decision:** a seller never signs in with a local password. When Sankhya (the verifier) is unavailable: an existing session keeps working until it expires or is revoked; a new login is refused (fail closed, no local fallback).
+- **Addendum 2026-10-28 (owner):** a stale directory mirror (beyond ) or a failing sync never revokes a  link nor drops a session. Revocation happens only on a successful directory read showing the user without CODVEND or blocked. The TSIUSU blocking field is not yet validated: the hook is prepared and tested with a stub until the owner brings the field from DBExplorer. Slice order: AUTH-6 → PB-1 → DISC-2 (DISC-2 only base + routing; R36 ceiling and R37 stay open); security-reviewer at the end of each slice.
 
 #### AUTH-7 · `external_user_id` fill tool (PRE_LINKED)
 - **Status:** APPROVED in direction 2026-10-28 (owner ruling: option b) · **waits for the idusu ↔ CODUSU proof**
