@@ -634,6 +634,56 @@ Recorded from the owner's explicit answers of 2026-10-28 to the decisions table 
 - **Status:** APPROVED 2026-10-28 (owner ruling: option b) · already the implemented state
 - **Decision:** `POST /auth/login` accepts only `{ username, password }` (`strictObject`); `{ email }` bodies get 400 and there is no compatibility window. Refines P-16 for this contract.
 
+### 3.14 APPROVED — Owner rulings D1-D12, closing AUTH-6/PB-1/DISC-2 follow-ups (2026-10-28, second session)
+
+Source: the project owner (Gustavo) in the session of 2026-10-28; recorded here before implementation so no agent stalls on "decision not approved". Items touching secrets, production or the unvalidated TSIUSU blocking field remain stopped.
+
+#### AUTH-9 · Seller never has a local password (seed and CLI) — owner D1
+- **Status:** APPROVED 2026-10-28 · extends AUTH-6
+- **Decision:** the dev seed creates demo seller accounts with no usable password hash (data only); the account CLI refuses to create or change a password for role `seller`. In dev and tests a seller session is opened by the direct-session fixture (AUTH-6 option c). No fake verifier: AUTH-5 ("no demo bypass") stands.
+
+#### AUTH-10 · `user_blocked` applies to every `sankhya_auto` link — owner D2
+- **Status:** APPROVED 2026-10-28 · refines AUTH-6 addendum
+- **Decision:** the blocked check (hook still stubbed until the TSIUSU field is validated) applies to every `sankhya_auto` link regardless of `EXTERNAL_AUTO_PROVISION` (the flag governs creation, not revocation). Manual links are never touched. Revocation only on a fresh successful read.
+
+#### AUTH-11 · Database error while re-evaluating a link is not a refusal — owner D3
+- **Status:** APPROVED 2026-10-28 · refines AUTH-6
+- **Decision:** the session continues until it expires; log/audit without PII with reason `link_reevaluation_error` and a metric. A NEW login hitting a database error stays refused (fail closed).
+
+#### AUTH-12 · Usernames that match a local seller always go to the verifier — owner D4
+- **Status:** APPROVED 2026-10-28
+- **Decision:** Sankhya is the source of truth: such a name is always forwarded to the verifier; the local seller hash is never used; invalid credentials answer a uniform 401 that does not reveal whether an account exists.
+
+#### MOB-6a · MOB-6 wording approved as written — owner D5
+- **Status:** APPROVED 2026-10-28
+
+#### CFG-7 · Seller reads a safe configuration subset — owner D6
+- **Status:** APPROVED 2026-10-28
+- **Decision:** `GET /configuration` for a seller is served as an endpoint or filter returning only the subset "Novo pedido" needs; no secret, cost or margin (a test guarantees it); no 403 on that path.
+
+#### SEC-2 · CSP with `react-remove-scroll-bar` — owner D7
+- **Status:** APPROVED 2026-10-28
+- **Decision:** `script-src` stays strict. If the web is served by something that injects a per-response nonce, use it (get-nonce/setNonce); otherwise allow `'unsafe-inline'` ONLY in `style-src`, recording why. No other relaxation.
+
+#### DISC-3 · Discount ceilings (R36) — owner D8
+- **Status:** APPROVED 2026-10-28 (defaults provisional, "adjust by the owner")
+- **Decision:** limits are configuration editable by the admin in the administration screen, per level: seller alone up to X%, manager up to Y%, above that director. Provisional defaults X=5, Y=15. If the `director` role does not exist, admin approves the director level for now, with a note.
+
+#### DISC-4 · Substitute approver (R37) — owner D9
+- **Status:** APPROVED 2026-10-28
+- **Decision:** any user holding the level's role approves (pool), not a named manager; no automatic time escalation in v1; the audit records who approved.
+
+#### SNK-7 · Order submission to Sankhya, Sandbox only — owner D10
+- **Status:** APPROVED 2026-10-28 · narrows SNK-4/SNK-3 for the Sandbox; production stays forbidden
+- **Decision:** authorized ONLY against the Sandbox (`placfestas-teste.sankhyacloud.com.br` / `api.sandbox.sankhya.com.br`), behind a flag off by default (`SANKHYA_ORDER_WRITE_ENABLED`), a host allow-list refusing any other host, per-order idempotency, a documented dry-run before the first write, and a slice plan before coding. Never enabled in staging by an agent; the command goes to "Só o dono roda".
+
+#### SNK-8 · ERP commercial history (phase B), Sandbox read only — owner D11
+- **Status:** APPROVED 2026-10-28 · read only, Sandbox only, same allow-list
+
+#### TEST-1 · E2E migration — owner D12
+- **Status:** APPROVED 2026-10-28
+- **Decision:** migrate commit `2a836a0` into the evolution worktree, replacing the seller password login by the session fixture through the test API. Afterwards `C:\Dev\sales-force` is retired.
+
 ## 4. Status of the specification's decisions (spec §4)
 
 The spec is a draft. Its decisions are binding only where an APPROVED entry above covers them.
