@@ -1,4 +1,5 @@
 import type { IsoTimestamp } from './entities.js';
+import { compareDecimalStrings, validateDiscountPercent, type DecimalString } from './money.js';
 
 /**
  * Installation configuration (CFG-1..6): structured, typed, versioned. Customer-specific commercial
@@ -53,6 +54,20 @@ export interface AccountSellerLink {
   readonly sellerCode: number;
 }
 
+/** The levels of the discount authority chain (P-10, DISC-2): seller -> manager -> director. */
+export const DISCOUNT_AUTHORITY_LEVELS = ['seller', 'manager', 'director'] as const;
+export type DiscountAuthorityLevel = (typeof DISCOUNT_AUTHORITY_LEVELS)[number];
+
+/**
+ * Discount authority per level (DISC-2), a maximum discount percentage on the customer's price-table price
+ * (decimal string) or `null` = not configured. The values are customer commercial data: no default exists
+ * anywhere. The absolute ceiling and the substitute approver (R36 remainder) and R37 are NOT decided and
+ * deliberately have no field here: the rule fails closed where it would need them.
+ */
+export interface DiscountAuthorityConfiguration {
+  readonly limits: Readonly<Record<DiscountAuthorityLevel, string | null>>;
+}
+
 /** Known feature flags; unknown keys are allowed (open record). */
 export const KNOWN_FEATURE_FLAGS = ['demoMetrics'] as const;
 export type KnownFeatureFlag = (typeof KNOWN_FEATURE_FLAGS)[number];
@@ -83,6 +98,8 @@ export interface InstallationConfiguration {
       readonly allowDraftWithoutPrice: boolean;
     };
     readonly confirmationBehavior: ConfirmationBehavior;
+    /** Absent = discount authority not configured: any discount is refused (fail closed). */
+    readonly discountAuthority?: DiscountAuthorityConfiguration;
   };
   readonly customers: {
     readonly portfolioOwnership: { readonly strategy: PortfolioOwnershipStrategy };
@@ -177,7 +194,9 @@ export interface ConfigurationIssue {
     | 'duplicate_mobile_price_table'
     | 'fallback_table_not_mobile'
     | 'catalog_reference_table_not_mobile'
-    | 'alternative_table_active_unvalidated';
+    | 'alternative_table_active_unvalidated'
+    | 'discount_authority_limit_invalid'
+    | 'discount_authority_limits_not_ascending';
   readonly path: string;
 }
 
@@ -284,6 +303,21 @@ export function validateConfigurationConsistency(
       code: 'alternative_table_active_unvalidated',
       path: 'pricing.alternativeTable.active',
     });
+  }
+
+  const authority = sales.discountAuthority;
+  if (authority !== undefined) {
+    const present: DecimalString[] = [];
+    for (const level of DISCOUNT_AUTHORITY_LEVELS) {
+      const limit = authority.limits[level];
+      if (limit === null) continue;
+      const valid = validateDiscountPercent(limit);
+      if (valid.ok) present.push(valid.value);
+      else issues.push({ code: 'discount_authority_limit_invalid', path: `sales.discountAuthority.limits.${level}` });
+    }
+    if (present.some((value, index) => index > 0 && compareDecimalStrings(present[index - 1] as DecimalString, value) > 0)) {
+      issues.push({ code: 'discount_authority_limits_not_ascending', path: 'sales.discountAuthority.limits' });
+    }
   }
   return issues;
 }
