@@ -537,7 +537,12 @@ export class AuthService implements OnModuleInit {
       if (sync.ok) return sync.action !== 'relinked';
       return !sync.revoked;
     } catch (error) {
-      this.logger.warn({ ...errorLogFields(error) }, 'could not re-check an automatic seller link; keeping the session (only a definitive ERP change ends it)');
+      // AUTH-11: not a refusal. `reason` and `metric` are stable fields (no metrics infrastructure exists; log processors count `metric`).
+      // No account id, user code or error message: class/code only (errorLogFields).
+      this.logger.warn(
+        { ...errorLogFields(error), reason: 'link_reevaluation_error', metric: 'auth.link_reevaluation_error' },
+        'could not re-check an automatic seller link; keeping the session (only a definitive ERP change ends it)',
+      );
       return true;
     }
   }

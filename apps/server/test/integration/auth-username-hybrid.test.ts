@@ -549,6 +549,38 @@ describe('revocation of an automatic link on an established session', () => {
     expect(ctx.verifier.calls.filter((c) => c.login === 'um')).toHaveLength(1);
   });
 
+  it('AUTH-11 (D3): a re-check database error keeps the session and logs reason + stable metric field, without PII', async () => {
+    const { ctx, login } = await signedIn();
+    ctx.clock.advance(PAST_TOUCH);
+    const failing = Object.create(ctx.links) as typeof ctx.links;
+    failing.syncFromDirectory = () => Promise.reject(Object.assign(new Error('connection to db at 10.0.0.1 failed for user um'), { code: '57P01' }));
+    const service = new AuthService(
+      withExternalSellerLogin(testAuthConfig({ authMode: 'local', allowedRoles: LOCAL_MODE_ROLES }), { enabled: true, linkMode: 'VERIFIED_AUTO_PROVISION', verifyTimeoutMs: 200, minFailureMs: 0 }),
+      new Argon2idPasswordHasher(TEST_HASH_PARAMS),
+      new AccountRepository(ctx.db),
+      new SessionRepository(ctx.db),
+      new ThrottleRepository(ctx.db),
+      new AuditService(ctx.db, ctx.clock.fn),
+      ctx.clock.fn,
+      createLogger({ level: 'debug', service: 'api', destination: ctx.capture.stream }),
+      ctx.verifier,
+      failing,
+    );
+    expect(await service.resolveSession(login.token)).not.toBeNull();
+    const line = ctx.capture.lines().find((l) => l['reason'] === 'link_reevaluation_error');
+    expect(line).toMatchObject({ reason: 'link_reevaluation_error', metric: 'auth.link_reevaluation_error' });
+    const text = JSON.stringify(line);
+    expect(text).not.toContain('10.0.0.1');
+    expect(text).not.toContain('"um"');
+  });
+
+  it('AUTH-11 (D3): a NEW login hitting a database error stays refused (fail closed)', async () => {
+    const { ctx } = await signedIn();
+    ctx.links.syncFromDirectory = () => Promise.reject(new Error('boom'));
+    await expect(ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META)).rejects.toBeInstanceOf(Error);
+    expect(await ctx.db.select().from(session)).toHaveLength(1);
+  });
+
   it('never calls the verifier when resolving or refreshing a session', async () => {
     const { ctx, login } = await signedIn();
     const callsAfterLogin = ctx.verifier.calls.length;
