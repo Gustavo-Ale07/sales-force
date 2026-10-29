@@ -684,6 +684,61 @@ Source: the project owner (Gustavo) in the session of 2026-10-28; recorded here 
 - **Status:** APPROVED 2026-10-28
 - **Decision:** migrate commit `2a836a0` into the evolution worktree, replacing the seller password login by the session fixture through the test API. Afterwards `C:\Dev\sales-force` is retired.
 
+
+### 3.15 APPROVED — Owner answers Q1-Q13 and rulings D13-D20 (2026-10-29)
+
+Source: the project owner (Gustavo), session of 2026-10-29; recorded before implementation. D1-D12 (§3.14) were re-confirmed line by line against the owner's original text on 2026-10-29: no divergence found. Nothing here authorizes deploys, staging flag changes, production or Sankhya writes.
+
+#### Q1-Q13 · Answers to the open questions
+- **Q1 (AUTH-MODE-HYBRID):** `AUTH_MODE=local` + `EXTERNAL_LOGIN_ENABLED=1` is not refused at boot; the API logs a "transition mode" warning. This is the current staging state.
+- **Q2:** in `external` mode `WEB_AUTH_MODE=standard`, as documented; the login screen asks for the Sankhya username, not an e-mail.
+- **Q3:** pre-existing local seller sessions are revoked once, when staging switches to `external`; the command is in `.claude/work/CURRENT.md` ("Só o dono roda"); agents do not run it.
+- **Q4:** the owner switches staging to `external` after the suite is green and the new SHA is deployed. Precondition: an active local admin account exists in staging as emergency access.
+- **Q5 (= AUTH-11/D3):** a session is kept when the link re-check fails with a database error.
+- **Q6 (DISC-3 note):** in v1 the admin approves the director level, labelled "Diretoria" in the UI. No new role; `technical` stays blocked from approvals.
+- **Q7:** limits are inclusive (`<=`): a discount equal to a level's limit is within that level.
+- **Q8:** per-user limits (RF-CAT-3) are NOT built now — post-pilot backlog; the configuration shape must accept a per-user override later without a migration.
+- **Q9:** always three limits (seller, manager, director). The director's limit is the absolute ceiling; above it nobody approves and the order stays `blocked`.
+- **Q10:** the base is the item's effective price in the order, from the customer's table or the fallback table (CFG-4/5); the order records which table was used.
+- **Q11:** the PLAC values are brought by the owner. Until then provisional 5 / 15 / 30 (seller / manager / director), marked "ajustar pelo dono" in configuration and in the admin screen.
+- **Q12:** a blocked draft stays saved and marked `blocked`; only submission is refused. At submission the authority is recomputed from the stored lines.
+- **Q13:** ceiling = the director's limit.
+
+#### AUTH-13 · Blocked-field recheck covers every external login — owner D13
+- **Status:** APPROVED 2026-10-29 · refines AUTH-10
+- **Decision:** once the TSIUSU blocking field exists, `user_blocked` drops the session of any external login, automatic or manual (`PRE_LINKED`). What is never touched in a manual link is the link record itself. Until the field arrives the hook stays prepared for both modes.
+
+#### AUTH-14 · `AUTH_CONFIG` is mandatory — owner D14
+- **Status:** APPROVED 2026-10-29
+- **Decision:** the authentication module requires `AUTH_CONFIG`; if absent the server does not start (closes the reviewer finding on the `@Optional` in `AccountService`). A test covers it.
+
+#### OPS-7 · Directory mirror age — owner D15
+- **Status:** APPROVED 2026-10-29
+- **Decision:** a warning log and a metric when the mirror is older than `EXTERNAL_DIRECTORY_MAX_AGE_MINUTES`. No external alert in v1.
+
+#### DISC-5 · Draft edited by a manager — owner D16
+- **Status:** APPROVED 2026-10-29
+- **Decision:** the discount status is computed with the role of the draft's owner (seller), never of who saved it. Approval happens only by an explicit approve action, audited with who approved (DISC-4).
+
+#### ORD-1 · Order editing rule (R07) — owner D17
+- **Status:** APPROVED 2026-10-29
+- **Decision:** an order is editable only as draft and rejected-by-approver; editing an order awaiting approval returns it to draft and invalidates the pending approval; approve and reject are online only.
+
+#### DISC-6 · Approval in v1 — owner D18
+- **Status:** APPROVED 2026-10-29
+- **Decision:** no push. The approver sees the queue (W-20, web); the seller sees the state on the order (web) and in the app (M-14). A comment is mandatory on rejection, optional on approval. Nothing more.
+
+#### ORD-2 · Order states — owner D19
+- **Status:** APPROVED 2026-10-29
+- **Decision:** order states follow SM-2 of the blueprint, keeping the contract's current names (`draft`, `queued`, `sent`, `rejected`, `cancelled`) and adding the approval states. `rejected` stays the ERP-submission rejection; a discount reprovação is its own state and never reuses it. `revisao_preco` is out for now.
+
+#### MOB-8 · Offline mobile is not rebuilt this cycle — owner D20
+- **Status:** APPROVED 2026-10-29
+- **Decision:** local draft, outbox and sync already exist and were validated on device (`docs/mobile-spike.md` §8.8, `.claude/work/MOBILE_PARITY.md`). This cycle only the approval flow (M-14) enters the mobile app; the §8.8 finishing touches wait for the next session.
+
+#### AUTH-15 · Known accepted risk — user enumeration during verifier outage
+- **Status:** APPROVED 2026-10-29 (risk accepted for v1)
+- **Decision:** during a verifier outage the distinct 503 can reveal that a login was forwarded to the verifier; accepted in v1 and recorded as a known risk.
 ## 4. Status of the specification's decisions (spec §4)
 
 The spec is a draft. Its decisions are binding only where an APPROVED entry above covers them.
