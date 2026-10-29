@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { erpCustomer, salesOrder, salesOrderItem, type Database } from '@salesforce/db';
+import { account, erpCustomer, salesOrder, salesOrderApproval, salesOrderItem, type AccountRole, type ApprovalLevel, type Database } from '@salesforce/db';
 import type { CustomerScope, OrderItem } from '@salesforce/domain';
 import { and, asc, desc, eq, ne, or, sql, type SQL } from 'drizzle-orm';
 import { containsText, digitsOf, eqInt, fitsPgInt, inInts, inSellerCodes, offsetOf } from '../platform/sql.js';
@@ -8,6 +8,13 @@ import { DATABASE } from '../platform/tokens.js';
 export type OrderRow = typeof salesOrder.$inferSelect;
 export type OrderItemRow = typeof salesOrderItem.$inferSelect;
 export type NewOrder = typeof salesOrder.$inferInsert;
+export type ApprovalRow = typeof salesOrderApproval.$inferSelect;
+
+/** An approval request with the display name of whoever decided it (never an e-mail or an id). */
+export interface ApprovalWithDecider {
+  readonly approval: ApprovalRow;
+  readonly decidedByName: string | null;
+}
 
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 /** The database or an open transaction: writes of one business operation share a transaction. */
@@ -172,6 +179,53 @@ export class OrdersRepository {
         estimatedLineTotal: item.estimatedLineTotal,
       })),
     );
+  }
+
+  /** Role of an account, or `null` when it does not exist (the draft owner may be a removed account). */
+  async roleOfAccount(accountId: string, executor: Executor = this.db): Promise<AccountRole | null> {
+    const [row] = await executor.select({ role: account.role }).from(account).where(eq(account.id, accountId));
+    return (row?.role as AccountRole | undefined) ?? null;
+  }
+
+  async insertApproval(
+    values: { id: string; orderId: string; orderVersion: number; requestedLevel: ApprovalLevel; requestedByAccountId: string; requestedAt: Date },
+    executor: Executor,
+  ): Promise<ApprovalRow> {
+    const [row] = await executor.insert(salesOrderApproval).values({ ...values, decision: 'pending' }).returning();
+    if (row === undefined) throw new Error('Approval request was not inserted');
+    return row;
+  }
+
+  /** The request waiting for a decision, or `null`; `lock` takes the row for update. */
+  async pendingApprovalOf(orderId: string, executor: Executor = this.db, lock = false): Promise<ApprovalRow | null> {
+    const query = executor
+      .select()
+      .from(salesOrderApproval)
+      .where(and(eq(salesOrderApproval.orderId, orderId), eq(salesOrderApproval.decision, 'pending')));
+    const [row] = await (lock ? query.for('update') : query);
+    return row ?? null;
+  }
+
+  /** The newest request of an order (any decision) with the name of who decided it. */
+  async latestApprovalOf(orderId: string, executor: Executor = this.db): Promise<ApprovalWithDecider | null> {
+    const [row] = await executor
+      .select({ approval: salesOrderApproval, decidedByName: account.displayName })
+      .from(salesOrderApproval)
+      .leftJoin(account, eq(account.id, salesOrderApproval.decidedByAccountId))
+      .where(eq(salesOrderApproval.orderId, orderId))
+      .orderBy(sql`(${salesOrderApproval.decision} = 'pending') desc`, desc(salesOrderApproval.requestedAt), desc(salesOrderApproval.id))
+      .limit(1);
+    return row === undefined ? null : { approval: row.approval, decidedByName: row.decidedByName };
+  }
+
+  /** Closes the pending request, if any, because the order was edited or discarded (ORD-1). True when one was closed. */
+  async invalidatePendingApproval(orderId: string, at: Date, executor: Executor): Promise<boolean> {
+    const rows = await executor
+      .update(salesOrderApproval)
+      .set({ decision: 'invalidated', decidedAt: at })
+      .where(and(eq(salesOrderApproval.orderId, orderId), eq(salesOrderApproval.decision, 'pending')))
+      .returning({ id: salesOrderApproval.id });
+    return rows.length > 0;
   }
 
   async deleteItems(orderId: string, executor: Executor): Promise<void> {

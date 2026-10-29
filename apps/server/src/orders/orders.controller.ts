@@ -59,12 +59,12 @@ export class OrdersController {
     return this.orders.discard(user, contract.params.id);
   }
 
-  /** Always ends in `erp_submission_disabled` (409): see `OrdersService.submit`. */
+  /** Awaiting approval (200), `discount_blocked` or `erp_submission_disabled` (409): see `OrdersService.submit`. */
   @ApiRoute(routes.submitOrder)
   submit(
     @CurrentUserParam() user: CurrentUser,
     @Contract() contract: RequestContract<typeof routes.submitOrder>,
-  ): Promise<never> {
+  ): Promise<OrderDetail> {
     return this.orders.submit(user, contract.params.id);
   }
 

@@ -144,6 +144,7 @@ export function orderDetail(overrides: Partial<ApiSchema<"OrderDetail">> = {}): 
     negotiationTypeCode: null,
     notes: null,
     discountAuthority: "within_authority",
+    approval: null,
     items,
     totals: { estimatedTotal: "25", lineCount: items.length, unpricedLineCount: 0, isPartial: false },
     ...overrides,

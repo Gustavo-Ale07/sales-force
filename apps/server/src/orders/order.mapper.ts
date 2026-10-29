@@ -1,7 +1,20 @@
-import type { DiscountAuthorityStatus, OrderDetail, OrderItemDetail as OrderItemDto, OrderListItem, OrderReview, OrderStatus, ProductImage } from '@salesforce/contracts';
+import type { DiscountAuthorityStatus, OrderApproval, OrderDetail, OrderItemDetail as OrderItemDto, OrderListItem, OrderReview, OrderStatus, ProductImage } from '@salesforce/contracts';
 import { computeOrderTotals, customerOrderBlock, normalizeDecimalString } from '@salesforce/domain';
 import { isBlockedRaw } from '../mirror/mirror.repository.js';
-import type { OrderCustomerState, OrderItemRow, OrderListRow, OrderRow } from './orders.repository.js';
+import type { ApprovalWithDecider, OrderCustomerState, OrderItemRow, OrderListRow, OrderRow } from './orders.repository.js';
+
+export function toOrderApproval(found: ApprovalWithDecider | null): OrderApproval | null {
+  if (found === null) return null;
+  const { approval, decidedByName } = found;
+  return {
+    requestedLevel: approval.requestedLevel as OrderApproval['requestedLevel'],
+    requestedAt: approval.requestedAt.toISOString(),
+    decision: approval.decision as OrderApproval['decision'],
+    decidedAt: approval.decidedAt === null ? null : approval.decidedAt.toISOString(),
+    decidedByName: approval.decision === 'approved' || approval.decision === 'rejected' ? decidedByName : null,
+    comment: approval.comment,
+  };
+}
 
 /** Display name when the customer is no longer in the mirror (never an empty name in a list). */
 export function customerNameOrFallback(name: string | null | undefined, code: number): string {
@@ -66,7 +79,13 @@ function toItemDto(row: OrderItemRow, image?: ProductImage): OrderItemDto {
 }
 
 /** Order + its lines as the contract detail. Totals are recomputed by the domain from the stored lines. */
-export function toOrderDetail(order: OrderRow, items: readonly OrderItemRow[], customer: OrderCustomerState, images: ReadonlyMap<number, ProductImage> = new Map()): OrderDetail {
+export function toOrderDetail(
+  order: OrderRow,
+  items: readonly OrderItemRow[],
+  customer: OrderCustomerState,
+  images: ReadonlyMap<number, ProductImage> = new Map(),
+  approval: OrderApproval | null = null,
+): OrderDetail {
   const dtoItems = items.map((item) => toItemDto(item, images.get(item.productCode)));
   const totals = computeOrderTotals(dtoItems);
   return {
@@ -87,6 +106,7 @@ export function toOrderDetail(order: OrderRow, items: readonly OrderItemRow[], c
     negotiationTypeCode: order.negotiationTypeCode,
     notes: order.notes,
     discountAuthority: order.discountAuthority as DiscountAuthorityStatus,
+    approval,
     items: dtoItems,
     totals,
   };

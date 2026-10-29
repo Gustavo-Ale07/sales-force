@@ -8,20 +8,32 @@ import {
   isOrderEditable,
   isOrderTransitionDeclared,
   reachableOrderTargets,
+  statusAfterEdit,
   type OrderStatus,
   type OutboxStatus,
 } from '../src/index.js';
 
 describe('order status transitions', () => {
-  it('declares all six statuses', () => {
-    expect([...ORDER_STATUSES].sort()).toEqual(
-      ['cancelled', 'draft', 'queued', 'rejected', 'sent', 'unknown'].sort(),
-    );
+  it('declares every status', () => {
+    expect(ORDER_STATUSES).toHaveLength(9);
   });
 
-  it('only draft edits and draft -> cancelled are reachable today', () => {
+  it('only the approval flow, edits and cancellation are reachable today (no ERP state)', () => {
     const reachable = ORDER_TRANSITIONS.filter((t) => t.reachable).map((t) => `${t.from}->${t.to}`);
-    expect(reachable.sort()).toEqual(['draft->cancelled', 'draft->draft']);
+    expect(reachable.sort()).toEqual(
+      [
+        'approval_rejected->cancelled',
+        'approval_rejected->draft',
+        'approved->cancelled',
+        'awaiting_approval->approval_rejected',
+        'awaiting_approval->approved',
+        'awaiting_approval->cancelled',
+        'awaiting_approval->draft',
+        'draft->awaiting_approval',
+        'draft->cancelled',
+        'draft->draft',
+      ].sort(),
+    );
   });
 
   it.each([
@@ -58,12 +70,12 @@ describe('order status transitions', () => {
     }
   });
 
-  it('only drafts are editable', () => {
-    for (const s of ORDER_STATUSES) expect(isOrderEditable(s)).toBe(s === 'draft');
+  it('only draft, rejected-by-approver and awaiting approval are editable', () => {
+    for (const s of ORDER_STATUSES) expect(isOrderEditable(s)).toBe(['draft', 'approval_rejected', 'awaiting_approval'].includes(s));
   });
 
   it('lists reachable targets', () => {
-    expect([...reachableOrderTargets('draft')].sort()).toEqual(['cancelled', 'draft']);
+    expect([...reachableOrderTargets('draft')].sort()).toEqual(['awaiting_approval', 'cancelled', 'draft']);
     expect(reachableOrderTargets('queued')).toEqual([]);
   });
 });
@@ -99,5 +111,45 @@ describe('outbox status transitions', () => {
     for (const from of ['confirmed', 'rejected'] as const) {
       for (const to of OUTBOX_STATUSES) expect(canTransitionOutbox(from, to)).toBe(false);
     }
+  });
+});
+
+describe('order approval states (ORD-1, ORD-2, SM-2)', () => {
+  it('adds the approval states without touching the ERP ones', () => {
+    for (const s of ['awaiting_approval', 'approved', 'approval_rejected']) expect(ORDER_STATUSES).toContain(s);
+    expect(ORDER_STATUSES).toContain('rejected');
+  });
+
+  it.each([
+    ['draft', 'awaiting_approval', true],
+    ['awaiting_approval', 'approved', true],
+    ['awaiting_approval', 'approval_rejected', true],
+    ['awaiting_approval', 'draft', true], // an edit invalidates the pending approval
+    ['approval_rejected', 'draft', true], // an edit of a reprovado order
+    ['draft', 'cancelled', true],
+    ['awaiting_approval', 'cancelled', true],
+    ['approval_rejected', 'cancelled', true],
+    ['approved', 'cancelled', true],
+    ['approved', 'queued', false], // ERP submission stays disabled
+    ['approved', 'draft', false],
+    ['approval_rejected', 'approved', false], // a reprovação is never reverted without an edit
+    ['approval_rejected', 'rejected', false], // never confuses with the ERP rejection
+    ['awaiting_approval', 'rejected', false],
+    ['draft', 'approved', false], // only an explicit approval (or, later, the ERP gate) approves
+    ['cancelled', 'awaiting_approval', false],
+  ] as [OrderStatus, OrderStatus, boolean][])('canTransitionOrder %s -> %s = %s', (from, to, expected) => {
+    expect(canTransitionOrder(from, to)).toBe(expected);
+  });
+
+  it('is editable as draft, rejected-by-approver and awaiting approval (which returns to draft); never approved or sent', () => {
+    for (const s of ['draft', 'approval_rejected', 'awaiting_approval'] as const) expect(isOrderEditable(s)).toBe(true);
+    for (const s of ['approved', 'queued', 'sent', 'rejected', 'cancelled', 'unknown'] as const) expect(isOrderEditable(s)).toBe(false);
+  });
+
+  it('an edit always ends in draft', () => {
+    expect(statusAfterEdit('draft')).toBe('draft');
+    expect(statusAfterEdit('awaiting_approval')).toBe('draft');
+    expect(statusAfterEdit('approval_rejected')).toBe('draft');
+    expect(() => statusAfterEdit('approved')).toThrow();
   });
 });

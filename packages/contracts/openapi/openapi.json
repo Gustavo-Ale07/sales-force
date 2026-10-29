@@ -1729,8 +1729,8 @@
         "tags": [
           "orders"
         ],
-        "summary": "Submit an order to the ERP (disabled)",
-        "description": "Always 409 erp_submission_disabled until the ERP write-safety gates close (SNK-4/SNK-5).",
+        "summary": "Submit an order: sends it for discount approval, or (disabled) to the ERP",
+        "description": "The server recomputes the discount authority from the stored lines with the role of the draft OWNER (DISC-5, Q12). Above that authority: 200 with the order in awaiting_approval (idempotent for an order already waiting). Above the director ceiling: 409 discount_blocked. Within authority: 409 erp_submission_disabled until the ERP write-safety gates close (SNK-4/SNK-5).",
         "parameters": [
           {
             "name": "id",
@@ -1744,6 +1744,16 @@
           }
         ],
         "responses": {
+          "200": {
+            "description": "Pedido enviado para aprovação de desconto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderDetail"
+                }
+              }
+            }
+          },
           "400": {
             "description": "Requisição inválida (validation_failed)",
             "content": {
@@ -2519,6 +2529,13 @@
           "message"
         ],
         "additionalProperties": false
+      },
+      "ApprovalLevel": {
+        "type": "string",
+        "enum": [
+          "manager",
+          "director"
+        ]
       },
       "AuthMode": {
         "type": "string",
@@ -3443,6 +3460,8 @@
           "order_not_editable",
           "installation_not_enabled",
           "erp_submission_disabled",
+          "discount_blocked",
+          "approval_not_pending",
           "dataset_mismatch",
           "no_seller_scope",
           "customer_without_seller",
@@ -3921,6 +3940,57 @@
           "no_price_row"
         ]
       },
+      "OrderApproval": {
+        "type": "object",
+        "properties": {
+          "requestedLevel": {
+            "$ref": "#/components/schemas/ApprovalLevel"
+          },
+          "requestedAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "invalidated"
+            ]
+          },
+          "decidedAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IsoTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decidedByName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "comment": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "requestedLevel",
+          "requestedAt",
+          "decision",
+          "decidedAt",
+          "decidedByName",
+          "comment"
+        ],
+        "additionalProperties": false
+      },
       "OrderDateField": {
         "type": "string",
         "enum": [
@@ -4021,6 +4091,16 @@
           "discountAuthority": {
             "$ref": "#/components/schemas/DiscountAuthorityStatus"
           },
+          "approval": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrderApproval"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "items": {
             "type": "array",
             "items": {
@@ -4049,6 +4129,7 @@
           "negotiationTypeCode",
           "notes",
           "discountAuthority",
+          "approval",
           "items",
           "totals"
         ],
@@ -4468,6 +4549,9 @@
         "type": "string",
         "enum": [
           "draft",
+          "awaiting_approval",
+          "approved",
+          "approval_rejected",
           "cancelled",
           "queued",
           "sent",

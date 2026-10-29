@@ -8,6 +8,9 @@ import type { Tone } from "@salesforce/ui";
  */
 export const orderStatusLabels: Record<ApiSchema<"OrderStatus">, { label: string; tone: Tone }> = {
   draft: { label: "Rascunho", tone: "neutral" },
+  awaiting_approval: { label: "Aguardando aprovação", tone: "warning" },
+  approved: { label: "Aprovado", tone: "info" },
+  approval_rejected: { label: "Reprovado na aprovação", tone: "danger" },
   cancelled: { label: "Descartado", tone: "neutral" },
   queued: { label: "Na fila de envio ao ERP", tone: "info" },
   sent: { label: "Enviado ao ERP", tone: "info" },
@@ -18,6 +21,9 @@ export const orderStatusLabels: Record<ApiSchema<"OrderStatus">, { label: string
 /** One sentence per situation: what it says, and what it does not say about the ERP. */
 export const orderStatusHints: Record<ApiSchema<"OrderStatus">, string> = {
   draft: "Rascunho salvo no Sales Force. Ainda não foi enviado ao ERP.",
+  awaiting_approval: "O desconto do pedido aguarda a decisão de um aprovador. Editar o pedido cancela a solicitação e o devolve a rascunho.",
+  approved: "Desconto aprovado. Isso não significa que o pedido foi enviado ao ERP.",
+  approval_rejected: "O aprovador reprovou o desconto. Edite o pedido para ajustar e enviar de novo.",
   cancelled: "Rascunho descartado no Sales Force. Nada foi enviado ao ERP.",
   queued: "Aguardando envio ao ERP. O pedido ainda não existe no ERP.",
   sent: "O ERP aceitou o pedido enviado pelo Sales Force. Isso não indica confirmação nem faturamento: a situação do pedido dentro do ERP não é acompanhada aqui.",

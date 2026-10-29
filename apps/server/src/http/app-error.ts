@@ -15,6 +15,9 @@ export const DEFAULT_ERROR_MESSAGES: Readonly<Record<ErrorCode, string>> = {
   order_not_editable: 'Este pedido não pode mais ser editado.',
   installation_not_enabled: 'A instalação ainda não foi habilitada. Contate o administrador.',
   erp_submission_disabled: 'O envio de pedidos ao ERP ainda não está habilitado.',
+  discount_blocked:
+    'Este pedido tem desconto acima do teto da diretoria e não pode ser enviado. Reduza o desconto para poder enviá-lo.',
+  approval_not_pending: 'Este pedido não está aguardando aprovação.',
   dataset_mismatch:
     'Este pedido foi iniciado com outro conjunto de dados e não pode ser salvo aqui. Atualize o aplicativo, confira o pedido e refaça-o.',
   no_seller_scope:

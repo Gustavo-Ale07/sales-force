@@ -13,14 +13,17 @@ import type {
 import {
   canTransitionOrder,
   customerOrderBlock,
-  evaluateOrderDiscountAuthority,
   datasetOriginForConfigurationSource,
   isCustomerInScope,
   isOrderEditable,
   normalizeDecimalString,
   presentSkips,
+  recomputeOrderAuthority,
+  statusAfterEdit,
+  type AccountRole,
   type CustomerScope,
   type InstallationConfiguration,
+  type RecomputedOrderAuthority,
 } from '@salesforce/domain';
 import { ProductImageService } from '../catalog/product-image.service.js';
 import { CustomersService } from '../customers/customers.service.js';
@@ -34,7 +37,7 @@ import { uuidv7 } from '../platform/ids.js';
 import { CLOCK, DATASET_IDENTITY, type Clock } from '../platform/tokens.js';
 import { DraftBuilder, type DraftOutcome } from './draft-builder.js';
 import { orderFingerprint } from './order-fingerprint.js';
-import { toOrderDetail, toOrderListItem } from './order.mapper.js';
+import { toOrderApproval, toOrderDetail, toOrderListItem } from './order.mapper.js';
 import { OrdersRepository, type Executor, type OrderCounts, type OrderRow } from './orders.repository.js';
 
 type ValidDraft = Extract<DraftOutcome, { ok: true }>;
@@ -186,7 +189,7 @@ export class OrdersService {
           negotiationTypeCode: body.negotiationTypeCode,
           notes: body.notes,
           estimatedTotal: draft.totals.estimatedTotal,
-          discountAuthority: this.discountAuthorityOf(user, draft, context.configuration),
+          discountAuthority: this.discountAuthorityOf(user.role, draft.draft.items, context.configuration),
           version: 1,
           clientRequestId: body.clientRequestId,
           clientRequestHash: fingerprint,
@@ -347,6 +350,11 @@ export class OrdersService {
       this.assertEditable(locked, body.expectedVersion);
       assertOriginMatchesConfiguration(locked.datasetOrigin, context.configuration.source.kind);
 
+      // DISC-5: the status follows the role of the draft's OWNER, never of whoever saves it (a manager editing a
+      // seller's draft does not widen it). ORD-1: an edit returns a reprovado or waiting order to draft and closes the
+      // pending approval, so no stale approval can ever release the edited lines.
+      const ownerRole = await this.ownerRoleOf(locked, tx);
+      const invalidated = await this.orders.invalidatePendingApproval(id, at, tx);
       const row = await this.orders.updateOrder(
         id,
         {
@@ -355,7 +363,8 @@ export class OrdersService {
           negotiationTypeCode: body.negotiationTypeCode,
           notes: body.notes,
           estimatedTotal: draft.totals.estimatedTotal,
-          discountAuthority: this.discountAuthorityOf(user, draft, context.configuration),
+          status: statusAfterEdit(locked.status as Parameters<typeof statusAfterEdit>[0]),
+          discountAuthority: this.discountAuthorityOf(ownerRole, draft.draft.items, context.configuration),
           version: locked.version + 1,
           configVersionId: context.configVersionId,
           updatedAt: at,
@@ -368,6 +377,12 @@ export class OrdersService {
         { action: AUDIT_ACTIONS.orderReplaced, actorAccountId: user.accountId, detail: this.auditDetail(row, draft.draft.items.length, discountedLines(draft.draft.items)) },
         tx,
       );
+      if (invalidated) {
+        await this.audit.record(
+          { action: AUDIT_ACTIONS.orderApprovalInvalidated, actorAccountId: user.accountId, detail: { orderId: id, reason: 'edited', previousStatus: locked.status } },
+          tx,
+        );
+      }
       return row;
     });
     return this.detailOf(updated);
@@ -383,11 +398,18 @@ export class OrdersService {
       const locked = await this.orders.findById(id, tx, true);
       this.assertInScope(scope, locked);
       this.assertCancellable(locked);
+      const invalidated = await this.orders.invalidatePendingApproval(id, at, tx);
       const row = await this.orders.updateOrder(
         id,
         { status: 'cancelled', version: locked.version + 1, updatedAt: at },
         tx,
       );
+      if (invalidated) {
+        await this.audit.record(
+          { action: AUDIT_ACTIONS.orderApprovalInvalidated, actorAccountId: user.accountId, detail: { orderId: id, reason: 'discarded', previousStatus: locked.status } },
+          tx,
+        );
+      }
       const items = await this.orders.itemsOf(id, tx);
       await this.audit.record(
         { action: AUDIT_ACTIONS.orderDiscarded, actorAccountId: user.accountId, detail: this.auditDetail(row, items.length) },
@@ -398,15 +420,30 @@ export class OrdersService {
     return this.detailOf(updated);
   }
 
-  /* ---------- submit (disabled) ---------- */
+  /* ---------- submit ---------- */
 
   /**
-   * ERP submission is disabled until its write-safety gates close (SNK-4, SNK-6): the attempt is
-   * audited and refused. No outbox row, no job, no gateway call, no status change.
+   * Submission of an order. The discount authority is RECOMPUTED here from the stored lines, under the current
+   * limits and with the role of the draft's owner (DISC-5, Q12); the stored `discount_authority` is never trusted.
+   *  - above the director ceiling: refused, 409 `discount_blocked` (the draft stays saved, Q12);
+   *  - above the owner's authority: the order goes to `awaiting_approval` and one approval request is created, in the
+   *    same transaction (ORD-2, DISC-4); submitting an order already waiting changes nothing (idempotent);
+   *  - within authority: ERP submission is disabled until its write-safety gates close (SNK-4, SNK-6): the attempt is
+   *    audited and refused. No outbox row, no job, no gateway call.
+   * Nothing here approves anything: only an explicit approval action does.
    */
-  async submit(user: CurrentUser, id: string): Promise<never> {
-    const { scope } = await this.policy.accessContext(user);
+  async submit(user: CurrentUser, id: string): Promise<OrderDetail> {
+    const context = await this.policy.accessContext(user);
+    const { scope } = context;
     const order = await this.loadVisible(scope, id);
+    if (order.status === 'awaiting_approval') return this.detailOf(order);
+    if (order.status === 'approval_rejected') {
+      throw new AppError('conflict', {
+        message: 'Este pedido foi reprovado na aprovação de desconto. Edite o pedido antes de enviá-lo novamente.',
+        details: { reason: 'edit_before_resubmitting' },
+      });
+    }
+    if (order.status !== 'draft' && order.status !== 'approved') throw new AppError('order_not_editable');
     // The server revalidates the customer NOW, not at draft time: a draft whose customer became ineligible
     // is refused and flagged (needs_review), never sent and never silently altered.
     const [state] = [...(await this.mirror.customerStates([order.customerCode])).values()];
@@ -419,12 +456,58 @@ export class OrdersService {
       });
       throw new AppError('customer_ineligible', { details: { reason: block } });
     }
+    // An approved order was released by an explicit approval of these very lines (an edit would have reset it).
+    const authority = order.status === 'approved' ? null : await this.recomputeAuthority(order, context.configuration);
+    if (authority !== null && authority.status === 'blocked') {
+      await this.audit.record({
+        action: AUDIT_ACTIONS.orderSubmitDiscountBlocked,
+        actorAccountId: user.accountId,
+        detail: { ...this.auditDetail(order, 0), reason: authority.reason },
+      });
+      throw new AppError('discount_blocked', { details: { reason: authority.reason } });
+    }
+    if (authority !== null && authority.level !== null) {
+      return this.requestApproval(user, order, authority.level, context);
+    }
     await this.audit.record({
       action: AUDIT_ACTIONS.orderSubmitAttempted,
       actorAccountId: user.accountId,
       detail: { ...this.auditDetail(order, 0), outcome: 'erp_submission_disabled' },
     });
     throw new AppError('erp_submission_disabled');
+  }
+
+  /** draft -> awaiting_approval with its request, atomically; decided again on the locked row. */
+  private async requestApproval(user: CurrentUser, seen: OrderRow, level: 'manager' | 'director', context: AccessContext): Promise<OrderDetail> {
+    const at = this.clock();
+    const updated = await this.orders.transaction(async (tx) => {
+      const locked = await this.orders.findById(seen.id, tx, true);
+      this.assertInScope(context.scope, locked);
+      if (locked.status === 'awaiting_approval') return locked;
+      if (locked.status !== 'draft' || locked.version !== seen.version) throw new AppError('version_conflict', { details: { currentVersion: locked.version } });
+      const row = await this.orders.updateOrder(
+        locked.id,
+        {
+          status: 'awaiting_approval',
+          discountAuthority: level === 'manager' ? 'needs_manager' : 'needs_director',
+          // The order records the snapshot whose limits routed it.
+          configVersionId: context.configVersionId,
+          version: locked.version + 1,
+          updatedAt: at,
+        },
+        tx,
+      );
+      await this.orders.insertApproval(
+        { id: uuidv7(at.getTime()), orderId: row.id, orderVersion: row.version, requestedLevel: level, requestedByAccountId: user.accountId, requestedAt: at },
+        tx,
+      );
+      await this.audit.record(
+        { action: AUDIT_ACTIONS.orderApprovalRequested, actorAccountId: user.accountId, detail: { ...this.auditDetail(row, 0), requestedLevel: level } },
+        tx,
+      );
+      return row;
+    });
+    return this.detailOf(updated);
   }
 
   /* ---------- helpers ---------- */
@@ -481,11 +564,37 @@ export class OrdersService {
    * above the actor's authority as the level that must approve. Nothing is ever auto-approved: the approval
    * workflow and the absolute ceiling / substitute approver (R36) are not decided, so no state here means "approved".
    */
-  private discountAuthorityOf(user: CurrentUser, draft: ValidDraft, configuration: InstallationConfiguration): DiscountAuthorityStatus {
-    const routing = evaluateOrderDiscountAuthority(draft.draft.items, user.role, configuration.sales.discountAuthority);
-    if (routing.decision === 'within_authority') return 'within_authority';
-    if (routing.decision === 'needs_approval') return routing.level === 'manager' ? 'needs_manager' : 'needs_director';
-    return 'blocked';
+  private discountAuthorityOf(
+    ownerRole: AccountRole,
+    items: readonly { readonly lineNo: number; readonly discountPercent: string; readonly priceState: 'priced' | 'zero' | 'none' }[],
+    configuration: InstallationConfiguration,
+  ): DiscountAuthorityStatus {
+    return recomputeOrderAuthority(items, ownerRole, configuration.sales.discountAuthority).status;
+  }
+
+  /**
+   * Role of the draft's OWNER (the account that created it), the only role the discount status is computed with
+   * (DISC-5). An owner that no longer exists is outside the chain: its drafts are blocked, never widened.
+   */
+  private async ownerRoleOf(order: OrderRow, executor?: Executor): Promise<AccountRole> {
+    return (await this.orders.roleOfAccount(order.createdByAccountId, executor)) ?? 'technical';
+  }
+
+  /**
+   * Authority of a STORED order, recomputed from its stored lines under the CURRENT limits and the owner's role
+   * (Q12). Never reads the stored `discount_authority`. Reused at submission and by the ERP submission slice.
+   */
+  async recomputeAuthority(order: OrderRow, configuration: InstallationConfiguration, executor?: Executor): Promise<RecomputedOrderAuthority> {
+    const [items, ownerRole] = await Promise.all([this.orders.itemsOf(order.id, executor), this.ownerRoleOf(order, executor)]);
+    return recomputeOrderAuthority(
+      items.map((item) => ({
+        lineNo: item.lineNo,
+        discountPercent: normalizeDecimalString(item.discountPercent),
+        priceState: item.priceState as 'priced' | 'zero' | 'none',
+      })),
+      ownerRole,
+      configuration.sales.discountAuthority,
+    );
   }
 
   private eligibilityOf(state: CustomerStateRow): { active: boolean; blocked: boolean; sellerCode: number | null } {
@@ -493,9 +602,10 @@ export class OrdersService {
   }
 
   private async detailOf(order: OrderRow): Promise<OrderDetail> {
-    const [items, states] = await Promise.all([
+    const [items, states, approval] = await Promise.all([
       this.orders.itemsOf(order.id),
       this.mirror.customerStates([order.customerCode]),
+      this.orders.latestApprovalOf(order.id),
     ]);
     // Same media source as the catalog; best effort (a failure degrades to no photos, the order still works).
     const images = await this.images.metadataFor([...new Set(items.map((item) => item.productCode))]);
@@ -506,7 +616,7 @@ export class OrdersService {
       customerBlockedRaw: state?.blockedRaw ?? null,
       customerSellerCode: state?.sellerCode ?? null,
       customerLive: state?.live ?? null,
-    }, images);
+    }, images, toOrderApproval(approval));
   }
 
   /** Identifiers and counts only: no notes, no free text. */

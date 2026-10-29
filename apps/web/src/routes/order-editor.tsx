@@ -73,6 +73,12 @@ type OrderDetail = ApiSchema<"OrderDetail">;
 export const SUBMIT_DISABLED_MESSAGE =
   "O envio de pedidos ao ERP ainda não está habilitado nesta instalação. O rascunho continua salvo e nada foi enviado.";
 
+/** ORD-1: editable as draft and as rejected-by-approver; editing an order awaiting approval returns it to draft. */
+const EDITABLE_STATUSES: ReadonlySet<OrderDetail["status"]> = new Set(["draft", "approval_rejected", "awaiting_approval"]);
+export const SUBMIT_BLOCKED_MESSAGE =
+  "O desconto ultrapassa o limite máximo da diretoria. O rascunho continua salvo, mas não pode ser enviado até reduzir o desconto.";
+export const SUBMIT_AWAITING_MESSAGE = "Pedido enviado para aprovação do desconto. Você será avisado ao abrir o pedido quando houver decisão.";
+
 const PRODUCT_SEARCH_ID = "order-product-search";
 const CART_VIEW_ID = "order-view-cart";
 
@@ -190,7 +196,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
   const config = useQuery(orderEntryConfigurationQueryOptions(api));
   const loadedDataset = useLoadedDataset();
 
-  const readOnly = order !== null && order.status !== "draft";
+  const readOnly = order !== null && !EDITABLE_STATUSES.has(order.status);
   const lineCounter = useRef(0);
   const nextKey = () => `line-${(lineCounter.current += 1)}`;
 
@@ -205,6 +211,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
     order ? order.items.map((item, index) => lineFromOrderItem(item, `saved-${index}`)) : [],
   );
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
+  const [submitNotice, setSubmitNotice] = useState<string | null>(null);
   const [discarding, setDiscarding] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
   /** A different customer picked while items exist: waits for the seller's confirmation (prices depend on the customer). */
@@ -326,12 +333,15 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
       if (!order) throw new Error("O rascunho precisa estar salvo antes do envio.");
       return submitOrder(api, order.id);
     },
-    onSuccess: () => {
-      // Never expected while submission is disabled; refresh instead of claiming a result.
+    onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.ordersAll });
+      setSubmitMessage(null);
+      setSubmitNotice(result?.status === "awaiting_approval" ? SUBMIT_AWAITING_MESSAGE : null);
     },
     onError: (error) => {
+      setSubmitNotice(null);
       if (error instanceof ApiRequestError && error.code === ERP_SUBMISSION_DISABLED) setSubmitMessage(SUBMIT_DISABLED_MESSAGE);
+      else if (error instanceof ApiRequestError && error.code === "discount_blocked") setSubmitMessage(SUBMIT_BLOCKED_MESSAGE);
       else setSubmitMessage(null);
     },
   });
@@ -487,7 +497,8 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
 
   const negotiationTypes = config.data?.sales.negotiationTypes ?? [];
   const submitFailure =
-    submit.isError && !(submit.error instanceof ApiRequestError && submit.error.code === ERP_SUBMISSION_DISABLED)
+    submit.isError &&
+    !(submit.error instanceof ApiRequestError && (submit.error.code === ERP_SUBMISSION_DISABLED || submit.error.code === "discount_blocked"))
       ? describeApiError(submit.error, "Não foi possível enviar o pedido")
       : null;
   const status = order ? orderStatusLabels[order.status] : null;
@@ -519,6 +530,22 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
         </Alert>
       ) : null}
       {save.isError ? <FailureAlert failure={describeSaveFailure(save.error)} onReload={order ? reload : undefined} /> : null}
+      {order?.approval && (order.status === "approval_rejected" || order.status === "approved" || order.status === "awaiting_approval") ? (
+        <Alert
+          tone={order.status === "approval_rejected" ? "danger" : order.status === "approved" ? "info" : "warning"}
+          title={order.status === "awaiting_approval" ? "Aguardando aprovação de desconto" : order.status === "approved" ? "Desconto aprovado" : "Desconto reprovado"}
+        >
+          {order.status === "awaiting_approval"
+            ? `Nível de aprovação: ${order.approval.requestedLevel === "director" ? "Diretoria" : "Gerente"}.`
+            : `Decidido por ${order.approval.decidedByName ?? "aprovador"}.`}
+          {order.approval.comment ? <span className="mt-1 block">Comentário: {order.approval.comment}</span> : null}
+        </Alert>
+      ) : null}
+      {submitNotice ? (
+        <Alert tone="info" title="Enviado para aprovação" onDismiss={() => setSubmitNotice(null)}>
+          {submitNotice}
+        </Alert>
+      ) : null}
       {submitMessage ? (
         <Alert tone="warning" title="Envio ao ERP indisponível" onDismiss={() => setSubmitMessage(null)}>
           {submitMessage}
@@ -905,7 +932,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
           >
             Salvar como recorrente
           </Button>
-          {order && order.status === "draft" ? (
+          {order && (order.status === "draft" || order.status === "approval_rejected" || order.status === "awaiting_approval") ? (
             <Button
               className="flex-1 sm:flex-none"
               type="button"

@@ -298,6 +298,7 @@ describe('order requests', () => {
       negotiationTypeCode: null,
       notes: null,
       discountAuthority: 'within_authority',
+      approval: null,
       items: [
         {
           lineNo: 1,
@@ -378,7 +379,7 @@ describe('error envelope', () => {
       ErpSubmissionDisabledErrorSchema.safeParse({ code: 'conflict', message: 'x' }).success,
     ).toBe(false);
     expect(routes.submitOrder.responses[409].schema).toBe(ErpSubmissionDisabledErrorSchema);
-    expect(Object.keys(routes.submitOrder.responses)).toEqual(['409']);
+    expect(Object.keys(routes.submitOrder.responses)).toEqual(['200', '409']);
   });
 });
 

@@ -38,6 +38,7 @@ const EXPECTED: Record<string, { api: Priv[]; worker: Priv[] }> = {
   sync_state: { api: S, worker: SIU },
   sales_order: { api: SIU, worker: [] },
   sales_order_item: { api: SIUD, worker: [] },
+  sales_order_approval: { api: SIU, worker: [] },
   customer_order_template: { api: SIU, worker: [] },
   customer_order_template_item: { api: SIUD, worker: [] },
   integration_outbox: { api: [], worker: [] },

@@ -4,6 +4,9 @@ import {
   PROVISIONAL_DISCOUNT_AUTHORITY,
   evaluateItemDiscountAuthority,
   resolveDiscountAuthority,
+  canRoleApproveLevel,
+  approvableLevelsOf,
+  recomputeOrderAuthority,
   evaluateOrderDiscountAuthority,
   validateConfigurationConsistency,
   type DiscountAuthorityConfiguration,
@@ -160,5 +163,40 @@ describe('configuration consistency for discount authority', () => {
     expect(codes({ seller: '10', manager: '5', director: '20' })).toContain('discount_authority_limits_not_ascending');
     expect(codes({ seller: 'x', manager: '5', director: '20' })).toContain('discount_authority_limit_invalid');
     expect(codes({ seller: '5', manager: '10', director: '100' })).toContain('discount_authority_limit_invalid');
+  });
+});
+
+describe('who may approve a level (DISC-4, Q6)', () => {
+  it('the manager approves the manager level; the admin approves the director level ("Diretoria"); nobody else', () => {
+    expect(canRoleApproveLevel('manager', 'manager')).toBe(true);
+    expect(canRoleApproveLevel('manager', 'director')).toBe(false);
+    expect(canRoleApproveLevel('admin', 'director')).toBe(true);
+    expect(canRoleApproveLevel('admin', 'manager')).toBe(false);
+    for (const level of ['manager', 'director'] as const) {
+      expect(canRoleApproveLevel('seller', level)).toBe(false);
+      expect(canRoleApproveLevel('technical', level)).toBe(false);
+    }
+  });
+
+  it('lists the levels a role may decide', () => {
+    expect(approvableLevelsOf('manager')).toEqual(['manager']);
+    expect(approvableLevelsOf('admin')).toEqual(['director']);
+    expect(approvableLevelsOf('seller')).toEqual([]);
+    expect(approvableLevelsOf('technical')).toEqual([]);
+  });
+});
+
+describe('recomputeOrderAuthority: the draft owner decides, not who saved (DISC-5, Q12)', () => {
+  const lines = [{ lineNo: 1, discountPercent: '8', priceState: 'priced' as const }];
+
+  it('uses the owner role: 8% is manager-level for a seller owner, within authority for a manager owner', () => {
+    expect(recomputeOrderAuthority(lines, 'seller', LIMITS)).toEqual({ status: 'needs_manager', level: 'manager' });
+    expect(recomputeOrderAuthority([{ ...lines[0]!, discountPercent: '12' }], 'manager', LIMITS)).toEqual({ status: 'needs_director', level: 'director' });
+    expect(recomputeOrderAuthority([{ ...lines[0]!, discountPercent: '10' }], 'manager', LIMITS)).toEqual({ status: 'within_authority', level: null });
+  });
+
+  it('blocks above the ceiling and for an owner outside the chain, with the reason', () => {
+    expect(recomputeOrderAuthority([{ ...lines[0]!, discountPercent: '20.01' }], 'seller', LIMITS)).toMatchObject({ status: 'blocked' });
+    expect(recomputeOrderAuthority(lines, 'admin', LIMITS)).toMatchObject({ status: 'blocked' });
   });
 });

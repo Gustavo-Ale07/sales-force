@@ -40,6 +40,9 @@ export const AUDIT_ACTIONS = {
   orderRepeatedFromLast: 'order.repeated_from_last',
   /** An ERP submission was requested; it is refused while submission is disabled (SNK-4/SNK-6). */
   orderSubmitAttempted: 'order.submit_attempted',
+  orderApprovalRequested: 'order.approval_requested',
+  orderApprovalInvalidated: 'order.approval_invalidated',
+  orderSubmitDiscountBlocked: 'order.submit_discount_blocked',
   /** A draft was refused on submission because its customer is no longer eligible (ids and reason only). */
   orderSubmitCustomerIneligible: 'order.submit_customer_ineligible',
 } as const;

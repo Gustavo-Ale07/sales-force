@@ -404,12 +404,13 @@ export const routes = {
     method: 'post',
     path: '/orders/{id}/submit',
     tags: ['orders'],
-    summary: 'Submit an order to the ERP (disabled)',
+    summary: 'Submit an order: sends it for discount approval, or (disabled) to the ERP',
     description:
-      'Always 409 erp_submission_disabled until the ERP write-safety gates close (SNK-4/SNK-5).',
+      'The server recomputes the discount authority from the stored lines with the role of the draft OWNER (DISC-5, Q12). Above that authority: 200 with the order in awaiting_approval (idempotent for an order already waiting). Above the director ceiling: 409 discount_blocked. Within authority: 409 erp_submission_disabled until the ERP write-safety gates close (SNK-4/SNK-5).',
     auth: 'session',
     request: { params: OrderPathSchema },
     responses: {
+      200: { description: 'Pedido enviado para aprovação de desconto', schema: OrderDetailSchema },
       409: {
         description: 'Envio ao ERP aguardando conclusão da integração segura',
         schema: ErpSubmissionDisabledErrorSchema,

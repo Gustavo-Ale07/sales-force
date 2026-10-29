@@ -92,6 +92,13 @@
       "when": 1793204404868,
       "tag": "0012_sales_order_discount_authority",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793281290966,
+      "tag": "0013_sales_order_approval",
+      "breakpoints": true
     }
   ]
 }

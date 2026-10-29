@@ -27,6 +27,7 @@ const ALL_MIGRATIONS = [
   '0010_product_media_thumbnail',
   '0011_directory_user_mirror',
   '0012_sales_order_discount_authority',
+  '0013_sales_order_approval',
 ];
 const N = ALL_MIGRATIONS.length;
 
@@ -81,6 +82,7 @@ describe('migrations', () => {
         'integration_outbox',
         'product_media',
         'sales_order',
+        'sales_order_approval',
         'sales_order_item',
         'schema_migration',
         'session',
@@ -109,10 +111,10 @@ describe('migrations', () => {
     // Previous release: journal without 0004.
     const journalPath = path.join(dir, 'meta', '_journal.json');
     const journal = JSON.parse(await readFile(journalPath, 'utf8')) as { entries: { tag: string }[] };
-    journal.entries = journal.entries.filter((e) => e.tag !== '0004_sales_order_item_discount_percent' && e.tag !== '0005_sales_order_erp_binding' && e.tag !== '0006_account_seller_link_seller_code_check' && e.tag !== '0007_account_role_technical' && e.tag !== '0008_account_external_user_id' && e.tag !== '0009_product_media' && e.tag !== '0010_product_media_thumbnail' && e.tag !== '0011_directory_user_mirror' && e.tag !== '0012_sales_order_discount_authority');
+    journal.entries = journal.entries.filter((e) => e.tag !== '0004_sales_order_item_discount_percent' && e.tag !== '0005_sales_order_erp_binding' && e.tag !== '0006_account_seller_link_seller_code_check' && e.tag !== '0007_account_role_technical' && e.tag !== '0008_account_external_user_id' && e.tag !== '0009_product_media' && e.tag !== '0010_product_media_thumbnail' && e.tag !== '0011_directory_user_mirror' && e.tag !== '0012_sales_order_discount_authority' && e.tag !== '0013_sales_order_approval');
     await writeFile(journalPath, JSON.stringify(journal));
     const prev = await runMigrations(url, { ...quiet, migrationsDir: dir });
-    expect(prev.applied).toEqual(ALL_MIGRATIONS.slice(0, -9));
+    expect(prev.applied).toEqual(ALL_MIGRATIONS.slice(0, -10));
     expect(await query(url, `SELECT to_regclass('public.customer_order_template') AS t`)).toEqual([{ t: 'customer_order_template' }]);
 
     // Existing rows must survive untouched.
@@ -126,8 +128,8 @@ describe('migrations', () => {
 
     // Deploy the new release: only the new migration runs.
     const next = await runMigrations(url, quiet);
-    expect(next.applied).toEqual(ALL_MIGRATIONS.slice(-9));
-    expect(next.alreadyApplied).toBe(N - 9);
+    expect(next.applied).toEqual(ALL_MIGRATIONS.slice(-10));
+    expect(next.alreadyApplied).toBe(N - 10);
     expect(await query(url, `SELECT id FROM sales_order`)).toEqual([{ id: ord }]);
     // The existing line is kept as it was, with no discount.
     expect(await query(url, `SELECT quantity::text AS q, estimated_line_total::text AS t, discount_percent::text AS d FROM sales_order_item`)).toEqual([{ q: '2.0000', t: '10.00', d: '0.00' }]);
@@ -150,7 +152,7 @@ describe('migrations', () => {
     await cp(defaultMigrationsDir, dir, { recursive: true });
     const journalPath = path.join(dir, 'meta', '_journal.json');
     const journal = JSON.parse(await readFile(journalPath, 'utf8')) as { entries: { tag: string }[] };
-    journal.entries = journal.entries.filter((e) => e.tag !== '0005_sales_order_erp_binding' && e.tag !== '0006_account_seller_link_seller_code_check' && e.tag !== '0007_account_role_technical' && e.tag !== '0008_account_external_user_id' && e.tag !== '0009_product_media' && e.tag !== '0010_product_media_thumbnail' && e.tag !== '0011_directory_user_mirror' && e.tag !== '0012_sales_order_discount_authority');
+    journal.entries = journal.entries.filter((e) => e.tag !== '0005_sales_order_erp_binding' && e.tag !== '0006_account_seller_link_seller_code_check' && e.tag !== '0007_account_role_technical' && e.tag !== '0008_account_external_user_id' && e.tag !== '0009_product_media' && e.tag !== '0010_product_media_thumbnail' && e.tag !== '0011_directory_user_mirror' && e.tag !== '0012_sales_order_discount_authority' && e.tag !== '0013_sales_order_approval');
     await writeFile(journalPath, JSON.stringify(journal));
     await runMigrations(url, { ...quiet, migrationsDir: dir });
 
@@ -168,7 +170,7 @@ describe('migrations', () => {
     await query(url, `INSERT INTO sales_order (id, customer_code, created_by_account_id, client_request_id, config_version_id, status) VALUES ($1, 2, $2, $3, $4, 'cancelled')`, ['018f0000-0000-7000-8000-000000000006', acc, '018f0000-0000-7000-8000-000000000007', cfg]);
 
     const next = await runMigrations(url, quiet);
-    expect(next.applied).toEqual(['0005_sales_order_erp_binding', '0006_account_seller_link_seller_code_check', '0007_account_role_technical', '0008_account_external_user_id', '0009_product_media', '0010_product_media_thumbnail', '0011_directory_user_mirror', '0012_sales_order_discount_authority']);
+    expect(next.applied).toEqual(['0005_sales_order_erp_binding', '0006_account_seller_link_seller_code_check', '0007_account_role_technical', '0008_account_external_user_id', '0009_product_media', '0010_product_media_thumbnail', '0011_directory_user_mirror', '0012_sales_order_discount_authority', '0013_sales_order_approval']);
     // Backfill: every pre-existing order is legacy and unbound; nothing else changed.
     expect(await query(url, `SELECT dataset_origin, erp_environment, status FROM sales_order ORDER BY customer_code`)).toEqual([
       { dataset_origin: 'legacy_dev', erp_environment: null, status: 'draft' },
@@ -206,7 +208,7 @@ describe('migrations', () => {
     await cp(defaultMigrationsDir, dir, { recursive: true });
     const journalPath = path.join(dir, 'meta', '_journal.json');
     const journal = JSON.parse(await readFile(journalPath, 'utf8')) as { entries: { tag: string }[] };
-    journal.entries = journal.entries.filter((e) => e.tag !== '0006_account_seller_link_seller_code_check' && e.tag !== '0007_account_role_technical' && e.tag !== '0008_account_external_user_id' && e.tag !== '0009_product_media' && e.tag !== '0010_product_media_thumbnail' && e.tag !== '0011_directory_user_mirror' && e.tag !== '0012_sales_order_discount_authority');
+    journal.entries = journal.entries.filter((e) => e.tag !== '0006_account_seller_link_seller_code_check' && e.tag !== '0007_account_role_technical' && e.tag !== '0008_account_external_user_id' && e.tag !== '0009_product_media' && e.tag !== '0010_product_media_thumbnail' && e.tag !== '0011_directory_user_mirror' && e.tag !== '0012_sales_order_discount_authority' && e.tag !== '0013_sales_order_approval');
     await writeFile(journalPath, JSON.stringify(journal));
     await runMigrations(url, { ...quiet, migrationsDir: dir });
 
@@ -219,7 +221,7 @@ describe('migrations', () => {
     await query(url, `INSERT INTO account_seller_link (account_id, seller_code, config_version_id) VALUES ($1, 0, $2)`, [acc, cfg]);
 
     const next = await runMigrations(url, quiet);
-    expect(next.applied).toEqual(['0006_account_seller_link_seller_code_check', '0007_account_role_technical', '0008_account_external_user_id', '0009_product_media', '0010_product_media_thumbnail', '0011_directory_user_mirror', '0012_sales_order_discount_authority']);
+    expect(next.applied).toEqual(['0006_account_seller_link_seller_code_check', '0007_account_role_technical', '0008_account_external_user_id', '0009_product_media', '0010_product_media_thumbnail', '0011_directory_user_mirror', '0012_sales_order_discount_authority', '0013_sales_order_approval']);
     expect(await query(url, `SELECT seller_code FROM account_seller_link`)).toEqual([{ seller_code: 0 }]);
     await expect(query(url, `INSERT INTO account_seller_link (account_id, seller_code, config_version_id) VALUES ($1, 0, $2)`, [acc2, cfg])).rejects.toThrow(/account_seller_link_seller_code_chk/);
     await expect(query(url, `INSERT INTO account_seller_link (account_id, seller_code, config_version_id) VALUES ($1, -2, $2)`, [acc2, cfg])).rejects.toThrow(/account_seller_link_seller_code_chk/);
@@ -245,7 +247,7 @@ describe('migrations', () => {
     await cp(defaultMigrationsDir, dir, { recursive: true });
     const journalPath = path.join(dir, 'meta', '_journal.json');
     const journal = JSON.parse(await readFile(journalPath, 'utf8')) as { entries: { tag: string }[] };
-    journal.entries = journal.entries.filter((e) => e.tag !== '0007_account_role_technical' && e.tag !== '0008_account_external_user_id' && e.tag !== '0009_product_media' && e.tag !== '0010_product_media_thumbnail' && e.tag !== '0011_directory_user_mirror' && e.tag !== '0012_sales_order_discount_authority');
+    journal.entries = journal.entries.filter((e) => e.tag !== '0007_account_role_technical' && e.tag !== '0008_account_external_user_id' && e.tag !== '0009_product_media' && e.tag !== '0010_product_media_thumbnail' && e.tag !== '0011_directory_user_mirror' && e.tag !== '0012_sales_order_discount_authority' && e.tag !== '0013_sales_order_approval');
     await writeFile(journalPath, JSON.stringify(journal));
     await runMigrations(url, { ...quiet, migrationsDir: dir });
 
@@ -261,7 +263,7 @@ describe('migrations', () => {
     await expect(query(url, `INSERT INTO account (id, email, display_name, password_hash, role) VALUES ($1, 't@example.test', 'T', 'x', 'technical')`, [id(9)])).rejects.toThrow(/account_role_chk/);
 
     const next = await runMigrations(url, quiet);
-    expect(next.applied).toEqual(['0007_account_role_technical', '0008_account_external_user_id', '0009_product_media', '0010_product_media_thumbnail', '0011_directory_user_mirror', '0012_sales_order_discount_authority']);
+    expect(next.applied).toEqual(['0007_account_role_technical', '0008_account_external_user_id', '0009_product_media', '0010_product_media_thumbnail', '0011_directory_user_mirror', '0012_sales_order_discount_authority', '0013_sales_order_approval']);
     expect(await query(url, `SELECT role FROM account ORDER BY role`)).toEqual([{ role: 'admin' }, { role: 'manager' }, { role: 'seller' }]);
     // The swapped constraint is validated and still rejects unknown roles.
     expect(await query(url, `SELECT convalidated FROM pg_constraint WHERE conname = 'account_role_chk'`)).toEqual([{ convalidated: true }]);
@@ -287,7 +289,7 @@ describe('migrations', () => {
     await cp(defaultMigrationsDir, dir, { recursive: true });
     const journalPath = path.join(dir, 'meta', '_journal.json');
     const journal = JSON.parse(await readFile(journalPath, 'utf8')) as { entries: { tag: string }[] };
-    journal.entries = journal.entries.filter((e) => e.tag !== '0012_sales_order_discount_authority');
+    journal.entries = journal.entries.filter((e) => e.tag !== '0012_sales_order_discount_authority' && e.tag !== '0013_sales_order_approval');
     await writeFile(journalPath, JSON.stringify(journal));
     await runMigrations(url, { ...quiet, migrationsDir: dir });
 
@@ -299,13 +301,55 @@ describe('migrations', () => {
     await query(url, `INSERT INTO sales_order (id, customer_code, created_by_account_id, client_request_id, config_version_id) VALUES ($1, 1, $2, $3, $4)`, [ord, acc, '018f0000-0000-7000-8000-000000000304', cfg]);
 
     const next = await runMigrations(url, quiet);
-    expect(next.applied).toEqual(['0012_sales_order_discount_authority']);
+    expect(next.applied).toEqual(['0012_sales_order_discount_authority', '0013_sales_order_approval']);
     expect(await query(url, `SELECT discount_authority FROM sales_order`)).toEqual([{ discount_authority: 'not_evaluated' }]);
     await expect(query(url, `UPDATE sales_order SET discount_authority = 'approved'`)).rejects.toThrow(/sales_order_discount_authority_chk/);
     await query(url, `UPDATE sales_order SET discount_authority = 'needs_director'`);
 
     const file = await readFile(path.join(defaultMigrationsDir, '0012_sales_order_discount_authority.sql'), 'utf8');
     expect(file).not.toMatch(/DROP|TRUNCATE|DELETE|RENAME|ALTER\s+COLUMN|UPDATE/i);
+  });
+
+  it('0013 is expand-only: existing orders keep their status, the new states and the approval table are accepted, the rules hold at the database', async () => {
+    const url = await pgc.createDatabase();
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'sf-migrations-'));
+    await cp(defaultMigrationsDir, dir, { recursive: true });
+    const journalPath = path.join(dir, 'meta', '_journal.json');
+    const journal = JSON.parse(await readFile(journalPath, 'utf8')) as { entries: { tag: string }[] };
+    journal.entries = journal.entries.filter((e) => e.tag !== '0013_sales_order_approval');
+    await writeFile(journalPath, JSON.stringify(journal));
+    await runMigrations(url, { ...quiet, migrationsDir: dir });
+
+    const acc = '018f0000-0000-7000-8000-000000000401';
+    const cfg = '018f0000-0000-7000-8000-000000000402';
+    const ord = '018f0000-0000-7000-8000-000000000403';
+    await query(url, `INSERT INTO account (id, email, display_name, password_hash, role) VALUES ($1, 'b@example.test', 'B', 'x', 'manager')`, [acc]);
+    await query(url, `INSERT INTO installation_configuration_version (id, version_label, source_kind, payload, content_hash, synced_at) VALUES ($1, 'v', 'demo', '{}', 'h', now())`, [cfg]);
+    await query(url, `INSERT INTO sales_order (id, customer_code, created_by_account_id, client_request_id, config_version_id) VALUES ($1, 1, $2, $3, $4)`, [ord, acc, '018f0000-0000-7000-8000-000000000404', cfg]);
+
+    const next = await runMigrations(url, quiet);
+    expect(next.applied).toEqual(['0013_sales_order_approval']);
+    expect(await query(url, `SELECT status FROM sales_order`)).toEqual([{ status: 'draft' }]);
+    for (const status of ['awaiting_approval', 'approved', 'approval_rejected', 'draft']) {
+      await query(url, `UPDATE sales_order SET status = $1`, [status]);
+    }
+    await expect(query(url, `UPDATE sales_order SET status = 'pending_approval'`)).rejects.toThrow(/sales_order_status_chk/);
+    // The ERP gate is untouched: an approval state does not need a Sankhya binding, an ERP state still does.
+    await expect(query(url, `UPDATE sales_order SET status = 'queued'`)).rejects.toThrow(/sales_order_erp_eligibility_chk/);
+
+    const insert = (id: string, decision: string, extra: string, args: unknown[] = []) =>
+      query(url, `INSERT INTO sales_order_approval (id, order_id, order_version, requested_level, requested_by_account_id, requested_at, decision ${extra.split('|')[0]}) VALUES ($1, $2, 1, 'manager', $3, now(), $4 ${extra.split('|')[1] ?? ''})`, [id, ord, acc, decision, ...args]);
+    await insert('018f0000-0000-7000-8000-000000000411', 'pending', '|');
+    // At most one pending request per order.
+    await expect(insert('018f0000-0000-7000-8000-000000000412', 'pending', '|')).rejects.toThrow(/sales_order_approval_pending_uq/);
+    // A rejection needs a comment; a decided row needs who and when; a pending one has neither.
+    await expect(insert('018f0000-0000-7000-8000-000000000413', 'rejected', ', decided_by_account_id, decided_at|, $5, now()', [acc])).rejects.toThrow(/sales_order_approval_reject_comment_chk/);
+    await expect(insert('018f0000-0000-7000-8000-000000000414', 'approved', '|')).rejects.toThrow(/sales_order_approval_shape_chk/);
+    await expect(insert('018f0000-0000-7000-8000-000000000415', 'approved', ', decided_by_account_id, decided_at|, $5, now()', [acc])).resolves.toBeDefined();
+    await expect(insert('018f0000-0000-7000-8000-000000000416', 'maybe', '|')).rejects.toThrow(/sales_order_approval_decision_chk/);
+
+    const file = await readFile(path.join(defaultMigrationsDir, '0013_sales_order_approval.sql'), 'utf8');
+    expect(file).not.toMatch(/DROP\s+(TABLE|COLUMN)|TRUNCATE|DELETE\s+FROM|RENAME|ALTER\s+COLUMN/i);
   });
 
   it('two concurrent runners do not corrupt the database (advisory lock)', async () => {
@@ -398,7 +442,7 @@ describe('migrations', () => {
       await runMigrations(url, quiet);
       expect(await readiness(handle.pool)).toEqual({
         appliedCount: N,
-        lastId: '0012_sales_order_discount_authority',
+        lastId: '0013_sales_order_approval',
         expectedCount: N,
         upToDate: true,
       });

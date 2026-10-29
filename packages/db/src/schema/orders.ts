@@ -19,6 +19,10 @@ import { installationConfigurationVersion } from './platform.js';
 
 export const orderStatuses = [
   'draft',
+  // Discount approval (ORD-2); `rejected` stays the ERP rejection.
+  'awaiting_approval',
+  'approved',
+  'approval_rejected',
   'cancelled',
   'queued',
   'sent',
@@ -162,5 +166,59 @@ export const salesOrderItem = pgTable(
     uniqueIndex('sales_order_item_order_line_uq').on(t.orderId, t.lineNo),
     // Serves: "orders containing product X" lookups.
     index('sales_order_item_product_code_idx').on(t.productCode),
+  ],
+);
+
+/** Approval levels a request can wait for (DISC-3: the seller level never needs an approver). */
+export const approvalLevels = ['manager', 'director'] as const;
+export type ApprovalLevel = (typeof approvalLevels)[number];
+
+/** `invalidated` = the order was edited or discarded while the request was pending (ORD-1). */
+export const approvalDecisions = ['pending', 'approved', 'rejected', 'invalidated'] as const;
+export type ApprovalDecision = (typeof approvalDecisions)[number];
+
+/**
+ * One discount approval request per submission of an order above its owner authority (DISC-2..6). Append-only history:
+ * a decided or invalidated row is never reopened, a new submission creates a new row. At most one is pending per order.
+ */
+export const salesOrderApproval = pgTable(
+  'sales_order_approval',
+  {
+    id: uuid('id').primaryKey(),
+    orderId: uuid('order_id')
+      .notNull()
+      .references(() => salesOrder.id, { onDelete: 'cascade' }),
+    /** Version of the order the request was made for. */
+    orderVersion: integer('order_version').notNull(),
+    requestedLevel: text('requested_level').notNull(),
+    requestedByAccountId: uuid('requested_by_account_id')
+      .notNull()
+      .references(() => account.id),
+    requestedAt: timestamp('requested_at', { withTimezone: true }).notNull(),
+    decision: text('decision').notNull().default('pending'),
+    /** Who approved or rejected; NULL while pending and when invalidated. */
+    decidedByAccountId: uuid('decided_by_account_id').references(() => account.id),
+    /** When it was decided or invalidated; NULL while pending. */
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    /** Mandatory on rejection, optional on approval. */
+    comment: text('comment'),
+  },
+  (t) => [
+    check('sales_order_approval_level_chk', sql`${t.requestedLevel} in (${inList(approvalLevels)})`),
+    check('sales_order_approval_decision_chk', sql`${t.decision} in (${inList(approvalDecisions)})`),
+    check(
+      'sales_order_approval_shape_chk',
+      sql`(${t.decision} = 'pending' and ${t.decidedAt} is null and ${t.decidedByAccountId} is null)
+        or (${t.decision} in ('approved', 'rejected') and ${t.decidedAt} is not null and ${t.decidedByAccountId} is not null)
+        or (${t.decision} = 'invalidated' and ${t.decidedAt} is not null and ${t.decidedByAccountId} is null)`,
+    ),
+    check('sales_order_approval_reject_comment_chk', sql`${t.decision} <> 'rejected' or coalesce(length(btrim(${t.comment})), 0) > 0`),
+    check('sales_order_approval_comment_len_chk', sql`${t.comment} is null or length(${t.comment}) <= 500`),
+    // Serves: the pending request of an order, and guarantees there is at most one.
+    uniqueIndex('sales_order_approval_pending_uq').on(t.orderId).where(sql`${t.decision} = 'pending'`),
+    // Serves: history of an order, newest first.
+    index('sales_order_approval_order_idx').on(t.orderId, t.requestedAt.desc()),
+    // Serves: the approval queue of a level (W-20), oldest request first.
+    index('sales_order_approval_queue_idx').on(t.requestedLevel, t.decision, t.requestedAt),
   ],
 );

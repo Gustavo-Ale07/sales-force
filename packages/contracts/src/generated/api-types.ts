@@ -383,8 +383,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Submit an order to the ERP (disabled)
-         * @description Always 409 erp_submission_disabled until the ERP write-safety gates close (SNK-4/SNK-5).
+         * Submit an order: sends it for discount approval, or (disabled) to the ERP
+         * @description The server recomputes the discount authority from the stored lines with the role of the draft OWNER (DISC-5, Q12). Above that authority: 200 with the order in awaiting_approval (idempotent for an order already waiting). Above the director ceiling: 409 discount_blocked. Within authority: 409 erp_submission_disabled until the ERP write-safety gates close (SNK-4/SNK-5).
          */
         post: operations["submitOrder"];
         delete?: never;
@@ -516,6 +516,8 @@ export interface components {
             message: string;
             details?: components["schemas"]["ErrorDetails"];
         };
+        /** @enum {string} */
+        ApprovalLevel: "manager" | "director";
         /** @enum {string} */
         AuthMode: "dev" | "local" | "external";
         AuthenticatedSession: {
@@ -695,7 +697,7 @@ export interface components {
             details?: components["schemas"]["ErrorDetails"];
         };
         /** @enum {string} */
-        ErrorCode: "validation_failed" | "unauthenticated" | "invalid_credentials" | "access_not_configured" | "forbidden" | "not_found" | "conflict" | "version_conflict" | "idempotency_conflict" | "order_not_editable" | "installation_not_enabled" | "erp_submission_disabled" | "dataset_mismatch" | "no_seller_scope" | "customer_without_seller" | "customer_ineligible" | "link_reconciliation_required" | "rate_limited" | "service_unavailable" | "internal_error";
+        ErrorCode: "validation_failed" | "unauthenticated" | "invalid_credentials" | "access_not_configured" | "forbidden" | "not_found" | "conflict" | "version_conflict" | "idempotency_conflict" | "order_not_editable" | "installation_not_enabled" | "erp_submission_disabled" | "discount_blocked" | "approval_not_pending" | "dataset_mismatch" | "no_seller_scope" | "customer_without_seller" | "customer_ineligible" | "link_reconciliation_required" | "rate_limited" | "service_unavailable" | "internal_error";
         ErrorDetails: {
             issues?: components["schemas"]["ErrorIssue"][];
         } & {
@@ -800,6 +802,15 @@ export interface components {
         };
         /** @enum {string} */
         NoPriceReason: "no_resolved_table" | "no_effective_version" | "no_price_row";
+        OrderApproval: {
+            requestedLevel: components["schemas"]["ApprovalLevel"];
+            requestedAt: components["schemas"]["IsoTimestamp"];
+            /** @enum {string} */
+            decision: "pending" | "approved" | "rejected" | "invalidated";
+            decidedAt: components["schemas"]["IsoTimestamp"] | null;
+            decidedByName: string | null;
+            comment: string | null;
+        };
         /** @enum {string} */
         OrderDateField: "createdAt" | "updatedAt";
         OrderDetail: {
@@ -821,6 +832,7 @@ export interface components {
             negotiationTypeCode: number | null;
             notes: string | null;
             discountAuthority: components["schemas"]["DiscountAuthorityStatus"];
+            approval: components["schemas"]["OrderApproval"] | null;
             items: components["schemas"]["OrderItemDetail"][];
             totals: components["schemas"]["OrderTotals"];
         };
@@ -904,7 +916,7 @@ export interface components {
         /** @enum {string} */
         OrderSort: "updatedAt" | "-updatedAt" | "draftNumber" | "-draftNumber";
         /** @enum {string} */
-        OrderStatus: "draft" | "cancelled" | "queued" | "sent" | "rejected" | "unknown";
+        OrderStatus: "draft" | "awaiting_approval" | "approved" | "approval_rejected" | "cancelled" | "queued" | "sent" | "rejected" | "unknown";
         OrderTemplate: {
             /** Format: uuid */
             id: string;
@@ -2319,6 +2331,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Pedido enviado para aprovação de desconto */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderDetail"];
+                };
+            };
             /** @description Requisição inválida (validation_failed) */
             400: {
                 headers: {

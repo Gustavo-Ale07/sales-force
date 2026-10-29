@@ -119,3 +119,46 @@ export function evaluateOrderDiscountAuthority(
   }
   return level === null ? { ...WITHIN, lines } : { decision: 'needs_approval', level, lines };
 }
+
+/** Approval levels (the seller level never needs an approver). */
+export type ApprovalLevel = Exclude<DiscountAuthorityLevel, 'seller'>;
+
+/**
+ * Who decides an approval request (DISC-4, Q6): a pool per level. The manager role decides the manager level; the
+ * admin decides the director level (labelled "Diretoria" in v1, there is no director role); nobody else, `technical`
+ * included. There is no time escalation and no named substitute.
+ */
+export function approvableLevelsOf(role: AccountRole): readonly ApprovalLevel[] {
+  if (role === 'manager') return ['manager'];
+  if (role === 'admin') return ['director'];
+  return [];
+}
+
+export function canRoleApproveLevel(role: AccountRole, level: ApprovalLevel): boolean {
+  return approvableLevelsOf(role).includes(level);
+}
+
+/** Authority of an order, as stored on it (`discount_authority`) plus the level that must approve. */
+export type RecomputedOrderAuthority =
+  | { readonly status: 'within_authority'; readonly level: null }
+  | { readonly status: 'needs_manager'; readonly level: 'manager' }
+  | { readonly status: 'needs_director'; readonly level: 'director' }
+  | { readonly status: 'blocked'; readonly level: null; readonly reason: DiscountAuthorityRefusal };
+
+/**
+ * The single place that turns stored lines into the order's authority (DISC-2, DISC-5, Q12). `ownerRole` is the role
+ * of the DRAFT OWNER, never of whoever saved the order. Pure and deterministic: used when a draft is saved, when it is
+ * submitted (recomputed from the stored lines, never trusted from the stored status) and by the ERP submission slice.
+ */
+export function recomputeOrderAuthority(
+  items: readonly Pick<OrderItem, 'lineNo' | 'discountPercent' | 'priceState'>[],
+  ownerRole: AccountRole,
+  config: DiscountAuthorityConfiguration | undefined,
+): RecomputedOrderAuthority {
+  const routing = evaluateOrderDiscountAuthority(items, ownerRole, config);
+  if (routing.decision === 'within_authority') return { status: 'within_authority', level: null };
+  if (routing.decision === 'needs_approval') {
+    return routing.level === 'manager' ? { status: 'needs_manager', level: 'manager' } : { status: 'needs_director', level: 'director' };
+  }
+  return { status: 'blocked', level: null, reason: routing.reason };
+}

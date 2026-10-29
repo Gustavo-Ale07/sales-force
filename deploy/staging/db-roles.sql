@@ -50,6 +50,7 @@
 --   product_media                         S           S I U D     worker product-photo job writes metadata (DELETE: orphan cleanup); API reads it to serve photos
 --   sales_order                           S I U       -              orders.repository (status moves are UPDATEs)
 --   sales_order_item                      S I U D     -              orders.repository (lines are replaced: DELETE + INSERT)
+--   sales_order_approval                  S I U       -              orders approvals (discount approval requests: INSERT on submit, UPDATE on decision or invalidation; never deleted)
 --   customer_order_template               S I U       -              templates.repository
 --   customer_order_template_item          S I U D     -              templates.repository (items replaced)
 --   integration_outbox                    -           -              no code reads or writes it yet. See UNDETERMINED 2
@@ -233,6 +234,7 @@ BEGIN
       ('sales_order_item',                   'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
       ('customer_order_template_item',       'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
       ('sales_order',                        'force_api',    'SELECT, INSERT, UPDATE'),
+      ('sales_order_approval',               'force_api',    'SELECT, INSERT, UPDATE'),
       ('customer_order_template',            'force_api',    'SELECT, INSERT, UPDATE'),
       ('audit_log',                          'force_api',    'INSERT'),
       ('installation_configuration_version', 'force_api',    'SELECT'),

@@ -52,7 +52,7 @@ export interface OrdersSearch {
   pageSize?: number;
 }
 
-export const ORDER_STATUSES = ["draft", "cancelled", "queued", "sent", "rejected", "unknown"] as const;
+export const ORDER_STATUSES = ["draft", "awaiting_approval", "approved", "approval_rejected", "cancelled", "queued", "sent", "rejected", "unknown"] as const;
 export const MAX_ORDER_PRODUCTS = 20;
 export const ORDER_DATE_FIELDS = ["createdAt", "updatedAt"] as const;
 export const ORDER_PRODUCT_MATCHES = ["any", "all"] as const;

@@ -17,6 +17,9 @@ import {
 
 /**
  * Only `draft` and `cancelled` are reachable today; the rest exist for the persistence layer and are
+ * Discount approval (DISC-2..6, ORD-1, ORD-2): `awaiting_approval` (submitted above the owner's authority), `approved`,
+ * `approval_rejected` (reprovado by the approver; editable, an edit returns it to `draft`). `rejected` stays the ERP rejection.
+ *
  * ERP-delivery states that no code path produces while ERP submission is disabled (SNK-4, SNK-6):
  * `queued` = awaiting ERP, `sent` = the ERP accepted it (synced with the ERP), `rejected`, `unknown`.
  * "Confirmed by the ERP" and "invoiced" have NO status here: nothing mirrors them yet, so they must
@@ -24,7 +27,7 @@ import {
  */
 export const OrderStatusSchema = named(
   'OrderStatus',
-  z.enum(['draft', 'cancelled', 'queued', 'sent', 'rejected', 'unknown']),
+  z.enum(['draft', 'awaiting_approval', 'approved', 'approval_rejected', 'cancelled', 'queued', 'sent', 'rejected', 'unknown']),
 );
 export type OrderStatus = z.infer<typeof OrderStatusSchema>;
 
@@ -200,6 +203,26 @@ export const OrderTotalsSchema = named(
 );
 export type OrderTotals = z.infer<typeof OrderTotalsSchema>;
 
+/** Level that must approve (the seller level never needs an approver). */
+export const ApprovalLevelSchema = named('ApprovalLevel', z.enum(['manager', 'director']));
+export type ApprovalLevel = z.infer<typeof ApprovalLevelSchema>;
+
+/** The latest discount approval request of an order, as the seller sees it (DISC-6): level, decision, who and the comment. */
+export const OrderApprovalSchema = named(
+  'OrderApproval',
+  z.object({
+    requestedLevel: ApprovalLevelSchema,
+    requestedAt: IsoTimestampSchema,
+    /** `invalidated` = the order was edited or discarded while the request was pending. */
+    decision: z.enum(['pending', 'approved', 'rejected', 'invalidated']),
+    decidedAt: IsoTimestampSchema.nullable(),
+    /** Display name of who approved or rejected; `null` while pending or invalidated. */
+    decidedByName: z.string().nullable(),
+    comment: z.string().nullable(),
+  }),
+);
+export type OrderApproval = z.infer<typeof OrderApprovalSchema>;
+
 export const OrderDetailSchema = named(
   'OrderDetail',
   z.object({
@@ -208,6 +231,8 @@ export const OrderDetailSchema = named(
     negotiationTypeCode: codeInt().nullable(),
     notes: z.string().nullable(),
     discountAuthority: DiscountAuthorityStatusSchema,
+    /** Latest approval request (any decision), or `null` when the order never needed one. */
+    approval: OrderApprovalSchema.nullable(),
     items: z.array(OrderItemDetailSchema),
     totals: OrderTotalsSchema,
   }),

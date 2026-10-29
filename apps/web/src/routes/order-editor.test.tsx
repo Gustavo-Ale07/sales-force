@@ -18,7 +18,7 @@ import {
   productsPage,
 } from "../test/fixtures";
 import { apiError, callsTo, renderApp, type Handlers } from "../test/harness";
-import { SUBMIT_DISABLED_MESSAGE } from "./order-editor";
+import { SUBMIT_AWAITING_MESSAGE, SUBMIT_BLOCKED_MESSAGE, SUBMIT_DISABLED_MESSAGE } from "./order-editor";
 
 const FORBIDDEN_TERMS = /custo|margem|cost|margin/i;
 
@@ -761,6 +761,45 @@ describe("Rascunho existente", () => {
     await user.click(await screen.findByRole("button", { name: "Enviar ao ERP" }));
     expect(await screen.findByText("req-sub-2")).toBeInTheDocument();
     expect(screen.queryByText(SUBMIT_DISABLED_MESSAGE)).not.toBeInTheDocument();
+  });
+
+  it("tells the seller the order went to approval when the server answers 200 awaiting_approval", async () => {
+    const waiting = orderDetail({
+      status: "awaiting_approval",
+      discountAuthority: "needs_manager",
+      version: 2,
+      approval: { requestedLevel: "manager", requestedAt: "2026-09-20T12:00:00.000Z", decision: "pending", decidedAt: null, decidedByName: null, comment: null },
+    });
+    const { user } = renderApp(`/pedidos/${ORDER_ID}`, {
+      handlers: existing(orderDetail(), { "POST /orders/:id/submit": { body: waiting } }),
+    });
+    await user.click(await screen.findByRole("button", { name: "Enviar ao ERP" }));
+    expect(await screen.findByText(SUBMIT_AWAITING_MESSAGE)).toBeInTheDocument();
+    expect(screen.queryByText(SUBMIT_DISABLED_MESSAGE)).not.toBeInTheDocument();
+  });
+
+  it("explains a discount above the director ceiling and keeps the draft", async () => {
+    const { user } = renderApp(`/pedidos/${ORDER_ID}`, {
+      handlers: existing(orderDetail(), {
+        "POST /orders/:id/submit": apiError(409, "discount_blocked", "Desconto acima do limite.", { requestId: "req-sub-3" }),
+      }),
+    });
+    await user.click(await screen.findByRole("button", { name: "Enviar ao ERP" }));
+    expect(await screen.findByText(SUBMIT_BLOCKED_MESSAGE)).toBeInTheDocument();
+    expect(screen.queryByText("req-sub-3")).not.toBeInTheDocument();
+  });
+
+  it("shows who rejected the discount and why, and keeps a rejected order editable", async () => {
+    const rejected = orderDetail({
+      status: "approval_rejected",
+      approval: { requestedLevel: "manager", requestedAt: "2026-09-20T12:00:00.000Z", decision: "rejected", decidedAt: "2026-09-20T13:00:00.000Z", decidedByName: "Marina Gerente", comment: "Desconto alto demais" },
+    });
+    renderApp(`/pedidos/${ORDER_ID}`, { handlers: existing(rejected) });
+    expect(await screen.findByText("Desconto reprovado")).toBeInTheDocument();
+    expect(screen.getByText(/Marina Gerente/)).toBeInTheDocument();
+    expect(screen.getByText(/Desconto alto demais/)).toBeInTheDocument();
+    expect(screen.queryByText("Somente leitura")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Quantidade de Balão látex 9 pol. vermelho")).not.toBeDisabled();
   });
 
   it("requires saving before submitting", async () => {

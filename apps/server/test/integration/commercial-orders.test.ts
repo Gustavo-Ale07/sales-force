@@ -366,11 +366,12 @@ describe('replace, discard, submit', () => {
 
     const audits = (await ctx.database.handle.db.select().from(auditLog)).filter((row) => row.action === 'order.submit_attempted');
     expect(audits.some((row) => (row.detail as Json).orderId === id && (row.detail as Json).outcome === 'erp_submission_disabled')).toBe(true);
-    // Still refused for a cancelled order and for a manager: it is not a permission question.
-    await ctx.call('seller1', 'DELETE', `/orders/${id}`);
-    expect((await ctx.call('seller1', 'POST', `/orders/${id}/submit`)).body.code).toBe('erp_submission_disabled');
+    // Still refused for a manager and an admin: it is not a permission question.
     expect((await ctx.call('manager', 'POST', `/orders/${id}/submit`)).body.code).toBe('erp_submission_disabled');
     expect((await ctx.call('admin', 'POST', `/orders/${id}/submit`)).body.code).toBe('erp_submission_disabled');
+    // A discarded order is not submittable at all (ORD-1).
+    await ctx.call('seller1', 'DELETE', `/orders/${id}`);
+    expect((await ctx.call('seller1', 'POST', `/orders/${id}/submit`)).body.code).toBe('order_not_editable');
   });
 
   it('audits create, replace and discard with identifiers only (no notes, no payload)', async () => {
