@@ -8,11 +8,76 @@ STATUS: ACTIVE — atualizado em 2026-10-29. Fonte de verdade ÚNICA: `C:\Dev\sa
 
 - Arquivado: `C:\Dev\sales-force-evolution-old` → `C:\Dev\_arquivo\sales-force-evolution-old-20261029` (worktree antigo; `f57b2f8` contido aqui; levou `.env`, `deploy/.env` e `debug.keystore` sem abrir).
 - Arquivado: `C:\Users\T-GAMER\Desktop\sales-force` → `C:\Dev\_arquivo\sales-force-desktop-20261029` (diff das modificações em `C:\Dev\_arquivo\sales-force-desktop-20261029.diff`).
-- Mantido até o D12: `C:\Dev\sales-force`. Seu `deploy/.env` fica intocado. Resta lá um registro de worktree obsoleto (`.git/worktrees/sales-force-evolution`) que o `git worktree prune` não removeu.
+- Arquivado em 2026-10-29 (D12 commitado em `5ce650a`): `C:\Dev\sales-force` → `C:\Dev\_arquivo\sales-force-20261029` (nada apagado; `deploy/.env` foi junto, sem abrir).
 - Histórico do Claude Code `~/.claude/projects/C--Dev-sales-force`: mantido, não tocar.
 - Staging está em `e705f2f`, 30+ commits atrás deste HEAD; a migration `0012_sales_order_discount_authority` está pendente lá. AUTH-6, PB-1 e DISC-2 ainda não foram para staging.
 - Decisões D1–D12 (`02415be`, `docs/decisions.md` §3.14): confirmadas pelo dono em 2026-10-29.
 - `gh` não instalado (adiado pelo dono). `dbexplorer-sankhya` tem 40 commits e 47 branches sem remoto (outro projeto, sem ação).
+
+## Onde paramos (2026-10-29)
+- Trilhas A (auth) e B (alçada de desconto) concluídas e publicadas em `origin/feat/sales-force-evolution`; Trilha C = plano `docs/implementation/snk-7-order-submission-plan.md`. Hashes e achados: `.claude/work/CHECKPOINT_2026-10-29.md`.
+- Staging continua em `e705f2f` (híbrido; nada mudou lá). Pendentes no staging: migrations 0012 e 0013 (0013 cria tabela nova, então rodar `db-roles`) e o web com CSP `style-src 'unsafe-inline'`.
+
+## Por onde retomar (2026-10-29)
+1. Dono executa o deploy e a troca para `external` (abaixo) e traz os resultados.
+2. Itens abertos do checkpoint: 3 achados baixos, valores reais dos limites, regra de auto-aprovação, regra para nível sem aprovador.
+3. Plano SNK-7: responder D-1..D-10 no próprio documento; depois fatias S1-S10 (S7 depende de `recomputeOrderAuthority`, já pronta).
+4. Próxima sessão: acabamentos de `docs/mobile-spike.md` §8.8 (MOB-8), campo de bloqueio do TSIUSU, fase B (SNK-8) só como plano.
+
+## Só o dono roda — deploy do novo SHA e troca para AUTH_MODE=external (2026-10-29)
+
+Pré-requisito (Q4): existe conta **admin local ativa** no staging (porta de emergência); confirme fazendo login com ela na tela atual. Se não houver, crie conforme "First admin account" em `deploy/README-staging.md`. Sem admin local, NÃO troque o modo.
+
+**(1) Deploy do novo SHA** (na VPS, como usuário de deploy; `<SHA-COMPLETO>` = HEAD do push final, informado no relatório):
+```sh
+export SFC="docker compose --env-file /etc/salesforce/staging/compose.env -f deploy/docker-compose.staging.yml"
+git fetch --tags origin && git checkout --detach <SHA-COMPLETO>      # árvore limpa
+export SHA=$(git rev-parse --short=12 HEAD)
+# em compose.env: SERVER_IMAGE=sales-force-server:$SHA   WEB_IMAGE=sales-force-web:$SHA
+$SFC config -q
+$SFC build migrate web
+$SFC --profile self-hosted-db --profile ops run --rm migrate-safe   # backup obrigatório + migrations 0012 e 0013
+$SFC --profile ops-admin run --rm db-roles                          # obrigatório: 0013 cria sales_order_approval
+$SFC --profile self-hosted-db up -d
+curl -fsS https://$STAGING_DOMAIN/api/v1/ready
+```
+Alternativa: `deploy/scripts/deploy-staging.sh <SHA-40-hex>` (mesmos passos; `deploy/README-cicd.md`; o `db-roles` continua manual).
+
+**(2) Troca para `AUTH_MODE=external`** (só depois do (1) com /ready 200 e do admin local confirmado):
+- Mesmo `VERIFIER_SHARED_SECRET` (>= 32 caracteres) em `api.env` e `verifier.env`; `api.env` sem `ALLOW_DEV_AUTH` e sem `SF_ALLOW_DEMO_ACCOUNTS`.
+- `compose.env`: `API_AUTH_MODE=external`, `WEB_AUTH_MODE=standard`, `EXTERNAL_LOGIN_ENABLED=1`, `VERIFIER_MODE=live`, `VERIFIER_SANKHYA_BASE_URL=<Sandbox>`, `VERIFIER_EGRESS_NETWORK=verifier_egress`; manter `EXTERNAL_AUTO_PROVISION` como está hoje.
+- `$SFC --profile self-hosted-db up -d --force-recreate api web`; depois `curl -fsS https://$STAGING_DOMAIN/api/v1/ready`.
+- Revoke opcional (Q3), UMA vez, com janela combinada e o backup do passo (1):
+```sql
+BEGIN;
+UPDATE session SET revoked_at = now()
+ WHERE revoked_at IS NULL
+   AND account_id IN (SELECT id FROM account WHERE role = 'seller' AND external_user_id IS NULL)
+RETURNING id;
+-- conferir a contagem; se não for a esperada: ROLLBACK;
+COMMIT;
+```
+
+**(3) Validação**
+1. `/api/v1/ready` 200.
+2. Login do admin local (usuário e senha locais).
+3. Seu login como vendedor (usuário do Sankhya).
+4. Tela admin de limites de desconto (W-39): conferir 5/15/30 marcados "ajustar pelo dono".
+5. Como vendedor, criar pedido com desconto acima de 5% (até 15%) e enviar: fica "aguardando aprovação" (o envio ao ERP segue desligado; 409 `erp_submission_disabled` é esperado).
+6. Fila W-20 (`/aprovacoes`): o pedido aparece para o SUP (gerente externo já existente); o SUP aprova.
+7. Auditoria mostra quem aprovou, quando e o nível; o vendedor vê o estado no pedido (web) e no app (M-14).
+8. Negativo: desconto acima de 15% exige "Diretoria" (admin); acima de 30% fica bloqueado.
+
+**(4) Rollback**
+- Modo: `API_AUTH_MODE=local`, `WEB_AUTH_MODE=local`, `EXTERNAL_LOGIN_ENABLED=0`, recriar `api` e `web`.
+- Versão: `SERVER_IMAGE`/`WEB_IMAGE` de volta para `e705f2f` e `$SFC --profile self-hosted-db up -d`. As migrations 0012/0013 são expand-only e não são revertidas; a versão antiga convive com elas. Restore do dump só para desfazer migration ruim (README-staging, "Rollback" e "Backup and restore").
+
+## O que ainda depende do dono
+- Executar (1)-(3); trazer os valores reais dos limites (hoje 5/15/30 provisórios).
+- Regra de auto-aprovação (achado baixo 1) e regra quando não há aprovador do nível.
+- Campo de bloqueio de TSIUSU (DBExplorer) para ativar AUTH-13 de verdade.
+- Plano SNK-7: decisões D-1..D-10 e autorização do primeiro teste real no Sandbox (a flag `SANKHYA_ORDER_WRITE_ENABLED` fica desligada).
+- Anteriores: emenda STACK-2 (decisão 4), SB-2 (`eas.json`), pedidos ao Sankhya TESTE desligados (SNK-6).
 
 ## Decisões do dono (responder cada linha com uma palavra: SIM / NÃO / ADIAR / opção)
 
