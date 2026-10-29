@@ -3,9 +3,11 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View
 import type { DraftRecord } from "@salesforce/mobile-db";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import { lineAmountsOf, previewDraft, type EditorLine } from "../data/order-draft";
+import type { OrderRepository } from "../data/ports";
 import { formatBrl } from "../lib/money";
 import type { LocalOrdersPort } from "../offline/local-orders";
 import { saleValue } from "../offline/sales";
+import { approvalViewOf, type ApprovalView } from "../offline/approval-status";
 import { saleActions, saleExplanation } from "../offline/sales-status";
 import { colors, spacing } from "../theme";
 import { SaleBadgeView, describeSaleValue } from "./sale-parts";
@@ -15,6 +17,8 @@ export interface SaleDetailScreenProps {
   readonly localId: string;
   readonly localOrders: LocalOrdersPort;
   readonly connectivity: ConnectivityState;
+  /** Online read of the server's order, to show the discount approval state read-only (M-14). Optional: without it the card is simply absent. */
+  readonly orders?: Pick<OrderRepository, "get">;
   readonly onBack: () => void;
   /** Something changed locally (deleted, resolved, price accepted): the list must reload. */
   readonly onChanged: () => void;
@@ -37,7 +41,7 @@ function money(value: string | null): string {
 }
 
 /** Read-only view of one sale, with only the actions that are safe for its state. Explains what each state means in plain words. */
-export function SaleDetailScreen({ localId, localOrders, connectivity, onBack, onChanged, onContinue, onDuplicate, onSyncNow }: SaleDetailScreenProps) {
+export function SaleDetailScreen({ localId, localOrders, connectivity, orders, onBack, onChanged, onContinue, onDuplicate, onSyncNow }: SaleDetailScreenProps) {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [missing, setMissing] = useState(false);
   const [reloads, setReloads] = useState(0);
@@ -57,6 +61,22 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, onBack, o
       current = false;
     };
   }, [localOrders, localId, reloads]);
+
+  const [fetched, setFetched] = useState<{ readonly remoteId: string; readonly view: ApprovalView | null } | null>(null);
+  const remoteId = loaded?.draft.remoteId ?? null;
+  useEffect(() => {
+    if (orders === undefined || remoteId === null || offline) return;
+    let current = true;
+    orders
+      .get(remoteId)
+      .then((order) => current && setFetched({ remoteId, view: approvalViewOf(order) }))
+      // The state is a courtesy read: when it fails the card is just absent, the local view is unaffected.
+      .catch(() => undefined);
+    return () => {
+      current = false;
+    };
+  }, [orders, remoteId, offline, reloads]);
+  const approval = fetched !== null && fetched.remoteId === remoteId && !offline ? fetched.view : null;
 
   const act = useCallback(
     async (work: () => Promise<void>, failure = "Tente novamente quando houver conexão.") => {
@@ -143,6 +163,17 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, onBack, o
           {draft.negotiationTypeCode !== null && <Text style={styles.meta}>{`Negociação (código): ${draft.negotiationTypeCode}`}</Text>}
           {draft.notes !== null && draft.notes !== "" && <Text style={styles.notes}>{`Observações: ${draft.notes}`}</Text>}
         </View>
+
+        {approval !== null && (
+          <View style={approval.tone === "danger" ? styles.alert : styles.card} accessibilityLabel="Aprovação do desconto">
+            <Text style={styles.alertTitle}>{approval.title}</Text>
+            {approval.lines.map((line) => (
+              <Text key={line} style={styles.alertLine}>
+                {line}
+              </Text>
+            ))}
+          </View>
+        )}
 
         {draft.priceReview !== null && draft.priceReview.length > 0 && (
           <View style={styles.alert}>

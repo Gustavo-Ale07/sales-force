@@ -323,6 +323,7 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
                 <SalesScreen
                   localOrders={services.localOrders}
                   customers={repositories.customers}
+                  orders={repositories.orders}
                   syncStatus={syncStatus}
                   connectivity={connectivityState}
                   onUnauthenticated={expire}
