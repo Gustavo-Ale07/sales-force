@@ -58,19 +58,40 @@ export interface AccountSellerLink {
 export const DISCOUNT_AUTHORITY_LEVELS = ['seller', 'manager', 'director'] as const;
 export type DiscountAuthorityLevel = (typeof DISCOUNT_AUTHORITY_LEVELS)[number];
 
+export type DiscountAuthorityLimits = {
+  readonly seller: string | null;
+  readonly manager: string | null;
+  readonly director: string | null;
+};
+
 /**
- * Discount authority per level (DISC-2), a maximum discount percentage on the customer's price-table price
- * (decimal string) or `null` = not configured. The values are customer commercial data: no default exists
- * anywhere. The absolute ceiling and the substitute approver (R36 remainder) and R37 are NOT decided and
- * deliberately have no field here: the rule fails closed where it would need them.
+ * A per-user limit (RF-CAT-3). RESERVED SHAPE ONLY (Q8): accepted and stored so that adding it later needs no
+ * migration, but never evaluated and never written by the admin screen until the post-pilot backlog builds it.
+ */
+export interface UserDiscountAuthorityOverride {
+  readonly username: string;
+  readonly limits: DiscountAuthorityLimits;
+}
+
+/**
+ * Discount authority per level (DISC-2, DISC-3): the maximum discount percentage on the item's effective price
+ * (decimal string, inclusive: a discount equal to a limit is within that level, Q7). Three levels, always (Q9):
+ * the director limit is the absolute ceiling (Q13) and above it nobody approves. `null` = not configured
+ * (every discount refused, fail closed). `provisional` marks the values as the owner's provisional ones,
+ * "ajustar pelo dono" (Q11).
  */
 export interface DiscountAuthorityConfiguration {
-  readonly limits: {
-    readonly seller: string | null;
-    readonly manager: string | null;
-    readonly director: string | null;
-  };
+  readonly limits: DiscountAuthorityLimits;
+  readonly provisional?: boolean;
+  /** Reserved, not evaluated (Q8). */
+  readonly userOverrides?: readonly UserDiscountAuthorityOverride[];
 }
+
+/** The owner's provisional limits (Q11): 5 / 15 / 30 percent, to be adjusted by the owner. Apply while nothing is stored. */
+export const PROVISIONAL_DISCOUNT_AUTHORITY: DiscountAuthorityConfiguration = {
+  limits: { seller: '5', manager: '15', director: '30' },
+  provisional: true,
+};
 
 /** Known feature flags; unknown keys are allowed (open record). */
 export const KNOWN_FEATURE_FLAGS = ['demoMetrics'] as const;
@@ -102,7 +123,7 @@ export interface InstallationConfiguration {
       readonly allowDraftWithoutPrice: boolean;
     };
     readonly confirmationBehavior: ConfirmationBehavior;
-    /** Absent = discount authority not configured: any discount is refused (fail closed). */
+    /** Absent = the provisional 5/15/30 limits apply (Q11, `PROVISIONAL_DISCOUNT_AUTHORITY`). */
     readonly discountAuthority?: DiscountAuthorityConfiguration;
   };
   readonly customers: {

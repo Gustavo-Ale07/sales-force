@@ -82,7 +82,7 @@ describe('discount authority on drafts (DISC-2)', () => {
     expect(await statusOf(configured, 'seller1', ['8', '15'])).toBe('needs_director');
   });
 
-  it('above the highest configured limit is blocked (the absolute ceiling is undecided), never approved', async () => {
+  it('above the director limit (the absolute ceiling, Q13) is blocked, never approved', async () => {
     expect(await statusOf(configured, 'seller1', ['20.01'])).toBe('blocked');
     expect(await statusOf(configured, 'seller1', ['99.99'])).toBe('blocked');
   });
@@ -96,8 +96,11 @@ describe('discount authority on drafts (DISC-2)', () => {
     expect(await statusOf(configured, 'admin', ['1'])).toBe('blocked');
   });
 
-  it('without configured limits any discount is blocked (fail closed), never the old interim free pass', async () => {
-    expect(await statusOf(unconfigured, 'seller1', ['1'])).toBe('blocked');
+  it('without a stored block the provisional 5/15/30 limits apply (Q11), inclusive, with the 30 ceiling', async () => {
+    expect(await statusOf(unconfigured, 'seller1', ['5'])).toBe('within_authority');
+    expect(await statusOf(unconfigured, 'seller1', ['15'])).toBe('needs_manager');
+    expect(await statusOf(unconfigured, 'seller1', ['30'])).toBe('needs_director');
+    expect(await statusOf(unconfigured, 'seller1', ['30.01'])).toBe('blocked');
   });
 
   it('the client cannot choose the outcome: a sent discountAuthority is refused as an unknown field', async () => {

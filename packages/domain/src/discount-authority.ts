@@ -1,5 +1,6 @@
 import {
   DISCOUNT_AUTHORITY_LEVELS,
+  PROVISIONAL_DISCOUNT_AUTHORITY,
   type DiscountAuthorityConfiguration,
   type DiscountAuthorityLevel,
 } from './configuration.js';
@@ -12,11 +13,9 @@ import { compareDecimalStrings, isZeroDecimal, validateDiscountPercent, type Dec
  * configuration (never literals). Pure and deterministic (P-14). It reads no cost and no margin and returns
  * none (P-20).
  *
- * NOT DECIDED and therefore never approximated here (fail closed, never auto-approved):
- *  - the absolute ceiling above the highest configured level (R36 remainder): a discount above the director
- *    limit is refused with `ceiling_not_decided`;
- *  - the substitute approver (R36 remainder) and the credit-exception approver (R37): no field, no behaviour;
- *  - which account role is the "director": no account role maps to it yet, so a director is never an actor.
+ * Owner rulings (DISC-2..6, Q1-Q13): three inclusive limits; the director limit is the absolute ceiling (above it
+ * nobody approves); absent configuration means the provisional 5/15/30. Still without a field: a named substitute
+ * approver (the approver is a pool per level, DISC-4) and the credit-exception approver (R37).
  */
 
 export type DiscountAuthorityRefusal =
@@ -26,8 +25,8 @@ export type DiscountAuthorityRefusal =
   | 'authority_not_configured'
   /** The actor's role is not part of the seller -> manager -> director chain. */
   | 'actor_out_of_chain'
-  /** Above the highest configured limit; the absolute ceiling (R36) is not decided. */
-  | 'ceiling_not_decided';
+  /** Above the director limit: the absolute ceiling (Q13); nobody approves, the draft stays saved as blocked. */
+  | 'above_ceiling';
 
 export type DiscountAuthorityDecision =
   | { readonly decision: 'within_authority' }
@@ -52,13 +51,22 @@ export function discountAuthorityLevelOf(role: AccountRole): DiscountAuthorityLe
   return null;
 }
 
-/** Validated limits per level, or `null` when the configuration cannot be trusted (any gap or disorder). */
-function usableLimits(config: DiscountAuthorityConfiguration | undefined): Record<DiscountAuthorityLevel, DecimalString> | null {
-  if (config === undefined) return null;
+export interface ResolvedDiscountAuthority {
+  readonly limits: Record<DiscountAuthorityLevel, DecimalString>;
+  /** True while the values are the owner's provisional ones ("ajustar pelo dono"). */
+  readonly provisional: boolean;
+}
+
+/**
+ * The limits in force: the stored block, or the provisional 5/15/30 when none is stored (Q11); `null` when a stored
+ * block cannot be trusted (any gap, malformed value or disorder): then every discount is refused.
+ */
+export function resolveDiscountAuthority(config: DiscountAuthorityConfiguration | undefined): ResolvedDiscountAuthority | null {
+  const source = config ?? PROVISIONAL_DISCOUNT_AUTHORITY;
   const limits: Partial<Record<DiscountAuthorityLevel, DecimalString>> = {};
   let previous: DecimalString | null = null;
   for (const level of DISCOUNT_AUTHORITY_LEVELS) {
-    const raw = config.limits[level];
+    const raw = source.limits[level];
     if (raw === null) return null;
     const parsed = validateDiscountPercent(raw);
     if (!parsed.ok) return null;
@@ -66,7 +74,7 @@ function usableLimits(config: DiscountAuthorityConfiguration | undefined): Recor
     limits[level] = parsed.value;
     previous = parsed.value;
   }
-  return limits as Record<DiscountAuthorityLevel, DecimalString>;
+  return { limits: limits as Record<DiscountAuthorityLevel, DecimalString>, provisional: source.provisional === true };
 }
 
 /** Authority for one order line. A line without a discount needs none, whatever the role or configuration. */
@@ -78,14 +86,15 @@ export function evaluateItemDiscountAuthority(
   if (isZeroDecimal(item.discountPercent)) return WITHIN;
   if (item.priceState !== 'priced') return refused('price_base_missing');
 
-  const limits = usableLimits(config);
-  if (limits === null) return refused('authority_not_configured');
+  const resolved = resolveDiscountAuthority(config);
+  if (resolved === null) return refused('authority_not_configured');
+  const limits = resolved.limits;
 
   const actorLevel = discountAuthorityLevelOf(actorRole);
   if (actorLevel === null) return refused('actor_out_of_chain');
 
   const required = DISCOUNT_AUTHORITY_LEVELS.find((level) => compareDecimalStrings(item.discountPercent, limits[level]) <= 0);
-  if (required === undefined) return refused('ceiling_not_decided');
+  if (required === undefined) return refused('above_ceiling');
   if (DISCOUNT_AUTHORITY_LEVELS.indexOf(required) <= DISCOUNT_AUTHORITY_LEVELS.indexOf(actorLevel)) return WITHIN;
   return { decision: 'needs_approval', level: required as Exclude<DiscountAuthorityLevel, 'seller'> };
 }

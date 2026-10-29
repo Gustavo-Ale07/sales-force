@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildOrderItem,
+  PROVISIONAL_DISCOUNT_AUTHORITY,
   evaluateItemDiscountAuthority,
+  resolveDiscountAuthority,
   evaluateOrderDiscountAuthority,
   validateConfigurationConsistency,
   type DiscountAuthorityConfiguration,
@@ -53,9 +55,9 @@ describe('evaluateItemDiscountAuthority', () => {
     expect(evaluateItemDiscountAuthority(item('10.01'), 'manager', LIMITS)).toEqual({ decision: 'needs_approval', level: 'director' });
   });
 
-  it('above the director limit is refused: the absolute ceiling is not decided, never auto-approved', () => {
-    expect(evaluateItemDiscountAuthority(item('20.01'), 'seller', LIMITS)).toEqual({ decision: 'refused', reason: 'ceiling_not_decided' });
-    expect(evaluateItemDiscountAuthority(item('99.99'), 'manager', LIMITS)).toEqual({ decision: 'refused', reason: 'ceiling_not_decided' });
+  it('above the director limit is refused: the director limit is the absolute ceiling, nobody approves', () => {
+    expect(evaluateItemDiscountAuthority(item('20.01'), 'seller', LIMITS)).toEqual({ decision: 'refused', reason: 'above_ceiling' });
+    expect(evaluateItemDiscountAuthority(item('99.99'), 'manager', LIMITS)).toEqual({ decision: 'refused', reason: 'above_ceiling' });
   });
 
   it('a missing price (state none) is not a base: a discount on it is refused', () => {
@@ -66,8 +68,28 @@ describe('evaluateItemDiscountAuthority', () => {
     expect(evaluateItemDiscountAuthority(item('1', zero), 'seller', LIMITS)).toEqual({ decision: 'refused', reason: 'price_base_missing' });
   });
 
-  it('refuses a discount when authority is not configured (fail closed)', () => {
-    expect(evaluateItemDiscountAuthority(item('1'), 'seller', undefined)).toEqual({ decision: 'refused', reason: 'authority_not_configured' });
+  it('absent configuration uses the provisional 5/15/30 defaults (Q11), inclusive at each limit', () => {
+    expect(PROVISIONAL_DISCOUNT_AUTHORITY.limits).toEqual({ seller: '5', manager: '15', director: '30' });
+    expect(evaluateItemDiscountAuthority(item('5'), 'seller', undefined).decision).toBe('within_authority');
+    expect(evaluateItemDiscountAuthority(item('15'), 'seller', undefined)).toEqual({ decision: 'needs_approval', level: 'manager' });
+    expect(evaluateItemDiscountAuthority(item('30'), 'seller', undefined)).toEqual({ decision: 'needs_approval', level: 'director' });
+    expect(evaluateItemDiscountAuthority(item('30.01'), 'seller', undefined)).toEqual({ decision: 'refused', reason: 'above_ceiling' });
+  });
+
+  it('resolveDiscountAuthority flags the provisional defaults and passes a stored block through', () => {
+    expect(resolveDiscountAuthority(undefined)).toEqual({ limits: PROVISIONAL_DISCOUNT_AUTHORITY.limits, provisional: true });
+    expect(resolveDiscountAuthority(LIMITS)).toEqual({ limits: LIMITS.limits, provisional: false });
+    expect(resolveDiscountAuthority({ limits: { seller: '5', manager: null, director: '20' } })).toBeNull();
+    expect(resolveDiscountAuthority({ ...LIMITS, provisional: true })?.provisional).toBe(true);
+  });
+
+  it('a per-user override block is accepted by the shape but not evaluated yet (RF-CAT-3 is post-pilot, Q8)', () => {
+    const withOverride: DiscountAuthorityConfiguration = {
+      ...LIMITS,
+      userOverrides: [{ username: 'joao', limits: { seller: '25', manager: '26', director: '27' } }],
+    };
+    expect(evaluateItemDiscountAuthority(item('6'), 'seller', withOverride)).toEqual({ decision: 'needs_approval', level: 'manager' });
+    expect(validateConfigurationConsistency(makeConfig((c) => ({ ...c, sales: { ...c.sales, discountAuthority: withOverride } })))).toEqual([]);
   });
 
   it('refuses when any level limit is missing or the limits are not ascending', () => {

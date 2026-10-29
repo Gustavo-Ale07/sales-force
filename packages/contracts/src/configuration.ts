@@ -105,14 +105,26 @@ export const NegotiationTypeSchema = named(
 /** Maximum discount percentage per authority level, on the customer's price-table price (DISC-2). `null` = not configured. */
 const DiscountPercentLimitSchema = z.string().regex(/^\d{1,2}(\.\d{1,2})?$/).nullable();
 
+const DiscountAuthorityLimitsSchema = z.strictObject({
+  seller: DiscountPercentLimitSchema,
+  manager: DiscountPercentLimitSchema,
+  director: DiscountPercentLimitSchema,
+});
+
+/**
+ * Three limits per level (DISC-3, Q9), inclusive (Q7); the director limit is the absolute ceiling (Q13).
+ * `provisional` = the owner's provisional values, "ajustar pelo dono" (Q11). `userOverrides` is a RESERVED shape
+ * (RF-CAT-3, post-pilot, Q8): accepted so that adding it later needs no migration, never evaluated.
+ */
 export const DiscountAuthorityConfigurationSchema = named(
   'DiscountAuthorityConfiguration',
   z.strictObject({
-    limits: z.strictObject({
-      seller: DiscountPercentLimitSchema,
-      manager: DiscountPercentLimitSchema,
-      director: DiscountPercentLimitSchema,
-    }),
+    limits: DiscountAuthorityLimitsSchema,
+    provisional: z.boolean().optional(),
+    userOverrides: z
+      .array(z.strictObject({ username: z.string().min(1).max(254), limits: DiscountAuthorityLimitsSchema }))
+      .max(500)
+      .optional(),
   }),
 );
 

@@ -26,6 +26,18 @@ describe('InstallationConfigurationSchema', () => {
     expect(InstallationConfigurationSchema.parse(config)).toEqual(config);
   });
 
+  it('accepts the discount authority block with provisional flag and the reserved per-user shape; rejects bad limits', () => {
+    const base = makeConfig();
+    const limits = { seller: '5', manager: '15', director: '30' };
+    const withBlock = (discountAuthority: unknown) => ({ ...base, sales: { ...base.sales, discountAuthority } });
+    expect(InstallationConfigurationSchema.safeParse(withBlock({ limits, provisional: true })).success).toBe(true);
+    expect(
+      InstallationConfigurationSchema.safeParse(withBlock({ limits, userOverrides: [{ username: 'ana', limits }] })).success,
+    ).toBe(true);
+    expect(InstallationConfigurationSchema.safeParse(withBlock({ limits: { ...limits, director: '100' } })).success).toBe(false);
+    expect(InstallationConfigurationSchema.safeParse(withBlock({ limits, surprise: 1 })).success).toBe(false);
+  });
+
   it('rejects unknown top-level keys', () => {
     const issues = issuesOf({ ...makeConfig(), extra: true });
     expect(issues.some((i) => i.code === 'unrecognized_keys')).toBe(true);
