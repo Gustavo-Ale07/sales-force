@@ -18,6 +18,13 @@ import {
   CustomersQuerySchema,
   CustomersResponseSchema,
 } from './customers.js';
+import {
+  ApprovalPathSchema,
+  ApprovalQueueQuerySchema,
+  ApprovalQueueResponseSchema,
+  ApproveApprovalRequestSchema,
+  RejectApprovalRequestSchema,
+} from './approvals.js';
 import { DashboardResponseSchema } from './dashboard.js';
 import { DiscountLimitsResponseSchema, UpdateDiscountLimitsRequestSchema } from './discount-limits.js';
 import { ErpSubmissionDisabledErrorSchema, type ErrorStatus } from './errors.js';
@@ -417,6 +424,44 @@ export const routes = {
       },
     },
     errors: [400, 401, 403, 404],
+  }),
+  listApprovals: defineRoute({
+    operationId: 'listApprovals',
+    method: 'get',
+    path: '/approvals',
+    tags: ['orders'],
+    summary: 'Discount approval queue (W-20): the pending requests the caller may decide',
+    description:
+      'Manager role: requests of the manager level. Admin: requests of the director level ("Diretoria"). Oldest first. Online only; no push.',
+    auth: 'session',
+    request: { query: ApprovalQueueQuerySchema },
+    responses: { 200: { description: 'Solicitações pendentes', schema: ApprovalQueueResponseSchema } },
+    errors: [400, 401, 403],
+  }),
+  approveApproval: defineRoute({
+    operationId: 'approveApproval',
+    method: 'post',
+    path: '/approvals/{id}/approve',
+    tags: ['orders'],
+    summary: 'Approve a pending discount request (explicit, audited)',
+    description:
+      'Only the pool of the request level decides. The comment is optional. 409 approval_not_pending when the request was already decided, invalidated by an edit, or the order is no longer waiting; 409 discount_blocked when the stored lines no longer fit any level under the current limits.',
+    auth: 'session',
+    request: { params: ApprovalPathSchema, body: ApproveApprovalRequestSchema },
+    responses: { 200: { description: 'Pedido aprovado', schema: OrderDetailSchema } },
+    errors: [400, 401, 403, 404, 409],
+  }),
+  rejectApproval: defineRoute({
+    operationId: 'rejectApproval',
+    method: 'post',
+    path: '/approvals/{id}/reject',
+    tags: ['orders'],
+    summary: 'Reject a pending discount request (explicit, audited, comment mandatory)',
+    description: 'The order becomes approval_rejected: editable by the seller, never sent as it stands.',
+    auth: 'session',
+    request: { params: ApprovalPathSchema, body: RejectApprovalRequestSchema },
+    responses: { 200: { description: 'Pedido reprovado', schema: OrderDetailSchema } },
+    errors: [400, 401, 403, 404, 409],
   }),
   repeatLastOrder: defineRoute({
     operationId: 'repeatLastOrder',

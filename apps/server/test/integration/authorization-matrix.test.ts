@@ -44,6 +44,9 @@ const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>
   replaceOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   discardOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   submitOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  listApprovals: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny' },
+  approveApproval: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny' },
+  rejectApproval: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny' },
   repeatLastOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   // Recurring order templates (Phase E). ASSUMPTION (owner ruling in the plan): every role reaches them; which
   // templates it sees is the customer's seller scope (IDOR tests: order-templates.test.ts).

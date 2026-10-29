@@ -30,6 +30,15 @@ export function updateDiscountLimits(api: ApiClient, body: UpdateDiscountLimitsB
   return callApi(() => api.PUT("/discount-limits", { body }));
 }
 
+/** W-20: decide a pending discount request. Online only; the server re-checks the level pool and the state. */
+export function approveApproval(api: ApiClient, id: string, comment: string | undefined) {
+  return callApi(() => api.POST("/approvals/{id}/approve", { params: { path: { id } }, body: comment ? { comment } : {} }));
+}
+
+export function rejectApproval(api: ApiClient, id: string, comment: string) {
+  return callApi(() => api.POST("/approvals/{id}/reject", { params: { path: { id } }, body: { comment } }));
+}
+
 export const ERP_SUBMISSION_DISABLED = "erp_submission_disabled";
 
 export type ResolveProductsBody = ApiSchema<"ResolveProductsRequest">;

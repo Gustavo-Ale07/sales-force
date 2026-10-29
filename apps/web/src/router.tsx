@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { canAdministerDiscountLimits, canSeeIntegration, canUseCommercial } from "@salesforce/contracts";
+import { canAdministerDiscountLimits, canDecideApprovals, canSeeIntegration, canUseCommercial } from "@salesforce/contracts";
 import { toast } from "@salesforce/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -188,6 +188,18 @@ const discountLimitsRoute = createRoute({
   component: lazyRouteComponent(() => import("./routes/discount-limits"), "DiscountLimitsPage"),
 });
 
+const approvalsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/aprovacoes",
+  staticData: { crumb: "Aprovações" },
+  // Manager and administrator; the server (listApprovals, level pool) is what enforces it.
+  beforeLoad: async ({ context }) => {
+    const user = await context.queryClient.ensureQueryData(sessionQueryOptions(context.authClient));
+    if (!user || !canDecideApprovals(user.role)) throw redirect({ to: "/" });
+  },
+  component: lazyRouteComponent(() => import("./routes/approvals"), "ApprovalsPage"),
+});
+
 /**
  * Dev-only kitchen sink with synthetic data. Registered only when `import.meta.env.DEV`, so it is absent from
  * production builds. Outside the session guard on purpose (it shows no user data) and rendered in the shell without a user.
@@ -220,6 +232,7 @@ const appChildren = [
   profileRoute,
   integrationRoute,
   discountLimitsRoute,
+  approvalsRoute,
 ];
 
 const routeTree = rootRoute.addChildren([

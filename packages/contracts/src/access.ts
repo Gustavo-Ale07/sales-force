@@ -22,6 +22,14 @@ export function canAdministerDiscountLimits(role: string): boolean {
 }
 
 /**
+ * Who sees the discount approval queue (W-20): the manager (manager level) and the admin (director level, "Diretoria").
+ * Never `technical`. Convenience for the client; the server policy and the level pool enforce it.
+ */
+export function canDecideApprovals(role: string): boolean {
+  return role === 'manager' || role === 'admin';
+}
+
+/**
  * Roles that work with the commercial areas (catalog, customers, orders, dashboard). `technical`
  * (ROLE-1) is deliberately absent: no portfolio, no commercial changes. Convenience for the client
  * (menu, route guard); the server policy is what enforces it.

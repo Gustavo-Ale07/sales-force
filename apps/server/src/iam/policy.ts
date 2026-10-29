@@ -79,6 +79,11 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   replaceOrder: { roles: EVERY_ROLE },
   discardOrder: { roles: EVERY_ROLE },
   submitOrder: { roles: EVERY_ROLE },
+  // W-20 discount approvals (DISC-4/6): only manager and admin; WHICH level each may decide is enforced in the
+  // approvals service (manager: manager level, admin: director level). Technical and seller are denied here.
+  listApprovals: { roles: ['manager', 'admin'] },
+  approveApproval: { roles: ['manager', 'admin'] },
+  rejectApproval: { roles: ['manager', 'admin'] },
   // "Repetir último pedido" (Phase C): a draft-creation route from the customer's own order history in
   // Sales Force, so it follows the same grant as createOrder.
   repeatLastOrder: { roles: EVERY_ROLE },

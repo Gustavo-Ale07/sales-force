@@ -42,6 +42,10 @@ export const AUDIT_ACTIONS = {
   orderSubmitAttempted: 'order.submit_attempted',
   orderApprovalRequested: 'order.approval_requested',
   orderApprovalInvalidated: 'order.approval_invalidated',
+  orderApprovalApproved: 'order.approval_approved',
+  orderApprovalRejected: 'order.approval_rejected',
+  /** A decision was refused because the caller's role cannot decide the requested level (DISC-4). */
+  orderApprovalDenied: 'order.approval_denied',
   orderSubmitDiscountBlocked: 'order.submit_discount_blocked',
   /** A draft was refused on submission because its customer is no longer eligible (ids and reason only). */
   orderSubmitCustomerIneligible: 'order.submit_customer_ineligible',

@@ -23,6 +23,8 @@ export const queryKeys = {
   configuration: ["configuration"] as const,
   orderEntryConfiguration: ["order-entry-configuration"] as const,
   discountLimits: ["discount-limits"] as const,
+  approvals: (page: number, pageSize: number) => ["approvals", "list", page, pageSize] as const,
+  approvalsAll: ["approvals"] as const,
   dashboard: ["dashboard"] as const,
   sellers: ["sellers"] as const,
   customers: (params: CustomersParams) => ["customers", "list", params] as const,
@@ -70,6 +72,14 @@ export function discountLimitsQueryOptions(api: ApiClient) {
   return queryOptions({
     queryKey: queryKeys.discountLimits,
     queryFn: () => callApi(() => api.GET("/discount-limits")),
+  });
+}
+
+export function approvalsQueryOptions(api: ApiClient, page: number, pageSize: number) {
+  return queryOptions({
+    queryKey: queryKeys.approvals(page, pageSize),
+    queryFn: () => callApi(() => api.GET("/approvals", { params: { query: { page, pageSize } } })),
+    placeholderData: keepPreviousData,
   });
 }
 

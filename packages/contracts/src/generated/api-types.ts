@@ -393,6 +393,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Discount approval queue (W-20): the pending requests the caller may decide
+         * @description Manager role: requests of the manager level. Admin: requests of the director level ("Diretoria"). Oldest first. Online only; no push.
+         */
+        get: operations["listApprovals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/approvals/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve a pending discount request (explicit, audited)
+         * @description Only the pool of the request level decides. The comment is optional. 409 approval_not_pending when the request was already decided, invalidated by an edit, or the order is no longer waiting; 409 discount_blocked when the stored lines no longer fit any level under the current limits.
+         */
+        post: operations["approveApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/approvals/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject a pending discount request (explicit, audited, comment mandatory)
+         * @description The order becomes approval_rejected: editable by the seller, never sent as it stands.
+         */
+        post: operations["rejectApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/customers/{code}/orders/repeat-last": {
         parameters: {
             query?: never;
@@ -518,6 +578,31 @@ export interface components {
         };
         /** @enum {string} */
         ApprovalLevel: "manager" | "director";
+        ApprovalQueueItem: {
+            /** Format: uuid */
+            approvalId: string;
+            /** Format: uuid */
+            orderId: string;
+            draftNumber: number;
+            customerCode: number;
+            customerName: string;
+            sellerCode: number | null;
+            ownerName: string;
+            requestedLevel: components["schemas"]["ApprovalLevel"];
+            requestedAt: components["schemas"]["IsoTimestamp"];
+            estimatedTotal: components["schemas"]["DecimalString"];
+            itemCount: number;
+            maxDiscountPercent: components["schemas"]["DecimalString"];
+        };
+        ApprovalQueueResponse: {
+            items: components["schemas"]["ApprovalQueueItem"][];
+            page: number;
+            pageSize: number;
+            total: number;
+        };
+        ApproveApprovalRequest: {
+            comment?: string;
+        };
         /** @enum {string} */
         AuthMode: "dev" | "local" | "external";
         AuthenticatedSession: {
@@ -1039,6 +1124,9 @@ export interface components {
                 };
             };
             integration: components["schemas"]["IntegrationSummary"];
+        };
+        RejectApprovalRequest: {
+            comment: string;
         };
         RepeatLastOrderRequest: {
             /** Format: uuid */
@@ -2383,6 +2471,198 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErpSubmissionDisabledError"];
+                };
+            };
+        };
+    };
+    listApprovals: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Solicitações pendentes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalQueueResponse"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    approveApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApproveApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description Pedido aprovado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderDetail"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflito de estado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    rejectApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RejectApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description Pedido reprovado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderDetail"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflito de estado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
         };
