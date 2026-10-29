@@ -590,6 +590,37 @@ describe('revocation of an automatic link on an established session', () => {
   });
 });
 
+describe('AUTH-10 (D2): the re-check follows every sankhya_auto link, whatever the link mode', () => {
+  const PAST_TOUCH = 61_000;
+
+  it('PRE_LINKED mode + sankhya_auto link + fresh mirror without CODVEND: the session is revoked and the link removed', async () => {
+    const ctx = await setup({ linkMode: 'PRE_LINKED' });
+    await addSeller(ctx, 103, 'Vendedor Um');
+    const linked = await preLink(ctx, { username: 'um', externalUserId: '4501', sellerCode: 103 });
+    await ctx.db.update(accountSellerLink).set({ source: 'sankhya_auto' }).where(eq(accountSellerLink.accountId, linked.id));
+    await directoryUser(ctx, 'um', 4501, 103);
+    const login = await ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META);
+    await mirrorDirectoryUser(ctx, 4501, null);
+    ctx.clock.advance(PAST_TOUCH);
+    await markDirectoryFresh(ctx);
+    expect(await ctx.service.resolveSession(login.token)).toBeNull();
+    expect(await ctx.db.select().from(accountSellerLink)).toHaveLength(0);
+    expect(await directoryAudit(ctx, 'auth.directory.link_revoked')).toEqual(['no_seller']);
+  });
+
+  it('PRE_LINKED mode + MANUAL link: the mirror never touches it', async () => {
+    const ctx = await setup({ linkMode: 'PRE_LINKED' });
+    await addSeller(ctx, 103, 'Vendedor Um');
+    await preLink(ctx, { username: 'um', externalUserId: '4501', sellerCode: 103 });
+    await directoryUser(ctx, 'um', 4501, 103);
+    const login = await ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META);
+    await mirrorDirectoryUser(ctx, 4501, null);
+    ctx.clock.advance(PAST_TOUCH);
+    expect(await ctx.service.resolveSession(login.token)).not.toBeNull();
+    expect(await ctx.db.select().from(accountSellerLink)).toHaveLength(1);
+  });
+});
+
 describe('AUTH-6 hook: the ERP blocks the user (stubbed source, the real field is not validated)', () => {
   const PAST_TOUCH = 61_000;
   const blockedSource = (answer: boolean | null | 'throw'): DirectoryBlockSource => ({

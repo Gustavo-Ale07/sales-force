@@ -510,8 +510,8 @@ export class AuthService implements OnModuleInit {
   /**
    * False only when this re-check actually removed the account's AUTOMATIC seller link and revoked its sessions (a definitive
    * refusal on a FRESH mirror: user gone, no seller, seller inactive/ambiguous/claimed, user blocked) or moved it to another
-   * seller (`relinked`: the user signs in again under the new scope). Only meaningful in VERIFIED_AUTO_PROVISION; true otherwise
-   * or when the touch interval has not elapsed.
+   * seller (`relinked`: the user signs in again under the new scope). Applies to every `sankhya_auto` link in any link mode (AUTH-10);
+   * manual links are not touched; true also when the touch interval has not elapsed.
    *
    * AUTH-6 addendum: a stale/never-synced mirror, a failing sync, or any error never ends an existing session. Not being able
    * to prove a change is not a change; the session still expires on its own (idle/absolute) or when revoked. A database error
@@ -521,7 +521,8 @@ export class AuthService implements OnModuleInit {
   private async automaticLinkHolds(accountId: string, externalUserId: string | null, now: Date, lastSeenAt: Date): Promise<boolean> {
     const settings = this.config.externalLogin;
     const links = this.externalLinks;
-    if (settings === undefined || links === undefined || (settings.linkMode ?? 'PRE_LINKED') !== 'VERIFIED_AUTO_PROVISION') return true;
+    // AUTH-10: the link mode governs creation, never revocation; every `sankhya_auto` link follows the ERP.
+    if (settings === undefined || links === undefined) return true;
     if (now.getTime() - lastSeenAt.getTime() < this.config.sessionTouchIntervalMs) return true;
     try {
       if (externalUserId === null) return true;
