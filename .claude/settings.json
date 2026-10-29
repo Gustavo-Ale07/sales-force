@@ -7,7 +7,17 @@
       "PowerShell(node docs/blueprint/build.mjs*)",
       "Bash(git diff --stat*)",
       "Bash(git status*)",
-      "Bash(git log*)"
+      "Bash(git log*)",
+      "Bash(pnpm *)",
+      "Bash(npx *)",
+      "Bash(node *)",
+      "Bash(git *)",
+      "Bash(docker *)",
+      "Bash(ls *)",
+      "Bash(dir *)",
+      "Bash(cat *)",
+      "Bash(grep *)",
+      "Bash(find *)"
     ],
     "deny": [
       "Read(docs/blueprint.html)",
@@ -39,7 +49,25 @@
       "Bash(npm publish*)",
       "Bash(pnpm publish*)",
       "PowerShell(npm publish*)",
-      "PowerShell(pnpm publish*)"
+      "PowerShell(pnpm publish*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(**/compose.env)",
+      "Bash(type *.env*)",
+      "Bash(Get-Content *.env*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f *)",
+      "Bash(git push * --force*)",
+      "Bash(git push * main)",
+      "Bash(git push * main *)",
+      "Bash(git push * *:main)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -f*)",
+      "Bash(git branch -D *)",
+      "Bash(rm -rf *)",
+      "Bash(Remove-Item * -Recurse*)",
+      "Bash(ssh *)",
+      "Bash(scp *)"
     ],
     "ask": [
       "Read(.sankhya-raw/**)",
@@ -122,6 +150,7 @@
       "PowerShell(pnpm dlx *)",
       "PowerShell(pnpm add *)",
       "PowerShell(npm install *)"
-    ]
+    ],
+    "defaultMode": "acceptEdits"
   }
 }

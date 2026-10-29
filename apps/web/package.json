@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e": "playwright test -c e2e/playwright.config.ts",
+    "e2e:install": "playwright install chromium"
   },
   "dependencies": {
     "@salesforce/contracts": "workspace:*",
@@ -26,7 +28,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",
-    "@playwright/test": "^1.63.0",
+    "@playwright/test": "1.63.0",
     "@salesforce/config": "workspace:*",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.1",
