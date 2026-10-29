@@ -390,6 +390,23 @@ describe('AuthService.login: restrictions of the directory path', () => {
     expect(await ctx.db.select().from(account)).toHaveLength(0);
   });
 
+  it('OPS-7 (D15): a mirror older than the maximum age logs a warning with a stable metric field, on login and on a session re-check', async () => {
+    const ctx = await setup(AUTO);
+    await addSeller(ctx, 103, 'Vendedor Um');
+    await directoryUser(ctx, 'um', 4501, 103);
+    const ok = await ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META);
+    const stale = () => ctx.capture.lines().filter((l) => l['metric'] === 'auth.directory_mirror_stale');
+    expect(stale()).toHaveLength(0); // fresh mirror: silent
+    await markDirectoryFresh(ctx, new Date(ctx.clock.fn().getTime() - 3 * 60 * 60 * 1000));
+    await failure(ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META));
+    expect(stale()).toHaveLength(1);
+    expect(stale()[0]).toMatchObject({ level: 40, reason: 'directory_stale', maxAgeMinutes: 120 });
+    ctx.clock.advance(61_000);
+    expect(await ctx.service.resolveSession(ok.token)).not.toBeNull(); // AUTH-6: the session stays
+    expect(stale()).toHaveLength(2);
+    expect(JSON.stringify(stale())).not.toMatch(/4501|"um"/);
+  });
+
   it('never promotes or reuses a pre-linked admin account from directory data', async () => {
     const ctx = await setup(AUTO);
     await addSeller(ctx, 103, 'Vendedor Sintetico');

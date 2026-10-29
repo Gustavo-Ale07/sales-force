@@ -387,6 +387,7 @@ export class AuthService implements OnModuleInit {
           maxMirrorAgeMs: settings.directoryMaxAgeMs ?? DEFAULT_DIRECTORY_MAX_AGE_MS,
           allowCreate: true,
         });
+        if (!sync.ok) this.noteStaleMirror(sync.refusal, settings.directoryMaxAgeMs ?? DEFAULT_DIRECTORY_MAX_AGE_MS);
         if (!sync.ok) return this.failExternal('external_directory_refused', sync.accountId, failCtx, 'access', sync.refusal);
         accountId = sync.accountId;
       } catch (error) {
@@ -508,6 +509,18 @@ export class AuthService implements OnModuleInit {
   }
 
   /**
+   * OPS-7: warning + stable `metric` field when the directory mirror is older than `EXTERNAL_DIRECTORY_MAX_AGE_MINUTES` (or never synced).
+   * No external alert in v1 (log processors count `metric`). Carries no account, user code or login.
+   */
+  private noteStaleMirror(refusal: string, maxAgeMs: number): void {
+    if (refusal !== 'directory_stale') return;
+    this.logger.warn(
+      { reason: 'directory_stale', metric: 'auth.directory_mirror_stale', maxAgeMinutes: Math.round(maxAgeMs / 60_000) },
+      'the login directory mirror is older than the maximum age (or never synced); new external logins are refused',
+    );
+  }
+
+  /**
    * False only when this re-check actually removed the account's AUTOMATIC seller link and revoked its sessions (a definitive
    * refusal on a FRESH mirror: user gone, no seller, seller inactive/ambiguous/claimed, user blocked) or moved it to another
    * seller (`relinked`: the user signs in again under the new scope). Applies to every `sankhya_auto` link in any link mode (AUTH-10);
@@ -538,6 +551,7 @@ export class AuthService implements OnModuleInit {
         allowCreate: false,
       });
       if (sync.ok) return sync.action !== 'relinked';
+      this.noteStaleMirror(sync.refusal, settings.directoryMaxAgeMs ?? DEFAULT_DIRECTORY_MAX_AGE_MS);
       return !sync.revoked;
     } catch (error) {
       // AUTH-11: not a refusal. `reason` and `metric` are stable fields (no metrics infrastructure exists; log processors count `metric`).
