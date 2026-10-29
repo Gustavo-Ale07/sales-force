@@ -14,6 +14,14 @@ export function canSeeIntegration(role: string): boolean {
 }
 
 /**
+ * Who administers the discount limits (W-39) and, for the director level, approves ("Diretoria", Q6): the admin only.
+ * `technical` is blocked from approvals. Convenience for the client; the server policy enforces it.
+ */
+export function canAdministerDiscountLimits(role: string): boolean {
+  return role === 'admin';
+}
+
+/**
  * Roles that work with the commercial areas (catalog, customers, orders, dashboard). `technical`
  * (ROLE-1) is deliberately absent: no portfolio, no commercial changes. Convenience for the client
  * (menu, route guard); the server policy is what enforces it.

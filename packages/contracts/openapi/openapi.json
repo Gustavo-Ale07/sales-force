@@ -273,6 +273,128 @@
         }
       }
     },
+    "/discount-limits": {
+      "get": {
+        "operationId": "getDiscountLimits",
+        "tags": [
+          "configuration"
+        ],
+        "summary": "Discount limits per authority level (W-39, admin only)",
+        "description": "The three inclusive limits (seller, manager, director = absolute ceiling) in force, flagged provisional until the admin confirms them.",
+        "responses": {
+          "200": {
+            "description": "Limites de desconto vigentes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscountLimitsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflito de estado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateDiscountLimits",
+        "tags": [
+          "configuration"
+        ],
+        "summary": "Replace the discount limits (W-39, admin only, audited)",
+        "description": "Stores a new immutable configuration snapshot. Ascending (seller <= manager <= director), inclusive, 0 to 99.99. Optimistic on expectedRevision.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDiscountLimitsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Limites atualizados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscountLimitsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflito de estado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/order-entry/configuration": {
       "get": {
         "operationId": "getOrderEntryConfiguration",
@@ -3238,6 +3360,54 @@
           "blocked"
         ]
       },
+      "DiscountLimits": {
+        "type": "object",
+        "properties": {
+          "seller": {
+            "type": "string",
+            "pattern": "^\\d{1,2}(\\.\\d{1,2})?$"
+          },
+          "manager": {
+            "type": "string",
+            "pattern": "^\\d{1,2}(\\.\\d{1,2})?$"
+          },
+          "director": {
+            "type": "string",
+            "pattern": "^\\d{1,2}(\\.\\d{1,2})?$"
+          }
+        },
+        "required": [
+          "seller",
+          "manager",
+          "director"
+        ],
+        "additionalProperties": false
+      },
+      "DiscountLimitsResponse": {
+        "type": "object",
+        "properties": {
+          "limits": {
+            "$ref": "#/components/schemas/DiscountLimits"
+          },
+          "provisional": {
+            "type": "boolean"
+          },
+          "revision": {
+            "type": "string",
+            "minLength": 1
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          }
+        },
+        "required": [
+          "limits",
+          "provisional",
+          "revision",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
       "ErpSubmissionDisabledError": {
         "type": "object",
         "properties": {
@@ -5245,6 +5415,23 @@
           "product_hidden",
           "product_not_sellable"
         ]
+      },
+      "UpdateDiscountLimitsRequest": {
+        "type": "object",
+        "properties": {
+          "expectedRevision": {
+            "type": "string",
+            "minLength": 1
+          },
+          "limits": {
+            "$ref": "#/components/schemas/DiscountLimits"
+          }
+        },
+        "required": [
+          "expectedRevision",
+          "limits"
+        ],
+        "additionalProperties": false
       },
       "UseOrderTemplateRequest": {
         "type": "object",

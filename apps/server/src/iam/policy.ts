@@ -48,6 +48,9 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   // follows this same grant (health.controller.ts), so it is visible to admin and technical only; manager, seller
   // and anonymous callers get the coarse verdict. The least-privilege set (INTEGRATION_ROLES) is the rule.
   getConfiguration: { roles: INTEGRATION_ROLES },
+  // W-39 (DISC-3): the discount limits are administration data: admin only (the director level is approved by the admin, Q6).
+  getDiscountLimits: { roles: ['admin'] },
+  updateDiscountLimits: { roles: ['admin'] },
   // Minimal order-entry slice (never syncStates/gateway/integration/customers/pricing/financial):
   // open to every role that can create an order (seller/manager/admin), unlike getConfiguration above.
   getOrderEntryConfiguration: { roles: EVERY_ROLE },

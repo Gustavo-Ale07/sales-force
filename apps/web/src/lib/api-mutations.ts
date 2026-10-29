@@ -23,6 +23,13 @@ export function submitOrder(api: ApiClient, id: string) {
   return callApi(() => api.POST("/orders/{id}/submit", { params: { path: { id } } }));
 }
 
+export type UpdateDiscountLimitsBody = ApiSchema<"UpdateDiscountLimitsRequest">;
+
+/** W-39: replaces the three discount limits (admin only; the server re-checks the role). */
+export function updateDiscountLimits(api: ApiClient, body: UpdateDiscountLimitsBody) {
+  return callApi(() => api.PUT("/discount-limits", { body }));
+}
+
 export const ERP_SUBMISSION_DISABLED = "erp_submission_disabled";
 
 export type ResolveProductsBody = ApiSchema<"ResolveProductsRequest">;

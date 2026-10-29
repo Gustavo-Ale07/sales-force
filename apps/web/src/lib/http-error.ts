@@ -18,3 +18,7 @@ export function errorStatus(error: unknown): number | undefined {
 export function correlationIdOf(error: unknown): string | undefined {
   return isHttpError(error) ? error.correlationId : undefined;
 }
+
+export function errorCode(error: unknown): string | undefined {
+  return isHttpError(error) ? error.code : undefined;
+}

@@ -4,13 +4,16 @@ import {
   routes,
   type ConfigurationResponse,
   type DatasetIdentity,
+  type DiscountLimitsResponse,
   type OrderEntryConfiguration,
 } from '@salesforce/contracts';
 import { syncState, type Database } from '@salesforce/db';
-import { ApiRoute } from '../http/route.js';
+import { ApiRoute, Contract, type RequestContract } from '../http/route.js';
+import { CurrentUserParam, type CurrentUser } from '../iam/current-user.js';
 import { CLOCK, DATABASE, DATASET_IDENTITY, type Clock } from '../platform/tokens.js';
 import { buildConfigurationResponse, toOrderEntryConfiguration } from './configuration-summary.js';
 import { InstallationConfigurationService } from './configuration.service.js';
+import { DiscountLimitsService } from './discount-limits.service.js';
 
 /**
  * `GET /configuration`: admin and technical (central policy, `getConfiguration`; ROLE-1); the access guard has
@@ -28,12 +31,27 @@ export class ConfigurationController {
     @Inject(DATABASE) private readonly db: Database,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(DATASET_IDENTITY) private readonly dataset: DatasetIdentity | null,
+    @Inject(DiscountLimitsService) private readonly discountLimits: DiscountLimitsService,
   ) {}
 
   @ApiRoute(routes.getConfiguration)
   async get(): Promise<ConfigurationResponse> {
     const [current, rows] = await Promise.all([this.configuration.current(), this.db.select().from(syncState)]);
     return buildConfigurationResponse(current, rows, this.clock());
+  }
+
+  /** W-39: admin only (central policy). */
+  @ApiRoute(routes.getDiscountLimits)
+  getDiscountLimits(): Promise<DiscountLimitsResponse> {
+    return this.discountLimits.get();
+  }
+
+  @ApiRoute(routes.updateDiscountLimits)
+  updateDiscountLimits(
+    @CurrentUserParam() user: CurrentUser,
+    @Contract() contract: RequestContract<typeof routes.updateDiscountLimits>,
+  ): Promise<DiscountLimitsResponse> {
+    return this.discountLimits.update(user, contract.body);
   }
 
   @ApiRoute(routes.getOrderEntryConfiguration)

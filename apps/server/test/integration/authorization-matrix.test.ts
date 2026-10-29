@@ -21,6 +21,9 @@ type Expectation = 'allow' | 'deny';
 const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>>> = {
   logout: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'allow' },
   getConfiguration: { admin: 'allow', manager: 'deny', seller: 'deny', technical: 'allow' },
+  // W-39 discount limits (DISC-3): admin only; manager, seller and technical are denied.
+  getDiscountLimits: { admin: 'allow', manager: 'deny', seller: 'deny', technical: 'deny' },
+  updateDiscountLimits: { admin: 'allow', manager: 'deny', seller: 'deny', technical: 'deny' },
   // Minimal order-entry slice: every role that can create an order needs it (unlike getConfiguration above).
   getOrderEntryConfiguration: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   // Commercial routes (Stage 3A). The three roles that exist may use them; the external

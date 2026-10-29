@@ -7,6 +7,7 @@ import {
 import { ConfigurationVersionService } from './configuration-version.service.js';
 import { ConfigurationController } from './configuration.controller.js';
 import { InstallationConfigurationRepository } from './configuration.repository.js';
+import { DiscountLimitsService } from './discount-limits.service.js';
 
 /** Installation configuration (CFG-1...6): the local mirror of the governed configuration. */
 @Module({
@@ -20,6 +21,7 @@ import { InstallationConfigurationRepository } from './configuration.repository.
     },
     InstallationConfigurationService,
     ConfigurationVersionService,
+    DiscountLimitsService,
   ],
   exports: [InstallationConfigurationService, ConfigurationVersionService],
 })

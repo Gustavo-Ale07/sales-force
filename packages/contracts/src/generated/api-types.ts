@@ -121,6 +121,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/discount-limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Discount limits per authority level (W-39, admin only)
+         * @description The three inclusive limits (seller, manager, director = absolute ceiling) in force, flagged provisional until the admin confirms them.
+         */
+        get: operations["getDiscountLimits"];
+        /**
+         * Replace the discount limits (W-39, admin only, audited)
+         * @description Stores a new immutable configuration snapshot. Ascending (seller <= manager <= director), inclusive, 0 to 99.99. Optimistic on expectedRevision.
+         */
+        put: operations["updateDiscountLimits"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/order-entry/configuration": {
         parameters: {
             query?: never;
@@ -653,6 +677,17 @@ export interface components {
         DecimalString: string;
         /** @enum {string} */
         DiscountAuthorityStatus: "not_evaluated" | "within_authority" | "needs_manager" | "needs_director" | "blocked";
+        DiscountLimits: {
+            seller: string;
+            manager: string;
+            director: string;
+        };
+        DiscountLimitsResponse: {
+            limits: components["schemas"]["DiscountLimits"];
+            provisional: boolean;
+            revision: string;
+            updatedAt: components["schemas"]["IsoTimestamp"];
+        };
         ErpSubmissionDisabledError: {
             /** @constant */
             code: "erp_submission_disabled";
@@ -1052,6 +1087,10 @@ export interface components {
         SyncStatus: "idle" | "running" | "succeeded" | "failed";
         /** @enum {string} */
         TemplateLineSkipReason: "product_removed" | "product_inactive" | "no_price" | "zero_price" | "product_hidden" | "product_not_sellable";
+        UpdateDiscountLimitsRequest: {
+            expectedRevision: string;
+            limits: components["schemas"]["DiscountLimits"];
+        };
         UseOrderTemplateRequest: {
             /** Format: uuid */
             clientRequestId: string;
@@ -1264,6 +1303,113 @@ export interface operations {
             };
             /** @description Serviço indisponível */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    getDiscountLimits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Limites de desconto vigentes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscountLimitsResponse"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflito de estado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    updateDiscountLimits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDiscountLimitsRequest"];
+            };
+        };
+        responses: {
+            /** @description Limites atualizados */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscountLimitsResponse"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflito de estado */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

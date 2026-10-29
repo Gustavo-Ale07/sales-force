@@ -22,6 +22,7 @@ export const queryKeys = {
   ready: ["ready"] as const,
   configuration: ["configuration"] as const,
   orderEntryConfiguration: ["order-entry-configuration"] as const,
+  discountLimits: ["discount-limits"] as const,
   dashboard: ["dashboard"] as const,
   sellers: ["sellers"] as const,
   customers: (params: CustomersParams) => ["customers", "list", params] as const,
@@ -62,6 +63,13 @@ export function configurationQueryOptions(api: ApiClient) {
   return queryOptions({
     queryKey: queryKeys.configuration,
     queryFn: () => callApi(() => api.GET("/configuration")),
+  });
+}
+
+export function discountLimitsQueryOptions(api: ApiClient) {
+  return queryOptions({
+    queryKey: queryKeys.discountLimits,
+    queryFn: () => callApi(() => api.GET("/discount-limits")),
   });
 }
 

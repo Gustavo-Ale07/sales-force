@@ -26,6 +26,8 @@ export const AUDIT_ACTIONS = {
   directoryLinkRevoked: 'auth.directory.link_revoked',
   /** The ERP blocks the user: the account's sessions were revoked; the (manual) link record was left as is. */
   directorySessionRevoked: 'auth.directory.session_revoked',
+  /** The admin changed the discount limits (W-39, DISC-3): previous and new values, never free text. */
+  discountLimitsChanged: 'config.discount_limits_changed',
   orderCreated: 'order.created',
   orderReplaced: 'order.replaced',
   orderDiscarded: 'order.discarded',

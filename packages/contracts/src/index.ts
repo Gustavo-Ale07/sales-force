@@ -10,6 +10,7 @@ export * from './sellers.js';
 export * from './catalog.js';
 export * from './customers.js';
 export * from './orders.js';
+export * from './discount-limits.js';
 export * from './templates.js';
 export * from './dashboard.js';
 export * from './routes.js';

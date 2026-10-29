@@ -19,6 +19,7 @@ import {
   CustomersResponseSchema,
 } from './customers.js';
 import { DashboardResponseSchema } from './dashboard.js';
+import { DiscountLimitsResponseSchema, UpdateDiscountLimitsRequestSchema } from './discount-limits.js';
 import { ErpSubmissionDisabledErrorSchema, type ErrorStatus } from './errors.js';
 import { HealthResponseSchema, ReadyResponseSchema } from './health.js';
 import {
@@ -171,6 +172,33 @@ export const routes = {
       200: { description: 'Configuração vigente', schema: ConfigurationResponseSchema },
     },
     errors: [401, 403, 503],
+  }),
+
+  getDiscountLimits: defineRoute({
+    operationId: 'getDiscountLimits',
+    method: 'get',
+    path: '/discount-limits',
+    tags: ['configuration'],
+    summary: 'Discount limits per authority level (W-39, admin only)',
+    description:
+      'The three inclusive limits (seller, manager, director = absolute ceiling) in force, flagged provisional until the admin confirms them.',
+    auth: 'session',
+    request: {},
+    responses: { 200: { description: 'Limites de desconto vigentes', schema: DiscountLimitsResponseSchema } },
+    errors: [401, 403, 409],
+  }),
+  updateDiscountLimits: defineRoute({
+    operationId: 'updateDiscountLimits',
+    method: 'put',
+    path: '/discount-limits',
+    tags: ['configuration'],
+    summary: 'Replace the discount limits (W-39, admin only, audited)',
+    description:
+      'Stores a new immutable configuration snapshot. Ascending (seller <= manager <= director), inclusive, 0 to 99.99. Optimistic on expectedRevision.',
+    auth: 'session',
+    request: { body: UpdateDiscountLimitsRequestSchema },
+    responses: { 200: { description: 'Limites atualizados', schema: DiscountLimitsResponseSchema } },
+    errors: [400, 401, 403, 409],
   }),
 
   getOrderEntryConfiguration: defineRoute({
