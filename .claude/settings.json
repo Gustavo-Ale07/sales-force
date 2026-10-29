@@ -71,7 +71,6 @@
     ],
     "ask": [
       "Read(.sankhya-raw/**)",
-      "Bash(git commit *)",
       "Bash(git push *)",
       "Bash(git merge *)",
       "Bash(git rebase *)",
@@ -108,11 +107,9 @@
       "Bash(ssh *)",
       "Bash(scp *)",
       "Bash(eas *)",
-      "Bash(npx *)",
       "Bash(pnpm dlx *)",
       "Bash(pnpm add *)",
       "Bash(npm install *)",
-      "PowerShell(git commit *)",
       "PowerShell(git push *)",
       "PowerShell(git merge *)",
       "PowerShell(git rebase *)",
@@ -146,7 +143,6 @@
       "PowerShell(psql *)",
       "PowerShell(ssh *)",
       "PowerShell(eas *)",
-      "PowerShell(npx *)",
       "PowerShell(pnpm dlx *)",
       "PowerShell(pnpm add *)",
       "PowerShell(npm install *)"
