@@ -40,7 +40,7 @@ test.describe("Cenário 5 — envio ao ERP desabilitado", () => {
       await page.getByRole("button", { name: "Enviar ao ERP" }).click();
       expect((await submitResponse).status()).toBe(409);
     }
-    await navLink(page, "Pedidos").click();
+    await navLink(page, "Vendas").click();
     await expect(bodyRows(tableRegion(page, "Pedidos")).filter({ hasText: "Rascunho nº" }).first()).toBeVisible();
     await expect(bodyRows(tableRegion(page, "Pedidos")).filter({ hasText: /Na fila|Enviado|Rejeitado/ })).toHaveCount(0);
   });

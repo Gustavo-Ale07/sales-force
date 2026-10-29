@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { PRICED_PRODUCTS, SELLER_CUSTOMER, UNPRICED_PRODUCT, bodyRows, loginAsSeller, navLink, pickFromCombobox, priceStateFilter, tableRegion } from "./support/app";
+import { PRICED_PRODUCTS, SELLER_CUSTOMER, UNPRICED_PRODUCT, bodyRows, loginAsSeller, navLink, pickCustomer, priceStateFilter, tableRegion } from "./support/app";
 
 /** Cost, margin and markup vocabulary that must never reach an external-facing catalog view (P-20/P-23). */
 const RESTRICTED_TEXT = /\b(custos?|margem|margens|markup|lucro|cost|costs|margin|margins|profit)\b/i;
@@ -18,7 +18,7 @@ function collectKeys(value: unknown): string[] {
 test.describe("Cenário 3 — catálogo, preços e dados restritos", () => {
   test("produto sem linha de preço mostra 'Sem preço', nunca R$ 0,00, e nenhum custo/margem aparece", async ({ page }) => {
     await loginAsSeller(page);
-    await navLink(page, "Produtos").click();
+    await navLink(page, "Catálogo").click();
     await expect(page.getByRole("heading", { level: 1, name: "Catálogo de produtos" })).toBeVisible();
 
     await page.getByRole("searchbox", { name: "Buscar produto por código, descrição ou referência" }).fill("Aguarrás");
@@ -36,13 +36,13 @@ test.describe("Cenário 3 — catálogo, preços e dados restritos", () => {
 
   test("o filtro 'Sem preço' lista somente linhas sem valor monetário", async ({ page }) => {
     await loginAsSeller(page);
-    await navLink(page, "Produtos").click();
+    await navLink(page, "Catálogo").click();
     await priceStateFilter(page).selectOption({ label: "Sem preço" });
     await expect(page).toHaveURL(/priceState=none/);
 
     const rows = bodyRows(tableRegion(page, "Produtos"));
     await expect(rows.first()).toBeVisible();
-    await expect(page.getByText(/Mostrando 1–25 de \d/)).toBeVisible();
+    await expect(page.getByText(/Mostrando 1–\d+ de \d/)).toBeVisible();
     for (const row of await rows.all()) {
       await expect(row).toContainText("Sem preço");
       await expect(row).not.toContainText("R$");
@@ -51,8 +51,8 @@ test.describe("Cenário 3 — catálogo, preços e dados restritos", () => {
 
   test("com um cliente escolhido, a origem da tabela aparece e produtos com preço mostram valor em reais", async ({ page }) => {
     await loginAsSeller(page);
-    await navLink(page, "Produtos").click();
-    await pickFromCombobox(page, page.getByRole("combobox", { name: "Preços para o cliente" }), "Alvaro", new RegExp(`^${SELLER_CUSTOMER.code} — `));
+    await navLink(page, "Catálogo").click();
+    await pickCustomer(page, "Alvaro", SELLER_CUSTOMER.name, page.getByRole("button", { name: "Preços para o cliente" }));
     await expect(page).toHaveURL(new RegExp(`customerCode=${SELLER_CUSTOMER.code}`));
     await expect(page.getByText(`Cliente: ${SELLER_CUSTOMER.name}`)).toBeVisible();
     await expect(page.getByRole("status").filter({ hasText: /Origem dos preços.*Preços da tabela 21/ })).toBeVisible();
@@ -65,7 +65,7 @@ test.describe("Cenário 3 — catálogo, preços e dados restritos", () => {
 
   test("o painel do produto mostra a origem do preço e o estado vazio da busca é claro", async ({ page }) => {
     await loginAsSeller(page);
-    await navLink(page, "Produtos").click();
+    await navLink(page, "Catálogo").click();
     const search = page.getByRole("searchbox", { name: "Buscar produto por código, descrição ou referência" });
 
     await search.fill("zzz-nenhum-produto");
@@ -96,7 +96,7 @@ test.describe("Cenário 3 — catálogo, preços e dados restritos", () => {
     const first = (JSON.parse(raw) as { items: Array<Record<string, unknown>> }).items[0];
     expect(first).toBeDefined();
     expect(Object.keys(first ?? {}).sort()).toEqual(
-      ["active", "brand", "code", "description", "groupCode", "groupName", "listPrice", "reference", "sellable", "unit"].sort(),
+      ["active", "brand", "code", "description", "groupCode", "groupName", "image", "listPrice", "reference", "sellable", "unit"].sort(),
     );
   });
 });

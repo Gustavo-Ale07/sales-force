@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { PRICED_PRODUCTS, SELLER_CUSTOMER, UNPRICED_PRODUCT, bodyRows, createDraftViaUi, loginAsSeller, navLink, pickFromCombobox, tableRegion } from "./support/app";
+import { PRICED_PRODUCTS, SELLER_CUSTOMER, UNPRICED_PRODUCT, bodyRows, createDraftViaUi, loginAsSeller, navLink, pickCustomer, addProduct, tableRegion } from "./support/app";
 
 /** The draft's reference ("Rascunho nº 12") as shown in the editor title. */
 async function draftReference(page: Page): Promise<string> {
@@ -18,7 +18,7 @@ test.describe("Cenário 4 — novo pedido, rascunhos e descarte", () => {
     expect(total).toMatch(/^R\$\s?\d{1,3}(\.\d{3})*,\d{2}$/);
     const reference = await draftReference(page);
 
-    await navLink(page, "Pedidos").click();
+    await navLink(page, "Vendas").click();
     const row = bodyRows(tableRegion(page, "Pedidos")).filter({ hasText: reference });
     await expect(row).toHaveCount(1);
     await expect(row).toContainText("Rascunho");
@@ -32,10 +32,10 @@ test.describe("Cenário 4 — novo pedido, rascunhos e descarte", () => {
     const { id, total } = await createDraftViaUi(page);
     const reference = await draftReference(page);
 
-    await navLink(page, "Pedidos").click();
+    await navLink(page, "Vendas").click();
     await bodyRows(tableRegion(page, "Pedidos")).filter({ hasText: reference }).click();
     await expect(page).toHaveURL(new RegExp(`/pedidos/${id}$`));
-    await expect(page.getByRole("combobox", { name: /^Cliente/ })).toHaveValue(new RegExp(`^${SELLER_CUSTOMER.code} — `));
+    await expect(page.getByRole("button", { name: /^Cliente/ })).toContainText(`${SELLER_CUSTOMER.code} — `);
     const first = page.getByRole("textbox", { name: `Quantidade de ${PRICED_PRODUCTS[0]}` });
     await expect(first).toHaveValue("2");
     await expect(page.getByRole("textbox", { name: `Quantidade de ${PRICED_PRODUCTS[1]}` })).toHaveValue("3,5");
@@ -75,11 +75,12 @@ test.describe("Cenário 4 — novo pedido, rascunhos e descarte", () => {
 
   test("linha sem preço aparece como 'Sem preço' (nunca R$ 0,00), o total é parcial e a remoção o normaliza", async ({ page }) => {
     await loginAsSeller(page);
-    await navLink(page, "Pedidos").click();
+    await navLink(page, "Vendas").click();
     await page.getByRole("link", { name: "Novo pedido" }).first().click();
-    await pickFromCombobox(page, page.getByRole("combobox", { name: /^Cliente/ }), "Alvaro", new RegExp(`^${SELLER_CUSTOMER.code} — `));
-    await pickFromCombobox(page, page.getByRole("combobox", { name: "Adicionar produto" }), PRICED_PRODUCTS[0], new RegExp(`— ${PRICED_PRODUCTS[0]}`));
-    await pickFromCombobox(page, page.getByRole("combobox", { name: "Adicionar produto" }), UNPRICED_PRODUCT, new RegExp(`— ${UNPRICED_PRODUCT}`));
+    await pickCustomer(page, "Alvaro", SELLER_CUSTOMER.name);
+    await addProduct(page, PRICED_PRODUCTS[0], "1");
+    await addProduct(page, UNPRICED_PRODUCT, "1");
+    await page.getByRole("button", { name: /^Carrinho/ }).click();
 
     const unpricedRow = bodyRows(tableRegion(page, "Itens do pedido")).filter({ hasText: UNPRICED_PRODUCT });
     await expect(unpricedRow).toContainText("Sem preço");
@@ -87,26 +88,25 @@ test.describe("Cenário 4 — novo pedido, rascunhos e descarte", () => {
     await expect(page.getByText("Total parcial estimado")).toBeVisible();
     await expect(page.getByText("1 item sem preço não entra na soma.")).toBeVisible();
 
-    // The server refuses to persist a line that is not orderable in this installation (demo configuration), with a
-    // message the seller can act on; nothing is created.
-    const saveResponse = page.waitForResponse((r) => r.url().endsWith("/api/v1/orders") && r.request().method() === "POST");
-    await page.getByRole("button", { name: "Salvar rascunho" }).click();
-    expect((await saveResponse).status()).toBe(400);
-    await expect(page.getByRole("alert").filter({ hasText: "Este item não pode ser pedido sem preço nesta instalação." })).toBeVisible();
+    // The editor itself blocks saving a line that is not orderable in this installation (demo configuration), with a
+    // message the seller can act on; nothing is sent and nothing is created. The server still refuses it (API tests).
+    await expect(page.getByText("Este item não pode ser pedido sem preço nesta instalação.")).toBeVisible();
+    await expect(page.getByText("Remova os itens sem preço para salvar.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Salvar rascunho" })).toBeDisabled();
     await expect(page).toHaveURL(/\/pedidos\/novo$/);
 
     await page.getByRole("button", { name: `Remover ${UNPRICED_PRODUCT}` }).click();
-    await expect(page.getByRole("term")).toHaveText("Total estimado");
+    await expect(page.getByLabel("Resumo do pedido").getByRole("term").filter({ hasText: "Total" })).toHaveText("Total estimado");
     await expect(page.getByText("Total parcial estimado")).toHaveCount(0);
     await expect(page.getByTestId("order-total")).toContainText(/R\$\s?\d/);
   });
 
   test("sair com alterações não salvas pede confirmação e permite continuar editando", async ({ page }) => {
     await loginAsSeller(page);
-    await navLink(page, "Pedidos").click();
+    await navLink(page, "Vendas").click();
     await page.getByRole("link", { name: "Novo pedido" }).first().click();
-    await pickFromCombobox(page, page.getByRole("combobox", { name: /^Cliente/ }), "Alvaro", new RegExp(`^${SELLER_CUSTOMER.code} — `));
-    await pickFromCombobox(page, page.getByRole("combobox", { name: "Adicionar produto" }), PRICED_PRODUCTS[0], new RegExp(`— ${PRICED_PRODUCTS[0]}`));
+    await pickCustomer(page, "Alvaro", SELLER_CUSTOMER.name);
+    await addProduct(page, PRICED_PRODUCTS[0], "1");
 
     await navLink(page, "Clientes").click();
     const dialog = page.getByRole("dialog", { name: "Sair sem salvar?" });
@@ -117,7 +117,7 @@ test.describe("Cenário 4 — novo pedido, rascunhos e descarte", () => {
 
     await navLink(page, "Clientes").click();
     await page.getByRole("dialog", { name: "Sair sem salvar?" }).getByRole("button", { name: "Sair sem salvar" }).click();
-    await expect(page.getByRole("heading", { level: 1, name: "Carteira de clientes" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Clientes" })).toBeVisible();
   });
 
   test("descartar pede confirmação; 'Manter rascunho' preserva e a confirmação marca como Descartado", async ({ page }) => {
@@ -125,7 +125,7 @@ test.describe("Cenário 4 — novo pedido, rascunhos e descarte", () => {
     await createDraftViaUi(page);
     const reference = await draftReference(page);
 
-    await navLink(page, "Pedidos").click();
+    await navLink(page, "Vendas").click();
     const row = bodyRows(tableRegion(page, "Pedidos")).filter({ hasText: reference });
     await row.getByRole("button", { name: `Descartar ${reference}` }).click();
     const dialog = page.getByRole("dialog", { name: "Descartar rascunho?" });
@@ -154,8 +154,9 @@ test.describe("Cenário 4 — novo pedido, rascunhos e descarte", () => {
     const otherQty = other.getByRole("textbox", { name: `Quantidade de ${PRICED_PRODUCTS[0]}` });
     await expect(otherQty).toHaveValue("2");
     await otherQty.fill("9");
+    const otherSaved = other.waitForResponse((r) => r.url().endsWith(`/api/v1/orders/${id}`) && r.request().method() === "PUT");
     await other.getByRole("button", { name: "Salvar rascunho" }).click();
-    await expect(other.getByText("Rascunho salvo").first()).toBeVisible();
+    expect((await otherSaved).status()).toBe(200);
 
     // The first tab still holds the old version: its save must be refused, not silently overwrite.
     await page.getByRole("textbox", { name: `Quantidade de ${PRICED_PRODUCTS[0]}` }).fill("4");

@@ -10,7 +10,7 @@ test.describe("Cenário 2 — carteira do vendedor", () => {
     await loginAsSeller(page);
     const sellersLoaded = page.waitForResponse((r) => new URL(r.url()).pathname === "/api/v1/sellers");
     await navLink(page, "Clientes").click();
-    await expect(page.getByRole("heading", { level: 1, name: "Carteira de clientes" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Clientes" })).toBeVisible();
 
     const clientes = tableRegion(page, "Clientes");
     await expect(page.getByText(`Mostrando 1–25 de ${SELLER_103_CUSTOMERS}`)).toBeVisible();
@@ -60,20 +60,18 @@ test.describe("Cenário 2 — carteira do vendedor", () => {
 
     await expect(page).toHaveURL(new RegExp(`/clientes/${SELLER_CUSTOMER.code}$`));
     await expect(page.getByRole("heading", { level: 1, name: SELLER_CUSTOMER.name })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Cadastro" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Condições comerciais" })).toBeVisible();
     await expect(page.getByText("Código", { exact: true })).toBeVisible();
     await expect(page.getByText(String(SELLER_CUSTOMER.code), { exact: true }).first()).toBeVisible();
     await expect(page.getByText(SELLER_NAME).first()).toBeVisible();
     await expect(page.getByText(/^21 — /)).toBeVisible();
     await expect(page.getByText(/Tabela 21 \(do cliente\)/)).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Pedidos do cliente" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Vendas" })).toBeVisible();
     // Breadcrumbs reflect the location.
-    await expect(page.getByRole("navigation", { name: "Trilha de navegação" })).toContainText(`Cliente ${SELLER_CUSTOMER.code}`);
+    await expect(page.getByRole("navigation", { name: "Trilha de navegação" })).toContainText("Clientes");
 
     // The order shortcut carries the customer into the editor.
     await page.getByRole("link", { name: "Novo pedido" }).click();
     await expect(page.getByRole("heading", { level: 1, name: "Novo pedido" })).toBeVisible();
-    await expect(page.getByRole("combobox", { name: /^Cliente/ })).toHaveValue(`${SELLER_CUSTOMER.code} — ${SELLER_CUSTOMER.name}`);
+    await expect(page.getByRole("button", { name: /^Cliente/ })).toContainText(`${SELLER_CUSTOMER.code} — ${SELLER_CUSTOMER.name}`);
   });
 });
