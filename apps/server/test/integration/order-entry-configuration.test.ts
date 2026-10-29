@@ -84,6 +84,28 @@ describe('GET /api/v1/order-entry/configuration (getOrderEntryConfiguration)', (
     },
   );
 
+  it('CFG-7 (D6): the seller slice has no secret, cost or margin key at any depth, and answers 200 (no 403) on this path', async () => {
+    const { ctx } = await setupApp(DATASET);
+    await createTestAccount(ctx.database.handle, { username: 'oe-deep@example.test', role: 'seller' });
+    const cookie = await loginCookie(ctx, 'oe-deep@example.test', TEST_PASSWORD);
+    const response = await ctx.app.inject({ method: 'GET', url: ORDER_ENTRY_URL, headers: { cookie } });
+    expect(response.statusCode).toBe(200);
+    const keys: string[] = [];
+    const walk = (value: unknown): void => {
+      if (Array.isArray(value)) value.forEach(walk);
+      else if (value !== null && typeof value === 'object') {
+        for (const [key, inner] of Object.entries(value)) {
+          keys.push(key);
+          walk(inner);
+        }
+      }
+    };
+    walk(response.json());
+    const forbidden = /cost|custo|margin|margem|secret|segredo|token|password|senha|credential|apikey/i;
+    expect(keys.filter((key) => forbidden.test(key))).toEqual([]);
+    expect(response.body).not.toMatch(forbidden);
+  });
+
   it('returns dataset null when the installation declares no identity', async () => {
     const { ctx } = await setupApp(null);
     await createTestAccount(ctx.database.handle, { username: 'oe-null@example.test', role: 'seller' });

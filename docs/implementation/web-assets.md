@@ -62,3 +62,7 @@ Product photos are NOT static assets: they come from Sankhya through backend syn
 - `plac-mark.png` is a small crop (173x148, not square): acceptable as a favicon, soft on high-density displays.
 - `login-hero.png` weighs ~2.9 MB. No lossless/lossy optimizer is available in this environment; a visually equivalent WebP/optimized PNG should be produced with a proper tool and compared before replacing it.
 - Default favicon bakes the PLAC mark into the image for every installation (PROD-1 reusable product); other installations override it with `BRAND_MARK_URL`. Owner call whether the neutral default should be product-neutral.
+
+## CSP (SEC-2, 2026-10-29)
+
+O web é servido por nginx estático (`deploy/nginx/default.conf`), que não injeta nonce por resposta; por isso `get-nonce/setNonce` não se aplica. `script-src` fica `'self'` (sem inline, eval ou nonce) e `'unsafe-inline'` é permitido SOMENTE em `style-src` (o `react-remove-scroll-bar` do Radix injeta um `<style>` em tempo de execução). O Caddy de staging não define CSP. Guarda: `apps/web/src/csp.test.ts`. O bloqueio de rolagem por CSS próprio (`scroll-lock.test.ts`) permanece como defesa adicional.
