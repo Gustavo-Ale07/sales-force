@@ -720,6 +720,23 @@ describe('AUTH-6: outage versus invalid credentials, and the local seller passwo
     expect(await ctx.db.select().from(session)).toHaveLength(0);
   });
 
+  it('AUTH-12 (D4): a name matching a local seller ALWAYS goes to the verifier; the local hash is never used; the 401 is uniform', async () => {
+    const ctx = await setup(AUTO);
+    await createTestAccount(ctx.database.handle, { username: 'vendlocal', role: 'seller' }, ctx.clock.fn);
+    // The verifier knows the name with ANOTHER password: the valid local password must not be accepted anywhere.
+    ctx.verifier.users.set('vendlocal', { password: SANKHYA_PASSWORD, identity: { externalUserId: '9001', displayName: '', sellerCode: null, active: true } });
+    const localHash = await failure(ctx.service.login({ username: 'vendlocal', password: TEST_PASSWORD }, META));
+    const unknown = await failure(ctx.service.login({ username: 'ninguem', password: TEST_PASSWORD }, META));
+    expect(ctx.verifier.calls.map((c) => c.login)).toEqual(['vendlocal', 'ninguem']);
+    for (const err of [localHash, unknown]) {
+      expect(err.status).toBe(401);
+      expect(err.code).toBe('invalid_credentials');
+    }
+    expect(localHash.message).toBe(unknown.message);
+    expect(await ctx.db.select().from(session)).toHaveLength(0);
+    expect(ctx.capture.lines().map((l) => JSON.stringify(l)).join(' ')).not.toContain(TEST_PASSWORD);
+  });
+
   it('refuses a local seller account when the directory login is off, with the same uniform error', async () => {
     const ctx = await setup({ external: false });
     await createTestAccount(ctx.database.handle, { username: 'vendlocal', role: 'seller' }, ctx.clock.fn);
