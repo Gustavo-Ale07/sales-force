@@ -30,7 +30,8 @@ export function createOperatorAccountService(
     new ThrottleRepository(handle.db),
     new AuditService(handle.db, clock),
     clock,
-    ...(authMode === undefined ? [] : [{ authMode }]),
+    // Unset = 'local': the tool applies no external-mode refusal (same behavior as before AUTH-14 made the config mandatory).
+    { authMode: authMode ?? 'local' },
   );
   if (operator !== undefined) service.attributeTo(operator);
   return { accounts: service, repository };

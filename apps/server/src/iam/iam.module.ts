@@ -24,6 +24,8 @@ import { ThrottleRepository } from './throttle.repository.js';
 @Module({})
 export class IamModule {
   static register(config: AuthConfig): DynamicModule {
+    // AUTH-14: the authentication module cannot start without its configuration.
+    if (config === undefined || config === null) throw new Error('AUTH_CONFIG is required: the authentication module does not start without it (AUTH-14).');
     assertSafeAuthConfig(config);
     const external = config.externalLogin;
     // Directory login is wired only when explicitly enabled WITH a verifier endpoint; otherwise the optional ports stay

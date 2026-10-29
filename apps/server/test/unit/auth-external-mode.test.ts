@@ -1,4 +1,6 @@
+import 'reflect-metadata';
 import { describe, expect, it } from 'vitest';
+import { AccountService } from '../../src/iam/account.service.js';
 import { AuthService } from '../../src/iam/auth.service.js';
 import { IamModule } from '../../src/iam/iam.module.js';
 import { parseApiEnv } from '../../src/config/api-env.js';
@@ -135,6 +137,12 @@ describe('AUTH_MODE=external: resulting login policy', () => {
   it('IamModule.register runs the assertion', () => {
     expect(() => IamModule.register(testAuthConfig({ authMode: 'external', allowedRoles: LOCAL_MODE_ROLES }))).toThrow(/external/);
     expect(() => IamModule.register(config())).not.toThrow();
+  });
+
+  it('AUTH_CONFIG is mandatory (AUTH-14): the module refuses to register and AccountService has no optional dependency', () => {
+    expect(() => IamModule.register(undefined as never)).toThrow(/AUTH_CONFIG is required/);
+    const optional = (Reflect.getMetadata('optional:paramtypes', AccountService) ?? []) as number[];
+    expect(optional).toEqual([]);
   });
 
   it('assertSafeAuthConfig leaves the old modes alone', () => {

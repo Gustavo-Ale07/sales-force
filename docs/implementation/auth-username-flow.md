@@ -148,4 +148,6 @@ COMMIT;
 
 **Defesa em profundidade (PB-1):** `assertSafeAuthConfig` roda em `authConfigFromEnv`, no construtor de `AuthService` e em `IamModule.register`; em `external` recusa também `VERIFIED_AUTO_PROVISION` sem a prova idusu = CODUSU na configuração. `AccountService.createAccount` recusa `seller`/`manager` quando o modo é `external` (o CLI mostra a mesma mensagem antes de ler a senha).
 
+**`AUTH_CONFIG` obrigatório (AUTH-14, 2026-10-29):** `AccountService` não tem mais dependência `@Optional` de `AUTH_CONFIG` e `IamModule.register` lança `AUTH_CONFIG is required` se a configuração faltar: o servidor não sobe sem ela. As ferramentas de operador (`createOperatorAccountService`) passam `authMode` (padrão `local` quando não informado, sem recusa de modo externo). Teste: `test/unit/auth-external-mode.test.ts`.
+
 **Testes:** `test/unit/auth-external-mode.test.ts` (validação de boot, política de papéis, guard de CLI/seed) e `test/integration/auth-external-mode.test.ts` (login admin/technical local, manager/seller local recusados, indisponibilidade do verificador = 503).

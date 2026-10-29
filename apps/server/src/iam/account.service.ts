@@ -1,4 +1,4 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type { AccountRole, AccountStatus, Database } from '@salesforce/db';
 import { isValidSellerCode, normalizeUsername } from '@salesforce/domain';
 import { uuidv7 } from '../platform/ids.js';
@@ -92,8 +92,8 @@ export class AccountService {
     @Inject(ThrottleRepository) private readonly throttle: ThrottleRepository,
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(CLOCK) private readonly clock: Clock,
-    /** Only `authMode` is read: under `external` no seller/manager account is created with a local password (PB-1). */
-    @Optional() @Inject(AUTH_CONFIG) private readonly authConfig?: { readonly authMode: string },
+    /** AUTH_CONFIG is mandatory (AUTH-14): no `@Optional`, the container refuses to start without it. Only `authMode` is read: under `external` no seller/manager account is created with a local password (PB-1). */
+    @Inject(AUTH_CONFIG) private readonly authConfig: { readonly authMode: string },
   ) {}
 
   /** Attributes every audit row of this instance to the person running the script (operator CLI, seed). */
@@ -112,7 +112,7 @@ export class AccountService {
     input: { username: string; displayName: string; password: string; role: AccountRole },
     actor: ActorRef = CLI_ACTOR,
   ): Promise<string> {
-    const refusal = localPasswordRefusal(this.authConfig?.authMode, input.role);
+    const refusal = localPasswordRefusal(this.authConfig.authMode, input.role);
     if (refusal !== null) throw new OperationalLocalAccountError(refusal);
     const violations = checkPasswordPolicy(input.password);
     if (violations.length > 0) throw new PasswordPolicyError(violations);
