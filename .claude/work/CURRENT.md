@@ -1,8 +1,18 @@
 # CURRENT
 
-STATUS: ACTIVE — retomada em 2026-10-28. Fonte de verdade: este worktree (`feat/sales-force-evolution`). Nada enviado (sem push), nada em `main`.
+STATUS: ACTIVE — atualizado em 2026-10-29. Fonte de verdade ÚNICA: `C:\Dev\sales-force-evolution` (`feat/sales-force-evolution`, publicada em `origin`). Nada em `main`.
 
-> Checkout antigo `C:\Dev\sales-force` (branch `feat/phase-0-foundation`): guarda só a suíte Playwright de 21/09 como WIP pré-pivô (commit `2a836a0` lá). Não migrada para cá; não retomar.
+> **Toda sessão do Claude Code abre a partir de `C:\Dev\sales-force-evolution`.** Este repositório é independente (não é worktree do outro). O checkout `C:\Dev\sales-force` (`feat/phase-0-foundation`) fica só até o D12 ser commitado aqui (cherry-pick de `2a836a0`: apenas `apps/web/e2e/**` e os arquivos de pacote, lint, tsconfig e lock; sem `.claude/settings.json` e sem `CURRENT.md`); depois vai para `C:\Dev\_arquivo`.
+
+## Repositórios (auditoria 2026-10-29, `REPO_AUDIT_2026-10-29.md`)
+
+- Arquivado: `C:\Dev\sales-force-evolution-old` → `C:\Dev\_arquivo\sales-force-evolution-old-20261029` (worktree antigo; `f57b2f8` contido aqui; levou `.env`, `deploy/.env` e `debug.keystore` sem abrir).
+- Arquivado: `C:\Users\T-GAMER\Desktop\sales-force` → `C:\Dev\_arquivo\sales-force-desktop-20261029` (diff das modificações em `C:\Dev\_arquivo\sales-force-desktop-20261029.diff`).
+- Mantido até o D12: `C:\Dev\sales-force`. Seu `deploy/.env` fica intocado. Resta lá um registro de worktree obsoleto (`.git/worktrees/sales-force-evolution`) que o `git worktree prune` não removeu.
+- Histórico do Claude Code `~/.claude/projects/C--Dev-sales-force`: mantido, não tocar.
+- Staging está em `e705f2f`, 30+ commits atrás deste HEAD; a migration `0012_sales_order_discount_authority` está pendente lá. AUTH-6, PB-1 e DISC-2 ainda não foram para staging.
+- Decisões D1–D12 (`02415be`, `docs/decisions.md` §3.14): confirmadas pelo dono em 2026-10-29.
+- `gh` não instalado (adiado pelo dono). `dbexplorer-sankhya` tem 40 commits e 47 branches sem remoto (outro projeto, sem ação).
 
 ## Decisões do dono (responder cada linha com uma palavra: SIM / NÃO / ADIAR / opção)
 
