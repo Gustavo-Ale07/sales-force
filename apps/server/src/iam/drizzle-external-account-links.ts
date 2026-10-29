@@ -69,6 +69,23 @@ export class DrizzleExternalAccountLinks implements ExternalAccountLinks {
     return row !== undefined;
   }
 
+  async revokeSessionsIfDirectoryBlocked(input: { externalUserId: string; now: Date; maxMirrorAgeMs: number }): Promise<boolean> {
+    const userCode = parseDirectoryUserCode(input.externalUserId);
+    if (userCode === null) return false;
+    // Only an explicit `true` counts; unknown or a failing source is not "blocked".
+    const blocked = await this.blockSource.isBlocked(userCode).catch(() => null);
+    if (blocked !== true) return false;
+    return this.db.transaction(async (tx) => {
+      const [state] = await tx.select({ lastSuccessAt: syncState.lastSuccessAt }).from(syncState).where(eq(syncState.entity, DIRECTORY_ENTITY));
+      if (state?.lastSuccessAt == null || input.now.getTime() - state.lastSuccessAt.getTime() > input.maxMirrorAgeMs) return false;
+      const [existing] = await tx.select({ id: account.id }).from(account).where(eq(account.externalUserId, input.externalUserId));
+      if (existing === undefined) return false;
+      await tx.update(session).set({ revokedAt: input.now }).where(and(eq(session.accountId, existing.id), isNull(session.revokedAt)));
+      await this.audit.record({ action: AUDIT_ACTIONS.directorySessionRevoked, actorAccountId: existing.id, detail: { reason: 'user_blocked', userCode } }, tx);
+      return true;
+    });
+  }
+
   async syncFromDirectory(input: { externalUserId: string; now: Date; maxMirrorAgeMs: number; allowCreate: boolean }): Promise<DirectorySyncOutcome> {
     const userCode = parseDirectoryUserCode(input.externalUserId);
     if (userCode === null) return { ok: false, refusal: 'invalid_identity', accountId: null, revoked: false };

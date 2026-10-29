@@ -481,7 +481,7 @@ export class AuthService implements OnModuleInit {
     if (!this.roleMayHoldSession(row.role, row.external)) return null;
     // An automatic seller link follows the ERP: re-checked at most once per touch interval (the revocation window, on top of the
     // mirror refresh). Only a definitive change on a fresh mirror revokes the sessions; an old or missing mirror changes nothing (AUTH-6).
-    if (row.external && row.role === 'seller' && !(await this.automaticLinkHolds(row.accountId, row.externalUserId, now, row.lastSeenAt))) return null;
+    if (row.external && !(await this.automaticLinkHolds(row.accountId, row.externalUserId, now, row.lastSeenAt))) return null;
 
     let expiresAt = row.expiresAt;
     let renewed = false;
@@ -526,8 +526,11 @@ export class AuthService implements OnModuleInit {
     if (now.getTime() - lastSeenAt.getTime() < this.config.sessionTouchIntervalMs) return true;
     try {
       if (externalUserId === null) return true;
-      // A manual (administrator) link is never governed by the mirror: only `sankhya_auto` links follow the ERP.
-      if (!(await links.hasAutomaticLink(accountId))) return true;
+      // A manual (administrator) link is never governed by the mirror's relation: only `sankhya_auto` links follow the ERP seller (AUTH-13 adds the blocked fact).
+      if (!(await links.hasAutomaticLink(accountId))) {
+        // AUTH-13: the one fact that also ends a manual (or non-seller) external login: the ERP blocks the user. The link record stays.
+        return !(await links.revokeSessionsIfDirectoryBlocked({ externalUserId, now, maxMirrorAgeMs: settings.directoryMaxAgeMs ?? DEFAULT_DIRECTORY_MAX_AGE_MS }));
+      }
       const sync = await links.syncFromDirectory({
         externalUserId,
         now,

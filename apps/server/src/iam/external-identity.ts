@@ -104,6 +104,12 @@ export interface ExternalAccountLinks {
    * automatic link removes that link and revokes the account's sessions; a stale mirror changes nothing. Idempotent.
    */
   syncFromDirectory(input: { externalUserId: string; now: Date; maxMirrorAgeMs: number; allowCreate: boolean }): Promise<DirectorySyncOutcome>;
+  /**
+   * AUTH-13: for a link the sync never governs (manual, or another role), revokes the account's sessions when the ERP says the user
+   * is blocked on a FRESH mirror. The link record is never touched. Unknown/false/failing source or a stale mirror changes nothing.
+   * Returns true only when sessions were revoked.
+   */
+  revokeSessionsIfDirectoryBlocked(input: { externalUserId: string; now: Date; maxMirrorAgeMs: number }): Promise<boolean>;
 }
 
 /**

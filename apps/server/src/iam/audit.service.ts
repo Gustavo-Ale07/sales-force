@@ -24,6 +24,8 @@ export const AUDIT_ACTIONS = {
   directoryLinkRefused: 'auth.directory.link_refused',
   /** An automatic seller link was removed because the official ERP relation no longer supports it; the account's sessions were revoked. */
   directoryLinkRevoked: 'auth.directory.link_revoked',
+  /** The ERP blocks the user: the account's sessions were revoked; the (manual) link record was left as is. */
+  directorySessionRevoked: 'auth.directory.session_revoked',
   orderCreated: 'order.created',
   orderReplaced: 'order.replaced',
   orderDiscarded: 'order.discarded',

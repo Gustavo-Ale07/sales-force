@@ -63,6 +63,10 @@ export class InMemoryExternalAccountLinks implements ExternalAccountLinks {
     return Promise.resolve(!this.inactiveSellers.has(sellerCode));
   }
 
+  revokeSessionsIfDirectoryBlocked(): Promise<boolean> {
+    return Promise.resolve(false);
+  }
+
   syncFromDirectory(input: { externalUserId: string; now: Date; maxMirrorAgeMs: number; allowCreate: boolean }): Promise<DirectorySyncOutcome> {
     this.synced.push({ externalUserId: input.externalUserId, allowCreate: input.allowCreate });
     return Promise.resolve(this.syncResult);

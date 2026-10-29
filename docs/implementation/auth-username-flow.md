@@ -49,6 +49,8 @@ Com `externalLogin.enabled`, toda falha de credencial responde em no mínimo `mi
 
 **AUTH-12 (D4):** um nome que coincide com vendedor local vai SEMPRE ao verificador; o hash local nunca é usado e a resposta é um 401 uniforme, igual à de um nome desconhecido (teste de regressão em `auth-username-hybrid.test.ts`).
 
+**AUTH-13 (D13):** quando o campo de bloqueio existir, `user_blocked` (espelho fresco, fonte respondendo `true`) derruba as sessões de qualquer login externo, automático ou manual (`PRE_LINKED`) e de qualquer papel externo; o registro do vínculo manual nunca é alterado (`revokeSessionsIfDirectoryBlocked`, auditoria `auth.directory.session_revoked`). O gancho está pronto e testado com fonte simulada para os dois modos; o campo real de `TSIUSU` continua NÃO validado (pendência do dono, etapa 4 do CURRENT) e a fonte padrão responde "desconhecido".
+
 **Janela total de revogação ≈ intervalo do cron do espelho + 60 s.** Conta desativada segue o fluxo normal de status.
 
 

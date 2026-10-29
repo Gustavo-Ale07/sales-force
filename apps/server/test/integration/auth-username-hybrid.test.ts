@@ -710,6 +710,60 @@ describe('AUTH-6 hook: the ERP blocks the user (stubbed source, the real field i
   });
 });
 
+describe('AUTH-13 (D13): user_blocked drops the session of any external login, automatic or manual (stubbed source)', () => {
+  const PAST_TOUCH = 61_000;
+  /** `mode` picks the link kind: `auto` = sankhya_auto, `manual` = administrator link (PRE_LINKED). */
+  async function signedIn(mode: 'auto' | 'manual') {
+    const stub = { answer: null as boolean | null | 'throw' };
+    const blockSource: DirectoryBlockSource = {
+      isBlocked: () => (stub.answer === 'throw' ? Promise.reject(new Error('boom')) : Promise.resolve(stub.answer)),
+    };
+    const ctx = await setup({ linkMode: 'PRE_LINKED', blockSource });
+    await addSeller(ctx, 103, 'Vendedor Um');
+    const linked = await preLink(ctx, { username: 'um', externalUserId: '4501', sellerCode: 103 });
+    if (mode === 'auto') await ctx.db.update(accountSellerLink).set({ source: 'sankhya_auto' }).where(eq(accountSellerLink.accountId, linked.id));
+    await directoryUser(ctx, 'um', 4501, 103);
+    const login = await ctx.service.login({ username: 'um', password: SANKHYA_PASSWORD }, META);
+    return { ctx, login, stub };
+  }
+
+  it.each(['auto', 'manual'] as const)('revokes the session on a FRESH mirror when blocked (%s link)', async (mode) => {
+    const { ctx, login, stub } = await signedIn(mode);
+    stub.answer = true;
+    ctx.clock.advance(PAST_TOUCH);
+    await markDirectoryFresh(ctx);
+    expect(await ctx.service.resolveSession(login.token)).toBeNull();
+    const rows = await ctx.db.select().from(session).where(eq(session.id, login.user.sessionId));
+    expect(rows[0]?.revokedAt).not.toBeNull();
+    expect(await directoryAudit(ctx, mode === 'auto' ? 'auth.directory.link_revoked' : 'auth.directory.session_revoked')).toEqual(['user_blocked']);
+  });
+
+  it('never touches the manual link record', async () => {
+    const { ctx, login, stub } = await signedIn('manual');
+    stub.answer = true;
+    ctx.clock.advance(PAST_TOUCH);
+    await markDirectoryFresh(ctx);
+    expect(await ctx.service.resolveSession(login.token)).toBeNull();
+    expect(await ctx.db.select().from(accountSellerLink)).toMatchObject([{ sellerCode: 103, source: 'manual' }]);
+  });
+
+  it.each([null, false, 'throw'] as const)('keeps a manual-link session when the blocking fact is %s', async (answer) => {
+    const { ctx, login, stub } = await signedIn('manual');
+    stub.answer = answer;
+    ctx.clock.advance(PAST_TOUCH);
+    await markDirectoryFresh(ctx);
+    expect(await ctx.service.resolveSession(login.token)).not.toBeNull();
+  });
+
+  it('keeps a manual-link session when blocked is reported on a STALE mirror', async () => {
+    const { ctx, login, stub } = await signedIn('manual');
+    stub.answer = true;
+    await markDirectoryFresh(ctx, new Date(ctx.clock.fn().getTime() - 3 * 60 * 60 * 1000));
+    ctx.clock.advance(PAST_TOUCH);
+    expect(await ctx.service.resolveSession(login.token)).not.toBeNull();
+  });
+});
+
 describe('AUTH-6: outage versus invalid credentials, and the local seller password', () => {
   it('never opens a session for a local seller account from its valid local hash; the name goes to the directory, which refuses it', async () => {
     const ctx = await setup(AUTO);
