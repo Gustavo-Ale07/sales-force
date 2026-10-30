@@ -46,12 +46,12 @@ export interface EntitySpec<T> {
 }
 
 export class RowReader {
-  readonly #entity: ReadEntity;
+  readonly #entity: ReadEntity | 'orders';
   readonly #columns: readonly string[];
   readonly #cells: readonly unknown[];
   readonly #index: number;
 
-  constructor(entity: ReadEntity, columns: readonly string[], cells: readonly unknown[], index: number) {
+  constructor(entity: ReadEntity | 'orders', columns: readonly string[], cells: readonly unknown[], index: number) {
     this.#entity = entity;
     this.#columns = columns;
     this.#cells = cells;

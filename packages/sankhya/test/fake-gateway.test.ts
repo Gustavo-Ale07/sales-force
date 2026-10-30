@@ -7,7 +7,6 @@ import {
   DEMO_FALLBACK_TABLE_CODE,
   DEMO_MAIN_TABLE_CODE,
   FakeGateway,
-  NotImplementedError,
   SankhyaGatewayError,
   generateDemoDataset,
   getDemoDataset,
@@ -224,7 +223,4 @@ describe('FakeGateway behavior', () => {
     expect(() => new FakeGateway({ batchSize: 0 })).toThrow(RangeError);
   });
 
-  it('never implements order submission', async () => {
-    await expect(new FakeGateway().submitOrder({ originId: 'x', customerCode: 1, sellerCode: null, items: [] })).rejects.toBeInstanceOf(NotImplementedError);
-  });
 });

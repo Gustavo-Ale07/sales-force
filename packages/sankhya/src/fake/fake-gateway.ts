@@ -1,5 +1,5 @@
 import type { InstallationConfiguration } from '@salesforce/domain';
-import { NotImplementedError, SankhyaGatewayError } from '../errors.js';
+import { SankhyaGatewayError } from '../errors.js';
 import {
   assertBytesOptions,
   assertSignaturesOptions,
@@ -11,15 +11,20 @@ import {
 } from '../media.js';
 import {
   READ_ENTITIES,
-  SUBMIT_ORDER_NOT_IMPLEMENTED_MESSAGE,
   type GatewayDescription,
   type ReadEntity,
   type ReadOptions,
   type SankhyaGateway,
   type Snapshot,
-  type SubmitOrderRequest,
-  type SubmitOrderResult,
 } from '../gateway.js';
+import type {
+  ErpOrderRef,
+  IncludeOrderResult,
+  OrderCallOptions,
+  OrderWriteRequest,
+  WrittenOrder,
+} from '../write/order-contract.js';
+import { FakeOrderBook } from './fake-order-book.js';
 import { assertSafeScope, selectEffectiveVersions } from '../read-scope.js';
 import { DEMO_CONFIGURATION } from './demo-configuration.js';
 import { getDemoDataset, type DemoDataset } from './demo-data.js';
@@ -41,6 +46,8 @@ export interface FakeGatewayOptions {
   readonly faults?: readonly FakeGatewayFault[];
   /** Synthetic product photos and their failure injection (default: no photos). */
   readonly media?: FakeGatewayMediaOptions;
+  /** In-memory ERP order tables with scripted outcomes (SNK-7); a private empty book by default. */
+  readonly orders?: FakeOrderBook;
 }
 
 const DEFAULT_BATCH_SIZE = 100;
@@ -68,6 +75,7 @@ export class FakeGateway implements SankhyaGateway {
   readonly #configuration: InstallationConfiguration;
   readonly #faults: readonly FakeGatewayFault[];
   readonly #media: FakeGatewayMediaOptions;
+  readonly #orders: FakeOrderBook;
 
   constructor(options: FakeGatewayOptions = {}) {
     const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
@@ -79,6 +87,7 @@ export class FakeGateway implements SankhyaGateway {
     this.#configuration = options.configuration ?? DEMO_CONFIGURATION;
     this.#faults = options.faults ?? [];
     this.#media = options.media ?? {};
+    this.#orders = options.orders ?? new FakeOrderBook();
   }
 
   describe(): GatewayDescription {
@@ -91,7 +100,7 @@ export class FakeGateway implements SankhyaGateway {
         reads,
         configurationSource: this.#configuration.source.kind,
         readMechanism: 'fixtures',
-        writes: { submitOrder: 'not_implemented' },
+        writes: { submitOrder: 'simulated' },
       },
     };
   }
@@ -197,10 +206,32 @@ export class FakeGateway implements SankhyaGateway {
     return selectEffectiveVersions(inScope, options?.scope?.now ?? new Date().toISOString());
   }
 
-  /** SNK-4 / SNK-5 / SNK-6: intentionally unimplemented, no side effect. */
-  submitOrder(request: SubmitOrderRequest): Promise<SubmitOrderResult> {
-    void request;
-    return Promise.reject(new NotImplementedError(SUBMIT_ORDER_NOT_IMPLEMENTED_MESSAGE));
+  // ---- order delivery (SNK-7): in-memory, no network, scripted outcomes ----------------------
+
+  includeOrder(request: OrderWriteRequest, options?: OrderCallOptions): Promise<IncludeOrderResult> {
+    return this.#order(options, () => this.#orders.include(request));
+  }
+
+  confirmOrder(erpOrderNumber: number, options?: OrderCallOptions): Promise<void> {
+    return this.#order(options, () => this.#orders.confirm(erpOrderNumber));
+  }
+
+  findOrderByOrigin(originField: string, originId: string, options?: OrderCallOptions): Promise<ErpOrderRef | null> {
+    void originField;
+    return this.#order(options, () => this.#orders.find(originId));
+  }
+
+  readWrittenOrder(erpOrderNumber: number, options?: OrderCallOptions): Promise<WrittenOrder | null> {
+    return this.#order(options, () => this.#orders.read(erpOrderNumber));
+  }
+
+  #order<T>(options: OrderCallOptions | undefined, action: () => T): Promise<T> {
+    try {
+      options?.signal?.throwIfAborted();
+      return Promise.resolve(action());
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
   #failIfFaulted(entity: ReadEntity, deliveredBatches: number): void {

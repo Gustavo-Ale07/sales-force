@@ -62,3 +62,12 @@ export {
 } from './real/real-gateway.js';
 export { createFetchTransport, type HttpRequest, type HttpResponse, type HttpTransport } from './real/transport.js';
 export type { SankhyaCredentials } from './real/token-provider.js';
+export * from './write/order-contract.js';
+export { FakeOrderBook, type FakeOrderBookOptions, type FakeOrderCall, type FakeOrderOperation, type FakeOrderOutcome, type FakeStoredOrder } from './fake/fake-order-book.js';
+export {
+  INCLUIR_NOTA_PATH,
+  OBSERVATION_MAX_LENGTH,
+  buildIncluirNotaBody,
+  buildIncluirNotaRequestText,
+  parseIncluirNotaResponse,
+} from './write/incluir-nota.js';

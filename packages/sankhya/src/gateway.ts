@@ -1,6 +1,6 @@
+import type { SankhyaOrderReadPort, SankhyaWritePort } from './write/order-contract.js';
 import type {
   ConfigurationSourceKind,
-  DecimalString,
   InstallationConfiguration,
   ListPrice,
   PriceTable,
@@ -62,8 +62,11 @@ export interface GatewayDescription {
     /** Where `readConfiguration()` gets its snapshot from; `null` = not available (U-10). */
     readonly configurationSource: ConfigurationSourceKind | null;
     readonly readMechanism: 'fixtures' | 'sql_ordered_paging';
-    /** Intentionally unimplemented until SNK-4 prerequisites V-11 and V-13 close (SNK-5, SNK-6). */
-    readonly writes: { readonly submitOrder: 'not_implemented' };
+    /**
+     * `not_implemented` = no write path active (default; SNK-4 prerequisites V-11/V-13 open);
+     * `sandbox_only` = real adapter in live write mode, Sandbox hosts only; `simulated` = the fake.
+     */
+    readonly writes: { readonly submitOrder: 'not_implemented' | 'sandbox_only' | 'simulated' };
   };
 }
 
@@ -112,37 +115,15 @@ export interface SankhyaReadPort {
   readListPrices(options?: ReadOptions): Snapshot<ListPrice>;
 }
 
-/**
- * PROVISIONAL shape, declared as a type only. Nothing implements it: SNK-5 (origin-id field not
- * chosen) and SNK-6 (order submission gates: V-11, V-13) are open. Do not build on this shape; it
- * will be revised when the write path is designed.
- */
-export interface SubmitOrderRequest {
-  /** Sales Force origin id checked before ANY retry (SNK-4). The Sankhya field is not chosen (SNK-5). */
-  readonly originId: string;
-  readonly customerCode: number;
-  readonly sellerCode: number | null;
-  readonly items: readonly { readonly productCode: number; readonly quantity: DecimalString }[];
-}
-
-export interface SubmitOrderResult {
-  /** Identifier assigned by the ERP. Shape provisional. */
-  readonly externalOrderId: string;
-}
-
-export interface SankhyaWritePort {
-  /**
-   * INTENTIONALLY UNIMPLEMENTED (SNK-4, SNK-5, SNK-6). Writes go only through `integration_outbox`
-   * processed by the worker, after V-11 and V-13 close. Every implementation in this package
-   * rejects with `NotImplementedError` without contacting the ERP.
-   */
-  submitOrder(request: SubmitOrderRequest): Promise<SubmitOrderResult>;
-}
-
-export interface SankhyaGateway extends SankhyaReadPort, SankhyaProductMediaPort, SankhyaWritePort {
+export interface SankhyaGateway extends SankhyaReadPort, SankhyaProductMediaPort, SankhyaWritePort, SankhyaOrderReadPort {
   describe(): GatewayDescription;
 }
 
-export const SUBMIT_ORDER_NOT_IMPLEMENTED_MESSAGE =
-  'submitOrder is intentionally not implemented: NEEDS VALIDATION V-11 / V-13 (spike §9.39; SNK-4, SNK-5, SNK-6). ' +
-  'ERP order writes stay disabled until the write-safety gates close.';
+/**
+ * Why order writes refuse (SNK-4, SNK-5, SNK-6): the real adapter writes only when the worker
+ * configuration is `live` against the Sandbox; otherwise it raises `NotImplementedError` without any
+ * network call.
+ */
+export const ORDER_WRITE_NOT_ENABLED_MESSAGE =
+  'ERP order writes are not enabled for this gateway: NEEDS VALIDATION V-11 / V-13 (spike §9.39; SNK-4, SNK-5, SNK-6). ' +
+  'They require SANKHYA_ORDER_WRITE_MODE=live against the Sandbox with the gates marker.';

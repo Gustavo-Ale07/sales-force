@@ -5,6 +5,7 @@ import type { EnvironmentKind, SankhyaGateway } from './gateway.js';
 import { checkBaseUrl, parseAllowedHosts, validateAllowedHosts } from './real/host-guard.js';
 import { MAX_PAGE_SIZE, RealSankhyaGateway } from './real/real-gateway.js';
 import { Secret } from './secret.js';
+import { parseOrderWriteSettings } from './write/order-write-config.js';
 import { createFetchTransport, type HttpTransport } from './real/transport.js';
 
 export type GatewayEnvironment = Readonly<Record<string, string | undefined>>;
@@ -96,6 +97,9 @@ export function createGateway(env: GatewayEnvironment, deps: CreateGatewayDepend
     problems.push('SF_CONFIG_FILE is set but no configuration validator was supplied by the caller.');
   }
 
+  const orderWrite = parseOrderWriteSettings(env);
+  for (const problem of orderWrite.problems) if (!problems.includes(problem)) problems.push(problem);
+
   const clientId = env['SANKHYA_CLIENT_ID'];
   const clientSecret = env['SANKHYA_CLIENT_SECRET'];
   const xToken = env['SANKHYA_X_TOKEN'];
@@ -121,6 +125,7 @@ export function createGateway(env: GatewayEnvironment, deps: CreateGatewayDepend
       : undefined;
 
   return new RealSankhyaGateway({
+    orderWrite: orderWrite.settings,
     baseUrl: origin,
     allowedHosts,
     environmentKind,

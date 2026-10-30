@@ -22,9 +22,10 @@ export const TEST_BASE_URL = 'https://erp.example.test';
 export const TEST_HOST = 'erp.example.test';
 
 export interface RecordedCall {
-  readonly kind: 'authenticate' | 'query';
+  readonly kind: 'authenticate' | 'query' | 'write';
   readonly url: string;
   readonly sql?: string;
+  readonly body?: string;
   readonly at: number;
 }
 
@@ -171,6 +172,8 @@ export class MockSankhya {
   readonly calls: RecordedCall[] = [];
   /** Responses returned (in order) for the next gateway queries instead of the normal answer. */
   readonly forced: ForcedResponse[] = [];
+  /** Responses returned (in order) for the next ORDER WRITE calls (mgecom); default: 503. */
+  readonly writeResponses: ForcedResponse[] = [];
   /** Runs before each query is answered (tests mutate data or count concurrency here). */
   beforeQuery: ((sql: string) => void | Promise<void>) | undefined;
   /** Synthetic image bytes per CODPROD (the TGFPRO.IMAGEM BLOB stand-in). Mutable by tests. */
@@ -211,6 +214,7 @@ export class MockSankhya {
     const url = new URL(request.url);
     if (url.pathname === '/authenticate') return this.#authenticate(request);
     if (url.pathname === '/gateway/v1/mge/service.sbr') return this.#query(request);
+    if (url.pathname === '/gateway/v1/mgecom/service.sbr') return this.#write(request);
     return { status: 404, headers: {}, body: '' };
   }
 
@@ -232,6 +236,22 @@ export class MockSankhya {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ access_token: token, expires_in: TOKEN_LIFETIME_SECONDS, token_type: 'bearer' }),
     };
+  }
+
+  #write(request: HttpRequest): HttpResponse | Promise<HttpResponse> {
+    this.calls.push({ kind: 'write', url: request.url, body: request.body, at: this.clock.now });
+    const token = (request.headers['authorization'] ?? '').replace(/^Bearer /, '');
+    const expiresAt = this.#validTokens.get(token);
+    if (expiresAt === undefined || this.clock.now >= expiresAt) {
+      return { status: 403, headers: {}, body: '{"error":{"codigo":"GTW3403"}}' };
+    }
+    const forced = this.writeResponses.shift();
+    if (forced === undefined) return { status: 503, headers: {}, body: '' };
+    return typeof forced === 'function' ? forced(request) : forced;
+  }
+
+  writes(): RecordedCall[] {
+    return this.calls.filter((call) => call.kind === 'write');
   }
 
   async #query(request: HttpRequest): Promise<HttpResponse> {

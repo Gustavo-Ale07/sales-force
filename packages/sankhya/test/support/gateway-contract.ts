@@ -57,7 +57,7 @@ export function runGatewayContract(label: string, subject: ContractSubject): voi
       for (const entity of READ_ENTITIES) {
         expect(['supported', 'not_implemented']).toContain(description.capabilities.reads[entity]);
       }
-      expect(description.capabilities.writes.submitOrder).toBe('not_implemented');
+      expect(['not_implemented', 'simulated']).toContain(description.capabilities.writes.submitOrder);
       expect(JSON.stringify(description)).not.toMatch(/secret|token|password/i);
     });
 
@@ -117,7 +117,7 @@ export function runGatewayContract(label: string, subject: ContractSubject): voi
       expect(pairs.size).toBeLessThan(versions.length * products.size);
     });
 
-    it('exposes no write method other than the unimplemented submitOrder', () => {
+    it('exposes no write method other than the order delivery pair (SNK-7)', () => {
       const gateway = subject.create();
       const allowed = new Set<string>([
         'constructor',
@@ -134,26 +134,16 @@ export function runGatewayContract(label: string, subject: ContractSubject): voi
         'readListPrices',
         'readProductMediaSignatures',
         'readProductMediaBytes',
-        'submitOrder',
+        'includeOrder',
+        'confirmOrder',
+        'findOrderByOrigin',
+        'readWrittenOrder',
       ]);
       const names = new Set<string>();
       for (let proto: object | null = Object.getPrototypeOf(gateway); proto && proto !== Object.prototype; proto = Object.getPrototypeOf(proto)) {
         for (const name of Object.getOwnPropertyNames(proto)) names.add(name);
       }
       for (const name of names) expect(allowed.has(name), `unexpected method ${name}`).toBe(true);
-    });
-
-    it('submitOrder is intentionally unimplemented (SNK-4/5/6)', async () => {
-      const gateway = subject.create();
-      const failure = await gateway
-        .submitOrder({ originId: 'synthetic-origin-1', customerCode: 1, sellerCode: null, items: [] })
-        .then(
-          () => null,
-          (error: unknown) => error,
-        );
-      expect(failure).toBeInstanceOf(NotImplementedError);
-      expect((failure as NotImplementedError).message).toContain('NEEDS VALIDATION');
-      expect(isRetryable(failure)).toBe(false);
     });
 
     for (const kind of SANKHYA_ERROR_KINDS) {

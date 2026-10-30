@@ -31,15 +31,25 @@ import {
 } from '../errors.js';
 import {
   READ_ENTITIES,
-  SUBMIT_ORDER_NOT_IMPLEMENTED_MESSAGE,
   type EnvironmentKind,
   type GatewayDescription,
   type ReadOptions,
   type SankhyaGateway,
   type Snapshot,
-  type SubmitOrderRequest,
-  type SubmitOrderResult,
+  ORDER_WRITE_NOT_ENABLED_MESSAGE,
 } from '../gateway.js';
+import { decimalFromCell } from '../decimal.js';
+import { ORDER_WRITE_DISABLED, isValidOriginField, type OrderWriteSettings } from '../write/order-write-config.js';
+import { assertSandboxHost } from '../write/host-allowlist.js';
+import { INCLUIR_NOTA_PATH, buildIncluirNotaRequestText, parseIncluirNotaResponse } from '../write/incluir-nota.js';
+import type {
+  ErpOrderRef,
+  IncludeOrderResult,
+  OrderCallOptions,
+  OrderWriteRequest,
+  WrittenOrder,
+  WrittenOrderItem,
+} from '../write/order-contract.js';
 import { assertBaseUrlAllowed, assertRequestUrlAllowed } from './host-guard.js';
 import {
   CUSTOMER_SPEC,
@@ -88,12 +98,15 @@ export interface RealSankhyaGatewayOptions {
   readonly dbUtcOffsetMinutes?: number;
   /** Bootstrap file source for `readConfiguration()`; without it the read raises `NotImplementedError` (U-10). */
   readonly configurationSource?: ConfigurationSource;
+  /** SNK-7 D-1; absent = writes disabled. Only `live` (Sandbox, validated by the factory) can write. */
+  readonly orderWrite?: OrderWriteSettings;
 }
 
 /**
  * Read-only ERP adapter (P-02, P-03, STACK-2). Live use is opt-in (`createGateway`), credentials come
- * from the worker environment, and the class has NO write path: `submitOrder` rejects without any
- * HTTP call (SNK-4, SNK-5, SNK-6).
+ * from the worker environment, and its only write path is `includeOrder`, active solely in the
+ * `live` order-write mode against the Sandbox (SNK-7; SNK-4, SNK-5, SNK-6); otherwise it rejects
+ * without any HTTP call.
  *
  * Reads use `DbExplorerSP.executeQuery` with `ORDER BY <full key>` + `OFFSET ... FETCH` (F-23, F-30;
  * VALIDATED (env) in the Sandbox, Oracle dialect F-19). Requests are serialized (limits unmeasured,
@@ -114,6 +127,7 @@ export class RealSankhyaGateway implements SankhyaGateway {
   readonly #dbUtcOffsetMinutes: number;
   readonly #configurationSource: ConfigurationSource;
   readonly #now: () => number;
+  readonly #orderWrite: OrderWriteSettings;
   #queue: Promise<unknown> = Promise.resolve();
 
   constructor(options: RealSankhyaGatewayOptions) {
@@ -131,6 +145,7 @@ export class RealSankhyaGateway implements SankhyaGateway {
     this.#dbUtcOffsetMinutes = options.dbUtcOffsetMinutes ?? DEFAULT_DB_UTC_OFFSET_MINUTES;
     this.#configurationSource = options.configurationSource ?? new UnavailableConfigurationSource();
     this.#now = options.now ?? Date.now;
+    this.#orderWrite = options.orderWrite ?? ORDER_WRITE_DISABLED;
     this.#tokens = new TokenProvider({
       origin: this.#origin,
       credentials: options.credentials,
@@ -156,7 +171,7 @@ export class RealSankhyaGateway implements SankhyaGateway {
         reads,
         configurationSource: this.#configurationSource instanceof UnavailableConfigurationSource ? null : this.#configurationSource.kind,
         readMechanism: 'sql_ordered_paging',
-        writes: { submitOrder: 'not_implemented' },
+        writes: { submitOrder: this.#orderWrite.mode === 'live' ? 'sandbox_only' : 'not_implemented' },
       },
     };
   }
@@ -335,10 +350,122 @@ export class RealSankhyaGateway implements SankhyaGateway {
     return bytes;
   }
 
-  /** SNK-4 / SNK-5 / SNK-6: intentionally unimplemented; performs no HTTP call. */
-  submitOrder(request: SubmitOrderRequest): Promise<SubmitOrderResult> {
-    void request;
-    return Promise.reject(new NotImplementedError(SUBMIT_ORDER_NOT_IMPLEMENTED_MESSAGE));
+  // ---- order delivery (SNK-7) ---------------------------------------------------------------
+
+  /**
+   * CACSP.incluirNota (F-44). Refuses without any HTTP call unless the worker configuration is `live`
+   * (Sandbox, gates marker, origin field: validated at boot). The caller has ALREADY proven by
+   * `findOrderByOrigin` that the order is absent (SNK-4).
+   */
+  async includeOrder(request: OrderWriteRequest, options?: OrderCallOptions): Promise<IncludeOrderResult> {
+    if (this.#orderWrite.mode !== 'live' || this.#orderWrite.originField !== request.originField) {
+      throw new NotImplementedError(ORDER_WRITE_NOT_ENABLED_MESSAGE);
+    }
+    const body = buildIncluirNotaRequestText(request);
+    const response = await this.#write(INCLUIR_NOTA_PATH, body, options?.signal);
+    return parseIncluirNotaResponse(response.status, response.body, parseRetryAfterMs(response.headers['retry-after']));
+  }
+
+  /** NEEDS VALIDATION: the CACSP.confirmarNota request shape is not recorded anywhere (SNK-7 D-4, D-10). */
+  confirmOrder(erpOrderNumber: number, options?: OrderCallOptions): Promise<void> {
+    void erpOrderNumber;
+    void options;
+    return Promise.reject(
+      new NotImplementedError('confirmOrder: the CACSP.confirmarNota request shape is not validated. NEEDS VALIDATION S3 (SNK-7 D-4, D-10).'),
+    );
+  }
+
+  async findOrderByOrigin(originField: string, originId: string, options?: OrderCallOptions): Promise<ErpOrderRef | null> {
+    // Both values reach the SQL text: strictly validated, never escaped-and-hoped.
+    if (!isValidOriginField(originField)) throw invalidOrderQuery('the origin field name is not valid');
+    if (!UUID_PATTERN.test(originId)) throw invalidOrderQuery('the origin id is not a UUID');
+    const columns = ['NUNOTA', 'STATUSNOTA'] as const;
+    const result = await this.#query(
+      `SELECT NUNOTA, STATUSNOTA FROM TGFCAB WHERE ${originField} = '${originId.toLowerCase()}'`,
+      columns,
+      options?.signal,
+    );
+    if (result.rows.length === 0) return null;
+    if (result.rows.length > 1) {
+      // A duplicate already exists: the worker must stop and escalate, never pick one.
+      throw new SankhyaGatewayError('permanent', {
+        code: 'duplicate_origin',
+        message: 'More than one ERP order carries the same origin id; manual reconciliation is required.',
+      });
+    }
+    const reader = new RowReader('orders', columns, result.rows[0] ?? [], 0);
+    return { erpOrderNumber: reader.int('NUNOTA'), confirmed: reader.nullableText('STATUSNOTA') === 'L' };
+  }
+
+  async readWrittenOrder(erpOrderNumber: number, options?: OrderCallOptions): Promise<WrittenOrder | null> {
+    if (!Number.isInteger(erpOrderNumber) || erpOrderNumber < 1) throw invalidOrderQuery('the order number is not a positive integer');
+    const headerColumns = ['NUNOTA', 'STATUSNOTA'] as const;
+    const header = await this.#query(
+      `SELECT NUNOTA, STATUSNOTA FROM TGFCAB WHERE NUNOTA = ${erpOrderNumber}`,
+      headerColumns,
+      options?.signal,
+    );
+    if (header.rows.length === 0) return null;
+    const reader = new RowReader('orders', headerColumns, header.rows[0] ?? [], 0);
+    const itemColumns = ['CODPROD', 'QTDNEG', 'VLRUNIT', 'PERCDESC'] as const;
+    const itemRows = await this.#query(
+      `SELECT CODPROD, QTDNEG, VLRUNIT, PERCDESC FROM TGFITE WHERE NUNOTA = ${erpOrderNumber} ORDER BY CODPROD`,
+      itemColumns,
+      options?.signal,
+    );
+    const items: WrittenOrderItem[] = itemRows.rows.map((cells, index) => {
+      const row = new RowReader('orders', itemColumns, cells, index);
+      const decimal = (column: (typeof itemColumns)[number]) => {
+        const parsed = decimalFromCell(cells[itemColumns.indexOf(column)]);
+        if (!parsed.ok) return row.reject(column, parsed.problem);
+        return parsed.value;
+      };
+      const rawDiscount = cells[itemColumns.indexOf('PERCDESC')];
+      return {
+        productCode: row.int('CODPROD'),
+        quantity: decimal('QTDNEG'),
+        unitPrice: decimal('VLRUNIT'),
+        discountPercent: rawDiscount === null || rawDiscount === undefined ? null : decimal('PERCDESC'),
+      };
+    });
+    return { erpOrderNumber: reader.int('NUNOTA'), confirmed: reader.nullableText('STATUSNOTA') === 'L', items };
+  }
+
+  /**
+   * The single exit point for ERP writes: Sandbox allow-list (SNK-7 S2) AND the installation
+   * allow-list, serialized with every other request, one token renewal on 403 (the gateway rejected
+   * the token before running the service, so nothing was written).
+   */
+  #write(path: string, body: string, signal?: AbortSignal): Promise<HttpResponse> {
+    const run = this.#queue.then(async () => {
+      signal?.throwIfAborted();
+      const send = async (): Promise<HttpResponse> => {
+        const token = await this.#tokens.getToken(signal);
+        const url = `${this.#origin}${path}`;
+        assertSandboxHost(url);
+        assertRequestUrlAllowed(url, this.#allowedHosts);
+        return this.#transport({
+          method: 'POST',
+          url,
+          headers: {
+            'content-type': 'application/json',
+            accept: 'application/json',
+            authorization: `Bearer ${token.reveal()}`,
+          },
+          body,
+          timeoutMs: this.#requestTimeoutMs,
+          signal,
+        });
+      };
+      let response = await send();
+      if (response.status === 403) {
+        this.#tokens.invalidate();
+        response = await send();
+      }
+      return response;
+    });
+    this.#queue = run.catch(() => undefined);
+    return run;
   }
 
   // ---- paging -------------------------------------------------------------------------------
@@ -447,6 +574,12 @@ function countSql(spec: QueryShape): string {
 
 function whereClause(spec: QueryShape): string {
   return spec.where === undefined ? '' : ` WHERE ${spec.where}`;
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function invalidOrderQuery(detail: string): SankhyaGatewayError {
+  return new SankhyaGatewayError('validation', { code: 'invalid_order_query', message: `Order lookup refused: ${detail}.` });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

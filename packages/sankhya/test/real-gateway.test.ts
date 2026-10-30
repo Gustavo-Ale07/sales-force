@@ -128,12 +128,6 @@ describe('capabilities and NotImplemented paths', () => {
     expect((failure as Error).message).toMatch(/NEEDS VALIDATION U-10/);
     expect(mock.calls).toHaveLength(0);
   });
-
-  it('submitOrder performs no HTTP call at all', async () => {
-    const { gateway, mock } = setup();
-    await expect(gateway.submitOrder({ originId: 'o-1', customerCode: 1, sellerCode: null, items: [] })).rejects.toBeInstanceOf(NotImplementedError);
-    expect(mock.calls).toHaveLength(0);
-  });
 });
 
 describe('read-only guarantee', () => {
