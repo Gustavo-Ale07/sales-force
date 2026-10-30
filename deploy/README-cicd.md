@@ -164,11 +164,11 @@ writes `$SF_LOGS_DIR/deploy-<utc>-<sha12>.log`.
 
 ### Environment file path (divergence reconciled)
 
-`README-staging.md` examples use `/etc/salesforce/staging/compose.env`; **the CI/CD path uses
-`/opt/force-staging/config/compose.env`** (`SF_COMPOSE_ENV`, created by `bootstrap-vps.sh apply`, owned by the deploy user,
-0700). They are two different locations: do not keep two copies. Manual README-staging commands run on this host must use the
-same file and project: `docker compose -p salesforce-staging --env-file /opt/force-staging/config/compose.env -f deploy/docker-compose.staging.yml ...`
-(and the external-edge override when `SF_EDGE_MODE=external`); otherwise they act on a different project/config than the deploys.
+The CI/CD path and the manual path use the same location, `/opt/force-staging/config/compose.env` (`SF_COMPOSE_ENV`, created by
+`bootstrap-vps.sh apply`, owned by the deploy user, 0700); `/etc/salesforce/staging` was a draft path and is not used. Manual
+commands on this host go through `deploy/scripts/sf-compose.sh` (same project, files, external-edge overlay, profile and
+DEPLOYED_SHA image tags as the deploy; see `README-staging.md`, "Manual compose on the staging host"); hand-typed `docker compose`
+that differs in any of these acts on a different project/config than the deploys.
 
 ### Deploy state machine
 

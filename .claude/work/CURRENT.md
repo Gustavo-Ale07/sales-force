@@ -24,29 +24,28 @@ STATUS: ACTIVE — atualizado em 2026-10-29. Fonte de verdade ÚNICA: `C:\Dev\sa
 3. Plano SNK-7: responder D-1..D-10 no próprio documento; depois fatias S1-S10 (S7 depende de `recomputeOrderAuthority`, já pronta).
 4. Próxima sessão: acabamentos de `docs/mobile-spike.md` §8.8 (MOB-8), campo de bloqueio do TSIUSU, fase B (SNK-8) só como plano.
 
-## Só o dono roda — deploy do novo SHA e troca para AUTH_MODE=external (2026-10-29)
+## Só o dono roda — deploy e troca para AUTH_MODE=external (JÁ EXECUTADOS em 2026-10-29; procedimento corrigido em A2)
 
-Pré-requisito (Q4): existe conta **admin local ativa** no staging (porta de emergência); confirme fazendo login com ela na tela atual. Se não houver, crie conforme "First admin account" em `deploy/README-staging.md`. Sem admin local, NÃO troque o modo.
+Fatos de 2026-10-29 (`docs/decisions.md` §3.16): deploy de `bd6d593` por `deploy-staging.sh` como force-deploy com `SF_RUN_DB_ROLES=1`; migrations 0012/0013 aplicadas; `DEPLOYED_SHA=bd6d593`; staging em `API_AUTH_MODE=external` + `WEB_AUTH_MODE=standard` desde 2026-10-29 19:14Z, com `EXTERNAL_LOGIN_ENABLED=1`, `VERIFIER_MODE=live`, `EXTERNAL_AUTO_PROVISION=1`, `EXTERNAL_IDUSU_IS_CODUSU_VALIDATED=1`. A 1a tentativa falhou no health do web: nginx `open() /etc/nginx/conf.d/default.conf failed (13: Permission denied)` (checkout com umask 077 deixou `default.conf` 0600 e o `COPY` preservou o modo); corrigido na mão (`chmod 644`) e em definitivo no A2 (`Dockerfile.web` com `--chmod=0644`, `umask 022` e checagem prévia em `deploy-staging.sh`).
 
-**(1) Deploy do novo SHA** (na VPS, como usuário de deploy; `<SHA-COMPLETO>` = HEAD do push final, informado no relatório):
+Caminhos reais na VPS (NÃO `/etc/salesforce/staging`): repo `/opt/force-staging/repo`; `compose.env` em `/opt/force-staging/config/compose.env`; segredos `/opt/force-staging/config/secrets/*.env`; logs/estado `/opt/force-staging/logs`; usuário `force-deploy`; `SF_EDGE_MODE=external`, `SF_DB_MODE=self-hosted`.
+
+**Próximos deploys** (na VPS, como `force-deploy`): `deploy/scripts/deploy-staging.sh <SHA-40-hex>` (`SF_RUN_DB_ROLES=1` quando a release criar tabela). Qualquer `docker compose` manual passa por `deploy/scripts/sf-compose.sh` (mesmo projeto, arquivos, overlay external-edge, profile e tags de `DEPLOYED_SHA`; `--print` mostra o comando sem executar):
 ```sh
-export SFC="docker compose --env-file /etc/salesforce/staging/compose.env -f deploy/docker-compose.staging.yml"
-git fetch --tags origin && git checkout --detach <SHA-COMPLETO>      # árvore limpa
-export SHA=$(git rev-parse --short=12 HEAD)
-# em compose.env: SERVER_IMAGE=sales-force-server:$SHA   WEB_IMAGE=sales-force-web:$SHA
-$SFC config -q
-$SFC build migrate web
-$SFC --profile self-hosted-db --profile ops run --rm migrate-safe   # backup obrigatório + migrations 0012 e 0013
-$SFC --profile ops-admin run --rm db-roles                          # obrigatório: 0013 cria sales_order_approval
-$SFC --profile self-hosted-db up -d
+cd /opt/force-staging/repo
+deploy/scripts/sf-compose.sh --print up -d --no-deps --force-recreate api web
+deploy/scripts/sf-compose.sh up -d --no-deps --force-recreate api web
+deploy/scripts/sf-compose.sh --profile ops-admin run --rm db-roles
 curl -fsS https://$STAGING_DOMAIN/api/v1/ready
 ```
-Alternativa: `deploy/scripts/deploy-staging.sh <SHA-40-hex>` (mesmos passos; `deploy/README-cicd.md`; o `db-roles` continua manual).
+Armadilhas do compose manual (29/10): tag velha `62f50b18b4dc` lida do `compose.env`; sem o overlay `docker-compose.staging.external-edge.yml` não existem as portas loopback `127.0.0.1:13000`/`18080` e o proxy responde 502.
+
+Histórico da troca para `external` (já feita; mantido como referência; Q4 admin local e Q3 revoke):
 
 **(2) Troca para `AUTH_MODE=external`** (só depois do (1) com /ready 200 e do admin local confirmado):
 - Mesmo `VERIFIER_SHARED_SECRET` (>= 32 caracteres) em `api.env` e `verifier.env`; `api.env` sem `ALLOW_DEV_AUTH` e sem `SF_ALLOW_DEMO_ACCOUNTS`.
 - `compose.env`: `API_AUTH_MODE=external`, `WEB_AUTH_MODE=standard`, `EXTERNAL_LOGIN_ENABLED=1`, `VERIFIER_MODE=live`, `VERIFIER_SANKHYA_BASE_URL=<Sandbox>`, `VERIFIER_EGRESS_NETWORK=verifier_egress`; manter `EXTERNAL_AUTO_PROVISION` como está hoje.
-- `$SFC --profile self-hosted-db up -d --force-recreate api web`; depois `curl -fsS https://$STAGING_DOMAIN/api/v1/ready`.
+- `deploy/scripts/sf-compose.sh up -d --no-deps --force-recreate api web`; depois `curl -fsS https://$STAGING_DOMAIN/api/v1/ready`.
 - Revoke opcional (Q3), UMA vez, com janela combinada e o backup do passo (1):
 ```sql
 BEGIN;
@@ -70,7 +69,7 @@ COMMIT;
 
 **(4) Rollback**
 - Modo: `API_AUTH_MODE=local`, `WEB_AUTH_MODE=local`, `EXTERNAL_LOGIN_ENABLED=0`, recriar `api` e `web`.
-- Versão: `SERVER_IMAGE`/`WEB_IMAGE` de volta para `e705f2f` e `$SFC --profile self-hosted-db up -d`. As migrations 0012/0013 são expand-only e não são revertidas; a versão antiga convive com elas. Restore do dump só para desfazer migration ruim (README-staging, "Rollback" e "Backup and restore").
+- Versão: `deploy/scripts/rollback-staging.sh <SHA-anterior>` (ele ajusta as tags; `sf-compose.sh` ignora tags do `compose.env`). As migrations 0012/0013 são expand-only e não são revertidas; a versão antiga convive com elas. Restore do dump só para desfazer migration ruim (README-staging, "Rollback" e "Backup and restore").
 
 ## O que ainda depende do dono
 - Executar (1)-(3); trazer os valores reais dos limites (hoje 5/15/30 provisórios).

@@ -6,10 +6,10 @@ APPROVED. Where this document chooses something PROPOSED it says so. Owner decis
 dedicated internal verifier (STACK-2 option C, structure only), least-privilege database roles, staging RPO of 24 h
 with an off-VPS copy, real HTTPS on the planned `force-staging` host, SSH deploy by a dedicated non-root user.
 
-**Staging behaves like production** (owner decision): `NODE_ENV=production`, `API_AUTH_MODE=local` and
-`WEB_AUTH_MODE=local`, real HTTPS, no demo sellers, no seed overlay, no `SF_ALLOW_DEMO_ACCOUNTS`, no
-`ALLOW_DEV_AUTH`, never `NODE_ENV=development`. (Current state. The target mode is `API_AUTH_MODE=external`, PB-1: see
-"Switching to `AUTH_MODE=external`" below; it is an owner deploy decision and is not applied.)
+**Staging behaves like production** (owner decision): `NODE_ENV=production`, `API_AUTH_MODE=external` and
+`WEB_AUTH_MODE=standard` (since 2026-10-29), real HTTPS, no demo sellers, no seed overlay, no `SF_ALLOW_DEMO_ACCOUNTS`, no
+`ALLOW_DEV_AUTH`, never `NODE_ENV=development`. (Current state. PB-1: see
+"Switching to `AUTH_MODE=external`" below; applied on staging 2026-10-29, see "Manual compose on the staging host".)
 
 ## Authentication
 
@@ -155,7 +155,7 @@ Staging has no seed and no demo accounts, so the first admin is created once, by
 from the built server image (password read from stdin, never on the command line; never reuse a demo password):
 
 ```sh
-export SFC="docker compose --env-file /etc/salesforce/staging/compose.env -f deploy/docker-compose.staging.yml"  # same as "Build and deploy"
+export SFC=deploy/scripts/sf-compose.sh  # same as "Build and deploy"
 <secrets-manager command that prints the new admin password> \
   | $SFC run --rm -T --no-deps -e ALLOW_REMOTE_DB=1 \
       api node dist/account-cli.js create --email <admin address> --name "<name>" --role admin --password-stdin
@@ -180,7 +180,7 @@ command, **`config-bootstrap`** (`apps/server/src/config-bootstrap.ts`), which r
 
 ```sh
 $SFC --profile self-hosted-db run --rm --no-deps \
-  -v /etc/salesforce/staging/installation.json:/config/installation.json:ro \
+  -v /opt/force-staging/config/installation.json:/config/installation.json:ro \
   -e INSTALLATION_CONFIG_FILE=/config/installation.json \
   migrate node dist/config-bootstrap.js
 ```
@@ -245,7 +245,9 @@ registry reference in `SERVER_IMAGE`/`WEB_IMAGE` keeps working if one is adopted
 The deploy runs as the dedicated deploy user (next section).
 
 ```sh
-export SFC="docker compose --env-file /etc/salesforce/staging/compose.env -f deploy/docker-compose.staging.yml"
+# Manual compose on the staging host: use deploy/scripts/sf-compose.sh (see "Manual compose on the staging host" below); it reads
+# DEPLOYED_SHA and sets the image tags itself. This block is the by-hand equivalent for a host not managed by deploy-staging.sh.
+export SFC="docker compose -p salesforce-staging --env-file /opt/force-staging/config/compose.env -f deploy/docker-compose.staging.yml"
 git fetch --tags && git checkout <tag-or-sha>          # detached, exact version; the tree must be clean
 export SHA=$(git rev-parse --short=12 HEAD)
 # set in compose.env:  SERVER_IMAGE=sales-force-server:$SHA   WEB_IMAGE=sales-force-web:$SHA
@@ -283,12 +285,12 @@ health and `/api/v1/ready` checks) and an application-only `deploy/scripts/rollb
 
 Strategy the owner applies by hand when the VPS exists:
 
-- **A dedicated, non-root deploy/ops user** (for example `sfdeploy`), used for builds, `docker compose`, backups
+- **A dedicated, non-root deploy/ops user** (on the staging host: `force-deploy`), used for builds, `docker compose`, backups
   and restore checks. No routine work as root; no `sudo` rights for this user. The user owns
-  `/etc/salesforce/staging` (0700; secret files 0600) and `SF_BACKUP_DIR`.
+  `/opt/force-staging` (config 0700; secret files 0600; layout below) and `SF_BACKUP_DIR`.
 - **SSH key authentication only:** a key pair generated on the operator's machine (or held in a secrets manager),
   public key in the deploy user's `authorized_keys`; `PasswordAuthentication no`, `PermitRootLogin no`,
-  `AllowUsers sfdeploy <admin>`; no password flow for that account (`passwd -l`). **No private key is stored in the
+  `AllowUsers force-deploy <admin>`; no password flow for that account (`passwd -l`). **No private key is stored in the
   repository, in CI variables checked into Git, or on the VPS.** A CI-driven deploy (GitHub Actions over SSH) is
   PROPOSED and would use a separate, deploy-only key kept in the CI secret store and a forced command or restricted
   key options; it is not set up here.
@@ -381,7 +383,8 @@ The volume is not part of the PostgreSQL dump or PITR. `deploy/staging/ops-media
 
 ## Rollback (P-16: expand -> migrate -> contract)
 
-- Rollback = previous tag: set `SERVER_IMAGE`/`WEB_IMAGE` in `compose.env` back to the previous SHA tags (still
+- On the managed host use `deploy/scripts/rollback-staging.sh` (it sets the tags itself; `sf-compose.sh` ignores tags in
+  `compose.env`). By hand: rollback = previous tag: set `SERVER_IMAGE`/`WEB_IMAGE` (environment, or `compose.env` for a by-hand `$SFC`) back to the previous SHA tags (still
   present locally, see tag retention) and `$SFC --profile self-hosted-db up -d`. If the old tag is gone, check
   out its git tag and rebuild. `migrate` re-runs the (idempotent) migration job of the older image: it never
   reverses schema changes.
@@ -451,7 +454,44 @@ check against a real second name for the same database (stubbed); the real `aws`
 6. Operational (seller) login on staging waits for the real Sankhya verifier adapter (BLOCKED_EXTERNAL_SECRET).
 7. Managed PostgreSQL remains the target (V-04, V-15), including whether the provider allows the role bootstrap.
 
-## Switching to `AUTH_MODE=external` (PB-1; owner deploy decision, not applied)
+## Manual compose on the staging host (facts of 2026-10-29)
+
+Host layout (not `/etc/salesforce/staging`, which earlier drafts of this file cited): repository `/opt/force-staging/repo`,
+non-secret env `/opt/force-staging/config/compose.env`, secrets `/opt/force-staging/config/secrets/*.env`, state and logs
+`/opt/force-staging/logs` (`deployed.state`, `deploy-history.log`); user `force-deploy`; `SF_EDGE_MODE=external`,
+`SF_DB_MODE=self-hosted`. Compose project: `salesforce-staging`.
+
+Run every manual compose command through `deploy/scripts/sf-compose.sh`. It uses exactly what `deploy-staging.sh` uses
+(project, env file, compose files, the `docker-compose.staging.external-edge.yml` overlay when `SF_EDGE_MODE=external`,
+profile `self-hosted-db` when `SF_DB_MODE=self-hosted`) and takes the image tags from `DEPLOYED_SHA` in the state file
+(`sales-force-server:<12 hex>` / `sales-force-web:<12 hex>`), never from `compose.env`. Everything after the script name goes to
+compose; `--print` as the first argument shows the command and runs nothing:
+
+```sh
+cd /opt/force-staging/repo
+deploy/scripts/sf-compose.sh --print up -d --no-deps --force-recreate api web   # inspect
+deploy/scripts/sf-compose.sh up -d --no-deps --force-recreate api web
+deploy/scripts/sf-compose.sh ps
+```
+
+Do not run it while a deploy or rollback holds the lock. Pitfalls seen on 2026-10-29 with hand-typed `docker compose`:
+
+- **Stale image tag:** `compose.env` still carried `62f50b18b4dc`, so `up` recreated containers from an old image.
+- **Missing external-edge overlay:** without `-f deploy/docker-compose.staging.external-edge.yml` the loopback ports
+  `127.0.0.1:13000` (api) and `127.0.0.1:18080` (web) are not published, and the existing reverse proxy answers 502.
+- **nginx 0600 failure:** the first deploy attempt of `bd6d593` failed at the web health check with
+  `open() "/etc/nginx/conf.d/default.conf" failed (13: Permission denied)`. Cause: the script ran with `umask 077`, so the
+  checkout left `deploy/nginx/default.conf` at 0600, and `COPY` into the image preserved that mode (the nginx user could not
+  read it). Fixed by hand with `chmod 644`, and permanently: `Dockerfile.web` copies it with `--chmod=0644`,
+  `deploy-staging.sh` runs with `umask 022` and stops before the build if a file copied into the web image is not readable
+  by others.
+
+State on staging since 2026-10-29: `bd6d593` deployed by `deploy-staging.sh` as a force-deploy with `SF_RUN_DB_ROLES=1`
+(migrations 0012 and 0013 applied, db-roles OK, `DEPLOYED_SHA=bd6d593`); `API_AUTH_MODE=external` + `WEB_AUTH_MODE=standard`
+since 2026-10-29 19:14Z with `EXTERNAL_LOGIN_ENABLED=1`, `VERIFIER_MODE=live`, `EXTERNAL_AUTO_PROVISION=1` and
+`EXTERNAL_IDUSU_IS_CODUSU_VALIDATED=1`. Test: `bash deploy/scripts/test-sf-compose.sh` (CI).
+
+## Switching to `AUTH_MODE=external` (PB-1; applied on staging 2026-10-29 19:14Z)
 
 `external` = operational users (seller, manager) only through the Sankhya verifier (STACK-2a/2b); local Argon2id for
 `admin`/`technical` only; no demo bypass. `local` stays valid (AUTH-5) and is the current staging value; `dev` is for
@@ -466,8 +506,8 @@ is set. Steps, on the host only (no secret in Git; the real `compose.env` is nev
    restrict it by proxy/firewall before pointing the verifier anywhere else, STACK-2b). Keep `EXTERNAL_AUTO_PROVISION=0`
    until the AUTH-7 proofs close.
 3. Check `api.env` has no `ALLOW_DEV_AUTH` and no `SF_ALLOW_DEMO_ACCOUNTS`.
-4. Recreate `api` and `web`; check `/ready`, one local admin login and one Sandbox operational login.
+4. Recreate `api` and `web` (`deploy/scripts/sf-compose.sh up -d --no-deps --force-recreate api web`); check `/ready`, one local admin login and one Sandbox operational login.
 5. The operator CLI refuses `account create --role seller|manager` in this mode; operational accounts come from
    `account create-external` or the first verified sign-in. Optional one-shot revoke of old local-seller sessions: see
    `docs/implementation/auth-username-flow.md` (documented only).
-6. Rollback: `API_AUTH_MODE=local`, `WEB_AUTH_MODE=local`, `EXTERNAL_LOGIN_ENABLED=0`, recreate `api` and `web`.
+6. Rollback: `API_AUTH_MODE=local`, `WEB_AUTH_MODE=local`, `EXTERNAL_LOGIN_ENABLED=0`, recreate `api` and `web` with the same script.
