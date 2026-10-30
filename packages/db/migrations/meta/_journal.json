@@ -134,6 +134,13 @@
       "when": 1793384763655,
       "tag": "0018_order_erp_status_detail",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793388363655,
+      "tag": "0019_configuration_version_current_guard",
+      "breakpoints": true
     }
   ]
 }

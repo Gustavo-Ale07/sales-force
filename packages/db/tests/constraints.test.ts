@@ -90,6 +90,20 @@ async function newOrder(accountId: string, configId: string, overrides: Partial<
 }
 
 describe('installation_configuration_version', () => {
+  it('never lets a stored version become current again (rollback guard)', async () => {
+    const old = await newConfig(false);
+    const err = (await h.db
+      .update(installationConfigurationVersion)
+      .set({ isCurrent: true })
+      .where(eq(installationConfigurationVersion.id, old))
+      .then(
+        () => undefined,
+        (e: unknown) => e,
+      )) as { cause?: { message?: string }; message?: string } | undefined;
+    expect(err, 'expected the update to be rejected').toBeDefined();
+    expect(String(err?.cause?.message ?? err?.message)).toContain('can never become current again');
+  });
+
   it('allows exactly one current row (partial unique index)', async () => {
     const a = await newConfig(true);
     await expectPgError(newConfig(true), UNIQUE, 'installation_configuration_version_one_current_uq');

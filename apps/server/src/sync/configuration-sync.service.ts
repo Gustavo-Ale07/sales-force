@@ -22,6 +22,13 @@ export const CONFIGURATION_LOCK_NAMESPACE = 0x53464346;
 
 const BASE_SOURCE_KIND = 'bootstrap-file';
 const MAX_CHANGED_KEYS_CHARS = 1000;
+/** Keys that widen or narrow what sellers can do or see: the audit records the codes added and removed (CFG-2). */
+const SCOPE_KEYS = [
+  'general.enabledCompanyCodes',
+  'sales.eligibleOrderTopCodes',
+  'sales.negotiationTypes',
+  'customers.creditFeatures.showCreditLimit',
+] as const;
 
 export interface ConfigurationSyncDeps {
   readonly db: DbHandle;
@@ -142,6 +149,7 @@ export class ConfigurationSyncService {
               changedCount: changedKeys.length,
               changedKeys: changedKeys.join(',').slice(0, MAX_CHANGED_KEYS_CHARS),
               warningCount: warnings,
+              scopeChanges: scopeChanges(overlay.entries),
             },
           },
           writer,
@@ -214,4 +222,25 @@ export class ConfigurationSyncService {
       .values({ entity: CONFIGURATION_SYNC_ENTITY, ...values })
       .onConflictDoUpdate({ target: syncState.entity, set: values });
   }
+}
+
+function codesOf(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(typeof item === 'object' && item !== null && 'code' in item ? (item as { code: unknown }).code : item));
+  }
+  return value === null || value === undefined ? [] : [String(value)];
+}
+
+/** Codes added/removed per scope-relevant key (codes and flags only, never descriptions), cut to the audit limit. */
+function scopeChanges(entries: readonly { key: string; previous: unknown; next: unknown; changed: boolean }[]): string {
+  const parts: string[] = [];
+  for (const entry of entries) {
+    if (!entry.changed || !(SCOPE_KEYS as readonly string[]).includes(entry.key)) continue;
+    const before = new Set(codesOf(entry.previous));
+    const after = new Set(codesOf(entry.next));
+    const added = [...after].filter((code) => !before.has(code));
+    const removed = [...before].filter((code) => !after.has(code));
+    parts.push(`${entry.key}:+[${added.join(',')}]-[${removed.join(',')}]`);
+  }
+  return parts.join(';').slice(0, MAX_CHANGED_KEYS_CHARS);
 }

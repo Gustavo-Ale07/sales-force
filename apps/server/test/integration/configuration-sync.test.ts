@@ -92,6 +92,7 @@ describe('sync.configuration (CFG-8)', () => {
     expect(detail['previousVersion']).toBe('base-2026-10-02');
     expect(detail['newHash']).toBe(current.contentHash);
     expect(String(detail['changedKeys'])).toContain('pricing.catalogReferenceTableCode');
+    expect(typeof detail['scopeChanges']).toBe('string');
     expect(Number(detail['changedCount'])).toBeGreaterThan(0);
 
     const row = await state();
