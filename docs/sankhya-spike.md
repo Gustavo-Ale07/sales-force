@@ -988,3 +988,14 @@ The order delivery code (`packages/sankhya/src/write`, `apps/server/src/integrat
 8. The dedicated origin column (SNK-5) does not exist yet in the Sandbox; the owner creates it. `findOrderByOrigin` on that column cannot be exercised before.
 9. Source of the Vidya status code (`GETCODSTATUS_VIDYA`) for the ERP status shown in Sales Force (P2): the function body was not obtained. The mapping in `packages/domain` is a reconstruction from the rules the owner stated (including NEGADO overriding FATURADO when `STATUSNFE <> 'A'`) and stays NEEDS VALIDATION until compared with the real function on sample orders.
 10. Ambiguity after a timeout on `incluirNota` is resolved only by reading the origin column; a creation without the origin value is never assumed (SNK-4).
+
+### 9.49 Vidya Force configuration inside Sankhya — VALIDATED (env) 2026-10-30 (owner-run DBExplorer reads, read-only)
+
+Source: the project owner; full map in `.claude/work/VIDYA_SANKHYA_CONFIG_MAP_2026-10-30.md`. Parameters, dictionary and log exports came from PRODUCTION Sankhya; the catalogue from the Sandbox (the Sandbox may lag production — read key by key, never presume).
+
+1. The Vidya configuration is one row of `AD_TVDYCFGFRC` (`NUCFG = 1`; 370 columns, 88 filled) plus `AD_TVDYFRCSTS` (8 statuses: name, description, hex colour, `PERMEDIT`/`PERMDUPLIC`/`PERMEXC`), `AD_TVDYGRUOP`/`AD_TVDYTOPGRU` (TOP groups, incl. "ORÇAMENTO"), `AD_MOBILIDADE` flags on `TGFTOP`, `TGFTPV`, `TGFNTA`, `TGFPRO`, `TGFLOC`, `TSIEMP`, and `TSIEMP.AD_CODTIPOPERPAD`.
+2. `TGFTOP`/`TGFTPV` are versioned by `DHALTER`; the current version is `MAX(DHALTER)` per code.
+3. PLAC production: TOPs enabled 1000, 1001, 1009, 1051, 1061, 2209, 2309 (1000 skips confirmation); company 1 enabled with default TOP 1001; 35 negotiation types enabled (incl. returns 23, 24); `CODLOCALPEDIDOS` 209, `TABPADCSLTPROD` 5, `CODTABALT` 5, `USADECQTD` S, `DIASCONSULTAVENDAS` 90, `QTDDIASPRODCOMPRADOS` 90, `UTILFINANC` S.
+4. `AD_STATUS`/`AD_LIBORD`/`AD_FAROL` are PLAC customization (not interpreted by Force). TSILIB events seen: 44, 2, 18, 13.
+5. Security: `AD_TVDYLOGPED.BASICAUTH` stores Base64 credentials; `AD_TVDYCFGFRC` holds credential columns. The Force configuration queries never name them (test), and no Authorization/token/password is ever persisted by Force.
+6. Still NEEDS VALIDATION: the same values in the Sandbox (reported by the first sync), meaning of `AD_EXPEDICAO`, names of TSILIB events 2 and 13, the `TSIUSU` block field.
