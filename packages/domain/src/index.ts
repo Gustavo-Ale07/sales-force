@@ -13,3 +13,4 @@ export * from './erp-eligibility.js';
 export * from './product-mobility.js';
 export * from './discount-authority.js';
 export * from './order-top.js';
+export * from './order-document.js';
