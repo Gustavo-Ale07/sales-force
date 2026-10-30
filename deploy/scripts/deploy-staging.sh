@@ -18,7 +18,7 @@
 # `git checkout` replaces this very file while it runs, so bash must never read from it again after main starts.
 # A changed script takes effect on the NEXT run (the script of the previously deployed commit performs a deploy).
 set -euo pipefail
-umask 077
+umask 022 # checked-out files must stay readable by others: the web image copies them (the build also sets explicit modes)
 trap '' HUP PIPE
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -213,6 +213,16 @@ main() {
   git -C "$SF_REPO_DIR" checkout --detach --quiet "$DEPLOY_SHA"
   CHECKED_OUT="yes"
   [ "$(git -C "$SF_REPO_DIR" rev-parse HEAD)" = "$DEPLOY_SHA" ] || sf_die "checkout did not land on $DEPLOY_SHA"
+
+  STAGE="build inputs readable"
+  local f mode
+  for f in deploy/nginx/default.conf deploy/nginx/40-runtime-config.sh; do
+    [ -f "$SF_REPO_DIR/$f" ] || sf_die "file copied into the web image is missing: $f"
+    mode="$(stat -c %a "$SF_REPO_DIR/$f")"
+    if [ $(( 8#$mode & 4 )) -eq 0 ]; then
+      sf_die "$f has mode $mode and is not readable by others; nginx in the web image would fail with 'Permission denied'. Fix: chmod 644 $SF_REPO_DIR/$f (the umask of this script is 022; check the git checkout/umask of the caller). Nothing was built."
+    fi
+  done
 
   STAGE="compose config"
   sf_compose config -q

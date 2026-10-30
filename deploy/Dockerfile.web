@@ -23,8 +23,9 @@ RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
 RUN pnpm --filter "@salesforce/web..." run build
 
 FROM ${NGINX_IMAGE} AS runtime
+# File modes are explicit (never inherited from the checkout: a 0600 file made nginx fail with EACCES, 2026-10-29).
 COPY --from=build /repo/apps/web/dist/ /usr/share/nginx/html/
-COPY deploy/nginx/default.conf /etc/nginx/conf.d/default.conf
+COPY --chmod=0644 deploy/nginx/default.conf /etc/nginx/conf.d/default.conf
 COPY --chmod=0755 deploy/nginx/40-runtime-config.sh /docker-entrypoint.d/40-runtime-config.sh
 USER root
 # The site is read-only for the runtime user. config.json is a symlink into /tmp, the only place written at
