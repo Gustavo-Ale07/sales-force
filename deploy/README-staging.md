@@ -200,6 +200,13 @@ $SFC --profile self-hosted-db run --rm --no-deps \
   **`config-bootstrap`** -> first admin (below) -> `up -d` -> `/api/v1/ready`. Starting `worker` before the
   configuration only produces the failed mirror jobs described above (they repeat on the next schedule once the
   configuration exists).
+- **The file is the "arquivo base" (CFG-8, Part 2).** With `CONFIG_SYNC_FROM_SANKHYA=1` (default `0`, worker env) the
+  `sync.configuration` job reads the Vidya configuration inside Sankhya (read-only) every 15 minutes and at start,
+  overlays it on the latest `bootstrap-file` version and stores a new `sankhya` version when the content changed;
+  any failure leaves the current version untouched and shows as a failing `configuration` entity in the integration
+  panel. On demand: `node dist/sync-once.js sync.configuration`. **The next deploy needs `SF_RUN_DB_ROLES=1`**:
+  `force_worker` now holds INSERT and `UPDATE (is_current)` on `installation_configuration_version` (db-roles.sql,
+  UNDETERMINED 1); `force_api` stays read-only. Do not enable the flag before that deploy.
 
 ## Sankhya (SNK-3)
 

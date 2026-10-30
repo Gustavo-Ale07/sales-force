@@ -127,6 +127,8 @@ export type OrderStatusDisplay = z.infer<typeof OrderStatusDisplaySchema>;
 
 const ErpSchema = z.strictObject({
   orderStatusDisplay: z.array(OrderStatusDisplaySchema).optional(),
+  /** D6b: display names of ERP release (TSILIB) event codes, keyed by the code as text. Optional; unnamed codes show as the code. */
+  liberationEventLabels: z.record(z.string().regex(/^\d{1,9}$/), z.string().min(1).max(100)).optional(),
 });
 
 const GeneralSchema = z.strictObject({
@@ -340,6 +342,8 @@ export const ConfigurationSummarySchema = named(
     pricing: PricingSchema,
     financial: FinancialSchema,
     features: FeatureFlagsSchema,
+    /** CFG-8: origin of each bridge key. Admin/technical only; never part of the seller-facing slice. */
+    provenance: ProvenanceSchema.optional(),
   }),
 );
 export type ConfigurationSummary = z.infer<typeof ConfigurationSummarySchema>;

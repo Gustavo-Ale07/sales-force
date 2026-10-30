@@ -656,6 +656,15 @@ export interface components {
         CarriersResponse: {
             items: components["schemas"]["Carrier"][];
         };
+        ConfigurationProvenanceEntry: {
+            table: string;
+            column: string;
+            filter?: string;
+            readAt: components["schemas"]["IsoTimestamp"];
+        } | {
+            /** @constant */
+            source: "base";
+        };
         ConfigurationResponse: {
             contentHash: string | null;
             configuration: components["schemas"]["ConfigurationSummary"];
@@ -743,6 +752,9 @@ export interface components {
                 creditChecks: boolean;
             };
             features: components["schemas"]["FeatureFlags"];
+            provenance?: {
+                [key: string]: components["schemas"]["ConfigurationProvenanceEntry"];
+            };
         };
         /** @enum {string} */
         ConfirmationBehavior: "manual" | "automatic" | "disabled";
@@ -985,6 +997,10 @@ export interface components {
                 label: string;
                 invoiceNumber: number | null;
                 checkedAt: components["schemas"]["IsoTimestamp"];
+                releaseEvents?: {
+                    code: number;
+                    label: string | null;
+                }[];
             } | null;
             review: components["schemas"]["OrderReview"] | null;
             version: number;
@@ -1073,6 +1089,10 @@ export interface components {
                 label: string;
                 invoiceNumber: number | null;
                 checkedAt: components["schemas"]["IsoTimestamp"];
+                releaseEvents?: {
+                    code: number;
+                    label: string | null;
+                }[];
             } | null;
             review: components["schemas"]["OrderReview"] | null;
             version: number;

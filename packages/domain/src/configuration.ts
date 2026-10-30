@@ -146,6 +146,8 @@ export interface InstallationConfiguration {
   readonly provenance?: Readonly<Record<string, ConfigurationProvenanceEntry>>;
   readonly erp?: {
     readonly orderStatusDisplay?: readonly OrderStatusDisplay[];
+    /** D6b: display names of ERP release event codes (key = code as text). */
+    readonly liberationEventLabels?: Readonly<Record<string, string>>;
   };
   readonly general: {
     readonly appMinimumVersion?: string;

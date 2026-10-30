@@ -3122,6 +3122,52 @@
         ],
         "additionalProperties": false
       },
+      "ConfigurationProvenanceEntry": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "table": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60
+              },
+              "column": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60
+              },
+              "filter": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "readAt": {
+                "$ref": "#/components/schemas/IsoTimestamp"
+              }
+            },
+            "required": [
+              "table",
+              "column",
+              "readAt"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "source": {
+                "type": "string",
+                "const": "base"
+              }
+            },
+            "required": [
+              "source"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
       "ConfigurationResponse": {
         "type": "object",
         "properties": {
@@ -3553,6 +3599,17 @@
           },
           "features": {
             "$ref": "#/components/schemas/FeatureFlags"
+          },
+          "provenance": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ConfigurationProvenanceEntry"
+            }
           }
         },
         "required": [
@@ -4767,6 +4824,29 @@
                   },
                   "checkedAt": {
                     "$ref": "#/components/schemas/IsoTimestamp"
+                  },
+                  "releaseEvents": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "label": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "label"
+                      ],
+                      "additionalProperties": false
+                    }
                   }
                 },
                 "required": [
@@ -5298,6 +5378,29 @@
                   },
                   "checkedAt": {
                     "$ref": "#/components/schemas/IsoTimestamp"
+                  },
+                  "releaseEvents": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "label": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "label"
+                      ],
+                      "additionalProperties": false
+                    }
                   }
                 },
                 "required": [

@@ -1,7 +1,7 @@
 import { ConfigurationResponseSchema } from '@salesforce/contracts';
 import { defaultUnconfiguredConfiguration } from '@salesforce/domain';
 import { describe, expect, it } from 'vitest';
-import { buildConfigurationResponse, toConfigurationSummary } from '../../src/configuration/configuration-summary.js';
+import { buildConfigurationResponse, toConfigurationSummary, toOrderEntryConfiguration } from '../../src/configuration/configuration-summary.js';
 import { AppError } from '../../src/http/app-error.js';
 import { assertAuditDetailSafe, ForbiddenAuditDetailError } from '../../src/iam/audit.service.js';
 import { buildRedactPaths, caseVariants } from '../../src/observability/logger.js';
@@ -82,5 +82,42 @@ describe('configuration summary', () => {
     const summary = toConfigurationSummary(configuration);
     expect(summary.customers.accountSellerLinkCount).toBe(1);
     expect(JSON.stringify(summary)).not.toContain('someone@example.test');
+  });
+
+  it('serves source.kind, source.base and provenance to the admin summary (CFG-8)', () => {
+    const base = defaultUnconfiguredConfiguration();
+    const configuration = {
+      ...base,
+      source: {
+        kind: 'sankhya' as const,
+        version: 'sankhya-overlay:base-1',
+        syncedAt: '2026-10-30T12:00:00.000Z',
+        base: { kind: 'bootstrap-file' as const, version: 'base-1' },
+      },
+      provenance: {
+        'customers.historyDays': { table: 'AD_TVDYCFGFRC', column: 'DIASCONSULTAVENDAS', readAt: '2026-10-30T12:00:00.000Z' },
+        'pricing.fallbackStrategy': { source: 'base' as const },
+      },
+    };
+    const summary = toConfigurationSummary(configuration);
+    expect(summary.source.kind).toBe('sankhya');
+    expect(summary.source.base).toEqual({ kind: 'bootstrap-file', version: 'base-1' });
+    expect(summary.provenance?.['customers.historyDays']).toMatchObject({ table: 'AD_TVDYCFGFRC' });
+    const body = buildConfigurationResponse({ state: 'configured', configuration, contentHash: 'sha256:x' } as never, [], now);
+    expect(ConfigurationResponseSchema.safeParse(body).success).toBe(true);
+  });
+
+  it('never puts provenance or admin keys in the seller-facing order-entry slice (CFG-7)', () => {
+    const base = defaultUnconfiguredConfiguration();
+    const configuration = {
+      ...base,
+      provenance: { 'customers.historyDays': { table: 'AD_TVDYCFGFRC', column: 'DIASCONSULTAVENDAS', readAt: '2026-10-30T12:00:00.000Z' } },
+    };
+    const slice = toOrderEntryConfiguration(configuration, null);
+    const text = JSON.stringify(slice);
+    expect(slice).not.toHaveProperty('provenance');
+    expect(slice).not.toHaveProperty('source');
+    expect(text).not.toContain('AD_TVDYCFGFRC');
+    expect(text).not.toMatch(/provenance|catalogReferenceTableCode|mobilePriceTableCodes|financial|customers/);
   });
 });

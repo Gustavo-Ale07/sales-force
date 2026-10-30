@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { installationConfigurationVersion, type Database } from '@salesforce/db';
 import type { AuditWriter } from '../iam/audit.service.js';
 import type { InstallationConfiguration } from '@salesforce/domain';
-import { eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { uuidv7 } from '../platform/ids.js';
 import { DATABASE } from '../platform/tokens.js';
 import { configurationContentHash } from './configuration-hash.js';
@@ -41,6 +41,17 @@ export class InstallationConfigurationRepository {
       .select()
       .from(installationConfigurationVersion)
       .where(eq(installationConfigurationVersion.isCurrent, true));
+    return row ?? null;
+  }
+
+  /** Latest stored version of a source kind (immutable history, newest first by time-ordered id). */
+  async findLatestBySourceKind(sourceKind: string): Promise<StoredConfigurationRow | null> {
+    const [row] = await this.db
+      .select()
+      .from(installationConfigurationVersion)
+      .where(eq(installationConfigurationVersion.sourceKind, sourceKind))
+      .orderBy(desc(installationConfigurationVersion.id))
+      .limit(1);
     return row ?? null;
   }
 

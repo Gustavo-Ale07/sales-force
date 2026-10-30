@@ -23,7 +23,12 @@ export const QUEUE_NAMES = {
   integrationOrderDryRunPurge: 'integration.order.dry-run-purge',
   /** Reads the ERP status of sent orders (SNK-7 P2). Read-only; scheduled together with order delivery. */
   syncErpOrderStatus: 'sync.erp.orderStatus',
+  /** Reads the Vidya configuration inside Sankhya and stores a new configuration version (CFG-8). Only with CONFIG_SYNC_FROM_SANKHYA=1. */
+  syncConfiguration: 'sync.configuration',
 } as const;
+
+/** Every 15 minutes (CFG-8), and once at worker start. */
+export const CONFIGURATION_SYNC_CRON = '*/15 * * * *';
 
 /** Every minute; the outbox row decides what is actually due (`next_attempt_at`). */
 export const ORDER_DELIVERY_CRON = '* * * * *';
@@ -100,6 +105,18 @@ export const QUEUE_REGISTRY: readonly QueueSpec[] = [
   },
   {
     name: QUEUE_NAMES.syncErpOrderStatus,
+    options: {
+      policy: 'short',
+      retryLimit: 0,
+      expireInSeconds: 600,
+      retentionSeconds: 3600,
+      deleteAfterSeconds: 24 * 3600,
+      deadLetter: QUEUE_NAMES.deadLetter,
+    },
+  },
+  {
+    // The next tick is the retry of a failed read: pg-boss never retries it.
+    name: QUEUE_NAMES.syncConfiguration,
     options: {
       policy: 'short',
       retryLimit: 0,

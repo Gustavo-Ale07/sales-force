@@ -148,3 +148,51 @@ describe('GET /api/v1/configuration stays admin-only (regression guard)', () => 
     ]);
   });
 });
+
+describe('CFG-8 provenance visibility', () => {
+  const sankhyaSnapshot = {
+    ...DEMO_CONFIGURATION,
+    source: {
+      kind: 'sankhya' as const,
+      version: 'sankhya-overlay:demo-base',
+      syncedAt: '2026-10-30T12:00:00.000Z',
+      base: { kind: 'bootstrap-file' as const, version: 'demo-base' },
+    },
+    provenance: {
+      'customers.historyDays': { table: 'AD_TVDYCFGFRC', column: 'DIASCONSULTAVENDAS', readAt: '2026-10-30T12:00:00.000Z' },
+      'pricing.fallbackStrategy': { source: 'base' as const },
+    },
+  };
+
+  async function setupSankhyaApp(): Promise<AuthApp> {
+    const database = await createMigratedDatabase(postgres);
+    opened.push(() => database.handle.close());
+    await new InstallationConfigurationRepository(database.handle.db).saveSnapshot(sankhyaSnapshot, new Date('2026-10-30T12:00:00.000Z'));
+    return startAuthApp(postgres, opened, { database, dataset: null });
+  }
+
+  it('GET /configuration serves source.kind, source.base and provenance to the admin', async () => {
+    const ctx = await setupSankhyaApp();
+    await createTestAccount(ctx.database.handle, { username: 'prov-admin@example.test', role: 'admin' });
+    const cookie = await loginCookie(ctx, 'prov-admin@example.test', TEST_PASSWORD);
+    const response = await ctx.app.inject({ method: 'GET', url: CONFIGURATION_URL, headers: { cookie } });
+    expect(response.statusCode).toBe(200);
+    const parsed = ConfigurationResponseSchema.parse(response.json());
+    expect(parsed.configuration.source.kind).toBe('sankhya');
+    expect(parsed.configuration.source.base).toEqual({ kind: 'bootstrap-file', version: 'demo-base' });
+    expect(parsed.configuration.provenance?.['customers.historyDays']).toMatchObject({ table: 'AD_TVDYCFGFRC' });
+    expect(parsed.configuration.provenance?.['pricing.fallbackStrategy']).toEqual({ source: 'base' });
+  });
+
+  it.each(['seller', 'manager'] as const)('%s gets no provenance or source on any configuration path', async (role) => {
+    const ctx = await setupSankhyaApp();
+    await createTestAccount(ctx.database.handle, { username: `prov-${role}@example.test`, role });
+    const cookie = await loginCookie(ctx, `prov-${role}@example.test`, TEST_PASSWORD);
+    const slice = await ctx.app.inject({ method: 'GET', url: ORDER_ENTRY_URL, headers: { cookie } });
+    expect(slice.statusCode).toBe(200);
+    expect(slice.body).not.toMatch(/provenance|AD_TVDYCFGFRC|sankhya-overlay|bootstrap-file/);
+    const full = await ctx.app.inject({ method: 'GET', url: CONFIGURATION_URL, headers: { cookie } });
+    expect(full.statusCode).toBe(403);
+    expect(full.body).not.toMatch(/provenance|AD_TVDYCFGFRC/);
+  });
+});

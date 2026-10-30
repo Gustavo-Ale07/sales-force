@@ -21,7 +21,17 @@ import { SyncHeartbeatJob } from './jobs/sync-heartbeat.job.js';
 import type { OrderDeliveryService } from '../integration/order-delivery.service.js';
 import type { OrderErpStatusService } from '../integration/order-erp-status.service.js';
 import { OrderDeliveryJob, OrderDryRunPurgeJob, OrderErpStatusJob } from './jobs/order-delivery.job.js';
-import { ORDER_DELIVERY_CRON, ORDER_DRY_RUN_PURGE_CRON, ORDER_ERP_STATUS_CRON, QUEUE_NAMES, QUEUE_REGISTRY, type QueueSpec } from './queues.js';
+import type { ConfigurationSyncService } from '../sync/configuration-sync.service.js';
+import { ConfigurationSyncJob } from './jobs/configuration-sync.job.js';
+import {
+  CONFIGURATION_SYNC_CRON,
+  ORDER_DELIVERY_CRON,
+  ORDER_DRY_RUN_PURGE_CRON,
+  ORDER_ERP_STATUS_CRON,
+  QUEUE_NAMES,
+  QUEUE_REGISTRY,
+  type QueueSpec,
+} from './queues.js';
 
 export const QUEUE_INSTALL_HINT =
   'Run the one-shot queue installation before starting the worker (pnpm db:queue:install). ' +
@@ -77,6 +87,12 @@ export interface WorkerRuntimeDeps {
    * absent = no handler, and a schedule stored by an earlier configuration is dropped.
    */
   readonly orderDelivery?: { readonly service: OrderDeliveryService; readonly status?: OrderErpStatusService };
+  /**
+   * Configuration read from Sankhya (CFG-8). Present only when CONFIG_SYNC_FROM_SANKHYA=1: the handler is then
+   * registered, `sync.configuration` scheduled every 15 minutes and enqueued once at start. Absent = no handler, and a
+   * schedule stored by an earlier configuration is dropped.
+   */
+  readonly configurationSync?: { readonly service: ConfigurationSyncService };
 }
 
 /**
@@ -155,11 +171,14 @@ export class WorkerRuntime {
               new OrderDryRunPurgeJob(orderDelivery.service),
               ...(orderDelivery.status === undefined ? [] : [new OrderErpStatusJob(orderDelivery.status)]),
             ];
+      const { configurationSync } = this.deps;
+      const configurationHandlers = configurationSync === undefined ? [] : [new ConfigurationSyncJob(configurationSync.service)];
       const handlers: readonly JobHandler<unknown>[] = [
         heartbeat,
         ...mirrorHandlers,
         ...mediaHandlers,
         ...orderHandlers,
+        ...configurationHandlers,
         ...(this.deps.extraHandlers ?? []),
       ];
 
@@ -213,6 +232,17 @@ export class WorkerRuntime {
         // Disabled: drop a schedule stored by an earlier configuration (the switch is off by default).
         if (orderDelivery === undefined || (queue === QUEUE_NAMES.syncErpOrderStatus && orderDelivery.status === undefined)) await boss.unschedule(queue);
         else await boss.schedule(queue, cron, {});
+      }
+
+      if (queues.some((spec) => spec.name === QUEUE_NAMES.syncConfiguration)) {
+        if (configurationSync === undefined) {
+          // Disabled (the default): drop a schedule stored by an earlier configuration.
+          await boss.unschedule(QUEUE_NAMES.syncConfiguration);
+        } else {
+          await boss.schedule(QUEUE_NAMES.syncConfiguration, CONFIGURATION_SYNC_CRON, {});
+          await boss.send(QUEUE_NAMES.syncConfiguration, {}, { singletonKey: 'startup', singletonSeconds: 300 });
+          logger.info('startup configuration sync enqueued');
+        }
       }
 
       this.health.markStarted();

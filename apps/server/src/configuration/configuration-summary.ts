@@ -46,6 +46,9 @@ export function toConfigurationSummary(configuration: InstallationConfiguration)
     pricing: toPricingSummary(configuration.pricing),
     financial: { ...configuration.financial },
     features: { ...configuration.features },
+    ...(configuration.provenance === undefined
+      ? {}
+      : { provenance: Object.fromEntries(Object.entries(configuration.provenance).map(([key, entry]) => [key, { ...entry }])) }),
   };
 }
 

@@ -45,7 +45,7 @@ export interface FakeGatewayOptions {
   /** Dataset to serve; defaults to the frozen synthetic demo dataset. */
   readonly dataset?: DemoDataset;
   readonly configuration?: InstallationConfiguration;
-  /** Raw Sankhya-side configuration facts (CFG-8); defaults to the PLAC code fixture. */
+  /** Raw Sankhya-side configuration facts (CFG-8); defaults to the recorded-values code fixture. */
   readonly configurationFacts?: ConfigurationFacts;
   /** Injected failures, to test consumers against incomplete snapshots and error classes. */
   readonly faults?: readonly FakeGatewayFault[];

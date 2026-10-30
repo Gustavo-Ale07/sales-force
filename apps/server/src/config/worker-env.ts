@@ -74,6 +74,14 @@ export const WorkerEnvSchema = z.object({
     .default('0')
     .transform((value) => value === '1' || value === 'true'),
   AUTH_DIRECTORY_SYNC_CRON: cronField(DEFAULT_MIRROR_CRONS.sellers),
+  /**
+   * CFG-8: the worker reads the Vidya configuration inside Sankhya (read-only) every 15 minutes and at start, and stores a
+   * new configuration version over the base file. Off by default; an on-demand `sync:once sync.configuration` works either way.
+   */
+  CONFIG_SYNC_FROM_SANKHYA: z
+    .enum(['0', '1', 'true', 'false'], { error: "must be '1' or '0' (or 'true'/'false')." })
+    .default('0')
+    .transform((value) => value === '1' || value === 'true'),
   /** How long a graceful shutdown waits for running jobs before giving up. */
   WORKER_SHUTDOWN_TIMEOUT_MS: integerField({ min: 1000, max: 600_000 }, 30_000),
 

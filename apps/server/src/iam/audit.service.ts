@@ -28,6 +28,8 @@ export const AUDIT_ACTIONS = {
   directorySessionRevoked: 'auth.directory.session_revoked',
   /** The admin changed the discount limits (W-39, DISC-3): previous and new values, never free text. */
   discountLimitsChanged: 'config.discount_limits_changed',
+  /** CFG-8: the worker stored a new configuration version read from Sankhya (versions, hashes, changed keys; no values). */
+  configSankhyaSynced: 'config.sankhya_synced',
   orderCreated: 'order.created',
   orderReplaced: 'order.replaced',
   orderDiscarded: 'order.discarded',

@@ -65,6 +65,8 @@ runMain('worker', async () => {
               target: { environment: 'sandbox' },
             },
           },
+      // CFG-8: configuration read from Sankhya exists only when explicitly enabled (default off).
+      env.CONFIG_SYNC_FROM_SANKHYA ? { gateway } : undefined,
     ),
     { logger: new NestPinoLogger(logger), abortOnError: false },
   );

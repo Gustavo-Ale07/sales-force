@@ -10,7 +10,7 @@ import type {
 import { CONFIG_QUERIES } from '../real/configuration-queries.js';
 
 /**
- * Code fixture for the fake gateway: the PLAC configuration values recorded in spike §9.49 item 3
+ * Code fixture for the fake gateway: the first installation's configuration values recorded in spike §9.49 item 3
  * (TOPs, company/default TOP, parameter values, counts). Only codes, descriptions of TOPs / negotiation
  * types / statuses and flags; descriptions, colours and group assignment are SYNTHETIC placeholders
  * (the real texts are not recorded). No person names, no credentials.

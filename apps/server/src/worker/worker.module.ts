@@ -18,6 +18,8 @@ import {
   type OrderDeliverySettings,
 } from '../integration/order-delivery.service.js';
 import { OrderErpStatusService } from '../integration/order-erp-status.service.js';
+import type { SankhyaReadPort } from '@salesforce/sankhya';
+import { ConfigurationSyncService } from '../sync/configuration-sync.service.js';
 import { WorkerRuntime, type WorkerRuntimeOptions } from './runtime.js';
 
 /** Product photo synchronization wiring; passed only when PRODUCT_MEDIA_SYNC_ENABLED=true. */
@@ -36,6 +38,11 @@ export interface OrderDeliveryWiring {
   readonly settings: OrderDeliverySettings;
 }
 
+/** Configuration read from Sankhya (CFG-8); passed only when CONFIG_SYNC_FROM_SANKHYA=1. Read port only. */
+export interface ConfigurationSyncWiring {
+  readonly gateway: Pick<SankhyaReadPort, 'readConfigurationFacts'>;
+}
+
 /**
  * Root module of the Worker process (standalone application context, no HTTP). It registers the job
  * runtime. The gateway is created by the entry point from the worker-only environment and handed in
@@ -49,6 +56,7 @@ export class WorkerModule {
     mirror?: { readonly gateway: MirrorGateway; readonly schedules: MirrorSchedules; readonly startupSync?: readonly MirrorEntity[] },
     media?: ProductMediaWiring,
     orderDelivery?: OrderDeliveryWiring,
+    configurationSync?: ConfigurationSyncWiring,
   ): DynamicModule {
     return {
       module: WorkerModule,
@@ -79,6 +87,19 @@ export class WorkerModule {
                         now,
                         settings: media.settings,
                         readScope: () => loadCurrentReadScope(db.db),
+                      }),
+                    },
+                  }),
+              ...(configurationSync === undefined
+                ? {}
+                : {
+                    configurationSync: {
+                      service: new ConfigurationSyncService({
+                        db,
+                        gateway: configurationSync.gateway,
+                        audit: new AuditService(db.db, now),
+                        logger,
+                        now,
                       }),
                     },
                   }),

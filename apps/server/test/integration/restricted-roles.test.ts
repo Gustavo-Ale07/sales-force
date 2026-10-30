@@ -3,10 +3,14 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runMigrations, type DbHandle } from '@salesforce/db';
-import { DEMO_ACCOUNTS, DEMO_ACCOUNT_EMAILS, DEMO_CONFIGURATION, FakeGateway, Secret, getDemoDataset } from '@salesforce/sankhya';
+import { DEMO_ACCOUNTS, DEMO_ACCOUNT_EMAILS, DEMO_CONFIGURATION, FakeGateway, PLAC_CONFIGURATION_FACTS, Secret, getDemoDataset } from '@salesforce/sankhya';
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createOperatorAccountService } from '../../src/cli/operator.js';
+import { InstallationConfigurationRepository } from '../../src/configuration/configuration.repository.js';
+import { AuditService } from '../../src/iam/audit.service.js';
+import { ConfigurationSyncService } from '../../src/sync/configuration-sync.service.js';
+import { baseConfiguration } from '../helpers/overlay-base.js';
 import { createLogger } from '../../src/observability/logger.js';
 import { readWorkerHeartbeat } from '../../src/platform/worker-heartbeat.js';
 import { loadCurrentReadScope } from '../../src/sync/mirror-scope.js';
@@ -254,10 +258,48 @@ describe('API as force_api', () => {
     expect((await call('POST', '/auth/logout', undefined, cookie)).status).toBe(204);
   });
 
+  it('cannot write the installation configuration (CFG-8: only the worker job does)', async () => {
+    const pool: pg.Pool = apiDb.pool;
+    await expect(pool.query(`update installation_configuration_version set is_current = is_current`)).rejects.toMatchObject({ code: '42501' });
+    await expect(pool.query(`delete from installation_configuration_version`)).rejects.toMatchObject({ code: '42501' });
+    await expect(
+      pool.query(
+        `insert into installation_configuration_version (id, version_label, source_kind, payload, content_hash, synced_at, is_current) values ($1, 'x', 'sankhya', '{}', 'sha256:x', now(), false)`,
+        [randomUUID()],
+      ),
+    ).rejects.toMatchObject({ code: '42501' });
+  });
+
   it('cannot reach what the role does not own, even through the API connection', async () => {
     const pool: pg.Pool = apiDb.pool;
     await expect(pool.query('create table t_api_ddl (id int)')).rejects.toMatchObject({ code: '42501' });
     await expect(pool.query(`update erp_customer set name = name`)).rejects.toMatchObject({ code: '42501' });
     await expect(pool.query('select 1 from pgboss.job limit 1')).rejects.toMatchObject({ code: '42501' });
+  });
+});
+
+// Last on purpose: it replaces the current configuration version, which the API tests above depend on.
+describe('sync.configuration as force_worker (CFG-8)', () => {
+  it('inserts a version, switches is_current, audits and records sync_state; nothing else of a version is writable', async () => {
+    await new InstallationConfigurationRepository(migratorDb.db).saveSnapshot(baseConfiguration(), new Date());
+    const service = new ConfigurationSyncService({
+      db: workerDb,
+      gateway: { readConfigurationFacts: async () => PLAC_CONFIGURATION_FACTS },
+      audit: new AuditService(workerDb.db, () => new Date()),
+      logger,
+      now: () => new Date(),
+    });
+    expect((await service.run()).outcome).toBe('stored');
+    const current = await apiDb.pool.query<{ source_kind: string; n: number }>(
+      `select source_kind, (select count(*)::int from installation_configuration_version where is_current) as n from installation_configuration_version where is_current`,
+    );
+    expect(current.rows).toEqual([{ source_kind: 'sankhya', n: 1 }]);
+    expect((await migratorDb.pool.query(`select 1 from audit_log where action = 'config.sankhya_synced'`)).rowCount).toBe(1);
+    expect((await apiDb.pool.query(`select status from sync_state where entity = 'configuration'`)).rows[0]).toEqual({ status: 'succeeded' });
+
+    const pool: pg.Pool = workerDb.pool;
+    await expect(pool.query(`update installation_configuration_version set payload = '{}'`)).rejects.toMatchObject({ code: '42501' });
+    await expect(pool.query(`update installation_configuration_version set content_hash = 'x'`)).rejects.toMatchObject({ code: '42501' });
+    await expect(pool.query(`delete from installation_configuration_version`)).rejects.toMatchObject({ code: '42501' });
   });
 });

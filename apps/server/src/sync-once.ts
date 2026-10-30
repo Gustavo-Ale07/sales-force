@@ -6,6 +6,11 @@ import { isReservedSyncEntity } from './platform/worker-heartbeat.js';
 import { isMirrorEntity, MIRROR_ENTITIES, type MirrorEntity } from './sync/mirror-entities.js';
 import { loadCurrentReadScope } from './sync/mirror-scope.js';
 import { MirrorSyncService } from './sync/mirror-sync.service.js';
+import { ConfigurationSyncService } from './sync/configuration-sync.service.js';
+import { describeSyncFailure } from './sync/failure.js';
+import { AuditService } from './iam/audit.service.js';
+
+const CONFIGURATION_JOB = 'sync.configuration';
 
 /**
  * One-shot mirror synchronization (`pnpm --filter @salesforce/server run sync:once [entity ...]`):
@@ -15,12 +20,16 @@ import { MirrorSyncService } from './sync/mirror-sync.service.js';
  * environment (default: the synthetic fake). The exit code is 1 when any entity failed.
  */
 runMain('sync-once', async () => {
-  const requested = process.argv.slice(2).filter((arg) => arg !== '--');
+  const args = process.argv.slice(2).filter((arg) => arg !== '--');
+  // `sync.configuration` (CFG-8) is an on-demand job of its own, not a mirror entity.
+  const runConfiguration = args.includes(CONFIGURATION_JOB);
+  const requested = args.filter((arg) => arg !== CONFIGURATION_JOB);
   const unknown = requested.filter((arg) => !isMirrorEntity(arg));
   if (unknown.length > 0) {
-    throw new Error(`Unknown entity: ${unknown.join(', ')}. Valid entities: ${MIRROR_ENTITIES.join(', ')}.`);
+    throw new Error(`Unknown entity: ${unknown.join(', ')}. Valid: ${[...MIRROR_ENTITIES, CONFIGURATION_JOB].join(', ')}.`);
   }
-  const entities: MirrorEntity[] = requested.length === 0 ? [...MIRROR_ENTITIES] : requested.filter(isMirrorEntity);
+  const entities: MirrorEntity[] =
+    requested.length === 0 && !runConfiguration ? [...MIRROR_ENTITIES] : requested.filter(isMirrorEntity);
 
   const { env, gateway, gatewayDescription } = loadWorkerConfig(process.env);
   const logger = createLogger({ level: env.LOG_LEVEL, service: 'sync-once' });
@@ -28,6 +37,30 @@ runMain('sync-once', async () => {
   const out = (line: string) => process.stdout.write(`${line}\n`);
   try {
     out(`gateway: ${gatewayDescription.mode} (${gatewayDescription.environmentKind})`);
+    let configurationFailed = false;
+    if (runConfiguration) {
+      const configuration = new ConfigurationSyncService({
+        db,
+        gateway,
+        audit: new AuditService(db.db, () => new Date()),
+        logger,
+        now: () => new Date(),
+      });
+      try {
+        const result = await configuration.run();
+        out(
+          result.outcome === 'stored'
+            ? `${CONFIGURATION_JOB}: stored changed=${result.changedKeys.length} warnings=${result.warnings}`
+            : result.outcome === 'unchanged'
+              ? `${CONFIGURATION_JOB}: unchanged warnings=${result.warnings}`
+              : `${CONFIGURATION_JOB}: ${result.outcome}`,
+        );
+      } catch (error) {
+        configurationFailed = true;
+        const failure = describeSyncFailure(error);
+        out(`${CONFIGURATION_JOB}: FAILED [${failure.errorClass}] ${failure.message}`);
+      }
+    }
     const service = new MirrorSyncService({
       db,
       gateway,
@@ -51,7 +84,7 @@ runMain('sync-once', async () => {
     for (const row of (await db.db.select().from(syncState)).filter((state) => !isReservedSyncEntity(state.entity))) {
       out(`sync_state ${row.entity}: ${row.status} rows=${row.rowCount ?? '-'} lastSuccessAt=${row.lastSuccessAt?.toISOString() ?? '-'}`);
     }
-    if (failures.length > 0 || unsupported.length > 0) process.exitCode = 1;
+    if (failures.length > 0 || unsupported.length > 0 || configurationFailed) process.exitCode = 1;
   } finally {
     await db.close();
   }

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { configurationHashView } from '@salesforce/contracts';
 import type { InstallationConfiguration } from '@salesforce/domain';
 
 /** JSON with object keys sorted recursively: the same content always serializes identically. */
@@ -19,14 +20,13 @@ function sortKeys(value: unknown): unknown {
 }
 
 /**
- * Content hash of a configuration snapshot (`sha256:<hex>`). `source.syncedAt` is excluded: reading
- * the same configuration again must not look like a change (CFG-1: hash-diff before storing).
+ * Content hash of a configuration snapshot (`sha256:<hex>`) over the contracts hash view (CFG-8): `source.syncedAt` and
+ * every `provenance[*].readAt` are excluded, so reading the same configuration again never looks like a change
+ * (CFG-1: hash-diff before storing).
  */
 export function configurationContentHash(configuration: InstallationConfiguration): string {
-  const { source, ...rest } = configuration;
-  const { syncedAt: _syncedAt, ...stableSource } = source;
   const digest = createHash('sha256')
-    .update(canonicalJson({ ...rest, source: stableSource }))
+    .update(canonicalJson(configurationHashView(configuration as never)))
     .digest('hex');
   return `sha256:${digest}`;
 }

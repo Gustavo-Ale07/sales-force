@@ -146,6 +146,7 @@ describe('mapping', () => {
       readPriceTableVersions: (o) => gateway.readPriceTableVersions(o),
       readListPrices: (o) => gateway.readListPrices(o),
       readConfiguration: (o) => gateway.readConfiguration(o),
+      readConfigurationFacts: (o) => gateway.readConfigurationFacts(o),
     };
     const warnings: string[] = [];
     const rows: MirrorRow[] = [];

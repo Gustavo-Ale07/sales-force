@@ -38,7 +38,7 @@
 --   account_seller_link                   S I U D     -              account.repository (upsert); account CLI; D: removal of an automatic (sankhya_auto) link when the ERP relation ends
 --   auth_throttle                         S I U D     -              iam/throttle.repository (clear on success/unlock, purge)
 --   audit_log                             I           -              iam/audit.service. Append-only: no S/U/D (never read by code)
---   installation_configuration_version    S           S              configuration.repository (read); worker mirror-scope. Writers: see UNDETERMINED 1
+--   installation_configuration_version    S           S I U(is_current)  configuration.repository (read); worker mirror-scope + sync.configuration (CFG-8, UNDETERMINED 1)
 --   sync_state                            S           S I U          worker: sync-state, heartbeat. API reads (integration summary, /configuration)
 --   erp_directory_user (ERP user code + seller code only),
 --   erp_carrier (carrier code, name, active flag),
@@ -79,9 +79,12 @@
 --
 -- UNDETERMINED (reported to the owner, not guessed):
 --   1. Who writes installation_configuration_version in staging: the one-shot `config-bootstrap` command
---      (apps/server) run as force_migrator; the dev `seed` refuses staging/production and the API only reads.
---      The long-term source of the configuration file stays open (U-11). If the API or worker is meant to write it,
---      add INSERT, UPDATE here.
+--      (apps/server) run as force_migrator writes the base file version; the dev `seed` refuses staging/production.
+--      CFG-8 (Part 2): the WORKER now also writes it, only through the `sync.configuration` job (enabled by
+--      CONFIG_SYNC_FROM_SANKHYA=1 or `sync:once sync.configuration`): INSERT of a new version and UPDATE restricted
+--      to the column `is_current` (column-level grant). The API still only reads. Versions are never updated
+--      otherwise and never deleted. A deploy that carries this change needs the roles file re-applied
+--      (SF_RUN_DB_ROLES=1 on the next deploy).
 --   2. integration_outbox: grants added by SNK-7 (see the matrix). Enqueue stays OFF by default (API
 --      ERP_ORDER_ENQUEUE_ENABLED) and the worker sends nothing unless SANKHYA_ORDER_WRITE_ENABLED=true.
 --   3. pg-boss 12 maintenance (supervise) may issue DDL (queue_stats partitions, BAM index builds, partition
@@ -253,7 +256,7 @@ BEGIN
       ('erp_price_table_version',            'force_api',    'SELECT'),
       ('erp_list_price',                     'force_api',    'SELECT'),
       ('product_media',                      'force_api',    'SELECT'),
-      ('installation_configuration_version', 'force_worker', 'SELECT'),
+      ('installation_configuration_version', 'force_worker', 'SELECT, INSERT'),
       ('integration_outbox',                 'force_worker', 'SELECT, UPDATE'),
       ('integration_order_dry_run',          'force_worker', 'SELECT, INSERT, DELETE'),
       ('sales_order',                        'force_worker', 'SELECT, UPDATE'),
@@ -282,6 +285,11 @@ DO $lock$
 BEGIN
   IF to_regclass('public.erp_customer') IS NOT NULL THEN
     GRANT UPDATE (synced_at) ON public.erp_customer TO force_api;
+  END IF;
+  -- CFG-8: the worker switches the current configuration version (insert the new one, clear the old `is_current`);
+  -- it can change nothing else of an existing version (payload and hash stay immutable for it).
+  IF to_regclass('public.installation_configuration_version') IS NOT NULL THEN
+    GRANT UPDATE (is_current) ON public.installation_configuration_version TO force_worker;
   END IF;
 END
 $lock$;
