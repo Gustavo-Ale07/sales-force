@@ -324,6 +324,7 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
                   localOrders={services.localOrders}
                   customers={repositories.customers}
                   orders={repositories.orders}
+                  {...(dependencies.orderPdf !== undefined ? { orderPdf: dependencies.orderPdf } : {})}
                   syncStatus={syncStatus}
                   connectivity={connectivityState}
                   onUnauthenticated={expire}

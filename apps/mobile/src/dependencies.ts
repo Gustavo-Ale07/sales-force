@@ -5,6 +5,8 @@ import { createMobileApiClient } from "./data/api";
 import type { Repositories } from "./data/ports";
 import { createRemoteRepositories } from "./data/remote-repositories";
 import { createExpoImageFileSystem } from "./images/expo-image-fs";
+import { createExpoOrderPdf } from "./offline/order-pdf-expo";
+import type { OrderPdfPort } from "./offline/order-pdf";
 import { createOfflineServices, type OfflineServices } from "./offline/services";
 import type { SqlDatabase } from "@salesforce/mobile-db";
 
@@ -15,6 +17,8 @@ export interface AppDependencies {
   readonly connectivity: ConnectivityPort;
   /** On-device database services (cache, drafts, outbox, sync). Absent in online-only test setups. */
   readonly offline?: OfflineServices;
+  /** "Compartilhar PDF" of an order (share sheet). Absent in test setups: the action is then hidden. */
+  readonly orderPdf?: OrderPdfPort;
 }
 
 /** Production composition: online adapters over the API at `baseUrl` (already including the API base path). */
@@ -25,6 +29,7 @@ export function createAppDependencies(baseUrl: string, db: SqlDatabase): AppDepe
     auth: createHttpAuth(api),
     repositories: remote,
     connectivity: createDeviceConnectivity(),
+    orderPdf: createExpoOrderPdf(),
     offline: createOfflineServices({ db, api, remote, imageFileSystem: createExpoImageFileSystem() }),
   };
 }

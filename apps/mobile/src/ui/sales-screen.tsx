@@ -8,6 +8,7 @@ import type { LocalOrdersPort } from "../offline/local-orders";
 import { EMPTY_SALES_FILTERS, type SalesFilters, type SalesRow, type SalesSummary } from "../offline/sales";
 import { saleBadge } from "../offline/sales-status";
 import { colors, spacing } from "../theme";
+import type { OrderPdfPort } from "../offline/order-pdf";
 import { PagedListView } from "./paged-list-view";
 import { SaleBadgeView, describeSaleValue } from "./sale-parts";
 import { SaleDetailScreen } from "./sale-detail-screen";
@@ -57,6 +58,8 @@ export interface SalesScreenProps {
   readonly syncStatus: SyncStatus;
   /** Online read of a sent order, for the read-only discount approval card (M-14). */
   readonly orders?: Pick<OrderRepository, "get">;
+  /** Share-sheet PDF of an order; without it the action is hidden. */
+  readonly orderPdf?: OrderPdfPort;
   readonly connectivity: ConnectivityState;
   readonly onUnauthenticated: () => void;
   readonly onNewSale: () => void;
@@ -90,7 +93,7 @@ function describeSummary(summary: SalesSummary | null, group: SalesGroup): strin
  * backend) and "Enviados" (accepted by the Force backend — NOT the ERP). Everything is read from the local database,
  * so the whole screen works offline.
  */
-export function SalesScreen({ localOrders, customers, orders, syncStatus, connectivity, onUnauthenticated, onNewSale, onContinue, onDuplicate, onSyncNow, resetSignal = 0 }: SalesScreenProps) {
+export function SalesScreen({ localOrders, customers, orders, orderPdf, syncStatus, connectivity, onUnauthenticated, onNewSale, onContinue, onDuplicate, onSyncNow, resetSignal = 0 }: SalesScreenProps) {
   const [filters, setFilters] = useState<SalesFilters>({ group: "unsent", ...EMPTY_SALES_FILTERS });
   const [search, setSearch] = useState("");
   const [summary, setSummary] = useState<SalesSummary | null>(null);
@@ -203,6 +206,7 @@ export function SalesScreen({ localOrders, customers, orders, syncStatus, connec
           localOrders={localOrders}
           connectivity={connectivity}
           {...(orders !== undefined ? { orders } : {})}
+          {...(orderPdf !== undefined ? { orderPdf } : {})}
           onBack={() => setOpenId(null)}
           onChanged={changed}
           onContinue={onContinue}

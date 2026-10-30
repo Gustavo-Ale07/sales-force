@@ -6,6 +6,7 @@ import { lineAmountsOf, previewDraft, type EditorLine } from "../data/order-draf
 import type { OrderRepository } from "../data/ports";
 import { formatBrl } from "../lib/money";
 import type { LocalOrdersPort } from "../offline/local-orders";
+import { shareOrderPdf, type OrderPdfPort } from "../offline/order-pdf";
 import { saleValue } from "../offline/sales";
 import { approvalViewOf, type ApprovalView } from "../offline/approval-status";
 import { saleActions, saleExplanation } from "../offline/sales-status";
@@ -19,6 +20,8 @@ export interface SaleDetailScreenProps {
   readonly connectivity: ConnectivityState;
   /** Online read of the server's order, to show the discount approval state read-only (M-14). Optional: without it the card is simply absent. */
   readonly orders?: Pick<OrderRepository, "get">;
+  /** Share-sheet PDF (PLAC template, from the local data, works offline). Absent = no button. */
+  readonly orderPdf?: OrderPdfPort;
   readonly onBack: () => void;
   /** Something changed locally (deleted, resolved, price accepted): the list must reload. */
   readonly onChanged: () => void;
@@ -41,10 +44,11 @@ function money(value: string | null): string {
 }
 
 /** Read-only view of one sale, with only the actions that are safe for its state. Explains what each state means in plain words. */
-export function SaleDetailScreen({ localId, localOrders, connectivity, orders, onBack, onChanged, onContinue, onDuplicate, onSyncNow }: SaleDetailScreenProps) {
+export function SaleDetailScreen({ localId, localOrders, connectivity, orders, orderPdf, onBack, onChanged, onContinue, onDuplicate, onSyncNow }: SaleDetailScreenProps) {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [missing, setMissing] = useState(false);
   const [reloads, setReloads] = useState(0);
+  const [sharing, setSharing] = useState(false);
   const offline = connectivity === "offline";
 
   useEffect(() => {
@@ -114,6 +118,16 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
   const actions = saleActions(draft);
   const preview = previewDraft(lines);
   const value = saleValue(draft, lines);
+
+  async function sharePdf() {
+    if (orderPdf === undefined || sharing) return;
+    setSharing(true);
+    const result = await shareOrderPdf(orderPdf, draft, lines);
+    setSharing(false);
+    if (!result.ok) {
+      Alert.alert("Não foi possível gerar o PDF", result.reason === "empty" ? "Este pedido não tem itens." : "Tente novamente. Não é preciso estar conectado para gerar o PDF.");
+    }
+  }
 
   function confirmDelete() {
     Alert.alert(
@@ -250,6 +264,11 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
               </Pressable>
               {offline && <Text style={styles.meta}>Sem conexão. O envio acontece sozinho quando a internet voltar.</Text>}
             </>
+          )}
+          {orderPdf !== undefined && lines.length > 0 && (
+            <Pressable style={[styles.secondary, sharing && styles.off]} disabled={sharing} onPress={() => void sharePdf()} accessibilityRole="button" accessibilityLabel="Compartilhar PDF" accessibilityState={{ disabled: sharing, busy: sharing }}>
+              <Text style={styles.secondaryText}>{sharing ? "Gerando PDF..." : "Compartilhar PDF"}</Text>
+            </Pressable>
           )}
           {actions.duplicate && (
             <Pressable style={styles.secondary} onPress={() => onDuplicate(draft.localId)} accessibilityRole="button" accessibilityLabel="Duplicar pedido">
