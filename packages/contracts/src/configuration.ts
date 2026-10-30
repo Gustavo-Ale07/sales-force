@@ -102,6 +102,10 @@ export const NegotiationTypeSchema = named(
   z.strictObject({ code: codeInt(), label: z.string().min(1).max(200) }),
 );
 
+/** D-M: `erp` (default) = Sankhya releases discount/credit; `force` = the Force approval flow (DISC-2..6). */
+export const DiscountAuthorityModeSchema = named('DiscountAuthorityMode', z.enum(['erp', 'force']));
+export type DiscountAuthorityMode = z.infer<typeof DiscountAuthorityModeSchema>;
+
 /** Maximum discount percentage per authority level, on the customer's price-table price (DISC-2). `null` = not configured. */
 const DiscountPercentLimitSchema = z.string().regex(/^\d{1,2}(\.\d{1,2})?$/).nullable();
 
@@ -119,6 +123,7 @@ const DiscountAuthorityLimitsSchema = z.strictObject({
 export const DiscountAuthorityConfigurationSchema = named(
   'DiscountAuthorityConfiguration',
   z.strictObject({
+    mode: DiscountAuthorityModeSchema.optional(),
     limits: DiscountAuthorityLimitsSchema,
     provisional: z.boolean().optional(),
     userOverrides: z
@@ -243,7 +248,10 @@ export const ConfigurationSummarySchema = named(
     schemaVersion: z.literal(1),
     source: SourceSchema,
     general: GeneralSchema,
-    sales: SalesSchema.omit({ discountAuthority: true }),
+    sales: SalesSchema.omit({ discountAuthority: true }).extend({
+      /** D-M: web/mobile hide W-39, W-20 and M-14 unless this is `force`. */
+      discountAuthorityMode: DiscountAuthorityModeSchema,
+    }),
     customers: CustomersSchema.omit({ accountSellerLinks: true }).extend({
       accountSellerLinkCount: z.number().int().min(0),
     }),
@@ -287,6 +295,8 @@ export const OrderEntryConfigurationSchema = named(
       defaultNegotiationTypeCode: codeInt().nullable(),
       negotiationTypes: z.array(NegotiationTypeSchema),
       orderBehavior: z.strictObject({ allowDraftWithoutPrice: z.boolean() }),
+      /** D-M: `erp` = discounts above the allowed are released in Sankhya after sending; no approval UI. */
+      discountAuthorityMode: DiscountAuthorityModeSchema,
     }),
     products: z.strictObject({
       productWithoutPrice: z.strictObject({ orderable: z.boolean() }),

@@ -7,6 +7,7 @@ import {
   canRoleApproveLevel,
   approvableLevelsOf,
   recomputeOrderAuthority,
+  discountAuthorityModeOf,
   evaluateOrderDiscountAuthority,
   validateConfigurationConsistency,
   type DiscountAuthorityConfiguration,
@@ -16,7 +17,7 @@ import {
 import { makeConfig, makeProduct } from './fixtures.js';
 
 // Synthetic limits for tests only: the real values come from the installation configuration and are not decided here.
-const LIMITS: DiscountAuthorityConfiguration = { limits: { seller: '5', manager: '10', director: '20' } };
+const LIMITS: DiscountAuthorityConfiguration = { mode: 'force', limits: { seller: '5', manager: '10', director: '20' } };
 
 const priced: ResolvedPrice = { state: 'priced', unitPrice: '100', tableCode: 88, versionId: 4 };
 const zero: ResolvedPrice = { state: 'zero', unitPrice: '0', tableCode: 88, versionId: 4 };
@@ -198,5 +199,26 @@ describe('recomputeOrderAuthority: the draft owner decides, not who saved (DISC-
   it('blocks above the ceiling and for an owner outside the chain, with the reason', () => {
     expect(recomputeOrderAuthority([{ ...lines[0]!, discountPercent: '20.01' }], 'seller', LIMITS)).toMatchObject({ status: 'blocked' });
     expect(recomputeOrderAuthority(lines, 'admin', LIMITS)).toMatchObject({ status: 'blocked' });
+  });
+});
+
+describe('discount authority mode (D-M)', () => {
+  const lines = [{ lineNo: 1, discountPercent: '50', priceState: 'priced' as const }];
+
+  it('defaults to erp when the block or the mode is absent', () => {
+    expect(discountAuthorityModeOf(undefined)).toBe('erp');
+    expect(discountAuthorityModeOf({ limits: LIMITS.limits })).toBe('erp');
+    expect(discountAuthorityModeOf(LIMITS)).toBe('force');
+  });
+
+  it('in erp mode nothing waits for approval and nothing is blocked by discount, whatever the role', () => {
+    for (const role of ['seller', 'manager', 'admin', 'technical'] as const) {
+      expect(recomputeOrderAuthority(lines, role, undefined)).toEqual({ status: 'within_authority', level: null });
+      expect(recomputeOrderAuthority(lines, role, { mode: 'erp', limits: LIMITS.limits })).toEqual({ status: 'within_authority', level: null });
+    }
+  });
+
+  it('force mode is unchanged', () => {
+    expect(recomputeOrderAuthority(lines, 'seller', LIMITS)).toMatchObject({ status: 'blocked' });
   });
 });

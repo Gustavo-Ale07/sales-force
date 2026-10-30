@@ -19,7 +19,10 @@ let app: CommercialApp;
 
 beforeAll(async () => {
   postgres = await startPostgres();
-  const configuration: InstallationConfiguration = { ...DEMO_CONFIGURATION };
+  const configuration: InstallationConfiguration = {
+    ...DEMO_CONFIGURATION,
+    sales: { ...DEMO_CONFIGURATION.sales, discountAuthority: { mode: 'force', limits: { seller: '5', manager: '15', director: '30' }, provisional: true } },
+  };
   app = await startCommercialApp(postgres, opened, { configuration });
 });
 

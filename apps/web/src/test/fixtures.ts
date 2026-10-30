@@ -209,6 +209,7 @@ export const configuration: ApiSchema<"ConfigurationResponse"> = {
       ],
       orderBehavior: { allowDraftWithoutPrice: true },
       confirmationBehavior: "manual",
+      discountAuthorityMode: "force",
     },
     customers: {
       portfolioOwnership: { strategy: "customer_seller_field" },
@@ -257,6 +258,7 @@ export const orderEntryConfiguration: ApiSchema<"OrderEntryConfiguration"> = {
       { code: 4, label: "30 dias" },
     ],
     orderBehavior: { allowDraftWithoutPrice: true },
+    discountAuthorityMode: "force",
   },
   products: { productWithoutPrice: { orderable: true } },
 };

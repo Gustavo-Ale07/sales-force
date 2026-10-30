@@ -3133,6 +3133,9 @@
               },
               "confirmationBehavior": {
                 "$ref": "#/components/schemas/ConfirmationBehavior"
+              },
+              "discountAuthorityMode": {
+                "$ref": "#/components/schemas/DiscountAuthorityMode"
               }
             },
             "required": [
@@ -3141,7 +3144,8 @@
               "defaultNegotiationTypeCode",
               "negotiationTypes",
               "orderBehavior",
-              "confirmationBehavior"
+              "confirmationBehavior",
+              "discountAuthorityMode"
             ],
             "additionalProperties": false
           },
@@ -3741,6 +3745,13 @@
         "type": "string",
         "maxLength": 40,
         "pattern": "^\\d+(\\.\\d+)?$"
+      },
+      "DiscountAuthorityMode": {
+        "type": "string",
+        "enum": [
+          "erp",
+          "force"
+        ]
       },
       "DiscountAuthorityStatus": {
         "type": "string",
@@ -4566,12 +4577,16 @@
                   "allowDraftWithoutPrice"
                 ],
                 "additionalProperties": false
+              },
+              "discountAuthorityMode": {
+                "$ref": "#/components/schemas/DiscountAuthorityMode"
               }
             },
             "required": [
               "defaultNegotiationTypeCode",
               "negotiationTypes",
-              "orderBehavior"
+              "orderBehavior",
+              "discountAuthorityMode"
             ],
             "additionalProperties": false
           },

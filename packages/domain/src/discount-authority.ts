@@ -1,8 +1,10 @@
 import {
+  DEFAULT_DISCOUNT_AUTHORITY_MODE,
   DISCOUNT_AUTHORITY_LEVELS,
   PROVISIONAL_DISCOUNT_AUTHORITY,
   type DiscountAuthorityConfiguration,
   type DiscountAuthorityLevel,
+  type DiscountAuthorityMode,
 } from './configuration.js';
 import type { AccountRole, OrderItem } from './entities.js';
 import { compareDecimalStrings, isZeroDecimal, validateDiscountPercent, type DecimalString } from './money.js';
@@ -43,6 +45,11 @@ export type OrderDiscountAuthority = DiscountAuthorityDecision & { readonly line
 
 const WITHIN: DiscountAuthorityDecision = { decision: 'within_authority' };
 const refused = (reason: DiscountAuthorityRefusal): DiscountAuthorityDecision => ({ decision: 'refused', reason });
+
+/** The configured mode (D-M); `erp` when the block or its mode is absent. */
+export function discountAuthorityModeOf(config: DiscountAuthorityConfiguration | undefined): DiscountAuthorityMode {
+  return config?.mode ?? DEFAULT_DISCOUNT_AUTHORITY_MODE;
+}
 
 /** The authority level an account role holds, or `null` when the role is outside the chain. */
 export function discountAuthorityLevelOf(role: AccountRole): DiscountAuthorityLevel | null {
@@ -155,6 +162,9 @@ export function recomputeOrderAuthority(
   ownerRole: AccountRole,
   config: DiscountAuthorityConfiguration | undefined,
 ): RecomputedOrderAuthority {
+  // D-M: in `erp` mode Sankhya releases discounts; Force never waits for approval nor blocks by discount.
+  // Structural validity (0-99.99 %) and "sem preço" are draft invariants, checked elsewhere.
+  if (discountAuthorityModeOf(config) === 'erp') return { status: 'within_authority', level: null };
   const routing = evaluateOrderDiscountAuthority(items, ownerRole, config);
   if (routing.decision === 'within_authority') return { status: 'within_authority', level: null };
   if (routing.decision === 'needs_approval') {

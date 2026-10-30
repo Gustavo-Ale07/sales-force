@@ -61,6 +61,7 @@ describe('GET /api/v1/order-entry/configuration (getOrderEntryConfiguration)', (
             { code: 3, label: '28 dias (demonstração)' },
           ],
           orderBehavior: { allowDraftWithoutPrice: false },
+          discountAuthorityMode: 'erp',
         },
         products: { productWithoutPrice: { orderable: false } },
       });

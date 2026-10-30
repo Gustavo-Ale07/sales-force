@@ -648,6 +648,7 @@ export interface components {
                     allowDraftWithoutPrice: boolean;
                 };
                 confirmationBehavior: components["schemas"]["ConfirmationBehavior"];
+                discountAuthorityMode: components["schemas"]["DiscountAuthorityMode"];
             };
             customers: {
                 portfolioOwnership: {
@@ -762,6 +763,8 @@ export interface components {
             datasetId: string;
         };
         DecimalString: string;
+        /** @enum {string} */
+        DiscountAuthorityMode: "erp" | "force";
         /** @enum {string} */
         DiscountAuthorityStatus: "not_evaluated" | "within_authority" | "needs_manager" | "needs_director" | "blocked";
         DiscountLimits: {
@@ -932,6 +935,7 @@ export interface components {
                 orderBehavior: {
                     allowDraftWithoutPrice: boolean;
                 };
+                discountAuthorityMode: components["schemas"]["DiscountAuthorityMode"];
             };
             products: {
                 productWithoutPrice: {

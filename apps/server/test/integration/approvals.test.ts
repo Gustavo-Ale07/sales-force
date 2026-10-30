@@ -26,7 +26,7 @@ beforeAll(async () => {
   postgres = await startPostgres();
   const configuration: InstallationConfiguration = {
     ...DEMO_CONFIGURATION,
-    sales: { ...DEMO_CONFIGURATION.sales, discountAuthority: { limits: LIMITS } },
+    sales: { ...DEMO_CONFIGURATION.sales, discountAuthority: { mode: 'force', limits: LIMITS } },
   };
   app = await startCommercialApp(postgres, opened, { configuration });
   const c1 = dataset.customers.find((c) => c.sellerCode === 103 && c.active && !c.blocked && c.priceTableCode === 21);

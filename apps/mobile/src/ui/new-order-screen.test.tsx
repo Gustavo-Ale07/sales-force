@@ -128,7 +128,7 @@ describe("NewOrderScreen", () => {
     let captured: CreateOrderRequest | undefined;
     const created: OrderDetail = orderDetail({ draftNumber: 42, customerCode: 10, customerName: "Padaria Central", estimatedTotal: "9.00" });
     const orders = fakeOrders({
-      getEntryConfiguration: async () => orderEntryConfiguration({ sales: { defaultNegotiationTypeCode: 3, negotiationTypes: [], orderBehavior: { allowDraftWithoutPrice: false } } }),
+      getEntryConfiguration: async () => orderEntryConfiguration({ sales: { defaultNegotiationTypeCode: 3, negotiationTypes: [], orderBehavior: { allowDraftWithoutPrice: false }, discountAuthorityMode: "force" } }),
       create: async (request) => {
         captured = request;
         return created;
@@ -271,7 +271,7 @@ describe("NewOrderScreen", () => {
       list: async () => pageOf([product(9, { description: "Sem preço", listPrice: { state: "none", tableCode: null, versionId: null, noPriceReason: "no_resolved_table" } })]),
     });
     const orders = fakeOrders({
-      getEntryConfiguration: async () => orderEntryConfiguration({ sales: { defaultNegotiationTypeCode: null, negotiationTypes: [], orderBehavior: { allowDraftWithoutPrice: false } }, products: { productWithoutPrice: { orderable: false } } }),
+      getEntryConfiguration: async () => orderEntryConfiguration({ sales: { defaultNegotiationTypeCode: null, negotiationTypes: [], orderBehavior: { allowDraftWithoutPrice: false }, discountAuthorityMode: "force" }, products: { productWithoutPrice: { orderable: false } } }),
     });
     await setup({ products, orders });
     await pressAndSettle(await screen.findByText("Padaria Central"));

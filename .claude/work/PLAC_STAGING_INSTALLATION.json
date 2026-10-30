@@ -94,6 +94,10 @@
       "allowDraftWithoutPrice": false
     },
     "confirmationBehavior": "disabled",
+    "discountAuthority": {
+      "mode": "erp",
+      "limits": { "seller": null, "manager": null, "director": null }
+    },
     "eligibleOrderTopCodes": [
       1000,
       1001,

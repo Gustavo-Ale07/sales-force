@@ -142,6 +142,7 @@ describe('extended configuration fields (synthetic values)', () => {
     const { accountSellerLinks, ...rest } = extended().customers;
     const summary = {
       ...extended(),
+      sales: { ...extended().sales, discountAuthorityMode: 'erp' as const },
       customers: { ...rest, accountSellerLinkCount: accountSellerLinks.length },
     };
     expect(ConfigurationSummarySchema.parse(summary)).toEqual(summary);

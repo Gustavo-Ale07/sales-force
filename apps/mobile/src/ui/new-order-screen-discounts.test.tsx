@@ -69,7 +69,7 @@ describe("NewOrderScreen discounts (mass and group apply, DISC-1/MOB-4)", () => 
       getEntryConfiguration: async () => ({
         dataset: { environment: "production", datasetId: "mirror-real-001" },
         general: { enabled: true },
-        sales: { defaultNegotiationTypeCode: null, negotiationTypes: [], orderBehavior: { allowDraftWithoutPrice: false } },
+        sales: { defaultNegotiationTypeCode: null, negotiationTypes: [], orderBehavior: { allowDraftWithoutPrice: false }, discountAuthorityMode: "force" },
         products: { productWithoutPrice: { orderable: true } },
       }),
     });
@@ -183,7 +183,7 @@ describe("NewOrderScreen catalog-group discount (MOB-4a: automatic bucketing by 
       getEntryConfiguration: async () => ({
         dataset: { environment: "production", datasetId: "mirror-real-001" },
         general: { enabled: true },
-        sales: { defaultNegotiationTypeCode: null, negotiationTypes: [], orderBehavior: { allowDraftWithoutPrice: false } },
+        sales: { defaultNegotiationTypeCode: null, negotiationTypes: [], orderBehavior: { allowDraftWithoutPrice: false }, discountAuthorityMode: "force" },
         products: { productWithoutPrice: { orderable: true } },
       }),
     });

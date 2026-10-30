@@ -27,10 +27,13 @@ beforeAll(async () => {
   postgres = await startPostgres();
   const withLimits: InstallationConfiguration = {
     ...DEMO_CONFIGURATION,
-    sales: { ...DEMO_CONFIGURATION.sales, discountAuthority: { limits: LIMITS } },
+    sales: { ...DEMO_CONFIGURATION.sales, discountAuthority: { mode: 'force', limits: LIMITS } },
   };
   configured = await startCommercialApp(postgres, opened, { configuration: withLimits });
-  unconfigured = await startCommercialApp(postgres, opened);
+  // No stored block but mode force: the provisional 5/15/30 limits apply (Q11).
+  unconfigured = await startCommercialApp(postgres, opened, {
+    configuration: { ...DEMO_CONFIGURATION, sales: { ...DEMO_CONFIGURATION.sales, discountAuthority: { mode: 'force', limits: { seller: '5', manager: '15', director: '30' }, provisional: true } } },
+  });
   const c1 = dataset.customers.find((c) => c.sellerCode === 103 && c.active && !c.blocked && c.priceTableCode === 21);
   if (c1 === undefined) throw new Error('fixture lacks an orderable customer');
   customer1 = c1.code;
@@ -147,9 +150,11 @@ describe('discount authority on drafts (DISC-2)', () => {
   it('the limits are not part of any client configuration response', async () => {
     const admin = await configured.call('admin', 'GET', '/configuration');
     expect(admin.status).toBe(200);
-    expect(JSON.stringify(admin.body)).not.toContain('discountAuthority');
+    // Only the mode (D-M) is exposed, never the limits.
+    expect(JSON.stringify(admin.body)).not.toMatch(/limits|userOverrides|provisional|"seller":"5"/);
+    expect(admin.body.configuration.sales.discountAuthorityMode).toBe('force');
     const entry = await configured.call('seller1', 'GET', '/order-entry/configuration');
     expect(entry.status).toBe(200);
-    expect(JSON.stringify(entry.body)).not.toContain('discountAuthority');
+    expect(JSON.stringify(entry.body)).not.toMatch(/limits|userOverrides|provisional/);
   });
 });

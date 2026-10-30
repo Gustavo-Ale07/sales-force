@@ -1,6 +1,6 @@
 import type { ConfigurationResponse, ConfigurationSummary, DatasetIdentity, OrderEntryConfiguration, SyncState } from '@salesforce/contracts';
 import type { syncState } from '@salesforce/db';
-import type { InstallationConfiguration } from '@salesforce/domain';
+import { discountAuthorityModeOf, type InstallationConfiguration } from '@salesforce/domain';
 import { summarizeIntegration } from '../platform/integration-summary.js';
 import { isReservedSyncEntity } from '../platform/worker-heartbeat.js';
 import type { CurrentConfiguration } from './configuration.service.js';
@@ -27,6 +27,7 @@ export function toConfigurationSummary(configuration: InstallationConfiguration)
       negotiationTypes: configuration.sales.negotiationTypes.map((type) => ({ code: type.code, label: type.label })),
       orderBehavior: { allowDraftWithoutPrice: configuration.sales.orderBehavior.allowDraftWithoutPrice },
       confirmationBehavior: configuration.sales.confirmationBehavior,
+      discountAuthorityMode: discountAuthorityModeOf(configuration.sales.discountAuthority),
     },
     customers: {
       portfolioOwnership: { strategy: customers.portfolioOwnership.strategy },
@@ -65,6 +66,7 @@ export function toOrderEntryConfiguration(
       defaultNegotiationTypeCode: configuration.sales.defaultNegotiationTypeCode,
       negotiationTypes: configuration.sales.negotiationTypes.map((type) => ({ code: type.code, label: type.label })),
       orderBehavior: { allowDraftWithoutPrice: configuration.sales.orderBehavior.allowDraftWithoutPrice },
+      discountAuthorityMode: discountAuthorityModeOf(configuration.sales.discountAuthority),
     },
     products: {
       productWithoutPrice: { orderable: configuration.products.productWithoutPrice.orderable },

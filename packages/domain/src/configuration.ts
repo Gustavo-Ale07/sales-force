@@ -54,6 +54,14 @@ export interface AccountSellerLink {
   readonly sellerCode: number;
 }
 
+/**
+ * D-M (resolves R26 for the pilot): `erp` = discount and credit release belong to Sankhya; Force has no
+ * approval states, no discount block, no limits screen. `force` = the seller -> manager -> director flow (DISC-2..6).
+ */
+export const DISCOUNT_AUTHORITY_MODES = ['erp', 'force'] as const;
+export type DiscountAuthorityMode = (typeof DISCOUNT_AUTHORITY_MODES)[number];
+export const DEFAULT_DISCOUNT_AUTHORITY_MODE: DiscountAuthorityMode = 'erp';
+
 /** The levels of the discount authority chain (P-10, DISC-2): seller -> manager -> director. */
 export const DISCOUNT_AUTHORITY_LEVELS = ['seller', 'manager', 'director'] as const;
 export type DiscountAuthorityLevel = (typeof DISCOUNT_AUTHORITY_LEVELS)[number];
@@ -81,6 +89,8 @@ export interface UserDiscountAuthorityOverride {
  * "ajustar pelo dono" (Q11).
  */
 export interface DiscountAuthorityConfiguration {
+  /** D-M: who releases a discount. Absent = `erp` (Sankhya releases through the TOP events; Force routes nothing). */
+  readonly mode?: DiscountAuthorityMode;
   readonly limits: DiscountAuthorityLimits;
   readonly provisional?: boolean;
   /** Reserved, not evaluated (Q8). */

@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { ApprovalQueueQuery, ApprovalQueueResponse, OrderDetail } from '@salesforce/contracts';
-import { approvableLevelsOf, canRoleApproveLevel, canTransitionOrder, isCustomerInScope, normalizeDecimalString } from '@salesforce/domain';
+import { approvableLevelsOf, canRoleApproveLevel, canTransitionOrder, discountAuthorityModeOf, isCustomerInScope, normalizeDecimalString, type InstallationConfiguration } from '@salesforce/domain';
 import { AppError } from '../http/app-error.js';
 import { AUDIT_ACTIONS, AuditService } from '../iam/audit.service.js';
 import type { CurrentUser } from '../iam/current-user.js';
@@ -29,11 +29,17 @@ export class ApprovalsService {
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
+  /** D-M: in `erp` mode Sankhya releases discounts; the approval queue and its decisions do not exist. */
+  private assertForceMode(configuration: InstallationConfiguration): void {
+    if (discountAuthorityModeOf(configuration.sales.discountAuthority) !== 'force') throw new AppError('not_found');
+  }
+
   /** Pending requests of the levels the caller may decide, oldest first, inside the caller's data scope (P-21). */
   async list(user: CurrentUser, query: ApprovalQueueQuery): Promise<ApprovalQueueResponse> {
     const levels = approvableLevelsOf(user.role);
     if (levels.length === 0) throw new AppError('forbidden');
-    const { scope } = await this.policy.accessContext(user);
+    const { scope, configuration } = await this.policy.accessContext(user);
+    this.assertForceMode(configuration);
     const { rows, total } = await this.approvals.listPending(levels, scope, { page: query.page, pageSize: query.pageSize });
     return {
       items: rows.map((row) => ({
@@ -64,6 +70,7 @@ export class ApprovalsService {
   async decide(user: CurrentUser, approvalId: string, decision: ApprovalDecision): Promise<OrderDetail> {
     if (approvableLevelsOf(user.role).length === 0) throw new AppError('forbidden');
     const context = await this.policy.accessContext(user);
+    this.assertForceMode(context.configuration);
     const seen = await this.approvals.findById(approvalId);
     if (seen === null) throw new AppError('not_found');
     const at = this.clock();

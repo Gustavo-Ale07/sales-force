@@ -36,6 +36,10 @@ describe('InstallationConfigurationSchema', () => {
     ).toBe(true);
     expect(InstallationConfigurationSchema.safeParse(withBlock({ limits: { ...limits, director: '100' } })).success).toBe(false);
     expect(InstallationConfigurationSchema.safeParse(withBlock({ limits, surprise: 1 })).success).toBe(false);
+    // D-M: the mode is 'erp' | 'force'; absent is valid (defaults to erp).
+    expect(InstallationConfigurationSchema.safeParse(withBlock({ mode: 'force', limits })).success).toBe(true);
+    expect(InstallationConfigurationSchema.safeParse(withBlock({ mode: 'erp', limits })).success).toBe(true);
+    expect(InstallationConfigurationSchema.safeParse(withBlock({ mode: 'manual', limits })).success).toBe(false);
   });
 
   it('rejects unknown top-level keys', () => {
@@ -143,6 +147,7 @@ describe('client-safe configuration summary', () => {
   const { accountSellerLinks, ...customersWithoutLinks } = makeConfig().customers;
   const summary = {
     ...makeConfig(),
+    sales: { ...makeConfig().sales, discountAuthorityMode: 'erp' as const },
     customers: { ...customersWithoutLinks, accountSellerLinkCount: accountSellerLinks.length },
   };
 

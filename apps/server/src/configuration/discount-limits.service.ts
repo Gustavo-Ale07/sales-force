@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { DiscountLimitsResponse, UpdateDiscountLimitsRequest } from '@salesforce/contracts';
-import { resolveDiscountAuthority, type InstallationConfiguration } from '@salesforce/domain';
+import { discountAuthorityModeOf, resolveDiscountAuthority, type InstallationConfiguration } from '@salesforce/domain';
 import { AppError } from '../http/app-error.js';
 import { AUDIT_ACTIONS, AuditService } from '../iam/audit.service.js';
 import type { CurrentUser } from '../iam/current-user.js';
@@ -28,7 +28,9 @@ export class DiscountLimitsService {
   async get(): Promise<DiscountLimitsResponse> {
     const row = await this.repository.findCurrent();
     if (row === null) throw new AppError('installation_not_enabled');
-    return this.present(row, this.parse(row));
+    const configuration = this.parse(row);
+    this.assertForceMode(configuration);
+    return this.present(row, configuration);
   }
 
   async update(user: CurrentUser, request: UpdateDiscountLimitsRequest): Promise<DiscountLimitsResponse> {
@@ -45,6 +47,7 @@ export class DiscountLimitsService {
       now: at,
       build: (row) => {
         const current = this.parse(row);
+        this.assertForceMode(current);
         previous = this.present(row, current);
         const existing = current.sales.discountAuthority;
         return {
@@ -53,6 +56,7 @@ export class DiscountLimitsService {
           sales: {
             ...current.sales,
             discountAuthority: {
+              mode: 'force',
               limits: request.limits,
               // The admin confirmed these values: they are no longer the provisional ones.
               provisional: false,
@@ -82,6 +86,11 @@ export class DiscountLimitsService {
     if (result.outcome === 'not_stored') throw new AppError('installation_not_enabled');
     if (result.outcome === 'stale') throw new AppError('version_conflict');
     return this.get();
+  }
+
+  /** D-M: the limits screen exists only in `force` mode; in `erp` mode Sankhya releases discounts. */
+  private assertForceMode(configuration: InstallationConfiguration): void {
+    if (discountAuthorityModeOf(configuration.sales.discountAuthority) !== 'force') throw new AppError('not_found');
   }
 
   private parse(row: StoredConfigurationRow): InstallationConfiguration {

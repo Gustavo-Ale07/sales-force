@@ -14,7 +14,7 @@ export const DEFAULT_ERROR_MESSAGES: Readonly<Record<ErrorCode, string>> = {
   idempotency_conflict: 'Este identificador de requisição já foi usado com outro conteúdo.',
   order_not_editable: 'Este pedido não pode mais ser editado.',
   installation_not_enabled: 'A instalação ainda não foi habilitada. Contate o administrador.',
-  erp_submission_disabled: 'O envio de pedidos ao ERP ainda não está habilitado.',
+  erp_submission_disabled: 'O envio de pedidos ao Sankhya ainda não está habilitado.',
   discount_blocked:
     'Este pedido tem desconto acima do teto da diretoria e não pode ser enviado. Reduza o desconto para poder enviá-lo.',
   approval_not_pending: 'Este pedido não está aguardando aprovação.',
@@ -23,9 +23,9 @@ export const DEFAULT_ERROR_MESSAGES: Readonly<Record<ErrorCode, string>> = {
   no_seller_scope:
     'Sua conta ainda não está vinculada a um vendedor. Peça ao administrador para vincular um código de vendedor.',
   customer_without_seller:
-    'Este cliente não tem vendedor definido e não pode receber pedidos. Peça ao administrador para ajustar o cadastro no ERP.',
+    'Este cliente não tem vendedor definido e não pode receber pedidos. Peça ao administrador para ajustar o cadastro no Sankhya.',
   customer_ineligible:
-    'Este cliente está inativo ou bloqueado e não pode receber pedidos. Confira o cadastro no ERP antes de continuar.',
+    'Este cliente está inativo ou bloqueado e não pode receber pedidos. Confira o cadastro no Sankhya antes de continuar.',
   link_reconciliation_required:
     'Não foi possível concluir o acesso: o vínculo da sua conta com o vendedor precisa ser conferido. Peça ao administrador para reconciliar o vínculo.',
   rate_limited: 'Muitas tentativas. Aguarde um momento e tente novamente.',
