@@ -785,6 +785,27 @@ Source: the project owner (Gustavo), prompt of 2026-10-30 part 1 (`.claude/work/
 - First attempt failed at the web health check: nginx `open() /etc/nginx/conf.d/default.conf failed (13: Permission denied)` — the script's checkout left `deploy/nginx/default.conf` at mode 0600 and the web image copies it preserving the mode. Fixed by hand (`chmod 644`) and permanently in this cycle (A2).
 - Host layout: `/opt/force-staging/repo`, `/opt/force-staging/config/compose.env`, `/opt/force-staging/config/secrets/*.env`, `/opt/force-staging/logs`; user `force-deploy`; `SF_EDGE_MODE=external`; `SF_DB_MODE=self-hosted`. (Earlier docs cited `/etc/salesforce/staging`: wrong.)
 
+### 3.17 APPROVED — Configuration read from Sankhya: CFG-8, U-10-a..d, U-11 (2026-10-30, part 2)
+
+Source: the project owner (Gustavo), prompt of 2026-10-30 part 2 (`.claude/work/PROMPT_2026-10-30_parte2_config-sankhya.md`). Recorded before implementation. Resolves U-10 and U-11 for the pilot. Nothing here authorizes a Sankhya write, a flag change in staging or a deploy.
+
+#### Facts — VALIDATED (env) 2026-10-30 (source: DBExplorer read by the owner; details in `.claude/work/VIDYA_SANKHYA_CONFIG_MAP_2026-10-30.md` and `docs/sankhya-spike.md` §9.49)
+- Vidya has no configuration screen of its own: its whole configuration lives in Sankhya — one row in `AD_TVDYCFGFRC` (370 columns, 88 filled, `NUCFG = 1`), child tables by `NUCFG` (`AD_TVDYFRCSTS` statuses, `AD_TVDYGRUOP`/`AD_TVDYTOPGRU` TOP groups), `AD_MOBILIDADE` flags on the standard registers (`TGFTOP`, `TGFTPV`, `TGFNTA`, `TGFPRO`, `TGFLOC`, `TSIEMP`), `TSIEMP.AD_CODTIPOPERPAD`, and rules in `*_VIDYA` functions/views.
+- `TGFTOP` and `TGFTPV` are versioned by `DHALTER`; the current version is `DHALTER = MAX(DHALTER)` per code (what the Vidya views do; `TGFCAB.DHTIPOPER`/`DHTIPVENDA` point to the version used by a document).
+- PLAC values today: TOPs with `AD_MOBILIDADE = S`: 1000, 1001, 1009, 1051, 1061, 2209, 2309; 1000 has `AD_PULARCONFIRMACAO = S`. Company 1 enabled with `AD_CODTIPOPERPAD = 1001`, company 2 off. 35 negotiation types with `AD_MOBILIDADE = S` (including returns 23 and 24; `TGFTPV.AD_VENDA` empty everywhere). `AD_TVDYCFGFRC`: `CODLOCALPEDIDOS` 209, `TABPADCSLTPROD` 5, `CODTABALT` 5, `TIPDESC` P, `VALDESCMAX` A (validate and warn, does not block), `USADECQTD` S, `DECVLR` 2, `DIASCONSULTAVENDAS` 90, `QTDDIASPRODCOMPRADOS` 90, `UTILFINANC` S, `ALTTIPNEG` S, `PERMALTPRECOPROD` N, `APLICDESCMSS` S, credit blocks (`BLOQVEND*`) empty. `AD_TVDYFRCSTS`: 8 statuses (codes equal to `GETCODSTATUS_VIDYA`) with name, description, hex colour and `PERMEDIT`/`PERMDUPLIC`/`PERMEXC`.
+- `AD_STATUS`/`AD_LIBORD`/`AD_FAROL` are PLAC customization; Force neither writes nor interprets them. TSILIB release events seen: 44, 2, 18, 13 (names of 2 and 13 pending).
+- The parameters, dictionary and log exports came from PRODUCTION Sankhya (log with that day's orders); the catalogue came from the Sandbox. The Sandbox may lag production: the sync reports key by key what it read and what was missing, never presumes.
+- **Security finding:** `AD_TVDYLOGPED.BASICAUTH` stores Base64 credentials. `AD_TVDYCFGFRC` has credential columns (`BASICAUTH`, `CLIENTSECRET*`, `KEY*`, `CERT*`). Force never selects them and never persists Authorization/token/password/X-Token in the outbox, dry-run record, log or configuration snapshot (explicit test).
+
+#### Rulings
+- **U-10-a PONTE:** during the pilot Force reads the same tables and flags Vidya uses. Nothing is re-registered; PLAC keeps configuring in the Sankhya screens it already uses.
+- **U-10-b:** own `AD_PLACFORCE*` tables in Sankhya are DEFERRED. What is Force-only stays in the base file (ex-bootstrap). The proposed model is documented as "next stage" in `docs/implementation/sankhya-configuration-contract.md`, with no executable DDL.
+- **U-10-c:** Sankhya enables 7 TOPs, Force offers only the owner's list (D-A: 1000 and 1001). Optional Force-only key `sales.topAllowlist`: present → `eligibleOrderTopCodes` = Sankhya list ∩ allowlist; absent → the whole Sankhya list. An allowlisted TOP not enabled in Sankhya is dropped with a warning in the report.
+- **U-10-d:** negotiation types = current `TGFTPV` with `AD_MOBILIDADE = S` minus optional Force-only `sales.negotiationTypeExclusions` (pilot: 23 and 24, returns). "Return" is never inferred from the description.
+- **U-11 (resolved for the pilot):** source before an own model = base file (the current config-bootstrap) + Sankhya overlay. The file stops being "the configuration" and becomes "defaults + Force-only keys".
+- **CFG-8 (precedence and security):** a PONTE key successfully read from Sankhya overrides the base file; a failed/partial/invalid read = no new version, the current version stays, failure recorded in `sync_state` (entity `configuration`) and an alert on the integration panel; a sync never regresses to "not configured". Secrets never enter the snapshot. Force never writes configuration to Sankhya (P-02/P-03). Job off by default (`CONFIG_SYNC_FROM_SANKHYA=0`).
+
+
 ## 4. Status of the specification's decisions (spec §4)
 
 The spec is a draft. Its decisions are binding only where an APPROVED entry above covers them.
@@ -884,8 +905,8 @@ Kept for traceability. The binding text lives in the entry named in "Recorded in
 
 | ID | Topic | Depends on | Status |
 |---|---|---|---|
-| U-10 | Physical design of the Sankhya-side "Configuração Sales Force" (table/screen, fields, who edits, versioning, audit, synchronization cadence); security review of the account → seller scope path | CFG-1…CFG-6 | PROPOSED design pending; not approved |
-| U-11 | Source of the installation configuration before that model exists (development, CI, staging with the fake gateway; bootstrap of the first installation) | CFG-1 | UNDECIDED — nothing may be hardcoded meanwhile |
+| U-10 | Physical design of the Sankhya-side "Configuração Sales Force" (table/screen, fields, who edits, versioning, audit, synchronization cadence); security review of the account → seller scope path | CFG-1…CFG-6 | RESOLVED for the pilot 2026-10-30 (§3.17: PONTE; own AD_PLACFORCE* tables deferred) |
+| U-11 | Source of the installation configuration before that model exists (development, CI, staging with the fake gateway; bootstrap of the first installation) | CFG-1 | RESOLVED for the pilot 2026-10-30 (§3.17: base file + Sankhya overlay) |
 | U-12 | Dedicated origin-id field: final name, type and length, uniqueness/index, creation in Sandbox, acceptance by `incluirNota` | SNK-5, V-11, V-13 | NEEDS VALIDATION |
 | U-13 | Per-installation infrastructure, cost budget and release/operations model — the OPS-1/OPS-6/STACK-7 budgets were set for one production environment | PROD-1 | UNDECIDED — owner to decide before a second installation |
 
