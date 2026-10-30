@@ -110,6 +110,16 @@ export const WorkerEnvSchema = z.object({
     .transform((value) => value === 'true'),
   /** Consecutive runs a product may fail with the ERP unavailable before it is parked as `source_unavailable`. */
   PRODUCT_MEDIA_SOURCE_FAILURE_LIMIT: integerField({ min: 1, max: 20 }, 3),
+  /**
+   * SNK-7 D-4: header TOPs whose orders are included in the ERP but never confirmed (the quotation TOP 1000
+   * must stay unconfirmed). Comma-separated; read only when order writing is enabled. NEEDS VALIDATION against
+   * the installation's TOP list; empty = confirm every order.
+   */
+  ORDER_DELIVERY_UNCONFIRMED_TOPS: z
+    .string()
+    .regex(/^(\d+(\s*,\s*\d+)*)?$/, { error: 'must be a comma-separated list of TOP codes, e.g. "1000".' })
+    .default('1000')
+    .transform((value) => (value.trim() === '' ? [] : value.split(',').map((part) => Number(part.trim())))),
 });
 
 export type WorkerEnv = z.output<typeof WorkerEnvSchema>;

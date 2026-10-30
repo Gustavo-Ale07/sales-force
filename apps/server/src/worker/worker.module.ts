@@ -11,6 +11,12 @@ import type { MirrorSchedules } from '../sync/schedules.js';
 import { ProductMediaSyncService, type MediaGateway, type ProductMediaSettings } from '../media/product-media-sync.service.js';
 import type { ObjectStore } from '../media/object-store.js';
 import { SharpThumbnailRenderer, type ThumbnailRenderer } from '../media/thumbnail-renderer.js';
+import { AuditService } from '../iam/audit.service.js';
+import {
+  OrderDeliveryService,
+  type OrderDeliveryGateway,
+  type OrderDeliverySettings,
+} from '../integration/order-delivery.service.js';
 import { WorkerRuntime, type WorkerRuntimeOptions } from './runtime.js';
 
 /** Product photo synchronization wiring; passed only when PRODUCT_MEDIA_SYNC_ENABLED=true. */
@@ -21,6 +27,12 @@ export interface ProductMediaWiring {
   readonly cron: string;
   /** Thumbnail renderer; absent = sharp (tests inject their own). */
   readonly renderer?: ThumbnailRenderer;
+}
+
+/** ERP order delivery wiring (SNK-7); passed only when the order-write switch is on. */
+export interface OrderDeliveryWiring {
+  readonly gateway: OrderDeliveryGateway;
+  readonly settings: OrderDeliverySettings;
 }
 
 /**
@@ -35,6 +47,7 @@ export class WorkerModule {
     options: WorkerRuntimeOptions,
     mirror?: { readonly gateway: MirrorGateway; readonly schedules: MirrorSchedules; readonly startupSync?: readonly MirrorEntity[] },
     media?: ProductMediaWiring,
+    orderDelivery?: OrderDeliveryWiring,
   ): DynamicModule {
     return {
       module: WorkerModule,
@@ -65,6 +78,20 @@ export class WorkerModule {
                         now,
                         settings: media.settings,
                         readScope: () => loadCurrentReadScope(db.db),
+                      }),
+                    },
+                  }),
+              ...(orderDelivery === undefined
+                ? {}
+                : {
+                    orderDelivery: {
+                      service: new OrderDeliveryService({
+                        db,
+                        gateway: orderDelivery.gateway,
+                        settings: orderDelivery.settings,
+                        audit: new AuditService(db.db, now),
+                        logger,
+                        now,
                       }),
                     },
                   }),

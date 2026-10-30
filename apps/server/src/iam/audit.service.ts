@@ -50,6 +50,18 @@ export const AUDIT_ACTIONS = {
   orderSubmitDiscountBlocked: 'order.submit_discount_blocked',
   /** A draft was refused on submission because its customer is no longer eligible (ids and reason only). */
   orderSubmitCustomerIneligible: 'order.submit_customer_ineligible',
+  /** SNK-7: the order was queued for the ERP (outbox row created in the same transaction). */
+  orderErpEnqueued: 'order.erp_enqueued',
+  /** SNK-7 D-5: a queued order was cancelled while its outbox row was still pending. */
+  orderErpCancelledByUser: 'order.erp_cancelled_by_user',
+  /** SNK-7: the worker delivered the order (ERP number in the detail). */
+  orderErpSent: 'order.erp_sent',
+  /** SNK-7: the delivery ended in an integration error (class and code only). */
+  orderErpRejected: 'order.erp_rejected',
+  /** SNK-7: the delivery needs attention (ambiguous result or included but unconfirmed). */
+  orderErpUnknown: 'order.erp_unknown',
+  /** SNK-7 D-6: the payload was built and stored, nothing was sent. */
+  orderErpDryRun: 'order.erp_dry_run',
 } as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
 

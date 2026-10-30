@@ -10,6 +10,8 @@ import { installProcessGuards, logPoolErrors, runMain } from './process.js';
 import { WorkerRuntime } from './worker/runtime.js';
 import { WorkerModule } from './worker/worker.module.js';
 
+const DRY_RUN_ORIGIN_FIELD_PLACEHOLDER = 'AD_ORIGEM_NAO_CONFIGURADA';
+
 /**
  * Worker process entry point (STACK-2). The only process that reads Sankhya settings (STACK-3); it
  * builds the gateway from them (default: the synthetic fake) and fails fast on any problem. The
@@ -17,7 +19,7 @@ import { WorkerModule } from './worker/worker.module.js';
  * installs queue tables (DATA-2) and performs no Sankhya write (SNK-4).
  */
 runMain('worker', async () => {
-  const { env, gateway, gatewayDescription } = loadWorkerConfig(process.env);
+  const { env, gateway, gatewayDescription, orderWrite } = loadWorkerConfig(process.env);
   const logger = createLogger({ level: env.LOG_LEVEL, service: 'worker' });
   const db = createDb(env.DATABASE_URL.reveal(), { max: env.DB_POOL_MAX, applicationName: 'salesforce-worker-app' });
   logPoolErrors(db, logger);
@@ -48,6 +50,21 @@ runMain('worker', async () => {
             },
           }
         : undefined,
+      // SNK-7: delivery exists only when the owner turned the switch on; `live` was already refused at boot
+      // unless it targets the Sandbox with the gates marker and the origin field (loadWorkerConfig).
+      orderWrite.mode === 'off' || (orderWrite.mode === 'live' && orderWrite.originField === null)
+        ? undefined
+        : {
+            gateway,
+            settings: {
+              mode: orderWrite.mode,
+              // dry_run needs no origin field (D-1): a marked placeholder keeps the stored payload shape without
+              // naming an ERP column; live never reaches here without the real one.
+              originField: orderWrite.originField ?? DRY_RUN_ORIGIN_FIELD_PLACEHOLDER,
+              unconfirmedTops: env.ORDER_DELIVERY_UNCONFIRMED_TOPS,
+              target: { environment: 'sandbox' },
+            },
+          },
     ),
     { logger: new NestPinoLogger(logger), abortOnError: false },
   );

@@ -18,7 +18,9 @@ import type { ProductMediaSyncService } from '../media/product-media-sync.servic
 import { MirrorSyncJob } from './jobs/mirror-sync.job.js';
 import { ProductMediaSyncJob } from './jobs/product-media-sync.job.js';
 import { SyncHeartbeatJob } from './jobs/sync-heartbeat.job.js';
-import { QUEUE_NAMES, QUEUE_REGISTRY, type QueueSpec } from './queues.js';
+import type { OrderDeliveryService } from '../integration/order-delivery.service.js';
+import { OrderDeliveryJob, OrderDryRunPurgeJob } from './jobs/order-delivery.job.js';
+import { ORDER_DELIVERY_CRON, ORDER_DRY_RUN_PURGE_CRON, QUEUE_NAMES, QUEUE_REGISTRY, type QueueSpec } from './queues.js';
 
 export const QUEUE_INSTALL_HINT =
   'Run the one-shot queue installation before starting the worker (pnpm db:queue:install). ' +
@@ -69,6 +71,11 @@ export interface WorkerRuntimeDeps {
    * earlier configuration is dropped.
    */
   readonly media?: { readonly service: ProductMediaSyncService; readonly cron: string };
+  /**
+   * ERP order delivery (SNK-7). Present only when the order-write switch is on (mode dry_run or live);
+   * absent = no handler, and a schedule stored by an earlier configuration is dropped.
+   */
+  readonly orderDelivery?: { readonly service: OrderDeliveryService };
 }
 
 /**
@@ -138,7 +145,16 @@ export class WorkerRuntime {
       const mirrorHandlers = mirror === undefined ? [] : MIRROR_ENTITIES.map((entity) => new MirrorSyncJob(entity, mirror.service));
       const { media } = this.deps;
       const mediaHandlers = media === undefined ? [] : [new ProductMediaSyncJob(media.service)];
-      const handlers: readonly JobHandler<unknown>[] = [heartbeat, ...mirrorHandlers, ...mediaHandlers, ...(this.deps.extraHandlers ?? [])];
+      const { orderDelivery } = this.deps;
+      const orderHandlers =
+        orderDelivery === undefined ? [] : [new OrderDeliveryJob(orderDelivery.service), new OrderDryRunPurgeJob(orderDelivery.service)];
+      const handlers: readonly JobHandler<unknown>[] = [
+        heartbeat,
+        ...mirrorHandlers,
+        ...mediaHandlers,
+        ...orderHandlers,
+        ...(this.deps.extraHandlers ?? []),
+      ];
 
       for (const handler of handlers) {
         await boss.work(
@@ -179,6 +195,16 @@ export class WorkerRuntime {
         } else {
           await boss.schedule(QUEUE_NAMES.mediaProducts, media.cron, {});
         }
+      }
+
+      for (const [queue, cron] of [
+        [QUEUE_NAMES.integrationOrderDeliver, ORDER_DELIVERY_CRON],
+        [QUEUE_NAMES.integrationOrderDryRunPurge, ORDER_DRY_RUN_PURGE_CRON],
+      ] as const) {
+        if (!queues.some((spec) => spec.name === queue)) continue;
+        // Disabled: drop a schedule stored by an earlier configuration (the switch is off by default).
+        if (orderDelivery === undefined) await boss.unschedule(queue);
+        else await boss.schedule(queue, cron, {});
       }
 
       this.health.markStarted();

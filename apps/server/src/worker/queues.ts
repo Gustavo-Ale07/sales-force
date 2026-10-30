@@ -17,7 +17,16 @@ export const QUEUE_NAMES = {
   syncHeartbeat: 'sync.heartbeat',
   /** Product photo synchronization (ERP -> object store). Registered and scheduled only when enabled by configuration. */
   mediaProducts: 'media.products',
+  /** Sweep of due `integration_outbox` order deliveries (SNK-7). Scheduled only while order writing is enabled. */
+  integrationOrderDeliver: 'integration.order.deliver',
+  /** Removes dry-run payload records older than 30 days (SNK-7 D-6). */
+  integrationOrderDryRunPurge: 'integration.order.dry-run-purge',
 } as const;
+
+/** Every minute; the outbox row decides what is actually due (`next_attempt_at`). */
+export const ORDER_DELIVERY_CRON = '* * * * *';
+/** Daily, off-peak. */
+export const ORDER_DRY_RUN_PURGE_CRON = '17 3 * * *';
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
 
@@ -72,4 +81,28 @@ export const QUEUE_REGISTRY: readonly QueueSpec[] = [
   ...MIRROR_ENTITIES.map((entity): QueueSpec => ({ name: mirrorQueueName(entity), options: MIRROR_QUEUE_OPTIONS })),
   // Product photos: a first full run can take long, hence the larger `expireInSeconds` (2 h).
   { name: QUEUE_NAMES.mediaProducts, options: { ...MIRROR_QUEUE_OPTIONS, expireInSeconds: 7200 } },
+  // Order delivery sweeps (SNK-7): the outbox row carries retries and backoff (D-2), so pg-boss never
+  // retries a sweep; the next minute's tick is the retry. `short` keeps at most one queued.
+  {
+    name: QUEUE_NAMES.integrationOrderDeliver,
+    options: {
+      policy: 'short',
+      retryLimit: 0,
+      expireInSeconds: 600,
+      retentionSeconds: 3600,
+      deleteAfterSeconds: 24 * 3600,
+      deadLetter: QUEUE_NAMES.deadLetter,
+    },
+  },
+  {
+    name: QUEUE_NAMES.integrationOrderDryRunPurge,
+    options: {
+      policy: 'short',
+      retryLimit: 0,
+      expireInSeconds: 600,
+      retentionSeconds: 3600,
+      deleteAfterSeconds: 24 * 3600,
+      deadLetter: QUEUE_NAMES.deadLetter,
+    },
+  },
 ];

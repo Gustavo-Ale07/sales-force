@@ -78,7 +78,7 @@ describe('ERP order submission switches (SNK-7 D-1)', () => {
     for (const file of files) {
       const text = readFileSync(file, 'utf8');
       for (const line of text.split('\n')) {
-        if (line.trim().startsWith('#')) continue;
+        if (line.trim().startsWith('#') || line.trim().startsWith('--')) continue;
         if (!line.includes('SANKHYA_ORDER_WRITE_ENABLED')) continue;
         expect(line, file).toMatch(/SANKHYA_ORDER_WRITE_ENABLED:\s*"false"/);
       }
