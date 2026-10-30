@@ -739,6 +739,52 @@ Source: the project owner (Gustavo), session of 2026-10-29; recorded before impl
 #### AUTH-15 · Known accepted risk — user enumeration during verifier outage
 - **Status:** APPROVED 2026-10-29 (risk accepted for v1)
 - **Decision:** during a verifier outage the distinct 503 can reveal that a login was forwarded to the verifier; accepted in v1 and recorded as a known risk.
+### 3.16 APPROVED — Owner rulings D-A..D-M, SNK-7 D-1..D-10 and P2-P5 (2026-10-30)
+
+Source: the project owner (Gustavo), prompt of 2026-10-30 part 1 (`.claude/work/PROMPT_2026-10-30_parte1.md`), after the Vidya Force audit and gap analysis (`.claude/work/auditoria-vidya-force.md`, `.claude/work/VIDYA_GAP_ANALYSIS_2026-10-29.md`). Recorded before implementation. Where a ruling below conflicts with §3.13-§3.15 for the pilot, this section prevails. Nothing here authorizes a Sankhya write, a flag change in staging or a deploy.
+
+#### Pilot scope rulings D-A..D-L
+- **D-A (TOPs for the seller):** 1001 and 1000. `sales.eligibleOrderTopCodes` lists them; `sales.orderTopCode` is the default (1001). 1051, 1061 and ZFM stay out until decided.
+- **D-B (quotation):** a quotation is an order with TOP 1000, sent to Sankhya as 1000 and not confirmed. "Convert to order" = duplicate as 1001. No new state machine (closes BP-03 for the pilot).
+- **D-C (carrier):** optional header field, no default; list = carrier partners (`TGFPAR.TRANSPORTADORA = 'S'`) from the mirror.
+- **D-D (estimated IPI in totals):** yes, labelled "estimado" — part 2.
+- **D-E (ERP status labels):** the Vidya labels: CONFIRMADO, AGUARDANDO LIBERAÇÃO, FATURADO, NEGADO, CANCELADO, NÃO CONFIRMADO, AGUARDANDO FATURAMENTO, DESCONHECIDO.
+- **D-F:** no discount on the order total (R35). **D-G:** alternative units (CX) postponed. **D-H:** per-product discount limit postponed.
+- **D-I:** customer financials in the pilot are read-only, no automatic block — part 2.
+- **D-J:** order PDF uses an own template (PLAC brand, never cost/margin), not the Sankhya report.
+- **D-K:** self-approval rule becomes backlog of the `force` mode.
+- **D-L (vocabulary):** user-facing text says "Enviar ao Sankhya" and "Sankhya", not "ERP".
+
+#### D-M · Discount/credit release belongs to Sankhya in the pilot (resolves R26 for the pilot)
+- **Decision:** release of discount and credit is done by Sankhya through the TOP events (TSILIB), as with Vidya today. The Force approval flow (DISC-3/4/5/6: limits, W-39, W-20, approval states, M-14) stays OFF by configuration: `sales.discountAuthority.mode = 'erp'` (default). Mode `'force'` keeps existing, with the already reviewed code, for a future installation.
+- **In `erp` mode:** no order waits for approval or is blocked by discount in Force; only structural validity (0-99.99 %) and "sem preço" apply; the order goes to the Sankhya queue and its state comes from Sankhya (P2). W-39 and W-20 are hidden and their routes disabled. The recompute of authority runs only in `force` mode. Cart footer text: "Descontos acima do permitido passam pela liberação no Sankhya depois do envio."
+- **Consequences:** the immutability trigger (security finding 3) and D-K are `force`-mode backlog; the "real limit values 5/15/30" owner pendency is dropped. SNK-7 D-9 does not exist in `erp` mode.
+
+#### SNK-7 plan rulings D-1..D-10 (`docs/implementation/snk-7-order-submission-plan.md` §6)
+- **D-1:** one extra marker `SANKHYA_ORDER_WRITE_GATES_CLOSED=1`, read only by the worker; `live` mode without it fails boot; `dry_run` does not need it. `live` also requires `SANKHYA_ORDER_ORIGIN_FIELD` (name of the origin field in TGFCAB, created by the owner in the Sandbox); empty = write refused.
+- **D-2:** attempts exhausted on a temporary error → order `rejected` (SM-2 integration error) with class `exhausted`, visible in W-32 for reprocessing, alert on the integration panel. `unknown` is reserved for an ambiguous result (sent without answer).
+- **D-3:** keep the 5 outbox values in the database. SM-7 sub-steps (`verificando_origem`, `enviando`, `aguardando_retry`, `vinculado_existente`) go to the log and to an informational `last_step` column (expand-only migration), not to the state machine.
+- **D-4:** Force confirms. Flow `incluirNota` → `confirmarNota`, two idempotent steps. `sent` = included and confirmed. Failure only at confirmation = intermediate state "incluído, aguardando confirmação" (outbox `unknown` + NUNOTA stored); reprocess redoes only the confirmation, never the inclusion. Quotation TOP 1000 is NOT confirmed. Native TOP releases (TSILIB) stay in Sankhya; Force only shows the state (P2). `confirmarNota` is part of the D-10 test.
+- **D-5:** cancel with outbox `pending` (including retry without ambiguous result): allowed; in the same transaction the outbox goes to `rejected` with class `cancelled_by_user`. With `processing` or `unknown`: refused ("aguarde a conclusão do envio"). After `sent`: no Force-side cancel in v1; the state mirrors Sankhya (P2).
+- **D-6:** dry-run record retained 30 days, purged by a job; payload keeps only codes, UUIDs, quantities and values; `OBSERVACAO` replaced by its hash; no token, name, CPF/CNPJ.
+- **D-7:** discount by `PERCDESC` on the item, list price computed by Sankhya (`INFORMARPRECO False`). After writing, the worker rereads the item and checks `VLRUNIT` = table price and `PERCDESC` = sent; divergence = validation error, order `rejected`. If test #1 shows Sankhya ignores `PERCDESC` with `INFORMARPRECO False`: fallback `INFORMARPRECO True` with `VLRUNIT` = table price + `PERCDESC`, recorded in the spike.
+- **D-8:** nothing literal in code: CODEMP = `general.defaultCompanyCode`; CODTIPOPER = order header TOP; CODTIPVENDA = chosen negotiation type; CODLOCALORIG = `sales.orderStockLocationCode` (PLAC 209, to confirm); CODVOL = product unit in the mirror; CODVEND = linked seller; CODPARC = customer; DTNEG = order date; TIPMOV = P; OBSERVACAO = order note cut at 2000 chars; CODPARCTRANSP = header carrier when given.
+- **D-9:** no effect in `erp` mode (D-M).
+- **D-10:** authorization for the first Sandbox test is given by the owner in writing ("AUTORIZO") after the dry-run is reviewed. The script is prepared in `docs/implementation/snk-7-dry-run.md` (order A: 1 item, no discount, TOP 1001, cash 11; order B: 1 item with 8 % PERCDESC, TOP 1001, negotiation 2; resend of A must link, not duplicate; cleanup `excluirNotas`, fallback `cancelarNota`; budget ≤ 40 requests). Nothing runs without that written "AUTORIZO".
+- **S9 modelling:** column `erp_order_number` (integer, null until sent, immutable afterwards) on orders; in the detail and list DTOs.
+- **Texts:** queued = "Na fila para o Sankhya"; included but unconfirmed = "Enviado, aguardando confirmação"; sent = "Enviado ao Sankhya"; rejected = "Falha no envio" (never "Rejeitado" for technical errors); unknown = "Envio em verificação".
+
+#### P2-P5 · ERP order state, carriers, origin field, decimals
+- **P2:** pure function `mapErpOrderStatus` in `packages/domain` reproduces EXACTLY the precedence of Vidya's `GETCODSTATUS_VIDYA`, including NEGADO overriding FATURADO when `STATUSNFE <> 'A'` (known behaviour, audit F-03; documented). Codes: 0 CANCELADO, 1 NÃO CONFIRMADO, 2 CONFIRMADO, 3 AGUARDANDO FATURAMENTO, 4 FATURADO, 5 NEGADO, 6 AGUARDANDO LIBERAÇÃO, -1 DESCONHECIDO (7 EM COTAÇÃO, TOP 900 only, unused). Worker job `sync.erp.orderStatus` every 15 min for `sent` orders in a non-final state (≠ 0 and ≠ 4, up to 90 days), reading TGFCAB, TGFCAN, TGFVAR→TGFCAB child and TSILIB through the gateway SQL read path (SNK-8 authorizes Sandbox reads); stores `erp_status_code`, `erp_status_label`, `erp_invoice_number`, `erp_status_checked_at` (expand-only migration).
+- **P3:** carrier mirror from `TGFPAR` with `TRANSPORTADORA = 'S'` (52 active in the Sandbox). "Expedição" = `TGFCAB.AD_EXPEDICAO` (VARCHAR2 10, values to confirm) — part 2. The origin field is never `AD_NUVIDYA` nor `AD_VDYORIG` (Vidya's, in use during the pilot); its name comes from `SANKHYA_ORDER_ORIGIN_FIELD`.
+- **P4:** `TGFPRO.DECQTD = 4` for products 4158, 1440 and 2804 (four decimal places; unit PT): decimal quantities end to end. PLAC rule: laminated plates/trays sell by box (1.0) and pack (0.2), multiples of 0.2 only; white tray by pack of 10 (quantity = number of packs). Per-product step is later; now only guarantee decimals work.
+- **P5:** IPI rate from `TGFPRO.CODIPI` → `TGFIPI` — part 2.
+
+#### Staging facts 2026-10-29 (status note)
+- Deploy of `bd6d593` done by `deploy-staging.sh` as force-deploy with `SF_RUN_DB_ROLES=1`; migrations 0012 and 0013 applied; db-roles OK; `DEPLOYED_SHA=bd6d593`. Staging runs `API_AUTH_MODE=external` + `WEB_AUTH_MODE=standard` since 2026-10-29 19:14Z; the owner's seller login worked in external mode.
+- First attempt failed at the web health check: nginx `open() /etc/nginx/conf.d/default.conf failed (13: Permission denied)` — the script's checkout left `deploy/nginx/default.conf` at mode 0600 and the web image copies it preserving the mode. Fixed by hand (`chmod 644`) and permanently in this cycle (A2).
+- Host layout: `/opt/force-staging/repo`, `/opt/force-staging/config/compose.env`, `/opt/force-staging/config/secrets/*.env`, `/opt/force-staging/logs`; user `force-deploy`; `SF_EDGE_MODE=external`; `SF_DB_MODE=self-hosted`. (Earlier docs cited `/etc/salesforce/staging`: wrong.)
+
 ## 4. Status of the specification's decisions (spec §4)
 
 The spec is a draft. Its decisions are binding only where an APPROVED entry above covers them.
