@@ -19,6 +19,11 @@ Classes: REQUIRED · P1 · NOT_NEEDED. State: DONE (already on mobile or done th
 | 12 | Customers (list, search, filters, A-Z, detail) | REQUIRED | DONE | Map gated by valid geolocation (BLOCKED_BY_GEO_DATA). |
 | 13 | Orders created on the web shown on mobile | P1 | OPEN | Requires pulling orders into the device (protocol). |
 | 14 | ERP stages (quote, ERP order, invoice) | BLOCKED | OPEN | SNK-6 / V-11 / V-13. Do not show. |
-| 15 | Print / share PDF, export | NOT_NEEDED | n/a | Representatives have no export (P-20). |
+| 15 | Share PDF of the order | DONE | ed0ac11 (D-J) | "Compartilhar PDF" in the sale detail, PLAC template shared with web, built from local data, works offline. Generic data export (CSV, lists) stays NOT_NEEDED for representatives (P-20). |
 | 16 | Agenda, Mural, Engajamento, Performance, Notifications | NOT_NEEDED por ora | n/a | No source; Home shows honest empty states. |
 | 17 | Stock, route, GPS check-in, POS photo | NOT_NEEDED | n/a | Out of scope (P-13). |
+| 18 | Decimal quantities (A6) | REQUIRED | DONE 80ec37d | Comma or dot, up to 4 decimals; +/- step 1 for whole lines and 0,2 for fractional ones; fractional above 1 can be decremented. No per-product step in the catalog data: the step comes from the line's own quantity. |
+| 19 | Discount authority mode (A5, D-L) | REQUIRED | DONE 28d522e | In `erp` mode the approval card is hidden and the cart footer says "Descontos acima do permitido passam pela liberação no Sankhya depois do envio." Confirmations before Descartar and before opening another order over unsaved edits. |
+| 20 | Order TOP and negotiation type (A7, D-A) | REQUIRED | DONE 6ab7b6c | "Opções do pedido" in the cart: TOP chips (Pedido/Cotação) from `orderTops`, only `sellable` negotiation types. Stored on the draft (local schema v4) and sent in order.create/replace. TOP names are derived from the configured codes only. |
+| 21 | Duplicar como pedido (A7, D-B) | REQUIRED | DONE 6ab7b6c | Sent quotation, online only (disabled with a hint offline). Uses the quotation's own dataset; 409 reasons shown in pt-BR; skipped lines listed; the new draft is adopted on the device. |
+| 22 | Carrier (A7b, D-C) | P1 | DONE | Optional picker. List from GET /carriers fetched with each pull and stored on the device; offline reads the stored list, with none it shows a hint (no new sync scope; a first-ever offline use has no list). |
