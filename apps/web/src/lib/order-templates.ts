@@ -1,6 +1,14 @@
 import type { ApiSchema } from "@salesforce/contracts/client";
 import { ApiRequestError } from "./api";
-import { NO_PREVIOUS_ORDER, TEMPLATE_LIMIT_REACHED, TEMPLATE_NAME_TAKEN, TEMPLATE_NO_USABLE_LINES } from "./api-mutations";
+import {
+  NOT_A_QUOTATION,
+  NO_PREVIOUS_ORDER,
+  ORDER_TOP_NOT_CONFIGURED,
+  SOURCE_CANCELLED,
+  TEMPLATE_LIMIT_REACHED,
+  TEMPLATE_NAME_TAKEN,
+  TEMPLATE_NO_USABLE_LINES,
+} from "./api-mutations";
 import { describeApiError, type ErrorDescription } from "./error-message";
 
 /**
@@ -129,7 +137,36 @@ export function skippedLinesOf(error: unknown): SkippedTemplateLine[] {
  * reuse the same `TemplateSkippedNotice` component.
  */
 export interface OrderNoticeState {
-  source: "template" | "repeat-last";
+  source: "template" | "repeat-last" | "duplicate-as-order";
   templateName?: string;
   skippedLines?: SkippedTemplateLine[];
+}
+
+/** User-facing pt-BR text for a failed "Duplicar como pedido" (409 reasons of `duplicate-as-order`, D-B). */
+export function describeDuplicateAsOrderError(error: unknown): TemplateErrorDescription {
+  if (error instanceof ApiRequestError && error.status === 409) {
+    const correlationId = error.correlationId;
+    if (error.reason === NOT_A_QUOTATION) {
+      return { title: "Este pedido não é um orçamento", description: "Só um orçamento pode ser duplicado como pedido. Nenhum pedido foi criado.", correlationId };
+    }
+    if (error.reason === SOURCE_CANCELLED) {
+      return { title: "Orçamento descartado", description: "Este orçamento foi descartado e não pode ser duplicado como pedido. Nenhum pedido foi criado.", correlationId };
+    }
+    if (error.reason === ORDER_TOP_NOT_CONFIGURED) {
+      return {
+        title: "Tipo de operação do pedido não configurado",
+        description: "Esta instalação ainda não tem o tipo de operação (TOP) padrão de pedido. Nenhum pedido foi criado.",
+        correlationId,
+      };
+    }
+    if (error.reason === TEMPLATE_NO_USABLE_LINES) {
+      return {
+        title: "Nenhum item do orçamento pode ser pedido agora",
+        description: "Os produtos do orçamento foram removidos, estão inativos, indisponíveis ou sem preço para este cliente. Nenhum pedido foi criado.",
+        correlationId,
+        reason: "no_usable_lines",
+      };
+    }
+  }
+  return describeApiError(error, "Não foi possível duplicar o orçamento como pedido");
 }

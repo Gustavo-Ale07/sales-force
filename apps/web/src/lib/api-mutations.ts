@@ -89,3 +89,18 @@ export function repeatLastOrder(api: ApiClient, customerCode: number, body: Repe
 
 /** 409: the customer has no previous order recorded in Sales Force at all (an expected empty state, not a system error). */
 export const NO_PREVIOUS_ORDER = "no_previous_order";
+
+/**
+ * "Duplicar como pedido" (D-B): a new, independent draft with the default order TOP from a quotation (an order with the
+ * quotation TOP). Same response shape as "Repetir último pedido": the draft plus the lines left out.
+ */
+export type DuplicateAsOrderBody = ApiSchema<"DuplicateAsOrderRequest">;
+
+export function duplicateAsOrder(api: ApiClient, id: string, body: DuplicateAsOrderBody) {
+  return callApi(() => api.POST("/orders/{id}/duplicate-as-order", { params: { path: { id } }, body }));
+}
+
+/** 409 reasons of `duplicate-as-order` (besides `no_usable_lines`, shared with templates). */
+export const NOT_A_QUOTATION = "not_a_quotation";
+export const SOURCE_CANCELLED = "source_cancelled";
+export const ORDER_TOP_NOT_CONFIGURED = "order_top_not_configured";

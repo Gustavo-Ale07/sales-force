@@ -3,6 +3,7 @@ import { useState } from "react";
 import { NotFound } from "../components/route-states";
 import { TemplateSkippedNotice } from "../components/template-skipped-notice";
 import { parseOrdersSearch } from "../lib/route-search";
+import type { OrderNoticeState } from "../lib/order-templates";
 import { asInt } from "../lib/search-params";
 import { OrderEditorPage } from "./order-editor";
 import { OrdersPage } from "./orders";
@@ -32,7 +33,8 @@ export function NewOrderRoute() {
   );
 }
 
-const orderNoticeDescriptions: Record<"template" | "repeat-last", string> = {
+const orderNoticeDescriptions: Record<OrderNoticeState["source"], string> = {
+  "duplicate-as-order": "O pedido foi criado com os demais itens do orçamento. Confira as quantidades e adicione o que faltar.",
   template: "O rascunho foi criado com os demais itens do modelo. Confira as quantidades e adicione o que faltar.",
   "repeat-last":
     "O rascunho foi criado com os demais itens do último pedido registrado no Sales Force. Confira as quantidades e adicione o que faltar.",

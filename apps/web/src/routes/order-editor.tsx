@@ -40,6 +40,7 @@ import { CustomerFichaDialog } from "../components/customer-ficha";
 import { ProductImage } from "../components/product-image";
 import { CustomerPicker, type PickedCustomer } from "../components/customer-picker";
 import { DiscardOrderDialog } from "../components/discard-order-dialog";
+import { DuplicateAsOrderButton } from "../components/duplicate-as-order-button";
 import { DuplicateOrderButton } from "../components/duplicate-order-button";
 import { GroupDiscountDialog, MassDiscountDialog } from "../components/discount-dialogs";
 import { NO_PRICE_TEXT, PriceCell } from "../components/price-cell";
@@ -49,7 +50,7 @@ import { QueryError } from "../components/query-error";
 import { SaveTemplateDialog } from "../components/save-template-dialog";
 import { ApiRequestError } from "../lib/api";
 import { ERP_SUBMISSION_DISABLED, createOrder, replaceOrder, submitOrder } from "../lib/api-mutations";
-import { orderEntryConfigurationQueryOptions, customerQueryOptions, orderQueryOptions, queryKeys } from "../lib/api-queries";
+import { carriersQueryOptions, orderEntryConfigurationQueryOptions, customerQueryOptions, orderQueryOptions, queryKeys } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { useLoadedDataset, requireDataset } from "../lib/dataset";
 import { approvalsEnabled } from "../lib/discount-authority";
@@ -88,6 +89,13 @@ const PRODUCT_SEARCH_ID = "order-product-search";
 const CART_VIEW_ID = "order-view-cart";
 
 type ItemsView = "produtos" | "carrinho";
+
+/** Seller-facing name of an order TOP: the configured default is the order, the quotation TOP is the quotation (D-A, D-B). */
+function topLabel(code: number, tops: { defaultTopCode: number | null; quotationTopCode: number | null } | undefined): string {
+  if (code === tops?.quotationTopCode) return `Orçamento (TOP ${code})`;
+  if (code === tops?.defaultTopCode) return `Pedido (TOP ${code})`;
+  return `TOP ${code}`;
+}
 
 function newUuid(): string {
   return globalThis.crypto.randomUUID();
@@ -211,6 +219,11 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
   const [fichaOpen, setFichaOpen] = useState(false);
   /** `undefined` = the installation default (loaded asynchronously); `null` = explicitly none. */
   const [negotiationChoice, setNegotiationChoice] = useState<number | null | undefined>(order ? order.negotiationTypeCode : undefined);
+  /** `undefined` = the installation default order TOP; a number = chosen (D-A). */
+  const [topChoice, setTopChoice] = useState<number | undefined>(order?.topCode ?? undefined);
+  /** Optional carrier (D-C): no default. */
+  const [carrierChoice, setCarrierChoice] = useState<number | null>(order?.carrierCode ?? null);
+  const carriers = useQuery(carriersQueryOptions(api));
   const [notes, setNotes] = useState(order?.notes ?? "");
   const [lines, setLines] = useState<EditorLine[]>(() =>
     order ? order.items.map((item, index) => lineFromOrderItem(item, `saved-${index}`)) : [],
@@ -257,19 +270,25 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
     if (searchFocusRequest > 0) document.getElementById(PRODUCT_SEARCH_ID)?.focus();
   }, [searchFocusRequest]);
 
+  const orderTops = config.data?.sales.orderTops;
+  const orderTopCode = topChoice ?? orderTops?.defaultTopCode ?? null;
   const negotiationTypeCode =
     negotiationChoice !== undefined ? negotiationChoice : (config.data?.sales.defaultNegotiationTypeCode ?? null);
 
   const snapshot = (state: {
     customerCode: number | null;
     negotiation: number | null | undefined;
+    top: number | undefined;
+    carrier: number | null;
     notes: string;
     lines: readonly EditorLine[];
-  }) => JSON.stringify([state.customerCode, state.negotiation, state.notes, state.lines.map((l) => [l.productCode, l.quantityText, l.discountText.trim()])]);
+  }) => JSON.stringify([state.customerCode, state.negotiation, state.top ?? null, state.carrier, state.notes, state.lines.map((l) => [l.productCode, l.quantityText, l.discountText.trim()])]);
   const [baseline] = useState(() =>
     snapshot({
       customerCode: order ? order.customerCode : (initialCustomer?.code ?? null),
       negotiation: order ? order.negotiationTypeCode : undefined,
+      top: order?.topCode ?? undefined,
+      carrier: order?.carrierCode ?? null,
       notes: order?.notes ?? "",
       lines: order ? order.items.map((item) => lineFromOrderItem(item, "baseline")) : [],
     }),
@@ -279,6 +298,8 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
     snapshot({
       customerCode: customer?.code ?? null,
       negotiation: negotiationChoice,
+      top: topChoice,
+      carrier: carrierChoice,
       notes,
       lines,
     }) !== baseline;
@@ -308,6 +329,8 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
   const body = {
     customerCode: customer?.code ?? 0,
     negotiationTypeCode,
+    topCode: orderTopCode,
+    carrierCode: carrierChoice,
     notes: notes.trim() === "" ? null : notes.trim(),
     items: toRequestItems(lines),
   };
@@ -500,7 +523,12 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
       </div>
     ) : null;
 
-  const negotiationTypes = config.data?.sales.negotiationTypes ?? [];
+  // Return types (`sellable: false`, e.g. 23/24) are never offered (D-B); absent = sellable.
+  const negotiationTypes = (config.data?.sales.negotiationTypes ?? []).filter((type) => type.sellable !== false);
+  const isQuotation = order !== null && orderTops?.quotationTopCode != null && order.topCode === orderTops.quotationTopCode;
+  const topOptions = orderTops?.eligibleTopCodes ?? [];
+  const carrierItems = carriers.data?.items ?? [];
+  const carrierUnlisted = carrierChoice !== null && !carrierItems.some((carrier) => carrier.code === carrierChoice);
   const submitFailure =
     submit.isError &&
     !(submit.error instanceof ApiRequestError && (submit.error.code === ERP_SUBMISSION_DISABLED || submit.error.code === "discount_blocked"))
@@ -519,7 +547,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
           order ? (
             <>
               <PrintOrderButton orderId={order.id} order={order} label={orderReference(order)} disabled={dirty || order.items.length === 0} />
-              <DuplicateOrderButton order={order} disabled={dirty} />
+              {isQuotation ? <DuplicateAsOrderButton order={order} disabled={dirty} /> : <DuplicateOrderButton order={order} disabled={dirty} />}
             </>
           ) : undefined
         }
@@ -596,6 +624,39 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
                 {negotiationTypes.map((type) => (
                   <option key={type.code} value={type.code}>
                     {type.label}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+            {topOptions.length > 0 ? (
+              <FormField label="Tipo de operação (TOP)">
+                <Select
+                  size="md"
+                  disabled={readOnly}
+                  value={orderTopCode ?? ""}
+                  onChange={(event) => setTopChoice(event.target.value === "" ? undefined : Number(event.target.value))}
+                >
+                  {orderTopCode === null || !topOptions.includes(orderTopCode) ? <option value="">Padrão da instalação</option> : null}
+                  {topOptions.map((code) => (
+                    <option key={code} value={code}>
+                      {topLabel(code, orderTops)}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+            ) : null}
+            <FormField label="Transportadora" hint={carriers.isError ? "Transportadoras indisponíveis no momento." : undefined}>
+              <Select
+                size="md"
+                disabled={readOnly || (carrierItems.length === 0 && carrierChoice === null)}
+                value={carrierChoice ?? ""}
+                onChange={(event) => setCarrierChoice(event.target.value === "" ? null : Number(event.target.value))}
+              >
+                <option value="">Sem transportadora</option>
+                {carrierUnlisted ? <option value={carrierChoice}>{`Transportadora ${carrierChoice} (indisponível)`}</option> : null}
+                {carrierItems.map((carrier) => (
+                  <option key={carrier.code} value={carrier.code}>
+                    {carrier.name}
                   </option>
                 ))}
               </Select>

@@ -27,6 +27,7 @@ export const queryKeys = {
   approvalsAll: ["approvals"] as const,
   dashboard: ["dashboard"] as const,
   sellers: ["sellers"] as const,
+  carriers: ["carriers"] as const,
   customers: (params: CustomersParams) => ["customers", "list", params] as const,
   customer: (code: number) => ["customers", "detail", code] as const,
   productGroups: ["product-groups"] as const,
@@ -87,6 +88,15 @@ export function orderEntryConfigurationQueryOptions(api: ApiClient) {
   return queryOptions({
     queryKey: queryKeys.orderEntryConfiguration,
     queryFn: () => callApi(() => api.GET("/order-entry/configuration")),
+  });
+}
+
+/** Active carriers (D-C), mirrored from Sankhya; changes rarely. */
+export function carriersQueryOptions(api: ApiClient) {
+  return queryOptions({
+    queryKey: queryKeys.carriers,
+    queryFn: () => callApi(() => api.GET("/carriers")),
+    staleTime: 5 * 60_000,
   });
 }
 
