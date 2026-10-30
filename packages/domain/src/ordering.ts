@@ -144,6 +144,7 @@ export type DraftIssueCode =
   | 'product_not_sellable'
   | 'negotiation_type_not_configured'
   | 'order_top_not_eligible'
+  | 'carrier_unknown'
   | 'order_total_mismatch'
   | 'order_total_out_of_range';
 

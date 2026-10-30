@@ -3,6 +3,7 @@ import {
   API_BASE_PATH,
   routes,
   type ProductDetail,
+  type CarriersResponse,
   type ProductGroupsResponse,
   type ProductsResponse,
   type ResolveProductsResponse,
@@ -24,6 +25,11 @@ export class CatalogController {
   @ApiRoute(routes.listProductGroups)
   groups(@CurrentUserParam() user: CurrentUser): Promise<ProductGroupsResponse> {
     return this.catalog.listGroups(user);
+  }
+
+  @ApiRoute(routes.listCarriers)
+  carriers(@CurrentUserParam() user: CurrentUser): Promise<CarriersResponse> {
+    return this.catalog.listCarriers(user);
   }
 
   @ApiRoute(routes.listProducts)

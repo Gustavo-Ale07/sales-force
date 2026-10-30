@@ -58,6 +58,15 @@ export function erpTablesFromDataset(dataset: DemoDataset, dbUtcOffsetMinutes = 
         CODTAB: c.priceTableCode,
         LIMCRED: c.creditLimit === null ? null : Number(c.creditLimit),
       })),
+      // Partners flagged as carriers (TRANSPORTADORA = S); not customers.
+      ...dataset.carriers.map((c) => ({
+        CODPARC: c.code,
+        CLIENTE: 'N',
+        TRANSPORTADORA: 'S',
+        NOMEPARC: c.name,
+        RAZAOSOCIAL: null,
+        ATIVO: flag(c.active),
+      })),
       // A non-customer partner (supplier): must never reach the mirror.
       {
         CODPARC: 999_999,

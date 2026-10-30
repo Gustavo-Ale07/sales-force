@@ -2,6 +2,7 @@ import type {
   Customer,
   DecimalString,
   DirectoryUser,
+  Carrier,
   IsoTimestamp,
   ListPrice,
   PriceTable,
@@ -182,6 +183,25 @@ export const DIRECTORY_USER_SPEC: EntitySpec<DirectoryUser> = {
     return { code: row.int('CODUSU'), sellerCode: sellerCode === null || sellerCode <= 0 ? null : sellerCode };
   },
   keyOf: (user) => [user.code],
+};
+
+/**
+ * TGFPAR partners flagged as carriers (decisions D-C / P3: 52 active in the Sandbox). PK CODPARC. Only code, name and the
+ * active flag are read: no document number. The filtered paged read was not measured on its own (NEEDS VALIDATION, as for customers).
+ */
+export const CARRIER_SPEC: EntitySpec<Carrier> = {
+  entity: 'carriers',
+  table: 'TGFPAR',
+  select: ['CODPARC', 'NOMEPARC', 'RAZAOSOCIAL', 'ATIVO'],
+  columns: ['CODPARC', 'NOMEPARC', 'RAZAOSOCIAL', 'ATIVO'],
+  where: "TRANSPORTADORA = 'S' AND CODPARC > 0",
+  orderBy: 'CODPARC',
+  map: (row) => ({
+    code: row.int('CODPARC'),
+    name: row.nullableText('RAZAOSOCIAL') ?? row.text('NOMEPARC'),
+    active: row.flag('ATIVO'),
+  }),
+  keyOf: (carrier) => [carrier.code],
 };
 
 /**

@@ -243,6 +243,7 @@ const issueMessages: Record<DraftIssueCode, string> = {
   product_not_sellable: "Produto indisponível para venda.",
   negotiation_type_not_configured: "Tipo de negociação não configurado nesta instalação.",
   order_top_not_eligible: "Tipo de operação (TOP) não permitido nesta instalação.",
+  carrier_unknown: "Transportadora inválida ou inativa.",
   order_total_mismatch: "Total do pedido divergente do calculado. Recarregue o rascunho e tente novamente.",
   order_total_out_of_range: "O total do pedido excede o limite permitido.",
 };

@@ -116,6 +116,7 @@ describe('capabilities and NotImplemented paths', () => {
       priceTableVersions: 'supported',
       listPrices: 'supported',
       directoryUsers: 'supported',
+      carriers: 'supported',
     });
     expect(description.capabilities.configurationSource).toBeNull();
   });

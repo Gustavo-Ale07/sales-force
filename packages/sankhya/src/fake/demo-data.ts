@@ -1,6 +1,7 @@
 import type {
   Customer,
   DirectoryUser,
+  Carrier,
   ListPrice,
   PriceTable,
   PriceTableVersion,
@@ -36,6 +37,7 @@ export interface DemoDataset {
   readonly sellerManagerLinks: readonly DemoSellerManagerLink[];
   /** Synthetic ERP users: one per seller (codes 9001...), plus one user without a seller. */
   readonly directoryUsers: readonly DirectoryUser[];
+  readonly carriers: readonly Carrier[];
   readonly customers: readonly Customer[];
   readonly productGroups: readonly ProductGroup[];
   readonly products: readonly Product[];
@@ -95,6 +97,17 @@ function buildDirectoryUsers(sellers: readonly Seller[]): DirectoryUser[] {
   return [
     ...sellers.map((seller, index) => ({ code: DEMO_DIRECTORY_USER_FIRST_CODE + index, sellerCode: seller.code })),
     { code: DEMO_DIRECTORY_USER_WITHOUT_SELLER, sellerCode: null },
+  ];
+}
+
+export const DEMO_CARRIER_FIRST_CODE = 7001;
+
+/** Synthetic carriers (one inactive, to exercise the active flag). */
+function buildCarriers(): Carrier[] {
+  return [
+    { code: DEMO_CARRIER_FIRST_CODE, name: 'Transportes Alfa (demo)', active: true },
+    { code: DEMO_CARRIER_FIRST_CODE + 1, name: 'Rodoviario Beta (demo)', active: true },
+    { code: DEMO_CARRIER_FIRST_CODE + 2, name: 'Logistica Gama (demo, inativa)', active: false },
   ];
 }
 
@@ -411,6 +424,7 @@ export function generateDemoDataset(seed: number = DEMO_SEED): DemoDataset {
     sellers,
     sellerManagerLinks: links,
     directoryUsers: buildDirectoryUsers(sellers),
+    carriers: buildCarriers(),
     customers,
     productGroups: groups,
     products: products.map((p) => p.product),

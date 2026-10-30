@@ -253,6 +253,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/carriers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Active carriers (transportadoras) mirrored from Sankhya, ordered by name */
+        get: operations["listCarriers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products": {
         parameters: {
             query?: never;
@@ -632,6 +649,13 @@ export interface components {
             account: components["schemas"]["Account"];
             expiresAt: components["schemas"]["IsoTimestamp"];
         };
+        Carrier: {
+            code: number;
+            name: string;
+        };
+        CarriersResponse: {
+            items: components["schemas"]["Carrier"][];
+        };
         ConfigurationResponse: {
             contentHash: string | null;
             configuration: components["schemas"]["ConfigurationSummary"];
@@ -715,6 +739,7 @@ export interface components {
             expectedDataset: components["schemas"]["DatasetIdentity"];
             customerCode: number;
             topCode?: number | null;
+            carrierCode?: number | null;
             negotiationTypeCode: number | null;
             notes: string | null;
             items: components["schemas"]["OrderItemInput"][];
@@ -937,6 +962,7 @@ export interface components {
             sellerCode: number | null;
             status: components["schemas"]["OrderStatus"];
             topCode: number | null;
+            carrierCode: number | null;
             estimatedTotal: components["schemas"]["DecimalString"];
             itemCount: number;
             isPartial: boolean;
@@ -1017,6 +1043,7 @@ export interface components {
             sellerCode: number | null;
             status: components["schemas"]["OrderStatus"];
             topCode: number | null;
+            carrierCode: number | null;
             estimatedTotal: components["schemas"]["DecimalString"];
             itemCount: number;
             itemPreview: string[];
@@ -1181,6 +1208,7 @@ export interface components {
             expectedDataset: components["schemas"]["DatasetIdentity"];
             customerCode: number;
             topCode?: number | null;
+            carrierCode?: number | null;
             negotiationTypeCode: number | null;
             notes: string | null;
             items: components["schemas"]["OrderItemInput"][];
@@ -1823,6 +1851,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProductGroupsResponse"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    listCarriers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Transportadoras ativas */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CarriersResponse"];
                 };
             };
             /** @description Não autenticado */

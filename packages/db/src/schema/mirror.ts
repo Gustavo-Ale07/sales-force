@@ -45,6 +45,14 @@ export const erpSeller = pgTable(
   ],
 );
 
+/** Carriers (partners flagged as carrier in the ERP): code, display name and active flag only (D-C). */
+export const erpCarrier = pgTable('erp_carrier', {
+  code: integer('code').primaryKey(),
+  name: text('name').notNull(),
+  active: boolean('active').notNull(),
+  ...mirrorColumns(),
+});
+
 /**
  * Official ERP user -> seller relation (TSIUSU.CODUSU / CODVEND), the ONLY user data mirrored: no name, e-mail, credential or
  * permission column exists. Read by the identity module to provision and reconcile seller accounts; never exposed by an endpoint.

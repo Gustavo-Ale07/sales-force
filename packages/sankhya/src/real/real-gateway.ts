@@ -57,6 +57,7 @@ import {
   RowReader,
   SELLER_SPEC,
   DIRECTORY_USER_SPEC,
+  CARRIER_SPEC,
   compareKeys,
   type EntitySpec,
 } from './mapping.js';
@@ -169,6 +170,9 @@ export class RealSankhyaGateway implements SankhyaGateway {
   }
   readDirectoryUsers(options?: ReadOptions) {
     return this.#paged(DIRECTORY_USER_SPEC, options);
+  }
+  readCarriers(options?: ReadOptions) {
+    return this.#paged(CARRIER_SPEC, options);
   }
   readCustomers(options?: ReadOptions) {
     return this.#paged(CUSTOMER_SPEC, options);

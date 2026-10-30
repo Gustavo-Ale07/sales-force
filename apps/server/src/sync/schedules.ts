@@ -39,9 +39,9 @@ export function mirrorSchedulesFromSettings(settings: MirrorScheduleSettings): M
     // Full mirror off: only the login directory may still run, and only sellers + directoryUsers (never customers, products or prices).
     if (settings.AUTH_DIRECTORY_SYNC_ENABLED === true) {
       const cron = settings.AUTH_DIRECTORY_SYNC_CRON ?? DEFAULT_MIRROR_CRONS.sellers;
-      return { sellers: cron, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: cron };
+      return { sellers: cron, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: cron, carriers: null };
     }
-    return { sellers: null, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: null };
+    return { sellers: null, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: null, carriers: null };
   }
   return {
     sellers: settings.SYNC_CRON_SELLERS,
@@ -53,5 +53,7 @@ export function mirrorSchedulesFromSettings(settings: MirrorScheduleSettings): M
     listPrices: settings.SYNC_CRON_PRICES,
     // The user -> seller relation moves with the seller list: one knob.
     directoryUsers: settings.SYNC_CRON_SELLERS,
+    // Carriers are partners flagged in the same registry as customers: they move with that knob.
+    carriers: settings.SYNC_CRON_CUSTOMERS,
   };
 }

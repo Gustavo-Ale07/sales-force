@@ -196,3 +196,66 @@ describe('negotiation types are only the sellable ones', () => {
     }
   });
 });
+
+describe('order carrier (D-C)', () => {
+  const activeCarrier = dataset.carriers.find((c) => c.active) as { code: number; name: string };
+  const inactiveCarrier = dataset.carriers.find((c) => !c.active) as { code: number };
+
+  it('GET /carriers lists the active mirrored carriers by name, code and name only', async () => {
+    const result = await app.call('seller1', 'GET', '/carriers');
+    expect(result.status).toBe(200);
+    const expected = dataset.carriers
+      .filter((c) => c.active)
+      .map((c) => ({ code: c.code, name: c.name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    expect(result.body.items).toEqual(expected);
+    expect(result.body.items.map((c: Json) => c.code)).not.toContain(inactiveCarrier.code);
+  });
+
+  it('is optional: an order without a carrier reads carrierCode null', async () => {
+    const created = await create();
+    expect(created.status).toBe(201);
+    expect(created.body.carrierCode).toBeNull();
+  });
+
+  it('stores a valid carrier, exposes it in detail and list, and refuses an unknown or inactive one', async () => {
+    const created = await create({ carrierCode: activeCarrier.code });
+    expect(created.status).toBe(201);
+    expect(created.body.carrierCode).toBe(activeCarrier.code);
+    const listed = await app.call('seller1', 'GET', '/orders?pageSize=100');
+    expect(listed.body.items.find((o: Json) => o.id === created.body.id).carrierCode).toBe(activeCarrier.code);
+
+    for (const code of [987654, inactiveCarrier.code]) {
+      const refused = await create({ carrierCode: code });
+      expect(refused.status).toBe(400);
+      expect(refused.body.details.issues).toEqual([{ path: 'carrierCode', code: 'carrier_unknown' }]);
+    }
+  });
+
+  it('replace keeps the carrier when omitted, clears it with null and changes it with a valid code', async () => {
+    const created = await create({ carrierCode: activeCarrier.code });
+    const kept = await app.call('seller1', 'PUT', `/orders/${created.body.id}`, replaceBody({}, created.body.version));
+    expect(kept.body.carrierCode).toBe(activeCarrier.code);
+    const cleared = await app.call('seller1', 'PUT', `/orders/${created.body.id}`, replaceBody({ carrierCode: null }, kept.body.version));
+    expect(cleared.body.carrierCode).toBeNull();
+    const refused = await app.call('seller1', 'PUT', `/orders/${created.body.id}`, replaceBody({ carrierCode: 987654 }, cleared.body.version));
+    expect(refused.status).toBe(400);
+  });
+
+  it('a different carrier under the same clientRequestId conflicts; the same request replays', async () => {
+    const request = body({ carrierCode: activeCarrier.code });
+    const first = await app.call('seller1', 'POST', '/orders', request);
+    const replay = await app.call('seller1', 'POST', '/orders', request);
+    expect(first.status).toBe(201);
+    expect(replay.status).toBe(200);
+    const other = await app.call('seller1', 'POST', '/orders', { ...request, carrierCode: undefined });
+    expect(other.status).toBe(409);
+  });
+
+  it('duplicate as order keeps the quotation carrier', async () => {
+    const quotation = await create({ topCode: 1000, carrierCode: activeCarrier.code });
+    const result = await duplicate(quotation.body.id);
+    expect(result.status).toBe(201);
+    expect(result.body.order.carrierCode).toBe(activeCarrier.code);
+  });
+});

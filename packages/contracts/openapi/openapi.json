@@ -799,6 +799,47 @@
         }
       }
     },
+    "/carriers": {
+      "get": {
+        "operationId": "listCarriers",
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Active carriers (transportadoras) mirrored from Sankhya, ordered by name",
+        "responses": {
+          "200": {
+            "description": "Transportadoras ativas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarriersResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/products": {
       "get": {
         "operationId": "listProducts",
@@ -3049,6 +3090,38 @@
         ],
         "additionalProperties": false
       },
+      "Carrier": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "CarriersResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Carrier"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
       "ConfigurationResponse": {
         "type": "object",
         "properties": {
@@ -3454,6 +3527,17 @@
             "minimum": 0
           },
           "topCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "carrierCode": {
             "anyOf": [
               {
                 "type": "integer",
@@ -4564,6 +4648,17 @@
               }
             ]
           },
+          "carrierCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "estimatedTotal": {
             "$ref": "#/components/schemas/DecimalString"
           },
@@ -4664,6 +4759,7 @@
           "sellerCode",
           "status",
           "topCode",
+          "carrierCode",
           "estimatedTotal",
           "itemCount",
           "isPartial",
@@ -5037,6 +5133,17 @@
               }
             ]
           },
+          "carrierCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "estimatedTotal": {
             "$ref": "#/components/schemas/DecimalString"
           },
@@ -5093,6 +5200,7 @@
           "sellerCode",
           "status",
           "topCode",
+          "carrierCode",
           "estimatedTotal",
           "itemCount",
           "itemPreview",
@@ -5837,6 +5945,17 @@
             "minimum": 0
           },
           "topCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "carrierCode": {
             "anyOf": [
               {
                 "type": "integer",

@@ -79,6 +79,15 @@ export const ProductGroupsResponseSchema = named(
 );
 export type ProductGroupsResponse = z.infer<typeof ProductGroupsResponseSchema>;
 
+/* ---------- carriers ---------- */
+
+/** An active carrier (transportadora) the seller may choose on an order (D-C). Code and name only. */
+export const CarrierSchema = named('Carrier', z.object({ code: codeInt(), name: z.string() }));
+export type Carrier = z.infer<typeof CarrierSchema>;
+
+export const CarriersResponseSchema = named('CarriersResponse', z.object({ items: z.array(CarrierSchema) }));
+export type CarriersResponse = z.infer<typeof CarriersResponseSchema>;
+
 /* ---------- products ---------- */
 
 export const ProductSortSchema = named(

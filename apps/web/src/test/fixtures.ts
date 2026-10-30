@@ -125,6 +125,7 @@ export function orderListItem(overrides: Partial<ApiSchema<"OrderListItem">> = {
     sellerCode: 7,
     status: "draft",
     topCode: null,
+    carrierCode: null,
     estimatedTotal: "25",
     itemCount: 1,
     itemPreview: ["Cabo flexível 2,5 mm"],

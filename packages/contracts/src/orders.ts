@@ -69,6 +69,7 @@ export const DraftIssueCodeSchema = named(
     'product_not_sellable',
     'negotiation_type_not_configured',
     'order_top_not_eligible',
+    'carrier_unknown',
     'order_total_mismatch',
     'order_total_out_of_range',
   ]),
@@ -137,6 +138,8 @@ export const OrderListItemSchema = named(
     status: OrderStatusSchema,
     /** TOP the order carries (D-A): the eligible order TOP or the quotation TOP. `null` on drafts saved before it existed. */
     topCode: codeInt().nullable(),
+    /** Optional carrier chosen on the order (D-C), or `null`. */
+    carrierCode: codeInt().nullable(),
     /** Estimate from list prices; the final value is calculated by the ERP. */
     estimatedTotal: DecimalStringSchema,
     itemCount: z.number().int().min(0),
@@ -281,6 +284,11 @@ const orderDraftFields = {
    * Must be one of the installation's eligible TOPs; otherwise 400 `validation_failed` with issue `order_top_not_eligible`.
    */
   topCode: codeInt().nullable().optional(),
+  /**
+   * Optional carrier (D-C): a code from `GET /carriers`; omitted keeps the current one on replace, `null` clears it. An unknown or
+   * inactive code answers 400 `validation_failed` with issue `carrier_unknown`.
+   */
+  carrierCode: codeInt().nullable().optional(),
   negotiationTypeCode: codeInt().nullable(),
   notes: z.string().max(2000).nullable(),
   items: z.array(OrderItemInputSchema).max(MAX_ORDER_ITEMS),

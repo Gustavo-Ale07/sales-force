@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   MAX_PRODUCT_RESOLUTION_CANDIDATES,
   type ProductDetail,
+  type CarriersResponse,
   type ProductGroupsResponse,
   type ProductImage,
   type ProductListItem,
@@ -77,6 +78,12 @@ export class CatalogService {
     const { configuration } = await this.policy.accessContext(user);
     const groups = await this.mirror.listProductGroups(configuration.products.showInactive);
     return { items: groups.map((group) => ({ code: group.code, name: group.name ?? `Grupo ${group.code}` })) };
+  }
+
+  async listCarriers(user: CurrentUser): Promise<CarriersResponse> {
+    // Same access gate as the rest of the catalog reads: the context resolves the actor and the active configuration.
+    await this.policy.accessContext(user);
+    return { items: await this.mirror.listCarriers() };
   }
 
   private async bookFor(context: AccessContext, customerCode: number | undefined): Promise<PriceBook> {

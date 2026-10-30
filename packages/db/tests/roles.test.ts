@@ -25,7 +25,7 @@ const ALL_PRIVS: Priv[] = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', '
 const S: Priv[] = ['SELECT'];
 const SIU: Priv[] = ['SELECT', 'INSERT', 'UPDATE'];
 const SIUD: Priv[] = ['SELECT', 'INSERT', 'UPDATE', 'DELETE'];
-const MIRROR = ['erp_seller', 'erp_directory_user', 'erp_customer', 'erp_product', 'erp_price_table', 'erp_price_table_version', 'erp_list_price'];
+const MIRROR = ['erp_seller', 'erp_directory_user', 'erp_carrier', 'erp_customer', 'erp_product', 'erp_price_table', 'erp_price_table_version', 'erp_list_price'];
 
 /** The matrix documented in db-roles.sql. A table absent here must have no api/worker privilege at all. */
 const EXPECTED: Record<string, { api: Priv[]; worker: Priv[] }> = {

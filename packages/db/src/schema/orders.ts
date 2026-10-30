@@ -63,6 +63,8 @@ export const salesOrder = pgTable(
     topCode: integer('top_code'),
     /** Quotation this order was duplicated from ("Duplicar como pedido"); traceability only, no state depends on it. */
     sourceOrderId: uuid('source_order_id'),
+    /** Optional carrier chosen on the order (D-C); validated against the carrier mirror, no FK (mirror rows are soft-deleted). */
+    carrierCode: integer('carrier_code'),
     notes: text('notes'),
     /** Estimate from list prices only (sum of priced lines); the ERP computes the final value. */
     estimatedTotal: numeric('estimated_total', { precision: 14, scale: 2 }).notNull().default('0'),

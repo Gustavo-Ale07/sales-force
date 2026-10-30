@@ -109,6 +109,7 @@ describe('OpenAPI generation', () => {
       'quantity',
     ]);
     expect(Object.keys(schemas['CreateOrderRequest']?.properties ?? {}).sort()).toEqual([
+      'carrierCode',
       'clientRequestId',
       'customerCode',
       'expectedDataset',

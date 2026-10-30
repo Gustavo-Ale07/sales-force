@@ -6,6 +6,7 @@ import {
   erpPriceTableVersion,
   erpProduct,
   erpSeller,
+  erpCarrier,
   type Database,
 } from '@salesforce/db';
 import type { CustomerScope, PriceTableVersion } from '@salesforce/domain';
@@ -480,6 +481,26 @@ export class MirrorRepository {
       .select(this.productSelectFields())
       .from(erpProduct)
       .where(and(isNull(erpProduct.deletedAt), inArray(erpProduct.code, usable)));
+  }
+
+  /** Active carriers, ordered by name (D-C). Code and name only. */
+  async listCarriers(): Promise<{ code: number; name: string }[]> {
+    return this.db
+      .select({ code: erpCarrier.code, name: erpCarrier.name })
+      .from(erpCarrier)
+      .where(and(isNull(erpCarrier.deletedAt), eq(erpCarrier.active, true)))
+      .orderBy(asc(erpCarrier.name), asc(erpCarrier.code));
+  }
+
+  /** Whether the code is an active, not-deleted mirrored carrier (validation of the order carrier). */
+  async carrierIsActive(code: number): Promise<boolean> {
+    if (!fitsPgInt(code)) return false;
+    const rows = await this.db
+      .select({ code: erpCarrier.code })
+      .from(erpCarrier)
+      .where(and(eq(erpCarrier.code, code), isNull(erpCarrier.deletedAt), eq(erpCarrier.active, true)))
+      .limit(1);
+    return rows.length > 0;
   }
 
   async listProductGroups(showInactive: boolean): Promise<{ code: number; name: string | null }[]> {

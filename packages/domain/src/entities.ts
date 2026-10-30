@@ -29,6 +29,16 @@ export interface DirectoryUser {
   readonly sellerCode: number | null;
 }
 
+/**
+ * A carrier (transportadora) mirrored from the ERP partner registry. Only the code, a display name and the active flag:
+ * no document number or other personal data.
+ */
+export interface Carrier {
+  readonly code: number;
+  readonly name: string;
+  readonly active: boolean;
+}
+
 export interface Customer {
   readonly code: number;
   readonly name: string;

@@ -33,6 +33,7 @@ const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>
   listCustomers: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   getCustomer: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   listProductGroups: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  listCarriers: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   listProducts: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   getProduct: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   getProductImage: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },

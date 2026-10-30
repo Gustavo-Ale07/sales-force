@@ -1,13 +1,14 @@
 import {
   erpCustomer,
   erpDirectoryUser,
+  erpCarrier,
   erpListPrice,
   erpPriceTable,
   erpPriceTableVersion,
   erpProduct,
   erpSeller,
 } from '@salesforce/db';
-import type { Customer, DirectoryUser, ListPrice, PriceTable, PriceTableVersion, Product, Seller } from '@salesforce/domain';
+import type { Carrier, Customer, DirectoryUser, ListPrice, PriceTable, PriceTableVersion, Product, Seller } from '@salesforce/domain';
 import {
   SankhyaGatewayError,
   type GatewayDescription,
@@ -36,6 +37,7 @@ export const MIRROR_ENTITIES = [
   'listPrices',
   // Appended last: the entity lock key is the position in this list (never reorder).
   'directoryUsers',
+  'carriers',
 ] as const satisfies readonly ReadEntity[];
 
 export type MirrorEntity = (typeof MIRROR_ENTITIES)[number];
@@ -312,6 +314,19 @@ const directoryUsers: MirrorEntitySpec = {
     })),
 };
 
+/** Carriers (transportadoras): the optional carrier of an order is validated against this mirror (D-C). */
+const carriers: MirrorEntitySpec = {
+  entity: 'carriers',
+  requires: ['carriers'],
+  table: erpCarrier,
+  keyProps: ['code'],
+  read: (context) =>
+    mapped<Carrier>(context.gateway.readCarriers(readOptions(context)), (row) => ({
+      key: [keyColumn('carriers', 'code', row.code)],
+      content: { name: row.name, active: row.active },
+    })),
+};
+
 export const MIRROR_SPECS: Readonly<Record<MirrorEntity, MirrorEntitySpec>> = {
   sellers,
   customers,
@@ -320,4 +335,5 @@ export const MIRROR_SPECS: Readonly<Record<MirrorEntity, MirrorEntitySpec>> = {
   priceTableVersions,
   listPrices,
   directoryUsers,
+  carriers,
 };

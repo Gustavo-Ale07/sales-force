@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { erpCustomer, erpListPrice, erpPriceTable, erpPriceTableVersion, erpProduct, erpSeller, type DbHandle } from '@salesforce/db';
+import { erpCarrier, erpCustomer, erpListPrice, erpPriceTable, erpPriceTableVersion, erpProduct, erpSeller, type DbHandle } from '@salesforce/db';
 import type { InstallationConfiguration } from '@salesforce/domain';
 import { DEMO_ACCOUNTS, DEMO_CONFIGURATION, getDemoDataset } from '@salesforce/sankhya';
 import { InstallationConfigurationRepository } from '../../src/configuration/configuration.repository.js';
@@ -28,6 +28,9 @@ export async function seedDemoMirror(handle: DbHandle, syncedAt: Date = new Date
 
   await inChunks(dataset.sellers, (chunk) =>
     db.insert(erpSeller).values(chunk.map((s) => ({ code: s.code, name: s.name, active: s.active, ...base(s) }))),
+  );
+  await inChunks(dataset.carriers, (chunk) =>
+    db.insert(erpCarrier).values(chunk.map((c) => ({ code: c.code, name: c.name, active: c.active, ...base(c) }))),
   );
   await inChunks(dataset.customers, (chunk) =>
     db.insert(erpCustomer).values(

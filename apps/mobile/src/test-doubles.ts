@@ -108,6 +108,7 @@ export function orderDetail(overrides: Partial<OrderDetail> = {}): OrderDetail {
     sellerCode: 7,
     status: "draft",
     topCode: null,
+    carrierCode: null,
     estimatedTotal: "0.00",
     itemCount: 0,
     isPartial: false,

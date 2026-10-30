@@ -10,6 +10,7 @@ import type {
   Seller,
   Customer,
   DirectoryUser,
+  Carrier,
 } from '@salesforce/domain';
 import type { SankhyaProductMediaPort } from './media.js';
 import type { ReadScope } from './read-scope.js';
@@ -27,6 +28,7 @@ export type ReadEntity =
   | 'configuration'
   | 'sellers'
   | 'directoryUsers'
+  | 'carriers'
   | 'customers'
   | 'products'
   | 'productGroups'
@@ -38,6 +40,7 @@ export const READ_ENTITIES: readonly ReadEntity[] = [
   'configuration',
   'sellers',
   'directoryUsers',
+  'carriers',
   'customers',
   'products',
   'productGroups',
@@ -89,6 +92,8 @@ export interface SankhyaReadPort {
   readSellers(options?: ReadOptions): Snapshot<Seller>;
   /** Ordered by `DirectoryUser.code`. Only the user code and its official seller relation: never names, e-mails or credentials. */
   readDirectoryUsers(options?: ReadOptions): Snapshot<DirectoryUser>;
+  /** Ordered by `Carrier.code`. Partners flagged as carriers: code, name and active flag only. */
+  readCarriers(options?: ReadOptions): Snapshot<Carrier>;
   /** Ordered by `Customer.code`. */
   readCustomers(options?: ReadOptions): Snapshot<Customer>;
   /** Ordered by `Product.code`. */

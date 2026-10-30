@@ -180,6 +180,7 @@ export class OrdersService {
     const customer = await this.customers.requireVisible(context.scope, body.customerCode);
     assertCustomerEligible(customer);
     const topCode = this.resolveTop(context.configuration, body.topCode);
+    const carrierCode = (await this.resolveCarrier(body.carrierCode)) ?? null;
     const draft = await this.buildValid(context, customer, body);
     const at = this.clock();
 
@@ -195,6 +196,7 @@ export class OrdersService {
           status: 'draft',
           negotiationTypeCode: body.negotiationTypeCode,
           topCode,
+          carrierCode,
           sourceOrderId: hooks.sourceOrderId ?? null,
           notes: body.notes,
           estimatedTotal: draft.totals.estimatedTotal,
@@ -386,6 +388,7 @@ export class OrdersService {
         expectedDataset: body.expectedDataset,
         customerCode: customer.code,
         topCode: targetTop,
+        carrierCode: source.carrierCode !== null && (await this.mirror.carrierIsActive(source.carrierCode)) ? source.carrierCode : null,
         negotiationTypeCode,
         notes: source.notes,
         items: usable.map((line) => {
@@ -412,6 +415,17 @@ export class OrdersService {
       },
     );
     return { result: { order, skippedLines: presentSkips(user.role, skipped) }, replayed };
+  }
+
+  /**
+   * The optional carrier (D-C): `undefined` = not named (keep/none), `null` = none, a code must be an active mirrored carrier.
+   */
+  private async resolveCarrier(requested: number | null | undefined): Promise<number | null | undefined> {
+    if (requested === undefined || requested === null) return requested;
+    if (!(await this.mirror.carrierIsActive(requested))) {
+      throw new AppError('validation_failed', { details: { issues: [{ path: 'carrierCode', code: 'carrier_unknown' }] } });
+    }
+    return requested;
   }
 
   /** The TOP an order is stored with: server-side eligibility (D-A), never the client's word. */
@@ -447,6 +461,7 @@ export class OrdersService {
     assertCustomerEligible(customer);
     // No TOP in the request keeps the order's current one; a named TOP must be eligible.
     const requestedTop = body.topCode === undefined ? undefined : this.resolveTop(context.configuration, body.topCode);
+    const requestedCarrier = await this.resolveCarrier(body.carrierCode);
     const draft = await this.buildValid(context, customer, body);
     const at = this.clock();
 
@@ -471,6 +486,7 @@ export class OrdersService {
           sellerCode: customer.sellerCode,
           negotiationTypeCode: body.negotiationTypeCode,
           topCode: requestedTop === undefined ? locked.topCode : requestedTop,
+          carrierCode: requestedCarrier === undefined ? locked.carrierCode : requestedCarrier,
           notes: body.notes,
           estimatedTotal: draft.totals.estimatedTotal,
           status: statusAfterEdit(locked.status as Parameters<typeof statusAfterEdit>[0]),
