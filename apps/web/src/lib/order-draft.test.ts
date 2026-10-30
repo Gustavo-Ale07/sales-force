@@ -32,6 +32,13 @@ describe("parseQuantityInput", () => {
     ["2", "2"],
     ["2,5", "2.5"],
     ["0,0001", "0.0001"],
+    ["0.0001", "0.0001"],
+    ["0,2", "0.2"],
+    ["0.2", "0.2"],
+    ["1,5", "1.5"],
+    ["1.5", "1.5"],
+    [" 1.0 ", "1"],
+    ["12,3456", "12.3456"],
   ])("accepts %s", (text, value) => {
     expect(parseQuantityInput(text)).toEqual({ ok: true, value });
   });
@@ -39,8 +46,11 @@ describe("parseQuantityInput", () => {
   it.each([
     ["", "empty"],
     ["  ", "empty"],
-    ["2.5", "dot_separator"],
     ["abc", "not_a_decimal"],
+    ["1.234,5", "not_a_decimal"],
+    ["1,2,3", "not_a_decimal"],
+    ["1..5", "not_a_decimal"],
+    ["1.00001", "too_many_decimals"],
     ["0", "not_positive"],
     ["1,00001", "too_many_decimals"],
   ])("rejects %j as %s", (text, problem) => {
@@ -170,6 +180,18 @@ describe("summarizeCart", () => {
       { unit: "UN", quantity: "4" },
       { unit: "KG", quantity: "3" },
     ]);
+  });
+
+  it("adds 0.2 steps without floating point error and prices them in decimal (laminated plates by pack)", () => {
+    const priced = { state: "priced" as const, unitPrice: "10", tableCode: 5, versionId: 9 };
+    const lines = [
+      line({ key: "a", quantityText: "0,2", unit: "PT", price: priced }),
+      line({ key: "b", productCode: 2, quantityText: "0.2", unit: "PT", price: priced }),
+      line({ key: "c", productCode: 3, quantityText: "0,0001", unit: "PT", price: priced }),
+    ];
+    const preview = previewDraft(lines);
+    expect(summarizeCart(lines, preview.lines).quantities).toEqual([{ unit: "PT", quantity: "0.4001" }]);
+    expect(preview.totals.estimatedTotal).toBe("4.00");
   });
 
   it("is empty for an empty cart", () => {

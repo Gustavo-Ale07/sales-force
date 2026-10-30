@@ -275,10 +275,28 @@ describe("Novo pedido", () => {
 
     const quantity = screen.getByLabelText("Quantidade de Balão látex 9 pol. vermelho");
     await user.clear(quantity);
-    await user.type(quantity, "2.5");
-    expect(await screen.findByText("Use vírgula como separador decimal.")).toBeInTheDocument();
+    await user.type(quantity, "2.5.1");
+    expect(await screen.findByText("Quantidade inválida.")).toBeInTheDocument();
     expect(quantity).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByRole("button", { name: "Salvar rascunho" })).toBeDisabled();
+  });
+
+  it("accepts decimal quantities with a comma or a dot (0,2 pack steps) and sends them as decimal strings", async () => {
+    const { user, calls } = renderApp("/pedidos/novo?customer=1001", {
+      handlers: newOrderHandlers({ "POST /orders": { status: 201, body: orderDetail() } }),
+    });
+    await addProduct(user, "Balão");
+    const quantity = screen.getByLabelText("Quantidade de Balão látex 9 pol. vermelho");
+    for (const typed of ["1,5", "0,0001", "0.0001"]) {
+      await user.clear(quantity);
+      await user.type(quantity, typed);
+      expect(quantity).not.toHaveAttribute("aria-invalid");
+    }
+    await user.clear(quantity);
+    await user.type(quantity, "0.2");
+    await user.click(screen.getByRole("button", { name: "Salvar rascunho" }));
+    await waitFor(() => expect(callsTo(calls, "POST", "/orders")).toHaveLength(1));
+    expect(callsTo(calls, "POST", "/orders")[0]?.body).toMatchObject({ items: [{ productCode: 2001, quantity: "0.2" }] });
   });
 
   describe("Produtos | Carrinho", () => {
@@ -319,9 +337,9 @@ describe("Novo pedido", () => {
     it("refuses an invalid quantity in the table without adding the product", async () => {
       const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: groupHandlers() });
       const quantity = await screen.findByLabelText("Quantidade de Balão látex 9 pol. vermelho a adicionar");
-      await user.type(quantity, "2.5");
+      await user.type(quantity, "2,5,1");
       await user.click(screen.getByRole("button", { name: /^Adicionar .*Balão/ }));
-      expect(await screen.findByText("Use vírgula como separador decimal.")).toBeInTheDocument();
+      expect(await screen.findByText("Quantidade inválida.")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Carrinho (0)" })).toBeInTheDocument();
     });
 

@@ -47,15 +47,18 @@ export interface EditorLine {
   image?: ApiSchema<"ProductImage"> | null;
 }
 
-export type QuantityProblem = "empty" | DecimalError | "dot_separator";
+export type QuantityProblem = "empty" | DecimalError;
 
 export type QuantityParse = { ok: true; value: string } | { ok: false; problem: QuantityProblem };
 
-/** A pt-BR quantity ("2,5") becomes a decimal string ("2.5") validated by the domain (positive, at most 4 decimals). */
+/**
+ * A quantity typed with a comma ("2,5") or a dot ("2.5") becomes a decimal string ("2.5") validated by the domain (positive, at most
+ * 4 decimals, P4). There is no thousands separator: a text with more than one separator ("1.234,5") is not a number.
+ */
 export function parseQuantityInput(text: string): QuantityParse {
   const trimmed = text.trim();
   if (trimmed === "") return { ok: false, problem: "empty" };
-  if (trimmed.includes(".")) return { ok: false, problem: "dot_separator" };
+  if (/[.,].*[.,]/.test(trimmed)) return { ok: false, problem: "not_a_decimal" };
   const result = validateQuantity(trimmed.replace(",", "."));
   return result.ok ? { ok: true, value: result.value } : { ok: false, problem: result.error };
 }
@@ -89,7 +92,6 @@ export function discountTextOf(percent: string): string {
 
 export const quantityProblemMessages: Record<QuantityProblem, string> = {
   empty: "Informe a quantidade.",
-  dot_separator: "Use vírgula como separador decimal.",
   not_a_decimal: "Quantidade inválida.",
   not_positive: "A quantidade deve ser maior que zero.",
   negative: "A quantidade deve ser maior que zero.",

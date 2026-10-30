@@ -52,8 +52,8 @@ describe("parseBulkEntry", () => {
   });
 
   it("keeps invalid quantities as row problems instead of dropping them", () => {
-    const result = parseBulkEntry("2001;0\n2002;2.5\n2003;abc\n2004;");
-    expect(result.ok && result.rows.map((row) => row.problem)).toEqual(["not_positive", "dot_separator", "not_a_decimal", "empty"]);
+    const result = parseBulkEntry("2001;0\n2002;1.2.5\n2003;abc\n2004;");
+    expect(result.ok && result.rows.map((row) => row.problem)).toEqual(["not_positive", "not_a_decimal", "not_a_decimal", "empty"]);
   });
 
   it("flags an identifier longer than the API accepts", () => {
