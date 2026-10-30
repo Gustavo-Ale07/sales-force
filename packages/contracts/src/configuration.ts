@@ -85,13 +85,52 @@ export const AlternativeTableSchema = named(
   }),
 );
 
-const SourceSchema =z.strictObject({
+const SourceSchema = z.strictObject({
   kind: ConfigurationSourceKindSchema,
   version: z.string().min(1).max(200),
   syncedAt: IsoTimestampSchema,
+  /** CFG-8: the bootstrap file overlaid by a `sankhya` snapshot. */
+  base: z
+    .strictObject({ kind: z.literal('bootstrap-file'), version: z.string().min(1).max(200) })
+    .optional(),
+});
+
+/** CFG-8: origin of one bridge key: the Sankhya table/column read, or the bootstrap base file. */
+export const ConfigurationProvenanceEntrySchema = named(
+  'ConfigurationProvenanceEntry',
+  z.union([
+    z.strictObject({
+      table: z.string().min(1).max(60),
+      column: z.string().min(1).max(60),
+      filter: z.string().min(1).max(200).optional(),
+      readAt: IsoTimestampSchema,
+    }),
+    z.strictObject({ source: z.literal('base') }),
+  ]),
+);
+export type ConfigurationProvenanceEntry = z.infer<typeof ConfigurationProvenanceEntrySchema>;
+
+const ProvenanceSchema = z.record(z.string().min(1).max(100), ConfigurationProvenanceEntrySchema);
+
+export const OrderStatusDisplaySchema = named(
+  'OrderStatusDisplay',
+  z.strictObject({
+    code: z.string().min(1).max(20),
+    label: z.string().min(1).max(200),
+    color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+    canEdit: z.boolean(),
+    canDuplicate: z.boolean(),
+    canDelete: z.boolean(),
+  }),
+);
+export type OrderStatusDisplay = z.infer<typeof OrderStatusDisplaySchema>;
+
+const ErpSchema = z.strictObject({
+  orderStatusDisplay: z.array(OrderStatusDisplaySchema).optional(),
 });
 
 const GeneralSchema = z.strictObject({
+  appMinimumVersion: z.string().min(1).max(50).optional(),
   enabled: z.boolean(),
   enabledCompanyCodes: z.array(codeInt()),
   defaultCompanyCode: codeInt().nullable().optional(),
@@ -146,7 +185,15 @@ const SalesSchema = z.strictObject({
   quotationTopCode: codeInt().nullable(),
   defaultNegotiationTypeCode: codeInt().nullable(),
   negotiationTypes: z.array(NegotiationTypeSchema),
-  orderBehavior: z.strictObject({ allowDraftWithoutPrice: z.boolean() }),
+  orderBehavior: z.strictObject({
+    allowDraftWithoutPrice: z.boolean(),
+    decimalQuantities: z.boolean().optional(),
+  }),
+  /** CFG-8 bridge keys, all optional. */
+  topAllowlist: z.array(codeInt()).optional(),
+  negotiationTypeExclusions: z.array(codeInt()).optional(),
+  quoteTopCodes: z.array(codeInt()).optional(),
+  skipConfirmationTopCodes: z.array(codeInt()).optional(),
   confirmationBehavior: ConfirmationBehaviorSchema,
   /** Absent = discount authority not configured: discounts are refused (fail closed). Not sent to clients. */
   discountAuthority: DiscountAuthorityConfigurationSchema.optional(),
@@ -162,6 +209,8 @@ const CustomersSchema = z.strictObject({
   accountSellerLinks: z.array(AccountSellerLinkSchema),
   customerWithoutPriceTable: CustomerWithoutPriceTablePolicySchema,
   creditFeatures: z.strictObject({ showCreditLimit: z.boolean() }),
+  historyDays: z.number().int().min(0).max(3650).optional(),
+  purchasedWindowDays: z.number().int().min(0).max(3650).optional(),
 });
 
 const ProductsSchema = z.strictObject({
@@ -197,6 +246,8 @@ export const FeatureFlagsSchema = named(
 const InstallationConfigurationShape = z.strictObject({
   schemaVersion: z.literal(1),
   source: SourceSchema,
+  provenance: ProvenanceSchema.optional(),
+  erp: ErpSchema.optional(),
   general: GeneralSchema,
   sales: SalesSchema,
   customers: CustomersSchema,
@@ -205,6 +256,31 @@ const InstallationConfigurationShape = z.strictObject({
   financial: FinancialSchema,
   features: FeatureFlagsSchema,
 });
+
+/**
+ * Pure view of a snapshot for content hashing (CFG-8): drops `source.syncedAt` and every
+ * `provenance[*].readAt`, so re-reading unchanged configuration never looks like a change.
+ * The server canonicalizes (sorted keys) and hashes this view. Does not mutate the input.
+ */
+export function configurationHashView(configuration: InstallationConfiguration): unknown {
+  const { source, provenance, ...rest } = configuration;
+  const stableSource: Record<string, unknown> = { ...source };
+  delete stableSource['syncedAt'];
+  const view: Record<string, unknown> = { ...rest, source: stableSource };
+  if (provenance !== undefined) {
+    view['provenance'] = Object.fromEntries(
+      Object.entries(provenance).map(([key, entry]) => {
+        if ('readAt' in entry) {
+          const stable: Record<string, unknown> = { ...entry };
+          delete stable['readAt'];
+          return [key, stable];
+        }
+        return [key, entry];
+      }),
+    );
+  }
+  return view;
+}
 
 /**
  * The full snapshot as stored and as loaded from a bootstrap file. It includes account e-mails

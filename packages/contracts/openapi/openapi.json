@@ -3193,6 +3193,25 @@
               },
               "syncedAt": {
                 "$ref": "#/components/schemas/IsoTimestamp"
+              },
+              "base": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "bootstrap-file"
+                  },
+                  "version": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "kind",
+                  "version"
+                ],
+                "additionalProperties": false
               }
             },
             "required": [
@@ -3205,6 +3224,11 @@
           "general": {
             "type": "object",
             "properties": {
+              "appMinimumVersion": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 50
+              },
               "enabled": {
                 "type": "boolean"
               },
@@ -3301,12 +3325,43 @@
                 "properties": {
                   "allowDraftWithoutPrice": {
                     "type": "boolean"
+                  },
+                  "decimalQuantities": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
                   "allowDraftWithoutPrice"
                 ],
                 "additionalProperties": false
+              },
+              "topAllowlist": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "negotiationTypeExclusions": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "quoteTopCodes": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "skipConfirmationTopCodes": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                }
               },
               "confirmationBehavior": {
                 "$ref": "#/components/schemas/ConfirmationBehavior"
@@ -3355,6 +3410,16 @@
                   "showCreditLimit"
                 ],
                 "additionalProperties": false
+              },
+              "historyDays": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 3650
+              },
+              "purchasedWindowDays": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 3650
               },
               "accountSellerLinkCount": {
                 "type": "integer",

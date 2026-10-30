@@ -112,14 +112,43 @@ export const PROVISIONAL_DISCOUNT_AUTHORITY: DiscountAuthorityConfiguration = {
 export const KNOWN_FEATURE_FLAGS = ['demoMetrics'] as const;
 export type KnownFeatureFlag = (typeof KNOWN_FEATURE_FLAGS)[number];
 
+/** CFG-8: where a bridge key was read from in Sankhya, or that it still comes from the base file. */
+export type ConfigurationProvenanceEntry =
+  | {
+      readonly table: string;
+      readonly column: string;
+      readonly filter?: string;
+      readonly readAt: IsoTimestamp;
+    }
+  | { readonly source: 'base' };
+
+/** CFG-8: display and permission of an ERP order status (read from Sankhya). */
+export interface OrderStatusDisplay {
+  readonly code: string;
+  readonly label: string;
+  /** `#RRGGBB`. */
+  readonly color: string;
+  readonly canEdit: boolean;
+  readonly canDuplicate: boolean;
+  readonly canDelete: boolean;
+}
+
 export interface InstallationConfiguration {
   readonly schemaVersion: 1;
   readonly source: {
     readonly kind: ConfigurationSourceKind;
     readonly version: string;
     readonly syncedAt: IsoTimestamp;
+    /** CFG-8: the bootstrap file this snapshot overlays, when `kind` is `sankhya`. */
+    readonly base?: { readonly kind: 'bootstrap-file'; readonly version: string };
+  };
+  /** CFG-8: key path -> origin, for every bridge key actually read. Excluded `readAt` from the content hash. */
+  readonly provenance?: Readonly<Record<string, ConfigurationProvenanceEntry>>;
+  readonly erp?: {
+    readonly orderStatusDisplay?: readonly OrderStatusDisplay[];
   };
   readonly general: {
+    readonly appMinimumVersion?: string;
     readonly enabled: boolean;
     readonly enabledCompanyCodes: readonly number[];
     /** Absent/null = not configured. When set it must be one of `enabledCompanyCodes`. */
@@ -136,7 +165,13 @@ export interface InstallationConfiguration {
     readonly negotiationTypes: readonly NegotiationType[];
     readonly orderBehavior: {
       readonly allowDraftWithoutPrice: boolean;
+      readonly decimalQuantities?: boolean;
     };
+    /** CFG-8 bridge keys (all optional, read from Sankhya). */
+    readonly topAllowlist?: readonly number[];
+    readonly negotiationTypeExclusions?: readonly number[];
+    readonly quoteTopCodes?: readonly number[];
+    readonly skipConfirmationTopCodes?: readonly number[];
     readonly confirmationBehavior: ConfirmationBehavior;
     /** Absent = the provisional 5/15/30 limits apply (Q11, `PROVISIONAL_DISCOUNT_AUTHORITY`). */
     readonly discountAuthority?: DiscountAuthorityConfiguration;
@@ -147,6 +182,8 @@ export interface InstallationConfiguration {
     readonly accountSellerLinks: readonly AccountSellerLink[];
     readonly customerWithoutPriceTable: CustomerWithoutPriceTablePolicy;
     readonly creditFeatures: { readonly showCreditLimit: boolean };
+    readonly historyDays?: number;
+    readonly purchasedWindowDays?: number;
   };
   readonly products: {
     /** Raw usage codes that make an active product sellable. Empty = nothing is sellable. */

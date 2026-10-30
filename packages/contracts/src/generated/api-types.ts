@@ -674,8 +674,14 @@ export interface components {
                 kind: components["schemas"]["ConfigurationSourceKind"];
                 version: string;
                 syncedAt: components["schemas"]["IsoTimestamp"];
+                base?: {
+                    /** @constant */
+                    kind: "bootstrap-file";
+                    version: string;
+                };
             };
             general: {
+                appMinimumVersion?: string;
                 enabled: boolean;
                 enabledCompanyCodes: number[];
                 defaultCompanyCode?: number | null;
@@ -690,7 +696,12 @@ export interface components {
                 negotiationTypes: components["schemas"]["NegotiationType"][];
                 orderBehavior: {
                     allowDraftWithoutPrice: boolean;
+                    decimalQuantities?: boolean;
                 };
+                topAllowlist?: number[];
+                negotiationTypeExclusions?: number[];
+                quoteTopCodes?: number[];
+                skipConfirmationTopCodes?: number[];
                 confirmationBehavior: components["schemas"]["ConfirmationBehavior"];
                 discountAuthorityMode: components["schemas"]["DiscountAuthorityMode"];
             };
@@ -702,6 +713,8 @@ export interface components {
                 creditFeatures: {
                     showCreditLimit: boolean;
                 };
+                historyDays?: number;
+                purchasedWindowDays?: number;
                 accountSellerLinkCount: number;
             };
             products: {
