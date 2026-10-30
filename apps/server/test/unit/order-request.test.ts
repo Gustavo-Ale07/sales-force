@@ -132,3 +132,18 @@ describe('verifyWrittenOrder (D-7)', () => {
     expect(verifyWrittenOrder([{ ...ITEM, discountPercent: '0.00' }], written({ discountPercent: null }))).toEqual({ ok: true });
   });
 });
+
+describe('carrier (D-C, D-8)', () => {
+  it('flows from the order into the frozen header and the write request (CODPARCTRANSP) when set', () => {
+    const header = resolveHeader({ ...ORDER, carrierCode: 1234 }, config());
+    expect(header).toMatchObject({ ok: true, value: { carrierCode: 1234 } });
+    if (!header.ok) return;
+    const built = buildOrderRequest({ ...ORDER, carrierCode: 1234 }, [ITEM], header.value, 'AD_TESTE');
+    expect(built).toMatchObject({ ok: true, value: { carrierCode: 1234 } });
+  });
+
+  it('stays null when the order has no carrier', () => {
+    const header = resolveHeader(ORDER, config());
+    expect(header).toMatchObject({ ok: true, value: { carrierCode: null } });
+  });
+});

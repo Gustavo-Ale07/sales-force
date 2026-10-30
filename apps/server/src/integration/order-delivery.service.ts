@@ -545,9 +545,9 @@ function toDelivery(order: OrderRow): DeliveryOrder {
     customerCode: order.customerCode,
     sellerCode: order.sellerCode,
     negotiationTypeCode: order.negotiationTypeCode,
-    // The order's own TOP (D-A); null falls back to the configured default. The carrier column is not in this branch yet (D-C).
+    // The order's own TOP (D-A); null falls back to the configured default. The carrier (D-C/D-8) travels as CODPARCTRANSP when set.
     topCode: order.topCode,
-    carrierCode: null,
+    carrierCode: order.carrierCode,
     notes: order.notes,
     createdAt: order.createdAt,
   };
