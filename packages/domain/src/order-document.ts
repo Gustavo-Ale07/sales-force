@@ -1,7 +1,7 @@
 import { normalizeDecimalString } from './money.js';
 
 /**
- * Order document (D-J): ONE HTML template with the PLAC brand, shared by web (print / PDF) and mobile (share PDF).
+ * Order document (D-J): ONE HTML template with the installation brand, shared by web (print / PDF) and mobile (share PDF).
  * Pure functions, no DOM, no Node built-ins, no clock. The model carries ONLY what the order screen already shows:
  * never cost, margin, the customer's document, seller, price table or approval details (P-20). `toOrderDocument` is the
  * single allow-list that copies fields; the renderer reads only the model's own fields.
@@ -133,8 +133,10 @@ function safeLogoSrc(src: string | undefined): string | null {
 }
 
 export interface OrderHtmlOptions {
-  /** Absolute URL or data URI of the PLAC logo (data URI on mobile: it works offline). Without it a text wordmark is used. */
+  /** Absolute URL or data URI of the brand logo (data URI on mobile: it works offline). Without it a text wordmark is used. */
   readonly logoSrc?: string;
+  /** Brand name shown as the text wordmark and the logo alt text; supplied by the app (installation configuration), never a literal here. */
+  readonly brandName?: string;
   /** Document title (browser tab / file name). */
   readonly title?: string;
 }
@@ -165,7 +167,8 @@ footer { margin-top: 16px; border-top: 1px solid ${BRAND_RED}; padding-top: 6px;
 
 export function renderOrderHtml(model: OrderDocumentModel, options: OrderHtmlOptions = {}): string {
   const logo = safeLogoSrc(options.logoSrc);
-  const brand = logo === null ? '<div class="wordmark">PLAC<span>.</span></div>' : `<img src="${escapeHtml(logo)}" alt="PLAC">`;
+  const brandName = escapeHtml(options.brandName ?? '');
+  const brand = logo === null ? `<div class="wordmark">${brandName}<span>.</span></div>` : `<img src="${escapeHtml(logo)}" alt="${brandName}">`;
   const forceNumber = model.draftNumber === null ? 'Pedido Force (sem número ainda)' : `Pedido Force nº ${escapeHtml(model.draftNumber)}`;
   const erpLine = model.erpNumber === null ? '' : `<div class="meta">Pedido Sankhya nº ${escapeHtml(model.erpNumber)}</div>`;
   const title = options.title ?? (model.draftNumber === null ? 'Pedido' : `Pedido ${model.draftNumber}`);

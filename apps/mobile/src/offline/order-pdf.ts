@@ -46,7 +46,7 @@ export function orderDocumentOf(draft: DraftRecord, lines: readonly EditorLine[]
 }
 
 export function buildOrderPdfHtml(draft: DraftRecord, lines: readonly EditorLine[], logoSrc: string | null): string {
-  return renderOrderHtml(orderDocumentOf(draft, lines), logoSrc === null ? {} : { logoSrc });
+  return renderOrderHtml(orderDocumentOf(draft, lines), logoSrc === null ? { brandName: 'PLAC' } : { logoSrc, brandName: 'PLAC' });
 }
 
 export type ShareOrderPdfResult = { readonly ok: true } | { readonly ok: false; readonly reason: "empty" | "failed" };

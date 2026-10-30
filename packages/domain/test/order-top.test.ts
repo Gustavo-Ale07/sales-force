@@ -14,11 +14,11 @@ const withSales = (patch: Partial<InstallationConfiguration['sales']>): Installa
   makeConfig((c) => ({ ...c, sales: { ...c.sales, ...patch } }));
 
 describe('order TOP (D-A / D-B)', () => {
-  const config = withSales({ orderTopCode: 1001, quotationTopCode: 1000, eligibleOrderTopCodes: [1001, 1000] });
+  const config = withSales({ orderTopCode: 3001, quotationTopCode: 1000, eligibleOrderTopCodes: [3001, 1000] });
 
   it('uses the configured default TOP when the request names none', () => {
-    expect(resolveOrderTopCode(undefined, config.sales)).toEqual({ ok: true, value: 1001 });
-    expect(resolveOrderTopCode(null, config.sales)).toEqual({ ok: true, value: 1001 });
+    expect(resolveOrderTopCode(undefined, config.sales)).toEqual({ ok: true, value: 3001 });
+    expect(resolveOrderTopCode(null, config.sales)).toEqual({ ok: true, value: 3001 });
   });
 
   it('accepts an eligible TOP and refuses any other', () => {
@@ -27,19 +27,19 @@ describe('order TOP (D-A / D-B)', () => {
   });
 
   it('without an explicit list the eligible TOPs are the order and quotation TOPs', () => {
-    const sales = withSales({ orderTopCode: 1001, quotationTopCode: 1000 }).sales;
-    expect(eligibleOrderTopCodesOf(sales)).toEqual([1001, 1000]);
+    const sales = withSales({ orderTopCode: 3001, quotationTopCode: 1000 }).sales;
+    expect(eligibleOrderTopCodesOf(sales)).toEqual([3001, 1000]);
   });
 
   it('with no TOP configured at all there is nothing to store', () => {
     const sales = withSales({ orderTopCode: null, quotationTopCode: null }).sales;
     expect(resolveOrderTopCode(undefined, sales)).toEqual({ ok: true, value: null });
-    expect(resolveOrderTopCode(1001, sales)).toEqual({ ok: false, code: 'order_top_not_eligible' });
+    expect(resolveOrderTopCode(3001, sales)).toEqual({ ok: false, code: 'order_top_not_eligible' });
   });
 
   it('a quotation is an order whose TOP is the quotation TOP', () => {
     expect(isQuotationTopCode(1000, config.sales)).toBe(true);
-    expect(isQuotationTopCode(1001, config.sales)).toBe(false);
+    expect(isQuotationTopCode(3001, config.sales)).toBe(false);
     expect(isQuotationTopCode(null, config.sales)).toBe(false);
   });
 });

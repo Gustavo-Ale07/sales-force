@@ -29,5 +29,5 @@ export function buildOrderHtml(order: OrderDetail, origin: string): string {
     items: order.items,
     totals: order.totals,
   });
-  return renderOrderHtml(model, { logoSrc: `${origin}/brand/plac-logo.png` });
+  return renderOrderHtml(model, { logoSrc: `${origin}/brand/plac-logo.png`, brandName: 'PLAC' });
 }
