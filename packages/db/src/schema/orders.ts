@@ -59,6 +59,10 @@ export const salesOrder = pgTable(
       .references(() => account.id),
     status: text('status').notNull().default('draft'),
     negotiationTypeCode: integer('negotiation_type_code'),
+    /** TOP the order carries (D-A): an eligible order TOP or the quotation TOP. Null on drafts saved before it existed. */
+    topCode: integer('top_code'),
+    /** Quotation this order was duplicated from ("Duplicar como pedido"); traceability only, no state depends on it. */
+    sourceOrderId: uuid('source_order_id'),
     notes: text('notes'),
     /** Estimate from list prices only (sum of priced lines); the ERP computes the final value. */
     estimatedTotal: numeric('estimated_total', { precision: 14, scale: 2 }).notNull().default('0'),

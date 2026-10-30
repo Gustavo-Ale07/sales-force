@@ -8,6 +8,7 @@ const SLICE = {
     negotiationTypes: [{ code: 2, label: 'À vista' }],
     orderBehavior: { allowDraftWithoutPrice: false },
     discountAuthorityMode: 'erp',
+    orderTops: { defaultTopCode: null, quotationTopCode: null, eligibleTopCodes: [] },
   },
   products: { productWithoutPrice: { orderable: false } },
 };

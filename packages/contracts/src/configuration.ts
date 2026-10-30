@@ -99,7 +99,12 @@ const GeneralSchema = z.strictObject({
 
 export const NegotiationTypeSchema = named(
   'NegotiationType',
-  z.strictObject({ code: codeInt(), label: z.string().min(1).max(200) }),
+  z.strictObject({
+    code: codeInt(),
+    label: z.string().min(1).max(200),
+    /** `false` = not for selling (a return type): never listed, never usable on a draft. Absent = sellable (D-B). */
+    sellable: z.boolean().optional(),
+  }),
 );
 
 /** D-M: `erp` (default) = Sankhya releases discount/credit; `force` = the Force approval flow (DISC-2..6). */
@@ -297,6 +302,12 @@ export const OrderEntryConfigurationSchema = named(
       orderBehavior: z.strictObject({ allowDraftWithoutPrice: z.boolean() }),
       /** D-M: `erp` = discounts above the allowed are released in Sankhya after sending; no approval UI. */
       discountAuthorityMode: DiscountAuthorityModeSchema,
+      /** Order TOPs (D-A): the default for a new order, the quotation TOP and every TOP an order may carry. */
+      orderTops: z.strictObject({
+        defaultTopCode: codeInt().nullable(),
+        quotationTopCode: codeInt().nullable(),
+        eligibleTopCodes: z.array(codeInt()),
+      }),
     }),
     products: z.strictObject({
       productWithoutPrice: z.strictObject({ orderable: z.boolean() }),

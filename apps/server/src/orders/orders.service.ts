@@ -3,6 +3,7 @@ import type {
   CreateOrderRequest,
   DatasetIdentity,
   DiscountAuthorityStatus,
+  DuplicateAsOrderRequest,
   OrderDetail,
   OrdersQuery,
   OrdersResponse,
@@ -16,9 +17,12 @@ import {
   datasetOriginForConfigurationSource,
   isCustomerInScope,
   isOrderEditable,
+  isQuotationTopCode,
   normalizeDecimalString,
   presentSkips,
   recomputeOrderAuthority,
+  resolveOrderTopCode,
+  sellableNegotiationTypes,
   statusAfterEdit,
   type AccountRole,
   type CustomerScope,
@@ -48,6 +52,8 @@ type ValidDraft = Extract<DraftOutcome, { ok: true }>;
  * action without a second code path for the draft itself. Not run when the request is a replay.
  */
 export interface CreateHooks {
+  /** Quotation the new draft is duplicated from ("Duplicar como pedido"); stored for traceability. */
+  readonly sourceOrderId?: string;
   /** First thing in the transaction (locks, last checks). Throwing aborts the create. */
   readonly beforeInsert?: (tx: Executor) => Promise<void>;
   /** After the draft and its lines are written. */
@@ -173,6 +179,7 @@ export class OrdersService {
 
     const customer = await this.customers.requireVisible(context.scope, body.customerCode);
     assertCustomerEligible(customer);
+    const topCode = this.resolveTop(context.configuration, body.topCode);
     const draft = await this.buildValid(context, customer, body);
     const at = this.clock();
 
@@ -187,6 +194,8 @@ export class OrdersService {
           createdByAccountId: user.accountId,
           status: 'draft',
           negotiationTypeCode: body.negotiationTypeCode,
+          topCode,
+          sourceOrderId: hooks.sourceOrderId ?? null,
           notes: body.notes,
           estimatedTotal: draft.totals.estimatedTotal,
           discountAuthority: this.discountAuthorityOf(user.role, draft.draft.items, context.configuration),
@@ -316,6 +325,104 @@ export class OrdersService {
     return { result: { order, skippedLines: presentSkips(user.role, skipped) }, replayed };
   }
 
+  /**
+   * "Duplicar como pedido" (D-B): a NEW, independent draft with the installation's default order TOP from an order that
+   * carries the quotation TOP. A quotation is only an order with another TOP, so there is no new state machine: the
+   * source is read, never locked or changed; the new draft goes through the ordinary `create` path (current seller,
+   * current prices, revalidated lines, its own idempotency by `clientRequestId`). Lines, discounts, negotiation type
+   * and notes are copied; lines that cannot be ordered now are reported in `skippedLines`, never priced by guess.
+   */
+  async duplicateAsOrder(user: CurrentUser, sourceId: string, body: DuplicateAsOrderRequest): Promise<RepeatLastOrderResult> {
+    assertDatasetMatches(this.dataset, body.expectedDataset);
+    const context = await this.policy.accessContext(user);
+
+    // Idempotency first (see `repeatLast`): a retry must not depend on mutable state.
+    const priorOrder = await this.orders.findByClientRequestId(body.clientRequestId);
+    if (priorOrder !== null) {
+      const sameRequest =
+        priorOrder.createdByAccountId === user.accountId &&
+        priorOrder.sourceOrderId === sourceId &&
+        isCustomerInScope({ sellerCode: priorOrder.sellerCode }, context.scope);
+      if (!sameRequest) throw new AppError('idempotency_conflict');
+      return { result: { order: await this.detailOf(priorOrder), skippedLines: [] }, replayed: true };
+    }
+
+    const source = await this.loadVisible(context.scope, sourceId);
+    if (source.status === 'cancelled') {
+      throw new AppError('conflict', { message: 'Este orçamento foi descartado e não pode ser duplicado.', details: { reason: 'source_cancelled' } });
+    }
+    if (!isQuotationTopCode(source.topCode, context.configuration.sales)) {
+      throw new AppError('conflict', { message: 'Só é possível duplicar como pedido um orçamento.', details: { reason: 'not_a_quotation' } });
+    }
+    const targetTop = context.configuration.sales.orderTopCode;
+    if (targetTop === null) {
+      throw new AppError('conflict', { message: 'A instalação não tem um tipo de operação de pedido configurado.', details: { reason: 'order_top_not_configured' } });
+    }
+    const customer = await this.customers.requireVisible(context.scope, source.customerCode);
+    assertCustomerEligible(customer);
+
+    const sourceItems = await this.orders.itemsOf(source.id);
+    const { usable, skipped } = await this.builder.classifyTemplateLines(
+      { code: customer.code, sellerCode: customer.sellerCode, priceTableCode: customer.priceTableCode },
+      sourceItems.map((item) => ({ lineNo: item.lineNo, productCode: item.productCode, quantity: normalizeDecimalString(item.quantity) })),
+      context.configuration,
+    );
+    if (usable.length === 0) {
+      throw new AppError('conflict', {
+        message: 'Nenhum item do orçamento pode ser pedido agora (produtos removidos, inativos, indisponíveis ou sem preço). Nenhum pedido foi criado.',
+        details: { reason: 'no_usable_lines', skippedLines: presentSkips(user.role, skipped) },
+      });
+    }
+    const discountByLine = new Map(sourceItems.map((item) => [item.lineNo, normalizeDecimalString(item.discountPercent)]));
+    const negotiationTypeCode =
+      source.negotiationTypeCode !== null && sellableNegotiationTypes(context.configuration.sales).some((t) => t.code === source.negotiationTypeCode)
+        ? source.negotiationTypeCode
+        : null;
+
+    const { order, replayed } = await this.create(
+      user,
+      {
+        clientRequestId: body.clientRequestId,
+        expectedDataset: body.expectedDataset,
+        customerCode: customer.code,
+        topCode: targetTop,
+        negotiationTypeCode,
+        notes: source.notes,
+        items: usable.map((line) => {
+          const discount = discountByLine.get(line.lineNo ?? -1);
+          return {
+            productCode: line.productCode,
+            quantity: line.quantity,
+            ...(discount === undefined || discount === '0' ? {} : { discountPercent: discount }),
+          };
+        }),
+      },
+      {
+        sourceOrderId: source.id,
+        afterInsert: async (tx, created) => {
+          await this.audit.record(
+            {
+              action: AUDIT_ACTIONS.orderDuplicatedAsOrder,
+              actorAccountId: user.accountId,
+              detail: { sourceOrderId: source.id, orderId: created.id, customerCode: customer.code, usedCount: created.itemCount, skippedCount: skipped.length },
+            },
+            tx,
+          );
+        },
+      },
+    );
+    return { result: { order, skippedLines: presentSkips(user.role, skipped) }, replayed };
+  }
+
+  /** The TOP an order is stored with: server-side eligibility (D-A), never the client's word. */
+  private resolveTop(configuration: InstallationConfiguration, requested: number | null | undefined): number | null {
+    const resolved = resolveOrderTopCode(requested, configuration.sales);
+    if (!resolved.ok) {
+      throw new AppError('validation_failed', { details: { issues: [{ path: 'topCode', code: resolved.code }] } });
+    }
+    return resolved.value;
+  }
+
   private async replayOf(existing: OrderRow, user: CurrentUser, fingerprint: string, scope: CustomerScope): Promise<OrderDetail> {
     // Another account, another content, or an order the caller may no longer see: the id is simply
     // unusable. The response never says which, nor shows anything about the existing order.
@@ -338,6 +445,8 @@ export class OrdersService {
 
     const customer = await this.customers.requireVisible(context.scope, body.customerCode);
     assertCustomerEligible(customer);
+    // No TOP in the request keeps the order's current one; a named TOP must be eligible.
+    const requestedTop = body.topCode === undefined ? undefined : this.resolveTop(context.configuration, body.topCode);
     const draft = await this.buildValid(context, customer, body);
     const at = this.clock();
 
@@ -361,6 +470,7 @@ export class OrdersService {
           customerCode: customer.code,
           sellerCode: customer.sellerCode,
           negotiationTypeCode: body.negotiationTypeCode,
+          topCode: requestedTop === undefined ? locked.topCode : requestedTop,
           notes: body.notes,
           estimatedTotal: draft.totals.estimatedTotal,
           status: statusAfterEdit(locked.status as Parameters<typeof statusAfterEdit>[0]),

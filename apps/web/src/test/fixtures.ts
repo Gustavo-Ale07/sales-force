@@ -124,6 +124,7 @@ export function orderListItem(overrides: Partial<ApiSchema<"OrderListItem">> = {
     customerName: "Comercial Alfa Ltda",
     sellerCode: 7,
     status: "draft",
+    topCode: null,
     estimatedTotal: "25",
     itemCount: 1,
     itemPreview: ["Cabo flexível 2,5 mm"],
@@ -143,6 +144,7 @@ export function orderDetail(overrides: Partial<ApiSchema<"OrderDetail">> = {}): 
     ...orderListItem(),
     negotiationTypeCode: null,
     notes: null,
+    sourceOrderId: null,
     discountAuthority: "within_authority",
     approval: null,
     items,
@@ -259,6 +261,7 @@ export const orderEntryConfiguration: ApiSchema<"OrderEntryConfiguration"> = {
     ],
     orderBehavior: { allowDraftWithoutPrice: true },
     discountAuthorityMode: "force",
+    orderTops: { defaultTopCode: null, quotationTopCode: null, eligibleTopCodes: [] },
   },
   products: { productWithoutPrice: { orderable: true } },
 };

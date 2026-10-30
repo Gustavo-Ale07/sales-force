@@ -87,6 +87,7 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   // "Repetir último pedido" (Phase C): a draft-creation route from the customer's own order history in
   // Sales Force, so it follows the same grant as createOrder.
   repeatLastOrder: { roles: EVERY_ROLE },
+  duplicateAsOrder: { roles: EVERY_ROLE },
   // Recurring order templates (Phase E). Reads follow the customer read grant and writes follow the
   // order-draft grant: every role that exists, never more than the order routes give. WHICH customers a
   // caller reaches is the seller scope of the customer (404 outside it), never this table. ASSUMPTION

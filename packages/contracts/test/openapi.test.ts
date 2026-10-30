@@ -115,6 +115,7 @@ describe('OpenAPI generation', () => {
       'items',
       'negotiationTypeCode',
       'notes',
+      'topCode',
     ]);
   });
 });

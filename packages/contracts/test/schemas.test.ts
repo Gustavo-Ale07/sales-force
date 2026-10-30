@@ -287,6 +287,7 @@ describe('order requests', () => {
       customerName: 'Cliente Sintetico',
       sellerCode: 900,
       status: 'draft',
+      topCode: 1001,
       estimatedTotal: '25.00',
       itemCount: 2,
       isPartial: true,
@@ -297,6 +298,7 @@ describe('order requests', () => {
       updatedAt: TS,
       negotiationTypeCode: null,
       notes: null,
+      sourceOrderId: null,
       discountAuthority: 'within_authority',
       approval: null,
       items: [

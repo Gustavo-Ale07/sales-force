@@ -2173,6 +2173,110 @@
         }
       }
     },
+    "/orders/{id}/duplicate-as-order": {
+      "post": {
+        "operationId": "duplicateAsOrder",
+        "tags": [
+          "orders"
+        ],
+        "summary": "Create a new draft order from a quotation ('Duplicar como pedido')",
+        "description": "Creates a NEW, independent draft carrying the installation's default order TOP from an order that carries the quotation TOP and is visible to the caller, through the same path as `createOrder` (201 created; 200 with the original draft on a replay of the same `clientRequestId`). Lines (product, quantity, discount), negotiation type, notes and carrier are copied and each line is revalidated against the current catalog and prices; lines that cannot be ordered now are left out and reported in `skippedLines`, never priced by guess. The source quotation is never modified and no new state exists: the result is an ordinary draft whose `sourceOrderId` points to the quotation. 404 when the source is not visible. 409 conflict (details.reason `not_a_quotation`) when the source does not carry the quotation TOP; `order_top_not_configured` when the installation has no default order TOP; `no_usable_lines` (with `skippedLines`) when no line can be used. `expectedDataset` is required: 409 dataset_mismatch (nothing is written) when it differs from the dataset the server declares.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DuplicateAsOrderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reenvio idempotente: rascunho original",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepeatLastOrderResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Rascunho criado a partir do orçamento",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepeatLastOrderResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflito de estado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/customers/{code}/order-templates": {
       "get": {
         "operationId": "listOrderTemplates",
@@ -3349,6 +3453,17 @@
             "type": "integer",
             "minimum": 0
           },
+          "topCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "negotiationTypeCode": {
             "anyOf": [
               {
@@ -3808,6 +3923,24 @@
           "provisional",
           "revision",
           "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "DuplicateAsOrderRequest": {
+        "type": "object",
+        "properties": {
+          "clientRequestId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "expectedDataset": {
+            "$ref": "#/components/schemas/DatasetIdentity"
+          }
+        },
+        "required": [
+          "clientRequestId",
+          "expectedDataset"
         ],
         "additionalProperties": false
       },
@@ -4310,6 +4443,9 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 200
+          },
+          "sellable": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -4417,6 +4553,17 @@
           "status": {
             "$ref": "#/components/schemas/OrderStatus"
           },
+          "topCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "estimatedTotal": {
             "$ref": "#/components/schemas/DecimalString"
           },
@@ -4474,6 +4621,18 @@
               "null"
             ]
           },
+          "sourceOrderId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "discountAuthority": {
             "$ref": "#/components/schemas/DiscountAuthorityStatus"
           },
@@ -4504,6 +4663,7 @@
           "customerName",
           "sellerCode",
           "status",
+          "topCode",
           "estimatedTotal",
           "itemCount",
           "isPartial",
@@ -4514,6 +4674,7 @@
           "updatedAt",
           "negotiationTypeCode",
           "notes",
+          "sourceOrderId",
           "discountAuthority",
           "approval",
           "items",
@@ -4580,13 +4741,54 @@
               },
               "discountAuthorityMode": {
                 "$ref": "#/components/schemas/DiscountAuthorityMode"
+              },
+              "orderTops": {
+                "type": "object",
+                "properties": {
+                  "defaultTopCode": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "quotationTopCode": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "eligibleTopCodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                },
+                "required": [
+                  "defaultTopCode",
+                  "quotationTopCode",
+                  "eligibleTopCodes"
+                ],
+                "additionalProperties": false
               }
             },
             "required": [
               "defaultNegotiationTypeCode",
               "negotiationTypes",
               "orderBehavior",
-              "discountAuthorityMode"
+              "discountAuthorityMode",
+              "orderTops"
             ],
             "additionalProperties": false
           },
@@ -4824,6 +5026,17 @@
           "status": {
             "$ref": "#/components/schemas/OrderStatus"
           },
+          "topCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "estimatedTotal": {
             "$ref": "#/components/schemas/DecimalString"
           },
@@ -4879,6 +5092,7 @@
           "customerName",
           "sellerCode",
           "status",
+          "topCode",
           "estimatedTotal",
           "itemCount",
           "itemPreview",
@@ -5621,6 +5835,17 @@
           "customerCode": {
             "type": "integer",
             "minimum": 0
+          },
+          "topCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "negotiationTypeCode": {
             "anyOf": [

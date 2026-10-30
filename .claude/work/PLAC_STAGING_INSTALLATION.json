@@ -98,12 +98,7 @@
       "mode": "erp",
       "limits": { "seller": null, "manager": null, "director": null }
     },
-    "eligibleOrderTopCodes": [
-      1000,
-      1001,
-      1051,
-      2209
-    ],
+    "eligibleOrderTopCodes": [1001, 1000],
     "orderStockLocationCode": 209,
     "orderLayout": {
       "layoutNumber": 30,

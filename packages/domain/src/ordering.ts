@@ -1,4 +1,5 @@
 import type { InstallationConfiguration } from './configuration.js';
+import { sellableNegotiationTypes } from './order-top.js';
 import type { OrderItem, Product, ResolvedPrice } from './entities.js';
 import {
   computeDiscountedLineTotal,
@@ -142,6 +143,7 @@ export type DraftIssueCode =
   | 'product_unknown'
   | 'product_not_sellable'
   | 'negotiation_type_not_configured'
+  | 'order_top_not_eligible'
   | 'order_total_mismatch'
   | 'order_total_out_of_range';
 
@@ -172,7 +174,7 @@ export function validateDraftInvariants(
 
   if (
     draft.negotiationTypeCode !== null &&
-    !config.sales.negotiationTypes.some((t) => t.code === draft.negotiationTypeCode)
+    !sellableNegotiationTypes(config.sales).some((t) => t.code === draft.negotiationTypeCode)
   ) {
     add('negotiation_type_not_configured', 'negotiationTypeCode');
   }

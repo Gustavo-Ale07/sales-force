@@ -68,6 +68,18 @@ export class OrdersController {
     return this.orders.submit(user, contract.params.id);
   }
 
+  @ApiRoute(routes.duplicateAsOrder)
+  async duplicateAsOrder(
+    @CurrentUserParam() user: CurrentUser,
+    @Contract() contract: RequestContract<typeof routes.duplicateAsOrder>,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<RepeatLastOrderResponse> {
+    const { result, replayed } = await this.orders.duplicateAsOrder(user, contract.params.id, contract.body);
+    // 201 when created; 200 with the original draft on a replay of the same request.
+    if (replayed) void reply.status(200);
+    return result;
+  }
+
   @ApiRoute(routes.repeatLastOrder)
   async repeatLast(
     @CurrentUserParam() user: CurrentUser,

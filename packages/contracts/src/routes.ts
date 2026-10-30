@@ -36,6 +36,7 @@ import {
   OrdersQuerySchema,
   OrdersResponseSchema,
   ReplaceOrderRequestSchema,
+  DuplicateAsOrderRequestSchema,
   RepeatLastOrderRequestSchema,
 } from './orders.js';
 import { SellersQuerySchema, SellersResponseSchema } from './sellers.js';
@@ -476,6 +477,24 @@ export const routes = {
     maxBodyBytes: 2 * 1024,
     responses: {
       201: { description: 'Rascunho criado a partir do último pedido', schema: RepeatLastOrderResponseSchema },
+      200: { description: 'Reenvio idempotente: rascunho original', schema: RepeatLastOrderResponseSchema },
+    },
+    errors: [400, 401, 403, 404, 409],
+  }),
+
+  duplicateAsOrder: defineRoute({
+    operationId: 'duplicateAsOrder',
+    method: 'post',
+    path: '/orders/{id}/duplicate-as-order',
+    tags: ['orders'],
+    summary: "Create a new draft order from a quotation ('Duplicar como pedido')",
+    description:
+      "Creates a NEW, independent draft carrying the installation's default order TOP from an order that carries the quotation TOP and is visible to the caller, through the same path as `createOrder` (201 created; 200 with the original draft on a replay of the same `clientRequestId`). Lines (product, quantity, discount), negotiation type, notes and carrier are copied and each line is revalidated against the current catalog and prices; lines that cannot be ordered now are left out and reported in `skippedLines`, never priced by guess. The source quotation is never modified and no new state exists: the result is an ordinary draft whose `sourceOrderId` points to the quotation. 404 when the source is not visible. 409 conflict (details.reason `not_a_quotation`) when the source does not carry the quotation TOP; `order_top_not_configured` when the installation has no default order TOP; `no_usable_lines` (with `skippedLines`) when no line can be used. `expectedDataset` is required: 409 dataset_mismatch (nothing is written) when it differs from the dataset the server declares.",
+    auth: 'session',
+    request: { params: OrderPathSchema, body: DuplicateAsOrderRequestSchema },
+    maxBodyBytes: 2 * 1024,
+    responses: {
+      201: { description: 'Rascunho criado a partir do orçamento', schema: RepeatLastOrderResponseSchema },
       200: { description: 'Reenvio idempotente: rascunho original', schema: RepeatLastOrderResponseSchema },
     },
     errors: [400, 401, 403, 404, 409],

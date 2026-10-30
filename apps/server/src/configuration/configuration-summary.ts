@@ -1,6 +1,6 @@
 import type { ConfigurationResponse, ConfigurationSummary, DatasetIdentity, OrderEntryConfiguration, SyncState } from '@salesforce/contracts';
 import type { syncState } from '@salesforce/db';
-import { discountAuthorityModeOf, type InstallationConfiguration } from '@salesforce/domain';
+import { discountAuthorityModeOf, eligibleOrderTopCodesOf, sellableNegotiationTypes, type InstallationConfiguration } from '@salesforce/domain';
 import { summarizeIntegration } from '../platform/integration-summary.js';
 import { isReservedSyncEntity } from '../platform/worker-heartbeat.js';
 import type { CurrentConfiguration } from './configuration.service.js';
@@ -24,7 +24,7 @@ export function toConfigurationSummary(configuration: InstallationConfiguration)
       orderTopCode: configuration.sales.orderTopCode,
       quotationTopCode: configuration.sales.quotationTopCode,
       defaultNegotiationTypeCode: configuration.sales.defaultNegotiationTypeCode,
-      negotiationTypes: configuration.sales.negotiationTypes.map((type) => ({ code: type.code, label: type.label })),
+      negotiationTypes: sellableNegotiationTypes(configuration.sales).map((type) => ({ code: type.code, label: type.label })),
       orderBehavior: { allowDraftWithoutPrice: configuration.sales.orderBehavior.allowDraftWithoutPrice },
       confirmationBehavior: configuration.sales.confirmationBehavior,
       discountAuthorityMode: discountAuthorityModeOf(configuration.sales.discountAuthority),
@@ -64,9 +64,14 @@ export function toOrderEntryConfiguration(
     general: { enabled: configuration.general.enabled },
     sales: {
       defaultNegotiationTypeCode: configuration.sales.defaultNegotiationTypeCode,
-      negotiationTypes: configuration.sales.negotiationTypes.map((type) => ({ code: type.code, label: type.label })),
+      negotiationTypes: sellableNegotiationTypes(configuration.sales).map((type) => ({ code: type.code, label: type.label })),
       orderBehavior: { allowDraftWithoutPrice: configuration.sales.orderBehavior.allowDraftWithoutPrice },
       discountAuthorityMode: discountAuthorityModeOf(configuration.sales.discountAuthority),
+      orderTops: {
+        defaultTopCode: configuration.sales.orderTopCode,
+        quotationTopCode: configuration.sales.quotationTopCode,
+        eligibleTopCodes: [...eligibleOrderTopCodesOf(configuration.sales)],
+      },
     },
     products: {
       productWithoutPrice: { orderable: configuration.products.productWithoutPrice.orderable },

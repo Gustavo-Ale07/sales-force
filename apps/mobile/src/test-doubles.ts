@@ -76,7 +76,7 @@ export function orderEntryConfiguration(overrides: Partial<OrderEntryConfigurati
   return {
     dataset: { environment: "production", datasetId: "mirror-real-001" },
     general: { enabled: true },
-    sales: { defaultNegotiationTypeCode: null, negotiationTypes: [], orderBehavior: { allowDraftWithoutPrice: false }, discountAuthorityMode: "force" },
+    sales: { defaultNegotiationTypeCode: null, negotiationTypes: [], orderBehavior: { allowDraftWithoutPrice: false }, discountAuthorityMode: "force", orderTops: { defaultTopCode: null, quotationTopCode: null, eligibleTopCodes: [] } },
     products: { productWithoutPrice: { orderable: false } },
     ...overrides,
   };
@@ -107,6 +107,7 @@ export function orderDetail(overrides: Partial<OrderDetail> = {}): OrderDetail {
     customerName: "Cliente 10",
     sellerCode: 7,
     status: "draft",
+    topCode: null,
     estimatedTotal: "0.00",
     itemCount: 0,
     isPartial: false,
@@ -117,6 +118,7 @@ export function orderDetail(overrides: Partial<OrderDetail> = {}): OrderDetail {
     updatedAt: "2026-09-29T12:00:00.000Z",
     negotiationTypeCode: null,
     notes: null,
+    sourceOrderId: null,
     discountAuthority: "within_authority",
     approval: null,
     items: [],

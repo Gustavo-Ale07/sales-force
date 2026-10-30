@@ -5,6 +5,8 @@ export interface FingerprintInput {
   readonly customerCode: number;
   readonly negotiationTypeCode: number | null;
   readonly notes: string | null;
+  /** Part of the content only when the request names one; requests without it keep their earlier fingerprint. */
+  readonly topCode?: number | null | undefined;
   readonly items: readonly { readonly productCode: number; readonly quantity: string; readonly discountPercent?: string | undefined }[];
 }
 
@@ -30,7 +32,7 @@ function canonicalDiscount(discountPercent: string | undefined): string {
 export function orderFingerprint(input: FingerprintInput): string {
   // A request without any discount keeps the original 'v1' content, so fingerprints stored before discounts existed still match a replay.
   const discounted = input.items.some((item) => canonicalDiscount(item.discountPercent) !== '0');
-  const canonical = JSON.stringify([
+  const base = [
     discounted ? 'v2' : 'v1',
     input.customerCode,
     input.negotiationTypeCode,
@@ -40,6 +42,7 @@ export function orderFingerprint(input: FingerprintInput): string {
         ? [item.productCode, canonicalQuantity(item.quantity), canonicalDiscount(item.discountPercent)]
         : [item.productCode, canonicalQuantity(item.quantity)],
     ),
-  ]);
+  ];
+  const canonical = JSON.stringify(input.topCode === undefined || input.topCode === null ? base : [...base, { topCode: input.topCode }]);
   return createHash('sha256').update(canonical).digest('hex');
 }

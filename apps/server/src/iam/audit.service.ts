@@ -38,6 +38,7 @@ export const AUDIT_ACTIONS = {
   orderTemplateUsed: 'order_template.used',
   /** "Repetir último pedido": a new draft order was produced from the customer's most recent order. */
   orderRepeatedFromLast: 'order.repeated_from_last',
+  orderDuplicatedAsOrder: 'order.duplicated_as_order',
   /** An ERP submission was requested; it is refused while submission is disabled (SNK-4/SNK-6). */
   orderSubmitAttempted: 'order.submit_attempted',
   orderApprovalRequested: 'order.approval_requested',

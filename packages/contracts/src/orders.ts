@@ -68,6 +68,7 @@ export const DraftIssueCodeSchema = named(
     'product_unknown',
     'product_not_sellable',
     'negotiation_type_not_configured',
+    'order_top_not_eligible',
     'order_total_mismatch',
     'order_total_out_of_range',
   ]),
@@ -134,6 +135,8 @@ export const OrderListItemSchema = named(
     customerName: z.string(),
     sellerCode: codeInt().nullable(),
     status: OrderStatusSchema,
+    /** TOP the order carries (D-A): the eligible order TOP or the quotation TOP. `null` on drafts saved before it existed. */
+    topCode: codeInt().nullable(),
     /** Estimate from list prices; the final value is calculated by the ERP. */
     estimatedTotal: DecimalStringSchema,
     itemCount: z.number().int().min(0),
@@ -230,6 +233,8 @@ export const OrderDetailSchema = named(
     ...OrderListItemSchema.omit({ itemPreview: true }).shape,
     negotiationTypeCode: codeInt().nullable(),
     notes: z.string().nullable(),
+    /** Quotation this order was duplicated from ("Duplicar como pedido"), or `null`. */
+    sourceOrderId: UuidSchema.nullable(),
     discountAuthority: DiscountAuthorityStatusSchema,
     /** Latest approval request (any decision), or `null` when the order never needed one. */
     approval: OrderApprovalSchema.nullable(),
@@ -271,6 +276,11 @@ export type OrderItemInput = z.infer<typeof OrderItemInputSchema>;
 
 const orderDraftFields = {
   customerCode: codeInt(),
+  /**
+   * Order TOP (D-A). Omitted or `null` = the installation's default order TOP on create, the current TOP on replace.
+   * Must be one of the installation's eligible TOPs; otherwise 400 `validation_failed` with issue `order_top_not_eligible`.
+   */
+  topCode: codeInt().nullable().optional(),
   negotiationTypeCode: codeInt().nullable(),
   notes: z.string().max(2000).nullable(),
   items: z.array(OrderItemInputSchema).max(MAX_ORDER_ITEMS),
@@ -307,3 +317,13 @@ export const RepeatLastOrderRequestSchema = named(
   z.strictObject({ clientRequestId: UuidSchema, expectedDataset: expectedDatasetField }),
 );
 export type RepeatLastOrderRequest = z.infer<typeof RepeatLastOrderRequestSchema>;
+
+/**
+ * `POST /orders/{id}/duplicate-as-order` ("Duplicar como pedido", D-B): a new draft with the default order TOP from an
+ * order carrying the quotation TOP. One `clientRequestId` per user action (it becomes the new draft's own request id).
+ */
+export const DuplicateAsOrderRequestSchema = named(
+  'DuplicateAsOrderRequest',
+  z.strictObject({ clientRequestId: UuidSchema, expectedDataset: expectedDatasetField }),
+);
+export type DuplicateAsOrderRequest = z.infer<typeof DuplicateAsOrderRequestSchema>;

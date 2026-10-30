@@ -473,6 +473,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orders/{id}/duplicate-as-order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a new draft order from a quotation ('Duplicar como pedido')
+         * @description Creates a NEW, independent draft carrying the installation's default order TOP from an order that carries the quotation TOP and is visible to the caller, through the same path as `createOrder` (201 created; 200 with the original draft on a replay of the same `clientRequestId`). Lines (product, quantity, discount), negotiation type, notes and carrier are copied and each line is revalidated against the current catalog and prices; lines that cannot be ordered now are left out and reported in `skippedLines`, never priced by guess. The source quotation is never modified and no new state exists: the result is an ordinary draft whose `sourceOrderId` points to the quotation. 404 when the source is not visible. 409 conflict (details.reason `not_a_quotation`) when the source does not carry the quotation TOP; `order_top_not_configured` when the installation has no default order TOP; `no_usable_lines` (with `skippedLines`) when no line can be used. `expectedDataset` is required: 409 dataset_mismatch (nothing is written) when it differs from the dataset the server declares.
+         */
+        post: operations["duplicateAsOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/customers/{code}/order-templates": {
         parameters: {
             query?: never;
@@ -694,6 +714,7 @@ export interface components {
             clientRequestId: string;
             expectedDataset: components["schemas"]["DatasetIdentity"];
             customerCode: number;
+            topCode?: number | null;
             negotiationTypeCode: number | null;
             notes: string | null;
             items: components["schemas"]["OrderItemInput"][];
@@ -777,6 +798,11 @@ export interface components {
             provisional: boolean;
             revision: string;
             updatedAt: components["schemas"]["IsoTimestamp"];
+        };
+        DuplicateAsOrderRequest: {
+            /** Format: uuid */
+            clientRequestId: string;
+            expectedDataset: components["schemas"]["DatasetIdentity"];
         };
         ErpSubmissionDisabledError: {
             /** @constant */
@@ -887,6 +913,7 @@ export interface components {
         NegotiationType: {
             code: number;
             label: string;
+            sellable?: boolean;
         };
         /** @enum {string} */
         NoPriceReason: "no_resolved_table" | "no_effective_version" | "no_price_row";
@@ -909,6 +936,7 @@ export interface components {
             customerName: string;
             sellerCode: number | null;
             status: components["schemas"]["OrderStatus"];
+            topCode: number | null;
             estimatedTotal: components["schemas"]["DecimalString"];
             itemCount: number;
             isPartial: boolean;
@@ -919,6 +947,7 @@ export interface components {
             updatedAt: components["schemas"]["IsoTimestamp"];
             negotiationTypeCode: number | null;
             notes: string | null;
+            sourceOrderId: string | null;
             discountAuthority: components["schemas"]["DiscountAuthorityStatus"];
             approval: components["schemas"]["OrderApproval"] | null;
             items: components["schemas"]["OrderItemDetail"][];
@@ -936,6 +965,11 @@ export interface components {
                     allowDraftWithoutPrice: boolean;
                 };
                 discountAuthorityMode: components["schemas"]["DiscountAuthorityMode"];
+                orderTops: {
+                    defaultTopCode: number | null;
+                    quotationTopCode: number | null;
+                    eligibleTopCodes: number[];
+                };
             };
             products: {
                 productWithoutPrice: {
@@ -982,6 +1016,7 @@ export interface components {
             customerName: string;
             sellerCode: number | null;
             status: components["schemas"]["OrderStatus"];
+            topCode: number | null;
             estimatedTotal: components["schemas"]["DecimalString"];
             itemCount: number;
             itemPreview: string[];
@@ -1145,6 +1180,7 @@ export interface components {
             expectedVersion: number;
             expectedDataset: components["schemas"]["DatasetIdentity"];
             customerCode: number;
+            topCode?: number | null;
             negotiationTypeCode: number | null;
             notes: string | null;
             items: components["schemas"]["OrderItemInput"][];
@@ -2696,6 +2732,86 @@ export interface operations {
                 };
             };
             /** @description Rascunho criado a partir do último pedido */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepeatLastOrderResponse"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflito de estado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    duplicateAsOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DuplicateAsOrderRequest"];
+            };
+        };
+        responses: {
+            /** @description Reenvio idempotente: rascunho original */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepeatLastOrderResponse"];
+                };
+            };
+            /** @description Rascunho criado a partir do orçamento */
             201: {
                 headers: {
                     [name: string]: unknown;

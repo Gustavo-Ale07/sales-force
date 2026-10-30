@@ -47,6 +47,11 @@ export interface AlternativeTable {
 export interface NegotiationType {
   readonly code: number;
   readonly label: string;
+  /**
+   * `false` marks a type that is not for selling (a return type, for instance): it never reaches an API list and
+   * a draft cannot use it. Absent means sellable (D-B).
+   */
+  readonly sellable?: boolean;
 }
 
 export interface AccountSellerLink {
@@ -219,6 +224,7 @@ export interface ConfigurationIssue {
     | 'fallback_table_required'
     | 'fallback_table_unexpected'
     | 'default_negotiation_type_unknown'
+    | 'default_negotiation_type_not_sellable'
     | 'duplicate_negotiation_type'
     | 'duplicate_account_seller_link'
     | 'account_seller_link_invalid_seller'
@@ -273,6 +279,11 @@ export function validateConfigurationConsistency(
       code: 'default_negotiation_type_unknown',
       path: 'sales.defaultNegotiationTypeCode',
     });
+  } else if (
+    sales.defaultNegotiationTypeCode !== null &&
+    sales.negotiationTypes.some((t) => t.code === sales.defaultNegotiationTypeCode && t.sellable === false)
+  ) {
+    issues.push({ code: 'default_negotiation_type_not_sellable', path: 'sales.defaultNegotiationTypeCode' });
   }
 
   if (customers.accountSellerLinks.some((l) => !Number.isSafeInteger(l.sellerCode) || l.sellerCode < 1)) {
