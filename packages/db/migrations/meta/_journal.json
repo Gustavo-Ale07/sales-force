@@ -113,6 +113,13 @@
       "when": 1793365913048,
       "tag": "0015_erp_carrier_and_order_carrier",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1793365913049,
+      "tag": "0016_order_delivery",
+      "breakpoints": true
     }
   ]
 }

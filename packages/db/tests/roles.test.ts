@@ -33,15 +33,16 @@ const EXPECTED: Record<string, { api: Priv[]; worker: Priv[] }> = {
   session: { api: SIUD, worker: [] },
   account_seller_link: { api: SIUD, worker: [] },
   auth_throttle: { api: SIUD, worker: [] },
-  audit_log: { api: ['INSERT'], worker: [] },
+  audit_log: { api: ['INSERT'], worker: ['INSERT'] },
   installation_configuration_version: { api: S, worker: S },
   sync_state: { api: S, worker: SIU },
-  sales_order: { api: SIU, worker: [] },
-  sales_order_item: { api: SIUD, worker: [] },
+  sales_order: { api: SIU, worker: ['SELECT', 'UPDATE'] },
+  sales_order_item: { api: SIUD, worker: S },
   sales_order_approval: { api: SIU, worker: [] },
   customer_order_template: { api: SIU, worker: [] },
   customer_order_template_item: { api: SIUD, worker: [] },
-  integration_outbox: { api: [], worker: [] },
+  integration_outbox: { api: SIU, worker: ['SELECT', 'UPDATE'] },
+  integration_order_dry_run: { api: [], worker: ['SELECT', 'INSERT', 'DELETE'] },
   product_media: { api: S, worker: SIUD },
   schema_migration: { api: S, worker: [] },
   ...Object.fromEntries(MIRROR.map((t) => [t, { api: S, worker: SIU }])),
@@ -198,7 +199,8 @@ describe('db-roles.sql', () => {
       'SELECT count(*) FROM audit_log',
       'UPDATE audit_log SET action = action',
       'DELETE FROM audit_log',
-      'SELECT count(*) FROM integration_outbox',
+      'DELETE FROM integration_outbox',
+      'SELECT count(*) FROM integration_order_dry_run',
       'SELECT count(*) FROM pgboss.job',
       'UPDATE schema_migration SET hash = hash',
       'DELETE FROM schema_migration',
@@ -207,7 +209,7 @@ describe('db-roles.sql', () => {
     }
   });
 
-  it('worker: writes the mirror and sync_state only; cannot read credentials/sessions/orders; cannot DDL', async () => {
+  it('worker: writes the mirror, sync_state, outbox delivery state and order ERP state only; cannot read credentials/sessions; cannot DDL', async () => {
     expect(await sqlState('force_worker', 'SELECT count(*) FROM erp_customer')).toBeUndefined();
     expect(await sqlState('force_worker', 'SELECT count(*) FROM installation_configuration_version')).toBeUndefined();
     expect(await sqlState('force_worker', `UPDATE sync_state SET status = status`)).toBeUndefined();
@@ -219,9 +221,11 @@ describe('db-roles.sql', () => {
       'SELECT count(*) FROM account',
       'SELECT count(*) FROM auth_throttle',
       'SELECT count(*) FROM audit_log',
-      'SELECT count(*) FROM sales_order',
+      'INSERT INTO sales_order DEFAULT VALUES',
+      'DELETE FROM sales_order',
+      'INSERT INTO integration_outbox DEFAULT VALUES',
+      'DELETE FROM integration_outbox',
       'SELECT count(*) FROM customer_order_template',
-      'SELECT count(*) FROM integration_outbox',
       'SELECT count(*) FROM schema_migration',
       'DELETE FROM erp_customer',
       'TRUNCATE erp_customer',

@@ -78,7 +78,7 @@ export const salesOrder = pgTable(
     clientRequestHash: text('client_request_hash'),
     /** Unresolved integration point (SNK-5): never populated today. */
     externalOriginId: text('external_origin_id'),
-    /** ERP order number once known. */
+    /** ERP order number (NUNOTA) once known; null until sent, immutable afterwards (SNK-7 S9). */
     erpNumber: bigint('erp_number', { mode: 'number' }),
     configVersionId: uuid('config_version_id')
       .notNull()
@@ -103,6 +103,8 @@ export const salesOrder = pgTable(
     ),
     check('sales_order_discount_authority_chk', sql`${t.discountAuthority} in (${inList(discountAuthorityStatuses)})`),
     check('sales_order_status_chk', sql`${t.status} in (${inList(orderStatuses)})`),
+    // NUNOTA is an integer in Sankhya; the column is write-once (trigger sales_order_erp_number_immutable, migration 0017).
+    check('sales_order_erp_number_chk', sql`${t.erpNumber} is null or (${t.erpNumber} > 0 and ${t.erpNumber} <= 2147483647)`),
     check('sales_order_estimated_total_chk', sql`${t.estimatedTotal} >= 0`),
     check('sales_order_version_chk', sql`${t.version} >= 1`),
     // Idempotent creation. Serves: POST /orders replay lookup.

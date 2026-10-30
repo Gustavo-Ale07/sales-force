@@ -54,7 +54,11 @@
 --   sales_order_approval                  S I U       -              orders approvals (discount approval requests: INSERT on submit, UPDATE on decision or invalidation; never deleted)
 --   customer_order_template               S I U       -              templates.repository
 --   customer_order_template_item          S I U D     -              templates.repository (items replaced)
---   integration_outbox                    -           -              no code reads or writes it yet. See UNDETERMINED 2
+--   integration_outbox                    S I U       S U            api: INSERT on submit (same transaction as order -> queued) and UPDATE on cancel (pending -> rejected, D-5);
+--                                                                       worker: claims and closes deliveries (SNK-7). The order gate trigger reads sales_order as the invoking role.
+--   integration_order_dry_run             -           S I D          worker: dry-run payload record (SNK-7 D-6); DELETE by the 30-day purge. The API never reads it
+--   sales_order, sales_order_item         (above)     S (U on sales_order)   worker: reads the order to build the payload; UPDATE status and erp_number on delivery
+--   audit_log                             I           I              worker records delivery outcomes (order.erp_*), append-only
 --   schema_migration                      S           -              packages/db readiness() for /ready. Written only by force_migrator
 --   Everything else in `public` (future tables included): force_migrator only (deny by default).
 --   Also: force_worker gets TEMPORARY on the database (the mirror writer keeps a session-temporary table of seen keys).
@@ -78,10 +82,8 @@
 --      (apps/server) run as force_migrator; the dev `seed` refuses staging/production and the API only reads.
 --      The long-term source of the configuration file stays open (U-11). If the API or worker is meant to write it,
 --      add INSERT, UPDATE here.
---   2. integration_outbox: no code path inserts or claims rows yet (ERP submission is disabled, SNK-4/S0). When the
---      API enqueues on order submit it will need INSERT (+ SELECT) and the worker SELECT, UPDATE for delivery; the
---      integration_outbox_order_gate trigger also reads sales_order as the invoking role (api has SELECT; the
---      worker would need SELECT on sales_order). Add those lines with the change that introduces the code.
+--   2. integration_outbox: grants added by SNK-7 (see the matrix). Enqueue stays OFF by default (API
+--      ERP_ORDER_ENQUEUE_ENABLED) and the worker sends nothing unless SANKHYA_ORDER_WRITE_ENABLED=true.
 --   3. pg-boss 12 maintenance (supervise) may issue DDL (queue_stats partitions, BAM index builds, partition
 --      drops). With migrate=false/createSchema=false the worker only needs DML in the tests run so far; verify on
 --      the staging pg-boss version after the first long run (apps/server restricted-roles test covers start,
@@ -236,6 +238,7 @@ BEGIN
       ('customer_order_template_item',       'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
       ('sales_order',                        'force_api',    'SELECT, INSERT, UPDATE'),
       ('sales_order_approval',               'force_api',    'SELECT, INSERT, UPDATE'),
+      ('integration_outbox',                 'force_api',    'SELECT, INSERT, UPDATE'),
       ('customer_order_template',            'force_api',    'SELECT, INSERT, UPDATE'),
       ('audit_log',                          'force_api',    'INSERT'),
       ('installation_configuration_version', 'force_api',    'SELECT'),
@@ -251,6 +254,11 @@ BEGIN
       ('erp_list_price',                     'force_api',    'SELECT'),
       ('product_media',                      'force_api',    'SELECT'),
       ('installation_configuration_version', 'force_worker', 'SELECT'),
+      ('integration_outbox',                 'force_worker', 'SELECT, UPDATE'),
+      ('integration_order_dry_run',          'force_worker', 'SELECT, INSERT, DELETE'),
+      ('sales_order',                        'force_worker', 'SELECT, UPDATE'),
+      ('sales_order_item',                   'force_worker', 'SELECT'),
+      ('audit_log',                          'force_worker', 'INSERT'),
       ('sync_state',                         'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_seller',                         'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_directory_user',                 'force_worker', 'SELECT, INSERT, UPDATE'),
