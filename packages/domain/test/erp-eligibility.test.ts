@@ -51,8 +51,12 @@ describe('canQueueOrder', () => {
     expect(canQueueOrder({ status: 'draft', ...bound({ datasetOrigin: 'legacy_dev' }) }, { environment: 'sandbox' })).toBe(false);
   });
 
-  it('stays false for every order today: draft -> queued is not reachable (SNK-6)', () => {
-    expect(canQueueOrder({ status: 'draft', ...bound() }, { environment: 'sandbox' })).toBe(false);
+  it('a bound, eligible draft can be queued (the server still gates enqueue behind its own switch, SNK-6)', () => {
+    expect(canQueueOrder({ status: 'draft', ...bound() }, { environment: 'sandbox' })).toBe(true);
+  });
+
+  it('a sent order can never be queued again', () => {
+    expect(canQueueOrder({ status: 'sent', ...bound() }, { environment: 'sandbox' })).toBe(false);
   });
 });
 

@@ -1,8 +1,8 @@
 /**
  * Status models and transition tables. Pure data + lookups.
- * Reachable today: draft edits, the discount approval flow (awaiting_approval / approved / approval_rejected) and
- * cancellation. The ERP-side transitions are declared so the persistence layer can carry the statuses, but no code
- * path may perform them until ERP submission is enabled (SNK-4/SNK-5 gates).
+ * Reachable: draft edits, the discount approval flow (awaiting_approval / approved / approval_rejected),
+ * cancellation and the ERP delivery states (SNK-7). The model only says what is legal; the server performs the ERP
+ * transitions solely when its delivery switches are on (SNK-4/SNK-5/SNK-6 gates).
  */
 
 export type OrderStatus =
@@ -35,7 +35,6 @@ export interface StatusTransition<S extends string> {
   readonly note?: string;
 }
 
-const NOT_YET = 'ERP submission is disabled until its write-safety gates close';
 
 export const ORDER_TRANSITIONS: readonly StatusTransition<OrderStatus>[] = [
   { from: 'draft', to: 'draft', reachable: true, note: 'draft edit' },
@@ -49,13 +48,15 @@ export const ORDER_TRANSITIONS: readonly StatusTransition<OrderStatus>[] = [
   { from: 'awaiting_approval', to: 'cancelled', reachable: true, note: 'discard' },
   { from: 'approval_rejected', to: 'cancelled', reachable: true, note: 'discard' },
   { from: 'approved', to: 'cancelled', reachable: true, note: 'discard before any ERP submission' },
-  { from: 'approved', to: 'queued', reachable: false, note: NOT_YET },
-  { from: 'draft', to: 'queued', reachable: false, note: NOT_YET },
-  { from: 'queued', to: 'sent', reachable: false, note: NOT_YET },
-  { from: 'queued', to: 'rejected', reachable: false, note: NOT_YET },
-  { from: 'queued', to: 'unknown', reachable: false, note: NOT_YET },
-  { from: 'unknown', to: 'sent', reachable: false, note: NOT_YET },
-  { from: 'unknown', to: 'rejected', reachable: false, note: NOT_YET },
+  // ERP delivery (SNK-7). Reachable in the model; the server only performs them when the delivery switches are on.
+  { from: 'approved', to: 'queued', reachable: true, note: 'enqueued for the ERP (outbox row in the same transaction)' },
+  { from: 'draft', to: 'queued', reachable: true, note: 'enqueued for the ERP (outbox row in the same transaction)' },
+  { from: 'queued', to: 'cancelled', reachable: true, note: 'cancel while the outbox row is still pending (D-5)' },
+  { from: 'queued', to: 'sent', reachable: true, note: 'included (and confirmed) in the ERP; erp_number stored' },
+  { from: 'queued', to: 'rejected', reachable: true, note: 'integration error: permanent refusal or attempts exhausted (D-2)' },
+  { from: 'queued', to: 'unknown', reachable: true, note: 'ambiguous result (sent without answer) or included but not yet confirmed (D-4)' },
+  { from: 'unknown', to: 'sent', reachable: true, note: 'reconciliation by origin id found the order / confirmation done' },
+  { from: 'unknown', to: 'rejected', reachable: true, note: 'verification proved the order was not created and the failure is final' },
 ];
 
 export type OutboxStatus = 'pending' | 'processing' | 'confirmed' | 'rejected' | 'unknown';

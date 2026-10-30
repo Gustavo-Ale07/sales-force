@@ -18,7 +18,7 @@ describe('order status transitions', () => {
     expect(ORDER_STATUSES).toHaveLength(9);
   });
 
-  it('only the approval flow, edits and cancellation are reachable today (no ERP state)', () => {
+  it('the approval flow, edits, cancellation and the ERP delivery states are reachable in the model (SNK-7)', () => {
     const reachable = ORDER_TRANSITIONS.filter((t) => t.reachable).map((t) => `${t.from}->${t.to}`);
     expect(reachable.sort()).toEqual(
       [
@@ -32,6 +32,14 @@ describe('order status transitions', () => {
         'draft->awaiting_approval',
         'draft->cancelled',
         'draft->draft',
+        'draft->queued',
+        'approved->queued',
+        'queued->cancelled',
+        'queued->rejected',
+        'queued->sent',
+        'queued->unknown',
+        'unknown->rejected',
+        'unknown->sent',
       ].sort(),
     );
   });
@@ -39,11 +47,17 @@ describe('order status transitions', () => {
   it.each([
     ['draft', 'draft', true],
     ['draft', 'cancelled', true],
-    ['draft', 'queued', false],
-    ['queued', 'sent', false],
-    ['queued', 'rejected', false],
-    ['queued', 'unknown', false],
-    ['unknown', 'sent', false],
+    ['draft', 'queued', true],
+    ['approved', 'queued', true],
+    ['queued', 'sent', true],
+    ['queued', 'rejected', true],
+    ['queued', 'unknown', true],
+    ['queued', 'cancelled', true],
+    ['unknown', 'sent', true],
+    ['unknown', 'rejected', true],
+    ['unknown', 'cancelled', false],
+    ['sent', 'cancelled', false],
+    ['sent', 'rejected', false],
     ['cancelled', 'draft', false],
     ['cancelled', 'cancelled', false],
     ['sent', 'draft', false],
@@ -53,9 +67,8 @@ describe('order status transitions', () => {
   });
 
   it('distinguishes declared-but-unreachable from undeclared', () => {
-    expect(isOrderTransitionDeclared('draft', 'queued')).toBe(true);
-    expect(canTransitionOrder('draft', 'queued')).toBe(false);
     expect(isOrderTransitionDeclared('cancelled', 'draft')).toBe(false);
+    expect(isOrderTransitionDeclared('queued', 'draft')).toBe(false);
   });
 
   it('every non-reachable declared transition carries a reason', () => {
@@ -75,8 +88,9 @@ describe('order status transitions', () => {
   });
 
   it('lists reachable targets', () => {
-    expect([...reachableOrderTargets('draft')].sort()).toEqual(['awaiting_approval', 'cancelled', 'draft']);
-    expect(reachableOrderTargets('queued')).toEqual([]);
+    expect([...reachableOrderTargets('draft')].sort()).toEqual(['awaiting_approval', 'cancelled', 'draft', 'queued']);
+    expect([...reachableOrderTargets('queued')].sort()).toEqual(['cancelled', 'rejected', 'sent', 'unknown']);
+    expect(reachableOrderTargets('sent')).toEqual([]);
   });
 });
 
@@ -130,7 +144,7 @@ describe('order approval states (ORD-1, ORD-2, SM-2)', () => {
     ['awaiting_approval', 'cancelled', true],
     ['approval_rejected', 'cancelled', true],
     ['approved', 'cancelled', true],
-    ['approved', 'queued', false], // ERP submission stays disabled
+    ['approved', 'queued', true], // enqueue is gated by the server switch (SNK-6/SNK-7), not by the model
     ['approved', 'draft', false],
     ['approval_rejected', 'approved', false], // a reprovação is never reverted without an edit
     ['approval_rejected', 'rejected', false], // never confuses with the ERP rejection
