@@ -28,6 +28,8 @@ import type {
 import { FakeOrderBook } from './fake-order-book.js';
 import { assertSafeScope, selectEffectiveVersions } from '../read-scope.js';
 import { DEMO_CONFIGURATION } from './demo-configuration.js';
+import type { ConfigurationFacts } from '../configuration-facts.js';
+import { PLAC_CONFIGURATION_FACTS } from './configuration-facts-fixture.js';
 import { getDemoDataset, type DemoDataset } from './demo-data.js';
 
 export interface FakeGatewayFault {
@@ -43,6 +45,8 @@ export interface FakeGatewayOptions {
   /** Dataset to serve; defaults to the frozen synthetic demo dataset. */
   readonly dataset?: DemoDataset;
   readonly configuration?: InstallationConfiguration;
+  /** Raw Sankhya-side configuration facts (CFG-8); defaults to the PLAC code fixture. */
+  readonly configurationFacts?: ConfigurationFacts;
   /** Injected failures, to test consumers against incomplete snapshots and error classes. */
   readonly faults?: readonly FakeGatewayFault[];
   /** Synthetic product photos and their failure injection (default: no photos). */
@@ -74,6 +78,7 @@ export class FakeGateway implements SankhyaGateway {
   readonly #batchSize: number;
   readonly #dataset: DemoDataset;
   readonly #configuration: InstallationConfiguration;
+  readonly #configurationFacts: ConfigurationFacts;
   readonly #faults: readonly FakeGatewayFault[];
   readonly #media: FakeGatewayMediaOptions;
   readonly #orders: FakeOrderBook;
@@ -86,6 +91,7 @@ export class FakeGateway implements SankhyaGateway {
     this.#batchSize = batchSize;
     this.#dataset = options.dataset ?? getDemoDataset();
     this.#configuration = options.configuration ?? DEMO_CONFIGURATION;
+    this.#configurationFacts = options.configurationFacts ?? PLAC_CONFIGURATION_FACTS;
     this.#faults = options.faults ?? [];
     this.#media = options.media ?? {};
     this.#orders = options.orders ?? new FakeOrderBook();
@@ -110,6 +116,12 @@ export class FakeGateway implements SankhyaGateway {
     options?.signal?.throwIfAborted();
     this.#failIfFaulted('configuration', 0);
     return this.#configuration;
+  }
+
+  async readConfigurationFacts(options?: ReadOptions): Promise<ConfigurationFacts> {
+    options?.signal?.throwIfAborted();
+    this.#failIfFaulted('configuration', 0);
+    return this.#configurationFacts;
   }
 
   readSellers(options?: ReadOptions) {

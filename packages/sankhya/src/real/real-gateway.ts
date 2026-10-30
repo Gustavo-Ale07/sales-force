@@ -52,6 +52,8 @@ import type {
   WrittenOrderItem,
 } from '../write/order-contract.js';
 import { assertBaseUrlAllowed, assertRequestUrlAllowed } from './host-guard.js';
+import type { ConfigQueryResult, ConfigurationFacts } from '../configuration-facts.js';
+import { CONFIG_QUERIES, type ConfigQueryDef } from './configuration-queries.js';
 import {
   CUSTOMER_SPEC,
   PRODUCT_GROUP_SPEC,
@@ -179,6 +181,59 @@ export class RealSankhyaGateway implements SankhyaGateway {
 
   readConfiguration(options?: ReadOptions): Promise<InstallationConfiguration> {
     return this.#configurationSource.read(options);
+  }
+
+  /**
+   * Q1-Q8 of the Vidya configuration inside Sankhya (CFG-8, spike §9.49), through the same serialized
+   * `DbExplorerSP.executeQuery` path as the mirrors. Each query yields a typed result or a per-query
+   * failure marker (permanent/validation/temporary, or Q1 != 1 row), so a partial read is never
+   * silent. Auth, unavailable and rate-limit failures stop the run and are thrown as classified errors
+   * (every remaining query would fail the same way).
+   */
+  async readConfigurationFacts(options?: ReadOptions): Promise<ConfigurationFacts> {
+    const signal = options?.signal;
+    const readAt = new Date(this.#now()).toISOString();
+    const run = async <T>(def: ConfigQueryDef<T>): Promise<ConfigQueryResult<T>> => {
+      signal?.throwIfAborted();
+      try {
+        const page = await this.#query(def.sql, def.columns, signal);
+        if (def.exactlyOneRow === true && page.rows.length !== 1) {
+          throw new SankhyaGatewayError('validation', {
+            code: 'configuration_row_count',
+            message: `${def.id}: expected exactly one configuration row (NUCFG = 1) and the ERP returned ${page.rows.length}.`,
+          });
+        }
+        const rows = page.rows.map((cells, index) => def.map(new RowReader('configuration', def.columns, cells, index)));
+        return { ok: true, source: def.source, rows };
+      } catch (error) {
+        if (!(error instanceof SankhyaGatewayError)) throw error;
+        if (error.kind === 'auth' || error.kind === 'unavailable' || error.kind === 'rate_limit') throw error;
+        return {
+          ok: false,
+          source: def.source,
+          error: { kind: error.kind, code: error.code, message: error.message, retryable: error.retryable },
+        };
+      }
+    };
+    const q1GeneralParameters = await run(CONFIG_QUERIES.Q1);
+    const q2Companies = await run(CONFIG_QUERIES.Q2);
+    const q3EnabledTops = await run(CONFIG_QUERIES.Q3);
+    const q4TopGroups = await run(CONFIG_QUERIES.Q4);
+    const q5NegotiationTypes = await run(CONFIG_QUERIES.Q5);
+    const q6PriceTables = await run(CONFIG_QUERIES.Q6);
+    const q7OrderStatuses = await run(CONFIG_QUERIES.Q7);
+    const q8ProductMobility = await run(CONFIG_QUERIES.Q8);
+    return {
+      readAt,
+      q1GeneralParameters,
+      q2Companies,
+      q3EnabledTops,
+      q4TopGroups,
+      q5NegotiationTypes,
+      q6PriceTables,
+      q7OrderStatuses,
+      q8ProductMobility,
+    };
   }
 
   readSellers(options?: ReadOptions) {

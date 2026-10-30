@@ -98,6 +98,24 @@ export class RowReader {
     return trimmed === '' ? null : trimmed;
   }
 
+  /** Untyped scalar for report-only columns whose type is not validated; never interpreted. */
+  rawScalar(column: string): string | number | null {
+    const cell = this.#cell(column);
+    if (cell === null || cell === undefined || cell === '') return null;
+    if (typeof cell === 'string') return cell.trim() === '' ? null : cell;
+    if (typeof cell === 'number' && Number.isFinite(cell)) return cell;
+    return this.#fail(column, 'is not a scalar value');
+  }
+
+  /** `S`/`N` flag where null stays `null` ("not read"), never `false`. Anything else is rejected. */
+  nullableFlag(column: string): boolean | null {
+    const cell = this.#cell(column);
+    if (cell === null || cell === undefined || cell === '') return null;
+    if (cell === 'S') return true;
+    if (cell === 'N') return false;
+    return this.#fail(column, 'is not S or N');
+  }
+
   text(column: string): string {
     const value = this.nullableText(column);
     if (value === null) this.#fail(column, 'is null or blank');

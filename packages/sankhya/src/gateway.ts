@@ -14,6 +14,7 @@ import type {
 } from '@salesforce/domain';
 import type { SankhyaProductMediaPort } from './media.js';
 import type { ReadScope } from './read-scope.js';
+import type { ConfigurationFacts } from './configuration-facts.js';
 
 /**
  * `SankhyaGateway`: the ERP boundary (P-02, P-03, STACK-2). Inputs and outputs are Sales Force-shaped
@@ -91,6 +92,14 @@ export type Snapshot<T> = AsyncIterable<readonly T[]>;
 export interface SankhyaReadPort {
   /** One complete, self-consistent configuration snapshot (not paged). */
   readConfiguration(options?: ReadOptions): Promise<InstallationConfiguration>;
+  /**
+   * RAW FACTS of the Vidya configuration kept inside Sankhya (CFG-8, spike §9.49): typed rows per query
+   * Q1-Q8 with per-query success/failure. The server overlays them on the base file; the gateway maps
+   * nothing into the configuration snapshot. Classified error for auth/unavailable/rate-limit; other
+   * failures are per-query markers (`assertConfigurationFactsComplete` throws on any).
+   * (Named `...Facts` because `readConfiguration` already returns the bootstrap snapshot.)
+   */
+  readConfigurationFacts(options?: ReadOptions): Promise<ConfigurationFacts>;
   /** Ordered by `Seller.code`. */
   readSellers(options?: ReadOptions): Snapshot<Seller>;
   /** Ordered by `DirectoryUser.code`. Only the user code and its official seller relation: never names, e-mails or credentials. */

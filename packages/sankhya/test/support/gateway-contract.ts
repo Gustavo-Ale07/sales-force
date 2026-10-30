@@ -123,6 +123,7 @@ export function runGatewayContract(label: string, subject: ContractSubject): voi
         'constructor',
         'describe',
         'readConfiguration',
+        'readConfigurationFacts',
         'readSellers',
         'readCustomers',
         'readProducts',

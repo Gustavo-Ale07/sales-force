@@ -42,6 +42,14 @@ const SECRET_LOOKING: readonly { name: string; pattern: RegExp }[] = [
   { name: 'long hex/base64 blob', pattern: /['"][A-Za-z0-9+/=_-]{40,}['"]/ },
 ];
 
+/**
+ * The fake gateway's PLAC configuration fixture (CFG-8 D2, spike 9.49 item 3) deliberately carries the
+ * recorded PLAC TOP codes. Allowed for that one file and that one pattern only.
+ */
+function isDeclaredPlacFixture(path: string, name: string): boolean {
+  return name === 'PLAC TOP 1001 / 1101' && /fake[\\/]configuration-facts-fixture\.ts$/.test(path);
+}
+
 describe('repository hygiene scan', () => {
   it('finds the files it is meant to scan', () => {
     expect(sourceFiles.length).toBeGreaterThan(10);
@@ -51,7 +59,7 @@ describe('repository hygiene scan', () => {
     const hits: string[] = [];
     for (const path of sourceFiles) {
       const code = withoutComments(readFileSync(path, 'utf8'));
-      for (const { name, pattern } of FORBIDDEN) if (pattern.test(code)) hits.push(`${relative(PACKAGE_ROOT, path)}: ${name}`);
+      for (const { name, pattern } of FORBIDDEN) if (!isDeclaredPlacFixture(path, name) && pattern.test(code)) hits.push(`${relative(PACKAGE_ROOT, path)}: ${name}`);
     }
     expect(hits).toEqual([]);
   });
