@@ -1,9 +1,16 @@
-import type { OrderDetail } from "../data/ports";
+import type { OrderDetail, OrderEntryConfiguration } from "../data/ports";
+
+/** Who decides discounts beyond the seller's limit: `force` = the Sales Force approval flow, `erp` = the release happens in Sankhya (D-L). */
+export type DiscountAuthorityMode = OrderEntryConfiguration["sales"]["discountAuthorityMode"];
+
+/** Shown in the order editor while the installation releases discounts in Sankhya (`discountAuthorityMode = "erp"`). */
+export const ERP_DISCOUNT_NOTICE = "Descontos acima do permitido passam pela liberação no Sankhya depois do envio.";
 
 /**
  * M-14 (DISC-6): the seller sees, read-only, where the order stands in the discount approval and what the approver
  * answered. The app never approves or rejects anything (approval is online and on the web only) and there is no push.
- * These are Sales Force states, never ERP states.
+ * These are Sales Force states, never Sankhya states. When the installation releases discounts in Sankhya
+ * (`discountAuthorityMode = "erp"`) no approval is requested in Sales Force, so nothing is shown (D-L).
  */
 export interface ApprovalView {
   readonly title: string;
@@ -14,7 +21,8 @@ export interface ApprovalView {
 const LEVEL_LABEL = { manager: "Gerente", director: "Diretoria" } as const;
 
 /** `null` when the order has nothing to show about approval (an ordinary draft or an order sent on). */
-export function approvalViewOf(order: Pick<OrderDetail, "status" | "approval">): ApprovalView | null {
+export function approvalViewOf(order: Pick<OrderDetail, "status" | "approval">, mode: DiscountAuthorityMode = "force"): ApprovalView | null {
+  if (mode === "erp") return null;
   const { status, approval } = order;
   if (status === "awaiting_approval") {
     return {

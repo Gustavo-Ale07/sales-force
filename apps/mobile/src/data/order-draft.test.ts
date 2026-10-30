@@ -10,6 +10,7 @@ import {
   groupRowsOf,
   decrementLineQuantity,
   incrementLineQuantity,
+  orderSignature,
   isLinePriceOrderable,
   lineAmountsOf,
   lineFromOrderItem,
@@ -520,5 +521,17 @@ describe("decrementLineQuantity", () => {
 
   it("does not guess for an invalid text (edited in the cart instead)", () => {
     expect(decrementLineQuantity(line({ quantityText: "abc" }))).toBeNull();
+  });
+});
+
+describe("orderSignature", () => {
+  it("is equal for the same editable content and changes with any edit", () => {
+    const base = [line({ productCode: 1, quantityText: "2" })];
+    const same = [line({ productCode: 1, quantityText: "2 ", key: "other" })];
+    expect(orderSignature(10, same)).toBe(orderSignature(10, base));
+    expect(orderSignature(10, [line({ productCode: 1, quantityText: "3" })])).not.toBe(orderSignature(10, base));
+    expect(orderSignature(10, [line({ productCode: 1, quantityText: "2", discountText: "5" })])).not.toBe(orderSignature(10, base));
+    expect(orderSignature(11, base)).not.toBe(orderSignature(10, base));
+    expect(orderSignature(10, base, { topCode: 1001 })).not.toBe(orderSignature(10, base, { topCode: 1000 }));
   });
 });

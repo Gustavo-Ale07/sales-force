@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { Alert } from "react-native";
 import type { LocalOrdersPort } from "../offline/local-orders";
-import { draftRecord, fakeLocalOrders, fakeOrders, orderDetail } from "../test-doubles";
+import { draftRecord, fakeLocalOrders, fakeOrders, orderDetail, orderEntryConfiguration } from "../test-doubles";
 import { SaleDetailScreen } from "./sale-detail-screen";
 
 const noop = () => undefined;
@@ -78,5 +78,22 @@ describe("SaleDetailScreen Compartilhar PDF", () => {
     await render(<SaleDetailScreen localId="x" localOrders={open()} connectivity="online" onBack={noop} onChanged={noop} onContinue={noop} onDuplicate={noop} onSyncNow={noop} />);
     await screen.findByText("Itens (1)");
     expect(screen.queryByLabelText("Compartilhar PDF")).toBeNull();
+  });
+});
+
+describe("SaleDetailScreen in erp discount mode (D-L)", () => {
+  it("hides the approval card when the installation releases discounts in Sankhya", async () => {
+    const sent = draftRecord({ localId: "x", status: "synced", remoteId: "r-x", remoteVersion: 2, remoteDraftNumber: 9 });
+    const awaiting = orderDetail({ id: "r-x", status: "awaiting_approval", approval: null });
+    const base = orderEntryConfiguration();
+    let reads = 0;
+    const orders = fakeOrders({
+      get: async () => { reads += 1; return awaiting; },
+      getEntryConfiguration: async () => orderEntryConfiguration({ sales: { ...base.sales, discountAuthorityMode: "erp" } }),
+    });
+    await render(<SaleDetailScreen localId="x" localOrders={fakeLocalOrders([sent], { open: async () => ({ draft: sent, lines: [] }) })} connectivity="online" orders={orders} onBack={noop} onChanged={noop} onContinue={noop} onDuplicate={noop} onSyncNow={noop} />);
+    expect(await screen.findByText("Enviado ao Force")).toBeTruthy();
+    await waitFor(() => expect(reads).toBe(1));
+    expect(screen.queryByText("Aguardando aprovação do desconto")).toBeNull();
   });
 });

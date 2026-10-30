@@ -156,6 +156,15 @@ export function lineFromProduct(product: ProductListItem, key: string): EditorLi
   };
 }
 
+/**
+ * A comparable fingerprint of what the seller can edit in an order (customer, header choices, and each line's product,
+ * quantity text and discount text). Two equal fingerprints mean there is nothing unsaved to lose; used to decide when
+ * leaving or discarding an order needs a confirmation.
+ */
+export function orderSignature(customerCode: number | null, lines: readonly EditorLine[], header: Readonly<Record<string, string | number | null>> = {}): string {
+  return JSON.stringify([customerCode, header, lines.map((line) => [line.productCode, line.quantityText.trim(), line.discountText.trim()])]);
+}
+
 /** Missing or inconsistent price data on a saved order line is treated as "no price", never fabricated (mirrors `resolvedPriceOf`). */
 function priceFromOrderItem(item: OrderItemDto): ListPriceContext {
   if (item.priceState !== "none" && item.unitListPrice !== null && item.priceTableCode !== null && item.priceVersionId !== null) {

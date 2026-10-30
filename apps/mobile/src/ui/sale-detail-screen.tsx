@@ -8,7 +8,7 @@ import { formatBrl } from "../lib/money";
 import type { LocalOrdersPort } from "../offline/local-orders";
 import { shareOrderPdf, type OrderPdfPort } from "../offline/order-pdf";
 import { saleValue } from "../offline/sales";
-import { approvalViewOf, type ApprovalView } from "../offline/approval-status";
+import { approvalViewOf, type ApprovalView, type DiscountAuthorityMode } from "../offline/approval-status";
 import { saleActions, saleExplanation } from "../offline/sales-status";
 import { colors, spacing } from "../theme";
 import { SaleBadgeView, describeSaleValue } from "./sale-parts";
@@ -19,7 +19,7 @@ export interface SaleDetailScreenProps {
   readonly localOrders: LocalOrdersPort;
   readonly connectivity: ConnectivityState;
   /** Online read of the server's order, to show the discount approval state read-only (M-14). Optional: without it the card is simply absent. */
-  readonly orders?: Pick<OrderRepository, "get">;
+  readonly orders?: Pick<OrderRepository, "get"> & Partial<Pick<OrderRepository, "getEntryConfiguration">>;
   /** Share-sheet PDF (PLAC template, from the local data, works offline). Absent = no button. */
   readonly orderPdf?: OrderPdfPort;
   readonly onBack: () => void;
@@ -71,9 +71,13 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
   useEffect(() => {
     if (orders === undefined || remoteId === null || offline) return;
     let current = true;
-    orders
-      .get(remoteId)
-      .then((order) => current && setFetched({ remoteId, view: approvalViewOf(order) }))
+    // When the installation releases discounts in Sankhya (`erp`) there is no approval to show; an unreadable configuration keeps the default.
+    const mode: Promise<DiscountAuthorityMode> =
+      orders.getEntryConfiguration === undefined
+        ? Promise.resolve("force")
+        : orders.getEntryConfiguration().then((config) => config.sales.discountAuthorityMode, () => "force" as const);
+    Promise.all([orders.get(remoteId), mode])
+      .then(([order, authority]) => current && setFetched({ remoteId, view: approvalViewOf(order, authority) }))
       // The state is a courtesy read: when it fails the card is just absent, the local view is unaffected.
       .catch(() => undefined);
     return () => {

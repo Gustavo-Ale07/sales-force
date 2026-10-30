@@ -35,3 +35,14 @@ describe("approvalViewOf (M-14)", () => {
     expect(view?.lines.join(" ")).not.toMatch(/ERP/);
   });
 });
+
+describe("approvalViewOf when discounts are released in Sankhya (D-L)", () => {
+  it("shows no approval state at all in erp mode", () => {
+    expect(approvalViewOf({ status: "awaiting_approval", approval: null }, "erp")).toBeNull();
+    expect(approvalViewOf({ status: "approval_rejected", approval: decided("rejected", "x") }, "erp")).toBeNull();
+  });
+
+  it("keeps the Sales Force approval state in force mode", () => {
+    expect(approvalViewOf({ status: "awaiting_approval", approval: null }, "force")?.title).toBe("Aguardando aprovação do desconto");
+  });
+});

@@ -1,8 +1,8 @@
 import { isCustomerUnavailableMessage, type DraftRecord, type DraftStatus, type SalesGroup } from "@salesforce/mobile-db";
 
 /**
- * "Enviados" means accepted by the Force backend — NOT delivered to, confirmed by or invoiced in the ERP. The device carries no
- * ERP stage, so no label here claims one (never "sincronizado com o ERP", "confirmado" or "faturado"). Everything else,
+ * "Enviados" means accepted by the Force backend — NOT delivered to, confirmed by or invoiced in Sankhya. The device carries no
+ * Sankhya stage, so no label here claims one (never "sincronizado com o ERP", "confirmado" or "faturado"). Everything else,
  * including a synced order with a change still queued, is "Não enviados".
  */
 export function salesGroupOf(status: DraftStatus): SalesGroup {
@@ -59,7 +59,7 @@ export function saleExplanation(draft: Pick<DraftRecord, "status" | "remoteId" |
     case "syncing":
       return "Enviando este pedido ao Force...";
     case "synced":
-      return "Este pedido foi enviado ao Force. O andamento no ERP é feito pelo Force e ainda não é acompanhado aqui.";
+      return "Este pedido foi enviado ao Force. O andamento no Sankhya ainda não é acompanhado neste aplicativo.";
     case "sync_error":
       return `Não foi possível enviar este pedido. ${draft.lastError ?? ""} Corrija o que for preciso ou tente enviar novamente.`.replace(/\s+/g, " ").trim();
     case "conflict":

@@ -10,6 +10,7 @@ import {
   isLinePriceOrderable,
   lineFromOrderItem,
   lineFromProduct,
+  orderSignature,
   previewDraft,
   toRequestItems,
   describeIssue,
@@ -17,6 +18,7 @@ import {
 } from "../data/order-draft";
 import type { CustomerListItem, OrderDetail, OrderEntryConfiguration, OrderRepository, ProductListItem, Repositories } from "../data/ports";
 import { formatBrl } from "../lib/money";
+import { ERP_DISCOUNT_NOTICE } from "../offline/approval-status";
 import { describeDraftStatus, type LocalOrdersPort } from "../offline/local-orders";
 import { newClientRequestId } from "../lib/uuid";
 import { colors, spacing } from "../theme";
@@ -154,11 +156,18 @@ export function NewOrderScreen({
   const [localDraft, setLocalDraft] = useState<DraftRecord | null>(null);
   const [savedLocal, setSavedLocal] = useState<DraftRecord | null>(null);
 
-  // Latest cart state for the start-request handler, which must react only to a new request, not to every edit.
+  // What the editor held when it was last loaded or saved; an order that differs from it has unsaved edits to protect.
+  const baselineRef = useRef(orderSignature(null, []));
   const finished = savedLocal !== null || savedOrder !== null;
-  const inProgress = useRef({ customer, lines, finished });
+  const dirty =
+    !finished &&
+    orderSignature(customer?.code ?? null, lines) !== baselineRef.current &&
+    (lines.length > 0 || localDraft !== null || editingOrder !== null);
+
+  // Latest cart state for the start-request handler, which must react only to a new request, not to every edit.
+  const inProgress = useRef({ customer, lines, finished, dirty });
   useEffect(() => {
-    inProgress.current = { customer, lines, finished };
+    inProgress.current = { customer, lines, finished, dirty };
   });
   const startNonce = startRequest?.nonce ?? null;
   const startCustomer = startRequest?.customer ?? null;
@@ -209,12 +218,30 @@ export function NewOrderScreen({
         if (!active) return;
         onResumeConsumed?.();
         if (opened === null) return;
-        setLocalDraft(opened.draft);
-        setCustomer({ code: opened.draft.customerCode, name: opened.draft.customerName });
-        setLines(opened.lines);
-        setSavedLocal(null);
-        setSaveFailure(null);
-        setStep("cart");
+        const open = () => {
+          baselineRef.current = orderSignature(opened.draft.customerCode, opened.lines);
+          setLocalDraft(opened.draft);
+          setCustomer({ code: opened.draft.customerCode, name: opened.draft.customerName });
+          setLines(opened.lines);
+          setSavedLocal(null);
+          setSavedOrder(null);
+          setEditingOrder(null);
+          setSaveFailure(null);
+          setStep("cart");
+        };
+        // Opening another order over unsaved edits would silently throw them away: ask first.
+        if (!inProgress.current.dirty) {
+          open();
+          return;
+        }
+        Alert.alert(
+          "Há alterações não salvas",
+          "Abrir outro pedido descarta as alterações do pedido que você está editando.",
+          [
+            { text: "Continuar editando", style: "cancel" },
+            { text: "Descartar e abrir", style: "destructive", onPress: open },
+          ],
+        );
       })
       .catch(() => {
         if (!active) return;
@@ -265,6 +292,7 @@ export function NewOrderScreen({
   }, [config, preview.lines, lines]);
 
   function resetOrder() {
+    baselineRef.current = orderSignature(null, []);
     requestIdRef.current = null;
     setCustomer(null);
     setLines([]);
@@ -280,6 +308,7 @@ export function NewOrderScreen({
 
   /** Reopens the just-saved draft for editing (the only entry point this slice has — there is no order-list screen yet). */
   function editSavedOrder(order: OrderDetail) {
+    baselineRef.current = orderSignature(order.customerCode, order.items.map((item, index) => lineFromOrderItem(item, `edit-${index}`)));
     setEditingOrder(order);
     setCustomer({ code: order.customerCode, name: order.customerName });
     setLines(order.items.map((item, index) => lineFromOrderItem(item, `edit-${index}`)));
@@ -295,6 +324,7 @@ export function NewOrderScreen({
     if (editingOrder === null) return;
     try {
       const fresh = await repositories.orders.get(editingOrder.id);
+      baselineRef.current = orderSignature(fresh.customerCode, fresh.items.map((item, index) => lineFromOrderItem(item, `edit-${index}`)));
       setEditingOrder(fresh);
       setCustomer({ code: fresh.customerCode, name: fresh.customerName });
       setLines(fresh.items.map((item, index) => lineFromOrderItem(item, `edit-${index}`)));
@@ -306,6 +336,20 @@ export function NewOrderScreen({
       }
       setSaveFailure(describeSaveFailure(error));
     }
+  }
+
+  /** Throws away the order being edited (never a saved draft: that one stays on the device). Always asks first. */
+  function confirmDiscard() {
+    Alert.alert(
+      localDraft !== null || editingOrder !== null ? "Descartar alterações?" : "Descartar pedido?",
+      localDraft !== null || editingOrder !== null
+        ? "As alterações feitas desde o último salvamento serão perdidas. O pedido salvo continua como estava."
+        : "Os itens do carrinho serão removidos e o pedido não será salvo. Esta ação não pode ser desfeita.",
+      [
+        { text: "Continuar editando", style: "cancel" },
+        { text: "Descartar", style: "destructive", onPress: resetOrder },
+      ],
+    );
   }
 
   function toggleSelectionMode() {
@@ -409,6 +453,7 @@ export function NewOrderScreen({
           lines,
           loadedDataset: config.status === "ready" ? datasetIdentityOf(config.value) : null,
         });
+        baselineRef.current = orderSignature(customer.code, lines);
         setLocalDraft(saved);
         setSavedLocal(saved);
       } catch (error) {
@@ -629,6 +674,11 @@ export function NewOrderScreen({
 
       <View style={styles.footer}>
         {config.status === "error" && <Text style={styles.footerNotice}>{config.error.message}</Text>}
+        {config.status === "ready" && config.value.sales.discountAuthorityMode === "erp" && lines.length > 0 && (
+          <Text style={styles.footerInfo} accessibilityLabel="Liberação de descontos no Sankhya">
+            {ERP_DISCOUNT_NOTICE}
+          </Text>
+        )}
         {blockedLineCount > 0 && (
           <Text style={styles.footerNotice}>
             {`${blockedLineCount} item(ns) sem preço não podem ser salvos nesta instalação. Remova-os ou aguarde a atualização de preços.`}
@@ -648,6 +698,11 @@ export function NewOrderScreen({
               </Pressable>
             )}
           </View>
+        )}
+        {dirty && !saving && (
+          <Pressable style={styles.discardButton} onPress={confirmDiscard} accessibilityRole="button" accessibilityLabel="Descartar">
+            <Text style={styles.discardButtonText}>{localDraft !== null || editingOrder !== null ? "Descartar alterações" : "Descartar pedido"}</Text>
+          </Pressable>
         )}
         <Pressable
           style={[
@@ -758,6 +813,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   footerNotice: { fontSize: 12, color: colors.warning },
+  footerInfo: { fontSize: 12, color: colors.textMuted },
+  discardButton: { alignItems: "center", paddingVertical: spacing.sm },
+  discardButtonText: { color: colors.red, fontWeight: "700", fontSize: 13 },
   failureBox: { backgroundColor: colors.errorBackground, borderRadius: 8, padding: spacing.md, gap: 2 },
   failureTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
   failureMessage: { fontSize: 13, color: colors.text },

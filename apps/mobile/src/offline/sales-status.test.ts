@@ -45,6 +45,8 @@ describe("saleExplanation", () => {
     expect(saleExplanation(draftRecord({ status: "pending_sync" }))).toMatch(/será enviado/i);
     const synced = saleExplanation(draftRecord({ status: "synced", remoteId: "r1" }));
     expect(synced).toMatch(/enviado ao Force/i);
+    expect(synced).toMatch(/Sankhya/);
+    expect(synced).not.toMatch(/ERP/);
     expect(synced).not.toMatch(/faturad|confirmad|sincronizado com o ERP/i);
     expect(saleExplanation(draftRecord({ status: "sync_error", lastError: "O servidor recusou este pedido." }))).toMatch(/recusou/);
     expect(saleExplanation(draftRecord({ status: "conflict" }))).toMatch(/nada foi sobrescrito/i);
