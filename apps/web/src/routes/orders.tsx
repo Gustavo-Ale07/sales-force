@@ -35,6 +35,7 @@ import { useState } from "react";
 import { CustomerPicker } from "../components/customer-picker";
 import { DiscardOrderDialog } from "../components/discard-order-dialog";
 import { OrderProductFilter, PRODUCT_MATCH_OPTIONS, useProductLabel, type ProductMatch } from "../components/order-product-filter";
+import { PrintOrderButton } from "../components/print-order-button";
 import { QueryError } from "../components/query-error";
 import { customerQueryOptions, ordersQueryOptions, type OrdersParams } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
@@ -383,21 +384,31 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
                       <DateText value={order.updatedAt} withTime />
                     </TableCell>
                     <TableCell>
-                      {order.status === "draft" ? (
-                        <Button
+                      <div className="flex items-center gap-1">
+                        <PrintOrderButton
+                          orderId={order.id}
+                          label={orderReference(order)}
                           size="sm"
                           variant="ghost"
-                          aria-label={`Descartar ${orderReference(order)}`}
-                          leftIcon={<Trash2 size={13} aria-hidden="true" />}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setDiscarding({ id: order.id, label: orderReference(order) });
-                          }}
-                          onKeyDown={(event) => event.stopPropagation()}
-                        >
-                          Descartar
-                        </Button>
-                      ) : null}
+                          disabled={order.itemCount === 0}
+                          stopPropagation
+                        />
+                        {order.status === "draft" ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            aria-label={`Descartar ${orderReference(order)}`}
+                            leftIcon={<Trash2 size={13} aria-hidden="true" />}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setDiscarding({ id: order.id, label: orderReference(order) });
+                            }}
+                            onKeyDown={(event) => event.stopPropagation()}
+                          >
+                            Descartar
+                          </Button>
+                        ) : null}
+                      </div>
                     </TableCell>
                   </TableRow>
                 );

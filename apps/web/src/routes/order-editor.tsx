@@ -44,6 +44,7 @@ import { DuplicateOrderButton } from "../components/duplicate-order-button";
 import { GroupDiscountDialog, MassDiscountDialog } from "../components/discount-dialogs";
 import { NO_PRICE_TEXT, PriceCell } from "../components/price-cell";
 import { INITIAL_PRODUCT_FILTERS, ProductBrowser, type ProductFilters } from "../components/product-browser";
+import { PrintOrderButton } from "../components/print-order-button";
 import { QueryError } from "../components/query-error";
 import { SaveTemplateDialog } from "../components/save-template-dialog";
 import { ApiRequestError } from "../lib/api";
@@ -508,7 +509,14 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
       <PageHeader
         title={order ? orderReference(order) : "Novo pedido"}
         badges={status ? <StatusBadge tone={status.tone}>{status.label}</StatusBadge> : undefined}
-        actions={order ? <DuplicateOrderButton order={order} disabled={dirty} /> : undefined}
+        actions={
+          order ? (
+            <>
+              <PrintOrderButton orderId={order.id} order={order} label={orderReference(order)} disabled={dirty || order.items.length === 0} />
+              <DuplicateOrderButton order={order} disabled={dirty} />
+            </>
+          ) : undefined
+        }
       />
 
       {customer ? <CustomerContextBar customerCode={customer.code} customerName={customer.name} onOpenFicha={() => setFichaOpen(true)} /> : null}
