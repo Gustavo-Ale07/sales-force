@@ -22,6 +22,18 @@ STATUS: ACTIVE — atualizado em 2026-10-29. Fonte de verdade ÚNICA: `C:\Dev\sa
 1. Parte 2 (`PROMPT_2026-10-30_parte2_config-sankhya.md`): começa registrando CFG-8, U-10-a..d e U-11 em `docs/decisions.md`; depois Trilha D.
 2. Decisões do dono abertas pelo reviewer: alçada em modo `erp` vs P-10; PDF compartilhado por representante vs P-20 (ver checkpoint).
 
+## Onde paramos (2026-10-30, parte 2 parcial)
+- Decisões CFG-8/U-10/U-11 em `docs/decisions.md` §3.17. Feito: D1 contrato, D2 gateway Q1–Q8, D3 job `sync.configuration` + grants + migrações 0018/0019, D4 (provenance só para admin). Detalhes e achados: `.claude/work/CHECKPOINT_2026-10-30-parte2-parcial.md`. Job DESLIGADO por padrão.
+- Falta (próxima sessão): D5 web W-38, D6 documentos (contrato físico PONTE/BASE/INFRA, README-staging), D7 testes restantes, UI do `erp_status_detail`, D8 reviewer final.
+
+## Só o dono roda — parte 2 (DESLIGADO até você executar)
+1. Deploy do novo SHA com `SF_RUN_DB_ROLES=1` (grants do worker; migrações 0018 e 0019).
+2. Antes de ligar: pôr `sales.topAllowlist` [1000, 1001] e `negotiationTypeExclusions` [23, 24] no arquivo base e reexecutar o config-bootstrap (achado MÉDIO 1).
+3. Em `/opt/force-staging/config/compose.env`: `CONFIG_SYNC_FROM_SANKHYA=1`; recriar o worker com `deploy/scripts/sf-compose.sh`.
+4. Disparar uma vez (`node dist/sync-once.js` com a entidade de configuração — conferir o comando em `apps/server/src/sync-once.ts`), ler o relatório e `GET /api/v1/configuration` (`source.kind = 'sankhya'`, `source.base`).
+5. Diferenças esperadas vs. arquivo de 2026-10-02: negociações 18 → 33, `catalogReferenceTableCode` null → 5, `alternativeTable.tableCode` 5, TOPs {1000, 1001} com allowlist, `skipConfirmationTopCodes` [1000], `orderStatusDisplay` com 8 status. Outra diferença = investigar.
+6. Voltar: `CONFIG_SYNC_FROM_SANKHYA=0`, recriar o worker; se preciso, reexecutar o config-bootstrap.
+
 ## Só o dono roda — parte 1 (tudo DESLIGADO até você executar)
 1. Deploy do novo SHA com `deploy/scripts/sf-compose.sh` / `deploy-staging.sh` e `SF_RUN_DB_ROLES=1` (migrations 0014–0017 e grants novos de `erp_carrier` e `integration_order_dry_run`).
 2. Reaplicar a configuração do staging (`PLAC_STAGING_INSTALLATION.json`): `sales.discountAuthority.mode=erp`, TOPs elegíveis [1001, 1000], TOP de orçamento 1000.
