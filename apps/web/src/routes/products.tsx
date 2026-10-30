@@ -252,7 +252,7 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
                 <EmptyState
                   compact
                   title={hasFilters ? "Nenhum produto encontrado" : "Catálogo vazio"}
-                  description={hasFilters ? "Ajuste ou limpe os filtros para ver mais resultados." : "Os produtos aparecem aqui após a sincronização com o ERP."}
+                  description={hasFilters ? "Ajuste ou limpe os filtros para ver mais resultados." : "Os produtos aparecem aqui após a sincronização com o Sankhya."}
                 />
               </TableMessageRow>
             ) : (

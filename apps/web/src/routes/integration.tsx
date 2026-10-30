@@ -46,12 +46,12 @@ const syncStatusLabels: Record<ApiSchema<"SyncStatus">, { label: string; tone: T
 
 const gatewayLabels: Record<ApiSchema<"GatewayMode">, string> = {
   fake: "Demonstração (dados de exemplo)",
-  live: "ERP conectado",
+  live: "Sankhya conectado",
   unknown: "Indisponível (sem sinal do worker)",
 };
 
 const sourceLabels: Record<ApiSchema<"ConfigurationSourceKind">, string> = {
-  sankhya: "ERP (Sankhya)",
+  sankhya: "Sankhya",
   "bootstrap-file": "Arquivo de instalação",
   demo: "Demonstração",
 };
@@ -68,7 +68,7 @@ export function IntegrationPage() {
       <PageHeader
         title="Integração e configuração"
        
-        description="Estado da integração com o ERP e da configuração desta instalação (somente leitura)."
+        description="Estado da integração com o Sankhya e da configuração desta instalação (somente leitura)."
         actions={
           <Button
             variant="secondary"
@@ -82,7 +82,7 @@ export function IntegrationPage() {
         }
       />
       {query.isPending ? (
-        <LoadingPanel title="Consultando a integração com o ERP…" description="Buscando o estado da sincronização e a configuração desta instalação." lines={8} />
+        <LoadingPanel title="Consultando a integração com o Sankhya…" description="Buscando o estado da sincronização e a configuração desta instalação." lines={8} />
       ) : query.isError ? (
         <Card>
           <QueryError error={query.error} onRetry={() => void query.refetch()} retrying={query.isRefetching} title="Não foi possível carregar a configuração" />
@@ -90,7 +90,7 @@ export function IntegrationPage() {
       ) : (
         <>
           {query.isFetching ? (
-            <Alert tone="info" title="Sincronizando com o ERP…">
+            <Alert tone="info" title="Sincronizando com o Sankhya…">
               Atualizando o estado da integração; os dados abaixo serão substituídos assim que a resposta chegar.
             </Alert>
           ) : null}
@@ -108,7 +108,7 @@ function ConfigurationView({ data }: { data: ApiSchema<"ConfigurationResponse"> 
     <>
       {gateway.mode === "fake" ? (
         <Alert tone="warning" title="Dados de demonstração">
-          Esta instalação usa dados de exemplo; nada aqui vem do ERP real.
+          Esta instalação usa dados de exemplo; nada aqui vem do Sankhya real.
         </Alert>
       ) : null}
       <div className="grid gap-3 lg:grid-cols-2">

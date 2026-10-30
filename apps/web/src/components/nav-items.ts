@@ -34,8 +34,10 @@ const allNavItems: NavItem[] = [
  * left out. The commercial areas are not for the technical profile (ROLE-1): it sees Integração only. Visibility
  * here is convenience only: the server enforces access.
  */
-export function navItemsFor(role: string | undefined): NavItem[] {
+export function navItemsFor(role: string | undefined, approvals = false): NavItem[] {
   return allNavItems.filter((item) => {
+    // D-M: in `erp` mode the release belongs to Sankhya; the limits and approvals screens do not exist for the user.
+    if ((item.approverOnly || item.adminOnly) && !approvals) return false;
     if (item.approverOnly) return role !== undefined && canDecideApprovals(role);
     if (item.adminOnly) return role !== undefined && canAdministerDiscountLimits(role);
     return item.integrationOnly ? role !== undefined && canSeeIntegration(role) : role === undefined || canUseCommercial(role);

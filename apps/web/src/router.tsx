@@ -13,6 +13,7 @@ import {
   type RouterHistory,
 } from "@tanstack/react-router";
 import { AppShell } from "./components/app-shell";
+import { ForceModeGate } from "./components/force-mode-gate";
 import { NotFound, RouteError, RoutePending } from "./components/route-states";
 import { useAppServices } from "./lib/app-context";
 import { sessionQueryOptions, type AuthClient } from "./lib/auth-client";
@@ -176,6 +177,9 @@ const integrationRoute = createRoute({
   component: lazyRouteComponent(() => import("./routes/integration"), "IntegrationPage"),
 });
 
+const LazyDiscountLimitsPage = lazyRouteComponent(() => import("./routes/discount-limits"), "DiscountLimitsPage");
+const LazyApprovalsPage = lazyRouteComponent(() => import("./routes/approvals"), "ApprovalsPage");
+
 const discountLimitsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/limites-desconto",
@@ -185,7 +189,11 @@ const discountLimitsRoute = createRoute({
     const user = await context.queryClient.ensureQueryData(sessionQueryOptions(context.authClient));
     if (!user || !canAdministerDiscountLimits(user.role)) throw redirect({ to: "/" });
   },
-  component: lazyRouteComponent(() => import("./routes/discount-limits"), "DiscountLimitsPage"),
+  component: () => (
+    <ForceModeGate>
+      <LazyDiscountLimitsPage />
+    </ForceModeGate>
+  ),
 });
 
 const approvalsRoute = createRoute({
@@ -197,7 +205,11 @@ const approvalsRoute = createRoute({
     const user = await context.queryClient.ensureQueryData(sessionQueryOptions(context.authClient));
     if (!user || !canDecideApprovals(user.role)) throw redirect({ to: "/" });
   },
-  component: lazyRouteComponent(() => import("./routes/approvals"), "ApprovalsPage"),
+  component: () => (
+    <ForceModeGate>
+      <LazyApprovalsPage />
+    </ForceModeGate>
+  ),
 });
 
 /**

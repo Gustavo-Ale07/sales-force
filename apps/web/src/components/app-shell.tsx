@@ -5,6 +5,7 @@ import { ArrowLeft, Menu } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useAppServices } from "../lib/app-context";
 import { documentTitleBase } from "../lib/brand";
+import { approvalsEnabled, useDiscountAuthorityMode } from "../lib/discount-authority";
 import type { AuthUser } from "../lib/auth-client";
 import { Brand } from "./brand";
 import { CommandMenu } from "./command-menu";
@@ -23,12 +24,13 @@ const topLink =
   "flex h-11 items-center gap-2 rounded-[12px] px-[18px] text-[15px] font-semibold text-sidebar-fg no-underline transition-[background-color,color] duration-[var(--sf-dur-fast)] ease-spring hover:bg-sidebar-hover hover:text-sidebar-fg-active data-[status=active]:bg-white data-[status=active]:text-[var(--sf-sidebar-bg)] data-[status=active]:shadow-[0_2px_8px_rgba(0,0,0,0.18)]";
 
 function TopNav({ role }: { role: string | undefined }) {
+  const approvals = approvalsEnabled(useDiscountAuthorityMode(role));
   return (
     // lg, not md: at md (768px) the integration pill still shows its full label (see integration-pill.tsx's
     // max-md: collapse), and up to 5 nav items plus that label don't both fit in the 768-1023px range -- the
     // drawer nav below covers that gap instead of the two colliding.
     <nav aria-label="Principal" className="hidden items-center gap-1.5 lg:flex">
-      {navItemsFor(role).map(({ to, label }) => (
+      {navItemsFor(role, approvals).map(({ to, label }) => (
         <Link key={to} to={to} activeOptions={{ exact: to === "/" }} className={topLink}>
           {label}
         </Link>
@@ -42,9 +44,10 @@ const drawerLink =
 
 /** Same items as `TopNav`, stacked, for the drawer used below the `lg` breakpoint. */
 function DrawerNav({ role, onNavigate }: { role: string | undefined; onNavigate: () => void }) {
+  const approvals = approvalsEnabled(useDiscountAuthorityMode(role));
   return (
     <nav aria-label="Principal" className="flex flex-col gap-1">
-      {navItemsFor(role).map(({ to, label, icon: Icon }) => (
+      {navItemsFor(role, approvals).map(({ to, label, icon: Icon }) => (
         <Link
           key={to}
           to={to}

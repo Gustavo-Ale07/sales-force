@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Plus, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { canUseCommercial } from "@salesforce/contracts";
+import { approvalsEnabled, useDiscountAuthorityMode } from "../lib/discount-authority";
 import { navItemsFor } from "./nav-items";
 
 const isApple = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/i.test(navigator.platform);
@@ -16,6 +17,7 @@ export function CommandMenu({ role }: { role: string | undefined }) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const approvals = approvalsEnabled(useDiscountAuthorityMode(role));
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -29,7 +31,7 @@ export function CommandMenu({ role }: { role: string | undefined }) {
 
   const items = useMemo<CommandItem[]>(
     () => [
-      ...navItemsFor(role).map(({ to, label, icon: Icon }) => ({
+      ...navItemsFor(role, approvals).map(({ to, label, icon: Icon }) => ({
         id: `page-${to}`,
         group: "Páginas",
         label,
@@ -51,7 +53,7 @@ export function CommandMenu({ role }: { role: string | undefined }) {
           ]
         : []),
     ],
-    [role, navigate],
+    [role, approvals, navigate],
   );
 
   const chip = isApple() ? "⌘ K" : "Ctrl K";

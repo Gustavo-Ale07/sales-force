@@ -8,12 +8,12 @@ export type IntegrationState = "unknown" | "ok" | "degraded" | "not_configured" 
 
 const presentation: Record<IntegrationState, { tone: Tone; label: string; hint: string }> = {
   unknown: { tone: "neutral", label: "Integração: sem dados", hint: "O estado da integração ainda não foi carregado." },
-  ok: { tone: "success", label: "Integração: normal", hint: "Sincronização com o ERP em dia." },
-  degraded: { tone: "warning", label: "Integração: degradada", hint: "O ERP está indisponível ou atrasado; os dados podem estar desatualizados." },
+  ok: { tone: "success", label: "Integração: normal", hint: "Sincronização com o Sankhya em dia." },
+  degraded: { tone: "warning", label: "Integração: degradada", hint: "O Sankhya está indisponível ou atrasado; os dados podem estar desatualizados." },
   not_configured: {
     tone: "neutral",
     label: "Integração: não configurada",
-    hint: "O ERP ainda não está conectado a esta instalação; os dados exibidos podem ser de demonstração.",
+    hint: "O Sankhya ainda não está conectado a esta instalação; os dados exibidos podem ser de demonstração.",
   },
   down: { tone: "danger", label: "Integração: indisponível", hint: "Sem comunicação com o servidor ou com a integração." },
 };

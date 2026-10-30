@@ -45,7 +45,7 @@ test.describe("Cenário 4 — novo pedido, rascunhos e descarte", () => {
 
     await first.fill("7");
     await expect(save).toBeEnabled();
-    await expect(page.getByRole("button", { name: "Enviar ao ERP" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Enviar ao Sankhya" })).toBeDisabled();
     await expect(page.getByTestId("order-total")).not.toHaveText(total);
     const newTotal = (await page.getByTestId("order-total").innerText()).trim();
 
@@ -142,7 +142,7 @@ test.describe("Cenário 4 — novo pedido, rascunhos e descarte", () => {
     await row.click();
     await expect(page.getByText("Somente leitura")).toBeVisible();
     await expect(page.getByRole("button", { name: "Salvar rascunho" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Enviar ao ERP" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Enviar ao Sankhya" })).toHaveCount(0);
   });
 
   test("edição concorrente em outra aba gera conflito de versão com opção de recarregar", async ({ page, context }) => {

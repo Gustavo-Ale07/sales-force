@@ -10,10 +10,10 @@ export const orderDocumentStatusLabels: Record<ApiSchema<"OrderStatus">, string>
   approved: "Aprovado",
   approval_rejected: "Reprovado na aprovação",
   cancelled: "Descartado",
-  queued: "Na fila de envio ao Sankhya",
+  queued: "Na fila para o Sankhya",
   sent: "Enviado ao Sankhya",
-  rejected: "Rejeitado no envio ao Sankhya",
-  unknown: "Situação desconhecida",
+  rejected: "Falha no envio",
+  unknown: "Envio em verificação",
 };
 
 /** The order screen's data, restricted by the domain allow-list (never cost/margin: P-20), rendered with the shared PLAC template. */

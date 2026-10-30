@@ -198,7 +198,7 @@ describe("Situação do pedido: textos distintos e honestos", () => {
   it("shows one distinct text per status and never says invoiced or synchronized", async () => {
     renderApp("/pedidos", { handlers: { "GET /orders": { body: ordersPage(rows) } } });
     const table = await screen.findByRole("table");
-    for (const text of ["Na fila de envio ao ERP", "Enviado ao ERP", "Rejeitado no envio ao ERP", "Situação desconhecida", "Descartado"]) {
+    for (const text of ["Na fila para o Sankhya", "Enviado ao Sankhya", "Falha no envio", "Envio em verificação", "Descartado"]) {
       expect(await within(table).findAllByText(text)).not.toHaveLength(0);
     }
     expect(table).not.toHaveTextContent(/faturad|sincronizado|confirmado/i);
@@ -213,7 +213,7 @@ describe("Situação do pedido: textos distintos e honestos", () => {
     const review = { status: "needs_review", reason: "customer_ineligible", customerBlock: "customer_blocked" } as const;
     renderApp(`/pedidos/${ORDER_ID}`, { handlers: editorHandlers(orderDetail({ review })) });
     expect(await screen.findByText("O cliente deste rascunho está bloqueado.", { exact: false })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Enviar ao ERP" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Enviar ao Sankhya" })).toBeDisabled();
     expect(screen.getAllByText("Rascunho").length).toBeGreaterThan(0);
   });
 

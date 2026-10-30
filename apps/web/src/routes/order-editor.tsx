@@ -52,6 +52,7 @@ import { ERP_SUBMISSION_DISABLED, createOrder, replaceOrder, submitOrder } from 
 import { orderEntryConfigurationQueryOptions, customerQueryOptions, orderQueryOptions, queryKeys } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { useLoadedDataset, requireDataset } from "../lib/dataset";
+import { approvalsEnabled } from "../lib/discount-authority";
 import { describeApiError } from "../lib/error-message";
 import { orderReference, orderReviewLabel, orderReviewReasons, orderStatusHints, orderStatusLabels } from "../lib/labels";
 import {
@@ -71,8 +72,11 @@ import {
 
 type OrderDetail = ApiSchema<"OrderDetail">;
 
+/** D-M: shown in the cart footer while discounts are released by Sankhya. */
+export const ERP_RELEASE_NOTE = "Descontos acima do permitido passam pela liberação no Sankhya depois do envio.";
+
 export const SUBMIT_DISABLED_MESSAGE =
-  "O envio de pedidos ao ERP ainda não está habilitado nesta instalação. O rascunho continua salvo e nada foi enviado.";
+  "O envio de pedidos ao Sankhya ainda não está habilitado nesta instalação. O rascunho continua salvo e nada foi enviado.";
 
 /** ORD-1: editable as draft and as rejected-by-approver; editing an order awaiting approval returns it to draft. */
 const EDITABLE_STATUSES: ReadonlySet<OrderDetail["status"]> = new Set(["draft", "approval_rejected", "awaiting_approval"]);
@@ -503,6 +507,8 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
       ? describeApiError(submit.error, "Não foi possível enviar o pedido")
       : null;
   const status = order ? orderStatusLabels[order.status] : null;
+  const discountMode = config.data?.sales.discountAuthorityMode;
+  const approvalsOn = approvalsEnabled(discountMode);
 
   return (
     <>
@@ -529,7 +535,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
       ) : null}
       {order?.review ? (
         <Alert tone="warning" title={orderReviewLabel}>
-          {orderReviewReasons[order.review.customerBlock]} O envio ao ERP fica bloqueado até o cliente voltar a estar disponível; nada no rascunho foi alterado.
+          {orderReviewReasons[order.review.customerBlock]} O envio ao Sankhya fica bloqueado até o cliente voltar a estar disponível; nada no rascunho foi alterado.
         </Alert>
       ) : null}
       {readOnly ? (
@@ -538,7 +544,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
         </Alert>
       ) : null}
       {save.isError ? <FailureAlert failure={describeSaveFailure(save.error)} onReload={order ? reload : undefined} /> : null}
-      {order?.approval && (order.status === "approval_rejected" || order.status === "approved" || order.status === "awaiting_approval") ? (
+      {approvalsOn && order?.approval && (order.status === "approval_rejected" || order.status === "approved" || order.status === "awaiting_approval") ? (
         <Alert
           tone={order.status === "approval_rejected" ? "danger" : order.status === "approved" ? "info" : "warning"}
           title={order.status === "awaiting_approval" ? "Aguardando aprovação de desconto" : order.status === "approved" ? "Desconto aprovado" : "Desconto reprovado"}
@@ -555,7 +561,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
         </Alert>
       ) : null}
       {submitMessage ? (
-        <Alert tone="warning" title="Envio ao ERP indisponível" onDismiss={() => setSubmitMessage(null)}>
+        <Alert tone="warning" title="Envio ao Sankhya indisponível" onDismiss={() => setSubmitMessage(null)}>
           {submitMessage}
         </Alert>
       ) : null}
@@ -909,9 +915,16 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
               </p>
             ) : null}
             <FieldHint className="mt-1 text-right">
-              Estimativa pelos preços de lista e descontos informados. O desconto é gravado no rascunho; a aprovação por alçada, a
-              condição de pagamento e a análise de crédito ainda não estão disponíveis nesta versão.
+              Estimativa pelos preços de lista e descontos informados. O desconto é gravado no rascunho.
+              {approvalsOn
+                ? " A condição de pagamento e a análise de crédito ainda não estão disponíveis nesta versão."
+                : null}
             </FieldHint>
+            {discountMode === "erp" ? (
+              <FieldHint className="mt-1 text-right" data-testid="erp-release-note">
+                {ERP_RELEASE_NOTE}
+              </FieldHint>
+            ) : null}
           </CardBody>
         </Card>
 
@@ -965,7 +978,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
                 submit.mutate();
               }}
             >
-              Enviar ao ERP
+              Enviar ao Sankhya
             </Button>
           ) : null}
           {!readOnly ? (

@@ -188,7 +188,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
       <PageHeader
         title="Vendas"
         count={query.data ? query.data.total.toLocaleString("pt-BR") : undefined}
-        description="Pedidos e rascunhos. O envio ao ERP ainda não está habilitado nesta instalação."
+        description="Pedidos e rascunhos. O envio ao Sankhya ainda não está habilitado nesta instalação."
         actions={
           <Button asChild variant="primary" leftIcon={<Plus size={16} strokeWidth={1.75} aria-hidden="true" />}>
             <Link to="/pedidos/novo">Novo pedido</Link>
