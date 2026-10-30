@@ -17,3 +17,4 @@ export * from './order-document.js';
 export * from './order-delivery.js';
 
 export * from './order-erp-validation.js';
+export * from './erp-order-status.js';

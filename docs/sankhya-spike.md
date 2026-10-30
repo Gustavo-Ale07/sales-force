@@ -972,3 +972,19 @@ Overall result: **OVERALL PROOF OK**. Verifier live on the Sandbox tenant host; 
 **Still NEEDS VALIDATION:** the official blocked/inactive column of `TSIUSU` (checkpoint step 4; the owner will bring it from DBExplorer).
 
 **Note on the local probe.** `.claude/work/sankhya-idusu-proof.mjs` returned `authenticate failed: HTTP 404` when pointed at the tenant host: the human login uses the tenant host (`VERIFIER_SANKHYA_BASE_URL`), while `/authenticate` and `/gateway/v1` use the worker's `SANKHYA_BASE_URL`. The request shape (path, headers, body) was already identical to `packages/sankhya/src/real/token-provider.ts`; only the origin was wrong. The probe now takes that origin from `SANKHYA_BASE_URL` (default: Sandbox API base of §9.1, `api.sandbox.sankhya.com.br`) and refuses any other host, including production `api.sankhya.com.br`. The VPS script remains the proof of record.
+
+
+### 9.48 SNK-7 implementation — assumptions that are NEEDS VALIDATION (2026-10-30, no Sankhya contact)
+
+The order delivery code (`packages/sankhya/src/write`, `apps/server/src/integration`) was built against fakes and the S3 evidence in 9.38/9.39 only. Nothing below was observed; each item must be proved in the Sandbox under the D-10 written authorization (`docs/implementation/snk-7-dry-run.md`) before any `live` mode:
+
+1. `confirmarNota` request/response shape: unknown. The real adapter's `confirmOrder` deliberately throws NotImplemented (S3) until proved.
+2. Error body of a rejected `incluirNota` (field-level messages, codes): unknown; classification keeps unknown errors as non-retryable-by-default except transport/timeout/5xx/429/auth.
+3. `IGNOREDESCPROMOQTD` expected value (the payload builder emits `"true"`): unproved.
+4. A multi-item `incluirNota` list: only one-item orders were observed (9.38).
+5. `PERCDESC` with `INFORMARPRECO` false: the 8 % order B of the D-10 test is the first proof.
+6. Columns of TGFITE re-read after the write (D-7 check): the verification compares what the read port returns; the real column list is unconfirmed.
+7. `CODLOCALORIG` 209: from the S3 order; owner confirmation pending, kept configurable, never a literal in the builder.
+8. The dedicated origin column (SNK-5) does not exist yet in the Sandbox; the owner creates it. `findOrderByOrigin` on that column cannot be exercised before.
+9. Source of the Vidya status code (`GETCODSTATUS_VIDYA`) for the ERP status shown in Sales Force (P2): the function body was not obtained. The mapping in `packages/domain` is a reconstruction from the rules the owner stated (including NEGADO overriding FATURADO when `STATUSNFE <> 'A'`) and stays NEEDS VALIDATION until compared with the real function on sample orders.
+10. Ambiguity after a timeout on `incluirNota` is resolved only by reading the origin column; a creation without the origin value is never assumed (SNK-4).
