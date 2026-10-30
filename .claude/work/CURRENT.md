@@ -14,6 +14,21 @@ STATUS: ACTIVE — atualizado em 2026-10-29. Fonte de verdade ÚNICA: `C:\Dev\sa
 - Decisões D1–D12 (`02415be`, `docs/decisions.md` §3.14): confirmadas pelo dono em 2026-10-29.
 - `gh` não instalado (adiado pelo dono). `dbexplorer-sankhya` tem 40 commits e 47 branches sem remoto (outro projeto, sem ação).
 
+## Onde paramos (2026-10-30, parte 1)
+- Parte 1 implementada na branch (decisões em `docs/decisions.md` §3.16): modo de alçada `erp` (padrão), TOP do pedido (1001/1000), orçamento duplicado como pedido, transportadora, quantidades decimais, PDF próprio (web + mobile), SNK-7 estrutural (escrita DESLIGADA, dry-run) e P2 (status do Sankhya a cada 15 min). Hashes e achados do reviewer: `.claude/work/CHECKPOINT_2026-10-30-parte1.md`.
+- Nenhuma chamada ao Sankhya foi feita. Staging não foi tocado.
+
+## Por onde retomar (2026-10-30)
+1. Parte 2 (`PROMPT_2026-10-30_parte2_config-sankhya.md`): começa registrando CFG-8, U-10-a..d e U-11 em `docs/decisions.md`; depois Trilha D.
+2. Decisões do dono abertas pelo reviewer: alçada em modo `erp` vs P-10; PDF compartilhado por representante vs P-20 (ver checkpoint).
+
+## Só o dono roda — parte 1 (tudo DESLIGADO até você executar)
+1. Deploy do novo SHA com `deploy/scripts/sf-compose.sh` / `deploy-staging.sh` e `SF_RUN_DB_ROLES=1` (migrations 0014–0017 e grants novos de `erp_carrier` e `integration_order_dry_run`).
+2. Reaplicar a configuração do staging (`PLAC_STAGING_INSTALLATION.json`): `sales.discountAuthority.mode=erp`, TOPs elegíveis [1001, 1000], TOP de orçamento 1000.
+3. Rebuild dos dev builds iOS (módulos nativos expo-print, expo-sharing, expo-asset).
+4. SNK-7 teste #1 no Sandbox só com o seu "AUTORIZO" escrito, depois de revisar o dry-run (`docs/implementation/snk-7-dry-run.md`). Variáveis que habilitariam a escrita no Sandbox, DESATIVADO: `SANKHYA_ORDER_WRITE_ENABLED=true`, `SANKHYA_ORDER_WRITE_GATES_CLOSED=1`, `SANKHYA_ORDER_ORIGIN_FIELD=<campo criado por você no Sandbox>`. Não definir sem a autorização.
+5. Criar o campo de origem dedicado no Sandbox; rotacionar as credenciais do spike; confirmar `confirmarNota`, `CODLOCALORIG` 209, a leitura de transportadoras (TGFPAR) e o campo de bloqueio do TSIUSU.
+
 ## Onde paramos (2026-10-29)
 - Trilhas A (auth) e B (alçada de desconto) concluídas e publicadas em `origin/feat/sales-force-evolution`; Trilha C = plano `docs/implementation/snk-7-order-submission-plan.md`. Hashes e achados: `.claude/work/CHECKPOINT_2026-10-29.md`.
 - Staging continua em `e705f2f` (híbrido; nada mudou lá). Pendentes no staging: migrations 0012 e 0013 (0013 cria tabela nova, então rodar `db-roles`) e o web com CSP `style-src 'unsafe-inline'`.
