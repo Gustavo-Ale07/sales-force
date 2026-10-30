@@ -40,6 +40,14 @@ export const ApiEnvSchema = z.object({
   DB_STATEMENT_TIMEOUT_MS: integerField({ min: 100, max: 600_000 }, 15_000),
   /** `/ready` results are reused this long (ms; 0 = no cache): the endpoint is public, its cost must be bounded. */
   READINESS_CACHE_TTL_MS: integerField({ min: 0, max: 60_000 }, 3000),
+  /**
+   * SNK-7: queue a submitted order for the ERP (the worker delivers it). `false` by default and refused in
+   * production (SNK-6): ERP order submission stays disabled until its write-safety gates close.
+   */
+  ERP_ORDER_ENQUEUE_ENABLED: z
+    .enum(['true', 'false'], { error: "must be 'true' or 'false'." })
+    .default('false')
+    .transform((value) => value === 'true'),
   /** Argon2id hashes running at once (they block the event loop); beyond it a login answers 429. */
   LOGIN_MAX_CONCURRENT_HASHES: integerField({ min: 1, max: 64 }, 4),
   /** Failed password checks per minute the whole installation tolerates, every client together (login DoS budget). */
@@ -165,6 +173,9 @@ export function parseApiEnv(source: EnvSource): ParsedApiEnv {
     }
     const origins = originProblems(parsed.ALLOWED_ORIGINS, parsed.NODE_ENV);
     allowedOrigins = origins.origins;
+    if (parsed.ERP_ORDER_ENQUEUE_ENABLED && parsed.NODE_ENV === 'production') {
+      problems.push('ERP_ORDER_ENQUEUE_ENABLED: is refused when NODE_ENV=production (ERP order submission stays disabled, SNK-6).');
+    }
     if (parsed.SF_ERP_ENVIRONMENT !== undefined && parsed.SF_DATASET_ID === undefined) {
       problems.push('SF_DATASET_ID: is required when SF_ERP_ENVIRONMENT is set (set both or neither).');
     }

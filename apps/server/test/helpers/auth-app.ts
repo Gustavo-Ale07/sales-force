@@ -91,6 +91,8 @@ export interface AuthAppOptions {
   readonly dataset?: DatasetIdentity | null;
   readonly productImageSource?: ProductImageSource;
   readonly productImageSettings?: Partial<ProductImageSettings>;
+  /** Opens the API-side enqueue of orders for the ERP (default off, as shipped). */
+  readonly orderEnqueueEnabled?: boolean;
 }
 
 /** The API with the real identity module over a fresh migrated database and a hand-driven clock. */
@@ -117,7 +119,7 @@ export async function startAuthApp(
   ];
   if (extraControllers.length > 0) {
     @Module({
-      imports: [ApiModule.register({ logger, db: database.handle, clock: clock.fn, dataset: options.dataset ?? null, ...imageDeps }, auth)],
+      imports: [ApiModule.register({ logger, db: database.handle, clock: clock.fn, dataset: options.dataset ?? null, orderEnqueueEnabled: options.orderEnqueueEnabled ?? false, ...imageDeps }, auth)],
       controllers: extraControllers,
     })
     class ProbedApiModule {}
@@ -131,6 +133,7 @@ export async function startAuthApp(
     auth,
     dataset: options.dataset ?? null,
     ...imageDeps,
+    orderEnqueueEnabled: options.orderEnqueueEnabled ?? false,
     ...(options.trustProxy === undefined ? {} : { trustProxy: options.trustProxy }),
     ...(rootModule === undefined ? {} : { rootModule }),
   });

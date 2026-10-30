@@ -349,3 +349,17 @@ describe('development seed environment (no seed dependency in production)', () =
     expect(parseSeedEnv({ ...base, NODE_ENV: 'development' }).NODE_ENV).toBe('development');
   });
 });
+
+describe('API order enqueue switch (SNK-6, SNK-7)', () => {
+  it('is off by default and when empty', () => {
+    expect(parseApiEnv({ ...DEV }).ERP_ORDER_ENQUEUE_ENABLED).toBe(false);
+    expect(parseApiEnv({ ...DEV, ERP_ORDER_ENQUEUE_ENABLED: '' }).ERP_ORDER_ENQUEUE_ENABLED).toBe(false);
+  });
+
+  it('can be switched on outside production only', () => {
+    expect(parseApiEnv({ ...DEV, ERP_ORDER_ENQUEUE_ENABLED: 'true' }).ERP_ORDER_ENQUEUE_ENABLED).toBe(true);
+    expect(problemsOf(() => parseApiEnv({ ...DEV, NODE_ENV: 'production', ERP_ORDER_ENQUEUE_ENABLED: 'true' }))).toEqual(
+      expect.arrayContaining([expect.stringMatching(/^ERP_ORDER_ENQUEUE_ENABLED: is refused/)]),
+    );
+  });
+});

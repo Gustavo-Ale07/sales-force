@@ -14,6 +14,7 @@ import {
   DATABASE,
   DATABASE_HANDLE,
   LOGGER,
+  ORDER_ENQUEUE_ENABLED,
   PRODUCT_IMAGE_SETTINGS,
   PRODUCT_IMAGE_SOURCE,
   READINESS_CACHE_TTL_MS,
@@ -32,6 +33,8 @@ export interface InfrastructureDeps {
   /** Product image source (default: `NoImageSource`, no product has an image). */
   readonly productImageSource?: ProductImageSource;
   readonly productImageSettings?: Partial<ProductImageSettings>;
+  /** API only: queue submitted orders for the ERP (default false = submission stays disabled, SNK-6). */
+  readonly orderEnqueueEnabled?: boolean;
 }
 
 /**
@@ -50,6 +53,7 @@ export class InfrastructureModule {
       { provide: CLOCK, useValue: deps.clock ?? systemClock },
       { provide: READINESS_CACHE_TTL_MS, useValue: deps.readinessCacheTtlMs ?? 0 },
       { provide: DATASET_IDENTITY, useValue: deps.dataset ?? null },
+      { provide: ORDER_ENQUEUE_ENABLED, useValue: deps.orderEnqueueEnabled ?? false },
       { provide: PRODUCT_IMAGE_SOURCE, useValue: deps.productImageSource ?? new NoImageSource() },
       { provide: PRODUCT_IMAGE_SETTINGS, useValue: { ...DEFAULT_PRODUCT_IMAGE_SETTINGS, ...deps.productImageSettings } },
     ];

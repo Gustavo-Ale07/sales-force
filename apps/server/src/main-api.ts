@@ -41,6 +41,7 @@ runMain('api', async () => {
     auth: authConfigFromEnv(env),
     dataset: env.dataset,
     readinessCacheTtlMs: env.READINESS_CACHE_TTL_MS,
+    orderEnqueueEnabled: env.ERP_ORDER_ENQUEUE_ENABLED,
     trustProxy: env.TRUST_PROXY,
     // Product photos: read-only view of what the worker stored (never the ERP). Unset = no product has an image.
     ...(env.PRODUCT_MEDIA_DIR === undefined

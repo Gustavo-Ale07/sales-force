@@ -15,10 +15,12 @@ import {
   canTransitionOrder,
   customerOrderBlock,
   datasetOriginForConfigurationSource,
+  discountAuthorityModeOf,
   isCustomerInScope,
   isOrderEditable,
   isQuotationTopCode,
   normalizeDecimalString,
+  orderErpIssues,
   presentSkips,
   recomputeOrderAuthority,
   resolveOrderTopCode,
@@ -38,8 +40,10 @@ import { PolicyService, type AccessContext } from '../iam/policy.service.js';
 import { isBlockedRaw, MirrorRepository, type CustomerRow, type CustomerStateRow } from '../mirror/mirror.repository.js';
 import { assertDatasetMatches } from '../platform/dataset-guard.js';
 import { uuidv7 } from '../platform/ids.js';
-import { CLOCK, DATASET_IDENTITY, type Clock } from '../platform/tokens.js';
+import { CLOCK, DATASET_IDENTITY, ORDER_ENQUEUE_ENABLED, type Clock } from '../platform/tokens.js';
 import { DraftBuilder, type DraftOutcome } from './draft-builder.js';
+import { assertEligibleForErpSubmission } from './erp-eligibility.guard.js';
+import { enqueueOrderDelivery, withdrawPendingDelivery } from './order-erp-delivery.js';
 import { orderFingerprint } from './order-fingerprint.js';
 import { toOrderApproval, toOrderDetail, toOrderListItem } from './order.mapper.js';
 import { OrdersRepository, type Executor, type OrderCounts, type OrderRow } from './orders.repository.js';
@@ -122,6 +126,7 @@ export class OrdersService {
     @Inject(ProductImageService) private readonly images: ProductImageService,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(DATASET_IDENTITY) private readonly dataset: DatasetIdentity | null,
+    @Inject(ORDER_ENQUEUE_ENABLED) private readonly enqueueEnabled: boolean,
   ) {}
 
   /* ---------- reads ---------- */
@@ -209,7 +214,8 @@ export class OrdersService {
           // request (SNK-6). The ERP environment stays unbound until an installation-level identity
           // for it is decided: an unbound order is never eligible for the ERP.
           datasetOrigin: datasetOriginForConfigurationSource(context.configuration.source.kind),
-          erpEnvironment: null,
+          erpEnvironment:
+            datasetOriginForConfigurationSource(context.configuration.source.kind) === 'sankhya' ? (this.dataset?.environment ?? null) : null,
           createdAt: at,
           updatedAt: at,
         },
@@ -524,6 +530,14 @@ export class OrdersService {
       const locked = await this.orders.findById(id, tx, true);
       this.assertInScope(scope, locked);
       this.assertCancellable(locked);
+      // D-5: a queued order is withdrawn from the delivery only while the worker has not claimed it; once a send
+      // is in flight (or ambiguous) the user waits for its outcome, never a cancel that could race the ERP.
+      if (locked.status === 'queued' && (await withdrawPendingDelivery(tx, id, at)) === 'busy') {
+        throw new AppError('conflict', {
+          message: 'O pedido está sendo enviado ao Sankhya. Aguarde a conclusão do envio para cancelar.',
+          details: { reason: 'delivery_in_progress' },
+        });
+      }
       const invalidated = await this.orders.invalidatePendingApproval(id, at, tx);
       const row = await this.orders.updateOrder(
         id,
@@ -537,6 +551,12 @@ export class OrdersService {
         );
       }
       const items = await this.orders.itemsOf(id, tx);
+      if (locked.status === 'queued') {
+        await this.audit.record(
+          { action: AUDIT_ACTIONS.orderErpCancelledByUser, actorAccountId: user.accountId, detail: this.auditDetail(row, items.length) },
+          tx,
+        );
+      }
       await this.audit.record(
         { action: AUDIT_ACTIONS.orderDiscarded, actorAccountId: user.accountId, detail: this.auditDetail(row, items.length) },
         tx,
@@ -569,6 +589,7 @@ export class OrdersService {
         details: { reason: 'edit_before_resubmitting' },
       });
     }
+    if (order.status === 'queued' && this.enqueueEnabled) return this.detailOf(order); // replay of the same click
     if (order.status !== 'draft' && order.status !== 'approved') throw new AppError('order_not_editable');
     // The server revalidates the customer NOW, not at draft time: a draft whose customer became ineligible
     // is refused and flagged (needs_review), never sent and never silently altered.
@@ -583,7 +604,10 @@ export class OrdersService {
       throw new AppError('customer_ineligible', { details: { reason: block } });
     }
     // An approved order was released by an explicit approval of these very lines (an edit would have reset it).
-    const authority = order.status === 'approved' ? null : await this.recomputeAuthority(order, context.configuration);
+    // Discount authority is a Sales Force rule only in `force` mode (D-M). In `erp` mode (default) the ERP decides
+    // and only structural validity is checked here (below).
+    const forceMode = discountAuthorityModeOf(context.configuration.sales.discountAuthority) === 'force';
+    const authority = order.status === 'approved' || !forceMode ? null : await this.recomputeAuthority(order, context.configuration);
     if (authority !== null && authority.status === 'blocked') {
       await this.audit.record({
         action: AUDIT_ACTIONS.orderSubmitDiscountBlocked,
@@ -595,12 +619,54 @@ export class OrdersService {
     if (authority !== null && authority.level !== null) {
       return this.requestApproval(user, order, authority.level, context);
     }
-    await this.audit.record({
-      action: AUDIT_ACTIONS.orderSubmitAttempted,
-      actorAccountId: user.accountId,
-      detail: { ...this.auditDetail(order, 0), outcome: 'erp_submission_disabled' },
+    if (!this.enqueueEnabled) {
+      await this.audit.record({
+        action: AUDIT_ACTIONS.orderSubmitAttempted,
+        actorAccountId: user.accountId,
+        detail: { ...this.auditDetail(order, 0), outcome: 'erp_submission_disabled' },
+      });
+      throw new AppError('erp_submission_disabled');
+    }
+    return this.enqueueForErp(user, order, scope);
+  }
+
+  /**
+   * draft/approved -> queued with its outbox row, atomically (SNK-7). Structural validity ("Sem preço", discount
+   * 0-99.99 %, unit) and the ERP eligibility of the stored binding are checked on the locked row; nothing is sent
+   * from here: the worker delivers.
+   */
+  private async enqueueForErp(user: CurrentUser, seen: OrderRow, scope: CustomerScope): Promise<OrderDetail> {
+    const at = this.clock();
+    const updated = await this.orders.transaction(async (tx) => {
+      const locked = await this.orders.findById(seen.id, tx, true);
+      this.assertInScope(scope, locked);
+      if (locked.status === 'queued') return locked; // idempotent replay of the same click
+      if (locked.status !== 'draft' && locked.status !== 'approved') throw new AppError('order_not_editable');
+      if (locked.version !== seen.version) throw new AppError('version_conflict', { details: { currentVersion: locked.version } });
+      assertEligibleForErpSubmission(locked, { environment: this.dataset?.environment ?? '' });
+      const items = await this.orders.itemsOf(locked.id, tx);
+      const issues = [
+        ...(locked.negotiationTypeCode === null ? [{ path: 'negotiationTypeCode', code: 'missing_negotiation_type' }] : []),
+        ...orderErpIssues(
+          items.map((item) => ({
+            lineNo: item.lineNo,
+            discountPercent: normalizeDecimalString(item.discountPercent),
+            priceState: item.priceState as 'priced' | 'zero' | 'none',
+            unit: item.unit,
+          })),
+        ).map((issue) => ({ path: issue.lineNo === 0 ? 'items' : `items.${issue.lineNo}`, code: issue.code })),
+      ];
+      if (issues.length > 0) {
+        throw new AppError('validation_failed', { details: { issues } });
+      }
+      const row = await enqueueOrderDelivery(tx, locked, at);
+      await this.audit.record(
+        { action: AUDIT_ACTIONS.orderErpEnqueued, actorAccountId: user.accountId, detail: this.auditDetail(row, items.length) },
+        tx,
+      );
+      return row;
     });
-    throw new AppError('erp_submission_disabled');
+    return this.detailOf(updated);
   }
 
   /** draft -> awaiting_approval with its request, atomically; decided again on the locked row. */
