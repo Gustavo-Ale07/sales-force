@@ -90,6 +90,9 @@ jobs:
       - name: Deploy scripts - postgres guard self-test (stubbed Compose, no Docker)
         run: bash deploy/scripts/test-postgres-guard.sh
 
+      - name: Deploy scripts - sf-compose.sh self-test (--print, no Docker)
+        run: bash deploy/scripts/test-sf-compose.sh
+
       - name: Compose config with the example env files (fictional values)
         run: bash deploy/scripts/ci-compose-check.sh "$RUNNER_TEMP/compose-check"
 
