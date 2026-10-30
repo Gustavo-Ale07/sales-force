@@ -85,7 +85,7 @@ describe('migration 0008 (account.external_user_id)', () => {
     const url = await postgres.createDatabase();
     const first = await runMigrations(url, { log: () => undefined });
     expect(first.applied).toContain('0008_account_external_user_id');
-    expect(first.applied.at(-1)).toBe('0017_order_erp_status');
+    expect(first.applied.at(-1)).toBe('0018_order_erp_status_detail');
     const second = await runMigrations(url, { log: () => undefined });
     expect(second.applied).toEqual([]);
   });
