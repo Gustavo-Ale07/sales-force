@@ -34,7 +34,8 @@ const EXPECTED: Record<string, { api: Priv[]; worker: Priv[] }> = {
   account_seller_link: { api: SIUD, worker: [] },
   auth_throttle: { api: SIUD, worker: [] },
   audit_log: { api: ['INSERT'], worker: ['INSERT'] },
-  installation_configuration_version: { api: S, worker: S },
+  // Worker: INSERT + column-level UPDATE (is_current) only (CFG-8); the column grant is checked below.
+  installation_configuration_version: { api: S, worker: ['SELECT', 'INSERT'] },
   sync_state: { api: S, worker: SIU },
   sales_order: { api: SIU, worker: ['SELECT', 'UPDATE'] },
   sales_order_item: { api: SIUD, worker: S },
@@ -213,6 +214,9 @@ describe('db-roles.sql', () => {
     expect(await sqlState('force_worker', 'SELECT count(*) FROM erp_customer')).toBeUndefined();
     expect(await sqlState('force_worker', 'SELECT count(*) FROM installation_configuration_version')).toBeUndefined();
     expect(await sqlState('force_worker', `UPDATE sync_state SET status = status`)).toBeUndefined();
+    // CFG-8: the sync.configuration job switches `is_current` (column grant) and inserts versions; FOR UPDATE needs that grant.
+    expect(await sqlState('force_worker', 'UPDATE installation_configuration_version SET is_current = is_current')).toBeUndefined();
+    expect(await sqlState('force_worker', 'SELECT id FROM installation_configuration_version FOR UPDATE')).toBeUndefined();
     expect(await sqlState('force_worker', 'UPDATE erp_product SET description = description')).toBeUndefined();
     // The mirror writer keeps a session-temporary table of the keys seen.
     expect(await sqlState('force_worker', 'CREATE TEMPORARY TABLE sf_seen (k0 int); TRUNCATE sf_seen')).toBeUndefined();
@@ -229,7 +233,9 @@ describe('db-roles.sql', () => {
       'SELECT count(*) FROM schema_migration',
       'DELETE FROM erp_customer',
       'TRUNCATE erp_customer',
-      'UPDATE installation_configuration_version SET is_current = is_current',
+      "UPDATE installation_configuration_version SET payload = '{}'",
+      'UPDATE installation_configuration_version SET content_hash = content_hash',
+      'DELETE FROM installation_configuration_version',
       'CREATE TABLE t_ddl (id int)',
       'CREATE SCHEMA s_ddl',
       'DROP TABLE erp_product',

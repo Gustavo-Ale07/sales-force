@@ -113,6 +113,23 @@ describe('sync.erp.orderStatus (SNK-7 P2)', () => {
     expect((await w.row(id))?.erpStatusCode).toBe(2);
   });
 
+  it('stores the release event codes (distinct, ascending) in erp_status_detail, and keeps them when a later reading carries none (D6b)', async () => {
+    const w = await world();
+    const id = await w.seed(7010);
+    w.book.statusFacts.set(7010, facts({ awaitingRelease: true }));
+    w.book.releaseEventCodes.set(7010, [44, 2, 13, 2]);
+    await w.service.runOnce();
+    expect((await w.row(id))?.erpStatusDetail).toBe('2,13,44');
+
+    w.book.releaseEventCodes.delete(7010);
+    await w.service.runOnce();
+    expect((await w.row(id))?.erpStatusDetail).toBe('2,13,44');
+
+    w.book.releaseEventCodes.set(7010, []);
+    await w.service.runOnce();
+    expect((await w.row(id))?.erpStatusDetail).toBeNull();
+  });
+
   it('shows DESCONHECIDO for a sent order the ERP cannot find on the first read', async () => {
     const w = await world();
     const id = await w.seed(7009);

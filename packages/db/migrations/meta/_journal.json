@@ -127,6 +127,13 @@
       "when": 1793367307545,
       "tag": "0017_order_erp_status",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793384763655,
+      "tag": "0018_order_erp_status_detail",
+      "breakpoints": true
     }
   ]
 }

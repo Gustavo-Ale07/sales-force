@@ -99,6 +99,11 @@ export interface ErpOrderStatusReading {
   readonly facts: ErpOrderStatusFactsReading;
   /** Invoice number when one exists. */
   readonly invoiceNumber: number | null;
+  /**
+   * Codes of the release (TSILIB) events seen for the order (D6b). Absent when the source did not provide them.
+   * Reading them from the ERP is NEEDS VALIDATION together with the rest of the status source (spike 9.48 item 9).
+   */
+  readonly releaseEventCodes?: readonly number[];
 }
 
 export interface SankhyaOrderReadPort {

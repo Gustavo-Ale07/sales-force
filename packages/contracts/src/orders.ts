@@ -162,6 +162,8 @@ export const OrderListItemSchema = named(
         label: z.string(),
         invoiceNumber: z.number().int().nullable(),
         checkedAt: IsoTimestampSchema,
+        /** D6b, order detail only: release (TSILIB) event codes last read; `label` comes from `erp.liberationEventLabels`, else `null`. */
+        releaseEvents: z.array(z.object({ code: z.number().int().min(0), label: z.string().nullable() })).optional(),
       })
       .nullable(),
     /** `null` unless the draft needs review (its customer became ineligible). Clients show it and block sending. */

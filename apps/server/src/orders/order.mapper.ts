@@ -1,6 +1,7 @@
 import type { DiscountAuthorityStatus, OrderApproval, OrderDetail, OrderItemDetail as OrderItemDto, OrderListItem, OrderReview, OrderStatus, ProductImage } from '@salesforce/contracts';
 import { computeOrderTotals, customerOrderBlock, normalizeDecimalString } from '@salesforce/domain';
 import { isBlockedRaw } from '../mirror/mirror.repository.js';
+import { decodeReleaseEventCodes } from './release-events.js';
 import type { ApprovalWithDecider, OrderCustomerState, OrderItemRow, OrderListRow, OrderRow } from './orders.repository.js';
 
 export function toOrderApproval(found: ApprovalWithDecider | null): OrderApproval | null {
@@ -41,14 +42,21 @@ export function reviewOf(status: string, customer: OrderCustomerState): OrderRev
 }
 
 /** ERP status as last read by the worker (P2); null until the first read. */
-export function erpStatusOf(order: OrderRow): OrderListItem['erpStatus'] {
+export function erpStatusOf(order: OrderRow, liberationEventLabels?: Readonly<Record<string, string>>): OrderListItem['erpStatus'] {
   if (order.erpStatusCode == null || order.erpStatusLabel == null || order.erpStatusCheckedAt == null) return null;
-  return {
+  const base = {
     code: order.erpStatusCode,
     label: order.erpStatusLabel,
     invoiceNumber: order.erpInvoiceNumber ?? null,
     checkedAt: order.erpStatusCheckedAt.toISOString(),
   };
+  // D6b: release events are a detail-only addition (the list item stays small); the label is optional configuration.
+  if (liberationEventLabels === undefined) return base;
+  const releaseEvents = decodeReleaseEventCodes(order.erpStatusDetail).map((code) => ({
+    code,
+    label: liberationEventLabels[String(code)] ?? null,
+  }));
+  return releaseEvents.length === 0 ? base : { ...base, releaseEvents };
 }
 
 export function toOrderListItem(row: OrderListRow): OrderListItem {
@@ -99,6 +107,7 @@ export function toOrderDetail(
   customer: OrderCustomerState,
   images: ReadonlyMap<number, ProductImage> = new Map(),
   approval: OrderApproval | null = null,
+  liberationEventLabels: Readonly<Record<string, string>> = {},
 ): OrderDetail {
   const dtoItems = items.map((item) => toItemDto(item, images.get(item.productCode)));
   const totals = computeOrderTotals(dtoItems);
@@ -115,7 +124,7 @@ export function toOrderDetail(
     itemCount: dtoItems.length,
     isPartial: totals.isPartial,
     erpNumber: order.erpNumber,
-    erpStatus: erpStatusOf(order),
+    erpStatus: erpStatusOf(order, liberationEventLabels),
     review: reviewOf(order.status, customer),
     version: order.version,
     createdAt: order.createdAt.toISOString(),

@@ -45,6 +45,7 @@ import { DraftBuilder, type DraftOutcome } from './draft-builder.js';
 import { assertEligibleForErpSubmission } from './erp-eligibility.guard.js';
 import { enqueueOrderDelivery, withdrawPendingDelivery } from './order-erp-delivery.js';
 import { orderFingerprint } from './order-fingerprint.js';
+import { InstallationConfigurationService } from '../configuration/configuration.service.js';
 import { toOrderApproval, toOrderDetail, toOrderListItem } from './order.mapper.js';
 import { OrdersRepository, type Executor, type OrderCounts, type OrderRow } from './orders.repository.js';
 
@@ -127,6 +128,7 @@ export class OrdersService {
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(DATASET_IDENTITY) private readonly dataset: DatasetIdentity | null,
     @Inject(ORDER_ENQUEUE_ENABLED) private readonly enqueueEnabled: boolean,
+    @Inject(InstallationConfigurationService) private readonly installation: InstallationConfigurationService,
   ) {}
 
   /* ---------- reads ---------- */
@@ -802,13 +804,16 @@ export class OrdersService {
     // Same media source as the catalog; best effort (a failure degrades to no photos, the order still works).
     const images = await this.images.metadataFor([...new Set(items.map((item) => item.productCode))]);
     const state = states.get(order.customerCode);
+    // D6b: names for the release events; read only when the order has any.
+    const liberationEventLabels =
+      order.erpStatusDetail == null ? {} : ((await this.installation.current()).configuration.erp?.liberationEventLabels ?? {});
     return toOrderDetail(order, items, {
       customerName: state?.name ?? null,
       customerActive: state?.active ?? null,
       customerBlockedRaw: state?.blockedRaw ?? null,
       customerSellerCode: state?.sellerCode ?? null,
       customerLive: state?.live ?? null,
-    }, images, toOrderApproval(approval));
+    }, images, toOrderApproval(approval), liberationEventLabels);
   }
 
   /** Identifiers and counts only: no notes, no free text. */

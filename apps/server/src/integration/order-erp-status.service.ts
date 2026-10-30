@@ -3,6 +3,7 @@ import { mapErpOrderStatus } from '@salesforce/domain';
 import { isSankhyaGatewayError, type SankhyaOrderReadPort } from '@salesforce/sankhya';
 import { and, asc, eq, gte, isNotNull, sql } from 'drizzle-orm';
 import type { Logger } from '../observability/logger.js';
+import { encodeReleaseEventCodes } from '../orders/release-events.js';
 import type { Clock } from '../platform/tokens.js';
 
 /** Orders older than this are no longer polled (P2). */
@@ -76,6 +77,8 @@ export class OrderErpStatusService {
           erpStatusLabel: mapped.label,
           erpInvoiceNumber: reading.invoiceNumber,
           erpStatusCheckedAt: now,
+          // Absent in the reading = the source did not provide events: keep what was stored.
+          ...(reading.releaseEventCodes === undefined ? {} : { erpStatusDetail: encodeReleaseEventCodes(reading.releaseEventCodes) }),
         })
         .where(eq(salesOrder.id, row.id));
       updated += 1;

@@ -67,6 +67,8 @@ export const salesOrder = pgTable(
     /** Invoice number once the ERP issued one (null before). */
     erpInvoiceNumber: bigint('erp_invoice_number', { mode: 'number' }),
     erpStatusCheckedAt: timestamp('erp_status_checked_at', { withTimezone: true }),
+    /** ERP release (TSILIB) event codes as last read, ascending and comma-separated (e.g. "2,13,44"); null until read. D6b. */
+    erpStatusDetail: text('erp_status_detail'),
     /** Quotation this order was duplicated from ("Duplicar como pedido"); traceability only, no state depends on it. */
     sourceOrderId: uuid('source_order_id'),
     /** Optional carrier chosen on the order (D-C); validated against the carrier mirror, no FK (mirror rows are soft-deleted). */

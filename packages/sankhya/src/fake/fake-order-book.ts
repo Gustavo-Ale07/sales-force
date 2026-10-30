@@ -54,6 +54,8 @@ export class FakeOrderBook {
   /** Status facts a test sets for an order number (P2); otherwise derived from the stored order. */
   readonly invoiceNumbers = new Map<number, number>();
   readonly statusFacts = new Map<number, ErpOrderStatusFactsReading>();
+  /** Release event codes a test sets for an order number (D6b). */
+  readonly releaseEventCodes = new Map<number, readonly number[]>();
   readonly #scripts: Record<FakeOrderOperation, FakeOrderOutcome[]> = { include: [], confirm: [], find: [], read: [] };
   readonly #options: FakeOrderBookOptions;
   #next: number;
@@ -109,12 +111,17 @@ export class FakeOrderBook {
 
   statusOf(erpOrderNumbers: readonly number[]): ErpOrderStatusReading[] {
     return erpOrderNumbers.map((erpOrderNumber) => {
+      const events = this.releaseEventCodes.get(erpOrderNumber);
+      const eventPart = events === undefined ? {} : { releaseEventCodes: [...events] };
       const set = this.statusFacts.get(erpOrderNumber);
-      if (set !== undefined) return { erpOrderNumber, facts: set, invoiceNumber: this.invoiceNumbers.get(erpOrderNumber) ?? null };
+      if (set !== undefined) {
+        return { erpOrderNumber, facts: set, invoiceNumber: this.invoiceNumbers.get(erpOrderNumber) ?? null, ...eventPart };
+      }
       const stored = this.orders.find((order) => order.erpOrderNumber === erpOrderNumber);
       return {
         erpOrderNumber,
         invoiceNumber: null,
+        ...eventPart,
         facts: {
           found: stored !== undefined,
           cancelled: false,

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { CatalogModule } from '../catalog/catalog.module.js';
+import { ConfigurationModule } from '../configuration/configuration.module.js';
 import { CustomersModule } from '../customers/customers.module.js';
 import { MirrorModule } from '../mirror/mirror.module.js';
 import { ApprovalsController } from './approvals.controller.js';
@@ -15,7 +16,7 @@ import { OrdersService } from './orders.service.js';
  * is disabled (SNK-4, SNK-6), so this module never enqueues a Sankhya write.
  */
 @Module({
-  imports: [MirrorModule, CustomersModule, CatalogModule],
+  imports: [MirrorModule, CustomersModule, CatalogModule, ConfigurationModule],
   controllers: [OrdersController, ApprovalsController],
   providers: [OrdersRepository, OrdersService, DraftBuilder, ApprovalsRepository, ApprovalsService],
   exports: [OrdersService, DraftBuilder],
