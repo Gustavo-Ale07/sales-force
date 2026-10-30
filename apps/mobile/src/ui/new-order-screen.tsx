@@ -21,6 +21,7 @@ import { formatBrl } from "../lib/money";
 import { ERP_DISCOUNT_NOTICE } from "../offline/approval-status";
 import { describeDraftStatus, type LocalOrdersPort } from "../offline/local-orders";
 import { newClientRequestId } from "../lib/uuid";
+import { OrderHeaderOptions } from "./order-header-options";
 import { colors, spacing } from "../theme";
 import { CartView } from "./cart-view";
 import { CustomerPicker } from "./customer-picker";
@@ -158,10 +159,13 @@ export function NewOrderScreen({
 
   // What the editor held when it was last loaded or saved; an order that differs from it has unsaved edits to protect.
   const baselineRef = useRef(orderSignature(null, []));
+  /** Header options the seller changed in this session (`undefined` = untouched, the saved or default value stands). */
+  const [choice, setChoice] = useState<{ top?: number; negotiation?: number }>({});
+  const choiceHeader = { ...(choice.top === undefined ? {} : { top: choice.top }), ...(choice.negotiation === undefined ? {} : { negotiation: choice.negotiation }) };
   const finished = savedLocal !== null || savedOrder !== null;
   const dirty =
     !finished &&
-    orderSignature(customer?.code ?? null, lines) !== baselineRef.current &&
+    orderSignature(customer?.code ?? null, lines, choiceHeader) !== baselineRef.current &&
     (lines.length > 0 || localDraft !== null || editingOrder !== null);
 
   // Latest cart state for the start-request handler, which must react only to a new request, not to every edit.
@@ -220,6 +224,7 @@ export function NewOrderScreen({
         if (opened === null) return;
         const open = () => {
           baselineRef.current = orderSignature(opened.draft.customerCode, opened.lines);
+          setChoice({});
           setLocalDraft(opened.draft);
           setCustomer({ code: opened.draft.customerCode, name: opened.draft.customerName });
           setLines(opened.lines);
@@ -276,6 +281,19 @@ export function NewOrderScreen({
     }
   }, [repositories.orders, onUnauthenticated]);
 
+  const savedTopCode = localDraft?.topCode ?? editingOrder?.topCode ?? null;
+  const topCode = choice.top !== undefined ? choice.top : savedTopCode;
+  const savedNegotiation =
+    localDraft !== null
+      ? localDraft.negotiationTypeCode
+      : editingOrder !== null
+        ? editingOrder.negotiationTypeCode
+        : config.status === "ready"
+          ? config.value.sales.defaultNegotiationTypeCode
+          : null;
+  const negotiationTypeCode = choice.negotiation !== undefined ? choice.negotiation : savedNegotiation;
+  const carrierCode = localDraft?.carrierCode ?? editingOrder?.carrierCode ?? null;
+
   const preview = useMemo(() => previewDraft(lines), [lines]);
   const productActions = useMemo<ProductOrderActions>(() => {
     const quantities = new Map(lines.map((line) => [line.productCode, line.quantityText]));
@@ -293,6 +311,7 @@ export function NewOrderScreen({
 
   function resetOrder() {
     baselineRef.current = orderSignature(null, []);
+    setChoice({});
     requestIdRef.current = null;
     setCustomer(null);
     setLines([]);
@@ -309,6 +328,7 @@ export function NewOrderScreen({
   /** Reopens the just-saved draft for editing (the only entry point this slice has — there is no order-list screen yet). */
   function editSavedOrder(order: OrderDetail) {
     baselineRef.current = orderSignature(order.customerCode, order.items.map((item, index) => lineFromOrderItem(item, `edit-${index}`)));
+    setChoice({});
     setEditingOrder(order);
     setCustomer({ code: order.customerCode, name: order.customerName });
     setLines(order.items.map((item, index) => lineFromOrderItem(item, `edit-${index}`)));
@@ -325,6 +345,7 @@ export function NewOrderScreen({
     try {
       const fresh = await repositories.orders.get(editingOrder.id);
       baselineRef.current = orderSignature(fresh.customerCode, fresh.items.map((item, index) => lineFromOrderItem(item, `edit-${index}`)));
+      setChoice({});
       setEditingOrder(fresh);
       setCustomer({ code: fresh.customerCode, name: fresh.customerName });
       setLines(fresh.items.map((item, index) => lineFromOrderItem(item, `edit-${index}`)));
@@ -443,17 +464,15 @@ export function NewOrderScreen({
         const saved = await localOrders.save({
           localId: localDraft?.localId ?? null,
           customer,
-          negotiationTypeCode:
-            localDraft !== null
-              ? localDraft.negotiationTypeCode
-              : config.status === "ready"
-                ? config.value.sales.defaultNegotiationTypeCode
-                : null,
+          negotiationTypeCode,
+          topCode,
+          carrierCode,
           notes: localDraft?.notes ?? null,
           lines,
           loadedDataset: config.status === "ready" ? datasetIdentityOf(config.value) : null,
         });
         baselineRef.current = orderSignature(customer.code, lines);
+        setChoice({});
         setLocalDraft(saved);
         setSavedLocal(saved);
       } catch (error) {
@@ -481,12 +500,9 @@ export function NewOrderScreen({
         customerCode: customer.code,
         // Editing an existing draft keeps its negotiation type and notes as loaded (not editable in this slice);
         // a fresh draft uses the installation default.
-        negotiationTypeCode:
-          editingOrder !== null
-            ? editingOrder.negotiationTypeCode
-            : config.status === "ready"
-              ? config.value.sales.defaultNegotiationTypeCode
-              : null,
+        negotiationTypeCode,
+        ...(topCode === null ? {} : { topCode }),
+        ...(carrierCode === null && (editingOrder?.carrierCode ?? null) === null ? {} : { carrierCode }),
         notes: editingOrder !== null ? editingOrder.notes : null,
         items: toRequestItems(lines),
       };
@@ -657,6 +673,15 @@ export function NewOrderScreen({
             </View>
           )}
           <ScrollView style={styles.flex}>
+            {config.status === "ready" && (
+              <OrderHeaderOptions
+                sales={config.value.sales}
+                topCode={topCode}
+                negotiationTypeCode={negotiationTypeCode}
+                onTopChange={(code) => setChoice((current) => ({ ...current, top: code }))}
+                onNegotiationChange={(code) => setChoice((current) => ({ ...current, negotiation: code }))}
+              />
+            )}
             <CartView
               lines={lines}
               preview={preview}

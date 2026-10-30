@@ -9,6 +9,8 @@ function draft(localId: string, status: DraftStatus, updatedAt: string): DraftRe
     customerCode: 1,
     customerName: "Cliente",
     negotiationTypeCode: null,
+    topCode: null,
+    carrierCode: null,
     notes: null,
     status,
     remoteId: null,

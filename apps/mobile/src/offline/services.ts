@@ -59,6 +59,7 @@ export function createOfflineServices(deps: {
           env,
           transport,
           ownerAccountId: account.id,
+          duplicateAsOrder: (id, request) => deps.remote.orders.duplicateAsOrder(id, request),
           onChanged: () => {
             // Counters only. Delivery is triggered by the sync hook when the device is online, so an offline save
             // never burns a delivery attempt (an attempted create is frozen).

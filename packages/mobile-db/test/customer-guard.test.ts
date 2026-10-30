@@ -38,6 +38,8 @@ function input(customerCode: number): SaveDraftInput {
     customerCode,
     customerName: `Cliente ${customerCode}`,
     negotiationTypeCode: null,
+    topCode: null,
+    carrierCode: null,
     notes: null,
     loadedDataset: REAL,
     items: [{ productCode: 1, description: "Produto 1", unit: "UN", quantity: "2", discountPercent: "0", priceJson: JSON.stringify({ state: "priced", unitPrice: "10.00" }), groupCode: 1, groupName: "G" }],
@@ -68,6 +70,8 @@ class Server implements OrderTransport {
       customerCode: request.customerCode,
       customerName: "Cliente",
       negotiationTypeCode: null,
+      topCode: null,
+      carrierCode: null,
       notes: null,
       estimatedTotal: "20.00",
       items: request.items.map((line) => ({

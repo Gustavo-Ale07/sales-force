@@ -67,6 +67,8 @@ class SpyTransport implements OrderTransport {
       customerCode: request.customerCode,
       customerName: "x",
       negotiationTypeCode: null,
+      topCode: null,
+      carrierCode: null,
       notes: null,
       estimatedTotal: "0.00",
       items: request.items.map((i) => ({
@@ -219,7 +221,7 @@ describe("migration v3", () => {
     await insertLegacy(old, A, "1");
     await insertLegacy(old, A, "2", "needs_review");
     const report = await runMigrations(old, migrations);
-    expect(report.applied).toEqual([3]);
+    expect(report.applied).toEqual([3, 4]);
     expect((await listDrafts(old, A)).map((d) => [d.dataset, d.eligibility])).toEqual([
       [null, "unchecked"],
       [null, "unchecked"],

@@ -1,5 +1,6 @@
 import {
   acknowledgePriceReview,
+  adoptRemoteDraft,
   countQuarantinedDrafts,
   discardLocalDraft,
   discardQuarantinedDraft,
@@ -24,7 +25,9 @@ import {
   type SqlDatabase,
 } from "@salesforce/mobile-db";
 import { discountTextOf, parseDiscountInput, parseQuantityInput, type EditorLine } from "../data/order-draft";
-import type { ListPriceContext, Page } from "../data/ports";
+import { describeDuplicateFailure, type DuplicateFailure } from "../data/order-header";
+import type { DuplicateAsOrderRequest, DuplicateAsOrderResult, ListPriceContext, Page } from "../data/ports";
+import { toRemoteOrder } from "./transport";
 import { listSales, summarizeSales, type SalesFilters, type SalesRow, type SalesSummary } from "./sales";
 
 export interface SaveLocalDraftInput {
@@ -32,11 +35,19 @@ export interface SaveLocalDraftInput {
   readonly localId: string | null;
   readonly customer: { readonly code: number; readonly name: string };
   readonly negotiationTypeCode: number | null;
+  /** Order TOP (D-A): `null`/absent = none chosen, the server applies the default. */
+  readonly topCode?: number | null;
+  /** Optional carrier (D-C). */
+  readonly carrierCode?: number | null;
   readonly notes: string | null;
   readonly lines: readonly EditorLine[];
   /** The dataset the editor was loaded under (from the entry configuration it showed); `null` = unknown, the save is refused. */
   readonly loadedDataset: DatasetIdentity | null;
 }
+
+export type DuplicateOutcome =
+  | { readonly ok: true; readonly localId: string; readonly skippedLines: DuplicateAsOrderResult["skippedLines"] }
+  | { readonly ok: false; readonly failure: DuplicateFailure };
 
 export interface OpenedLocalDraft {
   readonly draft: DraftRecord;
@@ -63,6 +74,12 @@ export interface LocalOrdersPort {
   discardQuarantined(localId: string): Promise<void>;
   acknowledgePriceReview(localId: string): Promise<void>;
   resolveConflict(localId: string, resolution: ConflictResolution): Promise<void>;
+  /**
+   * "Duplicar como pedido" (D-B): asks the server for a new order draft from a sent quotation, under the dataset the
+   * quotation itself was created under, and brings it onto this device. Online only; a retry reuses the same
+   * `clientRequestId` until the server answers definitively, so a lost reply never creates a second order.
+   */
+  duplicateAsOrder(localId: string): Promise<DuplicateOutcome>;
 }
 
 /** The editor keeps its own line model; only validated quantity/discount and the price snapshot are stored. */
@@ -114,10 +131,14 @@ export function createLocalOrdersPort(deps: {
   readonly env: OfflineEnv;
   readonly transport: OrderTransport;
   readonly ownerAccountId: string;
+  /** The online call of D-B; absent = the action is unavailable. */
+  readonly duplicateAsOrder?: (orderId: string, request: DuplicateAsOrderRequest) => Promise<DuplicateAsOrderResult>;
   /** Called after any change so counters and the indicator update, and a sync can start when online. */
   readonly onChanged: () => void;
 }): LocalOrdersPort {
   const { db, env, transport, ownerAccountId, onChanged } = deps;
+  const duplicateRequestIds = new Map<string, string>();
+  const refuse = (message: string): DuplicateOutcome => ({ ok: false, failure: { title: "Não foi possível duplicar como pedido", message, skipped: [] } });
   return {
     async save(input) {
       const id = await saveOrderDraft(db, env, {
@@ -126,6 +147,8 @@ export function createLocalOrdersPort(deps: {
         customerCode: input.customer.code,
         customerName: input.customer.name,
         negotiationTypeCode: input.negotiationTypeCode,
+        ...(input.topCode === undefined ? {} : { topCode: input.topCode }),
+        ...(input.carrierCode === undefined ? {} : { carrierCode: input.carrierCode }),
         notes: input.notes,
         items: toDraftItems(input.lines),
         loadedDataset: input.loadedDataset,
@@ -166,6 +189,32 @@ export function createLocalOrdersPort(deps: {
     async resolveConflict(localId, resolution) {
       await resolveConflict(db, env, transport, localId, resolution);
       onChanged();
+    },
+    async duplicateAsOrder(localId) {
+      const source = await getDraft(db, localId);
+      if (source === null || source.ownerAccountId !== ownerAccountId) return refuse("Esta cotação não foi encontrada neste aparelho.");
+      if (source.remoteId === null || source.status !== "synced") return refuse("Só é possível duplicar uma cotação já enviada.");
+      if (source.dataset === null) return refuse("Esta cotação foi criada antes da verificação de dados e não pode ser duplicada.");
+      if (deps.duplicateAsOrder === undefined) return refuse("Conecte-se para duplicar como pedido.");
+      const clientRequestId = duplicateRequestIds.get(localId) ?? env.newId();
+      duplicateRequestIds.set(localId, clientRequestId);
+      try {
+        // The quotation's own dataset, never "the current one": the server refuses a mismatch instead of repricing.
+        const result = await deps.duplicateAsOrder(source.remoteId, {
+          clientRequestId,
+          expectedDataset: { environment: source.dataset.environment, datasetId: source.dataset.datasetId },
+        });
+        const adoptedId = await adoptRemoteDraft(db, env, { ownerAccountId, clientRequestId, order: toRemoteOrder(result.order) });
+        duplicateRequestIds.delete(localId);
+        onChanged();
+        return { ok: true, localId: adoptedId, skippedLines: result.skippedLines };
+      } catch (error) {
+        const failure = describeDuplicateFailure(error);
+        // A definitive answer ends the attempt; a network or server failure keeps the id so the retry is idempotent.
+        const status = (error as { status?: number }).status;
+        if (typeof status === "number" && status >= 400 && status < 500 && status !== 0 && status !== 429) duplicateRequestIds.delete(localId);
+        return { ok: false, failure };
+      }
     },
   };
 }

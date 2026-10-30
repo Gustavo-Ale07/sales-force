@@ -121,4 +121,11 @@ export const migrations: readonly Migration[] = [
         CHECK (eligibility IN ('unchecked', 'eligible', 'legacy_local', 'environment_mismatch', 'dataset_mismatch', 'owner_mismatch'))`,
     ],
   },
+  {
+    // Order TOP and optional carrier chosen on the order (D-A, D-C). Expand-only: two nullable columns. NULL = "not chosen":
+    // the server then applies the installation's default TOP on create and keeps the current TOP/carrier on replace.
+    version: 4,
+    name: "order_top_and_carrier",
+    statements: [`ALTER TABLE local_order_draft ADD COLUMN top_code INTEGER`, `ALTER TABLE local_order_draft ADD COLUMN carrier_code INTEGER`],
+  },
 ];

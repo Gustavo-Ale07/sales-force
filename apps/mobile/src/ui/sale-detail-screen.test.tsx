@@ -97,3 +97,53 @@ describe("SaleDetailScreen in erp discount mode (D-L)", () => {
     expect(screen.queryByText("Aguardando aprovação do desconto")).toBeNull();
   });
 });
+
+describe("SaleDetailScreen Duplicar como pedido (D-B)", () => {
+  const base = orderEntryConfiguration();
+  const config = orderEntryConfiguration({ sales: { ...base.sales, orderTops: { defaultTopCode: 1001, quotationTopCode: 1000, eligibleTopCodes: [1000, 1001] } } });
+  const quotation = draftRecord({ localId: "x", status: "synced", remoteId: "r-x", topCode: 1000, remoteDraftNumber: 4 });
+  const orders = fakeOrders({ getEntryConfiguration: async () => config, get: async () => orderDetail({ id: "r-x", topCode: 1000 }) });
+  const show = (draft: typeof quotation, localOrders: Partial<LocalOrdersPort>, connectivity: "online" | "offline" = "online", onContinue = noop) =>
+    render(<SaleDetailScreen localId="x" localOrders={fakeLocalOrders([draft], { open: async () => ({ draft, lines: [] }), ...localOrders })} connectivity={connectivity} orders={orders} onBack={noop} onChanged={noop} onContinue={onContinue} onDuplicate={noop} onSyncNow={noop} />);
+
+  it("is offered for a sent quotation, labels the operation, and opens the new order", async () => {
+    const onContinue = jest.fn();
+    const duplicateAsOrder = jest.fn(async () => ({ ok: true as const, localId: "new-1", skippedLines: [] }));
+    await show(quotation, { duplicateAsOrder }, "online", onContinue);
+    expect(await screen.findByText("Operação: Cotação (TOP 1000)")).toBeTruthy();
+    fireEvent.press(screen.getByRole("button", { name: "Duplicar como pedido" }));
+    await waitFor(() => expect(onContinue).toHaveBeenCalledWith("new-1"));
+    expect(duplicateAsOrder).toHaveBeenCalledWith("x");
+  });
+
+  it("reports the lines left out before opening the new order", async () => {
+    const alert = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
+    await show(quotation, { duplicateAsOrder: async () => ({ ok: true as const, localId: "new-1", skippedLines: [{ lineNo: 1, productCode: 12, reason: "no_price" }] }) });
+    fireEvent.press(await screen.findByRole("button", { name: "Duplicar como pedido" }));
+    await waitFor(() => expect(alert).toHaveBeenCalledWith("Pedido criado com itens a menos", expect.stringContaining("Produto 12 (sem preço)"), expect.any(Array)));
+    alert.mockRestore();
+  });
+
+  it("shows the refusal text and stays on the quotation", async () => {
+    const alert = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
+    const onContinue = jest.fn();
+    await show(quotation, { duplicateAsOrder: async () => ({ ok: false as const, failure: { title: "Não foi possível duplicar como pedido", message: "A cotação foi cancelada e não pode ser duplicada.", skipped: [] } }) }, "online", onContinue);
+    fireEvent.press(await screen.findByRole("button", { name: "Duplicar como pedido" }));
+    await waitFor(() => expect(alert).toHaveBeenCalledWith("Não foi possível duplicar como pedido", "A cotação foi cancelada e não pode ser duplicada."));
+    expect(onContinue).not.toHaveBeenCalled();
+    alert.mockRestore();
+  });
+
+  it("is disabled with a hint while offline and absent for a regular order", async () => {
+    await show(quotation, {}, "offline");
+    expect(await screen.findByText("Conecte-se à internet para duplicar a cotação como pedido.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Duplicar como pedido" }).props.accessibilityState.disabled).toBe(true);
+  });
+
+  it("is not offered for an order that is not a quotation", async () => {
+    const regular = { ...quotation, topCode: 1001 };
+    await render(<SaleDetailScreen localId="x" localOrders={fakeLocalOrders([regular], { open: async () => ({ draft: regular, lines: [] }) })} connectivity="online" orders={fakeOrders({ getEntryConfiguration: async () => config, get: async () => orderDetail({ id: "r-x", topCode: 1001 }) })} onBack={noop} onChanged={noop} onContinue={noop} onDuplicate={noop} onSyncNow={noop} />);
+    expect(await screen.findByText("Operação: Pedido (TOP 1001)")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Duplicar como pedido" })).toBeNull();
+  });
+});

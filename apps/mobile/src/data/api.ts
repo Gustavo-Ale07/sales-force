@@ -33,6 +33,10 @@ export class ApiRequestError extends Error {
   readonly correlationId?: string;
   /** Stable per-item issue codes of a rejected order draft (`details.issues`), e.g. `invalid_discount`. */
   readonly issues: readonly { path: string; code: string; message?: string }[];
+  /** Machine reason of a 409 (`details.reason`), e.g. `not_a_quotation`; absent for other failures. */
+  readonly reason?: string;
+  /** Lines a 409 `no_usable_lines` reports as left out (`details.skippedLines`). */
+  readonly skippedLines: readonly { lineNo: number; productCode: number; reason: string }[];
 
   constructor(init: {
     status: number;
@@ -41,6 +45,8 @@ export class ApiRequestError extends Error {
     retryAfterSeconds?: number;
     correlationId?: string;
     issues?: readonly { path: string; code: string; message?: string }[];
+    reason?: string;
+    skippedLines?: readonly { lineNo: number; productCode: number; reason: string }[];
   }) {
     super(init.message);
     this.name = "ApiRequestError";
@@ -49,6 +55,8 @@ export class ApiRequestError extends Error {
     this.retryAfterSeconds = init.retryAfterSeconds;
     this.correlationId = init.correlationId;
     this.issues = init.issues ?? [];
+    this.reason = init.reason;
+    this.skippedLines = init.skippedLines ?? [];
   }
 
   /** Network failure, timeout or a proxy answering without the API envelope. */
@@ -92,8 +100,17 @@ export async function callApi<T>(call: () => Promise<ClientResult<T>>): Promise<
         ? [{ path: item.path, code: item.code, message: typeof item.message === "string" ? item.message : undefined }]
         : [];
     });
+    const rawSkipped = Array.isArray(details?.skippedLines) ? details.skippedLines : [];
+    const skippedLines = rawSkipped.flatMap((line) => {
+      const item = record(line);
+      return item && typeof item.lineNo === "number" && typeof item.productCode === "number" && typeof item.reason === "string"
+        ? [{ lineNo: item.lineNo, productCode: item.productCode, reason: item.reason }]
+        : [];
+    });
     throw new ApiRequestError({
       status: result.response.status,
+      reason: typeof details?.reason === "string" ? details.reason : undefined,
+      skippedLines,
       code: typeof envelope?.code === "string" ? envelope.code : undefined,
       message: typeof envelope?.message === "string" ? envelope.message : `HTTP ${result.response.status}`,
       retryAfterSeconds: retryAfter(result.response.headers.get("retry-after")),

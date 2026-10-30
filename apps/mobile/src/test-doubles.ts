@@ -135,6 +135,10 @@ export function fakeOrders(overrides: Partial<OrderRepository> = {}): OrderRepos
     get: async (id: string) => orderDetail({ id }),
     replace: async (id: string, request) =>
       orderDetail({ id, customerCode: request.customerCode, negotiationTypeCode: request.negotiationTypeCode, notes: request.notes, version: request.expectedVersion + 1 }),
+    duplicateAsOrder: async () => {
+      throw new Error("unused");
+    },
+    listCarriers: async () => [],
     ...overrides,
   };
 }
@@ -193,6 +197,8 @@ export function draftRecord(overrides: Partial<DraftRecord> = {}): DraftRecord {
     customerCode: 10,
     customerName: "Padaria Central",
     negotiationTypeCode: null,
+    topCode: null,
+    carrierCode: null,
     notes: null,
     status: "pending_sync",
     remoteId: null,
@@ -264,6 +270,9 @@ export function fakeLocalOrders(drafts: DraftRecord[] = [], overrides: Partial<L
     discardQuarantined: async () => undefined,
     acknowledgePriceReview: async () => undefined,
     resolveConflict: async () => undefined,
+    duplicateAsOrder: async () => {
+      throw new Error("unused");
+    },
     ...overrides,
   };
   return Object.defineProperty(port, "drafts", { get: () => state.drafts }) as LocalOrdersPort & { drafts: DraftRecord[] };

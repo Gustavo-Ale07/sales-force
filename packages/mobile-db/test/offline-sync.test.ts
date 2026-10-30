@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   acknowledgePriceReview,
+  adoptRemoteDraft,
   backoffDelayMs,
   countOutbox,
   createSyncManager,
@@ -87,6 +88,8 @@ class FakeServer implements OrderTransport {
       customerCode: request.customerCode,
       customerName: "Cliente",
       negotiationTypeCode: request.negotiationTypeCode,
+      topCode: request.topCode ?? null,
+      carrierCode: request.carrierCode ?? null,
       notes: request.notes,
       estimatedTotal: "0.00",
       items,
@@ -203,6 +206,87 @@ describe("saveOrderDraft", () => {
     const id = await saveOrderDraft(db, env, input([item(1)]));
     await expect(saveOrderDraft(db, env, input([item(1)], { localId: id, ownerAccountId: "other" }))).rejects.toThrow();
     expect(await listDrafts(db, "other")).toEqual([]);
+  });
+});
+
+describe("order TOP and carrier (D-A, D-C)", () => {
+  it("keeps them on the draft and in the create command, and sends the TOP only when one was chosen", async () => {
+    const id = await saveOrderDraft(db, env, input([item(1)], { topCode: 1000, carrierCode: 55 }));
+    expect(await getDraft(db, id)).toMatchObject({ topCode: 1000, carrierCode: 55 });
+    const [op] = await listOutbox(db, id);
+    expect(op?.payload.request).toMatchObject({ topCode: 1000, carrierCode: 55 });
+
+    const plain = await saveOrderDraft(db, env, input([item(1)]));
+    expect(await getDraft(db, plain)).toMatchObject({ topCode: null, carrierCode: null });
+    const [plainOp] = await listOutbox(db, plain);
+    expect(plainOp?.payload.request).not.toHaveProperty("topCode");
+    expect(plainOp?.payload.request.carrierCode).toBeNull();
+  });
+
+  it("an edit changes them in the unsent command; the server receives and returns them", async () => {
+    const id = await saveOrderDraft(db, env, input([item(1)], { topCode: 1001, carrierCode: null }));
+    await saveOrderDraft(db, env, input([item(1)], { localId: id, topCode: 1000, carrierCode: 7 }));
+    expect(await getDraft(db, id)).toMatchObject({ topCode: 1000, carrierCode: 7 });
+    await push();
+    expect(server.orders.get("order-1")).toMatchObject({ topCode: 1000, carrierCode: 7 });
+  });
+
+  it("an edit after sending replaces the carrier (cleared with null)", async () => {
+    const id = await saveOrderDraft(db, env, input([item(1)], { carrierCode: 7 }));
+    await push();
+    await saveOrderDraft(db, env, input([item(1)], { localId: id, carrierCode: null }));
+    await push();
+    expect(server.orders.get("order-1")?.carrierCode).toBeNull();
+  });
+
+  it("use_server adopts the server's TOP and carrier", async () => {
+    const id = await saveOrderDraft(db, env, input([item(1)], { topCode: 1001 }));
+    await push();
+    await saveOrderDraft(db, env, input([item(1, "8")], { localId: id, topCode: 1001 }));
+    const order = server.orders.get("order-1") as RemoteOrder;
+    server.orders.set("order-1", { ...order, version: order.version + 1, topCode: 1000, carrierCode: 9 });
+    await push();
+    await resolveConflict(db, env, server, id, "use_server");
+    expect(await getDraft(db, id)).toMatchObject({ topCode: 1000, carrierCode: 9 });
+  });
+});
+
+describe("adoptRemoteDraft (order made on the server, e.g. Duplicar como pedido)", () => {
+  const remote = (): RemoteOrder => ({
+    id: "order-dup",
+    version: 1,
+    draftNumber: 31,
+    customerCode: 77,
+    customerName: "Cliente",
+    negotiationTypeCode: 3,
+    topCode: 1001,
+    carrierCode: 5,
+    notes: null,
+    estimatedTotal: "20.00",
+    items: [{ productCode: 1, productDescription: "Produto 1", unit: "UN", quantity: "2", unitListPrice: "10.00", priceState: "priced", priceTableCode: 1, priceVersionId: 1, discountPercent: "0" }],
+  });
+
+  it("stores it as a synced draft with no command to send, and is idempotent per server order", async () => {
+    const id = await adoptRemoteDraft(db, env, { ownerAccountId: OWNER, clientRequestId: "req-dup", order: remote() });
+    expect(await getDraft(db, id)).toMatchObject({ status: "synced", remoteId: "order-dup", remoteVersion: 1, remoteDraftNumber: 31, topCode: 1001, carrierCode: 5, negotiationTypeCode: 3, itemCount: 1 });
+    expect(await listOutbox(db, id)).toEqual([]);
+    expect((await getDraftItems(db, id))[0]).toMatchObject({ productCode: 1, quantity: "2" });
+    expect(await adoptRemoteDraft(db, env, { ownerAccountId: OWNER, clientRequestId: "req-dup-2", order: remote() })).toBe(id);
+    expect(await listDrafts(db, OWNER)).toHaveLength(1);
+  });
+
+  it("an edit afterwards is a replace against the adopted version", async () => {
+    server.orders.set("order-dup", remote());
+    const id = await adoptRemoteDraft(db, env, { ownerAccountId: OWNER, clientRequestId: "req-dup", order: remote() });
+    await saveOrderDraft(db, env, input([item(1, "5")], { localId: id, topCode: 1001, carrierCode: 5 }));
+    const ops = await listOutbox(db, id);
+    expect(ops.map((op) => [op.type, op.baseVersion])).toEqual([["order.replace", 1]]);
+  });
+
+  it("refuses without a confirmed dataset", async () => {
+    const bare = openNodeDatabase();
+    await runMigrations(bare, migrations);
+    await expect(adoptRemoteDraft(bare, env, { ownerAccountId: OWNER, clientRequestId: "r", order: remote() })).rejects.toThrow();
   });
 });
 

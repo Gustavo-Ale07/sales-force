@@ -14,6 +14,8 @@ function draft(localId: string, customerName: string, status: DraftRecord["statu
     customerCode: 1,
     customerName,
     negotiationTypeCode: null,
+    topCode: null,
+    carrierCode: null,
     notes: null,
     status,
     remoteId: null,

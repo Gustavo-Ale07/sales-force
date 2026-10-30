@@ -13,7 +13,7 @@ import {
   type OutboxRecord,
   type PriceReviewEntry,
 } from "./local-orders";
-import { classifyEligibility, ineligibleMessage, readExpectedDataset, sameDataset, type DatasetIdentity, type IneligibleReason } from "./dataset-identity";
+import { DatasetUnavailableError, classifyEligibility, ineligibleMessage, readExpectedDataset, sameDataset, type DatasetIdentity, type IneligibleReason } from "./dataset-identity";
 import { isoNow, type OfflineEnv } from "./offline-env";
 import { isCustomerUnavailable } from "./reference-cache";
 
@@ -50,6 +50,8 @@ export interface RemoteOrder {
   readonly customerCode: number;
   readonly customerName: string;
   readonly negotiationTypeCode: number | null;
+  readonly topCode: number | null;
+  readonly carrierCode: number | null;
   readonly notes: string | null;
   readonly estimatedTotal: string;
   readonly items: readonly RemoteOrderItem[];
@@ -190,6 +192,45 @@ export function priceContextOf(item: RemoteOrderItem): string {
     return JSON.stringify({ state: item.priceState, unitPrice: item.unitListPrice, tableCode: item.priceTableCode, versionId: item.priceVersionId });
   }
   return JSON.stringify({ state: "none", tableCode: item.priceTableCode, versionId: item.priceVersionId, noPriceReason: "no_price_row" });
+}
+
+/**
+ * Brings a draft that already exists on the server (made there from another order, e.g. "Duplicar como pedido") onto this
+ * device as a SYNCED draft: no command is queued, because the server already holds exactly this state. Editing it later
+ * queues an `order.replace` against `order.version` like any synced draft. Idempotent per server order: adopting the same
+ * order twice returns the same local draft. Needs a confirmed dataset (the draft is stamped with it, never guessed).
+ */
+export async function adoptRemoteDraft(
+  db: SqlDatabase,
+  env: OfflineEnv,
+  input: { readonly ownerAccountId: string; readonly clientRequestId: string; readonly order: RemoteOrder },
+): Promise<string> {
+  return db.transaction(async (tx) => {
+    const { order } = input;
+    const known = await tx.query<SqlRow>("SELECT local_id FROM local_order_draft WHERE remote_id = ? AND owner_account_id = ?", [order.id, input.ownerAccountId]);
+    if (known[0] !== undefined) return String(known[0].local_id);
+    const confirmed = await readExpectedDataset(tx);
+    if (confirmed === null) throw new DatasetUnavailableError();
+    const now = isoNow(env);
+    const localId = env.newId();
+    await tx.execute(
+      `INSERT INTO local_order_draft (local_id, owner_account_id, client_request_id, customer_code, customer_name, negotiation_type_code, top_code, carrier_code, notes,
+         status, remote_id, remote_version, remote_draft_number, estimated_total, created_at, updated_at, dataset_environment, dataset_id, eligibility)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?, ?, ?, ?, ?, ?, ?, ?, 'eligible')`,
+      [
+        localId, input.ownerAccountId, input.clientRequestId, order.customerCode, order.customerName, order.negotiationTypeCode, order.topCode, order.carrierCode,
+        order.notes, order.id, order.version, order.draftNumber, order.estimatedTotal, now, now, confirmed.environment, confirmed.datasetId,
+      ],
+    );
+    for (const [index, item] of order.items.entries()) {
+      await tx.execute(
+        `INSERT INTO local_order_item (draft_local_id, position, product_code, description, unit, quantity, discount_percent, price_json, group_code, group_name)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)`,
+        [localId, index + 1, item.productCode, item.productDescription, item.unit, item.quantity, item.discountPercent, priceContextOf(item)],
+      );
+    }
+    return localId;
+  });
 }
 
 function samePrice(a: string | null, b: string | null): boolean {
@@ -619,9 +660,9 @@ export async function resolveConflict(
         );
       }
       await tx.execute(
-        `UPDATE local_order_draft SET remote_version = ?, customer_code = ?, customer_name = ?, negotiation_type_code = ?, notes = ?,
+        `UPDATE local_order_draft SET remote_version = ?, customer_code = ?, customer_name = ?, negotiation_type_code = ?, top_code = ?, carrier_code = ?, notes = ?,
            estimated_total = ?, server_snapshot = NULL, price_review = NULL, updated_at = ? WHERE local_id = ?`,
-        [server.version, server.customerCode, server.customerName, server.negotiationTypeCode, server.notes, server.estimatedTotal, now, draftLocalId],
+        [server.version, server.customerCode, server.customerName, server.negotiationTypeCode, server.topCode, server.carrierCode, server.notes, server.estimatedTotal, now, draftLocalId],
       );
     }
     await refreshDraftStatus(tx, draftLocalId);

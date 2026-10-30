@@ -107,6 +107,10 @@ export type OrderEntryConfiguration = ApiSchema<"OrderEntryConfiguration">;
 export type OrderDetail = ApiSchema<"OrderDetail">;
 export type OrderItem = ApiSchema<"OrderItemDetail">;
 export type CreateOrderRequest = ApiSchema<"CreateOrderRequest">;
+export type DuplicateAsOrderRequest = ApiSchema<"DuplicateAsOrderRequest">;
+/** `{ order, skippedLines }`: lines the server could not carry over are reported, never priced by guess. */
+export type DuplicateAsOrderResult = ApiSchema<"RepeatLastOrderResponse">;
+export type Carrier = ApiSchema<"Carrier">;
 export type ReplaceOrderRequest = ApiSchema<"ReplaceOrderRequest">;
 
 /**
@@ -122,6 +126,10 @@ export interface OrderRepository {
   create(request: CreateOrderRequest): Promise<OrderDetail>;
   get(id: string): Promise<OrderDetail>;
   replace(id: string, request: ReplaceOrderRequest): Promise<OrderDetail>;
+  /** `POST /orders/{id}/duplicate-as-order` (D-B): a new draft with the default order TOP from a quotation. Online only. */
+  duplicateAsOrder(id: string, request: DuplicateAsOrderRequest): Promise<DuplicateAsOrderResult>;
+  /** Active carriers (`GET /carriers`, D-C), ordered by name. Offline-first adapters answer from the last list they stored. */
+  listCarriers(): Promise<readonly Carrier[]>;
 }
 
 export interface Repositories {

@@ -66,6 +66,12 @@ export function createRemoteOrderRepository(api: ApiClient): OrderRepository {
     async replace(id, request) {
       return callApi(() => api.PUT("/orders/{id}", { params: { path: { id } }, body: request }));
     },
+    async duplicateAsOrder(id, request) {
+      return callApi(() => api.POST("/orders/{id}/duplicate-as-order", { params: { path: { id } }, body: request }));
+    },
+    async listCarriers() {
+      return (await callApi(() => api.GET("/carriers"))).items;
+    },
   };
 }
 

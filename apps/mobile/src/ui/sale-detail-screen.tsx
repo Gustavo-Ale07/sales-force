@@ -3,7 +3,8 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View
 import type { DraftRecord } from "@salesforce/mobile-db";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import { lineAmountsOf, previewDraft, type EditorLine } from "../data/order-draft";
-import type { OrderRepository } from "../data/ports";
+import { describeSkippedLines, isQuotationTop, topLabel } from "../data/order-header";
+import type { OrderEntryConfiguration, OrderRepository } from "../data/ports";
 import { formatBrl } from "../lib/money";
 import type { LocalOrdersPort } from "../offline/local-orders";
 import { shareOrderPdf, type OrderPdfPort } from "../offline/order-pdf";
@@ -66,7 +67,21 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
     };
   }, [localOrders, localId, reloads]);
 
-  const [fetched, setFetched] = useState<{ readonly remoteId: string; readonly view: ApprovalView | null } | null>(null);
+  const [fetched, setFetched] = useState<{ readonly remoteId: string; readonly view: ApprovalView | null; readonly topCode: number | null } | null>(null);
+  // The TOPs come from the configuration the device already holds, so the quotation label works offline.
+  const [tops, setTops] = useState<OrderEntryConfiguration["sales"]["orderTops"] | null>(null);
+  useEffect(() => {
+    if (orders?.getEntryConfiguration === undefined) return;
+    let current = true;
+    orders
+      .getEntryConfiguration()
+      .then((config) => current && setTops(config.sales.orderTops))
+      .catch(() => undefined);
+    return () => {
+      current = false;
+    };
+  }, [orders]);
+  const [duplicating, setDuplicating] = useState(false);
   const remoteId = loaded?.draft.remoteId ?? null;
   useEffect(() => {
     if (orders === undefined || remoteId === null || offline) return;
@@ -77,7 +92,7 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
         ? Promise.resolve("force")
         : orders.getEntryConfiguration().then((config) => config.sales.discountAuthorityMode, () => "force" as const);
     Promise.all([orders.get(remoteId), mode])
-      .then(([order, authority]) => current && setFetched({ remoteId, view: approvalViewOf(order, authority) }))
+      .then(([order, authority]) => current && setFetched({ remoteId, view: approvalViewOf(order, authority), topCode: order.topCode }))
       // The state is a courtesy read: when it fails the card is just absent, the local view is unaffected.
       .catch(() => undefined);
     return () => {
@@ -85,6 +100,8 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
     };
   }, [orders, remoteId, offline, reloads]);
   const approval = fetched !== null && fetched.remoteId === remoteId && !offline ? fetched.view : null;
+  // The server's TOP wins when it was read just now; otherwise what this device stored.
+  const effectiveTop = fetched !== null && fetched.remoteId === remoteId && !offline ? fetched.topCode : (loaded?.draft.topCode ?? null);
 
   const act = useCallback(
     async (work: () => Promise<void>, failure = "Tente novamente quando houver conexão.") => {
@@ -133,6 +150,30 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
     }
   }
 
+  const canDuplicateAsOrder = draft.status === "synced" && draft.remoteId !== null && tops !== null && isQuotationTop(effectiveTop, tops);
+
+  async function duplicateAsOrder() {
+    if (duplicating) return;
+    setDuplicating(true);
+    const result = await localOrders.duplicateAsOrder(draft.localId);
+    setDuplicating(false);
+    if (!result.ok) {
+      const { failure } = result;
+      Alert.alert(failure.title, [failure.message, ...failure.skipped].join("\n"));
+      return;
+    }
+    onChanged();
+    if (result.skippedLines.length > 0) {
+      Alert.alert(
+        "Pedido criado com itens a menos",
+        `Estes itens da cotação não foram copiados:\n${describeSkippedLines(result.skippedLines).join("\n")}`,
+        [{ text: "Abrir pedido", onPress: () => onContinue(result.localId) }],
+      );
+      return;
+    }
+    onContinue(result.localId);
+  }
+
   function confirmDelete() {
     Alert.alert(
       "Excluir rascunho?",
@@ -178,6 +219,11 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
           <Text style={styles.explanation}>{saleExplanation(draft)}</Text>
           <Text style={styles.meta}>{`Criado em ${formatDateTime(draft.createdAt)}`}</Text>
           <Text style={styles.meta}>{`Última alteração ${formatDateTime(draft.updatedAt)}`}</Text>
+          {effectiveTop !== null && (
+            <Text style={styles.meta} accessibilityLabel="Operação do pedido">
+              {`Operação: ${tops === null ? `TOP ${effectiveTop}` : topLabel(effectiveTop, tops)}`}
+            </Text>
+          )}
           {draft.negotiationTypeCode !== null && <Text style={styles.meta}>{`Negociação (código): ${draft.negotiationTypeCode}`}</Text>}
           {draft.notes !== null && draft.notes !== "" && <Text style={styles.notes}>{`Observações: ${draft.notes}`}</Text>}
         </View>
@@ -273,6 +319,21 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
             <Pressable style={[styles.secondary, sharing && styles.off]} disabled={sharing} onPress={() => void sharePdf()} accessibilityRole="button" accessibilityLabel="Compartilhar PDF" accessibilityState={{ disabled: sharing, busy: sharing }}>
               <Text style={styles.secondaryText}>{sharing ? "Gerando PDF..." : "Compartilhar PDF"}</Text>
             </Pressable>
+          )}
+          {canDuplicateAsOrder && (
+            <>
+              <Pressable
+                style={[styles.primary, (offline || duplicating) && styles.off]}
+                disabled={offline || duplicating}
+                onPress={() => void duplicateAsOrder()}
+                accessibilityRole="button"
+                accessibilityLabel="Duplicar como pedido"
+                accessibilityState={{ disabled: offline || duplicating, busy: duplicating }}
+              >
+                <Text style={styles.primaryText}>{duplicating ? "Duplicando..." : "Duplicar como pedido"}</Text>
+              </Pressable>
+              {offline && <Text style={styles.meta}>Conecte-se à internet para duplicar a cotação como pedido.</Text>}
+            </>
           )}
           {actions.duplicate && (
             <Pressable style={styles.secondary} onPress={() => onDuplicate(draft.localId)} accessibilityRole="button" accessibilityLabel="Duplicar pedido">
