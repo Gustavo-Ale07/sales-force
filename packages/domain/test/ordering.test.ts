@@ -281,3 +281,32 @@ describe('computeDiscountSummary', () => {
     expect(computeDiscountSummary([])).toEqual({ listTotal: '0.00', discountTotal: '0.00', discountedLineCount: 0 });
   });
 });
+
+describe('decimal quantities end to end (P4: DECQTD = 4, packs of 0.2 and boxes of 1.0)', () => {
+  const quantities = ['0.2', '0.4', '1.2', '10', '0.0001'];
+
+  it('builds lines and totals without float drift for 0.2, 0.4, 1.2, 10 and 0.0001', () => {
+    const lines = quantities.map((q, index) => item(index + 1, q, priced('1.05')));
+    expect(lines.map((l) => l.quantity)).toEqual(quantities);
+    // 0.21 + 0.42 + 1.26 + 10.50 + 0.000105 (0.00): exact, half-up per line.
+    expect(lines.map((l) => l.estimatedLineTotal)).toEqual(['0.21', '0.42', '1.26', '10.50', '0.00']);
+    expect(computeOrderTotals(lines).estimatedTotal).toBe('12.39');
+    expect(validateDraftInvariants(draft(lines), makeConfig())).toEqual([]);
+  });
+
+  it('keeps the classic float traps exact (0.1 + 0.2 packs, 1.2 x 3 prices)', () => {
+    expect(item(1, '0.2', priced('0.10')).estimatedLineTotal).toBe('0.02');
+    expect(item(1, '1.2', priced('3.00')).estimatedLineTotal).toBe('3.60');
+    expect(item(1, '0.0001', priced('99999.999999')).estimatedLineTotal).toBe('10.00');
+  });
+
+  it('applies a discount to a decimal quantity exactly', () => {
+    const built = buildOrderItem({ lineNo: 1, product, quantity: '0.2', price: priced('100'), discountPercent: '10' });
+    expect(built.ok && built.value.estimatedLineTotal).toBe('18.00');
+  });
+
+  it('refuses a fifth decimal and a zero quantity', () => {
+    expect(buildOrderItem({ lineNo: 1, product, quantity: '0.00001', price: priced('1') }).ok).toBe(false);
+    expect(buildOrderItem({ lineNo: 1, product, quantity: '0', price: priced('1') }).ok).toBe(false);
+  });
+});
