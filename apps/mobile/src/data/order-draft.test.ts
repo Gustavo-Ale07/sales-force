@@ -39,6 +39,11 @@ describe("parseQuantityInput", () => {
     ["2", "2"],
     ["2,5", "2.5"],
     ["0,0001", "0.0001"],
+    ["2.5", "2.5"],
+    ["0.2", "0.2"],
+    ["1,2", "1.2"],
+    ["0.0001", "0.0001"],
+    [" 1,25 ", "1.25"],
   ])("accepts %s", (text, value) => {
     expect(parseQuantityInput(text)).toEqual({ ok: true, value });
   });
@@ -46,10 +51,12 @@ describe("parseQuantityInput", () => {
   it.each([
     ["", "empty"],
     ["  ", "empty"],
-    ["2.5", "dot_separator"],
     ["abc", "not_a_decimal"],
+    ["1.234,5", "not_a_decimal"],
+    ["1,2,3", "not_a_decimal"],
     ["0", "not_positive"],
     ["1,00001", "too_many_decimals"],
+    ["1.00001", "too_many_decimals"],
     ["-1", "negative"],
   ])("rejects %j as %s", (text, problem) => {
     expect(parseQuantityInput(text)).toEqual({ ok: false, problem });
@@ -262,7 +269,14 @@ describe("describeIssue", () => {
 
 describe("incrementLineQuantity", () => {
   it("adds one unit to a valid quantity, in decimal", () => {
-    expect(incrementLineQuantity(line({ quantityText: "2,5" })).quantityText).toBe("3,5");
+    expect(incrementLineQuantity(line({ quantityText: "2" })).quantityText).toBe("3");
+  });
+
+  it("steps a fractional line by 0,2 (never a forced +1)", () => {
+    expect(incrementLineQuantity(line({ quantityText: "2,5" })).quantityText).toBe("2,7");
+    expect(incrementLineQuantity(line({ quantityText: "0,2" })).quantityText).toBe("0,4");
+    expect(incrementLineQuantity(line({ quantityText: "1,2" })).quantityText).toBe("1,4");
+    expect(incrementLineQuantity(line({ quantityText: "0,0001" })).quantityText).toBe("0,2001");
   });
 
   it("treats an invalid quantity as zero before adding", () => {
@@ -488,7 +502,15 @@ describe("summarizeCart", () => {
 describe("decrementLineQuantity", () => {
   it("removes the line when one unit (or less) is left", () => {
     expect(decrementLineQuantity(line({ quantityText: "1" }))).toEqual({ kind: "remove" });
-    expect(decrementLineQuantity(line({ quantityText: "0,5" }))).toEqual({ kind: "remove" });
+    expect(decrementLineQuantity(line({ quantityText: "0,2" }))).toEqual({ kind: "remove" });
+    expect(decrementLineQuantity(line({ quantityText: "0,0001" }))).toEqual({ kind: "remove" });
+  });
+
+  it("steps a fractional quantity down by 0,2, also above one", () => {
+    expect(decrementLineQuantity(line({ quantityText: "2,5" }))).toEqual({ kind: "set", quantityText: "2,3" });
+    expect(decrementLineQuantity(line({ quantityText: "1,2" }))).toEqual({ kind: "set", quantityText: "1" });
+    expect(decrementLineQuantity(line({ quantityText: "0,5" }))).toEqual({ kind: "set", quantityText: "0,3" });
+    expect(decrementLineQuantity(line({ quantityText: "1,0001" }))).toEqual({ kind: "set", quantityText: "0,8001" });
   });
 
   it("subtracts one unit from a whole quantity", () => {
@@ -496,8 +518,7 @@ describe("decrementLineQuantity", () => {
     expect(decrementLineQuantity(line({ quantityText: "10" }))).toEqual({ kind: "set", quantityText: "9" });
   });
 
-  it("does not guess for a fractional quantity above one or an invalid text (edited in the cart instead)", () => {
-    expect(decrementLineQuantity(line({ quantityText: "2,5" }))).toBeNull();
+  it("does not guess for an invalid text (edited in the cart instead)", () => {
     expect(decrementLineQuantity(line({ quantityText: "abc" }))).toBeNull();
   });
 });

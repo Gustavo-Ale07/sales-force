@@ -3,7 +3,6 @@ import {
   buildOrderItem,
   computeDiscountSummary,
   computeLineTotal,
-  compareDecimalStrings,
   computeOrderTotals,
   isLineOrderable,
   subtractTotals,
@@ -50,21 +49,23 @@ export interface EditorLine {
   readonly group?: LineGroup;
 }
 
-export type QuantityProblem = "empty" | DecimalError | "dot_separator";
+export type QuantityProblem = "empty" | DecimalError;
 export type QuantityParse = { ok: true; value: string } | { ok: false; problem: QuantityProblem };
 
-/** A pt-BR quantity ("2,5") becomes a decimal string ("2.5") validated by the domain (positive, at most 4 decimals). */
+/**
+ * A quantity typed with a comma or a dot ("2,5", "2.5", "0,0001") becomes a decimal string validated by the domain
+ * (positive, at most 4 decimals). Both separators together ("1.234,5") are ambiguous and refused, never guessed.
+ */
 export function parseQuantityInput(text: string): QuantityParse {
   const trimmed = text.trim();
   if (trimmed === "") return { ok: false, problem: "empty" };
-  if (trimmed.includes(".")) return { ok: false, problem: "dot_separator" };
+  if (trimmed.includes(",") && trimmed.includes(".")) return { ok: false, problem: "not_a_decimal" };
   const result = validateQuantity(trimmed.replace(",", "."));
   return result.ok ? { ok: true, value: result.value } : { ok: false, problem: result.error };
 }
 
 export const quantityProblemMessages: Record<QuantityProblem, string> = {
   empty: "Informe a quantidade.",
-  dot_separator: "Use vírgula como separador decimal.",
   not_a_decimal: "Quantidade inválida.",
   not_positive: "A quantidade deve ser maior que zero.",
   negative: "A quantidade deve ser maior que zero.",
@@ -98,25 +99,48 @@ export function discountTextOf(percent: string): string {
   return percent === "0" ? "" : percent.replace(".", ",");
 }
 
-/** Adds one unit to a line already in the cart (tapping the same product again in the catalog). An invalid typed quantity is treated as zero before adding, never as a text concatenation. */
+const QUANTITY_SCALE = 4;
+const SCALE_FACTOR = 10n ** BigInt(QUANTITY_SCALE);
+/** Step of a fractional line, in 1/10000 units (0,2). */
+const FRACTIONAL_STEP = 2000n;
+
+/** A validated quantity string ("2.5") as an integer count of 1/10000 units, so steps never touch binary floats. */
+function toUnits(value: string): bigint {
+  const [whole = "0", fraction = ""] = value.split(".");
+  return BigInt(whole) * SCALE_FACTOR + BigInt(fraction.padEnd(QUANTITY_SCALE, "0"));
+}
+
+/** Back to the pt-BR text the editor shows: trailing zeros trimmed, decimal comma. */
+function unitsToText(units: bigint): string {
+  const whole = units / SCALE_FACTOR;
+  const fraction = (units % SCALE_FACTOR).toString().padStart(QUANTITY_SCALE, "0").replace(/0+$/, "");
+  return fraction === "" ? whole.toString() : `${whole.toString()},${fraction}`;
+}
+
+/** A fractional line moves by 0,2; a whole-number line by 1. There is no per-product step in the catalog data, so the line's own quantity decides. */
+function stepUnitsOf(units: bigint): bigint {
+  return units % SCALE_FACTOR === 0n ? SCALE_FACTOR : FRACTIONAL_STEP;
+}
+
+/** Adds one step to a line already in the cart (tapping the same product again in the catalog). An invalid typed quantity is treated as zero before adding, never as a text concatenation. */
 export function incrementLineQuantity(line: EditorLine): EditorLine {
   const parsed = parseQuantityInput(line.quantityText);
-  const next = sumQuantities([parsed.ok ? parsed.value : "0", "1"]);
-  return { ...line, quantityText: next.replace(".", ",") };
+  const units = parsed.ok ? toUnits(parsed.value) : 0n;
+  return { ...line, quantityText: unitsToText(units + stepUnitsOf(units === 0n ? SCALE_FACTOR : units)) };
 }
 
 export type LineDecrement = { kind: "remove" } | { kind: "set"; quantityText: string };
 
 /**
- * "−" on a catalog card: one unit less. At one unit (or less) the product leaves the cart; a whole quantity loses one;
- * a fractional quantity above one or an invalid text returns null (no guessing: it is edited in the cart).
+ * "−" on a catalog card: one step less (1 for a whole quantity, 0,2 for a fractional one). When nothing positive is
+ * left the product leaves the cart; an invalid text returns null (no guessing: it is edited in the cart).
  */
 export function decrementLineQuantity(line: EditorLine): LineDecrement | null {
   const parsed = parseQuantityInput(line.quantityText);
   if (!parsed.ok) return null;
-  if (compareDecimalStrings(parsed.value, "1") <= 0) return { kind: "remove" };
-  if (!/^\d+$/.test(parsed.value)) return null;
-  return { kind: "set", quantityText: (BigInt(parsed.value) - 1n).toString() };
+  const units = toUnits(parsed.value);
+  const next = units - stepUnitsOf(units);
+  return next <= 0n ? { kind: "remove" } : { kind: "set", quantityText: unitsToText(next) };
 }
 
 export function lineFromProduct(product: ProductListItem, key: string): EditorLine {
