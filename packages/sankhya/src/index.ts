@@ -21,6 +21,15 @@ export {
   type ConfigurationValidationResult,
   type ConfigurationValidator,
 } from './configuration-source.js';
+export {
+  FORBIDDEN_ORIGIN_FIELDS,
+  ORDER_WRITE_DISABLED,
+  isValidOriginField,
+  parseOrderWriteSettings,
+  type OrderWriteMode,
+  type OrderWriteSettings,
+} from './write/order-write-config.js';
+export { SANDBOX_WRITE_HOSTS, assertSandboxHost, writeHostRefusal } from './write/host-allowlist.js';
 export { createGateway, type CreateGatewayDependencies, type GatewayEnvironment } from './factory.js';
 
 export { FakeGateway, type FakeGatewayFault, type FakeGatewayMediaOptions, type FakeGatewayOptions } from './fake/fake-gateway.js';

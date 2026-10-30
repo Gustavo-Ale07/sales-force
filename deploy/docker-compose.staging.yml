@@ -189,6 +189,9 @@ services:
       # Both come from compose.env (fake + ALLOW_FAKE_GATEWAY=1 in the example): no implicit fake gateway.
       SANKHYA_MODE: ${SANKHYA_MODE:?SANKHYA_MODE must be set explicitly (fake or live)}
       ALLOW_FAKE_GATEWAY: ${ALLOW_FAKE_GATEWAY:-}
+      # SNK-7 D-1: ERP order submission is hard-coded OFF in shipped config (and live mode is refused when
+      # NODE_ENV=production anyway). Turning it on is an owner decision, never a variable default.
+      SANKHYA_ORDER_WRITE_ENABLED: "false"
       # Mandatory and explicit in live mode (scheduled mirror never starts against a real Sankhya by default).
       SYNC_MIRROR_ENABLED: ${SYNC_MIRROR_ENABLED:-}
       # Login directory only: keeps `sellers` + `directoryUsers` fresh (read-only, enqueued once at startup, then on the cron) for the

@@ -120,6 +120,8 @@ services:
       SANKHYA_CLIENT_ID: ${SANKHYA_CLIENT_ID:-}
       SANKHYA_CLIENT_SECRET: ${SANKHYA_CLIENT_SECRET:-}
       SANKHYA_X_TOKEN: ${SANKHYA_X_TOKEN:-}
+      # SNK-7 D-1: ERP order submission is hard-coded OFF in shipped config; never a variable default.
+      SANKHYA_ORDER_WRITE_ENABLED: "false"
       # Scheduled mirror jobs. Empty = the worker default (on for the fake gateway; MANDATORY and explicit in live
       # mode). Keep false against a real Sankhya until sync is run manually (sync:once).
       SYNC_MIRROR_ENABLED: ${SYNC_MIRROR_ENABLED:-}

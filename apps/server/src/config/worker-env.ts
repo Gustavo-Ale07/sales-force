@@ -1,7 +1,9 @@
 import {
   createGateway,
   GatewayConfigError,
+  parseOrderWriteSettings,
   type GatewayDescription,
+  type OrderWriteSettings,
   type SankhyaGateway,
 } from '@salesforce/sankhya';
 import { z } from 'zod';
@@ -116,6 +118,8 @@ export interface WorkerConfig {
   readonly env: WorkerEnv;
   readonly gateway: SankhyaGateway;
   readonly gatewayDescription: GatewayDescription;
+  /** SNK-7 D-1: ERP order submission switches. Disabled unless explicitly enabled; worker only. */
+  readonly orderWrite: OrderWriteSettings;
 }
 
 /**
@@ -176,8 +180,11 @@ export function loadWorkerConfig(source: EnvSource): WorkerConfig {
     problems.push(...error.problems);
   }
 
+  const orderWrite = parseOrderWriteSettings({ ...withoutEmptyValues(source) });
+  for (const problem of orderWrite.problems) if (!problems.includes(problem)) problems.push(problem);
+
   if (env === undefined || gateway === undefined || problems.length > 0) {
     throw new EnvValidationError('Worker', problems);
   }
-  return { env, gateway, gatewayDescription: gateway.describe() };
+  return { env, gateway, gatewayDescription: gateway.describe(), orderWrite: orderWrite.settings };
 }
