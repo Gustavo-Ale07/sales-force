@@ -298,6 +298,8 @@ export const META_KEYS = {
   customersSyncedAt: "cache.customers.synced_at",
   productsSyncedAt: "cache.products.synced_at",
   entryConfiguration: "cache.entry_configuration",
+  /** JSON array of `{code, name}` carriers (D-C), refreshed with every pull; never required for ordering. */
+  carriers: "cache.carriers",
   cacheOwner: "cache.owner_account_id",
   cacheDatasetEnvironment: "cache.dataset_environment",
   cacheDatasetId: "cache.dataset_id",

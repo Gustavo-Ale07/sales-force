@@ -16,7 +16,7 @@ import {
   describeIssue,
   type EditorLine,
 } from "../data/order-draft";
-import type { CustomerListItem, OrderDetail, OrderEntryConfiguration, OrderRepository, ProductListItem, Repositories } from "../data/ports";
+import type { Carrier, CustomerListItem, OrderDetail, OrderEntryConfiguration, OrderRepository, ProductListItem, Repositories } from "../data/ports";
 import { formatBrl } from "../lib/money";
 import { ERP_DISCOUNT_NOTICE } from "../offline/approval-status";
 import { describeDraftStatus, type LocalOrdersPort } from "../offline/local-orders";
@@ -160,8 +160,9 @@ export function NewOrderScreen({
   // What the editor held when it was last loaded or saved; an order that differs from it has unsaved edits to protect.
   const baselineRef = useRef(orderSignature(null, []));
   /** Header options the seller changed in this session (`undefined` = untouched, the saved or default value stands). */
-  const [choice, setChoice] = useState<{ top?: number; negotiation?: number }>({});
-  const choiceHeader = { ...(choice.top === undefined ? {} : { top: choice.top }), ...(choice.negotiation === undefined ? {} : { negotiation: choice.negotiation }) };
+  const [choice, setChoice] = useState<{ top?: number; negotiation?: number; carrier?: number | null }>({});
+  const [carriers, setCarriers] = useState<readonly Carrier[] | null>(null);
+  const choiceHeader = { ...(choice.top === undefined ? {} : { top: choice.top }), ...(choice.negotiation === undefined ? {} : { negotiation: choice.negotiation }), ...(choice.carrier === undefined ? {} : { carrier: choice.carrier }) };
   const finished = savedLocal !== null || savedOrder !== null;
   const dirty =
     !finished &&
@@ -292,7 +293,20 @@ export function NewOrderScreen({
           ? config.value.sales.defaultNegotiationTypeCode
           : null;
   const negotiationTypeCode = choice.negotiation !== undefined ? choice.negotiation : savedNegotiation;
-  const carrierCode = localDraft?.carrierCode ?? editingOrder?.carrierCode ?? null;
+  const savedCarrier = localDraft?.carrierCode ?? editingOrder?.carrierCode ?? null;
+  const carrierCode = choice.carrier !== undefined ? choice.carrier : savedCarrier;
+
+  // Optional list; offline-first adapters answer from what the device stored, and a failure just leaves the choice empty.
+  useEffect(() => {
+    let active = true;
+    repositories.orders
+      .listCarriers()
+      .then((items) => active && setCarriers(items))
+      .catch(() => active && setCarriers([]));
+    return () => {
+      active = false;
+    };
+  }, [repositories.orders]);
 
   const preview = useMemo(() => previewDraft(lines), [lines]);
   const productActions = useMemo<ProductOrderActions>(() => {
@@ -680,6 +694,9 @@ export function NewOrderScreen({
                 negotiationTypeCode={negotiationTypeCode}
                 onTopChange={(code) => setChoice((current) => ({ ...current, top: code }))}
                 onNegotiationChange={(code) => setChoice((current) => ({ ...current, negotiation: code }))}
+                carriers={carriers}
+                carrierCode={carrierCode}
+                onCarrierChange={(code) => setChoice((current) => ({ ...current, carrier: code }))}
               />
             )}
             <CartView

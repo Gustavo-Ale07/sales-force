@@ -18,7 +18,7 @@ import {
 } from "@salesforce/mobile-db";
 import { ApiRequestError } from "../data/api";
 import { datasetIdentityOf } from "./reference-source";
-import type { CustomerListItem, OrderEntryConfiguration, ProductListItem, Repositories } from "../data/ports";
+import type { Carrier, CustomerListItem, OrderEntryConfiguration, ProductListItem, Repositories } from "../data/ports";
 
 /**
  * Repositories that read the on-device cache (filled by the sync manager) and fall back to the API only when the
@@ -79,6 +79,28 @@ export function createOfflineFirstRepositories(deps: {
     },
     orders: {
       ...remote.orders,
+      // Online: the live list, remembered for later. Offline: the list stored by the last pull or live read of this
+      // account and dataset; with none, the picker simply has nothing to offer (carrier is optional).
+      async listCarriers() {
+        try {
+          const fresh = await remote.orders.listCarriers();
+          if (await cacheReady()) await setMeta(db, META_KEYS.carriers, JSON.stringify(fresh), isoNow(env));
+          return fresh;
+        } catch (error) {
+          if (error instanceof ApiRequestError && error.isNetwork) {
+            if (!(await cacheReady())) return [];
+            const cached = await getMeta(db, META_KEYS.carriers);
+            if (cached === null) return [];
+            try {
+              const parsed: unknown = JSON.parse(cached);
+              return Array.isArray(parsed) ? (parsed as Carrier[]) : [];
+            } catch {
+              return [];
+            }
+          }
+          throw error;
+        }
+      },
       async getEntryConfiguration() {
         try {
           const fresh = await remote.orders.getEntryConfiguration();

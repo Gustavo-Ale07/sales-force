@@ -3,7 +3,7 @@ import { DatasetIdentityError, confirmDataset, readExpectedDataset, sameDataset,
 import { countOutbox } from "./local-orders";
 import { isoNow, type OfflineEnv } from "./offline-env";
 import { pushOutbox, recoverInterrupted, TransportError, type OrderTransport, type PushOptions } from "./order-sync";
-import { META_KEYS, getMeta, replaceCustomers, replaceProducts, setMeta, type CustomerLike, type ProductLike } from "./reference-cache";
+import { META_KEYS, deleteMeta, getMeta, replaceCustomers, replaceProducts, setMeta, type CustomerLike, type ProductLike } from "./reference-cache";
 
 /**
  * Where the reference data comes from. The server stays authoritative and delivers only what the actor's scope
@@ -16,6 +16,8 @@ export interface ReferenceSource {
   fetchEntryConfiguration(): Promise<unknown>;
   /** Dataset the server serves (`null` = the server cannot tell: fail closed, nothing is cached or sent). */
   fetchDatasetIdentity(): Promise<DatasetIdentity | null>;
+  /** Active carriers (D-C). Optional and best-effort: a failure here never fails the pull. */
+  fetchCarriers?(): Promise<readonly unknown[]>;
 }
 
 export interface PullResult {
@@ -36,6 +38,16 @@ export async function pullReferenceData(db: SqlDatabase, env: OfflineEnv, source
   const [customers, products, configuration] = await Promise.all([source.fetchCustomers(), source.fetchProducts(), source.fetchEntryConfiguration()]);
   const after = await source.fetchDatasetIdentity();
   if (!sameDataset(before, after)) throw new DatasetIdentityError("O conjunto de dados do servidor mudou durante a atualização.");
+  // The carrier list is a convenience: when it cannot be read the previous list stays, unless it belongs to another dataset.
+  const previousDataset = await readExpectedDataset(db);
+  let carriers: readonly unknown[] | null = null;
+  if (source.fetchCarriers !== undefined) {
+    try {
+      carriers = await source.fetchCarriers();
+    } catch {
+      carriers = null;
+    }
+  }
   const now = isoNow(env);
   await db.transaction(async (tx) => {
     await writeCacheDataset(tx, before, now);
@@ -45,6 +57,8 @@ export async function pullReferenceData(db: SqlDatabase, env: OfflineEnv, source
     await setMeta(tx, META_KEYS.customersSyncedAt, now, now);
     await setMeta(tx, META_KEYS.productsSyncedAt, now, now);
     await setMeta(tx, META_KEYS.entryConfiguration, JSON.stringify(configuration ?? null), now);
+    if (carriers !== null) await setMeta(tx, META_KEYS.carriers, JSON.stringify(carriers), now);
+    else if (!sameDataset(previousDataset, before)) await deleteMeta(tx, META_KEYS.carriers);
     await setMeta(tx, META_KEYS.cacheOwner, ownerAccountId, now);
   });
   return { customers: customers.length, products: products.length };

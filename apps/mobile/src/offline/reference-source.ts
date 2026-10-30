@@ -57,6 +57,8 @@ export function createReferenceSource(api: ApiClient): ReferenceSource {
         ),
       ),
     fetchEntryConfiguration: () => guard(() => callApi(() => api.GET("/order-entry/configuration"))),
+    // Same endpoint the online carrier picker uses; the pull treats a failure here as non-fatal.
+    fetchCarriers: () => guard(async () => (await callApi(() => api.GET("/carriers"))).items),
     fetchDatasetIdentity: () => guard(async () => datasetIdentityOf(await callApi(() => api.GET("/order-entry/configuration")))),
   };
 }

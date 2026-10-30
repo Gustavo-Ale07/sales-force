@@ -27,11 +27,11 @@ const config = orderEntryConfiguration({
   },
 });
 
-async function openCart(localOrders = fakeLocalOrders()) {
+async function openCart(localOrders = fakeLocalOrders(), carriers: readonly { code: number; name: string }[] = []) {
   const repositories = {
     customers: { list: async () => pageOf([customer(10, { name: "Padaria Central" })]) },
     products: fakeProducts({ list: async () => pageOf([copo]) }),
-    orders: fakeOrders({ getEntryConfiguration: async () => config }),
+    orders: fakeOrders({ getEntryConfiguration: async () => config, listCarriers: async () => carriers }),
   };
   await render(<NewOrderScreen repositories={repositories} onUnauthenticated={() => undefined} localOrders={localOrders} />);
   await pressAndSettle(await screen.findByText("Padaria Central"));
@@ -63,5 +63,20 @@ describe("NewOrderScreen order options (D-A, D-B)", () => {
     await openCart(fakeLocalOrders([], { save: save as never }));
     await pressAndSettle(screen.getByRole("button", { name: "Salvar rascunho" }));
     expect(save).toHaveBeenCalledWith(expect.objectContaining({ topCode: null, negotiationTypeCode: 1 }));
+  });
+
+  it("saves the chosen carrier, and 'Nenhuma' clears it", async () => {
+    const save = jest.fn(async () => draftRecord());
+    await openCart(fakeLocalOrders([], { save: save as never }), [{ code: 7, name: "Rápido" }]);
+    await pressAndSettle(screen.getByRole("button", { name: "Escolher transportadora" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Transportadora Rápido" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Salvar rascunho" }));
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ carrierCode: 7 }));
+  });
+
+  it("degrades gracefully when no carrier list is available", async () => {
+    await openCart();
+    expect(screen.getByText(/lista de transportadoras não está disponível/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Escolher transportadora" }).props.accessibilityState?.disabled).toBe(true);
   });
 });
