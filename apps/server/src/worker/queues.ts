@@ -21,12 +21,16 @@ export const QUEUE_NAMES = {
   integrationOrderDeliver: 'integration.order.deliver',
   /** Removes dry-run payload records older than 30 days (SNK-7 D-6). */
   integrationOrderDryRunPurge: 'integration.order.dry-run-purge',
+  /** Reads the ERP status of sent orders (SNK-7 P2). Read-only; scheduled together with order delivery. */
+  syncErpOrderStatus: 'sync.erp.orderStatus',
 } as const;
 
 /** Every minute; the outbox row decides what is actually due (`next_attempt_at`). */
 export const ORDER_DELIVERY_CRON = '* * * * *';
 /** Daily, off-peak. */
 export const ORDER_DRY_RUN_PURGE_CRON = '17 3 * * *';
+/** Every 15 minutes (P2). */
+export const ORDER_ERP_STATUS_CRON = '*/15 * * * *';
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
 
@@ -85,6 +89,17 @@ export const QUEUE_REGISTRY: readonly QueueSpec[] = [
   // retries a sweep; the next minute's tick is the retry. `short` keeps at most one queued.
   {
     name: QUEUE_NAMES.integrationOrderDeliver,
+    options: {
+      policy: 'short',
+      retryLimit: 0,
+      expireInSeconds: 600,
+      retentionSeconds: 3600,
+      deleteAfterSeconds: 24 * 3600,
+      deadLetter: QUEUE_NAMES.deadLetter,
+    },
+  },
+  {
+    name: QUEUE_NAMES.syncErpOrderStatus,
     options: {
       policy: 'short',
       retryLimit: 0,

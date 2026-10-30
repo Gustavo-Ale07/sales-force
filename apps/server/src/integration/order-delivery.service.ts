@@ -545,8 +545,8 @@ function toDelivery(order: OrderRow): DeliveryOrder {
     customerCode: order.customerCode,
     sellerCode: order.sellerCode,
     negotiationTypeCode: order.negotiationTypeCode,
-    // Per-order header TOP and carrier arrive with the order header work (D-A, D-C); until then the configured default applies.
-    topCode: null,
+    // The order's own TOP (D-A); null falls back to the configured default. The carrier column is not in this branch yet (D-C).
+    topCode: order.topCode,
     carrierCode: null,
     notes: order.notes,
     createdAt: order.createdAt,

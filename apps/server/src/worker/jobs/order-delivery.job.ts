@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { OrderDeliveryService } from '../../integration/order-delivery.service.js';
+import type { OrderErpStatusService } from '../../integration/order-erp-status.service.js';
 import type { JobContext, JobHandler } from '../job-contract.js';
 import { QUEUE_NAMES } from '../queues.js';
 
@@ -28,5 +29,17 @@ export class OrderDryRunPurgeJob implements JobHandler<Record<string, never>> {
 
   async handle(): Promise<void> {
     await this.service.purgeDryRuns();
+  }
+}
+
+/** `sync.erp.orderStatus` (P2): reads the ERP status of sent, non-final orders. Read-only toward the ERP. */
+export class OrderErpStatusJob implements JobHandler<Record<string, never>> {
+  readonly queue = QUEUE_NAMES.syncErpOrderStatus;
+  readonly payload = z.object({});
+
+  constructor(private readonly service: OrderErpStatusService) {}
+
+  async handle(_payload: Record<string, never>, context: JobContext): Promise<void> {
+    await this.service.runOnce(context.signal === undefined ? {} : { signal: context.signal });
   }
 }

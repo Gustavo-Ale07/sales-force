@@ -48,6 +48,7 @@ import type {
   OrderCallOptions,
   OrderWriteRequest,
   WrittenOrder,
+  ErpOrderStatusReading,
   WrittenOrderItem,
 } from '../write/order-contract.js';
 import { assertBaseUrlAllowed, assertRequestUrlAllowed } from './host-guard.js';
@@ -395,6 +396,15 @@ export class RealSankhyaGateway implements SankhyaGateway {
     }
     const reader = new RowReader('orders', columns, result.rows[0] ?? [], 0);
     return { erpOrderNumber: reader.int('NUNOTA'), confirmed: reader.nullableText('STATUSNOTA') === 'L' };
+  }
+
+  /** NEEDS VALIDATION (spike 9.48 item 9): where the ERP status facts live is not known; no query is invented. */
+  readOrderStatusFacts(erpOrderNumbers: readonly number[], options?: OrderCallOptions): Promise<readonly ErpOrderStatusReading[]> {
+    void erpOrderNumbers;
+    void options;
+    return Promise.reject(
+      new NotImplementedError('readOrderStatusFacts: the source of the ERP order status is not validated. NEEDS VALIDATION (SNK-7 P2, spike 9.48).'),
+    );
   }
 
   async readWrittenOrder(erpOrderNumber: number, options?: OrderCallOptions): Promise<WrittenOrder | null> {

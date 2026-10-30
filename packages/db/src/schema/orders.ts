@@ -61,6 +61,12 @@ export const salesOrder = pgTable(
     negotiationTypeCode: integer('negotiation_type_code'),
     /** TOP the order carries (D-A): an eligible order TOP or the quotation TOP. Null on drafts saved before it existed. */
     topCode: integer('top_code'),
+    /** ERP status as last read by the worker (P2): code and label are Vidya-compatible; null until the first read. */
+    erpStatusCode: integer('erp_status_code'),
+    erpStatusLabel: text('erp_status_label'),
+    /** Invoice number once the ERP issued one (null before). */
+    erpInvoiceNumber: bigint('erp_invoice_number', { mode: 'number' }),
+    erpStatusCheckedAt: timestamp('erp_status_checked_at', { withTimezone: true }),
     /** Quotation this order was duplicated from ("Duplicar como pedido"); traceability only, no state depends on it. */
     sourceOrderId: uuid('source_order_id'),
     /** Optional carrier chosen on the order (D-C); validated against the carrier mirror, no FK (mirror rows are soft-deleted). */

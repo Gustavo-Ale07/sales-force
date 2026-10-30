@@ -967,6 +967,12 @@ export interface components {
             itemCount: number;
             isPartial: boolean;
             erpNumber: number | null;
+            erpStatus: {
+                code: number;
+                label: string;
+                invoiceNumber: number | null;
+                checkedAt: components["schemas"]["IsoTimestamp"];
+            } | null;
             review: components["schemas"]["OrderReview"] | null;
             version: number;
             createdAt: components["schemas"]["IsoTimestamp"];
@@ -1049,6 +1055,12 @@ export interface components {
             itemPreview: string[];
             isPartial: boolean;
             erpNumber: number | null;
+            erpStatus: {
+                code: number;
+                label: string;
+                invoiceNumber: number | null;
+                checkedAt: components["schemas"]["IsoTimestamp"];
+            } | null;
             review: components["schemas"]["OrderReview"] | null;
             version: number;
             createdAt: components["schemas"]["IsoTimestamp"];

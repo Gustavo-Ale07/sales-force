@@ -17,6 +17,7 @@ import {
   type OrderDeliveryGateway,
   type OrderDeliverySettings,
 } from '../integration/order-delivery.service.js';
+import { OrderErpStatusService } from '../integration/order-erp-status.service.js';
 import { WorkerRuntime, type WorkerRuntimeOptions } from './runtime.js';
 
 /** Product photo synchronization wiring; passed only when PRODUCT_MEDIA_SYNC_ENABLED=true. */
@@ -85,6 +86,7 @@ export class WorkerModule {
                 ? {}
                 : {
                     orderDelivery: {
+                      status: new OrderErpStatusService({ db, gateway: orderDelivery.gateway, logger, now }),
                       service: new OrderDeliveryService({
                         db,
                         gateway: orderDelivery.gateway,

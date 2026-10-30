@@ -19,8 +19,9 @@ import { MirrorSyncJob } from './jobs/mirror-sync.job.js';
 import { ProductMediaSyncJob } from './jobs/product-media-sync.job.js';
 import { SyncHeartbeatJob } from './jobs/sync-heartbeat.job.js';
 import type { OrderDeliveryService } from '../integration/order-delivery.service.js';
-import { OrderDeliveryJob, OrderDryRunPurgeJob } from './jobs/order-delivery.job.js';
-import { ORDER_DELIVERY_CRON, ORDER_DRY_RUN_PURGE_CRON, QUEUE_NAMES, QUEUE_REGISTRY, type QueueSpec } from './queues.js';
+import type { OrderErpStatusService } from '../integration/order-erp-status.service.js';
+import { OrderDeliveryJob, OrderDryRunPurgeJob, OrderErpStatusJob } from './jobs/order-delivery.job.js';
+import { ORDER_DELIVERY_CRON, ORDER_DRY_RUN_PURGE_CRON, ORDER_ERP_STATUS_CRON, QUEUE_NAMES, QUEUE_REGISTRY, type QueueSpec } from './queues.js';
 
 export const QUEUE_INSTALL_HINT =
   'Run the one-shot queue installation before starting the worker (pnpm db:queue:install). ' +
@@ -75,7 +76,7 @@ export interface WorkerRuntimeDeps {
    * ERP order delivery (SNK-7). Present only when the order-write switch is on (mode dry_run or live);
    * absent = no handler, and a schedule stored by an earlier configuration is dropped.
    */
-  readonly orderDelivery?: { readonly service: OrderDeliveryService };
+  readonly orderDelivery?: { readonly service: OrderDeliveryService; readonly status?: OrderErpStatusService };
 }
 
 /**
@@ -147,7 +148,13 @@ export class WorkerRuntime {
       const mediaHandlers = media === undefined ? [] : [new ProductMediaSyncJob(media.service)];
       const { orderDelivery } = this.deps;
       const orderHandlers =
-        orderDelivery === undefined ? [] : [new OrderDeliveryJob(orderDelivery.service), new OrderDryRunPurgeJob(orderDelivery.service)];
+        orderDelivery === undefined
+          ? []
+          : [
+              new OrderDeliveryJob(orderDelivery.service),
+              new OrderDryRunPurgeJob(orderDelivery.service),
+              ...(orderDelivery.status === undefined ? [] : [new OrderErpStatusJob(orderDelivery.status)]),
+            ];
       const handlers: readonly JobHandler<unknown>[] = [
         heartbeat,
         ...mirrorHandlers,
@@ -200,10 +207,11 @@ export class WorkerRuntime {
       for (const [queue, cron] of [
         [QUEUE_NAMES.integrationOrderDeliver, ORDER_DELIVERY_CRON],
         [QUEUE_NAMES.integrationOrderDryRunPurge, ORDER_DRY_RUN_PURGE_CRON],
+        [QUEUE_NAMES.syncErpOrderStatus, ORDER_ERP_STATUS_CRON],
       ] as const) {
         if (!queues.some((spec) => spec.name === queue)) continue;
         // Disabled: drop a schedule stored by an earlier configuration (the switch is off by default).
-        if (orderDelivery === undefined) await boss.unschedule(queue);
+        if (orderDelivery === undefined || (queue === QUEUE_NAMES.syncErpOrderStatus && orderDelivery.status === undefined)) await boss.unschedule(queue);
         else await boss.schedule(queue, cron, {});
       }
 

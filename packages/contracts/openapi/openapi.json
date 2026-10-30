@@ -4679,6 +4679,44 @@
               }
             ]
           },
+          "erpStatus": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "integer"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "invoiceNumber": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "checkedAt": {
+                    "$ref": "#/components/schemas/IsoTimestamp"
+                  }
+                },
+                "required": [
+                  "code",
+                  "label",
+                  "invoiceNumber",
+                  "checkedAt"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "review": {
             "anyOf": [
               {
@@ -4764,6 +4802,7 @@
           "itemCount",
           "isPartial",
           "erpNumber",
+          "erpStatus",
           "review",
           "version",
           "createdAt",
@@ -5171,6 +5210,44 @@
               }
             ]
           },
+          "erpStatus": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "integer"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "invoiceNumber": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "checkedAt": {
+                    "$ref": "#/components/schemas/IsoTimestamp"
+                  }
+                },
+                "required": [
+                  "code",
+                  "label",
+                  "invoiceNumber",
+                  "checkedAt"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "review": {
             "anyOf": [
               {
@@ -5206,6 +5283,7 @@
           "itemPreview",
           "isPartial",
           "erpNumber",
+          "erpStatus",
           "review",
           "version",
           "createdAt",

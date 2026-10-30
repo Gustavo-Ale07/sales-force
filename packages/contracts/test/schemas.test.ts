@@ -293,6 +293,7 @@ describe('order requests', () => {
       itemCount: 2,
       isPartial: true,
       erpNumber: null,
+      erpStatus: null,
       review: null,
       version: 1,
       createdAt: TS,

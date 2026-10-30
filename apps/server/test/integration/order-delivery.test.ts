@@ -86,6 +86,7 @@ async function world(options: { mode?: 'dry_run' | 'live'; book?: FakeOrderBook;
     confirmOrder: (number, o) => fake.confirmOrder(number, o),
     findOrderByOrigin: (field, id, o) => fake.findOrderByOrigin(field, id, o),
     readWrittenOrder: (number, o) => fake.readWrittenOrder(number, o),
+    readOrderStatusFacts: (numbers, o) => fake.readOrderStatusFacts(numbers, o),
   };
   const now = () => new Date(clock.ms);
   const settings: OrderDeliverySettings = {

@@ -152,6 +152,18 @@ export const OrderListItemSchema = named(
     isPartial: z.boolean(),
     /** ERP order number once the order exists there; always `null` while submission is disabled. */
     erpNumber: z.number().int().nullable(),
+    /**
+     * ERP status as last read by the worker (Vidya-compatible code and label); `null` until the first read, and for
+     * orders that were never sent. The code list and precedence are NEEDS VALIDATION (spike 9.48).
+     */
+    erpStatus: z
+      .object({
+        code: z.number().int(),
+        label: z.string(),
+        invoiceNumber: z.number().int().nullable(),
+        checkedAt: IsoTimestampSchema,
+      })
+      .nullable(),
     /** `null` unless the draft needs review (its customer became ineligible). Clients show it and block sending. */
     review: OrderReviewSchema.nullable(),
     version: z.number().int().min(1),

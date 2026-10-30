@@ -5,6 +5,8 @@ import type {
   IncludeOrderResult,
   OrderWriteRequest,
   WrittenOrder,
+  ErpOrderStatusFactsReading,
+  ErpOrderStatusReading,
 } from '../write/order-contract.js';
 
 /**
@@ -49,6 +51,9 @@ export interface FakeOrderBookOptions {
 export class FakeOrderBook {
   readonly orders: FakeStoredOrder[] = [];
   readonly calls: FakeOrderCall[] = [];
+  /** Status facts a test sets for an order number (P2); otherwise derived from the stored order. */
+  readonly invoiceNumbers = new Map<number, number>();
+  readonly statusFacts = new Map<number, ErpOrderStatusFactsReading>();
   readonly #scripts: Record<FakeOrderOperation, FakeOrderOutcome[]> = { include: [], confirm: [], find: [], read: [] };
   readonly #options: FakeOrderBookOptions;
   #next: number;
@@ -100,6 +105,27 @@ export class FakeOrderBook {
     if (outcome.kind !== 'ok') throw outcome.error;
     const found = this.orders.find((order) => order.request.originId === originId);
     return found === undefined ? null : { erpOrderNumber: found.erpOrderNumber, confirmed: found.confirmed };
+  }
+
+  statusOf(erpOrderNumbers: readonly number[]): ErpOrderStatusReading[] {
+    return erpOrderNumbers.map((erpOrderNumber) => {
+      const set = this.statusFacts.get(erpOrderNumber);
+      if (set !== undefined) return { erpOrderNumber, facts: set, invoiceNumber: this.invoiceNumbers.get(erpOrderNumber) ?? null };
+      const stored = this.orders.find((order) => order.erpOrderNumber === erpOrderNumber);
+      return {
+        erpOrderNumber,
+        invoiceNumber: null,
+        facts: {
+          found: stored !== undefined,
+          cancelled: false,
+          confirmed: stored?.confirmed ?? false,
+          awaitingRelease: false,
+          awaitingBilling: false,
+          invoiced: false,
+          invoiceStatus: null,
+        },
+      };
+    });
   }
 
   read(erpOrderNumber: number): WrittenOrder | null {

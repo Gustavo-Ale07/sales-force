@@ -40,6 +40,17 @@ export function reviewOf(status: string, customer: OrderCustomerState): OrderRev
   return block === null ? null : { status: 'needs_review', reason: 'customer_ineligible', customerBlock: block };
 }
 
+/** ERP status as last read by the worker (P2); null until the first read. */
+export function erpStatusOf(order: OrderRow): OrderListItem['erpStatus'] {
+  if (order.erpStatusCode == null || order.erpStatusLabel == null || order.erpStatusCheckedAt == null) return null;
+  return {
+    code: order.erpStatusCode,
+    label: order.erpStatusLabel,
+    invoiceNumber: order.erpInvoiceNumber ?? null,
+    checkedAt: order.erpStatusCheckedAt.toISOString(),
+  };
+}
+
 export function toOrderListItem(row: OrderListRow): OrderListItem {
   const { order } = row;
   return {
@@ -56,6 +67,7 @@ export function toOrderListItem(row: OrderListRow): OrderListItem {
     itemPreview: [...row.itemPreview],
     isPartial: row.unpricedCount > 0,
     erpNumber: order.erpNumber,
+    erpStatus: erpStatusOf(order),
     review: reviewOf(order.status, row),
     version: order.version,
     createdAt: order.createdAt.toISOString(),
@@ -103,6 +115,7 @@ export function toOrderDetail(
     itemCount: dtoItems.length,
     isPartial: totals.isPartial,
     erpNumber: order.erpNumber,
+    erpStatus: erpStatusOf(order),
     review: reviewOf(order.status, customer),
     version: order.version,
     createdAt: order.createdAt.toISOString(),

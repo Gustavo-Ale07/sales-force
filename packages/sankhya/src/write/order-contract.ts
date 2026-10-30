@@ -80,7 +80,30 @@ export interface SankhyaWritePort {
   confirmOrder(erpOrderNumber: number, options?: OrderCallOptions): Promise<void>;
 }
 
+/**
+ * Facts about one ERP order that the domain maps to a status (SNK-7 P2). Same shape as the domain's
+ * `ErpOrderStatusFacts`; how each fact is read from the ERP is NEEDS VALIDATION (spike 9.48 item 9).
+ */
+export interface ErpOrderStatusFactsReading {
+  readonly found: boolean;
+  readonly cancelled: boolean;
+  readonly confirmed: boolean;
+  readonly awaitingRelease: boolean;
+  readonly awaitingBilling: boolean;
+  readonly invoiced: boolean;
+  readonly invoiceStatus: string | null;
+}
+
+export interface ErpOrderStatusReading {
+  readonly erpOrderNumber: number;
+  readonly facts: ErpOrderStatusFactsReading;
+  /** Invoice number when one exists. */
+  readonly invoiceNumber: number | null;
+}
+
 export interface SankhyaOrderReadPort {
+  /** Status facts of already sent orders (P2); one entry per requested number, `found` false when the ERP has none. */
+  readOrderStatusFacts(erpOrderNumbers: readonly number[], options?: OrderCallOptions): Promise<readonly ErpOrderStatusReading[]>;
   /** SNK-4 origin check: exact match on the dedicated origin field, `null` when absent. */
   findOrderByOrigin(originField: string, originId: string, options?: OrderCallOptions): Promise<ErpOrderRef | null>;
   /** D-7 post-write reread of header state and item prices/discounts; `null` when the order is gone. */

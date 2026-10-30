@@ -2,11 +2,13 @@ import { FakeGateway } from '@salesforce/sankhya';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AuditService } from '../../src/iam/audit.service.js';
 import { OrderDeliveryService } from '../../src/integration/order-delivery.service.js';
+import { OrderErpStatusService } from '../../src/integration/order-erp-status.service.js';
 import { createLogger } from '../../src/observability/logger.js';
 import { installQueues } from '../../src/worker/queue-installer.js';
 import {
   ORDER_DELIVERY_CRON,
   ORDER_DRY_RUN_PURGE_CRON,
+  ORDER_ERP_STATUS_CRON,
   QUEUE_NAMES,
   QUEUE_REGISTRY,
 } from '../../src/worker/queues.js';
@@ -54,7 +56,9 @@ function runtimeFor(database: MigratedDatabase, withDelivery: boolean): WorkerRu
     logger,
     db: database.handle,
     now,
-    ...(withDelivery ? { orderDelivery: { service } } : {}),
+    ...(withDelivery
+      ? { orderDelivery: { service, status: new OrderErpStatusService({ db: database.handle, gateway: new FakeGateway(), logger, now }) } }
+      : {}),
     options: {
       databaseUrl: database.secret,
       heartbeatCron: '*/5 * * * *',
@@ -79,6 +83,7 @@ describe('order delivery queues (SNK-7)', () => {
       const names = (await off.boss.getSchedules()).map((schedule) => schedule.name);
       expect(names).not.toContain(QUEUE_NAMES.integrationOrderDeliver);
       expect(names).not.toContain(QUEUE_NAMES.integrationOrderDryRunPurge);
+      expect(names).not.toContain(QUEUE_NAMES.syncErpOrderStatus);
     } finally {
       await off.stop();
     }
@@ -89,6 +94,7 @@ describe('order delivery queues (SNK-7)', () => {
       const schedules = await on.boss.getSchedules();
       expect(schedules.find((s) => s.name === QUEUE_NAMES.integrationOrderDeliver)?.cron).toBe(ORDER_DELIVERY_CRON);
       expect(schedules.find((s) => s.name === QUEUE_NAMES.integrationOrderDryRunPurge)?.cron).toBe(ORDER_DRY_RUN_PURGE_CRON);
+      expect(schedules.find((s) => s.name === QUEUE_NAMES.syncErpOrderStatus)?.cron).toBe(ORDER_ERP_STATUS_CRON);
     } finally {
       await on.stop();
     }

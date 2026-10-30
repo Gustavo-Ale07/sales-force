@@ -23,6 +23,7 @@ import type {
   OrderCallOptions,
   OrderWriteRequest,
   WrittenOrder,
+  ErpOrderStatusReading,
 } from '../write/order-contract.js';
 import { FakeOrderBook } from './fake-order-book.js';
 import { assertSafeScope, selectEffectiveVersions } from '../read-scope.js';
@@ -219,6 +220,10 @@ export class FakeGateway implements SankhyaGateway {
   findOrderByOrigin(originField: string, originId: string, options?: OrderCallOptions): Promise<ErpOrderRef | null> {
     void originField;
     return this.#order(options, () => this.#orders.find(originId));
+  }
+
+  readOrderStatusFacts(erpOrderNumbers: readonly number[], options?: OrderCallOptions): Promise<readonly ErpOrderStatusReading[]> {
+    return this.#order(options, () => this.#orders.statusOf(erpOrderNumbers));
   }
 
   readWrittenOrder(erpOrderNumber: number, options?: OrderCallOptions): Promise<WrittenOrder | null> {
