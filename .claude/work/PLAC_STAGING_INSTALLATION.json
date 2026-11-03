@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "source": {
     "kind": "bootstrap-file",
-    "version": "plac-staging-2026-10-02",
+    "version": "plac-staging-2026-11-03",
     "syncedAt": "2026-10-02T00:00:00.000Z"
   },
   "general": {
@@ -96,9 +96,16 @@
     "confirmationBehavior": "disabled",
     "discountAuthority": {
       "mode": "erp",
-      "limits": { "seller": null, "manager": null, "director": null }
+      "limits": {
+        "seller": null,
+        "manager": null,
+        "director": null
+      }
     },
-    "eligibleOrderTopCodes": [1001, 1000],
+    "eligibleOrderTopCodes": [
+      1001,
+      1000
+    ],
     "orderStockLocationCode": 209,
     "orderLayout": {
       "layoutNumber": 30,
@@ -123,7 +130,15 @@
         },
         "unlistedFields": "IGNORED_UNTIL_NEEDED"
       }
-    }
+    },
+    "topAllowlist": [
+      1000,
+      1001
+    ],
+    "negotiationTypeExclusions": [
+      23,
+      24
+    ]
   },
   "customers": {
     "portfolioOwnership": {
@@ -178,5 +193,11 @@
     "overdueTitles": false,
     "creditChecks": false
   },
-  "features": {}
+  "features": {},
+  "erp": {
+    "liberationEventLabels": {
+      "18": "confirmação de nota",
+      "44": "liberação exigida pela TOP"
+    }
+  }
 }
