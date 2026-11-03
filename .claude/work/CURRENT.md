@@ -39,7 +39,13 @@ STATUS: ACTIVE — atualizado em 2026-10-29. Fonte de verdade ÚNICA: `C:\Dev\sa
 - Trilha E concluída na branch: W-38 (`2fac9c6`), status/eventos de liberação no web (`e4dad5e`), documentos (`22d61ba`), teste de credenciais no dry-run (`51de3fa`), arquivo base do staging 2026-11-03 (`574f393`). Reviewer sem altos/médios. Detalhes: `.claude/work/CHECKPOINT_2026-11-03-parte2.md`.
 - Nada em staging mudou: ele roda a parte 1; a parte 2 não foi implantada; `CONFIG_SYNC_FROM_SANKHYA` ausente (desligada).
 
-## Por onde retomar (2026-11-03) — parte 2b
+## Onde paramos (2026-11-03, parte 2b parcial)
+- G1 feito: IPI estimado (`f070a69`, base `ef68bee`). Verde em lint/typecheck e nos testes dos pacotes tocados. Nada em staging, nada ao Sankhya, sem deploy. Detalhes e escopo de G2–G6: `.claude/work/CHECKPOINT_2026-11-03-parte2b-parcial.md`.
+
+## Por onde retomar (2026-11-03, parte 2b)
+- G2 a G6 do PROMPT_2026-11-03_parte2b.md (o texto não está em arquivo: o escopo completo está no checkpoint acima). Reviewer único no fim, sobre o diff inteiro desde `ef68bee`. Só o dono roda: deploy com `SF_RUN_DB_ROLES=1` (tabela `erp_ipi_rate`) e `sync-once` de `ipiRates`.
+
+## (antigo) Por onde retomar (2026-11-03) — parte 2b
 1. IPI: `TGFPRO.CODIPI` → `TGFIPI` (leitura, sem cálculo próprio até validar).
 2. Financeiro só leitura, com as regras de `VGFFIN_VIDYA` / `VGFPAR_VIDYA`.
 3. `AD_EXPEDICAO` S/N no pedido (padrão S, a validar).
