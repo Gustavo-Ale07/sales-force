@@ -806,6 +806,8 @@ Source: the project owner (Gustavo), prompt of 2026-10-30 part 2 (`.claude/work/
 - **CFG-8 (precedence and security):** a PONTE key successfully read from Sankhya overrides the base file; a failed/partial/invalid read = no new version, the current version stays, failure recorded in `sync_state` (entity `configuration`) and an alert on the integration panel; a sync never regresses to "not configured". Secrets never enter the snapshot. Force never writes configuration to Sankhya (P-02/P-03). Job off by default (`CONFIG_SYNC_FROM_SANKHYA=0`).
 
 
+**Status note 2026-11-03 (owner).** (a) Staging runs Part 1 (`df923a8`, migrations 0014–0017); `CONFIG_SYNC_FROM_SANKHYA` is still absent from `compose.env` (= off). (b) `customers.creditFeatures.showCreditLimit` stays with the base file; the `OCLTLIMCRED` value read from Sankhya is informational only (sync report), until the owner confirms Sankhya owns it (closes reviewer finding M2 for now). (c) Release events: only 44 ("liberação exigida pela TOP") and 18 ("confirmação de nota") are named; 2 and 13 show as "evento 2"/"evento 13" until the owner names them (`erp.liberationEventLabels` in the base file). (d) Reviewer finding M1 (overlay widening the order scope) is resolved by the base file: `sales.topAllowlist`, `negotiationTypeExclusions` and the eligible TOPs are set there.
+
 ## 4. Status of the specification's decisions (spec §4)
 
 The spec is a draft. Its decisions are binding only where an APPROVED entry above covers them.

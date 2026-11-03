@@ -298,23 +298,24 @@ describe('overlay decision table: preconditions that keep the base and warn', ()
     expect(snap.customers.creditFeatures.showCreditLimit).toBe(true);
   });
 
-  it('OCLTLIMCRED = S hides the credit limit, = N shows it', () => {
-    const hide = overlayConfigurationFacts({
-      base: baseConfiguration(),
-      facts: factsWith((f) => {
-        f['q1GeneralParameters'].rows[0].hidesCreditLimit = true;
-      }),
-    });
-    expect((hide.snapshot as any).customers.creditFeatures.showCreditLimit).toBe(false);
-    const show = overlayConfigurationFacts({
-      base: baseConfiguration((c) => {
-        c['customers'].creditFeatures.showCreditLimit = false;
-      }),
-      facts: factsWith((f) => {
-        f['q1GeneralParameters'].rows[0].hidesCreditLimit = false;
-      }),
-    });
-    expect((show.snapshot as any).customers.creditFeatures.showCreditLimit).toBe(true);
+  it('OCLTLIMCRED is reported only: showCreditLimit follows the base file', () => {
+    for (const [hides, baseShows] of [
+      [true, true],
+      [false, false],
+    ] as const) {
+      const out = overlayConfigurationFacts({
+        base: baseConfiguration((c) => {
+          c['customers'].creditFeatures.showCreditLimit = baseShows;
+        }),
+        facts: factsWith((f) => {
+          f['q1GeneralParameters'].rows[0].hidesCreditLimit = hides;
+        }),
+      });
+      expect((out.snapshot as any).customers.creditFeatures.showCreditLimit).toBe(baseShows);
+      expect(out.informational.hidesCreditLimit).toBe(hides);
+      expect(out.entries.some((e) => e.key === 'customers.creditFeatures.showCreditLimit')).toBe(false);
+      expect((out.snapshot as any).provenance['customers.creditFeatures.showCreditLimit']).toEqual({ source: 'base' });
+    }
   });
 
   it('a status with an empty name, colour or permission is left out with a warning', () => {

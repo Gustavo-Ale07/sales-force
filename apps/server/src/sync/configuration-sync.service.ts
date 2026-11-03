@@ -27,7 +27,6 @@ const SCOPE_KEYS = [
   'general.enabledCompanyCodes',
   'sales.eligibleOrderTopCodes',
   'sales.negotiationTypes',
-  'customers.creditFeatures.showCreditLimit',
 ] as const;
 
 export interface ConfigurationSyncDeps {
@@ -181,6 +180,8 @@ export class ConfigurationSyncService {
       changedKeys,
       warnings: overlay.warnings.map((warning) => ({ code: warning.code, key: warning.key })),
       productMobility: overlay.informational.productMobility,
+      usesFinancial: overlay.informational.usesFinancial,
+      hidesCreditLimit: overlay.informational.hidesCreditLimit,
       parametersWithoutFeature: Object.keys(overlay.informational.parametersWithoutFeature),
     };
   }

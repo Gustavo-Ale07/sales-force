@@ -53,6 +53,8 @@ export interface OverlayInformational {
   readonly productMobility: readonly { readonly mobile: boolean | null; readonly count: number }[];
   /** Q1 UTILFINANC: reported, NOT applied to `financial.showFinancialArea` until P6 exists. */
   readonly usesFinancial: boolean | null;
+  /** Q1 OCLTLIMCRED: reported, NOT applied to `customers.creditFeatures.showCreditLimit` (owner 2026-11-03). */
+  readonly hidesCreditLimit: boolean | null;
   /** Q1 parameters that have no feature in Sales Force yet (read, reported, not applied). */
   readonly parametersWithoutFeature: Readonly<Record<string, ConfigScalar>>;
 }
@@ -70,6 +72,7 @@ const BASE_ONLY_KEYS = [
   'sales.topAllowlist',
   'sales.negotiationTypeExclusions',
   'pricing.fallbackTableCode',
+  'customers.creditFeatures.showCreditLimit',
 ] as const;
 
 type Draft = Record<string, unknown>;
@@ -262,7 +265,7 @@ export function overlayConfigurationFacts(input: {
   if (q1.decimalQuantities !== null) apply('sales.orderBehavior.decimalQuantities', q1Origin('USADECQTD'), q1.decimalQuantities);
   if (q1.historyDays !== null) apply('customers.historyDays', q1Origin('DIASCONSULTAVENDAS'), q1.historyDays);
   if (q1.purchasedWindowDays !== null) apply('customers.purchasedWindowDays', q1Origin('QTDDIASPRODCOMPRADOS'), q1.purchasedWindowDays);
-  if (q1.hidesCreditLimit !== null) apply('customers.creditFeatures.showCreditLimit', q1Origin('OCLTLIMCRED'), !q1.hidesCreditLimit);
+  // OCLTLIMCRED is REPORTED only (owner 2026-11-03): `showCreditLimit` stays with the base file until the owner confirms it.
   if (q1.catalogReferenceTableCode !== null) apply('pricing.catalogReferenceTableCode', q1Origin('TABPADCSLTPROD'), q1.catalogReferenceTableCode);
   if (q1.alternativeTableCode !== null) {
     const existing = getPath(draft, 'pricing.alternativeTable');
@@ -333,7 +336,6 @@ export function overlayConfigurationFacts(input: {
     'pricing.alternativeTable.tableCode',
     'customers.historyDays',
     'customers.purchasedWindowDays',
-    'customers.creditFeatures.showCreditLimit',
     'erp.orderStatusDisplay',
   ];
   for (const key of [...bridgeKeys, ...BASE_ONLY_KEYS]) {
@@ -360,6 +362,7 @@ export function overlayConfigurationFacts(input: {
     informational: {
       productMobility: q8.map((row) => ({ mobile: row.mobile, count: row.count })),
       usesFinancial: q1.usesFinancial,
+      hidesCreditLimit: q1.hidesCreditLimit,
       parametersWithoutFeature,
     },
   };
