@@ -188,6 +188,16 @@ describe('dry run (D-6)', () => {
     expect(await w.database.handle.db.select().from(integrationOrderDryRun)).toHaveLength(1);
   });
 
+  it('leaves no credential text in the dry-run record or the outbox row', async () => {
+    const w = await world({ mode: 'dry_run' });
+    const { outboxId } = await w.seed({});
+    await w.service.runDue();
+    const [record] = await w.database.handle.db.select().from(integrationOrderDryRun);
+    const forbidden = /authorization|bearer|x-token|client_secret|password|basicauth/i;
+    expect(JSON.stringify(record)).not.toMatch(forbidden);
+    expect(JSON.stringify(await w.outbox(outboxId))).not.toMatch(forbidden);
+  });
+
   it('purges records older than 30 days and keeps newer ones', async () => {
     const w = await world({ mode: 'dry_run' });
     await w.seed();
