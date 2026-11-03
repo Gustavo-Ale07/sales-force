@@ -22,17 +22,31 @@ STATUS: ACTIVE — atualizado em 2026-10-29. Fonte de verdade ÚNICA: `C:\Dev\sa
 1. Parte 2 (`PROMPT_2026-10-30_parte2_config-sankhya.md`): começa registrando CFG-8, U-10-a..d e U-11 em `docs/decisions.md`; depois Trilha D.
 2. Decisões do dono abertas pelo reviewer: alçada em modo `erp` vs P-10; PDF compartilhado por representante vs P-20 (ver checkpoint).
 
-## Onde paramos (2026-10-30, parte 2 parcial)
-- Decisões CFG-8/U-10/U-11 em `docs/decisions.md` §3.17. Feito: D1 contrato, D2 gateway Q1–Q8, D3 job `sync.configuration` + grants + migrações 0018/0019, D4 (provenance só para admin). Detalhes e achados: `.claude/work/CHECKPOINT_2026-10-30-parte2-parcial.md`. Job DESLIGADO por padrão.
-- Falta (próxima sessão): D5 web W-38, D6 documentos (contrato físico PONTE/BASE/INFRA, README-staging), D7 testes restantes, UI do `erp_status_detail`, D8 reviewer final.
+## Onde paramos (2026-11-03, parte 2 fechada)
+- Trilha E concluída na branch: W-38 (`2fac9c6`), status/eventos de liberação no web (`e4dad5e`), documentos (`22d61ba`), teste de credenciais no dry-run (`51de3fa`), arquivo base do staging 2026-11-03 (`574f393`). Reviewer sem altos/médios. Detalhes: `.claude/work/CHECKPOINT_2026-11-03-parte2.md`.
+- Nada em staging mudou: ele roda a parte 1; a parte 2 não foi implantada; `CONFIG_SYNC_FROM_SANKHYA` ausente (desligada).
+
+## Por onde retomar (2026-11-03) — parte 2b
+1. IPI: `TGFPRO.CODIPI` → `TGFIPI` (leitura, sem cálculo próprio até validar).
+2. Financeiro só leitura, com as regras de `VGFFIN_VIDYA` / `VGFPAR_VIDYA`.
+3. `AD_EXPEDICAO` S/N no pedido (padrão S, a validar).
+4. Roteiro do 1º pedido real (depende do SNK-7 e do seu "AUTORIZO").
+5. Mobile: mostrar o status do Sankhya exige levar `erpStatus` no sync (decisão sua, ver abaixo).
+
+## Decisões do dono (parte 2)
+- Mostrar o motivo de liberação ao representante externo no detalhe do pedido? (SIM / NÃO)
+- Levar o status do Sankhya ao mobile (muda o protocolo de sync)? (SIM / ADIAR)
+- Confirmar o valor de `showCreditLimit` no arquivo base para vendedores.
+- Conferir que `lastErrorMessage` do sync nunca carrega credencial/URL (BAIXO 1 do reviewer).
 
 ## Só o dono roda — parte 2 (DESLIGADO até você executar)
-1. Deploy do novo SHA com `SF_RUN_DB_ROLES=1` (grants do worker; migrações 0018 e 0019).
-2. Antes de ligar: pôr `sales.topAllowlist` [1000, 1001] e `negotiationTypeExclusions` [23, 24] no arquivo base e reexecutar o config-bootstrap (achado MÉDIO 1).
-3. Em `/opt/force-staging/config/compose.env`: `CONFIG_SYNC_FROM_SANKHYA=1`; recriar o worker com `deploy/scripts/sf-compose.sh`.
-4. Disparar uma vez (`node dist/sync-once.js` com a entidade de configuração — conferir o comando em `apps/server/src/sync-once.ts`), ler o relatório e `GET /api/v1/configuration` (`source.kind = 'sankhya'`, `source.base`).
-5. Diferenças esperadas vs. arquivo de 2026-10-02: negociações 18 → 33, `catalogReferenceTableCode` null → 5, `alternativeTable.tableCode` 5, TOPs {1000, 1001} com allowlist, `skipConfirmationTopCodes` [1000], `orderStatusDisplay` com 8 status. Outra diferença = investigar.
-6. Voltar: `CONFIG_SYNC_FROM_SANKHYA=0`, recriar o worker; se preciso, reexecutar o config-bootstrap.
+1. Copiar `.claude/work/PLAC_STAGING_INSTALLATION.json` para `/opt/force-staging/config/installation.json` e rodar de novo o config-bootstrap, com o comando exato de `deploy/README-staging.md` ("Installation configuration"):
+   `$SFC --profile self-hosted-db run --rm --no-deps -v /opt/force-staging/config/installation.json:/config/installation.json:ro -e INSTALLATION_CONFIG_FILE=/config/installation.json migrate node dist/config-bootstrap.js`
+2. Deploy do novo SHA com `SF_RUN_DB_ROLES=1` (migrações 0018 e 0019 + grants do worker).
+3. `CONFIG_SYNC_FROM_SANKHYA=1` em `/opt/force-staging/config/compose.env`; recriar o worker: `deploy/scripts/sf-compose.sh up -d --no-deps --force-recreate worker`.
+4. Rodar uma vez: `deploy/scripts/sf-compose.sh exec worker node dist/sync-once.js sync.configuration`; ler o relatório (seção "Configuração lida do Sankhya" do README-staging), conferir `GET /api/v1/configuration` (`source.kind = 'sankhya'`) e a tela Configurações.
+5. Diferenças esperadas vs. o Sandbox: negociações 18 → 22 (entram 8, 17, 20, 21), TOPs {1000, 1001}, `quoteTopCodes` [1000], `skipConfirmationTopCodes` [] (AD_PULARCONFIRMACAO vazio no Sandbox), `mobilePriceTableCodes` [0, 3, 5, 6, 9], `catalogReferenceTableCode` 5, `alternativeTable.tableCode` 5, `orderStockLocationCode` 209, 8 situações. Outra diferença = investigar.
+6. Voltar: `CONFIG_SYNC_FROM_SANKHYA=0`, recriar o worker; para o conteúdo do arquivo, reexecutar o config-bootstrap (passos do README-staging).
 
 ## Só o dono roda — parte 1 (tudo DESLIGADO até você executar)
 1. Deploy do novo SHA com `deploy/scripts/sf-compose.sh` / `deploy-staging.sh` e `SF_RUN_DB_ROLES=1` (migrations 0014–0017 e grants novos de `erp_carrier` e `integration_order_dry_run`).
