@@ -1,45 +1,77 @@
-# "Configuração Sales Force" — proposed Sankhya-side contract
+# Configuração lida do Sankhya — contrato PONTE / BASE / INFRA
 
-> **Status: PROPOSED — U-10 / U-11 (`docs/decisions.md`).** Documentation of the Sales Force side of CFG-1. It does **not** authorize creating anything in any Sankhya environment. No DDL is included or implied; creating custom tables/screens follows a separately approved integration/configuration workflow (Sandbox first, SNK-3). Source of the requirement: owner rulings of 2026-09-18 (PROD-1, CFG-1…CFG-6).
+> **Status:** PONTE, BASE e INFRA descrevem o que o código já faz (CFG-8, `docs/decisions.md` §3.17, decisões de 2026-11-03). A camada `AD_PLACFORCE*` (seção 5) é **PROPOSTA** (U-10-b: adiada) e **não autoriza criar nada em nenhum ambiente Sankhya**. Este documento não contém DDL. Criar tabelas ou telas no Sankhya segue um fluxo próprio aprovado, Sandbox primeiro (SNK-3).
 
-## 1. Principle
+## 1. Princípio
 
-Each customer's Sankhya is the source of truth for that installation's commercial configuration. Sales Force reads it (worker → `SankhyaGateway.readConfiguration()`), validates it against the `InstallationConfiguration` schema (`packages/contracts`), and stores a **versioned snapshot** in PostgreSQL (`installation_configuration_version`). The API and domain use only the local snapshot, never Sankhya, on request paths. **Secrets are never part of this configuration** (Client Secret, `X-Token`, database and signing/encryption secrets stay in the installation's environment/secret store; P-22, SEC-1).
+O que a PLAC já configura no Sankhya, o Force **lê** (PONTE). O que é só do Force fica no **arquivo base** (BASE). O que é segredo ou infraestrutura nunca entra no ERP (INFRA; P-22, SEC-1). O Force nunca escreve configuração no Sankhya (P-02/P-03).
 
-Until the Sankhya-side model exists, the snapshot can come from a `bootstrap-file` or `demo` source (U-11). Both use exactly the same schema and are labelled in `source.kind`; the UI shows which source is active.
+O worker (job `sync.configuration`, a cada 15 min e no start, só com `CONFIG_SYNC_FROM_SANKHYA=1`; padrão `0`) lê as consultas Q1–Q8 pelo `SankhyaGateway.readConfigurationFacts()`, sobrepõe a PONTE ao último arquivo base (`bootstrap-file`) e grava uma nova versão `source.kind='sankhya'` em `installation_configuration_version`, com `source.base` (versão do arquivo) e **proveniência por chave** (`TABELA.COLUNA` e hora da leitura). A API e o domínio usam só o snapshot local, nunca o Sankhya, nos caminhos de requisição.
 
-## 2. Logical structure (what the future screen must expose)
+Regras do mecanismo:
 
-Logical groups → one header record per installation plus child rows where a list is needed. Physical names are intentionally not proposed here (U-10).
+- **Falha fecha:** leitura falha ou parcial (qualquer Q com erro) = nenhuma versão nova; a vigente continua; a falha aparece em `sync_state` (`entity='configuration'`) e no painel de integração.
+- **Sem alteração = sem versão:** o hash do conteúdo ignora `readAt` e `syncedAt`; conteúdo igual é no-op.
+- **Auditoria:** cada versão nova registra as chaves alteradas e as mudanças de escopo (códigos de TOP/negociação acrescentados ou removidos).
+- **Gatilho de versão vigente:** a migração 0019 impede que uma versão armazenada volte a `is_current`.
+- **Visibilidade (CFG-7):** vendedor recebe só a fatia segura; `GET /api/v1/configuration` (com proveniência) é só de administrador e técnico. A tela W-38 é somente leitura.
 
-| Group | Fields (logical) | Notes |
+## 2. PONTE — chaves lidas do Sankhya
+
+| Chave do Force | Origem (tabela.coluna) | Consulta |
 |---|---|---|
-| **Geral** | `enabled`; `configVersion` (monotonic, bumped on every save); enabled companies (list of company codes) | `configVersion` and `updatedAt` are what the mirror stores as source markers |
-| **Vendas** | order TOP; quotation TOP (optional); default negotiation type; allowed negotiation types (list); order behavior (allow draft without price); confirmation behavior (`manual`/`automatic`/`disabled`) | None of these has a universal value; the Sandbox values are test evidence only (CFG-6) |
-| **Clientes** | portfolio ownership strategy (`customer_seller_field`/`explicit_account_links`/`all_visible`); account → seller links (list: account e-mail, seller code); customer-without-price-table behavior (`no_resolved_table`/`use_fallback_table`); credit-related switches (show credit limit) | `TSIUSU.CODVEND` is a reference, not the mapping (CFG-2) |
-| **Produtos** | allowed product-use values (list of codes); show inactive (bool); product-without-price: visible (bool), orderable (bool) | Sellable ≠ `('V','R')` universally (CFG-3) |
-| **Preços** | customer price-table strategy; fallback strategy (`none`/`fixed_table`) and fallback table; catalog reference table (for browsing without a customer); missing-price behavior (`no_price_state`) | Null `CODTAB` = no resolved table until a fallback is configured (CFG-4); missing price shown "Sem preço", never R$ 0,00 (CFG-5) |
-| **Financeiro** | show financial area; overdue-titles feature; credit-check feature | Switches only; the rules behind them stay UNDECIDED (S4) |
-| **Recursos** | installation feature flags (name → on/off) | Known keys are typed in Sales Force; unknown keys are ignored and reported |
+| `general.enabledCompanyCodes` | `TSIEMP.AD_MOBILIDADE` = S | Q2 |
+| `general.defaultCompanyCode` | `TSIEMP.AD_MOBILIDADE` (primeira empresa habilitada) | Q2 |
+| `sales.orderTopCode` | `TSIEMP.AD_CODTIPOPERPAD` | Q2 |
+| `sales.eligibleOrderTopCodes` | `TGFTOP.AD_MOBILIDADE` = S (última versão, `TIPMOV` = P), limitada por `sales.topAllowlist` quando existir | Q3 |
+| `sales.quoteTopCodes` | `AD_TVDYGRUOP.NOME` ("ORÇAMENTO") + `AD_TVDYTOPGRU.CODTIPOPER` | Q4 |
+| `sales.quotationTopCode` | idem, só quando há exatamente uma TOP de orçamento | Q4 |
+| `sales.skipConfirmationTopCodes` | `TGFTOP.AD_PULARCONFIRMACAO` = S (vazio em todas as TOPs ⇒ mantém o valor base e avisa `skip_confirmation_not_read`) | Q3 |
+| `sales.negotiationTypes` | `TGFTPV.AD_MOBILIDADE` = S e `ATIVO` = S (versão vigente), menos `sales.negotiationTypeExclusions` | Q5 |
+| `sales.orderStockLocationCode` | `AD_TVDYCFGFRC.CODLOCALPEDIDOS` | Q1 |
+| `sales.orderBehavior.decimalQuantities` | `AD_TVDYCFGFRC.USADECQTD` | Q1 |
+| `customers.historyDays` | `AD_TVDYCFGFRC.DIASCONSULTAVENDAS` | Q1 |
+| `customers.purchasedWindowDays` | `AD_TVDYCFGFRC.QTDDIASPRODCOMPRADOS` | Q1 |
+| `pricing.catalogReferenceTableCode` | `AD_TVDYCFGFRC.TABPADCSLTPROD` | Q1 |
+| `pricing.alternativeTable.tableCode` | `AD_TVDYCFGFRC.CODTABALT` (registrada, inativa) | Q1 |
+| `pricing.mobilePriceTableCodes` | `TGFNTA.AD_MOBILIDADE` = S | Q6 |
+| `erp.orderStatusDisplay` | `AD_TVDYFRCSTS` (código, nome, cor) | Q7 |
 
-## 3. Screen contract ("Configuração Sales Force")
+**Leituras só informativas** (vão para o relatório da sincronização, não alteram o snapshot): Q8 (distribuição de `TGFPRO.AD_MOBILIDADE`, não decide nada hoje), `AD_TVDYCFGFRC.UTILFINANC`, `AD_TVDYCFGFRC.OCLTLIMCRED` (decisão do dono de 2026-11-03: `showCreditLimit` continua do arquivo base) e parâmetros sem funcionalidade no Force.
 
-- One screen per Sankhya installation, restricted to administrative profiles chosen by the customer in Sankhya.
-- Every save creates a new `configVersion` and an audit trail entry in Sankhya (who/when/what changed).
-- The screen validates required combinations before saving (for example fixed-table fallback requires a fallback table; `orderable` products without price require an order behavior that accepts them).
-- No secrets, no credentials, no free-form script/expressions.
-- Deleting a record used by a released snapshot is prevented or versioned; Sales Force never edits Sankhya configuration (read-only, P-02/P-03).
+## 3. BASE — chaves só do Force (arquivo base)
 
-## 4. Delivery contract to Sales Force
+Arquivo JSON fora do repositório, validado por `InstallationConfigurationSchema` e pelas regras de consistência do domínio, aplicado por `config-bootstrap`. Vale para tudo o que não tem origem no Sankhya, e como valor de reserva da PONTE:
 
-1. `readConfiguration()` returns one complete, self-consistent snapshot (`source.kind='sankhya'`, `source.version=configVersion`, `syncedAt`). No partial or paged config.
-2. The worker compares the snapshot's content hash with the current local version; a changed hash inserts a new `installation_configuration_version` row and flips `is_current` in one transaction. An invalid snapshot is rejected, the previous version stays current, and the failure is recorded in `sync_state` (`entity='configuration'`).
-3. A configuration change that would **widen a user's scope** (for example new account → seller links) is written to the audit log with the old and new version before it takes effect (proposed guard-rail from the CFG-2 security note; not approved).
-4. Cadence and manual "sync now" trigger: proposed every few minutes plus on demand from the integration page; final cadence NEEDS VALIDATION with the customer.
+- `general.appMinimumVersion`
+- `sales.topAllowlist` (TOPs do piloto: mecanismo de escopo; ausente = todas as habilitadas no Sankhya)
+- `sales.negotiationTypeExclusions` (hoje 23 e 24)
+- `sales.discountAuthority.mode` e demais políticas de desconto
+- `pricing.fallbackTableCode`, política de produto/cliente sem preço (CFG-4/CFG-5)
+- `customers.creditFeatures.showCreditLimit`
+- vínculos conta → vendedor, flags de recursos
+- `erp.liberationEventLabels` (nome dos eventos de liberação; ausente ⇒ a tela mostra "evento N")
 
-## 5. Open points (owner / customer input)
+Os valores comerciais da instalação são configuração, nunca literais no código (CFG-3, CFG-6).
 
-- Physical model (table/screen, editors, profiles) — U-10.
-- Which source seeds the first installation before the model exists — U-11.
-- Whether some settings are per company (multi-company customers) rather than per installation.
-- Origin-id field used by future ERP submissions is **not** part of this contract (SNK-5, U-12).
+## 4. INFRA — nunca no ERP nem no snapshot
+
+Hosts, credenciais, `VERIFIER_*`, `SANKHYA_ORDER_WRITE_*`, `SANKHYA_ORDER_ORIGIN_FIELD`, chaves e segredos ficam em `compose.env` e nos arquivos de segredos da instalação (STACK-2, SEC-1). Nenhuma consulta Q1–Q8 lê coluna de credencial (há teste).
+
+## 5. PROPOSTA — tabelas próprias `AD_PLACFORCE*` (próxima etapa, U-10-b: ADIADA)
+
+Quando o primeiro sync estiver rodando, o que hoje é BASE e é "do negócio" pode ganhar tabelas do Force dentro do Sankhya, criadas pelo dono no Dicionário de Dados. Campos propostos (sem tipos nem DDL):
+
+- `AD_PLACFORCECFG` (1 linha): `NUCFG`, `VERSAOMINIMAAPP`, `DIASOFFLINEMAX` (7), `MODOALCADA` (ERP/FORCE, padrão ERP), `PERMITEPDF` (S), `PERMITEIMPORTPLAN` (S), `DHALT`, `CODUSUALT`.
+- `AD_PLACFORCETOP` (filha): `CODTIPOPER`, `PERMITIDA`, `PADRAO` — substituiria `sales.topAllowlist`.
+- `AD_PLACFORCETPV` (filha): `CODTIPVENDA`, `PERMITIDA` — substituiria `sales.negotiationTypeExclusions`.
+
+Só entra o que não existe no Vidya e não é segredo. Se o Vidya for desligado, as tabelas `AD_TVDY*` continuam no banco da PLAC; migrar o que for usado para `AD_PLACFORCE*` seria um script, não uma decisão de agora.
+
+## 6. Pontos em aberto
+
+- Criar `AD_PLACFORCE*` (U-10-b) e quando.
+- Fonte definitiva do arquivo base antes disso (U-11).
+- Configuração por empresa em clientes multiempresa.
+- O campo de origem de pedidos (SNK-5, U-12) não faz parte deste contrato.
+- Q8 e leituras informativas só existem no relatório do worker; não há API para elas (a W-38 avisa isso).

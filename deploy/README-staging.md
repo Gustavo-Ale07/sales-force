@@ -208,6 +208,52 @@ $SFC --profile self-hosted-db run --rm --no-deps \
   `force_worker` now holds INSERT and `UPDATE (is_current)` on `installation_configuration_version` (db-roles.sql,
   UNDETERMINED 1); `force_api` stays read-only. Do not enable the flag before that deploy.
 
+## Configuração lida do Sankhya
+
+Contrato das chaves (PONTE / BASE / INFRA): `docs/implementation/sankhya-configuration-contract.md`. A leitura é só de
+consulta (Q1-Q8), pelo worker, nunca pela API. Caminhos reais do host: `/opt/force-staging/...` (nunca `/etc/salesforce`).
+
+**Pré-requisitos (nesta ordem; a flag fica desligada até o fim):**
+
+1. Arquivo base atualizado em `/opt/force-staging/config/installation.json` e `config-bootstrap` rodado de novo (comando
+   da seção "Installation configuration", com o mesmo caminho). Confira `installation configuration unchanged` ou a nova versão.
+2. Deploy do SHA novo com `SF_RUN_DB_ROLES=1` (migrações 0018 e 0019 e os grants do worker, abaixo).
+3. Só então `CONFIG_SYNC_FROM_SANKHYA=1` em `/opt/force-staging/config/compose.env`.
+
+**Grants** (`db-roles.sql`): `force_worker` recebe INSERT e `UPDATE (is_current)` em `installation_configuration_version`;
+`force_api` continua só leitura. Sem o deploy com `SF_RUN_DB_ROLES=1`, a primeira gravação do job falha por permissão e
+aparece como falha da entidade `configuration`.
+
+**Ligar e recriar o worker:**
+
+```sh
+cd /opt/force-staging/repo
+deploy/scripts/sf-compose.sh up -d --no-deps --force-recreate worker
+```
+
+**Rodar uma vez, sem esperar os 15 minutos** (mesma imagem do worker, lê o Sankhya do Sandbox):
+
+```sh
+cd /opt/force-staging/repo
+deploy/scripts/sf-compose.sh exec worker node dist/sync-once.js sync.configuration
+```
+
+**Como ler o resultado.** A saída imprime `sync.configuration: FAILED [classe] mensagem` se algo falhou, e depois as linhas
+`sync_state configuration: <status> ...`. O relatório do job (nos logs do worker, `configuration sync stored a new version` ou
+`nothing changed`) traz só chaves, códigos e contagens: `outcome` (`stored`/`unchanged`), `version`, `contentHash`,
+`keysRead`, `changedKeys`, `warnings` (código e chave, ex.: `skip_confirmation_not_read`), `productMobility` (Q8),
+`usesFinancial`, `hidesCreditLimit`, `parametersWithoutFeature`. Depois confira `GET /api/v1/configuration` (administrador ou
+técnico: traz `source.kind: "sankhya"`, `source.base` e `provenance`) e a tela **Configurações** (W-38) no web.
+
+- **Falha não muda nada:** leitura falha ou parcial mantém a versão vigente; o motivo fica em `sync_state` e no painel de integração.
+- **Auditoria:** cada versão nova grava as chaves alteradas e as mudanças de escopo.
+
+**Voltar atrás (rollback):**
+
+1. `CONFIG_SYNC_FROM_SANKHYA=0` (ou remover a linha) em `compose.env` e recriar o worker como acima. O job deixa de ser agendado na próxima partida.
+2. A versão `sankhya` vigente continua valendo. Para voltar ao conteúdo do arquivo base, rode `config-bootstrap` de novo com o arquivo e confira a saída: ela grava uma versão `bootstrap-file` nova só se o conteúdo for diferente da vigente.
+3. As versões antigas são mantidas (nada é apagado). O código das migrações 0018/0019 segue o expand -> migrate -> contract (P-16): voltar a imagem anterior não exige desfazer o banco.
+
 ## Sankhya (SNK-3)
 
 `SANKHYA_MODE` is required (no implicit default); `compose.env.example` sets `fake` with the explicit

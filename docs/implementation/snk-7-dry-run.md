@@ -23,6 +23,8 @@ O dono revisa as duas requisições (pedidos A e B abaixo) contra o contrato de 
 Pedido A: 1 item, sem desconto, TOP 1001, condição à vista (negociação 11).
 Pedido B: 1 item com 8 % de `PERCDESC`, TOP 1001, negociação 2.
 
+Expectativa do pedido B (EXIGELIB): no Sandbox, `TGFTOP.EXIGELIB` da TOP 1001 vale N (não exige liberação). **Não se afirma que o desconto de 8 % passa sem evento de liberação nem que o Sandbox o bloqueia**: o teste serve para registrar o que o Sandbox faz (nota aceita direto, ou evento de liberação em `TSILIB` com o código lido). O resultado entra em `docs/sankhya-spike.md` e não é critério de reprovação. Se aparecer evento, o Force o mostra como "pendente: liberação exigida pela TOP" (evento 44) ou "evento N" quando o nome não está em `erp.liberationEventLabels`.
+
 Sequência:
 
 1. `incluirNota` do pedido A, depois `confirmarNota` (dois passos idempotentes, D-4). Reler a nota (D-7): confere itens, quantidades, valores e o campo de origem = UUID do pedido.
