@@ -141,6 +141,13 @@
       "when": 1793388363655,
       "tag": "0019_configuration_version_current_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793717615242,
+      "tag": "0020_erp_ipi_rate_and_product_ipi_code",
+      "breakpoints": true
     }
   ]
 }

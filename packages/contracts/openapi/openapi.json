@@ -4345,9 +4345,107 @@
         ],
         "additionalProperties": false
       },
+      "IpiRef": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "const": "rate"
+              },
+              "percentual": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "percentual"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "const": "tariff"
+              }
+            },
+            "required": [
+              "status"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "const": "unavailable"
+              }
+            },
+            "required": [
+              "status"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
       "IsoTimestamp": {
         "type": "string",
         "format": "date-time"
+      },
+      "ItemIpi": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "const": "estimated"
+              },
+              "amount": {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              "percentual": {
+                "$ref": "#/components/schemas/DecimalString"
+              }
+            },
+            "required": [
+              "status",
+              "amount",
+              "percentual"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "const": "unavailable"
+              }
+            },
+            "required": [
+              "status"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "const": "tariff"
+              }
+            },
+            "required": [
+              "status"
+            ],
+            "additionalProperties": false
+          }
+        ]
       },
       "ListPriceContext": {
         "oneOf": [
@@ -4956,6 +5054,9 @@
           },
           "totals": {
             "$ref": "#/components/schemas/OrderTotals"
+          },
+          "ipi": {
+            "$ref": "#/components/schemas/OrderIpi"
           }
         },
         "required": [
@@ -5126,6 +5227,36 @@
         ],
         "additionalProperties": false
       },
+      "OrderIpi": {
+        "type": "object",
+        "properties": {
+          "ipiEstimated": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "grandTotalEstimated": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "unavailableLineCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "tariffLineCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "isPartial": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ipiEstimated",
+          "grandTotalEstimated",
+          "unavailableLineCount",
+          "tariffLineCount",
+          "isPartial"
+        ],
+        "additionalProperties": false
+      },
       "OrderItemDetail": {
         "type": "object",
         "properties": {
@@ -5193,6 +5324,9 @@
                 "type": "null"
               }
             ]
+          },
+          "ipi": {
+            "$ref": "#/components/schemas/ItemIpi"
           },
           "image": {
             "anyOf": [
@@ -5873,6 +6007,9 @@
               }
             ]
           },
+          "ipi": {
+            "$ref": "#/components/schemas/IpiRef"
+          },
           "usageCode": {
             "type": [
               "string",
@@ -6020,6 +6157,9 @@
                 "type": "null"
               }
             ]
+          },
+          "ipi": {
+            "$ref": "#/components/schemas/IpiRef"
           }
         },
         "required": [

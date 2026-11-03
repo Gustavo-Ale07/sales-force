@@ -39,6 +39,12 @@ export interface OrderDocumentSource {
     readonly isPartial: boolean;
     readonly unpricedLineCount: number;
   };
+  /** Estimated IPI (D-D); absent = the document shows no IPI lines. */
+  readonly ipi?: {
+    readonly ipiEstimated: string;
+    readonly grandTotalEstimated: string;
+    readonly isPartial: boolean;
+  };
 }
 
 export type OrderDocumentModel = OrderDocumentSource;
@@ -67,6 +73,15 @@ export function toOrderDocument(source: OrderDocumentSource): OrderDocumentModel
       isPartial: source.totals.isPartial,
       unpricedLineCount: source.totals.unpricedLineCount,
     },
+    ...(source.ipi === undefined
+      ? {}
+      : {
+          ipi: {
+            ipiEstimated: source.ipi.ipiEstimated,
+            grandTotalEstimated: source.ipi.grandTotalEstimated,
+            isPartial: source.ipi.isPartial,
+          },
+        }),
   };
 }
 
@@ -184,6 +199,10 @@ export function renderOrderHtml(model: OrderDocumentModel, options: OrderHtmlOpt
   const partial = model.totals.isPartial
     ? `<div class="hint">Valor parcial: ${escapeHtml(model.totals.unpricedLineCount)} item(ns) sem preço.</div>`
     : '';
+  const ipiBlock =
+    model.ipi === undefined
+      ? ''
+      : `<div class="total">IPI estimado: ${escapeHtml(formatDocumentMoney(model.ipi.ipiEstimated))}</div><div class="total">${model.ipi.isPartial ? 'Total parcial estimado (com IPI)' : 'Total estimado (com IPI)'}: ${escapeHtml(formatDocumentMoney(model.ipi.grandTotalEstimated))}</div>${model.ipi.isPartial ? '<div class="hint">IPI estimado apenas nos itens com alíquota disponível.</div>' : ''}`;
   const notes =
     model.notes === null || model.notes.trim() === ''
       ? ''
@@ -200,9 +219,9 @@ export function renderOrderHtml(model: OrderDocumentModel, options: OrderHtmlOpt
 <section><h2>Itens</h2>
 <table><thead><tr><th>Item</th><th>Código</th><th>Descrição</th><th>Un.</th><th class="n">Quantidade</th><th class="n">Preço unit.</th><th class="n">Desconto</th><th class="n">Total</th></tr></thead>
 <tbody>${rows}</tbody></table>
-<div class="total">Total estimado: ${escapeHtml(formatDocumentMoney(model.totals.estimatedTotal))}</div>${partial}
+<div class="total">Total estimado: ${escapeHtml(formatDocumentMoney(model.totals.estimatedTotal))}</div>${partial}${ipiBlock}
 </section>
 ${notes}
-<footer>Valores estimados a partir dos preços de lista; o valor final é calculado no Sankhya.</footer>
+<footer>Valores estimados a partir dos preços de lista; o IPI é estimativa e o valor final é calculado no Sankhya.</footer>
 </body></html>`;
 }

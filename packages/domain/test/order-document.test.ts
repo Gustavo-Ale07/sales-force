@@ -161,3 +161,20 @@ describe('restricted data never reaches the document (P-20)', () => {
     expect(out).not.toContain('Fulano');
   });
 });
+
+describe('estimated IPI in the document (D-D)', () => {
+  it('shows IPI estimado and the total with IPI only when the source carries them', () => {
+    const plain = renderOrderHtml(toOrderDocument(source));
+    expect(plain).not.toContain('IPI estimado');
+    const withIpi = renderOrderHtml(
+      toOrderDocument({ ...source, ipi: { ipiEstimated: '1.60', grandTotalEstimated: '18.03', isPartial: false } }),
+    );
+    expect(withIpi).toContain('IPI estimado: R$');
+    expect(withIpi).toContain('Total estimado (com IPI)');
+    expect(withIpi).not.toContain('Total parcial estimado (com IPI)');
+    const partial = renderOrderHtml(
+      toOrderDocument({ ...source, ipi: { ipiEstimated: '1.60', grandTotalEstimated: '18.03', isPartial: true } }),
+    );
+    expect(partial).toContain('Total parcial estimado (com IPI)');
+  });
+});

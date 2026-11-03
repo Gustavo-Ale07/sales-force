@@ -42,6 +42,7 @@
 --   sync_state                            S           S I U          worker: sync-state, heartbeat. API reads (integration summary, /configuration)
 --   erp_directory_user (ERP user code + seller code only),
 --   erp_carrier (carrier code, name, active flag),
+--   erp_ipi_rate (IPI rate by ERP code, display estimate only),
 --   erp_seller, erp_customer, erp_product,
 --   erp_price_table, erp_price_table_version,
 --   erp_list_price                        S           S I U          worker mirror-writer upserts + soft delete (no DELETE). API is read-only (mirror.repository)
@@ -250,6 +251,7 @@ BEGIN
       ('erp_seller',                         'force_api',    'SELECT'),
       ('erp_directory_user',                 'force_api',    'SELECT'),
       ('erp_carrier',                        'force_api',    'SELECT'),
+      ('erp_ipi_rate',                       'force_api',    'SELECT'),
       ('erp_customer',                       'force_api',    'SELECT'),
       ('erp_product',                        'force_api',    'SELECT'),
       ('erp_price_table',                    'force_api',    'SELECT'),
@@ -266,6 +268,7 @@ BEGIN
       ('erp_seller',                         'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_directory_user',                 'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_carrier',                        'force_worker', 'SELECT, INSERT, UPDATE'),
+      ('erp_ipi_rate',                       'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_customer',                       'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_product',                        'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_price_table',                    'force_worker', 'SELECT, INSERT, UPDATE'),

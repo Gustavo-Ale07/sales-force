@@ -3,13 +3,16 @@ import type { ApiSchema } from "@salesforce/contracts/client";
 import {
   buildOrderItem,
   computeDiscountSummary,
+  computeOrderIpiFromRefs,
   computeOrderTotals,
   isLineOrderable,
   sumQuantities,
   validateDiscountPercent,
   validateQuantity,
   type DecimalError,
+  type IpiRef,
   type OrderDiscountSummary,
+  type OrderIpi,
   type OrderItem,
   type OrderTotals,
   type ResolvedPrice,
@@ -45,6 +48,8 @@ export interface EditorLine {
   group?: { code: number | null; name: string | null };
   /** Photo metadata from the shared product media source (catalog and orders); `null`/absent = placeholder. */
   image?: ApiSchema<"ProductImage"> | null;
+  /** IPI reference for the display estimate (D-D); absent = "IPI não disponível". Never validated nor sent to the server. */
+  ipi?: IpiRef;
 }
 
 export type QuantityProblem = "empty" | DecimalError;
@@ -117,7 +122,14 @@ export function lineFromProduct(product: ProductRow, key: string): EditorLine {
     price: priceFromListPrice(product.listPrice),
     group: { code: product.groupCode, name: product.groupName },
     image: product.image ?? null,
+    ipi: product.ipi ?? { status: "unavailable" },
   };
+}
+
+function ipiRefOfItem(ipi: ApiSchema<"OrderItemDetail">["ipi"]): IpiRef {
+  if (ipi?.status === "estimated") return { status: "rate", percentual: ipi.percentual };
+  if (ipi?.status === "tariff") return { status: "tariff" };
+  return { status: "unavailable" };
 }
 
 export function lineFromOrderItem(item: ApiSchema<"OrderItemDetail">, key: string): EditorLine {
@@ -135,6 +147,7 @@ export function lineFromOrderItem(item: ApiSchema<"OrderItemDetail">, key: strin
       versionId: item.priceVersionId,
     },
     image: item.image ?? null,
+    ipi: ipiRefOfItem(item.ipi),
   };
 }
 
@@ -191,6 +204,8 @@ export interface DraftPreview {
   totals: OrderTotals;
   /** Total before discount and what the discounts take off. */
   discounts: OrderDiscountSummary;
+  /** Estimated IPI (D-D): display only. */
+  ipi: OrderIpi;
   /** Every line has a valid quantity (required before saving). */
   valid: boolean;
 }
@@ -198,7 +213,14 @@ export interface DraftPreview {
 export function previewDraft(lines: readonly EditorLine[]): DraftPreview {
   const previews = lines.map((line, index) => previewLine(line, index + 1));
   const items = previews.flatMap((p) => (p.item ? [p.item] : []));
-  return { lines: previews, totals: computeOrderTotals(items), discounts: computeDiscountSummary(items), valid: previews.every((p) => p.item !== null) };
+  const totals = computeOrderTotals(items);
+  const ipi = computeOrderIpiFromRefs(
+    previews.flatMap((p, index) =>
+      p.item ? [{ lineNetTotal: p.item.estimatedLineTotal, ref: lines[index]?.ipi ?? ({ status: "unavailable" } as IpiRef) }] : [],
+    ),
+    totals.estimatedTotal,
+  );
+  return { lines: previews, totals, discounts: computeDiscountSummary(items), ipi, valid: previews.every((p) => p.item !== null) };
 }
 
 /** Body items of `POST/PUT /orders`: product, quantity and, when there is one, the discount percentage. */

@@ -40,6 +40,8 @@ export interface RemoteOrderItem {
   readonly priceTableCode: number | null;
   readonly priceVersionId: number | null;
   readonly discountPercent: string;
+  /** Server IPI estimate of the line (D-D); absent from older servers. */
+  readonly ipi?: { readonly status: "estimated" | "tariff" | "unavailable"; readonly percentual?: string };
 }
 
 /** The slice of the server order the client needs. Never contains cost or margin (P-20). */
@@ -194,6 +196,13 @@ export function priceContextOf(item: RemoteOrderItem): string {
   return JSON.stringify({ state: "none", tableCode: item.priceTableCode, versionId: item.priceVersionId, noPriceReason: "no_price_row" });
 }
 
+/** IPI reference stored with a line (D-D): the rate when estimated, "tariff", else unavailable. */
+export function ipiJsonOf(item: RemoteOrderItem): string {
+  if (item.ipi?.status === "estimated" && item.ipi.percentual !== undefined) return JSON.stringify({ status: "rate", percentual: item.ipi.percentual });
+  if (item.ipi?.status === "tariff") return JSON.stringify({ status: "tariff" });
+  return JSON.stringify({ status: "unavailable" });
+}
+
 /**
  * Brings a draft that already exists on the server (made there from another order, e.g. "Duplicar como pedido") onto this
  * device as a SYNCED draft: no command is queued, because the server already holds exactly this state. Editing it later
@@ -224,9 +233,9 @@ export async function adoptRemoteDraft(
     );
     for (const [index, item] of order.items.entries()) {
       await tx.execute(
-        `INSERT INTO local_order_item (draft_local_id, position, product_code, description, unit, quantity, discount_percent, price_json, group_code, group_name)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)`,
-        [localId, index + 1, item.productCode, item.productDescription, item.unit, item.quantity, item.discountPercent, priceContextOf(item)],
+        `INSERT INTO local_order_item (draft_local_id, position, product_code, description, unit, quantity, discount_percent, price_json, group_code, group_name, ipi_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)`,
+        [localId, index + 1, item.productCode, item.productDescription, item.unit, item.quantity, item.discountPercent, priceContextOf(item), ipiJsonOf(item)],
       );
     }
     return localId;
@@ -652,11 +661,12 @@ export async function resolveConflict(
           priceJson: priceContextOf(item),
           groupCode: known?.groupCode ?? null,
           groupName: known?.groupName ?? null,
+          ipiJson: ipiJsonOf(item),
         };
         await tx.execute(
-          `INSERT INTO local_order_item (draft_local_id, position, product_code, description, unit, quantity, discount_percent, price_json, group_code, group_name)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [draftLocalId, index + 1, input.productCode, input.description, input.unit, input.quantity, input.discountPercent, input.priceJson, input.groupCode, input.groupName],
+          `INSERT INTO local_order_item (draft_local_id, position, product_code, description, unit, quantity, discount_percent, price_json, group_code, group_name, ipi_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [draftLocalId, index + 1, input.productCode, input.description, input.unit, input.quantity, input.discountPercent, input.priceJson, input.groupCode, input.groupName, input.ipiJson ?? null],
         );
       }
       await tx.execute(

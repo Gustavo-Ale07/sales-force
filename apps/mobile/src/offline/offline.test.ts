@@ -100,6 +100,15 @@ describe("editor line <-> stored draft item", () => {
     expect(reopened!.price).toEqual(priced.listPrice);
   });
 
+  it("keeps the IPI reference of a line across save/reopen and treats unreadable data as unavailable", () => {
+    const line = { ...lineFromProduct(product(5), "k1"), ipi: { status: "rate" as const, percentual: "9.75" } };
+    const [stored] = toDraftItems([line]);
+    const [reopened] = linesFromDraftItems([{ ...stored!, position: 0 } as DraftItemRecord]);
+    expect(reopened!.ipi).toEqual({ status: "rate", percentual: "9.75" });
+    const [broken] = linesFromDraftItems([{ ...stored!, position: 0, ipiJson: "{not json" } as DraftItemRecord]);
+    expect(broken!.ipi).toEqual({ status: "unavailable" });
+  });
+
   it("stores no discount for a line without a price (P-09)", () => {
     const [stored] = toDraftItems([{ ...lineFromProduct(product(6), "k2"), discountText: "15" }]);
     expect(stored!.discountPercent).toBe("0");

@@ -203,9 +203,39 @@ export const OrderItemSchema = named(
 export type OrderItem = z.infer<typeof OrderItemSchema>;
 
 /** Order line in the detail response: the priced line plus the shared product media metadata (one source with the catalog). */
+/** Estimated IPI of one line (D-D): display only, never validated nor sent to the ERP. */
+export const ItemIpiSchema = named(
+  'ItemIpi',
+  z.discriminatedUnion('status', [
+    z.object({ status: z.literal('estimated'), amount: DecimalStringSchema, percentual: DecimalStringSchema }),
+    /** "IPI não disponível": no IPI code or no rate for it. Never zero. */
+    z.object({ status: z.literal('unavailable') }),
+    /** "IPI por pauta — não estimado". */
+    z.object({ status: z.literal('tariff') }),
+  ]),
+);
+export type ItemIpi = z.infer<typeof ItemIpiSchema>;
+
+export const OrderIpiSchema = named(
+  'OrderIpi',
+  z.object({
+    /** Sum of the estimated line IPI ("IPI estimado"). */
+    ipiEstimated: DecimalStringSchema,
+    /** Net total + estimated IPI ("Total estimado (com IPI)"). */
+    grandTotalEstimated: DecimalStringSchema,
+    unavailableLineCount: z.number().int().min(0),
+    tariffLineCount: z.number().int().min(0),
+    /** True when at least one line has no estimated IPI. */
+    isPartial: z.boolean(),
+  }),
+);
+export type OrderIpi = z.infer<typeof OrderIpiSchema>;
+
 export const OrderItemDetailSchema = named(
   'OrderItemDetail',
   OrderItemSchema.extend({
+    /** Estimated IPI of the line (additive; absent from older servers). */
+    ipi: ItemIpiSchema.optional(),
     /** `null`/absent = no photo. Bytes are never inlined. */
     image: ProductImageSchema.nullable().optional(),
   }),
@@ -257,6 +287,8 @@ export const OrderDetailSchema = named(
     approval: OrderApprovalSchema.nullable(),
     items: z.array(OrderItemDetailSchema),
     totals: OrderTotalsSchema,
+    /** Estimated IPI of the order (D-D, additive). */
+    ipi: OrderIpiSchema.optional(),
   }),
 );
 export type OrderDetail = z.infer<typeof OrderDetailSchema>;

@@ -53,7 +53,7 @@ describe("NewOrderScreen discounts (mass and group apply, DISC-1/MOB-4)", () => 
     expect((screen.getByLabelText("Desconto de Copo 200 ml").props as { value: string }).value).toBe("10");
     expect((screen.getByLabelText("Desconto de Prato 20cm").props as { value: string }).value).toBe("10");
     // 10.00 - 10% = 9.00; 20.00 - 10% = 18.00; order total = 27.00. Domain math only, never a JS float.
-    await waitFor(() => expect(screen.getByText("R$ 27,00")).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText("R$ 27,00").length).toBeGreaterThan(0));
   });
 
   it("never discounts a line without a price during mass apply (P-09)", async () => {

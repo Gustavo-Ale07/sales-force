@@ -77,6 +77,7 @@ import {
   SELLER_SPEC,
   DIRECTORY_USER_SPEC,
   CARRIER_SPEC,
+  IPI_RATE_SPEC,
   compareKeys,
   type EntitySpec,
 } from './mapping.js';
@@ -292,6 +293,9 @@ export class RealSankhyaGateway implements SankhyaGateway {
   }
   readCarriers(options?: ReadOptions) {
     return this.#paged(CARRIER_SPEC, options);
+  }
+  readIpiRates(options?: ReadOptions) {
+    return this.#paged(IPI_RATE_SPEC, options);
   }
   readCustomers(options?: ReadOptions) {
     return this.#paged(CUSTOMER_SPEC, options);

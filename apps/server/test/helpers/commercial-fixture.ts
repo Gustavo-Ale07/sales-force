@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { erpCarrier, erpCustomer, erpListPrice, erpPriceTable, erpPriceTableVersion, erpProduct, erpSeller, type DbHandle } from '@salesforce/db';
+import { erpCarrier, erpIpiRate, erpCustomer, erpListPrice, erpPriceTable, erpPriceTableVersion, erpProduct, erpSeller, type DbHandle } from '@salesforce/db';
 import type { InstallationConfiguration } from '@salesforce/domain';
 import { DEMO_ACCOUNTS, DEMO_CONFIGURATION, getDemoDataset } from '@salesforce/sankhya';
 import { InstallationConfigurationRepository } from '../../src/configuration/configuration.repository.js';
@@ -32,6 +32,9 @@ export async function seedDemoMirror(handle: DbHandle, syncedAt: Date = new Date
   await inChunks(dataset.carriers, (chunk) =>
     db.insert(erpCarrier).values(chunk.map((c) => ({ code: c.code, name: c.name, active: c.active, ...base(c) }))),
   );
+  await db.insert(erpIpiRate).values(
+    dataset.ipiRates.map((r) => ({ code: r.code, description: r.description, percentual: r.percentual, byTariff: r.byTariff, ...base(r) })),
+  );
   await inChunks(dataset.customers, (chunk) =>
     db.insert(erpCustomer).values(
       chunk.map((c) => ({
@@ -61,6 +64,7 @@ export async function seedDemoMirror(handle: DbHandle, syncedAt: Date = new Date
         groupCode: p.groupCode,
         groupName: p.groupCode === null ? null : (groupName.get(p.groupCode) ?? null),
         usageCode: p.usageCode,
+        ipiCode: p.ipiCode ?? null,
         active: p.active,
         ...base(p),
       })),

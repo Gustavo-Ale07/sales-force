@@ -69,7 +69,7 @@ describe("NewOrderScreen", () => {
     expect(screen.getByText("Copo 200 ml")).toBeTruthy();
     // The line subtotal never shows for a zero discount (see cart-view.tsx); the line total, the order
     // summary's "Total de itens" and its "Total estimado" all coincide at "R$ 10,00" with one undiscounted line.
-    expect(screen.getAllByText("R$ 10,00")).toHaveLength(3);
+    expect(screen.getAllByText("R$ 10,00")).toHaveLength(4);
   });
 
   it("shows the current customer discreetly and steps the quantity from the catalog card, removing the line at one unit", async () => {
@@ -103,7 +103,7 @@ describe("NewOrderScreen", () => {
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
     expect(screen.getByDisplayValue("2")).toBeTruthy();
     // The line total, "Total de itens" and "Total estimado" all coincide at "R$ 20,00" with one undiscounted line.
-    expect(screen.getAllByText("R$ 20,00")).toHaveLength(3);
+    expect(screen.getAllByText("R$ 20,00")).toHaveLength(4);
   });
 
   it("removes a line from the cart", async () => {
@@ -121,7 +121,7 @@ describe("NewOrderScreen", () => {
     fireEvent.changeText(await screen.findByLabelText("Desconto de Copo 200 ml"), "10");
     // The discounted line total and the order summary's "Total estimado" coincide at "R$ 9,00" (see test above
     // for the equivalent zero-discount case, where all three totals coincide instead).
-    await waitFor(() => expect(screen.getAllByText("R$ 9,00")).toHaveLength(2));
+    await waitFor(() => expect(screen.getAllByText("R$ 9,00")).toHaveLength(3));
   });
 
   it("saves the draft sending only product, quantity and discount, never a price", async () => {
@@ -138,7 +138,7 @@ describe("NewOrderScreen", () => {
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
     fireEvent.changeText(await screen.findByLabelText("Desconto de Copo 200 ml"), "10");
-    await waitFor(() => expect(screen.getAllByText("R$ 9,00")).toHaveLength(2));
+    await waitFor(() => expect(screen.getAllByText("R$ 9,00")).toHaveLength(3));
     await pressAndSettle(screen.getByRole("button", { name: "Salvar rascunho" }));
 
     expect(screen.getByText("Rascunho salvo")).toBeTruthy();
@@ -180,7 +180,7 @@ describe("NewOrderScreen", () => {
     // Now the cart changes (a discount is applied): the payload differs, so a fresh id must be minted —
     // otherwise the server would answer idempotency_conflict forever and the user could never save again.
     fireEvent.changeText(await screen.findByLabelText("Desconto de Copo 200 ml"), "10");
-    await waitFor(() => expect(screen.getAllByText("R$ 9,00")).toHaveLength(2));
+    await waitFor(() => expect(screen.getAllByText("R$ 9,00")).toHaveLength(3));
     shouldFail = false;
     await pressAndSettle(screen.getByRole("button", { name: "Salvar rascunho" }));
     expect(capturedIds).toHaveLength(3);

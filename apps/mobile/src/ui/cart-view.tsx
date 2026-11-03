@@ -170,6 +170,20 @@ export function CartView({ lines, preview, onQuantityChange, onDiscountChange, o
             {`Pedido parcial: ${preview.totals.unpricedLineCount} item(ns) sem preço não entram no total.`}
           </Text>
         )}
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>IPI estimado</Text>
+          <Text style={styles.summaryValue}>{money(preview.ipi.ipiEstimated)}</Text>
+        </View>
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>{preview.ipi.isPartial ? "Total parcial estimado (com IPI)" : "Total estimado (com IPI)"}</Text>
+          <Text style={styles.summaryValue}>{money(preview.ipi.grandTotalEstimated)}</Text>
+        </View>
+        {preview.ipi.unavailableLineCount > 0 && (
+          <Text style={styles.partialNotice}>{`IPI não disponível em ${preview.ipi.unavailableLineCount} item(ns).`}</Text>
+        )}
+        {preview.ipi.tariffLineCount > 0 && (
+          <Text style={styles.partialNotice}>{`IPI por pauta — não estimado em ${preview.ipi.tariffLineCount} item(ns).`}</Text>
+        )}
       </View>
     </ScrollView>
   );

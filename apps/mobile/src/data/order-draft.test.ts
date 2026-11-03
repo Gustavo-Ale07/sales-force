@@ -342,6 +342,7 @@ describe("lineFromOrderItem (loading a saved draft for editing)", () => {
       quantityText: "2,5",
       discountText: "7,5",
       price: { state: "priced", unitPrice: "4", tableCode: 2, versionId: 3 },
+      ipi: { status: "unavailable" },
     });
   });
 

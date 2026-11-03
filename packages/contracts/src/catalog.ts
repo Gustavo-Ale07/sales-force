@@ -133,6 +133,17 @@ export type ProductImage = z.infer<typeof ProductImageSchema>;
 export const ProductImageQuerySchema = z.object({ variant: ProductImageVariantSchema.default('thumb') });
 export type ProductImageQuery = z.infer<typeof ProductImageQuerySchema>;
 
+/** IPI reference of a product (D-D): the rate to estimate the IPI of a line; never validated nor sent to the ERP. */
+export const IpiRefSchema = named(
+  'IpiRef',
+  z.discriminatedUnion('status', [
+    z.object({ status: z.literal('rate'), percentual: z.string() }),
+    z.object({ status: z.literal('tariff') }),
+    z.object({ status: z.literal('unavailable') }),
+  ]),
+);
+export type IpiRef = z.infer<typeof IpiRefSchema>;
+
 export const ProductListItemSchema = named(
   'ProductListItem',
   z.object({
@@ -149,6 +160,8 @@ export const ProductListItemSchema = named(
     listPrice: ListPriceContextSchema,
     /** `null` (or absent) = the product has no image; the catalog works without one. */
     image: ProductImageSchema.nullable().optional(),
+    /** Additive: absent from older servers (treated as "IPI não disponível"). */
+    ipi: IpiRefSchema.optional(),
   }),
 );
 export type ProductListItem = z.infer<typeof ProductListItemSchema>;

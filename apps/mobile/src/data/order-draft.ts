@@ -3,6 +3,7 @@ import {
   buildOrderItem,
   computeDiscountSummary,
   computeLineTotal,
+  computeOrderIpiFromRefs,
   computeOrderTotals,
   isLineOrderable,
   subtractTotals,
@@ -10,7 +11,9 @@ import {
   validateDiscountPercent,
   validateQuantity,
   type DecimalError,
+  type IpiRef,
   type OrderDiscountSummary,
+  type OrderIpi,
   type OrderItem,
   type OrderTotals,
   type ResolvedPrice,
@@ -47,6 +50,8 @@ export interface EditorLine {
    * draft via `lineFromOrderItem`, which does not carry it — the group-discount sheet looks it up while open).
    */
   readonly group?: LineGroup;
+  /** IPI reference for the display estimate (D-D); absent = "IPI não disponível". Never validated nor sent to the server. */
+  readonly ipi?: IpiRef;
 }
 
 export type QuantityProblem = "empty" | DecimalError;
@@ -153,6 +158,7 @@ export function lineFromProduct(product: ProductListItem, key: string): EditorLi
     discountText: "",
     price: product.listPrice,
     group: { code: product.groupCode, name: product.groupName },
+    ipi: product.ipi ?? { status: "unavailable" },
   };
 }
 
@@ -174,7 +180,13 @@ function priceFromOrderItem(item: OrderItemDto): ListPriceContext {
 }
 
 /** Rebuilds an editor line from a saved order item, to reopen an existing draft for editing (mirrors `apps/web`'s `lineFromOrderItem`). */
-export function lineFromOrderItem(item: OrderItemDto, key: string): EditorLine {
+export function lineFromOrderItem(item: OrderItemDto & { readonly ipi?: { readonly status: string; readonly percentual?: string } }, key: string): EditorLine {
+  const ipi: IpiRef =
+    item.ipi?.status === "estimated" && item.ipi.percentual !== undefined
+      ? { status: "rate", percentual: item.ipi.percentual }
+      : item.ipi?.status === "tariff"
+        ? { status: "tariff" }
+        : { status: "unavailable" };
   return {
     key,
     productCode: item.productCode,
@@ -183,6 +195,7 @@ export function lineFromOrderItem(item: OrderItemDto, key: string): EditorLine {
     quantityText: item.quantity.replace(".", ","),
     discountText: discountTextOf(item.discountPercent),
     price: priceFromOrderItem(item),
+    ipi,
   };
 }
 
@@ -229,6 +242,8 @@ export interface DraftPreview {
   readonly totals: OrderTotals;
   /** Total before discount and what the discounts take off. */
   readonly discounts: OrderDiscountSummary;
+  /** Estimated IPI (D-D): display only. */
+  readonly ipi: OrderIpi;
   /** Every line has a valid quantity and discount (required before saving). */
   readonly valid: boolean;
 }
@@ -236,10 +251,18 @@ export interface DraftPreview {
 export function previewDraft(lines: readonly EditorLine[]): DraftPreview {
   const previews = lines.map((line, index) => previewLine(line, index + 1));
   const items = previews.flatMap((p) => (p.item ? [p.item] : []));
+  const totals = computeOrderTotals(items);
+  const ipi = computeOrderIpiFromRefs(
+    previews.flatMap((p, index) =>
+      p.item ? [{ lineNetTotal: p.item.estimatedLineTotal, ref: lines[index]?.ipi ?? ({ status: "unavailable" } as IpiRef) }] : [],
+    ),
+    totals.estimatedTotal,
+  );
   return {
     lines: previews,
-    totals: computeOrderTotals(items),
+    totals,
     discounts: computeDiscountSummary(items),
+    ipi,
     valid: previews.every((p) => p.item !== null),
   };
 }

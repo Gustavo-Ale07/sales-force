@@ -1,8 +1,13 @@
 import type { DiscountAuthorityStatus, OrderApproval, OrderDetail, OrderItemDetail as OrderItemDto, OrderListItem, OrderReview, OrderStatus, ProductImage } from '@salesforce/contracts';
-import { computeOrderTotals, customerOrderBlock, normalizeDecimalString } from '@salesforce/domain';
+import { computeOrderIpi, computeOrderTotals, customerOrderBlock, normalizeDecimalString, type IpiRate } from '@salesforce/domain';
 import { isBlockedRaw } from '../mirror/mirror.repository.js';
 import { decodeReleaseEventCodes } from './release-events.js';
 import type { ApprovalWithDecider, OrderCustomerState, OrderItemRow, OrderListRow, OrderRow } from './orders.repository.js';
+
+export interface IpiLookup {
+  readonly codes: ReadonlyMap<number, number>;
+  readonly rates: ReadonlyMap<number, IpiRate>;
+}
 
 export function toOrderApproval(found: ApprovalWithDecider | null): OrderApproval | null {
   if (found === null) return null;
@@ -108,9 +113,17 @@ export function toOrderDetail(
   images: ReadonlyMap<number, ProductImage> = new Map(),
   approval: OrderApproval | null = null,
   liberationEventLabels: Readonly<Record<string, string>> = {},
+  ipiLookup: IpiLookup = { codes: new Map(), rates: new Map() },
 ): OrderDetail {
-  const dtoItems = items.map((item) => toItemDto(item, images.get(item.productCode)));
-  const totals = computeOrderTotals(dtoItems);
+  const baseItems = items.map((item) => toItemDto(item, images.get(item.productCode)));
+  const totals = computeOrderTotals(baseItems);
+  // D-D: estimated IPI from the NET line total; display only, never part of validation or the ERP payload.
+  const ipi = computeOrderIpi(
+    baseItems.map((item) => ({ lineNetTotal: item.estimatedLineTotal, ipiCode: ipiLookup.codes.get(item.productCode) ?? null })),
+    totals.estimatedTotal,
+    ipiLookup.rates,
+  );
+  const dtoItems = baseItems.map((item, index) => ({ ...item, ipi: ipi.lines[index]! }));
   return {
     id: order.id,
     draftNumber: order.draftNumber,
@@ -136,5 +149,12 @@ export function toOrderDetail(
     approval,
     items: dtoItems,
     totals,
+    ipi: {
+      ipiEstimated: ipi.ipiEstimated,
+      grandTotalEstimated: ipi.grandTotalEstimated,
+      unavailableLineCount: ipi.unavailableLineCount,
+      tariffLineCount: ipi.tariffLineCount,
+      isPartial: ipi.isPartial,
+    },
   };
 }

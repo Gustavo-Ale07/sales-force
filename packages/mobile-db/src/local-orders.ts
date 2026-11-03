@@ -50,6 +50,8 @@ export interface DraftItemInput {
   readonly priceJson: string;
   readonly groupCode: number | null;
   readonly groupName: string | null;
+  /** JSON of the product's IPI reference (display estimate, D-D); absent/`null` = "IPI não disponível". */
+  readonly ipiJson?: string | null;
 }
 
 export interface SaveDraftInput {
@@ -324,6 +326,7 @@ export async function getDraftItems(db: SqlExecutor, localId: string): Promise<D
     priceJson: String(row.price_json),
     groupCode: nullableNumber(row.group_code),
     groupName: nullableString(row.group_name),
+    ipiJson: nullableString(row.ipi_json),
   }));
 }
 
@@ -413,9 +416,9 @@ async function insertItems(tx: SqlExecutor, localId: string, items: readonly Dra
   await tx.execute("DELETE FROM local_order_item WHERE draft_local_id = ?", [localId]);
   for (const [index, item] of items.entries()) {
     await tx.execute(
-      `INSERT INTO local_order_item (draft_local_id, position, product_code, description, unit, quantity, discount_percent, price_json, group_code, group_name)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [localId, index + 1, item.productCode, item.description, item.unit, item.quantity, item.discountPercent, item.priceJson, item.groupCode, item.groupName],
+      `INSERT INTO local_order_item (draft_local_id, position, product_code, description, unit, quantity, discount_percent, price_json, group_code, group_name, ipi_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [localId, index + 1, item.productCode, item.description, item.unit, item.quantity, item.discountPercent, item.priceJson, item.groupCode, item.groupName, item.ipiJson ?? null],
     );
   }
 }

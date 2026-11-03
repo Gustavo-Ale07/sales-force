@@ -7,9 +7,10 @@ import {
   erpProduct,
   erpSeller,
   erpCarrier,
+  erpIpiRate,
   type Database,
 } from '@salesforce/db';
-import type { CustomerScope, PriceTableVersion } from '@salesforce/domain';
+import type { CustomerScope, IpiRate, PriceTableVersion } from '@salesforce/domain';
 import { and, asc, desc, eq, inArray, isNotNull, isNull, not, or, sql, type SQL } from 'drizzle-orm';
 import { DATABASE } from '../platform/tokens.js';
 import { containsText, digitsOf, eqInt, fitsPgInt, inSellerCodes, offsetOf } from '../platform/sql.js';
@@ -481,6 +482,29 @@ export class MirrorRepository {
       .select(this.productSelectFields())
       .from(erpProduct)
       .where(and(isNull(erpProduct.deletedAt), inArray(erpProduct.code, usable)));
+  }
+
+  /** IPI codes of the products and the mirrored rates (display estimate, D-D). Products without a code are absent. */
+  async ipiLookup(productCodes: readonly number[]): Promise<{ codes: Map<number, number>; rates: Map<number, IpiRate> }> {
+    const usable = [...new Set(productCodes.filter(fitsPgInt))];
+    const codes = new Map<number, number>();
+    const rates = new Map<number, IpiRate>();
+    if (usable.length === 0) return { codes, rates };
+    const products = await this.db
+      .select({ code: erpProduct.code, ipiCode: erpProduct.ipiCode })
+      .from(erpProduct)
+      .where(and(isNull(erpProduct.deletedAt), inArray(erpProduct.code, usable)));
+    for (const product of products) if (product.ipiCode !== null) codes.set(product.code, product.ipiCode);
+    const wanted = [...new Set(codes.values())];
+    if (wanted.length === 0) return { codes, rates };
+    const rows = await this.db
+      .select()
+      .from(erpIpiRate)
+      .where(and(isNull(erpIpiRate.deletedAt), inArray(erpIpiRate.code, wanted)));
+    for (const row of rows) {
+      rates.set(row.code, { code: row.code, percentual: row.percentual, byTariff: row.byTariff, description: row.description });
+    }
+    return { codes, rates };
   }
 
   /** Active carriers, ordered by name (D-C). Code and name only. */

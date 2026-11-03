@@ -801,6 +801,7 @@ export class OrdersService {
       this.mirror.customerStates([order.customerCode]),
       this.orders.latestApprovalOf(order.id),
     ]);
+    const ipiLookup = await this.mirror.ipiLookup(items.map((item) => item.productCode));
     // Same media source as the catalog; best effort (a failure degrades to no photos, the order still works).
     const images = await this.images.metadataFor([...new Set(items.map((item) => item.productCode))]);
     const state = states.get(order.customerCode);
@@ -813,7 +814,7 @@ export class OrdersService {
       customerBlockedRaw: state?.blockedRaw ?? null,
       customerSellerCode: state?.sellerCode ?? null,
       customerLive: state?.live ?? null,
-    }, images, toOrderApproval(approval), liberationEventLabels);
+    }, images, toOrderApproval(approval), liberationEventLabels, ipiLookup);
   }
 
   /** Identifiers and counts only: no notes, no free text. */

@@ -54,6 +54,18 @@ export const erpCarrier = pgTable('erp_carrier', {
 });
 
 /**
+ * IPI rates (TGFIPI): code, description, rate in percent and the tariff (pauta) flag. Used for the display ESTIMATE of the
+ * IPI only (D-D); the ERP calculates the real value. Replaced in full on every run (a handful of rows).
+ */
+export const erpIpiRate = pgTable('erp_ipi_rate', {
+  code: integer('code').primaryKey(),
+  description: text('description').notNull(),
+  percentual: numeric('percentual', { precision: 9, scale: 4 }).notNull(),
+  byTariff: boolean('by_tariff').notNull(),
+  ...mirrorColumns(),
+});
+
+/**
  * Official ERP user -> seller relation (TSIUSU.CODUSU / CODVEND), the ONLY user data mirrored: no name, e-mail, credential or
  * permission column exists. Read by the identity module to provision and reconcile seller accounts; never exposed by an endpoint.
  */
@@ -138,6 +150,8 @@ export const erpProduct = pgTable(
     groupName: text('group_name'),
     /** Raw source usage code; "sellable" is decided by configuration (products.sellableUsageValues). */
     usageCode: text('usage_code'),
+    /** ERP IPI code (TGFPRO.CODIPI) -> erp_ipi_rate.code. NULL = no IPI code. Not a foreign key: the mirrors load independently. */
+    ipiCode: integer('ipi_code'),
     active: boolean('active').notNull(),
     ...mirrorColumns(),
   },

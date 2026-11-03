@@ -967,7 +967,29 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
                   <Money value={preview.totals.estimatedTotal} />
                 </dd>
               </div>
+              <div className="flex items-baseline gap-2">
+                <dt className="text-fg-muted">IPI estimado</dt>
+                <dd className="m-0 font-medium" data-testid="order-ipi">
+                  <Money value={preview.ipi.ipiEstimated} />
+                </dd>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <dt className="text-fg-muted">{preview.ipi.isPartial ? "Total parcial estimado (com IPI)" : "Total estimado (com IPI)"}</dt>
+                <dd className="m-0 font-semibold" data-testid="order-grand-total">
+                  <Money value={preview.ipi.grandTotalEstimated} />
+                </dd>
+              </div>
             </dl>
+            {preview.ipi.unavailableLineCount > 0 ? (
+              <p className="m-0 mt-1 text-right text-xs text-fg-muted" data-testid="order-ipi-unavailable">
+                {preview.ipi.unavailableLineCount === 1 ? "1 item com IPI não disponível." : `${preview.ipi.unavailableLineCount} itens com IPI não disponível.`}
+              </p>
+            ) : null}
+            {preview.ipi.tariffLineCount > 0 ? (
+              <p className="m-0 mt-1 text-right text-xs text-fg-muted" data-testid="order-ipi-tariff">
+                {preview.ipi.tariffLineCount === 1 ? "1 item com IPI por pauta — não estimado." : `${preview.ipi.tariffLineCount} itens com IPI por pauta — não estimado.`}
+              </p>
+            ) : null}
             {cartSummary.invalidLineCount > 0 ? (
               <p className="m-0 mt-1 text-right text-xs text-danger">
                 {cartSummary.invalidLineCount === 1
@@ -983,7 +1005,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
               </p>
             ) : null}
             <FieldHint className="mt-1 text-right">
-              Estimativa pelos preços de lista e descontos informados. O desconto é gravado no rascunho.
+              Estimativa pelos preços de lista e descontos informados. O desconto é gravado no rascunho. O IPI é uma estimativa só para conferência: o valor real é calculado pelo Sankhya.
               {approvalsOn
                 ? " A condição de pagamento e a análise de crédito ainda não estão disponíveis nesta versão."
                 : null}

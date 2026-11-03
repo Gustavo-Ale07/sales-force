@@ -137,6 +137,17 @@ export function computeDiscountedLineTotal(
   return q.value.mul(p.value).mul(factor).toDecimalPlaces(TOTAL_SCALE, Decimal.ROUND_HALF_UP).toFixed(TOTAL_SCALE);
 }
 
+/**
+ * Estimated IPI of a line: net line total x rate / 100, rounded half-up to 2 decimals ONCE (D-D). The net total is
+ * quantity x unit price - item discount. An estimate for display only: the ERP calculates the real IPI.
+ */
+export function estimateItemIpi(lineNetTotal: DecimalString, percentual: DecimalString): DecimalString {
+  const t = parseUnsigned(lineNetTotal);
+  const r = parseUnsigned(percentual);
+  if (!t || !r) throw new RangeError('Malformed decimal string');
+  return t.value.mul(r.value).div(100).toDecimalPlaces(TOTAL_SCALE, Decimal.ROUND_HALF_UP).toFixed(TOTAL_SCALE);
+}
+
 /** Unit price after the discount (list x (1 - d/100)), for display: at most 6 decimals, trailing zeros dropped. */
 export function computeNetUnitPrice(unitPrice: DecimalString, discountPercent: DecimalString): DecimalString {
   const p = parseUnsigned(unitPrice);

@@ -311,3 +311,30 @@ describe("applyDiscount", () => {
     expect(lines.every((l) => l.discountText === "")).toBe(true);
   });
 });
+
+describe("estimated IPI in the preview (D-D)", () => {
+  it("estimates from the net line total with the product reference and sums the order", () => {
+    const preview = previewDraft([
+      line({ key: "a", quantityText: "1", price: { state: "priced", unitPrice: "16.43", tableCode: 5, versionId: 9 }, ipi: { status: "rate", percentual: "9.75" } }),
+      line({ key: "b", quantityText: "2", discountText: "10", price: { state: "priced", unitPrice: "50", tableCode: 5, versionId: 9 }, ipi: { status: "rate", percentual: "3.25" } }),
+    ]);
+    expect(preview.ipi.ipiEstimated).toBe("4.53");
+    expect(preview.ipi.grandTotalEstimated).toBe("110.96");
+    expect(preview.ipi.isPartial).toBe(false);
+  });
+
+  it("a line without a reference or by tariff is flagged, never a silent zero", () => {
+    const preview = previewDraft([
+      line({ key: "a", price: { state: "priced", unitPrice: "10", tableCode: 5, versionId: 9 } }),
+      line({ key: "b", price: { state: "priced", unitPrice: "10", tableCode: 5, versionId: 9 }, ipi: { status: "tariff" } }),
+    ]);
+    expect(preview.ipi).toMatchObject({ unavailableLineCount: 1, tariffLineCount: 1, isPartial: true, ipiEstimated: "0.00" });
+  });
+
+  it("lineFromOrderItem keeps the server IPI result as a reference", () => {
+    const base = { lineNo: 1, productCode: 1, productDescription: "x", unit: "UN", quantity: "1", unitListPrice: "10", priceState: "priced", priceTableCode: 5, priceVersionId: 9, discountPercent: "0", estimatedLineTotal: "10.00" } as const;
+    expect(lineFromOrderItem({ ...base, ipi: { status: "estimated", amount: "0.33", percentual: "3.25" } } as never, "k").ipi).toEqual({ status: "rate", percentual: "3.25" });
+    expect(lineFromOrderItem({ ...base, ipi: { status: "tariff" } } as never, "k").ipi).toEqual({ status: "tariff" });
+    expect(lineFromOrderItem(base as never, "k").ipi).toEqual({ status: "unavailable" });
+  });
+});

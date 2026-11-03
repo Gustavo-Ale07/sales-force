@@ -91,6 +91,15 @@ export function erpTablesFromDataset(dataset: DemoDataset, dbUtcOffsetMinutes = 
       CODVOL: p.unit,
       MARCA: p.brand,
       REFERENCIA: p.reference,
+      CODIPI: p.ipiCode ?? null,
+    })),
+    TGFIPI: dataset.ipiRates.map((r) => ({
+      CODIPI: r.code,
+      DESCRICAO: r.description,
+      PERCENTUAL: Number(r.percentual),
+      VLRPAUTA: r.byTariff ? 1.5 : 0,
+      PAUTACONDIC: 'N',
+      CSTIPISAI: 50,
     })),
     TGFGRU: dataset.productGroups.map((g) => ({
       CODGRUPOPROD: g.code,

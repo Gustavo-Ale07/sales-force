@@ -2,6 +2,7 @@ import type {
   Customer,
   DirectoryUser,
   Carrier,
+  IpiRate,
   ListPrice,
   PriceTable,
   PriceTableVersion,
@@ -38,6 +39,8 @@ export interface DemoDataset {
   /** Synthetic ERP users: one per seller (codes 9001...), plus one user without a seller. */
   readonly directoryUsers: readonly DirectoryUser[];
   readonly carriers: readonly Carrier[];
+  /** Synthetic IPI rates: 3.25%, 9.75% and one by tariff (not estimated). */
+  readonly ipiRates: readonly IpiRate[];
   readonly customers: readonly Customer[];
   readonly productGroups: readonly ProductGroup[];
   readonly products: readonly Product[];
@@ -98,6 +101,27 @@ function buildDirectoryUsers(sellers: readonly Seller[]): DirectoryUser[] {
     ...sellers.map((seller, index) => ({ code: DEMO_DIRECTORY_USER_FIRST_CODE + index, sellerCode: seller.code })),
     { code: DEMO_DIRECTORY_USER_WITHOUT_SELLER, sellerCode: null },
   ];
+}
+
+export const DEMO_IPI_CODE_LOW = 5;
+export const DEMO_IPI_CODE_HIGH = 6;
+export const DEMO_IPI_CODE_TARIFF = 8;
+
+function buildIpiRates(): IpiRate[] {
+  return [
+    { code: DEMO_IPI_CODE_LOW, percentual: '3.25', byTariff: false, description: 'IPI DE 3,25% (demo)' },
+    { code: DEMO_IPI_CODE_HIGH, percentual: '9.75', byTariff: false, description: 'IPI DE 9,75% (demo)' },
+    { code: DEMO_IPI_CODE_TARIFF, percentual: '0', byTariff: true, description: 'IPI POR PAUTA (demo)' },
+  ];
+}
+
+/** Deterministic, without consuming the PRNG (the dataset of existing tests stays identical). */
+function demoIpiCode(productCode: number): number | null {
+  const bucket = productCode % 4;
+  if (bucket === 0) return DEMO_IPI_CODE_LOW;
+  if (bucket === 1) return DEMO_IPI_CODE_HIGH;
+  if (bucket === 2) return DEMO_IPI_CODE_TARIFF;
+  return null;
 }
 
 export const DEMO_CARRIER_FIRST_CODE = 7001;
@@ -308,6 +332,7 @@ function buildProducts(rng: Prng): { groups: ProductGroup[]; products: ProductBu
         unit: rng.pick(spec.units),
         brand,
         reference,
+        ipiCode: demoIpiCode(code),
       },
     });
   }
@@ -425,6 +450,7 @@ export function generateDemoDataset(seed: number = DEMO_SEED): DemoDataset {
     sellerManagerLinks: links,
     directoryUsers: buildDirectoryUsers(sellers),
     carriers: buildCarriers(),
+    ipiRates: buildIpiRates(),
     customers,
     productGroups: groups,
     products: products.map((p) => p.product),

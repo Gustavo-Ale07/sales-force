@@ -3,6 +3,7 @@ import type {
   DecimalString,
   DirectoryUser,
   Carrier,
+  IpiRate,
   IsoTimestamp,
   ListPrice,
   PriceTable,
@@ -272,8 +273,8 @@ export const CUSTOMER_SPEC: EntitySpec<Customer> = {
 export const PRODUCT_SPEC: EntitySpec<Product> = {
   entity: 'products',
   table: 'TGFPRO',
-  select: ['CODPROD', 'DESCRPROD', 'ATIVO', 'USOPROD', 'CODGRUPOPROD', 'CODVOL', 'MARCA', 'REFERENCIA'],
-  columns: ['CODPROD', 'DESCRPROD', 'ATIVO', 'USOPROD', 'CODGRUPOPROD', 'CODVOL', 'MARCA', 'REFERENCIA'],
+  select: ['CODPROD', 'DESCRPROD', 'ATIVO', 'USOPROD', 'CODGRUPOPROD', 'CODVOL', 'MARCA', 'REFERENCIA', 'CODIPI'],
+  columns: ['CODPROD', 'DESCRPROD', 'ATIVO', 'USOPROD', 'CODGRUPOPROD', 'CODVOL', 'MARCA', 'REFERENCIA', 'CODIPI'],
   // `CODPROD = 0` is the ERP placeholder row ("<sem descrição>", Sandbox 2026-09-30): never mirrored.
   where: 'CODPROD > 0',
   orderBy: 'CODPROD',
@@ -286,8 +287,32 @@ export const PRODUCT_SPEC: EntitySpec<Product> = {
     unit: row.text('CODVOL'),
     brand: row.nullableText('MARCA'),
     reference: row.nullableText('REFERENCIA'),
+    ipiCode: row.nullableInt('CODIPI'),
   }),
   keyOf: (product) => [product.code],
+};
+
+/**
+ * TGFIPI (Sandbox 2026-11-03: CODIPI 5 = 3.25, CODIPI 6 = 9.75; both VLRPAUTA 0, PAUTACONDIC 'N'). PK CODIPI. Read in full on
+ * every run (a handful of rows). `PERCENTUAL` is the rate in percent. VLRPAUTA > 0 or PAUTACONDIC = 'S' means IPI by tariff
+ * value (pauta), which the Sales Force does not estimate (D-D).
+ */
+export const IPI_RATE_SPEC: EntitySpec<IpiRate> = {
+  entity: 'ipiRates',
+  table: 'TGFIPI',
+  select: ['CODIPI', 'DESCRICAO', 'PERCENTUAL', 'VLRPAUTA', 'PAUTACONDIC', 'CSTIPISAI'],
+  columns: ['CODIPI', 'DESCRICAO', 'PERCENTUAL', 'VLRPAUTA', 'PAUTACONDIC', 'CSTIPISAI'],
+  orderBy: 'CODIPI',
+  map: (row) => {
+    const tariffValue = row.nullableDecimal('VLRPAUTA');
+    return {
+      code: row.int('CODIPI'),
+      description: row.nullableText('DESCRICAO') ?? '',
+      percentual: row.decimal('PERCENTUAL'),
+      byTariff: (tariffValue !== null && Number(tariffValue) > 0) || row.nullableText('PAUTACONDIC') === 'S',
+    };
+  },
+  keyOf: (rate) => [rate.code],
 };
 
 /** `TGFGRU.CODGRUPAI` of a root group (validated on the ERP test base): a sentinel, not a parent code. */

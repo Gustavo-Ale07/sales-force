@@ -128,4 +128,11 @@ export const migrations: readonly Migration[] = [
     name: "order_top_and_carrier",
     statements: [`ALTER TABLE local_order_draft ADD COLUMN top_code INTEGER`, `ALTER TABLE local_order_draft ADD COLUMN carrier_code INTEGER`],
   },
+  {
+    // IPI reference of each line (D-D): JSON of `{status:'rate',percentual}` | `{status:'tariff'}` | `{status:'unavailable'}`, for the
+    // offline estimate. Expand-only, nullable: NULL = "IPI não disponível". Display only; never sent to the server.
+    version: 5,
+    name: "order_item_ipi_reference",
+    statements: [`ALTER TABLE local_order_item ADD COLUMN ipi_json TEXT`],
+  },
 ];

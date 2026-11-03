@@ -42,6 +42,11 @@ export function orderDocumentOf(draft: DraftRecord, lines: readonly EditorLine[]
       isPartial: value.partial,
       unpricedLineCount: preview.totals.unpricedLineCount,
     },
+    ipi: {
+      ipiEstimated: preview.ipi.ipiEstimated,
+      grandTotalEstimated: preview.ipi.grandTotalEstimated,
+      isPartial: preview.ipi.isPartial,
+    },
   });
 }
 

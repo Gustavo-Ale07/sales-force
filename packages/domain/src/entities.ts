@@ -78,6 +78,8 @@ export interface Product {
   readonly unit: string;
   readonly brand: string | null;
   readonly reference: string | null;
+  /** ERP IPI code pointing to a mirrored rate; undefined = not requested, null = none. Display estimate only (D-D). */
+  readonly ipiCode?: number | null;
 }
 
 export interface PriceTable {

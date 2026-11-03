@@ -12,7 +12,7 @@ import {
   type ResolveProductsRequest,
   type ResolveProductsResponse,
 } from '@salesforce/contracts';
-import { isProductSellable, isProductVisible, type InstallationConfiguration, type Product } from '@salesforce/domain';
+import { ipiRefOf, isProductSellable, isProductVisible, type InstallationConfiguration, type IpiRef, type Product } from '@salesforce/domain';
 import { CustomersService } from '../customers/customers.service.js';
 import { AppError } from '../http/app-error.js';
 import type { CurrentUser } from '../iam/current-user.js';
@@ -102,6 +102,7 @@ export class CatalogService {
     book: PriceBook,
     config: InstallationConfiguration,
     image: ProductImage | null,
+    ipi: IpiRef,
   ): ProductListItem {
     const product = toDomainProduct(row);
     return {
@@ -116,7 +117,14 @@ export class CatalogService {
       groupName: row.groupName,
       listPrice: toListPriceContext(this.pricing.priceOf(book, row.code, row.unitPrice)),
       image,
+      ipi,
     };
+  }
+
+  /** IPI references (D-D) of a batch of product rows, from the mirrored rates. */
+  private async ipiRefsOf(rows: readonly { code: number }[]): Promise<(code: number) => IpiRef> {
+    const lookup = await this.mirror.ipiLookup(rows.map((row) => row.code));
+    return (code) => ipiRefOf(lookup.codes.get(code), lookup.rates);
   }
 
   async list(user: CurrentUser, query: ProductsQuery): Promise<ProductsResponse> {
@@ -135,8 +143,9 @@ export class CatalogService {
       { page: query.page, pageSize: query.pageSize },
     );
     const imagesByCode = await this.images.metadataFor(rows.map((row) => row.code));
+    const ipiOf = await this.ipiRefsOf(rows);
     return {
-      items: rows.map((row) => this.toListItem(row, book, context.configuration, imagesByCode.get(row.code) ?? null)),
+      items: rows.map((row) => this.toListItem(row, book, context.configuration, imagesByCode.get(row.code) ?? null, ipiOf(row.code))),
       page: query.page,
       pageSize: query.pageSize,
       total,
@@ -150,7 +159,7 @@ export class CatalogService {
     const row = await this.mirror.findProduct(code, book.versionId);
     if (row === null) throw new AppError('not_found');
     const image = (await this.images.metadataFor([row.code])).get(row.code) ?? null;
-    const item = this.toListItem(row, book, context.configuration, image);
+    const item = this.toListItem(row, book, context.configuration, image, (await this.ipiRefsOf([row]))(row.code));
     // A product the configuration hides from the catalog is not found here either.
     if (!isProductVisible(toDomainProduct(row), context.configuration, item.listPrice.state)) {
       throw new AppError('not_found');
@@ -167,7 +176,7 @@ export class CatalogService {
     const book = await this.bookFor(context, undefined);
     const row = await this.mirror.findProduct(code, book.versionId);
     if (row === null) throw new AppError('not_found');
-    const item = this.toListItem(row, book, context.configuration, null);
+    const item = this.toListItem(row, book, context.configuration, null, { status: 'unavailable' });
     if (!isProductVisible(toDomainProduct(row), context.configuration, item.listPrice.state)) {
       throw new AppError('not_found');
     }
@@ -189,8 +198,9 @@ export class CatalogService {
     const byCode = new Map<number, ProductListItem>();
     const byReference = new Map<string, ProductListItem[]>();
     const imagesByCode = await this.images.metadataFor(rows.map((row) => row.code));
+    const ipiOf = await this.ipiRefsOf(rows);
     for (const row of rows) {
-      const item = this.toListItem(row, book, context.configuration, imagesByCode.get(row.code) ?? null);
+      const item = this.toListItem(row, book, context.configuration, imagesByCode.get(row.code) ?? null, ipiOf(row.code));
       if (!isProductVisible(toDomainProduct(row), context.configuration, item.listPrice.state)) continue;
       byCode.set(row.code, item);
       if (row.reference !== null) byReference.set(row.reference, [...(byReference.get(row.reference) ?? []), item]);

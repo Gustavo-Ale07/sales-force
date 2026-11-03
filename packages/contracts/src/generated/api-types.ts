@@ -899,8 +899,31 @@ export interface components {
             failingEntities: string[];
             message: string | null;
         };
+        IpiRef: {
+            /** @constant */
+            status: "rate";
+            percentual: string;
+        } | {
+            /** @constant */
+            status: "tariff";
+        } | {
+            /** @constant */
+            status: "unavailable";
+        };
         /** Format: date-time */
         IsoTimestamp: string;
+        ItemIpi: {
+            /** @constant */
+            status: "estimated";
+            amount: components["schemas"]["DecimalString"];
+            percentual: components["schemas"]["DecimalString"];
+        } | {
+            /** @constant */
+            status: "unavailable";
+        } | {
+            /** @constant */
+            status: "tariff";
+        };
         ListPriceContext: {
             /** @constant */
             state: "priced";
@@ -1019,6 +1042,7 @@ export interface components {
             approval: components["schemas"]["OrderApproval"] | null;
             items: components["schemas"]["OrderItemDetail"][];
             totals: components["schemas"]["OrderTotals"];
+            ipi?: components["schemas"]["OrderIpi"];
         };
         OrderEntryConfiguration: {
             dataset: components["schemas"]["DatasetIdentity"] | null;
@@ -1044,6 +1068,13 @@ export interface components {
                 };
             };
         };
+        OrderIpi: {
+            ipiEstimated: components["schemas"]["DecimalString"];
+            grandTotalEstimated: components["schemas"]["DecimalString"];
+            unavailableLineCount: number;
+            tariffLineCount: number;
+            isPartial: boolean;
+        };
         OrderItemDetail: {
             lineNo: number;
             productCode: number;
@@ -1056,6 +1087,7 @@ export interface components {
             priceVersionId: number | null;
             discountPercent: components["schemas"]["DecimalString"];
             estimatedLineTotal: components["schemas"]["DecimalString"] | null;
+            ipi?: components["schemas"]["ItemIpi"];
             image?: components["schemas"]["ProductImage"] | null;
         };
         OrderItemInput: {
@@ -1188,6 +1220,7 @@ export interface components {
             groupName: string | null;
             listPrice: components["schemas"]["ListPriceContext"];
             image?: components["schemas"]["ProductImage"] | null;
+            ipi?: components["schemas"]["IpiRef"];
             usageCode: string | null;
             priceContext: components["schemas"]["PriceContext"];
         };
@@ -1217,6 +1250,7 @@ export interface components {
             groupName: string | null;
             listPrice: components["schemas"]["ListPriceContext"];
             image?: components["schemas"]["ProductImage"] | null;
+            ipi?: components["schemas"]["IpiRef"];
         };
         ProductResolutionItem: {
             identifier: string;

@@ -51,6 +51,7 @@ export function toRemoteOrder(order: OrderDetail): RemoteOrder {
       priceTableCode: item.priceTableCode,
       priceVersionId: item.priceVersionId,
       discountPercent: item.discountPercent,
+      ...(item.ipi === undefined ? {} : { ipi: item.ipi }),
     })),
   };
 }

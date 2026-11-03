@@ -27,6 +27,7 @@ type Reader = (gateway: SankhyaGateway) => Snapshot<unknown>;
 const SNAPSHOT_READS: readonly { entity: Exclude<ReadEntity, 'configuration'>; read: Reader; key: (row: never) => readonly number[] }[] = [
   { entity: 'sellers', read: (g) => g.readSellers(), key: (r: { code: number }) => [r.code] },
   { entity: 'carriers', read: (g) => g.readCarriers(), key: (r: { code: number }) => [r.code] },
+  { entity: 'ipiRates', read: (g) => g.readIpiRates(), key: (r: { code: number }) => [r.code] },
   { entity: 'customers', read: (g) => g.readCustomers(), key: (r: { code: number }) => [r.code] },
   { entity: 'products', read: (g) => g.readProducts(), key: (r: { code: number }) => [r.code] },
   { entity: 'productGroups', read: (g) => g.readProductGroups(), key: (r: { code: number }) => [r.code] },
@@ -132,6 +133,7 @@ export function runGatewayContract(label: string, subject: ContractSubject): voi
         'readPriceTableVersions',
         'readDirectoryUsers',
         'readCarriers',
+        'readIpiRates',
         'readListPrices',
         'readProductMediaSignatures',
         'readProductMediaBytes',

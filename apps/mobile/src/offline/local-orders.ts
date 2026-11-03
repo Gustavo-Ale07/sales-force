@@ -24,6 +24,7 @@ import {
   type QuarantinedDraftRecord,
   type SqlDatabase,
 } from "@salesforce/mobile-db";
+import type { IpiRef } from "@salesforce/domain";
 import { discountTextOf, parseDiscountInput, parseQuantityInput, type EditorLine } from "../data/order-draft";
 import { describeDuplicateFailure, type DuplicateFailure } from "../data/order-header";
 import type { DuplicateAsOrderRequest, DuplicateAsOrderResult, ListPriceContext, Page } from "../data/ports";
@@ -99,8 +100,20 @@ export function toDraftItems(lines: readonly EditorLine[]): DraftItemInput[] {
       priceJson: JSON.stringify(line.price),
       groupCode: line.group?.code ?? null,
       groupName: line.group?.name ?? null,
+      ipiJson: JSON.stringify(line.ipi ?? { status: "unavailable" }),
     };
   });
+}
+
+function parseIpi(json: string | null | undefined): IpiRef {
+  try {
+    const parsed = JSON.parse(json ?? "null") as IpiRef | null;
+    if (parsed?.status === "tariff") return { status: "tariff" };
+    if (parsed?.status === "rate" && typeof parsed.percentual === "string") return parsed;
+  } catch {
+    // fall through: unreadable IPI data is "IPI não disponível", never a fabricated rate
+  }
+  return { status: "unavailable" };
 }
 
 function parsePrice(json: string): ListPriceContext {
@@ -123,6 +136,7 @@ export function linesFromDraftItems(items: readonly DraftItemRecord[]): EditorLi
     discountText: discountTextOf(item.discountPercent),
     price: parsePrice(item.priceJson),
     group: { code: item.groupCode, name: item.groupName },
+    ipi: parseIpi(item.ipiJson),
   }));
 }
 

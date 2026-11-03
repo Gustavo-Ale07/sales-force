@@ -28,6 +28,7 @@ export function buildOrderHtml(order: OrderDetail, origin: string): string {
     notes: order.notes,
     items: order.items,
     totals: order.totals,
+    ...(order.ipi === undefined ? {} : { ipi: order.ipi }),
   });
   return renderOrderHtml(model, { logoSrc: `${origin}/brand/plac-logo.png`, brandName: 'PLAC' });
 }

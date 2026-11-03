@@ -15,6 +15,7 @@ export * from './discount-authority.js';
 export * from './order-top.js';
 export * from './order-document.js';
 export * from './order-delivery.js';
+export * from './ipi.js';
 
 export * from './order-erp-validation.js';
 export * from './erp-order-status.js';

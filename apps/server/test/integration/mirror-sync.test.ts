@@ -30,6 +30,7 @@ const TABLES: Record<MirrorEntity, string> = {
   listPrices: 'erp_list_price',
   directoryUsers: 'erp_directory_user',
   carriers: 'erp_carrier',
+  ipiRates: 'erp_ipi_rate',
 };
 
 let postgres: TestPostgres;
@@ -79,6 +80,7 @@ function datasetCopy(): { -readonly [K in keyof DemoDataset]: DemoDataset[K][num
     sellerManagerLinks: [...source.sellerManagerLinks],
     directoryUsers: [...source.directoryUsers],
     carriers: [...source.carriers],
+    ipiRates: [...source.ipiRates],
     customers: [...source.customers],
     productGroups: [...source.productGroups],
     products: [...source.products],

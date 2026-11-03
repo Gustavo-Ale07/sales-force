@@ -11,6 +11,7 @@ import type {
   Customer,
   DirectoryUser,
   Carrier,
+  IpiRate,
 } from '@salesforce/domain';
 import type { SankhyaProductMediaPort } from './media.js';
 import type { ReadScope } from './read-scope.js';
@@ -30,6 +31,7 @@ export type ReadEntity =
   | 'sellers'
   | 'directoryUsers'
   | 'carriers'
+  | 'ipiRates'
   | 'customers'
   | 'products'
   | 'productGroups'
@@ -42,6 +44,7 @@ export const READ_ENTITIES: readonly ReadEntity[] = [
   'sellers',
   'directoryUsers',
   'carriers',
+  'ipiRates',
   'customers',
   'products',
   'productGroups',
@@ -106,6 +109,8 @@ export interface SankhyaReadPort {
   readDirectoryUsers(options?: ReadOptions): Snapshot<DirectoryUser>;
   /** Ordered by `Carrier.code`. Partners flagged as carriers: code, name and active flag only. */
   readCarriers(options?: ReadOptions): Snapshot<Carrier>;
+  /** Ordered by `IpiRate.code`. IPI rates (TGFIPI) for the display estimate; read in full on every run. */
+  readIpiRates(options?: ReadOptions): Snapshot<IpiRate>;
   /** Ordered by `Customer.code`. */
   readCustomers(options?: ReadOptions): Snapshot<Customer>;
   /** Ordered by `Product.code`. */

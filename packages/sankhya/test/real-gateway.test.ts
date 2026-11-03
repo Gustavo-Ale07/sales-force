@@ -117,6 +117,7 @@ describe('capabilities and NotImplemented paths', () => {
       listPrices: 'supported',
       directoryUsers: 'supported',
       carriers: 'supported',
+      ipiRates: 'supported',
     });
     expect(description.capabilities.configurationSource).toBeNull();
   });

@@ -2,13 +2,14 @@ import {
   erpCustomer,
   erpDirectoryUser,
   erpCarrier,
+  erpIpiRate,
   erpListPrice,
   erpPriceTable,
   erpPriceTableVersion,
   erpProduct,
   erpSeller,
 } from '@salesforce/db';
-import type { Carrier, Customer, DirectoryUser, ListPrice, PriceTable, PriceTableVersion, Product, Seller } from '@salesforce/domain';
+import type { Carrier, Customer, IpiRate, DirectoryUser, ListPrice, PriceTable, PriceTableVersion, Product, Seller } from '@salesforce/domain';
 import {
   SankhyaGatewayError,
   type GatewayDescription,
@@ -38,6 +39,7 @@ export const MIRROR_ENTITIES = [
   // Appended last: the entity lock key is the position in this list (never reorder).
   'directoryUsers',
   'carriers',
+  'ipiRates',
 ] as const satisfies readonly ReadEntity[];
 
 export type MirrorEntity = (typeof MIRROR_ENTITIES)[number];
@@ -241,6 +243,7 @@ const products: MirrorEntitySpec = {
           groupCode: row.groupCode,
           groupName: row.groupCode === null ? null : (groupNames.get(row.groupCode) ?? null),
           usageCode: row.usageCode,
+          ipiCode: row.ipiCode ?? null,
           active: row.active,
         },
       }));
@@ -327,6 +330,23 @@ const carriers: MirrorEntitySpec = {
     })),
 };
 
+/** IPI rates (TGFIPI): display estimate of the IPI only (D-D). A handful of rows, read in full on every run. */
+const ipiRates: MirrorEntitySpec = {
+  entity: 'ipiRates',
+  requires: ['ipiRates'],
+  table: erpIpiRate,
+  keyProps: ['code'],
+  read: (context) =>
+    mapped<IpiRate>(context.gateway.readIpiRates(readOptions(context)), (row) => ({
+      key: [keyColumn('ipiRates', 'code', row.code)],
+      content: {
+        description: row.description,
+        percentual: decimalColumn('ipiRates', 'percentual', row.percentual, 9, 4),
+        byTariff: row.byTariff,
+      },
+    })),
+};
+
 export const MIRROR_SPECS: Readonly<Record<MirrorEntity, MirrorEntitySpec>> = {
   sellers,
   customers,
@@ -336,4 +356,5 @@ export const MIRROR_SPECS: Readonly<Record<MirrorEntity, MirrorEntitySpec>> = {
   listPrices,
   directoryUsers,
   carriers,
+  ipiRates,
 };
