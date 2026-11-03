@@ -3600,6 +3600,30 @@
           "features": {
             "$ref": "#/components/schemas/FeatureFlags"
           },
+          "erp": {
+            "type": "object",
+            "properties": {
+              "orderStatusDisplay": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/OrderStatusDisplay"
+                }
+              },
+              "liberationEventLabels": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^\\d{1,9}$"
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                }
+              }
+            },
+            "additionalProperties": false
+          },
           "provenance": {
             "type": "object",
             "propertyNames": {
@@ -5516,6 +5540,43 @@
           "rejected",
           "unknown"
         ]
+      },
+      "OrderStatusDisplay": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^#[0-9A-Fa-f]{6}$"
+          },
+          "canEdit": {
+            "type": "boolean"
+          },
+          "canDuplicate": {
+            "type": "boolean"
+          },
+          "canDelete": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "label",
+          "color",
+          "canEdit",
+          "canDuplicate",
+          "canDelete"
+        ],
+        "additionalProperties": false
       },
       "OrderTemplate": {
         "type": "object",

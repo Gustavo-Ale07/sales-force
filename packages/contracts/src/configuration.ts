@@ -342,6 +342,7 @@ export const ConfigurationSummarySchema = named(
     pricing: PricingSchema,
     financial: FinancialSchema,
     features: FeatureFlagsSchema,
+    erp: ErpSchema.optional(),
     /** CFG-8: origin of each bridge key. Admin/technical only; never part of the seller-facing slice. */
     provenance: ProvenanceSchema.optional(),
   }),

@@ -8,8 +8,8 @@ describe("navItemsFor (ROLE-1: convenience only, the server enforces)", () => {
     expect(navItemsFor("admin", true).map((item) => item.to)).toEqual(expect.arrayContaining(["/limites-desconto", "/aprovacoes"]));
   });
 
-  it("shows the technical profile only the integration page", () => {
-    expect(navItemsFor("technical").map((item) => item.to)).toEqual(["/integracao"]);
+  it("shows the technical profile only the integration and settings pages", () => {
+    expect(navItemsFor("technical").map((item) => item.to)).toEqual(["/integracao", "/configuracoes"]);
   });
 
   it("keeps the commercial areas for admin, manager and seller, and integration only for admin", () => {

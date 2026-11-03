@@ -752,6 +752,12 @@ export interface components {
                 creditChecks: boolean;
             };
             features: components["schemas"]["FeatureFlags"];
+            erp?: {
+                orderStatusDisplay?: components["schemas"]["OrderStatusDisplay"][];
+                liberationEventLabels?: {
+                    [key: string]: string;
+                };
+            };
             provenance?: {
                 [key: string]: components["schemas"]["ConfigurationProvenanceEntry"];
             };
@@ -1113,6 +1119,14 @@ export interface components {
         OrderSort: "updatedAt" | "-updatedAt" | "draftNumber" | "-draftNumber";
         /** @enum {string} */
         OrderStatus: "draft" | "awaiting_approval" | "approved" | "approval_rejected" | "cancelled" | "queued" | "sent" | "rejected" | "unknown";
+        OrderStatusDisplay: {
+            code: string;
+            label: string;
+            color: string;
+            canEdit: boolean;
+            canDuplicate: boolean;
+            canDelete: boolean;
+        };
         OrderTemplate: {
             /** Format: uuid */
             id: string;

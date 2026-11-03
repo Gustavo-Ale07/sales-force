@@ -19,13 +19,23 @@ export function toConfigurationSummary(configuration: InstallationConfiguration)
   return {
     schemaVersion: configuration.schemaVersion,
     source: { ...configuration.source },
-    general: { enabled: configuration.general.enabled, enabledCompanyCodes: [...configuration.general.enabledCompanyCodes] },
+    general: {
+      enabled: configuration.general.enabled,
+      enabledCompanyCodes: [...configuration.general.enabledCompanyCodes],
+      ...(configuration.general.appMinimumVersion === undefined ? {} : { appMinimumVersion: configuration.general.appMinimumVersion }),
+    },
     sales: {
       orderTopCode: configuration.sales.orderTopCode,
       quotationTopCode: configuration.sales.quotationTopCode,
+      ...codeListsOf(configuration.sales),
       defaultNegotiationTypeCode: configuration.sales.defaultNegotiationTypeCode,
       negotiationTypes: sellableNegotiationTypes(configuration.sales).map((type) => ({ code: type.code, label: type.label })),
-      orderBehavior: { allowDraftWithoutPrice: configuration.sales.orderBehavior.allowDraftWithoutPrice },
+      orderBehavior: {
+        allowDraftWithoutPrice: configuration.sales.orderBehavior.allowDraftWithoutPrice,
+        ...(configuration.sales.orderBehavior.decimalQuantities === undefined
+          ? {}
+          : { decimalQuantities: configuration.sales.orderBehavior.decimalQuantities }),
+      },
       confirmationBehavior: configuration.sales.confirmationBehavior,
       discountAuthorityMode: discountAuthorityModeOf(configuration.sales.discountAuthority),
     },
@@ -34,6 +44,8 @@ export function toConfigurationSummary(configuration: InstallationConfiguration)
       customerWithoutPriceTable: customers.customerWithoutPriceTable,
       creditFeatures: { showCreditLimit: customers.creditFeatures.showCreditLimit },
       accountSellerLinkCount: customers.accountSellerLinks.length,
+      ...(customers.historyDays === undefined ? {} : { historyDays: customers.historyDays }),
+      ...(customers.purchasedWindowDays === undefined ? {} : { purchasedWindowDays: customers.purchasedWindowDays }),
     },
     products: {
       sellableUsageValues: [...configuration.products.sellableUsageValues],
@@ -46,6 +58,18 @@ export function toConfigurationSummary(configuration: InstallationConfiguration)
     pricing: toPricingSummary(configuration.pricing),
     financial: { ...configuration.financial },
     features: { ...configuration.features },
+    ...(configuration.erp === undefined
+      ? {}
+      : {
+          erp: {
+            ...(configuration.erp.orderStatusDisplay === undefined
+              ? {}
+              : { orderStatusDisplay: configuration.erp.orderStatusDisplay.map((status) => ({ ...status })) }),
+            ...(configuration.erp.liberationEventLabels === undefined
+              ? {}
+              : { liberationEventLabels: { ...configuration.erp.liberationEventLabels } }),
+          },
+        }),
     ...(configuration.provenance === undefined
       ? {}
       : { provenance: Object.fromEntries(Object.entries(configuration.provenance).map(([key, entry]) => [key, { ...entry }])) }),
@@ -112,6 +136,21 @@ export function buildConfigurationResponse(
       .sort((a, b) => a.entity.localeCompare(b.entity)),
     gateway: { mode: integration.gatewayMode },
     integration,
+  };
+}
+
+/** The TOP/code lists of the sales section that the read-only settings screen shows (admin/technical only). */
+function codeListsOf(sales: InstallationConfiguration['sales']) {
+  const lists = {
+    eligibleOrderTopCodes: sales.eligibleOrderTopCodes,
+    topAllowlist: sales.topAllowlist,
+    negotiationTypeExclusions: sales.negotiationTypeExclusions,
+    quoteTopCodes: sales.quoteTopCodes,
+    skipConfirmationTopCodes: sales.skipConfirmationTopCodes,
+  };
+  return {
+    ...Object.fromEntries(Object.entries(lists).filter(([, value]) => value !== undefined).map(([key, value]) => [key, [...(value ?? [])]])),
+    ...(sales.orderStockLocationCode === undefined ? {} : { orderStockLocationCode: sales.orderStockLocationCode }),
   };
 }
 

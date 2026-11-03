@@ -1,8 +1,8 @@
 import { canAdministerDiscountLimits, canDecideApprovals, canSeeIntegration, canUseCommercial } from "@salesforce/contracts";
-import { List, Percent, ShieldCheck, Plug, ShoppingCart, Target, Users, type LucideIcon } from "lucide-react";
+import { List, Percent, Settings, ShieldCheck, Plug, ShoppingCart, Target, Users, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
-  to: "/" | "/clientes" | "/produtos" | "/pedidos" | "/integracao" | "/limites-desconto" | "/aprovacoes";
+  to: "/" | "/clientes" | "/produtos" | "/pedidos" | "/integracao" | "/configuracoes" | "/limites-desconto" | "/aprovacoes";
   label: string;
   icon: LucideIcon;
   /** Only for the roles that may see the integration (INTEGRATION_ROLES). */
@@ -27,6 +27,7 @@ const allNavItems: NavItem[] = [
   { to: "/aprovacoes", label: "Aprovações", icon: ShieldCheck, approverOnly: true },
   { to: "/limites-desconto", label: "Limites de desconto", icon: Percent, adminOnly: true },
   { to: "/integracao", label: "Integração", icon: Plug, integrationOnly: true },
+  { to: "/configuracoes", label: "Configurações", icon: Settings, integrationOnly: true },
 ];
 
 /**

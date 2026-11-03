@@ -72,7 +72,8 @@ const appRoute = createRoute({
     }
     // ROLE-1: the technical profile has no commercial area; it lands on the integration page. Convenience only:
     // the server denies every commercial route to it.
-    if (!canUseCommercial(user.role) && location.pathname !== "/integracao" && location.pathname !== "/perfil") {
+    const technicalPages = ["/integracao", "/configuracoes", "/perfil"];
+    if (!canUseCommercial(user.role) && !technicalPages.includes(location.pathname)) {
       throw redirect({ to: "/integracao" });
     }
   },
@@ -177,6 +178,18 @@ const integrationRoute = createRoute({
   component: lazyRouteComponent(() => import("./routes/integration"), "IntegrationPage"),
 });
 
+const settingsRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/configuracoes",
+  staticData: { crumb: "Configurações" },
+  // W-38: administrator and technical only (CFG-7); the server (getConfiguration) is what enforces it.
+  beforeLoad: async ({ context }) => {
+    const user = await context.queryClient.ensureQueryData(sessionQueryOptions(context.authClient));
+    if (!user || !canSeeIntegration(user.role)) throw redirect({ to: "/" });
+  },
+  component: lazyRouteComponent(() => import("./routes/settings"), "SettingsPage"),
+});
+
 const LazyDiscountLimitsPage = lazyRouteComponent(() => import("./routes/discount-limits"), "DiscountLimitsPage");
 const LazyApprovalsPage = lazyRouteComponent(() => import("./routes/approvals"), "ApprovalsPage");
 
@@ -243,6 +256,7 @@ const appChildren = [
   ordersRoute.addChildren([ordersIndexRoute, newOrderRoute, orderDetailRoute]),
   profileRoute,
   integrationRoute,
+  settingsRoute,
   discountLimitsRoute,
   approvalsRoute,
 ];
