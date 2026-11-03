@@ -28,7 +28,7 @@ const factsWith = (patch: (facts: Record<string, any>) => void): ConfigurationFa
 const gatewayOf = (read: () => Promise<ConfigurationFacts>) => ({ readConfigurationFacts: read });
 const failedQuery = (facts: ConfigurationFacts, key: string, code: string, kind: 'permanent' | 'auth' = 'permanent'): ConfigurationFacts =>
   factsWith((f) => {
-    f[key] = { ok: false, source: f[key].source, error: { kind, code, message: `${code} synthetic`, retryable: false } };
+    f[key] = { ok: false, source: f[key].source, error: { kind, code: code.startsWith('ORA-') ? 'sql_error' : code, message: `${code} synthetic`, retryable: false, ...(code.startsWith('ORA-') ? { detail: code } : {}) } };
   });
 
 beforeAll(async () => {
@@ -136,7 +136,7 @@ describe('sync.configuration (CFG-8)', () => {
   });
 
   describe('fail closed: nothing written, sync_state filled, integration degraded', () => {
-    const cases: { name: string; facts: () => Promise<ConfigurationFacts>; errorClass: string }[] = [
+    const cases: { name: string; facts: () => Promise<ConfigurationFacts>; errorClass: string; message?: string }[] = [
       {
         name: 'HTTP 403 GTW3403',
         facts: async () => {
@@ -144,7 +144,7 @@ describe('sync.configuration (CFG-8)', () => {
         },
         errorClass: 'auth',
       },
-      { name: 'ORA-00904 on Q1', facts: async () => failedQuery(PLAC_CONFIGURATION_FACTS, 'q1GeneralParameters', 'ORA-00904'), errorClass: 'permanent' },
+      { name: 'ORA-00904 on Q1', facts: async () => failedQuery(PLAC_CONFIGURATION_FACTS, 'q1GeneralParameters', 'ORA-00904'), errorClass: 'permanent', message: 'Q1 (sql_error: ORA-00904)' },
       { name: 'ORA-00942 on Q3', facts: async () => failedQuery(PLAC_CONFIGURATION_FACTS, 'q3EnabledTops', 'ORA-00942'), errorClass: 'permanent' },
       {
         name: 'Q1 row missing',
@@ -173,6 +173,7 @@ describe('sync.configuration (CFG-8)', () => {
         expect(row?.status).toBe('failed');
         expect(row?.lastErrorClass).toBe(c.errorClass);
         expect(row?.lastErrorMessage).toBeTruthy();
+        if (c.message !== undefined) expect(row?.lastErrorMessage).toContain(c.message);
         const summary = summarizeIntegration(await database.handle.db.select().from(syncState), NOW);
         expect(summary.failingEntities).toContain(CONFIGURATION_SYNC_ENTITY);
       });

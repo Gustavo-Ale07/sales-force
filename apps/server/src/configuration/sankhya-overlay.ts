@@ -159,6 +159,9 @@ export function overlayConfigurationFacts(input: {
     };
   };
 
+  for (const column of q1.missingColumns ?? []) {
+    warn('column_missing', `AD_TVDYCFGFRC.${column}`, `AD_TVDYCFGFRC.${column} does not exist in this ERP schema; it is not read.`);
+  }
   const q1Origin = (column: string): Origin => fromQuery(facts.q1GeneralParameters.source, 'AD_TVDYCFGFRC', column);
   const q2Source = facts.q2Companies.source;
   const q3Source = facts.q3EnabledTops.source;

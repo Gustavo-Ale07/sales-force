@@ -27,6 +27,8 @@ export interface ConfigQueryFailure {
   readonly code: string;
   /** Secret-free message (no values, no response bodies). */
   readonly message: string;
+  /** Secret-free diagnosis: the ORA code of a sql_error, or the names of missing columns. */
+  readonly detail?: string;
   readonly retryable: boolean;
 }
 
@@ -58,6 +60,8 @@ export interface GeneralParametersRow {
   readonly hidesCreditLimit: boolean | null;
   /** Remaining Q1 columns, report-only, keyed by column name. */
   readonly informational: Readonly<Record<string, ConfigScalar>>;
+  /** Wanted Q1 columns that do not exist in this ERP schema (informational ones only; a missing required one fails Q1). */
+  readonly missingColumns?: readonly string[];
 }
 
 /** Q2: `TSIEMP`. */
@@ -179,7 +183,7 @@ export function assertConfigurationFactsComplete(facts: ConfigurationFacts): voi
   if (first === undefined) return;
   throw new SankhyaGatewayError(first.error.kind, {
     code: 'configuration_query_failed',
-    message: `Configuration read incomplete: ${failed.map((f) => `${f.id} (${f.error.code})`).join(', ')}. Nothing was applied.`,
+    message: `Configuration read incomplete: ${failed.map((f) => `${f.id} (${f.error.code}${f.error.detail === undefined ? '' : `: ${f.error.detail}`})`).join(', ')}. Nothing was applied.`,
   });
 }
 

@@ -31,6 +31,12 @@ export interface ConfigQueryDef<T> {
   readonly map: (row: RowReader) => T;
 }
 
+/**
+ * Every Q1 column wanted from `AD_TVDYCFGFRC`. The table differs between ERP environments (the production
+ * Vidya is newer than the Sandbox: BLOQVENDCLIBLOQ and EXIBLIMCRECAR do not exist there, ORA-00904), so the
+ * gateway first reads the existing column names (`Q1_COLUMN_DISCOVERY_SQL`) and selects only the
+ * intersection (`buildQ1`).
+ */
 const Q1_COLUMNS = [
   'NUCFG', 'CODLOCALPEDIDOS', 'TABPADCSLTPROD', 'CODTABALT', 'TIPDESC', 'VALDESCMAX', 'VALVLRMIN', 'USADECQTD',
   'DECVLR', 'DIASCONSULTAVENDAS', 'QTDDIASPRODCOMPRADOS', 'UTILFINANC', 'ALTTIPNEG', 'PERMALTPRECOPROD',
@@ -39,20 +45,28 @@ const Q1_COLUMNS = [
   'VERSAOMINIMA', 'DHALT',
 ] as const;
 
+/** Columns that feed an applied configuration key: a missing one fails the read closed. */
+export const Q1_REQUIRED_COLUMNS: readonly string[] = [
+  'NUCFG', 'CODLOCALPEDIDOS', 'TABPADCSLTPROD', 'CODTABALT', 'USADECQTD', 'DIASCONSULTAVENDAS', 'QTDDIASPRODCOMPRADOS',
+];
+
+/** Every Q1 column wanted (required first-class and informational), for tests and fixtures. */
+export const Q1_DESIRED_COLUMNS: readonly string[] = Q1_COLUMNS;
+
+/** Reads the column names that exist in the connected schema's copy of the table (`USER_` = the connected user's schema). */
+export const Q1_COLUMN_DISCOVERY_SQL = "SELECT COLUMN_NAME FROM USER_TAB_COLUMNS WHERE TABLE_NAME = 'AD_TVDYCFGFRC'";
+export const Q1_COLUMN_DISCOVERY_COLUMNS: readonly string[] = ['COLUMN_NAME'];
+
 const Q1_TYPED = new Set<string>([
   'NUCFG', 'CODLOCALPEDIDOS', 'TABPADCSLTPROD', 'CODTABALT', 'USADECQTD', 'DIASCONSULTAVENDAS',
   'QTDDIASPRODCOMPRADOS', 'UTILFINANC', 'OCLTLIMCRED',
 ]);
 
-const Q1: ConfigQueryDef<GeneralParametersRow> = {
-  id: 'Q1',
-  sql: `SELECT ${Q1_COLUMNS.join(', ')} FROM AD_TVDYCFGFRC WHERE NUCFG = 1`,
-  columns: Q1_COLUMNS,
-  source: { tables: ['AD_TVDYCFGFRC'], columns: Q1_COLUMNS, filter: 'NUCFG = 1' },
-  exactlyOneRow: true,
-  map: (row) => {
+function q1MapRow(columns: readonly string[], missingColumns: readonly string[]): (row: RowReader) => GeneralParametersRow {
+  const present = new Set(columns);
+  return (row) => {
     const informational: Record<string, ConfigScalar> = {};
-    for (const column of Q1_COLUMNS) if (!Q1_TYPED.has(column)) informational[column] = row.rawScalar(column);
+    for (const column of columns) if (!Q1_TYPED.has(column)) informational[column] = row.rawScalar(column);
     return {
       nucfg: row.int('NUCFG'),
       orderStockLocationCode: row.nullableInt('CODLOCALPEDIDOS'),
@@ -61,12 +75,41 @@ const Q1: ConfigQueryDef<GeneralParametersRow> = {
       decimalQuantities: row.nullableFlag('USADECQTD'),
       historyDays: row.nullableInt('DIASCONSULTAVENDAS'),
       purchasedWindowDays: row.nullableInt('QTDDIASPRODCOMPRADOS'),
-      usesFinancial: row.nullableFlag('UTILFINANC'),
-      hidesCreditLimit: row.nullableFlag('OCLTLIMCRED'),
+      usesFinancial: present.has('UTILFINANC') ? row.nullableFlag('UTILFINANC') : null,
+      hidesCreditLimit: present.has('OCLTLIMCRED') ? row.nullableFlag('OCLTLIMCRED') : null,
       informational,
+      missingColumns,
     };
-  },
-};
+  };
+}
+
+function q1Definition(columns: readonly string[], missingColumns: readonly string[]): ConfigQueryDef<GeneralParametersRow> {
+  return {
+    id: 'Q1',
+    sql: `SELECT ${columns.join(', ')} FROM AD_TVDYCFGFRC WHERE NUCFG = 1`,
+    columns,
+    source: { tables: ['AD_TVDYCFGFRC'], columns, filter: 'NUCFG = 1' },
+    exactlyOneRow: true,
+    map: q1MapRow(columns, missingColumns),
+  };
+}
+
+/** The full-column Q1 (the production shape): documentation, provenance defaults and fixtures. */
+const Q1: ConfigQueryDef<GeneralParametersRow> = q1Definition(Q1_COLUMNS, []);
+
+export type Q1Build =
+  | { readonly ok: true; readonly def: ConfigQueryDef<GeneralParametersRow>; readonly missingOptional: readonly string[] }
+  | { readonly ok: false; readonly missingRequired: readonly string[] };
+
+/** Q1 limited to the columns that exist; `ok: false` when a required column is absent. Never `SELECT *`. */
+export function buildQ1(existingColumns: Iterable<string>): Q1Build {
+  const existing = new Set([...existingColumns].map((column) => column.trim().toUpperCase()));
+  const missingRequired = Q1_REQUIRED_COLUMNS.filter((column) => !existing.has(column));
+  if (missingRequired.length > 0) return { ok: false, missingRequired };
+  const columns = Q1_COLUMNS.filter((column) => existing.has(column));
+  const missingOptional = Q1_COLUMNS.filter((column) => !existing.has(column));
+  return { ok: true, def: q1Definition(columns, missingOptional), missingOptional };
+}
 
 const Q2: ConfigQueryDef<CompanyRow> = {
   id: 'Q2',

@@ -31,8 +31,13 @@ export {
 } from './write/order-write-config.js';
 export { SANDBOX_WRITE_HOSTS, assertSandboxHost, writeHostRefusal } from './write/host-allowlist.js';
 export * from './configuration-facts.js';
-export { PLAC_CONFIGURATION_FACTS, PLAC_FIXTURE_READ_AT } from './fake/configuration-facts-fixture.js';
-export { CONFIG_QUERY_TEXTS } from './real/configuration-queries.js';
+export {
+  PLAC_CONFIGURATION_FACTS,
+  PLAC_FIXTURE_READ_AT,
+  PLAC_SANDBOX_CONFIGURATION_FACTS,
+  SANDBOX_MISSING_Q1_COLUMNS,
+} from './fake/configuration-facts-fixture.js';
+export { CONFIG_QUERY_TEXTS, Q1_COLUMN_DISCOVERY_SQL, Q1_DESIRED_COLUMNS, Q1_REQUIRED_COLUMNS } from './real/configuration-queries.js';
 export { createGateway, type CreateGatewayDependencies, type GatewayEnvironment } from './factory.js';
 
 export { FakeGateway, type FakeGatewayFault, type FakeGatewayMediaOptions, type FakeGatewayOptions } from './fake/fake-gateway.js';

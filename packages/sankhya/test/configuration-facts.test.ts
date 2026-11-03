@@ -12,7 +12,14 @@ import {
   isQuoteGroupName,
   type ConfigurationFacts,
 } from '../src/index.js';
-import { CONFIG_QUERIES } from '../src/real/configuration-queries.js';
+import {
+  CONFIG_QUERIES,
+  Q1_COLUMN_DISCOVERY_COLUMNS,
+  Q1_COLUMN_DISCOVERY_SQL,
+  Q1_DESIRED_COLUMNS,
+  Q1_REQUIRED_COLUMNS,
+  buildQ1,
+} from '../src/real/configuration-queries.js';
 import {
   MockSankhya,
   TEST_BASE_URL,
@@ -47,6 +54,23 @@ describe('configuration queries: credential columns are never named', () => {
     expect('SELECT NUCFG, CODLOCALPEDIDOS FROM AD_TVDYCFGFRC').not.toMatch(FORBIDDEN);
   });
 
+  it('the column discovery reads names only, from the connected schema', () => {
+    expect(Q1_COLUMN_DISCOVERY_SQL).toBe("SELECT COLUMN_NAME FROM USER_TAB_COLUMNS WHERE TABLE_NAME = 'AD_TVDYCFGFRC'");
+    expect(Q1_COLUMN_DISCOVERY_SQL).not.toMatch(FORBIDDEN);
+  });
+
+  it('buildQ1 selects only the intersection, never SELECT *, and never a credential column', () => {
+    for (const existing of [Q1_DESIRED_COLUMNS, Q1_DESIRED_COLUMNS.filter((c) => c !== 'BLOQVENDCLIBLOQ' && c !== 'EXIBLIMCRECAR')]) {
+      const built = buildQ1([...existing, 'BASICAUTH', 'CLIENTSECRET1', 'SOMETHINGELSE']);
+      if (!built.ok) throw new Error('required columns are present');
+      const identifiers = built.def.sql.match(/[A-Za-z_][A-Za-z0-9_]*/g) ?? [];
+      for (const identifier of identifiers) expect(identifier, built.def.sql).not.toMatch(FORBIDDEN);
+      expect(built.def.sql).not.toMatch(/SELECT\s+(\w+\.)?\*/i);
+      expect(built.def.sql).not.toContain('SOMETHINGELSE');
+      expect(built.def.sql.endsWith('FROM AD_TVDYCFGFRC WHERE NUCFG = 1')).toBe(true);
+    }
+  });
+
   it('Q1 reads only AD_TVDYCFGFRC with an explicit column list for NUCFG = 1', () => {
     expect(CONFIG_QUERIES.Q1.sql.startsWith('SELECT NUCFG, CODLOCALPEDIDOS,')).toBe(true);
     expect(CONFIG_QUERIES.Q1.sql.endsWith('FROM AD_TVDYCFGFRC WHERE NUCFG = 1')).toBe(true);
@@ -73,7 +97,11 @@ const Q5_OK = ok(CONFIG_QUERIES.Q5.columns, [[23, 'Devolucao', 'S', 'S', 'N', '2
 const Q6_OK = ok(CONFIG_QUERIES.Q6.columns, [[5, 'S'], [6, 'N']]);
 const Q7_OK = ok(CONFIG_QUERIES.Q7.columns, [[1, 'Novo', 'Pedido novo', '9E9E9E', 'S', 'S', 'N']]);
 const Q8_OK = ok(CONFIG_QUERIES.Q8.columns, [['S', 10], [null, 2]]);
-const ALL_OK = () => [Q1_OK, Q2_OK, Q3_OK, Q4_OK, Q5_OK, Q6_OK, Q7_OK, Q8_OK];
+const REST_OK = () => [Q2_OK, Q3_OK, Q4_OK, Q5_OK, Q6_OK, Q7_OK, Q8_OK];
+// The schema's AD_TVDYCFGFRC columns as the discovery query returns them (production shape = every wanted column).
+const discovery = (columns: readonly string[]) => ok(Q1_COLUMN_DISCOVERY_COLUMNS, columns.map((c) => [c]));
+const DISCOVERY_PROD = discovery(Q1_DESIRED_COLUMNS);
+const ALL_OK = () => [DISCOVERY_PROD, Q1_OK, ...REST_OK()];
 
 function setup() {
   const clock: ClockRef = { now: Date.parse('2026-10-30T12:00:00Z') };
@@ -99,7 +127,7 @@ describe('RealSankhyaGateway.readConfigurationFacts over mocked HTTP', () => {
     mock.forced.push(...ALL_OK());
     const facts = await gateway.readConfigurationFacts();
 
-    expect(mock.queries().map((q) => q.sql)).toEqual(CONFIG_QUERY_TEXTS);
+    expect(mock.queries().map((q) => q.sql)).toEqual([Q1_COLUMN_DISCOVERY_SQL, ...CONFIG_QUERY_TEXTS]);
     expect(mock.queries().every((q) => q.url.includes('serviceName=DbExplorerSP.executeQuery'))).toBe(true);
     expect(mock.maxInFlight).toBe(1);
     expect(failedConfigQueries(facts)).toEqual([]);
@@ -127,8 +155,7 @@ describe('RealSankhyaGateway.readConfigurationFacts over mocked HTTP', () => {
 
   it('Q1 returning zero rows fails with a classified per-query marker', async () => {
     const { gateway, mock } = setup();
-    const [, ...rest] = ALL_OK();
-    mock.forced.push(ok(CONFIG_QUERIES.Q1.columns, []), ...rest);
+    mock.forced.push(DISCOVERY_PROD, ok(CONFIG_QUERIES.Q1.columns, []), ...REST_OK());
     const facts = await gateway.readConfigurationFacts();
     expect(failedConfigQueries(facts).map((f) => f.id)).toEqual(['Q1']);
     expect(facts.q1GeneralParameters.ok === false && facts.q1GeneralParameters.error.code).toBe('configuration_row_count');
@@ -138,8 +165,7 @@ describe('RealSankhyaGateway.readConfigurationFacts over mocked HTTP', () => {
   it('Q1 returning two rows also fails', async () => {
     const { gateway, mock } = setup();
     const row = rowFor(CONFIG_QUERIES.Q1.columns, { NUCFG: 1 });
-    const [, ...rest] = ALL_OK();
-    mock.forced.push(ok(CONFIG_QUERIES.Q1.columns, [row, row]), ...rest);
+    mock.forced.push(DISCOVERY_PROD, ok(CONFIG_QUERIES.Q1.columns, [row, row]), ...REST_OK());
     const facts = await gateway.readConfigurationFacts();
     expect(failedConfigQueries(facts).map((f) => f.id)).toEqual(['Q1']);
   });
@@ -147,7 +173,7 @@ describe('RealSankhyaGateway.readConfigurationFacts over mocked HTTP', () => {
   it('status "0" with ORA-00904 / ORA-00942 marks only that query as permanent and never succeeds silently', async () => {
     const { gateway, mock } = setup();
     mock.forced.push(
-      Q1_OK, Q2_OK, Q3_OK, Q4_OK,
+      DISCOVERY_PROD, Q1_OK, Q2_OK, Q3_OK, Q4_OK,
       sqlError('ORA-00942: table or view does not exist'),
       Q6_OK,
       sqlError('ORA-00904: "COR": invalid identifier'),
@@ -160,7 +186,7 @@ describe('RealSankhyaGateway.readConfigurationFacts over mocked HTTP', () => {
     expect(failed[0]?.error.message).toContain('ORA-00942');
     expect(failed[1]?.error.message).toContain('ORA-00904');
     expect(facts.q6PriceTables.ok).toBe(true);
-    expect(() => assertConfigurationFactsComplete(facts)).toThrowError(/Q5 \(sql_error\), Q7 \(sql_error\)/);
+    expect(() => assertConfigurationFactsComplete(facts)).toThrowError(/Q5 \(sql_error: ORA-00942\), Q7 \(sql_error: ORA-00904\)/);
   });
 
   it('HTTP 403 GTW3403 that persists after the token renewal throws a classified auth error and stops', async () => {
@@ -171,7 +197,7 @@ describe('RealSankhyaGateway.readConfigurationFacts over mocked HTTP', () => {
     expect(failure).toBeInstanceOf(SankhyaGatewayError);
     expect((failure as SankhyaGatewayError).kind).toBe('auth');
     expect((failure as SankhyaGatewayError).retryable).toBe(false);
-    expect(mock.queries()).toHaveLength(2); // Q1 and its single retry; Q2..Q8 never sent
+    expect(mock.queries()).toHaveLength(2); // the column discovery and its single retry; Q1..Q8 never sent
   });
 
   it('HTTP 503 throws a retryable unavailable error', async () => {
@@ -184,10 +210,11 @@ describe('RealSankhyaGateway.readConfigurationFacts over mocked HTTP', () => {
 
   it('a malformed cell (flag that is not S/N) marks the query as a validation failure without echoing the value', async () => {
     const { gateway, mock } = setup();
-    const [q1, q2, , ...rest] = ALL_OK();
+    const [, , ...rest] = REST_OK();
     mock.forced.push(
-      q1 as ForcedResponse,
-      q2 as ForcedResponse,
+      DISCOVERY_PROD,
+      Q1_OK,
+      Q2_OK,
       ok(CONFIG_QUERIES.Q3.columns, [[1000, 'x', 'P', 'Z', null, null, null]]),
       ...(rest as ForcedResponse[]),
     );
@@ -200,8 +227,7 @@ describe('RealSankhyaGateway.readConfigurationFacts over mocked HTTP', () => {
 
   it('a result with different columns than the query fails closed (column missing in the ERP)', async () => {
     const { gateway, mock } = setup();
-    const [q1, ...rest] = ALL_OK();
-    mock.forced.push(q1 as ForcedResponse, ok(['CODEMP', 'NOMEFANTASIA'], [[1, 'x']]), ...(rest.slice(1) as ForcedResponse[]));
+    mock.forced.push(DISCOVERY_PROD, Q1_OK, ok(['CODEMP', 'NOMEFANTASIA'], [[1, 'x']]), ...(REST_OK().slice(1) as ForcedResponse[]));
     const facts = await gateway.readConfigurationFacts();
     expect(failedConfigQueries(facts).map((f) => f.id)).toEqual(['Q2']);
   });
@@ -211,6 +237,72 @@ describe('RealSankhyaGateway.readConfigurationFacts over mocked HTTP', () => {
     mock.forced.push(...ALL_OK());
     const facts = await gateway.readConfigurationFacts();
     expect(JSON.stringify(facts)).not.toMatch(/test-client|test-x-token|synthetic-token/);
+  });
+});
+
+describe('adaptive Q1 (columns differ between ERP environments)', () => {
+  const SANDBOX_COLUMNS = Q1_DESIRED_COLUMNS.filter((c) => c !== 'BLOQVENDCLIBLOQ' && c !== 'EXIBLIMCRECAR');
+
+  it('Sandbox shape (without BLOQVENDCLIBLOQ and EXIBLIMCRECAR): Q1 is built without them and succeeds', async () => {
+    const { gateway, mock } = setup();
+    const sandboxQ1 = ok(SANDBOX_COLUMNS, [
+      SANDBOX_COLUMNS.map((c) => ({ NUCFG: 1, CODLOCALPEDIDOS: 209, TABPADCSLTPROD: 5, CODTABALT: 5, USADECQTD: 'S', DIASCONSULTAVENDAS: 90, QTDDIASPRODCOMPRADOS: 90 })[c as string] ?? null),
+    ]);
+    mock.forced.push(discovery(SANDBOX_COLUMNS), sandboxQ1, ...REST_OK());
+    const facts = await gateway.readConfigurationFacts();
+    const sent = mock.queries()[1]?.sql ?? '';
+    expect(sent).not.toContain('BLOQVENDCLIBLOQ');
+    expect(sent).not.toContain('EXIBLIMCRECAR');
+    expect(sent).toContain('OCLTLIMCRED');
+    expect(failedConfigQueries(facts)).toEqual([]);
+    if (!facts.q1GeneralParameters.ok) throw new Error('Q1 failed');
+    expect(facts.q1GeneralParameters.rows[0]).toMatchObject({ orderStockLocationCode: 209, missingColumns: ['BLOQVENDCLIBLOQ', 'EXIBLIMCRECAR'] });
+    expect(facts.q1GeneralParameters.source.columns).toEqual(SANDBOX_COLUMNS);
+    expect(facts.q1GeneralParameters.rows[0]?.informational).not.toHaveProperty('BLOQVENDCLIBLOQ');
+  });
+
+  it('production shape: every wanted column is selected and nothing is reported missing', async () => {
+    const { gateway, mock } = setup();
+    mock.forced.push(...ALL_OK());
+    const facts = await gateway.readConfigurationFacts();
+    expect(mock.queries()[1]?.sql).toBe(CONFIG_QUERIES.Q1.sql);
+    if (!facts.q1GeneralParameters.ok) throw new Error('Q1 failed');
+    expect(facts.q1GeneralParameters.rows[0]?.missingColumns).toEqual([]);
+  });
+
+  it('a missing required column fails Q1 closed with configuration_column_missing naming the column, and Q1 is never sent', async () => {
+    const { gateway, mock } = setup();
+    const without = Q1_DESIRED_COLUMNS.filter((c) => c !== 'CODTABALT' && c !== 'USADECQTD');
+    mock.forced.push(discovery(without), ...REST_OK());
+    const facts = await gateway.readConfigurationFacts();
+    const failed = failedConfigQueries(facts);
+    expect(failed.map((f) => f.id)).toEqual(['Q1']);
+    expect(failed[0]?.error).toMatchObject({ kind: 'validation', code: 'configuration_column_missing', retryable: false, detail: 'CODTABALT, USADECQTD' });
+    expect(mock.queries().some((q) => (q.sql ?? '').includes('FROM AD_TVDYCFGFRC WHERE NUCFG = 1'))).toBe(false);
+    expect(() => assertConfigurationFactsComplete(facts)).toThrowError(/Q1 \(configuration_column_missing: CODTABALT, USADECQTD\)/);
+  });
+
+  it('an ORA error on the discovery or on Q1 reports the ORA code and the query name, never the statement', async () => {
+    const { gateway, mock } = setup();
+    mock.forced.push(DISCOVERY_PROD, sqlError('ORA-00904: "EXIBLIMCRECAR": invalid identifier'), ...REST_OK());
+    const facts = await gateway.readConfigurationFacts();
+    const failed = failedConfigQueries(facts);
+    expect(failed[0]).toMatchObject({ id: 'Q1', error: { code: 'sql_error', detail: 'ORA-00904' } });
+    let thrown = '';
+    try { assertConfigurationFactsComplete(facts); } catch (e) { thrown = (e as Error).message; }
+    expect(thrown).toContain('Q1 (sql_error: ORA-00904)');
+    expect(thrown).not.toMatch(/SELECT|FROM|EXIBLIMCRECAR/);
+
+    const second = setup();
+    second.mock.forced.push(sqlError('ORA-00942: table or view does not exist'), ...REST_OK());
+    const discoveryFailed = await second.gateway.readConfigurationFacts();
+    expect(failedConfigQueries(discoveryFailed)[0]).toMatchObject({ id: 'Q1', error: { detail: 'ORA-00942' } });
+  });
+
+  it('required columns are the seven that feed applied keys', () => {
+    expect([...Q1_REQUIRED_COLUMNS].sort()).toEqual(
+      ['CODLOCALPEDIDOS', 'CODTABALT', 'DIASCONSULTAVENDAS', 'NUCFG', 'QTDDIASPRODCOMPRADOS', 'TABPADCSLTPROD', 'USADECQTD'],
+    );
   });
 });
 

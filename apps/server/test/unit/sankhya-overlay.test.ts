@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- tests patch deliberately malformed facts */
 import {
   PLAC_CONFIGURATION_FACTS,
+  PLAC_SANDBOX_CONFIGURATION_FACTS,
   type ConfigurationFacts,
   type EnabledTopRow,
 } from '@salesforce/sankhya';
@@ -383,5 +384,21 @@ describe('overlay decision table: preconditions that keep the base and warn', ()
       facts: PLAC_CONFIGURATION_FACTS,
     });
     expect(validateInstallationConfiguration(structuredClone(out.snapshot))).toMatchObject({ ok: false });
+  });
+});
+
+describe('overlay over a Sandbox-shaped Q1 (columns absent from this ERP schema)', () => {
+  it('reports each absent informational column as a column_missing warning and applies the same keys', () => {
+    const production = overlayConfigurationFacts({ base: baseConfiguration(), facts: PLAC_CONFIGURATION_FACTS });
+    const sandbox = overlayConfigurationFacts({ base: baseConfiguration(), facts: PLAC_SANDBOX_CONFIGURATION_FACTS });
+
+    expect(sandbox.warnings.filter((warning) => warning.code === 'column_missing').map((warning) => warning.key)).toEqual([
+      'AD_TVDYCFGFRC.BLOQVENDCLIBLOQ',
+      'AD_TVDYCFGFRC.EXIBLIMCRECAR',
+    ]);
+    expect(production.warnings.some((warning) => warning.code === 'column_missing')).toBe(false);
+    expect(sandbox.entries.map((entry) => entry.key)).toEqual(production.entries.map((entry) => entry.key));
+    expect(configurationContentHash(sandbox.snapshot)).toBe(configurationContentHash(production.snapshot));
+    expect(Object.keys(sandbox.informational.parametersWithoutFeature)).not.toContain('BLOQVENDCLIBLOQ');
   });
 });

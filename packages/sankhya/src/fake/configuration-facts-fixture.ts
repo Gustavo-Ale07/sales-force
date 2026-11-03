@@ -121,3 +121,23 @@ export const PLAC_CONFIGURATION_FACTS: ConfigurationFacts = {
     ],
   },
 };
+
+/** The two Q1 columns that exist in the production AD_TVDYCFGFRC but not in the Sandbox copy (ORA-00904, 2026-11-03). */
+export const SANDBOX_MISSING_Q1_COLUMNS: readonly string[] = ['BLOQVENDCLIBLOQ', 'EXIBLIMCRECAR'];
+
+const sandboxQ1 = PLAC_CONFIGURATION_FACTS.q1GeneralParameters;
+const sandboxInformational = Object.fromEntries(
+  Object.entries(sandboxQ1.ok ? (sandboxQ1.rows[0]?.informational ?? {}) : {}).filter(([column]) => !SANDBOX_MISSING_Q1_COLUMNS.includes(column)),
+);
+
+/** Same installation values read from a Sandbox-shaped schema: Q1 omits the two absent columns and reports them as missing. */
+export const PLAC_SANDBOX_CONFIGURATION_FACTS: ConfigurationFacts = {
+  ...PLAC_CONFIGURATION_FACTS,
+  q1GeneralParameters: sandboxQ1.ok
+    ? {
+        ok: true,
+        source: { ...sandboxQ1.source, columns: sandboxQ1.source.columns.filter((c) => !SANDBOX_MISSING_Q1_COLUMNS.includes(c)) },
+        rows: sandboxQ1.rows.map((row) => ({ ...row, informational: sandboxInformational, missingColumns: SANDBOX_MISSING_Q1_COLUMNS })),
+      }
+    : sandboxQ1,
+};

@@ -52,8 +52,14 @@ import type {
   WrittenOrderItem,
 } from '../write/order-contract.js';
 import { assertBaseUrlAllowed, assertRequestUrlAllowed } from './host-guard.js';
-import type { ConfigQueryResult, ConfigurationFacts } from '../configuration-facts.js';
-import { CONFIG_QUERIES, type ConfigQueryDef } from './configuration-queries.js';
+import type { ConfigQueryResult, ConfigurationFacts, GeneralParametersRow } from '../configuration-facts.js';
+import {
+  CONFIG_QUERIES,
+  Q1_COLUMN_DISCOVERY_COLUMNS,
+  Q1_COLUMN_DISCOVERY_SQL,
+  buildQ1,
+  type ConfigQueryDef,
+} from './configuration-queries.js';
 import {
   CUSTOMER_SPEC,
   PRODUCT_GROUP_SPEC,
@@ -211,11 +217,17 @@ export class RealSankhyaGateway implements SankhyaGateway {
         return {
           ok: false,
           source: def.source,
-          error: { kind: error.kind, code: error.code, message: error.message, retryable: error.retryable },
+          error: {
+            kind: error.kind,
+            code: error.code,
+            message: error.message,
+            retryable: error.retryable,
+            ...(error.code === 'sql_error' ? oracleDetail(error.message) : {}),
+          },
         };
       }
     };
-    const q1GeneralParameters = await run(CONFIG_QUERIES.Q1);
+    const q1GeneralParameters = await this.#readQ1(run, signal);
     const q2Companies = await run(CONFIG_QUERIES.Q2);
     const q3EnabledTops = await run(CONFIG_QUERIES.Q3);
     const q4TopGroups = await run(CONFIG_QUERIES.Q4);
@@ -234,6 +246,42 @@ export class RealSankhyaGateway implements SankhyaGateway {
       q7OrderStatuses,
       q8ProductMobility,
     };
+  }
+
+  /**
+   * Q1 over the columns that exist in this schema (the Sandbox copy of AD_TVDYCFGFRC has fewer columns than the
+   * production one). The discovery reads names only; a required column that is absent fails Q1 closed.
+   */
+  async #readQ1(
+    run: <T>(def: ConfigQueryDef<T>) => Promise<ConfigQueryResult<T>>,
+    signal: AbortSignal | undefined,
+  ): Promise<ConfigQueryResult<GeneralParametersRow>> {
+    const fullSource = CONFIG_QUERIES.Q1.source;
+    const discovery = await run<string>({
+      id: 'Q1',
+      sql: Q1_COLUMN_DISCOVERY_SQL,
+      columns: Q1_COLUMN_DISCOVERY_COLUMNS,
+      source: { tables: ['USER_TAB_COLUMNS'], columns: Q1_COLUMN_DISCOVERY_COLUMNS, filter: "TABLE_NAME = 'AD_TVDYCFGFRC'" },
+      map: (row) => row.nullableText('COLUMN_NAME') ?? '',
+    });
+    signal?.throwIfAborted();
+    if (!discovery.ok) return { ok: false, source: fullSource, error: discovery.error };
+    const built = buildQ1(discovery.rows);
+    if (!built.ok) {
+      const names = built.missingRequired.join(', ');
+      return {
+        ok: false,
+        source: fullSource,
+        error: {
+          kind: 'validation',
+          code: 'configuration_column_missing',
+          message: `Q1: required column(s) ${names} do not exist in AD_TVDYCFGFRC of this ERP schema.`,
+          retryable: false,
+          detail: names,
+        },
+      };
+    }
+    return run(built.def);
   }
 
   readSellers(options?: ReadOptions) {
@@ -711,6 +759,12 @@ export function parseQueryResponse(response: HttpResponse, expectedColumns: read
     if (!Array.isArray(row) || row.length !== expectedColumns.length) throw invalidEnvelope('row width differs from the query');
   }
   return { rows: rows as readonly (readonly unknown[])[] };
+}
+
+/** The ORA code of a sql_error message, when it has one (never the statement text). */
+function oracleDetail(message: string): { detail: string } | Record<string, never> {
+  const code = /ORA-[0-9]{5}/.exec(message)?.[0];
+  return code === undefined ? {} : { detail: code };
 }
 
 function emptySnapshot<T>(): Snapshot<T> {
