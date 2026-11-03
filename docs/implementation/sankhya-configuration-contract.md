@@ -39,6 +39,10 @@ Regras do mecanismo:
 
 **Q1 adaptativa (2026-11-03):** a tabela `AD_TVDYCFGFRC` difere entre ambientes (Sandbox 329 colunas, produção 370). Antes da Q1 o worker lê `SELECT COLUMN_NAME FROM USER_TAB_COLUMNS WHERE TABLE_NAME = 'AD_TVDYCFGFRC'` (esquema do usuário conectado) e monta a Q1 só com a interseção da lista desejada; nunca `SELECT *`. As 7 colunas que alimentam chave aplicada (`NUCFG`, `CODLOCALPEDIDOS`, `TABPADCSLTPROD`, `CODTABALT`, `USADECQTD`, `DIASCONSULTAVENDAS`, `QTDDIASPRODCOMPRADOS`) são obrigatórias: ausente = a leitura falha fechada com `configuration_column_missing` nomeando a coluna. As demais são informativas: ausente = aviso `column_missing` no relatório e o sync segue. Uma falha `sql_error` traz o código ORA e o nome da consulta (por exemplo `Q1 (sql_error: ORA-00904)`), nunca o texto do SQL.
 
+**Q7 tolerante (2026-11-03, F4):** no Sandbox as permissões de `AD_TVDYFRCSTS` são NULL na maioria dos status. Só `CODSTATUS` (inteiro) e `NOME` (não vazio) são obrigatórios; `COR` ausente ou inválida = status sem cor; `PERMEDIT/PERMDUPLIC/PERMEXC` NULL ou `N` = false, `S` = true, outro valor = false com aviso `status_flag_invalid` (código do status e coluna); `DESCRICAO` é opcional. Linha sem código ou sem nome = aviso `status_incomplete` com o código e só ela é descartada. `no_order_status` só quando nenhuma linha sobra.
+
+**Resumo de escopo no relatório (F5):** o log do sync traz `scope.negotiationTypes` (lidos, inativos, excluídos pelo arquivo base, resultado, códigos) e `scope.eligibleOrderTops` (lidos, não-pedido, fora da allowlist, resultado, códigos): só números, sem descrições.
+
 **Leituras só informativas** (vão para o relatório da sincronização, não alteram o snapshot): Q8 (distribuição de `TGFPRO.AD_MOBILIDADE`, não decide nada hoje), `AD_TVDYCFGFRC.UTILFINANC`, `AD_TVDYCFGFRC.OCLTLIMCRED` (decisão do dono de 2026-11-03: `showCreditLimit` continua do arquivo base) e parâmetros sem funcionalidade no Force.
 
 ## 3. BASE — chaves só do Force (arquivo base)

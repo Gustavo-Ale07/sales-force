@@ -22,6 +22,12 @@ STATUS: ACTIVE — atualizado em 2026-10-29. Fonte de verdade ÚNICA: `C:\Dev\sa
 1. Parte 2 (`PROMPT_2026-10-30_parte2_config-sankhya.md`): começa registrando CFG-8, U-10-a..d e U-11 em `docs/decisions.md`; depois Trilha D.
 2. Decisões do dono abertas pelo reviewer: alçada em modo `erp` vs P-10; PDF compartilhado por representante vs P-20 (ver checkpoint).
 
+## Correção 2 da parte 2 — Q7 tolerante e resumo de escopo (2026-11-03, 11:04 BRT em staging)
+- Fato: com a Q1 corrigida o `sync.configuration` fez `stored` (5 alterações), mas `erp.orderStatusDisplay` não foi aplicada: as 8 linhas da `AD_TVDYFRCSTS` do Sandbox caíram em `status_incomplete` (permissões NULL, `DESCRICAO` nula no -1).
+- F4: Q7 agora exige só `CODSTATUS` e `NOME`; cor ausente/inválida = sem cor (`color` virou opcional no contrato, openapi regenerado); `PERM*` NULL/`N` = false, `S` = true, outro valor = false + aviso `status_flag_invalid`; linha sem código/nome = `status_incomplete` com o código, só ela é descartada. Fixture das 8 linhas do Sandbox (nomes/permissões pela sua descrição e CONFIG_MAP; cores e descrições sintéticas).
+- F5: o log do sync agora traz `scope` com contagens (lidos, inativos, excluídos pelo arquivo base, resultado) e a lista final de códigos para `sales.negotiationTypes` e `sales.eligibleOrderTopCodes` (só códigos).
+- Para você, depois do deploy: `exec worker node dist/sync-once.js sync.configuration` e conferir no log do worker a linha "configuration sync stored/nothing changed" (campo `scope`); `erp.orderStatusDisplay` deve vir com as 8 linhas e nenhum `status_incomplete`.
+
 ## Correção da parte 2 — Q1 adaptativa (2026-11-03, 10:14 BRT em staging; correção na branch)
 - Fato: o primeiro `sync.configuration` contra o Sandbox falhou fechado (`configuration_query_failed`, Q1 `sql_error`, ORA-00904) porque a Q1 pedia `BLOQVENDCLIBLOQ` e `EXIBLIMCRECAR`, que só existem na `AD_TVDYCFGFRC` da produção (370 colunas; Sandbox 329). Nada foi aplicado (como projetado).
 - F1: a Q1 agora lê `USER_TAB_COLUMNS` e monta o SELECT só com as colunas existentes. 7 obrigatórias (ausente = falha `configuration_column_missing` nomeando a coluna); 21 informativas (ausente = aviso `column_missing` no relatório). F2: a falha `sql_error` mostra o código ORA e a consulta (`Q1 (sql_error: ORA-00904)`), sem SQL.
