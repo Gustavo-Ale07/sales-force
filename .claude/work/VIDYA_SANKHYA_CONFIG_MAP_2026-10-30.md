@@ -1,6 +1,6 @@
 # Como o Vidya Force é configurado dentro do Sankhya — e proposta para o Plac Force (U-10)
 
-Fontes: catálogo Oracle (ALL_TABLES/ALL_TAB_COLUMNS/ALL_CONSTRAINTS/ALL_OBJECTS), dicionário do Sankhya (TDDTAB/TDDCAM/TDDOPC/TDDINS), a linha de `AD_TVDYCFGFRC`, fonte das 9 funções e 7 views `*_VIDYA`, amostra do `AD_TVDYLOGPED` — lidos em 30/10/2026 pelo dono, somente leitura. **Ambiente: os quatro exports das 10h29 (dicionário, parâmetros, fontes e log) vieram do Sankhya de PRODUÇÃO — o log traz envios de hoje entre 07h15 e 10h27 com nº único 20.155–20.696, e o Sandbox está na casa dos 2.400; o catálogo das 10h23 veio do Sandbox. Leitura apenas, sem efeito; mas o Sandbox pode estar defasado em relação à produção, e é o Sandbox que o staging lê.** Nada aqui contém credencial; os exports brutos (em especial o do log, que traz nomes de clientes) ficam fora do repositório.
+Fontes: catálogo Oracle (ALL_TABLES/ALL_TAB_COLUMNS/ALL_CONSTRAINTS/ALL_OBJECTS), dicionário do Sankhya (TDDTAB/TDDCAM/TDDOPC/TDDINS), a linha de `AD_TVDYCFGFRC`, fonte das 9 funções e 7 views `*_VIDYA`, amostra do `AD_TVDYLOGPED` — lidos em 30/10/2026 pelo dono, somente leitura. ****Correção do dono, 03/11/2026: TODOS os exports de 30/10 — inclusive o catálogo das 10h23 — vieram da PRODUÇÃO; só o levantamento do navegador é Sandbox. A `AD_TVDYCFGFRC` do Sandbox tem 329 colunas contra 370 da produção (faltam, entre outras, `BLOQVENDCLIBLOQ` e `EXIBLIMCRECAR`); por isso a Q1 agora lê as colunas existentes antes de montar o SELECT.** Ambiente (texto original de 30/10, superado pela correção acima): os quatro exports das 10h29 (dicionário, parâmetros, fontes e log) vieram do Sankhya de PRODUÇÃO — o log traz envios de hoje entre 07h15 e 10h27 com nº único 20.155–20.696, e o Sandbox está na casa dos 2.400; o catálogo das 10h23 veio do Sandbox. Leitura apenas, sem efeito; mas o Sandbox pode estar defasado em relação à produção, e é o Sandbox que o staging lê.** Nada aqui contém credencial; os exports brutos (em especial o do log, que traz nomes de clientes) ficam fora do repositório.
 
 Legenda: **PONTE** = o Force lê a mesma configuração que o Vidya, sem recadastrar · **PRÓPRIA** = precisa de objeto novo do Force no Sankhya · **INFRA** = nunca vai para o banco do ERP · **IGNORAR** = recurso que a PLAC não usa.
 
@@ -124,7 +124,7 @@ Hosts, credenciais, `VERIFIER_*`, `SANKHYA_ORDER_WRITE_*`, `SANKHYA_ORDER_ORIGIN
 ---
 
 ## 5. Não verificado / pendente
-- Em qual ambiente cada export rodou (produção × Sandbox) — confirmar.
+- ~~Em qual ambiente cada export rodou~~ — resolvido em 03/11/2026: todos produção; o Sandbox é o do levantamento do navegador.
 - `VGFPAR_VIDYA` veio cortada em 4.000 caracteres (falta o trecho `OUTER APPLY` do fim): `SELECT DBMS_METADATA.GET_DDL('VIEW','VGFPAR_VIDYA','SANKHYA') FROM DUAL` quando precisar.
 - Colunas de `TGFIPI` (alíquota de IPI) — a "consulta grande" do início da manhã não foi rodada; o Force pode descobrir pela leitura do Sandbox.
 - Onde mora o "desconto máximo por produto" (12%) que o Vidya avisa — não está na `CFGFRC` nem nos fontes lidos; provavelmente no servidor da Vidya ou em coluna de `TGFPRO`/`TGFEXC` (consulta 6 da manhã).
