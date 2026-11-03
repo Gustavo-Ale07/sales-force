@@ -162,6 +162,25 @@ describe('RealSankhyaGateway.readConfigurationFacts over mocked HTTP', () => {
     expect(() => assertConfigurationFactsComplete(facts)).toThrow(SankhyaGatewayError);
   });
 
+  it('Q7 keeps rows with NULL permissions, no colour or no description; a bad flag is reported, a row without code is kept for the overlay', async () => {
+    const { gateway, mock } = setup();
+    const q7 = ok(CONFIG_QUERIES.Q7.columns, [
+      [-1, 'DESCONHECIDO', null, null, null, null, null],
+      [3, 'AGUARDANDO FATURAMENTO', 'x', 'ZZZ', null, 'N', null],
+      [5, 'NEGADO', null, '', 'X', 'S', 'Y'],
+      [null, 'SEM CODIGO', null, 'FF0000', 'S', 'S', 'S'],
+    ]);
+    mock.forced.push(DISCOVERY_PROD, Q1_OK, Q2_OK, Q3_OK, Q4_OK, Q5_OK, Q6_OK, q7, Q8_OK);
+    const facts = await gateway.readConfigurationFacts();
+    expect(failedConfigQueries(facts)).toEqual([]);
+    const rows = facts.q7OrderStatuses.ok ? facts.q7OrderStatuses.rows : [];
+    expect(rows).toHaveLength(4);
+    expect(rows[0]).toMatchObject({ code: -1, name: 'DESCONHECIDO', description: null, canEdit: null, canDuplicate: null, canDelete: null });
+    expect(rows[1]).toMatchObject({ code: 3, canDuplicate: false, canEdit: null });
+    expect(rows[2]).toMatchObject({ code: 5, canDuplicate: true, canEdit: null, canDelete: null, invalidFlags: ['PERMEDIT', 'PERMEXC'] });
+    expect(rows[3]).toMatchObject({ code: null, name: 'SEM CODIGO' });
+  });
+
   it('Q1 returning two rows also fails', async () => {
     const { gateway, mock } = setup();
     const row = rowFor(CONFIG_QUERIES.Q1.columns, { NUCFG: 1 });

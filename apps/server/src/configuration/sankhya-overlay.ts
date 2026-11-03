@@ -59,11 +59,30 @@ export interface OverlayInformational {
   readonly parametersWithoutFeature: Readonly<Record<string, ConfigScalar>>;
 }
 
+/** Counts and final codes (no descriptions) of the two scope lists, for the sync report (F5). */
+export interface OverlayScopeSummary {
+  readonly negotiationTypes: {
+    readonly read: number;
+    readonly inactive: number;
+    readonly excludedByBase: number;
+    readonly result: number;
+    readonly codes: readonly number[];
+  };
+  readonly eligibleOrderTops: {
+    readonly read: number;
+    readonly notOrderTops: number;
+    readonly outsideAllowlist: number;
+    readonly result: number;
+    readonly codes: readonly number[];
+  };
+}
+
 export interface OverlayResult {
   readonly snapshot: InstallationConfiguration;
   readonly entries: readonly OverlayEntry[];
   readonly warnings: readonly OverlayWarning[];
   readonly informational: OverlayInformational;
+  readonly scopeSummary: OverlayScopeSummary;
 }
 
 /** Keys owned by Force only (the base file); listed in the provenance as `{ source: 'base' }` when present. */
@@ -211,6 +230,13 @@ export function overlayConfigurationFacts(input: {
   } else {
     apply('sales.eligibleOrderTopCodes', fromQuery(q3Source, 'TGFTOP', 'AD_MOBILIDADE'), eligible);
   }
+  const eligibleSummary = {
+    read: tops.length,
+    notOrderTops: tops.length - tops.filter((top) => top.movementType === 'P').length,
+    outsideAllowlist: orderTops.length - eligible.length,
+    result: (getPath(draft, 'sales.eligibleOrderTopCodes') as number[] | undefined)?.length ?? 0,
+    codes: [...((getPath(draft, 'sales.eligibleOrderTopCodes') as number[] | undefined) ?? [])],
+  };
 
   // ---- quotation TOPs (Q4, group ORCAMENTO) -------------------------------------------------------------------
   const quoteTops = sortedUnique(groups.filter((row) => isQuoteGroupName(row.groupName)).map((row) => row.topCode));
@@ -257,6 +283,11 @@ export function overlayConfigurationFacts(input: {
         ...(sellable === undefined ? {} : { sellable }),
       };
     });
+  const negotiationSummaryBase = {
+    read: negotiation.length,
+    inactive: negotiation.filter((row) => row.active !== true).length,
+    excludedByBase: negotiation.filter((row) => row.active === true && exclusions.has(row.code)).length,
+  };
   if (types.length === 0) {
     warn('no_negotiation_type', 'sales.negotiationTypes', 'No active negotiation type is enabled in Sankhya; the base list is kept.');
   } else {
@@ -296,24 +327,36 @@ export function overlayConfigurationFacts(input: {
   }
 
   // ---- order status presentation (Q7) --------------------------------------------------------------------------
+  // F4: only CODSTATUS and NOME are required. Colour absent/invalid = no colour; PERM* null = false; a flag that is
+  // neither S nor N is read as false with a warning; DESCRICAO is optional. Only a row without code or name is dropped.
   const display: OrderStatusDisplay[] = [];
+  const seenStatusCodes = new Set<number>();
   for (const status of statuses) {
-    const label = (status.name ?? status.description)?.trim();
-    const color = status.color?.trim();
-    if (
-      label === undefined || label === '' || color === undefined || color === '' ||
-      status.canEdit === null || status.canDuplicate === null || status.canDelete === null
-    ) {
-      warn('status_incomplete', 'erp.orderStatusDisplay', `Order status ${status.code} is incomplete in Sankhya (name, colour or permission empty) and was left out.`);
+    const label = status.name?.trim();
+    if (status.code === null || label === undefined || label === '') {
+      warn(
+        'status_incomplete',
+        'erp.orderStatusDisplay',
+        `Order status ${status.code === null ? '(no CODSTATUS)' : status.code} has no ${status.code === null ? 'code' : 'name'} in Sankhya and was left out.`,
+      );
       continue;
     }
+    if (seenStatusCodes.has(status.code)) {
+      warn('status_duplicate', 'erp.orderStatusDisplay', `Order status ${status.code} appears more than once in Sankhya; the first row is kept.`);
+      continue;
+    }
+    seenStatusCodes.add(status.code);
+    for (const column of status.invalidFlags ?? []) {
+      warn('status_flag_invalid', 'erp.orderStatusDisplay', `Order status ${status.code}: ${column} is neither S nor N; it is read as false.`);
+    }
+    const rawColor = status.color?.trim().replace(/^#/, '') ?? '';
     display.push({
       code: String(status.code),
-      label,
-      color: color.startsWith('#') ? color : `#${color}`,
-      canEdit: status.canEdit,
-      canDuplicate: status.canDuplicate,
-      canDelete: status.canDelete,
+      label: label.slice(0, 200),
+      ...(/^[0-9A-Fa-f]{6}$/.test(rawColor) ? { color: `#${rawColor}` } : {}),
+      canEdit: status.canEdit === true,
+      canDuplicate: status.canDuplicate === true,
+      canDelete: status.canDelete === true,
     });
   }
   if (display.length === 0) {
@@ -362,6 +405,14 @@ export function overlayConfigurationFacts(input: {
     snapshot: draft as unknown as InstallationConfiguration,
     entries,
     warnings,
+    scopeSummary: {
+      negotiationTypes: {
+        ...negotiationSummaryBase,
+        result: (getPath(draft, 'sales.negotiationTypes') as { code: number }[] | undefined)?.length ?? 0,
+        codes: ((getPath(draft, 'sales.negotiationTypes') as { code: number }[] | undefined) ?? []).map((type) => type.code),
+      },
+      eligibleOrderTops: eligibleSummary,
+    },
     informational: {
       productMobility: q8.map((row) => ({ mobile: row.mobile, count: row.count })),
       usesFinancial: q1.usesFinancial,

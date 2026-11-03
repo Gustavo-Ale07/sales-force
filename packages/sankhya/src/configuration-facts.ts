@@ -116,7 +116,8 @@ export interface PriceTableFlagRow {
 
 /** Q7: `AD_TVDYFRCSTS` order status presentation. */
 export interface OrderStatusRow {
-  readonly code: number;
+  /** CODSTATUS; null = the row has no code (the overlay discards it). */
+  readonly code: number | null;
   readonly name: string | null;
   readonly description: string | null;
   /** COR: hex colour as stored (the server adds the `#`). */
@@ -124,6 +125,8 @@ export interface OrderStatusRow {
   readonly canEdit: boolean | null;
   readonly canDuplicate: boolean | null;
   readonly canDelete: boolean | null;
+  /** PERM* columns whose value was neither null, S nor N (read as false by the overlay, with a warning). */
+  readonly invalidFlags?: readonly string[];
 }
 
 /** Q8: distribution of `TGFPRO.AD_MOBILIDADE` (report only, decides nothing). */

@@ -188,15 +188,28 @@ const Q7: ConfigQueryDef<OrderStatusRow> = {
   sql: 'SELECT CODSTATUS, NOME, DESCRICAO, COR, PERMEDIT, PERMDUPLIC, PERMEXC FROM AD_TVDYFRCSTS WHERE NUCFG = 1 ORDER BY CODSTATUS',
   columns: Q7_COLUMNS,
   source: { tables: ['AD_TVDYFRCSTS'], columns: Q7_COLUMNS, filter: 'NUCFG = 1' },
-  map: (row) => ({
-    code: row.int('CODSTATUS'),
-    name: row.nullableText('NOME'),
-    description: row.nullableText('DESCRICAO'),
-    color: row.nullableText('COR'),
-    canEdit: row.nullableFlag('PERMEDIT'),
-    canDuplicate: row.nullableFlag('PERMDUPLIC'),
-    canDelete: row.nullableFlag('PERMEXC'),
-  }),
+  // Presentation only (F4): only CODSTATUS and NOME make a row usable; nothing else may fail the whole query.
+  map: (row) => {
+    const edit = row.flagOrInvalid('PERMEDIT');
+    const duplicate = row.flagOrInvalid('PERMDUPLIC');
+    const remove = row.flagOrInvalid('PERMEXC');
+    const color = row.rawScalar('COR');
+    const invalidFlags = [
+      ...(edit.invalid ? ['PERMEDIT'] : []),
+      ...(duplicate.invalid ? ['PERMDUPLIC'] : []),
+      ...(remove.invalid ? ['PERMEXC'] : []),
+    ];
+    return {
+      code: row.nullableInt('CODSTATUS'),
+      name: row.nullableText('NOME'),
+      description: row.nullableText('DESCRICAO'),
+      color: typeof color === 'string' ? color.trim() : null,
+      canEdit: edit.value,
+      canDuplicate: duplicate.value,
+      canDelete: remove.value,
+      ...(invalidFlags.length === 0 ? {} : { invalidFlags }),
+    };
+  },
 };
 
 const Q8: ConfigQueryDef<ProductMobilityRow> = {

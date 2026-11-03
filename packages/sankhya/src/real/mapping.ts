@@ -116,6 +116,15 @@ export class RowReader {
     return this.#fail(column, 'is not S or N');
   }
 
+  /** Lenient S/N flag for presentation-only columns: `invalid` when the cell is neither null, S nor N (never fails the row). */
+  flagOrInvalid(column: string): { readonly value: boolean | null; readonly invalid: boolean } {
+    const cell = this.#cell(column);
+    if (cell === null || cell === undefined || cell === '') return { value: null, invalid: false };
+    if (cell === 'S') return { value: true, invalid: false };
+    if (cell === 'N') return { value: false, invalid: false };
+    return { value: null, invalid: true };
+  }
+
   text(column: string): string {
     const value = this.nullableText(column);
     if (value === null) this.#fail(column, 'is null or blank');

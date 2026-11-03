@@ -126,8 +126,8 @@ export type ConfigurationProvenanceEntry =
 export interface OrderStatusDisplay {
   readonly code: string;
   readonly label: string;
-  /** `#RRGGBB`. */
-  readonly color: string;
+  /** `#RRGGBB`; absent when Sankhya has no valid colour for the status. */
+  readonly color?: string;
   readonly canEdit: boolean;
   readonly canDuplicate: boolean;
   readonly canDelete: boolean;

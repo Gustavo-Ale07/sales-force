@@ -5571,7 +5571,6 @@
         "required": [
           "code",
           "label",
-          "color",
           "canEdit",
           "canDuplicate",
           "canDelete"

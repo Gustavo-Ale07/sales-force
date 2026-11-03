@@ -141,3 +141,19 @@ export const PLAC_SANDBOX_CONFIGURATION_FACTS: ConfigurationFacts = {
       }
     : sandboxQ1,
 };
+
+/**
+ * The 8 `AD_TVDYFRCSTS` rows as read from the Sandbox on 2026-11-03 (staging report, F4): PERMEDIT / PERMDUPLIC / PERMEXC
+ * are NULL on most statuses, `-1 DESCONHECIDO` has every permission NULL and no DESCRICAO. Names and permissions follow
+ * the owner's description and the CONFIG_MAP; colours and descriptions are SYNTHETIC placeholders (not recorded).
+ */
+export const PLAC_SANDBOX_ORDER_STATUS_ROWS: readonly OrderStatusRow[] = [
+  { code: -1, name: 'DESCONHECIDO', description: null, color: 'BDBDBD', canEdit: null, canDuplicate: null, canDelete: null },
+  { code: 0, name: 'CANCELADO', description: 'Descricao sintetica', color: '9E9E9E', canEdit: null, canDuplicate: false, canDelete: false },
+  { code: 1, name: 'NAO CONFIRMADO', description: 'Descricao sintetica', color: '2196F3', canEdit: true, canDuplicate: true, canDelete: true },
+  { code: 2, name: 'CONFIRMADO', description: 'Descricao sintetica', color: '4CAF50', canEdit: false, canDuplicate: true, canDelete: false },
+  { code: 3, name: 'AGUARDANDO FATURAMENTO', description: 'Descricao sintetica', color: 'FFC107', canEdit: null, canDuplicate: false, canDelete: null },
+  { code: 4, name: 'FATURADO', description: 'Descricao sintetica', color: '607D8B', canEdit: null, canDuplicate: false, canDelete: null },
+  { code: 5, name: 'NEGADO', description: 'Descricao sintetica', color: 'F44336', canEdit: null, canDuplicate: false, canDelete: null },
+  { code: 6, name: 'AGUARDANDO LIBERACAO', description: 'Descricao sintetica', color: '9C27B0', canEdit: false, canDuplicate: false, canDelete: false },
+];

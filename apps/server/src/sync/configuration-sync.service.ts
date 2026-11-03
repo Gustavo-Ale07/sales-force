@@ -179,6 +179,8 @@ export class ConfigurationSyncService {
       keysRead: overlay.entries.length,
       changedKeys,
       warnings: overlay.warnings.map((warning) => ({ code: warning.code, key: warning.key })),
+      // Counts and codes only (F5): lets the owner check the scope lists without opening the database.
+      scope: overlay.scopeSummary,
       productMobility: overlay.informational.productMobility,
       usesFinancial: overlay.informational.usesFinancial,
       hidesCreditLimit: overlay.informational.hidesCreditLimit,

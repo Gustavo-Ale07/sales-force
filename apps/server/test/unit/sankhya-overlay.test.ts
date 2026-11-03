@@ -2,6 +2,7 @@
 import {
   PLAC_CONFIGURATION_FACTS,
   PLAC_SANDBOX_CONFIGURATION_FACTS,
+  PLAC_SANDBOX_ORDER_STATUS_ROWS,
   type ConfigurationFacts,
   type EnabledTopRow,
 } from '@salesforce/sankhya';
@@ -319,16 +320,129 @@ describe('overlay decision table: preconditions that keep the base and warn', ()
     }
   });
 
-  it('a status with an empty name, colour or permission is left out with a warning', () => {
+  describe('order status presentation (F4)', () => {
+    const sandboxStatuses = (patch?: (rows: any[]) => void) =>
+      factsWith((f) => {
+        const rows = structuredClone(PLAC_SANDBOX_ORDER_STATUS_ROWS) as any[];
+        patch?.(rows);
+        f['q7OrderStatuses'].rows = rows;
+      });
+    const statusesOf = (out: ReturnType<typeof overlayConfigurationFacts>) => (out.snapshot as any).erp.orderStatusDisplay as any[];
+
+    it('the 8 real Sandbox rows (NULL permissions) are all applied, NULL read as false, no warning', () => {
+      const out = overlayConfigurationFacts({ base: baseConfiguration(), facts: sandboxStatuses() });
+      const list = statusesOf(out);
+      expect(list.map((s) => s.code)).toEqual(['-1', '0', '1', '2', '3', '4', '5', '6']);
+      expect(list.find((s) => s.code === '-1')).toEqual({
+        code: '-1', label: 'DESCONHECIDO', color: '#BDBDBD', canEdit: false, canDuplicate: false, canDelete: false,
+      });
+      expect(list.find((s) => s.code === '0')).toMatchObject({ canEdit: false });
+      expect(list.find((s) => s.code === '1')).toMatchObject({ canEdit: true, canDuplicate: true, canDelete: true });
+      expect(codes(out).filter((c) => c.startsWith('status_') || c === 'no_order_status')).toEqual([]);
+      expect(keyOf(out, 'erp.orderStatusDisplay')).toBeDefined();
+      expect(validateInstallationConfiguration(structuredClone(out.snapshot)).ok).toBe(true);
+    });
+
+    it('a missing or invalid colour means no colour and does not invalidate the row', () => {
+      const out = overlayConfigurationFacts({
+        base: baseConfiguration(),
+        facts: sandboxStatuses((rows) => {
+          rows[2].color = null;
+          rows[3].color = 'ZZZ';
+        }),
+      });
+      const list = statusesOf(out);
+      expect(list).toHaveLength(8);
+      expect(list.find((s) => s.code === '1')).not.toHaveProperty('color');
+      expect(list.find((s) => s.code === '2')).not.toHaveProperty('color');
+      expect(validateInstallationConfiguration(structuredClone(out.snapshot)).ok).toBe(true);
+    });
+
+    it('S is true, N is false, any other value is false with status_flag_invalid naming status and column', () => {
+      const out = overlayConfigurationFacts({
+        base: baseConfiguration(),
+        facts: sandboxStatuses((rows) => {
+          rows[3].canEdit = true;
+          rows[4].invalidFlags = ['PERMEXC'];
+        }),
+      });
+      expect(statusesOf(out).find((s) => s.code === '2')).toMatchObject({ canEdit: true });
+      const invalid = out.warnings.filter((w) => w.code === 'status_flag_invalid');
+      expect(invalid).toHaveLength(1);
+      expect(invalid[0]?.message).toContain('status 3');
+      expect(invalid[0]?.message).toContain('PERMEXC');
+      expect(statusesOf(out).find((s) => s.code === '3')).toMatchObject({ canDelete: false });
+    });
+
+    it('a row without CODSTATUS or without NOME is dropped alone, with the status code in the warning', () => {
+      const out = overlayConfigurationFacts({
+        base: baseConfiguration(),
+        facts: sandboxStatuses((rows) => {
+          rows[6].name = null;
+          rows[7].code = null;
+        }),
+      });
+      expect(statusesOf(out)).toHaveLength(6);
+      const incomplete = out.warnings.filter((w) => w.code === 'status_incomplete');
+      expect(incomplete).toHaveLength(2);
+      expect(incomplete[0]?.message).toContain('status 5');
+      expect(incomplete[1]?.message).toContain('no CODSTATUS');
+      expect(codes(out)).not.toContain('no_order_status');
+      expect(keyOf(out, 'erp.orderStatusDisplay')).toBeDefined();
+    });
+
+    it('a duplicate CODSTATUS keeps the first row (warning) and a name over 200 characters is truncated', () => {
+      const out = overlayConfigurationFacts({
+        base: baseConfiguration(),
+        facts: sandboxStatuses((rows) => {
+          rows.push({ ...rows[2], name: 'OUTRO', canEdit: true });
+          rows[3].name = 'N'.repeat(300);
+        }),
+      });
+      const list = statusesOf(out);
+      expect(list).toHaveLength(8);
+      expect(list.find((s) => s.code === '1')).toMatchObject({ label: 'NAO CONFIRMADO' });
+      expect(list.find((s) => s.code === '2').label).toHaveLength(200);
+      expect(codes(out).filter((c) => c === 'status_duplicate')).toHaveLength(1);
+      expect(validateInstallationConfiguration(structuredClone(out.snapshot)).ok).toBe(true);
+    });
+
+    it('no_order_status only when no row remains; the base value is kept', () => {
+      const out = overlayConfigurationFacts({
+        base: baseConfiguration(),
+        facts: sandboxStatuses((rows) => {
+          for (const row of rows) row.name = null;
+        }),
+      });
+      expect(codes(out)).toContain('no_order_status');
+      expect(keyOf(out, 'erp.orderStatusDisplay')).toBeUndefined();
+    });
+  });
+
+  it('the scope summary (F5) has counts and codes only', () => {
     const out = overlayConfigurationFacts({
-      base: baseConfiguration(),
+      base: baseConfiguration((c) => {
+        c['sales'].negotiationTypeExclusions = [23, 24];
+      }),
       facts: factsWith((f) => {
-        f['q7OrderStatuses'].rows[0].color = null;
-        f['q7OrderStatuses'].rows[1].canDelete = null;
+        const rows = f['q5NegotiationTypes'].rows;
+        rows.push({ code: 23, description: 'Excluida', active: true, mobile: true, sale: null, changedAt: null });
+        rows.push({ code: 99, description: 'Inativa', active: false, mobile: true, sale: null, changedAt: null });
       }),
     });
-    expect((out.snapshot as any).erp.orderStatusDisplay).toHaveLength(6);
-    expect(codes(out).filter((c) => c === 'status_incomplete')).toHaveLength(2);
+    const summary = out.scopeSummary;
+    expect(summary.negotiationTypes.read).toBe(
+      summary.negotiationTypes.result + summary.negotiationTypes.inactive + summary.negotiationTypes.excludedByBase,
+    );
+    expect(summary.negotiationTypes.inactive).toBeGreaterThanOrEqual(1);
+    expect(summary.negotiationTypes.excludedByBase).toBeGreaterThanOrEqual(1);
+    expect(summary.negotiationTypes.codes).not.toContain(23);
+    expect(summary.negotiationTypes.codes).not.toContain(99);
+    expect(summary.negotiationTypes.codes).toEqual((out.snapshot as any).sales.negotiationTypes.map((t: any) => t.code));
+    expect(summary.eligibleOrderTops.codes).toEqual((out.snapshot as any).sales.eligibleOrderTopCodes);
+    expect(summary.eligibleOrderTops.read).toBe(7);
+    expect(summary.eligibleOrderTops.outsideAllowlist).toBe(5);
+    expect(JSON.stringify(summary)).not.toMatch(/Excluida|Inativa|description/);
   });
 
   it('no mobile price table: the base list is kept', () => {

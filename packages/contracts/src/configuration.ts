@@ -117,7 +117,7 @@ export const OrderStatusDisplaySchema = named(
   z.strictObject({
     code: z.string().min(1).max(20),
     label: z.string().min(1).max(200),
-    color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+    color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
     canEdit: z.boolean(),
     canDuplicate: z.boolean(),
     canDelete: z.boolean(),

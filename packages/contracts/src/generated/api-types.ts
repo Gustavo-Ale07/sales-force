@@ -1122,7 +1122,7 @@ export interface components {
         OrderStatusDisplay: {
             code: string;
             label: string;
-            color: string;
+            color?: string;
             canEdit: boolean;
             canDuplicate: boolean;
             canDelete: boolean;
