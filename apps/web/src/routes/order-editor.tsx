@@ -55,7 +55,7 @@ import { useApi } from "../lib/app-context";
 import { useLoadedDataset, requireDataset } from "../lib/dataset";
 import { approvalsEnabled } from "../lib/discount-authority";
 import { describeApiError } from "../lib/error-message";
-import { orderReference, orderReviewLabel, orderReviewReasons, orderStatusHints, orderStatusLabels } from "../lib/labels";
+import { erpStatusText, orderReference, orderReviewLabel, orderReviewReasons, orderStatusHints, orderStatusLabels } from "../lib/labels";
 import {
   describeIssue,
   discountProblemMessages,
@@ -542,7 +542,14 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
     <>
       <PageHeader
         title={order ? orderReference(order) : "Novo pedido"}
-        badges={status ? <StatusBadge tone={status.tone}>{status.label}</StatusBadge> : undefined}
+        badges={
+          status ? (
+            <>
+              <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
+              {order?.erpStatus ? <ErpStatusBadges status={order.erpStatus} /> : null}
+            </>
+          ) : undefined
+        }
         actions={
           order ? (
             <>
@@ -1171,6 +1178,17 @@ export interface OrderEditorPageProps {
   onClose: () => void;
   /** Notice rendered under the header of an existing order. */
   notice?: ReactNode;
+}
+
+/** Sankhya status next to the Force one; with pending release events the detail says why (D6b). */
+function ErpStatusBadges({ status }: { status: NonNullable<ApiSchema<"OrderDetail">["erpStatus"]> }) {
+  const { label, detail } = erpStatusText(status);
+  return (
+    <>
+      <StatusBadge tone="info">{`Sankhya: ${label}`}</StatusBadge>
+      {detail ? <StatusBadge tone="warning">{detail}</StatusBadge> : null}
+    </>
+  );
 }
 
 function LoadingHeader({ title }: { title: string }) {

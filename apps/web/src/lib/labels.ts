@@ -63,6 +63,16 @@ export function orderReference(order: Pick<ApiSchema<"OrderListItem">, "draftNum
   return order.erpNumber === null ? `Rascunho nº ${order.draftNumber}` : `Pedido ${order.erpNumber}`;
 }
 
+type ErpStatus = NonNullable<ApiSchema<"OrderListItem">["erpStatus"]>;
+
+/** Sankhya status as read by the worker (P2): the label, plus the pending release events when the detail carries them. */
+export function erpStatusText(status: ErpStatus): { label: string; detail: string | null } {
+  const events = status.releaseEvents ?? [];
+  if (events.length === 0) return { label: status.label, detail: null };
+  // No configured name for an event: say "evento N" instead of inventing one.
+  return { label: status.label, detail: `pendente: ${events.map((event) => event.label ?? `evento ${event.code}`).join(", ")}` };
+}
+
 /** pt-BR count with thousands separator. Counts are integers, never money. */
 export function formatCount(value: number): string {
   return new Intl.NumberFormat("pt-BR").format(value);

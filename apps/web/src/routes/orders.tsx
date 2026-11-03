@@ -39,7 +39,7 @@ import { PrintOrderButton } from "../components/print-order-button";
 import { QueryError } from "../components/query-error";
 import { customerQueryOptions, ordersQueryOptions, type OrdersParams } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
-import { formatCount, orderReference, orderReviewLabel, orderReviewReasons, orderStatusLabels } from "../lib/labels";
+import { erpStatusText, formatCount, orderReference, orderReviewLabel, orderReviewReasons, orderStatusLabels } from "../lib/labels";
 import { MAX_ORDER_PRODUCTS, ORDER_DATE_FIELDS, ORDER_STATUSES, type OrdersSearch } from "../lib/route-search";
 import { asDate, asOneOf, compact } from "../lib/search-params";
 import { useSearchBox } from "../lib/use-search-box";
@@ -369,6 +369,9 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
                     </TableCell>
                     <TableCell>
                       <StatusDot tone={status.tone}>{status.label}</StatusDot>
+                      {order.erpStatus ? (
+                        <span className="mt-0.5 block text-fg-muted">Sankhya: {erpStatusText(order.erpStatus).label}</span>
+                      ) : null}
                       {order.review ? (
                         <span className="mt-0.5 block" title={orderReviewReasons[order.review.customerBlock]}>
                           <StatusDot tone="warning">{orderReviewLabel}</StatusDot>
