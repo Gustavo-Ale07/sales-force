@@ -139,6 +139,7 @@ export const IpiRefSchema = named(
   z.discriminatedUnion('status', [
     z.object({ status: z.literal('rate'), percentual: z.string() }),
     z.object({ status: z.literal('tariff') }),
+    z.object({ status: z.literal('exempt') }),
     z.object({ status: z.literal('unavailable') }),
   ]),
 );

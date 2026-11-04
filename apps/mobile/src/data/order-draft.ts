@@ -186,7 +186,9 @@ export function lineFromOrderItem(item: OrderItemDto & { readonly ipi?: { readon
       ? { status: "rate", percentual: item.ipi.percentual }
       : item.ipi?.status === "tariff"
         ? { status: "tariff" }
-        : { status: "unavailable" };
+        : item.ipi?.status === "exempt"
+          ? { status: "exempt" }
+          : { status: "unavailable" };
   return {
     key,
     productCode: item.productCode,

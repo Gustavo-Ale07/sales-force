@@ -986,6 +986,11 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
                 {preview.ipi.unavailableLineCount === 1 ? "1 item com IPI não disponível." : `${preview.ipi.unavailableLineCount} itens com IPI não disponível.`}
               </p>
             ) : null}
+            {preview.ipi.exemptLineCount > 0 ? (
+              <p className="m-0 mt-1 text-right text-xs text-fg-muted" data-testid="order-ipi-exempt">
+                {preview.ipi.exemptLineCount === 1 ? "1 item com IPI isento/não informado." : `${preview.ipi.exemptLineCount} itens com IPI isento/não informado.`}
+              </p>
+            ) : null}
             {preview.ipi.tariffLineCount > 0 ? (
               <p className="m-0 mt-1 text-right text-xs text-fg-muted" data-testid="order-ipi-tariff">
                 {preview.ipi.tariffLineCount === 1 ? "1 item com IPI por pauta — não estimado." : `${preview.ipi.tariffLineCount} itens com IPI por pauta — não estimado.`}

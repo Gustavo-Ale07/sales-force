@@ -110,6 +110,30 @@ describe('mapping', () => {
     }
   });
 
+  it('mirrors an IPI code without a rate as 0.00 flagged rate_missing and warns once with count and codes (H1)', async () => {
+    const warnings: string[] = [];
+    const gateway = new FakeGateway({
+      dataset: {
+        ...getDemoDataset(),
+        ipiRates: [
+          { code: 5, description: 'IPI DE 3,25%', percentual: '3.25', byTariff: false },
+          { code: 7, description: 'ISENTO', percentual: '0.00', byTariff: false, rateMissing: true },
+          { code: 6, description: 'IPI DE 9,75%', percentual: '9.75', byTariff: false },
+        ],
+      },
+    });
+    const rows: MirrorRow[] = [];
+    for await (const batch of MIRROR_SPECS.ipiRates.read({ gateway, description: gateway.describe(), warn: (message) => warnings.push(message) })) rows.push(...batch);
+    expect(rows.map((row) => [row.key[0], row.content['percentual'], row.content['rateMissing']])).toEqual([
+      [5, '3.25', false],
+      [7, '0', true],
+      [6, '9.75', false],
+    ]);
+    expect(warnings.filter((message) => message.includes('without a rate'))).toHaveLength(1);
+    expect(warnings.join(' ')).toContain('1 IPI code(s)');
+    expect(warnings.join(' ')).toContain('7');
+  });
+
   it('keeps a customer without a price table as NULL, never a default table (CFG-4)', async () => {
     const customers = await collect('customers', new FakeGateway());
     const withoutTable = getDemoDataset().customers.filter((customer) => customer.priceTableCode === null);

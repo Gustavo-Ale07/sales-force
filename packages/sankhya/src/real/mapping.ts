@@ -42,9 +42,26 @@ export interface EntitySpec<T> {
   readonly where?: string;
   /** Full primary key, so paging is deterministic (F-23, F-30). */
   readonly orderBy: string;
-  readonly map: (row: RowReader, context: MapContext) => T;
+  /**
+   * Maps one row. A row that is bad on its own (not the page, not the contract) is discarded with `discardRow(..)`: the read
+   * continues, the row still counts for the completeness check and the reason reaches `ReadOptions.onWarning`.
+   */
+  readonly map: (row: RowReader, context: MapContext) => T | RowDiscard;
   /** Strictly increasing key of a mapped row; used to detect duplicates and mis-ordering. */
   readonly keyOf: (row: T) => readonly number[];
+}
+
+/** A row a mapper chose to drop (see `EntitySpec.map`); `reason` never carries a value. */
+export interface RowDiscard {
+  readonly discarded: string;
+}
+
+export function discardRow(reason: string): RowDiscard {
+  return { discarded: reason };
+}
+
+export function isRowDiscard(value: unknown): value is RowDiscard {
+  return typeof value === 'object' && value !== null && typeof (value as { discarded?: unknown }).discarded === 'string';
 }
 
 export class RowReader {
@@ -90,6 +107,14 @@ export class RowReader {
     if (typeof cell === 'number' && Number.isSafeInteger(cell)) return cell;
     if (typeof cell === 'string' && /^-?\d{1,15}$/.test(cell.trim())) return Number(cell.trim());
     return this.#fail(column, 'is not an integer');
+  }
+
+  /** Integer, or `null` when the cell is null OR not an integer (never fails): for a key the caller may discard the row by. */
+  integerOrNull(column: string): number | null {
+    const cell = this.#cell(column);
+    if (typeof cell === 'number' && Number.isSafeInteger(cell)) return cell;
+    if (typeof cell === 'string' && /^-?\d{1,15}$/.test(cell.trim())) return Number(cell.trim());
+    return null;
   }
 
   nullableText(column: string): string | null {
@@ -294,17 +319,23 @@ export const OPEN_TITLE_SPEC: EntitySpec<OpenTitle> = {
   table: 'TGFFIN',
   select: ['NUFIN', 'NUNOTA', 'CODPARC', 'CODEMP', "TO_CHAR(DTVENC, 'YYYY-MM-DD') AS DTVENC", 'VLRDESDOB', 'VLRBAIXA'],
   columns: ['NUFIN', 'NUNOTA', 'CODPARC', 'CODEMP', 'DTVENC', 'VLRDESDOB', 'VLRBAIXA'],
-  where: "RECDESP = 1 AND PROVISAO = 'N' AND DHBAIXA IS NULL AND CODPARC > 0 AND DTVENC IS NOT NULL",
+  where: "RECDESP = 1 AND PROVISAO = 'N' AND DHBAIXA IS NULL AND CODPARC > 0",
   orderBy: 'NUFIN',
-  map: (row) => ({
-    nufin: row.int('NUFIN'),
-    customerCode: row.int('CODPARC'),
-    companyCode: row.nullableInt('CODEMP'),
-    documentNumber: row.nullableInt('NUNOTA'),
-    dueDate: row.businessDate('DTVENC'),
-    amount: row.decimal('VLRDESDOB'),
-    paidAmount: row.nullableDecimal('VLRBAIXA') ?? '0',
-  }),
+  map: (row) => {
+    // A title without a due date or a value cannot be aged or summed: dropped with a warning, the rest of the page stays.
+    if (row.nullableText('DTVENC') === null) return discardRow('DTVENC is null');
+    const amount = row.nullableDecimal('VLRDESDOB');
+    if (amount === null) return discardRow('VLRDESDOB is null');
+    return {
+      nufin: row.int('NUFIN'),
+      customerCode: row.int('CODPARC'),
+      companyCode: row.nullableInt('CODEMP'),
+      documentNumber: row.nullableInt('NUNOTA'),
+      dueDate: row.businessDate('DTVENC'),
+      amount,
+      paidAmount: row.nullableDecimal('VLRBAIXA') ?? '0',
+    };
+  },
   keyOf: (title) => [title.nufin],
 };
 
@@ -346,11 +377,17 @@ export const IPI_RATE_SPEC: EntitySpec<IpiRate> = {
   columns: ['CODIPI', 'DESCRICAO', 'PERCENTUAL', 'VLRPAUTA', 'PAUTACONDIC', 'CSTIPISAI'],
   orderBy: 'CODIPI',
   map: (row) => {
+    // A row without a usable key is dropped (the page and the other rates stay); nothing can reference it.
+    const code = row.integerOrNull('CODIPI');
+    if (code === null) return discardRow('CODIPI is null or not an integer');
     const tariffValue = row.nullableDecimal('VLRPAUTA');
+    // A code without a rate (exempt / not taxed) is a valid TGFIPI row: rate 0.00 flagged `rateMissing` (never read as a real 0%).
+    const percentual = row.nullableDecimal('PERCENTUAL');
     return {
-      code: row.int('CODIPI'),
+      code,
       description: row.nullableText('DESCRICAO') ?? '',
-      percentual: row.decimal('PERCENTUAL'),
+      percentual: percentual ?? '0.00',
+      rateMissing: percentual === null,
       byTariff: (tariffValue !== null && Number(tariffValue) > 0) || row.nullableText('PAUTACONDIC') === 'S',
     };
   },

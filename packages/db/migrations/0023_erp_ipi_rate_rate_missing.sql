@@ -1,0 +1,1 @@
+ALTER TABLE "erp_ipi_rate" ADD COLUMN "rate_missing" boolean DEFAULT false NOT NULL;

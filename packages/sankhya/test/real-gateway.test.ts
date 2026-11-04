@@ -419,6 +419,70 @@ describe('completeness and fail-closed validation', () => {
   });
 });
 
+describe('tolerant rows: a bad row never rejects the page (H1, H2)', () => {
+  const ipiRow = (code: unknown, percentual: unknown, extra: Record<string, unknown> = {}) => ({
+    CODIPI: code,
+    DESCRICAO: 'x',
+    PERCENTUAL: percentual,
+    VLRPAUTA: 0,
+    PAUTACONDIC: 'N',
+    CSTIPISAI: 50,
+    ...extra,
+  });
+  const withIpi = (rows: unknown[]) => {
+    const tables = erpTablesFromDataset(dataset);
+    return setup({ tables: { ...tables, TGFIPI: rows as never } , pageSize: 2 });
+  };
+  const flatten = async (gateway: SankhyaGateway, onWarning?: (m: string) => void) =>
+    (await collect(gateway.readIpiRates(onWarning ? { onWarning } : undefined))).rows;
+
+  it('the real Sandbox rows (5 = 3.25, 6 = 9.75) keep their rates', async () => {
+    const rows = await flatten(withIpi([ipiRow(5, 3.25), ipiRow(6, 9.75)]).gateway);
+    expect(rows.map((r) => [r.code, r.percentual, r.rateMissing])).toEqual([[5, '3.25', false], [6, '9.75', false]]);
+  });
+
+  it('a null PERCENTUAL in the middle becomes 0.00 flagged rateMissing; the page is kept', async () => {
+    const rows = await flatten(withIpi([ipiRow(5, 3.25), ipiRow(6, null, { DESCRICAO: null, VLRPAUTA: null, PAUTACONDIC: null }), ipiRow(7, 9.75)]).gateway);
+    expect(rows).toEqual([
+      { code: 5, description: 'x', percentual: '3.25', rateMissing: false, byTariff: false },
+      { code: 6, description: '', percentual: '0.00', rateMissing: true, byTariff: false },
+      { code: 7, description: 'x', percentual: '9.75', rateMissing: false, byTariff: false },
+    ]);
+  });
+
+  it('a page made only of null rates is accepted', async () => {
+    const rows = await flatten(withIpi([ipiRow(1, null), ipiRow(2, null)]).gateway);
+    expect(rows.map((r) => [r.code, r.rateMissing])).toEqual([[1, true], [2, true]]);
+  });
+
+  it('a malformed (non-null) PERCENTUAL still rejects the snapshot', async () => {
+    const failure = (await flatten(withIpi([ipiRow(5, 'abc')]).gateway).catch((e: unknown) => e)) as SankhyaGatewayError;
+    expect(failure).toMatchObject({ kind: 'validation', code: 'invalid_row' });
+  });
+
+  it('a null or non-integer CODIPI discards only that row, with a warning that carries no value', async () => {
+    const warnings: string[] = [];
+    const rows = await flatten(withIpi([ipiRow(5, 3.25), ipiRow(null, 1), ipiRow('x9', 2), ipiRow(6, 9.75)]).gateway, (m) => warnings.push(m));
+    expect(rows.map((r) => r.code)).toEqual([5, 6]);
+    expect(warnings).toHaveLength(2);
+    expect(warnings.join(' ')).toContain('ipiRates');
+    expect(warnings.join(' ')).not.toContain('x9');
+  });
+
+  const title = (nufin: number, extra: Record<string, unknown> = {}) => ({
+    NUFIN: nufin, NUNOTA: 1, CODPARC: 7, CODEMP: 1, DTVENC: '2026-12-01', DHBAIXA: null, VLRDESDOB: 100, VLRBAIXA: 0, RECDESP: 1, PROVISAO: 'N', ...extra,
+  });
+  const withTitles = (rows: unknown[]) => setup({ tables: { ...erpTablesFromDataset(dataset), TGFFIN: rows as never }, pageSize: 2 });
+
+  it('openTitles: null VLRBAIXA = 0; null DTVENC or VLRDESDOB discards the row with a warning', async () => {
+    const warnings: string[] = [];
+    const { gateway } = withTitles([title(10, { VLRBAIXA: null }), title(11, { DTVENC: null }), title(12, { VLRDESDOB: null }), title(13)]);
+    const rows = (await collect(gateway.readOpenTitles({ onWarning: (m) => warnings.push(m) }))).rows;
+    expect(rows.map((r) => [r.nufin, r.paidAmount])).toEqual([[10, '0'], [13, '0']]);
+    expect(warnings).toHaveLength(2);
+  });
+});
+
 describe('error classification of HTTP failures', () => {
   const cases: [number, SankhyaErrorKind, boolean][] = [
     [401, 'auth', false],

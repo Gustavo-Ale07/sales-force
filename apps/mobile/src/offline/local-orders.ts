@@ -109,6 +109,7 @@ function parseIpi(json: string | null | undefined): IpiRef {
   try {
     const parsed = JSON.parse(json ?? "null") as IpiRef | null;
     if (parsed?.status === "tariff") return { status: "tariff" };
+    if (parsed?.status === "exempt") return { status: "exempt" };
     if (parsed?.status === "rate" && typeof parsed.percentual === "string") return parsed;
   } catch {
     // fall through: unreadable IPI data is "IPI não disponível", never a fabricated rate

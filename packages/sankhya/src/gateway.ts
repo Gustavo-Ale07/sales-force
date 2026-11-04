@@ -81,6 +81,8 @@ export interface ReadOptions {
   readonly signal?: AbortSignal;
   /** Installation-derived limits (see ReadScope); omitted = no limits beyond placeholder exclusion. */
   readonly scope?: ReadScope;
+  /** Called for a row the adapter dropped on its own (message never carries a value); the rest of the page is kept. */
+  readonly onWarning?: (message: string) => void;
 }
 
 /**

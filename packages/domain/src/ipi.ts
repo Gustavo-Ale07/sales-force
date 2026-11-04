@@ -14,6 +14,8 @@ export interface IpiRate {
   readonly percentual: DecimalString;
   readonly byTariff: boolean;
   readonly description: string;
+  /** The ERP code has no rate (exempt / not taxed): `percentual` is 0.00 and must not be read as a real 0% (H1). Absent = false. */
+  readonly rateMissing?: boolean;
 }
 
 export type ItemIpi =
@@ -21,19 +23,24 @@ export type ItemIpi =
   /** No IPI code on the product, no rate mirrored for the code, or no priced line: "IPI não disponível". Never zero. */
   | { readonly status: 'unavailable' }
   /** IPI by tariff value: "IPI por pauta — não estimado". */
-  | { readonly status: 'tariff' };
+  | { readonly status: 'tariff' }
+  /** The product's IPI code has no rate in the ERP (exempt / not informed): estimated 0.00, shown as "IPI isento/não informado". */
+  | { readonly status: 'exempt'; readonly amount: DecimalString };
 
 /** The IPI reference of a product: what a client needs to estimate the IPI of a line (D-D). */
 export type IpiRef =
   | { readonly status: 'rate'; readonly percentual: DecimalString }
   | { readonly status: 'tariff' }
+  | { readonly status: 'exempt' }
   | { readonly status: 'unavailable' };
 
 export function ipiRefOf(ipiCode: number | null | undefined, rates: ReadonlyMap<number, IpiRate>): IpiRef {
   if (ipiCode === null || ipiCode === undefined) return { status: 'unavailable' };
   const rate = rates.get(ipiCode);
   if (rate === undefined) return { status: 'unavailable' };
-  return rate.byTariff ? { status: 'tariff' } : { status: 'rate', percentual: rate.percentual };
+  if (rate.byTariff) return { status: 'tariff' };
+  if (rate.rateMissing === true) return { status: 'exempt' };
+  return { status: 'rate', percentual: rate.percentual };
 }
 
 /** IPI of one line, from its NET total (quantity x unit price - item discount) and the product's IPI code. */
@@ -49,6 +56,7 @@ export function classifyItemIpi(
 export function classifyIpiRef(lineNetTotal: DecimalString | null, ref: IpiRef): ItemIpi {
   if (lineNetTotal === null || ref.status === 'unavailable') return { status: 'unavailable' };
   if (ref.status === 'tariff') return { status: 'tariff' };
+  if (ref.status === 'exempt') return { status: 'exempt', amount: '0.00' };
   return { status: 'estimated', amount: estimateItemIpi(lineNetTotal, ref.percentual), percentual: ref.percentual };
 }
 
@@ -64,6 +72,8 @@ export interface OrderIpi {
   readonly grandTotalEstimated: DecimalString;
   readonly unavailableLineCount: number;
   readonly tariffLineCount: number;
+  /** Lines whose IPI code has no rate (counted as 0.00 in the estimate, not as unavailable). */
+  readonly exemptLineCount: number;
   /** True when at least one line has no estimated IPI, i.e. the IPI does not cover the whole order. */
   readonly isPartial: boolean;
 }
@@ -87,8 +97,10 @@ export function computeOrderIpiFromRefs(
   const amounts: DecimalString[] = [];
   let unavailable = 0;
   let tariff = 0;
+  let exempt = 0;
   for (const item of classified) {
     if (item.status === 'estimated') amounts.push(item.amount);
+    else if (item.status === 'exempt') exempt += 1;
     else if (item.status === 'tariff') tariff += 1;
     else unavailable += 1;
   }
@@ -99,6 +111,7 @@ export function computeOrderIpiFromRefs(
     grandTotalEstimated: sumTotals([netTotal, ipiEstimated]),
     unavailableLineCount: unavailable,
     tariffLineCount: tariff,
+    exemptLineCount: exempt,
     isPartial: unavailable + tariff > 0,
   };
 }

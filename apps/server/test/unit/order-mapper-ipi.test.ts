@@ -53,6 +53,14 @@ describe('order detail estimated IPI (D-D)', () => {
   it('never shows a silent zero: no code, code without rate and tariff are flagged and make the total partial', () => {
     const detail = toOrderDetail(order, [item(1, 9, '10.00'), item(2, 88, '10.00'), item(3, 77, '10.00')], customer, new Map(), null, {}, { codes, rates });
     expect(detail.items.map((i) => i.ipi?.status)).toEqual(['unavailable', 'unavailable', 'tariff']);
-    expect(detail.ipi).toMatchObject({ ipiEstimated: '0.00', unavailableLineCount: 2, tariffLineCount: 1, isPartial: true });
+    expect(detail.ipi).toMatchObject({ ipiEstimated: '0.00', unavailableLineCount: 2, tariffLineCount: 1, exemptLineCount: 0, isPartial: true });
+  });
+
+  it('a code whose ERP row has no rate is exempt/not informed: 0.00, counted apart, never partial (H1)', () => {
+    const withMissing = new Map<number, { code: number; percentual: string; byTariff: boolean; description: string; rateMissing?: boolean }>(rates).set(9, { code: 9, percentual: '0.00', byTariff: false, description: 'ISENTO', rateMissing: true });
+    const exemptCodes = new Map(codes).set(55, 9);
+    const detail = toOrderDetail(order, [item(1, 4158, '100.00'), item(2, 55, '10.00')], customer, new Map(), null, {}, { codes: exemptCodes, rates: withMissing });
+    expect(detail.items[1]?.ipi).toEqual({ status: 'exempt', amount: '0.00' });
+    expect(detail.ipi).toMatchObject({ ipiEstimated: '3.25', unavailableLineCount: 0, tariffLineCount: 0, exemptLineCount: 1, isPartial: false });
   });
 });

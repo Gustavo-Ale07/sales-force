@@ -78,6 +78,37 @@ describe('computeOrderIpi', () => {
   });
 });
 
+describe('code without a rate in the ERP (rateMissing, H1)', () => {
+  const withExempt = new Map<number, IpiRate>([...rates, [8, { code: 8, percentual: '0.00', byTariff: false, description: 'x', rateMissing: true }]]);
+
+  it('is estimated at 0.00 and marked exempt, not unavailable', () => {
+    expect(classifyItemIpi('16.43', 8, withExempt)).toEqual({ status: 'exempt', amount: '0.00' });
+  });
+  it('an unpriced line stays unavailable', () => {
+    expect(classifyItemIpi(null, 8, withExempt)).toEqual({ status: 'unavailable' });
+  });
+  it('tariff wins over a missing rate', () => {
+    const both = new Map<number, IpiRate>([[9, { code: 9, percentual: '0.00', byTariff: true, description: 'x', rateMissing: true }]]);
+    expect(classifyItemIpi('10.00', 9, both)).toEqual({ status: 'tariff' });
+  });
+  it('does not count as unavailable nor make the order partial', () => {
+    const result = computeOrderIpi(
+      [
+        { lineNetTotal: '200.00', ipiCode: 5 },
+        { lineNetTotal: '10.00', ipiCode: 8 },
+      ],
+      '210.00',
+      withExempt,
+    );
+    expect(result).toMatchObject({ ipiEstimated: '6.50', grandTotalEstimated: '216.50', unavailableLineCount: 0, exemptLineCount: 1, isPartial: false });
+    expect(result.lines.map((l) => l.status)).toEqual(['estimated', 'exempt']);
+  });
+  it('the client reference path gives the same result', () => {
+    const result = computeOrderIpiFromRefs([{ lineNetTotal: '10.00', ref: { status: 'exempt' } }], '10.00');
+    expect(result).toMatchObject({ ipiEstimated: '0.00', exemptLineCount: 1, unavailableLineCount: 0, isPartial: false });
+  });
+});
+
 describe('computeOrderIpiFromRefs (client side: the product carries its reference)', () => {
   it('matches the rate-table path', () => {
     const result = computeOrderIpiFromRefs(

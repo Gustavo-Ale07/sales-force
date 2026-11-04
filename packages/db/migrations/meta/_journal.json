@@ -162,6 +162,13 @@
       "when": 1793792896918,
       "tag": "0022_sales_order_expedicao",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1793804092041,
+      "tag": "0023_erp_ipi_rate_rate_missing",
+      "breakpoints": true
     }
   ]
 }

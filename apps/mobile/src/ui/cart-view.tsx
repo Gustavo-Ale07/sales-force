@@ -181,6 +181,9 @@ export function CartView({ lines, preview, onQuantityChange, onDiscountChange, o
         {preview.ipi.unavailableLineCount > 0 && (
           <Text style={styles.partialNotice}>{`IPI não disponível em ${preview.ipi.unavailableLineCount} item(ns).`}</Text>
         )}
+        {preview.ipi.exemptLineCount > 0 && (
+          <Text style={styles.partialNotice}>{`IPI isento/não informado em ${preview.ipi.exemptLineCount} item(ns).`}</Text>
+        )}
         {preview.ipi.tariffLineCount > 0 && (
           <Text style={styles.partialNotice}>{`IPI por pauta — não estimado em ${preview.ipi.tariffLineCount} item(ns).`}</Text>
         )}

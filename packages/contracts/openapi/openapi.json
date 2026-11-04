@@ -4627,6 +4627,19 @@
             "properties": {
               "status": {
                 "type": "string",
+                "const": "exempt"
+              }
+            },
+            "required": [
+              "status"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
                 "const": "unavailable"
               }
             },
@@ -4687,6 +4700,23 @@
             },
             "required": [
               "status"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "const": "exempt"
+              },
+              "amount": {
+                "$ref": "#/components/schemas/DecimalString"
+              }
+            },
+            "required": [
+              "status",
+              "amount"
             ],
             "additionalProperties": false
           }
@@ -5492,6 +5522,10 @@
             "type": "integer",
             "minimum": 0
           },
+          "exemptLineCount": {
+            "type": "integer",
+            "minimum": 0
+          },
           "isPartial": {
             "type": "boolean"
           }
@@ -5501,6 +5535,7 @@
           "grandTotalEstimated",
           "unavailableLineCount",
           "tariffLineCount",
+          "exemptLineCount",
           "isPartial"
         ],
         "additionalProperties": false

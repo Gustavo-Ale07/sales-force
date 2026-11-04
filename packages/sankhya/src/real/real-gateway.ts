@@ -80,6 +80,7 @@ import {
   IPI_RATE_SPEC,
   OPEN_TITLE_SPEC,
   compareKeys,
+  isRowDiscard,
   type EntitySpec,
 } from './mapping.js';
 import { TokenProvider, type SankhyaCredentials } from './token-provider.js';
@@ -602,6 +603,7 @@ export class RealSankhyaGateway implements SankhyaGateway {
         const pageSize = gateway.#pageSize;
         let offset = 0;
         let total = 0;
+        let discarded = 0;
         let previousKey: readonly number[] | null = null;
 
         for (;;) {
@@ -609,7 +611,14 @@ export class RealSankhyaGateway implements SankhyaGateway {
           const page = await gateway.#query(pageSql(spec, offset, pageSize), spec.columns, signal);
           const mapped: T[] = [];
           for (const [index, cells] of page.rows.entries()) {
-            const row = spec.map(new RowReader(spec.entity, spec.columns, cells, index), context);
+            const result = spec.map(new RowReader(spec.entity, spec.columns, cells, index), context);
+            if (isRowDiscard(result)) {
+              // Counted as read (the ERP count includes it) but never delivered; the reason carries no value.
+              discarded += 1;
+              options?.onWarning?.(`${spec.entity}: row ${offset + index} discarded (${result.discarded}).`);
+              continue;
+            }
+            const row = result;
             const key = spec.keyOf(row);
             if (previousKey !== null && compareKeys(key, previousKey) <= 0) {
               throw new SankhyaGatewayError('temporary', {
@@ -628,7 +637,7 @@ export class RealSankhyaGateway implements SankhyaGateway {
 
         const counted = await gateway.#query(countSql(spec), ['TOTAL'], signal);
         const expected = new RowReader(spec.entity, ['TOTAL'], counted.rows[0] ?? [], 0).nullableInt('TOTAL');
-        if (counted.rows.length !== 1 || expected === null || expected !== total) {
+        if (counted.rows.length !== 1 || expected === null || expected !== total + discarded) {
           throw new SankhyaGatewayError('temporary', {
             code: 'incomplete_snapshot',
             message: `${spec.entity}: the number of rows read does not match the ERP row count (the data may have changed during the read). The snapshot was rejected; retry.`,

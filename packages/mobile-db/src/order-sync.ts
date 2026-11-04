@@ -41,7 +41,7 @@ export interface RemoteOrderItem {
   readonly priceVersionId: number | null;
   readonly discountPercent: string;
   /** Server IPI estimate of the line (D-D); absent from older servers. */
-  readonly ipi?: { readonly status: "estimated" | "tariff" | "unavailable"; readonly percentual?: string };
+  readonly ipi?: { readonly status: "estimated" | "tariff" | "exempt" | "unavailable"; readonly percentual?: string };
 }
 
 /** The slice of the server order the client needs. Never contains cost or margin (P-20). */
@@ -200,6 +200,7 @@ export function priceContextOf(item: RemoteOrderItem): string {
 export function ipiJsonOf(item: RemoteOrderItem): string {
   if (item.ipi?.status === "estimated" && item.ipi.percentual !== undefined) return JSON.stringify({ status: "rate", percentual: item.ipi.percentual });
   if (item.ipi?.status === "tariff") return JSON.stringify({ status: "tariff" });
+  if (item.ipi?.status === "exempt") return JSON.stringify({ status: "exempt" });
   return JSON.stringify({ status: "unavailable" });
 }
 

@@ -957,6 +957,9 @@ export interface components {
             status: "tariff";
         } | {
             /** @constant */
+            status: "exempt";
+        } | {
+            /** @constant */
             status: "unavailable";
         };
         /** Format: date-time */
@@ -972,6 +975,10 @@ export interface components {
         } | {
             /** @constant */
             status: "tariff";
+        } | {
+            /** @constant */
+            status: "exempt";
+            amount: components["schemas"]["DecimalString"];
         };
         ListPriceContext: {
             /** @constant */
@@ -1123,6 +1130,7 @@ export interface components {
             grandTotalEstimated: components["schemas"]["DecimalString"];
             unavailableLineCount: number;
             tariffLineCount: number;
+            exemptLineCount: number;
             isPartial: boolean;
         };
         OrderItemDetail: {

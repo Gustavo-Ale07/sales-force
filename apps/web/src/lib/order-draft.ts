@@ -129,6 +129,7 @@ export function lineFromProduct(product: ProductRow, key: string): EditorLine {
 function ipiRefOfItem(ipi: ApiSchema<"OrderItemDetail">["ipi"]): IpiRef {
   if (ipi?.status === "estimated") return { status: "rate", percentual: ipi.percentual };
   if (ipi?.status === "tariff") return { status: "tariff" };
+  if (ipi?.status === "exempt") return { status: "exempt" };
   return { status: "unavailable" };
 }
 

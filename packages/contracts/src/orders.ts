@@ -212,6 +212,8 @@ export const ItemIpiSchema = named(
     z.object({ status: z.literal('unavailable') }),
     /** "IPI por pauta — não estimado". */
     z.object({ status: z.literal('tariff') }),
+    /** "IPI isento/não informado": the ERP code has no rate; estimated at 0.00 (H1). */
+    z.object({ status: z.literal('exempt'), amount: DecimalStringSchema }),
   ]),
 );
 export type ItemIpi = z.infer<typeof ItemIpiSchema>;
@@ -225,6 +227,8 @@ export const OrderIpiSchema = named(
     grandTotalEstimated: DecimalStringSchema,
     unavailableLineCount: z.number().int().min(0),
     tariffLineCount: z.number().int().min(0),
+    /** Lines whose IPI code has no rate (estimated at 0.00; not unavailable). */
+    exemptLineCount: z.number().int().min(0),
     /** True when at least one line has no estimated IPI. */
     isPartial: z.boolean(),
   }),

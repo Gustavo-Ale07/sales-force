@@ -10,7 +10,7 @@ import {
   erpProduct,
   erpSeller,
 } from '@salesforce/db';
-import type { Carrier, Customer, IpiRate, OpenTitle, DirectoryUser, ListPrice, PriceTable, PriceTableVersion, Product, Seller } from '@salesforce/domain';
+import type { Carrier, Customer, OpenTitle, DirectoryUser, ListPrice, PriceTable, PriceTableVersion, Product, Seller } from '@salesforce/domain';
 import {
   SankhyaGatewayError,
   type GatewayDescription,
@@ -177,6 +177,7 @@ function readOptions(context: MirrorReadContext): ReadOptions {
   return {
     ...(context.signal === undefined ? {} : { signal: context.signal }),
     ...(context.scope === undefined ? {} : { scope: context.scope }),
+    onWarning: context.warn,
   };
 }
 
@@ -342,15 +343,27 @@ const ipiRates: MirrorEntitySpec = {
   requires: ['ipiRates'],
   table: erpIpiRate,
   keyProps: ['code'],
-  read: (context) =>
-    mapped<IpiRate>(context.gateway.readIpiRates(readOptions(context)), (row) => ({
-      key: [keyColumn('ipiRates', 'code', row.code)],
-      content: {
-        description: row.description,
-        percentual: decimalColumn('ipiRates', 'percentual', row.percentual, 9, 4),
-        byTariff: row.byTariff,
-      },
-    })),
+  read: (context) => ({
+    async *[Symbol.asyncIterator]() {
+      const withoutRate: number[] = [];
+      for await (const batch of context.gateway.readIpiRates(readOptions(context))) {
+        yield batch.map((row) => {
+          if (row.rateMissing === true) withoutRate.push(row.code);
+          return {
+            key: [keyColumn('ipiRates', 'code', row.code)],
+            content: {
+              description: row.description,
+              percentual: decimalColumn('ipiRates', 'percentual', row.percentual, 9, 4),
+              byTariff: row.byTariff,
+              rateMissing: row.rateMissing === true,
+            },
+          };
+        });
+      }
+      // H1: reported once per run (count and codes); a code without a rate is valid data, not a failure.
+      if (withoutRate.length > 0) context.warn(`ipiRates: ${withoutRate.length} IPI code(s) without a rate (stored as 0.00, flagged rate_missing): ${withoutRate.join(', ')}`);
+    },
+  }),
 };
 
 /**

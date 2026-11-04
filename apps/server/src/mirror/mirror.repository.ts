@@ -554,7 +554,7 @@ export class MirrorRepository {
       .from(erpIpiRate)
       .where(and(isNull(erpIpiRate.deletedAt), inArray(erpIpiRate.code, wanted)));
     for (const row of rows) {
-      rates.set(row.code, { code: row.code, percentual: row.percentual, byTariff: row.byTariff, description: row.description });
+      rates.set(row.code, { code: row.code, percentual: row.percentual, byTariff: row.byTariff, description: row.description, rateMissing: row.rateMissing });
     }
     return { codes, rates };
   }

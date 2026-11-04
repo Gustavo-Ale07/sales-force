@@ -63,6 +63,8 @@ export const erpIpiRate = pgTable('erp_ipi_rate', {
   description: text('description').notNull(),
   percentual: numeric('percentual', { precision: 9, scale: 4 }).notNull(),
   byTariff: boolean('by_tariff').notNull(),
+  /** The ERP code has no rate (exempt / not taxed): `percentual` is 0.00 and is not a real 0% (H1). */
+  rateMissing: boolean('rate_missing').default(false).notNull(),
   ...mirrorColumns(),
 });
 

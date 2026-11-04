@@ -157,6 +157,7 @@ export function toOrderDetail(
       grandTotalEstimated: ipi.grandTotalEstimated,
       unavailableLineCount: ipi.unavailableLineCount,
       tariffLineCount: ipi.tariffLineCount,
+      exemptLineCount: ipi.exemptLineCount,
       isPartial: ipi.isPartial,
     },
   };
