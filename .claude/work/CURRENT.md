@@ -24,6 +24,7 @@ STATUS: ACTIVE — atualizado em 2026-10-29. Fonte de verdade ÚNICA: `C:\Dev\sa
 
 ## Correção do IPI (2026-11-04) — `PERCENTUAL` nulo na TGFIPI
 - `ipiRates` falhava fechado no staging. H1/H2 feitos (taxa nula = 0,00 + `rate_missing`, status `exempt`, linhas ruins descartadas sem derrubar a página; `openTitles` idem). Detalhes e passos do dono: `.claude/work/CHECKPOINT_2026-11-04-correcao-ipi.md`.
+- Revisão de segurança (única, sem achados críticos/altos/médios). Decisões do dono, baixas: (1) títulos de `openTitles` com `DTVENC`/`VLRDESDOB` nulos são descartados com aviso — antes de qualquer crédito/inadimplência consumir `openTitles`, persistir a contagem de descartes por execução ou falhar fechado; (2) um aviso por linha descartada, sem teto — limitar e emitir resumo; (3) clientes mobile antigos com parse estrito podem rejeitar `exempt` — confirmar a ordem de rollout.
 - Só o dono roda: após o deploy (migração 0023), `sync-once ipiRates openTitles` e conferir o aviso no log; validar com o fiscal o que taxa nula significa.
 
 ## Correção 2 da parte 2 — Q7 tolerante e resumo de escopo (2026-11-03, 11:04 BRT em staging)
