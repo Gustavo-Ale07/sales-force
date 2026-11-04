@@ -66,7 +66,7 @@ export function DuplicateAsOrderButton({ order, disabled }: DuplicateAsOrderButt
         variant="primary"
         leftIcon={<CopyPlus size={14} aria-hidden="true" />}
         loading={mutation.isPending}
-        disabled={disabled || mutation.isPending || order.items.length === 0 || order.status === "cancelled"}
+        disabled={disabled || mutation.isPending || order.items.length === 0}
         title={disabled ? "Salve as alterações antes de duplicar como pedido" : undefined}
         onClick={() => mutation.mutate()}
       >

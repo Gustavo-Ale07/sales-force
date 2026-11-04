@@ -1,7 +1,7 @@
 /**
  * Status models and transition tables. Pure data + lookups.
  * Reachable: draft edits, the discount approval flow (awaiting_approval / approved / approval_rejected),
- * cancellation and the ERP delivery states (SNK-7). The model only says what is legal; the server performs the ERP
+ * deletion (D-Y: there is no discarded state) and the ERP delivery states (SNK-7). The model only says what is legal; the server performs the ERP
  * transitions solely when its delivery switches are on (SNK-4/SNK-5/SNK-6 gates).
  */
 
@@ -10,7 +10,6 @@ export type OrderStatus =
   | 'awaiting_approval'
   | 'approved'
   | 'approval_rejected'
-  | 'cancelled'
   | 'queued'
   | 'sent'
   | 'rejected'
@@ -20,7 +19,6 @@ export const ORDER_STATUSES: readonly OrderStatus[] = [
   'awaiting_approval',
   'approved',
   'approval_rejected',
-  'cancelled',
   'queued',
   'sent',
   'rejected',
@@ -38,20 +36,15 @@ export interface StatusTransition<S extends string> {
 
 export const ORDER_TRANSITIONS: readonly StatusTransition<OrderStatus>[] = [
   { from: 'draft', to: 'draft', reachable: true, note: 'draft edit' },
-  { from: 'draft', to: 'cancelled', reachable: true, note: 'discard' },
   // Discount approval (DISC-2..6, ORD-1, ORD-2). `rejected` stays the ERP rejection; a reprovação is `approval_rejected`.
   { from: 'draft', to: 'awaiting_approval', reachable: true, note: 'submitted above the owner authority' },
   { from: 'awaiting_approval', to: 'approved', reachable: true, note: 'explicit approval by the level pool' },
   { from: 'awaiting_approval', to: 'approval_rejected', reachable: true, note: 'explicit reprovação, comment mandatory' },
   { from: 'awaiting_approval', to: 'draft', reachable: true, note: 'edit invalidates the pending approval (ORD-1)' },
   { from: 'approval_rejected', to: 'draft', reachable: true, note: 'edit of a reprovado order (ORD-1)' },
-  { from: 'awaiting_approval', to: 'cancelled', reachable: true, note: 'discard' },
-  { from: 'approval_rejected', to: 'cancelled', reachable: true, note: 'discard' },
-  { from: 'approved', to: 'cancelled', reachable: true, note: 'discard before any ERP submission' },
   // ERP delivery (SNK-7). Reachable in the model; the server only performs them when the delivery switches are on.
   { from: 'approved', to: 'queued', reachable: true, note: 'enqueued for the ERP (outbox row in the same transaction)' },
   { from: 'draft', to: 'queued', reachable: true, note: 'enqueued for the ERP (outbox row in the same transaction)' },
-  { from: 'queued', to: 'cancelled', reachable: true, note: 'cancel while the outbox row is still pending (D-5)' },
   { from: 'queued', to: 'sent', reachable: true, note: 'included (and confirmed) in the ERP; erp_number stored' },
   { from: 'queued', to: 'rejected', reachable: true, note: 'integration error: permanent refusal or attempts exhausted (D-2)' },
   { from: 'queued', to: 'unknown', reachable: true, note: 'ambiguous result (sent without answer) or included but not yet confirmed (D-4)' },
@@ -116,6 +109,15 @@ export function canTransitionOutbox(from: OutboxStatus, to: OutboxStatus): boole
  */
 export function isOrderEditable(status: OrderStatus): boolean {
   return status === 'draft' || status === 'approval_rejected' || status === 'awaiting_approval';
+}
+
+/**
+ * D-Y: the seller deletes a quote/order that never reached Sankhya. Deletable only when no ERP number exists and no
+ * delivery is queued or in flight (queued / sent / unknown). draft, approval states and a rejected delivery qualify.
+ */
+export function isOrderDeletable(status: OrderStatus, erpNumber: number | null | undefined): boolean {
+  if (erpNumber !== null && erpNumber !== undefined) return false;
+  return status !== 'queued' && status !== 'sent' && status !== 'unknown';
 }
 
 /** Status after a successful edit: always draft (the pending approval, if any, is invalidated by the caller). */

@@ -39,7 +39,7 @@ import { CustomerContextBar } from "../components/customer-context-bar";
 import { CustomerFichaDialog } from "../components/customer-ficha";
 import { ProductImage } from "../components/product-image";
 import { CustomerPicker, type PickedCustomer } from "../components/customer-picker";
-import { DiscardOrderDialog } from "../components/discard-order-dialog";
+import { DeleteOrderDialog } from "../components/delete-order-dialog";
 import { DuplicateAsOrderButton } from "../components/duplicate-as-order-button";
 import { DuplicateOrderButton } from "../components/duplicate-order-button";
 import { GroupDiscountDialog, MassDiscountDialog } from "../components/discount-dialogs";
@@ -71,7 +71,7 @@ import {
   type EditorLine,
 } from "../lib/order-draft";
 
-import { documentKindOf, documentVocabulary } from "@salesforce/domain";
+import { documentKindOf, documentVocabulary, isOrderDeletable } from "@salesforce/domain";
 
 type OrderDetail = ApiSchema<"OrderDetail">;
 
@@ -230,7 +230,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
   );
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [submitNotice, setSubmitNotice] = useState<string | null>(null);
-  const [discarding, setDiscarding] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
   /** A different customer picked while items exist: waits for the seller's confirmation (prices depend on the customer). */
   // `picked: null` is the customer being cleared; the lines are priced for the current customer either way.
@@ -1056,15 +1056,15 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
           >
             Salvar como recorrente
           </Button>
-          {order && (order.status === "draft" || order.status === "approval_rejected" || order.status === "awaiting_approval") ? (
+          {order && isOrderDeletable(order.status, order.erpNumber) ? (
             <Button
               className="flex-1 sm:flex-none"
               type="button"
               variant="danger-outline"
               leftIcon={<Trash2 size={14} aria-hidden="true" />}
-              onClick={() => setDiscarding(true)}
+              onClick={() => setDeleting(true)}
             >
-              Descartar
+              Excluir
             </Button>
           ) : null}
           {order && order.status === "draft" ? (
@@ -1172,12 +1172,12 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
 
       {customer ? <CustomerFichaDialog customerCode={customer.code} open={fichaOpen} onOpenChange={setFichaOpen} /> : null}
 
-      <DiscardOrderDialog
-        order={discarding && order ? { id: order.id, label: orderReference(order) } : null}
-        onClose={() => setDiscarding(false)}
-        onDiscarded={() => {
+      <DeleteOrderDialog
+        order={deleting && order ? { id: order.id, label: orderReference(order) } : null}
+        onClose={() => setDeleting(false)}
+        onDeleted={() => {
           leavingRef.current = true;
-          toast({ title: "Descartado", tone: "success" });
+          toast({ title: "Excluído", tone: "success" });
           onClose();
         }}
       />

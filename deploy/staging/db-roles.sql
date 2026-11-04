@@ -51,12 +51,12 @@
 --                                           SELECT ... FOR SHARE on the customer row, and PostgreSQL requires an UPDATE privilege for any
 --                                           row lock. Smallest grant that satisfies it; no other erp_* column is writable by the API.
 --   product_media                         S           S I U D     worker product-photo job writes metadata (DELETE: orphan cleanup); API reads it to serve photos
---   sales_order                           S I U       -              orders.repository (status moves are UPDATEs)
+--   sales_order                           S I U D     -              orders.repository (status moves are UPDATEs; DELETE only for an order that never reached Sankhya, D-Y)
 --   sales_order_item                      S I U D     -              orders.repository (lines are replaced: DELETE + INSERT)
 --   sales_order_approval                  S I U       -              orders approvals (discount approval requests: INSERT on submit, UPDATE on decision or invalidation; never deleted)
 --   customer_order_template               S I U       -              templates.repository
 --   customer_order_template_item          S I U D     -              templates.repository (items replaced)
---   integration_outbox                    S I U       S U            api: INSERT on submit (same transaction as order -> queued) and UPDATE on cancel (pending -> rejected, D-5);
+--   integration_outbox                    S I U D     S U            api: INSERT on submit (same transaction as order -> queued); DELETE with its order (D-Y, never-delivered orders only; the dry-run record goes by cascade);
 --                                                                       worker: claims and closes deliveries (SNK-7). The order gate trigger reads sales_order as the invoking role.
 --   integration_order_dry_run             -           S I D          worker: dry-run payload record (SNK-7 D-6); DELETE by the 30-day purge. The API never reads it
 --   sales_order, sales_order_item         (above)     S (U on sales_order)   worker: reads the order to build the payload; UPDATE status and erp_number on delivery
@@ -241,9 +241,9 @@ BEGIN
       ('auth_throttle',                      'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
       ('sales_order_item',                   'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
       ('customer_order_template_item',       'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
-      ('sales_order',                        'force_api',    'SELECT, INSERT, UPDATE'),
+      ('sales_order',                        'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
       ('sales_order_approval',               'force_api',    'SELECT, INSERT, UPDATE'),
-      ('integration_outbox',                 'force_api',    'SELECT, INSERT, UPDATE'),
+      ('integration_outbox',                 'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
       ('customer_order_template',            'force_api',    'SELECT, INSERT, UPDATE'),
       ('audit_log',                          'force_api',    'INSERT'),
       ('installation_configuration_version', 'force_api',    'SELECT'),

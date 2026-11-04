@@ -57,7 +57,7 @@ type Drifted = DeepMutable<DomainInstallationConfiguration> & { extra: string };
 // @ts-expect-error a type with an extra required key is not equal
 export type _NegativeExtraKey = Assert<Equals<Drifted, DeepMutable<InstallationConfiguration>>>;
 // @ts-expect-error a narrower enum is not equal
-export type _NegativeEnum = Assert<Equals<'draft' | 'cancelled', OrderStatus>>;
+export type _NegativeEnum = Assert<Equals<'draft' | 'sent', OrderStatus>>;
 
 describe('domain alignment (runtime)', () => {
   it('a parsed configuration is directly usable as the domain type', () => {

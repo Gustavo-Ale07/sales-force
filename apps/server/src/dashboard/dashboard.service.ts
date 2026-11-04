@@ -86,7 +86,6 @@ export class DashboardService {
             value: { kind: 'money', value: figures.counts.draftsEstimatedTotal },
             description: 'Estimativa pelo preço de lista; linhas sem preço não entram na soma.',
           },
-          { key: 'cancelled', label: 'Rascunhos descartados', value: count(figures.counts.cancelled), description: null },
         ],
       },
       {

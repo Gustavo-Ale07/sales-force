@@ -503,7 +503,7 @@ describe('integration_outbox', () => {
 });
 
 describe('sales_order ERP binding', () => {
-  it('defaults to legacy_dev, which can only be draft or cancelled', async () => {
+  it('defaults to legacy_dev, which can only be a pre-ERP status', async () => {
     const acc = await newAccount();
     const cfg = await newConfig();
     const id = await newOrder(acc, cfg);
@@ -517,7 +517,6 @@ describe('sales_order ERP binding', () => {
         'sales_order_erp_eligibility_chk',
       );
     }
-    await h.db.update(salesOrder).set({ status: 'cancelled' }).where(eq(salesOrder.id, id));
   });
 
   it('checks the origin vocabulary and forbids an environment on non-Sankhya data', async () => {

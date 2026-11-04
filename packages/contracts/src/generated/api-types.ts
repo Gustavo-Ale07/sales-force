@@ -403,8 +403,11 @@ export interface paths {
          */
         put: operations["replaceOrder"];
         post?: never;
-        /** Discard a draft (status becomes cancelled) */
-        delete: operations["discardOrder"];
+        /**
+         * Delete a quote or order that never reached Sankhya (D-Y)
+         * @description Physical deletion with its items and delivery records. 409 when the order has an ERP number or a delivery is queued or in progress. Recorded in the audit trail.
+         */
+        delete: operations["deleteOrder"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1225,7 +1228,7 @@ export interface components {
         /** @enum {string} */
         OrderSort: "updatedAt" | "-updatedAt" | "draftNumber" | "-draftNumber";
         /** @enum {string} */
-        OrderStatus: "draft" | "awaiting_approval" | "approved" | "approval_rejected" | "cancelled" | "queued" | "sent" | "rejected" | "unknown";
+        OrderStatus: "draft" | "awaiting_approval" | "approved" | "approval_rejected" | "queued" | "sent" | "rejected" | "unknown";
         OrderStatusDisplay: {
             code: string;
             label: string;
@@ -2673,7 +2676,7 @@ export interface operations {
             };
         };
     };
-    discardOrder: {
+    deleteOrder: {
         parameters: {
             query?: never;
             header?: never;
@@ -2684,14 +2687,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Rascunho descartado */
-            200: {
+            /** @description Orçamento ou pedido excluído */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["OrderDetail"];
-                };
+                content?: never;
             };
             /** @description Requisição inválida (validation_failed) */
             400: {

@@ -57,8 +57,8 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   // Commercial routes (Stage 3A). Each is open to the three roles the schema has; WHICH rows a
   // caller sees is the data scope (`resolveCustomerScope`), never this table. An external
   // representative role does not exist yet (AUTH-3 PROPOSED): when it does it gets no line here
-  // until the owner grants it. ASSUMPTION: a seller may create/replace/discard their own drafts, and a
-  // manager or admin (whose customer scope is every customer) may create/replace/discard ANY seller's
+  // until the owner grants it. ASSUMPTION: a seller may create/replace/delete their own drafts, and a
+  // manager or admin (whose customer scope is every customer) may create/replace/delete ANY seller's
   // drafts. The second half is not written down anywhere: it follows from the scope rule and stays
   // pending owner ruling R35/R36 (who may act on behalf of whom).
   getDashboard: { roles: EVERY_ROLE },
@@ -82,7 +82,7 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   createOrder: { roles: EVERY_ROLE },
   getOrder: { roles: EVERY_ROLE },
   replaceOrder: { roles: EVERY_ROLE },
-  discardOrder: { roles: EVERY_ROLE },
+  deleteOrder: { roles: EVERY_ROLE },
   submitOrder: { roles: EVERY_ROLE },
   // W-20 discount approvals (DISC-4/6): only manager and admin; WHICH level each may decide is enforced in the
   // approvals service (manager: manager level, admin: director level). Technical and seller are denied here.

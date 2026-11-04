@@ -335,7 +335,6 @@ export function dashboard(overrides: Partial<ApiSchema<"DashboardResponse">> = {
             value: { kind: "money", value: "18500.00" },
             description: "Estimativa pelo preço de lista; linhas sem preço não entram na soma.",
           },
-          { key: "cancelled", label: "Rascunhos descartados", value: metricCount(3), description: null },
         ],
       },
       {

@@ -118,7 +118,6 @@ describe("Duplicar como pedido (D-B)", () => {
 
   it.each([
     ["not_a_quotation", "Este pedido não é um orçamento"],
-    ["source_cancelled", "Orçamento descartado"],
     ["order_top_not_configured", "Tipo de operação do pedido não configurado"],
     ["no_usable_lines", "Nenhum item do orçamento pode ser pedido agora"],
   ])("explains the 409 %s", async (reason, title) => {

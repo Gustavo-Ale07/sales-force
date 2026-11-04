@@ -422,15 +422,17 @@ export const routes = {
     responses: { 200: { description: 'Rascunho atualizado', schema: OrderDetailSchema } },
     errors: [400, 401, 403, 404, 409],
   }),
-  discardOrder: defineRoute({
-    operationId: 'discardOrder',
+  deleteOrder: defineRoute({
+    operationId: 'deleteOrder',
     method: 'delete',
     path: '/orders/{id}',
     tags: ['orders'],
-    summary: 'Discard a draft (status becomes cancelled)',
+    summary: 'Delete a quote or order that never reached Sankhya (D-Y)',
+    description:
+      'Physical deletion with its items and delivery records. 409 when the order has an ERP number or a delivery is queued or in progress. Recorded in the audit trail.',
     auth: 'session',
     request: { params: OrderPathSchema },
-    responses: { 200: { description: 'Rascunho descartado', schema: OrderDetailSchema } },
+    responses: { 204: { description: 'Orçamento ou pedido excluído' } },
     errors: [400, 401, 403, 404, 409],
   }),
   submitOrder: defineRoute({

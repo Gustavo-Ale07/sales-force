@@ -204,13 +204,14 @@ describe('the edit rule (ORD-1)', () => {
     expect(edited.body.code).toBe('order_not_editable');
   });
 
-  it('discarding an order awaiting approval cancels it and closes the request', async () => {
+  it('D-Y: deleting an order awaiting approval removes it together with its approval request', async () => {
     const order = await draft('seller1', '8');
     await app.call('seller1', 'POST', `/orders/${order.id}/submit`);
-    const discarded = await app.call('seller1', 'DELETE', `/orders/${order.id}`);
-    expect(discarded.status).toBe(200);
-    expect(discarded.body.status).toBe('cancelled');
-    expect((await approvalsOf(order.id))[0]?.decision).toBe('invalidated');
+    expect((await approvalsOf(order.id)).length).toBe(1);
+    const deleted = await app.call('seller1', 'DELETE', `/orders/${order.id}`);
+    expect(deleted.status).toBe(204);
+    expect(await approvalsOf(order.id)).toEqual([]);
+    expect((await app.call('seller1', 'GET', `/orders/${order.id}`)).status).toBe(404);
   });
 });
 

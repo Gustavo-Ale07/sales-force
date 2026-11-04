@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { account, erpCustomer, integrationOutbox, salesOrder, salesOrderApproval, salesOrderItem, type AccountRole, type ApprovalLevel, type Database } from '@salesforce/db';
 import type { CustomerScope, OrderItem } from '@salesforce/domain';
-import { and, asc, desc, eq, ne, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, or, sql, type SQL } from 'drizzle-orm';
 import { containsText, digitsOf, eqInt, fitsPgInt, inInts, inSellerCodes, offsetOf } from '../platform/sql.js';
 import { DATABASE } from '../platform/tokens.js';
 
@@ -67,7 +67,6 @@ export interface OrderListRow extends OrderCustomerState {
 export interface OrderCounts {
   readonly drafts: number;
   readonly draftsEstimatedTotal: string;
-  readonly cancelled: number;
 }
 
 /** Order visibility follows the seller recorded on the order at draft time (P-21). */
@@ -133,7 +132,7 @@ export class OrdersRepository {
   }
 
   /**
-   * The customer's most recent NON-cancelled order recorded in Sales Force ("Repetir último pedido",
+   * The customer's most recent order recorded in Sales Force ("Repetir último pedido",
    * Phase C) — never Sankhya/ERP order history, which is not mirrored here. `draftNumber` is a global
    * sequential identity, so the highest value for the customer is the most recently created order.
    * Scoped like every other order read (P-21).
@@ -142,7 +141,7 @@ export class OrdersRepository {
     const [row] = await executor
       .select()
       .from(salesOrder)
-      .where(and(scopeCondition(scope), eqInt(salesOrder.customerCode, customerCode), ne(salesOrder.status, 'cancelled')))
+      .where(and(scopeCondition(scope), eqInt(salesOrder.customerCode, customerCode)))
       .orderBy(desc(salesOrder.draftNumber))
       .limit(1);
     return row ?? null;
@@ -242,6 +241,11 @@ export class OrdersRepository {
     return rows.length > 0;
   }
 
+  /** D-Y: physical deletion. The items and the approval requests go by ON DELETE CASCADE. */
+  async deleteOrder(orderId: string, executor: Executor): Promise<void> {
+    await executor.delete(salesOrder).where(eq(salesOrder.id, orderId));
+  }
+
   async deleteItems(orderId: string, executor: Executor): Promise<void> {
     await executor.delete(salesOrderItem).where(eq(salesOrderItem.orderId, orderId));
   }
@@ -325,14 +329,12 @@ export class OrdersRepository {
       .select({
         drafts: sql<number>`(count(*) filter (where ${salesOrder.status} = 'draft'))::int`,
         draftsEstimatedTotal: sql<string>`round(coalesce(sum(${salesOrder.estimatedTotal}) filter (where ${salesOrder.status} = 'draft'), 0), 2)::text`,
-        cancelled: sql<number>`(count(*) filter (where ${salesOrder.status} = 'cancelled'))::int`,
       })
       .from(salesOrder)
       .where(scopeCondition(scope));
     return {
       drafts: row?.drafts ?? 0,
       draftsEstimatedTotal: row?.draftsEstimatedTotal ?? '0.00',
-      cancelled: row?.cancelled ?? 0,
     };
   }
 }

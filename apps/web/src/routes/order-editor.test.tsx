@@ -871,16 +871,17 @@ describe("Rascunho existente", () => {
     expect(screen.getByLabelText("Quantidade de Balão látex 9 pol. vermelho")).toHaveAttribute("readonly");
   });
 
-  it("discards the draft from the editor and returns to the list", async () => {
+  it("D-Y: deletes the quote/order from the editor after confirming and returns to the list", async () => {
     const { user, router, calls } = renderApp(`/pedidos/${ORDER_ID}`, {
       handlers: existing(orderDetail(), {
-        "DELETE /orders/:id": { body: orderDetail({ status: "cancelled" }) },
+        "DELETE /orders/:id": { status: 204 },
         "GET /orders": { body: { items: [], page: 1, pageSize: 25, total: 0 } },
       }),
     });
-    await user.click(await screen.findByRole("button", { name: "Descartar" }));
-    const dialog = await screen.findByRole("dialog", { name: "Descartar rascunho?" });
-    await user.click(within(dialog).getByRole("button", { name: "Descartar" }));
+    await user.click(await screen.findByRole("button", { name: "Excluir" }));
+    const dialog = await screen.findByRole("dialog", { name: /^Excluir .* nº \d+\?$/ });
+    expect(within(dialog).getByText("Isso não pode ser desfeito.")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Excluir" }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/pedidos"));
     expect(callsTo(calls, "DELETE", `/orders/${ORDER_ID}`)).toHaveLength(1);
   });

@@ -32,7 +32,8 @@ export const AUDIT_ACTIONS = {
   configSankhyaSynced: 'config.sankhya_synced',
   orderCreated: 'order.created',
   orderReplaced: 'order.replaced',
-  orderDiscarded: 'order.discarded',
+  /** D-Y: the seller (or a manager) deleted a quote/order that never reached Sankhya. Identifiers and the total only. */
+  orderDeleted: 'order.deleted',
   orderTemplateCreated: 'order_template.created',
   orderTemplateReplaced: 'order_template.replaced',
   orderTemplateDeleted: 'order_template.deleted',
@@ -55,7 +56,6 @@ export const AUDIT_ACTIONS = {
   /** SNK-7: the order was queued for the ERP (outbox row created in the same transaction). */
   orderErpEnqueued: 'order.erp_enqueued',
   /** SNK-7 D-5: a queued order was cancelled while its outbox row was still pending. */
-  orderErpCancelledByUser: 'order.erp_cancelled_by_user',
   /** SNK-7: the worker delivered the order (ERP number in the detail). */
   orderErpSent: 'order.erp_sent',
   /** SNK-7: the delivery ended in an integration error (class and code only). */

@@ -16,7 +16,7 @@ import {
 } from './primitives.js';
 
 /**
- * Only `draft` and `cancelled` are reachable today; the rest exist for the persistence layer and are
+ * There is no discarded state (D-Y): the seller deletes an order that never reached Sankhya.
  * Discount approval (DISC-2..6, ORD-1, ORD-2): `awaiting_approval` (submitted above the owner's authority), `approved`,
  * `approval_rejected` (reprovado by the approver; editable, an edit returns it to `draft`). `rejected` stays the ERP rejection.
  *
@@ -27,7 +27,7 @@ import {
  */
 export const OrderStatusSchema = named(
   'OrderStatus',
-  z.enum(['draft', 'awaiting_approval', 'approved', 'approval_rejected', 'cancelled', 'queued', 'sent', 'rejected', 'unknown']),
+  z.enum(['draft', 'awaiting_approval', 'approved', 'approval_rejected', 'queued', 'sent', 'rejected', 'unknown']),
 );
 export type OrderStatus = z.infer<typeof OrderStatusSchema>;
 

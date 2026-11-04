@@ -169,6 +169,20 @@
       "when": 1793804092041,
       "tag": "0023_erp_ipi_rate_rate_missing",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793816171837,
+      "tag": "0024_order_delete_cancelled_data",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793816186598,
+      "tag": "0025_order_status_drop_cancelled",
+      "breakpoints": true
     }
   ]
 }

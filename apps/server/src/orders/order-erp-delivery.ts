@@ -39,33 +39,25 @@ export async function enqueueOrderDelivery(tx: Executor, order: OrderRow, at: Da
 }
 
 /**
- * D-5: the user cancels a queued order. Only a row still `pending` (the worker has not claimed it) can be
- * withdrawn; the update is atomic with the worker's claim. `processing`/`unknown` rows (a send may be in
- * flight or may already exist in the ERP) are never cancelled from here: `busy`.
+ * D-Y: removes the delivery records of an order that is being deleted. Refuses (`busy`) when a delivery is still
+ * live (pending, processing or unknown): a send may be queued, in flight or already in the ERP. Terminal rows
+ * (rejected, with their dry-run records by cascade) are deleted with the order.
  */
-export async function withdrawPendingDelivery(tx: Executor, orderId: string, at: Date): Promise<'withdrawn' | 'busy'> {
-  const withdrawn = await tx
-    .update(integrationOutbox)
-    .set({ status: 'rejected', lastErrorClass: 'cancelled_by_user', nextAttemptAt: null, lastStep: null, updatedAt: at })
-    .where(
-      and(
-        eq(integrationOutbox.aggregateType, ORDER_DELIVERY_AGGREGATE),
-        eq(integrationOutbox.aggregateId, orderId),
-        eq(integrationOutbox.status, 'pending'),
-      ),
-    )
-    .returning({ id: integrationOutbox.id });
-  if (withdrawn.length > 0) return 'withdrawn';
-  // No pending row: either a send is in flight/ambiguous (busy) or the order has no delivery row at all.
-  const inFlight = await tx
+export async function deleteOrderDeliveries(tx: Executor, orderId: string): Promise<'deleted' | 'busy'> {
+  const live = await tx
     .select({ id: integrationOutbox.id })
     .from(integrationOutbox)
     .where(
       and(
         eq(integrationOutbox.aggregateType, ORDER_DELIVERY_AGGREGATE),
         eq(integrationOutbox.aggregateId, orderId),
-        inArray(integrationOutbox.status, ['processing', 'unknown']),
+        inArray(integrationOutbox.status, ['pending', 'processing', 'unknown']),
       ),
-    );
-  return inFlight.length > 0 ? 'busy' : 'withdrawn';
+    )
+    .limit(1);
+  if (live.length > 0) return 'busy';
+  await tx
+    .delete(integrationOutbox)
+    .where(and(eq(integrationOutbox.aggregateType, ORDER_DELIVERY_AGGREGATE), eq(integrationOutbox.aggregateId, orderId)));
+  return 'deleted';
 }

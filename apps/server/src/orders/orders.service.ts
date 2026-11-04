@@ -12,11 +12,11 @@ import type {
   ReplaceOrderRequest,
 } from '@salesforce/contracts';
 import {
-  canTransitionOrder,
   customerOrderBlock,
   datasetOriginForConfigurationSource,
   discountAuthorityModeOf,
   isCustomerInScope,
+  isOrderDeletable,
   isOrderEditable,
   isQuotationTopCode,
   normalizeDecimalString,
@@ -43,7 +43,7 @@ import { uuidv7 } from '../platform/ids.js';
 import { CLOCK, DATASET_IDENTITY, ORDER_ENQUEUE_ENABLED, type Clock } from '../platform/tokens.js';
 import { DraftBuilder, type DraftOutcome } from './draft-builder.js';
 import { assertEligibleForErpSubmission } from './erp-eligibility.guard.js';
-import { enqueueOrderDelivery, withdrawPendingDelivery } from './order-erp-delivery.js';
+import { deleteOrderDeliveries, enqueueOrderDelivery } from './order-erp-delivery.js';
 import { orderFingerprint } from './order-fingerprint.js';
 import { InstallationConfigurationService } from '../configuration/configuration.service.js';
 import { toOrderApproval, toOrderDetail, toOrderListItem } from './order.mapper.js';
@@ -360,9 +360,6 @@ export class OrdersService {
     }
 
     const source = await this.loadVisible(context.scope, sourceId);
-    if (source.status === 'cancelled') {
-      throw new AppError('conflict', { message: 'Este orçamento foi descartado e não pode ser duplicado.', details: { reason: 'source_cancelled' } });
-    }
     if (!isQuotationTopCode(source.topCode, context.configuration.sales)) {
       throw new AppError('conflict', { message: 'Só é possível duplicar como pedido um orçamento.', details: { reason: 'not_a_quotation' } });
     }
@@ -458,7 +455,7 @@ export class OrdersService {
     return this.detailOf(existing);
   }
 
-  /* ---------- replace / discard ---------- */
+  /* ---------- replace / delete ---------- */
 
   async replace(user: CurrentUser, id: string, body: ReplaceOrderRequest): Promise<OrderDetail> {
     assertDatasetMatches(this.dataset, body.expectedDataset);
@@ -524,50 +521,37 @@ export class OrdersService {
     return this.detailOf(updated);
   }
 
-  async discard(user: CurrentUser, id: string): Promise<OrderDetail> {
+  /**
+   * D-Y: there is no discarded state. The seller deletes a quote/order that never reached Sankhya (no ERP number,
+   * nothing queued or in flight); a manager or admin deletes any visible one. Physical deletion with the items, the
+   * approval requests and the delivery records, and one audit event (who, number, customer, total) in the same transaction.
+   */
+  async remove(user: CurrentUser, id: string): Promise<void> {
     const { scope } = await this.policy.accessContext(user);
     const current = await this.loadVisible(scope, id);
-    this.assertCancellable(current);
-    const at = this.clock();
+    this.assertDeletable(current);
 
-    const updated = await this.orders.transaction(async (tx) => {
+    await this.orders.transaction(async (tx) => {
       const locked = await this.orders.findById(id, tx, true);
       this.assertInScope(scope, locked);
-      this.assertCancellable(locked);
-      // D-5: a queued order is withdrawn from the delivery only while the worker has not claimed it; once a send
-      // is in flight (or ambiguous) the user waits for its outcome, never a cancel that could race the ERP.
-      if (locked.status === 'queued' && (await withdrawPendingDelivery(tx, id, at)) === 'busy') {
+      this.assertDeletable(locked);
+      if ((await deleteOrderDeliveries(tx, id)) === 'busy') {
         throw new AppError('conflict', {
-          message: 'O pedido está sendo enviado ao Sankhya. Aguarde a conclusão do envio para cancelar.',
+          message: 'O pedido está na fila de envio ao Sankhya. Aguarde a conclusão do envio.',
           details: { reason: 'delivery_in_progress' },
         });
       }
-      const invalidated = await this.orders.invalidatePendingApproval(id, at, tx);
-      const row = await this.orders.updateOrder(
-        id,
-        { status: 'cancelled', version: locked.version + 1, updatedAt: at },
-        tx,
-      );
-      if (invalidated) {
-        await this.audit.record(
-          { action: AUDIT_ACTIONS.orderApprovalInvalidated, actorAccountId: user.accountId, detail: { orderId: id, reason: 'discarded', previousStatus: locked.status } },
-          tx,
-        );
-      }
-      const items = await this.orders.itemsOf(id, tx);
-      if (locked.status === 'queued') {
-        await this.audit.record(
-          { action: AUDIT_ACTIONS.orderErpCancelledByUser, actorAccountId: user.accountId, detail: this.auditDetail(row, items.length) },
-          tx,
-        );
-      }
+      const itemCount = (await this.orders.itemsOf(id, tx)).length;
+      await this.orders.deleteOrder(id, tx);
       await this.audit.record(
-        { action: AUDIT_ACTIONS.orderDiscarded, actorAccountId: user.accountId, detail: this.auditDetail(row, items.length) },
+        {
+          action: AUDIT_ACTIONS.orderDeleted,
+          actorAccountId: user.accountId,
+          detail: { ...this.auditDetail(locked, itemCount), status: locked.status, estimatedTotal: locked.estimatedTotal },
+        },
         tx,
       );
-      return row;
     });
-    return this.detailOf(updated);
   }
 
   /* ---------- submit ---------- */
@@ -726,9 +710,12 @@ export class OrdersService {
     }
   }
 
-  private assertCancellable(order: OrderRow): void {
-    if (!canTransitionOrder(order.status as Parameters<typeof canTransitionOrder>[0], 'cancelled')) {
-      throw new AppError('order_not_editable');
+  private assertDeletable(order: OrderRow): void {
+    if (order.erpNumber !== null) {
+      throw new AppError('conflict', { message: 'Este documento já foi criado no Sankhya e não pode ser excluído aqui.', details: { reason: 'has_erp_number' } });
+    }
+    if (!isOrderDeletable(order.status as Parameters<typeof isOrderDeletable>[0], order.erpNumber)) {
+      throw new AppError('conflict', { message: 'Este documento está na fila de envio ao Sankhya e não pode ser excluído agora.', details: { reason: 'delivery_in_progress' } });
     }
   }
 

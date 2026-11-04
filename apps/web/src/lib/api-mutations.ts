@@ -14,7 +14,8 @@ export function replaceOrder(api: ApiClient, id: string, body: ReplaceOrderBody)
   return callApi(() => api.PUT("/orders/{id}", { params: { path: { id } }, body }));
 }
 
-export function discardOrder(api: ApiClient, id: string) {
+/** D-Y: physical deletion of a quote/order that never reached Sankhya (204, no body). */
+export function deleteOrder(api: ApiClient, id: string) {
   return callApi(() => api.DELETE("/orders/{id}", { params: { path: { id } } }));
 }
 
@@ -75,7 +76,7 @@ export const TEMPLATE_LIMIT_REACHED = "template_limit_reached";
 export const TEMPLATE_NO_USABLE_LINES = "no_usable_lines";
 
 /**
- * "Repetir último pedido": a brand-new, independent draft from the customer's most recent NON-cancelled order
+ * "Repetir último pedido": a brand-new, independent draft from the customer's most recent order
  * recorded in Sales Force (never Sankhya/ERP history, which is not mirrored here). Only product + quantity are
  * copied; prices are always resolved by the server. Shares its `no_usable_lines` conflict with order templates
  * (same `skippedLines` shape, same classification), so it reuses `TEMPLATE_NO_USABLE_LINES` rather than a duplicate
@@ -102,5 +103,4 @@ export function duplicateAsOrder(api: ApiClient, id: string, body: DuplicateAsOr
 
 /** 409 reasons of `duplicate-as-order` (besides `no_usable_lines`, shared with templates). */
 export const NOT_A_QUOTATION = "not_a_quotation";
-export const SOURCE_CANCELLED = "source_cancelled";
 export const ORDER_TOP_NOT_CONFIGURED = "order_top_not_configured";

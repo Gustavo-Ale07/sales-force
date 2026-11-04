@@ -51,12 +51,12 @@ export class OrdersController {
     return this.orders.replace(user, contract.params.id, contract.body);
   }
 
-  @ApiRoute(routes.discardOrder)
-  discard(
+  @ApiRoute(routes.deleteOrder)
+  remove(
     @CurrentUserParam() user: CurrentUser,
-    @Contract() contract: RequestContract<typeof routes.discardOrder>,
-  ): Promise<OrderDetail> {
-    return this.orders.discard(user, contract.params.id);
+    @Contract() contract: RequestContract<typeof routes.deleteOrder>,
+  ): Promise<void> {
+    return this.orders.remove(user, contract.params.id);
   }
 
   /** Awaiting approval (200), `discount_blocked` or `erp_submission_disabled` (409): see `OrdersService.submit`. */

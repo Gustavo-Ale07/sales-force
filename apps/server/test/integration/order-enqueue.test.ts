@@ -125,19 +125,7 @@ describe('API-side enqueue for the ERP (SNK-7 D-5, D-M)', () => {
     expect(await outboxOf(on, id)).toHaveLength(0);
   });
 
-  it('a queued order still pending is cancelled by the user: order cancelled, delivery withdrawn (D-5)', async () => {
-    const id = await draft(on);
-    await bindToSandbox(on, id);
-    expect((await on.call('seller1', 'POST', `/orders/${id}/submit`)).status).toBe(200);
-    const discarded = await on.call('seller1', 'DELETE', `/orders/${id}`);
-    expect(discarded.status).toBe(200);
-    expect(discarded.body.status).toBe('cancelled');
-    const [row] = await outboxOf(on, id);
-    expect(row?.status).toBe('rejected');
-    expect(row?.lastErrorClass).toBe('cancelled_by_user');
-  });
-
-  it.each(['processing', 'unknown'] as const)('a queued order whose delivery is %s cannot be cancelled (409)', async (state) => {
+  it.each(['pending', 'processing', 'unknown'] as const)('D-Y: a queued order whose delivery is %s has no delete (409)', async (state) => {
     const id = await draft(on);
     await bindToSandbox(on, id);
     expect((await on.call('seller1', 'POST', `/orders/${id}/submit`)).status).toBe(200);
@@ -147,5 +135,18 @@ describe('API-side enqueue for the ERP (SNK-7 D-5, D-M)', () => {
     expect(JSON.stringify(response.body)).toContain('delivery_in_progress');
     const order = await on.call('seller1', 'GET', `/orders/${id}`);
     expect(order.body.status).toBe('queued');
+    expect(await outboxOf(on, id)).toHaveLength(1);
+  });
+
+  it('D-Y: a rejected order (delivery finished, no ERP number) is deleted together with its delivery record', async () => {
+    const id = await draft(on);
+    await bindToSandbox(on, id);
+    expect((await on.call('seller1', 'POST', `/orders/${id}/submit`)).status).toBe(200);
+    const db = on.database.handle.db;
+    await db.update(integrationOutbox).set({ status: 'rejected', lastErrorClass: 'validation' }).where(eq(integrationOutbox.aggregateId, id));
+    await db.update(salesOrder).set({ status: 'rejected' }).where(eq(salesOrder.id, id));
+    expect((await on.call('seller1', 'DELETE', `/orders/${id}`)).status).toBe(204);
+    expect(await outboxOf(on, id)).toHaveLength(0);
+    expect((await on.call('seller1', 'GET', `/orders/${id}`)).status).toBe(404);
   });
 });

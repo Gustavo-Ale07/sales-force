@@ -1756,11 +1756,12 @@
         }
       },
       "delete": {
-        "operationId": "discardOrder",
+        "operationId": "deleteOrder",
         "tags": [
           "orders"
         ],
-        "summary": "Discard a draft (status becomes cancelled)",
+        "summary": "Delete a quote or order that never reached Sankhya (D-Y)",
+        "description": "Physical deletion with its items and delivery records. 409 when the order has an ERP number or a delivery is queued or in progress. Recorded in the audit trail.",
         "parameters": [
           {
             "name": "id",
@@ -1774,15 +1775,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Rascunho descartado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OrderDetail"
-                }
-              }
-            }
+          "204": {
+            "description": "Orçamento ou pedido excluído"
           },
           "400": {
             "description": "Requisição inválida (validation_failed)",
@@ -6059,7 +6053,6 @@
           "awaiting_approval",
           "approved",
           "approval_rejected",
-          "cancelled",
           "queued",
           "sent",
           "rejected",

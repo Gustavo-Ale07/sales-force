@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { OrderDetailSchema, OrdersResponseSchema } from '@salesforce/contracts';
-import { auditLog, integrationOutbox, salesOrder } from '@salesforce/db';
+import { auditLog, integrationOutbox, salesOrder, salesOrderItem } from '@salesforce/db';
 import { computeDiscountedLineTotal, computeLineTotal, decimalEquals, sumTotals, type InstallationConfiguration } from '@salesforce/domain';
 import { DEMO_ACCOUNT_EMAILS, DEMO_CONFIGURATION, getDemoDataset } from '@salesforce/sankhya';
 import { eq } from 'drizzle-orm';
@@ -279,33 +279,37 @@ describe('replace, discard, submit', () => {
     expect(after.body.items).toHaveLength(2);
   });
 
-  it('discard makes the draft cancelled; then replace, discard and any edit are order_not_editable', async () => {
+  it('D-Y: delete removes the order with its items; afterwards it is 404 and absent from the list', async () => {
     const created = await create('seller1', draftBody());
     const id = created.body.id;
-    const discarded = await ctx.call('seller1', 'DELETE', `/orders/${id}`);
-    expect(discarded.status).toBe(200);
-    expect(discarded.body.status).toBe('cancelled');
-    expect(discarded.body.version).toBe(2);
+    expect((await ctx.call('seller1', 'GET', `/orders/${id}`)).status).toBe(200);
+    const deleted = await ctx.call('seller1', 'DELETE', `/orders/${id}`);
+    expect(deleted.status).toBe(204);
 
-    const replaceAfter = await ctx.call('seller1', 'PUT', `/orders/${id}`, {
-      expectedVersion: 2,
-      customerCode: customer1,
-      negotiationTypeCode: 2,
-      notes: null,
-      items: [],
-    });
-    expect(replaceAfter.status).toBe(409);
-    expect(replaceAfter.body.code).toBe('order_not_editable');
-    const discardAgain = await ctx.call('seller1', 'DELETE', `/orders/${id}`);
-    expect(discardAgain.status).toBe(409);
-    expect(discardAgain.body.code).toBe('order_not_editable');
-    // The draft number and history stay readable.
-    expect((await ctx.call('seller1', 'GET', `/orders/${id}`)).body.status).toBe('cancelled');
+    expect((await ctx.call('seller1', 'GET', `/orders/${id}`)).status).toBe(404);
+    expect((await ctx.call('seller1', 'DELETE', `/orders/${id}`)).status).toBe(404);
+    expect((await ctx.call('seller1', 'PUT', `/orders/${id}`, { expectedVersion: 1, customerCode: customer1, negotiationTypeCode: 2, notes: null, items: [] })).status).toBe(404);
+    const db = ctx.database.handle.db;
+    expect(await db.select().from(salesOrder).where(eq(salesOrder.id, id))).toEqual([]);
+    expect(await db.select().from(salesOrderItem).where(eq(salesOrderItem.orderId, id))).toEqual([]);
+    const list = await ctx.call('seller1', 'GET', '/orders?pageSize=100');
+    expect(list.body.items.map((order: Json) => order.id)).not.toContain(id);
+  });
+
+  it('D-Y: an order that has an ERP number cannot be deleted (409 has_erp_number) and stays intact', async () => {
+    const created = await create('seller1', draftBody());
+    const id = created.body.id;
+    const db = ctx.database.handle.db;
+    await db.update(salesOrder).set({ erpNumber: 987654 }).where(eq(salesOrder.id, id));
+    const refused = await ctx.call('seller1', 'DELETE', `/orders/${id}`);
+    expect(refused.status).toBe(409);
+    expect(refused.body.details?.reason).toBe('has_erp_number');
+    expect((await db.select().from(salesOrder).where(eq(salesOrder.id, id))).length).toBe(1);
   });
 
   it('a non-editable status is reported before a version mismatch', async () => {
     const created = await create('seller1', draftBody());
-    await ctx.call('seller1', 'DELETE', `/orders/${created.body.id}`);
+    await ctx.database.handle.db.update(salesOrder).set({ status: 'approved' }).where(eq(salesOrder.id, created.body.id));
     const response = await ctx.call('seller1', 'PUT', `/orders/${created.body.id}`, {
       expectedVersion: 1,
       customerCode: customer1,
@@ -369,19 +373,19 @@ describe('replace, discard, submit', () => {
     // Still refused for a manager and an admin: it is not a permission question.
     expect((await ctx.call('manager', 'POST', `/orders/${id}/submit`)).body.code).toBe('erp_submission_disabled');
     expect((await ctx.call('admin', 'POST', `/orders/${id}/submit`)).body.code).toBe('erp_submission_disabled');
-    // A discarded order is not submittable at all (ORD-1).
+    // A deleted order does not exist any more (D-Y).
     await ctx.call('seller1', 'DELETE', `/orders/${id}`);
-    expect((await ctx.call('seller1', 'POST', `/orders/${id}/submit`)).body.code).toBe('order_not_editable');
+    expect((await ctx.call('seller1', 'POST', `/orders/${id}/submit`)).status).toBe(404);
   });
 
-  it('audits create, replace and discard with identifiers only (no notes, no payload)', async () => {
+  it('audits create, replace and delete with identifiers only (no notes, no payload)', async () => {
     const notes = 'texto-livre-que-nao-deve-ir-para-a-auditoria';
     const created = await create('seller1', draftBody({ notes }));
     const id = created.body.id;
     await ctx.call('seller1', 'PUT', `/orders/${id}`, { expectedVersion: 1, customerCode: customer1, negotiationTypeCode: 2, notes, items: [] });
     await ctx.call('seller1', 'DELETE', `/orders/${id}`);
     const rows = (await ctx.database.handle.db.select().from(auditLog)).filter((row) => (row.detail as Json | null)?.orderId === id);
-    expect(rows.map((row) => row.action).sort()).toEqual(['order.created', 'order.discarded', 'order.replaced']);
+    expect(rows.map((row) => row.action).sort()).toEqual(['order.created', 'order.deleted', 'order.replaced']);
     expect(JSON.stringify(rows)).not.toContain(notes);
     expect(rows.every((row) => row.actorAccountId === ctx.accounts.ids[DEMO_ACCOUNT_EMAILS.seller1])).toBe(true);
   });
@@ -405,8 +409,9 @@ describe('list orders', () => {
     expect(drafts.body.items.map((order: Json) => order.id)).toContain(first.body.id);
     expect(drafts.body.items.map((order: Json) => order.id)).not.toContain(second.body.id);
 
-    const cancelled = await ctx.call('seller1', 'GET', '/orders?status=cancelled&pageSize=100');
-    expect(cancelled.body.items.map((order: Json) => order.id)).toContain(second.body.id);
+    // D-Y: the deleted order is gone, and `cancelled` is no longer a status.
+    expect((await ctx.call('seller1', 'GET', '/orders?pageSize=100')).body.items.map((order: Json) => order.id)).not.toContain(second.body.id);
+    expect((await ctx.call('seller1', 'GET', '/orders?status=cancelled&pageSize=100')).status).toBe(400);
 
     const byNumber = await ctx.call('seller1', 'GET', '/orders?sort=draftNumber&pageSize=100');
     const numbers = byNumber.body.items.map((order: Json) => order.draftNumber);
@@ -528,7 +533,7 @@ describe('list orders: commercial filters (period, products, combinations)', () 
     expect(await ids('seller1', `${both}&from=2026-03-01&to=2026-03-31`)).toEqual([B]);
     expect(await ids('seller1', `${both}&from=2026-03-01&to=2026-03-31&dateField=updatedAt`)).toEqual([B]);
     expect(await ids('seller1', `${both}&from=2026-03-01&to=2026-03-09`)).toEqual([]);
-    expect(await ids('seller1', `customerCode=${customer1}&productCodes=${code(1)}&status=cancelled`)).toEqual([]);
+    expect(await ids('seller1', `customerCode=${customer1}&productCodes=${code(1)}&status=queued`)).toEqual([]);
     expect(await ids('manager', `customerCode=${customer2}&productCodes=${code(2)}`)).toEqual([foreign]);
   });
 
@@ -669,7 +674,7 @@ describe('IDOR race: the order leaves the caller scope between the unlocked read
     }
   });
 
-  it('discard answers 404 when the locked row is out of scope, and does not cancel it', async () => {
+  it('delete answers 404 when the locked row is out of scope, and does not delete it', async () => {
     const created = await create('seller1', draftBody());
     const restore = await moveAfterFirstRead(created.body.id);
     try {

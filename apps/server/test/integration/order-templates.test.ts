@@ -505,8 +505,8 @@ describe('use: a new independent draft through the same code path as createOrder
     expect((await ctx.call('seller1', 'PUT', `/order-templates/${template.id}`, { expectedVersion: 1, name: 'Mudou', items: lines([priced[3], '1']) })).status).toBe(200);
     expect((await ctx.call('seller1', 'GET', `/orders/${orderId}`)).body).toEqual(orderBefore);
 
-    // Discard the order: the template stays; delete the template: another order stays.
-    expect((await ctx.call('seller1', 'DELETE', `/orders/${orderId}`)).status).toBe(200);
+    // Delete the order: the template stays; delete the template: another order stays.
+    expect((await ctx.call('seller1', 'DELETE', `/orders/${orderId}`)).status).toBe(204);
     expect((await ctx.call('seller1', 'GET', `/order-templates/${template.id}`)).status).toBe(200);
     const second = await useTemplate('seller1', template.id);
     expect((await ctx.call('seller1', 'DELETE', `/order-templates/${template.id}`)).status).toBe(204);

@@ -164,10 +164,10 @@ describe('duplicate as order', () => {
     expect((await duplicate(randomUUID())).status).toBe(404);
   });
 
-  it('a cancelled quotation cannot be duplicated', async () => {
+  it('D-Y: a deleted quotation cannot be duplicated (404)', async () => {
     const quotation = await create({ topCode: 1000 });
     await app.call('seller1', 'DELETE', `/orders/${quotation.body.id}`);
-    expect((await duplicate(quotation.body.id)).status).toBe(409);
+    expect((await duplicate(quotation.body.id)).status).toBe(404);
   });
 
   it('the same clientRequestId for a different source conflicts', async () => {

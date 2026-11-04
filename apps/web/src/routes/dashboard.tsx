@@ -198,7 +198,6 @@ export function DashboardPage() {
   const productsSellableWithoutPrice = findMetric(groups, "catalog", "products_sellable_without_price");
   const drafts = findMetric(groups, "orders", "drafts");
   const draftsEstimatedTotal = findMetric(groups, "orders", "drafts_estimated_total");
-  const cancelled = findMetric(groups, "orders", "cancelled");
   const creditIndicators = findMetric(groups, "credit", "credit_indicators");
   const positivationRate = findMetric(groups, "positivation", "positivation_rate");
 
@@ -230,7 +229,7 @@ export function DashboardPage() {
   ];
   const pendingAttention = attentionItems.filter((item) => item.count !== null && item.count > 0);
   // A metric the server could not provide is listed once, quietly, instead of as a row of "Não disponível" (never a made-up zero).
-  const otherMetrics = [cancelled, creditIndicators, positivationRate].filter((metric): metric is Metric => metric !== undefined);
+  const otherMetrics = [creditIndicators, positivationRate].filter((metric): metric is Metric => metric !== undefined);
   const otherWithValue = otherMetrics.filter((metric) => metric.value !== null);
   const otherWithoutValue = otherMetrics.filter((metric) => metric.value === null);
 

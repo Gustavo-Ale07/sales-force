@@ -37,12 +37,12 @@ const EXPECTED: Record<string, { api: Priv[]; worker: Priv[] }> = {
   // Worker: INSERT + column-level UPDATE (is_current) only (CFG-8); the column grant is checked below.
   installation_configuration_version: { api: S, worker: ['SELECT', 'INSERT'] },
   sync_state: { api: S, worker: SIU },
-  sales_order: { api: SIU, worker: ['SELECT', 'UPDATE'] },
+  sales_order: { api: SIUD, worker: ['SELECT', 'UPDATE'] },
   sales_order_item: { api: SIUD, worker: S },
   sales_order_approval: { api: SIU, worker: [] },
   customer_order_template: { api: SIU, worker: [] },
   customer_order_template_item: { api: SIUD, worker: [] },
-  integration_outbox: { api: SIU, worker: ['SELECT', 'UPDATE'] },
+  integration_outbox: { api: SIUD, worker: ['SELECT', 'UPDATE'] },
   integration_order_dry_run: { api: [], worker: ['SELECT', 'INSERT', 'DELETE'] },
   product_media: { api: S, worker: SIUD },
   schema_migration: { api: S, worker: [] },
@@ -200,7 +200,6 @@ describe('db-roles.sql', () => {
       'SELECT count(*) FROM audit_log',
       'UPDATE audit_log SET action = action',
       'DELETE FROM audit_log',
-      'DELETE FROM integration_outbox',
       'SELECT count(*) FROM integration_order_dry_run',
       'SELECT count(*) FROM pgboss.job',
       'UPDATE schema_migration SET hash = hash',
@@ -208,6 +207,9 @@ describe('db-roles.sql', () => {
     ]) {
       expect(await sqlState('force_api', sql), sql).toBe(DENIED);
     }
+    // D-Y: the API deletes an order that never reached Sankhya, with its delivery record.
+    expect(await sqlState('force_api', 'DELETE FROM sales_order WHERE false')).toBeUndefined();
+    expect(await sqlState('force_api', 'DELETE FROM integration_outbox WHERE false')).toBeUndefined();
   });
 
   it('worker: writes the mirror, sync_state, outbox delivery state and order ERP state only; cannot read credentials/sessions; cannot DDL', async () => {

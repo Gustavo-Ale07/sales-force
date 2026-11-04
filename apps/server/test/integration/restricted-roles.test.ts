@@ -228,7 +228,7 @@ describe('API as force_api', () => {
     const submit = await call('POST', `/orders/${id}/submit`);
     expect(submit.status).toBe(409);
     expect(submit.body?.['code']).toBe('erp_submission_disabled');
-    expect((await call('DELETE', `/orders/${id}`)).status).toBe(200);
+    expect((await call('DELETE', `/orders/${id}`)).status).toBe(204);
   });
 
   it('runs the template lifecycle: create, replace, use, delete', async () => {

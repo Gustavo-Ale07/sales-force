@@ -20,7 +20,7 @@ function newUuid(): string {
 }
 
 /**
- * "Repetir último pedido": creates a new, independent draft from the customer's most recent NON-cancelled order
+ * "Repetir último pedido": creates a new, independent draft from the customer's most recent order
  * recorded in Sales Force (never Sankhya/ERP history — no such mirror exists). Only product + quantity are copied;
  * prices are always recomputed server-side. Reachable in one click from the customer page (RF, Fase C). The
  * mutation is lifted out of the button itself so its failure can be shown as a page-level notice below the header,

@@ -11,7 +11,7 @@ async function draftReference(page: Page): Promise<string> {
   return match?.[0] ?? "";
 }
 
-test.describe("Cenário 4 — novo pedido, rascunhos e descarte", () => {
+test.describe("Cenário 4 — novo pedido, rascunhos e exclusão", () => {
   test("cria um rascunho com dois produtos, confere o total e o encontra em Pedidos", async ({ page }) => {
     await loginAsSeller(page);
     const { total } = await createDraftViaUi(page);
@@ -120,29 +120,23 @@ test.describe("Cenário 4 — novo pedido, rascunhos e descarte", () => {
     await expect(page.getByRole("heading", { level: 1, name: "Clientes" })).toBeVisible();
   });
 
-  test("descartar pede confirmação; 'Manter rascunho' preserva e a confirmação marca como Descartado", async ({ page }) => {
+  test("excluir pede confirmação; 'Manter' preserva e a confirmação remove o documento da lista (D-Y)", async ({ page }) => {
     await loginAsSeller(page);
     await createDraftViaUi(page);
     const reference = await draftReference(page);
 
     await navLink(page, "Vendas").click();
     const row = bodyRows(tableRegion(page, "Pedidos")).filter({ hasText: reference });
-    await row.getByRole("button", { name: `Descartar ${reference}` }).click();
-    const dialog = page.getByRole("dialog", { name: "Descartar rascunho?" });
-    await expect(dialog).toContainText(reference);
-    await dialog.getByRole("button", { name: "Manter rascunho" }).click();
+    await row.getByRole("button", { name: `Excluir ${reference}` }).click();
+    const dialog = page.getByRole("dialog", { name: /^Excluir .*\?$/ });
+    await expect(dialog).toContainText("Isso não pode ser desfeito.");
+    await dialog.getByRole("button", { name: "Manter" }).click();
     await expect(dialog).toBeHidden();
     await expect(row).toContainText("Rascunho");
 
-    await row.getByRole("button", { name: `Descartar ${reference}` }).click();
-    await page.getByRole("dialog", { name: "Descartar rascunho?" }).getByRole("button", { name: "Descartar", exact: true }).click();
-    await expect(row).toContainText("Descartado");
-    // A discarded draft is no longer editable and offers no further discard action.
-    await expect(row.getByRole("button", { name: /^Descartar/ })).toHaveCount(0);
-    await row.click();
-    await expect(page.getByText("Somente leitura")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Salvar pedido" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Enviar ao Sankhya" })).toHaveCount(0);
+    await row.getByRole("button", { name: `Excluir ${reference}` }).click();
+    await page.getByRole("dialog", { name: /^Excluir .*\?$/ }).getByRole("button", { name: "Excluir", exact: true }).click();
+    await expect(row).toHaveCount(0);
   });
 
   test("edição concorrente em outra aba gera conflito de versão com opção de recarregar", async ({ page, context }) => {

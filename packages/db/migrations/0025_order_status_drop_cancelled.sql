@@ -1,0 +1,2 @@
+ALTER TABLE "sales_order" DROP CONSTRAINT "sales_order_status_chk";--> statement-breakpoint
+ALTER TABLE "sales_order" ADD CONSTRAINT "sales_order_status_chk" CHECK ("sales_order"."status" in ('draft', 'awaiting_approval', 'approved', 'approval_rejected', 'queued', 'sent', 'rejected', 'unknown'));

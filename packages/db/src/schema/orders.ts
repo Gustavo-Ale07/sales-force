@@ -24,7 +24,6 @@ export const orderStatuses = [
   'awaiting_approval',
   'approved',
   'approval_rejected',
-  'cancelled',
   'queued',
   'sent',
   'rejected',

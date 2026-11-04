@@ -128,16 +128,6 @@ describe('existing drafts of a customer that became ineligible', () => {
     }
   });
 
-  it('a cancelled order is never flagged', async () => {
-    const created = await ctx.call('manager', 'POST', '/orders', body(normal));
-    await ctx.call('manager', 'DELETE', `/orders/${created.body.id}`);
-    await setCustomer({ active: false });
-    try {
-      expect((await ctx.call('manager', 'GET', `/orders/${created.body.id}`)).body.review).toBeNull();
-    } finally {
-      await restore();
-    }
-  });
 });
 
 describe('all_visible never makes a linked seller global (server)', () => {

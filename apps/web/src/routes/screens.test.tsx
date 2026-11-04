@@ -294,7 +294,7 @@ describe("Catálogo (products)", () => {
 describe("Rascunhos (orders)", () => {
   it("lists drafts with total and status and opens one", async () => {
     const { user, router } = renderApp("/pedidos", {
-      handlers: { "GET /orders": { body: ordersPage([orderListItem(), orderListItem({ id: "0190a000-0000-7000-8000-0000000000bb", draftNumber: 13, isPartial: true, status: "cancelled" })]) } },
+      handlers: { "GET /orders": { body: ordersPage([orderListItem(), orderListItem({ id: "0190a000-0000-7000-8000-0000000000bb", draftNumber: 13, isPartial: true, status: "draft" })]) } },
     });
     expect(await screen.findByText("Pedido nº 12")).toBeInTheDocument();
     expect(screen.getByText("(parcial)")).toBeInTheDocument();
@@ -302,41 +302,41 @@ describe("Rascunhos (orders)", () => {
     await waitFor(() => expect(router.state.location.pathname).toBe(`/pedidos/${ORDER_ID}`));
   });
 
-  it("offers discard only for drafts", async () => {
+  it("D-Y: offers Excluir only when the document never reached Sankhya (no ERP number, not queued)", async () => {
     renderApp("/pedidos", { handlers: { "GET /orders": { body: ordersPage([orderListItem(), orderListItem({ id: "0190a000-0000-7000-8000-0000000000bb", draftNumber: 13, status: "sent", erpNumber: 555 })]) } } });
     expect(await screen.findByText("Pedido nº 12")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /^Descartar/ })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: /^Excluir/ })).toHaveLength(1);
     expect(screen.getByText("Pedido nº 555")).toBeInTheDocument();
   });
 
-  it("discards a draft after confirmation and refreshes the list", async () => {
-    let discarded = false;
+  it("deletes after confirmation and refreshes the list", async () => {
+    let deleted = false;
     const { user, calls } = renderApp("/pedidos", {
       handlers: {
-        "GET /orders": () => ({ body: ordersPage(discarded ? [] : [orderListItem()]) }),
+        "GET /orders": () => ({ body: ordersPage(deleted ? [] : [orderListItem()]) }),
         "DELETE /orders/:id": () => {
-          discarded = true;
-          return { body: { ...orderListItem({ status: "cancelled" }), negotiationTypeCode: null, notes: null, items: [], totals: { estimatedTotal: "0", lineCount: 0, unpricedLineCount: 0, isPartial: false } } };
+          deleted = true;
+          return { status: 204 };
         },
       },
     });
-    await user.click(await screen.findByRole("button", { name: "Descartar Pedido nº 12" }));
-    const dialog = await screen.findByRole("dialog", { name: "Descartar rascunho?" });
-    await user.click(within(dialog).getByRole("button", { name: "Descartar" }));
+    await user.click(await screen.findByRole("button", { name: "Excluir Pedido nº 12" }));
+    const dialog = await screen.findByRole("dialog", { name: "Excluir pedido nº 12?" });
+    await user.click(within(dialog).getByRole("button", { name: "Excluir" }));
     expect(await screen.findByText("Nenhum pedido ainda")).toBeInTheDocument();
     expect(callsTo(calls, "DELETE", `/orders/${ORDER_ID}`)).toHaveLength(1);
   });
 
-  it("keeps the draft and shows the error with the correlation id when discarding fails", async () => {
+  it("keeps the document and shows the error with the correlation id when deleting fails", async () => {
     const { user } = renderApp("/pedidos", {
       handlers: {
         "GET /orders": { body: ordersPage([orderListItem()]) },
-        "DELETE /orders/:id": apiError(409, "order_not_editable", "Pedido não pode ser descartado.", { requestId: "req-d-1" }),
+        "DELETE /orders/:id": apiError(409, "order_not_editable", "Pedido não pode ser excluído.", { requestId: "req-d-1" }),
       },
     });
-    await user.click(await screen.findByRole("button", { name: "Descartar Pedido nº 12" }));
-    const dialog = await screen.findByRole("dialog", { name: "Descartar rascunho?" });
-    await user.click(within(dialog).getByRole("button", { name: "Descartar" }));
+    await user.click(await screen.findByRole("button", { name: "Excluir Pedido nº 12" }));
+    const dialog = await screen.findByRole("dialog", { name: "Excluir pedido nº 12?" });
+    await user.click(within(dialog).getByRole("button", { name: "Excluir" }));
     expect(await within(dialog).findByText("req-d-1")).toBeInTheDocument();
   });
 

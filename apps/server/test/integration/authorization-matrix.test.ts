@@ -44,7 +44,7 @@ const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>
   createOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   getOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   replaceOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  discardOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  deleteOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   submitOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   listApprovals: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny' },
   approveApproval: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny' },

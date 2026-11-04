@@ -33,7 +33,7 @@ import { Link } from "@tanstack/react-router";
 import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { CustomerPicker } from "../components/customer-picker";
-import { DiscardOrderDialog } from "../components/discard-order-dialog";
+import { DeleteOrderDialog } from "../components/delete-order-dialog";
 import { OrderProductFilter, PRODUCT_MATCH_OPTIONS, useProductLabel, type ProductMatch } from "../components/order-product-filter";
 import { PrintOrderButton } from "../components/print-order-button";
 import { QueryError } from "../components/query-error";
@@ -43,6 +43,7 @@ import { deliveryErrorText, erpStatusText, formatCount, orderReference, orderRev
 import { MAX_ORDER_PRODUCTS, ORDER_DATE_FIELDS, ORDER_STATUSES, type OrdersSearch } from "../lib/route-search";
 import { asDate, asOneOf, compact } from "../lib/search-params";
 import { useSearchBox } from "../lib/use-search-box";
+import { isOrderDeletable } from "@salesforce/domain";
 
 
 function sortDirection(sort: OrdersSearch["sort"], field: "updatedAt" | "draftNumber"): SortDirection | null {
@@ -169,7 +170,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
     sort: params.sort ?? "-updatedAt",
   };
   const query = useQuery(ordersQueryOptions(api, apiParams));
-  const [discarding, setDiscarding] = useState<{ id: string; label: string } | null>(null);
+  const [deleting, setDeleting] = useState<{ id: string; label: string } | null>(null);
 
   const change = (patch: Partial<OrdersSearch>) => onSearchChange(compact({ ...params, page: undefined, ...patch }));
   const [searchText, setSearchText] = useSearchBox(params.search, (search) => change({ search }));
@@ -399,19 +400,19 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
                           disabled={order.itemCount === 0}
                           stopPropagation
                         />
-                        {order.status === "draft" ? (
+                        {isOrderDeletable(order.status, order.erpNumber) ? (
                           <Button
                             size="sm"
                             variant="ghost"
-                            aria-label={`Descartar ${orderReference(order)}`}
+                            aria-label={`Excluir ${orderReference(order)}`}
                             leftIcon={<Trash2 size={13} aria-hidden="true" />}
                             onClick={(event) => {
                               event.stopPropagation();
-                              setDiscarding({ id: order.id, label: orderReference(order) });
+                              setDeleting({ id: order.id, label: orderReference(order) });
                             }}
                             onKeyDown={(event) => event.stopPropagation()}
                           >
-                            Descartar
+                            Excluir
                           </Button>
                         ) : null}
                       </div>
@@ -433,7 +434,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
         ) : null}
       </Card>
 
-      <DiscardOrderDialog order={discarding} onClose={() => setDiscarding(null)} />
+      <DeleteOrderDialog order={deleting} onClose={() => setDeleting(null)} />
     </>
   );
 }

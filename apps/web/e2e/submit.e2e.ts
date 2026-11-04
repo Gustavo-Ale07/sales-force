@@ -27,7 +27,7 @@ test.describe("Cenário 5 — envio ao Sankhya desabilitado", () => {
     const list = (await orders.json()) as { items: Array<{ id: string; status: string; erpNumber: number | null }> };
     expect(list.items.find((o) => o.id === id)?.status).toBe("draft");
     for (const order of list.items) {
-      expect(["draft", "cancelled"]).toContain(order.status);
+      expect(order.status).toBe("draft");
       expect(order.erpNumber).toBeNull();
     }
   });

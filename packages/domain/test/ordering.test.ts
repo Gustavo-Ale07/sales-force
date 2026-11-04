@@ -161,7 +161,7 @@ describe('validateDraftInvariants', () => {
     expect(codes(draft([item(1, '1', priced('1'))]), disabled)).toEqual(['installation_not_enabled@config.general.enabled']);
   });
 
-  it.each(['cancelled', 'queued', 'sent', 'rejected', 'unknown'] as const)('status %s is not editable', (status) => {
+  it.each(['queued', 'sent', 'rejected', 'unknown'] as const)('status %s is not editable', (status) => {
     expect(codes(draft([], { status }))).toEqual(['status_not_editable@status']);
   });
 

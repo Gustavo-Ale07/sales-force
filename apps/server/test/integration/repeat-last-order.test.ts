@@ -67,7 +67,7 @@ async function makeOrder(who: Who = 'seller1', overrides: Record<string, unknown
   return response.body;
 }
 
-describe('repeat last order: a new independent draft from the customer\'s most recent non-cancelled order', () => {
+describe('repeat last order: a new independent draft from the customer\'s most recent order', () => {
   it('201: copies productCode and quantity only, contract-valid, nothing skipped', async () => {
     await reset();
     await makeOrder('seller1', { items: lines([priced[0], '2'], [priced[1], '3.5']) });
@@ -94,11 +94,11 @@ describe('repeat last order: a new independent draft from the customer\'s most r
     expect(repeated.body.order.notes).toBeNull();
   });
 
-  it('uses the most recent NON-cancelled order: a later cancelled order is ignored', async () => {
+  it('uses the most recent order that still exists: a later deleted order is ignored (D-Y)', async () => {
     await reset();
     const older = await makeOrder('seller1', { items: lines([priced[0], '1']) });
     const newer = await makeOrder('seller1', { items: lines([priced[1], '9']) });
-    expect((await ctx.call('seller1', 'DELETE', `/orders/${newer.id}`)).status).toBe(200); // discard -> cancelled
+    expect((await ctx.call('seller1', 'DELETE', `/orders/${newer.id}`)).status).toBe(204); // deleted (D-Y)
     const repeated = await repeatLast('seller1', customer1);
     expect(repeated.status).toBe(201);
     expect(repeated.body.order.items.map((i: Json) => i.productCode)).toEqual([priced[0].code]);
@@ -146,7 +146,7 @@ describe('repeat last order: a new independent draft from the customer\'s most r
     const sourceAfter = await ctx.call('seller1', 'GET', `/orders/${source.id}`);
     expect(sourceAfter.body).toEqual(source);
 
-    expect((await ctx.call('seller1', 'DELETE', `/orders/${newId}`)).status).toBe(200);
+    expect((await ctx.call('seller1', 'DELETE', `/orders/${newId}`)).status).toBe(204);
     const sourceAfterDiscard = await ctx.call('seller1', 'GET', `/orders/${source.id}`);
     expect(sourceAfterDiscard.body).toEqual(source);
   });
@@ -166,10 +166,10 @@ describe('repeat last order: a new independent draft from the customer\'s most r
     expect(response.body.details.reason).toBe('no_previous_order');
   });
 
-  it('409 conflict no_previous_order when every order of the customer is cancelled', async () => {
+  it('409 conflict no_previous_order when every order of the customer was deleted', async () => {
     await reset();
     const order = await makeOrder('seller1');
-    expect((await ctx.call('seller1', 'DELETE', `/orders/${order.id}`)).status).toBe(200);
+    expect((await ctx.call('seller1', 'DELETE', `/orders/${order.id}`)).status).toBe(204);
     const response = await repeatLast('seller1', customer1);
     expect(response.status).toBe(409);
     expect(response.body.details.reason).toBe('no_previous_order');
@@ -286,10 +286,10 @@ describe('repeat last order: a new independent draft from the customer\'s most r
       const first = await repeatLast('seller1', customer1, clientRequestId);
       expect(first.status).toBe(201);
 
-      // Shift the state that a fresh repeat-last call would resolve differently: cancel the very
-      // source order used for the first call (so "latest non-cancelled order" would now resolve to
+      // Shift the state that a fresh repeat-last call would resolve differently: delete the very
+      // source order used for the first call (so "latest order" would now resolve to
       // nothing, or to the repeated draft itself) and make one of its products unsellable.
-      expect((await ctx.call('seller1', 'DELETE', `/orders/${source.id}`)).status).toBe(200);
+      expect((await ctx.call('seller1', 'DELETE', `/orders/${source.id}`)).status).toBe(204);
       await sql('update erp_product set active = false where code = $1', [priced[0].code]);
       try {
         const retry = await repeatLast('seller1', customer1, clientRequestId);
@@ -302,20 +302,18 @@ describe('repeat last order: a new independent draft from the customer\'s most r
       }
     });
 
-    it('a retry that would have no previous order left at all (its own source cancelled, nothing else) still replays instead of 409 no_previous_order', async () => {
+    it('D-Y: once the draft it created was deleted too, nothing is left to replay: 409 no_previous_order', async () => {
       await reset();
       const source = await makeOrder('seller1');
       const clientRequestId = randomUUID();
       const first = await repeatLast('seller1', customer1, clientRequestId);
       expect(first.status).toBe(201);
-      expect((await ctx.call('seller1', 'DELETE', `/orders/${source.id}`)).status).toBe(200);
-      expect((await ctx.call('seller1', 'DELETE', `/orders/${first.body.order.id}`)).status).toBe(200);
+      expect((await ctx.call('seller1', 'DELETE', `/orders/${source.id}`)).status).toBe(204);
+      expect((await ctx.call('seller1', 'DELETE', `/orders/${first.body.order.id}`)).status).toBe(204);
 
       const retry = await repeatLast('seller1', customer1, clientRequestId);
-      expect(retry.status).toBe(200);
-      expect(retry.body.order.id).toBe(first.body.order.id);
-      // The replayed draft still reads as cancelled: repeat-last never resurrects or re-derives it.
-      expect(retry.body.order.status).toBe('cancelled');
+      expect(retry.status).toBe(409);
+      expect(retry.body.details.reason).toBe('no_previous_order');
     });
   });
 

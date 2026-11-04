@@ -4,7 +4,6 @@ import {
   NOT_A_QUOTATION,
   NO_PREVIOUS_ORDER,
   ORDER_TOP_NOT_CONFIGURED,
-  SOURCE_CANCELLED,
   TEMPLATE_LIMIT_REACHED,
   TEMPLATE_NAME_TAKEN,
   TEMPLATE_NO_USABLE_LINES,
@@ -148,9 +147,6 @@ export function describeDuplicateAsOrderError(error: unknown): TemplateErrorDesc
     const correlationId = error.correlationId;
     if (error.reason === NOT_A_QUOTATION) {
       return { title: "Este pedido não é um orçamento", description: "Só um orçamento pode ser duplicado como pedido. Nenhum pedido foi criado.", correlationId };
-    }
-    if (error.reason === SOURCE_CANCELLED) {
-      return { title: "Orçamento descartado", description: "Este orçamento foi descartado e não pode ser duplicado como pedido. Nenhum pedido foi criado.", correlationId };
     }
     if (error.reason === ORDER_TOP_NOT_CONFIGURED) {
       return {

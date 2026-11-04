@@ -82,7 +82,7 @@ test.describe("Cenário 6 — escopo de carteira (vendedor x gerente)", () => {
     await expect(page.locator("body")).not.toContainText(OTHER_SELLER.name);
   });
 
-  test("um vendedor não lê, altera, envia nem descarta o rascunho de outro vendedor", async ({ page, browser }) => {
+  test("um vendedor não lê, altera, envia nem exclui o rascunho de outro vendedor", async ({ page, browser }) => {
     await loginAsSeller(page);
     const { id } = await createDraftViaUi(page);
 
