@@ -22,6 +22,10 @@ STATUS: ACTIVE — atualizado em 2026-10-29. Fonte de verdade ÚNICA: `C:\Dev\sa
 1. Parte 2 (`PROMPT_2026-10-30_parte2_config-sankhya.md`): começa registrando CFG-8, U-10-a..d e U-11 em `docs/decisions.md`; depois Trilha D.
 2. Decisões do dono abertas pelo reviewer: alçada em modo `erp` vs P-10; PDF compartilhado por representante vs P-20 (ver checkpoint).
 
+## Comporta por ambiente de implantação (2026-11-04) — API não subia com o dry-run ligado
+- `SF_DEPLOY_ENVIRONMENT=staging|production` agora decide a comporta (não mais `NODE_ENV`). Detalhes e passos do dono: `.claude/work/CHECKPOINT_2026-11-04-comporta-ambiente.md`; override do dono em `docs/implementation/snk-7-dry-run.md` §5.1.
+- Só o dono roda: criar o override no servidor, fazer o deploy e recriar api+worker com `-f` (deploy sem `-f` desliga).
+
 ## Correção do IPI (2026-11-04) — `PERCENTUAL` nulo na TGFIPI
 - `ipiRates` falhava fechado no staging. H1/H2 feitos (taxa nula = 0,00 + `rate_missing`, status `exempt`, linhas ruins descartadas sem derrubar a página; `openTitles` idem). Detalhes e passos do dono: `.claude/work/CHECKPOINT_2026-11-04-correcao-ipi.md`.
 - Revisão de segurança (única, sem achados críticos/altos/médios). Decisões do dono, baixas: (1) títulos de `openTitles` com `DTVENC`/`VLRDESDOB` nulos são descartados com aviso — antes de qualquer crédito/inadimplência consumir `openTitles`, persistir a contagem de descartes por execução ou falhar fechado; (2) um aviso por linha descartada, sem teto — limitar e emitir resumo; (3) clientes mobile antigos com parse estrito podem rejeitar `exempt` — confirmar a ordem de rollout.

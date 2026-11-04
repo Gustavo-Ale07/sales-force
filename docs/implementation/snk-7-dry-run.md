@@ -56,6 +56,52 @@ SANKHYA_MODE=live
 SANKHYA_BASE_URL=<um dos dois hosts do Sandbox>
 ```
 
-Do lado da API, o enfileiramento (`ERP_ORDER_ENQUEUE_ENABLED=true`) só é aceito fora de produção. Todos os padrões distribuídos (compose de desenvolvimento e staging) mantêm os dois desligados; um teste automatizado falha se algum arquivo de deploy habilitar a escrita.
+### 5.1 Como o dono liga (arquivo de override fora do repositório)
 
-Antes de ligar: o worker recusa iniciar em modo `live` fora do Sandbox, sem a marca de comportas fechadas ou sem o campo de origem. Para voltar: remover as variáveis (ou `SANKHYA_ORDER_WRITE_ENABLED=false`); o agendamento é retirado na próxima partida do worker.
+A comporta é o **ambiente de implantação**, não o `NODE_ENV` (I1, 2026-11-04): o staging roda com `NODE_ENV=production` por desenho, e o compose de staging passa `SF_DEPLOY_ENVIRONMENT=staging` à API e ao worker. `ERP_ORDER_ENQUEUE_ENABLED=true` na API e `SANKHYA_ORDER_WRITE_ENABLED=true` no worker só são aceitos com `SF_DEPLOY_ENVIRONMENT=staging` (com `production`, ou com a variável vazia sob `NODE_ENV=production`, o processo recusa subir). No worker isso se SOMA às comportas do modo `live` (host na lista do Sandbox, `SANKHYA_ENVIRONMENT=sandbox`, `SANKHYA_ORDER_WRITE_GATES_CLOSED=1`, campo de origem): nada foi afrouxado.
+
+O arquivo vive só no servidor, **`/opt/force-staging/config/compose.write-sandbox.yml`**, nunca em Git, e é passado com `-f` ao `deploy/scripts/sf-compose.sh`. Credenciais continuam no `worker.env`; nada sensível entra neste arquivo.
+
+Bloco para o **dry-run** (fase 1, não contata o Sankhya):
+
+```
+services:
+  worker:
+    environment:
+      SANKHYA_ORDER_WRITE_ENABLED: "true"
+      SANKHYA_ORDER_WRITE_MODE: dry_run
+      SANKHYA_ORDER_ORIGIN_FIELD: AD_FORCEORIGEM
+  api:
+    environment:
+      ERP_ORDER_ENQUEUE_ENABLED: "true"
+```
+
+Bloco para o **live** (fase 2; só depois do "AUTORIZO" escrito; substitui o bloco acima):
+
+```
+services:
+  worker:
+    environment:
+      SANKHYA_ORDER_WRITE_ENABLED: "true"
+      SANKHYA_ORDER_WRITE_MODE: live
+      SANKHYA_ORDER_WRITE_GATES_CLOSED: "1"
+      SANKHYA_ORDER_ORIGIN_FIELD: AD_FORCEORIGEM
+      SANKHYA_MODE: live
+      SANKHYA_ENVIRONMENT: sandbox
+      SANKHYA_BASE_URL: <um dos dois hosts do Sandbox>
+  api:
+    environment:
+      ERP_ORDER_ENQUEUE_ENABLED: "true"
+```
+
+Aplicar (recria só api e worker):
+
+```
+deploy/scripts/sf-compose.sh -f /opt/force-staging/config/compose.write-sandbox.yml up -d --no-deps --force-recreate api worker
+```
+
+**Qualquer deploy ou recriação sem esse `-f` desliga tudo** (os padrões distribuídos têm a escrita desligada): o `deploy-staging.sh`, o `rollback-staging.sh` e um `sf-compose.sh` sem o `-f` voltam ao estado desligado. Para religar, repetir o comando acima. Para desligar de propósito, recriar api e worker sem o `-f`.
+
+Do lado da API, o enfileiramento (`ERP_ORDER_ENQUEUE_ENABLED=true`) só é aceito com `SF_DEPLOY_ENVIRONMENT=staging`. Todos os padrões distribuídos (compose de desenvolvimento e staging) mantêm os dois desligados; um teste automatizado falha se algum arquivo de deploy habilitar a escrita.
+
+Antes de ligar: o worker recusa iniciar com a escrita ligada fora do staging e em modo `live` fora do Sandbox, sem a marca de comportas fechadas ou sem o campo de origem. Para voltar: remover as variáveis (ou `SANKHYA_ORDER_WRITE_ENABLED=false`); o agendamento é retirado na próxima partida do worker.
