@@ -808,6 +808,15 @@ Source: the project owner (Gustavo), prompt of 2026-10-30 part 2 (`.claude/work/
 
 **Status note 2026-11-03 (owner).** (a) Staging runs Part 1 (`df923a8`, migrations 0014–0017); `CONFIG_SYNC_FROM_SANKHYA` is still absent from `compose.env` (= off). (b) `customers.creditFeatures.showCreditLimit` stays with the base file; the `OCLTLIMCRED` value read from Sankhya is informational only (sync report), until the owner confirms Sankhya owns it (closes reviewer finding M2 for now). (c) Release events: only 44 ("liberação exigida pela TOP") and 18 ("confirmação de nota") are named; 2 and 13 show as "evento 2"/"evento 13" until the owner names them (`erp.liberationEventLabels` in the base file). (d) Reviewer finding M1 (overlay widening the order scope) is resolved by the base file: `sales.topAllowlist`, `negotiationTypeExclusions` and the eligible TOPs are set there.
 
+### 3.18 APPROVED — Owner rulings D-D, D-I, D-O, D-P, D-Q, D-R (2026-11-03, part 2b)
+
+- **D-D (estimated IPI):** the order totals show an estimated IPI, labelled "estimado". It is display only: never part of the validation, the price, the discount authority or the Sankhya payload. Rates come from the `TGFIPI` mirror (`TGFPRO.CODIPI`); validated rates: CODIPI 5 = 3.25, 6 = 9.75 (`sankhya-spike.md` §9.50).
+- **D-I (financial, read-only):** the customer record shows open titles, overdue titles and credit limits from the ERP mirror (`TGFFIN`, `TGFPAR`). No automatic block: Sales Force does not decide credit from it. The credit limit is visible per `customers.creditFeatures.showCreditLimit`. Mobile financial summary is not part of this batch.
+- **D-O (expedição):** no field on any seller screen. An order is born with expedição NOT marked and is sent as `AD_EXPEDICAO='N'`. The value comes from `sales.expedicaoDefault` (pilot "N"), is stored on the order, and is shown only in the order detail for admin/technical (read-only) and in the dry-run record.
+- **D-P (release reason):** the release reason (TSILIB event codes, with the optional `erp.liberationEventLabels` names) is visible to the seller and the manager in the order detail; an external representative sees it like a seller. Detail only; the list item stays small.
+- **D-Q (error text masking):** text stored in `sync_state.last_error_message`, `integration_outbox.last_error_message` and dry-run records is masked before it is written: no Authorization header, token, password, secret, URL with credentials or Sankhya host; only class, code and a short text remain. Implemented in `observability/mask-error-message.ts`; the worker registers the hosts and literal credentials at start.
+- **D-R:** showing the Sankhya status on mobile is part 3 (needs `erpStatus` in the sync protocol).
+
 ## 4. Status of the specification's decisions (spec §4)
 
 The spec is a draft. Its decisions are binding only where an APPROVED entry above covers them.

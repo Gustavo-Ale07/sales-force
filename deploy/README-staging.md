@@ -208,6 +208,16 @@ $SFC --profile self-hosted-db run --rm --no-deps \
   `force_worker` now holds INSERT and `UPDATE (is_current)` on `installation_configuration_version` (db-roles.sql,
   UNDETERMINED 1); `force_api` stays read-only. Do not enable the flag before that deploy.
 
+## Parte 2b — IPI estimado, financeiro, expedição (2026-11-04)
+
+Não implantado: nada disto está em staging até o dono rodar o deploy abaixo.
+
+- **Novas tabelas** `erp_ipi_rate` e `erp_open_title` (migrações 0020-0022, só expand) e colunas novas em `erp_customer` e `sales_order`. As tabelas têm linha na matriz de privilégios (`packages/db/tests/roles.test.ts`) e no GRANT de `deploy/staging/db-roles.sql`. **O deploy precisa de `SF_RUN_DB_ROLES=1`**; sem ele o worker falha por permissão ao gravar os espelhos novos.
+- **Novos jobs de espelho:** `ipiRates` (cron dos preços, `SYNC_CRON_PRICES`) e `openTitles` (padrão `*/30 * * * *`, `SYNC_CRON_OPEN_TITLES`). No modo "só diretório de login" ficam sem agendamento, como os demais espelhos.
+- **Primeira carga, uma vez:** `deploy/scripts/sf-compose.sh exec worker node dist/sync-once.js ipiRates openTitles` (aceita qualquer subconjunto de entidades).
+- **Arquivo base:** `installation.json` ganha o bloco `financial` e `sales.expedicaoDefault` ("N" no piloto); copiar o arquivo novo e rodar `config-bootstrap` de novo.
+- **Escrita no Sankhya continua desligada.** `SANKHYA_ORDER_ORIGIN_FIELD=AD_FORCEORIGEM` só é definido pelo dono em `compose.env`, junto do "AUTORIZO" do SNK-7 (`docs/implementation/snk-7-dry-run.md`).
+
 ## Configuração lida do Sankhya
 
 Contrato das chaves (PONTE / BASE / INFRA): `docs/implementation/sankhya-configuration-contract.md`. A leitura é só de

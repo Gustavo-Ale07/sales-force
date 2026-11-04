@@ -999,3 +999,11 @@ Source: the project owner; full map in `.claude/work/VIDYA_SANKHYA_CONFIG_MAP_20
 4. `AD_STATUS`/`AD_LIBORD`/`AD_FAROL` are PLAC customization (not interpreted by Force). TSILIB events seen: 44, 2, 18, 13.
 5. Security: `AD_TVDYLOGPED.BASICAUTH` stores Base64 credentials; `AD_TVDYCFGFRC` holds credential columns. The Force configuration queries never name them (test), and no Authorization/token/password is ever persisted by Force.
 6. Still NEEDS VALIDATION: the same values in the Sandbox (reported by the first successful sync; the first attempt failed on the missing columns above), meaning of `AD_EXPEDICAO`, names of TSILIB events 2 and 13, the `TSIUSU` block field.
+
+### 9.50 Part 2b — IPI, origin field, expedição and financial — VALIDATED (Sandbox, DBExplorer, owner-run read-only, 2026-11-03)
+
+1. **IPI:** `TGFPRO.CODIPI` points to `TGFIPI`; CODIPI 5 = 3.25 and CODIPI 6 = 9.75 (percent). Force mirrors the rates (`ipiRates`) and shows an estimate only (D-D); the real IPI is Sankhya's and is read back after a write for comparison (`VLRIPI`), never sent.
+2. **Origin field:** `TGFCAB.AD_FORCEORIGEM VARCHAR2(100)`, nullable. It is the dedicated field of SNK-5 (`SANKHYA_ORDER_ORIGIN_FIELD=AD_FORCEORIGEM`; only the owner sets it in `compose.env`). No write has been made with it.
+3. **Expedição:** `TGFCAB.AD_EXPEDICAO VARCHAR2(10)`, values S/N. In the Vidya production data S appears in 3,189 of 3,417 notes. **The business meaning is NEEDS VALIDATION** (owner to confirm). Force sends `N` (D-O) and reads the field back in the SNK-7 test.
+4. **Financial (Vidya views):** `TGFFIN` with `RECDESP = 1` (receivable) and `PROVISAO = 'N'`; open = `DHBAIXA` null; overdue = `DTVENC + 1 < SYSDATE`; amounts `VLRDESDOB` (face) and `VLRBAIXA` (paid). `TGFPAR`: `LIMCRED`, `LIMCREDMENSAL`, `BLOQUEAR`, `MOTBLOQ`, `SITUACAO`. No sales block at PLAC. Force reads only and does not block (D-I).
+5. **Still NEEDS VALIDATION:** how the Sandbox treats `AD_EXPEDICAO='N'` and `CODPARCTRANSP` on `incluirNota`, and the `VLRIPI` it computes for an item (all in the SNK-7 test, `docs/implementation/snk-7-dry-run.md`, which needs the owner's written "AUTORIZO").

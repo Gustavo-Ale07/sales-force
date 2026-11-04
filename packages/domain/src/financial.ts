@@ -8,7 +8,7 @@ export interface OpenTitle {
   readonly nufin: number;
   readonly customerCode: number;
   readonly companyCode: number | null;
-  /** Sales document number (`NUNOTA`), when the title comes from a document. */
+  /** Sales document number (ERP document id), when the title comes from a document. */
   readonly documentNumber: number | null;
   readonly dueDate: string;
   readonly amount: DecimalString;

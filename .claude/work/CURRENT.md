@@ -42,8 +42,26 @@ STATUS: ACTIVE — atualizado em 2026-10-29. Fonte de verdade ÚNICA: `C:\Dev\sa
 ## Onde paramos (2026-11-03, parte 2b parcial)
 - G1 feito: IPI estimado (`f070a69`, base `ef68bee`). Verde em lint/typecheck e nos testes dos pacotes tocados. Nada em staging, nada ao Sankhya, sem deploy. Detalhes e escopo de G2–G6: `.claude/work/CHECKPOINT_2026-11-03-parte2b-parcial.md`.
 
-## Por onde retomar (2026-11-03, parte 2b)
-- G2 a G6 do PROMPT_2026-11-03_parte2b.md (o texto não está em arquivo: o escopo completo está no checkpoint acima). Reviewer único no fim, sobre o diff inteiro desde `ef68bee`. Só o dono roda: deploy com `SF_RUN_DB_ROLES=1` (tabela `erp_ipi_rate`) e `sync-once` de `ipiRates`.
+## Onde paramos (2026-11-04, parte 2b fechada)
+- G1 a G6 feitos na branch; hashes e desenho em `.claude/work/CHECKPOINT_2026-11-03-parte2b.md`. Decisões D-D, D-I, D-O, D-P, D-Q, D-R em `docs/decisions.md` §3.18; fatos do Sandbox em `docs/sankhya-spike.md` §9.50. Nada em staging, nada ao Sankhya, sem deploy.
+
+## Só o dono roda (nesta ordem)
+1. Deploy do SHA novo com `SF_RUN_DB_ROLES=1` (novas tabelas `erp_ipi_rate` e `erp_open_title`, migrações 0020-0022, GRANTs do `db-roles.sql`). Sem o flag, o worker falha por permissão ao gravar os espelhos novos.
+2. Copiar o novo arquivo base (`PLAC_STAGING_INSTALLATION.json`, com bloco `financial` e `sales.expedicaoDefault`) para `/opt/force-staging/config/installation.json` e rodar `config-bootstrap` de novo.
+3. Primeira carga: `deploy/scripts/sf-compose.sh exec worker node dist/sync-once.js ipiRates openTitles`.
+4. Conferir no web: ficha do cliente (aba Financeiro, selo de vencido), IPI estimado no carrinho (rotulado "estimado") e, como administrador, "Expedição: não marcada" no cabeçalho do pedido.
+5. Decidir o que falta antes do dry-run (lista abaixo) e só então o "AUTORIZO" do SNK-7 (`docs/implementation/snk-7-dry-run.md`). `SANKHYA_ORDER_ORIGIN_FIELD=AD_FORCEORIGEM` é seu, em `compose.env`.
+
+## Decisões do dono (parte 2b)
+- `PROMPT_2026-11-03_parte2b.md` nunca foi um arquivo: o escopo vive no checkpoint parcial e no checkpoint final. Se quiser o texto como arquivo, cole de novo.
+- Resumo financeiro no mobile (5 campos): NÃO feito. Não é aditivo trivial (exige levar os dados no sync); registrado aqui. SIM / ADIAR para a parte 3?
+- Significado de `AD_EXPEDICAO` (S/N; S em 3.189 de 3.417 notas do Vidya): confirmar. Hoje o pedido sai com `N`.
+- Nomes dos eventos de liberação 2 e 13 (hoje aparecem como "evento 2/13").
+- Financeiro: com `overdueTitles` ou `showCreditLimit` desligados, a lista de títulos ainda traz vencimento, motivo de bloqueio e situação (BAIXO 1 do reviewer). Ocultar também, ou manter?
+- Antes do dry-run: autorizar a escrita no Sandbox por escrito ("AUTORIZO") e confirmar os itens NEEDS VALIDATION da seção 1 do roteiro.
+
+## (antigo) Por onde retomar (2026-11-03, parte 2b)
+- Escopo G2 a G6: ver o checkpoint. Concluído.
 
 ## (antigo) Por onde retomar (2026-11-03) — parte 2b
 1. IPI: `TGFPRO.CODIPI` → `TGFIPI` (leitura, sem cálculo próprio até validar).
