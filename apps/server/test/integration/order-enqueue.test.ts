@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { auditLog, integrationOutbox, salesOrder } from '@salesforce/db';
+import { auditLog, integrationOrderDryRun, integrationOutbox, salesOrder } from '@salesforce/db';
 import { getDemoDataset } from '@salesforce/sankhya';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -141,6 +141,24 @@ describe('API-side enqueue for the ERP (SNK-7 D-5, D-M)', () => {
     const order = await on.call('seller1', 'GET', `/orders/${id}`);
     expect(order.body.status).toBe('queued');
     expect(await outboxOf(on, id)).toHaveLength(1);
+  });
+
+  it('D-Z: a draft with a simulated delivery shows when it was simulated and the payload hash; a queued one does not', async () => {
+    const id = await draft(on);
+    await bindToSandbox(on, id);
+    const db = on.database.handle.db;
+    expect((await on.call('seller1', 'GET', `/orders/${id}`)).body.dryRun ?? null).toBeNull();
+    const [outbox] = await db
+      .insert(integrationOutbox)
+      .values({ id: randomUUID(), aggregateType: 'sales_order', aggregateId: id, operation: 'send_order', payload: {}, status: 'dry_run', lastStep: 'dry_run' })
+      .returning();
+    await db.insert(integrationOrderDryRun).values({ id: randomUUID(), outboxId: outbox!.id, orderId: id, payload: {}, payloadHash: 'abc123' });
+    const detail = (await on.call('seller1', 'GET', `/orders/${id}`)).body;
+    expect(detail.status).toBe('draft');
+    expect(detail.dryRun.payloadHash).toBe('abc123');
+    expect(typeof detail.dryRun.at).toBe('string');
+    // The mark is only for a draft: editing/sending is a new decision. Deleting the draft removes the terminal record too.
+    expect((await on.call('seller1', 'DELETE', `/orders/${id}`)).status).toBe(204);
   });
 
   it('D-Y: a rejected order (delivery finished, no ERP number) is deleted together with its delivery record', async () => {

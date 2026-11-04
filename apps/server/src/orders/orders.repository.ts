@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { account, erpCustomer, integrationOutbox, salesOrder, salesOrderApproval, salesOrderItem, type AccountRole, type ApprovalLevel, type Database } from '@salesforce/db';
+import { account, erpCustomer, integrationOrderDryRun, integrationOutbox, salesOrder, salesOrderApproval, salesOrderItem, type AccountRole, type ApprovalLevel, type Database } from '@salesforce/db';
 import type { CustomerScope, OrderItem } from '@salesforce/domain';
 import { and, asc, desc, eq, or, sql, type SQL } from 'drizzle-orm';
 import { containsText, digitsOf, eqInt, fitsPgInt, inInts, inSellerCodes, offsetOf } from '../platform/sql.js';
@@ -216,6 +216,17 @@ export class OrdersRepository {
       .from(integrationOutbox)
       .where(and(eq(integrationOutbox.aggregateType, 'sales_order'), eq(integrationOutbox.aggregateId, orderId)))
       .orderBy(desc(integrationOutbox.createdAt))
+      .limit(1);
+    return row ?? null;
+  }
+
+  /** D-Z: the newest simulated delivery of an order (when, payload hash). */
+  async latestDryRunOf(orderId: string, executor: Executor = this.db): Promise<{ at: Date; payloadHash: string } | null> {
+    const [row] = await executor
+      .select({ at: integrationOrderDryRun.createdAt, payloadHash: integrationOrderDryRun.payloadHash })
+      .from(integrationOrderDryRun)
+      .where(eq(integrationOrderDryRun.orderId, orderId))
+      .orderBy(desc(integrationOrderDryRun.createdAt))
       .limit(1);
     return row ?? null;
   }

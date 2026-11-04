@@ -1135,6 +1135,10 @@ export interface components {
             items: components["schemas"]["OrderItemDetail"][];
             totals: components["schemas"]["OrderTotals"];
             ipi?: components["schemas"]["OrderIpi"];
+            dryRun?: {
+                at: components["schemas"]["IsoTimestamp"];
+                payloadHash: string;
+            } | null;
         };
         OrderEntryConfiguration: {
             dataset: components["schemas"]["DatasetIdentity"] | null;

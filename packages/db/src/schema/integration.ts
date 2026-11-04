@@ -14,7 +14,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { inList } from './_util.js';
 
-export const outboxStatuses = ['pending', 'processing', 'confirmed', 'rejected', 'unknown'] as const;
+export const outboxStatuses = ['pending', 'processing', 'confirmed', 'rejected', 'unknown', 'dry_run'] as const;
 export type OutboxStatus = (typeof outboxStatuses)[number];
 
 /**

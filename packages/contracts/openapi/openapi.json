@@ -5488,6 +5488,29 @@
           },
           "ipi": {
             "$ref": "#/components/schemas/OrderIpi"
+          },
+          "dryRun": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "at": {
+                    "$ref": "#/components/schemas/IsoTimestamp"
+                  },
+                  "payloadHash": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "at",
+                  "payloadHash"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [

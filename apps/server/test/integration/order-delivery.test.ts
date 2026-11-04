@@ -5,6 +5,7 @@ import { FakeGateway, FakeOrderBook, SankhyaGatewayError, type OrderWriteRequest
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AuditService } from '../../src/iam/audit.service.js';
+import { enqueueOrderDelivery } from '../../src/orders/order-erp-delivery.js';
 import { MAX_DELIVERY_ATTEMPTS } from '../../src/integration/order-delivery.policy.js';
 import {
   OrderDeliveryService,
@@ -168,6 +169,22 @@ async function world(options: { mode?: 'dry_run' | 'live'; book?: FakeOrderBook;
 const ops = (book: FakeOrderBook) => book.calls.map((c) => c.operation);
 
 describe('dry run (D-6)', () => {
+  it('D-Z: the dry run is terminal, releases the origin id, returns the order to draft and is never picked again', async () => {
+    const w = await world({ mode: 'dry_run' });
+    const { orderId, outboxId } = await w.seed();
+    await w.service.runDue();
+    expect(await w.outbox(outboxId)).toMatchObject({ status: 'dry_run', originId: null, nextAttemptAt: null });
+    expect((await w.order(orderId)).status).toBe('draft');
+    expect((await w.service.runDue()).processed).toBe(0);
+    // A new "Enviar ao Sankhya" creates a NEW record for the same order (the old one never blocks it).
+    await w.database.handle.db.transaction(async (tx) => {
+      const [order] = await tx.select().from(salesOrder).where(eq(salesOrder.id, orderId));
+      await enqueueOrderDelivery(tx, order!, new Date());
+    });
+    const rows = await w.database.handle.db.select().from(integrationOutbox).where(eq(integrationOutbox.aggregateId, orderId));
+    expect(rows.map((r) => r.status).sort()).toEqual(['dry_run', 'pending']);
+  });
+
   it('stores the sanitized payload, calls nothing and parks the row', async () => {
     const w = await world({ mode: 'dry_run' });
     const { orderId, outboxId } = await w.seed({ notes: 'Segredo do cliente 11 99999-0000' });
@@ -175,8 +192,8 @@ describe('dry run (D-6)', () => {
     expect(summary.processed).toBe(1);
     expect(w.book.calls).toEqual([]);
     expect(w.book.orders).toEqual([]);
-    expect(await w.outbox(outboxId)).toMatchObject({ status: 'pending', nextAttemptAt: null, lastStep: 'dry_run' });
-    expect((await w.order(orderId)).status).toBe('queued');
+    expect(await w.outbox(outboxId)).toMatchObject({ status: 'dry_run', nextAttemptAt: null, lastStep: 'dry_run' });
+    expect((await w.order(orderId)).status).toBe('draft');
     const [record] = await w.database.handle.db.select().from(integrationOrderDryRun);
     expect(record?.orderId).toBe(orderId);
     const text = JSON.stringify(record?.payload);

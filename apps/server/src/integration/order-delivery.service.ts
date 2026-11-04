@@ -522,11 +522,17 @@ export class OrderDeliveryService {
         .insert(integrationOrderDryRun)
         .values({ id: uuidv7(at.getTime()), outboxId: row.id, orderId: order.id, payload: record.payload, payloadHash: record.payloadHash, createdAt: at })
         .onConflictDoNothing({ target: integrationOrderDryRun.outboxId });
-      // Parked as `pending` with no next attempt: nothing was sent, nothing will be until the mode changes.
+      // D-Z: the simulated delivery is TERMINAL (`dry_run`), never picked again, and its origin id is released so a new
+      // "Enviar ao Sankhya" can create a fresh record. The order goes back to draft carrying the dry-run mark (read from
+      // integration_order_dry_run); nothing is delivered on its own when the mode turns live.
       await tx
         .update(integrationOutbox)
-        .set({ status: 'pending', nextAttemptAt: null, lastStep: 'dry_run', lastErrorClass: null, lastErrorMessage: null, updatedAt: at })
+        .set({ status: 'dry_run', originId: null, nextAttemptAt: null, lastStep: 'dry_run', lastErrorClass: null, lastErrorMessage: null, updatedAt: at })
         .where(eq(integrationOutbox.id, row.id));
+      await tx
+        .update(salesOrder)
+        .set({ status: 'draft', version: sql`${salesOrder.version} + 1`, updatedAt: at })
+        .where(and(eq(salesOrder.id, order.id), eq(salesOrder.status, 'queued')));
       await this.deps.audit.record(
         { action: AUDIT_ACTIONS.orderErpDryRun, actorAccountId: null, detail: this.detail(row, order, { payloadHash: record.payloadHash }) },
         tx,

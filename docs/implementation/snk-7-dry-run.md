@@ -17,6 +17,8 @@ Decisões: SNK-7 D-1..D-10 (`docs/decisions.md` §3.16), SNK-4 (idempotência), 
 
 O worker, com a chave de escrita em modo `dry_run`, monta a requisição de cada pedido enfileirado e a grava em `integration_order_dry_run` (D-6): apenas códigos, UUIDs, quantidades e valores; `OBSERVACAO` substituída pelo hash; sem token, nome, CPF/CNPJ; retida 30 dias e removida pelo job `integration.order.dry-run-purge`. Nenhum pedido é enviado e nenhum token é pedido. Qualquer texto de erro gravado passa pelo mascaramento (D-Q): sem Authorization, token, senha, URL com credenciais nem host do Sankhya.
 
+**D-Z — o dry-run é terminal.** Ao gravar o registro, o outbox passa a `dry_run` (não é mais reprocessado, libera o id de origem) e o pedido volta a `draft`, mostrando "Simulado em dd/mm hh:mm — não enviado" (data e hash vêm de `integration_order_dry_run`; somem após os 30 dias da retenção). Nada simulado é enviado ao virar o modo `live`: o envio real exige novo "Enviar ao Sankhya", que cria um registro novo. As migrações 0026 (status) e 0027 (converte os registros já parados, como o pedido 7) são aplicadas pelo dono.
+
 O registro do dry-run mostra o cabeçalho completo, incluindo `CODPARCTRANSP` (transportadora, quando houver) e `AD_EXPEDICAO='N'` (D-O: o pedido nasce sem expedição marcada; o valor vem de `sales.expedicaoDefault`, piloto "N"). O IPI estimado (D-D) **não** aparece no payload nem na validação; é apenas informativo.
 
 O dono revisa as duas requisições (pedidos A e B abaixo) contra o contrato de `incluirNota` e aprova ou pede ajuste.

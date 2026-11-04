@@ -586,6 +586,11 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
           {deliveryErrorText(order.erpDelivery)}
         </Alert>
       ) : null}
+      {order?.status === "draft" && order.dryRun ? (
+        <Alert tone="info" title="Simulado, não enviado">
+          Simulado em {new Date(order.dryRun.at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} — não enviado ao Sankhya (assinatura {order.dryRun.payloadHash.slice(0, 12)}). Para enviar de verdade, use “Enviar ao Sankhya” de novo.
+        </Alert>
+      ) : null}
       {readOnly ? (
         <Alert tone="info" title="Somente leitura">
           Este pedido está como “{status?.label}” e não pode mais ser editado. {order ? orderStatusHints[order.status] : null}

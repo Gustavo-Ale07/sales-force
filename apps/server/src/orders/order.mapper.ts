@@ -127,6 +127,7 @@ export function toOrderDetail(
   ipiLookup: IpiLookup = { codes: new Map(), rates: new Map() },
   showExpedicao = false,
   lastDelivery: { errorClass: string | null; message: string | null } | null = null,
+  dryRun: { at: Date; payloadHash: string } | null = null,
 ): OrderDetail {
   const baseItems = items.map((item) => toItemDto(item, images.get(item.productCode)));
   const totals = computeOrderTotals(baseItems);
@@ -156,6 +157,7 @@ export function toOrderDetail(
     version: order.version,
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
+    ...(dryRun === null ? {} : { dryRun: { at: dryRun.at.toISOString(), payloadHash: dryRun.payloadHash } }),
     negotiationTypeCode: order.negotiationTypeCode,
     notes: order.notes,
     sourceOrderId: order.sourceOrderId,

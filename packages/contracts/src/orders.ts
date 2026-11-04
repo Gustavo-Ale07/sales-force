@@ -300,6 +300,8 @@ export const OrderDetailSchema = named(
     totals: OrderTotalsSchema,
     /** Estimated IPI of the order (D-D, additive). */
     ipi: OrderIpiSchema.optional(),
+    /** D-Z: the last simulated (dry-run) delivery of a draft: when and the payload hash. Nothing was sent. */
+    dryRun: z.object({ at: IsoTimestampSchema, payloadHash: z.string() }).nullable().optional(),
   }),
 );
 export type OrderDetail = z.infer<typeof OrderDetailSchema>;
