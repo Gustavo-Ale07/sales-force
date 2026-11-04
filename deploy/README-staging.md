@@ -128,7 +128,7 @@ unexpected characters; it was exercised against a throwaway PostgreSQL 17 (see "
 ## Secrets (P-22, SEC-1)
 
 Nothing secret is in the repository. Non-secret interpolation values come from a compose env file
-(`deploy/staging/compose.env.example`); secrets from per-role files under `SF_SECRETS_DIR`, outside the
+(`deploy/staging/compose.env.example`); SF_ERP_ENVIRONMENT uses the Sankhya vocabulary (D-X, 2026-11-04): `sandbox` or `production` (`staging` is not a valid value; the API refuses to boot naming the variable). It must equal the worker SANKHYA_ENVIRONMENT: the delivery refuses (environment_mismatch) every order stamped with another environment. Secrets come from per-role files under `SF_SECRETS_DIR`, outside the
 repository, owner-only permissions:
 
 | File | Read by | Content |

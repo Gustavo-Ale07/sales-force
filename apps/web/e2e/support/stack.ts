@@ -196,7 +196,7 @@ export async function startStack(): Promise<StackHandle> {
         API_PORT: String(E2E_API_PORT),
         ALLOWED_ORIGINS: E2E_WEB_ORIGIN,
         // Non-secret dataset identity of this throwaway installation: the order editor refuses to write without it.
-        SF_ERP_ENVIRONMENT: "e2e",
+        SF_ERP_ENVIRONMENT: "sandbox",
         SF_DATASET_ID: "e2e-fake-gateway-1",
       }),
       stdio: ["ignore", "pipe", "pipe"],

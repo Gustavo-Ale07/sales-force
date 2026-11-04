@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DATASET_ID_SLUG_PATTERN, ENVIRONMENT_SLUG_PATTERN, type DatasetIdentity } from '@salesforce/contracts';
+import { DATASET_ID_SLUG_PATTERN, type DatasetIdentity } from '@salesforce/contracts';
 import { passwordHashFields, passwordHashProblems } from './auth-env.js';
 import { externalLoginFields, externalLoginProblems, externalVerifierOf, type ExternalVerifierSettings } from './external-login-env.js';
 import {
@@ -80,10 +80,9 @@ export const ApiEnvSchema = z.object({
   SF_DEPLOY_ENVIRONMENT: z
     .enum(['staging', 'production'], { error: "must be 'staging' or 'production'." })
     .optional(),
-  SF_ERP_ENVIRONMENT: z
-    .string()
-    .regex(ENVIRONMENT_SLUG_PATTERN, { error: 'must be a slug: lowercase letters, digits, - or _ (max 32), e.g. sandbox.' })
-    .optional(),
+  // D-X: the ERP environment uses the Sankhya vocabulary. It must equal the worker's SANKHYA_ENVIRONMENT: the delivery
+  // refuses (environment_mismatch) every order stamped with another environment.
+  SF_ERP_ENVIRONMENT: z.enum(['sandbox', 'production'], { error: "must be 'sandbox' or 'production'." }).optional(),
   SF_DATASET_ID: z
     .string()
     .regex(DATASET_ID_SLUG_PATTERN, { error: 'must be a slug of 3-64 characters: lowercase letters, digits, . - or _, e.g. acme-sandbox-real-1.' })

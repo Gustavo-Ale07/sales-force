@@ -46,12 +46,26 @@ describe('API dataset identity environment', () => {
     ['SF_ERP_ENVIRONMENT', 'Sandbox'],
     ['SF_ERP_ENVIRONMENT', 'x'.repeat(33)],
     ['SF_ERP_ENVIRONMENT', 'sand box'],
+    ['SF_ERP_ENVIRONMENT', 'staging'],
+    ['SF_ERP_ENVIRONMENT', 'dev'],
     ['SF_DATASET_ID', 'ab'],
     ['SF_DATASET_ID', 'UPPER-case'],
     ['SF_DATASET_ID', 'x'.repeat(65)],
   ])('rejects a bad slug in %s (%s)', (key, value) => {
     const valid = { SF_ERP_ENVIRONMENT: 'sandbox', SF_DATASET_ID: 'plac-sandbox-real-1' };
     expect(problemsOf(() => parseApiEnv({ ...DEV, ...valid, [key]: value }))).toEqual([expect.stringMatching(new RegExp(`^${key}: `))]);
+  });
+});
+
+describe('SF_ERP_ENVIRONMENT uses the Sankhya vocabulary (D-X)', () => {
+  it.each(['sandbox', 'production'])('accepts %s', (value) => {
+    expect(parseApiEnv({ ...DEV, SF_ERP_ENVIRONMENT: value, SF_DATASET_ID: 'plac-sandbox-real-1' }).dataset?.environment).toBe(value);
+  });
+
+  it('refuses staging, naming the variable and never echoing the value', () => {
+    const problems = problemsOf(() => parseApiEnv({ ...DEV, SF_ERP_ENVIRONMENT: 'staging', SF_DATASET_ID: 'plac-sandbox-real-1' }));
+    expect(problems).toEqual([expect.stringMatching(/^SF_ERP_ENVIRONMENT: /)]);
+    expect(problems.join()).not.toContain('staging');
   });
 });
 
