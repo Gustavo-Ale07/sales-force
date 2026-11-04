@@ -435,6 +435,19 @@ export const routes = {
     responses: { 204: { description: 'Orçamento ou pedido excluído' } },
     errors: [400, 401, 403, 404, 409],
   }),
+  convertQuote: defineRoute({
+    operationId: 'convertQuote',
+    method: 'post',
+    path: '/orders/{id}/convert',
+    tags: ['orders'],
+    summary: 'Convert a quote that never reached Sankhya into an order, in place (D-U a)',
+    description:
+      'The TOP becomes the installation order TOP on the same record (same id, number and lines); the version is bumped and a pending approval is invalidated. 409 not_a_quotation when the document is not a quote, already_in_sankhya when it has a Sankhya number (native conversion is a separate step), order_top_not_configured without an order TOP.',
+    auth: 'session',
+    request: { params: OrderPathSchema },
+    responses: { 200: { description: 'Orçamento convertido em pedido', schema: OrderDetailSchema } },
+    errors: [400, 401, 403, 404, 409],
+  }),
   submitOrder: defineRoute({
     operationId: 'submitOrder',
     method: 'post',

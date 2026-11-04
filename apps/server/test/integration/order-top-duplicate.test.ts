@@ -259,3 +259,38 @@ describe('order carrier (D-C)', () => {
     expect(result.body.order.carrierCode).toBe(activeCarrier.code);
   });
 });
+
+describe('D-U (a): convert a not-yet-sent quote in place', () => {
+  const convert = (id: string, who: 'seller1' | 'seller2' | 'manager' = 'seller1') => app.call(who, 'POST', `/orders/${id}/convert`);
+
+  it('changes the TOP to the order TOP on the same record, bumps the version and audits it', async () => {
+    const quotation = await create({ topCode: 1000 });
+    expect(quotation.status).toBe(201);
+    const converted = await convert(quotation.body.id);
+    expect(converted.status).toBe(200);
+    const detail = OrderDetailSchema.parse(converted.body);
+    expect(detail.id).toBe(quotation.body.id);
+    expect(detail.topCode).toBe(1001);
+    expect(detail.version).toBe(quotation.body.version + 1);
+    expect(detail.items).toHaveLength(2);
+    const audits = (await app.database.handle.db.select().from(auditLog)).filter((a) => a.action === 'order.converted');
+    expect(audits.some((a) => (a.detail as Json).orderId === quotation.body.id)).toBe(true);
+  });
+
+  it('refuses what is not a quote, and a quote outside the caller scope looks missing', async () => {
+    const order = await create({ topCode: 1001 });
+    const refused = await convert(order.body.id);
+    expect(refused.status).toBe(409);
+    expect(JSON.stringify(refused.body)).toContain('not_a_quotation');
+    const quotation = await create({ topCode: 1000 });
+    expect((await convert(quotation.body.id, 'seller2')).status).toBe(404);
+  });
+
+  it('refuses a quote that already has a Sankhya number (native conversion is a separate step)', async () => {
+    const quotation = await create({ topCode: 1000 });
+    await app.database.handle.db.update(salesOrder).set({ erpNumber: 777001 }).where(eq(salesOrder.id, quotation.body.id));
+    const refused = await convert(quotation.body.id);
+    expect(refused.status).toBe(409);
+    expect(JSON.stringify(refused.body)).toContain('already_in_sankhya');
+  });
+});

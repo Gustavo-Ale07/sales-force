@@ -59,6 +59,14 @@ export class OrdersController {
     return this.orders.remove(user, contract.params.id);
   }
 
+  @ApiRoute(routes.convertQuote)
+  convert(
+    @CurrentUserParam() user: CurrentUser,
+    @Contract() contract: RequestContract<typeof routes.convertQuote>,
+  ): Promise<OrderDetail> {
+    return this.orders.convertQuote(user, contract.params.id);
+  }
+
   /** Awaiting approval (200), `discount_blocked` or `erp_submission_disabled` (409): see `OrdersService.submit`. */
   @ApiRoute(routes.submitOrder)
   submit(

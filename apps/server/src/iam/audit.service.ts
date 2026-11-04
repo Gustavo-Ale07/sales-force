@@ -34,6 +34,8 @@ export const AUDIT_ACTIONS = {
   orderReplaced: 'order.replaced',
   /** D-Y: the seller (or a manager) deleted a quote/order that never reached Sankhya. Identifiers and the total only. */
   orderDeleted: 'order.deleted',
+  /** D-U (a): a quote that never reached Sankhya became an order in place (ids and TOPs only). */
+  orderConverted: 'order.converted',
   orderTemplateCreated: 'order_template.created',
   orderTemplateReplaced: 'order_template.replaced',
   orderTemplateDeleted: 'order_template.deleted',

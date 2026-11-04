@@ -554,6 +554,54 @@ export class OrdersService {
     });
   }
 
+  /**
+   * D-U (a): a quote that never reached Sankhya becomes an order in place: same record, TOP = the installation order TOP.
+   * Lines and prices are untouched; a pending approval is closed like after any edit (ORD-1). A document that already has
+   * a Sankhya number is converted natively by the worker instead (D-U b), never here.
+   */
+  async convertQuote(user: CurrentUser, id: string): Promise<OrderDetail> {
+    const context = await this.policy.accessContext(user);
+    const current = await this.loadVisible(context.scope, id);
+    const sales = context.configuration.sales;
+    const targetTop = sales.orderTopCode;
+    const check = (order: OrderRow): void => {
+      if (!isQuotationTopCode(order.topCode, sales) && !(order.topCode !== null && sales.quoteTopCodes?.includes(order.topCode) === true)) {
+        throw new AppError('conflict', { message: 'Só é possível converter um orçamento.', details: { reason: 'not_a_quotation' } });
+      }
+      if (order.erpNumber !== null) {
+        throw new AppError('conflict', { message: 'Este orçamento já está no Sankhya; a conversão é feita no próprio Sankhya.', details: { reason: 'already_in_sankhya' } });
+      }
+      if (!isOrderEditable(order.status as Parameters<typeof isOrderEditable>[0])) throw new AppError('order_not_editable');
+      if (targetTop === null) {
+        throw new AppError('conflict', { message: 'A instalação não tem um tipo de operação de pedido configurado.', details: { reason: 'order_top_not_configured' } });
+      }
+    };
+    check(current);
+    const at = this.clock();
+    const updated = await this.orders.transaction(async (tx) => {
+      const locked = await this.orders.findById(id, tx, true);
+      this.assertInScope(context.scope, locked);
+      check(locked);
+      const invalidated = await this.orders.invalidatePendingApproval(id, at, tx);
+      const row = await this.orders.updateOrder(
+        id,
+        {
+          topCode: targetTop,
+          status: statusAfterEdit(locked.status as Parameters<typeof statusAfterEdit>[0]),
+          version: locked.version + 1,
+          updatedAt: at,
+        },
+        tx,
+      );
+      await this.audit.record(
+        { action: AUDIT_ACTIONS.orderConverted, actorAccountId: user.accountId, detail: { orderId: id, fromTopCode: locked.topCode, toTopCode: targetTop, approvalInvalidated: invalidated } },
+        tx,
+      );
+      return row;
+    });
+    return this.detailOf(updated);
+  }
+
   /* ---------- submit ---------- */
 
   /**
