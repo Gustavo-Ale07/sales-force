@@ -213,6 +213,7 @@ $SFC --profile self-hosted-db run --rm --no-deps \
 Não implantado: nada disto está em staging até o dono rodar o deploy abaixo.
 
 - **Novas tabelas** `erp_ipi_rate` e `erp_open_title` (migrações 0020-0022, só expand) e colunas novas em `erp_customer` e `sales_order`. As tabelas têm linha na matriz de privilégios (`packages/db/tests/roles.test.ts`) e no GRANT de `deploy/staging/db-roles.sql`. **O deploy precisa de `SF_RUN_DB_ROLES=1`**; sem ele o worker falha por permissão ao gravar os espelhos novos.
+- **Migração 0023 (correção do IPI, 2026-11-04):** só expand (coluna `rate_missing` em `erp_ipi_rate`, padrão `false`); roda com o deploy. Depois do deploy, repetir `deploy/scripts/sf-compose.sh exec worker node dist/sync-once.js ipiRates` — a linha com `PERCENTUAL` nulo passa a ser espelhada como 0,00 sinalizada e o log do worker mostra um aviso com a contagem e os códigos.
 - **Novos jobs de espelho:** `ipiRates` (cron dos preços, `SYNC_CRON_PRICES`) e `openTitles` (padrão `*/30 * * * *`, `SYNC_CRON_OPEN_TITLES`). No modo "só diretório de login" ficam sem agendamento, como os demais espelhos.
 - **Primeira carga, uma vez:** `deploy/scripts/sf-compose.sh exec worker node dist/sync-once.js ipiRates openTitles` (aceita qualquer subconjunto de entidades).
 - **Arquivo base:** `installation.json` ganha o bloco `financial` e `sales.expedicaoDefault` ("N" no piloto); copiar o arquivo novo e rodar `config-bootstrap` de novo.
