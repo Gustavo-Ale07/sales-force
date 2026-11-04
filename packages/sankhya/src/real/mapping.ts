@@ -471,6 +471,9 @@ export function productSpec(scope: ReadScope | undefined): EntitySpec<Product> {
   if (filter.activeOnly !== false) terms.push("ATIVO = 'S'");
   terms.push(`USOPROD IN (${filter.usageValues.map((v) => `'${v}'`).join(',')})`);
   const mobilityField = filter.mobilitySourceField ?? null;
+  if (mobilityField !== null && filter.mobilityAllowedValues !== undefined && filter.mobilityAllowedValues.length > 0) {
+    terms.push(`${mobilityField} IN (${filter.mobilityAllowedValues.map((v) => `'${v}'`).join(',')})`);
+  }
   const columns = mobilityField === null ? PRODUCT_SPEC.columns : [...PRODUCT_SPEC.columns, 'MOBILITY'];
   const select = mobilityField === null ? PRODUCT_SPEC.select : [...PRODUCT_SPEC.select, `${mobilityField} AS MOBILITY`];
   return {

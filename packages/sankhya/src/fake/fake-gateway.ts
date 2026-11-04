@@ -26,7 +26,7 @@ import type {
   ErpOrderStatusReading,
 } from '../write/order-contract.js';
 import { FakeOrderBook } from './fake-order-book.js';
-import { assertSafeScope, selectEffectiveVersions } from '../read-scope.js';
+import { assertSafeScope, mobilityAllowed, selectEffectiveVersions } from '../read-scope.js';
 import { DEMO_CONFIGURATION } from './demo-configuration.js';
 import type { ConfigurationFacts } from '../configuration-facts.js';
 import { PLAC_CONFIGURATION_FACTS } from './configuration-facts-fixture.js';
@@ -149,7 +149,11 @@ export class FakeGateway implements SankhyaGateway {
       filter === undefined
         ? this.#dataset.products
         : this.#dataset.products.filter(
-            (p) => (filter.activeOnly === false || p.active) && p.usageCode !== null && filter.usageValues.includes(p.usageCode),
+            (p) =>
+              (filter.activeOnly === false || p.active) &&
+              p.usageCode !== null &&
+              filter.usageValues.includes(p.usageCode) &&
+              mobilityAllowed(p.mobilityCode, filter.mobilityAllowedValues),
           );
     return this.#snapshot('products', rows, options);
   }
@@ -185,7 +189,10 @@ export class FakeGateway implements SankhyaGateway {
         (p) =>
           p.code > after &&
           (filter === undefined ||
-            ((filter.activeOnly === false || p.active) && p.usageCode !== null && filter.usageValues.includes(p.usageCode))),
+            ((filter.activeOnly === false || p.active) &&
+              p.usageCode !== null &&
+              filter.usageValues.includes(p.usageCode) &&
+              mobilityAllowed(p.mobilityCode, filter.mobilityAllowedValues))),
       )
       .flatMap((p) => {
         const bytes = images.get(p.code);

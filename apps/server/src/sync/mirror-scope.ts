@@ -7,13 +7,20 @@ import { validateInstallationConfiguration } from '../configuration/validate.js'
 /**
  * What the mirror reads is decided by the CURRENT installation configuration (CFG-1…6), never by
  * literals in the gateway or here: sellable usage codes, whether inactive products are mirrored, and
- * the price tables to mirror. The mobility field is deliberately not requested yet: its semantics are
- * PENDING_VALIDATION and it is not persisted.
+ * the price tables to mirror. The mobility field is requested only when the filter is `enforced` AND
+ * `validated` (D-S, 2026-11-04): products outside it are then not mirrored at all (a product that leaves
+ * the filter is deactivated by the normal missing-row rule). Otherwise the field is not read.
  */
 export function deriveReadScope(config: InstallationConfiguration): ReadScope {
   const tables = config.pricing.mobilePriceTableCodes;
+  const mobility = config.products.mobilityFilter;
+  const mobilityApplies = mobility !== undefined && mobility.mode === 'enforced' && mobility.validation === 'validated';
   return {
-    products: { usageValues: [...config.products.sellableUsageValues], activeOnly: !config.products.showInactive },
+    products: {
+      usageValues: [...config.products.sellableUsageValues],
+      activeOnly: !config.products.showInactive,
+      ...(mobilityApplies ? { mobilitySourceField: mobility.sourceField, mobilityAllowedValues: [...mobility.allowedValues] } : {}),
+    },
     ...(tables === undefined ? {} : { priceTableCodes: [...tables] }),
   };
 }

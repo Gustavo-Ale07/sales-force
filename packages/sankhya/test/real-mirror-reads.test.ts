@@ -196,6 +196,24 @@ describe('readProducts scope (sellable usage, active, optional mobility field)',
     expect(plain.some((p) => p.code === 0)).toBe(false);
   });
 
+  it('mobilityAllowedValues filters at the source with an IN clause (D-S)', async () => {
+    const { gateway, mock } = gatewayOver(tables);
+    await rows(
+      gateway.readProducts({
+        scope: { products: { usageValues: ['V', 'R'], mobilitySourceField: 'AD_MOBILIDADE', mobilityAllowedValues: ['S'] } },
+      }),
+    );
+    expect(mock.queries()[0]?.sql).toContain("AD_MOBILIDADE IN ('S')");
+  });
+
+  it('refuses an allowed-values list without a field, empty, or with unsafe text', () => {
+    expect(() => assertSafeScope({ products: { usageValues: ['V'], mobilityAllowedValues: ['S'] } })).toThrow(RangeError);
+    expect(() => assertSafeScope({ products: { usageValues: ['V'], mobilitySourceField: 'AD_MOBILIDADE', mobilityAllowedValues: [] } })).toThrow(RangeError);
+    expect(() =>
+      assertSafeScope({ products: { usageValues: ['V'], mobilitySourceField: 'AD_MOBILIDADE', mobilityAllowedValues: ["S'--"] } }),
+    ).toThrow(RangeError);
+  });
+
   it('an empty usage list selects nothing', async () => {
     const { gateway } = gatewayOver(tables);
     expect(await rows(gateway.readProducts({ scope: { products: { usageValues: [] } } }))).toEqual([]);

@@ -14,6 +14,11 @@ export interface ReadScope {
     readonly activeOnly?: boolean;
     /** Name of the ERP field holding the mobility flag, read raw into `Product.mobilityCode`. */
     readonly mobilitySourceField?: string | null;
+    /**
+     * D-S/D-V: when set together with `mobilitySourceField`, only products whose raw mobility value is in
+     * this list are mirrored (the filter runs at the source; a blank value never matches).
+     */
+    readonly mobilityAllowedValues?: readonly string[];
   };
   /** Price tables to mirror (`pricing.mobilePriceTableCodes`). Applies to tables, versions and list prices. */
   readonly priceTableCodes?: readonly number[];
@@ -34,9 +39,24 @@ export function assertSafeScope(scope: ReadScope | undefined): void {
   if (field !== undefined && field !== null && !FIELD_NAME_RE.test(field)) {
     throw new RangeError('scope.products.mobilitySourceField is not a valid field name');
   }
+  const allowed = scope.products?.mobilityAllowedValues;
+  if (allowed !== undefined) {
+    if (allowed.length === 0 || field === undefined || field === null) {
+      throw new RangeError('scope.products.mobilityAllowedValues needs a source field and at least one value');
+    }
+    for (const value of allowed) {
+      if (!USAGE_VALUE_RE.test(value)) throw new RangeError('scope.products.mobilityAllowedValues contains an invalid value');
+    }
+  }
   for (const code of scope.priceTableCodes ?? []) {
     if (!Number.isSafeInteger(code) || code < 0) throw new RangeError('scope.priceTableCodes contains an invalid code');
   }
+}
+
+/** Mobility rule shared by the fake gateway: no list = no filter; a blank or unread value never matches. */
+export function mobilityAllowed(code: string | null | undefined, allowed: readonly string[] | undefined): boolean {
+  if (allowed === undefined) return true;
+  return code !== undefined && code !== null && allowed.includes(code);
 }
 
 /**

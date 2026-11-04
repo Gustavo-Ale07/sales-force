@@ -36,9 +36,21 @@ describe('deriveReadScope (installation configuration -> mirror read scope)', ()
     expect(deriveReadScope(withConfig({ products: { sellableUsageValues: [] } })).products?.usageValues).toEqual([]);
   });
 
-  it('never asks the ERP for the mobility field: it is not persisted and is PENDING_VALIDATION', () => {
-    const scope = deriveReadScope(withConfig({}));
-    expect(scope.products?.mobilitySourceField).toBeUndefined();
+  it('does not ask for the mobility field while the filter is disabled or unvalidated', () => {
+    expect(deriveReadScope(withConfig({})).products?.mobilitySourceField).toBeUndefined();
+    const pending = withConfig({
+      products: { mobilityFilter: { sourceField: 'AD_MOBILIDADE', allowedValues: ['S'], validation: 'pending_validation', mode: 'disabled' } },
+    });
+    expect(deriveReadScope(pending).products?.mobilityAllowedValues).toBeUndefined();
+  });
+
+  it('asks for the mobility field and its allowed values when enforced and validated (D-S)', () => {
+    const scope = deriveReadScope(
+      withConfig({
+        products: { mobilityFilter: { sourceField: 'AD_MOBILIDADE', allowedValues: ['S'], validation: 'validated', mode: 'enforced' } },
+      }),
+    );
+    expect(scope.products).toMatchObject({ mobilitySourceField: 'AD_MOBILIDADE', mobilityAllowedValues: ['S'] });
   });
 });
 

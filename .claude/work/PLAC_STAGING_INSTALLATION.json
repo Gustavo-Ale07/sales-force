@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "source": {
     "kind": "bootstrap-file",
-    "version": "plac-staging-2026-11-03b",
+    "version": "plac-staging-2026-11-04",
     "syncedAt": "2026-10-02T00:00:00.000Z"
   },
   "general": {
@@ -131,15 +131,7 @@
         },
         "unlistedFields": "IGNORED_UNTIL_NEEDED"
       }
-    },
-    "topAllowlist": [
-      1000,
-      1001
-    ],
-    "negotiationTypeExclusions": [
-      23,
-      24
-    ]
+    }
   },
   "customers": {
     "portfolioOwnership": {
@@ -158,7 +150,7 @@
     ],
     "showInactive": false,
     "productWithoutPrice": {
-      "visible": true,
+      "visible": false,
       "orderable": false
     },
     "mobilityFilter": {
@@ -166,8 +158,8 @@
       "allowedValues": [
         "S"
       ],
-      "validation": "pending_validation",
-      "mode": "disabled"
+      "validation": "validated",
+      "mode": "enforced"
     }
   },
   "pricing": {

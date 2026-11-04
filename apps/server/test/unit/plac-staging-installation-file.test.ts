@@ -24,14 +24,20 @@ describe('PLAC staging base file (.claude/work/PLAC_STAGING_INSTALLATION.json)',
       erp: Record<string, unknown>;
       financial: Record<string, unknown>;
     };
-    expect(file.source).toMatchObject({ kind: 'bootstrap-file', version: 'plac-staging-2026-11-03b' });
+    expect(file.source).toMatchObject({ kind: 'bootstrap-file', version: 'plac-staging-2026-11-04' });
     // D-I: read-only financial area on; credit checks stay off (nothing blocks a sale).
     expect(file.financial).toEqual({ showFinancialArea: true, overdueTitles: true, creditChecks: false });
     expect(file.sales['eligibleOrderTopCodes']).toEqual([1001, 1000]);
     expect(file.sales['expedicaoDefault']).toBe('N'); // D-O
     expect(file.sales['quotationTopCode']).toBe(1000);
-    expect(file.sales['topAllowlist']).toEqual([1000, 1001]);
-    expect(file.sales['negotiationTypeExclusions']).toEqual([23, 24]);
+    // D-V: Sankhya is the only source; no fixed TOP / negotiation code lists in the base file.
+    expect(file.sales['topAllowlist']).toBeUndefined();
+    expect(file.sales['negotiationTypeExclusions']).toBeUndefined();
+    // D-S: catalogue filtered by mobility, products without price hidden.
+    expect((file as unknown as { products: Record<string, unknown> }).products).toMatchObject({
+      mobilityFilter: { mode: 'enforced', validation: 'validated' },
+      productWithoutPrice: { visible: false, orderable: false },
+    });
     expect(file.sales['discountAuthority']).toMatchObject({ mode: 'erp' });
     expect(file.erp['liberationEventLabels']).toEqual({ '44': 'liberação exigida pela TOP', '18': 'confirmação de nota' });
   });
