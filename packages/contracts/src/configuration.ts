@@ -215,6 +215,21 @@ const CustomersSchema = z.strictObject({
   creditFeatures: z.strictObject({ showCreditLimit: z.boolean() }),
   historyDays: z.number().int().min(0).max(3650).optional(),
   purchasedWindowDays: z.number().int().min(0).max(3650).optional(),
+  /** D-V: which ERP partners are mirrored as customers (column names validated; never free text). */
+  eligibility: z
+    .strictObject({
+      activeOnly: z.boolean(),
+      requiredFlags: z.array(z.string().regex(/^[A-Z][A-Z0-9_]{0,29}$/)).max(10),
+      columnIn: z
+        .array(
+          z.strictObject({
+            column: z.string().regex(/^[A-Z][A-Z0-9_]{0,29}$/),
+            values: z.array(z.string().regex(/^[A-Za-z0-9]{1,5}$/)).min(1).max(20),
+          }),
+        )
+        .max(10),
+    })
+    .optional(),
 });
 
 const ProductsSchema = z.strictObject({

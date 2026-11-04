@@ -11,7 +11,7 @@ export {
   type ReadProductMediaSignaturesOptions,
   type SankhyaProductMediaPort,
 } from './media.js';
-export { selectEffectiveVersions, type ReadScope } from './read-scope.js';
+export { selectEffectiveVersions, customerExclusion, type ReadScope, type CustomerEligibilityScope, type CustomerExclusion } from './read-scope.js';
 export {
   BootstrapFileConfigurationSource,
   NO_CONFIGURATION_SOURCE_MESSAGE,

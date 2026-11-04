@@ -3547,6 +3547,55 @@
                 "minimum": 0,
                 "maximum": 3650
               },
+              "eligibility": {
+                "type": "object",
+                "properties": {
+                  "activeOnly": {
+                    "type": "boolean"
+                  },
+                  "requiredFlags": {
+                    "maxItems": 10,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[A-Z][A-Z0-9_]{0,29}$"
+                    }
+                  },
+                  "columnIn": {
+                    "maxItems": 10,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "column": {
+                          "type": "string",
+                          "pattern": "^[A-Z][A-Z0-9_]{0,29}$"
+                        },
+                        "values": {
+                          "minItems": 1,
+                          "maxItems": 20,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "^[A-Za-z0-9]{1,5}$"
+                          }
+                        }
+                      },
+                      "required": [
+                        "column",
+                        "values"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "activeOnly",
+                  "requiredFlags",
+                  "columnIn"
+                ],
+                "additionalProperties": false
+              },
               "accountSellerLinkCount": {
                 "type": "integer",
                 "minimum": 0

@@ -746,6 +746,14 @@ export interface components {
                 };
                 historyDays?: number;
                 purchasedWindowDays?: number;
+                eligibility?: {
+                    activeOnly: boolean;
+                    requiredFlags: string[];
+                    columnIn: {
+                        column: string;
+                        values: string[];
+                    }[];
+                };
                 accountSellerLinkCount: number;
             };
             products: {

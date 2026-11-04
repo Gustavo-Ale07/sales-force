@@ -26,7 +26,7 @@ import type {
   ErpOrderStatusReading,
 } from '../write/order-contract.js';
 import { FakeOrderBook } from './fake-order-book.js';
-import { assertSafeScope, mobilityAllowed, selectEffectiveVersions } from '../read-scope.js';
+import { assertSafeScope, customerExclusion, mobilityAllowed, selectEffectiveVersions } from '../read-scope.js';
 import { DEMO_CONFIGURATION } from './demo-configuration.js';
 import type { ConfigurationFacts } from '../configuration-facts.js';
 import { PLAC_CONFIGURATION_FACTS } from './configuration-facts-fixture.js';
@@ -140,7 +140,23 @@ export class FakeGateway implements SankhyaGateway {
     return this.#snapshot('directoryUsers', this.#dataset.directoryUsers, options);
   }
   readCustomers(options?: ReadOptions) {
-    return this.#snapshot('customers', this.#dataset.customers, options);
+    assertSafeScope(options?.scope);
+    const rules = options?.scope?.customers;
+    if (rules === undefined) return this.#snapshot('customers', this.#dataset.customers, options);
+    // Same rule as the real gateway. A fake partner is a customer by construction: CLIENTE defaults to 'S'.
+    const tally: Record<string, number> = {};
+    const rows = this.#dataset.customers.filter((c) => {
+      const exclusion = customerExclusion(
+        c.active,
+        (column) => c.sourceAttributes?.[column] ?? (column === 'CLIENTE' ? 'S' : null),
+        rules,
+      );
+      if (exclusion === null) return true;
+      tally[exclusion] = (tally[exclusion] ?? 0) + 1;
+      return false;
+    });
+    options?.onExcluded?.('customers', tally);
+    return this.#snapshot('customers', rows, options);
   }
   readProducts(options?: ReadOptions) {
     assertSafeScope(options?.scope);

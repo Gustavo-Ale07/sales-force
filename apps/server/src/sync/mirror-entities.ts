@@ -178,6 +178,11 @@ function readOptions(context: MirrorReadContext): ReadOptions {
     ...(context.signal === undefined ? {} : { signal: context.signal }),
     ...(context.scope === undefined ? {} : { scope: context.scope }),
     onWarning: context.warn,
+    // D-V: how many rows each eligibility criterion left out, reported in the sync warnings of the run.
+    onExcluded: (entity, counts) => {
+      const parts = Object.entries(counts).map(([criterion, n]) => `${criterion}: ${n}`);
+      context.warn(`${entity}: left out by eligibility - ${parts.length === 0 ? 'none' : parts.join('; ')}`);
+    },
   };
 }
 

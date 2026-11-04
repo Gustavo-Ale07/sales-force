@@ -54,6 +54,27 @@ describe('deriveReadScope (installation configuration -> mirror read scope)', ()
   });
 });
 
+describe('customer eligibility (D-V 4)', () => {
+  it('is absent from the scope when the configuration has none', () => {
+    expect(deriveReadScope(withConfig({})).customers).toBeUndefined();
+  });
+
+  it('is copied from the configuration, never from literals', () => {
+    const config: InstallationConfiguration = {
+      ...withConfig({}),
+      customers: {
+        ...DEMO_CONFIGURATION.customers,
+        eligibility: { activeOnly: true, requiredFlags: ['CLIENTE'], columnIn: [{ column: 'CLASSIFICMS', values: ['R'] }] },
+      },
+    };
+    expect(deriveReadScope(config).customers).toEqual({
+      activeOnly: true,
+      requiredFlags: ['CLIENTE'],
+      columnIn: [{ column: 'CLASSIFICMS', values: ['R'] }],
+    });
+  });
+});
+
 describe('mirror specs pass the scope to the gateway', () => {
   it('reads only the configured price tables, versions and prices', async () => {
     const dataset = getDemoDataset();
@@ -73,5 +94,21 @@ describe('mirror specs pass the scope to the gateway', () => {
     const prices = await read('listPrices');
     expect(prices.length).toBeGreaterThan(0);
     expect(prices.every((r) => r.key[0] === versions[0]!.key[0])).toBe(true);
+  });
+
+  it('the customers sync reports how many each eligibility criterion left out (D-V)', async () => {
+    const dataset = getDemoDataset();
+    const base = dataset.customers[0]!;
+    const customers = [
+      { ...base, code: 1, active: true, sourceAttributes: { CLASSIFICMS: 'R' } },
+      { ...base, code: 2, active: true, sourceAttributes: { CLASSIFICMS: 'C' } },
+    ];
+    const gateway = new FakeGateway({ dataset: { ...dataset, customers } });
+    const warnings: string[] = [];
+    const scope = { customers: { activeOnly: true, requiredFlags: ['CLIENTE'], columnIn: [{ column: 'CLASSIFICMS', values: ['R'] }] } };
+    const rows: MirrorRow[] = [];
+    for await (const batch of MIRROR_SPECS.customers.read({ gateway, description: gateway.describe(), warn: (m: string) => warnings.push(m), scope })) rows.push(...batch);
+    expect(rows.map((r) => r.key)).toEqual([[1]]);
+    expect(warnings).toContain('customers: left out by eligibility - column:CLASSIFICMS: 1');
   });
 });

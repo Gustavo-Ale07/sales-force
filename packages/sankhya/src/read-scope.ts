@@ -20,10 +20,21 @@ export interface ReadScope {
      */
     readonly mobilityAllowedValues?: readonly string[];
   };
+  /**
+   * D-V: which partners are mirrored as customers (`customers.eligibility`). Absent = the previous rule
+   * (flag CLIENTE only). The gateway checks the columns exist in the ERP schema and fails closed naming them.
+   */
+  readonly customers?: CustomerEligibilityScope;
   /** Price tables to mirror (`pricing.mobilePriceTableCodes`). Applies to tables, versions and list prices. */
   readonly priceTableCodes?: readonly number[];
   /** Clock used to pick each table's current price-table version. Default: the gateway clock. */
   readonly now?: IsoTimestamp;
+}
+
+export interface CustomerEligibilityScope {
+  readonly activeOnly: boolean;
+  readonly requiredFlags: readonly string[];
+  readonly columnIn: readonly { readonly column: string; readonly values: readonly string[] }[];
 }
 
 const USAGE_VALUE_RE = /^[A-Za-z0-9]{1,5}$/;
@@ -48,9 +59,40 @@ export function assertSafeScope(scope: ReadScope | undefined): void {
       if (!USAGE_VALUE_RE.test(value)) throw new RangeError('scope.products.mobilityAllowedValues contains an invalid value');
     }
   }
+  for (const flag of scope.customers?.requiredFlags ?? []) {
+    if (!FIELD_NAME_RE.test(flag)) throw new RangeError("scope.customers.requiredFlags contains an invalid column name");
+  }
+  for (const rule of scope.customers?.columnIn ?? []) {
+    if (!FIELD_NAME_RE.test(rule.column)) throw new RangeError("scope.customers.columnIn contains an invalid column name");
+    if (rule.values.length === 0) throw new RangeError("scope.customers.columnIn needs at least one value per column");
+    for (const value of rule.values) {
+      if (!USAGE_VALUE_RE.test(value)) throw new RangeError("scope.customers.columnIn contains an invalid value");
+    }
+  }
   for (const code of scope.priceTableCodes ?? []) {
     if (!Number.isSafeInteger(code) || code < 0) throw new RangeError('scope.priceTableCodes contains an invalid code');
   }
+}
+
+/** Why a partner is left out of the customer mirror; one entry per criterion (the first that fails). */
+export type CustomerExclusion = `active` | `flag:${string}` | `column:${string}`;
+
+/**
+ * Shared eligibility rule (the real gateway applies it row by row, the fake over `attributes`). A blank or
+ * missing attribute never satisfies a flag or a column rule. Returns the first failing criterion or null.
+ */
+export function customerExclusion(
+  active: boolean,
+  attribute: (column: string) => string | null | undefined,
+  rules: CustomerEligibilityScope,
+): CustomerExclusion | null {
+  if (rules.activeOnly && !active) return `active`;
+  for (const flag of rules.requiredFlags) if (attribute(flag) !== `S`) return `flag:${flag}`;
+  for (const rule of rules.columnIn) {
+    const value = attribute(rule.column);
+    if (value === undefined || value === null || !rule.values.includes(value)) return `column:${rule.column}`;
+  }
+  return null;
 }
 
 /** Mobility rule shared by the fake gateway: no list = no filter; a blank or unread value never matches. */

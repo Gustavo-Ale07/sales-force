@@ -83,6 +83,11 @@ export interface ReadOptions {
   readonly scope?: ReadScope;
   /** Called for a row the adapter dropped on its own (message never carries a value); the rest of the page is kept. */
   readonly onWarning?: (message: string) => void;
+  /**
+   * D-V: called once when a customer/carrier snapshot ends, with how many rows each eligibility criterion left out
+   * (criterion name -> count; empty when none). Counts only, never values.
+   */
+  readonly onExcluded?: (entity: ReadEntity, countsByCriterion: Readonly<Record<string, number>>) => void;
 }
 
 /**

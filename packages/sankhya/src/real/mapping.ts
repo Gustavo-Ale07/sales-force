@@ -17,7 +17,7 @@ import { decimalFromCell } from '../decimal.js';
 import { SankhyaGatewayError } from '../errors.js';
 import type { ReadEntity } from '../gateway.js';
 import { MEDIA_SAMPLE_BYTES, MEDIA_SAMPLE_PERCENTS } from '../media.js';
-import { assertSafeScope, type ReadScope } from '../read-scope.js';
+import { assertSafeScope, customerExclusion, type ReadScope } from '../read-scope.js';
 
 /**
  * ERP row -> Sales Force type mapping. This is the ONLY place in the repository that names ERP tables
@@ -54,10 +54,12 @@ export interface EntitySpec<T> {
 /** A row a mapper chose to drop (see `EntitySpec.map`); `reason` never carries a value. */
 export interface RowDiscard {
   readonly discarded: string;
+  /** Expected exclusions (an eligibility rule) are counted by the caller, not warned about row by row. */
+  readonly silent?: boolean;
 }
 
-export function discardRow(reason: string): RowDiscard {
-  return { discarded: reason };
+export function discardRow(reason: string, silent = false): RowDiscard {
+  return silent ? { discarded: reason, silent } : { discarded: reason };
 }
 
 export function isRowDiscard(value: unknown): value is RowDiscard {
@@ -261,7 +263,8 @@ export const CARRIER_SPEC: EntitySpec<Carrier> = {
   table: 'TGFPAR',
   select: ['CODPARC', 'NOMEPARC', 'RAZAOSOCIAL', 'ATIVO'],
   columns: ['CODPARC', 'NOMEPARC', 'RAZAOSOCIAL', 'ATIVO'],
-  where: "TRANSPORTADORA = 'S' AND CODPARC > 0",
+  // D-V: carriers are partners flagged TRANSPORTADORA = 'S' that are active (ATIVO = 'S').
+  where: "TRANSPORTADORA = 'S' AND ATIVO = 'S' AND CODPARC > 0",
   orderBy: 'CODPARC',
   map: (row) => ({
     code: row.int('CODPARC'),
@@ -307,6 +310,37 @@ export const CUSTOMER_SPEC: EntitySpec<Customer> = {
   },
   keyOf: (customer) => [customer.code],
 };
+
+/**
+ * D-V: the customer spec under an eligibility rule. The source is read for every partner (`CODPARC > 0`) and the rule
+ * is applied row by row so each criterion can be counted (`tally`); a left-out partner is discarded like any dropped
+ * row (it still counts for the completeness check and is deactivated in the mirror by the missing-row rule, while
+ * saved orders keep it). The rule columns are selected on top of the base ones; the gateway has already checked that
+ * they exist in this ERP schema.
+ */
+export function customerSpec(scope: ReadScope | undefined, tally?: Record<string, number>): EntitySpec<Customer> {
+  assertSafeScope(scope);
+  const rules = scope?.customers;
+  if (rules === undefined) return CUSTOMER_SPEC;
+  const extra = [...new Set([...rules.requiredFlags, ...rules.columnIn.map((r) => r.column)])].filter(
+    (c) => !CUSTOMER_SPEC.columns.includes(c),
+  );
+  const columns = [...CUSTOMER_SPEC.columns, ...extra];
+  return {
+    ...CUSTOMER_SPEC,
+    select: [...CUSTOMER_SPEC.select, ...extra],
+    columns,
+    where: "CODPARC > 0",
+    map: (row, context) => {
+      const exclusion = customerExclusion(row.flag("ATIVO"), (column) => row.nullableText(column), rules);
+      if (exclusion !== null) {
+        if (tally !== undefined) tally[exclusion] = (tally[exclusion] ?? 0) + 1;
+        return discardRow(`left out by eligibility (${exclusion})`, true);
+      }
+      return CUSTOMER_SPEC.map(row, context);
+    },
+  };
+}
 
 /**
  * TGFFIN open receivable titles (Sandbox 2026-11-03, per the Vidya financial views): `RECDESP = 1` (receivable),

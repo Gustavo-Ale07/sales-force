@@ -141,6 +141,20 @@
     "customerWithoutPriceTable": "use_fallback_table",
     "creditFeatures": {
       "showCreditLimit": true
+    },
+    "eligibility": {
+      "activeOnly": true,
+      "requiredFlags": [
+        "CLIENTE"
+      ],
+      "columnIn": [
+        {
+          "column": "CLASSIFICMS",
+          "values": [
+            "R"
+          ]
+        }
+      ]
     }
   },
   "products": {

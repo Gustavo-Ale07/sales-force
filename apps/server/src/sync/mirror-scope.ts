@@ -14,6 +14,7 @@ import { validateInstallationConfiguration } from '../configuration/validate.js'
 export function deriveReadScope(config: InstallationConfiguration): ReadScope {
   const tables = config.pricing.mobilePriceTableCodes;
   const mobility = config.products.mobilityFilter;
+  const eligibility = config.customers.eligibility;
   const mobilityApplies = mobility !== undefined && mobility.mode === 'enforced' && mobility.validation === 'validated';
   return {
     products: {
@@ -21,6 +22,15 @@ export function deriveReadScope(config: InstallationConfiguration): ReadScope {
       activeOnly: !config.products.showInactive,
       ...(mobilityApplies ? { mobilitySourceField: mobility.sourceField, mobilityAllowedValues: [...mobility.allowedValues] } : {}),
     },
+    ...(eligibility === undefined
+      ? {}
+      : {
+          customers: {
+            activeOnly: eligibility.activeOnly,
+            requiredFlags: [...eligibility.requiredFlags],
+            columnIn: eligibility.columnIn.map((r) => ({ column: r.column, values: [...r.values] })),
+          },
+        }),
     ...(tables === undefined ? {} : { priceTableCodes: [...tables] }),
   };
 }

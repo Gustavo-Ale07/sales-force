@@ -1,4 +1,5 @@
 import type {
+  Customer,
   InstallationConfiguration,
   ListPrice,
   PriceTable,
@@ -6,7 +7,10 @@ import type {
   Product,
   ProductGroup,
 } from '@salesforce/domain';
-import { assertSafeScope, selectEffectiveVersions } from '../read-scope.js';
+import { assertSafeScope, selectEffectiveVersions, type ReadScope } from '../read-scope.js';
+
+/** D-V: columns of TGFPAR in the connected schema (names only). */
+const CUSTOMER_COLUMN_DISCOVERY_SQL = "SELECT COLUMN_NAME FROM USER_TAB_COLUMNS WHERE TABLE_NAME = 'TGFPAR'";
 import {
   MEDIA_CHUNK_BYTES,
   assertBytesOptions,
@@ -62,6 +66,7 @@ import {
 } from './configuration-queries.js';
 import {
   CUSTOMER_SPEC,
+  customerSpec,
   PRODUCT_GROUP_SPEC,
   listPriceSpec,
   priceTableSpec,
@@ -302,8 +307,34 @@ export class RealSankhyaGateway implements SankhyaGateway {
   readOpenTitles(options?: ReadOptions) {
     return this.#paged(OPEN_TITLE_SPEC, options);
   }
-  readCustomers(options?: ReadOptions) {
-    return this.#paged(CUSTOMER_SPEC, options);
+  readCustomers(options?: ReadOptions): Snapshot<Customer> {
+    assertSafeScope(options?.scope);
+    const rules = options?.scope?.customers;
+    if (rules === undefined) return this.#paged(CUSTOMER_SPEC, options);
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const gateway = this;
+    return {
+      async *[Symbol.asyncIterator]() {
+        await gateway.#assertCustomerColumns(rules, options?.signal);
+        const tally: Record<string, number> = {};
+        yield* gateway.#paged(customerSpec(options?.scope, tally), options, tally);
+      },
+    };
+  }
+
+  /** D-V: the eligibility columns must exist in this ERP schema (USER_TAB_COLUMNS, as the adaptive Q1); a missing one fails closed. */
+  async #assertCustomerColumns(rules: NonNullable<ReadScope['customers']>, signal?: AbortSignal): Promise<void> {
+    const wanted = [...new Set([...rules.requiredFlags, ...rules.columnIn.map((r) => r.column)])];
+    if (wanted.length === 0) return;
+    const found = await this.#query(CUSTOMER_COLUMN_DISCOVERY_SQL, ['COLUMN_NAME'], signal);
+    const present = new Set(found.rows.map((cells, index) => new RowReader('customers', ['COLUMN_NAME'], cells, index).nullableText('COLUMN_NAME') ?? ''));
+    const missing = wanted.filter((c) => !present.has(c));
+    if (missing.length > 0) {
+      throw new SankhyaGatewayError('validation', {
+        code: 'customer_eligibility_column_missing',
+        message: `Customer eligibility column(s) ${missing.join(', ')} do not exist in TGFPAR of this ERP schema.`,
+      });
+    }
   }
   readProducts(options?: ReadOptions): Snapshot<Product> {
     assertSafeScope(options?.scope);
@@ -592,7 +623,7 @@ export class RealSankhyaGateway implements SankhyaGateway {
 
   // ---- paging -------------------------------------------------------------------------------
 
-  #paged<T>(spec: EntitySpec<T>, options?: ReadOptions): Snapshot<T> {
+  #paged<T>(spec: EntitySpec<T>, options?: ReadOptions, tally?: Record<string, number>): Snapshot<T> {
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const gateway = this;
     return {
@@ -615,7 +646,7 @@ export class RealSankhyaGateway implements SankhyaGateway {
             if (isRowDiscard(result)) {
               // Counted as read (the ERP count includes it) but never delivered; the reason carries no value.
               discarded += 1;
-              options?.onWarning?.(`${spec.entity}: row ${offset + index} discarded (${result.discarded}).`);
+              if (result.silent !== true) options?.onWarning?.(`${spec.entity}: row ${offset + index} discarded (${result.discarded}).`);
               continue;
             }
             const row = result;
@@ -643,6 +674,7 @@ export class RealSankhyaGateway implements SankhyaGateway {
             message: `${spec.entity}: the number of rows read does not match the ERP row count (the data may have changed during the read). The snapshot was rejected; retry.`,
           });
         }
+        if (tally !== undefined) options?.onExcluded?.(spec.entity, { ...tally });
       },
     };
   }

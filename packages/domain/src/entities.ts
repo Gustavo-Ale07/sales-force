@@ -58,6 +58,11 @@ export interface Customer {
   readonly blockReason?: string | null;
   /** Situation code as reported by the source (raw, informational). */
   readonly situation?: string | null;
+  /**
+   * Raw partner columns the eligibility rule (D-V) may test (e.g. CLIENTE, CLASSIFICMS). Filled only by the fake
+   * gateway dataset; the real gateway applies the rule at the source and never delivers it.
+   */
+  readonly sourceAttributes?: Readonly<Record<string, string | null>>;
 }
 
 export interface ProductGroup {

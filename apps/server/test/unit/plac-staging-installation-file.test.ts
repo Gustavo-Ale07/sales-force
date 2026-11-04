@@ -38,6 +38,12 @@ describe('PLAC staging base file (.claude/work/PLAC_STAGING_INSTALLATION.json)',
       mobilityFilter: { mode: 'enforced', validation: 'validated' },
       productWithoutPrice: { visible: false, orderable: false },
     });
+    // D-V 4: customers = active + CLIENTE + reseller (CLASSIFICMS = R, initial hypothesis to validate at the first sync).
+    expect((file as unknown as { customers: Record<string, unknown> }).customers['eligibility']).toEqual({
+      activeOnly: true,
+      requiredFlags: ['CLIENTE'],
+      columnIn: [{ column: 'CLASSIFICMS', values: ['R'] }],
+    });
     expect(file.sales['discountAuthority']).toMatchObject({ mode: 'erp' });
     expect(file.erp['liberationEventLabels']).toEqual({ '44': 'liberação exigida pela TOP', '18': 'confirmação de nota' });
   });

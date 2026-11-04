@@ -1008,3 +1008,15 @@ Source: the project owner; full map in `.claude/work/VIDYA_SANKHYA_CONFIG_MAP_20
 4. **Financial (Vidya views):** `TGFFIN` with `RECDESP = 1` (receivable) and `PROVISAO = 'N'`; open = `DHBAIXA` null; overdue = `DTVENC + 1 < SYSDATE`; amounts `VLRDESDOB` (face) and `VLRBAIXA` (paid). `TGFPAR`: `LIMCRED`, `LIMCREDMENSAL`, `BLOQUEAR`, `MOTBLOQ`, `SITUACAO`. No sales block at PLAC. Force reads only and does not block (D-I).
 6. **`TGFIPI` rows with a null `PERCENTUAL` exist in the Sandbox (staging `sync-once ipiRates`, 2026-11-04):** the first mirror failed closed on one. Rule (H1): a null rate is stored as 0.00 with `erp_ipi_rate.rate_missing = true`, the page is accepted, the sync log carries one warning with the count and the codes, and the order shows "IPI isento/não informado" (0.00, not partial). A null/non-integer `CODIPI` discards that row only (warning without values); the page completeness check counts discarded rows. Same tolerance on `openTitles` (H2): null `VLRBAIXA` = 0, null `DTVENC`/`VLRDESDOB` = row discarded. Whether a null rate means exempt or untaxed in the ERP is NEEDS VALIDATION (owner); the estimate is 0.00 either way and never presented as a validated rate.
 5. **Still NEEDS VALIDATION:** how the Sandbox treats `AD_EXPEDICAO='N'` and `CODPARCTRANSP` on `incluirNota`, and the `VLRIPI` it computes for an item (all in the SNK-7 test, `docs/implementation/snk-7-dry-run.md`, which needs the owner's written "AUTORIZO").
+
+### 9.51 Mirror eligibility criteria (D-V, 2026-11-04) — NEEDS VALIDATION at the first sync
+
+Sankhya is the only source of what is mirrored; the base file holds no code lists (`sales.topAllowlist` and `sales.negotiationTypeExclusions` were removed). Criteria applied by the gateway and reported per sync (counts per criterion, never values):
+
+| Entity | Criterion | Status |
+|---|---|---|
+| Products | `AD_MOBILIDADE = 'S'` (`products.mobilityFilter`, enforced at the source) plus a price in the resolved table | enforced; the count of products left out by mobility is not reported yet |
+| Customers | `ATIVO = 'S'`, `CLIENTE = 'S'`, `CLASSIFICMS IN ('R')` (`customers.eligibility`) | `'R'` is an initial hypothesis (5,547 resellers in the Sandbox per the owner); validate the value at the first sync |
+| Carriers | `TRANSPORTADORA = 'S'` and `ATIVO = 'S'` | applied in the WHERE; the fake gateway still delivers inactive carriers (mirror keeps the flag) |
+
+Customers: the rule columns are discovered through `USER_TAB_COLUMNS` (`TABLE_NAME = 'TGFPAR'`); a missing column fails the read closed (`customer_eligibility_column_missing`, naming the column). With a rule the source is read for every partner (`CODPARC > 0`) and the rule is applied per row, so each criterion can be counted; the volume of that read is NEEDS VALIDATION. A customer that stops meeting the rule is absent from the snapshot and is soft-deactivated by the missing-row rule; saved orders keep it. The sync warning reads `customers: left out by eligibility - active: n; flag:CLIENTE: n; column:CLASSIFICMS: n`.

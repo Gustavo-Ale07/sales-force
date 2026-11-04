@@ -38,6 +38,17 @@ export interface MobilityFilter {
   readonly mode: MobilityFilterMode;
 }
 
+/**
+ * D-V: customer eligibility in the mirror. `requiredFlags` are partner columns that must equal 'S'
+ * (e.g. CLIENTE); `columnIn` columns must hold one of the values (a partner classification column).
+ * Every entry is a column NAME or a short code, never free text.
+ */
+export interface CustomerEligibility {
+  readonly activeOnly: boolean;
+  readonly requiredFlags: readonly string[];
+  readonly columnIn: readonly { readonly column: string; readonly values: readonly string[] }[];
+}
+
 export interface AlternativeTable {
   readonly tableCode: number;
   readonly validation: AlternativeTableValidation;
@@ -188,6 +199,11 @@ export interface InstallationConfiguration {
     readonly creditFeatures: { readonly showCreditLimit: boolean };
     readonly historyDays?: number;
     readonly purchasedWindowDays?: number;
+    /**
+     * D-V: which ERP partners are mirrored as customers. Absent = the previous rule (flag CLIENTE only).
+     * Column names are discovered in the ERP schema; a missing column fails the read closed.
+     */
+    readonly eligibility?: CustomerEligibility;
   };
   readonly products: {
     /** Raw usage codes that make an active product sellable. Empty = nothing is sellable. */
