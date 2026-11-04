@@ -3,7 +3,7 @@ import { Button, toast } from "@salesforce/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import { Printer } from "lucide-react";
 import { useState } from "react";
-import { orderQueryOptions } from "../lib/api-queries";
+import { orderEntryConfigurationQueryOptions, orderQueryOptions } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { describeApiError } from "../lib/error-message";
 import { buildOrderHtml } from "../lib/order-print";
@@ -32,7 +32,16 @@ export function PrintOrderButton({ orderId, label, order, disabled, size = "md",
     setBusy(true);
     try {
       const detail = order ?? (await queryClient.fetchQuery({ ...orderQueryOptions(api, orderId), staleTime: 0 }));
-      printHtml(buildOrderHtml(detail, window.location.origin));
+      const tops = await queryClient
+        .fetchQuery(orderEntryConfigurationQueryOptions(api))
+        .then((configuration) => configuration.sales.orderTops)
+        .catch(() => undefined);
+      printHtml(
+        buildOrderHtml(detail, window.location.origin, {
+          issuedAt: new Date().toISOString(),
+          ...(tops === undefined ? {} : { topRules: { quoteTopCodes: tops.quoteTopCodes, quotationTopCode: tops.quotationTopCode } }),
+        }),
+      );
     } catch (error) {
       const failure = describeApiError(error, "Não foi possível preparar o pedido para impressão");
       toast({ title: failure.title, description: failure.description, tone: "danger" });

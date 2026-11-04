@@ -1,5 +1,5 @@
 import type { ApiSchema } from "@salesforce/contracts/client";
-import { renderOrderHtml, toOrderDocument } from "@salesforce/domain";
+import { documentKindOf, renderOrderHtml, toOrderDocument, type DocumentTopRules, type OrderDocumentCompany } from "@salesforce/domain";
 
 type OrderDetail = ApiSchema<"OrderDetail">;
 
@@ -16,8 +16,19 @@ export const orderDocumentStatusLabels: Record<ApiSchema<"OrderStatus">, string>
 };
 
 /** The order screen's data, restricted by the domain allow-list (never cost/margin: P-20), rendered with the shared PLAC template. */
-export function buildOrderHtml(order: OrderDetail, origin: string): string {
+export interface OrderPrintExtras {
+  /** Quote/order TOP rules from the installation configuration (J3); absent = printed as an order. */
+  topRules?: DocumentTopRules;
+  /** Moment of issue (the caller's clock). */
+  issuedAt?: string;
+  sellerName?: string;
+  /** `brand.company` of the runtime configuration; absent = no company block. */
+  company?: OrderDocumentCompany;
+}
+
+export function buildOrderHtml(order: OrderDetail, origin: string, extras: OrderPrintExtras = {}): string {
   const model = toOrderDocument({
+    kind: documentKindOf(order.topCode, extras.topRules ?? {}),
     draftNumber: order.draftNumber,
     erpNumber: order.erpNumber,
     customerCode: order.customerCode,
@@ -29,5 +40,11 @@ export function buildOrderHtml(order: OrderDetail, origin: string): string {
     totals: order.totals,
     ...(order.ipi === undefined ? {} : { ipi: order.ipi }),
   });
-  return renderOrderHtml(model, { logoSrc: `${origin}/brand/plac-logo.png`, brandName: 'PLAC' });
+  return renderOrderHtml(model, {
+    logoSrc: `${origin}/brand/plac-logo.png`,
+    brandName: 'PLAC',
+    ...(extras.issuedAt === undefined ? {} : { issuedAt: extras.issuedAt }),
+    ...(extras.sellerName === undefined ? {} : { sellerName: extras.sellerName }),
+    ...(extras.company === undefined ? {} : { company: extras.company }),
+  });
 }

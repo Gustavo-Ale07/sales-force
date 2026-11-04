@@ -178,3 +178,79 @@ describe('estimated IPI in the document (D-D)', () => {
     expect(partial).toContain('Total parcial estimado (com IPI)');
   });
 });
+
+describe('D-W template (J4)', () => {
+  const full = toOrderDocument({
+    ...source,
+    kind: 'quote',
+    conditions: [
+      { label: 'Condição de pagamento', value: '28 DDL' },
+      { label: 'Tipo de negociação', value: 'Boleto' },
+    ],
+    items: [{ ...source.items[0]!, ipiPercent: '5' }, source.items[1]!],
+    ipi: { ipiEstimated: '1.60', grandTotalEstimated: '18.03', isPartial: true },
+  });
+  const options = { issuedAt: '2026-11-04T17:05:00.000Z', sellerName: 'Maria Vendedora', brandName: 'PLAC' };
+
+  it('A4, 15 mm margins, 10.5 pt, page X of Y, repeated header, brand colours', () => {
+    const html = renderOrderHtml(full, options);
+    expect(html).toContain('size: A4');
+    expect(html).toContain('margin: 15mm');
+    expect(html).toContain('10.5pt');
+    expect(html).toContain('página');
+    expect(html).toContain('counter(page)');
+    expect(html).toContain('counter(pages)');
+    expect(html).toContain('display: table-header-group');
+    expect(html).toContain('#01136A');
+    expect(html).toContain('#FF0109');
+  });
+
+  it('header follows the TOP kind and state', () => {
+    const quote = renderOrderHtml(full, options);
+    expect(quote).toContain('ORÇAMENTO');
+    expect(quote).not.toContain('PEDIDO FORCE');
+    const order = renderOrderHtml(toOrderDocument({ ...source, kind: 'order' }), options);
+    expect(order).toContain('PEDIDO');
+    expect(order).not.toContain('ORÇAMENTO');
+    expect(quote).toContain('Enviado ao Sankhya');
+  });
+
+  it('shows CLIENTE and CONDIÇÕES side by side, IPI % per item and the IPI note', () => {
+    const html = renderOrderHtml(full, options);
+    expect(html).toContain('Cliente');
+    expect(html).toContain('Condições');
+    expect(html).toContain('28 DDL');
+    expect(html).toContain('IPI %');
+    expect(html).toContain('5%');
+    expect(html).toContain('IPI estimado');
+    expect(html).toContain('Observações');
+  });
+
+  it('an item without IPI percentage shows a dash, never zero', () => {
+    const html = renderOrderHtml(toOrderDocument({ ...source, kind: 'order', items: source.items }), options);
+    expect(html).toContain('<td class="n">—</td>');
+  });
+
+  it('footer carries the issue moment (business time) and the seller', () => {
+    const html = renderOrderHtml(full, options);
+    expect(html).toContain('Emitido pelo Plac Force em 04/11/2026 14:05 · Maria Vendedora');
+  });
+
+  it('company block only from supplied data; absent means omitted, nothing invented', () => {
+    const without = renderOrderHtml(full, options);
+    expect(without).not.toContain('CNPJ');
+    expect(without).not.toContain('class="company"');
+    const withCompany = renderOrderHtml(full, { ...options, company: { legalName: 'Empresa Exemplo Ltda', cnpj: '00.000.000/0001-00' } });
+    expect(withCompany).toContain('Empresa Exemplo Ltda');
+    expect(withCompany).toContain('CNPJ 00.000.000/0001-00');
+    expect(withCompany).not.toContain('Telefone');
+    const empty = renderOrderHtml(full, { ...options, company: {} });
+    expect(empty).not.toContain('class="company"');
+  });
+
+  it('never carries restricted fields and matches the layout snapshot', () => {
+    const html = renderOrderHtml(full, options);
+    for (const word of ['custo', 'margem', 'crédito', 'financeiro']) expect(html.toLowerCase()).not.toContain(word);
+    expect(html.replace(/<style>[\s\S]*?<\/style>/, '<style/>')).toMatchSnapshot();
+  });
+});

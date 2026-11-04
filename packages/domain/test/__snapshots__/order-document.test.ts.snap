@@ -1,0 +1,23 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`D-W template (J4) > never carries restricted fields and matches the layout snapshot 1`] = `
+"<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>Orçamento 42</title><style/></head>
+<body>
+<header>
+<div><div class="wordmark">PLAC<span>.</span></div></div>
+<div><div class="kind">ORÇAMENTO</div><h1>Orçamento nº 42</h1><div class="meta">Orçamento Sankhya nº 987654</div><div class="meta">Data 30/03/2026</div><div class="badge">Enviado ao Sankhya</div></div>
+</header>
+<section class="cols">
+<div><h2>Cliente</h2><div><strong>CASA &amp; CIA LTDA</strong></div><div>Cliente 1500</div></div>
+<div><h2>Condições</h2><div>Condição de pagamento: <strong>28 DDL</strong></div><div>Tipo de negociação: <strong>Boleto</strong></div></div>
+</section>
+<section><h2>Itens</h2>
+<table><thead><tr><th>Item</th><th>Código</th><th>Descrição</th><th>Un.</th><th class="n">Quantidade</th><th class="n">Preço unit.</th><th class="n">Desconto</th><th class="n">IPI %</th><th class="n">Total</th></tr></thead>
+<tbody><tr><td>1</td><td>10</td><td>Cabo flexível 2,5mm</td><td>RL</td><td class="n">1.250,5</td><td class="n">R$ 12,3456</td><td class="n">10%</td><td class="n">5%</td><td class="n">R$ 13.890,29</td></tr><tr><td>2</td><td>11</td><td>Tomada</td><td>UN</td><td class="n">3</td><td class="n">Sem preço</td><td class="n">—</td><td class="n">—</td><td class="n">Sem preço</td></tr></tbody></table>
+<div class="total">Total estimado: R$ 13.890,29</div><div class="hint">Valor parcial: 1 item(ns) sem preço.</div><div class="total">IPI estimado: R$ 1,60</div><div class="total">Total parcial estimado (com IPI): R$ 18,03</div><div class="hint">IPI estimado a partir das alíquotas disponíveis (apenas nos itens com alíquota); o valor final é calculado no Sankhya.</div>
+</section>
+<section><h2>Observações</h2><div class="notes">Entregar pela manhã</div></section>
+<footer>Emitido pelo Plac Force em 04/11/2026 14:05 · Maria Vendedora</footer>
+</body></html>"
+`;
