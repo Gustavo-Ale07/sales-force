@@ -12,6 +12,7 @@ import type {
   DirectoryUser,
   Carrier,
   IpiRate,
+  OpenTitle,
 } from '@salesforce/domain';
 import type { SankhyaProductMediaPort } from './media.js';
 import type { ReadScope } from './read-scope.js';
@@ -32,6 +33,7 @@ export type ReadEntity =
   | 'directoryUsers'
   | 'carriers'
   | 'ipiRates'
+  | 'openTitles'
   | 'customers'
   | 'products'
   | 'productGroups'
@@ -45,6 +47,7 @@ export const READ_ENTITIES: readonly ReadEntity[] = [
   'directoryUsers',
   'carriers',
   'ipiRates',
+  'openTitles',
   'customers',
   'products',
   'productGroups',
@@ -111,6 +114,8 @@ export interface SankhyaReadPort {
   readCarriers(options?: ReadOptions): Snapshot<Carrier>;
   /** Ordered by `IpiRate.code`. IPI rates (TGFIPI) for the display estimate; read in full on every run. */
   readIpiRates(options?: ReadOptions): Snapshot<IpiRate>;
+  /** Ordered by `OpenTitle.nufin`. Open receivable titles (read-only financial information, D-I); a complete snapshot every run. */
+  readOpenTitles(options?: ReadOptions): Snapshot<OpenTitle>;
   /** Ordered by `Customer.code`. */
   readCustomers(options?: ReadOptions): Snapshot<Customer>;
   /** Ordered by `Product.code`. */

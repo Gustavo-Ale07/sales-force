@@ -30,6 +30,7 @@ export const queryKeys = {
   carriers: ["carriers"] as const,
   customers: (params: CustomersParams) => ["customers", "list", params] as const,
   customer: (code: number) => ["customers", "detail", code] as const,
+  customerFinancial: (code: number) => ["customers", "financial", code] as const,
   productGroups: ["product-groups"] as const,
   products: (params: ProductsParams) => ["products", "list", params] as const,
   product: (code: number, customerCode?: number) => ["products", "detail", code, customerCode ?? null] as const,
@@ -127,6 +128,15 @@ export function customerQueryOptions(api: ApiClient, code: number) {
   return queryOptions({
     queryKey: queryKeys.customer(code),
     queryFn: () => callApi(() => api.GET("/customers/{code}", { params: { path: { code } } })),
+  });
+}
+
+/** Read-only financial area of a customer (D-I). A 404 means the installation does not show it (or the customer is out of scope). */
+export function customerFinancialQueryOptions(api: ApiClient, code: number) {
+  return queryOptions({
+    queryKey: queryKeys.customerFinancial(code),
+    queryFn: () => callApi(() => api.GET("/customers/{code}/financial", { params: { path: { code } } })),
+    retry: false,
   });
 }
 

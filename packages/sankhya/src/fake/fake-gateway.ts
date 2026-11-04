@@ -133,6 +133,9 @@ export class FakeGateway implements SankhyaGateway {
   readIpiRates(options?: ReadOptions) {
     return this.#snapshot('ipiRates', this.#dataset.ipiRates, options);
   }
+  readOpenTitles(options?: ReadOptions) {
+    return this.#snapshot('openTitles', this.#dataset.openTitles, options);
+  }
   readDirectoryUsers(options?: ReadOptions) {
     return this.#snapshot('directoryUsers', this.#dataset.directoryUsers, options);
   }

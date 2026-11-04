@@ -8,10 +8,11 @@ import {
   erpSeller,
   erpCarrier,
   erpIpiRate,
+  erpOpenTitle,
   type Database,
 } from '@salesforce/db';
-import type { CustomerScope, IpiRate, PriceTableVersion } from '@salesforce/domain';
-import { and, asc, desc, eq, inArray, isNotNull, isNull, not, or, sql, type SQL } from 'drizzle-orm';
+import type { CustomerScope, IpiRate, OpenTitle, PriceTableVersion } from '@salesforce/domain';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, not, or, sql, type SQL } from 'drizzle-orm';
 import { DATABASE } from '../platform/tokens.js';
 import { containsText, digitsOf, eqInt, fitsPgInt, inSellerCodes, offsetOf } from '../platform/sql.js';
 
@@ -47,6 +48,9 @@ export interface CustomerRow {
   readonly priceTableCode: number | null;
   readonly priceTableName: string | null;
   readonly creditLimit: string | null;
+  readonly monthlyCreditLimit: string | null;
+  readonly blockReason: string | null;
+  readonly situation: string | null;
   readonly syncedAt: Date;
 }
 
@@ -159,6 +163,9 @@ export class MirrorRepository {
         priceTableCode: erpCustomer.priceTableCode,
         priceTableName: erpPriceTable.name,
         creditLimit: erpCustomer.creditLimit,
+        monthlyCreditLimit: erpCustomer.monthlyCreditLimit,
+        blockReason: erpCustomer.blockReason,
+        situation: erpCustomer.situation,
         syncedAt: erpCustomer.syncedAt,
       })
       .from(erpCustomer)
@@ -236,6 +243,51 @@ export class MirrorRepository {
       .where(and(...this.liveCustomer(), eq(erpCustomer.code, code), scopeCondition(scope)))
       .limit(1);
     return row ?? null;
+  }
+
+  /**
+   * Open receivable titles of ONE customer (live rows, due date ascending) and when the latest of them was synced. No scope here:
+   * the caller has already proved the customer visible (`findCustomer`). Read-only financial information (D-I).
+   */
+  async openTitlesOf(customerCode: number): Promise<{ titles: OpenTitle[]; syncedAt: Date | null }> {
+    if (!fitsPgInt(customerCode)) return { titles: [], syncedAt: null };
+    const rows = await this.db
+      .select({
+        nufin: erpOpenTitle.nufin,
+        customerCode: erpOpenTitle.customerCode,
+        companyCode: erpOpenTitle.companyCode,
+        documentNumber: erpOpenTitle.documentNumber,
+        dueDate: erpOpenTitle.dueDate,
+        amount: erpOpenTitle.amount,
+        paidAmount: erpOpenTitle.paidAmount,
+        syncedAt: erpOpenTitle.syncedAt,
+      })
+      .from(erpOpenTitle)
+      .where(and(eq(erpOpenTitle.customerCode, customerCode), isNull(erpOpenTitle.deletedAt)))
+      .orderBy(asc(erpOpenTitle.dueDate), asc(erpOpenTitle.nufin));
+    const syncedAt = rows.reduce<Date | null>((acc, r) => (acc === null || r.syncedAt > acc ? r.syncedAt : acc), null);
+    return {
+      titles: rows.map(({ syncedAt: _ignored, ...title }) => title),
+      syncedAt,
+    };
+  }
+
+  /** Which of these (already scoped) customers have at least one overdue open title (due date before `today`). */
+  async overdueCustomerCodes(codes: readonly number[], today: string): Promise<Set<number>> {
+    const usable = [...new Set(codes.filter(fitsPgInt))];
+    if (usable.length === 0) return new Set();
+    const rows = await this.db
+      .selectDistinct({ customerCode: erpOpenTitle.customerCode })
+      .from(erpOpenTitle)
+      .where(
+        and(
+          inArray(erpOpenTitle.customerCode, usable),
+          isNull(erpOpenTitle.deletedAt),
+          lt(erpOpenTitle.dueDate, today),
+          sql`${erpOpenTitle.amount} > ${erpOpenTitle.paidAmount}`,
+        ),
+      );
+    return new Set(rows.map((r) => r.customerCode));
   }
 
   /** Display names of customers by code (order lists); the caller already selected visible orders. */

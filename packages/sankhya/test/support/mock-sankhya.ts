@@ -58,6 +58,9 @@ export function erpTablesFromDataset(dataset: DemoDataset, dbUtcOffsetMinutes = 
         CODVEND: c.sellerCode,
         CODTAB: c.priceTableCode,
         LIMCRED: c.creditLimit === null ? null : Number(c.creditLimit),
+        LIMCREDMENSAL: c.monthlyCreditLimit === undefined || c.monthlyCreditLimit === null ? null : Number(c.monthlyCreditLimit),
+        MOTBLOQ: c.blockReason ?? null,
+        SITUACAO: c.situation ?? null,
       })),
       // Partners flagged as carriers (TRANSPORTADORA = S); not customers.
       ...dataset.carriers.map((c) => ({
@@ -93,6 +96,24 @@ export function erpTablesFromDataset(dataset: DemoDataset, dbUtcOffsetMinutes = 
       REFERENCIA: p.reference,
       CODIPI: p.ipiCode ?? null,
     })),
+    TGFFIN: [
+      ...dataset.openTitles.map((t) => ({
+        NUFIN: t.nufin,
+        NUNOTA: t.documentNumber,
+        CODPARC: t.customerCode,
+        CODEMP: t.companyCode,
+        DTVENC: t.dueDate,
+        DHBAIXA: null,
+        VLRDESDOB: Number(t.amount),
+        VLRBAIXA: Number(t.paidAmount),
+        RECDESP: 1,
+        PROVISAO: 'N',
+      })),
+      // Never mirrored: a settled title, a payable and a provision.
+      { NUFIN: 1, NUNOTA: 1, CODPARC: 1, CODEMP: 1, DTVENC: '2026-01-01', DHBAIXA: '2026-01-02', VLRDESDOB: 10, VLRBAIXA: 10, RECDESP: 1, PROVISAO: 'N' },
+      { NUFIN: 2, NUNOTA: 2, CODPARC: 1, CODEMP: 1, DTVENC: '2026-01-01', DHBAIXA: null, VLRDESDOB: 10, VLRBAIXA: 0, RECDESP: -1, PROVISAO: 'N' },
+      { NUFIN: 3, NUNOTA: 3, CODPARC: 1, CODEMP: 1, DTVENC: '2026-01-01', DHBAIXA: null, VLRDESDOB: 10, VLRBAIXA: 0, RECDESP: 1, PROVISAO: 'S' },
+    ],
     TGFIPI: dataset.ipiRates.map((r) => ({
       CODIPI: r.code,
       DESCRICAO: r.description,
@@ -147,6 +168,12 @@ function whereMatches(row: ErpRow, where: string | undefined): boolean {
   return where.split(' AND ').every((term) => {
     const flagMatch = /^(\w+) = '(\w)'$/.exec(term);
     if (flagMatch) return row[flagMatch[1] as string] === flagMatch[2];
+    const equalsNumber = /^(\w+) = (-?\d+)$/.exec(term);
+    if (equalsNumber) return Number(row[equalsNumber[1] as string]) === Number(equalsNumber[2]);
+    const isNull = /^(\w+) IS NULL$/.exec(term);
+    if (isNull) return row[isNull[1] as string] === null || row[isNull[1] as string] === undefined;
+    const isNotNull = /^(\w+) IS NOT NULL$/.exec(term);
+    if (isNotNull) return row[isNotNull[1] as string] !== null && row[isNotNull[1] as string] !== undefined;
     const positive = /^(\w+) > 0$/.exec(term);
     if (positive) return Number(row[positive[1] as string]) > 0;
     const inList = /^(\w+) IN \((.+)\)$/.exec(term);

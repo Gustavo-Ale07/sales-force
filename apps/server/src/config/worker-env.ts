@@ -64,6 +64,8 @@ export const WorkerEnvSchema = z.object({
   SYNC_CRON_PRODUCTS: cronField(DEFAULT_MIRROR_CRONS.products),
   /** One schedule for the whole price model (price tables, versions, list prices). */
   SYNC_CRON_PRICES: cronField(DEFAULT_MIRROR_CRONS.prices),
+  /** Open receivable titles (read-only financial information). */
+  SYNC_CRON_OPEN_TITLES: cronField(DEFAULT_MIRROR_CRONS.openTitles),
   /**
    * Login-directory mirror: keeps ONLY `sellers` + `directoryUsers` fresh (read-only) so the Sankhya-only login can create and
    * reconcile accounts. Off by default; works with `SYNC_MIRROR_ENABLED=false` and never enables another entity. When the full

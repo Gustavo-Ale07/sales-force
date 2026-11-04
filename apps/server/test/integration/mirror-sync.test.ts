@@ -31,6 +31,7 @@ const TABLES: Record<MirrorEntity, string> = {
   directoryUsers: 'erp_directory_user',
   carriers: 'erp_carrier',
   ipiRates: 'erp_ipi_rate',
+  openTitles: 'erp_open_title',
 };
 
 let postgres: TestPostgres;
@@ -81,6 +82,7 @@ function datasetCopy(): { -readonly [K in keyof DemoDataset]: DemoDataset[K][num
     directoryUsers: [...source.directoryUsers],
     carriers: [...source.carriers],
     ipiRates: [...source.ipiRates],
+    openTitles: [...source.openTitles],
     customers: [...source.customers],
     productGroups: [...source.productGroups],
     products: [...source.products],
@@ -409,6 +411,7 @@ describe('mirror jobs through pg-boss (retry / dead-letter)', () => {
       SYNC_CRON_CUSTOMERS: '0 3 * * *',
       SYNC_CRON_PRODUCTS: '0 3 * * *',
       SYNC_CRON_PRICES: '0 3 * * *',
+      SYNC_CRON_OPEN_TITLES: '0 3 * * *',
     });
     const runtime = new WorkerRuntime({
       logger,

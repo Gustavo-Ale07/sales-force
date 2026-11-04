@@ -52,6 +52,12 @@ export interface Customer {
   /** `null` means the customer has no price table of its own ("no resolved table" unless a fallback applies). */
   readonly priceTableCode: number | null;
   readonly creditLimit: DecimalString | null;
+  /** Monthly credit limit as reported (read-only financial information, D-I). Absent/null = not reported. */
+  readonly monthlyCreditLimit?: DecimalString | null;
+  /** Free-text reason recorded with the block at the source, shown as information only (D-I). */
+  readonly blockReason?: string | null;
+  /** Situation code as reported by the source (raw, informational). */
+  readonly situation?: string | null;
 }
 
 export interface ProductGroup {

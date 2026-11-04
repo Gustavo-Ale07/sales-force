@@ -148,6 +148,13 @@
       "when": 1793717615242,
       "tag": "0020_erp_ipi_rate_and_product_ipi_code",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1793790848303,
+      "tag": "0021_erp_open_title_and_customer_financial_fields",
+      "breakpoints": true
     }
   ]
 }

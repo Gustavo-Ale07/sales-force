@@ -758,6 +758,79 @@
         }
       }
     },
+    "/customers/{code}/financial": {
+      "get": {
+        "operationId": "getCustomerFinancial",
+        "tags": [
+          "customers"
+        ],
+        "summary": "Customer financial information (read-only, scoped)",
+        "description": "Open titles and credit information mirrored from the ERP (D-I). A customer outside the actor scope, or an installation that does not show the financial area, is reported as 404.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Financeiro do cliente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerFinancial"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/product-groups": {
       "get": {
         "operationId": "listProductGroups",
@@ -3824,6 +3897,9 @@
               }
             ]
           },
+          "overdue": {
+            "type": "boolean"
+          },
           "priceTableName": {
             "type": [
               "string",
@@ -3889,6 +3965,165 @@
         ],
         "additionalProperties": false
       },
+      "CustomerFinancial": {
+        "type": "object",
+        "properties": {
+          "customerCode": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "creditLimit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "monthlyCreditLimit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "blocked": {
+            "type": "boolean"
+          },
+          "blockReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "situation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "openCount": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "openAmount": {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              "overdueCount": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "overdueAmount": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DecimalString"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "oldestOverdueDueDate": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "openCount",
+              "openAmount",
+              "overdueCount",
+              "overdueAmount",
+              "oldestOverdueDueDate"
+            ],
+            "additionalProperties": false
+          },
+          "titles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomerFinancialTitle"
+            }
+          },
+          "checkedAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          }
+        },
+        "required": [
+          "customerCode",
+          "creditLimit",
+          "monthlyCreditLimit",
+          "blocked",
+          "blockReason",
+          "situation",
+          "summary",
+          "titles",
+          "checkedAt"
+        ],
+        "additionalProperties": false
+      },
+      "CustomerFinancialTitle": {
+        "type": "object",
+        "properties": {
+          "nufin": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "documentNumber": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dueDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "balance": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "overdue": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "nufin",
+          "documentNumber",
+          "dueDate",
+          "amount",
+          "balance",
+          "overdue"
+        ],
+        "additionalProperties": false
+      },
       "CustomerListItem": {
         "type": "object",
         "properties": {
@@ -3944,6 +4179,9 @@
                 "type": "null"
               }
             ]
+          },
+          "overdue": {
+            "type": "boolean"
           }
         },
         "required": [

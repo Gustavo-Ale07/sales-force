@@ -118,6 +118,7 @@ describe('capabilities and NotImplemented paths', () => {
       directoryUsers: 'supported',
       carriers: 'supported',
       ipiRates: 'supported',
+      openTitles: 'supported',
     });
     expect(description.capabilities.configurationSource).toBeNull();
   });

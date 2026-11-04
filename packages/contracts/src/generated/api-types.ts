@@ -236,6 +236,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/customers/{code}/financial": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Customer financial information (read-only, scoped)
+         * @description Open titles and credit information mirrored from the ERP (D-I). A customer outside the actor scope, or an installation that does not show the financial area, is reported as 404.
+         */
+        get: operations["getCustomerFinancial"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/product-groups": {
         parameters: {
             query?: never;
@@ -792,6 +812,7 @@ export interface components {
             sellerCode: number | null;
             sellerName: string | null;
             priceTableCode: number | null;
+            overdue?: boolean;
             priceTableName: string | null;
             resolvedPriceTable: {
                 code: number;
@@ -800,6 +821,31 @@ export interface components {
             } | null;
             creditLimit: components["schemas"]["DecimalString"] | null;
             syncedAt: components["schemas"]["IsoTimestamp"];
+        };
+        CustomerFinancial: {
+            customerCode: number;
+            creditLimit: components["schemas"]["DecimalString"] | null;
+            monthlyCreditLimit: components["schemas"]["DecimalString"] | null;
+            blocked: boolean;
+            blockReason: string | null;
+            situation: string | null;
+            summary: {
+                openCount: number;
+                openAmount: components["schemas"]["DecimalString"];
+                overdueCount: number | null;
+                overdueAmount: components["schemas"]["DecimalString"] | null;
+                oldestOverdueDueDate: string | null;
+            };
+            titles: components["schemas"]["CustomerFinancialTitle"][];
+            checkedAt: components["schemas"]["IsoTimestamp"];
+        };
+        CustomerFinancialTitle: {
+            nufin: number;
+            documentNumber: number | null;
+            dueDate: string;
+            amount: components["schemas"]["DecimalString"];
+            balance: components["schemas"]["DecimalString"];
+            overdue: boolean;
         };
         CustomerListItem: {
             code: number;
@@ -811,6 +857,7 @@ export interface components {
             sellerCode: number | null;
             sellerName: string | null;
             priceTableCode: number | null;
+            overdue?: boolean;
         };
         /** @enum {string} */
         CustomerSort: "name" | "-name" | "code" | "-code";
@@ -1888,6 +1935,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CustomerDetail"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    getCustomerFinancial: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Financeiro do cliente */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerFinancial"];
                 };
             };
             /** @description Requisição inválida (validation_failed) */

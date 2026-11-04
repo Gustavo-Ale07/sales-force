@@ -1,5 +1,11 @@
 import { Controller, Inject } from '@nestjs/common';
-import { API_BASE_PATH, routes, type CustomerDetail, type CustomersResponse } from '@salesforce/contracts';
+import {
+  API_BASE_PATH,
+  routes,
+  type CustomerDetail,
+  type CustomerFinancial,
+  type CustomersResponse,
+} from '@salesforce/contracts';
 import { ApiRoute, Contract, type RequestContract } from '../http/route.js';
 import { CurrentUserParam, type CurrentUser } from '../iam/current-user.js';
 import { CustomersService } from './customers.service.js';
@@ -22,5 +28,13 @@ export class CustomersController {
     @Contract() contract: RequestContract<typeof routes.getCustomer>,
   ): Promise<CustomerDetail> {
     return this.customers.get(user, contract.params.code);
+  }
+
+  @ApiRoute(routes.getCustomerFinancial)
+  financial(
+    @CurrentUserParam() user: CurrentUser,
+    @Contract() contract: RequestContract<typeof routes.getCustomerFinancial>,
+  ): Promise<CustomerFinancial> {
+    return this.customers.financial(user, contract.params.code);
   }
 }

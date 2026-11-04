@@ -1,12 +1,20 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { CustomerDetail, CustomerListItem, CustomersQuery, CustomersResponse } from '@salesforce/contracts';
-import { resolveCustomerPriceTable, type CustomerScope } from '@salesforce/domain';
+import type {
+  CustomerDetail,
+  CustomerFinancial,
+  CustomerListItem,
+  CustomersQuery,
+  CustomersResponse,
+} from '@salesforce/contracts';
+import { resolveCustomerPriceTable, summarizeOpenTitles, titleBalance, type CustomerScope } from '@salesforce/domain';
 import { AppError } from '../http/app-error.js';
 import type { CurrentUser } from '../iam/current-user.js';
 import { PolicyService } from '../iam/policy.service.js';
+import { businessDate } from '../integration/order-request.js';
+import { CLOCK, type Clock } from '../platform/tokens.js';
 import { isBlockedRaw, MirrorRepository, type CustomerRow } from '../mirror/mirror.repository.js';
 
-function toListItem(row: CustomerRow): CustomerListItem {
+function toListItem(row: CustomerRow, overdue = false): CustomerListItem {
   return {
     code: row.code,
     name: row.name,
@@ -17,6 +25,7 @@ function toListItem(row: CustomerRow): CustomerListItem {
     sellerCode: row.sellerCode,
     sellerName: row.sellerName,
     priceTableCode: row.priceTableCode,
+    ...(overdue ? { overdue: true } : {}),
   };
 }
 
@@ -30,10 +39,11 @@ export class CustomersService {
   constructor(
     @Inject(PolicyService) private readonly policy: PolicyService,
     @Inject(MirrorRepository) private readonly mirror: MirrorRepository,
+    @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
   async list(user: CurrentUser, query: CustomersQuery): Promise<CustomersResponse> {
-    const { scope } = await this.policy.accessContext(user);
+    const { scope, configuration } = await this.policy.accessContext(user);
     const { rows, total } = await this.mirror.listCustomers(
       {
         scope,
@@ -45,7 +55,20 @@ export class CustomersService {
       },
       { page: query.page, pageSize: query.pageSize },
     );
-    return { items: rows.map(toListItem), page: query.page, pageSize: query.pageSize, total };
+    // Read-only "overdue" hint (D-I): only when the installation shows the financial area and overdue titles.
+    const hint = configuration.financial.showFinancialArea && configuration.financial.overdueTitles;
+    const overdue = hint
+      ? await this.mirror.overdueCustomerCodes(
+          rows.map((r) => r.code),
+          businessDate(this.clock()),
+        )
+      : new Set<number>();
+    return {
+      items: rows.map((row) => toListItem(row, overdue.has(row.code))),
+      page: query.page,
+      pageSize: query.pageSize,
+      total,
+    };
   }
 
   async get(user: CurrentUser, code: number): Promise<CustomerDetail> {
@@ -61,6 +84,46 @@ export class CustomersService {
       // Credit is only shown when the installation configuration enables it (CFG-3...6).
       creditLimit: configuration.customers.creditFeatures.showCreditLimit ? row.creditLimit : null,
       syncedAt: row.syncedAt.toISOString(),
+    };
+  }
+
+  /**
+   * Read-only financial information of one customer (D-I). Same scope rule as `get`; an installation that does not show the
+   * financial area answers 404 (the area does not exist for it). Limits only with `showCreditLimit`; overdue only with `overdueTitles`.
+   */
+  async financial(user: CurrentUser, code: number): Promise<CustomerFinancial> {
+    const { scope, configuration } = await this.policy.accessContext(user);
+    if (!configuration.financial.showFinancialArea) throw new AppError('not_found');
+    const row = await this.mirror.findCustomer(scope, code);
+    if (row === null) throw new AppError('not_found');
+    const { titles, syncedAt } = await this.mirror.openTitlesOf(row.code);
+    const today = businessDate(this.clock());
+    const showOverdue = configuration.financial.overdueTitles;
+    const showLimit = configuration.customers.creditFeatures.showCreditLimit;
+    const summary = summarizeOpenTitles(titles, today);
+    return {
+      customerCode: row.code,
+      creditLimit: showLimit ? row.creditLimit : null,
+      monthlyCreditLimit: showLimit ? row.monthlyCreditLimit : null,
+      blocked: isBlockedRaw(row.blockedRaw),
+      blockReason: row.blockReason,
+      situation: row.situation,
+      summary: {
+        openCount: summary.openCount,
+        openAmount: summary.openAmount,
+        overdueCount: showOverdue ? summary.overdueCount : null,
+        overdueAmount: showOverdue ? summary.overdueAmount : null,
+        oldestOverdueDueDate: showOverdue ? summary.oldestOverdueDueDate : null,
+      },
+      titles: titles.map((t) => ({
+        nufin: t.nufin,
+        documentNumber: t.documentNumber,
+        dueDate: t.dueDate,
+        amount: t.amount,
+        balance: titleBalance(t),
+        overdue: showOverdue && t.dueDate < today,
+      })),
+      checkedAt: (syncedAt ?? row.syncedAt).toISOString(),
     };
   }
 

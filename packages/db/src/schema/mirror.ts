@@ -13,6 +13,7 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   check,
+  date,
   index,
   integer,
   numeric,
@@ -66,6 +67,30 @@ export const erpIpiRate = pgTable('erp_ipi_rate', {
 });
 
 /**
+ * Open receivable titles (read-only financial information, D-I). Complete snapshot every run: a settled title is absent from the
+ * next snapshot and is soft-deleted by reconciliation. `amount` is the title value, `paid_amount` what was already settled.
+ * Not a foreign key to the customer: the mirrors load independently.
+ */
+export const erpOpenTitle = pgTable(
+  'erp_open_title',
+  {
+    nufin: integer('nufin').primaryKey(),
+    customerCode: integer('customer_code').notNull(),
+    companyCode: integer('company_code'),
+    documentNumber: integer('document_number'),
+    dueDate: date('due_date', { mode: 'string' }).notNull(),
+    amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
+    paidAmount: numeric('paid_amount', { precision: 14, scale: 2 }).notNull(),
+    ...mirrorColumns(),
+  },
+  (t) => [
+    check('erp_open_title_amounts_chk', sql`${t.amount} >= 0 and ${t.paidAmount} >= 0`),
+    // Serves: per-customer title list ordered by due date and the per-customer summary, live rows only.
+    index('erp_open_title_customer_due_idx').on(t.customerCode, t.dueDate).where(sql`${t.deletedAt} is null`),
+  ],
+);
+
+/**
  * Official ERP user -> seller relation (TSIUSU.CODUSU / CODVEND), the ONLY user data mirrored: no name, e-mail, credential or
  * permission column exists. Read by the identity module to provision and reconcile seller accounts; never exposed by an endpoint.
  */
@@ -107,6 +132,12 @@ export const erpCustomer = pgTable(
     isCustomer: boolean('is_customer').notNull(),
     /** Raw block flag exactly as reported by the source; interpretation is configuration/domain. */
     blockedRaw: text('blocked_raw'),
+    /** Monthly credit limit as reported (informational, D-I); NULL = not reported. */
+    monthlyCreditLimit: numeric('monthly_credit_limit', { precision: 14, scale: 2 }),
+    /** Reason recorded with the block at the source (informational text). */
+    blockReason: text('block_reason'),
+    /** Situation code as reported (raw, informational). */
+    situation: text('situation'),
     ...mirrorColumns(),
   },
   (t) => [

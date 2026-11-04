@@ -228,7 +228,7 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
                   </TableCell>
                   <TableCell>{formatDocument(customer.document)}</TableCell>
                   <TableCell>
-                    <CustomerStatus active={customer.active} blocked={customer.blocked} />
+                    <CustomerStatus active={customer.active} blocked={customer.blocked} overdue={customer.overdue === true} />
                   </TableCell>
                   <TableCell>{customer.sellerName ?? <span className="text-fg-faint">—</span>}</TableCell>
                   <TableCell>
@@ -277,11 +277,12 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
   );
 }
 
-export function CustomerStatus({ active, blocked }: { active: boolean; blocked: boolean }) {
+export function CustomerStatus({ active, blocked, overdue = false }: { active: boolean; blocked: boolean; overdue?: boolean }) {
   return (
     <span className="inline-flex flex-wrap items-center gap-x-4 gap-y-1">
       <StatusDot tone={active ? "success" : "neutral"}>{active ? "Ativo" : "Inativo"}</StatusDot>
       {blocked ? <StatusDot tone="danger">Bloqueado</StatusDot> : null}
+      {overdue ? <StatusDot tone="warning">Vencido</StatusDot> : null}
     </span>
   );
 }

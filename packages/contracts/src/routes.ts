@@ -15,6 +15,7 @@ import {
 import { ConfigurationResponseSchema, OrderEntryConfigurationSchema } from './configuration.js';
 import {
   CustomerDetailSchema,
+  CustomerFinancialSchema,
   CustomerPathSchema,
   CustomersQuerySchema,
   CustomersResponseSchema,
@@ -269,6 +270,19 @@ export const routes = {
     auth: 'session',
     request: { params: CustomerPathSchema },
     responses: { 200: { description: 'Cliente', schema: CustomerDetailSchema } },
+    errors: [400, 401, 403, 404],
+  }),
+  getCustomerFinancial: defineRoute({
+    operationId: 'getCustomerFinancial',
+    method: 'get',
+    path: '/customers/{code}/financial',
+    tags: ['customers'],
+    summary: 'Customer financial information (read-only, scoped)',
+    description:
+      'Open titles and credit information mirrored from the ERP (D-I). A customer outside the actor scope, or an installation that does not show the financial area, is reported as 404.',
+    auth: 'session',
+    request: { params: CustomerPathSchema },
+    responses: { 200: { description: 'Financeiro do cliente', schema: CustomerFinancialSchema } },
     errors: [400, 401, 403, 404],
   }),
 

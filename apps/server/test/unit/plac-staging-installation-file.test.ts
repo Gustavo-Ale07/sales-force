@@ -18,8 +18,15 @@ describe('PLAC staging base file (.claude/work/PLAC_STAGING_INSTALLATION.json)',
   });
 
   it('carries the 2026-11-03 decisions', () => {
-    const file = raw as { source: { kind: string; version: string }; sales: Record<string, unknown>; erp: Record<string, unknown> };
-    expect(file.source).toMatchObject({ kind: 'bootstrap-file', version: 'plac-staging-2026-11-03' });
+    const file = raw as {
+      source: { kind: string; version: string };
+      sales: Record<string, unknown>;
+      erp: Record<string, unknown>;
+      financial: Record<string, unknown>;
+    };
+    expect(file.source).toMatchObject({ kind: 'bootstrap-file', version: 'plac-staging-2026-11-03b' });
+    // D-I: read-only financial area on; credit checks stay off (nothing blocks a sale).
+    expect(file.financial).toEqual({ showFinancialArea: true, overdueTitles: true, creditChecks: false });
     expect(file.sales['eligibleOrderTopCodes']).toEqual([1001, 1000]);
     expect(file.sales['quotationTopCode']).toBe(1000);
     expect(file.sales['topAllowlist']).toEqual([1000, 1001]);

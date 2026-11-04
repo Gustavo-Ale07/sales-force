@@ -48,6 +48,21 @@ export function customerDetail(overrides: Partial<ApiSchema<"CustomerDetail">> =
   };
 }
 
+export function customerFinancial(overrides: Partial<ApiSchema<"CustomerFinancial">> = {}): ApiSchema<"CustomerFinancial"> {
+  return {
+    customerCode: 1001,
+    creditLimit: null,
+    monthlyCreditLimit: null,
+    blocked: false,
+    blockReason: null,
+    situation: null,
+    summary: { openCount: 0, openAmount: "0.00", overdueCount: 0, overdueAmount: "0.00", oldestOverdueDueDate: null },
+    titles: [],
+    checkedAt: "2026-11-04T10:00:00.000Z",
+    ...overrides,
+  };
+}
+
 type ListPrice = ApiSchema<"ListPriceContext">;
 
 export const pricedList = (unitPrice: string, tableCode = 5, versionId = 9): ListPrice => ({

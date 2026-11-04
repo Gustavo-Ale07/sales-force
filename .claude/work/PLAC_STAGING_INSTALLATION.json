@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "source": {
     "kind": "bootstrap-file",
-    "version": "plac-staging-2026-11-03",
+    "version": "plac-staging-2026-11-03b",
     "syncedAt": "2026-10-02T00:00:00.000Z"
   },
   "general": {
@@ -189,8 +189,8 @@
     }
   },
   "financial": {
-    "showFinancialArea": false,
-    "overdueTitles": false,
+    "showFinancialArea": true,
+    "overdueTitles": true,
     "creditChecks": false
   },
   "features": {},

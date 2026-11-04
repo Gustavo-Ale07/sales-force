@@ -103,6 +103,7 @@ describe('mapping', () => {
       directoryUsers: dataset.directoryUsers.length,
       carriers: dataset.carriers.length,
       ipiRates: dataset.ipiRates.length,
+      openTitles: dataset.openTitles.length,
     };
     for (const entity of MIRROR_ENTITIES) {
       expect((await collect(entity, gateway)).length, entity).toBe(expected[entity]);
@@ -141,6 +142,7 @@ describe('mapping', () => {
       readDirectoryUsers: (o) => gateway.readDirectoryUsers(o),
       readCarriers: (o) => gateway.readCarriers(o),
       readIpiRates: (o) => gateway.readIpiRates(o),
+      readOpenTitles: (o) => gateway.readOpenTitles(o),
       readCustomers: (o) => gateway.readCustomers(o),
       readProducts: (o) => gateway.readProducts(o),
       readProductGroups: (o) => gateway.readProductGroups(o),
@@ -225,6 +227,7 @@ describe('schedules, queues and locks', () => {
       directoryUsers: '1 * * * *',
       carriers: '2 * * * *',
       ipiRates: '4 * * * *',
+      openTitles: '*/30 * * * *',
       customers: '2 * * * *',
       products: '3 * * * *',
       priceTables: '4 * * * *',

@@ -3,13 +3,14 @@ import {
   erpDirectoryUser,
   erpCarrier,
   erpIpiRate,
+  erpOpenTitle,
   erpListPrice,
   erpPriceTable,
   erpPriceTableVersion,
   erpProduct,
   erpSeller,
 } from '@salesforce/db';
-import type { Carrier, Customer, IpiRate, DirectoryUser, ListPrice, PriceTable, PriceTableVersion, Product, Seller } from '@salesforce/domain';
+import type { Carrier, Customer, IpiRate, OpenTitle, DirectoryUser, ListPrice, PriceTable, PriceTableVersion, Product, Seller } from '@salesforce/domain';
 import {
   SankhyaGatewayError,
   type GatewayDescription,
@@ -40,6 +41,7 @@ export const MIRROR_ENTITIES = [
   'directoryUsers',
   'carriers',
   'ipiRates',
+  'openTitles',
 ] as const satisfies readonly ReadEntity[];
 
 export type MirrorEntity = (typeof MIRROR_ENTITIES)[number];
@@ -212,6 +214,10 @@ const customers: MirrorEntitySpec = {
         // The gateway exposes the flag as a boolean; the raw source code is not visible here.
         // Its business meaning stays configuration/domain territory (NEEDS VALIDATION S4).
         blockedRaw: row.blocked ? 'true' : 'false',
+        // Read-only financial information (D-I): reported as is, absent = NULL.
+        monthlyCreditLimit: decimalColumn('customers', 'monthlyCreditLimit', row.monthlyCreditLimit ?? null, 14, 2),
+        blockReason: row.blockReason ?? null,
+        situation: row.situation ?? null,
       },
     })),
 };
@@ -347,6 +353,29 @@ const ipiRates: MirrorEntitySpec = {
     })),
 };
 
+/**
+ * Open receivable titles (read-only financial information, D-I). A complete snapshot every run: a settled title is absent from the
+ * next one and reconciliation soft-deletes it, so each run is a full replacement.
+ */
+const openTitles: MirrorEntitySpec = {
+  entity: 'openTitles',
+  requires: ['openTitles'],
+  table: erpOpenTitle,
+  keyProps: ['nufin'],
+  read: (context) =>
+    mapped<OpenTitle>(context.gateway.readOpenTitles(readOptions(context)), (row) => ({
+      key: [keyColumn('openTitles', 'nufin', row.nufin)],
+      content: {
+        customerCode: keyColumn('openTitles', 'customerCode', row.customerCode),
+        companyCode: row.companyCode,
+        documentNumber: row.documentNumber,
+        dueDate: row.dueDate,
+        amount: decimalColumn('openTitles', 'amount', row.amount, 14, 2),
+        paidAmount: decimalColumn('openTitles', 'paidAmount', row.paidAmount, 14, 2),
+      },
+    })),
+};
+
 export const MIRROR_SPECS: Readonly<Record<MirrorEntity, MirrorEntitySpec>> = {
   sellers,
   customers,
@@ -357,4 +386,5 @@ export const MIRROR_SPECS: Readonly<Record<MirrorEntity, MirrorEntitySpec>> = {
   directoryUsers,
   carriers,
   ipiRates,
+  openTitles,
 };

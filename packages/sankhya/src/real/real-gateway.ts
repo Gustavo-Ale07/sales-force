@@ -78,6 +78,7 @@ import {
   DIRECTORY_USER_SPEC,
   CARRIER_SPEC,
   IPI_RATE_SPEC,
+  OPEN_TITLE_SPEC,
   compareKeys,
   type EntitySpec,
 } from './mapping.js';
@@ -296,6 +297,9 @@ export class RealSankhyaGateway implements SankhyaGateway {
   }
   readIpiRates(options?: ReadOptions) {
     return this.#paged(IPI_RATE_SPEC, options);
+  }
+  readOpenTitles(options?: ReadOptions) {
+    return this.#paged(OPEN_TITLE_SPEC, options);
   }
   readCustomers(options?: ReadOptions) {
     return this.#paged(CUSTOMER_SPEC, options);

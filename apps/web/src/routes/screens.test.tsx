@@ -5,6 +5,7 @@ import {
   configuration,
   customer,
   customerDetail,
+  customerFinancial,
   customersPage,
   dashboard,
   integrationFake,
@@ -148,16 +149,21 @@ describe("Carteira (customers)", () => {
 });
 
 describe("Cliente (customer detail)", () => {
-  it("shows the registration, the price table and credit limit as not available when the server omits it", async () => {
+  it("shows the registration and price table, and no credit limit when the server omits it", async () => {
     const { user } = renderApp("/clientes/1001", {
-      handlers: { "GET /customers/:code": { body: customerDetail() }, "GET /orders": { body: ordersPage([orderListItem()]) } },
+      handlers: {
+        "GET /customers/:code": { body: customerDetail() },
+        "GET /customers/:code/financial": { body: customerFinancial() },
+        "GET /orders": { body: ordersPage([orderListItem()]) },
+      },
     });
     expect(await screen.findByRole("heading", { name: /Comercial Alfa Ltda/ })).toBeInTheDocument();
     expect(screen.getByText("11.222.333/0001-81")).toBeInTheDocument();
     expect(screen.getByText("5 — Tabela Varejo")).toBeInTheDocument();
     expect(screen.getByText("Tabela 5 (do cliente)")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: /Financeiro/ }));
-    expect(screen.getByText("Limite de crédito", { selector: "dt" }).closest("div")).toHaveTextContent("Não disponível");
+    expect(await screen.findByText("Nenhum título em aberto")).toBeInTheDocument();
+    expect(screen.queryByText("Limite de crédito", { selector: "dt" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: /Vendas/ }));
     expect(await screen.findByText("Rascunho nº 12")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Novo pedido/ })).toHaveAttribute("href", expect.stringContaining("customer=1001"));
@@ -165,10 +171,23 @@ describe("Cliente (customer detail)", () => {
 
   it("shows the credit limit only when the server sent it", async () => {
     const { user } = renderApp("/clientes/1001", {
-      handlers: { "GET /customers/:code": { body: customerDetail({ creditLimit: "5000" }) }, "GET /orders": { body: ordersPage([]) } },
+      handlers: {
+        "GET /customers/:code": { body: customerDetail({ creditLimit: "5000" }) },
+        "GET /customers/:code/financial": {
+          body: customerFinancial({
+            creditLimit: "5000",
+            summary: { openCount: 1, openAmount: "80.00", overdueCount: 1, overdueAmount: "80.00", oldestOverdueDueDate: "2026-09-15" },
+            titles: [{ nufin: 1, documentNumber: 77, dueDate: "2026-09-15", amount: "80.00", balance: "80.00", overdue: true }],
+          }),
+        },
+        "GET /orders": { body: ordersPage([]) },
+      },
     });
     await user.click(await screen.findByRole("tab", { name: /Financeiro/ }));
     expect(await screen.findByText(/5\.000,00/)).toBeInTheDocument();
+    expect(screen.getByText(/mais antigo venceu em/)).toBeInTheDocument();
+    expect(screen.getAllByText("15/09/2026", { selector: "time" }).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Informação do Sankhya em/)).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: /Vendas/ }));
     expect(await screen.findByText("Nenhum pedido para este cliente")).toBeInTheDocument();
   });

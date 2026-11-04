@@ -10,6 +10,8 @@ export const DEFAULT_MIRROR_CRONS = {
   customers: '*/10 * * * *',
   products: '*/15 * * * *',
   prices: '*/10 * * * *',
+  /** Open receivable titles (read-only financial information, D-I): every 30 minutes. */
+  openTitles: '*/30 * * * *',
 } as const;
 
 export interface MirrorScheduleSettings {
@@ -18,6 +20,8 @@ export interface MirrorScheduleSettings {
   readonly SYNC_CRON_CUSTOMERS: string;
   readonly SYNC_CRON_PRODUCTS: string;
   readonly SYNC_CRON_PRICES: string;
+  /** Open receivable titles; defaults to `DEFAULT_MIRROR_CRONS.openTitles` when absent. */
+  readonly SYNC_CRON_OPEN_TITLES?: string;
   /** Targeted login-directory mirror (`sellers` + `directoryUsers` only). Independent of `SYNC_MIRROR_ENABLED`. */
   readonly AUTH_DIRECTORY_SYNC_ENABLED?: boolean;
   readonly AUTH_DIRECTORY_SYNC_CRON?: string;
@@ -39,9 +43,9 @@ export function mirrorSchedulesFromSettings(settings: MirrorScheduleSettings): M
     // Full mirror off: only the login directory may still run, and only sellers + directoryUsers (never customers, products or prices).
     if (settings.AUTH_DIRECTORY_SYNC_ENABLED === true) {
       const cron = settings.AUTH_DIRECTORY_SYNC_CRON ?? DEFAULT_MIRROR_CRONS.sellers;
-      return { sellers: cron, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: cron, carriers: null, ipiRates: null };
+      return { sellers: cron, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: cron, carriers: null, ipiRates: null, openTitles: null };
     }
-    return { sellers: null, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: null, carriers: null, ipiRates: null };
+    return { sellers: null, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: null, carriers: null, ipiRates: null, openTitles: null };
   }
   return {
     sellers: settings.SYNC_CRON_SELLERS,
@@ -57,5 +61,7 @@ export function mirrorSchedulesFromSettings(settings: MirrorScheduleSettings): M
     carriers: settings.SYNC_CRON_CUSTOMERS,
     // IPI rates are price-side reference data: they move with the price tables (D-D).
     ipiRates: settings.SYNC_CRON_PRICES,
+    // Open titles move on their own 30-minute schedule (D-I).
+    openTitles: settings.SYNC_CRON_OPEN_TITLES ?? DEFAULT_MIRROR_CRONS.openTitles,
   };
 }

@@ -18,7 +18,7 @@ import { canonicalJson } from './configuration-hash.js';
  * - a bridge key read successfully from Sankhya overrides the base; a NULL cell is "not read" and keeps the base
  *   (never `false`); a rule whose precondition fails keeps the base and adds a warning;
  * - base-only keys (topAllowlist, negotiationTypeExclusions, fallbackTableCode, ...) are never written;
- * - `financial.showFinancialArea` (UTILFINANC) is REPORTED only until the financial area exists;
+ * - `financial.showFinancialArea` follows UTILFINANC (D-I, the read-only financial area exists); `showCreditLimit` (OCLTLIMCRED) is reported only;
  * - nothing here reads a credential: the facts contain none (the gateway queries never name such columns).
  * The caller validates the result with the contracts schema (which embeds the domain consistency rules).
  */
@@ -51,7 +51,7 @@ export interface OverlayWarning {
 export interface OverlayInformational {
   /** Q8: distribution of `TGFPRO.AD_MOBILIDADE` (decides nothing today). */
   readonly productMobility: readonly { readonly mobile: boolean | null; readonly count: number }[];
-  /** Q1 UTILFINANC: reported, NOT applied to `financial.showFinancialArea` until P6 exists. */
+  /** Q1 UTILFINANC: applied to `financial.showFinancialArea` (D-I) and also reported here. */
   readonly usesFinancial: boolean | null;
   /** Q1 OCLTLIMCRED: reported, NOT applied to `customers.creditFeatures.showCreditLimit` (owner 2026-11-03). */
   readonly hidesCreditLimit: boolean | null;
@@ -299,6 +299,8 @@ export function overlayConfigurationFacts(input: {
   if (q1.decimalQuantities !== null) apply('sales.orderBehavior.decimalQuantities', q1Origin('USADECQTD'), q1.decimalQuantities);
   if (q1.historyDays !== null) apply('customers.historyDays', q1Origin('DIASCONSULTAVENDAS'), q1.historyDays);
   if (q1.purchasedWindowDays !== null) apply('customers.purchasedWindowDays', q1Origin('QTDDIASPRODCOMPRADOS'), q1.purchasedWindowDays);
+  // UTILFINANC drives the read-only financial area (D-I): read from Sankhya, it overrides the base `showFinancialArea` (NULL keeps the base).
+  if (q1.usesFinancial !== null) apply('financial.showFinancialArea', q1Origin('UTILFINANC'), q1.usesFinancial);
   // OCLTLIMCRED is REPORTED only (owner 2026-11-03): `showCreditLimit` stays with the base file until the owner confirms it.
   if (q1.catalogReferenceTableCode !== null) apply('pricing.catalogReferenceTableCode', q1Origin('TABPADCSLTPROD'), q1.catalogReferenceTableCode);
   if (q1.alternativeTableCode !== null) {

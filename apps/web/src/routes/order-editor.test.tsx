@@ -5,6 +5,7 @@ import {
   ORDER_ID,
   customer,
   customerDetail,
+  customerFinancial,
   customersPage,
   ordersPage,
   orderEntryConfiguration,
@@ -213,6 +214,7 @@ describe("Novo pedido", () => {
     const fichaHandlers = () =>
       newOrderHandlers({
         "GET /customers/:code": { body: customerDetail({ creditLimit: "5000" }) },
+        "GET /customers/:code/financial": { body: customerFinancial({ creditLimit: "5000" }) },
         "GET /orders": { body: ordersPage([orderListItem()]) },
       });
 

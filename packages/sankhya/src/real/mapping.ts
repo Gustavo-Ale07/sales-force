@@ -5,6 +5,7 @@ import type {
   Carrier,
   IpiRate,
   IsoTimestamp,
+  OpenTitle,
   ListPrice,
   PriceTable,
   PriceTableVersion,
@@ -172,6 +173,19 @@ export class RowReader {
     return new Date(midnight - dbUtcOffsetMinutes * 60_000).toISOString();
   }
 
+  /** `YYYY-MM-DD` business date (produced by TO_CHAR in the query), validated as a real calendar date and returned as is. */
+  businessDate(column: string): string {
+    const value = this.text(column);
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) return this.#fail(column, 'is not a YYYY-MM-DD date');
+    const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+      return this.#fail(column, 'is not a valid calendar date');
+    }
+    return value;
+  }
+
   /** Column must be null/blank or one of the given values; used to fail closed on unmodelled variants. */
   expectBlankOrZero(column: string): void {
     const cell = this.#cell(column);
@@ -242,8 +256,8 @@ export const CARRIER_SPEC: EntitySpec<Carrier> = {
 export const CUSTOMER_SPEC: EntitySpec<Customer> = {
   entity: 'customers',
   table: 'TGFPAR',
-  select: ['CODPARC', 'NOMEPARC', 'RAZAOSOCIAL', 'CGC_CPF', 'ATIVO', 'BLOQUEAR', 'CODVEND', 'CODTAB', 'LIMCRED'],
-  columns: ['CODPARC', 'NOMEPARC', 'RAZAOSOCIAL', 'CGC_CPF', 'ATIVO', 'BLOQUEAR', 'CODVEND', 'CODTAB', 'LIMCRED'],
+  select: ['CODPARC', 'NOMEPARC', 'RAZAOSOCIAL', 'CGC_CPF', 'ATIVO', 'BLOQUEAR', 'CODVEND', 'CODTAB', 'LIMCRED', 'LIMCREDMENSAL', 'MOTBLOQ', 'SITUACAO'],
+  columns: ['CODPARC', 'NOMEPARC', 'RAZAOSOCIAL', 'CGC_CPF', 'ATIVO', 'BLOQUEAR', 'CODVEND', 'CODTAB', 'LIMCRED', 'LIMCREDMENSAL', 'MOTBLOQ', 'SITUACAO'],
   // `CODPARC = 0` is the ERP placeholder row (flagged CLIENTE = 'S' in the Sandbox, 2026-09-30): never mirrored.
   where: "CLIENTE = 'S' AND CODPARC > 0",
   orderBy: 'CODPARC',
@@ -261,9 +275,37 @@ export const CUSTOMER_SPEC: EntitySpec<Customer> = {
       sellerCode: row.nullableInt('CODVEND'),
       priceTableCode: row.nullableInt('CODTAB'),
       creditLimit: row.nullableDecimal('LIMCRED'),
+      monthlyCreditLimit: row.nullableDecimal('LIMCREDMENSAL'),
+      blockReason: row.nullableText('MOTBLOQ'),
+      situation: row.nullableText('SITUACAO'),
     };
   },
   keyOf: (customer) => [customer.code],
+};
+
+/**
+ * TGFFIN open receivable titles (Sandbox 2026-11-03, per the Vidya financial views): `RECDESP = 1` (receivable),
+ * `PROVISAO = 'N'` (not a provision), open = `DHBAIXA` null. PK NUFIN. Read in full on every run (complete snapshot, so a settled
+ * title disappears from the mirror); no incremental column is used (YAGNI). `VLRDESDOB` is the title value, `VLRBAIXA` what was
+ * already settled. Read-only information: it never blocks a sale (D-I).
+ */
+export const OPEN_TITLE_SPEC: EntitySpec<OpenTitle> = {
+  entity: 'openTitles',
+  table: 'TGFFIN',
+  select: ['NUFIN', 'NUNOTA', 'CODPARC', 'CODEMP', "TO_CHAR(DTVENC, 'YYYY-MM-DD') AS DTVENC", 'VLRDESDOB', 'VLRBAIXA'],
+  columns: ['NUFIN', 'NUNOTA', 'CODPARC', 'CODEMP', 'DTVENC', 'VLRDESDOB', 'VLRBAIXA'],
+  where: "RECDESP = 1 AND PROVISAO = 'N' AND DHBAIXA IS NULL AND CODPARC > 0 AND DTVENC IS NOT NULL",
+  orderBy: 'NUFIN',
+  map: (row) => ({
+    nufin: row.int('NUFIN'),
+    customerCode: row.int('CODPARC'),
+    companyCode: row.nullableInt('CODEMP'),
+    documentNumber: row.nullableInt('NUNOTA'),
+    dueDate: row.businessDate('DTVENC'),
+    amount: row.decimal('VLRDESDOB'),
+    paidAmount: row.nullableDecimal('VLRBAIXA') ?? '0',
+  }),
+  keyOf: (title) => [title.nufin],
 };
 
 /**

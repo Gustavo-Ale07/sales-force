@@ -31,13 +31,12 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { customerQueryOptions, ordersQueryOptions } from "../lib/api-queries";
+import { customerFinancialQueryOptions, customerQueryOptions, ordersQueryOptions } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
+import { errorStatus } from "../lib/http-error";
 import { orderReference, orderStatusLabels } from "../lib/labels";
 import { CustomerStatus } from "../routes/customers";
 import { QueryError } from "./query-error";
-
-const NOT_AVAILABLE = "Não disponível";
 
 export type FichaTab = "cadastro" | "financeiro" | "analise" | "engajamento" | "vendas";
 
@@ -184,8 +183,13 @@ function RegistrationTab({ customerCode }: { customerCode: number }) {
   );
 }
 
+/**
+ * Read-only financial information mirrored from the ERP (D-I): informational only, never blocks a sale. The server decides what
+ * exists (limits, overdue); a 404 means this installation does not show the financial area.
+ */
 function FinanceTab({ customerCode }: { customerCode: number }) {
-  const query = useFichaCustomer(customerCode);
+  const api = useApi();
+  const query = useQuery({ ...customerFinancialQueryOptions(api, customerCode), staleTime: 30_000 });
   if (query.isPending) {
     return (
       <div aria-busy="true">
@@ -194,24 +198,104 @@ function FinanceTab({ customerCode }: { customerCode: number }) {
     );
   }
   if (query.isError) {
-    return <QueryError error={query.error} onRetry={() => void query.refetch()} retrying={query.isRefetching} title="Não foi possível carregar o cliente" />;
+    if (errorStatus(query.error) === 404) {
+      return (
+        <Alert tone="info" title="Financeiro indisponível">
+          A área financeira não está habilitada nesta instalação.
+        </Alert>
+      );
+    }
+    return <QueryError error={query.error} onRetry={() => void query.refetch()} retrying={query.isRefetching} title="Não foi possível carregar o financeiro" />;
   }
+  const data = query.data;
+  const { summary } = data;
   return (
     <div className="flex flex-col gap-3">
       <Card>
-        <CardHeader title="Limite de crédito" />
+        <CardHeader title="Situação financeira" />
         <CardBody>
           <KeyValueList>
-            {/* The server sends the credit limit only when the installation and profile allow it. */}
-            <KeyValue label="Limite de crédito">
-              {query.data.creditLimit === null ? <span className="text-fg-faint">{NOT_AVAILABLE}</span> : <Money value={query.data.creditLimit} />}
+            {/* The server sends the limits only when the installation allows it. */}
+            {data.creditLimit === null ? null : (
+              <KeyValue label="Limite de crédito">
+                <Money value={data.creditLimit} />
+              </KeyValue>
+            )}
+            {data.monthlyCreditLimit === null ? null : (
+              <KeyValue label="Limite mensal">
+                <Money value={data.monthlyCreditLimit} />
+              </KeyValue>
+            )}
+            <KeyValue label="Em aberto">
+              {summary.openCount} {summary.openCount === 1 ? "título" : "títulos"} · <Money value={summary.openAmount} />
+            </KeyValue>
+            {summary.overdueCount === null || summary.overdueAmount === null ? null : (
+              <KeyValue label="Vencido">
+                {summary.overdueCount === 0 ? (
+                  "Nenhum título vencido"
+                ) : (
+                  <span className="text-danger">
+                    {summary.overdueCount} {summary.overdueCount === 1 ? "título" : "títulos"} · <Money value={summary.overdueAmount} />
+                    {summary.oldestOverdueDueDate ? (
+                      <>
+                        {" "}
+                        · mais antigo venceu em <DateText value={summary.oldestOverdueDueDate} timeZone="UTC" />
+                      </>
+                    ) : null}
+                  </span>
+                )}
+              </KeyValue>
+            )}
+            <KeyValue label="Bloqueio">
+              {data.blocked ? (
+                <span className="text-danger">Bloqueado{data.blockReason ? ` — ${data.blockReason}` : ""}</span>
+              ) : (
+                "Sem bloqueio"
+              )}
             </KeyValue>
           </KeyValueList>
         </CardBody>
       </Card>
-      <Alert tone="info" title="Situação de crédito e títulos em aberto">
-        Situação, atraso médio e títulos em aberto ainda não estão disponíveis nesta versão: as regras de crédito não foram definidas.
-      </Alert>
+      <Card>
+        <CardHeader title="Títulos em aberto" />
+        {data.titles.length === 0 ? (
+          <CardBody>
+            <EmptyState compact title="Nenhum título em aberto" description="O Sankhya não informa títulos a receber em aberto para este cliente." />
+          </CardBody>
+        ) : (
+          <Table label="Títulos em aberto">
+            <TableCaption>Títulos a receber em aberto, por vencimento</TableCaption>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Vencimento</TableHead>
+                <TableHead>Nota</TableHead>
+                <TableHead numeric>Valor</TableHead>
+                <TableHead numeric>Saldo</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.titles.map((title) => (
+                <TableRow key={title.nufin}>
+                  <TableCell>
+                    <DateText value={title.dueDate} timeZone="UTC" />
+                    {title.overdue ? <StatusDot tone="danger">Vencido</StatusDot> : null}
+                  </TableCell>
+                  <TableCell>{title.documentNumber ?? <span className="text-fg-faint">—</span>}</TableCell>
+                  <TableCell numeric>
+                    <Money value={title.amount} />
+                  </TableCell>
+                  <TableCell numeric>
+                    <Money value={title.balance} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </Card>
+      <p className="text-xs text-fg-muted">
+        Informação do Sankhya em <DateText value={data.checkedAt} withTime />. Somente consulta: não bloqueia vendas.
+      </p>
     </div>
   );
 }

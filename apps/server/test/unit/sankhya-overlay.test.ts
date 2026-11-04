@@ -122,10 +122,25 @@ describe('overlay base (+) Sankhya facts (CFG-8)', () => {
     expect(snapshot.sales.confirmationBehavior).toBe('disabled');
   });
 
-  it('UTILFINANC is reported only: showFinancialArea is not applied', () => {
-    expect(snapshot.financial.showFinancialArea).toBe(false);
+  it('UTILFINANC overrides showFinancialArea, with provenance (D-I)', () => {
+    expect(snapshot.financial.showFinancialArea).toBe(true);
     expect(result.informational.usesFinancial).toBe(true);
-    expect(result.entries.some((e) => e.key === 'financial.showFinancialArea')).toBe(false);
+    const entry = result.entries.find((e) => e.key === 'financial.showFinancialArea');
+    expect(entry).toMatchObject({ next: true, origin: 'AD_TVDYCFGFRC.UTILFINANC' });
+    expect(snapshot.provenance['financial.showFinancialArea']).toMatchObject({ table: 'AD_TVDYCFGFRC', column: 'UTILFINANC' });
+  });
+
+  it('a NULL UTILFINANC keeps the base showFinancialArea', () => {
+    const out = overlayConfigurationFacts({
+      base: baseConfiguration((c) => {
+        c['financial'].showFinancialArea = false;
+      }),
+      facts: factsWith((f) => {
+        f['q1GeneralParameters'].rows[0].usesFinancial = null;
+      }),
+    });
+    expect((out.snapshot as any).financial.showFinancialArea).toBe(false);
+    expect(keyOf(out, 'financial.showFinancialArea')).toBeUndefined();
   });
 
   it('reports Q8 and the parameters without a feature, never applied', () => {
@@ -159,7 +174,7 @@ describe('overlay base (+) Sankhya facts (CFG-8)', () => {
     expect(snapshot.provenance['sales.topAllowlist']).toEqual({ source: 'base' });
     // fallbackTableCode is null in this base: nothing to attribute, and Sankhya never provides it.
     expect(snapshot.provenance['pricing.fallbackTableCode']).toBeUndefined();
-    expect(snapshot.provenance['financial.showFinancialArea']).toBeUndefined();
+    expect(snapshot.provenance['financial.showFinancialArea']).toMatchObject({ table: 'AD_TVDYCFGFRC', column: 'UTILFINANC' });
   });
 
   it('does not mutate the base', () => {

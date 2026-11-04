@@ -4,6 +4,7 @@ import type {
   Carrier,
   IpiRate,
   ListPrice,
+  OpenTitle,
   PriceTable,
   PriceTableVersion,
   Product,
@@ -41,6 +42,8 @@ export interface DemoDataset {
   readonly carriers: readonly Carrier[];
   /** Synthetic IPI rates: 3.25%, 9.75% and one by tariff (not estimated). */
   readonly ipiRates: readonly IpiRate[];
+  /** Synthetic open receivable titles for some customers: one long overdue, one far in the future, one partly settled. */
+  readonly openTitles: readonly OpenTitle[];
   readonly customers: readonly Customer[];
   readonly productGroups: readonly ProductGroup[];
   readonly products: readonly Product[];
@@ -113,6 +116,22 @@ function buildIpiRates(): IpiRate[] {
     { code: DEMO_IPI_CODE_HIGH, percentual: '9.75', byTariff: false, description: 'IPI DE 9,75% (demo)' },
     { code: DEMO_IPI_CODE_TARIFF, percentual: '0', byTariff: true, description: 'IPI POR PAUTA (demo)' },
   ];
+}
+
+/** Deterministic, without consuming the PRNG (the dataset of existing tests stays identical). */
+function buildOpenTitles(customers: readonly Customer[]): OpenTitle[] {
+  const titles: OpenTitle[] = [];
+  let nufin = 700_000;
+  customers.forEach((customer, index) => {
+    if (index % 3 !== 0) return;
+    const base = { customerCode: customer.code, companyCode: 1 };
+    titles.push({ ...base, nufin: (nufin += 1), documentNumber: 880_000 + index, dueDate: '2026-09-15', amount: '1250.50', paidAmount: '0' });
+    titles.push({ ...base, nufin: (nufin += 1), documentNumber: 880_000 + index, dueDate: '2027-03-10', amount: '980.00', paidAmount: '0' });
+    if (index % 6 === 0) {
+      titles.push({ ...base, nufin: (nufin += 1), documentNumber: null, dueDate: '2026-10-20', amount: '400.00', paidAmount: '150.00' });
+    }
+  });
+  return titles;
 }
 
 /** Deterministic, without consuming the PRNG (the dataset of existing tests stays identical). */
@@ -234,6 +253,9 @@ function buildCustomers(rng: Prng, sellers: readonly Seller[]): Customer[] {
       sellerCode,
       priceTableCode,
       creditLimit,
+      monthlyCreditLimit: null,
+      blockReason: blocked ? 'Bloqueio de teste (demo)' : null,
+      situation: null,
     });
   }
   return customers;
@@ -451,6 +473,7 @@ export function generateDemoDataset(seed: number = DEMO_SEED): DemoDataset {
     directoryUsers: buildDirectoryUsers(sellers),
     carriers: buildCarriers(),
     ipiRates: buildIpiRates(),
+    openTitles: buildOpenTitles(customers),
     customers,
     productGroups: groups,
     products: products.map((p) => p.product),
