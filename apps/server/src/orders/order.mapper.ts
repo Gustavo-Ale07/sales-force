@@ -64,6 +64,16 @@ export function erpStatusOf(order: OrderRow, liberationEventLabels?: Readonly<Re
   return releaseEvents.length === 0 ? base : { ...base, releaseEvents };
 }
 
+/**
+ * K3: the stable code of a stored delivery error. The stored text is `<code>: <masked message>`; only the code leaves
+ * the server, and only when it has the identifier shape. Orders that are not `rejected` carry nothing.
+ */
+export function erpDeliveryOf(status: string, errorClass: string | null, message: string | null): OrderListItem['erpDelivery'] {
+  if (status !== 'rejected' || errorClass === null) return null;
+  const head = message === null ? '' : (message.split(':', 1)[0] ?? '').trim();
+  return { errorClass, errorCode: /^[a-z][a-z0-9_]{0,63}$/.test(head) ? head : null };
+}
+
 export function toOrderListItem(row: OrderListRow): OrderListItem {
   const { order } = row;
   return {
@@ -81,6 +91,7 @@ export function toOrderListItem(row: OrderListRow): OrderListItem {
     isPartial: row.unpricedCount > 0,
     erpNumber: order.erpNumber,
     erpStatus: erpStatusOf(order),
+    erpDelivery: erpDeliveryOf(order.status, row.deliveryErrorClass, row.deliveryErrorMessage),
     review: reviewOf(order.status, row),
     version: order.version,
     createdAt: order.createdAt.toISOString(),
@@ -115,6 +126,7 @@ export function toOrderDetail(
   liberationEventLabels: Readonly<Record<string, string>> = {},
   ipiLookup: IpiLookup = { codes: new Map(), rates: new Map() },
   showExpedicao = false,
+  lastDelivery: { errorClass: string | null; message: string | null } | null = null,
 ): OrderDetail {
   const baseItems = items.map((item) => toItemDto(item, images.get(item.productCode)));
   const totals = computeOrderTotals(baseItems);
@@ -139,6 +151,7 @@ export function toOrderDetail(
     isPartial: totals.isPartial,
     erpNumber: order.erpNumber,
     erpStatus: erpStatusOf(order, liberationEventLabels),
+    erpDelivery: erpDeliveryOf(order.status, lastDelivery?.errorClass ?? null, lastDelivery?.message ?? null),
     review: reviewOf(order.status, customer),
     version: order.version,
     createdAt: order.createdAt.toISOString(),

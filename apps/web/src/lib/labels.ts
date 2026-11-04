@@ -64,6 +64,37 @@ export function orderReference(order: Pick<ApiSchema<"OrderListItem">, "draftNum
   return documentVocabulary(kind, order.erpNumber ?? order.draftNumber).title;
 }
 
+type ErpDelivery = NonNullable<ApiSchema<"OrderListItem">["erpDelivery"]>;
+
+const deliveryCodeLabels: Record<string, string> = {
+  environment_mismatch: "Configuração de ambiente divergente — avise o TI",
+  environment_unbound: "Configuração de ambiente divergente — avise o TI",
+  dataset_not_erp: "Pedido criado com dados de teste: não pode ser enviado ao Sankhya",
+  send_disabled: "Envio ao Sankhya desligado",
+  submission_disabled: "Envio ao Sankhya desligado",
+  missing_company: "Empresa do pedido não configurada — avise o TI",
+  missing_top: "TOP do pedido não definida",
+  top_not_eligible: "TOP do pedido não permitida para envio",
+  missing_stock_location: "Local de estoque não configurado — avise o TI",
+  missing_negotiation_type: "Tipo de negociação não informado",
+  no_items: "Pedido sem itens",
+  missing_unit: "Item sem unidade",
+  no_price: "Item sem preço",
+  price_divergence: "O Sankhya gravou um preço diferente do enviado",
+  discount_divergence: "O Sankhya gravou um desconto diferente do enviado",
+  item_mismatch: "Os itens gravados no Sankhya diferem dos enviados",
+  order_not_deliverable: "O pedido não estava em situação de envio",
+};
+
+/** K3: why the last delivery of a rejected order failed, from the stable class and code only (never the stored text). */
+export function deliveryErrorText(delivery: ErpDelivery | null | undefined): string | null {
+  if (!delivery) return null;
+  const byCode = delivery.errorCode ? deliveryCodeLabels[delivery.errorCode] : undefined;
+  if (byCode) return byCode;
+  if (delivery.errorClass === "validation") return "O Sankhya ou o Sales Force recusou os dados do pedido";
+  return `Falha no envio (${delivery.errorClass}${delivery.errorCode ? ` / ${delivery.errorCode}` : ""})`;
+}
+
 type ErpStatus = NonNullable<ApiSchema<"OrderListItem">["erpStatus"]>;
 
 /** Sankhya status as read by the worker (P2): the label, plus the pending release events when the detail carries them. */

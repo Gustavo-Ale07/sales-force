@@ -798,10 +798,11 @@ export class OrdersService {
   }
 
   private async detailOf(order: OrderRow, showExpedicao = false): Promise<OrderDetail> {
-    const [items, states, approval] = await Promise.all([
+    const [items, states, approval, lastDelivery] = await Promise.all([
       this.orders.itemsOf(order.id),
       this.mirror.customerStates([order.customerCode]),
       this.orders.latestApprovalOf(order.id),
+      order.status === 'rejected' ? this.orders.lastDeliveryErrorOf(order.id) : Promise.resolve(null),
     ]);
     const ipiLookup = await this.mirror.ipiLookup(items.map((item) => item.productCode));
     // Same media source as the catalog; best effort (a failure degrades to no photos, the order still works).
@@ -816,7 +817,7 @@ export class OrdersService {
       customerBlockedRaw: state?.blockedRaw ?? null,
       customerSellerCode: state?.sellerCode ?? null,
       customerLive: state?.live ?? null,
-    }, images, toOrderApproval(approval), liberationEventLabels, ipiLookup, showExpedicao);
+    }, images, toOrderApproval(approval), liberationEventLabels, ipiLookup, showExpedicao, lastDelivery);
   }
 
   /** Identifiers and counts only: no notes, no free text. */

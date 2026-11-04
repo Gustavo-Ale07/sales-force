@@ -166,6 +166,11 @@ export const OrderListItemSchema = named(
         releaseEvents: z.array(z.object({ code: z.number().int().min(0), label: z.string().nullable() })).optional(),
       })
       .nullable(),
+    /**
+     * Why the last ERP delivery was refused (K3, D-X): class and stable code only, never the stored text. Present only
+     * on `rejected` orders; clients map it to a human label.
+     */
+    erpDelivery: z.object({ errorClass: z.string(), errorCode: z.string().nullable() }).nullable().optional(),
     /** `null` unless the draft needs review (its customer became ineligible). Clients show it and block sending. */
     review: OrderReviewSchema.nullable(),
     version: z.number().int().min(1),

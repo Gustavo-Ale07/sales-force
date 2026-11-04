@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { account, erpCustomer, salesOrder, salesOrderApproval, salesOrderItem, type AccountRole, type ApprovalLevel, type Database } from '@salesforce/db';
+import { account, erpCustomer, integrationOutbox, salesOrder, salesOrderApproval, salesOrderItem, type AccountRole, type ApprovalLevel, type Database } from '@salesforce/db';
 import type { CustomerScope, OrderItem } from '@salesforce/domain';
 import { and, asc, desc, eq, ne, or, sql, type SQL } from 'drizzle-orm';
 import { containsText, digitsOf, eqInt, fitsPgInt, inInts, inSellerCodes, offsetOf } from '../platform/sql.js';
@@ -59,6 +59,9 @@ export interface OrderListRow extends OrderCustomerState {
   /** Descriptions of the first lines (matching lines first when filtered by product). */
   readonly itemPreview: readonly string[];
   readonly unpricedCount: number;
+  /** K3: class and code of the last delivery error; read only for `rejected` orders. */
+  readonly deliveryErrorClass: string | null;
+  readonly deliveryErrorMessage: string | null;
 }
 
 export interface OrderCounts {
@@ -207,6 +210,17 @@ export class OrdersRepository {
   }
 
   /** The newest request of an order (any decision) with the name of who decided it. */
+  /** K3: class and stored text of the latest delivery of an order, for the stable code only. */
+  async lastDeliveryErrorOf(orderId: string, executor: Executor = this.db): Promise<{ errorClass: string | null; message: string | null } | null> {
+    const [row] = await executor
+      .select({ errorClass: integrationOutbox.lastErrorClass, message: integrationOutbox.lastErrorMessage })
+      .from(integrationOutbox)
+      .where(and(eq(integrationOutbox.aggregateType, 'sales_order'), eq(integrationOutbox.aggregateId, orderId)))
+      .orderBy(desc(integrationOutbox.createdAt))
+      .limit(1);
+    return row ?? null;
+  }
+
   async latestApprovalOf(orderId: string, executor: Executor = this.db): Promise<ApprovalWithDecider | null> {
     const [row] = await executor
       .select({ approval: salesOrderApproval, decidedByName: account.displayName })
@@ -288,6 +302,8 @@ export class OrdersRepository {
           itemCount: sql<number>`(select count(*)::int from ${salesOrderItem} where ${salesOrderItem.orderId} = ${salesOrder.id})`,
           itemPreview: sql<string[]>`array(select ${salesOrderItem.productDescription} from ${salesOrderItem} where ${salesOrderItem.orderId} = ${salesOrder.id} order by ${previewFirst}${salesOrderItem.lineNo} limit ${sql.raw(String(ITEM_PREVIEW_SIZE))})`,
           unpricedCount: sql<number>`(select count(*)::int from ${salesOrderItem} where ${salesOrderItem.orderId} = ${salesOrder.id} and ${salesOrderItem.priceState} = 'none')`,
+          deliveryErrorClass: sql<string | null>`(select o.last_error_class from ${integrationOutbox} o where ${salesOrder.status} = 'rejected' and o.aggregate_type = 'sales_order' and o.aggregate_id = ${salesOrder.id} order by o.created_at desc limit 1)`,
+          deliveryErrorMessage: sql<string | null>`(select o.last_error_message from ${integrationOutbox} o where ${salesOrder.status} = 'rejected' and o.aggregate_type = 'sales_order' and o.aggregate_id = ${salesOrder.id} order by o.created_at desc limit 1)`,
         })
         .from(salesOrder)
         .leftJoin(erpCustomer, eq(erpCustomer.code, salesOrder.customerCode))

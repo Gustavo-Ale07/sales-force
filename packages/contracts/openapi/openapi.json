@@ -5308,6 +5308,32 @@
               }
             ]
           },
+          "erpDelivery": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "errorClass": {
+                    "type": "string"
+                  },
+                  "errorCode": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "errorClass",
+                  "errorCode"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "review": {
             "anyOf": [
               {
@@ -5905,6 +5931,32 @@
                   "label",
                   "invoiceNumber",
                   "checkedAt"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "erpDelivery": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "errorClass": {
+                    "type": "string"
+                  },
+                  "errorCode": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "errorClass",
+                  "errorCode"
                 ],
                 "additionalProperties": false
               },

@@ -55,7 +55,7 @@ import { useApi } from "../lib/app-context";
 import { useLoadedDataset, requireDataset } from "../lib/dataset";
 import { approvalsEnabled } from "../lib/discount-authority";
 import { describeApiError } from "../lib/error-message";
-import { erpStatusText, orderReference, orderReviewLabel, orderReviewReasons, orderStatusHints, orderStatusLabels } from "../lib/labels";
+import { deliveryErrorText, erpStatusText, orderReference, orderReviewLabel, orderReviewReasons, orderStatusHints, orderStatusLabels } from "../lib/labels";
 import {
   describeIssue,
   discountProblemMessages,
@@ -575,6 +575,11 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
       {order?.review ? (
         <Alert tone="warning" title={orderReviewLabel}>
           {orderReviewReasons[order.review.customerBlock]} O envio ao Sankhya fica bloqueado até o cliente voltar a estar disponível; nada no rascunho foi alterado.
+        </Alert>
+      ) : null}
+      {order?.status === "rejected" && deliveryErrorText(order.erpDelivery) ? (
+        <Alert tone="danger" title="Motivo da falha no envio">
+          {deliveryErrorText(order.erpDelivery)}
         </Alert>
       ) : null}
       {readOnly ? (

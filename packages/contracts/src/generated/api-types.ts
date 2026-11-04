@@ -1095,6 +1095,10 @@ export interface components {
                     label: string | null;
                 }[];
             } | null;
+            erpDelivery?: {
+                errorClass: string;
+                errorCode: string | null;
+            } | null;
             review: components["schemas"]["OrderReview"] | null;
             version: number;
             createdAt: components["schemas"]["IsoTimestamp"];
@@ -1198,6 +1202,10 @@ export interface components {
                     code: number;
                     label: string | null;
                 }[];
+            } | null;
+            erpDelivery?: {
+                errorClass: string;
+                errorCode: string | null;
             } | null;
             review: components["schemas"]["OrderReview"] | null;
             version: number;
