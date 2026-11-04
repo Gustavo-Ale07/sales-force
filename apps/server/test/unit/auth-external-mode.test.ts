@@ -12,7 +12,7 @@ import { testAuthConfig } from '../helpers/auth.js';
 
 /** PB-1 · AUTH_MODE=external: verifier mandatory for operational users, local Argon2id for admin/technical only. */
 const DATABASE_URL = 'postgres://user:hunter2-not-a-real-password@127.0.0.1:5432/db';
-const PROD = { DATABASE_URL, NODE_ENV: 'production', TRUST_PROXY: '1', ALLOWED_ORIGINS: 'https://app.example.com', SF_ERP_ENVIRONMENT: 'production', SF_DATASET_ID: 'plac-prod-1' } as const;
+const PROD = { DATABASE_URL, NODE_ENV: 'production', SF_DEPLOY_ENVIRONMENT: 'production', TRUST_PROXY: '1', ALLOWED_ORIGINS: 'https://app.example.com', SF_ERP_ENVIRONMENT: 'production', SF_DATASET_ID: 'plac-prod-1' } as const;
 const SECRET = 'a-synthetic-shared-secret-of-32-chars-minimum!';
 const VERIFIER = { EXTERNAL_LOGIN_ENABLED: '1', VERIFIER_URL: 'http://verifier:3002', VERIFIER_SHARED_SECRET: SECRET } as const;
 const EXTERNAL = { ...PROD, AUTH_MODE: 'external', ...VERIFIER } as const;

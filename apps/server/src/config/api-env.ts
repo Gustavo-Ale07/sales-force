@@ -72,6 +72,14 @@ export const ApiEnvSchema = z.object({
    * Explicit installation dataset identity (DEV-phase working mechanism, not a secret). Both or none
    * (checked below). Never derived from any SANKHYA_* setting: the API does not read those.
    */
+  /**
+   * Which installation this process belongs to (I1): `staging` | `production`. Required when NODE_ENV=production
+   * (checked below; empty = refused). NODE_ENV is the run mode; this is the deployment environment and the only
+   * thing the ERP order-submission switch looks at. Distinct from SF_ERP_ENVIRONMENT (the ERP dataset identity).
+   */
+  SF_DEPLOY_ENVIRONMENT: z
+    .enum(['staging', 'production'], { error: "must be 'staging' or 'production'." })
+    .optional(),
   SF_ERP_ENVIRONMENT: z
     .string()
     .regex(ENVIRONMENT_SLUG_PATTERN, { error: 'must be a slug: lowercase letters, digits, - or _ (max 32), e.g. sandbox.' })
@@ -173,8 +181,12 @@ export function parseApiEnv(source: EnvSource): ParsedApiEnv {
     }
     const origins = originProblems(parsed.ALLOWED_ORIGINS, parsed.NODE_ENV);
     allowedOrigins = origins.origins;
-    if (parsed.ERP_ORDER_ENQUEUE_ENABLED && parsed.NODE_ENV === 'production') {
-      problems.push('ERP_ORDER_ENQUEUE_ENABLED: is refused when NODE_ENV=production (ERP order submission stays disabled, SNK-6).');
+    // I1: the gate is the deployment environment, not NODE_ENV (staging runs with NODE_ENV=production by design).
+    if (parsed.NODE_ENV === 'production' && parsed.SF_DEPLOY_ENVIRONMENT === undefined) {
+      problems.push("SF_DEPLOY_ENVIRONMENT: is required when NODE_ENV=production ('staging' or 'production'); empty means refused.");
+    }
+    if (parsed.ERP_ORDER_ENQUEUE_ENABLED && parsed.SF_DEPLOY_ENVIRONMENT !== 'staging' && !(parsed.SF_DEPLOY_ENVIRONMENT === undefined && parsed.NODE_ENV !== 'production')) {
+      problems.push('ERP_ORDER_ENQUEUE_ENABLED: is only accepted when SF_DEPLOY_ENVIRONMENT=staging (ERP order submission stays disabled elsewhere, SNK-6).');
     }
     if (parsed.SF_ERP_ENVIRONMENT !== undefined && parsed.SF_DATASET_ID === undefined) {
       problems.push('SF_DATASET_ID: is required when SF_ERP_ENVIRONMENT is set (set both or neither).');

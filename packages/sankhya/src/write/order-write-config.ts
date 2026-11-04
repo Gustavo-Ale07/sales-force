@@ -8,7 +8,7 @@ import { SANDBOX_WRITE_HOSTS, writeHostRefusal } from './host-allowlist.js';
  *  - `SANKHYA_ORDER_WRITE_MODE` (`off`|`dry_run`|`live`): default `dry_run` once enabled. `dry_run` builds and
  *    stores the payload and never contacts Sankhya, so it needs none of the live prerequisites (D-1).
  *  - `live` additionally needs ALL of: `SANKHYA_MODE=live` against the Sandbox (`SANKHYA_ENVIRONMENT=sandbox`,
- *    base URL on a Sandbox write host), a non-production `NODE_ENV`, the marker
+ *    base URL on a Sandbox write host), `SF_DEPLOY_ENVIRONMENT=staging` (I1: any enabled mode needs it; NODE_ENV is the run mode, not the environment), the marker
  *    `SANKHYA_ORDER_WRITE_GATES_CLOSED=1` (gates SNK-4 / V-11 / V-13 closed) and `SANKHYA_ORDER_ORIGIN_FIELD`
  *    (the dedicated origin-id column of the order header, SNK-5; never Vidya's fields).
  */
@@ -39,6 +39,28 @@ type Env = Readonly<Record<string, string | undefined>>;
 function value(env: Env, name: string): string | undefined {
   const raw = env[name];
   return raw === undefined || raw.trim() === '' ? undefined : raw.trim();
+}
+
+/** `SF_DEPLOY_ENVIRONMENT` (I1): which installation this process belongs to; `staging` | `production`. */
+export function deployEnvironmentProblem(env: Env): string | null {
+  const raw = value(env, 'SF_DEPLOY_ENVIRONMENT')?.toLowerCase();
+  if (raw === 'staging' || raw === 'production') return null;
+  if (raw !== undefined) return "SF_DEPLOY_ENVIRONMENT must be 'staging' or 'production'.";
+  if (value(env, 'NODE_ENV')?.toLowerCase() === 'production') {
+    return "SF_DEPLOY_ENVIRONMENT: is required when NODE_ENV=production ('staging' or 'production'); empty means refused.";
+  }
+  return null;
+}
+
+/**
+ * Whether ERP order submission may be switched on in this deployment: only `staging`. Outside a production-mode
+ * process (local development, tests) an unset variable keeps the previous behaviour; production, an unknown value
+ * or an unset variable under NODE_ENV=production is refused.
+ */
+export function orderWriteAllowedHere(env: Env): boolean {
+  const raw = value(env, 'SF_DEPLOY_ENVIRONMENT')?.toLowerCase();
+  if (raw === 'staging') return true;
+  return raw === undefined && value(env, 'NODE_ENV')?.toLowerCase() !== 'production';
 }
 
 export function parseOrderWriteSettings(env: Env): { settings: OrderWriteSettings; problems: string[] } {
@@ -75,6 +97,15 @@ export function parseOrderWriteSettings(env: Env): { settings: OrderWriteSetting
 
   const mode: OrderWriteMode = !enabled ? 'off' : (requested ?? 'dry_run');
 
+  const deployProblem = deployEnvironmentProblem(env);
+  if (deployProblem !== null) problems.push(deployProblem);
+  // I1: the gate is the deployment environment, not NODE_ENV (staging runs with NODE_ENV=production by design).
+  if (mode !== 'off' && !orderWriteAllowedHere(env)) {
+    problems.push(
+      `SANKHYA_ORDER_WRITE_ENABLED=true (mode ${mode}) is only accepted when SF_DEPLOY_ENVIRONMENT=staging (ERP order submission stays disabled elsewhere, SNK-6).`,
+    );
+  }
+
   if (mode === 'live') {
     if (value(env, 'SANKHYA_MODE')?.toLowerCase() !== 'live') {
       problems.push("SANKHYA_ORDER_WRITE_MODE=live requires SANKHYA_MODE=live (the real adapter against the Sandbox).");
@@ -82,8 +113,8 @@ export function parseOrderWriteSettings(env: Env): { settings: OrderWriteSetting
     if (value(env, 'SANKHYA_ENVIRONMENT')?.toLowerCase() !== 'sandbox') {
       problems.push("SANKHYA_ORDER_WRITE_MODE=live is refused unless SANKHYA_ENVIRONMENT=sandbox (SNK-3, SNK-6).");
     }
-    if (value(env, 'NODE_ENV')?.toLowerCase() === 'production') {
-      problems.push('SANKHYA_ORDER_WRITE_MODE=live is refused when NODE_ENV=production (staging and production never write to Sankhya, SNK-7).');
+    if (value(env, 'SF_DEPLOY_ENVIRONMENT')?.toLowerCase() === 'production') {
+      problems.push('SANKHYA_ORDER_WRITE_MODE=live is refused when SF_DEPLOY_ENVIRONMENT=production (production never writes to Sankhya, SNK-7).');
     }
     const baseUrl = value(env, 'SANKHYA_BASE_URL');
     if (baseUrl === undefined || writeHostRefusal(baseUrl) !== null) {

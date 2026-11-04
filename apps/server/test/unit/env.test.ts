@@ -111,7 +111,7 @@ describe('API environment', () => {
   });
 
   it('refuses AUTH_MODE=dev in production, even with the opt-in', () => {
-    const problems = problemsOf(() => parseApiEnv({ DATABASE_URL, NODE_ENV: 'production', TRUST_PROXY: '1', ALLOW_DEV_AUTH: '1', ALLOWED_ORIGINS: 'https://app.example.com' }));
+    const problems = problemsOf(() => parseApiEnv({ DATABASE_URL, NODE_ENV: 'production', SF_DEPLOY_ENVIRONMENT: 'staging', TRUST_PROXY: '1', ALLOW_DEV_AUTH: '1', ALLOWED_ORIGINS: 'https://app.example.com' }));
     expect(problems.filter((problem) => !problem.startsWith('SF_'))).toEqual([expect.stringMatching(/^AUTH_MODE: .*production/)]);
   });
 
@@ -126,7 +126,7 @@ describe('API environment', () => {
 
   it('requires ALLOWED_ORIGINS in production and validates the origin format', () => {
     expect(
-      problemsOf(() => parseApiEnv({ DATABASE_URL, NODE_ENV: 'production', ALLOW_DEV_AUTH: '1' })).some((problem) =>
+      problemsOf(() => parseApiEnv({ DATABASE_URL, NODE_ENV: 'production', SF_DEPLOY_ENVIRONMENT: 'staging', ALLOW_DEV_AUTH: '1' })).some((problem) =>
         problem.startsWith('ALLOWED_ORIGINS'),
       ),
     ).toBe(true);
@@ -140,7 +140,7 @@ describe('API environment', () => {
   });
 
   it('refuses Argon2id parameters below the OWASP floor in production only', () => {
-    const production = { DATABASE_URL, NODE_ENV: 'production', ALLOW_DEV_AUTH: '1', ALLOWED_ORIGINS: 'https://app.example.com' };
+    const production = { DATABASE_URL, NODE_ENV: 'production', SF_DEPLOY_ENVIRONMENT: 'staging', ALLOW_DEV_AUTH: '1', ALLOWED_ORIGINS: 'https://app.example.com' };
     const problems = problemsOf(() => parseApiEnv({ ...production, PASSWORD_HASH_MEMORY_KIB: '1024', PASSWORD_HASH_TIME_COST: '1' }));
     expect(problems.filter((problem) => problem.startsWith('PASSWORD_HASH'))).toHaveLength(2);
     expect(parseApiEnv({ ...DEV, PASSWORD_HASH_MEMORY_KIB: '1024', PASSWORD_HASH_TIME_COST: '1' }).PASSWORD_HASH_MEMORY_KIB).toBe(1024);
@@ -232,7 +232,7 @@ describe('Worker environment', () => {
 describe('production boot defaults (F7)', () => {
   // Production has no authentication mode yet (only `dev`, refused there), so the parse always fails in
   // production today: the assertions are on the SF_* problems alone.
-  const API_PROD = { DATABASE_URL, NODE_ENV: 'production', TRUST_PROXY: '1', ALLOWED_ORIGINS: 'https://app.example.com' } as const;
+  const API_PROD = { DATABASE_URL, NODE_ENV: 'production', SF_DEPLOY_ENVIRONMENT: 'staging', TRUST_PROXY: '1', ALLOWED_ORIGINS: 'https://app.example.com' } as const;
   const datasetProblems = (env: Record<string, string>) =>
     problemsOf(() => parseApiEnv(env)).filter((problem) => problem.startsWith('SF_'));
 
@@ -248,7 +248,7 @@ describe('production boot defaults (F7)', () => {
     expect(parseApiEnv({ ...DEV }).dataset).toBeNull();
   });
 
-  const WORKER_PROD = { DATABASE_URL, NODE_ENV: 'production' } as const;
+  const WORKER_PROD = { DATABASE_URL, NODE_ENV: 'production', SF_DEPLOY_ENVIRONMENT: 'staging' } as const;
 
   it('Worker: SANKHYA_MODE must be explicit in production (no silent fake default)', () => {
     expect(problemsOf(() => loadWorkerConfig({ ...WORKER_PROD })).join('\n')).toMatch(/SANKHYA_MODE: is required when NODE_ENV=production/);
@@ -266,7 +266,7 @@ describe('production boot defaults (F7)', () => {
 });
 
 describe('production/staging boot refusals, fail closed (revalidation)', () => {
-  const PROD = { DATABASE_URL, NODE_ENV: 'production', TRUST_PROXY: '1', ALLOWED_ORIGINS: 'https://app.example.com' } as const;
+  const PROD = { DATABASE_URL, NODE_ENV: 'production', SF_DEPLOY_ENVIRONMENT: 'staging', TRUST_PROXY: '1', ALLOWED_ORIGINS: 'https://app.example.com' } as const;
   const DATASET = { SF_ERP_ENVIRONMENT: 'production', SF_DATASET_ID: 'plac-prod-1' } as const;
 
   it('API: there is no way to boot production on dev auth, with or without the opt-in', () => {
@@ -311,17 +311,17 @@ describe('production/staging boot refusals, fail closed (revalidation)', () => {
 
   it('Worker: the fake gateway is refused in production whatever the spelling, and only the exact opt-in value lifts it', () => {
     for (const mode of ['fake', 'FAKE', 'Fake']) {
-      expect(problemsOf(() => loadWorkerConfig({ DATABASE_URL, NODE_ENV: 'production', SANKHYA_MODE: mode })).join('\n')).toMatch(/fake gateway is refused/);
+      expect(problemsOf(() => loadWorkerConfig({ DATABASE_URL, NODE_ENV: 'production', SF_DEPLOY_ENVIRONMENT: 'staging', SANKHYA_MODE: mode })).join('\n')).toMatch(/fake gateway is refused/);
     }
     for (const optIn of ['true', 'yes', '0', 'TRUE']) {
       expect(
-        problemsOf(() => loadWorkerConfig({ DATABASE_URL, NODE_ENV: 'production', SANKHYA_MODE: 'fake', ALLOW_FAKE_GATEWAY: optIn })).join('\n'),
+        problemsOf(() => loadWorkerConfig({ DATABASE_URL, NODE_ENV: 'production', SF_DEPLOY_ENVIRONMENT: 'staging', SANKHYA_MODE: 'fake', ALLOW_FAKE_GATEWAY: optIn })).join('\n'),
       ).toMatch(/fake gateway is refused/);
     }
   });
 
   it('Worker: an unknown gateway mode in production is refused, never replaced by the fake', () => {
-    expect(() => loadWorkerConfig({ DATABASE_URL, NODE_ENV: 'production', SANKHYA_MODE: 'sandbox-ish' })).toThrow(EnvValidationError);
+    expect(() => loadWorkerConfig({ DATABASE_URL, NODE_ENV: 'production', SF_DEPLOY_ENVIRONMENT: 'staging', SANKHYA_MODE: 'sandbox-ish' })).toThrow(EnvValidationError);
   });
 });
 
@@ -356,10 +356,35 @@ describe('API order enqueue switch (SNK-6, SNK-7)', () => {
     expect(parseApiEnv({ ...DEV, ERP_ORDER_ENQUEUE_ENABLED: '' }).ERP_ORDER_ENQUEUE_ENABLED).toBe(false);
   });
 
-  it('can be switched on outside production only', () => {
+  it('is accepted in a local development process with no deployment environment declared', () => {
     expect(parseApiEnv({ ...DEV, ERP_ORDER_ENQUEUE_ENABLED: 'true' }).ERP_ORDER_ENQUEUE_ENABLED).toBe(true);
-    expect(problemsOf(() => parseApiEnv({ ...DEV, NODE_ENV: 'production', ERP_ORDER_ENQUEUE_ENABLED: 'true' }))).toEqual(
-      expect.arrayContaining([expect.stringMatching(/^ERP_ORDER_ENQUEUE_ENABLED: is refused/)]),
-    );
+  });
+
+  describe('gate by deployment environment (I1)', () => {
+    const STAGING_RUN = { DATABASE_URL, NODE_ENV: 'production', TRUST_PROXY: '1', ALLOWED_ORIGINS: 'https://app.example.com', AUTH_MODE: 'local', SF_ERP_ENVIRONMENT: 'sandbox', SF_DATASET_ID: 'acme-sandbox-1' } as const;
+
+    it('is accepted with NODE_ENV=production when SF_DEPLOY_ENVIRONMENT=staging', () => {
+      const env = parseApiEnv({ ...STAGING_RUN, SF_DEPLOY_ENVIRONMENT: 'staging', ERP_ORDER_ENQUEUE_ENABLED: 'true' });
+      expect(env.ERP_ORDER_ENQUEUE_ENABLED).toBe(true);
+    });
+
+    it('is refused in production, whatever NODE_ENV says', () => {
+      expect(problemsOf(() => parseApiEnv({ ...STAGING_RUN, SF_DEPLOY_ENVIRONMENT: 'production', ERP_ORDER_ENQUEUE_ENABLED: 'true' }))).toEqual(
+        expect.arrayContaining([expect.stringMatching(/^ERP_ORDER_ENQUEUE_ENABLED: is only accepted when SF_DEPLOY_ENVIRONMENT=staging/)]),
+      );
+      expect(problemsOf(() => parseApiEnv({ ...DEV, SF_DEPLOY_ENVIRONMENT: 'production', ERP_ORDER_ENQUEUE_ENABLED: 'true' }))).toEqual(
+        expect.arrayContaining([expect.stringMatching(/^ERP_ORDER_ENQUEUE_ENABLED: is only accepted/)]),
+      );
+    });
+
+    it('refuses to boot with NODE_ENV=production and the variable empty or missing', () => {
+      for (const patch of [{}, { SF_DEPLOY_ENVIRONMENT: '' }, { SF_DEPLOY_ENVIRONMENT: 'prod-eu' }]) {
+        expect(problemsOf(() => parseApiEnv({ ...STAGING_RUN, ...patch })).join('\n')).toContain('SF_DEPLOY_ENVIRONMENT');
+      }
+    });
+
+    it('stays off in a production deployment by default', () => {
+      expect(parseApiEnv({ ...STAGING_RUN, SF_DEPLOY_ENVIRONMENT: 'production' }).ERP_ORDER_ENQUEUE_ENABLED).toBe(false);
+    });
   });
 });

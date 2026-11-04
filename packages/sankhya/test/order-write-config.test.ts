@@ -41,6 +41,41 @@ describe('order write settings (SNK-7 S1, D-1)', () => {
     expect(settings).toEqual({ enabled: true, mode: 'live', originField: 'AD_SFORIGEM' });
   });
 
+  describe('gate by deployment environment (I1)', () => {
+    const STAGING = { NODE_ENV: 'production', SF_DEPLOY_ENVIRONMENT: 'staging' };
+
+    it('staging runs with NODE_ENV=production: dry_run and live are accepted there', () => {
+      expect(parseOrderWriteSettings({ ...STAGING, SANKHYA_ORDER_WRITE_ENABLED: 'true', SANKHYA_ORDER_WRITE_MODE: 'dry_run' }).problems).toEqual([]);
+      expect(parseOrderWriteSettings({ ...LIVE, ...STAGING }).problems).toEqual([]);
+    });
+
+    it.each([
+      ['production', { NODE_ENV: 'production', SF_DEPLOY_ENVIRONMENT: 'production' }],
+      ['empty under NODE_ENV=production', { NODE_ENV: 'production', SF_DEPLOY_ENVIRONMENT: '' }],
+      ['unknown value', { NODE_ENV: 'production', SF_DEPLOY_ENVIRONMENT: 'prod-eu' }],
+      ['unknown value in development', { NODE_ENV: 'development', SF_DEPLOY_ENVIRONMENT: 'prod-eu' }],
+    ])('enabling the write is refused: %s', (_name, patch) => {
+      const { problems } = parseOrderWriteSettings({ SANKHYA_ORDER_WRITE_ENABLED: 'true', SANKHYA_ORDER_WRITE_MODE: 'dry_run', ...patch });
+      expect(problems.join('\n')).toContain('SF_DEPLOY_ENVIRONMENT');
+    });
+
+    it('an explicit production deployment refuses the write even outside NODE_ENV=production', () => {
+      const { problems } = parseOrderWriteSettings({ SANKHYA_ORDER_WRITE_ENABLED: 'true', NODE_ENV: 'development', SF_DEPLOY_ENVIRONMENT: 'production' });
+      expect(problems.join('\n')).toContain('only accepted when SF_DEPLOY_ENVIRONMENT=staging');
+    });
+
+    it('does not loosen the other live gates: staging with a wrong host, environment or no marker still refuses live', () => {
+      expect(parseOrderWriteSettings({ ...LIVE, ...STAGING, SANKHYA_BASE_URL: 'https://erp.example.test' }).problems.join()).toContain('Sandbox write hosts');
+      expect(parseOrderWriteSettings({ ...LIVE, ...STAGING, SANKHYA_ENVIRONMENT: 'production' }).problems.join()).toContain('SANKHYA_ENVIRONMENT=sandbox');
+      expect(parseOrderWriteSettings({ ...LIVE, ...STAGING, SANKHYA_ORDER_WRITE_GATES_CLOSED: undefined }).problems.join()).toContain('GATES_CLOSED=1');
+    });
+
+    it('write off needs nothing but the variable is still validated under NODE_ENV=production', () => {
+      expect(parseOrderWriteSettings({ NODE_ENV: 'production' }).problems.join()).toContain('SF_DEPLOY_ENVIRONMENT');
+      expect(parseOrderWriteSettings({ NODE_ENV: 'production', SF_DEPLOY_ENVIRONMENT: 'production' }).problems).toEqual([]);
+    });
+  });
+
   it.each([
     ['gates marker', { SANKHYA_ORDER_WRITE_GATES_CLOSED: undefined }, 'GATES_CLOSED=1'],
     ['gates marker 0', { SANKHYA_ORDER_WRITE_GATES_CLOSED: '0' }, 'GATES_CLOSED=1'],
@@ -48,7 +83,8 @@ describe('order write settings (SNK-7 S1, D-1)', () => {
     ['sandbox environment', { SANKHYA_ENVIRONMENT: 'homologation' }, 'SANKHYA_ENVIRONMENT=sandbox'],
     ['production environment', { SANKHYA_ENVIRONMENT: 'production' }, 'SANKHYA_ENVIRONMENT=sandbox'],
     ['real adapter', { SANKHYA_MODE: 'fake' }, 'SANKHYA_MODE=live'],
-    ['NODE_ENV production (staging included)', { NODE_ENV: 'production' }, 'NODE_ENV=production'],
+    ['deploy environment production', { NODE_ENV: 'production', SF_DEPLOY_ENVIRONMENT: 'production' }, 'SF_DEPLOY_ENVIRONMENT=production'],
+    ['deploy environment (unset under NODE_ENV=production)', { NODE_ENV: 'production', SF_DEPLOY_ENVIRONMENT: undefined }, 'SF_DEPLOY_ENVIRONMENT'],
     ['host outside the allow-list', { SANKHYA_BASE_URL: 'https://erp.example.test' }, 'Sandbox write hosts'],
     ['host lookalike', { SANKHYA_BASE_URL: 'https://api.sandbox.sankhya.com.br.evil.test' }, 'Sandbox write hosts'],
   ])('live is refused without the %s', (_name, patch, expected) => {

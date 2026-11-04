@@ -36,11 +36,12 @@ describe('ERP order submission switches (SNK-7 D-1)', () => {
     expect(problems.join('\n')).toContain('SANKHYA_ORDER_ORIGIN_FIELD');
   });
 
-  it('live mode is refused when NODE_ENV=production even with every other prerequisite', () => {
+  it('live mode is refused when SF_DEPLOY_ENVIRONMENT=production even with every other prerequisite', () => {
     const problems = problemsOf(() =>
       loadWorkerConfig({
         DATABASE_URL,
         NODE_ENV: 'production',
+        SF_DEPLOY_ENVIRONMENT: 'production',
         SANKHYA_MODE: 'fake',
         ALLOW_FAKE_GATEWAY: '1',
         SANKHYA_ORDER_WRITE_ENABLED: 'true',
@@ -49,7 +50,22 @@ describe('ERP order submission switches (SNK-7 D-1)', () => {
         SANKHYA_ORDER_ORIGIN_FIELD: 'AD_SFORIGEM',
       }),
     );
-    expect(problems.join('\n')).toMatch(/NODE_ENV=production|SANKHYA_MODE=live/);
+    expect(problems.join('\n')).toMatch(/SF_DEPLOY_ENVIRONMENT/);
+  });
+
+  it('dry_run boots on staging (NODE_ENV=production, SF_DEPLOY_ENVIRONMENT=staging) and is refused in production or when unset', () => {
+    const base = {
+      DATABASE_URL,
+      NODE_ENV: 'production',
+      SANKHYA_MODE: 'fake',
+      ALLOW_FAKE_GATEWAY: '1',
+      SANKHYA_ORDER_WRITE_ENABLED: 'true',
+      SANKHYA_ORDER_WRITE_MODE: 'dry_run',
+      SANKHYA_ORDER_ORIGIN_FIELD: 'AD_FORCEORIGEM',
+    };
+    expect(loadWorkerConfig({ ...base, SF_DEPLOY_ENVIRONMENT: 'staging' }).orderWrite).toEqual({ enabled: true, mode: 'dry_run', originField: 'AD_FORCEORIGEM' });
+    expect(problemsOf(() => loadWorkerConfig({ ...base, SF_DEPLOY_ENVIRONMENT: 'production' })).join('\n')).toContain('SF_DEPLOY_ENVIRONMENT=staging');
+    expect(problemsOf(() => loadWorkerConfig({ ...base })).join('\n')).toContain('SF_DEPLOY_ENVIRONMENT');
   });
 
   it('the API never reads the order switches', () => {
@@ -83,6 +99,13 @@ describe('ERP order submission switches (SNK-7 D-1)', () => {
         expect(line, file).toMatch(/SANKHYA_ORDER_WRITE_ENABLED:\s*"false"/);
       }
       expect(text, file).not.toMatch(/SANKHYA_ORDER_WRITE_MODE:\s*"?live/);
+      expect(text, file).not.toMatch(/^\s*ERP_ORDER_ENQUEUE_ENABLED:\s*"?true/m);
     }
+  });
+
+  it('the staging compose declares the deployment environment for api and worker (I1)', () => {
+    const text = readFileSync(join(__dirname, '..', '..', '..', '..', 'deploy', 'docker-compose.staging.yml'), 'utf8');
+    expect(text.match(/^\s*SF_DEPLOY_ENVIRONMENT:\s*staging\s*$/gm)).toHaveLength(2);
+    expect(text).not.toMatch(/SF_DEPLOY_ENVIRONMENT:\s*production/);
   });
 });
