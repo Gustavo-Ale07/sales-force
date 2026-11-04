@@ -1,5 +1,5 @@
 import { isSankhyaGatewayError, type SankhyaErrorKind } from '@salesforce/sankhya';
-import { maskUris } from '../observability/logger.js';
+import { maskStoredError } from '../observability/mask-error-message.js';
 import { PermanentJobError, TransientJobError } from '../worker/job-contract.js';
 import { classifyJobFailure } from '../worker/retry.js';
 
@@ -41,7 +41,7 @@ export function describeSyncFailure(error: unknown): SyncFailure {
     return {
       errorClass: error.kind,
       errorCode: error.code,
-      message: maskUris(`${error.code}: ${error.message}`).slice(0, MAX_MESSAGE_CHARS),
+      message: maskStoredError(`${error.code}: ${error.message}`).slice(0, MAX_MESSAGE_CHARS),
       retry: error.retryable,
     };
   }
@@ -49,7 +49,7 @@ export function describeSyncFailure(error: unknown): SyncFailure {
     return {
       errorClass: error instanceof TransientJobError ? 'temporary' : 'permanent',
       errorCode: null,
-      message: maskUris(error.message).slice(0, MAX_MESSAGE_CHARS),
+      message: maskStoredError(error.message).slice(0, MAX_MESSAGE_CHARS),
       retry: classification.retry,
     };
   }

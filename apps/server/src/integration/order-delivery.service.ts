@@ -14,6 +14,7 @@ import { and, asc, eq, inArray, isNotNull, lt, lte, sql } from 'drizzle-orm';
 import { validateInstallationConfiguration } from '../configuration/validate.js';
 import { AUDIT_ACTIONS, type AuditDetail, type AuditService } from '../iam/audit.service.js';
 import type { Logger } from '../observability/logger.js';
+import { maskStoredError } from '../observability/mask-error-message.js';
 import { uuidv7 } from '../platform/ids.js';
 import type { Clock } from '../platform/tokens.js';
 import {
@@ -444,7 +445,7 @@ export class OrderDeliveryService {
           nextAttemptAt: null,
           lastStep: null,
           lastErrorClass: errorClass,
-          lastErrorMessage: `${errorCode}: ${message}`.slice(0, MESSAGE_MAX),
+          lastErrorMessage: maskStoredError(`${errorCode}: ${message}`).slice(0, MESSAGE_MAX),
           updatedAt: at,
         })
         .where(eq(integrationOutbox.id, row.id));
@@ -488,7 +489,7 @@ export class OrderDeliveryService {
           nextAttemptAt,
           lastStep: step,
           lastErrorClass: outcome.errorClass,
-          lastErrorMessage: `${outcome.errorCode}: ${message}`.slice(0, MESSAGE_MAX),
+          lastErrorMessage: maskStoredError(`${outcome.errorCode}: ${message}`).slice(0, MESSAGE_MAX),
           // An authentication failure does not consume an attempt (repeating it can lock the integration user).
           ...(outcome.kind === 'retry' && !outcome.consumesAttempt ? { attemptCount: sql`greatest(${integrationOutbox.attemptCount} - 1, 0)` } : {}),
           updatedAt: at,

@@ -9,6 +9,7 @@ import {
 import { z } from 'zod';
 import { DEFAULT_MIRROR_CRONS } from '../sync/schedules.js';
 import { validateInstallationConfiguration } from '../configuration/validate.js';
+import { setMaskTargets, type MaskTargets } from '../observability/mask-error-message.js';
 import { mediaDirField, mediaDirProblems, mediaMaxBytesField } from './media-env.js';
 import {
   databaseUrlField,
@@ -22,6 +23,29 @@ import {
   withoutEmptyValues,
   type EnvSource,
 } from './env.js';
+
+const MIN_MASKED_SECRET = 6;
+
+/** D-Q: the Sankhya hosts and literal credentials that stored error texts must never contain. */
+export function sankhyaMaskTargets(source: EnvSource): MaskTargets {
+  const read = (name: string): string => {
+    const value = source[name];
+    return typeof value === 'string' ? value : '';
+  };
+  const hosts = new Set<string>();
+  try {
+    const host = new URL(read('SANKHYA_BASE_URL')).hostname;
+    if (host !== '') hosts.add(host);
+  } catch {
+    // no base URL configured (fake gateway): nothing to mask
+  }
+  for (const entry of read('SANKHYA_ALLOWED_HOSTS').split(',')) {
+    const host = entry.trim();
+    if (host !== '') hosts.add(host);
+  }
+  const secrets = ['SANKHYA_CLIENT_ID', 'SANKHYA_CLIENT_SECRET', 'SANKHYA_X_TOKEN'].map(read).filter((v) => v.length >= MIN_MASKED_SECRET);
+  return { hosts: [...hosts], secrets };
+}
 
 /**
  * Worker process environment (STACK-2/STACK-3). The worker is the only process that reads
@@ -206,5 +230,6 @@ export function loadWorkerConfig(source: EnvSource): WorkerConfig {
   if (env === undefined || gateway === undefined || problems.length > 0) {
     throw new EnvValidationError('Worker', problems);
   }
+  setMaskTargets(sankhyaMaskTargets(source));
   return { env, gateway, gatewayDescription: gateway.describe(), orderWrite: orderWrite.settings };
 }
