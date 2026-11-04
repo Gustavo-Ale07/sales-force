@@ -113,8 +113,8 @@ export function parseOrderWriteSettings(env: Env): { settings: OrderWriteSetting
     if (value(env, 'SANKHYA_ENVIRONMENT')?.toLowerCase() !== 'sandbox') {
       problems.push("SANKHYA_ORDER_WRITE_MODE=live is refused unless SANKHYA_ENVIRONMENT=sandbox (SNK-3, SNK-6).");
     }
-    if (value(env, 'SF_DEPLOY_ENVIRONMENT')?.toLowerCase() === 'production') {
-      problems.push('SANKHYA_ORDER_WRITE_MODE=live is refused when SF_DEPLOY_ENVIRONMENT=production (production never writes to Sankhya, SNK-7).');
+    if (value(env, 'SF_DEPLOY_ENVIRONMENT')?.toLowerCase() !== 'staging') {
+      problems.push('SANKHYA_ORDER_WRITE_MODE=live requires an explicit SF_DEPLOY_ENVIRONMENT=staging; production or unset is refused (production never writes to Sankhya, SNK-7).');
     }
     const baseUrl = value(env, 'SANKHYA_BASE_URL');
     if (baseUrl === undefined || writeHostRefusal(baseUrl) !== null) {

@@ -17,7 +17,7 @@ import { decimalFromCell } from '../decimal.js';
 import { SankhyaGatewayError } from '../errors.js';
 import type { ReadEntity } from '../gateway.js';
 import { MEDIA_SAMPLE_BYTES, MEDIA_SAMPLE_PERCENTS } from '../media.js';
-import type { ReadScope } from '../read-scope.js';
+import { assertSafeScope, type ReadScope } from '../read-scope.js';
 
 /**
  * ERP row -> Sales Force type mapping. This is the ONLY place in the repository that names ERP tables
@@ -467,6 +467,7 @@ export function priceTableSpec(scope: ReadScope | undefined): EntitySpec<PriceTa
 export function productSpec(scope: ReadScope | undefined): EntitySpec<Product> {
   const filter = scope?.products;
   if (filter === undefined) return PRODUCT_SPEC;
+  assertSafeScope(scope); // values reach SQL text: never rely on the caller having asserted
   const terms = ['CODPROD > 0'];
   if (filter.activeOnly !== false) terms.push("ATIVO = 'S'");
   terms.push(`USOPROD IN (${filter.usageValues.map((v) => `'${v}'`).join(',')})`);

@@ -22,6 +22,9 @@ STATUS: ACTIVE — atualizado em 2026-10-29. Fonte de verdade ÚNICA: `C:\Dev\sa
 1. Parte 2 (`PROMPT_2026-10-30_parte2_config-sankhya.md`): começa registrando CFG-8, U-10-a..d e U-11 em `docs/decisions.md`; depois Trilha D.
 2. Decisões do dono abertas pelo reviewer: alçada em modo `erp` vs P-10; PDF compartilhado por representante vs P-20 (ver checkpoint).
 
+## Parte 2c (2026-11-04) — PARCIAL
+- Prontos: J1 (comporta), decisões D-S..D-W, J2 (filtro de mobilidade no espelho, arquivo base 2026-11-04). Pendentes: J3 (rótulos, Converter em pedido), J4 (PDF), D-V 4-5 (elegibilidade de clientes, transportadoras). Lista e passos do dono: `.claude/work/CHECKPOINT_2026-11-04-parte2c.md`. Retomar por J3.
+
 ## Comporta por ambiente de implantação (2026-11-04) — API não subia com o dry-run ligado
 - `SF_DEPLOY_ENVIRONMENT=staging|production` agora decide a comporta (não mais `NODE_ENV`). Detalhes e passos do dono: `.claude/work/CHECKPOINT_2026-11-04-comporta-ambiente.md`; override do dono em `docs/implementation/snk-7-dry-run.md` §5.1.
 - Só o dono roda: criar o override no servidor, fazer o deploy e recriar api+worker com `-f` (deploy sem `-f` desliga).

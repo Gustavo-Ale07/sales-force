@@ -10,6 +10,7 @@ const LIVE = {
   SANKHYA_ENVIRONMENT: 'sandbox',
   SANKHYA_BASE_URL: 'https://api.sandbox.sankhya.com.br',
   NODE_ENV: 'development',
+  SF_DEPLOY_ENVIRONMENT: 'staging',
 };
 
 describe('order write settings (SNK-7 S1, D-1)', () => {
@@ -83,7 +84,8 @@ describe('order write settings (SNK-7 S1, D-1)', () => {
     ['sandbox environment', { SANKHYA_ENVIRONMENT: 'homologation' }, 'SANKHYA_ENVIRONMENT=sandbox'],
     ['production environment', { SANKHYA_ENVIRONMENT: 'production' }, 'SANKHYA_ENVIRONMENT=sandbox'],
     ['real adapter', { SANKHYA_MODE: 'fake' }, 'SANKHYA_MODE=live'],
-    ['deploy environment production', { NODE_ENV: 'production', SF_DEPLOY_ENVIRONMENT: 'production' }, 'SF_DEPLOY_ENVIRONMENT=production'],
+    ['deploy environment production', { NODE_ENV: 'production', SF_DEPLOY_ENVIRONMENT: 'production' }, 'SF_DEPLOY_ENVIRONMENT=staging'],
+    ['explicit staging deploy environment (unset in development)', { SF_DEPLOY_ENVIRONMENT: undefined }, 'explicit SF_DEPLOY_ENVIRONMENT=staging'],
     ['deploy environment (unset under NODE_ENV=production)', { NODE_ENV: 'production', SF_DEPLOY_ENVIRONMENT: undefined }, 'SF_DEPLOY_ENVIRONMENT'],
     ['host outside the allow-list', { SANKHYA_BASE_URL: 'https://erp.example.test' }, 'Sandbox write hosts'],
     ['host lookalike', { SANKHYA_BASE_URL: 'https://api.sandbox.sankhya.com.br.evil.test' }, 'Sandbox write hosts'],
