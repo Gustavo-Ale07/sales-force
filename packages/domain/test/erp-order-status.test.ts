@@ -27,13 +27,17 @@ describe('mapErpOrderStatus decision table (P2)', () => {
     ['confirmed awaiting billing', { awaitingBilling: true }, 3, 'AGUARDANDO FATURAMENTO'],
     ['not confirmed ignores awaiting billing', { confirmed: false, awaitingBilling: true }, 1, 'NÃO CONFIRMADO'],
     ['confirmed', {}, 2, 'CONFIRMADO'],
+    ['quote with a child order (J3-c)', { convertedToOrder: true }, 7, 'CONVERTIDO EM PEDIDO'],
+    ['converted beats invoiced and release', { convertedToOrder: true, invoiced: true, invoiceStatus: 'A', awaitingRelease: true }, 7, 'CONVERTIDO EM PEDIDO'],
+    ['cancelled beats converted', { convertedToOrder: true, cancelled: true }, 0, 'CANCELADO'],
+    ['not found beats converted', { convertedToOrder: true, found: false }, -1, 'DESCONHECIDO'],
   ];
   it.each(table)('%s', (_name, over, code, label) => {
     expect(mapErpOrderStatus({ ...base, ...over })).toEqual({ code, label });
   });
 
-  it('has a label for every code and only cancelled/invoiced are final', () => {
-    expect(Object.keys(ERP_ORDER_STATUS_LABELS).sort()).toEqual(['-1', '0', '1', '2', '3', '4', '5', '6']);
-    expect([-1, 0, 1, 2, 3, 4, 5, 6].filter((c) => isFinalErpStatus(c as never))).toEqual([0, 4]);
+  it('has a label for every code and only cancelled/invoiced/converted are final', () => {
+    expect(Object.keys(ERP_ORDER_STATUS_LABELS).sort()).toEqual(['-1', '0', '1', '2', '3', '4', '5', '6', '7']);
+    expect([-1, 0, 1, 2, 3, 4, 5, 6, 7].filter((c) => isFinalErpStatus(c as never))).toEqual([0, 4, 7]);
   });
 });

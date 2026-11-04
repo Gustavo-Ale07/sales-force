@@ -26,7 +26,7 @@ export interface OrderErpStatusRun {
 /**
  * `sync.erp.orderStatus` (SNK-7 P2): reads the ERP status of orders already SENT and keeps the last one on the
  * order for display. Read-only toward the ERP; it never changes the delivery state of an order. Orders whose
- * ERP status is final (cancelled or invoiced and authorised) and orders older than 90 days are not read again.
+ * ERP status is final (cancelled, invoiced and authorised, or a quote converted into an order) and orders older than 90 days are not read again.
  * A failing read leaves the stored status untouched and is retried by the next run.
  */
 export class OrderErpStatusService {
@@ -44,7 +44,7 @@ export class OrderErpStatusService {
           eq(salesOrder.status, 'sent'),
           isNotNull(salesOrder.erpNumber),
           gte(salesOrder.createdAt, since),
-          sql`(${salesOrder.erpStatusCode} is null or ${salesOrder.erpStatusCode} not in (0, 4))`,
+          sql`(${salesOrder.erpStatusCode} is null or ${salesOrder.erpStatusCode} not in (0, 4, 7))`,
         ),
       )
       .orderBy(sql`${salesOrder.erpStatusCheckedAt} asc nulls first`, asc(salesOrder.createdAt))

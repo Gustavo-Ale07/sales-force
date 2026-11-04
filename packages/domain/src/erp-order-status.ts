@@ -17,6 +17,7 @@ export const ERP_ORDER_STATUS = {
   faturado: 4,
   negado: 5,
   aguardandoLiberacao: 6,
+  convertidoEmPedido: 7,
   desconhecido: -1,
 } as const;
 
@@ -30,6 +31,7 @@ export const ERP_ORDER_STATUS_LABELS: Readonly<Record<ErpOrderStatusCode, string
   4: 'FATURADO',
   5: 'NEGADO',
   6: 'AGUARDANDO LIBERAÇÃO',
+  7: 'CONVERTIDO EM PEDIDO',
   [-1]: 'DESCONHECIDO',
 };
 
@@ -46,6 +48,11 @@ export interface ErpOrderStatusFacts {
   readonly invoiced: boolean;
   /** Electronic invoice status; 'A' = authorised. null when not applicable or unreadable. */
   readonly invoiceStatus: string | null;
+  /**
+   * J3-c: the document is a quote (its TOP is in the quote group) and the ERP already has a child order for it
+   * (variation record). Absent = false. Deliberate deviation from GETCODSTATUS_VIDYA, which has no such status.
+   */
+  readonly convertedToOrder?: boolean;
 }
 
 export interface ErpOrderStatus {
@@ -53,8 +60,8 @@ export interface ErpOrderStatus {
   readonly label: string;
 }
 
-/** Terminal for polling: nothing more changes (cancelled or invoiced and authorised). */
-export const ERP_FINAL_STATUS_CODES: readonly ErpOrderStatusCode[] = [0, 4];
+/** Terminal for polling: nothing more changes (cancelled, invoiced and authorised, or converted into an order). */
+export const ERP_FINAL_STATUS_CODES: readonly ErpOrderStatusCode[] = [0, 4, 7];
 
 export function isFinalErpStatus(code: ErpOrderStatusCode): boolean {
   return ERP_FINAL_STATUS_CODES.includes(code);
@@ -64,10 +71,11 @@ function status(code: ErpOrderStatusCode): ErpOrderStatus {
   return { code, label: ERP_ORDER_STATUS_LABELS[code] };
 }
 
-/** Precedence, first match wins: unknown, cancelled, invoiced (NEGADO unless authorised), release, billing, confirmed. */
+/** Precedence, first match wins: unknown, cancelled, converted (quote), invoiced (NEGADO unless authorised), release, billing, confirmed. */
 export function mapErpOrderStatus(facts: ErpOrderStatusFacts): ErpOrderStatus {
   if (!facts.found) return status(ERP_ORDER_STATUS.desconhecido);
   if (facts.cancelled) return status(ERP_ORDER_STATUS.cancelado);
+  if (facts.convertedToOrder === true) return status(ERP_ORDER_STATUS.convertidoEmPedido);
   if (facts.invoiced) {
     return status(facts.invoiceStatus === 'A' ? ERP_ORDER_STATUS.faturado : ERP_ORDER_STATUS.negado);
   }
