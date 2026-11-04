@@ -3,7 +3,6 @@ import { screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { customerDetail, orderDetail, orderEntryConfiguration, ORDER_ID } from "../test/fixtures";
 import { callsTo, renderApp, type Handlers } from "../test/harness";
-import { ERP_RELEASE_NOTE } from "./order-editor";
 
 /** D-M: with `sales.discountAuthorityMode = 'erp'` Sankhya releases discounts; every Sales Force approval surface is hidden. */
 const erpConfig = (): ApiSchema<"OrderEntryConfiguration"> => ({
@@ -37,16 +36,16 @@ describe("modo erp (D-M)", () => {
     }
   });
 
-  it("shows the Sankhya release note in the order footer, only in erp mode", async () => {
+  it("no longer shows the Sankhya release note in the order footer (J3)", async () => {
     const handlers = { "GET /customers/:code": { body: customerDetail() } };
     const erp = renderApp("/pedidos/novo?customer=1001", { handlers: { ...handlers, ...erpHandlers } });
-    expect(await screen.findByText(ERP_RELEASE_NOTE)).toBeInTheDocument();
-    expect(ERP_RELEASE_NOTE).toBe("Descontos acima do permitido passam pela liberação no Sankhya depois do envio.");
+    await screen.findByRole("heading", { name: /^Novo pedido/ });
+    expect(screen.queryByText(/Descontos acima do permitido/)).not.toBeInTheDocument();
     erp.unmount();
     renderApp("/pedidos/novo?customer=1001", { handlers: { ...handlers, ...forceHandlers } });
     await screen.findByRole("heading", { name: /^Novo pedido/ });
     await screen.findByText(/condição de pagamento e a análise de crédito/);
-    expect(screen.queryByText(ERP_RELEASE_NOTE)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Descontos acima do permitido/)).not.toBeInTheDocument();
   });
 
   it("does not show the approval alert of an order in erp mode", async () => {
@@ -54,7 +53,7 @@ describe("modo erp (D-M)", () => {
     const order = orderDetail({ status: "awaiting_approval", approval });
     const handlers = (extra: Handlers): Handlers => ({ [`GET /orders/${ORDER_ID}`]: { body: order }, ...extra });
     const erp = renderApp(`/pedidos/${ORDER_ID}`, { handlers: handlers(erpHandlers) });
-    await screen.findByText(ERP_RELEASE_NOTE);
+    await screen.findByRole("heading", { name: /Pedido/ });
     expect(screen.queryByText("Aguardando aprovação de desconto")).not.toBeInTheDocument();
     erp.unmount();
     renderApp(`/pedidos/${ORDER_ID}`, { handlers: handlers(forceHandlers) });

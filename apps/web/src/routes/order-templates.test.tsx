@@ -116,7 +116,7 @@ describe("Cliente: Pedidos recorrentes", () => {
       expect(notice).toHaveTextContent("Código 2003: Produto removido do catálogo");
       expect(notice).toHaveTextContent("Código 2004: Produto sem preço para este cliente");
       // Non-blocking: the editor is usable next to it, and the notice can be dismissed.
-      expect(await screen.findByRole("heading", { name: /Rascunho nº 12/ })).toBeInTheDocument();
+      expect(await screen.findByRole("heading", { name: /Pedido nº 12/ })).toBeInTheDocument();
       await user.click(within(notice).getByRole("button", { name: "Dispensar aviso" }));
       expect(screen.queryByRole("alert", { name: "Itens do modelo que ficaram de fora" })).not.toBeInTheDocument();
     });
@@ -136,7 +136,7 @@ describe("Cliente: Pedidos recorrentes", () => {
 
     it("shows no template notice on a direct visit to a draft", async () => {
       renderApp(`/pedidos/${ORDER_ID}`, { handlers: { "GET /orders/:id": { body: orderDetail() } } });
-      expect(await screen.findByRole("heading", { name: /Rascunho nº 12/ })).toBeInTheDocument();
+      expect(await screen.findByRole("heading", { name: /Pedido nº 12/ })).toBeInTheDocument();
       expect(screen.queryByRole("alert", { name: "Itens do modelo que ficaram de fora" })).not.toBeInTheDocument();
     });
 

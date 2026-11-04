@@ -53,7 +53,7 @@ async function fillAndSave(user: ReturnType<typeof renderApp>["user"], qty = "2"
   const quantity = await screen.findByLabelText("Quantidade de Balão látex 9 pol. vermelho");
   await user.clear(quantity);
   await user.type(quantity, qty);
-  await user.click(screen.getByRole("button", { name: "Salvar rascunho" }));
+  await user.click(screen.getByRole("button", { name: "Salvar pedido" }));
 }
 
 describe("Identidade da base de dados nas gravações", () => {
@@ -80,7 +80,7 @@ describe("Identidade da base de dados nas gravações", () => {
     const quantity = await screen.findByLabelText("Quantidade de Balão látex 9 pol. vermelho");
     await user.clear(quantity);
     await user.type(quantity, "3");
-    await user.click(screen.getByRole("button", { name: "Salvar rascunho" }));
+    await user.click(screen.getByRole("button", { name: "Salvar pedido" }));
     await waitFor(() => expect(callsTo(calls, "PUT", `/orders/${ORDER_ID}`)).toHaveLength(1));
     expect(callsTo(calls, "PUT", `/orders/${ORDER_ID}`)[0]?.body).toHaveProperty("expectedDataset", loaded);
   });

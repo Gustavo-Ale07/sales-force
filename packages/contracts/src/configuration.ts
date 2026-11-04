@@ -405,6 +405,8 @@ export const OrderEntryConfigurationSchema = named(
         defaultTopCode: codeInt().nullable(),
         quotationTopCode: codeInt().nullable(),
         eligibleTopCodes: z.array(codeInt()),
+        /** J3: TOPs of the quote group; a document under one of them is a "orçamento" (labels follow). Absent = only the quotation TOP. */
+        quoteTopCodes: z.array(codeInt()).optional(),
       }),
     }),
     products: z.strictObject({

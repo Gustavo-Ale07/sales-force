@@ -105,7 +105,7 @@ export function ApprovalsPage() {
                 <TableRow key={item.approvalId}>
                   <TableCell>
                     <Link to="/pedidos/$id" params={{ id: item.orderId }} className="font-medium underline-offset-2 hover:underline">
-                      {`Rascunho nº ${item.draftNumber}`}
+                      {`Pedido nº ${item.draftNumber}`}
                     </Link>
                     <span className="block text-xs text-fg-muted">{`${formatCount(item.itemCount)} ${item.itemCount === 1 ? "item" : "itens"}`}</span>
                   </TableCell>
@@ -123,10 +123,10 @@ export function ApprovalsPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-2">
-                      <Button size="sm" variant="primary" aria-label={`Aprovar rascunho nº ${item.draftNumber}`} onClick={() => setDecision({ item, kind: "approve" })}>
+                      <Button size="sm" variant="primary" aria-label={`Aprovar pedido nº ${item.draftNumber}`} onClick={() => setDecision({ item, kind: "approve" })}>
                         Aprovar
                       </Button>
-                      <Button size="sm" variant="danger-outline" aria-label={`Reprovar rascunho nº ${item.draftNumber}`} onClick={() => setDecision({ item, kind: "reject" })}>
+                      <Button size="sm" variant="danger-outline" aria-label={`Reprovar pedido nº ${item.draftNumber}`} onClick={() => setDecision({ item, kind: "reject" })}>
                         Reprovar
                       </Button>
                     </div>
@@ -168,7 +168,7 @@ function DecisionDialog({ decision, onClose }: { decision: Decision; onClose: ()
       return reject ? rejectApproval(api, decision.item.approvalId, trimmed) : approveApproval(api, decision.item.approvalId, trimmed === "" ? undefined : trimmed);
     },
     onSuccess: async () => {
-      toast({ title: reject ? "Desconto reprovado" : "Desconto aprovado", description: `Rascunho nº ${decision?.item.draftNumber}`, tone: "success" });
+      toast({ title: reject ? "Desconto reprovado" : "Desconto aprovado", description: `Pedido nº ${decision?.item.draftNumber}`, tone: "success" });
       await queryClient.invalidateQueries({ queryKey: queryKeys.approvalsAll });
       await queryClient.invalidateQueries({ queryKey: queryKeys.ordersAll });
       close();
@@ -200,7 +200,7 @@ function DecisionDialog({ decision, onClose }: { decision: Decision; onClose: ()
         title={reject ? "Reprovar desconto?" : "Aprovar desconto?"}
         description={
           decision
-            ? `Rascunho nº ${decision.item.draftNumber}, desconto de até ${percentText(decision.item.maxDiscountPercent)}. A decisão fica registrada com o seu nome e a data.`
+            ? `Pedido nº ${decision.item.draftNumber}, desconto de até ${percentText(decision.item.maxDiscountPercent)}. A decisão fica registrada com o seu nome e a data.`
             : undefined
         }
         footer={

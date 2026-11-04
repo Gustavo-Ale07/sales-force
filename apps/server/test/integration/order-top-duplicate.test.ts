@@ -183,7 +183,7 @@ describe('negotiation types are only the sellable ones', () => {
   it('order-entry configuration and summary list no return type', async () => {
     const entry = await app.call('seller1', 'GET', '/order-entry/configuration');
     expect(entry.body.sales.negotiationTypes.map((t: Json) => t.code)).toEqual([2, 3]);
-    expect(entry.body.sales.orderTops).toEqual({ defaultTopCode: 1001, quotationTopCode: 1000, eligibleTopCodes: [1001, 1000] });
+    expect(entry.body.sales.orderTops).toEqual({ defaultTopCode: 1001, quotationTopCode: 1000, eligibleTopCodes: [1001, 1000], quoteTopCodes: [] });
     const summary = await app.call('admin', 'GET', '/configuration');
     expect(summary.body.configuration.sales.negotiationTypes.map((t: Json) => t.code)).toEqual([2, 3]);
   });

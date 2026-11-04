@@ -214,13 +214,13 @@ describe("Situação do pedido: textos distintos e honestos", () => {
     renderApp(`/pedidos/${ORDER_ID}`, { handlers: editorHandlers(orderDetail({ review })) });
     expect(await screen.findByText("O cliente deste rascunho está bloqueado.", { exact: false })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Enviar ao Sankhya" })).toBeDisabled();
-    expect(screen.getAllByText("Rascunho").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("não enviado").length).toBeGreaterThan(0);
   });
 
   it("flags the review in the list next to the status", async () => {
     const review = { status: "needs_review", reason: "customer_ineligible", customerBlock: "customer_inactive" } as const;
     renderApp("/pedidos", { handlers: { "GET /orders": { body: ordersPage([orderListItem({ review })]) } } });
     expect(await screen.findByText("Requer revisão")).toBeInTheDocument();
-    expect(screen.getAllByText("Rascunho").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("não enviado").length).toBeGreaterThan(0);
   });
 });

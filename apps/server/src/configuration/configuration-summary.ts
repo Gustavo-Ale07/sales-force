@@ -98,6 +98,7 @@ export function toOrderEntryConfiguration(
         defaultTopCode: configuration.sales.orderTopCode,
         quotationTopCode: configuration.sales.quotationTopCode,
         eligibleTopCodes: [...eligibleOrderTopCodesOf(configuration.sales)],
+        quoteTopCodes: [...(configuration.sales.quoteTopCodes ?? [])],
       },
     },
     products: {

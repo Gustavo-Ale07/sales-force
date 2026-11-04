@@ -62,7 +62,7 @@ describe('GET /api/v1/order-entry/configuration (getOrderEntryConfiguration)', (
           ],
           orderBehavior: { allowDraftWithoutPrice: false },
           discountAuthorityMode: 'erp',
-          orderTops: { defaultTopCode: 9000, quotationTopCode: 9001, eligibleTopCodes: [9000, 9001] },
+          orderTops: { defaultTopCode: 9000, quotationTopCode: 9001, eligibleTopCodes: [9000, 9001], quoteTopCodes: [] },
         },
         products: { productWithoutPrice: { orderable: false } },
       });

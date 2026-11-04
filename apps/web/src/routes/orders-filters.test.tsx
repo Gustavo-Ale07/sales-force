@@ -22,7 +22,7 @@ const lastOrdersCall = (calls: ReturnType<typeof renderApp>["calls"]) => callsTo
 describe("Vendas: filtros comerciais", () => {
   it("period: sends the dates as typed, keeps them in the URL and shows a chip; the date field can be switched", async () => {
     const { calls, router, user } = renderApp("/pedidos", { handlers: handlers() });
-    await screen.findByText("Rascunho nº 12");
+    await screen.findByText("Pedido nº 12");
     fireEvent.change(screen.getByLabelText("Data inicial"), { target: { value: "2026-03-01" } });
     await waitFor(() => expect(lastOrdersCall(calls)?.get("from")).toBe("2026-03-01"));
     fireEvent.change(screen.getByLabelText("Data final"), { target: { value: "2026-03-31" } });
@@ -39,7 +39,7 @@ describe("Vendas: filtros comerciais", () => {
 
   it("period: an end date before the start moves the start with it; a half-typed date sends nothing", async () => {
     const { calls } = renderApp("/pedidos?from=2026-03-10", { handlers: handlers() });
-    await screen.findByText("Rascunho nº 12");
+    await screen.findByText("Pedido nº 12");
     const before = callsTo(calls, "GET", "/orders").length;
     fireEvent.change(screen.getByLabelText("Data final"), { target: { value: "2026-03-05" } });
     await waitFor(() => expect(lastOrdersCall(calls)?.get("to")).toBe("2026-03-05"));
@@ -49,7 +49,7 @@ describe("Vendas: filtros comerciais", () => {
 
   it("customer: sends only the code and shows the name in a chip that can be removed", async () => {
     const { user, calls, router } = renderApp("/pedidos", { handlers: handlers() });
-    await screen.findByText("Rascunho nº 12");
+    await screen.findByText("Pedido nº 12");
     await user.click(screen.getByRole("button", { name: /Filtrar por cliente/ }));
     await user.click(await screen.findByRole("button", { name: /Beta Ltda/ }));
     await waitFor(() => expect(lastOrdersCall(calls)?.get("customerCode")).toBe("1002"));
@@ -61,7 +61,7 @@ describe("Vendas: filtros comerciais", () => {
 
   it("single product: picked from the search list, sent as productCodes, shown as a chip with code and name", async () => {
     const { user, calls, router } = renderApp("/pedidos", { handlers: handlers() });
-    await screen.findByText("Rascunho nº 12");
+    await screen.findByText("Pedido nº 12");
     await user.click(screen.getByRole("button", { name: "Filtrar por produtos" }));
     await user.click(await screen.findByRole("checkbox", { name: /Selecionar CABO FLEXIVEL/i }));
     // nothing is applied before "Aplicar filtro"
@@ -77,7 +77,7 @@ describe("Vendas: filtros comerciais", () => {
 
   it("several products: 'any' by default, 'all' on request, and each chip removes only its product", async () => {
     const { user, calls, router } = renderApp("/pedidos", { handlers: handlers() });
-    await screen.findByText("Rascunho nº 12");
+    await screen.findByText("Pedido nº 12");
     await user.click(screen.getByRole("button", { name: "Filtrar por produtos" }));
     await user.click(await screen.findByRole("checkbox", { name: /Selecionar CABO FLEXIVEL/i }));
     await user.click(await screen.findByRole("checkbox", { name: /Selecionar BALAO LATEX/i }));
@@ -103,7 +103,7 @@ describe("Vendas: filtros comerciais", () => {
 
   it("the product search box queries the catalog by name, code or reference", async () => {
     const { user, calls } = renderApp("/pedidos", { handlers: handlers() });
-    await screen.findByText("Rascunho nº 12");
+    await screen.findByText("Pedido nº 12");
     await user.click(screen.getByRole("button", { name: "Filtrar por produtos" }));
     await user.type(await screen.findByRole("searchbox", { name: "Buscar produto para o filtro" }), "CB-25");
     await waitFor(() => expect(callsTo(calls, "GET", "/products").some((call) => call.search.get("search") === "CB-25")).toBe(true));
@@ -113,7 +113,7 @@ describe("Vendas: filtros comerciais", () => {
     const { user, calls } = renderApp("/pedidos", {
       handlers: handlers({ "GET /products": (request) => ({ body: request.search.get("search") === "balao" ? productsPage([BALAO]) : productsPage([CABO, BALAO], priceContext, 25) }) }),
     });
-    await screen.findByText("Rascunho nº 12");
+    await screen.findByText("Pedido nº 12");
     await user.click(screen.getByRole("button", { name: "Filtrar por produtos" }));
     await user.click(await screen.findByRole("checkbox", { name: /Selecionar CABO FLEXIVEL/i }));
     await user.click(screen.getByRole("button", { name: "Próxima página" }));
@@ -128,7 +128,7 @@ describe("Vendas: filtros comerciais", () => {
 
   it("the rule for several products is chosen explicitly in the dialog and applied with the products", async () => {
     const { user, calls } = renderApp("/pedidos", { handlers: handlers() });
-    await screen.findByText("Rascunho nº 12");
+    await screen.findByText("Pedido nº 12");
     await user.click(screen.getByRole("button", { name: "Filtrar por produtos" }));
     await user.click(await screen.findByRole("checkbox", { name: /Selecionar CABO FLEXIVEL/i }));
     // one product: there is nothing to combine yet
@@ -146,7 +146,7 @@ describe("Vendas: filtros comerciais", () => {
     const { user, calls } = renderApp("/pedidos?products=%5B12%5D", {
       handlers: handlers({ "GET /product-groups": { body: { items: [{ code: 7, name: "Cabos" }] } } }),
     });
-    await screen.findByText("Rascunho nº 12");
+    await screen.findByText("Pedido nº 12");
     await user.click(screen.getByRole("button", { name: "Filtrar por produtos" }));
     await user.selectOptions(await screen.findByRole("combobox", { name: "Grupo dos produtos do filtro" }), "7");
     await waitFor(() => expect(callsTo(calls, "GET", "/products").some((call) => call.search.get("group") === "7")).toBe(true));
@@ -157,7 +157,7 @@ describe("Vendas: filtros comerciais", () => {
 
   it("description of the product: typed text goes to the API as productSearch, shows a chip and can be removed", async () => {
     const { user, calls, router } = renderApp("/pedidos", { handlers: handlers() });
-    await screen.findByText("Rascunho nº 12");
+    await screen.findByText("Pedido nº 12");
     await user.type(screen.getByRole("searchbox", { name: "Buscar pedidos por descrição do produto" }), "cabo flex");
     await waitFor(() => expect(lastOrdersCall(calls)?.get("productSearch")).toBe("cabo flex"));
     expect(router.state.location.search).toMatchObject({ productSearch: "cabo flex" });
@@ -170,7 +170,7 @@ describe("Vendas: filtros comerciais", () => {
     const { user, calls, router } = renderApp("/pedidos?page=3&pageSize=50", {
       handlers: handlers({ "GET /orders": { body: { ...ordersPage([orderListItem()], 195), page: 3, pageSize: 50 } } }),
     });
-    await screen.findByText("Rascunho nº 12");
+    await screen.findByText("Pedido nº 12");
     expect(lastOrdersCall(calls)?.get("page")).toBe("3");
 
     await user.selectOptions(screen.getByRole("combobox", { name: /Situação/ }), "draft");
@@ -213,7 +213,7 @@ describe("Vendas: filtros comerciais", () => {
       `/pedidos?${new URLSearchParams({ search: "12", status: "draft", customerCode: "1002", from: "2026-03-01", to: "2026-03-31", dateField: "updatedAt", products: "[12,34]", productMatch: "all", productSearch: "cabo" })}`,
       { handlers: handlers() },
     );
-    await screen.findByText("Rascunho nº 12");
+    await screen.findByText("Pedido nº 12");
     const search = callsTo(calls, "GET", "/orders")[0]!.search;
     expect(search.get("search")).toBe("12");
     expect(search.get("status")).toBe("draft");
@@ -240,7 +240,7 @@ describe("Vendas: filtros comerciais", () => {
     const { user, calls, router } = renderApp("/pedidos?status=draft&from=2026-03-01&products=%5B12%5D", {
       handlers: handlers({ "GET /orders": { body: ordersPage([orderListItem()], 60) } }),
     });
-    await screen.findByText("Rascunho nº 12");
+    await screen.findByText("Pedido nº 12");
     await user.click(screen.getByRole("button", { name: "Próxima página" }));
     await waitFor(() => expect(lastOrdersCall(calls)?.get("page")).toBe("2"));
     const search = lastOrdersCall(calls);
@@ -269,7 +269,7 @@ describe("Vendas: filtros comerciais", () => {
 
   it("an invalid or contradictory link degrades to the filters that make sense", async () => {
     const { calls } = renderApp("/pedidos?from=2026-13-40&to=2026-03-01&products=%5B%22x%22%5D&productMatch=some&dateField=deletedAt", { handlers: handlers() });
-    await screen.findByText("Rascunho nº 12");
+    await screen.findByText("Pedido nº 12");
     const search = callsTo(calls, "GET", "/orders")[0]!.search;
     // the valid end date stays (no start to contradict it); everything invalid is dropped
     expect(search.get("to")).toBe("2026-03-01");

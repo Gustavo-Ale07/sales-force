@@ -52,7 +52,9 @@ describe("TOP do pedido e transportadora (D-A, D-C)", () => {
     await user.selectOptions(carrier, "9");
     await user.click(await screen.findByRole("button", { name: "Produtos" }));
     await user.click(await screen.findByRole("button", { name: /^Adicionar .*Balão/ }));
-    await user.click(screen.getByRole("button", { name: "Salvar rascunho" }));
+    // J3: with a quote TOP selected the button says "orçamento".
+    expect(screen.queryByRole("button", { name: "Salvar pedido" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Salvar orçamento" }));
     await waitFor(() => expect(callsTo(calls, "POST", "/orders")).toHaveLength(1));
     expect(callsTo(calls, "POST", "/orders")[0]?.body).toMatchObject({ topCode: 1000, carrierCode: 9 });
   });
@@ -66,7 +68,7 @@ describe("TOP do pedido e transportadora (D-A, D-C)", () => {
     await user.selectOptions(await screen.findByLabelText("Transportadora"), "7").catch(() => undefined);
     await user.click(await screen.findByRole("button", { name: "Produtos" }));
     await user.click(await screen.findByRole("button", { name: /^Adicionar .*Balão/ }));
-    await user.click(screen.getByRole("button", { name: "Salvar rascunho" }));
+    await user.click(screen.getByRole("button", { name: "Salvar pedido" }));
     expect(await screen.findByText("Transportadora inválida ou inativa.")).toBeInTheDocument();
   });
 });

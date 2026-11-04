@@ -71,18 +71,18 @@ import {
   type EditorLine,
 } from "../lib/order-draft";
 
+import { documentKindOf, documentVocabulary } from "@salesforce/domain";
+
 type OrderDetail = ApiSchema<"OrderDetail">;
 
-/** D-M: shown in the cart footer while discounts are released by Sankhya. */
-export const ERP_RELEASE_NOTE = "Descontos acima do permitido passam pela liberação no Sankhya depois do envio.";
 
 export const SUBMIT_DISABLED_MESSAGE =
-  "O envio de pedidos ao Sankhya ainda não está habilitado nesta instalação. O rascunho continua salvo e nada foi enviado.";
+  "O envio de pedidos ao Sankhya ainda não está habilitado nesta instalação. O documento continua salvo e nada foi enviado.";
 
 /** ORD-1: editable as draft and as rejected-by-approver; editing an order awaiting approval returns it to draft. */
 const EDITABLE_STATUSES: ReadonlySet<OrderDetail["status"]> = new Set(["draft", "approval_rejected", "awaiting_approval"]);
 export const SUBMIT_BLOCKED_MESSAGE =
-  "O desconto ultrapassa o limite máximo da diretoria. O rascunho continua salvo, mas não pode ser enviado até reduzir o desconto.";
+  "O desconto ultrapassa o limite máximo da diretoria. Ele continua salvo, mas não pode ser enviado até reduzir o desconto.";
 export const SUBMIT_AWAITING_MESSAGE = "Pedido enviado para aprovação do desconto. Você será avisado ao abrir o pedido quando houver decisão.";
 
 const PRODUCT_SEARCH_ID = "order-product-search";
@@ -113,7 +113,7 @@ function describeSaveFailure(error: unknown): FailureView {
   if (error instanceof ApiRequestError) {
     if (error.code === "version_conflict") {
       return {
-        title: "O rascunho foi alterado em outro lugar",
+        title: "O documento foi alterado em outro lugar",
         messages: ["Recarregue para ver a versão atual. Suas alterações não salvas serão descartadas."],
         correlationId: error.correlationId,
         reloadable: true,
@@ -122,7 +122,7 @@ function describeSaveFailure(error: unknown): FailureView {
     if (error.code === "order_not_editable") {
       return {
         title: "Este pedido não pode mais ser editado",
-        messages: ["Ele já não é um rascunho. Recarregue para ver a situação atual."],
+        messages: ["Ele já não está em edição. Recarregue para ver a situação atual."],
         correlationId: error.correlationId,
         reloadable: true,
       };
@@ -144,7 +144,7 @@ function describeSaveFailure(error: unknown): FailureView {
       };
     }
   }
-  const { title, description, correlationId } = describeApiError(error, "Não foi possível salvar o rascunho");
+  const { title, description, correlationId } = describeApiError(error, "Não foi possível salvar");
   return { title, messages: [description], correlationId, reloadable: false };
 }
 
@@ -272,6 +272,9 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
 
   const orderTops = config.data?.sales.orderTops;
   const orderTopCode = topChoice ?? orderTops?.defaultTopCode ?? null;
+  // J3: the header TOP decides whether this is an order or a quote, and the texts follow.
+  const docKind = documentKindOf(orderTopCode, { quoteTopCodes: orderTops?.quoteTopCodes, quotationTopCode: orderTops?.quotationTopCode });
+  const vocab = documentVocabulary(docKind, order ? (order.erpNumber ?? order.draftNumber) : null);
   const negotiationTypeCode =
     negotiationChoice !== undefined ? negotiationChoice : (config.data?.sales.defaultNegotiationTypeCode ?? null);
 
@@ -348,7 +351,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
       queryClient.setQueryData(queryKeys.order(saved.id), saved);
       await queryClient.invalidateQueries({ queryKey: queryKeys.ordersAll });
       await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
-      toast({ title: "Rascunho salvo", description: orderReference(saved), tone: "success" });
+      toast({ title: docKind === "quote" ? "Orçamento salvo" : "Pedido salvo", description: orderReference(saved, docKind), tone: "success" });
       if (!order) {
         leavingRef.current = true;
         onCreated(saved.id);
@@ -541,7 +544,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
   return (
     <>
       <PageHeader
-        title={order ? orderReference(order) : "Novo pedido"}
+        title={order ? orderReference(order, docKind) : docKind === "quote" ? "Novo orçamento" : "Novo pedido"}
         badges={
           status ? (
             <>
@@ -554,7 +557,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
         actions={
           order ? (
             <>
-              <PrintOrderButton orderId={order.id} order={order} label={orderReference(order)} disabled={dirty || order.items.length === 0} />
+              <PrintOrderButton orderId={order.id} order={order} label={orderReference(order, docKind)} disabled={dirty || order.items.length === 0} />
               {isQuotation ? <DuplicateAsOrderButton order={order} disabled={dirty} /> : <DuplicateOrderButton order={order} disabled={dirty} />}
             </>
           ) : undefined
@@ -566,7 +569,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
       {notice}
       {!installationEnabled ? (
         <Alert tone="warning" title="Pedidos ainda não habilitados">
-          A instalação ainda não está habilitada para pedidos. Você pode consultar, mas não salvar rascunhos.
+          A instalação ainda não está habilitada para pedidos. Você pode consultar, mas não salvar.
         </Alert>
       ) : null}
       {order?.review ? (
@@ -1011,16 +1014,11 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
               </p>
             ) : null}
             <FieldHint className="mt-1 text-right">
-              Estimativa pelos preços de lista e descontos informados. O desconto é gravado no rascunho. O IPI é uma estimativa só para conferência: o valor real é calculado pelo Sankhya.
+              O IPI é uma estimativa só para conferência: o valor real é calculado pelo Sankhya.
               {approvalsOn
                 ? " A condição de pagamento e a análise de crédito ainda não estão disponíveis nesta versão."
                 : null}
             </FieldHint>
-            {discountMode === "erp" ? (
-              <FieldHint className="mt-1 text-right" data-testid="erp-release-note">
-                {ERP_RELEASE_NOTE}
-              </FieldHint>
-            ) : null}
           </CardBody>
         </Card>
 
@@ -1068,13 +1066,13 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
               leftIcon={<Send size={14} aria-hidden="true" />}
               loading={submit.isPending}
               disabled={dirty || order.review !== null}
-              title={order.review ? "Rascunho requer revisão: o cliente não pode receber pedidos" : dirty ? "Salve o rascunho antes de enviar" : undefined}
+              title={order.review ? "Requer revisão: o cliente não pode receber pedidos" : dirty ? "Salve antes de enviar" : undefined}
               onClick={() => {
                 setSubmitMessage(null);
                 submit.mutate();
               }}
             >
-              Enviar ao Sankhya
+              {vocab.send}
             </Button>
           ) : null}
           {!readOnly ? (
@@ -1086,7 +1084,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
               loading={save.isPending}
               disabled={!canSave}
             >
-              Salvar rascunho
+              {vocab.save}
             </Button>
           ) : null}
         </div>
@@ -1111,7 +1109,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
             </>
           }
         >
-          <p className="m-0 text-sm text-fg-muted">A troca ainda não é salva: ela só vale quando você salvar o rascunho.</p>
+          <p className="m-0 text-sm text-fg-muted">A troca ainda não é salva: ela só vale quando você salvar.</p>
         </DialogContent>
       </Dialog>
 
@@ -1170,7 +1168,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
         onClose={() => setDiscarding(false)}
         onDiscarded={() => {
           leavingRef.current = true;
-          toast({ title: "Rascunho descartado", tone: "success" });
+          toast({ title: "Descartado", tone: "success" });
           onClose();
         }}
       />
@@ -1190,7 +1188,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
             </>
           }
         >
-          <p className="m-0 text-sm text-fg-muted">Salve o rascunho para não perder o trabalho.</p>
+          <p className="m-0 text-sm text-fg-muted">Salve para não perder o trabalho.</p>
         </DialogContent>
       </Dialog>
     </>

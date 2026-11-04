@@ -1125,6 +1125,7 @@ export interface components {
                     defaultTopCode: number | null;
                     quotationTopCode: number | null;
                     eligibleTopCodes: number[];
+                    quoteTopCodes?: number[];
                 };
             };
             products: {

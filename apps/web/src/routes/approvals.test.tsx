@@ -37,7 +37,7 @@ describe("W-20 approval queue", () => {
 
   it("lists the pending requests with who asked and the largest discount", async () => {
     renderApp("/aprovacoes", { handlers: { ...shellData, "GET /approvals": { body: queue([item(), item({ approvalId: "0190a0c0-0000-7000-8000-0000000000a2", draftNumber: 13, requestedLevel: "director" })]) } }, role: "manager" });
-    expect(await screen.findByText("Rascunho nº 12")).toBeInTheDocument();
+    expect(await screen.findByText("Pedido nº 12")).toBeInTheDocument();
     expect(screen.getAllByText("Vera Vendedora")).toHaveLength(2);
     expect(screen.getAllByText("8,5%").length).toBeGreaterThan(0);
     expect(screen.getByText("Diretoria")).toBeInTheDocument();
@@ -53,7 +53,7 @@ describe("W-20 approval queue", () => {
       handlers: { ...shellData, "GET /approvals": { body: queue([item()]) }, "POST /approvals/:id/approve": { body: orderDetail({ status: "approved" }) } },
       role: "manager",
     });
-    await user.click(await screen.findByRole("button", { name: "Aprovar rascunho nº 12" }));
+    await user.click(await screen.findByRole("button", { name: "Aprovar pedido nº 12" }));
     const dialog = await screen.findByRole("dialog");
     await user.type(within(dialog).getByLabelText(/Comentário/), "Cliente estratégico");
     await user.click(within(dialog).getByRole("button", { name: "Aprovar" }));
@@ -63,7 +63,7 @@ describe("W-20 approval queue", () => {
 
   it("refuses to reject without a comment, on the client, before any request", async () => {
     const { user, calls } = renderApp("/aprovacoes", { handlers: { ...shellData, "GET /approvals": { body: queue([item()]) } }, role: "manager" });
-    await user.click(await screen.findByRole("button", { name: "Reprovar rascunho nº 12" }));
+    await user.click(await screen.findByRole("button", { name: "Reprovar pedido nº 12" }));
     const dialog = await screen.findByRole("dialog");
     await user.click(within(dialog).getByRole("button", { name: "Reprovar" }));
     expect(await within(dialog).findByText("Informe o motivo da reprovação.")).toBeInTheDocument();
@@ -79,7 +79,7 @@ describe("W-20 approval queue", () => {
       },
       role: "manager",
     });
-    await user.click(await screen.findByRole("button", { name: "Reprovar rascunho nº 12" }));
+    await user.click(await screen.findByRole("button", { name: "Reprovar pedido nº 12" }));
     const dialog = await screen.findByRole("dialog");
     await user.type(within(dialog).getByLabelText(/Comentário/), "Desconto alto demais");
     await user.click(within(dialog).getByRole("button", { name: "Reprovar" }));

@@ -114,7 +114,7 @@ export async function createDraftViaUi(page: Page): Promise<{ id: string; total:
   await page.getByRole("button", { name: /^Carrinho/ }).click();
 
   const total = (await page.getByTestId("order-total").innerText()).trim();
-  await page.getByRole("button", { name: "Salvar rascunho" }).click();
+  await page.getByRole("button", { name: "Salvar pedido" }).click();
   await expect(page).toHaveURL(/\/pedidos\/[0-9a-f-]{36}$/);
   await expect(page.getByText("Rascunho", { exact: true }).first()).toBeVisible();
   const id = page.url().split("/").pop() ?? "";

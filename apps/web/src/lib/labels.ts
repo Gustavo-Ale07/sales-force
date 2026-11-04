@@ -1,4 +1,5 @@
 import type { ApiSchema } from "@salesforce/contracts/client";
+import { documentVocabulary, type DocumentKind } from "@salesforce/domain";
 import type { Tone } from "@salesforce/ui";
 
 /**
@@ -8,7 +9,7 @@ import type { Tone } from "@salesforce/ui";
  * TODO(after Track B merges): the Sankhya-side status labels (D-E) come from `orderDeliveryLabel` in @salesforce/domain.
  */
 export const orderStatusLabels: Record<ApiSchema<"OrderStatus">, { label: string; tone: Tone }> = {
-  draft: { label: "Rascunho", tone: "neutral" },
+  draft: { label: "não enviado", tone: "neutral" },
   awaiting_approval: { label: "Aguardando aprovação", tone: "warning" },
   approved: { label: "Aprovado", tone: "info" },
   approval_rejected: { label: "Reprovado na aprovação", tone: "danger" },
@@ -21,7 +22,7 @@ export const orderStatusLabels: Record<ApiSchema<"OrderStatus">, { label: string
 
 /** One sentence per situation: what it says, and what it does not say about Sankhya. */
 export const orderStatusHints: Record<ApiSchema<"OrderStatus">, string> = {
-  draft: "Rascunho salvo no Sales Force. Ainda não foi enviado ao Sankhya.",
+  draft: "Salvo no Sales Force. Ainda não foi enviado ao Sankhya.",
   awaiting_approval: "O desconto do pedido aguarda a decisão de um aprovador. Editar o pedido cancela a solicitação e o devolve a rascunho.",
   approved: "Desconto aprovado. Isso não significa que o pedido foi enviado ao Sankhya.",
   approval_rejected: "O aprovador reprovou o desconto. Edite o pedido para ajustar e enviar de novo.",
@@ -59,8 +60,8 @@ export const orderReviewReasons: Record<NonNullable<ApiSchema<"OrderListItem">["
 };
 
 /** Reference shown for an order: the Sankhya number once it exists there, otherwise the draft number. */
-export function orderReference(order: Pick<ApiSchema<"OrderListItem">, "draftNumber" | "erpNumber">): string {
-  return order.erpNumber === null ? `Rascunho nº ${order.draftNumber}` : `Pedido ${order.erpNumber}`;
+export function orderReference(order: Pick<ApiSchema<"OrderListItem">, "draftNumber" | "erpNumber">, kind: DocumentKind = "order"): string {
+  return documentVocabulary(kind, order.erpNumber ?? order.draftNumber).title;
 }
 
 type ErpStatus = NonNullable<ApiSchema<"OrderListItem">["erpStatus"]>;

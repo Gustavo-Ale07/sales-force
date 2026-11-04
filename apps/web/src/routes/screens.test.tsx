@@ -44,7 +44,7 @@ describe("Início (dashboard)", () => {
     // It is not shown as a row of "Não disponível": one quiet note names it instead.
     expect(screen.getByTestId("indicators-without-data")).toHaveTextContent(/Sem dados nesta instalação:.*Indicadores de crédito/);
     expect(screen.getByText(/Escopo: Vendedor 7/)).toBeInTheDocument();
-    expect(screen.getByText("Rascunho nº 12")).toBeInTheDocument();
+    expect(screen.getByText("Pedido nº 12")).toBeInTheDocument();
   });
 
   it("marks demonstration data", async () => {
@@ -165,7 +165,7 @@ describe("Cliente (customer detail)", () => {
     expect(await screen.findByText("Nenhum título em aberto")).toBeInTheDocument();
     expect(screen.queryByText("Limite de crédito", { selector: "dt" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: /Vendas/ }));
-    expect(await screen.findByText("Rascunho nº 12")).toBeInTheDocument();
+    expect(await screen.findByText("Pedido nº 12")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Novo pedido/ })).toHaveAttribute("href", expect.stringContaining("customer=1001"));
   });
 
@@ -296,17 +296,17 @@ describe("Rascunhos (orders)", () => {
     const { user, router } = renderApp("/pedidos", {
       handlers: { "GET /orders": { body: ordersPage([orderListItem(), orderListItem({ id: "0190a000-0000-7000-8000-0000000000bb", draftNumber: 13, isPartial: true, status: "cancelled" })]) } },
     });
-    expect(await screen.findByText("Rascunho nº 12")).toBeInTheDocument();
+    expect(await screen.findByText("Pedido nº 12")).toBeInTheDocument();
     expect(screen.getByText("(parcial)")).toBeInTheDocument();
-    await user.click(screen.getByText("Rascunho nº 12"));
+    await user.click(screen.getByText("Pedido nº 12"));
     await waitFor(() => expect(router.state.location.pathname).toBe(`/pedidos/${ORDER_ID}`));
   });
 
   it("offers discard only for drafts", async () => {
     renderApp("/pedidos", { handlers: { "GET /orders": { body: ordersPage([orderListItem(), orderListItem({ id: "0190a000-0000-7000-8000-0000000000bb", draftNumber: 13, status: "sent", erpNumber: 555 })]) } } });
-    expect(await screen.findByText("Rascunho nº 12")).toBeInTheDocument();
+    expect(await screen.findByText("Pedido nº 12")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /^Descartar/ })).toHaveLength(1);
-    expect(screen.getByText("Pedido 555")).toBeInTheDocument();
+    expect(screen.getByText("Pedido nº 555")).toBeInTheDocument();
   });
 
   it("discards a draft after confirmation and refreshes the list", async () => {
@@ -320,7 +320,7 @@ describe("Rascunhos (orders)", () => {
         },
       },
     });
-    await user.click(await screen.findByRole("button", { name: "Descartar Rascunho nº 12" }));
+    await user.click(await screen.findByRole("button", { name: "Descartar Pedido nº 12" }));
     const dialog = await screen.findByRole("dialog", { name: "Descartar rascunho?" });
     await user.click(within(dialog).getByRole("button", { name: "Descartar" }));
     expect(await screen.findByText("Nenhum pedido ainda")).toBeInTheDocument();
@@ -334,7 +334,7 @@ describe("Rascunhos (orders)", () => {
         "DELETE /orders/:id": apiError(409, "order_not_editable", "Pedido não pode ser descartado.", { requestId: "req-d-1" }),
       },
     });
-    await user.click(await screen.findByRole("button", { name: "Descartar Rascunho nº 12" }));
+    await user.click(await screen.findByRole("button", { name: "Descartar Pedido nº 12" }));
     const dialog = await screen.findByRole("dialog", { name: "Descartar rascunho?" });
     await user.click(within(dialog).getByRole("button", { name: "Descartar" }));
     expect(await within(dialog).findByText("req-d-1")).toBeInTheDocument();
