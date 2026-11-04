@@ -123,6 +123,9 @@ main() {
   [ -d "$SF_REPO_DIR/.git" ] || sf_die "repository not found at $SF_REPO_DIR (manual clone step, see deploy/README-cicd.md)"
   [ -r "$SF_COMPOSE_ENV" ] || sf_die "compose env file not readable: $SF_COMPOSE_ENV"
 
+  STAGE="erp environment"
+  sf_check_erp_environment
+
   sf_log "environment=staging target_sha=$DEPLOY_SHA project=$SF_COMPOSE_PROJECT edge_mode=$SF_EDGE_MODE db_mode=$SF_DB_MODE"
 
   STAGE="previous commit"

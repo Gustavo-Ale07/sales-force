@@ -62,6 +62,32 @@ sf_init() {
   esac
 }
 
+# Value of one variable read from one env file: only that line, never the file. Empty when absent.
+sf_file_var() {
+  local file="$1" name="$2" val=""
+  [ -r "$file" ] || return 0
+  val="$(sed -n "s/^${name}=//p" "$file" | tail -n 1 | tr -d '\r')"
+  val="${val%\"}"; val="${val#\"}"; val="${val%\'}"; val="${val#\'}"
+  printf '%s' "$val"
+}
+
+# D-X: the API stamps orders with SF_ERP_ENVIRONMENT and the worker delivers only to its own Sankhya environment
+# (SANKHYA_ENVIRONMENT); a different pair makes every delivery fail with environment_mismatch. Compared before anything
+# starts. Neither is a secret, but only the variable NAMES are printed. Either side absent = nothing to compare.
+sf_check_erp_environment() {
+  local api_env worker_env secrets
+  api_env="$(sf_cfg SF_ERP_ENVIRONMENT)"
+  worker_env="${SANKHYA_ENVIRONMENT:-}"
+  if [ -z "$worker_env" ]; then
+    secrets="$(sf_cfg SF_SECRETS_DIR)"
+    [ -z "$secrets" ] || worker_env="$(sf_file_var "$secrets/worker.env" SANKHYA_ENVIRONMENT)"
+  fi
+  [ -n "$api_env" ] && [ -n "$worker_env" ] || return 0
+  if [ "$api_env" != "$worker_env" ]; then
+    sf_die "SF_ERP_ENVIRONMENT (compose.env) and SANKHYA_ENVIRONMENT (worker.env) differ: the delivery would refuse every order with environment_mismatch. Make them equal (sandbox or production). Nothing was changed."
+  fi
+}
+
 # Application services started by `up` (the database and `migrate` are handled separately; `edge` last).
 sf_app_services() { printf '%s' "api worker verifier web"; }
 
