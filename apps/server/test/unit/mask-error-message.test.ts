@@ -9,6 +9,8 @@ const targets = { hosts: [HOST], secrets: [SECRET] };
 
 const LEAKY = [
   `Authorization: Bearer abc123.def456.ghi789 rejected`,
+  `Authorization: Basic c2VjcmV0YmFzaWM6aHVudGVyMg== rejected`,
+  `authorization=Digest sometoken123 realm`,
   `request failed with header authorization=Bearer sometoken123`,
   `X-Token: 9a8b7c6d5e4f3a2b1c0d`,
   `{"access_token":"tok_abcdef123456","expires_in":300}`,
@@ -24,7 +26,7 @@ const LEAKY = [
   `user:pass@${HOST} unreachable`,
 ];
 
-const FORBIDDEN = [/bearer\s+[a-z0-9]/i, /abc123|sometoken123|9a8b7c6d5e4f3a2b1c0d|tok_abcdef|hunter2|minhaSenha|dbpass|user:pass|c2lnbmF0dXJl/, /token=zzz/];
+const FORBIDDEN = [/bearer\s+[a-z0-9]/i, /c2VjcmV0YmFzaWM6/, /basic\s+[a-z0-9]/i, /abc123|sometoken123|9a8b7c6d5e4f3a2b1c0d|tok_abcdef|hunter2|minhaSenha|dbpass|user:pass|c2lnbmF0dXJl/, /token=zzz/];
 
 describe('maskErrorMessage (D-Q)', () => {
   it.each(LEAKY)('masks %s', (text) => {

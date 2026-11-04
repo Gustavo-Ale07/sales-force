@@ -19,7 +19,7 @@ export interface MaskTargets {
 
 const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const SENSITIVE_KEY = /(["']?)\b(x-token|access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|api[_-]?key|authorization|password|passwd|senha|secret|token)\b\1(\s*[:=]\s*)("[^"]*"|'[^']*'|(?:bearer\s+)?[^\s,;&}"']+)/gi;
+const SENSITIVE_KEY = /(["']?)\b(x-token|access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|api[_-]?key|authorization|password|passwd|senha|secret|token)\b\1(\s*[:=]\s*)("[^"]*"|'[^']*'|(?:(?:bearer|basic|digest|negotiate|token)\s+)?[^\s,;&}"']+)/gi;
 const BEARER = /\bbearer\s+[A-Za-z0-9._~+/=-]+/gi;
 const JWT = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*/g;
 const USERINFO = /\b[^\s:@/]+:[^\s@/]+@[^\s/]+/g;
