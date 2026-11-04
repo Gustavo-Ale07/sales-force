@@ -54,7 +54,7 @@ import { carriersQueryOptions, orderEntryConfigurationQueryOptions, customerQuer
 import { useApi } from "../lib/app-context";
 import { useLoadedDataset, requireDataset } from "../lib/dataset";
 import { approvalsEnabled } from "../lib/discount-authority";
-import { describeApiError } from "../lib/error-message";
+import { describeApiError, submitConflictText } from "../lib/error-message";
 import { deliveryErrorText, erpStatusText, orderReference, orderReviewLabel, orderReviewReasons, orderStatusHints, orderStatusLabels } from "../lib/labels";
 import {
   describeIssue,
@@ -535,7 +535,11 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
   const submitFailure =
     submit.isError &&
     !(submit.error instanceof ApiRequestError && (submit.error.code === ERP_SUBMISSION_DISABLED || submit.error.code === "discount_blocked"))
-      ? describeApiError(submit.error, "Não foi possível enviar o pedido")
+      ? (() => {
+          const described = describeApiError(submit.error, "Não foi possível enviar o pedido");
+          const conflict = submitConflictText(submit.error);
+          return conflict === null ? described : { ...described, description: conflict };
+        })()
       : null;
   const status = order ? orderStatusLabels[order.status] : null;
   const discountMode = config.data?.sales.discountAuthorityMode;
