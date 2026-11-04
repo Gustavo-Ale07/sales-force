@@ -53,7 +53,7 @@ describe('GET /api/v1/order-entry/configuration (getOrderEntryConfiguration)', (
       const parsed = OrderEntryConfigurationSchema.parse(body);
       expect(parsed).toEqual({
         dataset: { environment: 'sandbox', datasetId: 'plac-sandbox-real-1' },
-        general: { enabled: true },
+        general: { enabled: true, erpSubmissionEnabled: false },
         sales: {
           defaultNegotiationTypeCode: 2,
           negotiationTypes: [

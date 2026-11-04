@@ -65,6 +65,11 @@ const outboxOf = (ctx: CommercialApp, id: string) =>
   ctx.database.handle.db.select().from(integrationOutbox).where(eq(integrationOutbox.aggregateId, id));
 
 describe('API-side enqueue for the ERP (SNK-7 D-5, D-M)', () => {
+  it('K8: GET /order-entry/configuration reports what the API applies (general.erpSubmissionEnabled)', async () => {
+    expect((await off.call('seller1', 'GET', '/order-entry/configuration')).body.general.erpSubmissionEnabled).toBe(false);
+    expect((await on.call('seller1', 'GET', '/order-entry/configuration')).body.general.erpSubmissionEnabled).toBe(true);
+  });
+
   it('with the switch off (as shipped) submit stays erp_submission_disabled and writes no outbox row', async () => {
     const id = await draft(off);
     await bindToSandbox(off, id);

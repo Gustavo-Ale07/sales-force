@@ -37,7 +37,7 @@ import { DeleteOrderDialog } from "../components/delete-order-dialog";
 import { OrderProductFilter, PRODUCT_MATCH_OPTIONS, useProductLabel, type ProductMatch } from "../components/order-product-filter";
 import { PrintOrderButton } from "../components/print-order-button";
 import { QueryError } from "../components/query-error";
-import { customerQueryOptions, ordersQueryOptions, type OrdersParams } from "../lib/api-queries";
+import { customerQueryOptions, orderEntryConfigurationQueryOptions, ordersQueryOptions, type OrdersParams } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { deliveryErrorText, erpStatusText, formatCount, orderReference, orderReviewLabel, orderReviewReasons, orderStatusLabels } from "../lib/labels";
 import { MAX_ORDER_PRODUCTS, ORDER_DATE_FIELDS, ORDER_STATUSES, type OrdersSearch } from "../lib/route-search";
@@ -171,6 +171,8 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
   };
   const query = useQuery(ordersQueryOptions(api, apiParams));
   const [deleting, setDeleting] = useState<{ id: string; label: string } | null>(null);
+  // K8: what the API applies now, not a cache until F5 — always revalidated on open and on tab focus.
+  const submissionEnabled = useQuery({ ...orderEntryConfigurationQueryOptions(api), staleTime: 0, refetchOnWindowFocus: true }).data?.general.erpSubmissionEnabled;
 
   const change = (patch: Partial<OrdersSearch>) => onSearchChange(compact({ ...params, page: undefined, ...patch }));
   const [searchText, setSearchText] = useSearchBox(params.search, (search) => change({ search }));
@@ -189,7 +191,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
       <PageHeader
         title="Vendas"
         count={query.data ? query.data.total.toLocaleString("pt-BR") : undefined}
-        description="Pedidos e rascunhos. O envio ao Sankhya ainda não está habilitado nesta instalação."
+        description={submissionEnabled === false ? "Pedidos e rascunhos. O envio ao Sankhya ainda não está habilitado nesta instalação." : "Pedidos e rascunhos."}
         actions={
           <Button asChild variant="primary" leftIcon={<Plus size={16} strokeWidth={1.75} aria-hidden="true" />}>
             <Link to="/pedidos/novo">Novo pedido</Link>

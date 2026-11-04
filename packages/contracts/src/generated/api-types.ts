@@ -1120,6 +1120,7 @@ export interface components {
             dataset: components["schemas"]["DatasetIdentity"] | null;
             general: {
                 enabled: boolean;
+                erpSubmissionEnabled?: boolean;
             };
             sales: {
                 defaultNegotiationTypeCode: number | null;

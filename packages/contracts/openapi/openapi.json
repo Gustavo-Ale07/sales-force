@@ -5452,6 +5452,9 @@
             "properties": {
               "enabled": {
                 "type": "boolean"
+              },
+              "erpSubmissionEnabled": {
+                "type": "boolean"
               }
             },
             "required": [

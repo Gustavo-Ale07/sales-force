@@ -85,10 +85,14 @@ export function toConfigurationSummary(configuration: InstallationConfiguration)
 export function toOrderEntryConfiguration(
   configuration: InstallationConfiguration,
   dataset: DatasetIdentity | null,
+  erpSubmissionEnabled?: boolean,
 ): OrderEntryConfiguration {
   return {
     dataset: dataset === null ? null : { environment: dataset.environment, datasetId: dataset.datasetId },
-    general: { enabled: configuration.general.enabled },
+    general: {
+      enabled: configuration.general.enabled,
+      ...(erpSubmissionEnabled === undefined ? {} : { erpSubmissionEnabled }),
+    },
     sales: {
       defaultNegotiationTypeCode: configuration.sales.defaultNegotiationTypeCode,
       negotiationTypes: sellableNegotiationTypes(configuration.sales).map((type) => ({ code: type.code, label: type.label })),

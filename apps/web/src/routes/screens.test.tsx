@@ -10,6 +10,7 @@ import {
   dashboard,
   integrationFake,
   noPriceList,
+  orderEntryConfiguration,
   orderListItem,
   ordersPage,
   pricedList,
@@ -292,6 +293,23 @@ describe("Catálogo (products)", () => {
 });
 
 describe("Rascunhos (orders)", () => {
+  it("K8: the subtitle says submission is not enabled only when the API reports it off; unknown or on shows no such notice", async () => {
+    const withFlag = (erpSubmissionEnabled: boolean | undefined) => ({
+      "GET /orders": { body: ordersPage([orderListItem()]) },
+      "GET /order-entry/configuration": { body: { ...orderEntryConfiguration, general: { enabled: true, ...(erpSubmissionEnabled === undefined ? {} : { erpSubmissionEnabled }) } } },
+    });
+    const off = renderApp("/pedidos", { handlers: withFlag(false) });
+    expect(await screen.findByText(/O envio ao Sankhya ainda não está habilitado/)).toBeInTheDocument();
+    off.unmount();
+    const on = renderApp("/pedidos", { handlers: withFlag(true) });
+    expect(await screen.findByText("Pedido nº 12")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText(/ainda não está habilitado/)).not.toBeInTheDocument());
+    on.unmount();
+    renderApp("/pedidos", { handlers: withFlag(undefined) });
+    expect(await screen.findByText("Pedido nº 12")).toBeInTheDocument();
+    expect(screen.queryByText(/ainda não está habilitado/)).not.toBeInTheDocument();
+  });
+
   it("lists drafts with total and status and opens one", async () => {
     const { user, router } = renderApp("/pedidos", {
       handlers: { "GET /orders": { body: ordersPage([orderListItem(), orderListItem({ id: "0190a000-0000-7000-8000-0000000000bb", draftNumber: 13, isPartial: true, status: "draft" })]) } },

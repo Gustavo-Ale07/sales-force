@@ -393,7 +393,11 @@ export const OrderEntryConfigurationSchema = named(
   z.object({
     /** Explicit installation dataset identity (`null` while the installation does not declare one). */
     dataset: DatasetIdentitySchema.nullable(),
-    general: z.strictObject({ enabled: z.boolean() }),
+    general: z.strictObject({
+      enabled: z.boolean(),
+      /** K8: what the API applies right now (`ERP_ORDER_ENQUEUE_ENABLED`): whether submitting a document queues it for Sankhya. Absent = unknown. */
+      erpSubmissionEnabled: z.boolean().optional(),
+    }),
     sales: z.strictObject({
       defaultNegotiationTypeCode: codeInt().nullable(),
       negotiationTypes: z.array(NegotiationTypeSchema),
