@@ -24,6 +24,8 @@ export interface DeliveryOrder {
   /** The order's own header TOP when it carries one; the configured default otherwise. */
   readonly topCode: number | null;
   readonly carrierCode: number | null;
+  /** D-O: the order's own expedição flag (born from configuration, sent as AD_EXPEDICAO). */
+  readonly expedicao: boolean;
   readonly notes: string | null;
   readonly createdAt: Date;
 }
@@ -116,6 +118,7 @@ export function buildOrderRequest(
       topCode: header.topCode,
       negotiationTypeCode: order.negotiationTypeCode,
       carrierCode: header.carrierCode,
+      expedicao: order.expedicao,
       stockLocationCode: header.stockLocationCode,
       orderDate: header.orderDate,
       notes: order.notes,

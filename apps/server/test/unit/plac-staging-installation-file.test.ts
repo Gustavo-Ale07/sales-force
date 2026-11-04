@@ -28,6 +28,7 @@ describe('PLAC staging base file (.claude/work/PLAC_STAGING_INSTALLATION.json)',
     // D-I: read-only financial area on; credit checks stay off (nothing blocks a sale).
     expect(file.financial).toEqual({ showFinancialArea: true, overdueTitles: true, creditChecks: false });
     expect(file.sales['eligibleOrderTopCodes']).toEqual([1001, 1000]);
+    expect(file.sales['expedicaoDefault']).toBe('N'); // D-O
     expect(file.sales['quotationTopCode']).toBe(1000);
     expect(file.sales['topAllowlist']).toEqual([1000, 1001]);
     expect(file.sales['negotiationTypeExclusions']).toEqual([23, 24]);

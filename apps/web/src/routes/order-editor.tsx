@@ -547,6 +547,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
             <>
               <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
               {order?.erpStatus ? <ErpStatusBadges status={order.erpStatus} /> : null}
+              {order?.expedicao === undefined ? null : <StatusBadge tone="neutral">{order.expedicao ? "Expedição: marcada" : "Expedição: não marcada"}</StatusBadge>}
             </>
           ) : undefined
         }

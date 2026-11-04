@@ -548,6 +548,7 @@ function toDelivery(order: OrderRow): DeliveryOrder {
     // The order's own TOP (D-A); null falls back to the configured default. The carrier (D-C/D-8) travels as CODPARCTRANSP when set.
     topCode: order.topCode,
     carrierCode: order.carrierCode,
+    expedicao: order.expedicao,
     notes: order.notes,
     createdAt: order.createdAt,
   };

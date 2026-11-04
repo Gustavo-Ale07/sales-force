@@ -18,6 +18,7 @@ const ORDER: DeliveryOrder = {
   negotiationTypeCode: 11,
   topCode: null,
   carrierCode: null,
+  expedicao: false,
   notes: 'Entregar pela manhã, falar com Maria 11 99999-0000',
   createdAt: new Date('2026-10-30T02:30:00Z'),
 };
@@ -107,6 +108,14 @@ describe('dryRunRecord (D-6)', () => {
 
   it('is deterministic', () => {
     expect(dryRunRecord(built.value)).toEqual(dryRunRecord(built.value));
+  });
+
+  it('shows AD_EXPEDICAO as N for an unmarked order and as S for a marked one (D-O)', () => {
+    const text = JSON.stringify(dryRunRecord(built.value).payload);
+    expect(text).toContain('"AD_EXPEDICAO":{"$":"N"}');
+    const marked = buildOrderRequest({ ...ORDER, expedicao: true }, [ITEM], header, 'AD_TESTE');
+    if (!marked.ok) throw new Error('fixture');
+    expect(JSON.stringify(dryRunRecord(marked.value).payload)).toContain('"AD_EXPEDICAO":{"$":"S"}');
   });
 });
 

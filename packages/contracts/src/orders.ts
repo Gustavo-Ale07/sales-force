@@ -283,6 +283,8 @@ export const OrderDetailSchema = named(
     /** Quotation this order was duplicated from ("Duplicar como pedido"), or `null`. */
     sourceOrderId: UuidSchema.nullable(),
     discountAuthority: DiscountAuthorityStatusSchema,
+    /** D-O: ERP "expedição" flag the order was born with. Present only for admin/technical, read-only; never on seller screens. */
+    expedicao: z.boolean().optional(),
     /** Latest approval request (any decision), or `null` when the order never needed one. */
     approval: OrderApprovalSchema.nullable(),
     items: z.array(OrderItemDetailSchema),

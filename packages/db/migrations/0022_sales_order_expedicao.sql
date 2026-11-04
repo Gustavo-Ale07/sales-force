@@ -1,0 +1,1 @@
+ALTER TABLE "sales_order" ADD COLUMN "expedicao" boolean DEFAULT false NOT NULL;

@@ -719,6 +719,8 @@ export interface components {
                 orderTopCode: number | null;
                 eligibleOrderTopCodes?: number[];
                 orderStockLocationCode?: number | null;
+                /** @enum {string} */
+                expedicaoDefault?: "S" | "N";
                 orderLayout?: components["schemas"]["OrderLayoutConfiguration"];
                 quotationTopCode: number | null;
                 defaultNegotiationTypeCode: number | null;
@@ -1086,6 +1088,7 @@ export interface components {
             notes: string | null;
             sourceOrderId: string | null;
             discountAuthority: components["schemas"]["DiscountAuthorityStatus"];
+            expedicao?: boolean;
             approval: components["schemas"]["OrderApproval"] | null;
             items: components["schemas"]["OrderItemDetail"][];
             totals: components["schemas"]["OrderTotals"];

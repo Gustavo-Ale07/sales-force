@@ -161,6 +161,8 @@ export interface InstallationConfiguration {
     readonly orderTopCode: number | null;
     readonly eligibleOrderTopCodes?: readonly number[];
     readonly orderStockLocationCode?: number | null;
+    /** D-O: value of the ERP "expedição" flag new orders are born with ('N' = not marked). Absent = 'N'. */
+    readonly expedicaoDefault?: 'S' | 'N';
     readonly orderLayout?: OrderLayoutConfiguration;
     readonly quotationTopCode: number | null;
     readonly defaultNegotiationTypeCode: number | null;

@@ -4,6 +4,7 @@ import { sql } from 'drizzle-orm';
 import {
   check,
   index,
+  boolean,
   integer,
   bigint,
   numeric,
@@ -73,6 +74,8 @@ export const salesOrder = pgTable(
     sourceOrderId: uuid('source_order_id'),
     /** Optional carrier chosen on the order (D-C); validated against the carrier mirror, no FK (mirror rows are soft-deleted). */
     carrierCode: integer('carrier_code'),
+    /** D-O: ERP "expedição" flag, stamped at creation from sales.expedicaoDefault; never a seller input. Born false. */
+    expedicao: boolean('expedicao').notNull().default(false),
     notes: text('notes'),
     /** Estimate from list prices only (sum of priced lines); the ERP computes the final value. */
     estimatedTotal: numeric('estimated_total', { precision: 14, scale: 2 }).notNull().default('0'),

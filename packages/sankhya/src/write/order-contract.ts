@@ -33,6 +33,8 @@ export interface OrderWriteRequest {
   readonly negotiationTypeCode: number;
   /** CODPARCTRANSP, only when the header carries one. */
   readonly carrierCode: number | null;
+  /** AD_EXPEDICAO: 'S' when true, 'N' when false (D-O). */
+  readonly expedicao: boolean;
   /** CODLOCALORIG, from `sales.orderStockLocationCode`. */
   readonly stockLocationCode: number;
   /** Order date, `yyyy-MM-dd` (DTNEG is sent as dd/MM/yyyy). */

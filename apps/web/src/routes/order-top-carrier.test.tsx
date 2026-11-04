@@ -89,6 +89,16 @@ describe("Duplicar como pedido (D-B)", () => {
     expect(screen.queryByRole("button", { name: "Duplicar como pedido" })).not.toBeInTheDocument();
   });
 
+  it("shows the expedição flag read-only only when the server sends it (admin/technical, D-O)", async () => {
+    const { unmount } = renderApp(`/pedidos/${ORDER_ID}`, { handlers: base({ "GET /orders/:id": { body: orderDetail({ topCode: 1001, expedicao: false }) } }) });
+    expect(await screen.findByText("Expedição: não marcada")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/expedição/i)).not.toBeInTheDocument();
+    unmount();
+    renderApp(`/pedidos/${ORDER_ID}`, { handlers: base({ "GET /orders/:id": { body: orderDetail({ topCode: 1001 }) } }) });
+    expect(await screen.findByRole("button", { name: "Duplicar pedido" })).toBeInTheDocument();
+    expect(screen.queryByText(/Expedição/)).not.toBeInTheDocument();
+  });
+
   it("posts clientRequestId and expectedDataset, opens the new draft and lists the skipped lines", async () => {
     const { user, calls, router } = open({
       "POST /orders/:id/duplicate-as-order": {

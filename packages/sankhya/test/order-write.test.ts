@@ -35,6 +35,7 @@ function request(overrides: Partial<OrderWriteRequest> = {}): OrderWriteRequest 
     topCode: 1001,
     negotiationTypeCode: 11,
     carrierCode: null,
+    expedicao: false,
     stockLocationCode: 209,
     orderDate: '2026-10-30',
     notes: null,
@@ -58,6 +59,7 @@ describe('CACSP.incluirNota payload (SNK-7 D-8, F-44)', () => {
           CODEMP: wrap('1'),
           TIPMOV: wrap('P'),
           [FIELD]: wrap(ORIGIN),
+          AD_EXPEDICAO: wrap('N'),
           CODVEND: wrap('7'),
         },
         itens: {
@@ -75,6 +77,13 @@ describe('CACSP.incluirNota payload (SNK-7 D-8, F-44)', () => {
         },
       },
     });
+  });
+
+  it('sends AD_EXPEDICAO as N for an order born unmarked and S only when the order carries the flag (D-O)', () => {
+    const header = (expedicao: boolean) =>
+      (buildIncluirNotaBody(request({ expedicao })) as { nota: { cabecalho: Record<string, unknown> } }).nota.cabecalho['AD_EXPEDICAO'];
+    expect(header(false)).toEqual(wrap('N'));
+    expect(header(true)).toEqual(wrap('S'));
   });
 
   it('takes company, TOP, payment, location, unit and origin field from the request', () => {

@@ -3408,6 +3408,13 @@
                   }
                 ]
               },
+              "expedicaoDefault": {
+                "type": "string",
+                "enum": [
+                  "S",
+                  "N"
+                ]
+              },
               "orderLayout": {
                 "$ref": "#/components/schemas/OrderLayoutConfiguration"
               },
@@ -5273,6 +5280,9 @@
           },
           "discountAuthority": {
             "$ref": "#/components/schemas/DiscountAuthorityStatus"
+          },
+          "expedicao": {
+            "type": "boolean"
           },
           "approval": {
             "anyOf": [

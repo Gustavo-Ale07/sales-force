@@ -155,6 +155,13 @@
       "when": 1793790848303,
       "tag": "0021_erp_open_title_and_customer_financial_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793792896918,
+      "tag": "0022_sales_order_expedicao",
+      "breakpoints": true
     }
   ]
 }

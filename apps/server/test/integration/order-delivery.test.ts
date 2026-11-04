@@ -404,6 +404,7 @@ describe('live delivery', () => {
       topCode: 1001,
       negotiationTypeCode: 11,
       carrierCode: null,
+      expedicao: false,
       stockLocationCode: 209,
       orderDate: '2026-10-30',
       notes: null,

@@ -161,7 +161,7 @@ export class OrdersService {
 
   async get(user: CurrentUser, id: string): Promise<OrderDetail> {
     const { scope } = await this.policy.accessContext(user);
-    return this.detailOf(await this.loadVisible(scope, id));
+    return this.detailOf(await this.loadVisible(scope, id), user.role === 'admin' || user.role === 'technical');
   }
 
   /** Figures and latest orders for the dashboard, within the caller's scope. */
@@ -204,6 +204,8 @@ export class OrdersService {
           negotiationTypeCode: body.negotiationTypeCode,
           topCode,
           carrierCode,
+          // D-O: born from the installation default (pilot 'N' = not marked), never from the request.
+          expedicao: context.configuration.sales.expedicaoDefault === 'S',
           sourceOrderId: hooks.sourceOrderId ?? null,
           notes: body.notes,
           estimatedTotal: draft.totals.estimatedTotal,
@@ -795,7 +797,7 @@ export class OrdersService {
     return { active: state.active, blocked: isBlockedRaw(state.blockedRaw), sellerCode: state.sellerCode };
   }
 
-  private async detailOf(order: OrderRow): Promise<OrderDetail> {
+  private async detailOf(order: OrderRow, showExpedicao = false): Promise<OrderDetail> {
     const [items, states, approval] = await Promise.all([
       this.orders.itemsOf(order.id),
       this.mirror.customerStates([order.customerCode]),
@@ -814,7 +816,7 @@ export class OrdersService {
       customerBlockedRaw: state?.blockedRaw ?? null,
       customerSellerCode: state?.sellerCode ?? null,
       customerLive: state?.live ?? null,
-    }, images, toOrderApproval(approval), liberationEventLabels, ipiLookup);
+    }, images, toOrderApproval(approval), liberationEventLabels, ipiLookup, showExpedicao);
   }
 
   /** Identifiers and counts only: no notes, no free text. */

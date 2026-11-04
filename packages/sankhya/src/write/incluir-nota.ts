@@ -37,6 +37,7 @@ export function buildIncluirNotaBody(request: OrderWriteRequest): Wire {
     CODEMP: value(request.companyCode),
     TIPMOV: value(MOVEMENT_TYPE_ORDER),
     [request.originField]: value(request.originId),
+    AD_EXPEDICAO: value(request.expedicao ? 'S' : 'N'),
   };
   if (request.sellerCode !== null) header['CODVEND'] = value(request.sellerCode);
   if (request.carrierCode !== null) header['CODPARCTRANSP'] = value(request.carrierCode);

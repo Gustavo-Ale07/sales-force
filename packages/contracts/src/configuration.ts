@@ -183,6 +183,8 @@ const SalesSchema = z.strictObject({
   orderTopCode: codeInt().nullable(),
   eligibleOrderTopCodes: z.array(codeInt()).optional(),
   orderStockLocationCode: codeInt().nullable().optional(),
+  /** D-O: value of the ERP "expedição" flag new orders are born with ('N' = not marked). Absent = 'N'. Never a seller input. */
+  expedicaoDefault: z.enum(['S', 'N']).optional(),
   orderLayout: OrderLayoutConfigurationSchema.optional(),
   quotationTopCode: codeInt().nullable(),
   defaultNegotiationTypeCode: codeInt().nullable(),

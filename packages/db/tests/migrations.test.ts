@@ -39,6 +39,7 @@ const ALL_MIGRATIONS = [
   '0019_configuration_version_current_guard',
   '0020_erp_ipi_rate_and_product_ipi_code',
   '0021_erp_open_title_and_customer_financial_fields',
+  '0022_sales_order_expedicao',
 ];
 const N = ALL_MIGRATIONS.length;
 
@@ -126,10 +127,10 @@ describe('migrations', () => {
     // Previous release: journal without 0004.
     const journalPath = path.join(dir, 'meta', '_journal.json');
     const journal = JSON.parse(await readFile(journalPath, 'utf8')) as { entries: { tag: string }[] };
-    journal.entries = journal.entries.filter((e) => e.tag !== '0004_sales_order_item_discount_percent' && e.tag !== '0005_sales_order_erp_binding' && e.tag !== '0006_account_seller_link_seller_code_check' && e.tag !== '0007_account_role_technical' && e.tag !== '0008_account_external_user_id' && e.tag !== '0009_product_media' && e.tag !== '0010_product_media_thumbnail' && e.tag !== '0011_directory_user_mirror' && e.tag !== '0012_sales_order_discount_authority' && e.tag !== '0013_sales_order_approval' && e.tag !== '0014_sales_order_top' && e.tag !== '0015_erp_carrier_and_order_carrier' && e.tag !== '0016_order_delivery' && e.tag !== '0017_order_erp_status' && e.tag !== '0018_order_erp_status_detail' && e.tag !== '0019_configuration_version_current_guard' && e.tag !== '0020_erp_ipi_rate_and_product_ipi_code' && e.tag !== '0021_erp_open_title_and_customer_financial_fields');
+    journal.entries = journal.entries.filter((e) => e.tag !== '0004_sales_order_item_discount_percent' && e.tag !== '0005_sales_order_erp_binding' && e.tag !== '0006_account_seller_link_seller_code_check' && e.tag !== '0007_account_role_technical' && e.tag !== '0008_account_external_user_id' && e.tag !== '0009_product_media' && e.tag !== '0010_product_media_thumbnail' && e.tag !== '0011_directory_user_mirror' && e.tag !== '0012_sales_order_discount_authority' && e.tag !== '0013_sales_order_approval' && e.tag !== '0014_sales_order_top' && e.tag !== '0015_erp_carrier_and_order_carrier' && e.tag !== '0016_order_delivery' && e.tag !== '0017_order_erp_status' && e.tag !== '0018_order_erp_status_detail' && e.tag !== '0019_configuration_version_current_guard' && e.tag !== '0020_erp_ipi_rate_and_product_ipi_code' && e.tag !== '0021_erp_open_title_and_customer_financial_fields' && e.tag !== '0022_sales_order_expedicao');
     await writeFile(journalPath, JSON.stringify(journal));
     const prev = await runMigrations(url, { ...quiet, migrationsDir: dir });
-    expect(prev.applied).toEqual(ALL_MIGRATIONS.slice(0, -18));
+    expect(prev.applied).toEqual(ALL_MIGRATIONS.slice(0, -19));
     expect(await query(url, `SELECT to_regclass('public.customer_order_template') AS t`)).toEqual([{ t: 'customer_order_template' }]);
 
     // Existing rows must survive untouched.
@@ -143,8 +144,8 @@ describe('migrations', () => {
 
     // Deploy the new release: only the new migration runs.
     const next = await runMigrations(url, quiet);
-    expect(next.applied).toEqual(ALL_MIGRATIONS.slice(-18));
-    expect(next.alreadyApplied).toBe(N - 18);
+    expect(next.applied).toEqual(ALL_MIGRATIONS.slice(-19));
+    expect(next.alreadyApplied).toBe(N - 19);
     expect(await query(url, `SELECT id FROM sales_order`)).toEqual([{ id: ord }]);
     // The existing line is kept as it was, with no discount.
     expect(await query(url, `SELECT quantity::text AS q, estimated_line_total::text AS t, discount_percent::text AS d FROM sales_order_item`)).toEqual([{ q: '2.0000', t: '10.00', d: '0.00' }]);
@@ -167,7 +168,7 @@ describe('migrations', () => {
     await cp(defaultMigrationsDir, dir, { recursive: true });
     const journalPath = path.join(dir, 'meta', '_journal.json');
     const journal = JSON.parse(await readFile(journalPath, 'utf8')) as { entries: { tag: string }[] };
-    journal.entries = journal.entries.filter((e) => e.tag !== '0005_sales_order_erp_binding' && e.tag !== '0006_account_seller_link_seller_code_check' && e.tag !== '0007_account_role_technical' && e.tag !== '0008_account_external_user_id' && e.tag !== '0009_product_media' && e.tag !== '0010_product_media_thumbnail' && e.tag !== '0011_directory_user_mirror' && e.tag !== '0012_sales_order_discount_authority' && e.tag !== '0013_sales_order_approval' && e.tag !== '0014_sales_order_top' && e.tag !== '0015_erp_carrier_and_order_carrier' && e.tag !== '0016_order_delivery' && e.tag !== '0017_order_erp_status' && e.tag !== '0018_order_erp_status_detail' && e.tag !== '0019_configuration_version_current_guard' && e.tag !== '0020_erp_ipi_rate_and_product_ipi_code' && e.tag !== '0021_erp_open_title_and_customer_financial_fields');
+    journal.entries = journal.entries.filter((e) => e.tag !== '0005_sales_order_erp_binding' && e.tag !== '0006_account_seller_link_seller_code_check' && e.tag !== '0007_account_role_technical' && e.tag !== '0008_account_external_user_id' && e.tag !== '0009_product_media' && e.tag !== '0010_product_media_thumbnail' && e.tag !== '0011_directory_user_mirror' && e.tag !== '0012_sales_order_discount_authority' && e.tag !== '0013_sales_order_approval' && e.tag !== '0014_sales_order_top' && e.tag !== '0015_erp_carrier_and_order_carrier' && e.tag !== '0016_order_delivery' && e.tag !== '0017_order_erp_status' && e.tag !== '0018_order_erp_status_detail' && e.tag !== '0019_configuration_version_current_guard' && e.tag !== '0020_erp_ipi_rate_and_product_ipi_code' && e.tag !== '0021_erp_open_title_and_customer_financial_fields' && e.tag !== '0022_sales_order_expedicao');
     await writeFile(journalPath, JSON.stringify(journal));
     await runMigrations(url, { ...quiet, migrationsDir: dir });
 
@@ -185,7 +186,7 @@ describe('migrations', () => {
     await query(url, `INSERT INTO sales_order (id, customer_code, created_by_account_id, client_request_id, config_version_id, status) VALUES ($1, 2, $2, $3, $4, 'cancelled')`, ['018f0000-0000-7000-8000-000000000006', acc, '018f0000-0000-7000-8000-000000000007', cfg]);
 
     const next = await runMigrations(url, quiet);
-    expect(next.applied).toEqual(['0005_sales_order_erp_binding', '0006_account_seller_link_seller_code_check', '0007_account_role_technical', '0008_account_external_user_id', '0009_product_media', '0010_product_media_thumbnail', '0011_directory_user_mirror', '0012_sales_order_discount_authority', '0013_sales_order_approval', '0014_sales_order_top', '0015_erp_carrier_and_order_carrier', '0016_order_delivery', '0017_order_erp_status', '0018_order_erp_status_detail', '0019_configuration_version_current_guard', '0020_erp_ipi_rate_and_product_ipi_code', '0021_erp_open_title_and_customer_financial_fields']);
+    expect(next.applied).toEqual(['0005_sales_order_erp_binding', '0006_account_seller_link_seller_code_check', '0007_account_role_technical', '0008_account_external_user_id', '0009_product_media', '0010_product_media_thumbnail', '0011_directory_user_mirror', '0012_sales_order_discount_authority', '0013_sales_order_approval', '0014_sales_order_top', '0015_erp_carrier_and_order_carrier', '0016_order_delivery', '0017_order_erp_status', '0018_order_erp_status_detail', '0019_configuration_version_current_guard', '0020_erp_ipi_rate_and_product_ipi_code', '0021_erp_open_title_and_customer_financial_fields', '0022_sales_order_expedicao']);
     // Backfill: every pre-existing order is legacy and unbound; nothing else changed.
     expect(await query(url, `SELECT dataset_origin, erp_environment, status FROM sales_order ORDER BY customer_code`)).toEqual([
       { dataset_origin: 'legacy_dev', erp_environment: null, status: 'draft' },
@@ -223,7 +224,7 @@ describe('migrations', () => {
     await cp(defaultMigrationsDir, dir, { recursive: true });
     const journalPath = path.join(dir, 'meta', '_journal.json');
     const journal = JSON.parse(await readFile(journalPath, 'utf8')) as { entries: { tag: string }[] };
-    journal.entries = journal.entries.filter((e) => e.tag !== '0006_account_seller_link_seller_code_check' && e.tag !== '0007_account_role_technical' && e.tag !== '0008_account_external_user_id' && e.tag !== '0009_product_media' && e.tag !== '0010_product_media_thumbnail' && e.tag !== '0011_directory_user_mirror' && e.tag !== '0012_sales_order_discount_authority' && e.tag !== '0013_sales_order_approval' && e.tag !== '0014_sales_order_top' && e.tag !== '0015_erp_carrier_and_order_carrier' && e.tag !== '0016_order_delivery' && e.tag !== '0017_order_erp_status' && e.tag !== '0018_order_erp_status_detail' && e.tag !== '0019_configuration_version_current_guard' && e.tag !== '0020_erp_ipi_rate_and_product_ipi_code' && e.tag !== '0021_erp_open_title_and_customer_financial_fields');
+    journal.entries = journal.entries.filter((e) => e.tag !== '0006_account_seller_link_seller_code_check' && e.tag !== '0007_account_role_technical' && e.tag !== '0008_account_external_user_id' && e.tag !== '0009_product_media' && e.tag !== '0010_product_media_thumbnail' && e.tag !== '0011_directory_user_mirror' && e.tag !== '0012_sales_order_discount_authority' && e.tag !== '0013_sales_order_approval' && e.tag !== '0014_sales_order_top' && e.tag !== '0015_erp_carrier_and_order_carrier' && e.tag !== '0016_order_delivery' && e.tag !== '0017_order_erp_status' && e.tag !== '0018_order_erp_status_detail' && e.tag !== '0019_configuration_version_current_guard' && e.tag !== '0020_erp_ipi_rate_and_product_ipi_code' && e.tag !== '0021_erp_open_title_and_customer_financial_fields' && e.tag !== '0022_sales_order_expedicao');
     await writeFile(journalPath, JSON.stringify(journal));
     await runMigrations(url, { ...quiet, migrationsDir: dir });
 
@@ -236,7 +237,7 @@ describe('migrations', () => {
     await query(url, `INSERT INTO account_seller_link (account_id, seller_code, config_version_id) VALUES ($1, 0, $2)`, [acc, cfg]);
 
     const next = await runMigrations(url, quiet);
-    expect(next.applied).toEqual(['0006_account_seller_link_seller_code_check', '0007_account_role_technical', '0008_account_external_user_id', '0009_product_media', '0010_product_media_thumbnail', '0011_directory_user_mirror', '0012_sales_order_discount_authority', '0013_sales_order_approval', '0014_sales_order_top', '0015_erp_carrier_and_order_carrier', '0016_order_delivery', '0017_order_erp_status', '0018_order_erp_status_detail', '0019_configuration_version_current_guard', '0020_erp_ipi_rate_and_product_ipi_code', '0021_erp_open_title_and_customer_financial_fields']);
+    expect(next.applied).toEqual(['0006_account_seller_link_seller_code_check', '0007_account_role_technical', '0008_account_external_user_id', '0009_product_media', '0010_product_media_thumbnail', '0011_directory_user_mirror', '0012_sales_order_discount_authority', '0013_sales_order_approval', '0014_sales_order_top', '0015_erp_carrier_and_order_carrier', '0016_order_delivery', '0017_order_erp_status', '0018_order_erp_status_detail', '0019_configuration_version_current_guard', '0020_erp_ipi_rate_and_product_ipi_code', '0021_erp_open_title_and_customer_financial_fields', '0022_sales_order_expedicao']);
     expect(await query(url, `SELECT seller_code FROM account_seller_link`)).toEqual([{ seller_code: 0 }]);
     await expect(query(url, `INSERT INTO account_seller_link (account_id, seller_code, config_version_id) VALUES ($1, 0, $2)`, [acc2, cfg])).rejects.toThrow(/account_seller_link_seller_code_chk/);
     await expect(query(url, `INSERT INTO account_seller_link (account_id, seller_code, config_version_id) VALUES ($1, -2, $2)`, [acc2, cfg])).rejects.toThrow(/account_seller_link_seller_code_chk/);
@@ -262,7 +263,7 @@ describe('migrations', () => {
     await cp(defaultMigrationsDir, dir, { recursive: true });
     const journalPath = path.join(dir, 'meta', '_journal.json');
     const journal = JSON.parse(await readFile(journalPath, 'utf8')) as { entries: { tag: string }[] };
-    journal.entries = journal.entries.filter((e) => e.tag !== '0007_account_role_technical' && e.tag !== '0008_account_external_user_id' && e.tag !== '0009_product_media' && e.tag !== '0010_product_media_thumbnail' && e.tag !== '0011_directory_user_mirror' && e.tag !== '0012_sales_order_discount_authority' && e.tag !== '0013_sales_order_approval' && e.tag !== '0014_sales_order_top' && e.tag !== '0015_erp_carrier_and_order_carrier' && e.tag !== '0016_order_delivery' && e.tag !== '0017_order_erp_status' && e.tag !== '0018_order_erp_status_detail' && e.tag !== '0019_configuration_version_current_guard' && e.tag !== '0020_erp_ipi_rate_and_product_ipi_code' && e.tag !== '0021_erp_open_title_and_customer_financial_fields');
+    journal.entries = journal.entries.filter((e) => e.tag !== '0007_account_role_technical' && e.tag !== '0008_account_external_user_id' && e.tag !== '0009_product_media' && e.tag !== '0010_product_media_thumbnail' && e.tag !== '0011_directory_user_mirror' && e.tag !== '0012_sales_order_discount_authority' && e.tag !== '0013_sales_order_approval' && e.tag !== '0014_sales_order_top' && e.tag !== '0015_erp_carrier_and_order_carrier' && e.tag !== '0016_order_delivery' && e.tag !== '0017_order_erp_status' && e.tag !== '0018_order_erp_status_detail' && e.tag !== '0019_configuration_version_current_guard' && e.tag !== '0020_erp_ipi_rate_and_product_ipi_code' && e.tag !== '0021_erp_open_title_and_customer_financial_fields' && e.tag !== '0022_sales_order_expedicao');
     await writeFile(journalPath, JSON.stringify(journal));
     await runMigrations(url, { ...quiet, migrationsDir: dir });
 
@@ -278,7 +279,7 @@ describe('migrations', () => {
     await expect(query(url, `INSERT INTO account (id, email, display_name, password_hash, role) VALUES ($1, 't@example.test', 'T', 'x', 'technical')`, [id(9)])).rejects.toThrow(/account_role_chk/);
 
     const next = await runMigrations(url, quiet);
-    expect(next.applied).toEqual(['0007_account_role_technical', '0008_account_external_user_id', '0009_product_media', '0010_product_media_thumbnail', '0011_directory_user_mirror', '0012_sales_order_discount_authority', '0013_sales_order_approval', '0014_sales_order_top', '0015_erp_carrier_and_order_carrier', '0016_order_delivery', '0017_order_erp_status', '0018_order_erp_status_detail', '0019_configuration_version_current_guard', '0020_erp_ipi_rate_and_product_ipi_code', '0021_erp_open_title_and_customer_financial_fields']);
+    expect(next.applied).toEqual(['0007_account_role_technical', '0008_account_external_user_id', '0009_product_media', '0010_product_media_thumbnail', '0011_directory_user_mirror', '0012_sales_order_discount_authority', '0013_sales_order_approval', '0014_sales_order_top', '0015_erp_carrier_and_order_carrier', '0016_order_delivery', '0017_order_erp_status', '0018_order_erp_status_detail', '0019_configuration_version_current_guard', '0020_erp_ipi_rate_and_product_ipi_code', '0021_erp_open_title_and_customer_financial_fields', '0022_sales_order_expedicao']);
     expect(await query(url, `SELECT role FROM account ORDER BY role`)).toEqual([{ role: 'admin' }, { role: 'manager' }, { role: 'seller' }]);
     // The swapped constraint is validated and still rejects unknown roles.
     expect(await query(url, `SELECT convalidated FROM pg_constraint WHERE conname = 'account_role_chk'`)).toEqual([{ convalidated: true }]);
@@ -304,7 +305,7 @@ describe('migrations', () => {
     await cp(defaultMigrationsDir, dir, { recursive: true });
     const journalPath = path.join(dir, 'meta', '_journal.json');
     const journal = JSON.parse(await readFile(journalPath, 'utf8')) as { entries: { tag: string }[] };
-    journal.entries = journal.entries.filter((e) => e.tag !== '0012_sales_order_discount_authority' && e.tag !== '0013_sales_order_approval' && e.tag !== '0014_sales_order_top' && e.tag !== '0015_erp_carrier_and_order_carrier' && e.tag !== '0016_order_delivery' && e.tag !== '0017_order_erp_status' && e.tag !== '0018_order_erp_status_detail' && e.tag !== '0019_configuration_version_current_guard' && e.tag !== '0020_erp_ipi_rate_and_product_ipi_code' && e.tag !== '0021_erp_open_title_and_customer_financial_fields');
+    journal.entries = journal.entries.filter((e) => e.tag !== '0012_sales_order_discount_authority' && e.tag !== '0013_sales_order_approval' && e.tag !== '0014_sales_order_top' && e.tag !== '0015_erp_carrier_and_order_carrier' && e.tag !== '0016_order_delivery' && e.tag !== '0017_order_erp_status' && e.tag !== '0018_order_erp_status_detail' && e.tag !== '0019_configuration_version_current_guard' && e.tag !== '0020_erp_ipi_rate_and_product_ipi_code' && e.tag !== '0021_erp_open_title_and_customer_financial_fields' && e.tag !== '0022_sales_order_expedicao');
     await writeFile(journalPath, JSON.stringify(journal));
     await runMigrations(url, { ...quiet, migrationsDir: dir });
 
@@ -316,7 +317,7 @@ describe('migrations', () => {
     await query(url, `INSERT INTO sales_order (id, customer_code, created_by_account_id, client_request_id, config_version_id) VALUES ($1, 1, $2, $3, $4)`, [ord, acc, '018f0000-0000-7000-8000-000000000304', cfg]);
 
     const next = await runMigrations(url, quiet);
-    expect(next.applied).toEqual(['0012_sales_order_discount_authority', '0013_sales_order_approval', '0014_sales_order_top', '0015_erp_carrier_and_order_carrier', '0016_order_delivery', '0017_order_erp_status', '0018_order_erp_status_detail', '0019_configuration_version_current_guard', '0020_erp_ipi_rate_and_product_ipi_code', '0021_erp_open_title_and_customer_financial_fields']);
+    expect(next.applied).toEqual(['0012_sales_order_discount_authority', '0013_sales_order_approval', '0014_sales_order_top', '0015_erp_carrier_and_order_carrier', '0016_order_delivery', '0017_order_erp_status', '0018_order_erp_status_detail', '0019_configuration_version_current_guard', '0020_erp_ipi_rate_and_product_ipi_code', '0021_erp_open_title_and_customer_financial_fields', '0022_sales_order_expedicao']);
     expect(await query(url, `SELECT discount_authority FROM sales_order`)).toEqual([{ discount_authority: 'not_evaluated' }]);
     await expect(query(url, `UPDATE sales_order SET discount_authority = 'approved'`)).rejects.toThrow(/sales_order_discount_authority_chk/);
     await query(url, `UPDATE sales_order SET discount_authority = 'needs_director'`);
@@ -331,7 +332,7 @@ describe('migrations', () => {
     await cp(defaultMigrationsDir, dir, { recursive: true });
     const journalPath = path.join(dir, 'meta', '_journal.json');
     const journal = JSON.parse(await readFile(journalPath, 'utf8')) as { entries: { tag: string }[] };
-    journal.entries = journal.entries.filter((e) => e.tag !== '0013_sales_order_approval' && e.tag !== '0014_sales_order_top' && e.tag !== '0015_erp_carrier_and_order_carrier' && e.tag !== '0016_order_delivery' && e.tag !== '0017_order_erp_status' && e.tag !== '0018_order_erp_status_detail' && e.tag !== '0019_configuration_version_current_guard' && e.tag !== '0020_erp_ipi_rate_and_product_ipi_code' && e.tag !== '0021_erp_open_title_and_customer_financial_fields');
+    journal.entries = journal.entries.filter((e) => e.tag !== '0013_sales_order_approval' && e.tag !== '0014_sales_order_top' && e.tag !== '0015_erp_carrier_and_order_carrier' && e.tag !== '0016_order_delivery' && e.tag !== '0017_order_erp_status' && e.tag !== '0018_order_erp_status_detail' && e.tag !== '0019_configuration_version_current_guard' && e.tag !== '0020_erp_ipi_rate_and_product_ipi_code' && e.tag !== '0021_erp_open_title_and_customer_financial_fields' && e.tag !== '0022_sales_order_expedicao');
     await writeFile(journalPath, JSON.stringify(journal));
     await runMigrations(url, { ...quiet, migrationsDir: dir });
 
@@ -343,7 +344,7 @@ describe('migrations', () => {
     await query(url, `INSERT INTO sales_order (id, customer_code, created_by_account_id, client_request_id, config_version_id) VALUES ($1, 1, $2, $3, $4)`, [ord, acc, '018f0000-0000-7000-8000-000000000404', cfg]);
 
     const next = await runMigrations(url, quiet);
-    expect(next.applied).toEqual(['0013_sales_order_approval', '0014_sales_order_top', '0015_erp_carrier_and_order_carrier', '0016_order_delivery', '0017_order_erp_status', '0018_order_erp_status_detail', '0019_configuration_version_current_guard', '0020_erp_ipi_rate_and_product_ipi_code', '0021_erp_open_title_and_customer_financial_fields']);
+    expect(next.applied).toEqual(['0013_sales_order_approval', '0014_sales_order_top', '0015_erp_carrier_and_order_carrier', '0016_order_delivery', '0017_order_erp_status', '0018_order_erp_status_detail', '0019_configuration_version_current_guard', '0020_erp_ipi_rate_and_product_ipi_code', '0021_erp_open_title_and_customer_financial_fields', '0022_sales_order_expedicao']);
     expect(await query(url, `SELECT status FROM sales_order`)).toEqual([{ status: 'draft' }]);
     for (const status of ['awaiting_approval', 'approved', 'approval_rejected', 'draft']) {
       await query(url, `UPDATE sales_order SET status = $1`, [status]);
@@ -457,7 +458,7 @@ describe('migrations', () => {
       await runMigrations(url, quiet);
       expect(await readiness(handle.pool)).toEqual({
         appliedCount: N,
-        lastId: '0021_erp_open_title_and_customer_financial_fields',
+        lastId: '0022_sales_order_expedicao',
         expectedCount: N,
         upToDate: true,
       });
