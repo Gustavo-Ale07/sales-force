@@ -37,6 +37,14 @@ Sequência:
 1. `incluirNota` do pedido A, depois `confirmarNota` (dois passos idempotentes, D-4). Reler a nota (D-7) e comparar: `VLRUNIT`, `PERCDESC` e `VLRIPI` (o IPI estimado pelo Force é só informativo: divergência de IPI é registrada, não reprova); ler também `AD_FORCEORIGEM` (= UUID do pedido), `AD_EXPEDICAO` (= `N`) e `CODPARCTRANSP` (= transportadora escolhida), além de itens e quantidades.
 2. `incluirNota` e `confirmarNota` do pedido B. Reler e conferir os mesmos campos, com `PERCDESC` = 8.
 3. Reenvio do pedido A (mesma chave de idempotência e mesma origem): o worker consulta primeiro a origem (`findOrderByOrigin`), encontra a nota e apenas a vincula. Critério de aprovação: nenhuma segunda nota criada (SNK-4).
+
+   **Como fazer (M1).** Antes não havia caminho seguro: um pedido `sent` não volta à fila por nenhuma tela ou comando, e editar o banco à mão foi proibido. Agora existe um comando operacional, só no contêiner do worker, que não fala com o Sankhya e não escreve no ERP: ele devolve à fila a MESMA linha do outbox (mesmo id, mesma origem = a chave de idempotência) e o pedido a `queued`, com auditoria `order.erp_resend_requested`. O worker em execução então consulta a origem, encontra a nota e apenas a vincula (`linked_existing`). Recusa-se quando o modo de escrita não é `live`, quando o pedido não está `sent` com número ERP, ou quando a última entrega não está `confirmed`.
+
+   ```
+   deploy/scripts/sf-compose.sh exec worker node dist/ops-order-resend.js <id-do-pedido-A>
+   ```
+
+   Saída esperada: `re-queued: outbox=… origin=… erpNumber=…`. Em até um ciclo do worker o pedido volta a `sent` com o mesmo número; conferir que `incluirNota` foi chamado uma única vez (registro da linha do outbox e contagem de requisições).
 4. Limpeza: `excluirNotas` das notas criadas; se recusado, `cancelarNota` como alternativa. Registrar o resultado em `docs/sankhya-spike.md`.
 
 Interrupção imediata (sem nova tentativa) em: erro de autenticação, resposta fora do contrato, qualquer segunda nota para o mesmo UUID, ou uso do orçamento.

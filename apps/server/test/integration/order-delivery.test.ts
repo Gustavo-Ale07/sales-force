@@ -5,6 +5,7 @@ import { FakeGateway, FakeOrderBook, SankhyaGatewayError, type OrderWriteRequest
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AuditService } from '../../src/iam/audit.service.js';
+import { requeueDeliveredOrder, ResendRefused } from '../../src/integration/order-resend.js';
 import { enqueueOrderDelivery } from '../../src/orders/order-erp-delivery.js';
 import { MAX_DELIVERY_ATTEMPTS } from '../../src/integration/order-delivery.policy.js';
 import {
@@ -234,6 +235,40 @@ describe('dry run (D-6)', () => {
     expect(await w.outbox(outboxId)).toMatchObject({ status: 'rejected', lastErrorClass: 'validation' });
     expect((await w.order(orderId)).status).toBe('rejected');
     expect(await w.database.handle.db.select().from(integrationOrderDryRun)).toHaveLength(0);
+  });
+});
+
+describe('M1: re-queue of a delivered order (roteiro step 3)', () => {
+  it('SNK-4: the same outbox row and origin are re-run, the ERP finds the note and only links it', async () => {
+    const w = await world();
+    const { orderId, outboxId } = await w.seed();
+    await w.service.runDue();
+    const sent = await w.order(orderId);
+    expect(sent.status).toBe('sent');
+    const before = await w.outbox(outboxId);
+
+    const audit = new AuditService(w.database.handle.db, () => new Date());
+    const result = await requeueDeliveredOrder(w.database.handle, audit, orderId, new Date(0));
+    expect(result).toEqual({ outboxId, originId: before.originId, erpNumber: sent.erpNumber });
+    expect(await w.order(orderId)).toMatchObject({ status: 'queued', erpNumber: sent.erpNumber });
+    expect(await w.outbox(outboxId)).toMatchObject({ status: 'pending', originId: before.originId });
+
+    await w.service.runDue();
+    expect(w.book.orders).toHaveLength(1);
+    expect(w.includes).toHaveLength(1);
+    expect(w.book.count('include')).toBe(1);
+    expect(await w.order(orderId)).toMatchObject({ status: 'sent', erpNumber: sent.erpNumber });
+    expect(await w.outbox(outboxId)).toMatchObject({ status: 'confirmed', originId: before.originId });
+    const rows = await w.database.handle.db.select().from(auditLog).where(eq(auditLog.action, 'order.erp_resend_requested'));
+    expect(rows).toHaveLength(1);
+  });
+
+  it('refuses an order that was not delivered and an unknown id', async () => {
+    const w = await world();
+    const { orderId } = await w.seed();
+    const audit = new AuditService(w.database.handle.db, () => new Date());
+    await expect(requeueDeliveredOrder(w.database.handle, audit, orderId, new Date(0))).rejects.toMatchObject({ reason: 'order_not_sent' });
+    await expect(requeueDeliveredOrder(w.database.handle, audit, randomUUID(), new Date())).rejects.toBeInstanceOf(ResendRefused);
   });
 });
 
