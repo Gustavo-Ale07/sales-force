@@ -148,5 +148,18 @@
       "PowerShell(npm install *)"
     ],
     "defaultMode": "acceptEdits"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/no-heredoc.cjs"
+          }
+        ]
+      }
+    ]
   }
 }
