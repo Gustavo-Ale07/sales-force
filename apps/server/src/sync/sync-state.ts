@@ -34,6 +34,8 @@ export const MirrorCursorSchema = z.object({
     finishedAt: z.string(),
     durationMs: z.number().int().nonnegative(),
     stats: RunStatsSchema,
+    /** D-V: rows left out per eligibility criterion in this run (counts only); absent when the entity has no rule. */
+    excluded: z.record(z.string(), z.number().int().nonnegative()).optional(),
   }),
 });
 export type MirrorCursor = z.infer<typeof MirrorCursorSchema>;
@@ -49,7 +51,7 @@ export async function markRunning(db: Queryable, entity: MirrorEntity, at: Date)
 export async function markSucceeded(
   db: Queryable,
   entity: MirrorEntity,
-  input: { startedAt: Date; finishedAt: Date; stats: RunStats; rowCount: number },
+  input: { startedAt: Date; finishedAt: Date; stats: RunStats; rowCount: number; excluded?: Readonly<Record<string, number>> },
 ): Promise<void> {
   const cursor: MirrorCursor = {
     strategy: 'full_snapshot',
@@ -58,6 +60,7 @@ export async function markSucceeded(
       finishedAt: input.finishedAt.toISOString(),
       durationMs: Math.max(0, input.finishedAt.getTime() - input.startedAt.getTime()),
       stats: input.stats,
+      ...(input.excluded === undefined ? {} : { excluded: { ...input.excluded } }),
     },
   };
   const values = {

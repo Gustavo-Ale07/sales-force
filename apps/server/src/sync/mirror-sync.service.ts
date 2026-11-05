@@ -29,6 +29,8 @@ export interface MirrorRunResult {
   readonly entity: MirrorEntity;
   readonly outcome: MirrorRunOutcome;
   readonly stats: RunStats | null;
+  /** D-V: rows left out per eligibility criterion (customers, carriers); absent otherwise. */
+  readonly excluded?: Readonly<Record<string, number>>;
 }
 
 export interface MirrorRunFailure {
@@ -181,11 +183,15 @@ export class MirrorSyncService {
         'Live mirror requires a configured read scope with non-empty products.sellableUsageValues and pricing.mobilePriceTableCodes; refusing an unscoped read.',
       );
     }
+    const excluded: Record<string, number> = {};
     const context = {
       gateway,
       description,
       ...(scope === undefined ? {} : { scope }),
       warn: (message: string) => logger.warn({ entity }, message),
+      excluded: (_entity: string, counts: Readonly<Record<string, number>>) => {
+        for (const [criterion, n] of Object.entries(counts)) excluded[criterion] = (excluded[criterion] ?? 0) + n;
+      },
       ...(signal === undefined ? {} : { signal }),
     };
 
@@ -202,13 +208,14 @@ export class MirrorSyncService {
 
     // The iteration finished without throwing: the snapshot is complete.
     const finishedAt = this.deps.now();
+    const hasExcluded = Object.keys(excluded).length > 0;
     await session.transaction(async (tx) => {
       stats.deactivated = await deactivateMissing(tx, spec, stats.read, finishedAt);
       const rowCount = await countLive(tx, spec);
-      await markSucceeded(tx, entity, { startedAt, finishedAt, stats, rowCount });
+      await markSucceeded(tx, entity, { startedAt, finishedAt, stats, rowCount, ...(hasExcluded ? { excluded } : {}) });
     });
 
-    logger.info({ entity, ...stats }, 'mirror sync completed');
-    return { entity, outcome: 'completed', stats };
+    logger.info({ entity, ...stats, ...(hasExcluded ? { excluded } : {}) }, 'mirror sync completed');
+    return { entity, outcome: 'completed', stats, ...(hasExcluded ? { excluded } : {}) };
   }
 }

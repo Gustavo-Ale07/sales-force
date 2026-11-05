@@ -213,7 +213,7 @@ describe('fake order book (SNK-7)', () => {
 
 describe('real adapter order writes (mock transport only, no network)', () => {
   const SANDBOX_URL = 'https://api.sandbox.sankhya.com.br';
-  const LIVE = { enabled: true, mode: 'live', originField: FIELD } as const;
+  const LIVE = { enabled: true, mode: 'live', originField: FIELD, requestBudget: null } as const;
 
   function setup(options: { baseUrl?: string; allowedHosts?: readonly string[]; orderWrite?: typeof LIVE | undefined } = {}) {
     const clock: ClockRef = { now: 1_800_000_000_000 };

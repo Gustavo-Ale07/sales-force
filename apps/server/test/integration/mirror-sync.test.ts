@@ -185,6 +185,38 @@ describe('mirror sync (RF-SNK-1/2/8 subset, WP 0.8)', () => {
     expect(await versions()).toEqual(before);
   });
 
+  it('D-V: records the rows left out per eligibility criterion in sync_state; a customer leaving the rule is deactivated, never deleted', async () => {
+    const database = await migrated();
+    const dataset = datasetCopy();
+    const base = dataset.customers[0]!;
+    dataset.customers = [
+      { ...base, code: 901, active: true, sourceAttributes: { CLASSIFICMS: 'R' } },
+      { ...base, code: 902, active: true, sourceAttributes: { CLASSIFICMS: 'R' } },
+      { ...base, code: 903, active: true, sourceAttributes: { CLASSIFICMS: 'C' } },
+    ];
+    const scope = { customers: { activeOnly: true, requiredFlags: ['CLIENTE'], columnIn: [{ column: 'CLASSIFICMS', values: ['R'] }] } };
+    const service = () =>
+      new MirrorSyncService({
+        db: database.handle,
+        gateway: new FakeGateway({ dataset: dataset as DemoDataset }),
+        logger: createLogger({ level: 'silent', service: 'worker' }),
+        now: () => new Date(),
+        readScope: async () => scope,
+      });
+    const first = await service().run('customers');
+    expect(first.stats).toMatchObject({ read: 2, created: 2 });
+    expect(first.excluded).toEqual({ 'column:CLASSIFICMS': 1 });
+    const state = await stateOf(database, 'customers');
+    expect((state?.cursor as { lastRun: { excluded?: Record<string, number> } }).lastRun.excluded).toEqual({ 'column:CLASSIFICMS': 1 });
+
+    // 902 stops matching the rule (CLASSIFICMS changes): inactive in the mirror, row kept.
+    dataset.customers[1] = { ...dataset.customers[1]!, sourceAttributes: { CLASSIFICMS: 'C' } };
+    const second = await service().run('customers');
+    expect(second.stats).toMatchObject({ read: 1, deactivated: 1 });
+    expect(second.excluded).toEqual({ 'column:CLASSIFICMS': 2 });
+    expect(await count(database, TABLES.customers, 'code = 902 and deleted_at is not null')).toBe(1);
+  });
+
   it('updates a changed source row, soft-deactivates a removed one and reactivates it when it returns', async () => {
     const database = await migrated();
     const dataset = datasetCopy();

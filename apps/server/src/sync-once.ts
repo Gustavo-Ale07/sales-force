@@ -76,6 +76,10 @@ runMain('sync-once', async () => {
           ? `${result.entity}: ${result.outcome}`
           : `${result.entity}: ${result.outcome} read=${stats.read} created=${stats.created} updated=${stats.updated} reactivated=${stats.reactivated} unchanged=${stats.unchanged} deactivated=${stats.deactivated}`,
       );
+      if (result.excluded !== undefined) {
+        // D-V: how many rows each eligibility criterion left out (counts only).
+        out(`${result.entity}: left out by eligibility - ${Object.entries(result.excluded).map(([criterion, n]) => `${criterion}=${n}`).join(' ') || 'none'}`);
+      }
     }
     for (const { entity, failure } of failures) {
       out(`${entity}: FAILED [${failure.errorClass}] ${failure.message}`);

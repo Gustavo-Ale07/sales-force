@@ -106,9 +106,12 @@ describe('real gateway: carriers (D-V 5)', () => {
         { CODPARC: 12, TRANSPORTADORA: 'N', ATIVO: 'S', NOMEPARC: 'C', RAZAOSOCIAL: null },
       ],
     });
-    const { rows } = await collect(gateway.readCarriers());
+    const excluded: Record<string, number>[] = [];
+    const { rows } = await collect(gateway.readCarriers({ onExcluded: (_e, counts) => excluded.push({ ...counts }) }));
     expect(rows.map((c) => c.code)).toEqual([10]);
-    expect(mock.queries().map((q) => q.sql ?? '').join('\n')).toContain("TRANSPORTADORA = 'S' AND ATIVO = 'S'");
+    expect(mock.queries().map((q) => q.sql ?? '').join('\n')).toContain("TRANSPORTADORA = 'S' AND CODPARC > 0");
+    // D-V adendo: counts per criterion - inactive carrier (11) and the partner not flagged as carrier (12).
+    expect(excluded).toEqual([{ 'flag:TRANSPORTADORA': 1, active: 1 }]);
   });
 });
 

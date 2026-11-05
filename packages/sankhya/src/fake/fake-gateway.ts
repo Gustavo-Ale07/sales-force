@@ -128,7 +128,11 @@ export class FakeGateway implements SankhyaGateway {
     return this.#snapshot('sellers', this.#dataset.sellers, options);
   }
   readCarriers(options?: ReadOptions) {
-    return this.#snapshot('carriers', this.#dataset.carriers, options);
+    // D-V: same rule as the real gateway (active carriers only), with the left-out count. A fake carrier is flagged by construction.
+    const rows = this.#dataset.carriers.filter((c) => c.active);
+    const left = this.#dataset.carriers.length - rows.length;
+    options?.onExcluded?.('carriers', { ...(left > 0 ? { active: left } : {}), 'flag:TRANSPORTADORA': 0 });
+    return this.#snapshot('carriers', rows, options);
   }
   readIpiRates(options?: ReadOptions) {
     return this.#snapshot('ipiRates', this.#dataset.ipiRates, options);

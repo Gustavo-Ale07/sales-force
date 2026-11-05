@@ -75,6 +75,8 @@ export interface MirrorReadContext {
   readonly description: GatewayDescription;
   readonly signal?: AbortSignal;
   readonly warn: (message: string) => void;
+  /** D-V: rows left out per eligibility criterion (counts only); recorded in `sync_state` and the run log. */
+  readonly excluded?: (entity: string, countsByCriterion: Readonly<Record<string, number>>) => void;
 }
 
 export interface MirrorEntitySpec {
@@ -182,6 +184,7 @@ function readOptions(context: MirrorReadContext): ReadOptions {
     onExcluded: (entity, counts) => {
       const parts = Object.entries(counts).map(([criterion, n]) => `${criterion}: ${n}`);
       context.warn(`${entity}: left out by eligibility - ${parts.length === 0 ? 'none' : parts.join('; ')}`);
+      context.excluded?.(entity, counts);
     },
   };
 }

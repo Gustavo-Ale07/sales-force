@@ -263,8 +263,9 @@ export const CARRIER_SPEC: EntitySpec<Carrier> = {
   table: 'TGFPAR',
   select: ['CODPARC', 'NOMEPARC', 'RAZAOSOCIAL', 'ATIVO'],
   columns: ['CODPARC', 'NOMEPARC', 'RAZAOSOCIAL', 'ATIVO'],
-  // D-V: carriers are partners flagged TRANSPORTADORA = 'S' that are active (ATIVO = 'S').
-  where: "TRANSPORTADORA = 'S' AND ATIVO = 'S' AND CODPARC > 0",
+  // D-V: carriers are partners flagged TRANSPORTADORA = 'S' that are active (ATIVO = 'S'); the active check is applied row by row
+  // (see `carrierSpec`) so the rows it leaves out can be counted.
+  where: "TRANSPORTADORA = 'S' AND CODPARC > 0",
   orderBy: 'CODPARC',
   map: (row) => ({
     code: row.int('CODPARC'),
@@ -273,6 +274,20 @@ export const CARRIER_SPEC: EntitySpec<Carrier> = {
   }),
   keyOf: (carrier) => [carrier.code],
 };
+
+/** D-V: the carrier spec with the active check counted (`tally['active']`); an inactive carrier is discarded like any dropped row. */
+export function carrierSpec(tally?: Record<string, number>): EntitySpec<Carrier> {
+  return {
+    ...CARRIER_SPEC,
+    map: (row, context) => {
+      if (!row.flag('ATIVO')) {
+        if (tally !== undefined) tally['active'] = (tally['active'] ?? 0) + 1;
+        return discardRow('left out by eligibility (active)', true);
+      }
+      return CARRIER_SPEC.map(row, context);
+    },
+  };
+}
 
 /**
  * TGFPAR (§9.30 F-24, §9.35). PK CODPARC. Only rows flagged `CLIENTE = 'S'` (a filtered paged read is

@@ -1,4 +1,5 @@
 import type {
+  Carrier,
   Customer,
   InstallationConfiguration,
   ListPrice,
@@ -81,7 +82,7 @@ import {
   RowReader,
   SELLER_SPEC,
   DIRECTORY_USER_SPEC,
-  CARRIER_SPEC,
+  carrierSpec,
   IPI_RATE_SPEC,
   OPEN_TITLE_SPEC,
   compareKeys,
@@ -298,8 +299,28 @@ export class RealSankhyaGateway implements SankhyaGateway {
   readDirectoryUsers(options?: ReadOptions) {
     return this.#paged(DIRECTORY_USER_SPEC, options);
   }
-  readCarriers(options?: ReadOptions) {
-    return this.#paged(CARRIER_SPEC, options);
+  readCarriers(options?: ReadOptions): Snapshot<Carrier> {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const gateway = this;
+    return {
+      async *[Symbol.asyncIterator]() {
+        const tally: Record<string, number> = {};
+        // D-V: partners that are not flagged TRANSPORTADORA = 'S' (null included) = all real partners minus the flagged ones.
+        const total = await gateway.#countOf("SELECT COUNT(*) AS TOTAL FROM TGFPAR WHERE CODPARC > 0", options?.signal);
+        const flagged = await gateway.#countOf("SELECT COUNT(*) AS TOTAL FROM TGFPAR WHERE TRANSPORTADORA = 'S' AND CODPARC > 0", options?.signal);
+        tally['flag:TRANSPORTADORA'] = Math.max(total - flagged, 0);
+        yield* gateway.#paged(carrierSpec(tally), options, tally);
+      },
+    };
+  }
+
+  async #countOf(sql: string, signal?: AbortSignal): Promise<number> {
+    const result = await this.#query(sql, ['TOTAL'], signal);
+    const value = new RowReader('carriers', ['TOTAL'], result.rows[0] ?? [], 0).nullableInt('TOTAL');
+    if (result.rows.length !== 1 || value === null) {
+      throw new SankhyaGatewayError('temporary', { code: 'incomplete_snapshot', message: 'carriers: the ERP row count could not be read. Retry.' });
+    }
+    return value;
   }
   readIpiRates(options?: ReadOptions) {
     return this.#paged(IPI_RATE_SPEC, options);
