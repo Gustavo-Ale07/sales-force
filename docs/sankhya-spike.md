@@ -1015,9 +1015,9 @@ Sankhya is the only source of what is mirrored; the base file holds no code list
 
 | Entity | Criterion | Status |
 |---|---|---|
-| Products | `AD_MOBILIDADE = 'S'` (`products.mobilityFilter`, enforced at the source) plus a price in the resolved table | enforced; the count of products left out by mobility is not reported yet |
+| Products | `AD_MOBILIDADE = 'S'` (`products.mobilityFilter`, enforced at the source) plus a price in the resolved table | enforced; the count left out by mobility is reported as `mobility: n` (COUNT with and without the term, J2) in the log, `sync_state.cursor.lastRun.excluded` and the `sync-once` output |
 | Customers | `ATIVO = 'S'`, `CLIENTE = 'S'`, `CLASSIFICMS IN ('R')` (`customers.eligibility`) | `'R'` is an initial hypothesis (5,547 resellers in the Sandbox per the owner); validate the value at the first sync |
-| Carriers | `TRANSPORTADORA = 'S'` and `ATIVO = 'S'` | applied in the WHERE; the fake gateway still delivers inactive carriers (mirror keeps the flag) |
+| Carriers | `TRANSPORTADORA = 'S'` and `ATIVO = 'S'` | `TRANSPORTADORA = 'S' AND CODPARC > 0` in the WHERE; inactive carriers are dropped per row. Reported as `active: n; flag:TRANSPORTADORA: n` (the latter by COUNT subtraction); the fake gateway follows the same rule |
 
 Customers: the rule columns are discovered through `USER_TAB_COLUMNS` (`TABLE_NAME = 'TGFPAR'`); a missing column fails the read closed (`customer_eligibility_column_missing`, naming the column). With a rule the source is read for every partner (`CODPARC > 0`) and the rule is applied per row, so each criterion can be counted; the volume of that read is NEEDS VALIDATION. A customer that stops meeting the rule is absent from the snapshot and is soft-deactivated by the missing-row rule; saved orders keep it. The sync warning reads `customers: left out by eligibility - active: n; flag:CLIENTE: n; column:CLASSIFICMS: n`.
 

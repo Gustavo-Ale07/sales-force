@@ -156,7 +156,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/no-heredoc.cjs"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/no-heredoc.cjs\""
           }
         ]
       }

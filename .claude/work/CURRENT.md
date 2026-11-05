@@ -22,6 +22,9 @@ STATUS: ACTIVE — atualizado em 2026-10-29. Fonte de verdade ÚNICA: `C:\Dev\sa
 1. Parte 2 (`PROMPT_2026-10-30_parte2_config-sankhya.md`): começa registrando CFG-8, U-10-a..d e U-11 em `docs/decisions.md`; depois Trilha D.
 2. Decisões do dono abertas pelo reviewer: alçada em modo `erp` vs P-10; PDF compartilhado por representante vs P-20 (ver checkpoint).
 
+## Parte 2e (2026-11-05) — itens 0–4 e 5a feitos; 5b adiado
+- Hashes, desenho do 5b (NÃO implementado), verificação, deslizes e "só o dono roda" (arquivo base `PLAC_STAGING_INSTALLATION.json` + config-bootstrap; `sync-once customers carriers products`): `.claude/work/CHECKPOINT_2026-11-05-parte2e.md`.
+
 ## Parte 2c (2026-11-04/05) — PARCIAL (J4, J3a e D-Z feitos)
 - Feitos e publicados: J4 PDF (D-W), J3 (a) converter orçamento não enviado (API + botão web), D-Z dry-run terminal (migrações 0026/0027). Detalhes, pendências (J3 b nativo, mobile, J2 contagem, e2e, security-reviewer) e "só o dono roda": `.claude/work/CHECKPOINT_2026-11-04-parte2c.md`.
 
