@@ -54,8 +54,8 @@ describe("LocalOrdersPort.duplicateAsOrder (D-B)", () => {
   });
 
   it.each([
-    ["not_a_quotation", /não é uma cotação/],
-    ["source_cancelled", /cancelada/],
+    ["not_a_quotation", /não é um orçamento/],
+    ["source_cancelled", /cancelado/],
     ["order_top_not_configured", /não foi configurada/],
     ["no_usable_lines", /Nenhum item/],
   ])("shows the 409 reason %s and adopts nothing", async (reason, pattern) => {

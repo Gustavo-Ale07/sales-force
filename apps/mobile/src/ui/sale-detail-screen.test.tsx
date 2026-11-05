@@ -110,7 +110,7 @@ describe("SaleDetailScreen Duplicar como pedido (D-B)", () => {
     const onContinue = jest.fn();
     const duplicateAsOrder = jest.fn(async () => ({ ok: true as const, localId: "new-1", skippedLines: [] }));
     await show(quotation, { duplicateAsOrder }, "online", onContinue);
-    expect(await screen.findByText("Operação: Cotação (TOP 1000)")).toBeTruthy();
+    expect(await screen.findByText("Operação: Orçamento (TOP 1000)")).toBeTruthy();
     fireEvent.press(screen.getByRole("button", { name: "Duplicar como pedido" }));
     await waitFor(() => expect(onContinue).toHaveBeenCalledWith("new-1"));
     expect(duplicateAsOrder).toHaveBeenCalledWith("x");
@@ -127,16 +127,16 @@ describe("SaleDetailScreen Duplicar como pedido (D-B)", () => {
   it("shows the refusal text and stays on the quotation", async () => {
     const alert = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
     const onContinue = jest.fn();
-    await show(quotation, { duplicateAsOrder: async () => ({ ok: false as const, failure: { title: "Não foi possível duplicar como pedido", message: "A cotação foi cancelada e não pode ser duplicada.", skipped: [] } }) }, "online", onContinue);
+    await show(quotation, { duplicateAsOrder: async () => ({ ok: false as const, failure: { title: "Não foi possível duplicar como pedido", message: "O orçamento foi cancelado e não pode ser duplicado.", skipped: [] } }) }, "online", onContinue);
     fireEvent.press(await screen.findByRole("button", { name: "Duplicar como pedido" }));
-    await waitFor(() => expect(alert).toHaveBeenCalledWith("Não foi possível duplicar como pedido", "A cotação foi cancelada e não pode ser duplicada."));
+    await waitFor(() => expect(alert).toHaveBeenCalledWith("Não foi possível duplicar como pedido", "O orçamento foi cancelado e não pode ser duplicado."));
     expect(onContinue).not.toHaveBeenCalled();
     alert.mockRestore();
   });
 
   it("is disabled with a hint while offline and absent for a regular order", async () => {
     await show(quotation, {}, "offline");
-    expect(await screen.findByText("Conecte-se à internet para duplicar a cotação como pedido.")).toBeTruthy();
+    expect(await screen.findByText("Conecte-se à internet para duplicar o orçamento como pedido.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Duplicar como pedido" }).props.accessibilityState.disabled).toBe(true);
   });
 

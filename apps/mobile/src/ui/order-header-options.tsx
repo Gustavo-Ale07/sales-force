@@ -18,7 +18,7 @@ export interface OrderHeaderOptionsProps {
 }
 
 /**
- * "Opções do pedido": the TOP (Pedido or Cotação, D-A) and the negotiation type (D-B: only the sellable ones). A group
+ * "Opções do pedido": the TOP (Pedido or Orçamento, D-A) and the negotiation type (D-B: only the sellable ones). A group
  * with nothing to choose is not drawn. What is eligible is decided by the server; this is only the picker.
  */
 export function OrderHeaderOptions({ sales, topCode, negotiationTypeCode, onTopChange, onNegotiationChange, carriers, carrierCode, onCarrierChange }: OrderHeaderOptionsProps) {

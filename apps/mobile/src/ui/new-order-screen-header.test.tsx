@@ -43,7 +43,7 @@ describe("NewOrderScreen order options (D-A, D-B)", () => {
   it("offers the TOPs and only the sellable negotiation types", async () => {
     await openCart();
     expect(screen.getByRole("radio", { name: "Operação Pedido (TOP 1001)" })).toBeTruthy();
-    expect(screen.getByRole("radio", { name: "Operação Cotação (TOP 1000)" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "Operação Orçamento (TOP 1000)" })).toBeTruthy();
     expect(screen.getByRole("radio", { name: "Negociação À vista" })).toBeTruthy();
     expect(screen.getByRole("radio", { name: "Negociação 30 dias" })).toBeTruthy();
     expect(screen.queryByRole("radio", { name: "Negociação Antigo" })).toBeNull();
@@ -52,7 +52,7 @@ describe("NewOrderScreen order options (D-A, D-B)", () => {
   it("saves the chosen TOP and negotiation type on the local draft", async () => {
     const save = jest.fn(async (input: { negotiationTypeCode: number | null }) => draftRecord({ negotiationTypeCode: input.negotiationTypeCode }));
     await openCart(fakeLocalOrders([], { save: save as never }));
-    await pressAndSettle(screen.getByRole("radio", { name: "Operação Cotação (TOP 1000)" }));
+    await pressAndSettle(screen.getByRole("radio", { name: "Operação Orçamento (TOP 1000)" }));
     await pressAndSettle(screen.getByRole("radio", { name: "Negociação 30 dias" }));
     await pressAndSettle(screen.getByRole("button", { name: "Salvar rascunho" }));
     expect(save).toHaveBeenCalledWith(expect.objectContaining({ topCode: 1000, negotiationTypeCode: 3, carrierCode: null }));

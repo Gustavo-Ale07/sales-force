@@ -17,7 +17,7 @@ describe("sellableNegotiationTypes", () => {
 describe("TOP options", () => {
   it("labels the default order TOP, the quotation TOP and any other", () => {
     expect(topLabel(1001, tops)).toBe("Pedido (TOP 1001)");
-    expect(topLabel(1000, tops)).toBe("Cotação (TOP 1000)");
+    expect(topLabel(1000, tops)).toBe("Orçamento (TOP 1000)");
     expect(topLabel(1002, tops)).toBe("TOP 1002");
   });
 
@@ -43,8 +43,8 @@ describe("describeDuplicateFailure", () => {
     new ApiRequestError({ status: 409, code: "conflict", message: "x", reason, skippedLines });
 
   it.each([
-    ["not_a_quotation", /não é uma cotação/],
-    ["source_cancelled", /cancelada/],
+    ["not_a_quotation", /não é um orçamento/],
+    ["source_cancelled", /cancelado/],
     ["order_top_not_configured", /não foi configurada/],
     ["no_usable_lines", /Nenhum item/],
   ])("explains the 409 reason %s", (reason, pattern) => {

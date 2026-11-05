@@ -166,7 +166,7 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
     if (result.skippedLines.length > 0) {
       Alert.alert(
         "Pedido criado com itens a menos",
-        `Estes itens da cotação não foram copiados:\n${describeSkippedLines(result.skippedLines).join("\n")}`,
+        `Estes itens do orçamento não foram copiados:\n${describeSkippedLines(result.skippedLines).join("\n")}`,
         [{ text: "Abrir pedido", onPress: () => onContinue(result.localId) }],
       );
       return;
@@ -214,7 +214,7 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
           <Text style={styles.meta}>{`Cliente ${draft.customerCode}`}</Text>
           <View style={styles.statusLine}>
             <SaleBadgeView status={draft.status} remoteId={draft.remoteId} lastError={draft.lastError} />
-            <Text style={styles.meta}>{draft.remoteDraftNumber !== null ? `Pedido nº ${draft.remoteDraftNumber}` : "Sem número ainda"}</Text>
+            <Text style={styles.meta}>{draft.remoteDraftNumber !== null ? `${tops !== null && isQuotationTop(effectiveTop, tops) ? "Orçamento" : "Pedido"} nº ${draft.remoteDraftNumber}` : "Sem número ainda"}</Text>
           </View>
           <Text style={styles.explanation}>{saleExplanation(draft)}</Text>
           <Text style={styles.meta}>{`Criado em ${formatDateTime(draft.createdAt)}`}</Text>
@@ -332,7 +332,7 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
               >
                 <Text style={styles.primaryText}>{duplicating ? "Duplicando..." : "Duplicar como pedido"}</Text>
               </Pressable>
-              {offline && <Text style={styles.meta}>Conecte-se à internet para duplicar a cotação como pedido.</Text>}
+              {offline && <Text style={styles.meta}>Conecte-se à internet para duplicar o orçamento como pedido.</Text>}
             </>
           )}
           {actions.duplicate && (

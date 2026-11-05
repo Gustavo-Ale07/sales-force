@@ -207,9 +207,9 @@ export function createLocalOrdersPort(deps: {
     },
     async duplicateAsOrder(localId) {
       const source = await getDraft(db, localId);
-      if (source === null || source.ownerAccountId !== ownerAccountId) return refuse("Esta cotação não foi encontrada neste aparelho.");
-      if (source.remoteId === null || source.status !== "synced") return refuse("Só é possível duplicar uma cotação já enviada.");
-      if (source.dataset === null) return refuse("Esta cotação foi criada antes da verificação de dados e não pode ser duplicada.");
+      if (source === null || source.ownerAccountId !== ownerAccountId) return refuse("Este orçamento não foi encontrado neste aparelho.");
+      if (source.remoteId === null || source.status !== "synced") return refuse("Só é possível duplicar um orçamento já enviado.");
+      if (source.dataset === null) return refuse("Este orçamento foi criado antes da verificação de dados e não pode ser duplicado.");
       if (deps.duplicateAsOrder === undefined) return refuse("Conecte-se para duplicar como pedido.");
       const clientRequestId = duplicateRequestIds.get(localId) ?? env.newId();
       duplicateRequestIds.set(localId, clientRequestId);

@@ -17,9 +17,9 @@ export interface TopOption {
   readonly label: string;
 }
 
-/** "Pedido (TOP 1001)" for the default order TOP, "Cotação (TOP 1000)" for the quotation TOP, "TOP n" otherwise. */
+/** "Pedido (TOP 1001)" for the default order TOP, "Orçamento (TOP 1000)" for the quotation TOP, "TOP n" otherwise. */
 export function topLabel(code: number, tops: SalesConfiguration["orderTops"]): string {
-  if (code === tops.quotationTopCode) return `Cotação (TOP ${code})`;
+  if (code === tops.quotationTopCode) return `Orçamento (TOP ${code})`;
   if (code === tops.defaultTopCode) return `Pedido (TOP ${code})`;
   return `TOP ${code}`;
 }
@@ -64,18 +64,18 @@ export function describeDuplicateFailure(error: unknown): DuplicateFailure {
     if (error.status === 409) {
       switch (error.reason ?? error.code) {
         case "not_a_quotation":
-          return { title, message: "Este pedido não é uma cotação.", skipped: [] };
+          return { title, message: "Este pedido não é um orçamento.", skipped: [] };
         case "source_cancelled":
-          return { title, message: "A cotação foi cancelada e não pode ser duplicada.", skipped: [] };
+          return { title, message: "O orçamento foi cancelado e não pode ser duplicado.", skipped: [] };
         case "order_top_not_configured":
           return { title, message: "A operação de pedido ainda não foi configurada nesta instalação. Fale com o administrador.", skipped: [] };
         case "no_usable_lines":
-          return { title, message: "Nenhum item da cotação pode ser pedido agora.", skipped: describeSkippedLines(error.skippedLines) };
+          return { title, message: "Nenhum item do orçamento pode ser pedido agora.", skipped: describeSkippedLines(error.skippedLines) };
         case "dataset_mismatch":
           return { title, message: "Os dados do servidor mudaram. Atualize o aplicativo e tente novamente.", skipped: [] };
       }
     }
-    if (error.status === 404) return { title, message: "Esta cotação não está mais disponível.", skipped: [] };
+    if (error.status === 404) return { title, message: "Este orçamento não está mais disponível.", skipped: [] };
     if (error.status === 403) return { title, message: "Seu perfil não tem permissão para esta operação.", skipped: [] };
   }
   return { title, message: "Tente novamente em instantes.", skipped: [] };
