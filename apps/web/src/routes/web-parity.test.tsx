@@ -102,7 +102,7 @@ describe("Pedido: Duplicar pedido", () => {
     await waitFor(() => expect(router.state.location.pathname).toBe(`/pedidos/${NEW_ID}`));
     const second = callsTo(calls, "POST", "/orders")[1]?.body as { items: unknown[] };
     expect(second.items).toEqual([{ productCode: 2001, quantity: "2" }]);
-    expect(await screen.findByText("Rascunho criado a partir do pedido")).toBeInTheDocument();
+    expect(await screen.findByText("Pedido preenchido a partir do pedido")).toBeInTheDocument();
   });
 
   it("does not offer to drop lines when the problem is not about the products", async () => {

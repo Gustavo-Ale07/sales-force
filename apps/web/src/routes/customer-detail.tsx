@@ -55,7 +55,7 @@ function useRepeatLastOrder(customerCode: number) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.ordersAll });
       void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
       if (result.skippedLines.length === 0) {
-        toast({ title: "Rascunho criado a partir do último pedido registrado no Sales Force", tone: "success" });
+        toast({ title: "Pedido preenchido a partir do último pedido registrado no Sales Force", tone: "success" });
       }
       await navigate({
         to: "/pedidos/$id",

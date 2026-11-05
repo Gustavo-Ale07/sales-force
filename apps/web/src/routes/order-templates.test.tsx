@@ -130,7 +130,7 @@ describe("Cliente: Pedidos recorrentes", () => {
       });
       await user.click(await screen.findByRole("button", { name: "Usar modelo Reposição mensal" }));
       await waitFor(() => expect(router.state.location.pathname).toBe(`/pedidos/${ORDER_ID}`));
-      expect(await screen.findByText("Rascunho criado a partir do modelo")).toBeInTheDocument();
+      expect(await screen.findByText("Pedido preenchido a partir do modelo")).toBeInTheDocument();
       expect(screen.queryByRole("alert", { name: "Itens do modelo que ficaram de fora" })).not.toBeInTheDocument();
     });
 

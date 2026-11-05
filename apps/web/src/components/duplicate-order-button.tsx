@@ -110,7 +110,7 @@ export function DuplicateOrderButton({ order, disabled }: DuplicateOrderButtonPr
       void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
       const skipped = order.items.length - created.items.length;
       toast({
-        title: "Rascunho criado a partir do pedido",
+        title: "Pedido preenchido a partir do pedido",
         description:
           skipped > 0
             ? `${skipped === 1 ? "1 item ficou" : `${skipped} itens ficaram`} de fora. Preços recalculados; descontos e observações não foram copiados.`

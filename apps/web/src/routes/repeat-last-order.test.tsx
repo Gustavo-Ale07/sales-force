@@ -46,7 +46,7 @@ describe("Cliente: Repetir último pedido", () => {
       expect((request?.body as { expectedDataset: unknown }).expectedDataset).toEqual(testDataset);
     expect((request?.body as { clientRequestId: string }).clientRequestId).toMatch(UUID);
 
-    expect(await screen.findByText("Rascunho criado a partir do último pedido registrado no Sales Force")).toBeInTheDocument();
+    expect(await screen.findByText("Pedido preenchido a partir do último pedido registrado no Sales Force")).toBeInTheDocument();
     expect(screen.queryByRole("alert", { name: "Itens do modelo que ficaram de fora" })).not.toBeInTheDocument();
   });
 
@@ -74,7 +74,7 @@ describe("Cliente: Repetir último pedido", () => {
     expect(notice).toHaveTextContent("último pedido registrado no Sales Force");
     expect(notice).toHaveTextContent("Código 2003: Produto removido do catálogo");
     expect(notice).toHaveTextContent("Código 2004: Produto sem preço para este cliente");
-    expect(screen.queryByText("Rascunho criado a partir do último pedido registrado no Sales Force")).not.toBeInTheDocument();
+    expect(screen.queryByText("Pedido preenchido a partir do último pedido registrado no Sales Force")).not.toBeInTheDocument();
   });
 
   it("shows an informational, non-danger alert with the honest Sales Force wording on 409 no_previous_order, and creates nothing", async () => {
