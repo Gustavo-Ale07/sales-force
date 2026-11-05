@@ -58,7 +58,7 @@
 --   customer_order_template_item          S I U D     -              templates.repository (items replaced)
 --   integration_outbox                    S I U D     S U            api: INSERT on submit (same transaction as order -> queued); DELETE with its order (D-Y, never-delivered orders only; the dry-run record goes by cascade);
 --                                                                       worker: claims and closes deliveries (SNK-7). The order gate trigger reads sales_order as the invoking role.
---   integration_order_dry_run             -           S I D          worker: dry-run payload record (SNK-7 D-6); DELETE by the 30-day purge. The API never reads it
+--   integration_order_dry_run             -           S I D          worker: dry-run payload record (SNK-7 D-6); DELETE by the 30-day purge. The API reads only order_id, created_at and payload_hash (column grant, D-Z), never the payload
 --   sales_order, sales_order_item         (above)     S (U on sales_order)   worker: reads the order to build the payload; UPDATE status and erp_number on delivery
 --   audit_log                             I           I              worker records delivery outcomes (order.erp_*), append-only
 --   schema_migration                      S           -              packages/db readiness() for /ready. Written only by force_migrator
@@ -289,6 +289,10 @@ $grants$;
 
 DO $lock$
 BEGIN
+  -- D-Z: the API shows when an order was last simulated (orders.repository latestDryRunOf): three columns only, never the payload.
+  IF to_regclass('public.integration_order_dry_run') IS NOT NULL THEN
+    GRANT SELECT (order_id, created_at, payload_hash) ON public.integration_order_dry_run TO force_api;
+  END IF;
   IF to_regclass('public.erp_customer') IS NOT NULL THEN
     GRANT UPDATE (synced_at) ON public.erp_customer TO force_api;
   END IF;

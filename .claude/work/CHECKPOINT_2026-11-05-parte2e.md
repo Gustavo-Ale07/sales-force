@@ -30,16 +30,16 @@ Adiado de propósito; **não implementado**. Desenho para a próxima rodada:
 
 ## Verificação
 - sankhya 347/347; domain ok; server unit 531/531; mobile tsc limpo e jest 495/495.
-- Suíte de integração completa do servidor: ver resultado no relatório final.
+- Suíte de integração completa do servidor: 1500/1503; 3 falhas, todas corrigidas e reexecutadas (12/12): migration-0008 (expectativa da última migração, agora 0027) e restricted-roles (force_api sem SELECT em integration_order_dry_run, regressão do D-Z; GRANT por coluna em db-roles.sql).
 - ESLint **não rodou** (comando não encontrado).
 - Playwright e2e (K7-adaptados) nunca rodados.
 
 ## Deslizes de processo (declarados)
-Heredocs anteriores (corpos de commit, anexos de teste) e um no-op `cat > /dev/null <<'EOF'`; um `sed` global; uma suíte do servidor rodada com Docker parado; um `sed` que corrompeu regex `\b` (corrigido).
+Heredocs anteriores (e um `cat > /dev/null` sem efeito mais tarde) (corpos de commit, anexos de teste) e um no-op `cat > /dev/null <<'EOF'`; um `sed` global; uma suíte do servidor rodada com Docker parado; um `sed` que corrompeu regex `\b` (corrigido).
 
 ## Só o dono roda
 Caminhos reais de staging: `/opt/force-staging/config/installation.json`, `deploy/scripts/sf-compose.sh`.
 1. Copiar `.claude/work/PLAC_STAGING_INSTALLATION.json` (chave `customers.eligibility`) para `/opt/force-staging/config/installation.json` e rodar `config-bootstrap`.
 2. `deploy/scripts/sf-compose.sh exec worker node dist/sync-once.js customers carriers products` e conferir a linha "left out by eligibility - criterion=n" (clientes: `active`, `flag:CLIENTE`, `column:CLASSIFICMS`; transportadoras: `active`, `flag:TRANSPORTADORA`; produtos: `mobility`). O valor `'R'` de CLASSIFICMS é hipótese a validar.
-3. Se houver novo GRANT: `db-roles.sql` (nada novo nesta parte).
+3. **`db-roles.sql` em staging é obrigatório**: o D-Z (já em staging) lê `integration_order_dry_run` pela API sem GRANT, o que dá 500 ao abrir/listar pedidos. A correção é um GRANT SELECT por coluna (order_id, created_at, payload_hash) para force_api; reexecute o arquivo (SF_RUN_DB_ROLES=1 no deploy).
 4. Teste ao vivo nº 1 no Sandbox: só com sua autorização; deploy sem `-f` desliga o override.
