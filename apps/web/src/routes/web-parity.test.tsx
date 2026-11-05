@@ -212,7 +212,8 @@ describe("Situação do pedido: textos distintos e honestos", () => {
     const review = { status: "needs_review", reason: "customer_ineligible", customerBlock: "customer_blocked" } as const;
     renderApp(`/pedidos/${ORDER_ID}`, { handlers: editorHandlers(orderDetail({ review })) });
     expect(await screen.findByText("O cliente deste rascunho está bloqueado.", { exact: false })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Enviar ao Sankhya" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Enviar ao Sankhya" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Salvar pedido" })).toBeDisabled();
     expect(screen.getAllByText("não enviado").length).toBeGreaterThan(0);
   });
 

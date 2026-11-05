@@ -32,7 +32,7 @@ import {
 } from "@salesforce/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useBlocker } from "@tanstack/react-router";
-import { BookmarkPlus, Percent, Save, Send, Trash2, X } from "lucide-react";
+import { BookmarkPlus, Percent, Save, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { BulkEntryDialog, type BulkEntryItem } from "../components/bulk-entry-dialog";
 import { CustomerContextBar } from "../components/customer-context-bar";
@@ -77,7 +77,7 @@ type OrderDetail = ApiSchema<"OrderDetail">;
 
 
 export const SUBMIT_DISABLED_MESSAGE =
-  "O envio de pedidos ao Sankhya ainda não está habilitado nesta instalação. O documento continua salvo e nada foi enviado.";
+  "Envio ao Sankhya desligado nesta instalação. O documento foi salvo e nada foi enviado.";
 
 /** ORD-1: editable as draft and as rejected-by-approver; editing an order awaiting approval returns it to draft. */
 const EDITABLE_STATUSES: ReadonlySet<OrderDetail["status"]> = new Set(["draft", "approval_rejected", "awaiting_approval"]);
@@ -230,6 +230,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
   );
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [submitNotice, setSubmitNotice] = useState<string | null>(null);
+  const [sendFailure, setSendFailure] = useState<ReturnType<typeof describeApiError> | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
   /** A different customer picked while items exist: waits for the seller's confirmation (prices depend on the customer). */
@@ -342,16 +343,55 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
     mutationFn: async () => {
       // The dataset this editor loaded under; unknown identity blocks the write before any request.
       const expectedDataset = requireDataset(loadedDataset);
-      if (order) return replaceOrder(api, order.id, { expectedVersion: order.version, expectedDataset, ...body });
-      const payload = JSON.stringify(body);
-      if (requestIdRef.current?.payload !== payload) requestIdRef.current = { payload, id: newUuid() };
-      return createOrder(api, { clientRequestId: requestIdRef.current.id, expectedDataset, ...body });
+      let saved: OrderDetail;
+      if (order && !dirty) saved = order; // saved before but never sent (switch off, failure): only the sending is repeated
+      else if (order) saved = await replaceOrder(api, order.id, { expectedVersion: order.version, expectedDataset, ...body });
+      else {
+        const payload = JSON.stringify(body);
+        if (requestIdRef.current?.payload !== payload) requestIdRef.current = { payload, id: newUuid() };
+        saved = await createOrder(api, { clientRequestId: requestIdRef.current.id, expectedDataset, ...body });
+      }
+      // D-AA: saving IS sending. The document stays saved whatever happens next; the idempotent submit makes a double click harmless.
+      if ((saved.status !== "draft" && saved.status !== "approved") || saved.review !== null) return { saved, sent: null, sendError: null };
+      try {
+        const sent = await submitOrder(api, saved.id);
+        return { saved, sent: sent ?? saved, sendError: null };
+      } catch (error) {
+        return { saved, sent: null, sendError: error };
+      }
     },
-    onSuccess: async (saved) => {
-      queryClient.setQueryData(queryKeys.order(saved.id), saved);
+    onSuccess: async ({ saved, sent, sendError }) => {
+      const finalOrder = sent ?? saved;
+      queryClient.setQueryData(queryKeys.order(finalOrder.id), finalOrder);
       await queryClient.invalidateQueries({ queryKey: queryKeys.ordersAll });
       await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
-      toast({ title: docKind === "quote" ? "Orçamento salvo" : "Pedido salvo", description: orderReference(saved, docKind), tone: "success" });
+      const reference = orderReference(finalOrder, docKind);
+      setSubmitMessage(null);
+      setSubmitNotice(null);
+      setSendFailure(null);
+      if (sent !== null) {
+        const awaiting = sent.status === "awaiting_approval";
+        if (awaiting) setSubmitNotice(SUBMIT_AWAITING_MESSAGE);
+        toast({
+          title: awaiting ? "Enviado para aprovação do desconto" : docKind === "quote" ? "Orçamento salvo e enviando ao Sankhya" : "Pedido salvo e enviando ao Sankhya",
+          description: reference,
+          tone: "success",
+        });
+      } else if (sendError instanceof ApiRequestError && sendError.code === ERP_SUBMISSION_DISABLED) {
+        setSubmitMessage(SUBMIT_DISABLED_MESSAGE);
+        toast({ title: "Envio ao Sankhya desligado", description: `${reference} foi salvo; nada foi enviado.`, tone: "warning" });
+      } else if (sendError instanceof ApiRequestError && sendError.code === "discount_blocked") {
+        setSubmitMessage(SUBMIT_BLOCKED_MESSAGE);
+        toast({ title: "Salvo, mas não enviado", description: "Desconto acima do limite da diretoria.", tone: "warning" });
+      } else if (sendError !== null) {
+        setSubmitMessage(null);
+        const described = describeApiError(sendError, "Não foi possível enviar ao Sankhya");
+        const conflict = submitConflictText(sendError);
+        setSendFailure(conflict === null ? described : { ...described, description: conflict });
+        toast({ title: "Salvo, mas o envio falhou", description: described.description, tone: "danger" });
+      } else {
+        toast({ title: docKind === "quote" ? "Orçamento salvo" : "Pedido salvo", description: reference, tone: "success" });
+      }
       if (!order) {
         leavingRef.current = true;
         onCreated(saved.id);
@@ -372,30 +412,12 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
     },
   });
 
-  const submit = useMutation({
-    mutationFn: async () => {
-      if (!order) throw new Error("O rascunho precisa estar salvo antes do envio.");
-      return submitOrder(api, order.id);
-    },
-    onSuccess: (result) => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.ordersAll });
-      setSubmitMessage(null);
-      setSubmitNotice(result?.status === "awaiting_approval" ? SUBMIT_AWAITING_MESSAGE : null);
-    },
-    onError: (error) => {
-      setSubmitNotice(null);
-      if (error instanceof ApiRequestError && error.code === ERP_SUBMISSION_DISABLED) setSubmitMessage(SUBMIT_DISABLED_MESSAGE);
-      else if (error instanceof ApiRequestError && error.code === "discount_blocked") setSubmitMessage(SUBMIT_BLOCKED_MESSAGE);
-      else setSubmitMessage(null);
-    },
-  });
-
   const reload = () => {
     if (order) void queryClient.invalidateQueries({ queryKey: queryKeys.order(order.id) });
   };
 
   const canSaveTemplate = customer !== null && lines.length > 0 && preview.valid;
-  const canSave = !readOnly && customer !== null && preview.valid && installationEnabled && !hasBlockedLines && (order === null || dirty);
+  const canSave = !readOnly && customer !== null && preview.valid && installationEnabled && !hasBlockedLines && (order === null || dirty || (order.status === "draft" && order.review === null));
   const onSubmitForm = (event: FormEvent) => {
     event.preventDefault();
     if (canSave && !save.isPending) save.mutate();
@@ -545,15 +567,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
   const topOptions = orderTops?.eligibleTopCodes ?? [];
   const carrierItems = carriers.data?.items ?? [];
   const carrierUnlisted = carrierChoice !== null && !carrierItems.some((carrier) => carrier.code === carrierChoice);
-  const submitFailure =
-    submit.isError &&
-    !(submit.error instanceof ApiRequestError && (submit.error.code === ERP_SUBMISSION_DISABLED || submit.error.code === "discount_blocked"))
-      ? (() => {
-          const described = describeApiError(submit.error, "Não foi possível enviar o pedido");
-          const conflict = submitConflictText(submit.error);
-          return conflict === null ? described : { ...described, description: conflict };
-        })()
-      : null;
+  const submitFailure = sendFailure;
   const status = order ? orderStatusLabels[order.status] : null;
   const discountMode = config.data?.sales.discountAuthorityMode;
   const approvalsOn = approvalsEnabled(discountMode);
@@ -1088,23 +1102,6 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
               onClick={() => setDeleting(true)}
             >
               Excluir
-            </Button>
-          ) : null}
-          {order && order.status === "draft" ? (
-            <Button
-              className="flex-1 sm:flex-none"
-              type="button"
-              variant="secondary"
-              leftIcon={<Send size={14} aria-hidden="true" />}
-              loading={submit.isPending}
-              disabled={dirty || order.review !== null}
-              title={order.review ? "Requer revisão: o cliente não pode receber pedidos" : dirty ? "Salve antes de enviar" : undefined}
-              onClick={() => {
-                setSubmitMessage(null);
-                submit.mutate();
-              }}
-            >
-              {vocab.send}
             </Button>
           ) : null}
           {!readOnly ? (

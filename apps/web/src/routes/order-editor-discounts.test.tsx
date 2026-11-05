@@ -126,7 +126,6 @@ describe("Desconto por item", () => {
     });
     const field = await screen.findByLabelText("Desconto de Balão látex 9 pol. vermelho (%)");
     expect(field).toHaveValue("5");
-    expect(screen.getByRole("button", { name: "Salvar pedido" })).toBeDisabled();
     await user.clear(field);
     await user.type(field, "7");
     expect(screen.getByRole("button", { name: "Salvar pedido" })).toBeEnabled();

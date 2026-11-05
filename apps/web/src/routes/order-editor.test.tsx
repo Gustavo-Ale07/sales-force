@@ -781,7 +781,9 @@ describe("Rascunho existente", () => {
     expect(await screen.findByRole("heading", { name: /^Pedido nº 12/ })).toBeInTheDocument();
     expect(screen.getByLabelText("Quantidade de Balão látex 9 pol. vermelho")).toHaveValue("2");
     expect(screen.getByTestId("order-total")).toHaveTextContent("25,00");
-    expect(screen.getByRole("button", { name: "Salvar pedido" })).toBeDisabled();
+    // D-AA: a saved document that was never sent can be sent without editing: the one button is "Salvar pedido".
+    expect(screen.getByRole("button", { name: "Salvar pedido" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Enviar ao Sankhya" })).not.toBeInTheDocument();
   });
 
   it("ends the submit action in the 'ERP submission disabled' message, never a success", async () => {
@@ -790,9 +792,10 @@ describe("Rascunho existente", () => {
         "POST /orders/:id/submit": apiError(409, "erp_submission_disabled", "Envio desabilitado.", { requestId: "req-sub-1" }),
       }),
     });
-    await user.click(await screen.findByRole("button", { name: "Enviar ao Sankhya" }));
+    await user.click(await screen.findByRole("button", { name: "Salvar pedido" }));
     expect(await screen.findByText(SUBMIT_DISABLED_MESSAGE)).toBeInTheDocument();
     expect(screen.getByText("Envio ao Sankhya indisponível")).toBeInTheDocument();
+    expect(screen.getByText("Envio ao Sankhya desligado")).toBeInTheDocument(); // never silent (D-AA)
     expect(callsTo(calls, "POST", `/orders/${ORDER_ID}/submit`)).toHaveLength(1);
     expect(screen.queryByText(/enviado com sucesso|pedido enviado/i)).not.toBeInTheDocument();
     expect(screen.queryByText("Pedido salvo")).not.toBeInTheDocument();
@@ -804,7 +807,7 @@ describe("Rascunho existente", () => {
         "POST /orders/:id/submit": apiError(503, "service_unavailable", "x", { requestId: "req-sub-2" }),
       }),
     });
-    await user.click(await screen.findByRole("button", { name: "Enviar ao Sankhya" }));
+    await user.click(await screen.findByRole("button", { name: "Salvar pedido" }));
     expect(await screen.findByText("req-sub-2")).toBeInTheDocument();
     expect(screen.queryByText(SUBMIT_DISABLED_MESSAGE)).not.toBeInTheDocument();
   });
@@ -819,7 +822,7 @@ describe("Rascunho existente", () => {
     const { user } = renderApp(`/pedidos/${ORDER_ID}`, {
       handlers: existing(orderDetail(), { "POST /orders/:id/submit": { body: waiting } }),
     });
-    await user.click(await screen.findByRole("button", { name: "Enviar ao Sankhya" }));
+    await user.click(await screen.findByRole("button", { name: "Salvar pedido" }));
     expect(await screen.findByText(SUBMIT_AWAITING_MESSAGE)).toBeInTheDocument();
     expect(screen.queryByText(SUBMIT_DISABLED_MESSAGE)).not.toBeInTheDocument();
   });
@@ -830,7 +833,7 @@ describe("Rascunho existente", () => {
         "POST /orders/:id/submit": apiError(409, "discount_blocked", "Desconto acima do limite.", { requestId: "req-sub-3" }),
       }),
     });
-    await user.click(await screen.findByRole("button", { name: "Enviar ao Sankhya" }));
+    await user.click(await screen.findByRole("button", { name: "Salvar pedido" }));
     expect(await screen.findByText(SUBMIT_BLOCKED_MESSAGE)).toBeInTheDocument();
     expect(screen.queryByText("req-sub-3")).not.toBeInTheDocument();
   });
@@ -848,13 +851,21 @@ describe("Rascunho existente", () => {
     expect(screen.getByLabelText("Quantidade de Balão látex 9 pol. vermelho")).not.toBeDisabled();
   });
 
-  it("requires saving before submitting", async () => {
-    const { user } = renderApp(`/pedidos/${ORDER_ID}`, { handlers: existing() });
+  it("D-AA: one click on 'Salvar pedido' replaces the lines and then sends, in this order, once", async () => {
+    const { user, calls } = renderApp(`/pedidos/${ORDER_ID}`, {
+      handlers: existing(orderDetail(), {
+        "PUT /orders/:id": { body: orderDetail({ version: 2 }) },
+        "POST /orders/:id/submit": { body: orderDetail({ version: 2, status: "queued" }) },
+      }),
+    });
     const quantity = await screen.findByLabelText("Quantidade de Balão látex 9 pol. vermelho");
     await user.clear(quantity);
     await user.type(quantity, "3");
-    expect(screen.getByRole("button", { name: "Enviar ao Sankhya" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Salvar pedido" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Enviar ao Sankhya" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Salvar pedido" }));
+    expect(await screen.findByText("Pedido salvo e enviando ao Sankhya")).toBeInTheDocument();
+    expect(callsTo(calls, "PUT", `/orders/${ORDER_ID}`)).toHaveLength(1);
+    expect(callsTo(calls, "POST", `/orders/${ORDER_ID}/submit`)).toHaveLength(1);
   });
 
   it("replaces the draft with the expected version and shows the saved result", async () => {
@@ -864,13 +875,16 @@ describe("Rascunho existente", () => {
       totals: { estimatedTotal: "37.5", lineCount: 1, unpricedLineCount: 0, isPartial: false },
     });
     const { user, calls } = renderApp(`/pedidos/${ORDER_ID}`, {
-      handlers: existing(orderDetail(), { "PUT /orders/:id": { body: saved } }),
+      handlers: existing(orderDetail(), {
+        "PUT /orders/:id": { body: saved },
+        "POST /orders/:id/submit": { body: { ...saved, status: "queued" } },
+      }),
     });
     const quantity = await screen.findByLabelText("Quantidade de Balão látex 9 pol. vermelho");
     await user.clear(quantity);
     await user.type(quantity, "3");
     await user.click(screen.getByRole("button", { name: "Salvar pedido" }));
-    expect(await screen.findByText("Pedido salvo")).toBeInTheDocument();
+    expect(await screen.findByText("Pedido salvo e enviando ao Sankhya")).toBeInTheDocument();
     const [put] = callsTo(calls, "PUT", `/orders/${ORDER_ID}`);
     expect(put?.body).toMatchObject({ expectedVersion: 1, customerCode: 1001, items: [{ productCode: 2001, quantity: "3" }] });
     expect(put?.body).toHaveProperty("expectedDataset", testDataset);
