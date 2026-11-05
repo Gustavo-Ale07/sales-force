@@ -3,7 +3,9 @@ import type { OrderWriteRequest } from './order-contract.js';
 
 /**
  * CACSP.incluirNota wire format (F-44, VALIDATED (env) for ONE case: one item, TOP 1001, company 1,
- * payment type 11). Every value travels as `{"$": "<text>"}`; empty keys travel as `{}`.
+ * payment type 11). Every field value travels as `{"$": "<text>"}`; empty keys travel as `{}`.
+ * Exception (L1, official example developer.sankhya.com.br/reference/post_incluimovimentos): `INFORMARPRECO` is an
+ * ATTRIBUTE of `itens`, a plain string (`"INFORMARPRECO": "False"`), never `{"$": "False"}`.
  *
  * NEEDS VALIDATION (spike S3.1, test #1 per SNK-7 D-10): the minimum field set, several items
  * (`item` as a list), `PERCDESC` honoured with `INFORMARPRECO = False` (D-7), the origin field write,
@@ -57,7 +59,7 @@ export function buildIncluirNotaBody(request: OrderWriteRequest): Wire {
     return wire;
   });
 
-  return { nota: { cabecalho: header, itens: { INFORMARPRECO: value('False'), item: items } } };
+  return { nota: { cabecalho: header, itens: { INFORMARPRECO: 'False', item: items } } };
 }
 
 export function buildIncluirNotaRequestText(request: OrderWriteRequest): string {

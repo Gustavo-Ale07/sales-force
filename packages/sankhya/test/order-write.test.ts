@@ -63,7 +63,7 @@ describe('CACSP.incluirNota payload (SNK-7 D-8, F-44)', () => {
           CODVEND: wrap('7'),
         },
         itens: {
-          INFORMARPRECO: wrap('False'),
+          INFORMARPRECO: 'False',
           item: [
             {
               NUNOTA: {},
