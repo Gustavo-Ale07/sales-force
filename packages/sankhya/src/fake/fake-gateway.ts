@@ -165,16 +165,17 @@ export class FakeGateway implements SankhyaGateway {
   readProducts(options?: ReadOptions) {
     assertSafeScope(options?.scope);
     const filter = options?.scope?.products;
-    const rows =
+    const base =
       filter === undefined
         ? this.#dataset.products
         : this.#dataset.products.filter(
-            (p) =>
-              (filter.activeOnly === false || p.active) &&
-              p.usageCode !== null &&
-              filter.usageValues.includes(p.usageCode) &&
-              mobilityAllowed(p.mobilityCode, filter.mobilityAllowedValues),
+            (p) => (filter.activeOnly === false || p.active) && p.usageCode !== null && filter.usageValues.includes(p.usageCode),
           );
+    const rows = filter === undefined ? base : base.filter((p) => mobilityAllowed(p.mobilityCode, filter.mobilityAllowedValues));
+    // J2: products left out only because they are not mobile-enabled (same count as the real gateway).
+    if (filter !== undefined && (filter.mobilitySourceField ?? null) !== null && (filter.mobilityAllowedValues ?? []).length > 0) {
+      options?.onExcluded?.('products', { mobility: base.length - rows.length });
+    }
     return this.#snapshot('products', rows, options);
   }
   readProductGroups(options?: ReadOptions) {

@@ -20,7 +20,7 @@ function problemsOf(action: () => unknown): readonly string[] {
 
 describe('ERP order submission switches (SNK-7 D-1)', () => {
   it('the worker has submission off by default', () => {
-    expect(loadWorkerConfig({ ...WORKER }).orderWrite).toEqual({ enabled: false, mode: 'off', originField: null });
+    expect(loadWorkerConfig({ ...WORKER }).orderWrite).toEqual({ enabled: false, mode: 'off', originField: null, requestBudget: null });
   });
 
   it('dry_run needs nothing else and works with the fake gateway', () => {
@@ -63,7 +63,7 @@ describe('ERP order submission switches (SNK-7 D-1)', () => {
       SANKHYA_ORDER_WRITE_MODE: 'dry_run',
       SANKHYA_ORDER_ORIGIN_FIELD: 'AD_FORCEORIGEM',
     };
-    expect(loadWorkerConfig({ ...base, SF_DEPLOY_ENVIRONMENT: 'staging' }).orderWrite).toEqual({ enabled: true, mode: 'dry_run', originField: 'AD_FORCEORIGEM' });
+    expect(loadWorkerConfig({ ...base, SF_DEPLOY_ENVIRONMENT: 'staging' }).orderWrite).toEqual({ enabled: true, mode: 'dry_run', originField: 'AD_FORCEORIGEM', requestBudget: null });
     expect(problemsOf(() => loadWorkerConfig({ ...base, SF_DEPLOY_ENVIRONMENT: 'production' })).join('\n')).toContain('SF_DEPLOY_ENVIRONMENT=staging');
     expect(problemsOf(() => loadWorkerConfig({ ...base })).join('\n')).toContain('SF_DEPLOY_ENVIRONMENT');
   });

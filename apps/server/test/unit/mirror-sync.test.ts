@@ -101,7 +101,8 @@ describe('mapping', () => {
       priceTableVersions: dataset.priceTableVersions.length,
       listPrices: dataset.listPrices.length,
       directoryUsers: dataset.directoryUsers.length,
-      carriers: dataset.carriers.length,
+      // D-V: only active carriers are mirrored (the real gateway filters them, the fake follows the same rule).
+      carriers: dataset.carriers.filter((c) => c.active).length,
       ipiRates: dataset.ipiRates.length,
       openTitles: dataset.openTitles.length,
     };

@@ -233,7 +233,7 @@ describe('D-W template (J4)', () => {
 
   it('footer carries the issue moment (business time) and the seller', () => {
     const html = renderOrderHtml(full, options);
-    expect(html).toContain('Emitido pelo Plac Force em 04/11/2026 14:05 · Maria Vendedora');
+    expect(html).toContain('Emitido pelo Sales Force em 04/11/2026 14:05 · Maria Vendedora');
   });
 
   it('company block only from supplied data; absent means omitted, nothing invented', () => {

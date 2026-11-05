@@ -18,6 +18,6 @@ exports[`D-W template (J4) > never carries restricted fields and matches the lay
 <div class="total">Total estimado: R$ 13.890,29</div><div class="hint">Valor parcial: 1 item(ns) sem preço.</div><div class="total">IPI estimado: R$ 1,60</div><div class="total">Total parcial estimado (com IPI): R$ 18,03</div><div class="hint">IPI estimado a partir das alíquotas disponíveis (apenas nos itens com alíquota); o valor final é calculado no Sankhya.</div>
 </section>
 <section><h2>Observações</h2><div class="notes">Entregar pela manhã</div></section>
-<footer>Emitido pelo Plac Force em 04/11/2026 14:05 · Maria Vendedora</footer>
+<footer>Emitido pelo Sales Force em 04/11/2026 14:05 · Maria Vendedora</footer>
 </body></html>"
 `;

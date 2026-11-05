@@ -198,12 +198,17 @@ describe('readProducts scope (sellable usage, active, optional mobility field)',
 
   it('mobilityAllowedValues filters at the source with an IN clause (D-S)', async () => {
     const { gateway, mock } = gatewayOver(tables);
-    await rows(
+    const excluded: Record<string, number>[] = [];
+    const result = await rows(
       gateway.readProducts({
         scope: { products: { usageValues: ['V', 'R'], mobilitySourceField: 'AD_MOBILIDADE', mobilityAllowedValues: ['S'] } },
+        onExcluded: (_entity, counts) => excluded.push({ ...counts }),
       }),
     );
-    expect(mock.queries()[0]?.sql).toContain("AD_MOBILIDADE IN ('S')");
+    expect(mock.queries().map((q) => q.sql ?? '').join('\n')).toContain("AD_MOBILIDADE IN ('S')");
+    // J2: product 2 passes usage and ATIVO but is not mobile-enabled; the report says how many were left out for that.
+    expect(result.map((p) => p.code)).toEqual([1]);
+    expect(excluded).toEqual([{ mobility: 1 }]);
   });
 
   it('refuses an allowed-values list without a field, empty, or with unsafe text', () => {

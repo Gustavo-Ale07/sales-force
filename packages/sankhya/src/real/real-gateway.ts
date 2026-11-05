@@ -360,7 +360,22 @@ export class RealSankhyaGateway implements SankhyaGateway {
   readProducts(options?: ReadOptions): Snapshot<Product> {
     assertSafeScope(options?.scope);
     if (options?.scope?.products?.usageValues.length === 0) return emptySnapshot();
-    return this.#paged(productSpec(options?.scope), options);
+    const filter = options?.scope?.products;
+    const mobilityOn = filter !== undefined && (filter.mobilitySourceField ?? null) !== null && (filter.mobilityAllowedValues ?? []).length > 0;
+    if (!mobilityOn) return this.#paged(productSpec(options?.scope), options);
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const gateway = this;
+    return {
+      async *[Symbol.asyncIterator]() {
+        // J2: products that pass every other rule but are not mobile-enabled = the same count without the mobility term minus with it.
+        const withMobility = productSpec(options?.scope);
+        const withoutMobility = productSpec({ ...options?.scope, products: { usageValues: filter.usageValues, activeOnly: filter.activeOnly, mobilitySourceField: filter.mobilitySourceField } });
+        const all = await gateway.#countOf(`SELECT COUNT(*) AS TOTAL FROM ${withoutMobility.table} WHERE ${withoutMobility.where}`, options?.signal);
+        const kept = await gateway.#countOf(`SELECT COUNT(*) AS TOTAL FROM ${withMobility.table} WHERE ${withMobility.where}`, options?.signal);
+        const tally: Record<string, number> = { mobility: Math.max(all - kept, 0) };
+        yield* gateway.#paged(withMobility, options, tally);
+      },
+    };
   }
 
   readProductGroups(options?: ReadOptions): Snapshot<ProductGroup> {

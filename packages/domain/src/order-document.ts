@@ -265,8 +265,8 @@ export function renderOrderHtml(model: OrderDocumentModel, options: OrderHtmlOpt
     .join('');
   const issued =
     options.issuedAt === undefined
-      ? 'Emitido pelo Plac Force'
-      : `Emitido pelo Plac Force em ${escapeHtml(formatDocumentDateTime(options.issuedAt))}`;
+      ? 'Emitido pelo Sales Force'
+      : `Emitido pelo Sales Force em ${escapeHtml(formatDocumentDateTime(options.issuedAt))}`;
   const seller = options.sellerName === undefined || options.sellerName.trim() === '' ? '' : ` · ${escapeHtml(options.sellerName)}`;
 
   return `<!DOCTYPE html>
