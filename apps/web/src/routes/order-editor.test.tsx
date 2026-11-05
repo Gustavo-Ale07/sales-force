@@ -345,6 +345,32 @@ describe("Novo pedido", () => {
       expect(screen.getByRole("button", { name: "Carrinho (0)" })).toBeInTheDocument();
     });
 
+    it("D-U (a): an unsent quote offers 'Converter em pedido' and calls the conversion", async () => {
+      const quoteConfig = withOrderEntryConfiguration((config) => ({
+        ...config,
+        sales: { ...config.sales, orderTops: { defaultTopCode: 1001, quotationTopCode: 1002, eligibleTopCodes: [1001, 1002] } },
+      }));
+      const { user, calls } = renderApp(`/pedidos/${ORDER_ID}`, {
+        handlers: newOrderHandlers({
+          ...quoteConfig,
+          "GET /orders/:id": { body: orderDetail({ topCode: 1002, items: [orderItem()] }) },
+          "POST /orders/:id/convert": { body: orderDetail({ topCode: 1001, items: [orderItem()] }) },
+        }),
+      });
+      await user.click(await screen.findByRole("button", { name: "Converter em pedido" }));
+      await waitFor(() => expect(callsTo(calls, "POST", "/orders/" + ORDER_ID + "/convert")).toHaveLength(1));
+    });
+
+    it("D-Z: a draft shows when it was simulated and that nothing was sent", async () => {
+      renderApp(`/pedidos/${ORDER_ID}`, {
+        handlers: newOrderHandlers({
+          "GET /orders/:id": { body: orderDetail({ items: [orderItem()], dryRun: { at: "2026-11-04T19:15:00.000Z", payloadHash: "abcdef1234567890" } }) },
+        }),
+      });
+      expect(await screen.findByText("Simulado, não enviado")).toBeInTheDocument();
+      expect(screen.getByText(/não enviado ao Sankhya/)).toBeInTheDocument();
+    });
+
     it("opens a saved order on the cart", async () => {
       renderApp(`/pedidos/${ORDER_ID}`, {
         handlers: newOrderHandlers({ "GET /orders/:id": { body: orderDetail({ items: [orderItem()] }) } }),

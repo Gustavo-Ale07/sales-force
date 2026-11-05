@@ -19,6 +19,11 @@ export function deleteOrder(api: ApiClient, id: string) {
   return callApi(() => api.DELETE("/orders/{id}", { params: { path: { id } } }));
 }
 
+/** D-U (a): a quote that never reached Sankhya becomes an order in place (same record, order TOP). */
+export function convertQuote(api: ApiClient, id: string) {
+  return callApi(() => api.POST("/orders/{id}/convert", { params: { path: { id } } }));
+}
+
 /** Always ends in `erp_submission_disabled` (409) until the ERP write-safety gates close. Never treated as success. */
 export function submitOrder(api: ApiClient, id: string) {
   return callApi(() => api.POST("/orders/{id}/submit", { params: { path: { id } } }));

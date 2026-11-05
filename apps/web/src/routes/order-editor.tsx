@@ -49,7 +49,7 @@ import { PrintOrderButton } from "../components/print-order-button";
 import { QueryError } from "../components/query-error";
 import { SaveTemplateDialog } from "../components/save-template-dialog";
 import { ApiRequestError } from "../lib/api";
-import { ERP_SUBMISSION_DISABLED, createOrder, replaceOrder, submitOrder } from "../lib/api-mutations";
+import { ERP_SUBMISSION_DISABLED, convertQuote, createOrder, replaceOrder, submitOrder } from "../lib/api-mutations";
 import { carriersQueryOptions, orderEntryConfigurationQueryOptions, customerQueryOptions, orderQueryOptions, queryKeys } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { useLoadedDataset, requireDataset } from "../lib/dataset";
@@ -359,6 +359,19 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
     },
   });
 
+  const convert = useMutation({
+    mutationFn: async () => {
+      if (!order) throw new Error("O orçamento precisa estar salvo antes da conversão.");
+      return convertQuote(api, order.id);
+    },
+    onSuccess: async (converted) => {
+      queryClient.setQueryData(queryKeys.order(converted.id), converted);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.ordersAll });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
+      toast({ title: "Orçamento convertido em pedido", description: orderReference(converted, "order"), tone: "success" });
+    },
+  });
+
   const submit = useMutation({
     mutationFn: async () => {
       if (!order) throw new Error("O rascunho precisa estar salvo antes do envio.");
@@ -562,6 +575,11 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
           order ? (
             <>
               <PrintOrderButton orderId={order.id} order={order} label={orderReference(order, docKind)} disabled={dirty || order.items.length === 0} />
+              {isQuotation && order.erpNumber == null && !readOnly && orderTops?.defaultTopCode != null ? (
+                <Button type="button" variant="secondary" disabled={dirty || convert.isPending} onClick={() => convert.mutate()}>
+                  Converter em pedido
+                </Button>
+              ) : null}
               {isQuotation ? <DuplicateAsOrderButton order={order} disabled={dirty} /> : <DuplicateOrderButton order={order} disabled={dirty} />}
             </>
           ) : undefined
