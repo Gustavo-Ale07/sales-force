@@ -69,6 +69,7 @@ export {
   RealSankhyaGateway,
   type RealSankhyaGatewayOptions,
 } from './real/real-gateway.js';
+export { BUDGET_EXHAUSTED_CODE, budgetedTransport, DEFAULT_LIVE_REQUEST_BUDGET, isBudgetExhaustedError, RequestBudget } from './request-budget.js';
 export { createFetchTransport, type HttpRequest, type HttpResponse, type HttpTransport } from './real/transport.js';
 export type { SankhyaCredentials } from './real/token-provider.js';
 export * from './write/order-contract.js';

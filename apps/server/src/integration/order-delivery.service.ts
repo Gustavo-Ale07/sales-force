@@ -9,7 +9,7 @@ import {
   type OutboxStep,
 } from '@salesforce/db';
 import { erpSubmissionBlock, type ErpSubmissionTarget, type InstallationConfiguration } from '@salesforce/domain';
-import { isSankhyaGatewayError, SankhyaGatewayError, type SankhyaOrderReadPort, type SankhyaWritePort } from '@salesforce/sankhya';
+import { isBudgetExhaustedError, isSankhyaGatewayError, SankhyaGatewayError, type RequestBudget, type SankhyaOrderReadPort, type SankhyaWritePort } from '@salesforce/sankhya';
 import { and, asc, eq, inArray, isNotNull, lt, lte, sql } from 'drizzle-orm';
 import { validateInstallationConfiguration } from '../configuration/validate.js';
 import { AUDIT_ACTIONS, type AuditDetail, type AuditService } from '../iam/audit.service.js';
@@ -56,6 +56,8 @@ export interface OrderDeliveryDeps {
   /** Used in `live` mode only; `dry_run` never touches it. */
   readonly gateway: OrderDeliveryGateway;
   readonly settings: OrderDeliverySettings;
+  /** M3: cap on the Sankhya requests of the delivery; absent = no cap (dry run, fake gateway). */
+  readonly budget?: RequestBudget;
   readonly audit: Pick<AuditService, 'record'>;
   readonly logger: Logger;
   readonly now: Clock;
@@ -129,11 +131,15 @@ export class OrderDeliveryService {
     const limit = options.limit ?? DEFAULT_SWEEP_LIMIT;
     let processed = 0;
     while (processed < limit && options.signal?.aborted !== true) {
+      if (this.deps.budget?.exhausted === true) {
+        this.deps.logger.warn({ used: this.deps.budget.used, limit: this.deps.budget.limit }, 'order delivery stopped: the request budget is exhausted (restart the worker to start a new budget)');
+        break;
+      }
       const claimed = await this.claimNext();
       if (claimed === null) break;
       processed += 1;
       try {
-        await this.deliver(claimed, options.signal);
+        await (this.deps.budget === undefined ? this.deliver(claimed, options.signal) : this.deps.budget.run(() => this.deliver(claimed, options.signal)));
       } catch (error) {
         // A bug or a database failure while recording the outcome: the row stays `processing` and is
         // recovered as `unknown` (never resent without verification). Surface it, keep the sweep alive.
@@ -305,6 +311,10 @@ export class OrderDeliveryService {
       await this.finishSent(row, order, erpNumber);
     } catch (error) {
       if (signal?.aborted === true && !isSankhyaGatewayError(error)) throw error;
+      if (isBudgetExhaustedError(error)) {
+        await this.parkForBudget(row, order);
+        return;
+      }
       const outcome = decideFailure(error, {
         phase,
         attemptCount: row.attemptCount,
@@ -313,6 +323,30 @@ export class OrderDeliveryService {
       });
       await this.applyOutcome(row, order, outcome, describeError(error), erpNumber, phase);
     }
+  }
+
+  /** M3: the budget ran out mid-attempt. The attempt is not counted, the row goes back to pending and the next attempt verifies by origin (SNK-4). */
+  private async parkForBudget(row: OutboxRow, order: OrderRow): Promise<void> {
+    const at = this.deps.now();
+    const budget = this.deps.budget;
+    await this.database.transaction(async (tx) => {
+      await tx
+        .update(integrationOutbox)
+        .set({
+          status: 'pending',
+          attemptCount: sql`greatest(${integrationOutbox.attemptCount} - 1, 0)`,
+          nextAttemptAt: at,
+          lastStep: 'waiting_retry',
+          lastErrorClass: 'budget_exhausted',
+          lastErrorMessage: 'The test request budget is exhausted; delivery is paused until the worker is restarted.',
+          updatedAt: at,
+        })
+        .where(eq(integrationOutbox.id, row.id));
+    });
+    this.deps.logger.warn(
+      { outboxId: row.id, orderId: order.id, used: budget?.used, limit: budget?.limit },
+      'order delivery paused: request budget exhausted (reason budget_exhausted)',
+    );
   }
 
   private async resolveFrozen(row: OutboxRow, order: OrderRow): Promise<{ ok: true; header: FrozenHeader } | { ok: false; code: string; message: string }> {

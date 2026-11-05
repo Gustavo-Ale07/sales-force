@@ -7,6 +7,7 @@ import { MAX_PAGE_SIZE, RealSankhyaGateway } from './real/real-gateway.js';
 import { Secret } from './secret.js';
 import { parseOrderWriteSettings } from './write/order-write-config.js';
 import { createFetchTransport, type HttpTransport } from './real/transport.js';
+import { budgetedTransport } from './request-budget.js';
 
 export type GatewayEnvironment = Readonly<Record<string, string | undefined>>;
 
@@ -134,7 +135,7 @@ export function createGateway(env: GatewayEnvironment, deps: CreateGatewayDepend
       clientSecret: new Secret(clientSecret),
       xToken: new Secret(xToken),
     },
-    transport: deps.transport ?? createFetchTransport(),
+    transport: budgetedTransport(deps.transport ?? createFetchTransport()),
     ...(deps.now ? { now: deps.now } : {}),
     ...(pageSize !== undefined ? { pageSize } : {}),
     ...(requestTimeoutMs !== undefined ? { requestTimeoutMs } : {}),

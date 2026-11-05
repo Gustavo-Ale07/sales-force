@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { auditLog, integrationOrderDryRun, integrationOutbox, salesOrder } from '@salesforce/db';
 import { defaultUnconfiguredConfiguration, type InstallationConfiguration } from '@salesforce/domain';
-import { FakeGateway, FakeOrderBook, SankhyaGatewayError, type OrderWriteRequest } from '@salesforce/sankhya';
+import { budgetedTransport, FakeGateway, FakeOrderBook, RequestBudget, SankhyaGatewayError, type OrderWriteRequest } from '@salesforce/sankhya';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AuditService } from '../../src/iam/audit.service.js';
@@ -69,7 +69,7 @@ interface World {
   order(id: string): Promise<typeof salesOrder.$inferSelect>;
 }
 
-async function world(options: { mode?: 'dry_run' | 'live'; book?: FakeOrderBook; unconfirmedTops?: number[] } = {}): Promise<World> {
+async function world(options: { mode?: 'dry_run' | 'live'; book?: FakeOrderBook; unconfirmedTops?: number[]; budget?: RequestBudget } = {}): Promise<World> {
   const database = await createMigratedDatabase(postgres);
   databases.push(database);
   const db = database.handle.db;
@@ -80,14 +80,27 @@ async function world(options: { mode?: 'dry_run' | 'live'; book?: FakeOrderBook;
   const book = options.book ?? new FakeOrderBook();
   const fake = new FakeGateway({ orders: book });
   const includes: OrderWriteRequest[] = [];
+  // Every delivery call stands for one HTTP request through the budgeted transport (M3), like the real gateway.
+  const charge = budgetedTransport(async () => ({ status: 200, headers: {}, body: '' }));
+  const request = () => charge({ method: 'POST', url: 'https://x.test', headers: {}, body: '', timeoutMs: 1000 });
   const gateway: OrderDeliveryGateway = {
-    includeOrder: (request, callOptions) => {
-      includes.push(request);
-      return fake.includeOrder(request, callOptions);
+    includeOrder: async (request_, callOptions) => {
+      await request();
+      includes.push(request_);
+      return fake.includeOrder(request_, callOptions);
     },
-    confirmOrder: (number, o) => fake.confirmOrder(number, o),
-    findOrderByOrigin: (field, id, o) => fake.findOrderByOrigin(field, id, o),
-    readWrittenOrder: (number, o) => fake.readWrittenOrder(number, o),
+    confirmOrder: async (number, o) => {
+      await request();
+      return fake.confirmOrder(number, o);
+    },
+    findOrderByOrigin: async (field, id, o) => {
+      await request();
+      return fake.findOrderByOrigin(field, id, o);
+    },
+    readWrittenOrder: async (number, o) => {
+      await request();
+      return fake.readWrittenOrder(number, o);
+    },
     readOrderStatusFacts: (numbers, o) => fake.readOrderStatusFacts(numbers, o),
   };
   const now = () => new Date(clock.ms);
@@ -101,6 +114,7 @@ async function world(options: { mode?: 'dry_run' | 'live'; book?: FakeOrderBook;
     db: database.handle,
     gateway,
     settings,
+    ...(options.budget === undefined ? {} : { budget: options.budget }),
     audit: new AuditService(db, now),
     logger: createLogger({ level: 'silent', service: 'test' }),
     now,
@@ -269,6 +283,33 @@ describe('M1: re-queue of a delivered order (roteiro step 3)', () => {
     const audit = new AuditService(w.database.handle.db, () => new Date());
     await expect(requeueDeliveredOrder(w.database.handle, audit, orderId, new Date(0))).rejects.toMatchObject({ reason: 'order_not_sent' });
     await expect(requeueDeliveredOrder(w.database.handle, audit, randomUUID(), new Date())).rejects.toBeInstanceOf(ResendRefused);
+  });
+});
+
+describe('M3: request budget', () => {
+  it('a full delivery is 4 requests (find, include, confirm, reread) and fits a budget of 4', async () => {
+    const budget = new RequestBudget(4);
+    const w = await world({ budget });
+    const { orderId } = await w.seed();
+    await w.service.runDue();
+    expect(budget.used).toBe(4);
+    expect(budget.exhausted).toBe(true);
+    expect((await w.order(orderId)).status).toBe('sent');
+  });
+
+  it('stops at the limit: the row goes back to pending with reason budget_exhausted, no attempt is consumed and nothing is resent', async () => {
+    const budget = new RequestBudget(2);
+    const w = await world({ budget });
+    const { orderId, outboxId } = await w.seed();
+    await w.service.runDue();
+    expect(budget.used).toBe(2);
+    expect(w.book.orders).toHaveLength(1);
+    expect(await w.outbox(outboxId)).toMatchObject({ status: 'pending', lastErrorClass: 'budget_exhausted', attemptCount: 0 });
+    expect((await w.order(orderId)).status).toBe('queued');
+    // A later sweep does nothing while the budget stays exhausted.
+    expect((await w.service.runDue()).processed).toBe(0);
+    expect(budget.used).toBe(2);
+    expect(w.book.count('include')).toBe(1);
   });
 });
 

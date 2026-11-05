@@ -19,7 +19,7 @@ const DRY_RUN_ORIGIN_FIELD_PLACEHOLDER = 'AD_ORIGEM_NAO_CONFIGURADA';
  * installs queue tables (DATA-2) and performs no Sankhya write (SNK-4).
  */
 runMain('worker', async () => {
-  const { env, gateway, gatewayDescription, orderWrite } = loadWorkerConfig(process.env);
+  const { env, gateway, gatewayDescription, orderWrite, orderRequestBudget } = loadWorkerConfig(process.env);
   const logger = createLogger({ level: env.LOG_LEVEL, service: 'worker' });
   const db = createDb(env.DATABASE_URL.reveal(), { max: env.DB_POOL_MAX, applicationName: 'salesforce-worker-app' });
   logPoolErrors(db, logger);
@@ -56,6 +56,7 @@ runMain('worker', async () => {
         ? undefined
         : {
             gateway,
+            budget: orderRequestBudget,
             settings: {
               mode: orderWrite.mode,
               // dry_run needs no origin field (D-1): a marked placeholder keeps the stored payload shape without

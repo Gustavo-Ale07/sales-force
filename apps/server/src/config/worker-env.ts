@@ -2,6 +2,7 @@ import {
   createGateway,
   GatewayConfigError,
   parseOrderWriteSettings,
+  RequestBudget,
   type GatewayDescription,
   type OrderWriteSettings,
   type SankhyaGateway,
@@ -164,6 +165,8 @@ export interface WorkerConfig {
   readonly gatewayDescription: GatewayDescription;
   /** SNK-7 D-1: ERP order submission switches. Disabled unless explicitly enabled; worker only. */
   readonly orderWrite: OrderWriteSettings;
+  /** M3: set only in order-write `live` mode. */
+  readonly orderRequestBudget: RequestBudget | null;
 }
 
 /**
@@ -231,5 +234,6 @@ export function loadWorkerConfig(source: EnvSource): WorkerConfig {
     throw new EnvValidationError('Worker', problems);
   }
   setMaskTargets(sankhyaMaskTargets(source));
-  return { env, gateway, gatewayDescription: gateway.describe(), orderWrite: orderWrite.settings };
+  const orderRequestBudget = orderWrite.settings.requestBudget === null ? null : new RequestBudget(orderWrite.settings.requestBudget);
+  return { env, gateway, gatewayDescription: gateway.describe(), orderWrite: orderWrite.settings, orderRequestBudget };
 }

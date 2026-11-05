@@ -11,6 +11,8 @@ import { SANDBOX_WRITE_HOSTS, writeHostRefusal } from './host-allowlist.js';
  *    base URL on a Sandbox write host), `SF_DEPLOY_ENVIRONMENT=staging` (I1: any enabled mode needs it; NODE_ENV is the run mode, not the environment), the marker
  *    `SANKHYA_ORDER_WRITE_GATES_CLOSED=1` (gates SNK-4 / V-11 / V-13 closed) and `SANKHYA_ORDER_ORIGIN_FIELD`
  *    (the dedicated origin-id column of the order header, SNK-5; never Vidya's fields).
+ *  - `SANKHYA_ORDER_WRITE_REQUEST_BUDGET` (M3, integer 1..10000): cap of Sankhya HTTP requests the order delivery may
+ *    make per worker run. Default 40 in `live` mode (the Sandbox test #1 budget); ignored in other modes.
  */
 export type OrderWriteMode = 'off' | 'dry_run' | 'live';
 
@@ -20,9 +22,11 @@ export interface OrderWriteSettings {
   readonly mode: OrderWriteMode;
   /** Upper-cased header column of the origin id; `null` when not configured. */
   readonly originField: string | null;
+  /** M3: request cap of the order delivery; `null` outside `live` mode. */
+  readonly requestBudget: number | null;
 }
 
-export const ORDER_WRITE_DISABLED: OrderWriteSettings = Object.freeze({ enabled: false, mode: 'off', originField: null });
+export const ORDER_WRITE_DISABLED: OrderWriteSettings = Object.freeze({ enabled: false, mode: 'off', originField: null, requestBudget: null });
 
 /** Origin-id columns that belong to the outgoing Vidya Force flow (SNK-5): never usable here. */
 export const FORBIDDEN_ORIGIN_FIELDS: readonly string[] = ['AD_VDY' + 'ORIG', 'AD_NUVI' + 'DYA'] // assembled so the hygiene scan sees no legacy field literal;
@@ -97,6 +101,16 @@ export function parseOrderWriteSettings(env: Env): { settings: OrderWriteSetting
 
   const mode: OrderWriteMode = !enabled ? 'off' : (requested ?? 'dry_run');
 
+  let requestBudget: number | null = null;
+  const budgetRaw = value(env, 'SANKHYA_ORDER_WRITE_REQUEST_BUDGET');
+  if (budgetRaw !== undefined) {
+    const parsed = Number(budgetRaw);
+    if (Number.isInteger(parsed) && parsed >= 1 && parsed <= 10_000) requestBudget = parsed;
+    else problems.push('SANKHYA_ORDER_WRITE_REQUEST_BUDGET must be an integer between 1 and 10000 (default 40 in live mode).');
+  }
+  if (mode === 'live' && requestBudget === null && budgetRaw === undefined) requestBudget = 40;
+  if (mode !== 'live') requestBudget = null;
+
   const deployProblem = deployEnvironmentProblem(env);
   if (deployProblem !== null) problems.push(deployProblem);
   // I1: the gate is the deployment environment, not NODE_ENV (staging runs with NODE_ENV=production by design).
@@ -128,5 +142,5 @@ export function parseOrderWriteSettings(env: Env): { settings: OrderWriteSetting
     }
   }
 
-  return { settings: { enabled, mode, originField }, problems };
+  return { settings: { enabled, mode, originField, requestBudget }, problems };
 }

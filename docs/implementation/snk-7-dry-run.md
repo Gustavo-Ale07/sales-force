@@ -53,6 +53,8 @@ Interrupção imediata (sem nova tentativa) em: erro de autenticação, resposta
 
 No máximo 40 requisições ao Sandbox em todo o teste (token, consultas de origem, inclusões, confirmações, releituras, limpeza). O worker não deve ultrapassar; ao chegar a 40 o teste termina e o dono decide.
 
+**Limite no worker (M3).** Antes o limite existia só neste texto. Agora o worker o aplica: `SANKHYA_ORDER_WRITE_REQUEST_BUDGET` (inteiro de 1 a 10000; **padrão 40 no modo `live`**, ignorado nos demais modos). Conta toda requisição HTTP ao Sankhya feita durante a entrega de pedidos — token, consultas de origem, inclusões, confirmações e releituras — qualquer que seja o resultado. Ao chegar ao limite a próxima requisição é recusada localmente (sem rede), a entrega em curso volta a `pending` com o motivo `budget_exhausted` (a tentativa não é contada e nada é reenviado; na retomada a origem é consultada primeiro, SNK-4), o worker registra um aviso e não entrega mais nada. O contador fica na memória: **reiniciar o worker abre um novo orçamento**, e essa é a forma de o dono continuar conscientemente. As leituras de sincronização do espelho e do status do ERP não entram na conta. Para mudar o limite, o dono põe a variável no arquivo de override (§5.1), no bloco `worker.environment`; sem ela vale 40.
+
 ## 5. Seção do dono — comando que HABILITARIA a escrita no Sandbox (DESATIVADO)
 
 Não executar. Registrado apenas para que o dono saiba o que seria alterado, depois do "AUTORIZO". As variáveis são do worker (a API nunca recebe credenciais do Sankhya, STACK-2); os valores sensíveis vêm do cofre do dono, não deste repositório.
@@ -66,6 +68,7 @@ SANKHYA_ORDER_ORIGIN_FIELD=AD_FORCEORIGEM
 SANKHYA_ENVIRONMENT=sandbox
 SANKHYA_MODE=live
 SANKHYA_BASE_URL=<um dos dois hosts do Sandbox>
+# SANKHYA_ORDER_WRITE_REQUEST_BUDGET=40   # opcional; 40 é o padrão em live (M3)
 ```
 
 ### 5.1 Como o dono liga (arquivo de override fora do repositório)

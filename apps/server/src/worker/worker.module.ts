@@ -18,7 +18,7 @@ import {
   type OrderDeliverySettings,
 } from '../integration/order-delivery.service.js';
 import { OrderErpStatusService } from '../integration/order-erp-status.service.js';
-import type { SankhyaReadPort } from '@salesforce/sankhya';
+import type { RequestBudget, SankhyaReadPort } from '@salesforce/sankhya';
 import { ConfigurationSyncService } from '../sync/configuration-sync.service.js';
 import { WorkerRuntime, type WorkerRuntimeOptions } from './runtime.js';
 
@@ -36,6 +36,8 @@ export interface ProductMediaWiring {
 export interface OrderDeliveryWiring {
   readonly gateway: OrderDeliveryGateway;
   readonly settings: OrderDeliverySettings;
+  /** M3: request cap of the delivery (live mode only). */
+  readonly budget?: RequestBudget | null;
 }
 
 /** Configuration read from Sankhya (CFG-8); passed only when CONFIG_SYNC_FROM_SANKHYA=1. Read port only. */
@@ -112,6 +114,7 @@ export class WorkerModule {
                         db,
                         gateway: orderDelivery.gateway,
                         settings: orderDelivery.settings,
+                        ...(orderDelivery.budget ? { budget: orderDelivery.budget } : {}),
                         audit: new AuditService(db.db, now),
                         logger,
                         now,
