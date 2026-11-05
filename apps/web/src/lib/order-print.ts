@@ -9,7 +9,7 @@ export const orderDocumentStatusLabels: Record<ApiSchema<"OrderStatus">, string>
   awaiting_approval: "Aguardando aprovação",
   approved: "Aprovado",
   approval_rejected: "Reprovado na aprovação",
-  queued: "Na fila para o Sankhya",
+  queued: "Enviando ao Sankhya",
   sent: "Enviado ao Sankhya",
   rejected: "Falha no envio",
   unknown: "Envio em verificação",

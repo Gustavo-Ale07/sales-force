@@ -34,7 +34,7 @@ import { useState } from "react";
 import { customerFinancialQueryOptions, customerQueryOptions, ordersQueryOptions } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { errorStatus } from "../lib/http-error";
-import { orderReference, orderStatusLabels } from "../lib/labels";
+import { orderReference, orderStatusView } from "../lib/labels";
 import { CustomerStatus } from "../routes/customers";
 import { QueryError } from "./query-error";
 
@@ -95,7 +95,7 @@ function CustomerOrders({ customerCode }: { customerCode: number }) {
             </TableHeader>
             <TableBody>
               {query.data.items.map((order) => {
-                const status = orderStatusLabels[order.status];
+                const status = orderStatusView(order);
                 return (
                   <TableRow key={order.id}>
                     <TableCell>

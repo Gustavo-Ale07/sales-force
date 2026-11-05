@@ -55,7 +55,7 @@ import { useApi } from "../lib/app-context";
 import { useLoadedDataset, requireDataset } from "../lib/dataset";
 import { approvalsEnabled } from "../lib/discount-authority";
 import { describeApiError, submitConflictText } from "../lib/error-message";
-import { deliveryErrorText, erpStatusText, orderReference, orderReviewLabel, orderReviewReasons, orderStatusHints, orderStatusLabels } from "../lib/labels";
+import { deliveryErrorText, erpStatusText, orderReference, orderReviewLabel, orderReviewReasons, orderStatusView } from "../lib/labels";
 import {
   describeIssue,
   discountProblemMessages,
@@ -568,7 +568,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
   const carrierItems = carriers.data?.items ?? [];
   const carrierUnlisted = carrierChoice !== null && !carrierItems.some((carrier) => carrier.code === carrierChoice);
   const submitFailure = sendFailure;
-  const status = order ? orderStatusLabels[order.status] : null;
+  const status = order ? orderStatusView(order) : null;
   const discountMode = config.data?.sales.discountAuthorityMode;
   const approvalsOn = approvalsEnabled(discountMode);
 
@@ -625,7 +625,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
       ) : null}
       {readOnly ? (
         <Alert tone="info" title="Somente leitura">
-          Este pedido está como “{status?.label}” e não pode mais ser editado. {order ? orderStatusHints[order.status] : null}
+          Este pedido está como “{status?.label}” e não pode mais ser editado. {status?.hint ?? null}
         </Alert>
       ) : null}
       {save.isError ? <FailureAlert failure={describeSaveFailure(save.error)} onReload={order ? reload : undefined} /> : null}

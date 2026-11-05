@@ -39,7 +39,7 @@ import { PrintOrderButton } from "../components/print-order-button";
 import { QueryError } from "../components/query-error";
 import { customerQueryOptions, orderEntryConfigurationQueryOptions, ordersQueryOptions, type OrdersParams } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
-import { deliveryErrorText, erpStatusText, formatCount, orderReference, orderReviewLabel, orderReviewReasons, orderStatusLabels } from "../lib/labels";
+import { deliveryErrorText, erpStatusText, formatCount, orderReference, orderReviewLabel, orderReviewReasons, orderStatusLabels, orderStatusView } from "../lib/labels";
 import { MAX_ORDER_PRODUCTS, ORDER_DATE_FIELDS, ORDER_STATUSES, type OrdersSearch } from "../lib/route-search";
 import { asDate, asOneOf, compact } from "../lib/search-params";
 import { useSearchBox } from "../lib/use-search-box";
@@ -357,7 +357,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
               </TableMessageRow>
             ) : (
               query.data.items.map((order) => {
-                const status = orderStatusLabels[order.status];
+                const status = orderStatusView(order);
                 return (
                   <TableRow key={order.id} interactive onActivate={() => onOpenOrder(order.id)}>
                     <TableCell>

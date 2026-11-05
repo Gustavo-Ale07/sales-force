@@ -537,7 +537,7 @@ export class OrdersService {
       this.assertDeletable(locked);
       if ((await deleteOrderDeliveries(tx, id)) === 'busy') {
         throw new AppError('conflict', {
-          message: 'O pedido está na fila de envio ao Sankhya. Aguarde a conclusão do envio.',
+          message: 'O envio ao Sankhya está em andamento. Aguarde a conclusão do envio.',
           details: { reason: 'delivery_in_progress' },
         });
       }
@@ -763,7 +763,7 @@ export class OrdersService {
       throw new AppError('conflict', { message: 'Este documento já foi criado no Sankhya e não pode ser excluído aqui.', details: { reason: 'has_erp_number' } });
     }
     if (!isOrderDeletable(order.status as Parameters<typeof isOrderDeletable>[0], order.erpNumber)) {
-      throw new AppError('conflict', { message: 'Este documento está na fila de envio ao Sankhya e não pode ser excluído agora.', details: { reason: 'delivery_in_progress' } });
+      throw new AppError('conflict', { message: 'O envio deste documento ao Sankhya está em andamento e ele não pode ser excluído agora.', details: { reason: 'delivery_in_progress' } });
     }
   }
 

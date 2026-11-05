@@ -188,7 +188,7 @@ describe("Situação do pedido: textos distintos e honestos", () => {
   const idFor = (n: number) => `0190a000-0000-7000-8000-0000000000a${n}`;
   const rows = [
     orderListItem({ id: idFor(1), draftNumber: 1, status: "draft" }),
-    orderListItem({ id: idFor(2), draftNumber: 2, status: "queued" }),
+    orderListItem({ id: idFor(2), draftNumber: 2, status: "queued", updatedAt: new Date().toISOString() }),
     orderListItem({ id: idFor(3), draftNumber: 3, status: "sent", erpNumber: 555 }),
     orderListItem({ id: idFor(4), draftNumber: 4, status: "rejected" }),
     orderListItem({ id: idFor(5), draftNumber: 5, status: "unknown" }),
@@ -197,7 +197,7 @@ describe("Situação do pedido: textos distintos e honestos", () => {
   it("shows one distinct text per status and never says invoiced or synchronized", async () => {
     renderApp("/pedidos", { handlers: { "GET /orders": { body: ordersPage(rows) } } });
     const table = await screen.findByRole("table");
-    for (const text of ["Na fila para o Sankhya", "Enviado ao Sankhya", "Falha no envio", "Envio em verificação"]) {
+    for (const text of ["Enviando ao Sankhya…", "Enviado ao Sankhya", "Falha no envio", "Envio em verificação"]) {
       expect(await within(table).findAllByText(text)).not.toHaveLength(0);
     }
     expect(table).not.toHaveTextContent(/faturad|sincronizado|confirmado/i);

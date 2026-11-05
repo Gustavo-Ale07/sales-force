@@ -42,6 +42,6 @@ test.describe("Cenário 5 — envio ao Sankhya desabilitado", () => {
     }
     await navLink(page, "Vendas").click();
     await expect(bodyRows(tableRegion(page, "Pedidos")).filter({ hasText: "Rascunho nº" }).first()).toBeVisible();
-    await expect(bodyRows(tableRegion(page, "Pedidos")).filter({ hasText: /Na fila|Enviado|Rejeitado/ })).toHaveCount(0);
+    await expect(bodyRows(tableRegion(page, "Pedidos")).filter({ hasText: /Enviando ao Sankhya|Enviado|Rejeitado/ })).toHaveCount(0);
   });
 });

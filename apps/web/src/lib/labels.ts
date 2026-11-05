@@ -1,5 +1,5 @@
 import type { ApiSchema } from "@salesforce/contracts/client";
-import { documentVocabulary, type DocumentKind } from "@salesforce/domain";
+import { documentVocabulary, isDeliveryOverdue, type DocumentKind } from "@salesforce/domain";
 import type { Tone } from "@salesforce/ui";
 
 /**
@@ -13,11 +13,31 @@ export const orderStatusLabels: Record<ApiSchema<"OrderStatus">, { label: string
   awaiting_approval: { label: "Aguardando aprovação", tone: "warning" },
   approved: { label: "Aprovado", tone: "info" },
   approval_rejected: { label: "Reprovado na aprovação", tone: "danger" },
-  queued: { label: "Na fila para o Sankhya", tone: "info" },
+  queued: { label: "Enviando ao Sankhya…", tone: "info" },
   sent: { label: "Enviado ao Sankhya", tone: "info" },
   rejected: { label: "Falha no envio", tone: "danger" },
   unknown: { label: "Envio em verificação", tone: "warning" },
 };
+
+/**
+ * D-AA: label, tone and hint of an order as the seller sees it. A delivery pending for more than 2 minutes reads
+ * "Aguardando envio — será reenviado automaticamente"; the word "fila" never reaches the seller.
+ */
+export function orderStatusView(
+  order: { status: ApiSchema<"OrderStatus">; erpNumber?: number | null; updatedAt?: string },
+  now: number = Date.now(),
+): { label: string; tone: Tone; hint: string } {
+  const base = orderStatusLabels[order.status];
+  const hint = orderStatusHints[order.status];
+  if (order.status === "queued" && isDeliveryOverdue({ updatedAt: order.updatedAt, now })) {
+    return {
+      label: "Aguardando envio — será reenviado automaticamente",
+      tone: "warning",
+      hint: "O envio ao Sankhya está demorando. O Sales Force tenta de novo sozinho; não é preciso enviar outra vez.",
+    };
+  }
+  return { ...base, hint };
+}
 
 /** One sentence per situation: what it says, and what it does not say about Sankhya. */
 export const orderStatusHints: Record<ApiSchema<"OrderStatus">, string> = {
@@ -25,7 +45,7 @@ export const orderStatusHints: Record<ApiSchema<"OrderStatus">, string> = {
   awaiting_approval: "O desconto do pedido aguarda a decisão de um aprovador. Editar o pedido cancela a solicitação e o devolve a rascunho.",
   approved: "Desconto aprovado. Isso não significa que o pedido foi enviado ao Sankhya.",
   approval_rejected: "O aprovador reprovou o desconto. Edite o pedido para ajustar e enviar de novo.",
-  queued: "Na fila para o Sankhya. O pedido ainda não existe no Sankhya.",
+  queued: "O envio ao Sankhya está em andamento. O pedido ainda não existe no Sankhya.",
   sent: "O Sankhya recebeu o pedido enviado pelo Sales Force. Isso não indica confirmação nem faturamento.",
   rejected: "O envio ao Sankhya falhou. O pedido não foi criado no Sankhya; ele pode ser reenviado depois.",
   unknown: "Não foi possível confirmar se o Sankhya recebeu o pedido. Confira no Sankhya antes de enviar novamente.",
