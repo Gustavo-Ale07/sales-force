@@ -16,7 +16,7 @@
 
 ## Verificação
 - db 78/78, web 495/495 (inclui testes novos do botão e da marca), typecheck e lint do web limpos, `order-delivery` e `order-enqueue` verdes.
-- Suíte completa do servidor: iniciada em segundo plano, log em `.claude/work/logs/server-full.log` (resultado abaixo, se já concluída).
+- Suíte completa do servidor: NÃO verificada. A execução falhou em 49 arquivos com "Could not find a working container runtime strategy" (Docker Desktop parado), não por teste. Rodar de novo com o Docker ligado: `cd apps/server && pnpm exec vitest run --reporter=dot > ../../.claude/work/logs/server-full.log`.
 
 ## Deslizes de processo (a declarar)
 - Heredocs usados contra a regra "ZERO heredoc": um `j4.cjs` vazio, dois `cat >>` de testes e o corpo de uma mensagem de commit.
