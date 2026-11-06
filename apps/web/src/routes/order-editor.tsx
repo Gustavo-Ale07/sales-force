@@ -339,6 +339,22 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
     items: toRequestItems(lines),
   };
 
+  // D-AA "Reenviar": a terminal failure goes back to the worker (same delivery record, the ERP is asked by origin first).
+  const resend = useMutation({
+    mutationFn: async () => {
+      if (!order) throw new Error("O documento precisa estar salvo.");
+      return submitOrder(api, order.id);
+    },
+    onSuccess: async (result) => {
+      if (result) queryClient.setQueryData(queryKeys.order(result.id), result);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.ordersAll });
+      toast({ title: "Reenviando ao Sankhya", description: order ? orderReference(order, docKind) : undefined, tone: "success" });
+    },
+    onError: (error) => {
+      toast({ title: "Não foi possível reenviar", description: describeApiError(error, "Tente novamente em instantes").description, tone: "danger" });
+    },
+  });
+
   const save = useMutation({
     mutationFn: async () => {
       // The dataset this editor loaded under; unknown identity blocks the write before any request.
@@ -616,6 +632,11 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
       {order?.status === "rejected" && deliveryErrorText(order.erpDelivery) ? (
         <Alert tone="danger" title="Motivo da falha no envio">
           {deliveryErrorText(order.erpDelivery)}
+          <div className="mt-2">
+            <Button type="button" variant="secondary" loading={resend.isPending} onClick={() => resend.mutate()}>
+              Reenviar
+            </Button>
+          </div>
         </Alert>
       ) : null}
       {order?.status === "draft" && order.dryRun ? (

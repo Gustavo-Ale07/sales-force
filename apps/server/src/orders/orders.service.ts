@@ -43,7 +43,7 @@ import { uuidv7 } from '../platform/ids.js';
 import { CLOCK, DATASET_IDENTITY, ORDER_ENQUEUE_ENABLED, type Clock } from '../platform/tokens.js';
 import { DraftBuilder, type DraftOutcome } from './draft-builder.js';
 import { assertEligibleForErpSubmission } from './erp-eligibility.guard.js';
-import { deleteOrderDeliveries, enqueueOrderDelivery } from './order-erp-delivery.js';
+import { deleteOrderDeliveries, enqueueOrderDelivery, requeueRejectedDelivery } from './order-erp-delivery.js';
 import { orderFingerprint } from './order-fingerprint.js';
 import { InstallationConfigurationService } from '../configuration/configuration.service.js';
 import { toOrderApproval, toOrderDetail, toOrderListItem } from './order.mapper.js';
@@ -626,6 +626,7 @@ export class OrdersService {
       });
     }
     if (order.status === 'queued' && this.enqueueEnabled) return this.detailOf(order); // replay of the same click
+    if (order.status === 'rejected') return this.resendRejected(user, order);
     if (order.status !== 'draft' && order.status !== 'approved') throw new AppError('order_not_editable');
     // The server revalidates the customer NOW, not at draft time: a draft whose customer became ineligible
     // is refused and flagged (needs_review), never sent and never silently altered.
@@ -664,6 +665,26 @@ export class OrdersService {
       throw new AppError('erp_submission_disabled');
     }
     return this.enqueueForErp(user, order, scope);
+  }
+
+  /** D-AA "Reenviar": a delivery that ended in a terminal failure goes back to the worker, same outbox row and origin id. */
+  private async resendRejected(user: CurrentUser, seen: OrderRow): Promise<OrderDetail> {
+    if (!this.enqueueEnabled) throw new AppError('erp_submission_disabled');
+    const at = this.clock();
+    const updated = await this.orders.transaction(async (tx) => {
+      const locked = await this.orders.findById(seen.id, tx, true);
+      if (locked === null) throw new AppError('not_found');
+      if (locked.status === 'queued') return locked;
+      if (locked.status !== 'rejected' || locked.version !== seen.version) throw new AppError('version_conflict', { details: { currentVersion: locked.version } });
+      const row = await requeueRejectedDelivery(tx, locked, at);
+      if (row === null) throw new AppError('order_not_editable');
+      await this.audit.record(
+        { action: AUDIT_ACTIONS.orderErpEnqueued, actorAccountId: user.accountId, detail: { ...this.auditDetail(row, 0), resend: true } },
+        tx,
+      );
+      return row;
+    });
+    return this.detailOf(updated);
   }
 
   /**

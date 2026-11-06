@@ -938,4 +938,14 @@ describe("Rascunho existente", () => {
     renderApp(`/pedidos/${ORDER_ID}`, { handlers: { "GET /orders/:id": () => new Promise(() => undefined) } });
     expect(await screen.findByText("Carregando pedido…")).toBeInTheDocument();
   });
+
+  it("D-AA: a failed delivery offers Reenviar, which submits the same order again", async () => {
+    const failed = orderDetail({ status: "rejected", erpDelivery: { errorClass: "validation", errorCode: "environment_mismatch" } });
+    const { user, calls } = renderApp(`/pedidos/${ORDER_ID}`, {
+      handlers: existing(failed, { "POST /orders/:id/submit": { body: orderDetail({ status: "queued" }) } }),
+    });
+    await user.click(await screen.findByRole("button", { name: "Reenviar" }));
+    expect(await screen.findByText("Reenviando ao Sankhya")).toBeInTheDocument();
+    expect(callsTo(calls, "POST", `/orders/${ORDER_ID}/submit`)).toHaveLength(1);
+  });
 });

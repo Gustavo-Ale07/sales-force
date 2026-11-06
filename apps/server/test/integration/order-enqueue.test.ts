@@ -161,6 +161,38 @@ describe('API-side enqueue for the ERP (SNK-7 D-5, D-M)', () => {
     expect((await on.call('seller1', 'DELETE', `/orders/${id}`)).status).toBe(204);
   });
 
+  it('D-AA: Reenviar puts a rejected delivery back to the worker on the SAME outbox row; a dry run or an off switch is not resent', async () => {
+    const id = await draft(on);
+    await bindToSandbox(on, id);
+    expect((await on.call('seller1', 'POST', `/orders/${id}/submit`)).status).toBe(200);
+    const db = on.database.handle.db;
+    const [before] = await outboxOf(on, id);
+    await db.update(integrationOutbox).set({ status: 'rejected', attemptCount: 3, lastErrorClass: 'temporary', lastErrorMessage: 'x' }).where(eq(integrationOutbox.aggregateId, id));
+    await db.update(salesOrder).set({ status: 'rejected' }).where(eq(salesOrder.id, id));
+
+    const resent = await on.call('seller1', 'POST', `/orders/${id}/submit`);
+    expect(resent.status).toBe(200);
+    expect(resent.body.status).toBe('queued');
+    const rows = await outboxOf(on, id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id).toBe(before?.id);
+    expect(rows[0]?.originId).toBe(id);
+    expect(rows[0]?.status).toBe('pending');
+    expect(rows[0]?.lastErrorClass).toBeNull();
+    expect((await on.call('seller1', 'POST', `/orders/${id}/submit`)).body.status).toBe('queued'); // second click replays
+
+    // a simulated delivery (dry_run) is not a failure: nothing to resend
+    await db.update(integrationOutbox).set({ status: 'dry_run' }).where(eq(integrationOutbox.aggregateId, id));
+    await db.update(salesOrder).set({ status: 'rejected' }).where(eq(salesOrder.id, id));
+    expect((await on.call('seller1', 'POST', `/orders/${id}/submit`)).status).toBe(409);
+
+    // with the switch off the resend is refused as well
+    const offId = await draft(off);
+    await bindToSandbox(off, offId);
+    await off.database.handle.db.update(salesOrder).set({ status: 'rejected' }).where(eq(salesOrder.id, offId));
+    expect((await off.call('seller1', 'POST', `/orders/${offId}/submit`)).body.code).toBe('erp_submission_disabled');
+  });
+
   it('D-Y: a rejected order (delivery finished, no ERP number) is deleted together with its delivery record', async () => {
     const id = await draft(on);
     await bindToSandbox(on, id);
