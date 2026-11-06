@@ -22,6 +22,13 @@ STATUS: ACTIVE — atualizado em 2026-10-29. Fonte de verdade ÚNICA: `C:\Dev\sa
 1. Parte 2 (`PROMPT_2026-10-30_parte2_config-sankhya.md`): começa registrando CFG-8, U-10-a..d e U-11 em `docs/decisions.md`; depois Trilha D.
 2. Decisões do dono abertas pelo reviewer: alçada em modo `erp` vs P-10; PDF compartilhado por representante vs P-20 (ver checkpoint).
 
+## Parte 2h (2026-11-06) — D-AC feito: C1–C3
+- Commits: `dad7641` (C1, API filtrada por perfil), `d2d765c` (C2, diálogo em duas visões, `ProgressSteps`/`StepRow`), `265dcbf` (C3, `CONFIG_SYNC_FROM_SANKHYA` repassada ao worker).
+- **Só o dono roda (staging):**
+  1. Implantar o SHA novo (web + API: o diálogo e a API filtrada) pelo procedimento habitual; o `docker-compose.staging.yml` novo precisa estar no host.
+  2. Prova do item 3 de 2g: `compose.env` já tem `CONFIG_SYNC_FROM_SANKHYA=1`; depois do compose novo: `deploy/scripts/sf-compose.sh up -d --no-deps --force-recreate worker`. Conferir que "Atualizar dados" deixa de dizer "Leitura da configuração desativada".
+  3. Testar como vendedor (barra + frase) e como gerente/admin (três blocos).
+
 ## Parte 2g (2026-11-06) — D-AB feito: B1–B5
 - Checkpoint: `CHECKPOINT_2026-11-06-parte2g.md`. Commits: `fd1ffdd` (B1), `499e154` (B2), `0347ce5` (B3), `1a1d538` (B4), B5 (docs).
 - **Só o dono roda (nesta ordem, em staging):**
