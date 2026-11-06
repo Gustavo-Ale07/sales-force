@@ -58,7 +58,7 @@ describe("Novo pedido", () => {
     expect(screen.getByText("Selecione o cliente")).toBeInTheDocument();
     expect(screen.queryByRole("searchbox", { name: "Buscar produto" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Lançamento múltiplo" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Salvar pedido" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Confirmar pedido" })).toBeDisabled();
   });
 
   it("the product picker requests thumbnails with the version, and a placeholder without image", async () => {
@@ -280,7 +280,7 @@ describe("Novo pedido", () => {
     await user.type(quantity, "2.5.1");
     expect(await screen.findByText("Quantidade inválida.")).toBeInTheDocument();
     expect(quantity).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByRole("button", { name: "Salvar pedido" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Confirmar pedido" })).toBeDisabled();
   });
 
   it("accepts decimal quantities with a comma or a dot (0,2 pack steps) and sends them as decimal strings", async () => {
@@ -296,7 +296,7 @@ describe("Novo pedido", () => {
     }
     await user.clear(quantity);
     await user.type(quantity, "0.2");
-    await user.click(screen.getByRole("button", { name: "Salvar pedido" }));
+    await user.click(screen.getByRole("button", { name: "Confirmar pedido" }));
     await waitFor(() => expect(callsTo(calls, "POST", "/orders")).toHaveLength(1));
     expect(callsTo(calls, "POST", "/orders")[0]?.body).toMatchObject({ items: [{ productCode: 2001, quantity: "0.2" }] });
   });
@@ -628,7 +628,7 @@ describe("Novo pedido", () => {
     const quantity = await screen.findByLabelText("Quantidade de Balão látex 9 pol. vermelho");
     await user.clear(quantity);
     await user.type(quantity, "2");
-    await user.click(screen.getByRole("button", { name: "Salvar pedido" }));
+    await user.click(screen.getByRole("button", { name: "Confirmar pedido" }));
     await waitFor(() => expect(router.state.location.pathname).toBe(`/pedidos/${ORDER_ID}`));
     const [created] = callsTo(calls, "POST", "/orders");
     expect(created?.body).toMatchObject({ customerCode: 1001, items: [{ productCode: 2001, quantity: "2" }] });
@@ -652,9 +652,9 @@ describe("Novo pedido", () => {
       }),
     });
     await addProduct(user, "Balão");
-    await user.click(screen.getByRole("button", { name: "Salvar pedido" }));
+    await user.click(screen.getByRole("button", { name: "Confirmar pedido" }));
     expect(await screen.findByText("req-s-1")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Salvar pedido" }));
+    await user.click(screen.getByRole("button", { name: "Confirmar pedido" }));
     await waitFor(() => expect(callsTo(calls, "POST", "/orders")).toHaveLength(2));
     const [first, second] = callsTo(calls, "POST", "/orders").map((call) => (call.body as { clientRequestId: string }).clientRequestId);
     expect(first).toBe(second);
@@ -670,7 +670,7 @@ describe("Novo pedido", () => {
       }),
     });
     await addProduct(user, "Balão");
-    await user.click(screen.getByRole("button", { name: "Salvar pedido" }));
+    await user.click(screen.getByRole("button", { name: "Confirmar pedido" }));
     expect(await screen.findByText("Corrija os itens antes de salvar")).toBeInTheDocument();
     expect(screen.getByText("Item 1: Produto indisponível para venda.")).toBeInTheDocument();
   });
@@ -683,7 +683,7 @@ describe("Novo pedido", () => {
     });
     await addProduct(user, "Vela");
     expect(await screen.findByText("Este item não pode ser pedido sem preço nesta instalação.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Salvar pedido" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Confirmar pedido" })).toBeDisabled();
     expect(screen.getByTestId("save-blocked-reason")).toHaveTextContent("Remova os itens sem preço para salvar.");
   });
 
@@ -693,7 +693,7 @@ describe("Novo pedido", () => {
     });
     expect(await screen.findByText("Pedidos ainda não habilitados")).toBeInTheDocument();
     await addProduct(user, "Balão");
-    expect(screen.getByRole("button", { name: "Salvar pedido" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Confirmar pedido" })).toBeDisabled();
   });
 
   it("asks for confirmation before leaving with unsaved changes", async () => {
@@ -781,8 +781,8 @@ describe("Rascunho existente", () => {
     expect(await screen.findByRole("heading", { name: /^Pedido nº 12/ })).toBeInTheDocument();
     expect(screen.getByLabelText("Quantidade de Balão látex 9 pol. vermelho")).toHaveValue("2");
     expect(screen.getByTestId("order-total")).toHaveTextContent("25,00");
-    // D-AA: a saved document that was never sent can be sent without editing: the one button is "Salvar pedido".
-    expect(screen.getByRole("button", { name: "Salvar pedido" })).toBeEnabled();
+    // D-AA: a saved document that was never sent can be sent without editing: the one button is "Confirmar pedido".
+    expect(screen.getByRole("button", { name: "Confirmar pedido" })).toBeEnabled();
     expect(screen.queryByRole("button", { name: "Enviar ao Sankhya" })).not.toBeInTheDocument();
   });
 
@@ -792,13 +792,13 @@ describe("Rascunho existente", () => {
         "POST /orders/:id/submit": apiError(409, "erp_submission_disabled", "Envio desabilitado.", { requestId: "req-sub-1" }),
       }),
     });
-    await user.click(await screen.findByRole("button", { name: "Salvar pedido" }));
+    await user.click(await screen.findByRole("button", { name: "Confirmar pedido" }));
     expect(await screen.findByText(SUBMIT_DISABLED_MESSAGE)).toBeInTheDocument();
     expect(screen.getByText("Envio ao Sankhya indisponível")).toBeInTheDocument();
     expect(screen.getByText("Envio ao Sankhya desligado")).toBeInTheDocument(); // never silent (D-AA)
     expect(callsTo(calls, "POST", `/orders/${ORDER_ID}/submit`)).toHaveLength(1);
     expect(screen.queryByText(/enviado com sucesso|pedido enviado/i)).not.toBeInTheDocument();
-    expect(screen.queryByText("Pedido salvo")).not.toBeInTheDocument();
+    expect(screen.queryByText("Pedido confirmado")).not.toBeInTheDocument();
   });
 
   it("shows other submit failures as errors with the correlation id", async () => {
@@ -807,7 +807,7 @@ describe("Rascunho existente", () => {
         "POST /orders/:id/submit": apiError(503, "service_unavailable", "x", { requestId: "req-sub-2" }),
       }),
     });
-    await user.click(await screen.findByRole("button", { name: "Salvar pedido" }));
+    await user.click(await screen.findByRole("button", { name: "Confirmar pedido" }));
     expect(await screen.findByText("req-sub-2")).toBeInTheDocument();
     expect(screen.queryByText(SUBMIT_DISABLED_MESSAGE)).not.toBeInTheDocument();
   });
@@ -822,7 +822,7 @@ describe("Rascunho existente", () => {
     const { user } = renderApp(`/pedidos/${ORDER_ID}`, {
       handlers: existing(orderDetail(), { "POST /orders/:id/submit": { body: waiting } }),
     });
-    await user.click(await screen.findByRole("button", { name: "Salvar pedido" }));
+    await user.click(await screen.findByRole("button", { name: "Confirmar pedido" }));
     expect(await screen.findByText(SUBMIT_AWAITING_MESSAGE)).toBeInTheDocument();
     expect(screen.queryByText(SUBMIT_DISABLED_MESSAGE)).not.toBeInTheDocument();
   });
@@ -833,7 +833,7 @@ describe("Rascunho existente", () => {
         "POST /orders/:id/submit": apiError(409, "discount_blocked", "Desconto acima do limite.", { requestId: "req-sub-3" }),
       }),
     });
-    await user.click(await screen.findByRole("button", { name: "Salvar pedido" }));
+    await user.click(await screen.findByRole("button", { name: "Confirmar pedido" }));
     expect(await screen.findByText(SUBMIT_BLOCKED_MESSAGE)).toBeInTheDocument();
     expect(screen.queryByText("req-sub-3")).not.toBeInTheDocument();
   });
@@ -851,7 +851,7 @@ describe("Rascunho existente", () => {
     expect(screen.getByLabelText("Quantidade de Balão látex 9 pol. vermelho")).not.toBeDisabled();
   });
 
-  it("D-AA: one click on 'Salvar pedido' replaces the lines and then sends, in this order, once", async () => {
+  it("D-AA: one click on 'Confirmar pedido' replaces the lines and then sends, in this order, once", async () => {
     const { user, calls } = renderApp(`/pedidos/${ORDER_ID}`, {
       handlers: existing(orderDetail(), {
         "PUT /orders/:id": { body: orderDetail({ version: 2 }) },
@@ -862,8 +862,8 @@ describe("Rascunho existente", () => {
     await user.clear(quantity);
     await user.type(quantity, "3");
     expect(screen.queryByRole("button", { name: "Enviar ao Sankhya" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Salvar pedido" }));
-    expect(await screen.findByText("Pedido salvo e enviando ao Sankhya")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Confirmar pedido" }));
+    expect(await screen.findByText("Pedido confirmado e enviando ao Sankhya")).toBeInTheDocument();
     expect(callsTo(calls, "PUT", `/orders/${ORDER_ID}`)).toHaveLength(1);
     expect(callsTo(calls, "POST", `/orders/${ORDER_ID}/submit`)).toHaveLength(1);
   });
@@ -883,8 +883,8 @@ describe("Rascunho existente", () => {
     const quantity = await screen.findByLabelText("Quantidade de Balão látex 9 pol. vermelho");
     await user.clear(quantity);
     await user.type(quantity, "3");
-    await user.click(screen.getByRole("button", { name: "Salvar pedido" }));
-    expect(await screen.findByText("Pedido salvo e enviando ao Sankhya")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Confirmar pedido" }));
+    expect(await screen.findByText("Pedido confirmado e enviando ao Sankhya")).toBeInTheDocument();
     const [put] = callsTo(calls, "PUT", `/orders/${ORDER_ID}`);
     expect(put?.body).toMatchObject({ expectedVersion: 1, customerCode: 1001, items: [{ productCode: 2001, quantity: "3" }] });
     expect(put?.body).toHaveProperty("expectedDataset", testDataset);
@@ -898,7 +898,7 @@ describe("Rascunho existente", () => {
     const quantity = await screen.findByLabelText("Quantidade de Balão látex 9 pol. vermelho");
     await user.clear(quantity);
     await user.type(quantity, "3");
-    await user.click(screen.getByRole("button", { name: "Salvar pedido" }));
+    await user.click(screen.getByRole("button", { name: "Confirmar pedido" }));
     expect(await screen.findByText("O documento foi alterado em outro lugar")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Recarregar" })).toBeInTheDocument();
   });
@@ -906,7 +906,7 @@ describe("Rascunho existente", () => {
   it("is read-only once the order is no longer a draft", async () => {
     renderApp(`/pedidos/${ORDER_ID}`, { handlers: existing(orderDetail({ status: "sent", erpNumber: 555 })) });
     expect(await screen.findByText("Somente leitura")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Salvar pedido" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Confirmar pedido" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Enviar ao Sankhya" })).not.toBeInTheDocument();
     expect(screen.getByLabelText("Quantidade de Balão látex 9 pol. vermelho")).toHaveAttribute("readonly");
   });

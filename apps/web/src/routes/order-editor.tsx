@@ -77,7 +77,7 @@ type OrderDetail = ApiSchema<"OrderDetail">;
 
 
 export const SUBMIT_DISABLED_MESSAGE =
-  "Envio ao Sankhya desligado nesta instalação. O documento foi salvo e nada foi enviado.";
+  "Envio ao Sankhya desligado nesta instalação. O documento ficou registrado e nada foi enviado.";
 
 /** ORD-1: editable as draft and as rejected-by-approver; editing an order awaiting approval returns it to draft. */
 const EDITABLE_STATUSES: ReadonlySet<OrderDetail["status"]> = new Set(["draft", "approval_rejected", "awaiting_approval"]);
@@ -389,13 +389,13 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
         const awaiting = sent.status === "awaiting_approval";
         if (awaiting) setSubmitNotice(SUBMIT_AWAITING_MESSAGE);
         toast({
-          title: awaiting ? "Enviado para aprovação do desconto" : docKind === "quote" ? "Orçamento salvo e enviando ao Sankhya" : "Pedido salvo e enviando ao Sankhya",
+          title: awaiting ? "Enviado para aprovação do desconto" : docKind === "quote" ? "Orçamento confirmado e enviando ao Sankhya" : "Pedido confirmado e enviando ao Sankhya",
           description: reference,
           tone: "success",
         });
       } else if (sendError instanceof ApiRequestError && sendError.code === ERP_SUBMISSION_DISABLED) {
         setSubmitMessage(SUBMIT_DISABLED_MESSAGE);
-        toast({ title: "Envio ao Sankhya desligado", description: `${reference} foi salvo; nada foi enviado.`, tone: "warning" });
+        toast({ title: "Envio ao Sankhya desligado", description: `${reference} ficou registrado; nada foi enviado.`, tone: "warning" });
       } else if (sendError instanceof ApiRequestError && sendError.code === "discount_blocked") {
         setSubmitMessage(SUBMIT_BLOCKED_MESSAGE);
         toast({ title: "Salvo, mas não enviado", description: "Desconto acima do limite da diretoria.", tone: "warning" });
@@ -406,7 +406,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
         setSendFailure(conflict === null ? described : { ...described, description: conflict });
         toast({ title: "Salvo, mas o envio falhou", description: described.description, tone: "danger" });
       } else {
-        toast({ title: docKind === "quote" ? "Orçamento salvo" : "Pedido salvo", description: reference, tone: "success" });
+        toast({ title: docKind === "quote" ? "Orçamento confirmado" : "Pedido confirmado", description: reference, tone: "success" });
       }
       if (!order) {
         leavingRef.current = true;
@@ -646,7 +646,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
       ) : null}
       {order?.status === "draft" && order.dryRun ? (
         <Alert tone="info" title="Simulado, não enviado">
-          Simulado em {new Date(order.dryRun.at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} — não enviado ao Sankhya (assinatura {order.dryRun.payloadHash.slice(0, 12)}). Para enviar de verdade, use “Enviar ao Sankhya” de novo.
+          Simulado em {new Date(order.dryRun.at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} — não enviado ao Sankhya (assinatura {order.dryRun.payloadHash.slice(0, 12)}). Para enviar de verdade, confirme o pedido de novo quando o envio estiver ligado.
         </Alert>
       ) : null}
       {readOnly ? (

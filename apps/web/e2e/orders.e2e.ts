@@ -40,7 +40,7 @@ test.describe("Cenário 4 — novo pedido, rascunhos e exclusão", () => {
     await expect(first).toHaveValue("2");
     await expect(page.getByRole("textbox", { name: `Quantidade de ${PRICED_PRODUCTS[1]}` })).toHaveValue("3,5");
     // Nothing changed yet: no needless save, no send while unsaved changes exist.
-    const save = page.getByRole("button", { name: "Salvar pedido" });
+    const save = page.getByRole("button", { name: "Confirmar pedido" });
     await expect(save).toBeDisabled();
 
     await first.fill("7");
@@ -67,10 +67,10 @@ test.describe("Cenário 4 — novo pedido, rascunhos e exclusão", () => {
     const first = page.getByRole("textbox", { name: `Quantidade de ${PRICED_PRODUCTS[0]}` });
     await first.fill("0");
     await expect(first).toHaveAttribute("aria-invalid", "true");
-    await expect(page.getByRole("button", { name: "Salvar pedido" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Confirmar pedido" })).toBeDisabled();
     await first.fill("abc");
     await expect(first).toHaveAttribute("aria-invalid", "true");
-    await expect(page.getByRole("button", { name: "Salvar pedido" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Confirmar pedido" })).toBeDisabled();
   });
 
   test("linha sem preço aparece como 'Sem preço' (nunca R$ 0,00), o total é parcial e a remoção o normaliza", async ({ page }) => {
@@ -92,7 +92,7 @@ test.describe("Cenário 4 — novo pedido, rascunhos e exclusão", () => {
     // message the seller can act on; nothing is sent and nothing is created. The server still refuses it (API tests).
     await expect(page.getByText("Este item não pode ser pedido sem preço nesta instalação.")).toBeVisible();
     await expect(page.getByText("Remova os itens sem preço para salvar.")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Salvar pedido" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Confirmar pedido" })).toBeDisabled();
     await expect(page).toHaveURL(/\/pedidos\/novo$/);
 
     await page.getByRole("button", { name: `Remover ${UNPRICED_PRODUCT}` }).click();
@@ -149,12 +149,12 @@ test.describe("Cenário 4 — novo pedido, rascunhos e exclusão", () => {
     await expect(otherQty).toHaveValue("2");
     await otherQty.fill("9");
     const otherSaved = other.waitForResponse((r) => r.url().endsWith(`/api/v1/orders/${id}`) && r.request().method() === "PUT");
-    await other.getByRole("button", { name: "Salvar pedido" }).click();
+    await other.getByRole("button", { name: "Confirmar pedido" }).click();
     expect((await otherSaved).status()).toBe(200);
 
     // The first tab still holds the old version: its save must be refused, not silently overwrite.
     await page.getByRole("textbox", { name: `Quantidade de ${PRICED_PRODUCTS[0]}` }).fill("4");
-    await page.getByRole("button", { name: "Salvar pedido" }).click();
+    await page.getByRole("button", { name: "Confirmar pedido" }).click();
     const alert = page.getByRole("alert").filter({ has: page.getByRole("button", { name: "Recarregar" }) });
     await expect(alert).toBeVisible();
 

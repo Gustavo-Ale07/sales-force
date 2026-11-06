@@ -32,7 +32,7 @@ export function documentVocabulary(kind: DocumentKind, number: number | string |
   const suffix = number === null ? '' : ` nº ${number}`;
   const noun = kind === 'quote' ? 'Orçamento' : 'Pedido';
   return {
-    save: kind === 'quote' ? 'Salvar orçamento' : 'Salvar pedido',
+    save: kind === 'quote' ? 'Confirmar orçamento' : 'Confirmar pedido',
     send: kind === 'quote' ? 'Enviar orçamento ao Sankhya' : 'Enviar ao Sankhya',
     title: `${noun}${suffix}`,
     heading: `${noun.toUpperCase()}${suffix.toUpperCase()}`,

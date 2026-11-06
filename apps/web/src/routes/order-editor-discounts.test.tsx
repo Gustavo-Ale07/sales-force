@@ -89,7 +89,7 @@ describe("Desconto por item", () => {
     await user.type(discountField("Balão látex vermelho"), "12.5");
     expect(await screen.findByText("Use vírgula como separador decimal.")).toBeInTheDocument();
     expect(screen.getByText("1 item com quantidade ou desconto inválido não entra na soma.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Salvar pedido" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Confirmar pedido" })).toBeDisabled();
   });
 
   it("is disabled for a line without a price", async () => {
@@ -107,7 +107,7 @@ describe("Desconto por item", () => {
     await addProduct(user, "Vela aniversário");
     await showCart(user);
     await user.type(discountField("Balão látex vermelho"), "10");
-    await user.click(screen.getByRole("button", { name: "Salvar pedido" }));
+    await user.click(screen.getByRole("button", { name: "Confirmar pedido" }));
     await waitFor(() => expect(callsTo(calls, "POST", "/orders")).toHaveLength(1));
     const [created] = callsTo(calls, "POST", "/orders");
     expect(created?.body).toMatchObject({
@@ -128,7 +128,7 @@ describe("Desconto por item", () => {
     expect(field).toHaveValue("5");
     await user.clear(field);
     await user.type(field, "7");
-    expect(screen.getByRole("button", { name: "Salvar pedido" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Confirmar pedido" })).toBeEnabled();
   });
 });
 

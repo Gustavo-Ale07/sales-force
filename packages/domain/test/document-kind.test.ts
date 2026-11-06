@@ -22,7 +22,7 @@ describe('documentKindOf (J3: the header TOP decides the vocabulary)', () => {
 describe('documentVocabulary', () => {
   it('orders', () => {
     expect(documentVocabulary('order', 7)).toEqual({
-      save: 'Salvar pedido',
+      save: 'Confirmar pedido',
       send: 'Enviar ao Sankhya',
       title: 'Pedido nº 7',
       heading: 'PEDIDO Nº 7',
@@ -32,7 +32,7 @@ describe('documentVocabulary', () => {
 
   it('quotes', () => {
     expect(documentVocabulary('quote', 7)).toEqual({
-      save: 'Salvar orçamento',
+      save: 'Confirmar orçamento',
       send: 'Enviar orçamento ao Sankhya',
       title: 'Orçamento nº 7',
       heading: 'ORÇAMENTO Nº 7',
