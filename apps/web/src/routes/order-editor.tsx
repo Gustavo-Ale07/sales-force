@@ -40,6 +40,7 @@ import { CustomerFichaDialog } from "../components/customer-ficha";
 import { ProductImage } from "../components/product-image";
 import { CustomerPicker, type PickedCustomer } from "../components/customer-picker";
 import { DeleteOrderDialog } from "../components/delete-order-dialog";
+import { SendProgressDialog } from "../components/send-progress-dialog";
 import { DuplicateAsOrderButton } from "../components/duplicate-as-order-button";
 import { DuplicateOrderButton } from "../components/duplicate-order-button";
 import { GroupDiscountDialog, MassDiscountDialog } from "../components/discount-dialogs";
@@ -71,7 +72,7 @@ import {
   type EditorLine,
 } from "../lib/order-draft";
 
-import { documentKindOf, documentVocabulary, isOrderDeletable } from "@salesforce/domain";
+import { documentKindOf, documentVocabulary, isOrderDeletable, type DocumentKind } from "@salesforce/domain";
 
 type OrderDetail = ApiSchema<"OrderDetail">;
 
@@ -199,11 +200,21 @@ interface EditorProps {
   initialCustomer: PickedCustomer | null;
   onCreated: (id: string) => void;
   onClose: () => void;
+  /** D-AB B2: a delivery went to the worker; the page (which survives the editor's re-keying) follows it in a dialog. */
+  onSent: (sent: SentDocument) => void;
   /** Page-level notice shown under the header (e.g. template lines left out of a draft created from a template). */
   notice?: ReactNode;
 }
 
-function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: EditorProps) {
+/** The document the progress dialog follows. */
+export interface SentDocument {
+  id: string;
+  isNew: boolean;
+  kind: DocumentKind;
+  reference: string;
+}
+
+function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notice }: EditorProps) {
   const api = useApi();
   const queryClient = useQueryClient();
   const config = useQuery(orderEntryConfigurationQueryOptions(api));
@@ -408,7 +419,11 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, notice }: Edi
       } else {
         toast({ title: docKind === "quote" ? "Orçamento confirmado" : "Pedido confirmado", description: reference, tone: "success" });
       }
-      if (!order) {
+      // D-AB B2: a delivery that went to the worker is followed in a blocking dialog; leaving the screen waits for it.
+      if (sent !== null && sent.status === "queued") {
+        if (!order) leavingRef.current = true; // the modal blocks editing; the page navigates when the seller closes it
+        onSent({ id: saved.id, isNew: !order, kind: docKind, reference: reference });
+      } else if (!order) {
         leavingRef.current = true;
         onCreated(saved.id);
       }
@@ -1283,7 +1298,7 @@ function LoadingHeader({ title }: { title: string }) {
   );
 }
 
-function ExistingOrder({ orderId, onCreated, onClose, notice }: { orderId: string; onCreated: (id: string) => void; onClose: () => void; notice?: ReactNode }) {
+function ExistingOrder({ orderId, onCreated, onClose, onSent, notice }: { orderId: string; onCreated: (id: string) => void; onClose: () => void; onSent: (sent: SentDocument) => void; notice?: ReactNode }) {
   const api = useApi();
   const query = useQuery(orderQueryOptions(api, orderId));
   if (query.isPending) return <LoadingHeader title="Pedido" />;
@@ -1310,12 +1325,13 @@ function ExistingOrder({ orderId, onCreated, onClose, notice }: { orderId: strin
       initialCustomer={null}
       onCreated={onCreated}
       onClose={onClose}
+      onSent={onSent}
       notice={notice}
     />
   );
 }
 
-function NewOrder({ initialCustomerCode, onCreated, onClose }: Omit<OrderEditorPageProps, "orderId" | "notice">) {
+function NewOrder({ initialCustomerCode, onCreated, onClose, onSent }: Omit<OrderEditorPageProps, "orderId" | "notice"> & { onSent: (sent: SentDocument) => void }) {
   const api = useApi();
   const customer = useQuery({
     ...customerQueryOptions(api, initialCustomerCode ?? 0),
@@ -1330,12 +1346,38 @@ function NewOrder({ initialCustomerCode, onCreated, onClose }: Omit<OrderEditorP
           Escolha o cliente abaixo para continuar. Se o problema persistir, o cliente pode estar fora da sua carteira.
         </Alert>
       ) : null}
-      <OrderEditor order={null} initialCustomer={initial} onCreated={onCreated} onClose={onClose} />
+      <OrderEditor order={null} initialCustomer={initial} onCreated={onCreated} onClose={onClose} onSent={onSent} />
     </>
   );
 }
 
 export function OrderEditorPage({ orderId, initialCustomerCode, onCreated, onClose, notice }: OrderEditorPageProps) {
-  if (orderId) return <ExistingOrder orderId={orderId} onCreated={onCreated} onClose={onClose} notice={notice} />;
-  return <NewOrder initialCustomerCode={initialCustomerCode} onCreated={onCreated} onClose={onClose} />;
+  const queryClient = useQueryClient();
+  // D-AB B2: held above the editor, which is re-keyed on every server version and would drop the dialog.
+  const [sending, setSending] = useState<SentDocument | null>(null);
+  const closeSending = (deleted: boolean) => {
+    const current = sending;
+    setSending(null);
+    if (current === null) return;
+    void queryClient.invalidateQueries({ queryKey: queryKeys.order(current.id) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.ordersAll });
+    if (deleted) onClose();
+    else if (current.isNew) onCreated(current.id);
+  };
+  return (
+    <>
+      {orderId ? (
+        <ExistingOrder orderId={orderId} onCreated={onCreated} onClose={onClose} onSent={setSending} notice={notice} />
+      ) : (
+        <NewOrder initialCustomerCode={initialCustomerCode} onCreated={onCreated} onClose={onClose} onSent={setSending} />
+      )}
+      <SendProgressDialog
+        orderId={sending?.id ?? null}
+        kind={sending?.kind ?? "order"}
+        reference={sending?.reference ?? ""}
+        onClose={() => closeSending(false)}
+        onDeleted={() => closeSending(true)}
+      />
+    </>
+  );
 }

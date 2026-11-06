@@ -868,6 +868,46 @@ describe("Rascunho existente", () => {
     expect(callsTo(calls, "POST", `/orders/${ORDER_ID}/submit`)).toHaveLength(1);
   });
 
+  describe("D-AB B2: diálogo 'Enviando ao Sankhya…'", () => {
+    // The first GET is the editor loading the draft; every later GET is the dialog polling the order.
+    const afterSend = (final: ReturnType<typeof orderDetail>): Handlers => {
+      let reads = 0;
+      return existing(orderDetail(), {
+        "GET /orders/:id": () => ({ body: (reads += 1) === 1 ? orderDetail() : final }),
+        "PUT /orders/:id": { body: orderDetail({ version: 2 }) },
+        "POST /orders/:id/submit": { body: orderDetail({ version: 2, status: "queued" }) },
+      });
+    };
+    const confirm = async (handlers: Handlers) => {
+      const rendered = renderApp(`/pedidos/${ORDER_ID}`, { handlers });
+      const quantity = await screen.findByLabelText("Quantidade de Balão látex 9 pol. vermelho");
+      await rendered.user.clear(quantity);
+      await rendered.user.type(quantity, "3");
+      await rendered.user.click(screen.getByRole("button", { name: "Confirmar pedido" }));
+      return rendered;
+    };
+
+    it("opens blocking, then shows the Sankhya number once the worker delivered", async () => {
+      const { calls } = await confirm(afterSend(orderDetail({ version: 3, status: "sent", erpNumber: 77 })));
+      expect(await screen.findByText("Pedido nº 77 confirmado no Sankhya", {}, { timeout: 5000 })).toBeInTheDocument();
+      expect(screen.queryByText(/fila/i)).not.toBeInTheDocument();
+      expect(callsTo(calls, "POST", `/orders/${ORDER_ID}/submit`)).toHaveLength(1);
+    }, 15000);
+
+    it("shows the failure reason with Reenviar and Excluir", async () => {
+      await confirm(afterSend(orderDetail({ version: 3, status: "rejected", erpDelivery: { errorClass: "validation", errorCode: "environment_mismatch" } })));
+      const dialog = await screen.findByRole("dialog", {}, { timeout: 5000 });
+      expect(await within(dialog).findByText(/^Falha no envio: /, {}, { timeout: 5000 })).toBeInTheDocument();
+      expect(within(dialog).getByRole("button", { name: "Reenviar" })).toBeInTheDocument();
+      expect(within(dialog).getByRole("button", { name: "Excluir" })).toBeInTheDocument();
+    }, 15000);
+
+    it("says the simulation did not send anything (dry run)", async () => {
+      await confirm(afterSend(orderDetail({ version: 3, status: "draft", dryRun: { at: "2026-11-06T11:00:00.000Z", payloadHash: "a".repeat(64) } })));
+      expect(await screen.findByText("Simulado — não enviado", {}, { timeout: 5000 })).toBeInTheDocument();
+    }, 15000);
+  });
+
   it("replaces the draft with the expected version and shows the saved result", async () => {
     const saved = orderDetail({
       version: 2,
