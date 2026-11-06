@@ -1,6 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   SYNC_REFRESH_ENTITIES,
+  SYNC_REFRESH_PHASE_OF,
+  canSeeSyncRefreshDetail,
+  type SyncRefreshBasic,
+  type SyncRefreshView,
   type StartSyncRefreshResponse,
   type SyncRefresh,
   type SyncRefreshStep,
@@ -33,6 +37,11 @@ export class SyncRefreshService {
   ) {}
 
   async start(user: CurrentUser): Promise<StartSyncRefreshResponse> {
+    const result = await this.#start(user);
+    return canSeeSyncRefreshDetail(user.role) ? result : { ...basicOf(result), reused: result.reused };
+  }
+
+  async #start(user: CurrentUser): Promise<SyncRefresh & { reused: boolean }> {
     const now = this.clock();
     const [latest] = await this.db.select().from(syncRefresh).orderBy(desc(syncRefresh.requestedAt)).limit(1);
     if (latest !== undefined) {
@@ -62,10 +71,11 @@ export class SyncRefreshService {
     return { ...(await this.#present(active)), reused: true };
   }
 
-  async get(id: string): Promise<SyncRefresh> {
+  async get(id: string, user: CurrentUser): Promise<SyncRefreshView> {
     const [row] = await this.db.select().from(syncRefresh).where(eq(syncRefresh.id, id)).limit(1);
     if (row === undefined) throw new AppError('not_found');
-    return this.#present(row);
+    const detail = await this.#present(row);
+    return canSeeSyncRefreshDetail(user.role) ? detail : basicOf(detail);
   }
 
   async status(): Promise<SyncStatusResponse> {
@@ -97,4 +107,23 @@ export class SyncRefreshService {
       })),
     };
   }
+}
+
+/**
+ * D-AC: the seller's view. Computed on the server from the detail, so the client never receives entity names, counts or
+ * technical reasons. Skipped steps (not wired in this installation) count as done and are not a warning.
+ */
+export function basicOf(detail: SyncRefresh): SyncRefreshBasic {
+  const total = detail.steps.length;
+  const finished = detail.steps.filter((step) => step.status === 'ok' || step.status === 'failed' || step.status === 'skipped').length;
+  const done = detail.status === 'done';
+  const current = detail.steps.find((step) => step.status === 'pending' || step.status === 'running');
+  return {
+    id: detail.id,
+    status: detail.status,
+    progressPercent: done ? 100 : total === 0 ? 0 : Math.floor((finished / total) * 100),
+    phase: done || current === undefined ? 'concluido' : SYNC_REFRESH_PHASE_OF[current.entity],
+    finishedAt: detail.finishedAt,
+    hasWarnings: detail.steps.some((step) => step.status === 'failed'),
+  };
 }

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { SYNC_REFRESH_ENTITIES } from '@salesforce/contracts';
+import { SYNC_REFRESH_ENTITIES, type SyncRefresh } from '@salesforce/contracts';
 import { syncRefresh } from '@salesforce/db';
 import { SankhyaGatewayError } from '@salesforce/sankhya';
 import { eq } from 'drizzle-orm';
@@ -24,7 +24,9 @@ afterAll(async () => {
 
 const T0 = Date.parse('2026-11-06T12:00:00Z');
 const logger = createLogger({ level: 'silent', service: 'test' });
-const user = { accountId: randomUUID() } as CurrentUser;
+const user = { accountId: randomUUID(), role: 'manager' } as CurrentUser;
+const seller = { accountId: randomUUID(), role: 'seller' } as CurrentUser;
+type Detail = SyncRefresh & { reused?: boolean };
 
 async function world() {
   const database = await createMigratedDatabase(postgres);
@@ -46,13 +48,13 @@ async function world() {
       ...over,
     });
   const row = async (id: string) => (await database.handle.db.select().from(syncRefresh).where(eq(syncRefresh.id, id)))[0]!;
-  return { database, api, advance, runner, row };
+  return { database, api, advance, runner, row, okResult };
 }
 
 describe('POST /sync/refresh (API side, D-AB B3)', () => {
   it('records a pending request with one pending step per entity, in the specified order', async () => {
     const w = await world();
-    const started = await w.api.start(user);
+    const started = (await w.api.start(user)) as Detail;
     expect(started.reused).toBe(false);
     expect(started.status).toBe('pending');
     expect(started.steps.map((s) => s.entity)).toEqual([...SYNC_REFRESH_ENTITIES]);
@@ -61,17 +63,17 @@ describe('POST /sync/refresh (API side, D-AB B3)', () => {
 
   it('a second click while one is pending or running returns the same refresh', async () => {
     const w = await world();
-    const first = await w.api.start(user);
-    const second = await w.api.start(user);
+    const first = (await w.api.start(user)) as Detail;
+    const second = (await w.api.start(user)) as Detail;
     expect(second.id).toBe(first.id);
     expect(second.reused).toBe(true);
     await w.database.handle.db.update(syncRefresh).set({ status: 'running', startedAt: new Date(T0) }).where(eq(syncRefresh.id, first.id));
-    expect((await w.api.start(user)).id).toBe(first.id);
+    expect(((await w.api.start(user)) as Detail).id).toBe(first.id);
   });
 
   it('the database allows only one active refresh', async () => {
     const w = await world();
-    await w.api.start(user);
+    (await w.api.start(user)) as Detail;
     await expect(
       w.database.handle.pool.query(`INSERT INTO sync_refresh (id, requested_by, status) VALUES ($1, $2, 'pending')`, [randomUUID(), randomUUID()]),
     ).rejects.toThrow(/sync_refresh_active_uq/);
@@ -79,21 +81,21 @@ describe('POST /sync/refresh (API side, D-AB B3)', () => {
 
   it('a refresh finished less than a minute ago is returned; after the cooldown a new one starts', async () => {
     const w = await world();
-    const first = await w.api.start(user);
+    const first = (await w.api.start(user)) as Detail;
     await w.runner().run(first.id);
     w.advance(30_000);
-    const within = await w.api.start(user);
+    const within = (await w.api.start(user)) as Detail;
     expect(within.id).toBe(first.id);
     expect(within.reused).toBe(true);
     w.advance(31_000);
-    const after = await w.api.start(user);
+    const after = (await w.api.start(user)) as Detail;
     expect(after.id).not.toBe(first.id);
     expect(after.reused).toBe(false);
   });
 
   it('GET of an unknown id is not_found', async () => {
     const w = await world();
-    await expect(w.api.get(randomUUID())).rejects.toBeInstanceOf(AppError);
+    await expect(w.api.get(randomUUID(), user)).rejects.toBeInstanceOf(AppError);
   });
 
   it('the status is the oldest last success among the mirrored entities (null while nothing was read)', async () => {
@@ -110,9 +112,65 @@ describe('POST /sync/refresh (API side, D-AB B3)', () => {
   it('GET carries the last success of each entity so a failed step can say how old its data is', async () => {
     const w = await world();
     await w.database.handle.pool.query(`INSERT INTO sync_state (entity, status, last_success_at) VALUES ('customers', 'succeeded', $1)`, [new Date(T0 - 120_000)]);
-    const started = await w.api.start(user);
-    const customers = (await w.api.get(started.id)).steps.find((s) => s.entity === 'customers');
+    const started = (await w.api.start(user)) as Detail;
+    const customers = (await (w.api.get(started.id, user) as Promise<Detail>)).steps.find((s) => s.entity === 'customers');
     expect(customers?.lastSuccessAt).toBe(new Date(T0 - 120_000).toISOString());
+  });
+});
+
+describe('role-based view (D-AC C1): a seller never receives steps, counts or reasons', () => {
+  const basicKeys = ['finishedAt', 'hasWarnings', 'id', 'phase', 'progressPercent', 'reused', 'status'];
+
+  it('POST and GET give the seller only the basic fields, even after a failure with a technical reason', async () => {
+    const w = await world();
+    const started = await w.api.start(seller);
+    expect(Object.keys(started).sort()).toEqual(basicKeys);
+    expect(started).toMatchObject({ status: 'pending', progressPercent: 0, phase: 'cadastros', hasWarnings: false });
+    await w
+      .runner({
+        mirror: {
+          run: async (entity) => {
+            if (entity === 'customers') throw new SankhyaGatewayError('unavailable', { code: 'SNK_DOWN', message: 'Sankhya fora do ar' });
+            return w.okResult(entity, 7);
+          },
+        },
+      })
+      .run(started.id);
+    const view = await w.api.get(started.id, seller);
+    expect(Object.keys(view).sort()).toEqual(['finishedAt', 'hasWarnings', 'id', 'phase', 'progressPercent', 'status']);
+    expect(view).toMatchObject({ status: 'done', progressPercent: 100, phase: 'concluido', hasWarnings: true });
+    const text = JSON.stringify(view);
+    for (const forbidden of ['steps', 'customers', 'SNK_DOWN', 'rowsRead', 'reason', 'Sankhya fora']) expect(text).not.toContain(forbidden);
+  });
+
+  it('manager, admin and technical keep the detail; any other role gets the basic view', async () => {
+    const w = await world();
+    const started = await w.api.start(user);
+    for (const role of ['manager', 'admin', 'technical'] as const) {
+      expect('steps' in (await w.api.get(started.id, { ...user, role }))).toBe(true);
+    }
+    expect('steps' in (await w.api.get(started.id, { ...user, role: 'unknown' as never }))).toBe(false);
+  });
+
+  it('progress grows with the finished steps and the phase follows the running one', async () => {
+    const w = await world();
+    const started = await w.api.start(seller);
+    const seen: string[] = [];
+    await w
+      .runner({
+        mirror: {
+          run: async (entity) => {
+            const view = await w.api.get(started.id, seller);
+            if ('phase' in view) seen.push(`${view.phase}:${view.progressPercent}`);
+            return w.okResult(entity);
+          },
+        },
+      })
+      .run(started.id);
+    expect(seen[0]).toMatch(/^cadastros:/);
+    expect(seen.some((entry) => entry.startsWith('precos:'))).toBe(true);
+    const percents = seen.map((entry) => Number(entry.split(':')[1]));
+    expect([...percents].sort((a, b) => a - b)).toEqual(percents);
   });
 });
 
@@ -120,7 +178,7 @@ describe('sync.refresh.on-demand (worker side, D-AB B3)', () => {
   it('runs every step in order, records rows read, and marks the request done', async () => {
     const w = await world();
     const order: string[] = [];
-    const started = await w.api.start(user);
+    const started = (await w.api.start(user)) as Detail;
     await w
       .runner({
         mirror: {
@@ -133,7 +191,7 @@ describe('sync.refresh.on-demand (worker side, D-AB B3)', () => {
         orderStatus: { runOnce: async () => ({ checked: 2, updated: 1 }) },
       })
       .run(started.id);
-    const done = await w.api.get(started.id);
+    const done = await (w.api.get(started.id, user) as Promise<Detail>);
     expect(done.status).toBe('done');
     expect(done.steps.map((s) => s.status)).toEqual(SYNC_REFRESH_ENTITIES.map(() => 'ok'));
     expect(order).toEqual(SYNC_REFRESH_ENTITIES.filter((e) => e !== 'configuration' && e !== 'orderStatus'));
@@ -144,7 +202,7 @@ describe('sync.refresh.on-demand (worker side, D-AB B3)', () => {
 
   it('a failed entity is reported with a masked reason and does not stop the following ones', async () => {
     const w = await world();
-    const started = await w.api.start(user);
+    const started = (await w.api.start(user)) as Detail;
     await w
       .runner({
         mirror: {
@@ -155,7 +213,7 @@ describe('sync.refresh.on-demand (worker side, D-AB B3)', () => {
         },
       })
       .run(started.id);
-    const done = await w.api.get(started.id);
+    const done = await (w.api.get(started.id, user) as Promise<Detail>);
     const byEntity = new Map(done.steps.map((s) => [s.entity, s]));
     expect(byEntity.get('customers')?.status).toBe('failed');
     expect(byEntity.get('customers')?.reason).toContain('SNK_DOWN');
@@ -165,9 +223,9 @@ describe('sync.refresh.on-demand (worker side, D-AB B3)', () => {
 
   it('steps without a wired service are skipped with a reason, never silent', async () => {
     const w = await world();
-    const started = await w.api.start(user);
+    const started = (await w.api.start(user)) as Detail;
     await w.runner().run(started.id);
-    const done = await w.api.get(started.id);
+    const done = await (w.api.get(started.id, user) as Promise<Detail>);
     for (const entity of ['configuration', 'orderStatus'] as const) {
       const step = done.steps.find((s) => s.entity === entity);
       expect(step?.status).toBe('skipped');
@@ -177,14 +235,14 @@ describe('sync.refresh.on-demand (worker side, D-AB B3)', () => {
 
   it('a failing order-status read is reported as failed', async () => {
     const w = await world();
-    const started = await w.api.start(user);
+    const started = (await w.api.start(user)) as Detail;
     await w.runner({ orderStatus: { runOnce: async () => ({ checked: 0, updated: 0, failed: true }) } }).run(started.id);
-    expect((await w.api.get(started.id)).steps.find((s) => s.entity === 'orderStatus')?.status).toBe('failed');
+    expect((await (w.api.get(started.id, user) as Promise<Detail>)).steps.find((s) => s.entity === 'orderStatus')?.status).toBe('failed');
   });
 
   it('a second delivery of the same job does nothing (idempotent claim)', async () => {
     const w = await world();
-    const started = await w.api.start(user);
+    const started = (await w.api.start(user)) as Detail;
     let calls = 0;
     const runner = w.runner({
       mirror: {
@@ -202,7 +260,7 @@ describe('sync.refresh.on-demand (worker side, D-AB B3)', () => {
 
   it('lists pending requests and closes a run left running past the limit', async () => {
     const w = await world();
-    const started = await w.api.start(user);
+    const started = (await w.api.start(user)) as Detail;
     const runner = w.runner();
     expect(await runner.pendingIds()).toEqual([started.id]);
     await w.database.handle.db
@@ -215,6 +273,6 @@ describe('sync.refresh.on-demand (worker side, D-AB B3)', () => {
     const closed = await w.row(started.id);
     expect(closed.status).toBe('done');
     // The next click works again.
-    expect((await w.api.start(user)).reused).toBe(false);
+    expect(((await w.api.start(user)) as Detail).reused).toBe(false);
   });
 });

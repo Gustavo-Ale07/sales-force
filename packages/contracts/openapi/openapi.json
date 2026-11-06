@@ -558,7 +558,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SyncRefresh"
+                  "$ref": "#/components/schemas/SyncRefreshView"
                 }
               }
             }
@@ -7287,59 +7287,110 @@
         "additionalProperties": false
       },
       "StartSyncRefreshResponse": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "status": {
-            "$ref": "#/components/schemas/SyncRefreshStatus"
-          },
-          "requestedAt": {
-            "$ref": "#/components/schemas/IsoTimestamp"
-          },
-          "startedAt": {
-            "anyOf": [
-              {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "status": {
+                "$ref": "#/components/schemas/SyncRefreshStatus"
+              },
+              "requestedAt": {
                 "$ref": "#/components/schemas/IsoTimestamp"
               },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "finishedAt": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/IsoTimestamp"
+              "startedAt": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/IsoTimestamp"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
-              {
-                "type": "null"
+              "finishedAt": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/IsoTimestamp"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "steps": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SyncRefreshStep"
+                }
+              },
+              "reused": {
+                "type": "boolean"
               }
-            ]
+            },
+            "required": [
+              "id",
+              "status",
+              "requestedAt",
+              "startedAt",
+              "finishedAt",
+              "steps",
+              "reused"
+            ],
+            "additionalProperties": false
           },
-          "steps": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SyncRefreshStep"
-            }
-          },
-          "reused": {
-            "type": "boolean"
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "status": {
+                "$ref": "#/components/schemas/SyncRefreshStatus"
+              },
+              "progressPercent": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "phase": {
+                "$ref": "#/components/schemas/SyncRefreshPhase"
+              },
+              "finishedAt": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/IsoTimestamp"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "hasWarnings": {
+                "type": "boolean"
+              },
+              "reused": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "status",
+              "progressPercent",
+              "phase",
+              "finishedAt",
+              "hasWarnings",
+              "reused"
+            ],
+            "additionalProperties": false
           }
-        },
-        "required": [
-          "id",
-          "status",
-          "requestedAt",
-          "startedAt",
-          "finishedAt",
-          "steps",
-          "reused"
-        ],
-        "additionalProperties": false
+        ]
       },
       "SyncRefresh": {
         "type": "object",
@@ -7392,6 +7443,52 @@
         ],
         "additionalProperties": false
       },
+      "SyncRefreshBasic": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SyncRefreshStatus"
+          },
+          "progressPercent": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "phase": {
+            "$ref": "#/components/schemas/SyncRefreshPhase"
+          },
+          "finishedAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IsoTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hasWarnings": {
+            "type": "boolean"
+          },
+          "reused": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "progressPercent",
+          "phase",
+          "finishedAt",
+          "hasWarnings"
+        ],
+        "additionalProperties": false
+      },
       "SyncRefreshEntity": {
         "type": "string",
         "enum": [
@@ -7406,6 +7503,15 @@
           "ipiRates",
           "openTitles",
           "orderStatus"
+        ]
+      },
+      "SyncRefreshPhase": {
+        "type": "string",
+        "enum": [
+          "cadastros",
+          "precos",
+          "pedidos",
+          "concluido"
         ]
       },
       "SyncRefreshStatus": {
@@ -7487,6 +7593,16 @@
           "ok",
           "failed",
           "skipped"
+        ]
+      },
+      "SyncRefreshView": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SyncRefresh"
+          },
+          {
+            "$ref": "#/components/schemas/SyncRefreshBasic"
+          }
         ]
       },
       "SyncState": {

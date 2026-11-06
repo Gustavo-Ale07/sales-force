@@ -1506,6 +1506,15 @@ export interface components {
             finishedAt: components["schemas"]["IsoTimestamp"] | null;
             steps: components["schemas"]["SyncRefreshStep"][];
             reused: boolean;
+        } | {
+            /** Format: uuid */
+            id: string;
+            status: components["schemas"]["SyncRefreshStatus"];
+            progressPercent: number;
+            phase: components["schemas"]["SyncRefreshPhase"];
+            finishedAt: components["schemas"]["IsoTimestamp"] | null;
+            hasWarnings: boolean;
+            reused: boolean;
         };
         SyncRefresh: {
             /** Format: uuid */
@@ -1516,8 +1525,20 @@ export interface components {
             finishedAt: components["schemas"]["IsoTimestamp"] | null;
             steps: components["schemas"]["SyncRefreshStep"][];
         };
+        SyncRefreshBasic: {
+            /** Format: uuid */
+            id: string;
+            status: components["schemas"]["SyncRefreshStatus"];
+            progressPercent: number;
+            phase: components["schemas"]["SyncRefreshPhase"];
+            finishedAt: components["schemas"]["IsoTimestamp"] | null;
+            hasWarnings: boolean;
+            reused?: boolean;
+        };
         /** @enum {string} */
         SyncRefreshEntity: "configuration" | "sellers" | "customers" | "products" | "priceTables" | "priceTableVersions" | "listPrices" | "carriers" | "ipiRates" | "openTitles" | "orderStatus";
+        /** @enum {string} */
+        SyncRefreshPhase: "cadastros" | "precos" | "pedidos" | "concluido";
         /** @enum {string} */
         SyncRefreshStatus: "pending" | "running" | "done";
         SyncRefreshStep: {
@@ -1530,6 +1551,7 @@ export interface components {
         };
         /** @enum {string} */
         SyncRefreshStepStatus: "pending" | "running" | "ok" | "failed" | "skipped";
+        SyncRefreshView: components["schemas"]["SyncRefresh"] | components["schemas"]["SyncRefreshBasic"];
         SyncState: {
             entity: string;
             status: components["schemas"]["SyncStatus"];
@@ -2019,7 +2041,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SyncRefresh"];
+                    "application/json": components["schemas"]["SyncRefreshView"];
                 };
             };
             /** @description Requisição inválida (validation_failed) */

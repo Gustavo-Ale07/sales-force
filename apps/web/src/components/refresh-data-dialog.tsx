@@ -68,7 +68,7 @@ export function RefreshDataDialog({ open, onClose }: RefreshDataDialogProps) {
   const startError = start.isError ? describeApiError(start.error, "Não foi possível iniciar a atualização") : null;
   const loadError = progress.isError && !progress.data ? describeApiError(progress.error, "Não foi possível acompanhar a atualização") : null;
   const busy = !startError && !done && !loadError;
-  const failed = refresh ? failedSteps(refresh) : [];
+  const failed = refresh && "steps" in refresh ? failedSteps(refresh) : [];
   const finishedAt = refresh?.finishedAt ? clockTime(refresh.finishedAt) : null;
 
   return (
@@ -109,7 +109,7 @@ export function RefreshDataDialog({ open, onClose }: RefreshDataDialogProps) {
             Os dados anteriores foram mantidos. Tente de novo em instantes.
           </Alert>
         ) : null}
-        {refresh ? (
+        {refresh && "steps" in refresh ? (
           <ul className="m-0 grid list-none gap-1 p-0" aria-label="Andamento por informação" aria-live="polite">
             {refresh.steps.map((step) => (
               <li key={step.entity} className="flex items-start gap-2 text-sm" data-status={step.status}>
@@ -121,6 +121,8 @@ export function RefreshDataDialog({ open, onClose }: RefreshDataDialogProps) {
               </li>
             ))}
           </ul>
+        ) : refresh ? (
+          <p className="m-0 text-sm text-fg-muted" role="status">{refresh.progressPercent}%</p>
         ) : startError ? null : (
           <div className="flex items-center gap-2 text-sm text-fg-muted" role="status">
             <Spinner size={16} label="Iniciando" /> Iniciando…

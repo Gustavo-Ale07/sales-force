@@ -28,7 +28,7 @@ import {
   RejectApprovalRequestSchema,
 } from './approvals.js';
 import { DashboardResponseSchema } from './dashboard.js';
-import { StartSyncRefreshResponseSchema, SyncRefreshPathSchema, SyncRefreshSchema, SyncStatusResponseSchema } from './sync-refresh.js';
+import { StartSyncRefreshResponseSchema, SyncRefreshPathSchema, SyncRefreshViewSchema, SyncStatusResponseSchema } from './sync-refresh.js';
 import { DiscountLimitsResponseSchema, UpdateDiscountLimitsRequestSchema } from './discount-limits.js';
 import { ErpSubmissionDisabledErrorSchema, type ErrorStatus } from './errors.js';
 import { HealthResponseSchema, ReadyResponseSchema } from './health.js';
@@ -260,7 +260,7 @@ export const routes = {
     summary: 'Progress of an on-demand refresh, one step per entity',
     auth: 'session',
     request: { params: SyncRefreshPathSchema },
-    responses: { 200: { description: 'Estado da atualização', schema: SyncRefreshSchema } },
+    responses: { 200: { description: 'Estado da atualização', schema: SyncRefreshViewSchema } },
     errors: [400, 401, 403, 404],
   }),
 

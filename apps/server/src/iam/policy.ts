@@ -34,6 +34,8 @@ export interface RoutePolicy {
 
 /** The commercial profiles (ROLE-1: never `technical`). */
 const EVERY_ROLE: readonly AccountRole[] = COMMERCIAL_ROLES;
+/** D-AC: every commercial profile may refresh; the technical profile too (it sees the detail). The response is cut by role in the service. */
+const SYNC_REFRESH_ROLES: readonly AccountRole[] = [...COMMERCIAL_ROLES, 'technical'];
 
 /**
  * Explicit grants by `operationId`. Endpoints of later stages are added here together with their
@@ -55,8 +57,8 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   // open to every role that can create an order (seller/manager/admin), unlike getConfiguration above.
   getOrderEntryConfiguration: { roles: EVERY_ROLE },
   // D-AB B3: any signed-in profile can ask for fresh data; the API only records the request (the worker reads Sankhya).
-  startSyncRefresh: { roles: EVERY_ROLE },
-  getSyncRefresh: { roles: EVERY_ROLE },
+  startSyncRefresh: { roles: SYNC_REFRESH_ROLES },
+  getSyncRefresh: { roles: SYNC_REFRESH_ROLES },
   getSyncStatus: { roles: EVERY_ROLE },
   // Commercial routes (Stage 3A). Each is open to the three roles the schema has; WHICH rows a
   // caller sees is the data scope (`resolveCustomerScope`), never this table. An external
