@@ -22,6 +22,16 @@ STATUS: ACTIVE — atualizado em 2026-10-29. Fonte de verdade ÚNICA: `C:\Dev\sa
 1. Parte 2 (`PROMPT_2026-10-30_parte2_config-sankhya.md`): começa registrando CFG-8, U-10-a..d e U-11 em `docs/decisions.md`; depois Trilha D.
 2. Decisões do dono abertas pelo reviewer: alçada em modo `erp` vs P-10; PDF compartilhado por representante vs P-20 (ver checkpoint).
 
+## Parte 2g (2026-11-06) — D-AB feito: B1–B5
+- Checkpoint: `CHECKPOINT_2026-11-06-parte2g.md`. Commits: `fd1ffdd` (B1), `499e154` (B2), `0347ce5` (B3), `1a1d538` (B4), B5 (docs).
+- **Só o dono roda (nesta ordem, em staging):**
+  1. Reexecutar `deploy/staging/db-roles.sql` (GRANT de `sync_refresh`: `force_api` SELECT/INSERT, `force_worker` SELECT/UPDATE).
+  2. Rodar a migração `0028_sync_refresh` pelo procedimento habitual de migração de staging.
+  3. Rodar `queue:install` (nova fila `sync.refresh.on-demand`; o worker se recusa a subir sem ela), depois implantar o commit publicado pelo procedimento habitual.
+  4. Fechar e reabrir o Claude Code (hook anti-heredoc).
+- Teste: menu do usuário → "Atualizar dados" → diálogo com uma linha por informação; "Dados do Sankhya de HH:MM" aparece no menu.
+- SNK-7 teste #1 autorizado pelo dono em 06/11 (Sandbox, 40 requisições, pedidos A/B/C): não executado pela IA; falta incluir o pedido C (13 itens, uma `incluirNota`) em `docs/implementation/snk-7-dry-run.md`.
+
 ## Parte 2f (2026-11-05/06) — D-AA salvar = enviar (feito: A1–A4, A6; B1–B5 da parte 2g ver adiante)
 - Checkpoint: `CHECKPOINT_2026-11-05-parte2f.md`. Último commit de código: `c2bdb89`.
 - Só o dono roda: (1) reexecutar `deploy/staging/db-roles.sql` em staging (GRANT de coluna em `integration_order_dry_run` para `force_api`; sem isso a leitura do dry-run dá 500); (2) fechar e reabrir o Claude Code (hook anti-heredoc); (3) implantar o commit publicado pelo procedimento habitual de staging. Nenhuma migração nova nesta parte.
