@@ -28,6 +28,7 @@ import {
   RejectApprovalRequestSchema,
 } from './approvals.js';
 import { DashboardResponseSchema } from './dashboard.js';
+import { StartSyncRefreshResponseSchema, SyncRefreshPathSchema, SyncRefreshSchema, SyncStatusResponseSchema } from './sync-refresh.js';
 import { DiscountLimitsResponseSchema, UpdateDiscountLimitsRequestSchema } from './discount-limits.js';
 import { ErpSubmissionDisabledErrorSchema, type ErrorStatus } from './errors.js';
 import { HealthResponseSchema, ReadyResponseSchema } from './health.js';
@@ -234,6 +235,44 @@ export const routes = {
     auth: 'session',
     request: {},
     responses: { 200: { description: 'Indicadores', schema: DashboardResponseSchema } },
+    errors: [401, 403],
+  }),
+
+  startSyncRefresh: defineRoute({
+    operationId: 'startSyncRefresh',
+    method: 'post',
+    path: '/sync/refresh',
+    tags: ['sync'],
+    summary: 'Ask the worker to re-read the Sankhya data now (D-AB B3)',
+    description:
+      'The API never reads Sankhya: it records the request and the worker runs the read-only steps. Singleton: a refresh already running is returned (reused=true); so is one that finished less than 60 s ago (per-installation cooldown).',
+    auth: 'session',
+    request: {},
+    responses: { 200: { description: 'Atualização iniciada ou reaproveitada', schema: StartSyncRefreshResponseSchema } },
+    errors: [401, 403],
+  }),
+
+  getSyncRefresh: defineRoute({
+    operationId: 'getSyncRefresh',
+    method: 'get',
+    path: '/sync/refresh/{id}',
+    tags: ['sync'],
+    summary: 'Progress of an on-demand refresh, one step per entity',
+    auth: 'session',
+    request: { params: SyncRefreshPathSchema },
+    responses: { 200: { description: 'Estado da atualização', schema: SyncRefreshSchema } },
+    errors: [400, 401, 403, 404],
+  }),
+
+  getSyncStatus: defineRoute({
+    operationId: 'getSyncStatus',
+    method: 'get',
+    path: '/sync/status',
+    tags: ['sync'],
+    summary: 'Age of the Sankhya data shown in the screens',
+    auth: 'session',
+    request: {},
+    responses: { 200: { description: 'Horário dos dados', schema: SyncStatusResponseSchema } },
     errors: [401, 403],
   }),
 

@@ -54,6 +54,10 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   // Minimal order-entry slice (never syncStates/gateway/integration/customers/pricing/financial):
   // open to every role that can create an order (seller/manager/admin), unlike getConfiguration above.
   getOrderEntryConfiguration: { roles: EVERY_ROLE },
+  // D-AB B3: any signed-in profile can ask for fresh data; the API only records the request (the worker reads Sankhya).
+  startSyncRefresh: { roles: EVERY_ROLE },
+  getSyncRefresh: { roles: EVERY_ROLE },
+  getSyncStatus: { roles: EVERY_ROLE },
   // Commercial routes (Stage 3A). Each is open to the three roles the schema has; WHICH rows a
   // caller sees is the data scope (`resolveCustomerScope`), never this table. An external
   // representative role does not exist yet (AUTH-3 PROPOSED): when it does it gets no line here

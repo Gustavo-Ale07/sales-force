@@ -109,3 +109,8 @@ export function duplicateAsOrder(api: ApiClient, id: string, body: DuplicateAsOr
 /** 409 reasons of `duplicate-as-order` (besides `no_usable_lines`, shared with templates). */
 export const NOT_A_QUOTATION = "not_a_quotation";
 export const ORDER_TOP_NOT_CONFIGURED = "order_top_not_configured";
+
+/** D-AB B3: asks the worker to read Sankhya now. The API only records the request. */
+export function startSyncRefresh(api: ApiClient) {
+  return callApi(() => api.POST("/sync/refresh"));
+}

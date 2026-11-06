@@ -40,6 +40,7 @@
 --   audit_log                             I           -              iam/audit.service. Append-only: no S/U/D (never read by code)
 --   installation_configuration_version    S           S I U(is_current)  configuration.repository (read); worker mirror-scope + sync.configuration (CFG-8, UNDETERMINED 1)
 --   sync_state                            S           S I U          worker: sync-state, heartbeat. API reads (integration summary, /configuration)
+--   sync_refresh                          S I         S U            D-AB B3: API inserts the on-demand refresh request and reads progress; worker claims it and writes the steps
 --   erp_directory_user (ERP user code + seller code only),
 --   erp_carrier (carrier code, name, active flag),
 --   erp_ipi_rate (IPI rate by ERP code, display estimate only),
@@ -248,6 +249,7 @@ BEGIN
       ('audit_log',                          'force_api',    'INSERT'),
       ('installation_configuration_version', 'force_api',    'SELECT'),
       ('sync_state',                         'force_api',    'SELECT'),
+      ('sync_refresh',                       'force_api',    'SELECT, INSERT'),
       ('schema_migration',                   'force_api',    'SELECT'),
       ('erp_seller',                         'force_api',    'SELECT'),
       ('erp_directory_user',                 'force_api',    'SELECT'),
@@ -267,6 +269,7 @@ BEGIN
       ('sales_order_item',                   'force_worker', 'SELECT'),
       ('audit_log',                          'force_worker', 'INSERT'),
       ('sync_state',                         'force_worker', 'SELECT, INSERT, UPDATE'),
+      ('sync_refresh',                       'force_worker', 'SELECT, UPDATE'),
       ('erp_seller',                         'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_directory_user',                 'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_carrier',                        'force_worker', 'SELECT, INSERT, UPDATE'),

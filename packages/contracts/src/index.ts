@@ -14,5 +14,6 @@ export * from './discount-limits.js';
 export * from './approvals.js';
 export * from './templates.js';
 export * from './dashboard.js';
+export * from './sync-refresh.js';
 export * from './routes.js';
 export * from './openapi.js';

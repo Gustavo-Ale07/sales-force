@@ -109,7 +109,7 @@ describe('sync.erp.orderStatus (SNK-7 P2)', () => {
       logger: createLogger({ level: 'silent', service: 'test' }),
       now: () => new Date(NOW),
     });
-    expect(await failing.runOnce()).toEqual({ checked: 0, updated: 0 });
+    expect(await failing.runOnce()).toEqual({ checked: 0, updated: 0, failed: true });
     expect((await w.row(id))?.erpStatusCode).toBe(2);
   });
 

@@ -21,6 +21,8 @@ export interface OrderErpStatusDeps {
 export interface OrderErpStatusRun {
   readonly checked: number;
   readonly updated: number;
+  /** True when the ERP read itself failed (the stored statuses are kept); lets the on-demand refresh report it. */
+  readonly failed?: true;
 }
 
 /**
@@ -60,7 +62,7 @@ export class OrderErpStatusService {
         { err: isSankhyaGatewayError(error) ? { kind: error.kind, code: error.code } : { message: String(error) } },
         'ERP order status read failed; the stored statuses are kept and the next run retries',
       );
-      return { checked: 0, updated: 0 };
+      return { checked: 0, updated: 0, failed: true };
     }
     const byNumber = new Map(readings.map((reading) => [reading.erpOrderNumber, reading]));
     let updated = 0;

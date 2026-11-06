@@ -20,6 +20,7 @@ import {
 import { OrderErpStatusService } from '../integration/order-erp-status.service.js';
 import type { RequestBudget, SankhyaReadPort } from '@salesforce/sankhya';
 import { ConfigurationSyncService } from '../sync/configuration-sync.service.js';
+import { SyncRefreshRunner } from '../sync/sync-refresh-runner.service.js';
 import { WorkerRuntime, type WorkerRuntimeOptions } from './runtime.js';
 
 /** Product photo synchronization wiring; passed only when PRODUCT_MEDIA_SYNC_ENABLED=true. */
@@ -66,15 +67,25 @@ export class WorkerModule {
       providers: [
         {
           provide: WorkerRuntime,
-          useFactory: (logger: Logger, db: DbHandle, now: Clock) =>
-            new WorkerRuntime({
+          useFactory: (logger: Logger, db: DbHandle, now: Clock) => {
+            const mirrorService =
+              mirror === undefined
+                ? undefined
+                : new MirrorSyncService({ db, gateway: mirror.gateway, logger, now, readScope: () => loadCurrentReadScope(db.db) });
+            const configurationService =
+              configurationSync === undefined
+                ? undefined
+                : new ConfigurationSyncService({ db, gateway: configurationSync.gateway, audit: new AuditService(db.db, now), logger, now });
+            const orderStatusService =
+              orderDelivery === undefined ? undefined : new OrderErpStatusService({ db, gateway: orderDelivery.gateway, logger, now });
+            return new WorkerRuntime({
               logger,
               db,
               now,
               options,
-              ...(mirror === undefined
+              ...(mirror === undefined || mirrorService === undefined
                 ? {}
-                : { mirror: { service: new MirrorSyncService({ db, gateway: mirror.gateway, logger, now, readScope: () => loadCurrentReadScope(db.db) }), schedules: mirror.schedules, ...(mirror.startupSync === undefined ? {} : { startupSync: mirror.startupSync }) } }),
+                : { mirror: { service: mirrorService, schedules: mirror.schedules, ...(mirror.startupSync === undefined ? {} : { startupSync: mirror.startupSync }) } }),
               ...(media === undefined
                 ? {}
                 : {
@@ -92,14 +103,16 @@ export class WorkerModule {
                       }),
                     },
                   }),
-              ...(configurationSync === undefined
+              ...(configurationService === undefined ? {} : { configurationSync: { service: configurationService } }),
+              ...(mirrorService === undefined
                 ? {}
                 : {
-                    configurationSync: {
-                      service: new ConfigurationSyncService({
+                    syncRefresh: {
+                      runner: new SyncRefreshRunner({
                         db,
-                        gateway: configurationSync.gateway,
-                        audit: new AuditService(db.db, now),
+                        mirror: mirrorService,
+                        ...(configurationService === undefined ? {} : { configuration: configurationService }),
+                        ...(orderStatusService === undefined ? {} : { orderStatus: orderStatusService }),
                         logger,
                         now,
                       }),
@@ -109,7 +122,7 @@ export class WorkerModule {
                 ? {}
                 : {
                     orderDelivery: {
-                      status: new OrderErpStatusService({ db, gateway: orderDelivery.gateway, logger, now }),
+                      ...(orderStatusService === undefined ? {} : { status: orderStatusService }),
                       service: new OrderDeliveryService({
                         db,
                         gateway: orderDelivery.gateway,
@@ -121,7 +134,8 @@ export class WorkerModule {
                       }),
                     },
                   }),
-            }),
+            });
+          },
           inject: [LOGGER, DATABASE_HANDLE, CLOCK],
         },
       ],

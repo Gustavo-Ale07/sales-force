@@ -161,26 +161,61 @@ describe("Meu perfil e atualização de dados", () => {
     expect(await screen.findByText("Nenhum vendedor vinculado")).toBeInTheDocument();
   });
 
-  it("reloads the data on screen from the API and confirms", async () => {
-    const { user, calls } = renderApp("/", { handlers: shell });
-    await waitFor(() => expect(callsTo(calls, "GET", "/dashboard")).toHaveLength(1));
-    await openUserMenu(user);
-    await user.click(await screen.findByRole("menuitem", { name: "Atualizar dados" }));
-    expect(await screen.findByText("Dados atualizados")).toBeInTheDocument();
-    expect(callsTo(calls, "GET", "/dashboard").length).toBeGreaterThanOrEqual(2);
+  const REFRESH_ID = "0190a000-0000-7000-8000-0000000000f1";
+  const refreshBody = (over: Record<string, unknown> = {}, failedEntity?: string) => ({
+    id: REFRESH_ID,
+    status: "done",
+    requestedAt: "2026-11-06T17:00:00.000Z",
+    startedAt: "2026-11-06T17:00:01.000Z",
+    finishedAt: "2026-11-06T17:00:09.000Z",
+    steps: ["configuration","sellers","customers","products","priceTables","priceTableVersions","listPrices","carriers","ipiRates","openTitles","orderStatus"].map((entity) => ({
+      entity,
+      status: entity === failedEntity ? "failed" : "ok",
+      rowsRead: entity === failedEntity ? null : 3,
+      durationMs: 10,
+      reason: entity === failedEntity ? "Sankhya indisponível." : null,
+      lastSuccessAt: entity === failedEntity ? "2026-11-06T16:00:00.000Z" : null,
+    })),
+    ...over,
   });
 
-  it("reports a failed reload instead of claiming success", async () => {
-    let fail = false;
+  it("opens the Sankhya refresh dialog, lists each entity and reloads the screens at the end", async () => {
     const { user, calls } = renderApp("/", {
-      handlers: { ...shell, "GET /dashboard": () => (fail ? apiError(503, "service_unavailable", "x") : { body: dashboard() }) },
+      handlers: {
+        ...shell,
+        "POST /sync/refresh": { body: { ...refreshBody({ status: "pending", finishedAt: null }), reused: false } },
+        ["GET /sync/refresh/" + REFRESH_ID]: { body: refreshBody() },
+      },
     });
     await waitFor(() => expect(callsTo(calls, "GET", "/dashboard")).toHaveLength(1));
-    fail = true;
     await openUserMenu(user);
     await user.click(await screen.findByRole("menuitem", { name: "Atualizar dados" }));
-    expect(await screen.findByText("Não foi possível atualizar os dados")).toBeInTheDocument();
-    expect(screen.queryByText("Dados atualizados")).not.toBeInTheDocument();
+    expect(await screen.findByText("Atualizando dados do Sankhya")).toBeInTheDocument();
+    expect(await screen.findByText(/Atualizado às/)).toBeInTheDocument();
+    expect(within(screen.getByRole("list", { name: "Andamento por informação" })).getByText("Clientes")).toBeInTheDocument();
+    expect(callsTo(calls, "POST", "/sync/refresh")).toHaveLength(1);
+    await waitFor(() => expect(callsTo(calls, "GET", "/dashboard").length).toBeGreaterThanOrEqual(2));
+  });
+
+  it("says which entity failed and that the old data was kept, never claiming success", async () => {
+    const { user } = renderApp("/", {
+      handlers: {
+        ...shell,
+        "POST /sync/refresh": { body: { ...refreshBody({}, "customers"), reused: false } },
+        ["GET /sync/refresh/" + REFRESH_ID]: { body: refreshBody({}, "customers") },
+      },
+    });
+    await openUserMenu(user);
+    await user.click(await screen.findByRole("menuitem", { name: "Atualizar dados" }));
+    expect(await screen.findByText(/Não foi possível atualizar: Clientes/)).toBeInTheDocument();
+    expect(screen.getByText(/Mantidos os dados de/)).toBeInTheDocument();
+  });
+
+  it("offers 'Tentar de novo' when the refresh cannot even be started", async () => {
+    const { user } = renderApp("/", { handlers: { ...shell, "POST /sync/refresh": apiError(503, "service_unavailable", "x") } });
+    await openUserMenu(user);
+    await user.click(await screen.findByRole("menuitem", { name: "Atualizar dados" }));
+    expect(await screen.findByRole("button", { name: "Tentar de novo" })).toBeInTheDocument();
   });
 });
 

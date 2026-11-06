@@ -37,6 +37,9 @@
     },
     {
       "name": "sellers"
+    },
+    {
+      "name": "sync"
     }
   ],
   "security": [
@@ -461,6 +464,162 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DashboardResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sync/refresh": {
+      "post": {
+        "operationId": "startSyncRefresh",
+        "tags": [
+          "sync"
+        ],
+        "summary": "Ask the worker to re-read the Sankhya data now (D-AB B3)",
+        "description": "The API never reads Sankhya: it records the request and the worker runs the read-only steps. Singleton: a refresh already running is returned (reused=true); so is one that finished less than 60 s ago (per-installation cooldown).",
+        "responses": {
+          "200": {
+            "description": "Atualização iniciada ou reaproveitada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartSyncRefreshResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sync/refresh/{id}": {
+      "get": {
+        "operationId": "getSyncRefresh",
+        "tags": [
+          "sync"
+        ],
+        "summary": "Progress of an on-demand refresh, one step per entity",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Estado da atualização",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncRefresh"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sync/status": {
+      "get": {
+        "operationId": "getSyncStatus",
+        "tags": [
+          "sync"
+        ],
+        "summary": "Age of the Sankhya data shown in the screens",
+        "responses": {
+          "200": {
+            "description": "Horário dos dados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncStatusResponse"
                 }
               }
             }
@@ -7127,6 +7286,209 @@
         ],
         "additionalProperties": false
       },
+      "StartSyncRefreshResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SyncRefreshStatus"
+          },
+          "requestedAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IsoTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finishedAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IsoTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SyncRefreshStep"
+            }
+          },
+          "reused": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "requestedAt",
+          "startedAt",
+          "finishedAt",
+          "steps",
+          "reused"
+        ],
+        "additionalProperties": false
+      },
+      "SyncRefresh": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SyncRefreshStatus"
+          },
+          "requestedAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IsoTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finishedAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IsoTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SyncRefreshStep"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "requestedAt",
+          "startedAt",
+          "finishedAt",
+          "steps"
+        ],
+        "additionalProperties": false
+      },
+      "SyncRefreshEntity": {
+        "type": "string",
+        "enum": [
+          "configuration",
+          "sellers",
+          "customers",
+          "products",
+          "priceTables",
+          "priceTableVersions",
+          "listPrices",
+          "carriers",
+          "ipiRates",
+          "openTitles",
+          "orderStatus"
+        ]
+      },
+      "SyncRefreshStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running",
+          "done"
+        ]
+      },
+      "SyncRefreshStep": {
+        "type": "object",
+        "properties": {
+          "entity": {
+            "$ref": "#/components/schemas/SyncRefreshEntity"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SyncRefreshStepStatus"
+          },
+          "rowsRead": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "durationMs": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lastSuccessAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IsoTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "entity",
+          "status",
+          "rowsRead",
+          "durationMs",
+          "reason",
+          "lastSuccessAt"
+        ],
+        "additionalProperties": false
+      },
+      "SyncRefreshStepStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running",
+          "ok",
+          "failed",
+          "skipped"
+        ]
+      },
       "SyncState": {
         "type": "object",
         "properties": {
@@ -7212,6 +7574,25 @@
           "succeeded",
           "failed"
         ]
+      },
+      "SyncStatusResponse": {
+        "type": "object",
+        "properties": {
+          "dataAsOf": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IsoTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "dataAsOf"
+        ],
+        "additionalProperties": false
       },
       "TemplateLineSkipReason": {
         "type": "string",

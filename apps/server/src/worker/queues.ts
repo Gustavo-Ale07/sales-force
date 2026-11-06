@@ -25,6 +25,8 @@ export const QUEUE_NAMES = {
   syncErpOrderStatus: 'sync.erp.orderStatus',
   /** Reads the Vidya configuration inside Sankhya and stores a new configuration version (CFG-8). Only with CONFIG_SYNC_FROM_SANKHYA=1. */
   syncConfiguration: 'sync.configuration',
+  /** "Atualizar dados" requested by a user (D-AB B3): reads the mirrored entities once, read-only. */
+  syncRefreshOnDemand: 'sync.refresh.on-demand',
 } as const;
 
 /** Every 15 minutes (CFG-8), and once at worker start. */
@@ -121,6 +123,18 @@ export const QUEUE_REGISTRY: readonly QueueSpec[] = [
       policy: 'short',
       retryLimit: 0,
       expireInSeconds: 600,
+      retentionSeconds: 3600,
+      deleteAfterSeconds: 24 * 3600,
+      deadLetter: QUEUE_NAMES.deadLetter,
+    },
+  },
+  {
+    // A failed on-demand refresh is shown to the user step by step; the user clicks again: pg-boss never retries it.
+    name: QUEUE_NAMES.syncRefreshOnDemand,
+    options: {
+      policy: 'short',
+      retryLimit: 0,
+      expireInSeconds: 1500,
       retentionSeconds: 3600,
       deleteAfterSeconds: 24 * 3600,
       deadLetter: QUEUE_NAMES.deadLetter,

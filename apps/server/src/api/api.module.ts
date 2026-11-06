@@ -3,6 +3,7 @@ import { CatalogModule } from '../catalog/catalog.module.js';
 import { ConfigurationModule } from '../configuration/configuration.module.js';
 import { CustomersModule } from '../customers/customers.module.js';
 import { DashboardModule } from '../dashboard/dashboard.module.js';
+import { SyncRefreshModule } from '../sync-refresh/sync-refresh.module.js';
 import { OrdersModule } from '../orders/orders.module.js';
 import { SellersModule } from '../sellers/sellers.module.js';
 import { TemplatesModule } from '../templates/templates.module.js';
@@ -31,6 +32,7 @@ export class ApiModule {
         OrdersModule,
         TemplatesModule,
         DashboardModule,
+        SyncRefreshModule,
       ],
     };
   }

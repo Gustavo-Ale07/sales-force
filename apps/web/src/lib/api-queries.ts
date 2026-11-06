@@ -28,6 +28,8 @@ export const queryKeys = {
   dashboard: ["dashboard"] as const,
   sellers: ["sellers"] as const,
   carriers: ["carriers"] as const,
+  syncRefresh: (id: string) => ["sync-refresh", id] as const,
+  syncStatus: ["sync-status"] as const,
   customers: (params: CustomersParams) => ["customers", "list", params] as const,
   customer: (code: number) => ["customers", "detail", code] as const,
   customerFinancial: (code: number) => ["customers", "financial", code] as const,
@@ -194,5 +196,22 @@ export function orderTemplateQueryOptions(api: ApiClient, id: string) {
   return queryOptions({
     queryKey: queryKeys.orderTemplate(id),
     queryFn: () => callApi(() => api.GET("/order-templates/{id}", { params: { path: { id } } })),
+  });
+}
+
+/** D-AB B3: age of the Sankhya data behind the screens (read from `sync_state`). */
+export function syncStatusQueryOptions(api: ApiClient) {
+  return queryOptions({
+    queryKey: queryKeys.syncStatus,
+    queryFn: () => callApi(() => api.GET("/sync/status")),
+    staleTime: 60_000,
+  });
+}
+
+/** D-AB B3: progress of one on-demand refresh. */
+export function syncRefreshQueryOptions(api: ApiClient, id: string) {
+  return queryOptions({
+    queryKey: queryKeys.syncRefresh(id),
+    queryFn: () => callApi(() => api.GET("/sync/refresh/{id}", { params: { path: { id } } })),
   });
 }

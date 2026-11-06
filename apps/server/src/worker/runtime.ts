@@ -23,6 +23,11 @@ import type { OrderErpStatusService } from '../integration/order-erp-status.serv
 import { OrderDeliveryJob, OrderDryRunPurgeJob, OrderErpStatusJob } from './jobs/order-delivery.job.js';
 import type { ConfigurationSyncService } from '../sync/configuration-sync.service.js';
 import { ConfigurationSyncJob } from './jobs/configuration-sync.job.js';
+import type { SyncRefreshRunner } from '../sync/sync-refresh-runner.service.js';
+import { SyncRefreshJob } from './jobs/sync-refresh.job.js';
+
+/** How often the worker looks for "Atualizar dados" requests recorded by the API. */
+export const SYNC_REFRESH_POLL_MS = 2_000;
 import {
   CONFIGURATION_SYNC_CRON,
   ORDER_DELIVERY_CRON,
@@ -93,6 +98,11 @@ export interface WorkerRuntimeDeps {
    * schedule stored by an earlier configuration is dropped.
    */
   readonly configurationSync?: { readonly service: ConfigurationSyncService };
+  /**
+   * On-demand "Atualizar dados" (D-AB B3). Present whenever the mirror is wired: the API only records the request in
+   * `sync_refresh`; this runtime polls it and enqueues `sync.refresh.on-demand`.
+   */
+  readonly syncRefresh?: { readonly runner: SyncRefreshRunner; readonly pollMs?: number };
 }
 
 /**
@@ -107,6 +117,7 @@ export class WorkerRuntime {
   #boss: PgBoss | undefined;
   #healthServer: HealthServer | undefined;
   #started = false;
+  #refreshTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(private readonly deps: WorkerRuntimeDeps) {
     this.health = new WorkerHealth(deps.now);
@@ -173,8 +184,14 @@ export class WorkerRuntime {
             ];
       const { configurationSync } = this.deps;
       const configurationHandlers = configurationSync === undefined ? [] : [new ConfigurationSyncJob(configurationSync.service)];
+      const { syncRefresh } = this.deps;
+      const refreshHandlers =
+        syncRefresh === undefined || !queues.some((spec) => spec.name === QUEUE_NAMES.syncRefreshOnDemand)
+          ? []
+          : [new SyncRefreshJob(syncRefresh.runner)];
       const handlers: readonly JobHandler<unknown>[] = [
         heartbeat,
+        ...refreshHandlers,
         ...mirrorHandlers,
         ...mediaHandlers,
         ...orderHandlers,
@@ -245,6 +262,8 @@ export class WorkerRuntime {
         }
       }
 
+      if (refreshHandlers.length > 0 && syncRefresh !== undefined) this.#startRefreshPoller(boss, syncRefresh);
+
       this.health.markStarted();
       // First beat right away, so the API sees the worker (and its gateway mode) without waiting a minute.
       const firstBeat = this.deps.now();
@@ -276,7 +295,29 @@ export class WorkerRuntime {
     this.deps.logger.info('worker stopped');
   }
 
+  /** Hands the pending "Atualizar dados" requests to the queue (one job per request: the singleton key is its id). */
+  #startRefreshPoller(boss: PgBoss, refresh: { readonly runner: SyncRefreshRunner; readonly pollMs?: number }): void {
+    let busy = false;
+    const tick = async () => {
+      if (busy) return;
+      busy = true;
+      try {
+        await refresh.runner.closeStale();
+        for (const refreshId of await refresh.runner.pendingIds()) {
+          await boss.send(QUEUE_NAMES.syncRefreshOnDemand, { refreshId }, { singletonKey: refreshId });
+        }
+      } catch (error) {
+        this.deps.logger.warn({ err: error }, 'on-demand refresh poll failed; the next tick retries');
+      } finally {
+        busy = false;
+      }
+    };
+    this.#refreshTimer = setInterval(() => void tick(), refresh.pollMs ?? SYNC_REFRESH_POLL_MS);
+  }
+
   async #stopBoss(graceful: boolean): Promise<void> {
+    if (this.#refreshTimer !== undefined) clearInterval(this.#refreshTimer);
+    this.#refreshTimer = undefined;
     const boss = this.#boss;
     this.#boss = undefined;
     if (boss === undefined) return;

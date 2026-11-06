@@ -65,3 +65,32 @@ export const syncState = pgTable(
     check('sync_state_row_count_chk', sql`${t.rowCount} is null or ${t.rowCount} >= 0`),
   ],
 );
+
+export const syncRefreshStatuses = ['pending', 'running', 'done'] as const;
+export type SyncRefreshStatus = (typeof syncRefreshStatuses)[number];
+
+/**
+ * D-AB B3: one on-demand "Atualizar dados" request. The API inserts it (`pending`); the worker claims it, runs the
+ * read-only steps and writes the progress into `steps` (counts and masked reasons only, never row content).
+ * At most one is `pending`/`running` at a time (partial unique index): a second request gets the same row.
+ */
+export const syncRefresh = pgTable(
+  'sync_refresh',
+  {
+    id: uuid('id').primaryKey(),
+    requestedBy: uuid('requested_by').notNull(),
+    requestedAt: timestamp('requested_at', { withTimezone: true }).notNull().defaultNow(),
+    status: text('status').notNull().default('pending'),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+    steps: jsonb('steps').notNull().default(sql`'[]'::jsonb`),
+  },
+  (t) => [
+    check('sync_refresh_status_chk', sql`${t.status} in (${inList(syncRefreshStatuses)})`),
+    uniqueIndex('sync_refresh_active_uq')
+      .on(sql`(1)`)
+      .where(sql`${t.status} in ('pending', 'running')`),
+    // Serves: the latest refresh (cooldown) and the worker's claim.
+    index('sync_refresh_requested_idx').on(t.requestedAt),
+  ],
+);

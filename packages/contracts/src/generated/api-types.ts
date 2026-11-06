@@ -182,6 +182,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sync/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask the worker to re-read the Sankhya data now (D-AB B3)
+         * @description The API never reads Sankhya: it records the request and the worker runs the read-only steps. Singleton: a refresh already running is returned (reused=true); so is one that finished less than 60 s ago (per-installation cooldown).
+         */
+        post: operations["startSyncRefresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sync/refresh/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Progress of an on-demand refresh, one step per entity */
+        get: operations["getSyncRefresh"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sync/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Age of the Sankhya data shown in the screens */
+        get: operations["getSyncStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sellers": {
         parameters: {
             query?: never;
@@ -1443,6 +1497,39 @@ export interface components {
             productCode: number;
             reason: components["schemas"]["TemplateLineSkipReason"];
         };
+        StartSyncRefreshResponse: {
+            /** Format: uuid */
+            id: string;
+            status: components["schemas"]["SyncRefreshStatus"];
+            requestedAt: components["schemas"]["IsoTimestamp"];
+            startedAt: components["schemas"]["IsoTimestamp"] | null;
+            finishedAt: components["schemas"]["IsoTimestamp"] | null;
+            steps: components["schemas"]["SyncRefreshStep"][];
+            reused: boolean;
+        };
+        SyncRefresh: {
+            /** Format: uuid */
+            id: string;
+            status: components["schemas"]["SyncRefreshStatus"];
+            requestedAt: components["schemas"]["IsoTimestamp"];
+            startedAt: components["schemas"]["IsoTimestamp"] | null;
+            finishedAt: components["schemas"]["IsoTimestamp"] | null;
+            steps: components["schemas"]["SyncRefreshStep"][];
+        };
+        /** @enum {string} */
+        SyncRefreshEntity: "configuration" | "sellers" | "customers" | "products" | "priceTables" | "priceTableVersions" | "listPrices" | "carriers" | "ipiRates" | "openTitles" | "orderStatus";
+        /** @enum {string} */
+        SyncRefreshStatus: "pending" | "running" | "done";
+        SyncRefreshStep: {
+            entity: components["schemas"]["SyncRefreshEntity"];
+            status: components["schemas"]["SyncRefreshStepStatus"];
+            rowsRead: number | null;
+            durationMs: number | null;
+            reason: string | null;
+            lastSuccessAt: components["schemas"]["IsoTimestamp"] | null;
+        };
+        /** @enum {string} */
+        SyncRefreshStepStatus: "pending" | "running" | "ok" | "failed" | "skipped";
         SyncState: {
             entity: string;
             status: components["schemas"]["SyncStatus"];
@@ -1455,6 +1542,9 @@ export interface components {
         };
         /** @enum {string} */
         SyncStatus: "idle" | "running" | "succeeded" | "failed";
+        SyncStatusResponse: {
+            dataAsOf: components["schemas"]["IsoTimestamp"] | null;
+        };
         /** @enum {string} */
         TemplateLineSkipReason: "product_removed" | "product_inactive" | "no_price" | "zero_price" | "product_hidden" | "product_not_sellable";
         UpdateDiscountLimitsRequest: {
@@ -1852,6 +1942,140 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DashboardResponse"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    startSyncRefresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Atualização iniciada ou reaproveitada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartSyncRefreshResponse"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    getSyncRefresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Estado da atualização */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncRefresh"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    getSyncStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Horário dos dados */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncStatusResponse"];
                 };
             };
             /** @description Não autenticado */

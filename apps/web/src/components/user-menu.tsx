@@ -6,12 +6,16 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  toast,
 } from "@salesforce/ui";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { LogOut, RefreshCw, UserRound } from "lucide-react";
+import { useState } from "react";
+import { syncStatusQueryOptions } from "../lib/api-queries";
+import { useApi } from "../lib/app-context";
 import type { AuthUser } from "../lib/auth-client";
+import { clockTime } from "../lib/sync-refresh";
+import { RefreshDataDialog } from "./refresh-data-dialog";
 
 export interface UserMenuProps {
   user: AuthUser | null;
@@ -21,21 +25,13 @@ export interface UserMenuProps {
 /** User menu slot. Without a session (design route) it renders nothing. */
 export function UserMenu({ user, onLogout }: UserMenuProps) {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const api = useApi();
+  const [refreshOpen, setRefreshOpen] = useState(false);
+  const status = useQuery({ ...syncStatusQueryOptions(api), enabled: user !== null });
   if (!user) return null;
-  /**
-   * Explicit data reload: refetches what is on screen and marks everything else stale, so the next visit reads the
-   * server again. It re-reads Sales Force; it does not ask the ERP for anything (there is no such endpoint).
-   */
-  const reloadData = async () => {
-    try {
-      await queryClient.invalidateQueries(undefined, { throwOnError: true });
-      toast({ title: "Dados atualizados", description: "As telas foram recarregadas a partir do Sales Force.", tone: "success" });
-    } catch {
-      toast({ title: "Não foi possível atualizar os dados", description: "Verifique a conexão e tente novamente.", tone: "danger" });
-    }
-  };
+  const dataAsOf = status.data?.dataAsOf ?? null;
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={`Menu do usuário ${user.name}`}
@@ -53,10 +49,11 @@ export function UserMenu({ user, onLogout }: UserMenuProps) {
           <UserRound size={16} strokeWidth={1.75} aria-hidden="true" />
           Meu perfil
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => void reloadData()}>
+        <DropdownMenuItem onSelect={() => setRefreshOpen(true)}>
           <RefreshCw size={16} strokeWidth={1.75} aria-hidden="true" />
           Atualizar dados
         </DropdownMenuItem>
+        {dataAsOf ? <DropdownMenuLabel className="pt-0 text-xs font-normal">Dados do Sankhya de {clockTime(dataAsOf)}</DropdownMenuLabel> : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onLogout}>
           <LogOut size={16} strokeWidth={1.75} aria-hidden="true" />
@@ -64,5 +61,7 @@ export function UserMenu({ user, onLogout }: UserMenuProps) {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    <RefreshDataDialog open={refreshOpen} onClose={() => setRefreshOpen(false)} />
+    </>
   );
 }
