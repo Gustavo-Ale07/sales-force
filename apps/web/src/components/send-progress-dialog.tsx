@@ -104,7 +104,6 @@ export function SendProgressDialog({ orderId, kind, reference, onClose, onDelete
         >
           <LoadingHero
             label="Envio ao Sankhya"
-            percent={0}
             action={busy ? "Enviando o pedido ao Sankhya…" : outcome.title}
             meta={busy ? null : outcome.detail}
             outcome={busy ? null : outcome.phase === "confirmed" || outcome.phase === "released_pending" || outcome.phase === "simulated" ? "ok" : "warn"}

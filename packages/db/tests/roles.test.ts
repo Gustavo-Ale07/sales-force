@@ -37,6 +37,7 @@ const EXPECTED: Record<string, { api: Priv[]; worker: Priv[] }> = {
   // Worker: INSERT + column-level UPDATE (is_current) only (CFG-8); the column grant is checked below.
   installation_configuration_version: { api: S, worker: ['SELECT', 'INSERT'] },
   sync_state: { api: S, worker: SIU },
+  sync_refresh: { api: SIU, worker: ['SELECT', 'UPDATE'] },
   sales_order: { api: SIUD, worker: ['SELECT', 'UPDATE'] },
   sales_order_item: { api: SIUD, worker: S },
   sales_order_approval: { api: SIU, worker: [] },
@@ -200,7 +201,7 @@ describe('db-roles.sql', () => {
       'SELECT count(*) FROM audit_log',
       'UPDATE audit_log SET action = action',
       'DELETE FROM audit_log',
-      'SELECT count(*) FROM integration_order_dry_run',
+      'SELECT payload FROM integration_order_dry_run',
       'SELECT count(*) FROM pgboss.job',
       'UPDATE schema_migration SET hash = hash',
       'DELETE FROM schema_migration',

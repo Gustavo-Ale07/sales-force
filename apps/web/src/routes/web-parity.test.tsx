@@ -1,5 +1,5 @@
 import { screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ORDER_ID, customer, customerDetail, customersPage, dashboard, ordersPage, orderDetail, orderItem, orderListItem, productsPage, testDataset } from "../test/fixtures";
 import { apiError, callsTo, openUserMenu, renderApp, session, type Handlers } from "../test/harness";
 
@@ -222,6 +222,47 @@ describe("Meu perfil e atualização de dados", () => {
     expect(await screen.findByText("Lendo clientes…")).toBeInTheDocument();
     expect(screen.getByText(/^2 de 11 · \d+ s$/)).toBeInTheDocument();
     expect(screen.getByTestId("hero-percent")).toHaveTextContent("18%");
+  });
+
+  describe('a refresh that does not advance (D-AD)', () => {
+    afterEach(() => vi.restoreAllMocks());
+    const basic = { id: REFRESH_ID, status: 'pending', progressPercent: 0, phase: 'cadastros', finishedAt: null, hasWarnings: false };
+    const open = async (role: 'seller' | 'manager') => {
+      const pending = role === 'manager' ? refreshBody({ status: 'pending', finishedAt: null, startedAt: null, steps: refreshBody().steps.map((step: Record<string, unknown>) => ({ ...step, status: 'pending' })) }) : basic;
+      const { user } = renderApp('/', {
+        role,
+        handlers: { ...shell, 'POST /sync/refresh': { body: { ...pending, reused: false } }, ['GET /sync/refresh/' + REFRESH_ID]: { body: pending } },
+      });
+      await openUserMenu(user);
+      await user.click(await screen.findByRole('menuitem', { name: 'Atualizar dados' }));
+      await screen.findByRole('progressbar');
+      return user;
+    };
+    const jump = (ms: number) => {
+      const real = Date.now();
+      vi.spyOn(Date, 'now').mockReturnValue(real + ms);
+    };
+
+    it('after 15 s with no step started, the action line says it is waiting for the service', async () => {
+      await open('manager');
+      expect(screen.queryByText('Aguardando o serviço de atualização…')).toBeNull();
+      jump(16_000);
+      expect(await screen.findByText('Aguardando o serviço de atualização…', {}, { timeout: 3_000 })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Fechar' })).toBeNull();
+    });
+
+    for (const role of ['seller', 'manager'] as const) {
+      it(role + ': after 60 s without any advance the dialog unblocks with only the phrase, Tentar de novo and Fechar', async () => {
+        const user = await open(role);
+        jump(61_000);
+        const phrase = 'Está demorando mais que o normal. Os dados anteriores continuam disponíveis.';
+        expect(await screen.findByText(phrase, {}, { timeout: 3_000 })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Tentar de novo' })).toBeInTheDocument();
+        if (role === 'seller') expect(within(screen.getByRole('dialog')).queryByText(/Lendo|cadastros|serviço de atualização/i)).toBeNull();
+        await user.click(screen.getByRole('button', { name: 'Fechar' }));
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      });
+    }
   });
 
   it("shows the seller only a bar and a sentence: no entity, count or reason", async () => {

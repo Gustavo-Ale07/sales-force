@@ -204,6 +204,13 @@
       "when": 1793971191452,
       "tag": "0028_sync_refresh",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1793991511507,
+      "tag": "0029_sync_refresh_progress_at",
+      "breakpoints": true
     }
   ]
 }

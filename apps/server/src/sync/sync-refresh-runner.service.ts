@@ -1,16 +1,14 @@
 import { SYNC_REFRESH_ENTITIES, type SyncRefreshEntity, type SyncRefreshStep } from '@salesforce/contracts';
 import { syncRefresh, type DbHandle } from '@salesforce/db';
-import { and, eq, lt } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { OrderErpStatusService } from '../integration/order-erp-status.service.js';
 import type { Logger } from '../observability/logger.js';
 import type { Clock } from '../platform/tokens.js';
 import type { ConfigurationSyncService } from './configuration-sync.service.js';
 import { describeSyncFailure } from './failure.js';
+import { expireStuckRefreshes } from './sync-refresh-expiry.js';
 import { PermanentJobError } from '../worker/job-contract.js';
 import type { MirrorSyncService } from './mirror-sync.service.js';
-
-/** A run still `running` after this long is taken as interrupted (worker restart) and closed, so the next click works. */
-export const SYNC_REFRESH_STALE_MS = 30 * 60_000;
 
 export interface SyncRefreshRunnerDeps {
   readonly db: DbHandle;
@@ -47,32 +45,16 @@ export class SyncRefreshRunner {
     return rows.map((row) => row.id);
   }
 
-  /** Closes a run that stayed `running` past the limit; its unfinished steps become failed. */
-  async closeStale(): Promise<number> {
-    const { db, now } = this.deps;
-    const limit = new Date(now().getTime() - SYNC_REFRESH_STALE_MS);
-    const stale = await db.db
-      .select()
-      .from(syncRefresh)
-      .where(and(eq(syncRefresh.status, 'running'), lt(syncRefresh.startedAt, limit)));
-    for (const row of stale) {
-      const steps = (row.steps as SyncRefreshStep[]).map((step) =>
-        step.status === 'pending' || step.status === 'running'
-          ? { ...step, status: 'failed' as const, reason: 'Leitura interrompida antes de terminar.' }
-          : step,
-      );
-      // Stamped with its start, not now: the 60 s cooldown must not hand an interrupted run back to the next click.
-      const finishedAt = row.startedAt ?? limit;
-      await db.db.update(syncRefresh).set({ status: 'done', finishedAt, steps }).where(eq(syncRefresh.id, row.id));
-    }
-    return stale.length;
+  /** D-AD: closes requests/runs that stopped advancing (see sync-refresh-expiry.ts). */
+  closeStale(): Promise<number> {
+    return expireStuckRefreshes(this.deps.db.db, this.deps.now());
   }
 
   async run(id: string, options: { signal?: AbortSignal } = {}): Promise<void> {
     const { db, logger, now } = this.deps;
     const [claimed] = await db.db
       .update(syncRefresh)
-      .set({ status: 'running', startedAt: now() })
+      .set({ status: 'running', startedAt: now(), progressAt: now() })
       .where(and(eq(syncRefresh.id, id), eq(syncRefresh.status, 'pending')))
       .returning();
     if (claimed === undefined) return; // already claimed, done, or unknown: idempotent
@@ -84,7 +66,7 @@ export class SyncRefreshRunner {
       reason: null,
       lastSuccessAt: null,
     }));
-    const save = () => db.db.update(syncRefresh).set({ steps }).where(eq(syncRefresh.id, id));
+    const save = () => db.db.update(syncRefresh).set({ steps, progressAt: now() }).where(eq(syncRefresh.id, id));
     await save();
 
     for (const [index, entity] of SYNC_REFRESH_ENTITIES.entries()) {

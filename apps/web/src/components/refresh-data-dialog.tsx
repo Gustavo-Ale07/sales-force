@@ -11,6 +11,8 @@ import {
   PHASE_CAPTION,
   REFRESH_GROUPS,
   REFRESH_POLL_MS,
+  REFRESH_STALLED_AFTER_S,
+  REFRESH_WAITING_AFTER_S,
   STEP_STATE,
   clockTime,
   currentStep,
@@ -40,6 +42,9 @@ export function RefreshDataDialog({ open, onClose, role }: RefreshDataDialogProp
   const started = useRef(false);
   const [elapsed, setElapsed] = useState(0);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  // Seconds since the run last advanced (percent, step or status): drives the "waiting" line and the non-blocking "slow" state (D-AD).
+  const [quiet, setQuiet] = useState(0);
+  const advancedAt = useRef(Date.now());
 
   const start = useMutation({ mutationFn: () => startSyncRefresh(api) });
   const refreshId = start.data?.id ?? null;
@@ -89,15 +94,35 @@ export function RefreshDataDialog({ open, onClose, role }: RefreshDataDialogProp
     void queryClient.invalidateQueries({ queryKey: queryKeys.syncStatus });
   }, [done, refresh, queryClient]);
 
+  const percentNow = refresh === undefined ? 0 : "steps" in refresh ? stepProgress((refresh as SyncRefresh).steps).percent : refresh.progressPercent;
+  const signature =
+    refresh === undefined ? "none" : `${refresh.id}|${refresh.status}|${percentNow}|${"steps" in refresh ? (refresh as SyncRefresh).steps.map((step) => step.status[0]).join("") : refresh.phase}`;
+  useEffect(() => {
+    advancedAt.current = Date.now();
+    setQuiet(0);
+  }, [signature, open]);
+  useEffect(() => {
+    if (!open || done) return undefined;
+    const timer = setInterval(() => setQuiet(Math.floor((Date.now() - advancedAt.current) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [open, done, signature]);
+
   const startError = start.isError ? describeApiError(start.error, "Não foi possível iniciar a atualização") : null;
   const loadError = progress.isError && !progress.data ? describeApiError(progress.error, "Não foi possível acompanhar a atualização") : null;
-  const busy = !startError && !done && !loadError;
+  const running = !startError && !done && !loadError;
+  const stalled = running && quiet >= REFRESH_STALLED_AFTER_S;
+  const busy = running && !stalled;
 
   const detail: SyncRefresh | null = refresh && "steps" in refresh ? (refresh as SyncRefresh) : null;
   const wantsDetail = detail !== null || (refresh === undefined && seesRefreshDetail(role));
   const hasWarnings = detail ? detail.steps.some((step) => step.status === "failed") : refresh !== undefined && "hasWarnings" in refresh && refresh.hasWarnings;
   const finishedAt = refresh?.finishedAt ? clockTime(refresh.finishedAt) : null;
-  const retry = () => (startError ? start.mutate() : hasWarnings ? start.mutate() : void progress.refetch());
+  const retry = () => {
+    advancedAt.current = Date.now();
+    setQuiet(0);
+    if (startError || hasWarnings || stalled) start.mutate();
+    else void progress.refetch();
+  };
 
   const steps = detail?.steps ?? [];
   const counted = stepProgress(steps);
@@ -105,27 +130,29 @@ export function RefreshDataDialog({ open, onClose, role }: RefreshDataDialogProp
   const percent = detail ? counted.percent : refresh && "progressPercent" in refresh ? refresh.progressPercent : 0;
   const current = detail ? currentStep(steps) : undefined;
   const phase = refresh && "phase" in refresh ? refresh.phase : "cadastros";
-  const action = done
-    ? hasWarnings
-      ? wantsDetail
-        ? "Atualização concluída com avisos"
-        : "Não foi possível atualizar tudo agora."
-      : finishedAt
-        ? `Dados atualizados às ${finishedAt}`
-        : "Dados atualizados"
-    : current
-      ? ENTITY_ACTION[current.entity]
-      : detail || !refresh
-        ? "Iniciando a atualização…"
-        : PHASE_CAPTION[phase];
-  const meta = detail
-    ? `${counted.finished} de ${counted.total} · ${elapsed} s`
-    : done && hasWarnings
-      ? "Os dados anteriores continuam disponíveis. Tente de novo em instantes."
-      : null;
+  const hasProgress = detail ? steps.some((step) => step.status !== "pending") : percent > 0;
+  const waiting = running && !hasProgress && quiet >= REFRESH_WAITING_AFTER_S;
+  const action = stalled
+    ? "Está demorando mais que o normal. Os dados anteriores continuam disponíveis."
+    : waiting
+      ? "Aguardando o serviço de atualização…"
+      : done
+        ? hasWarnings
+          ? wantsDetail
+            ? "Atualização concluída com avisos"
+            : "Não foi possível atualizar tudo agora."
+          : finishedAt
+            ? `Dados atualizados às ${finishedAt}`
+            : "Dados atualizados"
+        : current
+          ? ENTITY_ACTION[current.entity]
+          : detail || !refresh
+            ? "Iniciando a atualização…"
+            : PHASE_CAPTION[phase];
+  const meta = detail ? `${counted.finished} de ${counted.total} · ${elapsed} s` : done && hasWarnings ? "Os dados anteriores continuam disponíveis. Tente de novo em instantes." : null;
   const showList = detail !== null && (detailsOpen || hasWarnings);
 
-  const attention = Boolean(startError || loadError || hasWarnings);
+  const attention = Boolean(startError || loadError || hasWarnings || stalled);
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && !busy && onClose()}>
@@ -165,15 +192,7 @@ export function RefreshDataDialog({ open, onClose, role }: RefreshDataDialogProp
             </Alert>
           ) : null}
 
-          {startError || loadError ? null : (
-            <LoadingHero
-              label="Progresso da atualização"
-              percent={percent}
-              action={action}
-              meta={meta}
-              outcome={done ? (hasWarnings ? "warn" : "ok") : null}
-            />
-          )}
+          {startError || loadError ? null : <LoadingHero label="Progresso da atualização" percent={percent} action={action} meta={meta} outcome={done ? (hasWarnings ? "warn" : "ok") : null} />}
 
           {detail ? (
             <button

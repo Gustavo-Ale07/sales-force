@@ -83,6 +83,8 @@ export const syncRefresh = pgTable(
     status: text('status').notNull().default('pending'),
     startedAt: timestamp('started_at', { withTimezone: true }),
     finishedAt: timestamp('finished_at', { withTimezone: true }),
+    /** Last time the worker advanced this run (claim or any step write); the expiry of a stuck run reads it (D-AD). */
+    progressAt: timestamp('progress_at', { withTimezone: true }),
     steps: jsonb('steps').notNull().default(sql`'[]'::jsonb`),
   },
   (t) => [

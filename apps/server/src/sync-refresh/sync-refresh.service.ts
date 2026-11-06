@@ -15,6 +15,7 @@ import { desc, eq, inArray } from 'drizzle-orm';
 import { AppError } from '../http/app-error.js';
 import type { CurrentUser } from '../iam/current-user.js';
 import { uuidv7 } from '../platform/ids.js';
+import { expireStuckRefreshes } from '../sync/sync-refresh-expiry.js';
 import { CLOCK, DATABASE, type Clock } from '../platform/tokens.js';
 
 /** A refresh finished less than this long ago is returned instead of starting another one (D-AB B3). */
@@ -43,6 +44,8 @@ export class SyncRefreshService {
 
   async #start(user: CurrentUser): Promise<SyncRefresh & { reused: boolean }> {
     const now = this.clock();
+    // D-AD: a request stuck in pending/running (worker down or restarted) must not block this click.
+    await expireStuckRefreshes(this.db, now);
     const [latest] = await this.db.select().from(syncRefresh).orderBy(desc(syncRefresh.requestedAt)).limit(1);
     if (latest !== undefined) {
       const active = latest.status !== 'done';

@@ -1,0 +1,1 @@
+ALTER TABLE "sync_refresh" ADD COLUMN "progress_at" timestamp with time zone;

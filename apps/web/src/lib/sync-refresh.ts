@@ -6,6 +6,11 @@ export type SyncRefreshStep = ApiSchema<"SyncRefreshStep">;
 /** How often the dialog asks the API for the progress of the worker. */
 export const REFRESH_POLL_MS = 1_500;
 
+/** No step started after this long: the action line says it is waiting for the service. */
+export const REFRESH_WAITING_AFTER_S = 15;
+/** Nothing advanced for this long: the dialog stops blocking and offers to try again or close. */
+export const REFRESH_STALLED_AFTER_S = 60;
+
 /** What the seller reads, one per entity (never the technical name). */
 export const ENTITY_LABELS: Record<SyncRefreshStep["entity"], string> = {
   configuration: "Configuração",

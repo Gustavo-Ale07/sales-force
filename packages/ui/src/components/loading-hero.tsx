@@ -1,11 +1,11 @@
-import { Check, TriangleAlert } from "lucide-react";
+import { Check, Send, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { useId } from "react";
 import { cn } from "../lib/cn";
 
 export interface LoadingHeroProps {
-  /** 0-100. While it is 0 and nothing finished, the arc is indeterminate (a short arc turning around the ring). */
-  percent: number;
+  /** 0-100. Omit it for work that has no percentage (sending): the arc keeps turning and a send icon replaces the number. While it is 0 and nothing finished, the arc is indeterminate (a short arc turning around the ring). */
+  percent?: number;
   /** Accessible name of the progress ring. */
   label: string;
   /** The single highlighted action line below the ring ("Atualizando preços…"). */
@@ -29,8 +29,9 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
  */
 export function LoadingHero({ percent, label, action, meta, outcome = null, className }: LoadingHeroProps) {
   const gradientId = useId();
-  const value = outcome ? 100 : Math.max(0, Math.min(100, Math.round(percent)));
-  const indeterminate = !outcome && value <= 0;
+  const hasNumber = percent !== undefined;
+  const value = outcome ? 100 : Math.max(0, Math.min(100, Math.round(percent ?? 0)));
+  const indeterminate = !outcome && (!hasNumber || value <= 0);
   const offset = CIRCUMFERENCE * (1 - value / 100);
   const outcomeColor = outcome === "ok" ? "var(--color-ok)" : outcome === "warn" ? "var(--color-warn)" : null;
 
@@ -41,8 +42,8 @@ export function LoadingHero({ percent, label, action, meta, outcome = null, clas
         aria-label={label}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-valuenow={value}
-        aria-valuetext={indeterminate ? "Iniciando" : `${value}%`}
+        aria-valuenow={hasNumber || outcome ? value : undefined}
+        aria-valuetext={indeterminate ? (hasNumber ? "Iniciando" : "Em andamento") : `${value}%`}
         data-indeterminate={indeterminate ? "true" : "false"}
         className="relative shrink-0"
         style={{ width: SIZE, height: SIZE }}
@@ -98,6 +99,8 @@ export function LoadingHero({ percent, label, action, meta, outcome = null, clas
             <Check size={52} strokeWidth={2.5} className="text-ok" aria-hidden="true" data-outcome="ok" />
           ) : outcome === "warn" ? (
             <TriangleAlert size={48} strokeWidth={2} className="text-warn" aria-hidden="true" data-outcome="warn" />
+          ) : !hasNumber ? (
+            <Send size={44} strokeWidth={1.75} style={{ color: "var(--sf-navy)" }} aria-hidden="true" data-testid="hero-icon" />
           ) : (
             <span className="text-4xl font-semibold tabular-nums tracking-tight text-fg" data-testid="hero-percent">
               {value}%

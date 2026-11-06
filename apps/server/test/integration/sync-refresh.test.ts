@@ -9,7 +9,8 @@ import type { CurrentUser } from '../../src/iam/current-user.js';
 import { createLogger } from '../../src/observability/logger.js';
 import { SyncRefreshService } from '../../src/sync-refresh/sync-refresh.service.js';
 import type { MirrorRunResult } from '../../src/sync/mirror-sync.service.js';
-import { SYNC_REFRESH_STALE_MS, SyncRefreshRunner } from '../../src/sync/sync-refresh-runner.service.js';
+import { SYNC_REFRESH_EXPIRED_REASON, SYNC_REFRESH_PENDING_EXPIRY_MS, SYNC_REFRESH_RUNNING_EXPIRY_MS } from '../../src/sync/sync-refresh-expiry.js';
+import { SyncRefreshRunner } from '../../src/sync/sync-refresh-runner.service.js';
 import { closeAllThenStop, createMigratedDatabase, startPostgres, type MigratedDatabase, type TestPostgres } from '../helpers/postgres.js';
 
 let postgres: TestPostgres;
@@ -258,21 +259,73 @@ describe('sync.refresh.on-demand (worker side, D-AB B3)', () => {
     expect(calls).toBe(firstCalls);
   });
 
-  it('lists pending requests and closes a run left running past the limit', async () => {
+  it('lists pending requests', async () => {
     const w = await world();
     const started = (await w.api.start(user)) as Detail;
-    const runner = w.runner();
-    expect(await runner.pendingIds()).toEqual([started.id]);
-    await w.database.handle.db
-      .update(syncRefresh)
-      .set({ status: 'running', startedAt: new Date(T0) })
-      .where(eq(syncRefresh.id, started.id));
-    expect(await runner.closeStale()).toBe(0);
-    w.advance(SYNC_REFRESH_STALE_MS + 1_000);
-    expect(await runner.closeStale()).toBe(1);
-    const closed = await w.row(started.id);
-    expect(closed.status).toBe('done');
-    // The next click works again.
-    expect(((await w.api.start(user)) as Detail).reused).toBe(false);
+    expect(await w.runner().pendingIds()).toEqual([started.id]);
+  });
+
+  describe('expiry of a stuck refresh (D-AD)', () => {
+    it('pending without pickup for more than 2 minutes fails with the masked reason, and the next click starts a new run', async () => {
+      const w = await world();
+      const started = (await w.api.start(user)) as Detail;
+      w.advance(SYNC_REFRESH_PENDING_EXPIRY_MS - 1_000);
+      expect(await w.runner().closeStale()).toBe(0);
+      w.advance(2_000);
+      expect(await w.runner().closeStale()).toBe(1);
+      const closed = await w.row(started.id);
+      expect(closed.status).toBe('done');
+      expect((closed.steps as Array<{ status: string; reason: string }>).every((s) => s.status === 'failed' && s.reason === SYNC_REFRESH_EXPIRED_REASON)).toBe(true);
+      // No 60 s cooldown for a dead run.
+      const next = (await w.api.start(user)) as Detail;
+      expect(next.reused).toBe(false);
+      expect(next.id).not.toBe(started.id);
+    });
+
+    it('the API sweeps a stuck request itself when a new POST arrives (worker down)', async () => {
+      const w = await world();
+      const started = (await w.api.start(user)) as Detail;
+      w.advance(SYNC_REFRESH_PENDING_EXPIRY_MS + 1_000);
+      const next = (await w.api.start(user)) as Detail;
+      expect(next.reused).toBe(false);
+      expect((await w.row(started.id)).status).toBe('done');
+    });
+
+    it('running without progress for more than 5 minutes fails; a run that advances is not expired', async () => {
+      const w = await world();
+      const started = (await w.api.start(user)) as Detail;
+      await w.database.handle.db
+        .update(syncRefresh)
+        .set({ status: 'running', startedAt: new Date(T0), progressAt: new Date(T0) })
+        .where(eq(syncRefresh.id, started.id));
+      w.advance(SYNC_REFRESH_RUNNING_EXPIRY_MS - 1_000);
+      expect(await w.runner().closeStale()).toBe(0);
+      w.advance(2_000);
+      expect(await w.runner().closeStale()).toBe(1);
+      const closed = await w.row(started.id);
+      expect(closed.status).toBe('done');
+      expect(((await w.api.start(user)) as Detail).reused).toBe(false);
+    });
+
+    it('a healthy slow refresh (a 90 s step) is not expired while it advances', async () => {
+      const w = await world();
+      const started = (await w.api.start(user)) as Detail;
+      const sweeps: number[] = [];
+      const runner = w.runner({
+        mirror: {
+          run: async (entity) => {
+            // Each step takes 90 s of controlled time and a sweep runs in the middle of it.
+            w.advance(90_000);
+            sweeps.push(await w.runner().closeStale());
+            return w.okResult(entity);
+          },
+        },
+      });
+      await runner.run(started.id);
+      expect(sweeps.every((n) => n === 0)).toBe(true);
+      const finished = await w.row(started.id);
+      expect(finished.status).toBe('done');
+      expect((finished.steps as Array<{ status: string }>).filter((s) => s.status === 'failed')).toHaveLength(0);
+    });
   });
 });

@@ -57,4 +57,23 @@ describe("LoadingHero", () => {
     render(<LoadingHero percent={10} label="p" action="a" />);
     expect(screen.getByRole("progressbar")).toHaveStyle({ width: "136px", height: "136px" });
   });
+
+  it('without a percent (sending) it keeps turning, shows an icon instead of a number and never says 0%', () => {
+    render(<LoadingHero label="Envio" action="Enviando o pedido ao Sankhya…" />);
+    const ring = screen.getByRole('progressbar');
+    expect(ring).toHaveAttribute('data-indeterminate', 'true');
+    expect(ring).not.toHaveAttribute('aria-valuenow');
+    expect(ring).toHaveAttribute('aria-valuetext', 'Em andamento');
+    expect(ring.querySelector('[data-arc="indeterminate"]')).not.toBeNull();
+    expect(screen.queryByTestId('hero-percent')).toBeNull();
+    expect(screen.queryByText(/%/)).toBeNull();
+    expect(screen.getByTestId('hero-icon')).toBeInTheDocument();
+    expect(screen.getByText('Enviando o pedido ao Sankhya…')).toBeInTheDocument();
+  });
+
+  it('without a percent, the outcome still completes the ring', () => {
+    render(<LoadingHero label="Envio" action="Enviado" outcome="ok" />);
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100');
+    expect(screen.queryByTestId('hero-icon')).toBeNull();
+  });
 });
