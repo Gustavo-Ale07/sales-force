@@ -128,6 +128,7 @@ export function toOrderDetail(
   showExpedicao = false,
   lastDelivery: { errorClass: string | null; message: string | null } | null = null,
   dryRun: { at: Date; payloadHash: string } | null = null,
+  convertedInto: { id: string; draftNumber: number; erpNumber: number | null } | null = null,
 ): OrderDetail {
   const baseItems = items.map((item) => toItemDto(item, images.get(item.productCode)));
   const totals = computeOrderTotals(baseItems);
@@ -161,6 +162,7 @@ export function toOrderDetail(
     negotiationTypeCode: order.negotiationTypeCode,
     notes: order.notes,
     sourceOrderId: order.sourceOrderId,
+    ...(convertedInto === null ? {} : { convertedInto }),
     discountAuthority: order.discountAuthority as DiscountAuthorityStatus,
     approval,
     // D-O: read-only, only for admin/technical; no seller screen ever carries it.

@@ -1139,6 +1139,12 @@ export interface components {
                 at: components["schemas"]["IsoTimestamp"];
                 payloadHash: string;
             } | null;
+            convertedInto?: {
+                /** Format: uuid */
+                id: string;
+                draftNumber: number;
+                erpNumber: number | null;
+            } | null;
         };
         OrderEntryConfiguration: {
             dataset: components["schemas"]["DatasetIdentity"] | null;

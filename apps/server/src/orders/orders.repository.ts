@@ -231,6 +231,20 @@ export class OrdersRepository {
     return row ?? null;
   }
 
+  /** D-AA: the newest order created from this quotation, if any. */
+  async convertedIntoOf(
+    quotationId: string,
+    executor: Executor = this.db,
+  ): Promise<{ id: string; draftNumber: number; erpNumber: number | null } | null> {
+    const [row] = await executor
+      .select({ id: salesOrder.id, draftNumber: salesOrder.draftNumber, erpNumber: salesOrder.erpNumber })
+      .from(salesOrder)
+      .where(eq(salesOrder.sourceOrderId, quotationId))
+      .orderBy(desc(salesOrder.createdAt))
+      .limit(1);
+    return row ?? null;
+  }
+
   async latestApprovalOf(orderId: string, executor: Executor = this.db): Promise<ApprovalWithDecider | null> {
     const [row] = await executor
       .select({ approval: salesOrderApproval, decidedByName: account.displayName })

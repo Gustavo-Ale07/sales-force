@@ -626,8 +626,8 @@ export class OrdersService {
       });
     }
     if (order.status === 'queued' && this.enqueueEnabled) return this.detailOf(order); // replay of the same click
-    if (order.status === 'rejected') return this.resendRejected(user, order);
-    if (order.status !== 'draft' && order.status !== 'approved') throw new AppError('order_not_editable');
+    // D-AA "Reenviar": a rejected delivery passes through every check of a first send (customer, authority, ERP binding).
+    if (order.status !== 'draft' && order.status !== 'approved' && order.status !== 'rejected') throw new AppError('order_not_editable');
     // The server revalidates the customer NOW, not at draft time: a draft whose customer became ineligible
     // is refused and flagged (needs_review), never sent and never silently altered.
     const [state] = [...(await this.mirror.customerStates([order.customerCode])).values()];
@@ -654,6 +654,12 @@ export class OrdersService {
       throw new AppError('discount_blocked', { details: { reason: authority.reason } });
     }
     if (authority !== null && authority.level !== null) {
+      if (order.status === 'rejected') {
+        throw new AppError('conflict', {
+          message: 'O desconto deste pedido agora exige aprovação. Exclua o pedido e confirme um novo.',
+          details: { reason: 'approval_required_before_resend' },
+        });
+      }
       return this.requestApproval(user, order, authority.level, context);
     }
     if (!this.enqueueEnabled) {
@@ -667,26 +673,6 @@ export class OrdersService {
     return this.enqueueForErp(user, order, scope);
   }
 
-  /** D-AA "Reenviar": a delivery that ended in a terminal failure goes back to the worker, same outbox row and origin id. */
-  private async resendRejected(user: CurrentUser, seen: OrderRow): Promise<OrderDetail> {
-    if (!this.enqueueEnabled) throw new AppError('erp_submission_disabled');
-    const at = this.clock();
-    const updated = await this.orders.transaction(async (tx) => {
-      const locked = await this.orders.findById(seen.id, tx, true);
-      if (locked === null) throw new AppError('not_found');
-      if (locked.status === 'queued') return locked;
-      if (locked.status !== 'rejected' || locked.version !== seen.version) throw new AppError('version_conflict', { details: { currentVersion: locked.version } });
-      const row = await requeueRejectedDelivery(tx, locked, at);
-      if (row === null) throw new AppError('order_not_editable');
-      await this.audit.record(
-        { action: AUDIT_ACTIONS.orderErpEnqueued, actorAccountId: user.accountId, detail: { ...this.auditDetail(row, 0), resend: true } },
-        tx,
-      );
-      return row;
-    });
-    return this.detailOf(updated);
-  }
-
   /**
    * draft/approved -> queued with its outbox row, atomically (SNK-7). Structural validity ("Sem preço", discount
    * 0-99.99 %, unit) and the ERP eligibility of the stored binding are checked on the locked row; nothing is sent
@@ -698,7 +684,7 @@ export class OrdersService {
       const locked = await this.orders.findById(seen.id, tx, true);
       this.assertInScope(scope, locked);
       if (locked.status === 'queued') return locked; // idempotent replay of the same click
-      if (locked.status !== 'draft' && locked.status !== 'approved') throw new AppError('order_not_editable');
+      if (locked.status !== 'draft' && locked.status !== 'approved' && locked.status !== 'rejected') throw new AppError('order_not_editable');
       if (locked.version !== seen.version) throw new AppError('version_conflict', { details: { currentVersion: locked.version } });
       assertEligibleForErpSubmission(locked, { environment: this.dataset?.environment ?? '' });
       const items = await this.orders.itemsOf(locked.id, tx);
@@ -716,7 +702,9 @@ export class OrdersService {
       if (issues.length > 0) {
         throw new AppError('validation_failed', { details: { issues } });
       }
-      const row = await enqueueOrderDelivery(tx, locked, at);
+      // A rejected delivery keeps its outbox row and origin id (SNK-4); anything else gets its first row.
+      const row = locked.status === 'rejected' ? await requeueRejectedDelivery(tx, locked, at) : await enqueueOrderDelivery(tx, locked, at);
+      if (row === null) throw new AppError('order_not_editable');
       await this.audit.record(
         { action: AUDIT_ACTIONS.orderErpEnqueued, actorAccountId: user.accountId, detail: this.auditDetail(row, items.length) },
         tx,
@@ -854,12 +842,13 @@ export class OrdersService {
   }
 
   private async detailOf(order: OrderRow, showExpedicao = false): Promise<OrderDetail> {
-    const [items, states, approval, lastDelivery, dryRun] = await Promise.all([
+    const [items, states, approval, lastDelivery, dryRun, convertedInto] = await Promise.all([
       this.orders.itemsOf(order.id),
       this.mirror.customerStates([order.customerCode]),
       this.orders.latestApprovalOf(order.id),
       order.status === 'rejected' ? this.orders.lastDeliveryErrorOf(order.id) : Promise.resolve(null),
       order.status === 'draft' ? this.orders.latestDryRunOf(order.id) : Promise.resolve(null),
+      this.orders.convertedIntoOf(order.id),
     ]);
     const ipiLookup = await this.mirror.ipiLookup(items.map((item) => item.productCode));
     // Same media source as the catalog; best effort (a failure degrades to no photos, the order still works).
@@ -874,7 +863,7 @@ export class OrdersService {
       customerBlockedRaw: state?.blockedRaw ?? null,
       customerSellerCode: state?.sellerCode ?? null,
       customerLive: state?.live ?? null,
-    }, images, toOrderApproval(approval), liberationEventLabels, ipiLookup, showExpedicao, lastDelivery, dryRun);
+    }, images, toOrderApproval(approval), liberationEventLabels, ipiLookup, showExpedicao, lastDelivery, dryRun, convertedInto);
   }
 
   /** Identifiers and counts only: no notes, no free text. */

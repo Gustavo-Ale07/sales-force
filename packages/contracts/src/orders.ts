@@ -302,6 +302,8 @@ export const OrderDetailSchema = named(
     ipi: OrderIpiSchema.optional(),
     /** D-Z: the last simulated (dry-run) delivery of a draft: when and the payload hash. Nothing was sent. */
     dryRun: z.object({ at: IsoTimestampSchema, payloadHash: z.string() }).nullable().optional(),
+    /** D-AA: the order created from this quotation ("Duplicar como pedido"). Force-only link; Sankhya has no TGFVAR link for it. */
+    convertedInto: z.object({ id: UuidSchema, draftNumber: z.number().int(), erpNumber: z.number().int().nullable() }).nullable().optional(),
   }),
 );
 export type OrderDetail = z.infer<typeof OrderDetailSchema>;

@@ -948,4 +948,9 @@ describe("Rascunho existente", () => {
     expect(await screen.findByText("Reenviando ao Sankhya")).toBeInTheDocument();
     expect(callsTo(calls, "POST", `/orders/${ORDER_ID}/submit`)).toHaveLength(1);
   });
+
+  it("D-AA: a quotation that originated an order says so, in Force only", async () => {
+    renderApp(`/pedidos/${ORDER_ID}`, { handlers: existing(orderDetail({ convertedInto: { id: "0190a000-0000-7000-8000-0000000000b1", draftNumber: 9, erpNumber: 4321 } })) });
+    expect(await screen.findByText("CONVERTIDO EM PEDIDO nº 4321")).toBeInTheDocument();
+  });
 });
