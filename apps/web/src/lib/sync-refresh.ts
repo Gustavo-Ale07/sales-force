@@ -43,6 +43,28 @@ export const REFRESH_GROUPS: ReadonlyArray<{ title: string; entities: ReadonlyAr
   { title: "Financeiro e pedidos", entities: ["openTitles", "orderStatus"] },
 ];
 
+/** The action line of the detail view while one step runs ("Lendo clientes…"). */
+export const ENTITY_ACTION: Record<SyncRefreshStep["entity"], string> = {
+  configuration: "Lendo a configuração…",
+  sellers: "Lendo vendedores…",
+  customers: "Lendo clientes…",
+  products: "Lendo produtos…",
+  priceTables: "Lendo tabelas de preço…",
+  priceTableVersions: "Lendo versões das tabelas…",
+  listPrices: "Lendo preços de lista…",
+  carriers: "Lendo transportadoras…",
+  ipiRates: "Lendo alíquotas de IPI…",
+  openTitles: "Lendo títulos em aberto…",
+  orderStatus: "Lendo a situação dos pedidos…",
+};
+
+/** The current step of a run: the running one, else (once something finished) the next pending one, else none. */
+export function currentStep(steps: readonly SyncRefreshStep[]): SyncRefreshStep | undefined {
+  const running = steps.find((step) => step.status === "running");
+  if (running) return running;
+  return steps.some((step) => step.status !== "pending") ? steps.find((step) => step.status === "pending") : undefined;
+}
+
 /** Sentence of the basic view, per phase. */
 export const PHASE_CAPTION = {
   cadastros: "Atualizando cadastros…",

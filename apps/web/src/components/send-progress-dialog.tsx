@@ -1,5 +1,5 @@
 import type { DocumentKind } from "@salesforce/domain";
-import { Alert, Button, Dialog, DialogContent, OutcomeMark, Spinner } from "@salesforce/ui";
+import { Alert, Button, Dialog, DialogContent, LoadingHero } from "@salesforce/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { submitOrder } from "../lib/api-mutations";
@@ -102,19 +102,13 @@ export function SendProgressDialog({ orderId, kind, reference, onClose, onDelete
             )
           }
         >
-          <div className="flex items-center gap-3" role="status" aria-live="polite">
-            {busy ? (
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-surface-2">
-                <Spinner size={20} label="Enviando" />
-              </span>
-            ) : (
-              <OutcomeMark tone={outcome.phase === "confirmed" || outcome.phase === "released_pending" || outcome.phase === "simulated" ? "ok" : "warn"} />
-            )}
-            <div className="min-w-0">
-              <p className="m-0 text-sm font-semibold text-fg">{outcome.title}</p>
-              {outcome.detail ? <p className="m-0 mt-0.5 text-xs text-fg-muted">{outcome.detail}</p> : null}
-            </div>
-          </div>
+          <LoadingHero
+            label="Envio ao Sankhya"
+            percent={0}
+            action={busy ? "Enviando o pedido ao Sankhya…" : outcome.title}
+            meta={busy ? null : outcome.detail}
+            outcome={busy ? null : outcome.phase === "confirmed" || outcome.phase === "released_pending" || outcome.phase === "simulated" ? "ok" : "warn"}
+          />
           {resendError ? (
             <Alert tone="danger" title={resendError.title} className="mt-3">
               {resendError.description}

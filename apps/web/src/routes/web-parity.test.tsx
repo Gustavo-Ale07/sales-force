@@ -193,6 +193,9 @@ describe("Meu perfil e atualização de dados", () => {
     await user.click(await screen.findByRole("menuitem", { name: "Atualizar dados" }));
     expect(await screen.findByText("Atualizando dados do Sankhya")).toBeInTheDocument();
     expect(await screen.findByText(/Dados atualizados às/)).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Andamento por informação" })).toBeNull();
+    expect(screen.getByRole("progressbar", { name: "Progresso da atualização" })).toHaveAttribute("aria-valuenow", "100");
+    await user.click(screen.getByRole("button", { name: "Ver detalhes" }));
     const detail = screen.getByRole("group", { name: "Andamento por informação" });
     expect(within(detail).getByText("Clientes")).toBeInTheDocument();
     for (const title of ["Cadastros", "Preços", "Financeiro e pedidos"]) expect(within(detail).getByRole("heading", { name: title })).toBeInTheDocument();
@@ -201,6 +204,24 @@ describe("Meu perfil e atualização de dados", () => {
     expect(screen.getByRole("button", { name: "Concluir" })).toBeInTheDocument();
     expect(callsTo(calls, "POST", "/sync/refresh")).toHaveLength(1);
     await waitFor(() => expect(callsTo(calls, "GET", "/dashboard").length).toBeGreaterThanOrEqual(2));
+  });
+
+  it("manager: indeterminate ring at 0%, then the current step and 'n de N · s'", async () => {
+    const stepsAt = (finished: number) =>
+      refreshBody().steps.map((step: Record<string, unknown>, index: number) => ({
+        ...step,
+        status: index < finished ? "ok" : index === finished ? "running" : "pending",
+      }));
+    const running = (finished: number) => refreshBody({ status: "running", finishedAt: null, steps: stepsAt(finished) });
+    const { user } = renderApp("/", {
+      role: "manager",
+      handlers: { ...shell, "POST /sync/refresh": { body: { ...running(0), reused: false } }, ["GET /sync/refresh/" + REFRESH_ID]: { body: running(2) } },
+    });
+    await openUserMenu(user);
+    await user.click(await screen.findByRole("menuitem", { name: "Atualizar dados" }));
+    expect(await screen.findByText("Lendo clientes…")).toBeInTheDocument();
+    expect(screen.getByText(/^2 de 11 · \d+ s$/)).toBeInTheDocument();
+    expect(screen.getByTestId("hero-percent")).toHaveTextContent("18%");
   });
 
   it("shows the seller only a bar and a sentence: no entity, count or reason", async () => {
@@ -225,6 +246,9 @@ describe("Meu perfil e atualização de dados", () => {
     expect(await screen.findByText("Atualizando seus dados")).toBeInTheDocument();
     expect(await screen.findByText("Atualizando preços…")).toBeInTheDocument();
     expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "40");
+    expect(screen.getByTestId("hero-percent")).toHaveTextContent("40%");
+    expect(screen.queryByRole("button", { name: "Ver detalhes" })).toBeNull();
+    expect(within(screen.getByRole("dialog")).queryByText(/ de d+ · /)).toBeNull();
     expect(within(screen.getByRole("dialog")).queryByText("Clientes")).toBeNull();
     expect(screen.queryByRole("button", { name: "Fechar" })).toBeNull();
   });

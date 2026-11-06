@@ -1,17 +1,19 @@
-import { Alert, Button, Dialog, DialogContent, OutcomeMark, ProgressSteps, Spinner, StepGroup, StepRow } from "@salesforce/ui";
+import { Alert, Button, Dialog, DialogContent, LoadingHero, StepGroup, StepRow } from "@salesforce/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { startSyncRefresh } from "../lib/api-mutations";
 import { queryKeys, syncRefreshQueryOptions } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { describeApiError } from "../lib/error-message";
 import {
   ENTITY_LABELS,
+  ENTITY_ACTION,
   PHASE_CAPTION,
   REFRESH_GROUPS,
   REFRESH_POLL_MS,
   STEP_STATE,
   clockTime,
+  currentStep,
   seesRefreshDetail,
   stepCount,
   stepNote,
@@ -36,6 +38,8 @@ export function RefreshDataDialog({ open, onClose, role }: RefreshDataDialogProp
   const api = useApi();
   const queryClient = useQueryClient();
   const started = useRef(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const start = useMutation({ mutationFn: () => startSyncRefresh(api) });
   const refreshId = start.data?.id ?? null;
@@ -62,6 +66,20 @@ export function RefreshDataDialog({ open, onClose, role }: RefreshDataDialogProp
   const refresh = progress.data ?? (start.data ? { ...start.data } : undefined);
   const done = refresh?.status === "done";
 
+  // Seconds since the dialog opened (manager's discreet line); it stops when the run ends.
+  useEffect(() => {
+    if (!open) {
+      setElapsed(0);
+      setDetailsOpen(false);
+      return undefined;
+    }
+    if (done) return undefined;
+    const startedAt = Date.now() - elapsed * 1000;
+    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - startedAt) / 1000)), 1000);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, done]);
+
   // Once finished: every screen reads the server again, and the age shown in the menu is refreshed.
   const reloaded = useRef<string | null>(null);
   useEffect(() => {
@@ -83,10 +101,29 @@ export function RefreshDataDialog({ open, onClose, role }: RefreshDataDialogProp
 
   const steps = detail?.steps ?? [];
   const counted = stepProgress(steps);
+  // Manager: finished steps / total. Seller: the API's progressPercent (the basic datum he may see).
   const percent = detail ? counted.percent : refresh && "progressPercent" in refresh ? refresh.progressPercent : 0;
-  const runningGroup = detail ? REFRESH_GROUPS.find((group) => steps.some((step) => group.entities.includes(step.entity) && (step.status === "running" || step.status === "pending"))) : undefined;
-  const phase = refresh && "phase" in refresh ? refresh.phase : runningGroup?.title === "Preços" ? "precos" : runningGroup?.title === "Financeiro e pedidos" ? "pedidos" : "cadastros";
-  const caption = done ? PHASE_CAPTION.concluido : PHASE_CAPTION[phase];
+  const current = detail ? currentStep(steps) : undefined;
+  const phase = refresh && "phase" in refresh ? refresh.phase : "cadastros";
+  const action = done
+    ? hasWarnings
+      ? wantsDetail
+        ? "Atualização concluída com avisos"
+        : "Não foi possível atualizar tudo agora."
+      : finishedAt
+        ? `Dados atualizados às ${finishedAt}`
+        : "Dados atualizados"
+    : current
+      ? ENTITY_ACTION[current.entity]
+      : detail || !refresh
+        ? "Iniciando a atualização…"
+        : PHASE_CAPTION[phase];
+  const meta = detail
+    ? `${counted.finished} de ${counted.total} · ${elapsed} s`
+    : done && hasWarnings
+      ? "Os dados anteriores continuam disponíveis. Tente de novo em instantes."
+      : null;
+  const showList = detail !== null && (detailsOpen || hasWarnings);
 
   const attention = Boolean(startError || loadError || hasWarnings);
 
@@ -128,43 +165,30 @@ export function RefreshDataDialog({ open, onClose, role }: RefreshDataDialogProp
             </Alert>
           ) : null}
 
-          {!startError && !loadError && refresh === undefined ? (
-            <div className="flex items-center gap-2 text-sm text-fg-muted" role="status">
-              <Spinner size={16} label="Iniciando" /> Iniciando…
-            </div>
-          ) : null}
-
-          {refresh && !done ? (
-            <ProgressSteps
+          {startError || loadError ? null : (
+            <LoadingHero
               label="Progresso da atualização"
-              value={percent}
-              caption={caption}
-              summary={detail ? `${counted.finished} de ${counted.total}` : undefined}
+              percent={percent}
+              action={action}
+              meta={meta}
+              outcome={done ? (hasWarnings ? "warn" : "ok") : null}
             />
-          ) : null}
-
-          {refresh && done ? (
-            <div className="flex items-center gap-3" role="status">
-              <OutcomeMark tone={hasWarnings ? "warn" : "ok"} />
-              <div className="min-w-0">
-                <p className="m-0 text-sm font-semibold text-fg">
-                  {hasWarnings ? (wantsDetail ? "Atualização concluída com avisos" : "Não foi possível atualizar tudo agora.") : finishedAt ? `Dados atualizados às ${finishedAt}` : "Dados atualizados"}
-                </p>
-                <p className="m-0 mt-0.5 text-xs text-fg-muted">
-                  {hasWarnings
-                    ? wantsDetail
-                      ? `${counted.finished} de ${counted.total} etapas${finishedAt ? ` · ${finishedAt}` : ""}. Os dados anteriores foram mantidos nas etapas com falha.`
-                      : "Os dados anteriores continuam disponíveis. Tente de novo em instantes."
-                    : detail
-                      ? `${counted.total} etapas concluídas`
-                      : null}
-                </p>
-              </div>
-            </div>
-          ) : null}
+          )}
 
           {detail ? (
-            <div className="flex flex-col gap-3" aria-label="Andamento por informação" role="group" aria-live="polite">
+            <button
+              type="button"
+              className="mx-auto text-xs font-medium text-fg-muted underline-offset-2 hover:text-fg hover:underline focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-expanded={showList}
+              aria-controls="refresh-details"
+              onClick={() => setDetailsOpen((open) => !open)}
+            >
+              {showList ? "Ocultar detalhes" : "Ver detalhes"}
+            </button>
+          ) : null}
+
+          {detail && showList ? (
+            <div id="refresh-details" className="flex max-h-64 flex-col gap-3 overflow-auto" aria-label="Andamento por informação" role="group">
               {REFRESH_GROUPS.map((group) => {
                 const rows = group.entities.flatMap((entity) => steps.filter((step) => step.entity === entity));
                 if (rows.length === 0) return null;
