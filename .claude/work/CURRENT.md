@@ -22,6 +22,12 @@ STATUS: ACTIVE — atualizado em 2026-10-29. Fonte de verdade ÚNICA: `C:\Dev\sa
 1. Parte 2 (`PROMPT_2026-10-30_parte2_config-sankhya.md`): começa registrando CFG-8, U-10-a..d e U-11 em `docs/decisions.md`; depois Trilha D.
 2. Decisões do dono abertas pelo reviewer: alçada em modo `erp` vs P-10; PDF compartilhado por representante vs P-20 (ver checkpoint).
 
+## Parte 2i (2026-11-06) — D1–D4 feitos (D-AD)
+- Commits: `3d1b5e8` (D1/D2, `LoadingHero` anel de progresso), `92e25c4` (D3 + D-AD: nunca parece travado; `sync_refresh` preso expira — pending > 2 min, running > 5 min sem progresso; anel sem número no "Enviando ao Sankhya…"). D4 = só evidência visual (nenhum arquivo do repo mudou).
+- D4: Playwright com `page.route` (sem servidor, banco ou Sankhya); 14 imagens (7 cenários × 1366x768 e 1280x720) em `C:\Users\T-GAMER\AppData\Local\Temp\claude\0c406d7832dc6d20\sf-d4-shots` (fora do repo). O diálogo nunca rola; só a lista de detalhes aberta rola por dentro.
+- **Só o dono roda (staging):** (1) implantar o SHA novo; (2) **migration 0029 (`sync_refresh.progress_at`, nullable, expand-only) ANTES de subir a API/worker novos**; (3) **reaplicar `db-roles`** (`force_api` ganha UPDATE em `sync_refresh`); (4) recriar api e worker (`sf-compose.sh up -d --no-deps --force-recreate api worker`, com o override de dry-run). Não precisa de flag nova.
+- Riscos: ESLint não rodou aqui; `apps/web/e2e/submit.e2e.ts` ainda cita "Enviar ao Sankhya"; um passo sozinho sem escrever nada por > 5 min seria expirado; vocabulário mobile (A5) fica para a parte 3.
+
 ## Parte 2h (2026-11-06) — D-AC feito: C1–C3
 - Commits: `dad7641` (C1, API filtrada por perfil), `d2d765c` (C2, diálogo em duas visões, `ProgressSteps`/`StepRow`), `265dcbf` (C3, `CONFIG_SYNC_FROM_SANKHYA` repassada ao worker).
 - **Só o dono roda (staging):**
