@@ -230,7 +230,7 @@ consulta (Q1-Q8), pelo worker, nunca pela API. Caminhos reais do host: `/opt/for
 1. Arquivo base atualizado em `/opt/force-staging/config/installation.json` e `config-bootstrap` rodado de novo (comando
    da seção "Installation configuration", com o mesmo caminho). Confira `installation configuration unchanged` ou a nova versão.
 2. Deploy do SHA novo com `SF_RUN_DB_ROLES=1` (migrações 0018 e 0019 e os grants do worker, abaixo).
-3. Só então `CONFIG_SYNC_FROM_SANKHYA=1` em `/opt/force-staging/config/compose.env`.
+3. Só então `CONFIG_SYNC_FROM_SANKHYA=1` em `/opt/force-staging/config/compose.env`. O `docker-compose.staging.yml` repassa a variável ao worker (`CONFIG_SYNC_FROM_SANKHYA: ${CONFIG_SYNC_FROM_SANKHYA:-0}`, padrão desligado); antes de D-AC C3 a linha não existia e o valor de `compose.env` nunca chegava ao contêiner, então o worker seguia reportando "Leitura da configuração desativada nesta instalação". Basta **recriar o worker** (`deploy/scripts/sf-compose.sh up -d --force-recreate worker`), sem novo deploy de imagem. Um teste (`deploy-config-sync-flag.test.ts`) falha se algum arquivo de `deploy/` fixar a variável em ligado.
 
 **Grants** (`db-roles.sql`): `force_worker` recebe INSERT e `UPDATE (is_current)` em `installation_configuration_version`;
 `force_api` continua só leitura. Sem o deploy com `SF_RUN_DB_ROLES=1`, a primeira gravação do job falha por permissão e

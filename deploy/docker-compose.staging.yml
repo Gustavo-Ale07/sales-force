@@ -201,6 +201,9 @@ services:
       # Sankhya-only login. Independent of SYNC_MIRROR_ENABLED and never enables customers, products, prices or media.
       AUTH_DIRECTORY_SYNC_ENABLED: ${AUTH_DIRECTORY_SYNC_ENABLED:-0}
       AUTH_DIRECTORY_SYNC_CRON: ${AUTH_DIRECTORY_SYNC_CRON:-*/15 * * * *}
+      # CFG-8: reads the Vidya configuration inside Sankhya (read-only), every 15 minutes and at start, and on "Atualizar dados".
+      # compose.env only feeds this interpolation; without this line the variable never reached the container. Default off.
+      CONFIG_SYNC_FROM_SANKHYA: ${CONFIG_SYNC_FROM_SANKHYA:-0}
       # Product photos (ERP -> persistent volume). OFF by default: nothing is registered or scheduled until the
       # owner enables it. The directory is the only writable path of the worker besides /tmp.
       PRODUCT_MEDIA_SYNC_ENABLED: ${PRODUCT_MEDIA_SYNC_ENABLED:-false}
