@@ -72,7 +72,7 @@ describe("Início (dashboard)", () => {
     });
     expect(await screen.findByText("Serviço indisponível")).toBeInTheDocument();
     expect(screen.getByText("req-dash-1")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /Tentar novamente/ }));
+    await user.click(screen.getByRole("button", { name: /Tentar de novo/ }));
     expect(await screen.findByText("1.250")).toBeInTheDocument();
   });
 

@@ -48,7 +48,7 @@ export function EmptyState({ icon, ...props }: EmptyStateProps) {
 export interface ErrorStateProps extends Omit<ComponentProps<"div">, "title"> {
   title?: ReactNode;
   description?: ReactNode;
-  /** Shows a "Tentar novamente" button. */
+  /** Shows a "Tentar de novo" button. */
   onRetry?: () => void;
   retrying?: boolean;
   /** Correlation id returned by the API for support. */
@@ -77,7 +77,7 @@ export function ErrorState({
       action={
         onRetry ? (
           <Button size="sm" onClick={onRetry} loading={retrying} leftIcon={<RefreshCw size={13} aria-hidden="true" />}>
-            Tentar novamente
+            Tentar de novo
           </Button>
         ) : undefined
       }

@@ -72,7 +72,7 @@ describe("states", () => {
   it("ErrorState offers retry", async () => {
     const onRetry = vi.fn();
     render(<ErrorState onRetry={onRetry} correlationId="c-1" />);
-    await userEvent.click(screen.getByRole("button", { name: /Tentar novamente/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Tentar de novo/ }));
     expect(onRetry).toHaveBeenCalledOnce();
     expect(screen.getByText("c-1")).toBeInTheDocument();
   });

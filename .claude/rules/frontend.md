@@ -28,6 +28,7 @@ Decisions: STACK-4, STACK-5, AUTH-1, AUTH-3, P-20, P-23. Structure: `docs/archit
 - Strong hierarchy, information density suited to business work, consistent spacing, reusable components.
 - Avoid decorative clutter, gradients, unnecessary animation, generic "AI dashboard" layouts.
 - Every data view has explicit loading, empty, error and forbidden states.
+- **Toda ação assíncrona mostra estado imediato** (D-AB B4): botão que dispara mutação usa `loading` + `disabled` no mesmo instante; leitura mostra esqueleto (`SkeletonLines`, `TableLoadingRows`) ou `LoadingPanel` de `@salesforce/ui`; trabalho demorado diz o que faz ("Gerando PDF…", "Enviando ao Sankhya…"); a barra `GlobalActivity` cobre navegação e fetch; erro de rede usa `ErrorState` com "Tentar de novo". Nenhuma tela fica em branco nem parada sem retorno.
 - Filters are explicit and visible; tables support keyboard navigation.
 - Accessibility: WCAG 2.1 AA on main screens; accessible form controls with labels and error messages; visible focus.
 - Language and formats: pt-BR — currency `R$`, dates `dd/mm/aaaa`, CNPJ/CPF masks.

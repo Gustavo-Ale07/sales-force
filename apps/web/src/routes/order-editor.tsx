@@ -621,7 +621,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
             <>
               <PrintOrderButton orderId={order.id} order={order} label={orderReference(order, docKind)} disabled={dirty || order.items.length === 0} />
               {isQuotation && order.erpNumber == null && !readOnly && orderTops?.defaultTopCode != null ? (
-                <Button type="button" variant="secondary" disabled={dirty || convert.isPending} onClick={() => convert.mutate()}>
+                <Button type="button" variant="secondary" loading={convert.isPending} disabled={dirty || convert.isPending} onClick={() => convert.mutate()}>
                   Converter em pedido
                 </Button>
               ) : null}

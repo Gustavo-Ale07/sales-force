@@ -27,6 +27,27 @@ describe("Imprimir / PDF", () => {
     expect(printed[0]).not.toContain("ERP");
   });
 
+  it("list: shows 'Gerando PDF…' immediately while the order is being read (D-AB B4)", async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { user } = renderApp("/pedidos", {
+      handlers: {
+        "GET /orders": { body: ordersPage([orderListItem()]) },
+        "GET /orders/:id": async () => {
+          await gate;
+          return { body: orderDetail() };
+        },
+      },
+    });
+    await user.click(await screen.findByRole("button", { name: /^Imprimir \/ PDF / }, { timeout: 8000 }));
+    expect(await screen.findByText("Gerando PDF…")).toBeInTheDocument();
+    release();
+    await waitFor(() => expect(printed).toHaveLength(1));
+    await waitFor(() => expect(screen.queryByText("Gerando PDF…")).not.toBeInTheDocument());
+  });
+
   it("detail: prints the loaded order and never carries cost or margin even if the payload has them", async () => {
     const detail = {
       ...orderDetail({ items: [orderItem({ quantity: "2.5" })] }),

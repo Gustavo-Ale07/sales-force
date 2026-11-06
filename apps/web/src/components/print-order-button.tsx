@@ -64,7 +64,7 @@ export function PrintOrderButton({ orderId, label, order, disabled, size = "md",
       }}
       onKeyDown={stopPropagation ? (event) => event.stopPropagation() : undefined}
     >
-      Imprimir / PDF
+      {busy ? "Gerando PDF…" : "Imprimir / PDF"}
     </Button>
   );
 }

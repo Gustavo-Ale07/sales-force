@@ -83,7 +83,7 @@ describe("Cliente: Pedidos recorrentes", () => {
     });
     expect(await screen.findByText("Não foi possível carregar os pedidos recorrentes")).toBeInTheDocument();
     expect(screen.getByText("req-77")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Tentar novamente/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Tentar de novo/ })).toBeInTheDocument();
   });
 
   describe("Usar", () => {
