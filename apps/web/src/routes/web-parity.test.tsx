@@ -181,6 +181,7 @@ describe("Meu perfil e atualização de dados", () => {
 
   it("opens the Sankhya refresh dialog, lists each entity and reloads the screens at the end", async () => {
     const { user, calls } = renderApp("/", {
+      role: "manager",
       handlers: {
         ...shell,
         "POST /sync/refresh": { body: { ...refreshBody({ status: "pending", finishedAt: null }), reused: false } },
@@ -191,14 +192,58 @@ describe("Meu perfil e atualização de dados", () => {
     await openUserMenu(user);
     await user.click(await screen.findByRole("menuitem", { name: "Atualizar dados" }));
     expect(await screen.findByText("Atualizando dados do Sankhya")).toBeInTheDocument();
-    expect(await screen.findByText(/Atualizado às/)).toBeInTheDocument();
-    expect(within(screen.getByRole("list", { name: "Andamento por informação" })).getByText("Clientes")).toBeInTheDocument();
+    expect(await screen.findByText(/Dados atualizados às/)).toBeInTheDocument();
+    const detail = screen.getByRole("group", { name: "Andamento por informação" });
+    expect(within(detail).getByText("Clientes")).toBeInTheDocument();
+    for (const title of ["Cadastros", "Preços", "Financeiro e pedidos"]) expect(within(detail).getByRole("heading", { name: title })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Fechar" })).toBeNull();
+    expect(screen.queryByText(/Não feche/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Concluir" })).toBeInTheDocument();
     expect(callsTo(calls, "POST", "/sync/refresh")).toHaveLength(1);
     await waitFor(() => expect(callsTo(calls, "GET", "/dashboard").length).toBeGreaterThanOrEqual(2));
   });
 
+  it("shows the seller only a bar and a sentence: no entity, count or reason", async () => {
+    const basic = (over: Record<string, unknown> = {}) => ({
+      id: REFRESH_ID,
+      status: "running",
+      progressPercent: 40,
+      phase: "precos",
+      finishedAt: null,
+      hasWarnings: false,
+      ...over,
+    });
+    const { user } = renderApp("/", {
+      handlers: {
+        ...shell,
+        "POST /sync/refresh": { body: { ...basic(), reused: false } },
+        ["GET /sync/refresh/" + REFRESH_ID]: { body: basic() },
+      },
+    });
+    await openUserMenu(user);
+    await user.click(await screen.findByRole("menuitem", { name: "Atualizar dados" }));
+    expect(await screen.findByText("Atualizando seus dados")).toBeInTheDocument();
+    expect(await screen.findByText("Atualizando preços…")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "40");
+    expect(within(screen.getByRole("dialog")).queryByText("Clientes")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Fechar" })).toBeNull();
+  });
+
+  it("tells the seller, without reasons, when something could not be updated", async () => {
+    const basic = { id: REFRESH_ID, status: "done", progressPercent: 100, phase: "concluido", finishedAt: "2026-11-06T17:00:09.000Z", hasWarnings: true };
+    const { user } = renderApp("/", {
+      handlers: { ...shell, "POST /sync/refresh": { body: { ...basic, reused: false } }, ["GET /sync/refresh/" + REFRESH_ID]: { body: basic } },
+    });
+    await openUserMenu(user);
+    await user.click(await screen.findByRole("menuitem", { name: "Atualizar dados" }));
+    expect(await screen.findByText("Não foi possível atualizar tudo agora.")).toBeInTheDocument();
+    expect(screen.getByText(/dados anteriores continuam disponíveis/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeInTheDocument();
+  });
+
   it("says which entity failed and that the old data was kept, never claiming success", async () => {
     const { user } = renderApp("/", {
+      role: "manager",
       handlers: {
         ...shell,
         "POST /sync/refresh": { body: { ...refreshBody({}, "customers"), reused: false } },
@@ -207,8 +252,10 @@ describe("Meu perfil e atualização de dados", () => {
     });
     await openUserMenu(user);
     await user.click(await screen.findByRole("menuitem", { name: "Atualizar dados" }));
-    expect(await screen.findByText(/Não foi possível atualizar: Clientes/)).toBeInTheDocument();
-    expect(screen.getByText(/Mantidos os dados de/)).toBeInTheDocument();
+    expect(await screen.findByText("Atualização concluída com avisos")).toBeInTheDocument();
+    expect(screen.getByText(/Sankhya indisponível\. Mantidos os dados de/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Fechar" })).toBeInTheDocument();
   });
 
   it("offers 'Tentar de novo' when the refresh cannot even be started", async () => {

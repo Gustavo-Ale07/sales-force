@@ -61,7 +61,7 @@ export function UserMenu({ user, onLogout }: UserMenuProps) {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-    <RefreshDataDialog open={refreshOpen} onClose={() => setRefreshOpen(false)} />
+    <RefreshDataDialog open={refreshOpen} role={user.role} onClose={() => setRefreshOpen(false)} />
     </>
   );
 }

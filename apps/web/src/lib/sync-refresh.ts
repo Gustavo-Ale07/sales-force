@@ -30,20 +30,55 @@ export function failedSteps(refresh: SyncRefresh): SyncRefreshStep[] {
   return refresh.steps.filter((step) => step.status === "failed");
 }
 
-/** One line per step for the right-hand side of the row. */
-export function stepDetail(step: SyncRefreshStep): string {
+/** Profiles that receive the detail from the server (D-AC); everyone else gets only the basics. Mirrors the contract. */
+const DETAIL_ROLES: readonly string[] = ["admin", "manager", "technical"];
+export function seesRefreshDetail(role: string): boolean {
+  return DETAIL_ROLES.includes(role);
+}
+
+/** The three blocks of the detail view (D-AC C2). */
+export const REFRESH_GROUPS: ReadonlyArray<{ title: string; entities: ReadonlyArray<SyncRefreshStep["entity"]> }> = [
+  { title: "Cadastros", entities: ["configuration", "sellers", "customers", "products", "carriers"] },
+  { title: "Preços", entities: ["priceTables", "priceTableVersions", "listPrices", "ipiRates"] },
+  { title: "Financeiro e pedidos", entities: ["openTitles", "orderStatus"] },
+];
+
+/** Sentence of the basic view, per phase. */
+export const PHASE_CAPTION = {
+  cadastros: "Atualizando cadastros…",
+  precos: "Atualizando preços…",
+  pedidos: "Atualizando pedidos…",
+  concluido: "Atualização concluída",
+} as const;
+
+/** Steps finished (ok, failed or skipped) out of all, and the matching percentage. */
+export function stepProgress(steps: readonly SyncRefreshStep[]): { finished: number; total: number; percent: number } {
+  const total = steps.length;
+  const finished = steps.filter((step) => step.status === "ok" || step.status === "failed" || step.status === "skipped").length;
+  return { finished, total, percent: total === 0 ? 0 : Math.floor((finished / total) * 100) };
+}
+
+/** Count shown on the right of a row (never a sentence). */
+export function stepCount(step: SyncRefreshStep): string {
   switch (step.status) {
     case "pending":
-      return "Aguardando";
+      return "";
     case "running":
       return "Lendo…";
     case "ok":
-      return step.rowsRead === null ? "Atualizado" : `${step.rowsRead.toLocaleString("pt-BR")} lidos`;
+      return step.rowsRead === null ? "Atualizado" : step.rowsRead.toLocaleString("pt-BR");
     case "skipped":
-      return step.reason ?? "Não aplicável";
-    case "failed": {
-      const kept = step.lastSuccessAt ? ` Mantidos os dados de ${clockTime(step.lastSuccessAt)}.` : " Mantidos os dados anteriores.";
-      return `${step.reason ?? "Falhou."}${kept}`;
-    }
+      return "Não aplicável";
+    case "failed":
+      return "Falhou";
   }
 }
+
+/** Short second line of a failed row: the masked reason and how old the kept data is. */
+export function stepNote(step: SyncRefreshStep): string | null {
+  if (step.status !== "failed") return null;
+  const kept = step.lastSuccessAt ? `Mantidos os dados de ${clockTime(step.lastSuccessAt)}.` : "Mantidos os dados anteriores.";
+  return step.reason ? `${step.reason} ${kept}` : kept;
+}
+
+export const STEP_STATE = { pending: "pending", running: "running", ok: "done", failed: "failed", skipped: "skipped" } as const;

@@ -24,6 +24,7 @@ export * from "./components/segmented";
 export * from "./components/select";
 export * from "./components/loading-panel";
 export * from "./components/reveal";
+export * from "./components/progress-steps";
 export * from "./components/skeleton";
 export * from "./components/spinner";
 export * from "./components/top-progress";
