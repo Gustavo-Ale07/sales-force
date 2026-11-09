@@ -101,7 +101,14 @@ export class SyncRefreshRunner {
       const { orderStatus } = this.deps;
       if (orderStatus === undefined) return skipped('Envio de pedidos ao Sankhya desativado nesta instalação.');
       const result = await orderStatus.runOnce(withSignal);
-      if (result.failed === true) throw new PermanentJobError('A consulta ao Sankhya falhou; os status guardados foram mantidos.');
+      if (result.failed === true) {
+        const code = result.failure?.errorCode ?? 'order_status_read_failed';
+        const text =
+          code === 'not_implemented'
+            ? 'A leitura do status dos pedidos no Sankhya ainda não está disponível nesta instalação; os status guardados foram mantidos.'
+            : `A consulta ao Sankhya falhou (${code}); os status guardados foram mantidos.`;
+        throw new PermanentJobError(text, { code });
+      }
       return { status: 'ok', rowsRead: result.checked, reason: null };
     }
     const result = await this.deps.mirror.run(entity, withSignal);

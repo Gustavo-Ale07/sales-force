@@ -27,3 +27,16 @@ describe('describeSyncFailure masking (D-Q)', () => {
     expect(failure.message).not.toMatch(/hunter2|u:p@|x\.example/);
   });
 });
+
+describe('describeSyncFailure carries a job error code and a thrown status', () => {
+  it('keeps the code of a PermanentJobError (the refresh step stores it instead of null)', () => {
+    expect(describeSyncFailure(new PermanentJobError('x', { code: 'not_implemented' })).errorCode).toBe('not_implemented');
+    expect(describeSyncFailure(new PermanentJobError('x')).errorCode).toBeNull();
+  });
+
+  it('keeps only the numeric HTTP status of a thrown non-Error object, never its text', () => {
+    const failure = describeSyncFailure({ status: 400, body: 'password=hunter2hunter2' });
+    expect(failure.errorCode).toBe('http_400');
+    expect(failure.message).not.toContain('hunter2');
+  });
+});

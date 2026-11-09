@@ -22,10 +22,18 @@ const MAX_MESSAGE_CHARS = 500;
 
 /** A driver/system error code (`23505`, `ECONNRESET`, ...) only; free text or URIs become `null`. */
 function safeErrorCode(error: unknown): string | null {
-  if (typeof error !== 'object' || error === null || !('code' in error)) return null;
-  const { code } = error as { code: unknown };
-  const text = typeof code === 'number' ? String(code) : code;
-  return typeof text === 'string' && /^[A-Za-z0-9_.-]{1,40}$/.test(text) ? text : null;
+  if (typeof error !== 'object' || error === null) return null;
+  if ('code' in error) {
+    const { code } = error as { code: unknown };
+    const text = typeof code === 'number' ? String(code) : code;
+    if (typeof text === 'string' && /^[A-Za-z0-9_.-]{1,40}$/.test(text)) return text;
+  }
+  // A thrown response-like object (not an Error): its HTTP/Sankhya status is a number, safe to keep.
+  for (const key of ['status', 'statusCode'] as const) {
+    const value = (error as Record<string, unknown>)[key];
+    if (typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599) return `http_${value}`;
+  }
+  return null;
 }
 
 /**
@@ -48,7 +56,7 @@ export function describeSyncFailure(error: unknown): SyncFailure {
   if (error instanceof PermanentJobError || error instanceof TransientJobError) {
     return {
       errorClass: error instanceof TransientJobError ? 'temporary' : 'permanent',
-      errorCode: null,
+      errorCode: error instanceof PermanentJobError ? error.failureCode : null,
       message: maskStoredError(error.message).slice(0, MAX_MESSAGE_CHARS),
       retry: classification.retry,
     };

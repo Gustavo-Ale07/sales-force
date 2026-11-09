@@ -2,6 +2,7 @@ import { salesOrder, type DbHandle } from '@salesforce/db';
 import { mapErpOrderStatus } from '@salesforce/domain';
 import { isSankhyaGatewayError, type SankhyaOrderReadPort } from '@salesforce/sankhya';
 import { and, asc, eq, gte, isNotNull, sql } from 'drizzle-orm';
+import { describeSyncFailure, type SyncFailure } from '../sync/failure.js';
 import type { Logger } from '../observability/logger.js';
 import { encodeReleaseEventCodes } from '../orders/release-events.js';
 import type { Clock } from '../platform/tokens.js';
@@ -23,6 +24,8 @@ export interface OrderErpStatusRun {
   readonly updated: number;
   /** True when the ERP read itself failed (the stored statuses are kept); lets the on-demand refresh report it. */
   readonly failed?: true;
+  /** Secret-free classification of the failed read (class, code, message); present with `failed`. */
+  readonly failure?: SyncFailure;
 }
 
 /**
@@ -58,11 +61,19 @@ export class OrderErpStatusService {
     try {
       readings = await gateway.readOrderStatusFacts(numbers, options.signal === undefined ? {} : { signal: options.signal });
     } catch (error) {
+      // Whatever was thrown (an Error, a string, a response-like object): class, code and message are kept; never the raw value.
+      const failure = describeSyncFailure(error);
       logger.warn(
-        { err: isSankhyaGatewayError(error) ? { kind: error.kind, code: error.code } : { message: String(error) } },
+        {
+          errorClass: failure.errorClass,
+          errorCode: failure.errorCode,
+          detail: failure.message,
+          thrownType: error instanceof Error ? error.name : error === null ? 'null' : typeof error,
+          orders: numbers.length,
+        },
         'ERP order status read failed; the stored statuses are kept and the next run retries',
       );
-      return { checked: 0, updated: 0, failed: true };
+      return { checked: 0, updated: 0, failed: true, failure };
     }
     const byNumber = new Map(readings.map((reading) => [reading.erpOrderNumber, reading]));
     let updated = 0;

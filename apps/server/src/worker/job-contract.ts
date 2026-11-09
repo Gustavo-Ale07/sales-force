@@ -29,9 +29,13 @@ export interface JobHandler<TPayload> {
 
 /** The job cannot succeed by repeating it: it goes to the dead-letter queue immediately. */
 export class PermanentJobError extends Error {
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options);
+  /** Optional stable, secret-free code (e.g. a gateway error code) carried to the refresh step and the logs. */
+  readonly failureCode: string | null;
+
+  constructor(message: string, options?: { cause?: unknown; code?: string }) {
+    super(message, options?.cause === undefined ? undefined : { cause: options.cause });
     this.name = 'PermanentJobError';
+    this.failureCode = options?.code ?? null;
   }
 }
 

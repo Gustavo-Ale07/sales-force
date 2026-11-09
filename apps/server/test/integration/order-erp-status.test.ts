@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { salesOrder } from '@salesforce/db';
-import { FakeGateway, FakeOrderBook, SankhyaGatewayError, type ErpOrderStatusFactsReading } from '@salesforce/sankhya';
+import { FakeGateway, FakeOrderBook, NotImplementedError, SankhyaGatewayError, type ErpOrderStatusFactsReading } from '@salesforce/sankhya';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { OrderErpStatusService } from '../../src/integration/order-erp-status.service.js';
@@ -109,8 +109,53 @@ describe('sync.erp.orderStatus (SNK-7 P2)', () => {
       logger: createLogger({ level: 'silent', service: 'test' }),
       now: () => new Date(NOW),
     });
-    expect(await failing.runOnce()).toEqual({ checked: 0, updated: 0, failed: true });
+    expect(await failing.runOnce()).toMatchObject({ checked: 0, updated: 0, failed: true, failure: { errorClass: 'unavailable', errorCode: 'down' } });
     expect((await w.row(id))?.erpStatusCode).toBe(2);
+  });
+
+  it.each([
+    ['a string', 'ORA-00904: invalid identifier', null],
+    ['a response-like object', { status: 400, statusMessage: 'Bad Request', body: 'secret-looking text' }, 'http_400'],
+    ['an object with a code', { code: 'SANKHYA_ERR_7', message: 'x' }, 'SANKHYA_ERR_7'],
+    ['undefined', undefined, null],
+  ])('a non-Error thrown by the ERP read (%s) fails cleanly: class, code and a message are logged and the stored statuses are kept', async (_label, thrown, expectedCode) => {
+    const w = await world();
+    const id = await w.seed(7010, { statusCode: 2 });
+    const lines: { fields: Record<string, unknown>; message: string }[] = [];
+    const logger = { warn: (fields: Record<string, unknown>, message: string) => lines.push({ fields, message }), info: () => undefined, error: () => undefined, debug: () => undefined };
+    const throwing = new OrderErpStatusService({
+      db: w.database.handle,
+      gateway: { ...new FakeGateway({ orders: w.book }), readOrderStatusFacts: () => Promise.reject(thrown) } as never,
+      logger: logger as never,
+      now: () => new Date(NOW),
+    });
+    const run = await throwing.runOnce();
+    expect(run).toMatchObject({ checked: 0, updated: 0, failed: true, failure: { errorClass: 'unclassified', errorCode: expectedCode } });
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.message).toBe('ERP order status read failed; the stored statuses are kept and the next run retries');
+    expect(lines[0]?.fields).toMatchObject({ errorClass: 'unclassified', errorCode: expectedCode, orders: 1 });
+    expect(typeof lines[0]?.fields['detail']).toBe('string');
+    expect(lines[0]?.fields['thrownType']).toBe(typeof thrown);
+    // Nothing the ERP said is copied into the log.
+    expect(JSON.stringify(lines[0]?.fields)).not.toContain('secret-looking');
+    expect(JSON.stringify(lines[0]?.fields)).not.toContain('ORA-00904');
+    expect((await w.row(id))?.erpStatusCode).toBe(2);
+  });
+
+  it('the real gateway read that is not implemented is logged with its code and message (not an empty NonError)', async () => {
+    const w = await world();
+    await w.seed(7011);
+    const lines: Record<string, unknown>[] = [];
+    const logger = { warn: (fields: Record<string, unknown>) => lines.push(fields), info: () => undefined, error: () => undefined, debug: () => undefined };
+    const service = new OrderErpStatusService({
+      db: w.database.handle,
+      gateway: { readOrderStatusFacts: () => Promise.reject(new NotImplementedError('readOrderStatusFacts: not validated')) } as never,
+      logger: logger as never,
+      now: () => new Date(NOW),
+    });
+    expect(await service.runOnce()).toMatchObject({ failed: true, failure: { errorClass: 'permanent', errorCode: 'not_implemented' } });
+    expect(lines[0]).toMatchObject({ errorClass: 'permanent', errorCode: 'not_implemented', thrownType: 'NotImplementedError' });
+    expect(String(lines[0]?.['detail'])).toContain('not validated');
   });
 
   it('stores the release event codes (distinct, ascending) in erp_status_detail, and keeps them when a later reading carries none (D6b)', async () => {
