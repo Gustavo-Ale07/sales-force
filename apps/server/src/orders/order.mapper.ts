@@ -87,7 +87,30 @@ const ERP_REFUSAL_MAX = 200;
 function erpRefusalText(stored: string | null): string | null {
   if (stored === null || !stored.startsWith(ERP_REFUSAL_PREFIX)) return null;
   const text = stored.slice(ERP_REFUSAL_PREFIX.length).replace(/\.$/, '').replace(/\s+/g, ' ').trim();
-  return text === '' || text === 'no message' ? null : text.slice(0, ERP_REFUSAL_MAX);
+  if (text === '' || text === 'no message' || looksTechnical(text)) return null;
+  return text.slice(0, ERP_REFUSAL_MAX);
+}
+
+/**
+ * Security review (2026-11-09): the text is Sankhya's free text and its error format was never observed, so anything that
+ * looks like a database error, an exception, a stack trace or an internal table/column name is NOT shown to users (the
+ * screen then says only "O Sankhya recusou o pedido"). The full masked text stays in the delivery WARN log and in
+ * `integration_outbox.last_error_message` for IT. Business refusals in plain words ("O campo 'Perc. desconto' deve ser
+ * informado.") pass.
+ */
+const TECHNICAL_TEXT: readonly RegExp[] = [
+  /\bORA-\d+/i,
+  /\bSQL(?:STATE|EXCEPTION|CODE|ERROR)?\b/i,
+  /exception|\bstack\s?trace\b|\bcaused by\b|\btraceback\b/i,
+  /\bat\s+[\w$.]+\([^)]*\)/, // "at br.com.Foo.bar(Foo.java:12)"
+  /\bat\s+\S*[\\/]\S+/, // "at /opt/app/file.js", "at C:\\dir\\file"
+  /\b(?:java|javax|com|br|org|sun)\.[a-z]\w*\./i, // package names
+  /\bT(?:GF|SI|CS|GW|FP|SP)[A-Z0-9]+\b/, // TGFITE, TSIUSU...
+  /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/, // COLUMN_NAME, AD_FORCEORIGEM
+];
+
+function looksTechnical(text: string): boolean {
+  return TECHNICAL_TEXT.some((pattern) => pattern.test(text));
 }
 
 export function toOrderListItem(row: OrderListRow): OrderListItem {

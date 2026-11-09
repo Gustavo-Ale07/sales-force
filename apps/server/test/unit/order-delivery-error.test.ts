@@ -31,6 +31,24 @@ describe('erpDeliveryOf (K3: only the class and the stable code leave the server
     expect(erpDeliveryOf('rejected', 'validation', 'environment_mismatch: texto interno')).not.toHaveProperty('message');
   });
 
+  it("shows Sankhya's business refusal but hides anything that looks like a technical error", () => {
+    const shown = (text: string) => erpDeliveryOf('rejected', 'validation', `erp_refused_order: The ERP refused the order: ${text}.`);
+    expect(shown("O campo 'Perc. desconto' deve ser informado")).toMatchObject({ message: "O campo 'Perc. desconto' deve ser informado" });
+    for (const technical of [
+      'ORA-00936: expressão não encontrada',
+      'java.lang.NullPointerException',
+      'Erro: NullPointerException ao gravar',
+      'Falha em br.com.sankhya.modelcore.Foo.bar(Foo.java:12)',
+      'Violação de chave em TGFITE',
+      'Coluna VLR_UNIT inválida',
+      'Erro SQL ao inserir',
+      'at /opt/app/server.js',
+    ]) {
+      const out = shown(technical);
+      expect(out, technical).toEqual({ errorClass: 'validation', errorCode: 'erp_refused_order' });
+    }
+  });
+
   it('is null for orders that are not rejected', () => {
     expect(erpDeliveryOf('sent', 'validation', 'x: y')).toBeNull();
     expect(erpDeliveryOf('queued', null, null)).toBeNull();
