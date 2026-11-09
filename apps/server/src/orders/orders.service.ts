@@ -46,7 +46,7 @@ import { assertEligibleForErpSubmission } from './erp-eligibility.guard.js';
 import { deleteOrderDeliveries, enqueueOrderDelivery, requestDeliveryVerification, requeueRejectedDelivery } from './order-erp-delivery.js';
 import { orderFingerprint } from './order-fingerprint.js';
 import { InstallationConfigurationService } from '../configuration/configuration.service.js';
-import { toOrderApproval, toOrderDetail, toOrderListItem } from './order.mapper.js';
+import { erpDeliveryOf, toOrderApproval, toOrderDetail, toOrderListItem } from './order.mapper.js';
 import { OrdersRepository, type Executor, type OrderCounts, type OrderRow } from './orders.repository.js';
 
 type ValidDraft = Extract<DraftOutcome, { ok: true }>;
@@ -628,6 +628,16 @@ export class OrdersService {
     if (order.status === 'queued' && this.enqueueEnabled) return this.detailOf(order); // replay of the same click
     // D-AA "Reenviar": a rejected delivery passes through every check of a first send (customer, authority, ERP binding).
     if (order.status !== 'draft' && order.status !== 'approved' && order.status !== 'rejected') throw new AppError('order_not_editable');
+    if (order.status === 'rejected') {
+      // K2: several ERP notes carry this order's origin id; resending could make it worse. IT checks the ERP first.
+      const last = await this.orders.lastDeliveryErrorOf(order.id);
+      if (erpDeliveryOf(order.status, last?.errorClass ?? null, last?.message ?? null)?.errorCode === 'ambiguous_origin') {
+        throw new AppError('conflict', {
+          message: 'Há mais de uma nota com este pedido no Sankhya. Peça à TI para conferir.',
+          details: { reason: 'ambiguous_origin' },
+        });
+      }
+    }
     // The server revalidates the customer NOW, not at draft time: a draft whose customer became ineligible
     // is refused and flagged (needs_review), never sent and never silently altered.
     const [state] = [...(await this.mirror.customerStates([order.customerCode])).values()];

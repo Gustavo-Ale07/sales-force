@@ -346,7 +346,7 @@ describe('real adapter order writes (mock transport only, no network)', () => {
     mock.forced.push(ok(['NUNOTA', 'STATUSNOTA'], [[2475, 'A']]));
     expect(await gateway.findOrderByOrigin(FIELD, ORIGIN)).toEqual({ erpOrderNumber: 2475, confirmed: false });
     mock.forced.push(ok(['NUNOTA', 'STATUSNOTA'], [[2475, 'A'], [2476, 'A']]));
-    await expect(gateway.findOrderByOrigin(FIELD, ORIGIN)).rejects.toMatchObject({ kind: 'permanent', code: 'duplicate_origin' });
+    await expect(gateway.findOrderByOrigin(FIELD, ORIGIN)).rejects.toMatchObject({ kind: 'permanent', code: 'ambiguous_origin', erpOrderNumbers: [2475, 2476] });
   });
 
   it('rereads header and item prices for the D-7 check', async () => {

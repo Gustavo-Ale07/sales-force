@@ -76,8 +76,8 @@ export function decideFailure(error: unknown, facts: FailureFacts): DeliveryOutc
       // Never retried blindly (.claude/rules/sankhya.md). At `include` the origin check of this very attempt
       // proved the order absent, so a refusal is final. Elsewhere the order may exist in the ERP:
       // rejecting it would hide a real order, a person must look at it.
-      // More than one ERP order with the same origin id: orders exist, so it is never "rejected".
-      if (failure.code === 'duplicate_origin') return park(failure);
+      // K2: more than one ERP order with the same origin id: none adopted, none included, the delivery fails and a person checks.
+      if (failure.code === 'ambiguous_origin') return reject(failure);
       if (facts.phase === 'include') return reject(failure);
       return facts.mayExist || facts.hasErpNumber ? park(failure) : reject(failure);
     }

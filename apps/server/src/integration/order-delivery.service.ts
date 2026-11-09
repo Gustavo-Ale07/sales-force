@@ -9,7 +9,7 @@ import {
   type OutboxStep,
 } from '@salesforce/db';
 import { erpSubmissionBlock, type ErpSubmissionTarget, type InstallationConfiguration } from '@salesforce/domain';
-import { isBudgetExhaustedError, isSankhyaGatewayError, SankhyaGatewayError, type RequestBudget, type SankhyaOrderReadPort, type SankhyaWritePort } from '@salesforce/sankhya';
+import { AmbiguousOriginError, isBudgetExhaustedError, isSankhyaGatewayError, SankhyaGatewayError, type RequestBudget, type SankhyaOrderReadPort, type SankhyaWritePort } from '@salesforce/sankhya';
 import { and, asc, eq, inArray, isNotNull, lt, lte, sql } from 'drizzle-orm';
 import { validateInstallationConfiguration } from '../configuration/validate.js';
 import { AUDIT_ACTIONS, type AuditDetail, type AuditService } from '../iam/audit.service.js';
@@ -346,6 +346,15 @@ export class OrderDeliveryService {
         await this.parkForBudget(row, order);
         return;
       }
+      if (error instanceof AmbiguousOriginError) {
+        // K2: several ERP notes carry this origin id. Adopt none, include none, and block Reenviar: a person (IT) checks the ERP.
+        this.deps.logger.error(
+          { outboxId: row.id, orderId: order.id, erpOrderNumbers: error.erpOrderNumbers },
+          'more than one ERP order carries this origin id: none adopted, nothing resent',
+        );
+        await this.finishRejected(row, order, 'permanent', 'ambiguous_origin', error.message, false, { erpOrderNumbers: error.erpOrderNumbers.join(',') });
+        return;
+      }
       if (phase === 'include' && isSankhyaGatewayError(error) && error.code === 'timeout') {
         await this.startReconciling(row, order, describeError(error));
         return;
@@ -541,6 +550,7 @@ export class OrderDeliveryService {
     errorCode: string,
     message: string,
     keepNumber: boolean,
+    auditExtra: AuditDetail = {},
   ): Promise<void> {
     const at = this.deps.now();
     await this.database.transaction(async (tx) => {
@@ -561,7 +571,7 @@ export class OrderDeliveryService {
           {
             action: AUDIT_ACTIONS.orderErpRejected,
             actorAccountId: null,
-            detail: this.detail(row, order, { errorClass, errorCode, keptErpNumber: keepNumber }),
+            detail: this.detail(row, order, { errorClass, errorCode, keptErpNumber: keepNumber, ...auditExtra }),
           },
           tx,
         );

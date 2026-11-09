@@ -34,9 +34,11 @@ describe('decideFailure', () => {
     expect(decideFailure(err('validation'), facts({ mayExist: true })).kind).toBe('reject');
   });
 
-  it('a duplicate origin in the ERP parks the order for a person, never rejects it', () => {
-    const duplicate = new SankhyaGatewayError('permanent', { code: 'duplicate_origin', message: 'x' });
-    expect(decideFailure(duplicate, facts({ phase: 'verify' })).kind).toBe('park');
+  it('K2: several ERP notes with the same origin id reject the delivery (ambiguous_origin), never park or retry it', () => {
+    const ambiguous = new SankhyaGatewayError('permanent', { code: 'ambiguous_origin', message: 'x' });
+    for (const phase of ['verify', 'include'] as const) {
+      expect(decideFailure(ambiguous, facts({ phase, mayExist: true }))).toMatchObject({ kind: 'reject', errorCode: 'ambiguous_origin' });
+    }
   });
 
   it('a permanent failure while verifying a possibly-sent order parks it instead of rejecting a real order', () => {

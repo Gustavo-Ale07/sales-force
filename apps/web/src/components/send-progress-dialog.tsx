@@ -91,9 +91,11 @@ export function SendProgressDialog({ orderId, kind, reference, onClose, onDelete
                   <Button variant="danger-outline" className="border-[#fca5a5] bg-transparent text-[#fca5a5] hover:bg-white/10" onClick={() => setDeleting(true)}>
                     Excluir
                   </Button>
+                  {order?.erpDelivery?.errorCode === "ambiguous_origin" ? null : (
                   <Button variant="secondary" className="border-white/50 bg-transparent text-white hover:bg-white/10" loading={resend.isPending} onClick={() => resend.mutate()}>
                     Reenviar
                   </Button>
+                  )}
                 </>
               ) : null}
               <Button variant="primary" className="border-transparent bg-white text-[var(--sf-navy)] hover:bg-white/90" onClick={finish}>

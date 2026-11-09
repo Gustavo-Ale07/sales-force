@@ -30,6 +30,7 @@ import {
 } from '../configuration-source.js';
 import {
   NotImplementedError,
+  AmbiguousOriginError,
   SankhyaGatewayError,
   classifyHttpFailure,
   parseRetryAfterMs,
@@ -573,11 +574,9 @@ export class RealSankhyaGateway implements SankhyaGateway {
     );
     if (result.rows.length === 0) return null;
     if (result.rows.length > 1) {
-      // A duplicate already exists: the worker must stop and escalate, never pick one.
-      throw new SankhyaGatewayError('permanent', {
-        code: 'duplicate_origin',
-        message: 'More than one ERP order carries the same origin id; manual reconciliation is required.',
-      });
+      // A duplicate already exists: the worker must stop and escalate, never pick one (K2).
+      const numbers = result.rows.map((row, index) => new RowReader('orders', columns, row, index).int('NUNOTA'));
+      throw new AmbiguousOriginError(numbers);
     }
     const reader = new RowReader('orders', columns, result.rows[0] ?? [], 0);
     return { erpOrderNumber: reader.int('NUNOTA'), confirmed: reader.nullableText('STATUSNOTA') === 'L' };

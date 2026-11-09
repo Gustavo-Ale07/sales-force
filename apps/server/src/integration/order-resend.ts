@@ -32,9 +32,6 @@ export async function requeueDeliveredOrder(
   return database.db.transaction(async (tx) => {
     const [order] = await tx.select().from(salesOrder).where(eq(salesOrder.id, orderId)).for('update');
     if (order === undefined) throw new ResendRefused('order_not_found', 'No order with this id.');
-    if (order.status !== 'sent' || order.erpNumber === null) {
-      throw new ResendRefused('order_not_sent', `The order is "${order.status}"; only an order already delivered (with an ERP number) can be re-queued.`);
-    }
     const [row] = await tx
       .select()
       .from(integrationOutbox)
@@ -42,6 +39,15 @@ export async function requeueDeliveredOrder(
       .orderBy(desc(integrationOutbox.createdAt))
       .limit(1)
       .for('update');
+    // K3: this tool never talks to Sankhya, so it cannot count the notes itself. It refuses when a delivery of this order
+    // already found more than one note by origin (`ambiguous_origin`); and when it re-queues, the worker's origin lookup
+    // (which treats several notes as ambiguous_origin and adopts none) is what decides.
+    if (row !== undefined && (row.lastErrorMessage ?? '').startsWith('ambiguous_origin')) {
+      throw new ResendRefused('ambiguous_origin', 'Há mais de uma nota com este pedido no Sankhya (origem ambígua). Não reenviar: peça à TI para conferir no Sankhya.');
+    }
+    if (order.status !== 'sent' || order.erpNumber === null) {
+      throw new ResendRefused('order_not_sent', `The order is "${order.status}"; only an order already delivered (with an ERP number) can be re-queued.`);
+    }
     if (row === undefined || row.status !== 'confirmed') {
       throw new ResendRefused('delivery_not_confirmed', 'The newest delivery of this order is not confirmed.');
     }

@@ -103,6 +103,7 @@ const deliveryCodeLabels: Record<string, string> = {
   item_mismatch: "Os itens gravados no Sankhya diferem dos enviados",
   order_not_deliverable: "O pedido não estava em situação de envio",
   include_timeout_unconfirmed: "O Sankhya não confirmou o recebimento a tempo. Reenvie: o Sales Force confere antes de criar o pedido",
+  ambiguous_origin: "Há mais de uma nota com este pedido no Sankhya. Peça à TI para conferir.",
 };
 
 /** K3: why the last delivery of a rejected order failed, from the stable class and code only (never the stored text). */

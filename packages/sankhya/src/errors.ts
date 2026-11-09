@@ -83,6 +83,23 @@ export class NotImplementedError extends SankhyaGatewayError {
 }
 
 /**
+ * K2: the origin lookup found MORE THAN ONE ERP order with the same origin id. The caller must adopt none and include none:
+ * a person has to look. Carries the ERP order numbers (numbers only; no customer data).
+ */
+export class AmbiguousOriginError extends SankhyaGatewayError {
+  readonly erpOrderNumbers: readonly number[];
+
+  constructor(erpOrderNumbers: readonly number[]) {
+    super('permanent', {
+      code: 'ambiguous_origin',
+      message: `More than one ERP order carries the same origin id (NUNOTA ${erpOrderNumbers.join(', ')}); none adopted, nothing resent; manual reconciliation is required.`,
+    });
+    this.name = 'AmbiguousOriginError';
+    this.erpOrderNumbers = erpOrderNumbers;
+  }
+}
+
+/**
  * Startup/configuration problem (bad environment, refused host, missing credentials). Thrown when a
  * gateway is created, never during normal operation. Lists variable names, never their values.
  */

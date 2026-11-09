@@ -1017,6 +1017,16 @@ describe("Rascunho existente", () => {
     expect(screen.queryByRole("button", { name: "Verificar agora" })).not.toBeInTheDocument();
   });
 
+  it("K2: a failure by ambiguous origin says IT must check, has Excluir and no Reenviar", async () => {
+    renderApp(`/pedidos/${ORDER_ID}`, {
+      handlers: existing(orderDetail({ status: "rejected", erpDelivery: { errorClass: "permanent", errorCode: "ambiguous_origin" } })),
+    });
+    expect((await screen.findAllByText(/Há mais de uma nota com este pedido no Sankhya\. Peça à TI para conferir\./)).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Excluir" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reenviar" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Verificar agora" })).not.toBeInTheDocument();
+  });
+
   it("D-AA: a quotation that originated an order says so, in Force only", async () => {
     renderApp(`/pedidos/${ORDER_ID}`, { handlers: existing(orderDetail({ convertedInto: { id: "0190a000-0000-7000-8000-0000000000b1", draftNumber: 9, erpNumber: 4321 } })) });
     expect(await screen.findByText("CONVERTIDO EM PEDIDO nº 4321")).toBeInTheDocument();

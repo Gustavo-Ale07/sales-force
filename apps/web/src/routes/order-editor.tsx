@@ -675,11 +675,16 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
       {order?.status === "rejected" ? (
         <Alert tone="danger" title="Motivo da falha no envio">
           {deliveryErrorText(order.erpDelivery) ?? "Falha no envio. O pedido não foi criado no Sankhya."}
-          <div className="mt-2">
-            <Button type="button" variant="secondary" loading={resend.isPending} onClick={() => resend.mutate()}>
-              Reenviar
-            </Button>
-          </div>
+          {order.erpDelivery?.errorCode === "ambiguous_origin" ? (
+            // K2: reenviar could make it worse; only IT can check which note is the right one. Excluir stays available.
+            <div className="mt-2">A TI precisa conferir no Sankhya antes de qualquer novo envio. O reenvio está bloqueado para este pedido.</div>
+          ) : (
+            <div className="mt-2">
+              <Button type="button" variant="secondary" loading={resend.isPending} onClick={() => resend.mutate()}>
+                Reenviar
+              </Button>
+            </div>
+          )}
         </Alert>
       ) : null}
       {order?.convertedInto ? (

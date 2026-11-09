@@ -193,6 +193,26 @@ describe('API-side enqueue for the ERP (SNK-7 D-5, D-M)', () => {
     expect((await off.call('seller1', 'POST', `/orders/${offId}/submit`)).body.code).toBe('erp_submission_disabled');
   });
 
+  it('K2: an order that failed as ambiguous_origin (several ERP notes) cannot be resent; the detail carries the stable code, Excluir stays', async () => {
+    const id = await draft(on);
+    await bindToSandbox(on, id);
+    expect((await on.call('seller1', 'POST', `/orders/${id}/submit`)).status).toBe(200);
+    const db = on.database.handle.db;
+    await db
+      .update(integrationOutbox)
+      .set({ status: 'rejected', lastErrorClass: 'permanent', lastErrorMessage: 'ambiguous_origin: More than one ERP order carries the same origin id (NUNOTA 2495, 2496).' })
+      .where(eq(integrationOutbox.aggregateId, id));
+    await db.update(salesOrder).set({ status: 'rejected' }).where(eq(salesOrder.id, id));
+
+    const detail = await on.call('seller1', 'GET', `/orders/${id}`);
+    expect(detail.body.erpDelivery).toEqual({ errorClass: 'permanent', errorCode: 'ambiguous_origin' });
+    const resend = await on.call('seller1', 'POST', `/orders/${id}/submit`);
+    expect(resend.status).toBe(409);
+    expect(resend.body.details).toMatchObject({ reason: 'ambiguous_origin' });
+    expect((await outboxOf(on, id))[0]?.status).toBe('rejected'); // untouched: nothing re-queued
+    expect((await on.call('seller1', 'DELETE', `/orders/${id}`)).status).toBe(204);
+  });
+
   it('Verificar agora: an unknown delivery is made due on the SAME outbox row (no second row), audited with the actor, limited to once per 60 s', async () => {
     const id = await draft(on);
     await bindToSandbox(on, id);

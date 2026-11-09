@@ -1,5 +1,5 @@
 import type { DecimalString } from '@salesforce/domain';
-import { SankhyaGatewayError } from '../errors.js';
+import { AmbiguousOriginError, SankhyaGatewayError } from '../errors.js';
 import type {
   ErpOrderRef,
   IncludeOrderResult,
@@ -105,7 +105,10 @@ export class FakeOrderBook {
     this.calls.push({ operation: 'find', originId });
     const outcome = this.#take('find');
     if (outcome.kind !== 'ok') throw outcome.error;
-    const found = this.orders.find((order) => order.request.originId === originId);
+    const matches = this.orders.filter((order) => order.request.originId === originId);
+    // K2: like the real lookup, more than one note with the same origin id is an error, never "the first one".
+    if (matches.length > 1) throw new AmbiguousOriginError(matches.map((order) => order.erpOrderNumber));
+    const found = matches[0];
     return found === undefined ? null : { erpOrderNumber: found.erpOrderNumber, confirmed: found.confirmed };
   }
 

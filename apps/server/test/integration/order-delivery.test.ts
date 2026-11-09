@@ -446,6 +446,47 @@ describe('live delivery', () => {
     expect((await w.service.runDue()).processed).toBe(0);
   });
 
+  it('K2: three notes with the same origin id (live case NUNOTA 2495-2497): none adopted, nothing included, the delivery fails as ambiguous_origin with the numbers logged and audited', async () => {
+    const w = await world();
+    w.book.script('include', { kind: 'created_then_error', error: err('temporary', 'timeout') });
+    const { orderId, outboxId } = await w.seed();
+    await w.service.runDue();
+    const request = w.book.orders[0]?.request;
+    if (request === undefined) throw new Error('the first note was not created');
+    w.book.include(request);
+    w.book.include(request); // the ERP finished the other timed-out includes late
+    const numbers = w.book.orders.map((note) => note.erpOrderNumber);
+    expect(numbers).toHaveLength(3);
+    w.advance(60_000);
+    await w.service.runDue();
+    const row = await w.outbox(outboxId);
+    expect(row).toMatchObject({ status: 'rejected', nextAttemptAt: null, lastErrorClass: 'permanent' });
+    expect(row.lastErrorMessage).toContain('ambiguous_origin');
+    expect(await w.order(orderId)).toMatchObject({ status: 'rejected', erpNumber: null });
+    expect(w.includes).toHaveLength(1); // no new include
+    expect(w.book.orders).toHaveLength(3);
+    const audit = await w.database.handle.db.select().from(auditLog).where(eq(auditLog.action, 'order.erp_rejected'));
+    expect(JSON.stringify(audit.map((entry) => entry.detail))).toContain(`"erpOrderNumbers":"${numbers.join(',')}"`);
+    // Nothing is retried afterwards.
+    w.advance(3600_000);
+    expect((await w.service.runDue()).processed).toBe(0);
+    expect(w.includes).toHaveLength(1);
+  });
+
+  it('K3: the ops resend refuses an order whose delivery found several notes by origin', async () => {
+    const w = await world();
+    w.book.script('include', { kind: 'created_then_error', error: err('temporary', 'timeout') });
+    const { orderId } = await w.seed();
+    await w.service.runDue();
+    const request = w.book.orders[0]?.request;
+    if (request === undefined) throw new Error('the first note was not created');
+    w.book.include(request);
+    w.advance(60_000);
+    await w.service.runDue();
+    const audit = new AuditService(w.database.handle.db, () => new Date());
+    await expect(requeueDeliveredOrder(w.database.handle, audit, orderId, new Date(0))).rejects.toMatchObject({ reason: 'ambiguous_origin' });
+  });
+
   it('a failed include that created nothing is retried once with the same origin id and the frozen header', async () => {
     const w = await world();
     w.book.script('include', { kind: 'error', error: err('temporary') });
