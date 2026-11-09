@@ -144,6 +144,19 @@ describe('role-based view (D-AC C1): a seller never receives steps, counts or re
     for (const forbidden of ['steps', 'customers', 'SNK_DOWN', 'rowsRead', 'reason', 'Sankhya fora']) expect(text).not.toContain(forbidden);
   });
 
+  it('D-AF: no /sync/refresh response, for any role, carries rowsRead, "linhas" or a record count', async () => {
+    const w = await world();
+    const started = await w.api.start(user);
+    await w.runner({ mirror: { run: async (entity) => w.okResult(entity, 4565) } }).run(started.id);
+    for (const role of ['admin', 'manager', 'technical', 'seller', 'unknown'] as const) {
+      const who = { ...user, role } as CurrentUser;
+      const text = JSON.stringify([await w.api.get(started.id, who), await w.api.start(who)]);
+      for (const forbidden of ['rowsRead', 'linhas', '4565', '4.565']) expect(text).not.toContain(forbidden);
+    }
+    // The database keeps it for the technical diagnosis.
+    expect(JSON.stringify((await w.row(started.id)).steps)).toContain('4565');
+  });
+
   it('manager, admin and technical keep the detail; any other role gets the basic view', async () => {
     const w = await world();
     const started = await w.api.start(user);
@@ -196,8 +209,11 @@ describe('sync.refresh.on-demand (worker side, D-AB B3)', () => {
     expect(done.status).toBe('done');
     expect(done.steps.map((s) => s.status)).toEqual(SYNC_REFRESH_ENTITIES.map(() => 'ok'));
     expect(order).toEqual(SYNC_REFRESH_ENTITIES.filter((e) => e !== 'configuration' && e !== 'orderStatus'));
-    expect(done.steps.find((s) => s.entity === 'customers')?.rowsRead).toBe(5);
-    expect(done.steps.find((s) => s.entity === 'orderStatus')?.rowsRead).toBe(2);
+    // D-AF: the count stays in the database for diagnosis and never leaves through the API.
+    const stored = (await w.row(started.id)).steps as { entity: string; rowsRead: number | null }[];
+    expect(stored.find((s) => s.entity === 'customers')?.rowsRead).toBe(5);
+    expect(stored.find((s) => s.entity === 'orderStatus')?.rowsRead).toBe(2);
+    expect(JSON.stringify(done)).not.toContain('rowsRead');
     expect(done.finishedAt).not.toBeNull();
   });
 

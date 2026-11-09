@@ -7,7 +7,6 @@ import {
   type SyncRefreshView,
   type StartSyncRefreshResponse,
   type SyncRefresh,
-  type SyncRefreshStep,
   type SyncStatusResponse,
 } from '@salesforce/contracts';
 import { syncRefresh, syncState, type Database } from '@salesforce/db';
@@ -15,7 +14,7 @@ import { desc, eq, inArray } from 'drizzle-orm';
 import { AppError } from '../http/app-error.js';
 import type { CurrentUser } from '../iam/current-user.js';
 import { uuidv7 } from '../platform/ids.js';
-import { expireStuckRefreshes } from '../sync/sync-refresh-expiry.js';
+import { expireStuckRefreshes, type StoredSyncRefreshStep } from '../sync/sync-refresh-expiry.js';
 import { CLOCK, DATABASE, type Clock } from '../platform/tokens.js';
 
 /** A refresh finished less than this long ago is returned instead of starting another one (D-AB B3). */
@@ -53,7 +52,7 @@ export class SyncRefreshService {
       if (active || recent) return { ...(await this.#present(latest)), reused: true };
     }
     const id = uuidv7(now.getTime());
-    const steps: SyncRefreshStep[] = SYNC_REFRESH_ENTITIES.map((entity) => ({
+    const steps: StoredSyncRefreshStep[] = SYNC_REFRESH_ENTITIES.map((entity) => ({
       entity,
       status: 'pending',
       rowsRead: null,
@@ -97,15 +96,19 @@ export class SyncRefreshService {
       .from(syncState)
       .where(inArray(syncState.entity, MIRRORED_ENTITIES));
     const lastSuccess = new Map(states.map((state) => [state.entity, state.at]));
-    const stored = (Array.isArray(row.steps) ? row.steps : []) as SyncRefreshStep[];
+    const stored = (Array.isArray(row.steps) ? row.steps : []) as StoredSyncRefreshStep[];
     return {
       id: row.id,
       status: row.status as SyncRefresh['status'],
       requestedAt: row.requestedAt.toISOString(),
       startedAt: row.startedAt?.toISOString() ?? null,
       finishedAt: row.finishedAt?.toISOString() ?? null,
+      // D-AF: explicit fields, so the stored record count (rowsRead) can never leak through a spread.
       steps: stored.map((step) => ({
-        ...step,
+        entity: step.entity,
+        status: step.status,
+        durationMs: step.durationMs,
+        reason: step.reason,
         lastSuccessAt: lastSuccess.get(step.entity)?.toISOString() ?? null,
       })),
     };

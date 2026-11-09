@@ -1544,7 +1544,6 @@ export interface components {
         SyncRefreshStep: {
             entity: components["schemas"]["SyncRefreshEntity"];
             status: components["schemas"]["SyncRefreshStepStatus"];
-            rowsRead: number | null;
             durationMs: number | null;
             reason: string | null;
             lastSuccessAt: components["schemas"]["IsoTimestamp"] | null;

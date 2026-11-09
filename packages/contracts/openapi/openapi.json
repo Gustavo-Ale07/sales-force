@@ -7531,17 +7531,6 @@
           "status": {
             "$ref": "#/components/schemas/SyncRefreshStepStatus"
           },
-          "rowsRead": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 0
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "durationMs": {
             "anyOf": [
               {
@@ -7578,7 +7567,6 @@
         "required": [
           "entity",
           "status",
-          "rowsRead",
           "durationMs",
           "reason",
           "lastSuccessAt"

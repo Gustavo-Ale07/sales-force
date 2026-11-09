@@ -2,6 +2,9 @@ import type { SyncRefreshStep } from '@salesforce/contracts';
 import { syncRefresh, type Database } from '@salesforce/db';
 import { and, eq, inArray } from 'drizzle-orm';
 
+/** A step as stored in `sync_refresh.steps`: the public step plus the record count, which stays in the database for diagnosis and never leaves through the API (D-AF). */
+export type StoredSyncRefreshStep = SyncRefreshStep & { rowsRead: number | null };
+
 /** A request the worker never picked up for this long is dead (worker down). */
 export const SYNC_REFRESH_PENDING_EXPIRY_MS = 2 * 60_000;
 /** A run that advanced nothing (no claim, no step write) for this long is dead (worker restarted mid-run). */
@@ -23,7 +26,7 @@ export async function expireStuckRefreshes(db: Database, now: Date): Promise<num
     const alive = row.status === 'pending' ? row.requestedAt : (row.progressAt ?? row.startedAt ?? row.requestedAt);
     const limit = row.status === 'pending' ? SYNC_REFRESH_PENDING_EXPIRY_MS : SYNC_REFRESH_RUNNING_EXPIRY_MS;
     if (now.getTime() - alive.getTime() <= limit) continue;
-    const steps = (row.steps as SyncRefreshStep[]).map((step) =>
+    const steps = (row.steps as StoredSyncRefreshStep[]).map((step) =>
       step.status === 'pending' || step.status === 'running' ? { ...step, status: 'failed' as const, reason: SYNC_REFRESH_EXPIRED_REASON } : step,
     );
     // Guarded by the observed status: a run that finished meanwhile is left alone.

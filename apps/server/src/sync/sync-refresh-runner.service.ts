@@ -1,4 +1,4 @@
-import { SYNC_REFRESH_ENTITIES, type SyncRefreshEntity, type SyncRefreshStep } from '@salesforce/contracts';
+import { SYNC_REFRESH_ENTITIES, type SyncRefreshEntity } from '@salesforce/contracts';
 import { syncRefresh, type DbHandle } from '@salesforce/db';
 import { and, eq } from 'drizzle-orm';
 import type { OrderErpStatusService } from '../integration/order-erp-status.service.js';
@@ -6,7 +6,7 @@ import type { Logger } from '../observability/logger.js';
 import type { Clock } from '../platform/tokens.js';
 import type { ConfigurationSyncService } from './configuration-sync.service.js';
 import { describeSyncFailure } from './failure.js';
-import { expireStuckRefreshes } from './sync-refresh-expiry.js';
+import { expireStuckRefreshes, type StoredSyncRefreshStep } from './sync-refresh-expiry.js';
 import { PermanentJobError } from '../worker/job-contract.js';
 import type { MirrorSyncService } from './mirror-sync.service.js';
 
@@ -58,7 +58,7 @@ export class SyncRefreshRunner {
       .where(and(eq(syncRefresh.id, id), eq(syncRefresh.status, 'pending')))
       .returning();
     if (claimed === undefined) return; // already claimed, done, or unknown: idempotent
-    const steps: SyncRefreshStep[] = SYNC_REFRESH_ENTITIES.map((entity) => ({
+    const steps: StoredSyncRefreshStep[] = SYNC_REFRESH_ENTITIES.map((entity) => ({
       entity,
       status: 'pending',
       rowsRead: null,
@@ -73,7 +73,7 @@ export class SyncRefreshRunner {
       const startedAt = now().getTime();
       steps[index] = { ...steps[index]!, status: 'running' };
       await save();
-      let next: SyncRefreshStep;
+      let next: StoredSyncRefreshStep;
       try {
         const result = await this.#runStep(entity, options.signal);
         next = { ...steps[index]!, status: result.status, rowsRead: result.rowsRead, reason: result.reason };

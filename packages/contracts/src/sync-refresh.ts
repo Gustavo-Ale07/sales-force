@@ -4,7 +4,7 @@ import { IsoTimestampSchema, UuidSchema, named } from './primitives.js';
 
 /**
  * D-AB B3: "Atualizar dados" reads Sankhya on demand. The API never talks to Sankhya (STACK-2): it records the request in
- * `sync_refresh` and the worker runs the read-only steps in this order. Counts and masked reasons only; never row content.
+ * `sync_refresh` and the worker runs the read-only steps in this order. Masked reasons only; never row content and never record counts (D-AF: the screens show no sync counts; the worker keeps them in the database and the logs).
  */
 export const SYNC_REFRESH_ENTITIES = [
   'configuration',
@@ -30,7 +30,6 @@ export const SyncRefreshStepSchema = named(
   z.object({
     entity: SyncRefreshEntitySchema,
     status: SyncRefreshStepStatusSchema,
-    rowsRead: z.number().int().min(0).nullable(),
     durationMs: z.number().int().min(0).nullable(),
     /** Masked, secret-free reason of a failed or skipped step (D-Q). */
     reason: z.string().max(500).nullable(),
@@ -56,7 +55,7 @@ export const SyncRefreshSchema = named(
 );
 export type SyncRefresh = z.infer<typeof SyncRefreshSchema>;
 
-/** D-AC: only these profiles see entity names, counts and technical reasons. Everyone else gets the basic view. */
+/** D-AC: only these profiles see entity names and technical reasons. Everyone else gets the basic view. */
 export const SYNC_REFRESH_DETAIL_ROLES: readonly AccountRole[] = Object.freeze<AccountRole[]>(['admin', 'manager', 'technical']);
 
 export function canSeeSyncRefreshDetail(role: string): boolean {
@@ -81,7 +80,7 @@ export const SYNC_REFRESH_PHASE_OF: Record<SyncRefreshEntity, 'cadastros' | 'pre
   orderStatus: 'pedidos',
 };
 
-/** D-AC: what a seller receives. No entity name, no count, no reason. */
+/** D-AC: what a seller receives. No entity name, no reason. */
 export const SyncRefreshBasicSchema = named(
   'SyncRefreshBasic',
   z.object({

@@ -85,22 +85,6 @@ export function stepProgress(steps: readonly SyncRefreshStep[]): { finished: num
   return { finished, total, percent: total === 0 ? 0 : Math.floor((finished / total) * 100) };
 }
 
-/** Count shown on the right of a row (never a sentence). */
-export function stepCount(step: SyncRefreshStep): string {
-  switch (step.status) {
-    case "pending":
-      return "";
-    case "running":
-      return "Lendo…";
-    case "ok":
-      return step.rowsRead === null ? "Atualizado" : step.rowsRead.toLocaleString("pt-BR");
-    case "skipped":
-      return "Não aplicável";
-    case "failed":
-      return "Falhou";
-  }
-}
-
 /** Short second line of a failed row: the masked reason and how old the kept data is. */
 export function stepNote(step: SyncRefreshStep): string | null {
   if (step.status !== "failed") return null;

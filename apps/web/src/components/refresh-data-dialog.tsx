@@ -1,4 +1,4 @@
-import { Alert, Button, Dialog, DialogContent, LoadingHero, StepGroup, StepRow } from "@salesforce/ui";
+import { Button, FullScreenLoading, StepGroup, StepRow } from "@salesforce/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { startSyncRefresh } from "../lib/api-mutations";
@@ -17,7 +17,6 @@ import {
   clockTime,
   currentStep,
   seesRefreshDetail,
-  stepCount,
   stepNote,
   stepProgress,
   type SyncRefresh,
@@ -154,75 +153,58 @@ export function RefreshDataDialog({ open, onClose, role }: RefreshDataDialogProp
 
   const attention = Boolean(startError || loadError || hasWarnings || stalled);
 
+  const errorTitle = startError?.title ?? loadError?.title ?? null;
+  const errorText = startError?.description ?? loadError?.description ?? null;
+  const ghost = "border-white/50 bg-transparent text-white hover:bg-white/10";
+  const solid = "border-transparent bg-white text-[var(--sf-navy)] hover:bg-white/90";
+
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && !busy && onClose()}>
-      <DialogContent
-        dismissible={false}
-        className={wantsDetail ? "max-w-lg" : undefined}
-        title={wantsDetail ? "Atualizando dados do Sankhya" : "Atualizando seus dados"}
-        onEscapeKeyDown={(event) => busy && event.preventDefault()}
-        onPointerDownOutside={(event) => event.preventDefault()}
-        onInteractOutside={(event) => event.preventDefault()}
-        footer={
-          busy ? undefined : attention ? (
-            <>
-              <Button variant="secondary" onClick={retry}>
-                Tentar de novo
-              </Button>
-              <Button variant="primary" onClick={onClose}>
-                Fechar
-              </Button>
-            </>
-          ) : (
-            <Button variant="primary" onClick={onClose}>
-              Concluir
+    <FullScreenLoading
+      open={open}
+      onClose={onClose}
+      busy={busy}
+      title={wantsDetail ? "Atualizando dados do Sankhya" : "Atualizando seus dados"}
+      label="Progresso da atualização"
+      percent={percent}
+      action={errorTitle ?? action}
+      meta={errorText ?? meta}
+      outcome={errorTitle ? "warn" : done ? (hasWarnings ? "warn" : "ok") : null}
+      detailsId="refresh-details"
+      detailsOpen={showList}
+      onDetailsToggle={() => setDetailsOpen((value) => !value)}
+      details={
+        detail ? (
+          <>
+            {REFRESH_GROUPS.map((group) => {
+              const rows = group.entities.flatMap((entity) => steps.filter((step) => step.entity === entity));
+              if (rows.length === 0) return null;
+              return (
+                <StepGroup key={group.title} title={group.title} tone="dark">
+                  {rows.map((step) => (
+                    <StepRow key={step.entity} tone="dark" state={STEP_STATE[step.status]} label={ENTITY_LABELS[step.entity]} note={stepNote(step)} />
+                  ))}
+                </StepGroup>
+              );
+            })}
+          </>
+        ) : undefined
+      }
+      actions={
+        busy ? undefined : attention ? (
+          <>
+            <Button variant="secondary" className={ghost} onClick={retry}>
+              Tentar de novo
             </Button>
-          )
-        }
-      >
-        <div className="flex flex-col gap-4">
-          {startError ? (
-            <Alert tone="danger" title={startError.title}>
-              {startError.description}
-            </Alert>
-          ) : null}
-          {loadError ? (
-            <Alert tone="warning" title={loadError.title}>
-              {loadError.description}
-            </Alert>
-          ) : null}
-
-          {startError || loadError ? null : <LoadingHero label="Progresso da atualização" percent={percent} action={action} meta={meta} outcome={done ? (hasWarnings ? "warn" : "ok") : null} />}
-
-          {detail ? (
-            <button
-              type="button"
-              className="mx-auto text-xs font-medium text-fg-muted underline-offset-2 hover:text-fg hover:underline focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-expanded={showList}
-              aria-controls="refresh-details"
-              onClick={() => setDetailsOpen((open) => !open)}
-            >
-              {showList ? "Ocultar detalhes" : "Ver detalhes"}
-            </button>
-          ) : null}
-
-          {detail && showList ? (
-            <div id="refresh-details" className="flex max-h-64 flex-col gap-3 overflow-auto" aria-label="Andamento por informação" role="group">
-              {REFRESH_GROUPS.map((group) => {
-                const rows = group.entities.flatMap((entity) => steps.filter((step) => step.entity === entity));
-                if (rows.length === 0) return null;
-                return (
-                  <StepGroup key={group.title} title={group.title}>
-                    {rows.map((step) => (
-                      <StepRow key={step.entity} state={STEP_STATE[step.status]} label={ENTITY_LABELS[step.entity]} value={stepCount(step)} note={stepNote(step)} />
-                    ))}
-                  </StepGroup>
-                );
-              })}
-            </div>
-          ) : null}
-        </div>
-      </DialogContent>
-    </Dialog>
+            <Button variant="primary" className={solid} onClick={onClose}>
+              Fechar
+            </Button>
+          </>
+        ) : (
+          <Button variant="primary" className={solid} onClick={onClose}>
+            Concluir
+          </Button>
+        )
+      }
+    />
   );
 }

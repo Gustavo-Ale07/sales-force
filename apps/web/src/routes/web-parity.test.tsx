@@ -171,7 +171,6 @@ describe("Meu perfil e atualização de dados", () => {
     steps: ["configuration","sellers","customers","products","priceTables","priceTableVersions","listPrices","carriers","ipiRates","openTitles","orderStatus"].map((entity) => ({
       entity,
       status: entity === failedEntity ? "failed" : "ok",
-      rowsRead: entity === failedEntity ? null : 3,
       durationMs: 10,
       reason: entity === failedEntity ? "Sankhya indisponível." : null,
       lastSuccessAt: entity === failedEntity ? "2026-11-06T16:00:00.000Z" : null,

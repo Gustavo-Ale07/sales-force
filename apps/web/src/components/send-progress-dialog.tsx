@@ -1,5 +1,5 @@
 import type { DocumentKind } from "@salesforce/domain";
-import { Alert, Button, Dialog, DialogContent, LoadingHero } from "@salesforce/ui";
+import { Button, FullScreenLoading } from "@salesforce/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { submitOrder } from "../lib/api-mutations";
@@ -74,52 +74,47 @@ export function SendProgressDialog({ orderId, kind, reference, onClose, onDelete
 
   return (
     <>
-      <Dialog open={orderId !== null && !deleting} onOpenChange={(open) => !open && !busy && finish()}>
-        <DialogContent
-          title={outcome.phase === "sending" ? "Enviando ao Sankhya…" : "Envio ao Sankhya"}
-          description={reference}
-          dismissible={false}
-          onEscapeKeyDown={(event) => busy && event.preventDefault()}
-          onPointerDownOutside={(event) => event.preventDefault()}
-          onInteractOutside={(event) => event.preventDefault()}
-          footer={
-            busy ? undefined : (
-              <>
-                {outcome.phase === "failed" ? (
-                  <>
-                    <Button variant="danger-outline" onClick={() => setDeleting(true)}>
-                      Excluir
-                    </Button>
-                    <Button variant="secondary" loading={resend.isPending} onClick={() => resend.mutate()}>
-                      Reenviar
-                    </Button>
-                  </>
-                ) : null}
-                <Button variant="primary" onClick={finish}>
-                  Fechar
-                </Button>
-              </>
-            )
-          }
-        >
-          <LoadingHero
-            label="Envio ao Sankhya"
-            action={busy ? "Enviando o pedido ao Sankhya…" : outcome.title}
-            meta={busy ? null : outcome.detail}
-            outcome={busy ? null : outcome.phase === "confirmed" || outcome.phase === "released_pending" || outcome.phase === "simulated" ? "ok" : "warn"}
-          />
-          {resendError ? (
-            <Alert tone="danger" title={resendError.title} className="mt-3">
-              {resendError.description}
-            </Alert>
-          ) : null}
-          {loadError ? (
-            <Alert tone="warning" title={loadError.title} className="mt-3">
-              {loadError.description}
-            </Alert>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+      <FullScreenLoading
+        open={orderId !== null && !deleting}
+        onClose={finish}
+        busy={busy}
+        title={outcome.phase === "sending" ? "Enviando ao Sankhya…" : "Envio ao Sankhya"}
+        label="Envio ao Sankhya"
+        action={busy ? "Enviando o pedido ao Sankhya…" : outcome.title}
+        meta={busy ? null : outcome.detail}
+        outcome={busy ? null : outcome.phase === "confirmed" || outcome.phase === "released_pending" || outcome.phase === "simulated" ? "ok" : "warn"}
+        actions={
+          busy ? undefined : (
+            <>
+              {outcome.phase === "failed" ? (
+                <>
+                  <Button variant="danger-outline" className="border-[#fca5a5] bg-transparent text-[#fca5a5] hover:bg-white/10" onClick={() => setDeleting(true)}>
+                    Excluir
+                  </Button>
+                  <Button variant="secondary" className="border-white/50 bg-transparent text-white hover:bg-white/10" loading={resend.isPending} onClick={() => resend.mutate()}>
+                    Reenviar
+                  </Button>
+                </>
+              ) : null}
+              <Button variant="primary" className="border-transparent bg-white text-[var(--sf-navy)] hover:bg-white/90" onClick={finish}>
+                Fechar
+              </Button>
+            </>
+          )
+        }
+      >
+        <p className="m-0 -mt-2 text-sm text-white/80">{reference}</p>
+        {resendError ? (
+          <p role="alert" className="m-0 max-w-md text-sm text-[#fde68a]">
+            <strong>{resendError.title}.</strong> {resendError.description}
+          </p>
+        ) : null}
+        {loadError ? (
+          <p role="alert" className="m-0 max-w-md text-sm text-[#fde68a]">
+            <strong>{loadError.title}.</strong> {loadError.description}
+          </p>
+        ) : null}
+      </FullScreenLoading>
       <DeleteOrderDialog
         order={deleting && orderId !== null ? { id: orderId, label: reference } : null}
         onClose={() => setDeleting(false)}
