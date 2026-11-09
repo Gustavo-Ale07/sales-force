@@ -142,6 +142,28 @@ describe('sync.erp.orderStatus (SNK-7 P2)', () => {
     expect((await w.row(id))?.erpStatusCode).toBe(2);
   });
 
+  it('the not-implemented read is logged as WARN at most once per hour; other errors warn every run', async () => {
+    const w = await world();
+    await w.seed(7012);
+    const lines: Record<string, unknown>[] = [];
+    const logger = { warn: (fields: Record<string, unknown>) => lines.push(fields), info: () => undefined, error: () => undefined, debug: () => undefined };
+    let clock = new Date(NOW);
+    const make = (thrown: unknown) =>
+      new OrderErpStatusService({ db: w.database.handle, gateway: { readOrderStatusFacts: () => Promise.reject(thrown) } as never, logger: logger as never, now: () => clock });
+    const notImplemented = make(new NotImplementedError('not validated'));
+    expect(await notImplemented.runOnce()).toMatchObject({ failed: true, failure: { errorCode: 'not_implemented' } });
+    clock = new Date(clock.getTime() + 20 * 60_000);
+    expect(await notImplemented.runOnce()).toMatchObject({ failed: true });
+    expect(lines).toHaveLength(1);
+    clock = new Date(clock.getTime() + 41 * 60_000);
+    await notImplemented.runOnce();
+    expect(lines).toHaveLength(2);
+    const other = make(new SankhyaGatewayError('unavailable', { code: 'down', message: 'down' }));
+    await other.runOnce();
+    await other.runOnce();
+    expect(lines).toHaveLength(4);
+  });
+
   it('the real gateway read that is not implemented is logged with its code and message (not an empty NonError)', async () => {
     const w = await world();
     await w.seed(7011);

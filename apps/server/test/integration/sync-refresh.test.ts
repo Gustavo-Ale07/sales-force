@@ -257,6 +257,26 @@ describe('sync.refresh.on-demand (worker side, D-AB B3)', () => {
     expect((await (w.api.get(started.id, user) as Promise<Detail>)).steps.find((s) => s.entity === 'orderStatus')?.status).toBe('failed');
   });
 
+  it('an order-status read that is not implemented is neutral: step skipped with the discreet text, no failure, the refresh is clean', async () => {
+    const w = await world();
+    const started = (await w.api.start(user)) as Detail;
+    const failure = { errorClass: 'permanent', errorCode: 'not_implemented', message: 'x', retry: false };
+    await w.runner({ orderStatus: { runOnce: async () => ({ checked: 0, updated: 0, failed: true, failure }) } as never }).run(started.id);
+    const detail = await (w.api.get(started.id, user) as Promise<Detail>);
+    const step = detail.steps.find((s) => s.entity === 'orderStatus');
+    expect(step).toMatchObject({ status: 'skipped', reason: 'Status dos pedidos no Sankhya: ainda não disponível' });
+    expect(detail.steps.filter((s) => s.status === 'failed')).toHaveLength(0);
+    expect(detail.status).toBe('done');
+  });
+
+  it('any other order-status error code stays a failure', async () => {
+    const w = await world();
+    const started = (await w.api.start(user)) as Detail;
+    const failure = { errorClass: 'unavailable', errorCode: 'down', message: 'x', retry: true };
+    await w.runner({ orderStatus: { runOnce: async () => ({ checked: 0, updated: 0, failed: true, failure }) } as never }).run(started.id);
+    expect((await (w.api.get(started.id, user) as Promise<Detail>)).steps.find((s) => s.entity === 'orderStatus')?.status).toBe('failed');
+  });
+
   it('a second delivery of the same job does nothing (idempotent claim)', async () => {
     const w = await world();
     const started = (await w.api.start(user)) as Detail;

@@ -87,6 +87,7 @@ export function stepProgress(steps: readonly SyncRefreshStep[]): { finished: num
 
 /** Short second line of a failed row: the masked reason and how old the kept data is. */
 export function stepNote(step: SyncRefreshStep): string | null {
+  if (step.status === "skipped") return step.reason;
   if (step.status !== "failed") return null;
   const kept = step.lastSuccessAt ? `Mantidos os dados de ${clockTime(step.lastSuccessAt)}.` : "Mantidos os dados anteriores.";
   return step.reason ? `${step.reason} ${kept}` : kept;

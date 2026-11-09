@@ -103,11 +103,9 @@ export class SyncRefreshRunner {
       const result = await orderStatus.runOnce(withSignal);
       if (result.failed === true) {
         const code = result.failure?.errorCode ?? 'order_status_read_failed';
-        const text =
-          code === 'not_implemented'
-            ? 'A leitura do status dos pedidos no Sankhya ainda não está disponível nesta instalação; os status guardados foram mantidos.'
-            : `A consulta ao Sankhya falhou (${code}); os status guardados foram mantidos.`;
-        throw new PermanentJobError(text, { code });
+        // The real ERP status read is not validated yet (SNK-7 P2): "not available on this installation", neutral, not a failure.
+        if (code === 'not_implemented') return skipped('Status dos pedidos no Sankhya: ainda não disponível');
+        throw new PermanentJobError(`A consulta ao Sankhya falhou (${code}); os status guardados foram mantidos.`, { code });
       }
       return { status: 'ok', rowsRead: result.checked, reason: null };
     }

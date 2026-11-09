@@ -28,6 +28,8 @@ export interface OrderErpStatusRun {
   readonly failure?: SyncFailure;
 }
 
+const NOT_IMPLEMENTED_WARN_EVERY_MS = 3600_000;
+
 /**
  * `sync.erp.orderStatus` (SNK-7 P2): reads the ERP status of orders already SENT and keeps the last one on the
  * order for display. Read-only toward the ERP; it never changes the delivery state of an order. Orders whose
@@ -35,6 +37,9 @@ export interface OrderErpStatusRun {
  * A failing read leaves the stored status untouched and is retried by the next run.
  */
 export class OrderErpStatusService {
+  /** Last time the "read not implemented" WARN was written: that known, permanent state is logged once per hour. */
+  #lastNotImplementedWarnAt: number | null = null;
+
   constructor(private readonly deps: OrderErpStatusDeps) {}
 
   async runOnce(options: { signal?: AbortSignal } = {}): Promise<OrderErpStatusRun> {
@@ -63,7 +68,10 @@ export class OrderErpStatusService {
     } catch (error) {
       // Whatever was thrown (an Error, a string, a response-like object): class, code and message are kept; never the raw value.
       const failure = describeSyncFailure(error);
-      logger.warn(
+      const notImplemented = failure.errorCode === 'not_implemented';
+      const quiet = notImplemented && this.#lastNotImplementedWarnAt !== null && now.getTime() - this.#lastNotImplementedWarnAt < NOT_IMPLEMENTED_WARN_EVERY_MS;
+      if (notImplemented && !quiet) this.#lastNotImplementedWarnAt = now.getTime();
+      if (!quiet) logger.warn(
         {
           errorClass: failure.errorClass,
           errorCode: failure.errorCode,

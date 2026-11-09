@@ -66,7 +66,7 @@ export function StepRow({ state, label, note, tone = "light", className }: StepR
       >
         {label}
       </span>
-      {note ? <span className={cn("col-start-2 mt-0.5 text-xs leading-snug", dark ? "text-[#fde68a]" : "text-fg-muted")}>{note}</span> : null}
+      {note ? <span className={cn("col-start-2 mt-0.5 text-xs leading-snug", dark ? (state === "skipped" ? "text-white/60" : "text-[#fde68a]") : "text-fg-muted")}>{note}</span> : null}
     </li>
   );
 }
