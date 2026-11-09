@@ -143,6 +143,13 @@ describe('verifyWrittenOrder (D-7)', () => {
     expect(verifyWrittenOrder([{ ...ITEM, discountPercent: '0.00' }], written({ discountPercent: null, discountAmount: null }))).toEqual({ ok: true });
   });
 
+  it('D-AK addendum: a line without discount stored as PERCDESC 0 / VLRDESC 0 (what the ERP keeps now) is not a discount divergence', () => {
+    const plain = { ...ITEM, discountPercent: '0.00' };
+    expect(verifyWrittenOrder([plain], written({ discountPercent: '0', discountAmount: '0' }))).toEqual({ ok: true });
+    expect(verifyWrittenOrder([plain], written({ discountPercent: '0.00', discountAmount: '0.00' }))).toEqual({ ok: true });
+    expect(verifyWrittenOrder([plain], written({ discountPercent: '5', discountAmount: '0.53' }))).toMatchObject({ ok: false, code: 'discount_divergence' });
+  });
+
   it('D-AK: VLRDESC 0 with PERCDESC 8 is a discount divergence (the note 2499 case)', () => {
     expect(verifyWrittenOrder([ITEM], written({ discountAmount: '0' }))).toMatchObject({ ok: false, code: 'discount_divergence' });
     expect(verifyWrittenOrder([ITEM], written({ discountAmount: null }))).toMatchObject({ ok: false, code: 'discount_divergence' });

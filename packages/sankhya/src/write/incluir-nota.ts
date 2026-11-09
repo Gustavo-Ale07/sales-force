@@ -62,7 +62,12 @@ export function buildIncluirNotaBody(request: OrderWriteRequest): Wire {
       CODVOL: value(item.unit),
     };
     if (informedPrice) wire['VLRUNIT'] = value(item.listUnitPrice);
-    if (item.discountPercent !== null && Number(item.discountPercent) > 0) wire['PERCDESC'] = value(item.discountPercent);
+    // D-AK addendum: with INFORMARPRECO "True" the ERP demands "Perc. desconto" on EVERY line (Sandbox note refused:
+    // "O campo 'Perc. desconto' deve ser informado."), so a line without discount travels PERCDESC "0". With "False" the
+    // field is sent only for a real discount (D-7), exactly as before.
+    const discounted = item.discountPercent !== null && Number(item.discountPercent) > 0;
+    if (discounted) wire['PERCDESC'] = value(item.discountPercent as string);
+    else if (informedPrice) wire['PERCDESC'] = value('0');
     return wire;
   });
 

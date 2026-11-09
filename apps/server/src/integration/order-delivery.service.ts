@@ -366,7 +366,7 @@ export class OrderDeliveryService {
             phase: 'include',
             priceMode: usesInformedPrice(request) ? 'True' : 'False',
             discountedItems: request.items.filter((item) => item.discountPercent !== null).length,
-            items: request.items.map((item) => ({ productCode: item.productCode, vlrunit: usesInformedPrice(request) ? item.listUnitPrice : null, percdesc: item.discountPercent })),
+            items: request.items.map((item) => ({ productCode: item.productCode, vlrunit: usesInformedPrice(request) ? item.listUnitPrice : null, percdesc: item.discountPercent ?? (usesInformedPrice(request) ? '0' : null) })),
           },
           'including the order in the ERP',
         );

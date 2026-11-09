@@ -34,13 +34,27 @@ const itemsOf = (body: ReturnType<typeof buildIncluirNotaBody>): { informed: unk
 };
 
 describe('payload with a discount (D-AK)', () => {
-  it('sends INFORMARPRECO True and VLRUNIT on EVERY line, PERCDESC only on the discounted one', () => {
+  it('sends INFORMARPRECO True with VLRUNIT and PERCDESC on EVERY line (PERCDESC "0" when the line has no discount)', () => {
     const { informed, items } = itemsOf(buildIncluirNotaBody(request([discounted, plain])));
     expect(informed).toBe('True');
     expect(items[0]).toMatchObject({ CODPROD: { $: '4158' }, QTDNEG: { $: '10' }, VLRUNIT: { $: '28.94' }, PERCDESC: { $: '8' } });
-    expect(items[1]).toMatchObject({ CODPROD: { $: '4159' }, VLRUNIT: { $: '38.47' } });
-    expect(items[1]).not.toHaveProperty('PERCDESC');
+    expect(items[1]).toMatchObject({ CODPROD: { $: '4159' }, VLRUNIT: { $: '38.47' }, PERCDESC: { $: '0' } });
     expect(JSON.stringify(items)).not.toContain('VLRDESC');
+  });
+
+  it('the Sandbox order of 13 lines (4 without discount, 4 at 5%, 5 at 8%): every line has VLRUNIT and PERCDESC', () => {
+    const line = (productCode: number, discountPercent: string | null) => ({ productCode, quantity: '2', unit: 'CX', discountPercent, listUnitPrice: '70.97' }) as const;
+    const percents = [null, null, null, null, '5', '5', '5', '5', '8', '8', '8', '8', '8'] as const;
+    const { informed, items } = itemsOf(buildIncluirNotaBody(request(percents.map((percent, index) => line(100 + index, percent)))));
+    expect(informed).toBe('True');
+    expect(items).toHaveLength(13);
+    for (const [index, item] of items.entries()) {
+      expect(item, `line ${index + 1}`).toHaveProperty('VLRUNIT', { $: '70.97' });
+      expect(item, `line ${index + 1}`).toHaveProperty('PERCDESC', { $: percents[index] ?? '0' });
+    }
+    expect(items.filter((item) => (item['PERCDESC'] as { $: string }).$ === '0')).toHaveLength(4);
+    expect(items.filter((item) => (item['PERCDESC'] as { $: string }).$ === '5')).toHaveLength(4);
+    expect(items.filter((item) => (item['PERCDESC'] as { $: string }).$ === '8')).toHaveLength(5);
   });
 
   it('a note with no discount stays as before: INFORMARPRECO False and no VLRUNIT', () => {

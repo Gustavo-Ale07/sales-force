@@ -103,12 +103,13 @@ describe('CACSP.incluirNota payload (SNK-7 D-8, F-44)', () => {
     expect(JSON.stringify(buildIncluirNotaBody(request({ carrierCode: 88 })))).toContain('"CODPARCTRANSP":{"$":"88"}');
   });
 
-  it('sends PERCDESC only for a real discount (D-7) and keeps decimal quantities', () => {
+  it('sends PERCDESC "8" on the discounted line and "0" on the other (INFORMARPRECO True, D-AK addendum) and keeps decimal quantities', () => {
     const body = JSON.stringify(
       buildIncluirNotaBody(request({ items: [{ productCode: 1, quantity: '0.125', unit: 'KG', discountPercent: '8', listUnitPrice: '10' }, { productCode: 2, quantity: '3', unit: 'UN', discountPercent: '0', listUnitPrice: '10' }] })),
     );
-    expect(body.match(/PERCDESC/g)).toHaveLength(1);
+    expect(body.match(/PERCDESC/g)).toHaveLength(2);
     expect(body).toContain('"PERCDESC":{"$":"8"}');
+    expect(body).toContain('"PERCDESC":{"$":"0"}');
     expect(body).toContain('"QTDNEG":{"$":"0.125"}');
   });
 
