@@ -64,6 +64,8 @@ interface World {
   readonly includes: OrderWriteRequest[];
   seed(over?: SeedOptions): Promise<{ orderId: string; outboxId: string }>;
   advance(ms: number): void;
+  /** The next `count` origin lookups answer "not found" even if the note exists (the ERP is still processing it). */
+  hideFinds(count: number): void;
   setConfiguration(value: InstallationConfiguration): Promise<void>;
   outbox(id: string): Promise<typeof integrationOutbox.$inferSelect>;
   order(id: string): Promise<typeof salesOrder.$inferSelect>;
@@ -80,6 +82,7 @@ async function world(options: { mode?: 'dry_run' | 'live'; book?: FakeOrderBook;
   const book = options.book ?? new FakeOrderBook();
   const fake = new FakeGateway({ orders: book });
   const includes: OrderWriteRequest[] = [];
+  const hidden = { finds: 0 };
   // Every delivery call stands for one HTTP request through the budgeted transport (M3), like the real gateway.
   const charge = budgetedTransport(async () => ({ status: 200, headers: {}, body: '' }));
   const request = () => charge({ method: 'POST', url: 'https://x.test', headers: {}, body: '', timeoutMs: 1000 });
@@ -95,6 +98,10 @@ async function world(options: { mode?: 'dry_run' | 'live'; book?: FakeOrderBook;
     },
     findOrderByOrigin: async (field, id, o) => {
       await request();
+      if (hidden.finds > 0) {
+        hidden.finds -= 1;
+        return null;
+      }
       return fake.findOrderByOrigin(field, id, o);
     },
     readWrittenOrder: async (number, o) => {
@@ -164,6 +171,9 @@ async function world(options: { mode?: 'dry_run' | 'live'; book?: FakeOrderBook;
     seed,
     advance: (ms) => {
       clock.ms += ms;
+    },
+    hideFinds: (count) => {
+      hidden.finds = count;
     },
     setConfiguration: async (value) => {
       await pool.query(`UPDATE installation_configuration_version SET payload = $1::jsonb`, [JSON.stringify(value)]);
@@ -367,6 +377,53 @@ describe('live delivery', () => {
     expect(w.book.orders).toHaveLength(1);
     expect(await w.order(orderId)).toMatchObject({ status: 'sent', erpNumber: w.book.orders[0]?.erpOrderNumber });
     expect((await w.outbox(outboxId)).status).toBe('confirmed');
+  });
+
+  it('G2: after an include timeout the attempts only verify by origin each minute; a note that appears on the 3rd verification is adopted, never included again', async () => {
+    const w = await world();
+    w.book.script('include', { kind: 'created_then_error', error: err('temporary', 'timeout') });
+    const { orderId, outboxId } = await w.seed();
+    await w.service.runDue();
+    expect(w.book.count('include')).toBe(1);
+    expect(await w.outbox(outboxId)).toMatchObject({ status: 'unknown', lastErrorClass: 'temporary' });
+    expect((await w.outbox(outboxId)).payload).toMatchObject({ reconcileSince: new Date(START).toISOString() });
+    w.hideFinds(2);
+    for (let i = 1; i <= 2; i += 1) {
+      w.advance(60_000);
+      await w.service.runDue();
+      expect(w.book.count('include')).toBe(1);
+      expect(await w.outbox(outboxId)).toMatchObject({ status: 'unknown', lastErrorClass: 'reconciling' });
+      expect((await w.order(orderId)).status).toBe('unknown');
+    }
+    w.advance(60_000);
+    await w.service.runDue();
+    expect(w.book.count('include')).toBe(1);
+    expect(w.book.orders).toHaveLength(1);
+    expect(await w.order(orderId)).toMatchObject({ status: 'sent', erpNumber: w.book.orders[0]?.erpOrderNumber });
+    expect((await w.outbox(outboxId)).status).toBe('confirmed');
+  });
+
+  it('G2: when the reconciliation window ends without the note, the delivery fails with a masked reason (manual resend) and nothing was included twice', async () => {
+    const w = await world();
+    w.book.script('include', { kind: 'error', error: err('temporary', 'timeout') });
+    const { orderId, outboxId } = await w.seed();
+    await w.service.runDue();
+    w.hideFinds(1000);
+    for (let i = 0; i < 9; i += 1) {
+      w.advance(60_000);
+      await w.service.runDue();
+      expect((await w.outbox(outboxId)).status).toBe('unknown');
+    }
+    expect(w.book.count('include')).toBe(1);
+    w.advance(60_000);
+    await w.service.runDue();
+    const row = await w.outbox(outboxId);
+    expect(row).toMatchObject({ status: 'rejected', nextAttemptAt: null, lastErrorClass: 'timeout' });
+    expect(row.lastErrorMessage).toContain('include_timeout_unconfirmed');
+    expect(await w.order(orderId)).toMatchObject({ status: 'rejected', erpNumber: null });
+    expect(w.book.count('include')).toBe(1);
+    w.advance(3600_000);
+    expect((await w.service.runDue()).processed).toBe(0);
   });
 
   it('a failed include that created nothing is retried once with the same origin id and the frozen header', async () => {

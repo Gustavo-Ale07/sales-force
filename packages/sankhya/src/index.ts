@@ -65,6 +65,7 @@ export {
   DEFAULT_DB_UTC_OFFSET_MINUTES,
   DEFAULT_PAGE_SIZE,
   DEFAULT_REQUEST_TIMEOUT_MS,
+  DEFAULT_INCLUDE_TIMEOUT_MS,
   MAX_PAGE_SIZE,
   RealSankhyaGateway,
   type RealSankhyaGatewayOptions,

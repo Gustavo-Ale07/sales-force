@@ -45,7 +45,7 @@ export function createFetchTransport(fetchImpl: typeof fetch = fetch): HttpTrans
       throw new SankhyaGatewayError(timedOut ? 'temporary' : 'unavailable', {
         code: timedOut ? 'timeout' : 'network_error',
         message: timedOut
-          ? 'The ERP did not answer within the request timeout.'
+          ? `The ERP did not answer within the request timeout (${request.timeoutMs} ms).`
           : 'The ERP could not be reached (network error).',
         cause,
       });

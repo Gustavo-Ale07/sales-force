@@ -50,7 +50,7 @@ function parseIntegerVariable(
  *   `SANKHYA_BASE_URL`, `SANKHYA_ALLOWED_HOSTS` (no default; the base URL host must be listed),
  *   `SANKHYA_ENVIRONMENT` (`sandbox` or `homologation`; production is refused in this build, SNK-3/U-03),
  *   `SANKHYA_CLIENT_ID`, `SANKHYA_CLIENT_SECRET`, `SANKHYA_X_TOKEN`.
- *   Optional: `SANKHYA_PAGE_SIZE`, `SANKHYA_REQUEST_TIMEOUT_MS`, `SANKHYA_DB_UTC_OFFSET_MINUTES`, `SF_CONFIG_FILE`.
+ *   Optional: `SANKHYA_PAGE_SIZE`, `SANKHYA_REQUEST_TIMEOUT_MS` (reads, default 30 s), `SANKHYA_INCLUDE_TIMEOUT_MS` (order write only, default 120 s), `SANKHYA_DB_UTC_OFFSET_MINUTES`, `SF_CONFIG_FILE`.
  *
  * Every problem is reported at once, by variable name only; values (credentials, URLs) are never echoed.
  * Only the worker process may call this in live mode (STACK-2).
@@ -91,6 +91,7 @@ export function createGateway(env: GatewayEnvironment, deps: CreateGatewayDepend
 
   const pageSize = parseIntegerVariable(env, 'SANKHYA_PAGE_SIZE', { min: 1, max: MAX_PAGE_SIZE }, problems);
   const requestTimeoutMs = parseIntegerVariable(env, 'SANKHYA_REQUEST_TIMEOUT_MS', { min: 1000, max: 300_000 }, problems);
+  const includeTimeoutMs = parseIntegerVariable(env, 'SANKHYA_INCLUDE_TIMEOUT_MS', { min: 1000, max: 600_000 }, problems);
   const dbUtcOffsetMinutes = parseIntegerVariable(env, 'SANKHYA_DB_UTC_OFFSET_MINUTES', { min: -840, max: 840 }, problems);
 
   const configFile = env['SF_CONFIG_FILE'];
@@ -139,6 +140,7 @@ export function createGateway(env: GatewayEnvironment, deps: CreateGatewayDepend
     ...(deps.now ? { now: deps.now } : {}),
     ...(pageSize !== undefined ? { pageSize } : {}),
     ...(requestTimeoutMs !== undefined ? { requestTimeoutMs } : {}),
+    ...(includeTimeoutMs !== undefined ? { includeTimeoutMs } : {}),
     ...(dbUtcOffsetMinutes !== undefined ? { dbUtcOffsetMinutes } : {}),
     ...(configurationSource ? { configurationSource } : {}),
   });

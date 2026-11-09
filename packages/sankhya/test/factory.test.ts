@@ -77,6 +77,12 @@ describe('createGateway', () => {
     expect(problems).toContain('SANKHYA_DB_UTC_OFFSET_MINUTES');
   });
 
+  it('validates SANKHYA_INCLUDE_TIMEOUT_MS (1 s to 10 min) and accepts a valid value', () => {
+    expect(problemsOf({ ...LIVE_ENV, SANKHYA_INCLUDE_TIMEOUT_MS: '5' }).join('\n')).toContain('SANKHYA_INCLUDE_TIMEOUT_MS');
+    expect(problemsOf({ ...LIVE_ENV, SANKHYA_INCLUDE_TIMEOUT_MS: '999999' }).join('\n')).toContain('SANKHYA_INCLUDE_TIMEOUT_MS');
+    expect(problemsOf({ ...LIVE_ENV, SANKHYA_INCLUDE_TIMEOUT_MS: '90000' }).join('\n')).not.toContain('SANKHYA_INCLUDE_TIMEOUT_MS');
+  });
+
   it('requires a validator when SF_CONFIG_FILE is set', () => {
     expect(problemsOf({ ...LIVE_ENV, SF_CONFIG_FILE: '/tmp/config.json' }).join('\n')).toContain('SF_CONFIG_FILE');
   });

@@ -96,6 +96,8 @@ export const DEFAULT_PAGE_SIZE = 500;
 /** Largest page size measured (F-23: 500 and 1,000). The 5,000-row silent cap (F-19) stays far away. */
 export const MAX_PAGE_SIZE = 1000;
 export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+/** CACSP.incluirNota runs the ERP's own business rules and can take longer than a read (live Sandbox, 2026-11-09: timeouts at 30 s). Writes only; reads keep `DEFAULT_REQUEST_TIMEOUT_MS`. */
+export const DEFAULT_INCLUDE_TIMEOUT_MS = 120_000;
 /** Sandbox DB clock is UTC-03:00 (F-39). Production NEEDS VALIDATION; override per installation. */
 export const DEFAULT_DB_UTC_OFFSET_MINUTES = -180;
 
@@ -113,6 +115,8 @@ export interface RealSankhyaGatewayOptions {
   readonly now?: () => number;
   readonly pageSize?: number;
   readonly requestTimeoutMs?: number;
+  /** Timeout of the order write (`includeOrder`) only; default `DEFAULT_INCLUDE_TIMEOUT_MS`. */
+  readonly includeTimeoutMs?: number;
   readonly dbUtcOffsetMinutes?: number;
   /** Bootstrap file source for `readConfiguration()`; without it the read raises `NotImplementedError` (U-10). */
   readonly configurationSource?: ConfigurationSource;
@@ -142,6 +146,7 @@ export class RealSankhyaGateway implements SankhyaGateway {
   readonly #tokens: TokenProvider;
   readonly #pageSize: number;
   readonly #requestTimeoutMs: number;
+  readonly #includeTimeoutMs: number;
   readonly #dbUtcOffsetMinutes: number;
   readonly #configurationSource: ConfigurationSource;
   readonly #now: () => number;
@@ -160,6 +165,7 @@ export class RealSankhyaGateway implements SankhyaGateway {
       throw new RangeError(`pageSize must be an integer between 1 and ${MAX_PAGE_SIZE}`);
     }
     this.#requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    this.#includeTimeoutMs = options.includeTimeoutMs ?? DEFAULT_INCLUDE_TIMEOUT_MS;
     this.#dbUtcOffsetMinutes = options.dbUtcOffsetMinutes ?? DEFAULT_DB_UTC_OFFSET_MINUTES;
     this.#configurationSource = options.configurationSource ?? new UnavailableConfigurationSource();
     this.#now = options.now ?? Date.now;
@@ -642,7 +648,7 @@ export class RealSankhyaGateway implements SankhyaGateway {
             authorization: `Bearer ${token.reveal()}`,
           },
           body,
-          timeoutMs: this.#requestTimeoutMs,
+          timeoutMs: this.#includeTimeoutMs,
           signal,
         });
       };

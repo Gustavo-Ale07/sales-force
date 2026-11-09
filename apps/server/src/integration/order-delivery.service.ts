@@ -18,6 +18,8 @@ import { maskStoredError } from '../observability/mask-error-message.js';
 import { uuidv7 } from '../platform/ids.js';
 import type { Clock } from '../platform/tokens.js';
 import {
+  RECONCILE_INTERVAL_MS,
+  RECONCILE_WINDOW_MS,
   STALE_PROCESSING_MS,
   decideFailure,
   type DeliveryOutcome,
@@ -99,6 +101,14 @@ function parseErpNumber(reference: string | null): number | null {
   return value <= 2_147_483_647 ? value : null;
 }
 
+/** When the include of this row first timed out (G2); the attempts since then only verify by origin. */
+function parseReconcileSince(payload: unknown): Date | null {
+  const raw = (payload as { reconcileSince?: unknown } | null)?.reconcileSince;
+  if (typeof raw !== 'string') return null;
+  const at = new Date(raw);
+  return Number.isNaN(at.getTime()) ? null : at;
+}
+
 function describeError(error: unknown): string {
   // Gateway messages are secret-free by contract (errors.ts); anything else is reduced to its type.
   if (isSankhyaGatewayError(error)) return error.message.slice(0, MESSAGE_MAX);
@@ -138,12 +148,16 @@ export class OrderDeliveryService {
       const claimed = await this.claimNext();
       if (claimed === null) break;
       processed += 1;
+      const startedMs = this.deps.now().getTime();
       try {
         await (this.deps.budget === undefined ? this.deliver(claimed, options.signal) : this.deps.budget.run(() => this.deliver(claimed, options.signal)));
       } catch (error) {
         // A bug or a database failure while recording the outcome: the row stays `processing` and is
         // recovered as `unknown` (never resent without verification). Surface it, keep the sweep alive.
         this.deps.logger.error({ err: error, outboxId: claimed.row.id }, 'order delivery attempt failed unexpectedly');
+      } finally {
+        // Every attempt: how long it really took (a timeout shows as ~the configured timeout, named in the stored message).
+        this.deps.logger.info({ outboxId: claimed.row.id, attempt: claimed.row.attemptCount, durationMs: this.deps.now().getTime() - startedMs }, 'order delivery attempt finished');
       }
     }
     return { processed, recovered };
@@ -284,6 +298,23 @@ export class OrderDeliveryService {
             message: 'The ERP order number is known but the origin lookup does not find the order; not resent.',
           });
         }
+        // G2: after an include timeout the ERP may still be creating the note. Until the window ends, only VERIFY.
+        const reconcileSince = parseReconcileSince(row.payload);
+        if (reconcileSince !== null) {
+          if (this.deps.now().getTime() - reconcileSince.getTime() < RECONCILE_WINDOW_MS) {
+            await this.keepReconciling(row, order);
+            return;
+          }
+          await this.finishRejected(
+            row,
+            order,
+            'timeout',
+            'include_timeout_unconfirmed',
+            'The ERP did not answer the include and no order with this origin id appeared during the reconciliation window.',
+            false,
+          );
+          return;
+        }
         phase = 'include';
         await this.setStep(row.id, 'sending');
         const included = await this.deps.gateway.includeOrder(request, signal === undefined ? {} : { signal });
@@ -315,6 +346,10 @@ export class OrderDeliveryService {
         await this.parkForBudget(row, order);
         return;
       }
+      if (phase === 'include' && isSankhyaGatewayError(error) && error.code === 'timeout') {
+        await this.startReconciling(row, order, describeError(error));
+        return;
+      }
       const outcome = decideFailure(error, {
         phase,
         attemptCount: row.attemptCount,
@@ -323,6 +358,43 @@ export class OrderDeliveryService {
       });
       await this.applyOutcome(row, order, outcome, describeError(error), erpNumber, phase);
     }
+  }
+
+  /** G2: the include timed out. Marks when (once), and the next attempts verify by origin every minute. */
+  private async startReconciling(row: OutboxRow, order: OrderRow, message: string): Promise<void> {
+    const at = this.deps.now();
+    if (parseReconcileSince(row.payload) === null) {
+      await this.database
+        .update(integrationOutbox)
+        .set({ payload: sql`${integrationOutbox.payload} || ${JSON.stringify({ reconcileSince: at.toISOString() })}::jsonb`, updatedAt: at })
+        .where(eq(integrationOutbox.id, row.id));
+    }
+    await this.applyOutcome(
+      row,
+      order,
+      { kind: 'retry', status: 'unknown', delayMs: RECONCILE_INTERVAL_MS, consumesAttempt: true, errorClass: 'temporary', errorCode: 'timeout' },
+      message,
+      null,
+      'include',
+    );
+  }
+
+  /** G2: still inside the window and the origin lookup found nothing: look again in a minute. Never includes; the verification does not consume an attempt. */
+  private async keepReconciling(row: OutboxRow, order: OrderRow): Promise<void> {
+    const at = this.deps.now();
+    await this.database
+      .update(integrationOutbox)
+      .set({
+        status: 'unknown',
+        attemptCount: sql`greatest(${integrationOutbox.attemptCount} - 1, 0)`,
+        nextAttemptAt: new Date(at.getTime() + RECONCILE_INTERVAL_MS),
+        lastStep: 'waiting_retry',
+        lastErrorClass: 'reconciling',
+        lastErrorMessage: maskStoredError('include_timeout: the include timed out; waiting for the order to appear in the ERP (verified by origin id).').slice(0, MESSAGE_MAX),
+        updatedAt: at,
+      })
+      .where(eq(integrationOutbox.id, row.id));
+    this.deps.logger.info({ outboxId: row.id, orderId: order.id }, 'order not in the ERP yet after an include timeout: verified again, not resent');
   }
 
   /** M3: the budget ran out mid-attempt. The attempt is not counted, the row goes back to pending and the next attempt verifies by origin (SNK-4). */

@@ -215,9 +215,22 @@ describe('real adapter order writes (mock transport only, no network)', () => {
   const SANDBOX_URL = 'https://api.sandbox.sankhya.com.br';
   const LIVE = { enabled: true, mode: 'live', originField: FIELD, requestBudget: null } as const;
 
-  function setup(options: { baseUrl?: string; allowedHosts?: readonly string[]; orderWrite?: typeof LIVE | undefined } = {}) {
+  function setup(
+    options: {
+      baseUrl?: string;
+      allowedHosts?: readonly string[];
+      orderWrite?: typeof LIVE | undefined;
+      timeouts?: { url: string; timeoutMs: number }[];
+      includeTimeoutMs?: number;
+    } = {},
+  ) {
     const clock: ClockRef = { now: 1_800_000_000_000 };
     const mock = new MockSankhya({ tables: erpTablesFromDataset(getDemoDataset()), clock });
+    const spy = options.timeouts;
+    const transport: typeof mock.transport = (request) => {
+      spy?.push({ url: request.url, timeoutMs: request.timeoutMs });
+      return mock.transport(request);
+    };
     const baseUrl = options.baseUrl ?? SANDBOX_URL;
     const gateway = new RealSankhyaGateway({
       baseUrl,
@@ -228,8 +241,9 @@ describe('real adapter order writes (mock transport only, no network)', () => {
         clientSecret: new Secret(TEST_CREDENTIALS.clientSecret),
         xToken: new Secret(TEST_CREDENTIALS.xToken),
       },
-      transport: mock.transport,
+      transport,
       now: () => clock.now,
+      ...(options.includeTimeoutMs !== undefined ? { includeTimeoutMs: options.includeTimeoutMs } : {}),
       ...(options.orderWrite !== undefined ? { orderWrite: options.orderWrite } : {}),
     });
     return { gateway, mock };
@@ -262,6 +276,26 @@ describe('real adapter order writes (mock transport only, no network)', () => {
     expect(call?.url).toBe('https://api.sandbox.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.incluirNota&outputType=json');
     expect(JSON.parse(call?.body ?? '{}')).toEqual({ serviceName: 'CACSP.incluirNota', requestBody: buildIncluirNotaBody(request()) });
     expect(gateway.describe().capabilities.writes.submitOrder).toBe('sandbox_only');
+  });
+
+  it('gives only the include a longer timeout (default 120 s, configurable); reads keep 30 s', async () => {
+    const timeouts: { url: string; timeoutMs: number }[] = [];
+    const { gateway, mock } = setup({ orderWrite: LIVE, timeouts });
+    mock.writeResponses.push(okResponse());
+    mock.forced.push(ok(['NUNOTA', 'STATUSNOTA'], []));
+    await gateway.includeOrder(request());
+    await gateway.findOrderByOrigin(FIELD, ORIGIN);
+    const include = timeouts.find((entry) => entry.url.includes('CACSP.incluirNota'));
+    expect(include?.timeoutMs).toBe(120_000);
+    const reads = timeouts.filter((entry) => entry.url.includes('DbExplorerSP.executeQuery'));
+    expect(reads.length).toBeGreaterThan(0);
+    expect(reads.every((entry) => entry.timeoutMs === 30_000)).toBe(true);
+
+    const custom: { url: string; timeoutMs: number }[] = [];
+    const second = setup({ orderWrite: LIVE, timeouts: custom, includeTimeoutMs: 45_000 });
+    second.mock.writeResponses.push(okResponse());
+    await second.gateway.includeOrder(request());
+    expect(custom.find((entry) => entry.url.includes('CACSP.incluirNota'))?.timeoutMs).toBe(45_000);
   });
 
   it('never writes to a host outside the Sandbox allow-list, even if the installation allow-list has it', async () => {

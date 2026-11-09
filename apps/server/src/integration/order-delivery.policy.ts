@@ -15,6 +15,13 @@ export const AUTH_RETRY_DELAY_MS = 15 * 60_000;
 /** A row left `processing` longer than this lost its worker; it becomes `unknown` and is re-verified by origin. */
 export const STALE_PROCESSING_MS = 10 * 60_000;
 
+/**
+ * After a TIMEOUT of the include the ERP may still be processing the note. For this window the attempts only VERIFY by origin
+ * (never include); a note that shows up is adopted, and only a window that ends without one allows failing the delivery.
+ */
+export const RECONCILE_WINDOW_MS = 10 * 60_000;
+export const RECONCILE_INTERVAL_MS = 60_000;
+
 export function backoffMs(attempt: number): number {
   const exponent = Math.max(0, attempt - 1);
   return Math.min(BASE_DELAY_MS * 2 ** exponent, MAX_DELAY_MS);
