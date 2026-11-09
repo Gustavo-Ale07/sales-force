@@ -68,6 +68,7 @@ export const AUDIT_ACTIONS = {
   orderErpDryRun: 'order.erp_dry_run',
   /** SNK-7 M1: an operator re-queued an already delivered order with the same idempotency key (ids and ERP number only). */
   orderErpResendRequested: 'order.erp_resend_requested',
+  orderDeliveryVerifyRequested: 'order.delivery_verify_requested',
 } as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
 

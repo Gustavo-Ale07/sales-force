@@ -50,7 +50,7 @@ import { PrintOrderButton } from "../components/print-order-button";
 import { QueryError } from "../components/query-error";
 import { SaveTemplateDialog } from "../components/save-template-dialog";
 import { ApiRequestError } from "../lib/api";
-import { ERP_SUBMISSION_DISABLED, convertQuote, createOrder, replaceOrder, submitOrder } from "../lib/api-mutations";
+import { ERP_SUBMISSION_DISABLED, convertQuote, createOrder, replaceOrder, submitOrder, verifyOrderDelivery } from "../lib/api-mutations";
 import { carriersQueryOptions, orderEntryConfigurationQueryOptions, customerQueryOptions, orderQueryOptions, queryKeys } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { useLoadedDataset, requireDataset } from "../lib/dataset";
@@ -366,6 +366,22 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
     },
   });
 
+  // "Verificar agora": same delivery record, the worker asks Sankhya by origin before anything else (no second send).
+  const verifyNow = useMutation({
+    mutationFn: async () => {
+      if (!order) throw new Error("O documento precisa estar salvo.");
+      return verifyOrderDelivery(api, order.id);
+    },
+    onSuccess: async (result) => {
+      if (result) queryClient.setQueryData(queryKeys.order(result.id), result);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.ordersAll });
+      toast({ title: "Verificando o envio com o Sankhya", description: order ? orderReference(order, docKind) : undefined, tone: "success" });
+    },
+    onError: (error) => {
+      toast({ title: "Não foi possível verificar agora", description: describeApiError(error, "Tente novamente em instantes").description, tone: "danger" });
+    },
+  });
+
   const save = useMutation({
     mutationFn: async () => {
       // The dataset this editor loaded under; unknown identity blocks the write before any request.
@@ -644,9 +660,21 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
           {orderReviewReasons[order.review.customerBlock]} O envio ao Sankhya fica bloqueado até o cliente voltar a estar disponível; nada no rascunho foi alterado.
         </Alert>
       ) : null}
-      {order?.status === "rejected" && deliveryErrorText(order.erpDelivery) ? (
+      {order?.status === "unknown" ? (
+        <Alert tone="info" title="Verificando envio…">
+          {order.erpNumber == null
+            ? "Estamos verificando o envio com o Sankhya. Isso se resolve sozinho em instantes."
+            : "O pedido já está no Sankhya e aguarda confirmação. Isso se resolve sozinho em instantes."}
+          <div className="mt-2">
+            <Button type="button" variant="secondary" loading={verifyNow.isPending} onClick={() => verifyNow.mutate()}>
+              Verificar agora
+            </Button>
+          </div>
+        </Alert>
+      ) : null}
+      {order?.status === "rejected" ? (
         <Alert tone="danger" title="Motivo da falha no envio">
-          {deliveryErrorText(order.erpDelivery)}
+          {deliveryErrorText(order.erpDelivery) ?? "Falha no envio. O pedido não foi criado no Sankhya."}
           <div className="mt-2">
             <Button type="button" variant="secondary" loading={resend.isPending} onClick={() => resend.mutate()}>
               Reenviar

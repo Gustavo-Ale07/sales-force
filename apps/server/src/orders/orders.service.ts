@@ -43,7 +43,7 @@ import { uuidv7 } from '../platform/ids.js';
 import { CLOCK, DATASET_IDENTITY, ORDER_ENQUEUE_ENABLED, type Clock } from '../platform/tokens.js';
 import { DraftBuilder, type DraftOutcome } from './draft-builder.js';
 import { assertEligibleForErpSubmission } from './erp-eligibility.guard.js';
-import { deleteOrderDeliveries, enqueueOrderDelivery, requeueRejectedDelivery } from './order-erp-delivery.js';
+import { deleteOrderDeliveries, enqueueOrderDelivery, requestDeliveryVerification, requeueRejectedDelivery } from './order-erp-delivery.js';
 import { orderFingerprint } from './order-fingerprint.js';
 import { InstallationConfigurationService } from '../configuration/configuration.service.js';
 import { toOrderApproval, toOrderDetail, toOrderListItem } from './order.mapper.js';
@@ -671,6 +671,37 @@ export class OrdersService {
       throw new AppError('erp_submission_disabled');
     }
     return this.enqueueForErp(user, order, scope);
+  }
+
+  /**
+   * "Verificar agora": an order whose delivery is ambiguous (`unknown`) is verified by the worker right away, on the SAME
+   * outbox row (no second row, no second note: the ERP is asked by origin before any write, SNK-4). Visible to whoever
+   * can see the order (owner, their manager chain, admin); at most one request per order every 60 s (429). The actor is audited.
+   */
+  async verifyDelivery(user: CurrentUser, id: string): Promise<OrderDetail> {
+    const context = await this.policy.accessContext(user);
+    const seen = await this.loadVisible(context.scope, id);
+    if (seen.status !== 'unknown') return this.detailOf(seen); // already resolved: nothing to verify, show the current state
+    const at = this.clock();
+    const result = await this.orders.transaction(async (tx) => {
+      const locked = await this.orders.findById(seen.id, tx, true);
+      this.assertInScope(context.scope, locked);
+      if (locked.status !== 'unknown') return { kind: 'nothing_to_verify' as const, order: locked };
+      const outcome = await requestDeliveryVerification(tx, locked, at);
+      if (outcome.kind === 'requested') {
+        await this.audit.record(
+          {
+            action: AUDIT_ACTIONS.orderDeliveryVerifyRequested,
+            actorAccountId: user.accountId,
+            detail: { ...this.auditDetail(locked, 0), outboxId: outcome.outboxId },
+          },
+          tx,
+        );
+      }
+      return { ...outcome, order: locked };
+    });
+    if (result.kind === 'too_soon') throw new AppError('rate_limited', { retryAfterSeconds: result.retryAfterSeconds });
+    return this.detailOf(result.order);
   }
 
   /**

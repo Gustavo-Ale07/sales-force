@@ -12,7 +12,7 @@ export const orderDocumentStatusLabels: Record<ApiSchema<"OrderStatus">, string>
   queued: "Enviando ao Sankhya",
   sent: "Enviado ao Sankhya",
   rejected: "Falha no envio",
-  unknown: "Envio em verificação",
+  unknown: "Verificando envio…",
 };
 
 /** The order screen's data, restricted by the domain allow-list (never cost/margin: P-20), rendered with the shared PLAC template. */

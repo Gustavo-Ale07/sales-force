@@ -50,6 +50,7 @@ const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>
   replaceOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   deleteOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   submitOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  verifyOrderDelivery: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   convertQuote: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   listApprovals: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny' },
   approveApproval: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny' },

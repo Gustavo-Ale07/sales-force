@@ -52,7 +52,7 @@ export type DeliveryOutcome =
       readonly errorClass: string;
       readonly errorCode: string;
     }
-  /** Needs a person: outbox `unknown` with no next attempt; the order shows "Envio em verificação" / "aguardando confirmação". */
+  /** Needs a person: outbox `unknown` with no next attempt; the order shows "Verificando envio…" / "aguardando confirmação". */
   | { readonly kind: 'park'; readonly errorClass: string; readonly errorCode: string };
 
 interface ClassifiedError {

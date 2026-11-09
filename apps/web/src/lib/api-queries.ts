@@ -182,6 +182,8 @@ export function orderQueryOptions(api: ApiClient, id: string) {
   return queryOptions({
     queryKey: queryKeys.order(id),
     queryFn: () => callApi(() => api.GET("/orders/{id}", { params: { path: { id } } })),
+    // A delivery in progress or being verified resolves by itself: keep the screen current until it is final.
+    refetchInterval: (query) => (query.state.data?.status === "unknown" || query.state.data?.status === "queued" ? 5_000 : false),
   });
 }
 

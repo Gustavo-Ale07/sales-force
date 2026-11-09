@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AuditService } from '../../src/iam/audit.service.js';
 import { requeueDeliveredOrder, ResendRefused } from '../../src/integration/order-resend.js';
-import { enqueueOrderDelivery } from '../../src/orders/order-erp-delivery.js';
+import { enqueueOrderDelivery, requestDeliveryVerification } from '../../src/orders/order-erp-delivery.js';
 import { MAX_DELIVERY_ATTEMPTS } from '../../src/integration/order-delivery.policy.js';
 import {
   OrderDeliveryService,
@@ -377,6 +377,26 @@ describe('live delivery', () => {
     expect(w.book.orders).toHaveLength(1);
     expect(await w.order(orderId)).toMatchObject({ status: 'sent', erpNumber: w.book.orders[0]?.erpOrderNumber });
     expect((await w.outbox(outboxId)).status).toBe('confirmed');
+  });
+
+  it('Verificar agora: an unknown delivery verified at once finds the note by origin and links it; no second include, no second outbox row', async () => {
+    const w = await world();
+    w.book.script('include', { kind: 'created_then_error', error: err('unavailable', 'http_503') });
+    const { orderId, outboxId } = await w.seed();
+    await w.service.runDue();
+    expect(await w.order(orderId)).toMatchObject({ status: 'unknown', erpNumber: null });
+    expect((await w.service.runDue()).processed).toBe(0); // not due for 30 s on its own
+    const requested = await w.database.handle.db.transaction(async (tx) =>
+      requestDeliveryVerification(tx, await w.order(orderId), new Date(START)),
+    );
+    expect(requested).toEqual({ kind: 'requested', outboxId });
+    await w.service.runDue();
+    expect(w.book.count('include')).toBe(1);
+    expect(w.book.orders).toHaveLength(1);
+    expect(await w.order(orderId)).toMatchObject({ status: 'sent', erpNumber: w.book.orders[0]?.erpOrderNumber });
+    expect((await w.outbox(outboxId)).status).toBe('confirmed');
+    const rows = await w.database.handle.db.select().from(integrationOutbox).where(eq(integrationOutbox.aggregateId, orderId));
+    expect(rows).toHaveLength(1);
   });
 
   it('G2: after an include timeout the attempts only verify by origin each minute; a note that appears on the 3rd verification is adopted, never included again', async () => {

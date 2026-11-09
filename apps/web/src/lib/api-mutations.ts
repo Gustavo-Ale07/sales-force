@@ -29,6 +29,11 @@ export function submitOrder(api: ApiClient, id: string) {
   return callApi(() => api.POST("/orders/{id}/submit", { params: { path: { id } } }));
 }
 
+/** "Verificar agora": re-queues the ambiguous delivery on the same record; the worker asks Sankhya by origin first. */
+export function verifyOrderDelivery(api: ApiClient, id: string) {
+  return callApi(() => api.POST("/orders/{id}/verify-delivery", { params: { path: { id } } }));
+}
+
 export type UpdateDiscountLimitsBody = ApiSchema<"UpdateDiscountLimitsRequest">;
 
 /** W-39: replaces the three discount limits (admin only; the server re-checks the role). */

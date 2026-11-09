@@ -4,7 +4,7 @@ import { ORDER_STATUSES, orderDeliveryLabel, type OrderStatus } from '../src/ind
 describe('orderDeliveryLabel (SNK-7 D-L)', () => {
   it.each([
     ['queued', null, 'Enviando ao Sankhya…'],
-    ['unknown', null, 'Envio em verificação'],
+    ['unknown', null, 'Verificando envio…'],
     ['unknown', 5000, 'Enviado, aguardando confirmação'],
     ['sent', 5000, 'Enviado ao Sankhya'],
     ['rejected', null, 'Falha no envio'],

@@ -26,6 +26,8 @@ export async function requeueDeliveredOrder(
   audit: AuditService,
   orderId: string,
   now: Date,
+  /** Who asked (the ops CLI has no account: null). Recorded in the audit event. */
+  actorAccountId: string | null = null,
 ): Promise<ResendResult> {
   return database.db.transaction(async (tx) => {
     const [order] = await tx.select().from(salesOrder).where(eq(salesOrder.id, orderId)).for('update');
@@ -56,7 +58,7 @@ export async function requeueDeliveredOrder(
     await audit.record(
       {
         action: AUDIT_ACTIONS.orderErpResendRequested,
-        actorAccountId: null,
+        actorAccountId,
         detail: { orderId, outboxId: row.id, originId: row.originId, erpNumber: order.erpNumber },
       },
       tx,

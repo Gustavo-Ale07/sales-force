@@ -76,6 +76,15 @@ export class OrdersController {
     return this.orders.submit(user, contract.params.id);
   }
 
+  /** "Verificar agora" for an order in `unknown`; 429 when asked again within 60 s. */
+  @ApiRoute(routes.verifyOrderDelivery)
+  verifyDelivery(
+    @CurrentUserParam() user: CurrentUser,
+    @Contract() contract: RequestContract<typeof routes.verifyOrderDelivery>,
+  ): Promise<OrderDetail> {
+    return this.orders.verifyDelivery(user, contract.params.id);
+  }
+
   @ApiRoute(routes.duplicateAsOrder)
   async duplicateAsOrder(
     @CurrentUserParam() user: CurrentUser,

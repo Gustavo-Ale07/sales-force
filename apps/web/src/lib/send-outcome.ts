@@ -47,7 +47,7 @@ export function sendOutcomeOf(order: OrderDetail, kind: DocumentKind, timedOut: 
   if (order.status === "unknown") {
     return {
       phase: "verifying",
-      title: "Envio em verificação",
+      title: "Verificando envio…",
       detail: "O Sankhya ainda não respondeu. Nada será duplicado: o Sales Force confere antes de reenviar.",
       final: true,
     };

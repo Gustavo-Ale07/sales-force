@@ -989,6 +989,34 @@ describe("Rascunho existente", () => {
     expect(callsTo(calls, "POST", `/orders/${ORDER_ID}/submit`)).toHaveLength(1);
   });
 
+  it("an unknown delivery says it is being verified and offers Verificar agora, which asks the server once (same order, no resend)", async () => {
+    const unknown = orderDetail({ status: "unknown" });
+    const { user, calls } = renderApp(`/pedidos/${ORDER_ID}`, {
+      handlers: existing(unknown, { "POST /orders/:id/verify-delivery": { body: unknown } }),
+    });
+    expect(await screen.findByText("Estamos verificando o envio com o Sankhya. Isso se resolve sozinho em instantes.")).toBeInTheDocument();
+    expect(screen.queryByText(/Confira no Sankhya/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reenviar" })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Verificar agora" }));
+    expect(await screen.findByText("Verificando o envio com o Sankhya")).toBeInTheDocument();
+    expect(callsTo(calls, "POST", `/orders/${ORDER_ID}/verify-delivery`)).toHaveLength(1);
+    expect(callsTo(calls, "POST", `/orders/${ORDER_ID}/submit`)).toHaveLength(0);
+  });
+
+  it("Verificar agora is not offered once the delivery is resolved or failed", async () => {
+    const sent = renderApp(`/pedidos/${ORDER_ID}`, { handlers: existing(orderDetail({ status: "sent", erpNumber: 4321 })) });
+    await screen.findAllByText(/Enviado ao Sankhya/);
+    expect(screen.queryByRole("button", { name: "Verificar agora" })).not.toBeInTheDocument();
+    sent.unmount();
+    renderApp(`/pedidos/${ORDER_ID}`, {
+      handlers: existing(orderDetail({ status: "rejected", erpDelivery: { errorClass: "timeout", errorCode: "include_timeout_unconfirmed" } })),
+    });
+    expect(await screen.findByText(/O Sankhya não confirmou o recebimento a tempo/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reenviar" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Excluir" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Verificar agora" })).not.toBeInTheDocument();
+  });
+
   it("D-AA: a quotation that originated an order says so, in Force only", async () => {
     renderApp(`/pedidos/${ORDER_ID}`, { handlers: existing(orderDetail({ convertedInto: { id: "0190a000-0000-7000-8000-0000000000b1", draftNumber: 9, erpNumber: 4321 } })) });
     expect(await screen.findByText("CONVERTIDO EM PEDIDO nº 4321")).toBeInTheDocument();

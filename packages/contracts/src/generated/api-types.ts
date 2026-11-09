@@ -507,6 +507,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orders/{id}/verify-delivery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify now: asks the worker to check an ambiguous (unknown) delivery by origin right away
+         * @description Same delivery record and origin id, no second outbox row and no second note (SNK-4). Only for an order whose delivery is `unknown`; any other state returns the order unchanged. At most one request per order every 60 s (429). The actor is audited.
+         */
+        post: operations["verifyOrderDelivery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/approvals": {
         parameters: {
             query?: never;
@@ -3147,6 +3167,73 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErpSubmissionDisabledError"];
+                };
+            };
+        };
+    };
+    verifyOrderDelivery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pedido com a verificação solicitada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderDetail"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Muitas tentativas */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
         };

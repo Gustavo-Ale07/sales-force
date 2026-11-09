@@ -90,6 +90,7 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   replaceOrder: { roles: EVERY_ROLE },
   deleteOrder: { roles: EVERY_ROLE },
   submitOrder: { roles: EVERY_ROLE },
+  verifyOrderDelivery: { roles: EVERY_ROLE },
   convertQuote: { roles: EVERY_ROLE },
   // W-20 discount approvals (DISC-4/6): only manager and admin; WHICH level each may decide is enforced in the
   // approvals service (manager: manager level, admin: director level). Technical and seller are denied here.

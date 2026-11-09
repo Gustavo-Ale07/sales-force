@@ -506,6 +506,21 @@ export const routes = {
     },
     errors: [400, 401, 403, 404],
   }),
+  verifyOrderDelivery: defineRoute({
+    operationId: 'verifyOrderDelivery',
+    method: 'post',
+    path: '/orders/{id}/verify-delivery',
+    tags: ['orders'],
+    summary: 'Verify now: asks the worker to check an ambiguous (unknown) delivery by origin right away',
+    description:
+      'Same delivery record and origin id, no second outbox row and no second note (SNK-4). Only for an order whose delivery is `unknown`; any other state returns the order unchanged. At most one request per order every 60 s (429). The actor is audited.',
+    auth: 'session',
+    request: { params: OrderPathSchema },
+    responses: {
+      200: { description: 'Pedido com a verificação solicitada', schema: OrderDetailSchema },
+    },
+    errors: [400, 401, 403, 404, 429],
+  }),
   listApprovals: defineRoute({
     operationId: 'listApprovals',
     method: 'get',

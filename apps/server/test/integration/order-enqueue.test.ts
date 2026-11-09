@@ -193,6 +193,52 @@ describe('API-side enqueue for the ERP (SNK-7 D-5, D-M)', () => {
     expect((await off.call('seller1', 'POST', `/orders/${offId}/submit`)).body.code).toBe('erp_submission_disabled');
   });
 
+  it('Verificar agora: an unknown delivery is made due on the SAME outbox row (no second row), audited with the actor, limited to once per 60 s', async () => {
+    const id = await draft(on);
+    await bindToSandbox(on, id);
+    expect((await on.call('seller1', 'POST', `/orders/${id}/submit`)).status).toBe(200);
+    const db = on.database.handle.db;
+    const [before] = await outboxOf(on, id);
+    const later = new Date(Date.now() + 3_600_000);
+    await db.update(integrationOutbox).set({ status: 'unknown', nextAttemptAt: later }).where(eq(integrationOutbox.aggregateId, id));
+    await db.update(salesOrder).set({ status: 'unknown' }).where(eq(salesOrder.id, id));
+
+    // someone outside the order's scope neither sees nor touches it
+    expect([403, 404]).toContain((await on.call('seller2', 'POST', `/orders/${id}/verify-delivery`)).status);
+    expect((await outboxOf(on, id))[0]?.nextAttemptAt?.getTime()).toBe(later.getTime());
+
+    const first = await on.call('seller1', 'POST', `/orders/${id}/verify-delivery`);
+    expect(first.status).toBe(200);
+    expect(first.body.status).toBe('unknown');
+    const rows = await outboxOf(on, id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id).toBe(before?.id);
+    expect(rows[0]?.status).toBe('unknown');
+    expect(rows[0]?.originId).toBe(id);
+    expect(rows[0]?.nextAttemptAt!.getTime()).toBeLessThan(later.getTime());
+    const audits = (await db.select().from(auditLog)).filter((a) => a.action === 'order.delivery_verify_requested' && (a.detail as Json).orderId === id);
+    expect(audits).toHaveLength(1);
+    expect(audits[0]?.actorAccountId).toBeTruthy();
+
+    // at most one request per minute for the order (a manager is limited too: same order)
+    const again = await on.call('manager', 'POST', `/orders/${id}/verify-delivery`);
+    expect(again.status).toBe(429);
+    expect((await outboxOf(on, id))).toHaveLength(1);
+
+    // after the interval a manager (and admin) may ask again
+    await db.execute(sql`update integration_outbox set payload = payload || '{"lastVerifyRequestedAt":"2000-01-01T00:00:00.000Z"}'::jsonb where aggregate_id = ${id}`);
+    expect((await on.call('manager', 'POST', `/orders/${id}/verify-delivery`)).status).toBe(200);
+    await db.execute(sql`update integration_outbox set payload = payload || '{"lastVerifyRequestedAt":"2000-01-01T00:00:00.000Z"}'::jsonb where aggregate_id = ${id}`);
+    expect((await on.call('admin', 'POST', `/orders/${id}/verify-delivery`)).status).toBe(200);
+
+    // once the delivery is resolved the call changes nothing
+    await db.update(salesOrder).set({ status: 'sent' }).where(eq(salesOrder.id, id));
+    const done = await on.call('seller1', 'POST', `/orders/${id}/verify-delivery`);
+    expect(done.status).toBe(200);
+    expect(done.body.status).toBe('sent');
+    expect(await outboxOf(on, id)).toHaveLength(1);
+  });
+
   it('D-Y: a rejected order (delivery finished, no ERP number) is deleted together with its delivery record', async () => {
     const id = await draft(on);
     await bindToSandbox(on, id);

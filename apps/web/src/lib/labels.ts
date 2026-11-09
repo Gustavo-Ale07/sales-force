@@ -16,7 +16,7 @@ export const orderStatusLabels: Record<ApiSchema<"OrderStatus">, { label: string
   queued: { label: "Enviando ao Sankhya…", tone: "info" },
   sent: { label: "Enviado ao Sankhya", tone: "info" },
   rejected: { label: "Falha no envio", tone: "danger" },
-  unknown: { label: "Envio em verificação", tone: "warning" },
+  unknown: { label: "Verificando envio…", tone: "info" },
 };
 
 /**
@@ -48,7 +48,7 @@ export const orderStatusHints: Record<ApiSchema<"OrderStatus">, string> = {
   queued: "O envio ao Sankhya está em andamento. O pedido ainda não existe no Sankhya.",
   sent: "O Sankhya recebeu o pedido enviado pelo Sales Force. Isso não indica confirmação nem faturamento.",
   rejected: "O envio ao Sankhya falhou. O pedido não foi criado no Sankhya; ele pode ser reenviado depois.",
-  unknown: "Não foi possível confirmar se o Sankhya recebeu o pedido. Confira no Sankhya antes de enviar novamente.",
+  unknown: "Estamos verificando o envio com o Sankhya. Isso se resolve sozinho em instantes.",
 };
 
 export const noPriceReasonLabels: Record<ApiSchema<"NoPriceReason">, string> = {
@@ -102,6 +102,7 @@ const deliveryCodeLabels: Record<string, string> = {
   discount_divergence: "O Sankhya gravou um desconto diferente do enviado",
   item_mismatch: "Os itens gravados no Sankhya diferem dos enviados",
   order_not_deliverable: "O pedido não estava em situação de envio",
+  include_timeout_unconfirmed: "O Sankhya não confirmou o recebimento a tempo. Reenvie: o Sales Force confere antes de criar o pedido",
 };
 
 /** K3: why the last delivery of a rejected order failed, from the stable class and code only (never the stored text). */

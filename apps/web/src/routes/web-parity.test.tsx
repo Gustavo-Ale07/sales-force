@@ -343,7 +343,7 @@ describe("Situação do pedido: textos distintos e honestos", () => {
   it("shows one distinct text per status and never says invoiced or synchronized", async () => {
     renderApp("/pedidos", { handlers: { "GET /orders": { body: ordersPage(rows) } } });
     const table = await screen.findByRole("table");
-    for (const text of ["Enviando ao Sankhya…", "Enviado ao Sankhya", "Falha no envio", "Envio em verificação"]) {
+    for (const text of ["Enviando ao Sankhya…", "Enviado ao Sankhya", "Falha no envio", "Verificando envio…"]) {
       expect(await within(table).findAllByText(text)).not.toHaveLength(0);
     }
     expect(table).not.toHaveTextContent(/faturad|sincronizado|confirmado/i);
