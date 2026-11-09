@@ -28,7 +28,7 @@ export function backoffMs(attempt: number): number {
 }
 
 /** Where in one delivery attempt the failure happened. */
-export type DeliveryPhase = 'verify' | 'include' | 'confirm' | 'reread';
+export type DeliveryPhase = 'verify' | 'include' | 'reread';
 
 export interface FailureFacts {
   readonly phase: DeliveryPhase;

@@ -47,7 +47,7 @@ function runtimeFor(database: MigratedDatabase, withDelivery: boolean): WorkerRu
   const service = new OrderDeliveryService({
     db: database.handle,
     gateway: new FakeGateway(),
-    settings: { mode: 'dry_run', originField: 'AD_TESTE_ORIGEM', unconfirmedTops: [1000], target: { environment: 'sandbox' } },
+    settings: { mode: 'dry_run', originField: 'AD_TESTE_ORIGEM', target: { environment: 'sandbox' } },
     audit: new AuditService(database.handle.db, now),
     logger,
     now,

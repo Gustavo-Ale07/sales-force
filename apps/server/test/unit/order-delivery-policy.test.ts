@@ -47,7 +47,7 @@ describe('decideFailure', () => {
   });
 
   it('a refusal at confirmation or reread parks: the order exists in the ERP', () => {
-    for (const phase of ['confirm', 'reread'] as const) {
+    for (const phase of ['verify', 'reread'] as const) {
       expect(decideFailure(err('validation'), facts({ phase, mayExist: true, hasErpNumber: true })).kind).toBe('park');
     }
   });
@@ -92,7 +92,7 @@ describe('decideFailure', () => {
   });
 
   it('exhausted attempts when the ERP number is known park it, never calling an included order a failed send (D-4)', () => {
-    expect(decideFailure(err('temporary'), facts({ phase: 'confirm', attemptCount: MAX_DELIVERY_ATTEMPTS, mayExist: true, hasErpNumber: true })).kind).toBe('park');
+    expect(decideFailure(err('temporary'), facts({ phase: 'reread', attemptCount: MAX_DELIVERY_ATTEMPTS, mayExist: true, hasErpNumber: true })).kind).toBe('park');
   });
 
   it('an unclassified error is treated as ambiguous and retried (it may have happened after the send)', () => {

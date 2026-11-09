@@ -5,7 +5,7 @@ describe('orderDeliveryLabel (SNK-7 D-L)', () => {
   it.each([
     ['queued', null, 'Enviando ao Sankhya…'],
     ['unknown', null, 'Verificando envio…'],
-    ['unknown', 5000, 'Enviado, aguardando confirmação'],
+    ['unknown', 5000, 'Verificando envio…'],
     ['sent', 5000, 'Enviado ao Sankhya'],
     ['rejected', null, 'Falha no envio'],
     ['rejected', 5000, 'Falha no envio'],

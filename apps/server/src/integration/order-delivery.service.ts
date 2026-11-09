@@ -10,7 +10,7 @@ import {
 } from '@salesforce/db';
 import { erpSubmissionBlock, type ErpSubmissionTarget, type InstallationConfiguration } from '@salesforce/domain';
 import { AmbiguousOriginError, isBudgetExhaustedError, isSankhyaGatewayError, SankhyaGatewayError, type RequestBudget, type SankhyaOrderReadPort, type SankhyaWritePort } from '@salesforce/sankhya';
-import { and, asc, eq, inArray, isNotNull, lt, lte, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, like, lt, lte, sql } from 'drizzle-orm';
 import { validateInstallationConfiguration } from '../configuration/validate.js';
 import { AUDIT_ACTIONS, type AuditDetail, type AuditService } from '../iam/audit.service.js';
 import type { Logger } from '../observability/logger.js';
@@ -47,8 +47,6 @@ export interface OrderDeliverySettings {
   readonly mode: 'dry_run' | 'live';
   /** Dedicated origin field (SNK-5). Empty never reaches here: the worker config refuses it. */
   readonly originField: string;
-  /** Header TOPs that are included but never confirmed (D-4: quotation 1000). */
-  readonly unconfirmedTops: readonly number[];
   /** The ERP environment this worker may send to; an order bound to another one is refused (SNK-6). */
   readonly target: ErpSubmissionTarget;
 }
@@ -137,6 +135,7 @@ export class OrderDeliveryService {
 
   /** One sweep: rows left `processing` by a dead worker become `unknown`, then due rows are delivered one by one. */
   async runDue(options: RunOptions = {}): Promise<RunSummary> {
+    await this.releaseNotImplementedParks();
     const recovered = await this.recoverStale();
     const limit = options.limit ?? DEFAULT_SWEEP_LIMIT;
     let processed = 0;
@@ -174,6 +173,31 @@ export class OrderDeliveryService {
   }
 
   /* ---------- claim / recovery ---------- */
+
+  /**
+   * D-AJ: before the Force stopped confirming notes, a failed confirm (`not_implemented`) parked the row with the
+   * ERP number linked. Such a row only needs the verification cycle now (find by origin, reread, sent): give it a
+   * due date. No include happens: the origin lookup links the existing note.
+   */
+  private async releaseNotImplementedParks(): Promise<number> {
+    const now = this.deps.now();
+    const released = await this.database
+      .update(integrationOutbox)
+      .set({ nextAttemptAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(integrationOutbox.aggregateType, ORDER_DELIVERY_AGGREGATE),
+          eq(integrationOutbox.operation, ORDER_DELIVERY_OPERATION),
+          eq(integrationOutbox.status, 'unknown'),
+          isNull(integrationOutbox.nextAttemptAt),
+          isNotNull(integrationOutbox.erpReference),
+          like(integrationOutbox.lastErrorMessage, 'not_implemented:%'),
+        ),
+      )
+      .returning({ id: integrationOutbox.id });
+    if (released.length > 0) this.deps.logger.info({ count: released.length }, 'parked deliveries (not_implemented) released for verification');
+    return released.length;
+  }
 
   private async recoverStale(): Promise<number> {
     const now = this.deps.now();
@@ -284,10 +308,8 @@ export class OrderDeliveryService {
 
       // SNK-4: ask the ERP by origin id first, on EVERY attempt.
       const found = await this.deps.gateway.findOrderByOrigin(settings.originField, order.id, signal === undefined ? {} : { signal });
-      let confirmed = false;
       if (found !== null) {
         erpNumber = found.erpOrderNumber;
-        confirmed = found.confirmed;
         await this.recordErpNumber(row, order, erpNumber, 'linked_existing');
         logger.info({ outboxId: row.id, orderId: order.id, erpNumber }, 'order already in the ERP: linked, not resent');
       } else {
@@ -317,19 +339,18 @@ export class OrderDeliveryService {
         }
         phase = 'include';
         await this.setStep(row.id, 'sending');
+        const includeStartedMs = this.deps.now().getTime();
         const included = await this.deps.gateway.includeOrder(request, signal === undefined ? {} : { signal });
         erpNumber = included.erpOrderNumber;
+        logger.info({ outboxId: row.id, orderId: order.id, phase: 'include', erpNumber, durationMs: this.deps.now().getTime() - includeStartedMs }, 'order included in the ERP');
         await this.recordErpNumber(row, order, erpNumber, 'awaiting_confirmation');
       }
 
-      const needsConfirmation = !confirmed && !settings.unconfirmedTops.includes(frozen.header.topCode);
-      if (needsConfirmation) {
-        phase = 'confirm';
-        await this.deps.gateway.confirmOrder(erpNumber, signal === undefined ? {} : { signal });
-      }
-
+      // The Force never confirms or releases the note: that is done inside the ERP by the customer's internal team (D-AJ). The include is final.
       phase = 'reread';
+      const rereadStartedMs = this.deps.now().getTime();
       const written = await this.deps.gateway.readWrittenOrder(erpNumber, signal === undefined ? {} : { signal });
+      logger.info({ outboxId: row.id, orderId: order.id, phase: 'reread', erpNumber, durationMs: this.deps.now().getTime() - rereadStartedMs }, 'order read back from the ERP');
       if (written === null) {
         throw new SankhyaGatewayError('temporary', { code: 'order_not_readable', message: 'The written order cannot be read back yet.' });
       }

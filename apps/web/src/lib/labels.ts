@@ -46,7 +46,7 @@ export const orderStatusHints: Record<ApiSchema<"OrderStatus">, string> = {
   approved: "Desconto aprovado. Isso não significa que o pedido foi enviado ao Sankhya.",
   approval_rejected: "O aprovador reprovou o desconto. Edite o pedido para ajustar e enviar de novo.",
   queued: "O envio ao Sankhya está em andamento. O pedido ainda não existe no Sankhya.",
-  sent: "O Sankhya recebeu o pedido enviado pelo Sales Force. Isso não indica confirmação nem faturamento.",
+  sent: "Enviado ao Sankhya. A conferência e a liberação são feitas pela Plac dentro do Sankhya; isso não indica faturamento.",
   rejected: "O envio ao Sankhya falhou. O pedido não foi criado no Sankhya; ele pode ser reenviado depois.",
   unknown: "Estamos verificando o envio com o Sankhya. Isso se resolve sozinho em instantes.",
 };
@@ -102,7 +102,7 @@ const deliveryCodeLabels: Record<string, string> = {
   discount_divergence: "O Sankhya gravou um desconto diferente do enviado",
   item_mismatch: "Os itens gravados no Sankhya diferem dos enviados",
   order_not_deliverable: "O pedido não estava em situação de envio",
-  include_timeout_unconfirmed: "O Sankhya não confirmou o recebimento a tempo. Reenvie: o Sales Force confere antes de criar o pedido",
+  include_timeout_unconfirmed: "O Sankhya não confirmou o recebimento a tempo. Reenvie: o Force PLAC confere antes de criar o pedido",
   ambiguous_origin: "Há mais de uma nota com este pedido no Sankhya. Peça à TI para conferir.",
 };
 

@@ -71,7 +71,7 @@ interface World {
   order(id: string): Promise<typeof salesOrder.$inferSelect>;
 }
 
-async function world(options: { mode?: 'dry_run' | 'live'; book?: FakeOrderBook; unconfirmedTops?: number[]; budget?: RequestBudget } = {}): Promise<World> {
+async function world(options: { mode?: 'dry_run' | 'live'; book?: FakeOrderBook; budget?: RequestBudget } = {}): Promise<World> {
   const database = await createMigratedDatabase(postgres);
   databases.push(database);
   const db = database.handle.db;
@@ -114,7 +114,6 @@ async function world(options: { mode?: 'dry_run' | 'live'; book?: FakeOrderBook;
   const settings: OrderDeliverySettings = {
     mode: options.mode ?? 'live',
     originField: ORIGIN_FIELD,
-    unconfirmedTops: options.unconfirmedTops ?? [1000],
     target: { environment: 'sandbox' },
   };
   const service = new OrderDeliveryService({
@@ -297,12 +296,12 @@ describe('M1: re-queue of a delivered order (roteiro step 3)', () => {
 });
 
 describe('M3: request budget', () => {
-  it('a full delivery is 4 requests (find, include, confirm, reread) and fits a budget of 4', async () => {
-    const budget = new RequestBudget(4);
+  it('a full delivery is 3 requests (find, include, reread) and fits a budget of 3', async () => {
+    const budget = new RequestBudget(3);
     const w = await world({ budget });
     const { orderId } = await w.seed();
     await w.service.runDue();
-    expect(budget.used).toBe(4);
+    expect(budget.used).toBe(3);
     expect(budget.exhausted).toBe(true);
     expect((await w.order(orderId)).status).toBe('sent');
   });
@@ -324,11 +323,11 @@ describe('M3: request budget', () => {
 });
 
 describe('live delivery', () => {
-  it('verifies the origin, includes, confirms, rereads and ends sent with the ERP number', async () => {
+  it('verifies the origin, includes, rereads (never confirms, D-AJ) and ends sent with the ERP number', async () => {
     const w = await world();
     const { orderId, outboxId } = await w.seed();
     await w.service.runDue();
-    expect(ops(w.book)).toEqual(['find', 'include', 'confirm', 'read']);
+    expect(ops(w.book)).toEqual(['find', 'include', 'read']);
     expect(w.book.orders).toHaveLength(1);
     expect(w.book.orders[0]?.request).toMatchObject({
       originId: orderId,
@@ -339,7 +338,7 @@ describe('live delivery', () => {
       customerCode: 77,
       negotiationTypeCode: 11,
     });
-    expect(w.book.orders[0]?.confirmed).toBe(true);
+    expect(w.book.orders[0]?.confirmed).toBe(false);
     const order = await w.order(orderId);
     expect(order).toMatchObject({ status: 'sent', erpNumber: w.book.orders[0]?.erpOrderNumber });
     expect(await w.outbox(outboxId)).toMatchObject({
@@ -350,16 +349,6 @@ describe('live delivery', () => {
     });
     const audit = await w.database.handle.db.select().from(auditLog).where(eq(auditLog.action, 'order.erp_sent'));
     expect(audit).toHaveLength(1);
-  });
-
-  it('does not confirm an order of an unconfirmed TOP (quotation 1000, D-4) and still ends sent', async () => {
-    const w = await world();
-    await w.setConfiguration(configuration(1000));
-    const { orderId } = await w.seed();
-    await w.service.runDue();
-    expect(ops(w.book)).toEqual(['find', 'include', 'read']);
-    expect(w.book.orders[0]?.confirmed).toBe(false);
-    expect((await w.order(orderId)).status).toBe('sent');
   });
 
   it('SNK-4: an include whose answer was lost is found by origin and linked, never sent twice', async () => {
@@ -542,31 +531,20 @@ describe('live delivery', () => {
     expect(row.nextAttemptAt?.getTime()).toBe(START + 15 * 60_000);
   });
 
-  it('D-4: a failure only at confirmation keeps the number and redoes only the confirmation', async () => {
+  it('D-AJ: an order parked with its number linked (not_implemented) resolves to sent on the next cycle without re-including', async () => {
     const w = await world();
-    w.book.script('confirm', { kind: 'error', error: err('unavailable') });
-    const { orderId, outboxId } = await w.seed();
-    await w.service.runDue();
-    const middle = await w.order(orderId);
-    expect(middle.status).toBe('unknown');
-    expect(middle.erpNumber).toBe(w.book.orders[0]?.erpOrderNumber);
-    expect(await w.outbox(outboxId)).toMatchObject({ status: 'unknown', erpReference: String(middle.erpNumber) });
-    w.advance(31_000);
-    await w.service.runDue();
-    expect(w.book.count('include')).toBe(1);
-    expect(w.book.count('confirm')).toBe(2);
-    expect((await w.order(orderId)).status).toBe('sent');
-  });
-
-  it('a permanent failure at confirmation parks the order for a person without rejecting a real order', async () => {
-    const w = await world();
-    w.book.script('confirm', { kind: 'error', error: err('permanent', 'not_implemented') });
+    w.book.script('read', { kind: 'error', error: err('permanent', 'not_implemented') });
     const { orderId, outboxId } = await w.seed();
     await w.service.runDue();
     expect(await w.outbox(outboxId)).toMatchObject({ status: 'unknown', nextAttemptAt: null });
     expect(await w.order(orderId)).toMatchObject({ status: 'unknown' });
+    expect((await w.order(orderId)).erpNumber).toBe(w.book.orders[0]?.erpOrderNumber);
     w.advance(3600_000);
-    expect((await w.service.runDue()).processed).toBe(0);
+    expect((await w.service.runDue()).processed).toBe(1);
+    expect(w.book.count('include')).toBe(1);
+    expect(w.book.orders).toHaveLength(1);
+    expect(await w.order(orderId)).toMatchObject({ status: 'sent', erpNumber: w.book.orders[0]?.erpOrderNumber });
+    expect(await w.outbox(outboxId)).toMatchObject({ status: 'confirmed', nextAttemptAt: null });
   });
 
   it('D-7: an ERP that ignored the discount makes the order fail, keeping its number', async () => {

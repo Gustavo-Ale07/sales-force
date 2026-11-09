@@ -889,7 +889,7 @@ describe("Rascunho existente", () => {
 
     it("opens blocking, then shows the Sankhya number once the worker delivered", async () => {
       const { calls } = await confirm(afterSend(orderDetail({ version: 3, status: "sent", erpNumber: 77 })));
-      expect(await screen.findByText("Pedido nº 77 confirmado no Sankhya", {}, { timeout: 5000 })).toBeInTheDocument();
+      expect(await screen.findByText("Enviado ao Sankhya — nº 77. A conferência é feita pela Plac.", {}, { timeout: 5000 })).toBeInTheDocument();
       expect(screen.queryByText(/fila/i)).not.toBeInTheDocument();
       expect(callsTo(calls, "POST", `/orders/${ORDER_ID}/submit`)).toHaveLength(1);
     }, 15000);

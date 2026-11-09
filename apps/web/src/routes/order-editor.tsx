@@ -664,7 +664,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
         <Alert tone="info" title="Verificando envio…">
           {order.erpNumber == null
             ? "Estamos verificando o envio com o Sankhya. Isso se resolve sozinho em instantes."
-            : "O pedido já está no Sankhya e aguarda confirmação. Isso se resolve sozinho em instantes."}
+            : "O pedido já está no Sankhya; falta só a leitura final. Isso se resolve sozinho em instantes."}
           <div className="mt-2">
             <Button type="button" variant="secondary" loading={verifyNow.isPending} onClick={() => verifyNow.mutate()}>
               Verificar agora

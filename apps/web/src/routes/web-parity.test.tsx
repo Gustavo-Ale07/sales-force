@@ -351,7 +351,7 @@ describe("Situação do pedido: textos distintos e honestos", () => {
 
   it("explains in the editor that sent is not billing", async () => {
     renderApp(`/pedidos/${ORDER_ID}`, { handlers: editorHandlers(orderDetail({ status: "sent", erpNumber: 555 })) });
-    expect(await screen.findByText(/Isso não indica confirmação nem faturamento/)).toBeInTheDocument();
+    expect(await screen.findByText(/não indica faturamento/)).toBeInTheDocument();
   });
 
   it("marks a draft whose customer became ineligible and blocks sending, without changing its status", async () => {

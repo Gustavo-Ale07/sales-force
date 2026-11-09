@@ -30,7 +30,7 @@ export function sendOutcomeOf(order: OrderDetail, kind: DocumentKind, timedOut: 
     if (text?.detail) {
       return { phase: "released_pending", title: `${noun} nº ${order.erpNumber} — aguardando liberação`, detail: text.detail, final: true };
     }
-    return { phase: "confirmed", title: `${noun} nº ${order.erpNumber} confirmado no Sankhya`, detail: text?.label ?? null, final: true };
+    return { phase: "confirmed", title: `Enviado ao Sankhya — nº ${order.erpNumber}. A conferência é feita pela Plac.`, detail: text?.label ?? null, final: true };
   }
   if (order.status === "rejected") {
     const reason = deliveryErrorText(order.erpDelivery);
@@ -48,7 +48,7 @@ export function sendOutcomeOf(order: OrderDetail, kind: DocumentKind, timedOut: 
     return {
       phase: "verifying",
       title: "Verificando envio…",
-      detail: "O Sankhya ainda não respondeu. Nada será duplicado: o Sales Force confere antes de reenviar.",
+      detail: "O Sankhya ainda não respondeu. Nada será duplicado: o Force PLAC confere antes de reenviar.",
       final: true,
     };
   }

@@ -62,7 +62,6 @@ runMain('worker', async () => {
               // dry_run needs no origin field (D-1): a marked placeholder keeps the stored payload shape without
               // naming an ERP column; live never reaches here without the real one.
               originField: orderWrite.originField ?? DRY_RUN_ORIGIN_FIELD_PLACEHOLDER,
-              unconfirmedTops: env.ORDER_DELIVERY_UNCONFIRMED_TOPS,
               target: { environment: 'sandbox' },
             },
           },

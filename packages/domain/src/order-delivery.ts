@@ -28,7 +28,7 @@ export function orderDeliveryLabel(order: {
     case 'queued':
       return isDeliveryOverdue(order) ? 'Aguardando envio — será reenviado automaticamente' : 'Enviando ao Sankhya…';
     case 'unknown':
-      return order.erpNumber === null ? 'Verificando envio…' : 'Enviado, aguardando confirmação';
+      return order.erpNumber === null ? 'Verificando envio…' : 'Verificando envio…';
     case 'sent':
       return 'Enviado ao Sankhya';
     case 'rejected':
