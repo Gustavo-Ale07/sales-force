@@ -1,6 +1,7 @@
 import { cn } from "@salesforce/ui";
 import { useState } from "react";
 import { useAppServices } from "../lib/app-context";
+import { DEFAULT_MARK_URL } from "../lib/brand";
 
 /** True until the image at `src` fails to load (file not mounted, wrong format): the caller then falls back. */
 function useImageOk(src: string | null): { ok: boolean; onError: () => void } {
@@ -42,7 +43,15 @@ export function Brand({
   const { logoUrl, markUrl } = config.brand;
   const name = config.installationName;
   const logo = useImageOk(logoUrl);
-  const mark = useImageOk(markUrl);
+  const configuredMark = useImageOk(markUrl);
+  const defaultMark = useImageOk(DEFAULT_MARK_URL);
+  // The installation's own mark if it names one and it loads, else the product's round P; only then the initial.
+  const mark =
+    markUrl !== null && configuredMark.ok
+      ? { src: markUrl, onError: configuredMark.onError }
+      : defaultMark.ok
+        ? { src: DEFAULT_MARK_URL, onError: defaultMark.onError }
+        : null;
   const dark = tone === "dark";
   const showProductName = withProductName && !collapsed && !dark && name !== "Force";
 
@@ -67,8 +76,8 @@ export function Brand({
   }
 
   const markNode =
-    markUrl !== null && mark.ok ? (
-      <img src={markUrl} alt={collapsed ? name : ""} aria-hidden={!collapsed} onError={mark.onError} className={cn(box, "shrink-0 rounded-full object-contain")} />
+    mark !== null ? (
+      <img src={mark.src} alt={collapsed ? name : ""} aria-hidden={!collapsed} onError={mark.onError} className={cn(box, "shrink-0 rounded-full object-contain")} />
     ) : (
       <span
         aria-hidden={!collapsed}

@@ -14,6 +14,9 @@ export interface Brand {
   accent: string | null;
 }
 
+/** The product's own round "P" mark, shipped with the web app: used whenever the installation names no mark of its own (or its mark fails to load). */
+export const DEFAULT_MARK_URL = "/brand/icon-p.png";
+
 export const defaultBrand: Brand = { logoUrl: null, markUrl: null, accent: null };
 
 // A flat file name (no sub-folders, so no path tricks) under /brand/, image extensions only.

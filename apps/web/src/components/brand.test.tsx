@@ -20,15 +20,33 @@ describe("Brand", () => {
     const mark = container.querySelector('img[src="/brand/mark.png"]');
     expect(mark).not.toBeNull();
     fireEvent.error(mark!);
+    // The configured mark failed: the product's round P stands in before the initial does.
+    const fallback = container.querySelector('img[src="/brand/icon-p.png"]');
+    expect(fallback).not.toBeNull();
+    fireEvent.error(fallback!);
     expect(container.querySelector("img")).toBeNull();
     expect(screen.getByText("A")).toBeInTheDocument();
   });
 
-  it("shows the neutral placeholder and the installation name by default", () => {
-    renderBrand({});
+  it("shows the product's round P (icon-p.png) and the installation name when the installation defines no mark", () => {
+    const { container } = renderBrand({});
     expect(screen.getByText("Acme")).toBeInTheDocument();
+    expect(container.querySelector('img[src="/brand/icon-p.png"]')).not.toBeNull();
+    expect(screen.queryByText("A")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the initial only when even the default P cannot be loaded", () => {
+    const { container } = renderBrand({});
+    fireEvent.error(container.querySelector("img")!);
+    expect(container.querySelector("img")).toBeNull();
     expect(screen.getByText("A")).toBeInTheDocument();
-    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  });
+
+  it("the header shows the P and the bare name \"Force\"", () => {
+    const { container } = renderBrand({ installationName: "Force" });
+    expect(container.querySelector('img[src="/brand/icon-p.png"]')).not.toBeNull();
+    expect(screen.getByText("Force")).toBeInTheDocument();
+    expect(screen.queryByText(/PLAC/)).not.toBeInTheDocument();
   });
 
   it("shows the configured logo with the installation name as its accessible name, without repeating the name", () => {
