@@ -120,9 +120,32 @@ export function computeLineTotal(quantity: DecimalString, unitPrice: DecimalStri
 }
 
 /**
- * Estimated line total with a percentage discount on the list price: quantity x price x (1 - discount / 100),
- * rounded half-up to 2 decimals ONCE, on the exact product (no intermediate rounding of a net unit price).
- * A discount of "0" gives exactly `computeLineTotal`. Inputs must already be valid.
+ * Unit discount the ERP applies (D-AK, Sankhya rule seen in notes 2491/2492/2500): unit price x percentage / 100,
+ * rounded half-up to 2 decimals PER UNIT. Inputs must already be valid.
+ */
+export function computeUnitDiscount(unitPrice: DecimalString, discountPercent: DecimalString): DecimalString {
+  const p = parseUnsigned(unitPrice);
+  const d = parseUnsigned(discountPercent);
+  if (!p || !d) throw new RangeError('Malformed decimal string');
+  return p.value.mul(d.value).div(100).toDecimalPlaces(DISCOUNT_SCALE, Decimal.ROUND_HALF_UP).toFixed(DISCOUNT_SCALE);
+}
+
+/** Discount amount of a line, as the ERP stores it in VLRDESC: quantity x the per-unit rounded discount (D-AK). */
+export function computeLineDiscountAmount(
+  quantity: DecimalString,
+  unitPrice: DecimalString,
+  discountPercent: DecimalString,
+): DecimalString {
+  const q = parseUnsigned(quantity);
+  if (!q) throw new RangeError('Malformed decimal string');
+  const unit = new Decimal(computeUnitDiscount(unitPrice, discountPercent));
+  return q.value.mul(unit).toDecimalPlaces(TOTAL_SCALE, Decimal.ROUND_HALF_UP).toFixed(TOTAL_SCALE);
+}
+
+/**
+ * Net line total with a percentage discount, by the Sankhya rule (D-AK): quantity x (unit price - per-unit discount
+ * rounded to 2 decimals), rounded half-up to 2 decimals. A discount of "0" gives exactly `computeLineTotal`.
+ * Single shared calculation for editor, PDF, server totals, IPI base and the D-7 reread. Inputs must already be valid.
  */
 export function computeDiscountedLineTotal(
   quantity: DecimalString,
@@ -131,10 +154,9 @@ export function computeDiscountedLineTotal(
 ): DecimalString {
   const q = parseUnsigned(quantity);
   const p = parseUnsigned(unitPrice);
-  const d = parseUnsigned(discountPercent);
-  if (!q || !p || !d) throw new RangeError('Malformed decimal string');
-  const factor = new Decimal(1).minus(d.value.div(100));
-  return q.value.mul(p.value).mul(factor).toDecimalPlaces(TOTAL_SCALE, Decimal.ROUND_HALF_UP).toFixed(TOTAL_SCALE);
+  if (!q || !p) throw new RangeError('Malformed decimal string');
+  const unit = new Decimal(computeUnitDiscount(unitPrice, discountPercent));
+  return q.value.mul(p.value.minus(unit)).toDecimalPlaces(TOTAL_SCALE, Decimal.ROUND_HALF_UP).toFixed(TOTAL_SCALE);
 }
 
 /**
@@ -148,12 +170,11 @@ export function estimateItemIpi(lineNetTotal: DecimalString, percentual: Decimal
   return t.value.mul(r.value).div(100).toDecimalPlaces(TOTAL_SCALE, Decimal.ROUND_HALF_UP).toFixed(TOTAL_SCALE);
 }
 
-/** Unit price after the discount (list x (1 - d/100)), for display: at most 6 decimals, trailing zeros dropped. */
+/** Unit price after the discount (list - per-unit rounded discount, D-AK), for display: at most 6 decimals, trailing zeros dropped. */
 export function computeNetUnitPrice(unitPrice: DecimalString, discountPercent: DecimalString): DecimalString {
   const p = parseUnsigned(unitPrice);
-  const d = parseUnsigned(discountPercent);
-  if (!p || !d) throw new RangeError('Malformed decimal string');
-  return p.value.mul(new Decimal(1).minus(d.value.div(100))).toDecimalPlaces(UNIT_PRICE_SCALE, Decimal.ROUND_HALF_UP).toFixed();
+  if (!p) throw new RangeError('Malformed decimal string');
+  return p.value.minus(computeUnitDiscount(unitPrice, discountPercent)).toDecimalPlaces(UNIT_PRICE_SCALE, Decimal.ROUND_HALF_UP).toFixed();
 }
 
 /** Sum of already-rounded line totals, always with exactly 2 decimals. Empty sum is `"0.00"`. */

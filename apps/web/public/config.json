@@ -1,9 +1,9 @@
 {
-  "installationName": "PLAC",
+  "installationName": "Force",
   "authMode": "dev",
   "brand": {
     "logoUrl": "/brand/plac-logo.png",
-    "markUrl": null,
+    "markUrl": "/brand/icon-p.png",
     "accent": "#1e2b8f"
   }
 }

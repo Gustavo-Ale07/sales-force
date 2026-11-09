@@ -28,8 +28,14 @@ function formatDate(isoDate: string): string {
   return `${match[3]}/${match[2]}/${match[1]}`;
 }
 
+/** D-AK: a note with at least one discounted line carries the table price on EVERY line (INFORMARPRECO "True"). */
+export function usesInformedPrice(request: OrderWriteRequest): boolean {
+  return request.items.some((item) => item.discountPercent !== null && Number(item.discountPercent) > 0);
+}
+
 /** Pure and deterministic: same request, same payload (this is what the dry run stores). */
 export function buildIncluirNotaBody(request: OrderWriteRequest): Wire {
+  const informedPrice = usesInformedPrice(request);
   const header: Wire = {
     NUNOTA: empty(),
     CODPARC: value(request.customerCode),
@@ -55,11 +61,12 @@ export function buildIncluirNotaBody(request: OrderWriteRequest): Wire {
       CODLOCALORIG: value(request.stockLocationCode),
       CODVOL: value(item.unit),
     };
+    if (informedPrice) wire['VLRUNIT'] = value(item.listUnitPrice);
     if (item.discountPercent !== null && Number(item.discountPercent) > 0) wire['PERCDESC'] = value(item.discountPercent);
     return wire;
   });
 
-  return { nota: { cabecalho: header, itens: { INFORMARPRECO: 'False', item: items } } };
+  return { nota: { cabecalho: header, itens: { INFORMARPRECO: informedPrice ? 'True' : 'False', item: items } } };
 }
 
 export function buildIncluirNotaRequestText(request: OrderWriteRequest): string {

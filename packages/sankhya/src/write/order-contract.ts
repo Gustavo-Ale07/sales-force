@@ -16,6 +16,11 @@ export interface OrderWriteItem {
   readonly unit: string;
   /** Negotiated discount in percent (PERCDESC, D-7); `null`/zero = none. */
   readonly discountPercent: DecimalString | null;
+  /**
+   * The Force table price of the line (the price D-7 compares). Sent as VLRUNIT only when the note has a discount
+   * (INFORMARPRECO "True", D-AK); a note with no discount lets the ERP resolve the price itself.
+   */
+  readonly listUnitPrice: DecimalString;
 }
 
 export interface OrderWriteRequest {
@@ -62,9 +67,17 @@ export interface WrittenOrderItem {
   /** VLRUNIT as stored by the ERP. */
   readonly unitPrice: DecimalString;
   readonly discountPercent: DecimalString | null;
+  /** VLRDESC as stored by the ERP (derived by the ERP, never computed by the Force, F-14); null when absent. */
+  readonly discountAmount: DecimalString | null;
+  /** VLRIPI of the line as stored by the ERP (the ERP calculates it, on the NET line); null when absent. */
+  readonly ipiAmount: DecimalString | null;
 }
 
 export interface WrittenOrder extends ErpOrderRef {
+  /** Header VLRNOTA (sum of the net lines + IPIs); null when absent. */
+  readonly totalAmount: DecimalString | null;
+  /** Header VLRIPI; null when absent. */
+  readonly ipiAmount: DecimalString | null;
   readonly items: readonly WrittenOrderItem[];
 }
 

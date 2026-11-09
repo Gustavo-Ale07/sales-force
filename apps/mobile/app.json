@@ -4,6 +4,7 @@
     "slug": "plac-sales-force",
     "version": "0.0.0",
     "orientation": "portrait",
+    "icon": "./assets/brand/icon-p.png",
     "userInterfaceStyle": "light",
     "scheme": "salesforce",
     "newArchEnabled": true,
@@ -28,7 +29,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/brand/splash-icon.png",
+          "image": "./assets/brand/icon-p.png",
           "backgroundColor": "#FFFFFF",
           "imageWidth": 200,
           "resizeMode": "contain"

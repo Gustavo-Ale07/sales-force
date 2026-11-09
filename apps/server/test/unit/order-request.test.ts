@@ -123,7 +123,9 @@ describe('verifyWrittenOrder (D-7)', () => {
   const written = (over: Partial<WrittenOrder['items'][number]> = {}): WrittenOrder => ({
     erpOrderNumber: 5000,
     confirmed: true,
-    items: [{ productCode: 4158, quantity: '0.2', unitPrice: '10.5', discountPercent: '8', ...over }],
+    totalAmount: null,
+    ipiAmount: null,
+    items: [{ productCode: 4158, quantity: '0.2', unitPrice: '10.5', discountPercent: '8', discountAmount: '0.17', ipiAmount: null, ...over }],
   });
 
   it('accepts equal price and discount regardless of trailing zeros', () => {
@@ -138,7 +140,39 @@ describe('verifyWrittenOrder (D-7)', () => {
   });
 
   it('treats a null discount as zero when none was sent', () => {
-    expect(verifyWrittenOrder([{ ...ITEM, discountPercent: '0.00' }], written({ discountPercent: null }))).toEqual({ ok: true });
+    expect(verifyWrittenOrder([{ ...ITEM, discountPercent: '0.00' }], written({ discountPercent: null, discountAmount: null }))).toEqual({ ok: true });
+  });
+
+  it('D-AK: VLRDESC 0 with PERCDESC 8 is a discount divergence (the note 2499 case)', () => {
+    expect(verifyWrittenOrder([ITEM], written({ discountAmount: '0' }))).toMatchObject({ ok: false, code: 'discount_divergence' });
+    expect(verifyWrittenOrder([ITEM], written({ discountAmount: null }))).toMatchObject({ ok: false, code: 'discount_divergence' });
+  });
+
+  it('D-AK: VLRDESC follows qty x round2(VLRUNIT x PERCDESC / 100) within cents', () => {
+    const four = { ...ITEM, productCode: 4158, quantity: '10', unitListPrice: '28.94', discountPercent: '8' };
+    const line = { productCode: 4158, quantity: '10', unitPrice: '28.94', discountPercent: '8', ipiAmount: null };
+    const note = (discountAmount: string) => ({ erpOrderNumber: 1, confirmed: false, totalAmount: null, ipiAmount: null, items: [{ ...line, discountAmount }] });
+    expect(verifyWrittenOrder([four], note('23.20'))).toEqual({ ok: true });
+    expect(verifyWrittenOrder([four], note('23.15'))).toEqual({ ok: true }); // within the cent tolerance
+    expect(verifyWrittenOrder([four], note('20.00'))).toMatchObject({ ok: false, code: 'discount_divergence' });
+  });
+
+  it('D-AK: IPI and note total are compared with their own codes, only when the IPI of every line is known', () => {
+    const four = { ...ITEM, productCode: 4158, quantity: '10', unitListPrice: '28.94', discountPercent: '8' };
+    const refs = new Map([[4158, { status: 'rate', percentual: '3.25' } as const]]);
+    const note = (over: { lineIpi?: string; ipi?: string; total?: string }): WrittenOrder => ({
+      erpOrderNumber: 2500,
+      confirmed: false,
+      totalAmount: over.total ?? '274.85',
+      ipiAmount: over.ipi ?? '8.65',
+      items: [{ productCode: 4158, quantity: '10', unitPrice: '28.94', discountPercent: '8', discountAmount: '23.20', ipiAmount: over.lineIpi ?? '8.65' }],
+    });
+    expect(verifyWrittenOrder([four], note({}), refs)).toEqual({ ok: true });
+    expect(verifyWrittenOrder([four], note({ lineIpi: '9.41', ipi: '9.41', total: '275.61' }), refs)).toMatchObject({ ok: false, code: 'ipi_divergence' });
+    expect(verifyWrittenOrder([four], note({ total: '300.00' }), refs)).toMatchObject({ ok: false, code: 'total_divergence' });
+    // no IPI reference (or a tariff line): nothing to compare
+    expect(verifyWrittenOrder([four], note({ lineIpi: '9.41', total: '300.00' }))).toEqual({ ok: true });
+    expect(verifyWrittenOrder([four], note({ total: '300.00' }), new Map([[4158, { status: 'tariff' } as const]]))).toEqual({ ok: true });
   });
 });
 

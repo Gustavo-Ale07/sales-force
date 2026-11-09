@@ -1,5 +1,17 @@
 import { createHash } from 'node:crypto';
-import { decimalEquals, normalizeDecimalString, type InstallationConfiguration } from '@salesforce/domain';
+import {
+  classifyIpiRef,
+  compareDecimalStrings,
+  computeDiscountedLineTotal,
+  computeLineDiscountAmount,
+  computeLineTotal,
+  decimalEquals,
+  normalizeDecimalString,
+  subtractTotals,
+  sumTotals,
+  type InstallationConfiguration,
+  type IpiRef,
+} from '@salesforce/domain';
 import {
   buildIncluirNotaBody,
   buildIncluirNotaRequestText,
@@ -105,6 +117,8 @@ export function buildOrderRequest(
       quantity: normalizeDecimalString(item.quantity),
       unit: item.unit,
       discountPercent: discount === '0' ? null : discount,
+      // D-AK: the same table price D-7 compares; sent as VLRUNIT only when the note has a discount.
+      listUnitPrice: normalizeDecimalString(item.unitListPrice),
     });
   }
   return {
@@ -148,14 +162,57 @@ export function dryRunRecord(request: OrderWriteRequest): DryRunRecord {
   return { payload: body, payloadHash: sha256(buildIncluirNotaRequestText(request)) };
 }
 
-export type RereadVerdict = { readonly ok: true } | { readonly ok: false; readonly code: 'price_divergence' | 'discount_divergence' | 'item_mismatch'; readonly productCode: number };
+/** D-AK: R$ tolerance between the ERP's own figures and the Force rule (the ERP rounds on its own; 2492: 82.80 vs 82.78). */
+const AMOUNT_TOLERANCE = '0.05';
+
+function absoluteDifference(a: string, b: string): string {
+  return compareDecimalStrings(a, b) >= 0 ? subtractTotals(a, b) : subtractTotals(b, a);
+}
+
+function withinTolerance(a: string, b: string): boolean {
+  return compareDecimalStrings(absoluteDifference(a, b), AMOUNT_TOLERANCE) <= 0;
+}
 
 /**
- * D-7: after writing, the item prices stored by the ERP must be the table price (`VLRUNIT`) and the discount
- * the one sent (`PERCDESC`). Lines are paired by product and quantity; a difference is a validation error.
+ * The ERP derives VLRDESC from the percentage (never computed by the Force): per unit, rounded to 2 places, times the
+ * quantity (Sankhya rule, D-AK). With a discount VLRDESC must match that figure within cents and the effective line
+ * (quantity x VLRUNIT - VLRDESC) must match the Force net line; without a discount VLRDESC must be zero. VLRTOT is
+ * gross in the ERP and is not compared.
  */
-export function verifyWrittenOrder(items: readonly DeliveryItem[], written: WrittenOrder): RereadVerdict {
+function discountAmountCoherent(item: DeliveryItem, line: WrittenOrder['items'][number]): boolean {
+  const amount = line.discountAmount === null ? '0.00' : normalizeDecimalString(line.discountAmount);
+  if (decimalEquals(item.discountPercent, '0')) return compareDecimalStrings(amount, AMOUNT_TOLERANCE) <= 0;
+  if (compareDecimalStrings(amount, '0') <= 0) return false;
+  const gross = computeLineTotal(line.quantity, line.unitPrice);
+  if (compareDecimalStrings(amount, gross) > 0) return false;
+  const expectedAmount = computeLineDiscountAmount(item.quantity, line.unitPrice, item.discountPercent);
+  if (!withinTolerance(amount, expectedAmount)) return false;
+  const effective = subtractTotals(gross, amount);
+  const expectedNet = computeDiscountedLineTotal(item.quantity, line.unitPrice, item.discountPercent);
+  return withinTolerance(effective, expectedNet);
+}
+
+export type RereadVerdict =
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly code: 'price_divergence' | 'discount_divergence' | 'item_mismatch' | 'ipi_divergence' | 'total_divergence';
+      readonly productCode: number;
+    };
+
+/**
+ * D-7: after writing, the item prices stored by the ERP must be the table price (`VLRUNIT`), the discount the one sent
+ * (`PERCDESC`, with `VLRDESC` by the Sankhya rule) and, when the Force can estimate the IPI of every line, the IPI
+ * (`VLRIPI` per line and in the header) and the note total (`VLRNOTA` = net lines + IPIs) must match within cents.
+ * Lines are paired by product and quantity; a difference is a validation error.
+ */
+export function verifyWrittenOrder(
+  items: readonly DeliveryItem[],
+  written: WrittenOrder,
+  ipiRefs: ReadonlyMap<number, IpiRef> = new Map(),
+): RereadVerdict {
   const remaining = [...written.items];
+  const paired: { item: DeliveryItem; line: WrittenOrder['items'][number] }[] = [];
   for (const item of items) {
     const wantedQuantity = normalizeDecimalString(item.quantity);
     const at = remaining.findIndex((line) => line.productCode === item.productCode && decimalEquals(line.quantity, wantedQuantity));
@@ -168,7 +225,41 @@ export function verifyWrittenOrder(items: readonly DeliveryItem[], written: Writ
     if (!decimalEquals(line.discountPercent ?? '0', item.discountPercent)) {
       return { ok: false, code: 'discount_divergence', productCode: item.productCode };
     }
+    if (!discountAmountCoherent(item, line)) return { ok: false, code: 'discount_divergence', productCode: item.productCode };
+    paired.push({ item, line });
   }
   if (remaining.length > 0) return { ok: false, code: 'item_mismatch', productCode: remaining[0]?.productCode ?? 0 };
+  return verifyIpiAndTotal(paired, written, ipiRefs);
+}
+
+/** IPI and note total, compared only when the Force can estimate the IPI of every line (no tariff, no missing rate). */
+function verifyIpiAndTotal(
+  paired: readonly { item: DeliveryItem; line: WrittenOrder['items'][number] }[],
+  written: WrittenOrder,
+  ipiRefs: ReadonlyMap<number, IpiRef>,
+): RereadVerdict {
+  const nets: string[] = [];
+  const ipis: string[] = [];
+  for (const { item, line } of paired) {
+    if (item.unitListPrice === null) return { ok: true };
+    const ref = ipiRefs.get(item.productCode);
+    if (ref === undefined) return { ok: true };
+    const net = computeDiscountedLineTotal(item.quantity, item.unitListPrice, item.discountPercent);
+    const ipi = classifyIpiRef(net, ref);
+    if (ipi.status !== 'estimated' && ipi.status !== 'exempt') return { ok: true };
+    nets.push(net);
+    ipis.push(ipi.amount);
+    if (line.ipiAmount !== null && !withinTolerance(normalizeDecimalString(line.ipiAmount), ipi.amount)) {
+      return { ok: false, code: 'ipi_divergence', productCode: item.productCode };
+    }
+  }
+  const expectedIpi = sumTotals(ipis);
+  if (written.ipiAmount !== null && !withinTolerance(normalizeDecimalString(written.ipiAmount), expectedIpi)) {
+    return { ok: false, code: 'ipi_divergence', productCode: 0 };
+  }
+  const expectedTotal = sumTotals([...nets, ...ipis]);
+  if (written.totalAmount !== null && !withinTolerance(normalizeDecimalString(written.totalAmount), expectedTotal)) {
+    return { ok: false, code: 'total_divergence', productCode: 0 };
+  }
   return { ok: true };
 }

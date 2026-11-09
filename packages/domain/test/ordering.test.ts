@@ -66,9 +66,9 @@ describe('buildOrderItem', () => {
     it('applies the percentage on the list price and rounds the line total once', () => {
       expect(build('10')).toMatchObject({ ok: true, value: { discountPercent: '10', estimatedLineTotal: '27.00' } });
       expect(build('12.5')).toMatchObject({ value: { discountPercent: '12.5', estimatedLineTotal: '26.25' } });
-      // 3 x 0.335 x 0.9 = 0.9045 -> 0.90 (one rounding of the exact product)
+      // D-AK: unit discount 0.0335 -> 0.03; 3 x (0.335 - 0.03) = 0.915 -> 0.92
       expect(buildOrderItem({ lineNo: 1, product, quantity: '3', price: priced('0.335'), discountPercent: '10' })).toMatchObject({
-        value: { estimatedLineTotal: '0.90' },
+        value: { estimatedLineTotal: '0.92' },
       });
     });
 

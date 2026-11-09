@@ -79,6 +79,7 @@ export {
   INCLUIR_NOTA_PATH,
   OBSERVATION_MAX_LENGTH,
   buildIncluirNotaBody,
+  usesInformedPrice,
   buildIncluirNotaRequestText,
   parseIncluirNotaResponse,
 } from './write/incluir-nota.js';

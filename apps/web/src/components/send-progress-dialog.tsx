@@ -7,6 +7,7 @@ import { orderQueryOptions, queryKeys } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { describeApiError } from "../lib/error-message";
 import { SEND_POLL_MS, SEND_WAIT_MS, sendOutcomeOf } from "../lib/send-outcome";
+import { erpNoteDiverged } from "../lib/labels";
 import { DeleteOrderDialog } from "./delete-order-dialog";
 
 export interface SendProgressDialogProps {
@@ -91,7 +92,7 @@ export function SendProgressDialog({ orderId, kind, reference, onClose, onDelete
                   <Button variant="danger-outline" className="border-[#fca5a5] bg-transparent text-[#fca5a5] hover:bg-white/10" onClick={() => setDeleting(true)}>
                     Excluir
                   </Button>
-                  {order?.erpDelivery?.errorCode === "ambiguous_origin" ? null : (
+                  {order?.erpDelivery?.errorCode === "ambiguous_origin" || erpNoteDiverged(order) ? null : (
                   <Button variant="secondary" className="border-white/50 bg-transparent text-white hover:bg-white/10" loading={resend.isPending} onClick={() => resend.mutate()}>
                     Reenviar
                   </Button>

@@ -68,7 +68,7 @@ export function Brand({
 
   const markNode =
     markUrl !== null && mark.ok ? (
-      <img src={markUrl} alt={collapsed ? name : ""} aria-hidden={!collapsed} onError={mark.onError} className={cn(box, "shrink-0 object-contain")} />
+      <img src={markUrl} alt={collapsed ? name : ""} aria-hidden={!collapsed} onError={mark.onError} className={cn(box, "shrink-0 rounded-full object-contain")} />
     ) : (
       <span
         aria-hidden={!collapsed}

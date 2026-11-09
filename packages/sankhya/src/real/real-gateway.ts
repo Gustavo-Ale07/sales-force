@@ -593,17 +593,17 @@ export class RealSankhyaGateway implements SankhyaGateway {
 
   async readWrittenOrder(erpOrderNumber: number, options?: OrderCallOptions): Promise<WrittenOrder | null> {
     if (!Number.isInteger(erpOrderNumber) || erpOrderNumber < 1) throw invalidOrderQuery('the order number is not a positive integer');
-    const headerColumns = ['NUNOTA', 'STATUSNOTA'] as const;
+    const headerColumns = ['NUNOTA', 'STATUSNOTA', 'VLRNOTA', 'VLRIPI'] as const;
     const header = await this.#query(
-      `SELECT NUNOTA, STATUSNOTA FROM TGFCAB WHERE NUNOTA = ${erpOrderNumber}`,
+      `SELECT NUNOTA, STATUSNOTA, VLRNOTA, VLRIPI FROM TGFCAB WHERE NUNOTA = ${erpOrderNumber}`,
       headerColumns,
       options?.signal,
     );
     if (header.rows.length === 0) return null;
     const reader = new RowReader('orders', headerColumns, header.rows[0] ?? [], 0);
-    const itemColumns = ['CODPROD', 'QTDNEG', 'VLRUNIT', 'PERCDESC'] as const;
+    const itemColumns = ['CODPROD', 'QTDNEG', 'VLRUNIT', 'PERCDESC', 'VLRDESC', 'VLRIPI'] as const;
     const itemRows = await this.#query(
-      `SELECT CODPROD, QTDNEG, VLRUNIT, PERCDESC FROM TGFITE WHERE NUNOTA = ${erpOrderNumber} ORDER BY CODPROD`,
+      `SELECT CODPROD, QTDNEG, VLRUNIT, PERCDESC, VLRDESC, VLRIPI FROM TGFITE WHERE NUNOTA = ${erpOrderNumber} ORDER BY CODPROD`,
       itemColumns,
       options?.signal,
     );
@@ -615,14 +615,31 @@ export class RealSankhyaGateway implements SankhyaGateway {
         return parsed.value;
       };
       const rawDiscount = cells[itemColumns.indexOf('PERCDESC')];
+      const rawAmount = cells[itemColumns.indexOf('VLRDESC')];
+      const rawIpi = cells[itemColumns.indexOf('VLRIPI')];
       return {
         productCode: row.int('CODPROD'),
         quantity: decimal('QTDNEG'),
         unitPrice: decimal('VLRUNIT'),
         discountPercent: rawDiscount === null || rawDiscount === undefined ? null : decimal('PERCDESC'),
+        discountAmount: rawAmount === null || rawAmount === undefined ? null : decimal('VLRDESC'),
+        ipiAmount: rawIpi === null || rawIpi === undefined ? null : decimal('VLRIPI'),
       };
     });
-    return { erpOrderNumber: reader.int('NUNOTA'), confirmed: reader.nullableText('STATUSNOTA') === 'L', items };
+    const headerDecimal = (column: 'VLRNOTA' | 'VLRIPI'): string | null => {
+      const cell = (header.rows[0] ?? [])[headerColumns.indexOf(column)];
+      if (cell === null || cell === undefined) return null;
+      const parsed = decimalFromCell(cell);
+      if (!parsed.ok) return reader.reject(column, parsed.problem);
+      return parsed.value;
+    };
+    return {
+      erpOrderNumber: reader.int('NUNOTA'),
+      confirmed: reader.nullableText('STATUSNOTA') === 'L',
+      totalAmount: headerDecimal('VLRNOTA'),
+      ipiAmount: headerDecimal('VLRIPI'),
+      items,
+    };
   }
 
   /**

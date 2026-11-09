@@ -1,4 +1,5 @@
-import type { DecimalString } from '@salesforce/domain';
+import { computeDiscountedLineTotal, computeLineDiscountAmount, computeLineTotal, estimateItemIpi, sumTotals, type DecimalString } from '@salesforce/domain';
+import { usesInformedPrice } from '../write/incluir-nota.js';
 import { AmbiguousOriginError, SankhyaGatewayError } from '../errors.js';
 import type {
   ErpOrderRef,
@@ -41,6 +42,12 @@ export interface FakeOrderBookOptions {
   readonly priceOf?: (productCode: number) => DecimalString;
   /** Simulates an ERP that ignores PERCDESC (the D-7 fallback case). */
   readonly ignoreDiscount?: boolean;
+  /** Simulates an ERP that keeps PERCDESC but stores VLRDESC = 0 (D-AK reread case). */
+  readonly zeroDiscountAmount?: boolean;
+  /** IPI rate (percent) the fake ERP applies to the NET line of a product; absent = no IPI (VLRIPI 0.00). */
+  readonly ipiRateOf?: (productCode: number) => DecimalString | null;
+  /** Simulates an ERP whose header total differs from the lines (D-AK reread case). */
+  readonly skewTotalBy?: DecimalString;
 }
 
 /**
@@ -145,15 +152,28 @@ export class FakeOrderBook {
     const found = this.orders.find((order) => order.erpOrderNumber === erpOrderNumber);
     if (found === undefined) return null;
     const priceOf = this.#options.priceOf ?? ((): DecimalString => '10');
-    return {
-      erpOrderNumber: found.erpOrderNumber,
-      confirmed: found.confirmed,
-      items: found.request.items.map((item) => ({
-        productCode: item.productCode,
-        quantity: item.quantity,
-        unitPrice: priceOf(item.productCode),
-        discountPercent: this.#options.ignoreDiscount === true ? null : item.discountPercent,
-      })),
-    };
+    // D-AK: like the real ERP seen in the Sandbox, a discount is only stored when the price came with the request
+    // (INFORMARPRECO "True" + VLRUNIT); with "False" the ERP resolves price and discount itself and drops PERCDESC.
+    const informed = usesInformedPrice(found.request);
+    const accepts = informed && this.#options.ignoreDiscount !== true;
+    const nets: DecimalString[] = [];
+    const ipis: DecimalString[] = [];
+    const items = found.request.items.map((item) => {
+        const percent = accepts ? item.discountPercent : null;
+        const unitPrice = priceOf(item.productCode);
+        // The ERP derives VLRDESC per unit, rounded to 2 places, times the quantity (D-AK).
+        const amount =
+          percent === null || this.#options.zeroDiscountAmount === true
+            ? '0'
+            : computeLineDiscountAmount(item.quantity, unitPrice, percent);
+        const net = percent === null ? computeLineTotal(item.quantity, unitPrice) : computeDiscountedLineTotal(item.quantity, unitPrice, percent);
+        const rate = this.#options.ipiRateOf?.(item.productCode) ?? null;
+        const ipi = rate === null ? '0.00' : estimateItemIpi(net, rate);
+        nets.push(net);
+        ipis.push(ipi);
+        return { productCode: item.productCode, quantity: item.quantity, unitPrice, discountPercent: percent, discountAmount: amount, ipiAmount: ipi };
+    });
+    const total = sumTotals([...nets, ...ipis, ...(this.#options.skewTotalBy === undefined ? [] : [this.#options.skewTotalBy])]);
+    return { erpOrderNumber: found.erpOrderNumber, confirmed: found.confirmed, totalAmount: total, ipiAmount: sumTotals(ipis), items };
   }
 }

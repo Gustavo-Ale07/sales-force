@@ -597,7 +597,7 @@ describe('live delivery', () => {
       stockLocationCode: 209,
       orderDate: '2026-10-30',
       notes: null,
-      items: [{ productCode: 4158, quantity: '0.2', unit: 'PT', discountPercent: '8' }],
+      items: [{ productCode: 4158, quantity: '0.2', unit: 'PT', discountPercent: '8', listUnitPrice: '10' }],
     });
     w.book.calls.length = 0;
     await w.database.handle.pool.query(

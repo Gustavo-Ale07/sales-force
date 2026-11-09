@@ -8,8 +8,18 @@ import {
   type DbHandle,
   type OutboxStep,
 } from '@salesforce/db';
-import { erpSubmissionBlock, type ErpSubmissionTarget, type InstallationConfiguration } from '@salesforce/domain';
-import { AmbiguousOriginError, isBudgetExhaustedError, isSankhyaGatewayError, SankhyaGatewayError, type RequestBudget, type SankhyaOrderReadPort, type SankhyaWritePort } from '@salesforce/sankhya';
+import { erpIpiRate, erpProduct } from '@salesforce/db';
+import { erpSubmissionBlock, ipiRefOf, type ErpSubmissionTarget, type InstallationConfiguration, type IpiRate, type IpiRef } from '@salesforce/domain';
+import {
+  AmbiguousOriginError,
+  isBudgetExhaustedError,
+  isSankhyaGatewayError,
+  SankhyaGatewayError,
+  usesInformedPrice,
+  type RequestBudget,
+  type SankhyaOrderReadPort,
+  type SankhyaWritePort,
+} from '@salesforce/sankhya';
 import { and, asc, eq, inArray, isNotNull, isNull, like, lt, lte, sql } from 'drizzle-orm';
 import { validateInstallationConfiguration } from '../configuration/validate.js';
 import { AUDIT_ACTIONS, type AuditDetail, type AuditService } from '../iam/audit.service.js';
@@ -91,6 +101,13 @@ class ConfigurationUnavailableError extends SankhyaGatewayError {
   constructor(message: string) {
     super('temporary', { code: 'configuration_unavailable', message });
   }
+}
+
+/** Distinct wording per reread divergence (D-AK): IPI and total are not "a different discount". */
+function divergenceMessage(code: string, productCode: number): string {
+  if (code === 'ipi_divergence') return 'The ERP stored a different IPI than the Force estimate' + (productCode === 0 ? ' (note header).' : ` (product ${productCode}).`);
+  if (code === 'total_divergence') return 'The ERP note total differs from the Force total (net lines + IPI).';
+  return `The ERP stored a different ${code === 'discount_divergence' ? 'discount' : 'price or line'} (product ${productCode}).`;
 }
 
 function parseErpNumber(reference: string | null): number | null {
@@ -339,6 +356,18 @@ export class OrderDeliveryService {
         }
         phase = 'include';
         await this.setStep(row.id, 'sending');
+        // D-AK: what the include carries about price and discount (codes and numbers only, no personal data).
+        logger.info(
+          {
+            outboxId: row.id,
+            orderId: order.id,
+            phase: 'include',
+            priceMode: usesInformedPrice(request) ? 'True' : 'False',
+            discountedItems: request.items.filter((item) => item.discountPercent !== null).length,
+            items: request.items.map((item) => ({ productCode: item.productCode, vlrunit: usesInformedPrice(request) ? item.listUnitPrice : null, percdesc: item.discountPercent })),
+          },
+          'including the order in the ERP',
+        );
         const includeStartedMs = this.deps.now().getTime();
         const included = await this.deps.gateway.includeOrder(request, signal === undefined ? {} : { signal });
         erpNumber = included.erpOrderNumber;
@@ -354,10 +383,10 @@ export class OrderDeliveryService {
       if (written === null) {
         throw new SankhyaGatewayError('temporary', { code: 'order_not_readable', message: 'The written order cannot be read back yet.' });
       }
-      const verdict = verifyWrittenOrder(items, written);
+      const verdict = verifyWrittenOrder(items, written, await this.loadIpiRefs(items));
       if (!verdict.ok) {
         // D-7: the ERP stored something other than what was sent. The order exists there: keep its number.
-        await this.finishRejected(row, order, 'validation', verdict.code, `The ERP stored a different ${verdict.code === 'discount_divergence' ? 'discount' : 'price or line'} (product ${verdict.productCode}).`, true);
+        await this.finishRejected(row, order, 'validation', verdict.code, divergenceMessage(verdict.code, verdict.productCode), true);
         return;
       }
       await this.finishSent(row, order, erpNumber);
@@ -476,6 +505,27 @@ export class OrderDeliveryService {
     const validated = validateInstallationConfiguration(current.payload);
     if (!validated.ok) throw new ConfigurationUnavailableError('The current installation configuration is invalid.');
     return validated.value;
+  }
+
+  /** IPI reference per product from the mirror (display estimate, D-D); used only to compare the reread VLRIPI and VLRNOTA. */
+  private async loadIpiRefs(items: readonly DeliveryItem[]): Promise<Map<number, IpiRef>> {
+    const codes = [...new Set(items.map((item) => item.productCode))];
+    const refs = new Map<number, IpiRef>();
+    if (codes.length === 0) return refs;
+    const products = await this.database
+      .select({ code: erpProduct.code, ipiCode: erpProduct.ipiCode })
+      .from(erpProduct)
+      .where(and(isNull(erpProduct.deletedAt), inArray(erpProduct.code, codes)));
+    const ipiCodes = [...new Set(products.flatMap((product) => (product.ipiCode === null ? [] : [product.ipiCode])))];
+    const rates = new Map<number, IpiRate>();
+    if (ipiCodes.length > 0) {
+      const rows = await this.database.select().from(erpIpiRate).where(and(isNull(erpIpiRate.deletedAt), inArray(erpIpiRate.code, ipiCodes)));
+      for (const row of rows) {
+        rates.set(row.code, { code: row.code, percentual: row.percentual, byTariff: row.byTariff, description: row.description, rateMissing: row.rateMissing });
+      }
+    }
+    for (const product of products) refs.set(product.code, ipiRefOf(product.ipiCode, rates));
+    return refs;
   }
 
   private async loadOrder(orderId: string): Promise<{ order: OrderRow; items: DeliveryItem[] } | null> {

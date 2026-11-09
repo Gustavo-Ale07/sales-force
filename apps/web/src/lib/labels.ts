@@ -47,7 +47,7 @@ export const orderStatusHints: Record<ApiSchema<"OrderStatus">, string> = {
   approval_rejected: "O aprovador reprovou o desconto. Edite o pedido para ajustar e enviar de novo.",
   queued: "O envio ao Sankhya está em andamento. O pedido ainda não existe no Sankhya.",
   sent: "Enviado ao Sankhya. A conferência e a liberação são feitas pela Plac dentro do Sankhya; isso não indica faturamento.",
-  rejected: "O envio ao Sankhya falhou. O pedido não foi criado no Sankhya; ele pode ser reenviado depois.",
+  rejected: "O envio ao Sankhya falhou. Veja o motivo no pedido: se a nota já existe no Sankhya, ela não é reenviada.",
   unknown: "Estamos verificando o envio com o Sankhya. Isso se resolve sozinho em instantes.",
 };
 
@@ -101,10 +101,25 @@ const deliveryCodeLabels: Record<string, string> = {
   price_divergence: "O Sankhya gravou um preço diferente do enviado",
   discount_divergence: "O Sankhya gravou um desconto diferente do enviado",
   item_mismatch: "Os itens gravados no Sankhya diferem dos enviados",
+  ipi_divergence: "O Sankhya calculou um IPI diferente da estimativa do Force",
+  total_divergence: "O total da nota no Sankhya difere do total do Force (itens líquidos + IPI)",
   order_not_deliverable: "O pedido não estava em situação de envio",
   include_timeout_unconfirmed: "O Sankhya não confirmou o recebimento a tempo. Reenvie: o Force PLAC confere antes de criar o pedido",
   ambiguous_origin: "Há mais de uma nota com este pedido no Sankhya. Peça à TI para conferir.",
 };
+
+const divergenceCodes = new Set(["price_divergence", "discount_divergence", "item_mismatch", "ipi_divergence", "total_divergence"]);
+
+/** D-AK: the ERP note exists with other values than the order; the Force does not resend it (the server answers 409 too). */
+export function erpNoteDiverged(order: { erpNumber?: number | null; erpDelivery?: { errorCode?: string | null } | null } | null | undefined): boolean {
+  const code = order?.erpDelivery?.errorCode;
+  return order?.erpNumber != null && code != null && divergenceCodes.has(code);
+}
+
+/** Seller text for a diverged note. */
+export function erpNoteDivergedText(erpNumber: number): string {
+  return `A nota nº ${erpNumber} já existe no Sankhya com valores diferentes do pedido. Peça à TI para conferir; o Force não reenvia.`;
+}
 
 /** K3: why the last delivery of a rejected order failed, from the stable class and code only (never the stored text). */
 export function deliveryErrorText(delivery: ErpDelivery | null | undefined): string | null {

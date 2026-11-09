@@ -39,7 +39,7 @@ function request(overrides: Partial<OrderWriteRequest> = {}): OrderWriteRequest 
     stockLocationCode: 209,
     orderDate: '2026-10-30',
     notes: null,
-    items: [{ productCode: 55, quantity: '2.5', unit: 'UN', discountPercent: null }],
+    items: [{ productCode: 55, quantity: '2.5', unit: 'UN', discountPercent: null, listUnitPrice: '10' }],
     ...overrides,
   };
 }
@@ -88,7 +88,7 @@ describe('CACSP.incluirNota payload (SNK-7 D-8, F-44)', () => {
 
   it('takes company, TOP, payment, location, unit and origin field from the request', () => {
     const body = JSON.stringify(
-      buildIncluirNotaBody(request({ companyCode: 3, topCode: 1005, negotiationTypeCode: 2, stockLocationCode: 301, originField: 'AD_OUTRO', items: [{ productCode: 9, quantity: '1', unit: 'CX', discountPercent: null }] })),
+      buildIncluirNotaBody(request({ companyCode: 3, topCode: 1005, negotiationTypeCode: 2, stockLocationCode: 301, originField: 'AD_OUTRO', items: [{ productCode: 9, quantity: '1', unit: 'CX', discountPercent: null, listUnitPrice: '10' }] })),
     );
     for (const expected of ['"CODEMP":{"$":"3"}', '"CODTIPOPER":{"$":"1005"}', '"CODTIPVENDA":{"$":"2"}', '"CODLOCALORIG":{"$":"301"}', '"CODVOL":{"$":"CX"}', '"AD_OUTRO"']) {
       expect(body).toContain(expected);
@@ -105,7 +105,7 @@ describe('CACSP.incluirNota payload (SNK-7 D-8, F-44)', () => {
 
   it('sends PERCDESC only for a real discount (D-7) and keeps decimal quantities', () => {
     const body = JSON.stringify(
-      buildIncluirNotaBody(request({ items: [{ productCode: 1, quantity: '0.125', unit: 'KG', discountPercent: '8' }, { productCode: 2, quantity: '3', unit: 'UN', discountPercent: '0' }] })),
+      buildIncluirNotaBody(request({ items: [{ productCode: 1, quantity: '0.125', unit: 'KG', discountPercent: '8', listUnitPrice: '10' }, { productCode: 2, quantity: '3', unit: 'UN', discountPercent: '0', listUnitPrice: '10' }] })),
     );
     expect(body.match(/PERCDESC/g)).toHaveLength(1);
     expect(body).toContain('"PERCDESC":{"$":"8"}');
@@ -177,13 +177,13 @@ describe('fake order book (SNK-7)', () => {
     const book = new FakeOrderBook();
     const gateway = new FakeGateway({ orders: book });
     expect(await gateway.findOrderByOrigin(FIELD, ORIGIN)).toBeNull();
-    const { erpOrderNumber } = await gateway.includeOrder(request({ items: [{ productCode: 55, quantity: '2', unit: 'UN', discountPercent: '8' }] }));
+    const { erpOrderNumber } = await gateway.includeOrder(request({ items: [{ productCode: 55, quantity: '2', unit: 'UN', discountPercent: '8', listUnitPrice: '10' }] }));
     expect(await gateway.findOrderByOrigin(FIELD, ORIGIN)).toEqual({ erpOrderNumber, confirmed: false });
     await gateway.confirmOrder(erpOrderNumber);
     await gateway.confirmOrder(erpOrderNumber);
     const reread = await gateway.readWrittenOrder(erpOrderNumber);
     expect(reread?.confirmed).toBe(true);
-    expect(reread?.items).toEqual([{ productCode: 55, quantity: '2', unitPrice: '10', discountPercent: '8' }]);
+    expect(reread?.items).toEqual([{ productCode: 55, quantity: '2', unitPrice: '10', discountPercent: '8', discountAmount: '1.60', ipiAmount: '0.00' }]);
   });
 
   it('has no native idempotency: a second include creates a second order', async () => {
@@ -351,12 +351,14 @@ describe('real adapter order writes (mock transport only, no network)', () => {
 
   it('rereads header and item prices for the D-7 check', async () => {
     const { gateway, mock } = setup();
-    mock.forced.push(ok(['NUNOTA', 'STATUSNOTA'], [[2475, 'A']]));
-    mock.forced.push(ok(['CODPROD', 'QTDNEG', 'VLRUNIT', 'PERCDESC'], [[55, 2.5, 16.43, 8]]));
+    mock.forced.push(ok(['NUNOTA', 'STATUSNOTA', 'VLRNOTA', 'VLRIPI'], [[2475, 'A', 274.85, 8.65]]));
+    mock.forced.push(ok(['CODPROD', 'QTDNEG', 'VLRUNIT', 'PERCDESC', 'VLRDESC', 'VLRIPI'], [[55, 2.5, 16.43, 8, 3.29, 1.5]]));
     expect(await gateway.readWrittenOrder(2475)).toEqual({
       erpOrderNumber: 2475,
       confirmed: false,
-      items: [{ productCode: 55, quantity: '2.5', unitPrice: '16.43', discountPercent: '8' }],
+      totalAmount: '274.85',
+      ipiAmount: '8.65',
+      items: [{ productCode: 55, quantity: '2.5', unitPrice: '16.43', discountPercent: '8', discountAmount: '3.29', ipiAmount: '1.5' }],
     });
     await expect(gateway.readWrittenOrder(0)).rejects.toMatchObject({ kind: 'validation' });
   });

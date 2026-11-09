@@ -115,6 +115,9 @@ function discountedLines(items: readonly { readonly discountPercent: string }[])
   return items.filter((item) => item.discountPercent !== '0').length;
 }
 
+/** D-AK: reread divergences of a note that already exists in the ERP: never resent (Reenviar only links to it and rejects again). */
+const ERP_DIVERGENCE_CODES: ReadonlySet<string> = new Set(['price_divergence', 'discount_divergence', 'item_mismatch', 'ipi_divergence', 'total_divergence']);
+
 @Injectable()
 export class OrdersService {
   constructor(
@@ -631,7 +634,15 @@ export class OrdersService {
     if (order.status === 'rejected') {
       // K2: several ERP notes carry this order's origin id; resending could make it worse. IT checks the ERP first.
       const last = await this.orders.lastDeliveryErrorOf(order.id);
-      if (erpDeliveryOf(order.status, last?.errorClass ?? null, last?.message ?? null)?.errorCode === 'ambiguous_origin') {
+      const lastCode = erpDeliveryOf(order.status, last?.errorClass ?? null, last?.message ?? null)?.errorCode;
+      // D-AK: the note already exists in the ERP with other values than the order; resending only links to it and rejects again.
+      if (order.erpNumber !== null && lastCode !== undefined && lastCode !== null && ERP_DIVERGENCE_CODES.has(lastCode)) {
+        throw new AppError('conflict', {
+          message: `A nota nº ${order.erpNumber} já existe no Sankhya com valores diferentes do pedido. Peça à TI para conferir; o Force não reenvia.`,
+          details: { reason: 'delivery_diverged' },
+        });
+      }
+      if (lastCode === 'ambiguous_origin') {
         throw new AppError('conflict', {
           message: 'Há mais de uma nota com este pedido no Sankhya. Peça à TI para conferir.',
           details: { reason: 'ambiguous_origin' },

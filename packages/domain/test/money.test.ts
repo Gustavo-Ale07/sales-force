@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   compareDecimalStrings,
   computeDiscountedLineTotal,
+  computeLineDiscountAmount,
+  computeUnitDiscount,
+  estimateItemIpi,
   computeLineTotal,
   computeNetUnitPrice,
   decimalEquals,
@@ -152,15 +155,43 @@ describe('discount', () => {
     expect(validateDiscountPercent('-5')).toEqual({ ok: false, error: 'negative' });
   });
 
-  it('computeDiscountedLineTotal equals computeLineTotal at 0% and rounds once half-up', () => {
+  it('computeDiscountedLineTotal equals computeLineTotal at 0% and follows the per-unit rounded Sankhya rule', () => {
     expect(computeDiscountedLineTotal('3', '0.335', '0')).toBe(computeLineTotal('3', '0.335'));
-    expect(computeDiscountedLineTotal('1', '10.05', '50')).toBe('5.03'); // 5.025 -> 5.03
-    expect(computeDiscountedLineTotal('7', '19.9', '33.33')).toBe('92.87');
+    expect(computeDiscountedLineTotal('1', '10.05', '50')).toBe('5.02'); // unit discount 5.025 -> 5.03
+    expect(computeDiscountedLineTotal('7', '19.9', '33.33')).toBe('92.89'); // unit discount 6.632 -> 6.63
   });
 
-  it('computeNetUnitPrice: list x (1 - d/100), at most 6 decimals', () => {
+  it('D-AK: the Sankhya discount rule on real Sandbox cases (notes 2499/2500, 2491/2492)', () => {
+    expect(computeUnitDiscount('28.94', '8')).toBe('2.32');
+    expect(computeLineDiscountAmount('10', '28.94', '8')).toBe('23.20');
+    expect(computeDiscountedLineTotal('10', '28.94', '8')).toBe('266.20'); // the old one-shot rounding gave 266.25
+    expect(computeUnitDiscount('118.26', '7')).toBe('8.28');
+    expect(computeLineDiscountAmount('60', '118.26', '7')).toBe('496.80'); // VLRDESC, not 496.69
+    expect(computeUnitDiscount('158.65', '7')).toBe('11.11');
+    expect(computeLineDiscountAmount('15', '158.65', '7')).toBe('166.65');
+    // order B: 4158 x 50 and 4159 x 10 at 8%
+    const l1 = computeDiscountedLineTotal('50', '28.94', '8');
+    const l2 = computeDiscountedLineTotal('10', '38.47', '8');
+    expect(computeUnitDiscount('38.47', '8')).toBe('3.08'); // 3.0776
+    expect(l1).toBe('1331.00');
+    expect(l2).toBe('353.90');
+    expect(sumTotals([l1, l2])).toBe('1684.90'); // old 1685.16
+  });
+
+  it('D-AK: IPI on the net line and the total (note 2500: 266.20 + 8.65 = 274.85)', () => {
+    const net = computeDiscountedLineTotal('10', '28.94', '8');
+    const ipi = estimateItemIpi(net, '3.25');
+    expect(ipi).toBe('8.65');
+    expect(sumTotals([net, ipi])).toBe('274.85');
+    // order A, no discount: 4158 x 50 + 4159 x 10 -> IPI 47.03 + 12.50, total 1891.23
+    const a1 = computeLineTotal('50', '28.94');
+    const a2 = computeLineTotal('10', '38.47');
+    expect(sumTotals([a1, a2, estimateItemIpi(a1, '3.25'), estimateItemIpi(a2, '3.25')])).toBe('1891.23');
+  });
+
+  it('computeNetUnitPrice: list - per-unit rounded discount, at most 6 decimals', () => {
     expect(computeNetUnitPrice('8', '10')).toBe('7.2');
-    expect(computeNetUnitPrice('0.335', '12.5')).toBe('0.293125');
+    expect(computeNetUnitPrice('0.335', '12.5')).toBe('0.295');
     expect(computeNetUnitPrice('8', '0')).toBe('8');
   });
 });
