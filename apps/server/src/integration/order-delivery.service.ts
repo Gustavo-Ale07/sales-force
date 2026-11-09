@@ -95,6 +95,7 @@ interface Claimed {
 
 const DEFAULT_SWEEP_LIMIT = 25;
 const MESSAGE_MAX = 500;
+const REJECTION_LOG_MAX = 300;
 
 /** A configuration problem is operational, not the order's fault: retried like a temporary failure. */
 class ConfigurationUnavailableError extends SankhyaGatewayError {
@@ -676,7 +677,11 @@ export class OrderDeliveryService {
         );
       }
     });
-    this.deps.logger.warn({ outboxId: row.id, orderId: row.aggregateId, errorClass, errorCode }, 'order delivery rejected');
+    // The ERP's own refusal text (masked like the stored one, short, never the request) so the log says WHY, not only the code.
+    this.deps.logger.warn(
+      { outboxId: row.id, orderId: row.aggregateId, errorClass, errorCode, reason: maskStoredError(message).slice(0, REJECTION_LOG_MAX) },
+      'order delivery rejected',
+    );
   }
 
   private async applyOutcome(

@@ -127,7 +127,8 @@ export function deliveryErrorText(delivery: ErpDelivery | null | undefined): str
   if (!delivery) return null;
   const byCode = delivery.errorCode ? deliveryCodeLabels[delivery.errorCode] : undefined;
   if (byCode) return byCode;
-  if (delivery.errorClass === "validation") return "O Sankhya ou o Sales Force recusou os dados do pedido";
+  if (delivery.errorCode === "erp_refused_order") return delivery.message ? `O Sankhya recusou o pedido: ${delivery.message}` : "O Sankhya recusou o pedido";
+  if (delivery.errorClass === "validation") return "O Sankhya ou o Force recusou os dados do pedido";
   return `Falha no envio (${delivery.errorClass}${delivery.errorCode ? ` / ${delivery.errorCode}` : ""})`;
 }
 

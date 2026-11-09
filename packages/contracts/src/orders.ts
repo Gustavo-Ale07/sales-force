@@ -167,10 +167,11 @@ export const OrderListItemSchema = named(
       })
       .nullable(),
     /**
-     * Why the last ERP delivery was refused (K3, D-X): class and stable code only, never the stored text. Present only
-     * on `rejected` orders; clients map it to a human label.
+     * Why the last ERP delivery was refused (K3, D-X): class and stable code, never the stored text. Present only
+     * on `rejected` orders; clients map it to a human label. `message` is the ERP's own short refusal text and is set
+     * only when the ERP refused the order (`erp_refused_order`): masked, at most 200 characters, no request data.
      */
-    erpDelivery: z.object({ errorClass: z.string(), errorCode: z.string().nullable() }).nullable().optional(),
+    erpDelivery: z.object({ errorClass: z.string(), errorCode: z.string().nullable(), message: z.string().max(200).nullable().optional() }).nullable().optional(),
     /** `null` unless the draft needs review (its customer became ineligible). Clients show it and block sending. */
     review: OrderReviewSchema.nullable(),
     version: z.number().int().min(1),

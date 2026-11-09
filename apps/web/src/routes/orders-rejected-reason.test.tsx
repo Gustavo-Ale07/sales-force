@@ -25,7 +25,9 @@ describe("K3: motivo da falha de envio", () => {
 
   it("maps codes, falls back by class, and never invents text", () => {
     expect(deliveryErrorText({ errorClass: "validation", errorCode: "send_disabled" })).toBe("Envio ao Sankhya desligado");
-    expect(deliveryErrorText({ errorClass: "validation", errorCode: "something_new" })).toBe("O Sankhya ou o Sales Force recusou os dados do pedido");
+    expect(deliveryErrorText({ errorClass: "validation", errorCode: "something_new" })).toBe("O Sankhya ou o Force recusou os dados do pedido");
+    expect(deliveryErrorText({ errorClass: "validation", errorCode: "erp_refused_order", message: "Produto sem preço" })).toBe("O Sankhya recusou o pedido: Produto sem preço");
+    expect(deliveryErrorText({ errorClass: "validation", errorCode: "erp_refused_order" })).toBe("O Sankhya recusou o pedido");
     expect(deliveryErrorText({ errorClass: "exhausted", errorCode: null })).toBe("Falha no envio (exhausted)");
     expect(deliveryErrorText(null)).toBeNull();
     expect(deliveryErrorText(undefined)).toBeNull();

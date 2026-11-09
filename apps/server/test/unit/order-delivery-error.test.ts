@@ -15,6 +15,22 @@ describe('erpDeliveryOf (K3: only the class and the stable code leave the server
     expect(JSON.stringify(out)).not.toContain('João');
   });
 
+  it('exposes the ERP refusal text, and only for erp_refused_order', () => {
+    expect(erpDeliveryOf('rejected', 'validation', 'erp_refused_order: The ERP refused the order: Produto 123 sem preço na tabela.')).toEqual({
+      errorClass: 'validation',
+      errorCode: 'erp_refused_order',
+      message: 'Produto 123 sem preço na tabela',
+    });
+    const long = erpDeliveryOf('rejected', 'validation', `erp_refused_order: The ERP refused the order: ${'x'.repeat(400)}.`);
+    expect(long?.message).toHaveLength(200);
+    expect(erpDeliveryOf('rejected', 'validation', 'erp_refused_order: The ERP refused the order: no message.')).toEqual({
+      errorClass: 'validation',
+      errorCode: 'erp_refused_order',
+    });
+    // Any other code keeps the old rule: the stored text never leaves the server.
+    expect(erpDeliveryOf('rejected', 'validation', 'environment_mismatch: texto interno')).not.toHaveProperty('message');
+  });
+
   it('is null for orders that are not rejected', () => {
     expect(erpDeliveryOf('sent', 'validation', 'x: y')).toBeNull();
     expect(erpDeliveryOf('queued', null, null)).toBeNull();

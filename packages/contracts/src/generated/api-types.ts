@@ -1195,6 +1195,7 @@ export interface components {
             erpDelivery?: {
                 errorClass: string;
                 errorCode: string | null;
+                message?: string | null;
             } | null;
             review: components["schemas"]["OrderReview"] | null;
             version: number;
@@ -1314,6 +1315,7 @@ export interface components {
             erpDelivery?: {
                 errorClass: string;
                 errorCode: string | null;
+                message?: string | null;
             } | null;
             review: components["schemas"]["OrderReview"] | null;
             version: number;

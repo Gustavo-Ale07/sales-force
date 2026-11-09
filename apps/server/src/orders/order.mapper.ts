@@ -71,7 +71,23 @@ export function erpStatusOf(order: OrderRow, liberationEventLabels?: Readonly<Re
 export function erpDeliveryOf(status: string, errorClass: string | null, message: string | null): OrderListItem['erpDelivery'] {
   if (status !== 'rejected' || errorClass === null) return null;
   const head = message === null ? '' : (message.split(':', 1)[0] ?? '').trim();
-  return { errorClass, errorCode: /^[a-z][a-z0-9_]{0,63}$/.test(head) ? head : null };
+  const errorCode = /^[a-z][a-z0-9_]{0,63}$/.test(head) ? head : null;
+  const reason = errorCode === ERP_REFUSED_CODE ? erpRefusalText(message) : null;
+  return reason === null ? { errorClass, errorCode } : { errorClass, errorCode, message: reason };
+}
+
+const ERP_REFUSED_CODE = 'erp_refused_order';
+const ERP_REFUSAL_PREFIX = 'erp_refused_order: The ERP refused the order: ';
+const ERP_REFUSAL_MAX = 200;
+
+/**
+ * The ERP's own refusal text out of the stored `erp_refused_order: The ERP refused the order: <statusMessage>.` (already
+ * masked when stored, D-Q). Only this one code exposes text; the placeholder "no message" and empty text give `null`.
+ */
+function erpRefusalText(stored: string | null): string | null {
+  if (stored === null || !stored.startsWith(ERP_REFUSAL_PREFIX)) return null;
+  const text = stored.slice(ERP_REFUSAL_PREFIX.length).replace(/\.$/, '').replace(/\s+/g, ' ').trim();
+  return text === '' || text === 'no message' ? null : text.slice(0, ERP_REFUSAL_MAX);
 }
 
 export function toOrderListItem(row: OrderListRow): OrderListItem {
