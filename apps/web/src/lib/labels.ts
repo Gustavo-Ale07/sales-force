@@ -4,8 +4,9 @@ import type { Tone } from "@salesforce/ui";
 
 /**
  * Order situation as Sales Force records it. These are Sales Force delivery states, NOT Sankhya's own order status:
- * `sent` means the order was handed to Sankhya, never that it was invoiced there. No "success" tone for anything that is
- * not a confirmed final result. User text says "Sankhya", never "ERP" (D-L); texts follow decisions.md §3.16.
+ * `sent` means the order was handed to Sankhya, never that it was invoiced there. Tones: success (green) only for `sent`,
+ * the confirmed delivery; in progress (queued, unknown, approved) is info (blue); failures are danger (red); waiting that
+ * needs action or is long (awaiting approval, overdue delivery) is warning (amber). User text says "Sankhya", never "ERP" (D-L); texts follow decisions.md §3.16.
  * TODO(after Track B merges): the Sankhya-side status labels (D-E) come from `orderDeliveryLabel` in @salesforce/domain.
  */
 export const orderStatusLabels: Record<ApiSchema<"OrderStatus">, { label: string; tone: Tone }> = {
@@ -14,7 +15,7 @@ export const orderStatusLabels: Record<ApiSchema<"OrderStatus">, { label: string
   approved: { label: "Aprovado", tone: "info" },
   approval_rejected: { label: "Reprovado na aprovação", tone: "danger" },
   queued: { label: "Enviando ao Sankhya…", tone: "info" },
-  sent: { label: "Enviado ao Sankhya", tone: "info" },
+  sent: { label: "Enviado ao Sankhya", tone: "success" },
   rejected: { label: "Falha no envio", tone: "danger" },
   unknown: { label: "Verificando envio…", tone: "info" },
 };
