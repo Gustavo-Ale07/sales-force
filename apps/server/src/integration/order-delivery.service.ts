@@ -8,8 +8,8 @@ import {
   type DbHandle,
   type OutboxStep,
 } from '@salesforce/db';
-import { erpIpiRate, erpProduct } from '@salesforce/db';
-import { erpSubmissionBlock, ipiRefOf, type ErpSubmissionTarget, type InstallationConfiguration, type IpiRate, type IpiRef } from '@salesforce/domain';
+import { erpIpiRate, erpListPrice, erpPriceTableVersion, erpProduct } from '@salesforce/db';
+import { erpSubmissionBlock, findEffectiveVersion, ipiRefOf, type ErpSubmissionTarget, type InstallationConfiguration, type IpiRate, type IpiRef } from '@salesforce/domain';
 import {
   AmbiguousOriginError,
   isBudgetExhaustedError,
@@ -104,7 +104,8 @@ class ConfigurationUnavailableError extends SankhyaGatewayError {
 }
 
 /** Distinct wording per reread divergence (D-AK): IPI and total are not "a different discount". */
-function divergenceMessage(code: string, productCode: number): string {
+function divergenceMessage(code: string, productCode: number, priceChanged = false): string {
+  if (priceChanged) return `The table price changed after the order was created (product ${productCode}); create the order again.`;
   if (code === 'ipi_divergence') return 'The ERP stored a different IPI than the Force estimate' + (productCode === 0 ? ' (note header).' : ` (product ${productCode}).`);
   if (code === 'total_divergence') return 'The ERP note total differs from the Force total (net lines + IPI).';
   return `The ERP stored a different ${code === 'discount_divergence' ? 'discount' : 'price or line'} (product ${productCode}).`;
@@ -383,10 +384,10 @@ export class OrderDeliveryService {
       if (written === null) {
         throw new SankhyaGatewayError('temporary', { code: 'order_not_readable', message: 'The written order cannot be read back yet.' });
       }
-      const verdict = verifyWrittenOrder(items, written, await this.loadIpiRefs(items));
+      const verdict = verifyWrittenOrder(items, written, await this.loadIpiRefs(items), await this.loadCurrentPrices(items));
       if (!verdict.ok) {
         // D-7: the ERP stored something other than what was sent. The order exists there: keep its number.
-        await this.finishRejected(row, order, 'validation', verdict.code, divergenceMessage(verdict.code, verdict.productCode), true);
+        await this.finishRejected(row, order, 'validation', verdict.code, divergenceMessage(verdict.code, verdict.productCode, verdict.priceChanged === true), true);
         return;
       }
       await this.finishSent(row, order, erpNumber);
@@ -528,6 +529,32 @@ export class OrderDeliveryService {
     return refs;
   }
 
+  /** Today's table price per product, from the mirror (the effective version of the table each line was priced from); only priced rows. */
+  private async loadCurrentPrices(items: readonly DeliveryItem[]): Promise<Map<number, string>> {
+    const current = new Map<number, string>();
+    const byTable = new Map<number, number[]>();
+    for (const item of items) {
+      if (item.priceTableCode === null || item.priceTableCode === undefined || item.unitListPrice === null) continue;
+      byTable.set(item.priceTableCode, [...(byTable.get(item.priceTableCode) ?? []), item.productCode]);
+    }
+    const at = this.deps.now().toISOString();
+    for (const [tableCode, productCodes] of byTable) {
+      const versionRows = await this.database
+        .select({ versionId: erpPriceTableVersion.versionId, tableCode: erpPriceTableVersion.tableCode, effectiveFrom: erpPriceTableVersion.effectiveFrom })
+        .from(erpPriceTableVersion)
+        .where(and(eq(erpPriceTableVersion.tableCode, tableCode), isNull(erpPriceTableVersion.deletedAt)));
+      const versions = versionRows.map((row) => ({ versionId: row.versionId, tableCode: row.tableCode, effectiveFrom: row.effectiveFrom.toISOString() }));
+      const effective = findEffectiveVersion(tableCode, versions, at);
+      if (effective === null) continue;
+      const rows = await this.database
+        .select({ productCode: erpListPrice.productCode, unitPrice: erpListPrice.unitPrice })
+        .from(erpListPrice)
+        .where(and(eq(erpListPrice.versionId, effective.versionId), isNull(erpListPrice.deletedAt), inArray(erpListPrice.productCode, productCodes)));
+      for (const row of rows) current.set(row.productCode, row.unitPrice);
+    }
+    return current;
+  }
+
   private async loadOrder(orderId: string): Promise<{ order: OrderRow; items: DeliveryItem[] } | null> {
     const [order] = await this.database.select().from(salesOrder).where(eq(salesOrder.id, orderId));
     if (order === undefined) return null;
@@ -543,6 +570,7 @@ export class OrderDeliveryService {
         unit: line.unit,
         quantity: line.quantity,
         unitListPrice: line.unitListPrice,
+        priceTableCode: line.priceTableCode,
         discountPercent: line.discountPercent,
         priceState: line.priceState,
       })),

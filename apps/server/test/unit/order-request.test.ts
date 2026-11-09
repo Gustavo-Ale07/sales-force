@@ -148,6 +148,11 @@ describe('verifyWrittenOrder (D-7)', () => {
     expect(verifyWrittenOrder([ITEM], written({ discountAmount: null }))).toMatchObject({ ok: false, code: 'discount_divergence' });
   });
 
+  it('D-AK: a stored price equal to the sent one is still rejected when today\'s table price differs', () => {
+    expect(verifyWrittenOrder([ITEM], written(), new Map(), new Map([[4158, '10.5']]))).toEqual({ ok: true });
+    expect(verifyWrittenOrder([ITEM], written(), new Map(), new Map([[4158, '11']]))).toEqual({ ok: false, code: 'price_divergence', productCode: 4158, priceChanged: true });
+  });
+
   it('D-AK: VLRDESC follows qty x round2(VLRUNIT x PERCDESC / 100) within cents', () => {
     const four = { ...ITEM, productCode: 4158, quantity: '10', unitListPrice: '28.94', discountPercent: '8' };
     const line = { productCode: 4158, quantity: '10', unitPrice: '28.94', discountPercent: '8', ipiAmount: null };

@@ -47,6 +47,7 @@ export interface DeliveryItem {
   readonly unit: string | null;
   readonly quantity: string;
   readonly unitListPrice: string | null;
+  readonly priceTableCode?: number | null;
   readonly discountPercent: string;
   readonly priceState: string;
 }
@@ -198,6 +199,8 @@ export type RereadVerdict =
       readonly ok: false;
       readonly code: 'price_divergence' | 'discount_divergence' | 'item_mismatch' | 'ipi_divergence' | 'total_divergence';
       readonly productCode: number;
+      /** The stored price equals the one sent but the table price changed after the order was created. */
+      readonly priceChanged?: true;
     };
 
 /**
@@ -210,6 +213,7 @@ export function verifyWrittenOrder(
   items: readonly DeliveryItem[],
   written: WrittenOrder,
   ipiRefs: ReadonlyMap<number, IpiRef> = new Map(),
+  currentPrices: ReadonlyMap<number, string> = new Map(),
 ): RereadVerdict {
   const remaining = [...written.items];
   const paired: { item: DeliveryItem; line: WrittenOrder['items'][number] }[] = [];
@@ -221,6 +225,11 @@ export function verifyWrittenOrder(
     if (line === undefined) return { ok: false, code: 'item_mismatch', productCode: item.productCode };
     if (item.unitListPrice !== null && !decimalEquals(line.unitPrice, item.unitListPrice)) {
       return { ok: false, code: 'price_divergence', productCode: item.productCode };
+    }
+    // D-AK: with INFORMARPRECO "True" the ERP keeps the price sent; it must still be today's table price in the mirror (no auto-correction).
+    const current = currentPrices.get(item.productCode);
+    if (current !== undefined && !decimalEquals(line.unitPrice, current)) {
+      return { ok: false, code: 'price_divergence', productCode: item.productCode, priceChanged: true };
     }
     if (!decimalEquals(line.discountPercent ?? '0', item.discountPercent)) {
       return { ok: false, code: 'discount_divergence', productCode: item.productCode };

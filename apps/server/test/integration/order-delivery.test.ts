@@ -564,6 +564,32 @@ describe('live delivery', () => {
     expect((await w.order(orderId)).status).toBe('rejected');
   });
 
+  it('D-AK: the mirror table price changed between creating and sending: the note is written, then rejected as price_divergence with its number kept and no resend', async () => {
+    const w = await world();
+    const { orderId, outboxId } = await w.seed();
+    const pool = w.database.handle.pool;
+    await pool.query(`INSERT INTO erp_price_table_version (version_id, table_code, effective_from, content_hash, synced_at) VALUES (1, 1, '2026-01-01T00:00:00Z', 'h', now())`);
+    await pool.query(`INSERT INTO erp_list_price (version_id, product_code, unit_price, content_hash, synced_at) VALUES (1, 4158, '12', 'h', now())`);
+    await w.service.runDue();
+    expect(await w.outbox(outboxId)).toMatchObject({ status: 'rejected', lastErrorClass: 'validation' });
+    expect((await w.outbox(outboxId)).lastErrorMessage).toMatch(/^price_divergence: The table price changed after the order was created/);
+    const order = await w.order(orderId);
+    expect(order.status).toBe('rejected');
+    expect(order.erpNumber).toBe(w.book.orders[0]?.erpOrderNumber);
+    await w.service.runDue();
+    expect(w.book.orders).toHaveLength(1);
+  });
+
+  it('D-AK: a mirror price equal to the one sent does not reject the order', async () => {
+    const w = await world();
+    const { orderId } = await w.seed();
+    const pool = w.database.handle.pool;
+    await pool.query(`INSERT INTO erp_price_table_version (version_id, table_code, effective_from, content_hash, synced_at) VALUES (1, 1, '2026-01-01T00:00:00Z', 'h', now())`);
+    await pool.query(`INSERT INTO erp_list_price (version_id, product_code, unit_price, content_hash, synced_at) VALUES (1, 4158, '10', 'h', now())`);
+    await w.service.runDue();
+    expect((await w.order(orderId)).status).toBe('sent');
+  });
+
   it('refuses an order bound to another ERP environment before any call', async () => {
     const w = await world();
     const { orderId, outboxId } = await w.seed({ env: 'production' });

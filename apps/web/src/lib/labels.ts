@@ -98,7 +98,7 @@ const deliveryCodeLabels: Record<string, string> = {
   no_items: "Pedido sem itens",
   missing_unit: "Item sem unidade",
   no_price: "Item sem preço",
-  price_divergence: "O Sankhya gravou um preço diferente do enviado",
+  price_divergence: "O preço mudou depois do pedido, ou o Sankhya gravou um preço diferente do enviado. Refaça o pedido",
   discount_divergence: "O Sankhya gravou um desconto diferente do enviado",
   item_mismatch: "Os itens gravados no Sankhya diferem dos enviados",
   ipi_divergence: "O Sankhya calculou um IPI diferente da estimativa do Force",
