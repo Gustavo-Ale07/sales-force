@@ -261,6 +261,7 @@ const products: MirrorEntitySpec = {
           groupName: row.groupCode === null ? null : (groupNames.get(row.groupCode) ?? null),
           usageCode: row.usageCode,
           ipiCode: row.ipiCode ?? null,
+          quantityStep: row.quantityStep ?? null,
           active: row.active,
         },
       }));

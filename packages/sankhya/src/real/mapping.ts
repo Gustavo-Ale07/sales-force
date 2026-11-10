@@ -388,6 +388,16 @@ export const OPEN_TITLE_SPEC: EntitySpec<OpenTitle> = {
   keyOf: (title) => [title.nufin],
 };
 
+/** A selling step is meaningful only when positive; null/0 means "no rule". */
+/** Only a real step is carried; no rule leaves the field out (the same shape as the fake gateway). */
+function stepField(step: string | null): { quantityStep?: string } {
+  return step === null ? {} : { quantityStep: step };
+}
+
+function positiveStep(value: string | null): string | null {
+  return value !== null && Number(value) > 0 ? value : null;
+}
+
 /**
  * TGFPRO (§9.30 F-26, §9.35). PK CODPROD. `CODVOL` is the unit of measure. `USOPROD` is mirrored raw;
  * whether it makes the product sellable is configuration only (CFG-1..6).
@@ -395,8 +405,8 @@ export const OPEN_TITLE_SPEC: EntitySpec<OpenTitle> = {
 export const PRODUCT_SPEC: EntitySpec<Product> = {
   entity: 'products',
   table: 'TGFPRO',
-  select: ['CODPROD', 'DESCRPROD', 'ATIVO', 'USOPROD', 'CODGRUPOPROD', 'CODVOL', 'MARCA', 'REFERENCIA', 'CODIPI'],
-  columns: ['CODPROD', 'DESCRPROD', 'ATIVO', 'USOPROD', 'CODGRUPOPROD', 'CODVOL', 'MARCA', 'REFERENCIA', 'CODIPI'],
+  select: ['CODPROD', 'DESCRPROD', 'ATIVO', 'USOPROD', 'CODGRUPOPROD', 'CODVOL', 'MARCA', 'REFERENCIA', 'CODIPI', 'AGRUPMIN'],
+  columns: ['CODPROD', 'DESCRPROD', 'ATIVO', 'USOPROD', 'CODGRUPOPROD', 'CODVOL', 'MARCA', 'REFERENCIA', 'CODIPI', 'AGRUPMIN'],
   // `CODPROD = 0` is the ERP placeholder row ("<sem descrição>", Sandbox 2026-09-30): never mirrored.
   where: 'CODPROD > 0',
   orderBy: 'CODPROD',
@@ -410,6 +420,8 @@ export const PRODUCT_SPEC: EntitySpec<Product> = {
     brand: row.nullableText('MARCA'),
     reference: row.nullableText('REFERENCIA'),
     ipiCode: row.nullableInt('CODIPI'),
+    // AGRUPMIN (grouping minimum = selling step): null or 0 means no rule (step 0.01).
+    ...stepField(positiveStep(row.nullableDecimal('AGRUPMIN'))),
   }),
   keyOf: (product) => [product.code],
 };

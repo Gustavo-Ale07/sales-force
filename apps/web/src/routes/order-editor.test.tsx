@@ -290,7 +290,7 @@ describe("Novo pedido", () => {
     });
     await addProduct(user, "Balão");
     const quantity = screen.getByLabelText("Quantidade de Balão látex 9 pol. vermelho");
-    for (const typed of ["1,5", "0,0001", "0.0001"]) {
+    for (const typed of ["1,5", "0,01", "0.01"]) {
       await user.clear(quantity);
       await user.type(quantity, typed);
       expect(quantity).not.toHaveAttribute("aria-invalid");

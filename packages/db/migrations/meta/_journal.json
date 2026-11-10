@@ -225,6 +225,13 @@
       "when": 1794329433987,
       "tag": "0031_erp_product_group",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1794333063389,
+      "tag": "0032_erp_product_quantity_step",
+      "breakpoints": true
     }
   ]
 }

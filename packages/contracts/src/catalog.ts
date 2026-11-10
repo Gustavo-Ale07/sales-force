@@ -173,6 +173,8 @@ export const ProductListItemSchema = named(
     reference: z.string().nullable(),
     groupCode: codeInt().nullable(),
     groupName: z.string().nullable(),
+    /** Additive: selling step (multiples of it); absent or null = hundredths (at most 2 decimals). */
+    quantityStep: z.string().nullable().optional(),
     listPrice: ListPriceContextSchema,
     /** `null` (or absent) = the product has no image; the catalog works without one. */
     image: ProductImageSchema.nullable().optional(),

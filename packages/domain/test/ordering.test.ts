@@ -269,6 +269,29 @@ describe('validateDraftInvariants', () => {
       expect(codes(d, config, { products: new Map([[3001, other]]) })).toEqual(['product_not_sellable@items[0].productCode']);
     });
   });
+
+  describe('quantity step (AGRUPMIN, when a product lookup is supplied)', () => {
+    const run = (quantity: string, quantityStep: string | null | undefined) =>
+      codes(draft([item(1, quantity, priced('1'))]), config, {
+        products: new Map([[3001, makeProduct({ code: 3001, quantityStep })]]),
+      });
+    it('accepts multiples of the step, exactly (0.6 = 3 x 0.2)', () => {
+      expect(run('0.2', '0.2')).toEqual([]);
+      expect(run('0.6', '0.2')).toEqual([]);
+      expect(run('1.4', '0.2')).toEqual([]);
+    });
+    it('rejects a non-multiple with a stable code', () => {
+      expect(run('0.3', '0.2')).toEqual(['invalid_quantity_step@items[0].quantity']);
+    });
+    it('without a step the step is 0.01: hundredths pass, thousandths do not', () => {
+      for (const step of [null, undefined]) {
+        expect(run('0.01', step)).toEqual([]);
+        expect(run('0.5', step)).toEqual([]);
+        expect(run('7', step)).toEqual([]);
+        expect(run('0.005', step)).toEqual(['invalid_quantity_step@items[0].quantity']);
+      }
+    });
+  });
 });
 
 describe('computeDiscountSummary', () => {

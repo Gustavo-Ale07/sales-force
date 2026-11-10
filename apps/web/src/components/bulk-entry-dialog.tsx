@@ -148,7 +148,7 @@ function BulkEntryContent({
     () => [...selection.values()].map((picked) => ({ product: picked.product, quantityText: picked.quantityText.trim() === "" ? "1" : picked.quantityText.trim() })),
     [selection],
   );
-  const pickedProblem = [...selection.values()].some((picked) => quantityProblem(picked.quantityText) !== null);
+  const pickedProblem = [...selection.values()].some((picked) => quantityProblem(picked.quantityText, picked.product.quantityStep ?? null) !== null);
 
   const toAdd = useMemo(() => review?.planned.filter((entry) => entry.skip === null && entry.product !== null) ?? [], [review]);
   const leftOut = review ? review.planned.length - toAdd.length : 0;

@@ -92,6 +92,8 @@ export interface ProductRow {
   readonly groupCode: number | null;
   readonly groupName: string | null;
   readonly usageCode: string | null;
+  /** Selling step (AGRUPMIN), numeric text as stored; null = none. */
+  readonly quantityStep: string | null;
   readonly active: boolean;
 }
 
@@ -402,6 +404,7 @@ export class MirrorRepository {
       groupCode: erpProduct.groupCode,
       groupName: erpProduct.groupName,
       usageCode: erpProduct.usageCode,
+      quantityStep: erpProduct.quantityStep,
       active: erpProduct.active,
     };
   }

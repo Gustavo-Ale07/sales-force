@@ -7203,6 +7203,12 @@
               "null"
             ]
           },
+          "quantityStep": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "listPrice": {
             "$ref": "#/components/schemas/ListPriceContext"
           },
@@ -7378,6 +7384,12 @@
             ]
           },
           "groupName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "quantityStep": {
             "type": [
               "string",
               "null"

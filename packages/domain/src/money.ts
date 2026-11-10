@@ -90,6 +90,22 @@ export function validateQuantity(input: string): Result<DecimalString, DecimalEr
   return ok(parsed.value.toFixed());
 }
 
+/** Smallest quantity step of a product with no grouping rule (hundredths). */
+export const DEFAULT_QUANTITY_STEP: DecimalString = '0.01';
+
+/**
+ * Whether a quantity respects the product's selling step: a multiple of `step` (the ERP grouping minimum, AGRUPMIN) when
+ * it is positive, otherwise a multiple of 0.01 (at most 2 decimals). Exact decimal arithmetic, never floating point
+ * (0.6 is 3 x 0.2). A malformed quantity is not on any step; validate the quantity itself with `validateQuantity`.
+ */
+export function isQuantityOnStep(quantity: string, step?: string | null): boolean {
+  const parsed = parseUnsigned(quantity);
+  if (!parsed) return false;
+  const stepParsed = step === null || step === undefined ? null : parseUnsigned(step);
+  const unit = stepParsed !== null && !stepParsed.value.isZero() ? stepParsed.value : new Decimal(DEFAULT_QUANTITY_STEP);
+  return parsed.value.mod(unit).isZero();
+}
+
 /** Unit list price: zero or positive, at most 6 decimals. Returns the canonical string. */
 export function validateUnitPrice(input: string): Result<DecimalString, DecimalError> {
   const parsed = parseUnsigned(input);

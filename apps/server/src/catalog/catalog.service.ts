@@ -12,7 +12,7 @@ import {
   type ResolveProductsRequest,
   type ResolveProductsResponse,
 } from '@salesforce/contracts';
-import { ipiRefOf, isProductSellable, isProductVisible, type InstallationConfiguration, type IpiRef, type Product } from '@salesforce/domain';
+import { ipiRefOf, normalizeDecimalString, isProductSellable, isProductVisible, type InstallationConfiguration, type IpiRef, type Product } from '@salesforce/domain';
 import { CustomersService } from '../customers/customers.service.js';
 import { AppError } from '../http/app-error.js';
 import type { CurrentUser } from '../iam/current-user.js';
@@ -39,6 +39,7 @@ export function toDomainProduct(row: ProductRow): Product {
     unit: row.unit ?? '',
     brand: row.brand,
     reference: row.reference,
+    quantityStep: row.quantityStep === null ? null : normalizeDecimalString(row.quantityStep),
   };
 }
 
@@ -115,6 +116,7 @@ export class CatalogService {
       reference: row.reference,
       groupCode: row.groupCode,
       groupName: row.groupName,
+      quantityStep: product.quantityStep ?? null,
       listPrice: toListPriceContext(this.pricing.priceOf(book, row.code, row.unitPrice)),
       image,
       ipi,

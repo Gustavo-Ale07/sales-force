@@ -65,6 +65,7 @@ export async function seedDemoMirror(handle: DbHandle, syncedAt: Date = new Date
         groupName: p.groupCode === null ? null : (groupName.get(p.groupCode) ?? null),
         usageCode: p.usageCode,
         ipiCode: p.ipiCode ?? null,
+        quantityStep: p.quantityStep ?? null,
         active: p.active,
         ...base(p),
       })),

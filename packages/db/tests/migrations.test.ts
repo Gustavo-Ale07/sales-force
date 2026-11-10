@@ -42,7 +42,7 @@ const ALL_MIGRATIONS = [
   '0022_sales_order_expedicao',
   '0023_erp_ipi_rate_rate_missing',
   '0024_order_delete_cancelled_data',
-  '0025_order_status_drop_cancelled', '0026_outbox_status_dry_run', '0027_dry_run_parked_to_terminal', '0028_sync_refresh', '0029_sync_refresh_progress_at', '0030_order_freight_type',
+  '0025_order_status_drop_cancelled', '0026_outbox_status_dry_run', '0027_dry_run_parked_to_terminal', '0028_sync_refresh', '0029_sync_refresh_progress_at', '0030_order_freight_type', '0031_erp_product_group', '0032_erp_product_quantity_step',
 ];
 const N = ALL_MIGRATIONS.length;
 

@@ -207,6 +207,8 @@ export const erpProduct = pgTable(
     usageCode: text('usage_code'),
     /** ERP IPI code (TGFPRO.CODIPI) -> erp_ipi_rate.code. NULL = no IPI code. Not a foreign key: the mirrors load independently. */
     ipiCode: integer('ipi_code'),
+    /** Selling step (TGFPRO.AGRUPMIN): quantities are multiples of it. NULL = no rule (step 0.01). */
+    quantityStep: numeric('quantity_step', { precision: 14, scale: 4 }),
     active: boolean('active').notNull(),
     ...mirrorColumns(),
   },

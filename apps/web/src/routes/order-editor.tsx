@@ -65,6 +65,7 @@ import {
   lineFromProduct,
   listPriceOfLine,
   parseQuantityInput,
+  quantityProblemText,
   previewDraft,
   quantityProblemMessages,
   summarizeCart,
@@ -1028,7 +1029,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                               else quantityInputs.current.delete(line.key);
                             }}
                           />
-                          {problem ? <FieldError id={errorId}>{quantityProblemMessages[problem]}</FieldError> : null}
+                          {problem ? <FieldError id={errorId}>{quantityProblemText(problem, line.quantityStep)}</FieldError> : null}
                         </TableCell>
                         <TableCell numeric>
                           <PriceCell price={listPriceOfLine(line.price)} />

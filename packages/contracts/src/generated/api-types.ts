@@ -1482,6 +1482,7 @@ export interface components {
             reference: string | null;
             groupCode: number | null;
             groupName: string | null;
+            quantityStep?: string | null;
             listPrice: components["schemas"]["ListPriceContext"];
             image?: components["schemas"]["ProductImage"] | null;
             ipi?: components["schemas"]["IpiRef"];
@@ -1517,6 +1518,7 @@ export interface components {
             reference: string | null;
             groupCode: number | null;
             groupName: string | null;
+            quantityStep?: string | null;
             listPrice: components["schemas"]["ListPriceContext"];
             image?: components["schemas"]["ProductImage"] | null;
             ipi?: components["schemas"]["IpiRef"];

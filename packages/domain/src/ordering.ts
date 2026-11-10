@@ -6,6 +6,7 @@ import {
   computeLineTotal,
   decimalEquals,
   isDecimalString,
+  isQuantityOnStep,
   isTotalInRange,
   isZeroDecimal,
   subtractTotals,
@@ -135,6 +136,7 @@ export type DraftIssueCode =
   | 'invalid_line_number'
   | 'duplicate_line_number'
   | 'invalid_quantity'
+  | 'invalid_quantity_step'
   | 'invalid_discount'
   | 'price_state_inconsistent'
   | 'price_reference_missing'
@@ -203,6 +205,10 @@ export function validateDraftInvariants(
       const product = options.products.get(item.productCode);
       if (!product) add('product_unknown', `${at}.productCode`);
       else if (!isProductSellable(product, config)) add('product_not_sellable', `${at}.productCode`);
+      // A quantity off the product's step (AGRUPMIN, else hundredths) is rejected; an invalid quantity is already reported.
+      else if (validateQuantity(item.quantity).ok && !isQuantityOnStep(item.quantity, product.quantityStep)) {
+        add('invalid_quantity_step', `${at}.quantity`);
+      }
     }
   });
 

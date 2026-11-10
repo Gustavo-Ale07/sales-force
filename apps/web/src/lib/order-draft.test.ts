@@ -10,6 +10,7 @@ import {
   listPriceOfLine,
   parseDiscountInput,
   parseQuantityInput,
+  quantityProblemText,
   previewDraft,
   summarizeCart,
   toRequestItems,
@@ -25,6 +26,26 @@ const line = (overrides: Partial<EditorLine> = {}): EditorLine => ({
   discountText: "",
   price: { state: "priced", unitPrice: "10", tableCode: 5, versionId: 9 },
   ...overrides,
+});
+
+describe("parseQuantityInput with a selling step (AGRUPMIN)", () => {
+  it("laminate with step 0,2: 0,2 and 0,6 are valid, 0,3 is not", () => {
+    expect(parseQuantityInput("0,2", "0.2")).toEqual({ ok: true, value: "0.2" });
+    expect(parseQuantityInput("0,6", "0.2")).toEqual({ ok: true, value: "0.6" });
+    expect(parseQuantityInput("0,3", "0.2")).toEqual({ ok: false, problem: "quantity_step" });
+  });
+  it("napkin without step (null): hundredths are valid, thousandths are not", () => {
+    expect(parseQuantityInput("0,01", null)).toEqual({ ok: true, value: "0.01" });
+    expect(parseQuantityInput("0,5", null)).toEqual({ ok: true, value: "0.5" });
+    expect(parseQuantityInput("0,005", null)).toEqual({ ok: false, problem: "quantity_step" });
+  });
+  it("unknown step (undefined) skips the check; the server decides", () => {
+    expect(parseQuantityInput("0,005", undefined)).toEqual({ ok: true, value: "0.005" });
+  });
+  it("messages name the multiple", () => {
+    expect(quantityProblemText("quantity_step", "0.2")).toBe("Este produto só vende em múltiplos de 0,2.");
+    expect(quantityProblemText("quantity_step", null)).toBe("No máximo 2 casas decimais.");
+  });
 });
 
 describe("parseQuantityInput", () => {

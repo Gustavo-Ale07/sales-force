@@ -21,7 +21,7 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 import { productsQueryOptions } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
-import { discountProblemMessages, parseDiscountInput, parseQuantityInput, quantityProblemMessages } from "../lib/order-draft";
+import { discountProblemMessages, parseDiscountInput, parseQuantityInput, quantityProblemText } from "../lib/order-draft";
 import type { ProductRow } from "../lib/price-types";
 import { useDebounced } from "../lib/use-debounced";
 import { EMPTY_GROUP_PATH, GroupCascadeFilter, groupFilterValue, type GroupPath } from "./group-cascade-filter";
@@ -87,12 +87,12 @@ export function ProductBrowser({ filters, onFiltersChange, customerCode, cartQua
 
   const add = (product: ProductRow) => {
     const text = (quantities[product.code] ?? "").trim();
-    const parsed = parseQuantityInput(text === "" ? "1" : text);
+    const parsed = parseQuantityInput(text === "" ? "1" : text, product.quantityStep ?? null);
     // A product without a price takes no discount (P-09): whatever was typed is ignored.
     const discountText = product.listPrice.state === "none" ? "" : (discounts[product.code] ?? "").trim();
     const parsedDiscount = parseDiscountInput(discountText);
     if (!parsed.ok || !parsedDiscount.ok) {
-      setProblems(({ [product.code]: _dropped, ...rest }) => (parsed.ok ? rest : { ...rest, [product.code]: quantityProblemMessages[parsed.problem] }));
+      setProblems(({ [product.code]: _dropped, ...rest }) => (parsed.ok ? rest : { ...rest, [product.code]: quantityProblemText(parsed.problem, product.quantityStep ?? null) }));
       setDiscountProblems(({ [product.code]: _dropped, ...rest }) =>
         parsedDiscount.ok ? rest : { ...rest, [product.code]: discountProblemMessages[parsedDiscount.problem] },
       );

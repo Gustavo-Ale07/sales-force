@@ -21,7 +21,7 @@ import { useState } from "react";
 import { productsQueryOptions } from "../lib/api-queries";
 import { EMPTY_GROUP_PATH, GroupCascadeFilter, groupFilterValue, type GroupPath } from "./group-cascade-filter";
 import { useApi } from "../lib/app-context";
-import { parseQuantityInput, quantityProblemMessages } from "../lib/order-draft";
+import { parseQuantityInput, quantityProblemText } from "../lib/order-draft";
 import type { ProductRow } from "../lib/price-types";
 import { useDebounced } from "../lib/use-debounced";
 import { PriceCell } from "./price-cell";
@@ -50,11 +50,11 @@ export interface ProductMultiSelectProps {
   remainingSlots: number;
 }
 
-export function quantityProblem(quantityText: string): string | null {
+export function quantityProblem(quantityText: string, step?: string | null): string | null {
   const text = quantityText.trim();
   if (text === "") return null;
-  const parsed = parseQuantityInput(text);
-  return parsed.ok ? null : quantityProblemMessages[parsed.problem];
+  const parsed = parseQuantityInput(text, step);
+  return parsed.ok ? null : quantityProblemText(parsed.problem, step);
 }
 
 /**
@@ -174,7 +174,7 @@ export function ProductMultiSelect({
                 const picked = selection.get(product.code);
                 const inOrder = existingCodes.has(product.code);
                 const blocked = !inOrder && !isPriceOrderable(product.listPrice.state);
-                const problem = picked ? quantityProblem(picked.quantityText) : null;
+                const problem = picked ? quantityProblem(picked.quantityText, picked.product.quantityStep ?? null) : null;
                 const errorId = `multi-qty-error-${product.code}`;
                 return (
                   <TableRow key={product.code}>

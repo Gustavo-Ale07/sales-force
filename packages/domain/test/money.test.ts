@@ -9,6 +9,7 @@ import {
   computeNetUnitPrice,
   decimalEquals,
   isDecimalString,
+  isQuantityOnStep,
   isTotalInRange,
   normalizeDecimalString,
   sumQuantities,
@@ -193,5 +194,28 @@ describe('discount', () => {
     expect(computeNetUnitPrice('8', '10')).toBe('7.2');
     expect(computeNetUnitPrice('0.335', '12.5')).toBe('0.295');
     expect(computeNetUnitPrice('8', '0')).toBe('8');
+  });
+});
+
+describe('isQuantityOnStep (AGRUPMIN, exact decimal arithmetic)', () => {
+  it('laminates sold in multiples of 0.2', () => {
+    expect(isQuantityOnStep('0.2', '0.2')).toBe(true);
+    expect(isQuantityOnStep('0.6', '0.2')).toBe(true);
+    expect(isQuantityOnStep('3', '0.2')).toBe(true);
+    expect(isQuantityOnStep('0.3', '0.2')).toBe(false);
+    expect(isQuantityOnStep('0.1', '0.2')).toBe(false);
+  });
+  it('no step (null, undefined, zero) means hundredths', () => {
+    for (const step of [null, undefined, '0', '0.0000']) {
+      expect(isQuantityOnStep('0.01', step)).toBe(true);
+      expect(isQuantityOnStep('0.5', step)).toBe(true);
+      expect(isQuantityOnStep('4158', step)).toBe(true);
+      expect(isQuantityOnStep('0.005', step)).toBe(false);
+      expect(isQuantityOnStep('0.0001', step)).toBe(false);
+    }
+  });
+  it('a malformed quantity is on no step', () => {
+    expect(isQuantityOnStep('abc', '0.2')).toBe(false);
+    expect(isQuantityOnStep('', null)).toBe(false);
   });
 });

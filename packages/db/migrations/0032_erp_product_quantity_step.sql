@@ -1,0 +1,1 @@
+ALTER TABLE "erp_product" ADD COLUMN "quantity_step" numeric(14, 4);

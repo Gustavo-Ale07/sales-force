@@ -6,6 +6,7 @@ import {
   computeOrderIpiFromRefs,
   computeOrderTotals,
   isLineOrderable,
+  isQuantityOnStep,
   sumQuantities,
   validateDiscountPercent,
   validateQuantity,
@@ -50,22 +51,27 @@ export interface EditorLine {
   image?: ApiSchema<"ProductImage"> | null;
   /** IPI reference for the display estimate (D-D); absent = "IPI não disponível". Never validated nor sent to the server. */
   ipi?: IpiRef;
+  /** Selling step of the product (multiples of it). `null` = hundredths; `undefined` = not known (a line loaded from a saved order): the server decides. */
+  quantityStep?: string | null;
 }
 
-export type QuantityProblem = "empty" | DecimalError;
+export type QuantityProblem = "empty" | "quantity_step" | DecimalError;
 
 export type QuantityParse = { ok: true; value: string } | { ok: false; problem: QuantityProblem };
 
 /**
  * A quantity typed with a comma ("2,5") or a dot ("2.5") becomes a decimal string ("2.5") validated by the domain (positive, at most
  * 4 decimals, P4). There is no thousands separator: a text with more than one separator ("1.234,5") is not a number.
+ * With a `step` (the product's selling step; `null` = hundredths) the quantity must also be a multiple of it, in exact decimal arithmetic.
  */
-export function parseQuantityInput(text: string): QuantityParse {
+export function parseQuantityInput(text: string, step?: string | null): QuantityParse {
   const trimmed = text.trim();
   if (trimmed === "") return { ok: false, problem: "empty" };
   if (/[.,].*[.,]/.test(trimmed)) return { ok: false, problem: "not_a_decimal" };
   const result = validateQuantity(trimmed.replace(",", "."));
-  return result.ok ? { ok: true, value: result.value } : { ok: false, problem: result.error };
+  if (!result.ok) return { ok: false, problem: result.error };
+  if (step !== undefined && !isQuantityOnStep(result.value, step)) return { ok: false, problem: "quantity_step" };
+  return { ok: true, value: result.value };
 }
 
 export type DiscountProblem = "dot_separator" | DecimalError;
@@ -102,7 +108,14 @@ export const quantityProblemMessages: Record<QuantityProblem, string> = {
   negative: "A quantidade deve ser maior que zero.",
   too_many_decimals: "No máximo 4 casas decimais.",
   out_of_range: "Quantidade acima do limite permitido.",
+  quantity_step: "Quantidade fora do múltiplo permitido para este produto.",
 };
+
+/** Message of a quantity problem; a step problem names the multiple ("Este produto só vende em múltiplos de 0,2"). */
+export function quantityProblemText(problem: QuantityProblem, step?: string | null): string {
+  if (problem !== "quantity_step") return quantityProblemMessages[problem];
+  return step === null || step === undefined ? "No máximo 2 casas decimais." : `Este produto só vende em múltiplos de ${step.replace(".", ",")}.`;
+}
 
 export function priceFromListPrice(price: ListPrice): LinePrice {
   if (price.state === "none") {
@@ -123,6 +136,7 @@ export function lineFromProduct(product: ProductRow, key: string): EditorLine {
     group: { code: product.groupCode, name: product.groupName },
     image: product.image ?? null,
     ipi: product.ipi ?? { status: "unavailable" },
+    quantityStep: product.quantityStep ?? null,
   };
 }
 
@@ -177,7 +191,7 @@ export interface LinePreview {
 }
 
 export function previewLine(line: EditorLine, lineNo: number): LinePreview {
-  const quantity = parseQuantityInput(line.quantityText);
+  const quantity = parseQuantityInput(line.quantityText, line.quantityStep);
   const discount = parseDiscountInput(line.discountText);
   if (!quantity.ok || !discount.ok) {
     return {
@@ -259,6 +273,7 @@ const issueMessages: Record<DraftIssueCode, string> = {
   invalid_line_number: "Numeração de itens inválida.",
   duplicate_line_number: "Numeração de itens duplicada.",
   invalid_quantity: "Quantidade inválida.",
+  invalid_quantity_step: "Quantidade fora do múltiplo permitido para este produto.",
   invalid_discount: "Desconto inválido.",
   price_state_inconsistent: "Preço inconsistente. Recarregue o rascunho e tente novamente.",
   price_reference_missing: "Preço sem tabela de referência. Recarregue o rascunho e tente novamente.",

@@ -86,6 +86,7 @@ export const DraftIssueCodeSchema = named(
     'invalid_line_number',
     'duplicate_line_number',
     'invalid_quantity',
+    'invalid_quantity_step',
     'invalid_discount',
     'price_state_inconsistent',
     'price_reference_missing',
