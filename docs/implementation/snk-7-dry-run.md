@@ -47,6 +47,8 @@ Sequência:
    Saída esperada: `re-queued: outbox=… origin=… erpNumber=…`. Em até um ciclo do worker o pedido volta a `sent` com o mesmo número; conferir que `incluirNota` foi chamado uma única vez (registro da linha do outbox e contagem de requisições).
 4. Limpeza: `excluirNotas` das notas criadas; se recusado, `cancelarNota` como alternativa. Registrar o resultado em `docs/sankhya-spike.md`.
 
+**Estado do roteiro (2026-11-09, Sandbox, executado pelo dono).** Pedido A (NUNOTA 2498) e reenvio: a nota existente foi vinculada pela origem, sem segunda nota (SNK-4 atendido no caminho de reenvio). Pedido B (desconto): validado em D-AK. Pedido C (13 itens, cliente 2490, TOP 1001, 4 sem desconto com `PERCDESC "0"`, 4 com 5 %, 5 com 8 %, IPI 3,25 % e 9,75 %): feito, NUNOTA 2506, `VLRNOTA` 3.797,11, itens e IPI conferidos ao centavo, reread D-7 sem divergência. Item de quantidade decimal do pedido C: **a confirmar** (pode já estar coberto pelos pedidos A e B; não verificado). NUNOTA 2504 e 2505 foram consumidos pelas tentativas recusadas (sem nota). Notas de teste a limpar pela TI: 2499, 2500, 2501, 2502, 2503, 2506 (2498 a critério do dono). Registro: `docs/sankhya-spike.md` (linha de 2026-11-09, S3) e `docs/decisions.md` D-AK.
+
 Interrupção imediata (sem nova tentativa) em: erro de autenticação, resposta fora do contrato, qualquer segunda nota para o mesmo UUID, ou uso do orçamento.
 
 ## 4. Orçamento
