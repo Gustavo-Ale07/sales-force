@@ -1,14 +1,24 @@
 import { salesOrder, type DbHandle } from '@salesforce/db';
-import { mapErpOrderStatus } from '@salesforce/domain';
-import { isSankhyaGatewayError, type SankhyaOrderReadPort } from '@salesforce/sankhya';
+import { billingItemQuantities, billingStateOf, isFinalBillingState, mapErpOrderStatus, type ErpReleaseState } from '@salesforce/domain';
+import { type ErpOrderReleaseReading, type SankhyaOrderReadPort } from '@salesforce/sankhya';
 import { and, asc, eq, gte, isNotNull, sql } from 'drizzle-orm';
 import { describeSyncFailure, type SyncFailure } from '../sync/failure.js';
 import type { Logger } from '../observability/logger.js';
-import { decodeReleaseDetail, encodeReleaseDetail, encodeReleaseEventCodes, storedReleaseState, type StoredReleaseDetail } from '../orders/release-events.js';
+import {
+  decodeReleaseDetail,
+  encodeReleaseDetail,
+  encodeReleaseEventCodes,
+  releaseStateOfFacts,
+  storedBillingState,
+  type StoredBilling,
+  type StoredReleaseDetail,
+} from '../orders/release-events.js';
 import type { Clock } from '../platform/tokens.js';
 
 /** Orders older than this are no longer polled (P2). */
 export const ERP_STATUS_MAX_AGE_DAYS = 90;
+/** The release/billing cycle follows an order for at most this long after its creation. */
+export const BILLING_MAX_AGE_DAYS = 60;
 /** Orders read per run; the next run continues with the least recently checked. */
 export const ERP_STATUS_BATCH = 200;
 
@@ -116,17 +126,15 @@ export class OrderErpStatusService {
   async runReleaseOnce(options: { signal?: AbortSignal } = {}): Promise<OrderErpStatusRun> {
     const { db, gateway, logger } = this.deps;
     const now = this.deps.now();
-    const since = new Date(now.getTime() - ERP_STATUS_MAX_AGE_DAYS * 24 * 3600_000);
+    const since = new Date(now.getTime() - BILLING_MAX_AGE_DAYS * 24 * 3600_000);
     const candidates = await db.db
       .select({ id: salesOrder.id, erpNumber: salesOrder.erpNumber, detail: salesOrder.erpStatusDetail })
       .from(salesOrder)
       .where(and(eq(salesOrder.status, 'sent'), isNotNull(salesOrder.erpNumber), gte(salesOrder.createdAt, since)))
       .orderBy(asc(salesOrder.updatedAt))
       .limit(ERP_STATUS_BATCH);
-    const due = candidates.filter((row) => {
-      const stored = decodeReleaseDetail(row.detail);
-      return stored === null || storedReleaseState(stored) !== 'released';
-    });
+    // An order is followed until it is invoiced or cancelled, for at most 60 days (the query above).
+    const due = candidates.filter((row) => !isFinalBillingState(storedBillingState(decodeReleaseDetail(row.detail))));
     if (due.length === 0) return { checked: 0, updated: 0 };
     const numbers = due.flatMap((row) => (row.erpNumber === null ? [] : [row.erpNumber]));
     let readings;
@@ -144,15 +152,29 @@ export class OrderErpStatusService {
       return { checked: 0, updated: 0, failed: true, failure };
     }
     const byNumber = new Map(readings.map((reading) => [reading.erpOrderNumber, reading]));
+    // A failed billing read is never silent: one warning with the error code(s) and the count (no order data); the stored billing state is kept.
+    const billingErrors = readings.flatMap((reading) => (reading.billingErrorCode === undefined ? [] : [reading.billingErrorCode]));
+    if (billingErrors.length > 0) {
+      logger.warn(
+        { errorCodes: [...new Set(billingErrors)], orders: billingErrors.length },
+        'ERP billing read failed; the stored billing states are kept and the next run retries',
+      );
+    }
     let updated = 0;
     for (const row of due) {
       const reading = row.erpNumber === null ? undefined : byNumber.get(row.erpNumber);
-      // A note the ERP cannot find keeps what was stored (a missing note is not "no release").
-      if (reading === undefined || !reading.found) continue;
-      const next = encodeReleaseDetail(reading.lines, now);
-      // No change in the lines: keep the row untouched (the reading time is only stored with a change).
+      if (reading === undefined) continue;
       const stored = decodeReleaseDetail(row.detail);
-      if (stored !== null && next !== null && sameLines(stored, decodeReleaseDetail(next))) continue;
+      // A note the ERP cannot find keeps what was stored (a missing note is not "no release" and not a cancellation),
+      // unless the cancellation tables hold it: then the stored release lines stay and the billing state is "cancelled".
+      if (!reading.found && reading.billing?.cancelled !== true) continue;
+      const lines = reading.found
+        ? reading.lines
+        : (stored?.lines ?? []).map((line) => ({ event: line.code, description: line.description, released: line.state === 'released', denied: line.state === 'denied' }));
+      const billing = reading.billing === undefined ? stored?.billing : storedBillingOf(reading, releaseStateOfFacts(lines));
+      const next = encodeReleaseDetail(lines, now, billing);
+      // No change in the lines or billing: keep the row untouched (the reading time is only stored with a change).
+      if (stored !== null && next !== null && sameDetail(stored, decodeReleaseDetail(next))) continue;
       if (stored === null && next === null) continue;
       await db.db.update(salesOrder).set({ erpStatusDetail: next }).where(eq(salesOrder.id, row.id));
       updated += 1;
@@ -161,10 +183,29 @@ export class OrderErpStatusService {
   }
 }
 
-function sameLines(a: StoredReleaseDetail, b: StoredReleaseDetail | null): boolean {
+function sameDetail(a: StoredReleaseDetail, b: StoredReleaseDetail | null): boolean {
   if (b === null || a.lines.length !== b.lines.length) return false;
-  return a.lines.every((line, index) => {
+  const sameLines = a.lines.every((line, index) => {
     const other = b.lines[index];
     return other !== undefined && other.code === line.code && other.state === line.state && other.description === line.description;
   });
+  return sameLines && JSON.stringify(a.billing ?? null) === JSON.stringify(b.billing ?? null);
+}
+
+/** Billing state and per-item quantities of one reading (domain rules); a stored form with no secrets or ERP identifiers beyond the product. */
+export function storedBillingOf(reading: ErpOrderReleaseReading, releaseState: ErpReleaseState | null): StoredBilling {
+  const billing = reading.billing;
+  const state = billingStateOf({
+    cancelled: billing?.cancelled === true,
+    releaseState,
+    invoiced: billing?.invoiced === true,
+    statusNota: reading.statusNota,
+    pending: reading.pending,
+  });
+  return {
+    state,
+    invoicedAt: billing?.invoicedAt ?? null,
+    nfeAuthorized: billing?.nfeAuthorized === true,
+    items: (billing?.items ?? []).map((item) => ({ sequence: item.sequence, productCode: item.productCode, ...billingItemQuantities(item) })),
+  };
 }

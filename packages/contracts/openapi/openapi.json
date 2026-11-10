@@ -5845,6 +5845,69 @@
               }
             ]
           },
+          "erpBilling": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "cancelled",
+                      "denied",
+                      "awaiting_release",
+                      "invoiced",
+                      "awaiting_billing",
+                      "sent"
+                    ]
+                  },
+                  "invoicedAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "nfeAuthorized": {
+                    "type": "boolean"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "sequence": {
+                          "type": "integer"
+                        },
+                        "productCode": {
+                          "type": "integer"
+                        },
+                        "invoicedQuantity": {
+                          "type": "string"
+                        },
+                        "cutQuantity": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "sequence",
+                        "productCode",
+                        "invoicedQuantity",
+                        "cutQuantity"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "state"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "erpDelivery": {
             "anyOf": [
               {
@@ -6612,6 +6675,69 @@
                 "required": [
                   "state",
                   "checkedAt"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "erpBilling": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "cancelled",
+                      "denied",
+                      "awaiting_release",
+                      "invoiced",
+                      "awaiting_billing",
+                      "sent"
+                    ]
+                  },
+                  "invoicedAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "nfeAuthorized": {
+                    "type": "boolean"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "sequence": {
+                          "type": "integer"
+                        },
+                        "productCode": {
+                          "type": "integer"
+                        },
+                        "invoicedQuantity": {
+                          "type": "string"
+                        },
+                        "cutQuantity": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "sequence",
+                        "productCode",
+                        "invoicedQuantity",
+                        "cutQuantity"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "state"
                 ],
                 "additionalProperties": false
               },

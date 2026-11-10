@@ -252,15 +252,97 @@ describe('sync.erp.orderStatus - release (liberação), included notes only', ()
     w.book.releaseLines.set(7105, [line(44, { released: true })]);
     expect(await w.service.runReleaseOnce()).toEqual({ checked: 1, updated: 1 });
     expect(await stateOf(w, id)).toBe('released');
+    // Released is not the end: billing is followed until the order is invoiced or cancelled.
+    expect(await w.service.runReleaseOnce()).toEqual({ checked: 1, updated: 0 });
+    w.book.noteHeaders.set(7105, { statusNota: 'L', pending: 'N' });
+    w.book.billing.set(7105, { cancelled: false, invoiced: true, invoicedAt: '2026-11-09', nfeAuthorized: true, items: [] });
+    expect(await w.service.runReleaseOnce()).toEqual({ checked: 1, updated: 1 });
     expect(await w.service.runReleaseOnce()).toEqual({ checked: 0, updated: 0 });
   });
 
-  it('does not read orders that are not sent, have no ERP number or are older than 90 days', async () => {
+  it('does not read orders that are not sent, have no ERP number or are older than 60 days', async () => {
     const w = await world();
     await w.seed(7106, { status: 'queued' });
     await w.seed(null);
-    await w.seed(7107, { ageDays: 91 });
+    await w.seed(7107, { ageDays: 61 });
     expect(await w.service.runReleaseOnce()).toEqual({ checked: 0, updated: 0 });
+  });
+
+  describe('billing status', () => {
+    const billingOf = async (w: Awaited<ReturnType<typeof world>>, id: string) => decodeReleaseDetail((await w.row(id))?.erpStatusDetail)?.billing;
+    const facts = (over: Partial<{ cancelled: boolean; invoiced: boolean; invoicedAt: string | null; nfeAuthorized: boolean }> = {}) => ({
+      cancelled: false,
+      invoiced: false,
+      invoicedAt: null,
+      nfeAuthorized: false,
+      items: [],
+      ...over,
+    });
+
+    it('stores one state per scenario, following the precedence', async () => {
+      const w = await world();
+      const sent = await w.seed(7201);
+      const awaitingBilling = await w.seed(7202);
+      const invoiced = await w.seed(7203);
+      const awaitingRelease = await w.seed(7204);
+      const denied = await w.seed(7205);
+      w.book.noteHeaders.set(7201, { statusNota: 'A', pending: 'S' });
+      w.book.billing.set(7201, facts());
+      w.book.noteHeaders.set(7202, { statusNota: 'L', pending: 'S' });
+      w.book.billing.set(7202, facts());
+      w.book.noteHeaders.set(7203, { statusNota: 'L', pending: 'N' });
+      w.book.billing.set(7203, facts({ invoiced: true, invoicedAt: '2026-11-08', nfeAuthorized: true }));
+      w.book.noteHeaders.set(7204, { statusNota: 'L', pending: 'S' });
+      w.book.billing.set(7204, facts({ invoiced: true }));
+      w.book.releaseLines.set(7204, [line(44)]); // awaiting release wins over invoiced
+      w.book.noteHeaders.set(7205, { statusNota: 'A', pending: 'S' });
+      w.book.billing.set(7205, facts());
+      w.book.releaseLines.set(7205, [line(44), line(13, { denied: true })]);
+      await w.service.runReleaseOnce();
+      expect((await billingOf(w, sent))?.state).toBe('sent');
+      expect((await billingOf(w, awaitingBilling))?.state).toBe('awaiting_billing');
+      expect(await billingOf(w, invoiced)).toMatchObject({ state: 'invoiced', invoicedAt: '2026-11-08', nfeAuthorized: true });
+      expect((await billingOf(w, awaitingRelease))?.state).toBe('awaiting_release');
+      expect((await billingOf(w, denied))?.state).toBe('denied');
+    });
+
+    it('a failed billing read logs the error code (no order data) and keeps the stored billing state', async () => {
+      const w = await world();
+      const id = await w.seed(7221);
+      w.book.noteHeaders.set(7221, { statusNota: 'L', pending: 'S' });
+      w.book.billing.set(7221, facts());
+      await w.service.runReleaseOnce();
+      expect((await billingOf(w, id))?.state).toBe('awaiting_billing');
+      const lines: { fields: Record<string, unknown>; message: string }[] = [];
+      const logger = { warn: (fields: Record<string, unknown>, message: string) => lines.push({ fields, message }), info: () => undefined, error: () => undefined, debug: () => undefined };
+      const failing = new OrderErpStatusService({ db: w.database.handle, gateway: new FakeGateway({ orders: w.book }), logger: logger as never, now: () => new Date(NOW) });
+      w.book.billingErrorCodes.set(7221, 'billing_query_refused');
+      w.book.noteHeaders.set(7221, { statusNota: 'L', pending: 'N' });
+      w.book.billing.set(7221, facts({ invoiced: true }));
+      await failing.runReleaseOnce();
+      expect((await billingOf(w, id))?.state).toBe('awaiting_billing');
+      expect(lines).toHaveLength(1);
+      expect(lines[0]?.fields).toEqual({ errorCodes: ['billing_query_refused'], orders: 1 });
+    });
+
+    it('cancelled only when the cancellation tables say so; a note nobody finds is not deduced as cancelled', async () => {
+      const w = await world();
+      const gone = await w.seed(7211);
+      const cancelled = await w.seed(7212);
+      w.book.releaseLines.set(7212, [line(44)]);
+      w.book.noteHeaders.set(7212, { statusNota: 'A', pending: 'S' });
+      w.book.billing.set(7212, facts());
+      await w.service.runReleaseOnce();
+      expect((await billingOf(w, cancelled))?.state).toBe('awaiting_release');
+      w.book.noteHeaders.delete(7212);
+      w.book.releaseLines.delete(7212);
+      w.book.billing.set(7212, facts({ cancelled: true }));
+      await w.service.runReleaseOnce();
+      expect((await billingOf(w, cancelled))?.state).toBe('cancelled');
+      expect(await billingOf(w, gone)).toBeUndefined();
+      // Final: not read again.
+      expect(await w.service.runReleaseOnce()).toEqual({ checked: 1, updated: 0 });
+    });
   });
 
   it('keeps the stored release when the read fails, and when the ERP cannot find the note', async () => {

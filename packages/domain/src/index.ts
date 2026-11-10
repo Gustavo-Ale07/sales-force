@@ -21,4 +21,5 @@ export * from './financial.js';
 
 export * from './order-erp-validation.js';
 export * from './erp-order-status.js';
+export * from './billing-status.js';
 export * from './erp-release.js';

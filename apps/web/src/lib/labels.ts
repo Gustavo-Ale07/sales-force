@@ -160,6 +160,38 @@ export const erpReleaseMessages: Record<ErpReleaseState, string> = {
   denied: "A liberação foi negada no Sankhya.",
 };
 
+type ErpBilling = NonNullable<ApiSchema<"OrderListItem">["erpBilling"]>;
+type ErpBillingState = ErpBilling["state"];
+
+/**
+ * Billing (faturamento) state of an order already in the ERP. One table for list and detail; colour is never the only
+ * signal (the label always shows). Cancelled gray, denied red, awaiting release amber, invoiced green, awaiting billing
+ * light blue, sent-without-confirmation neutral.
+ */
+export const erpBillingLabels: Record<ErpBillingState, { label: string; tone: Tone; hint: string }> = {
+  cancelled: { label: "Cancelado", tone: "neutral", hint: "O pedido foi cancelado no Sankhya." },
+  denied: { label: "Negado", tone: "danger", hint: "A liberação foi negada no Sankhya." },
+  awaiting_release: { label: "Aguardando liberação", tone: "warning", hint: "Enviado ao Sankhya, aguardando liberação." },
+  invoiced: { label: "Faturado", tone: "success", hint: "O pedido foi faturado no Sankhya." },
+  awaiting_billing: { label: "Aguardando faturamento", tone: "info", hint: "Liberado e confirmado; aguardando o faturamento." },
+  sent: { label: "Enviado (sem confirmação)", tone: "neutral", hint: "Enviado ao Sankhya, ainda sem confirmação da nota." },
+};
+
+/** "Faturado em 09/11/2026" for the detail; the date arrives as YYYY-MM-DD. */
+export function erpBillingText(billing: ErpBilling): string {
+  const base = erpBillingLabels[billing.state].hint;
+  const match = billing.invoicedAt ? /^(\d{4})-(\d{2})-(\d{2})/.exec(billing.invoicedAt) : null;
+  const date = match ? `${match[3]}/${match[2]}/${match[1]}` : null;
+  if (billing.state === "invoiced") return `Faturado${date ? ` em ${date}` : ""}${billing.nfeAuthorized ? " · NF-e autorizada" : ""}.`;
+  return base;
+}
+
+/** Per-item billing line for the detail: invoiced, and the cut quantity when something was not delivered. */
+export function erpBillingItemText(item: NonNullable<ErpBilling["items"]>[number]): string {
+  const cut = item.cutQuantity !== "0" && item.cutQuantity !== "" ? ` · cortado ${item.cutQuantity}` : "";
+  return `faturado ${item.invoicedQuantity}${cut}`;
+}
+
 /** One line per release event, with the event description (or "evento N" when the ERP gave none) and its state. */
 export function erpReleaseEventText(event: NonNullable<ErpRelease["events"]>[number]): string {
   return `${event.label ?? `evento ${event.code}`}: ${erpReleaseLabels[event.state].label.toLowerCase()}`;

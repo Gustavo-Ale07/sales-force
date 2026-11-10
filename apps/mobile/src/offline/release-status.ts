@@ -3,7 +3,7 @@
  * the server decides; this never computes a state. "Aguardando liberação" is the NORMAL state of a sent order, so its
  * text is calm. The snapshot is untyped JSON, so every field is checked.
  */
-export type ReleaseTone = "warning" | "success" | "danger";
+export type ReleaseTone = "warning" | "success" | "danger" | "info" | "neutral";
 
 export interface ReleaseView {
   readonly label: string;
@@ -25,12 +25,30 @@ function isState(value: unknown): value is State {
   return value === "awaiting" || value === "released" || value === "denied";
 }
 
+/** Billing (faturamento) states of `erpBilling`; same labels and tones as the web (`erpBillingLabels`). */
+const BILLING = {
+  cancelled: { label: "Cancelado", message: "O pedido foi cancelado no Sankhya.", tone: "neutral" },
+  denied: { label: "Negado", message: "A liberação foi negada no Sankhya.", tone: "danger" },
+  awaiting_release: { label: "Aguardando liberação", message: "Enviado ao Sankhya, aguardando liberação.", tone: "warning" },
+  invoiced: { label: "Faturado", message: "O pedido foi faturado no Sankhya.", tone: "success" },
+  awaiting_billing: { label: "Aguardando faturamento", message: "Liberado e confirmado; aguardando o faturamento.", tone: "info" },
+  sent: { label: "Enviado (sem confirmação)", message: "Enviado ao Sankhya, ainda sem confirmação da nota.", tone: "neutral" },
+} as const;
+
+function billingViewOf(snapshot: object): Omit<ReleaseView, "events"> | null {
+  const billing = (snapshot as { erpBilling?: unknown }).erpBilling;
+  if (typeof billing !== "object" || billing === null) return null;
+  const { state } = billing as { state?: unknown };
+  if (typeof state !== "string" || !Object.prototype.hasOwnProperty.call(BILLING, state)) return null;
+  return BILLING[state as keyof typeof BILLING];
+}
+
 export function releaseViewOf(snapshot: unknown): ReleaseView | null {
-  if (typeof snapshot !== "object" || snapshot === null || !("erpRelease" in snapshot)) return null;
-  const release = (snapshot as { erpRelease: unknown }).erpRelease;
-  if (typeof release !== "object" || release === null) return null;
-  const { state, events } = release as { state?: unknown; events?: unknown };
-  if (!isState(state)) return null;
+  if (typeof snapshot !== "object" || snapshot === null) return null;
+  const billingView = billingViewOf(snapshot);
+  const release = "erpRelease" in snapshot ? (snapshot as { erpRelease: unknown }).erpRelease : null;
+  const { state, events } = typeof release === "object" && release !== null ? (release as { state?: unknown; events?: unknown }) : { state: undefined, events: undefined };
+  if (!isState(state)) return billingView === null ? null : { ...billingView, events: [] };
   const lines: string[] = [];
   if (Array.isArray(events)) {
     for (const raw of events as unknown[]) {
@@ -41,5 +59,5 @@ export function releaseViewOf(snapshot: unknown): ReleaseView | null {
       lines.push(`${name}: ${VIEWS[event.state].label.toLowerCase()}`);
     }
   }
-  return { ...VIEWS[state], events: lines };
+  return { ...(billingView ?? VIEWS[state]), events: lines };
 }

@@ -153,6 +153,34 @@ export interface ErpOrderReleaseReading {
   readonly adStatus: string | null;
   readonly pending: string | null;
   readonly lines: readonly ErpReleaseLineReading[];
+  /** Billing facts (read-only, same cycle). Absent when the source did not provide them. */
+  readonly billing?: ErpBillingReading;
+  /** Error code of the billing read that failed for this order (no order data): the stored billing state must be kept. */
+  readonly billingErrorCode?: string;
+}
+
+/** One item of the order note as billed: QTDNEG, QTDENTREGUE and PENDENTE as read (decimal strings). */
+export interface ErpBillingItemReading {
+  readonly sequence: number;
+  readonly productCode: number;
+  readonly ordered: string;
+  readonly delivered: string;
+  readonly pending: string | null;
+}
+
+/**
+ * Billing facts of one order note. `cancelled` is true only when the note is absent from TGFCAB AND present in the
+ * cancellation tables (TGFCAB_EXC / TGFCAN); a note that simply cannot be found is never deduced as cancelled.
+ * `invoiced` needs a TGFVAR link (NUNOTAORIG) to a sale note (TIPMOV 'V') with STATUSNOTA 'L'.
+ */
+export interface ErpBillingReading {
+  readonly cancelled: boolean;
+  readonly invoiced: boolean;
+  /** Earliest DTFATUR of the sale notes, `YYYY-MM-DD`; null when absent or unreadable. */
+  readonly invoicedAt: string | null;
+  /** STATUSNFE = 'A' or DHPROTOC filled on a sale note. */
+  readonly nfeAuthorized: boolean;
+  readonly items: readonly ErpBillingItemReading[];
 }
 
 export interface SankhyaOrderReadPort {

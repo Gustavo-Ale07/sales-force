@@ -77,10 +77,22 @@ export function erpStatusOf(order: OrderRow, liberationEventLabels?: Readonly<Re
  */
 export function erpReleaseOf(order: OrderRow, withEvents = false): OrderListItem['erpRelease'] {
   const detail = decodeReleaseDetail(order.erpStatusDetail);
-  if (detail === null) return null;
+  if (detail === null || detail.lines.length === 0) return null;
   const base = { state: storedReleaseState(detail), checkedAt: detail.checkedAt };
   if (!withEvents) return base;
   return { ...base, events: detail.lines.map((line) => ({ code: line.code, label: line.description, state: line.state })) };
+}
+
+/** ERP billing state as last read by the worker; null until read or when no state applies. Items only on the detail. */
+export function erpBillingOf(order: OrderRow, withItems = false): OrderListItem['erpBilling'] {
+  const billing = decodeReleaseDetail(order.erpStatusDetail)?.billing;
+  if (billing === undefined || billing.state === null) return null;
+  const base = { state: billing.state, invoicedAt: billing.invoicedAt, nfeAuthorized: billing.nfeAuthorized };
+  if (!withItems) return base;
+  return {
+    ...base,
+    items: billing.items.map((item) => ({ sequence: item.sequence, productCode: item.productCode, invoicedQuantity: item.invoiced, cutQuantity: item.cut })),
+  };
 }
 
 /**
@@ -151,6 +163,7 @@ export function toOrderListItem(row: OrderListRow): OrderListItem {
     erpNumber: order.erpNumber,
     erpStatus: erpStatusOf(order),
     erpRelease: erpReleaseOf(order),
+    erpBilling: erpBillingOf(order),
     erpDelivery: erpDeliveryOf(order.status, row.deliveryErrorClass, row.deliveryErrorMessage),
     review: reviewOf(order.status, row),
     version: order.version,
@@ -215,6 +228,7 @@ export function toOrderDetail(
     erpNumber: order.erpNumber,
     erpStatus: erpStatusOf(order, liberationEventLabels),
     erpRelease: erpReleaseOf(order, true),
+    erpBilling: erpBillingOf(order, true),
     erpDelivery: erpDeliveryOf(order.status, lastDelivery?.errorClass ?? null, lastDelivery?.message ?? null),
     review: reviewOf(order.status, customer),
     version: order.version,

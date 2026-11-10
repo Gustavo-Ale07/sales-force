@@ -392,12 +392,23 @@ describe('real adapter order writes (mock transport only, no network)', () => {
       ),
     );
     mock.forced.push(ok(['EVENTO', 'DESCRICAO'], [[2, ' Desconto   de produto '], [3, 'Limite de crédito'], [13, 'Valor mínimo'], [44, 'Liberação exigida pela TOP']]));
+    // Billing: 9999 is in the exclusion table (cancelled); 2508 has a sale note with a protocol; 2506 has a cut item.
+    mock.forced.push(ok(['NUNOTA'], [[9999]]));
+    mock.forced.push(ok(['NUNOTA'], []));
+    mock.forced.push(ok(['NUNOTAORIG', 'NUNOTA'], [[2508, 9001]]));
+    mock.forced.push(ok(['NUNOTA', 'DTFATUR', 'STATUSNFE', 'DHPROTOC'], [[9001, '09/11/2026', 'A', '09/11/2026 10:00:00']]));
+    mock.forced.push(ok(['NUNOTA', 'SEQUENCIA', 'CODPROD', 'QTDNEG', 'QTDENTREGUE', 'PENDENTE'], [[2506, 1, 4158, 10, 4, 'N']]));
     const readings = await gateway.readOrderReleaseFacts([2506, 2507, 2508, 9999]);
     const sqls = mock.queries().map((query) => query.sql);
     expect(sqls).toEqual([
       'SELECT NUNOTA, STATUSNOTA, AD_STATUS, PENDENTE FROM TGFCAB WHERE NUNOTA IN (2506,2507,2508,9999)',
       "SELECT NUCHAVE, EVENTO, DHLIB, REPROVADO, VLRLIBERADO FROM TSILIB WHERE TABELA = 'TGFCAB' AND NUCHAVE IN (2506,2507,2508,9999)",
       'SELECT EVENTO, DESCRICAO FROM VGFLIBEVE WHERE EVENTO IN (2,3,13,44)',
+      'SELECT NUNOTA FROM TGFCAB_EXC WHERE NUNOTA IN (9999)',
+      'SELECT NUNOTA FROM TGFCAN WHERE NUNOTA IN (9999)',
+      'SELECT NUNOTAORIG, NUNOTA FROM TGFVAR WHERE NUNOTAORIG IN (2506,2507,2508,9999)',
+      "SELECT NUNOTA, DTFATUR, STATUSNFE, DHPROTOC FROM TGFCAB WHERE TIPMOV = 'V' AND STATUSNOTA = 'L' AND NUNOTA IN (9001)",
+      'SELECT NUNOTA, SEQUENCIA, CODPROD, QTDNEG, QTDENTREGUE, PENDENTE FROM TGFITE WHERE NUNOTA IN (2506,2507,2508,9999) ORDER BY NUNOTA, SEQUENCIA',
     ]);
     for (const sql of sqls) expect(sql).toMatch(/^SELECT /);
     expect(sqls.join(' ')).not.toContain('CODUSULIB');
@@ -413,13 +424,62 @@ describe('real adapter order writes (mock transport only, no network)', () => {
           { event: 2, description: 'Desconto de produto', released: false, denied: false },
           { event: 3, description: 'Limite de crédito', released: true, denied: false },
         ],
+        billing: {
+          cancelled: false,
+          invoiced: false,
+          invoicedAt: null,
+          nfeAuthorized: false,
+          items: [{ sequence: 1, productCode: 4158, ordered: '10', delivered: '4', pending: 'N' }],
+        },
       },
       // Denied by REPROVADO = 'S'.
-      { erpOrderNumber: 2507, found: true, statusNota: 'L', adStatus: 'X', pending: 'N', lines: [{ event: 13, description: 'Valor mínimo', released: false, denied: true }] },
+      {
+        erpOrderNumber: 2507,
+        found: true,
+        statusNota: 'L',
+        adStatus: 'X',
+        pending: 'N',
+        lines: [{ event: 13, description: 'Valor mínimo', released: false, denied: true }],
+        billing: { cancelled: false, invoiced: false, invoicedAt: null, nfeAuthorized: false, items: [] },
+      },
       // Denied by VLRLIBERADO = 0 on a dated line (a normal release, above, has an amount above zero).
-      { erpOrderNumber: 2508, found: true, statusNota: 'L', adStatus: null, pending: 'N', lines: [{ event: 2, description: 'Desconto de produto', released: true, denied: true }] },
-      { erpOrderNumber: 9999, found: false, statusNota: null, adStatus: null, pending: null, lines: [] },
+      {
+        erpOrderNumber: 2508,
+        found: true,
+        statusNota: 'L',
+        adStatus: null,
+        pending: 'N',
+        lines: [{ event: 2, description: 'Desconto de produto', released: true, denied: true }],
+        billing: { cancelled: false, invoiced: true, invoicedAt: '2026-11-09', nfeAuthorized: true, items: [] },
+      },
+      {
+        erpOrderNumber: 9999,
+        found: false,
+        statusNota: null,
+        adStatus: null,
+        pending: null,
+        lines: [],
+        billing: { cancelled: true, invoiced: false, invoicedAt: null, nfeAuthorized: false, items: [] },
+      },
     ]);
+  });
+
+  it('an invoiced note without an NF-e protocol is invoiced but not authorized; a failed billing query leaves the batch without billing and carries the error code', async () => {
+    const noProtocol = setup();
+    noProtocol.mock.forced.push(ok(['NUNOTA', 'STATUSNOTA', 'AD_STATUS', 'PENDENTE'], [[2506, 'L', null, 'N']]));
+    noProtocol.mock.forced.push(ok(['NUCHAVE', 'EVENTO', 'DHLIB', 'REPROVADO', 'VLRLIBERADO'], []));
+    noProtocol.mock.forced.push(ok(['NUNOTAORIG', 'NUNOTA'], [[2506, 9001]]));
+    noProtocol.mock.forced.push(ok(['NUNOTA', 'DTFATUR', 'STATUSNFE', 'DHPROTOC'], [[9001, '09/11/2026', 'R', null]]));
+    noProtocol.mock.forced.push(ok(['NUNOTA', 'SEQUENCIA', 'CODPROD', 'QTDNEG', 'QTDENTREGUE', 'PENDENTE'], []));
+    expect((await noProtocol.gateway.readOrderReleaseFacts([2506]))[0]?.billing).toMatchObject({ invoiced: true, invoicedAt: '2026-11-09', nfeAuthorized: false });
+    const failing = setup();
+    failing.mock.forced.push(ok(['NUNOTA', 'STATUSNOTA', 'AD_STATUS', 'PENDENTE'], [[2506, 'L', null, 'N']]));
+    failing.mock.forced.push(ok(['NUCHAVE', 'EVENTO', 'DHLIB', 'REPROVADO', 'VLRLIBERADO'], []));
+    failing.mock.forced.push(httpStatus(400));
+    const reading = (await failing.gateway.readOrderReleaseFacts([2506]))[0];
+    expect(reading?.billing).toBeUndefined();
+    expect(typeof reading?.billingErrorCode).toBe('string');
+    expect(reading?.found).toBe(true);
   });
 
   it('keeps the release state when only the event description query is refused, and fails on any other error', async () => {
@@ -427,6 +487,8 @@ describe('real adapter order writes (mock transport only, no network)', () => {
     first.mock.forced.push(ok(['NUNOTA', 'STATUSNOTA', 'AD_STATUS', 'PENDENTE'], [[2506, 'A', null, null]]));
     first.mock.forced.push(ok(['NUCHAVE', 'EVENTO', 'DHLIB', 'REPROVADO', 'VLRLIBERADO'], [[2506, 44, null, null, null]]));
     first.mock.forced.push(httpStatus(400));
+    first.mock.forced.push(ok(['NUNOTAORIG', 'NUNOTA'], []));
+    first.mock.forced.push(ok(['NUNOTA', 'SEQUENCIA', 'CODPROD', 'QTDNEG', 'QTDENTREGUE', 'PENDENTE'], []));
     expect((await first.gateway.readOrderReleaseFacts([2506]))[0]?.lines).toEqual([{ event: 44, description: null, released: false, denied: false }]);
     const second = setup();
     second.mock.forced.push(ok(['NUNOTA', 'STATUSNOTA', 'AD_STATUS', 'PENDENTE'], [[2506, 'A', null, null]]));

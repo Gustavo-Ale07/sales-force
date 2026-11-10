@@ -10,6 +10,7 @@ import type {
   ErpOrderStatusFactsReading,
   ErpOrderStatusReading,
   ErpOrderReleaseReading,
+  ErpBillingReading,
   ErpReleaseLineReading,
 } from '../write/order-contract.js';
 
@@ -70,6 +71,12 @@ export class FakeOrderBook {
   readonly releaseEventCodes = new Map<number, readonly number[]>();
   /** Release (TSILIB) lines a test sets for an order number; an order without lines has no release state. */
   readonly releaseLines = new Map<number, readonly ErpReleaseLineReading[]>();
+  /** Header columns (STATUSNOTA, PENDENTE) a test sets for an order number (billing scenarios). */
+  readonly noteHeaders = new Map<number, { statusNota: string | null; pending: string | null }>();
+  /** Billing facts (cancellation, invoicing, items) a test sets for an order number. */
+  readonly billing = new Map<number, ErpBillingReading>();
+  /** Scenario: the billing read of this order failed with this error code (the release lines are still delivered). */
+  readonly billingErrorCodes = new Map<number, string>();
   readonly #scripts: Record<FakeOrderOperation, FakeOrderOutcome[]> = { include: [], confirm: [], find: [], read: [] };
   readonly #options: FakeOrderBookOptions;
   #next: number;
@@ -130,14 +137,22 @@ export class FakeOrderBook {
   }
 
   releaseOf(erpOrderNumbers: readonly number[]): ErpOrderReleaseReading[] {
-    return erpOrderNumbers.map((erpOrderNumber) => ({
-      erpOrderNumber,
-      found: this.orders.some((order) => order.erpOrderNumber === erpOrderNumber) || this.releaseLines.has(erpOrderNumber),
-      statusNota: null,
-      adStatus: null,
-      pending: null,
-      lines: [...(this.releaseLines.get(erpOrderNumber) ?? [])],
-    }));
+    return erpOrderNumbers.map((erpOrderNumber) => {
+      const stored = this.orders.find((order) => order.erpOrderNumber === erpOrderNumber);
+      const header = this.noteHeaders.get(erpOrderNumber);
+      const billingErrorCode = this.billingErrorCodes.get(erpOrderNumber);
+      const billing = billingErrorCode === undefined ? this.billing.get(erpOrderNumber) : undefined;
+      return {
+        ...(billingErrorCode === undefined ? {} : { billingErrorCode }),
+        erpOrderNumber,
+        found: stored !== undefined || this.releaseLines.has(erpOrderNumber) || header !== undefined,
+        statusNota: header?.statusNota ?? null,
+        adStatus: null,
+        pending: header?.pending ?? null,
+        lines: [...(this.releaseLines.get(erpOrderNumber) ?? [])],
+        ...(billing === undefined ? {} : { billing }),
+      };
+    });
   }
 
   statusOf(erpOrderNumbers: readonly number[]): ErpOrderStatusReading[] {

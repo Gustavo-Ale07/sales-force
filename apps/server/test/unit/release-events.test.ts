@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { erpReleaseOf, erpStatusOf } from '../../src/orders/order.mapper.js';
-import { decodeReleaseDetail, decodeReleaseEventCodes, encodeReleaseDetail, encodeReleaseEventCodes, storedReleaseState } from '../../src/orders/release-events.js';
+import { decodeReleaseDetail, decodeReleaseEventCodes, encodeReleaseDetail, encodeReleaseEventCodes, storedBillingState, storedReleaseState } from '../../src/orders/release-events.js';
 import type { OrderRow } from '../../src/orders/orders.repository.js';
 
 const order = (detail: string | null): OrderRow =>
@@ -53,6 +53,31 @@ describe('release event codes (D6b)', () => {
     ]);
     expect(encodeReleaseDetail([], at)).toBeNull();
     expect(decodeReleaseEventCodes(text)).toEqual([3, 44]);
+  });
+
+  it('stores billing in the v2 form, keeps v1 without it, and round-trips items and the invoicing date', () => {
+    const at = new Date('2026-11-10T12:00:00.000Z');
+    const lines = [{ event: 3, description: null, released: true, denied: false }];
+    const billing = {
+      state: 'invoiced' as const,
+      invoicedAt: '2026-11-09',
+      nfeAuthorized: true,
+      items: [{ sequence: 1, productCode: 4158, invoiced: '4', cut: '6' }],
+    };
+    const v1 = JSON.parse(encodeReleaseDetail(lines, at) ?? '{}') as { v: number; b?: unknown };
+    expect(v1.v).toBe(1);
+    expect(v1.b).toBeUndefined();
+    const text = encodeReleaseDetail(lines, at, billing);
+    expect((JSON.parse(text ?? '{}') as { v: number }).v).toBe(2);
+    expect(decodeReleaseDetail(text)?.billing).toEqual(billing);
+    expect(storedBillingState(decodeReleaseDetail(text))).toBe('invoiced');
+    expect(storedBillingState(decodeReleaseDetail(encodeReleaseDetail(lines, at)))).toBeNull();
+    // Billing alone (no release lines) is still a detail.
+    const alone = encodeReleaseDetail([], at, { state: 'cancelled', invoicedAt: null, nfeAuthorized: false, items: [] });
+    expect(decodeReleaseDetail(alone)?.billing?.state).toBe('cancelled');
+    // Unknown state and malformed items are dropped, not trusted.
+    const odd = decodeReleaseDetail('{"v":2,"at":"x","l":[{"c":3,"s":"l"}],"b":{"s":"weird","i":[[1,2,"3"],[1,2,"3","4"],"x"]}}');
+    expect(odd?.billing).toEqual({ state: null, invoicedAt: null, nfeAuthorized: false, items: [{ sequence: 1, productCode: 2, invoiced: '3', cut: '4' }] });
   });
 
   it('ignores the legacy codes and garbage as a release detail', () => {

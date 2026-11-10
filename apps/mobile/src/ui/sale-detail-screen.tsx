@@ -10,7 +10,15 @@ import type { LocalOrdersPort } from "../offline/local-orders";
 import { shareOrderPdf, type OrderPdfPort } from "../offline/order-pdf";
 import { saleValue } from "../offline/sales";
 import { approvalViewOf, type ApprovalView, type DiscountAuthorityMode } from "../offline/approval-status";
-import { releaseViewOf } from "../offline/release-status";
+import { releaseViewOf, type ReleaseTone } from "../offline/release-status";
+
+function releaseToneColor(tone: ReleaseTone): string {
+  if (tone === "success") return colors.ok;
+  if (tone === "danger") return colors.red;
+  if (tone === "info") return colors.navy;
+  if (tone === "neutral") return colors.textMuted;
+  return colors.warning;
+}
 import { saleActions, saleExplanation } from "../offline/sales-status";
 import { colors, spacing } from "../theme";
 import { SaleBadgeView, describeSaleValue } from "./sale-parts";
@@ -221,7 +229,7 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
           <Text style={styles.explanation}>{saleExplanation(draft)}</Text>
           {release !== null && (
             <View accessibilityLabel="Liberação no Sankhya">
-              <Text style={[styles.releaseLabel, { color: release.tone === "success" ? colors.ok : release.tone === "danger" ? colors.red : colors.warning }]}>{release.label}</Text>
+              <Text style={[styles.releaseLabel, { color: releaseToneColor(release.tone) }]}>{release.label}</Text>
               <Text style={styles.meta}>{release.message}</Text>
               {release.events.map((line) => (
                 <Text key={line} style={styles.meta}>{line}</Text>

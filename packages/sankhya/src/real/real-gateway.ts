@@ -59,6 +59,8 @@ import type {
   WrittenOrder,
   ErpOrderStatusReading,
   ErpOrderReleaseReading,
+  ErpBillingItemReading,
+  ErpBillingReading,
   ErpReleaseLineReading,
   WrittenOrderItem,
 } from '../write/order-contract.js';
@@ -637,8 +639,11 @@ export class RealSankhyaGateway implements SankhyaGateway {
       });
     }
     const descriptions = await this.#releaseEventDescriptions([...lines.values()].flatMap((bucket) => bucket.map((line) => line.event)), options);
+    const { facts: billing, failed: billingFailed } = await this.#billingFacts(erpOrderNumbers, new Set(headers.keys()), options);
     return erpOrderNumbers.map((erpOrderNumber): ErpOrderReleaseReading => {
       const header = headers.get(erpOrderNumber);
+      const billingPart = billing.get(erpOrderNumber);
+      const billingErrorCode = billingFailed.get(erpOrderNumber);
       const mapped: ErpReleaseLineReading[] = (lines.get(erpOrderNumber) ?? []).map((line) => ({
         ...line,
         description: descriptions.get(line.event) ?? null,
@@ -650,8 +655,109 @@ export class RealSankhyaGateway implements SankhyaGateway {
         adStatus: header?.adStatus ?? null,
         pending: header?.pending ?? null,
         lines: mapped,
+        ...(billingPart === undefined ? {} : { billing: billingPart }),
+        ...(billingErrorCode === undefined ? {} : { billingErrorCode }),
       };
     });
+  }
+
+  /**
+   * Billing facts, SELECT only, on known NUNOTA in batches (NEEDS VALIDATION in the Sandbox, `sankhya-spike.md` billing
+   * entry): cancellation = absent from TGFCAB and present in TGFCAB_EXC / TGFCAN; invoicing = TGFVAR.NUNOTAORIG to a sale
+   * note (TIPMOV 'V', STATUSNOTA 'L') with the earliest DTFATUR and the NF-e authorisation (STATUSNFE 'A' AND DHPROTOC filled,
+   * validated in the Sandbox 2026-11-10); items = TGFITE QTDNEG / QTDENTREGUE / PENDENTE (never QTDFAT, QTDCONFERIDA or
+   * AD_QTDFALTA). It never fails silently and never guesses from a partial read: if ANY billing query of a batch fails
+   * (a gateway error of any class), the batch has no billing facts, its orders carry the error code (no order data) and the
+   * caller keeps the previously stored billing state. A non-gateway error (e.g. an abort) is thrown.
+   */
+  async #billingFacts(
+    erpOrderNumbers: readonly number[],
+    present: ReadonlySet<number>,
+    options?: OrderCallOptions,
+  ): Promise<{ facts: Map<number, ErpBillingReading>; failed: Map<number, string> }> {
+    const result = new Map<number, ErpBillingReading>();
+    const failed = new Map<number, string>();
+    const soft = <C extends readonly string[]>(sql: string, columns: C) => this.#query(sql, columns, options?.signal);
+    for (let start = 0; start < erpOrderNumbers.length; start += RELEASE_READ_CHUNK) {
+      const chunk = erpOrderNumbers.slice(start, start + RELEASE_READ_CHUNK);
+      const chunkResult = new Map<number, ErpBillingReading>();
+      try {
+      const list = chunk.join(',');
+      const missing = chunk.filter((number) => !present.has(number));
+      const cancelledSet = new Set<number>();
+      if (missing.length > 0) {
+        for (const table of ['TGFCAB_EXC', 'TGFCAN'] as const) {
+          const found = await soft(`SELECT NUNOTA FROM ${table} WHERE NUNOTA IN (${missing.join(',')})`, ['NUNOTA'] as const);
+          found.rows.forEach((cells, index) => cancelledSet.add(new RowReader('orders', ['NUNOTA'], cells, index).int('NUNOTA')));
+        }
+      }
+      // Sale notes linked to the order notes.
+      const linkColumns = ['NUNOTAORIG', 'NUNOTA'] as const;
+      const links = await soft(`SELECT NUNOTAORIG, NUNOTA FROM TGFVAR WHERE NUNOTAORIG IN (${list})`, linkColumns);
+      const saleOf = new Map<number, Set<number>>();
+      links.rows.forEach((cells, index) => {
+        const row = new RowReader('orders', linkColumns, cells, index);
+        const bucket = saleOf.get(row.int('NUNOTAORIG')) ?? new Set<number>();
+        bucket.add(row.int('NUNOTA'));
+        saleOf.set(row.int('NUNOTAORIG'), bucket);
+      });
+      const saleNumbers = [...new Set([...saleOf.values()].flatMap((set) => [...set]))];
+      const sales = new Map<number, { invoicedAt: string | null; nfe: boolean }>();
+      if (saleNumbers.length > 0) {
+        const saleColumns = ['NUNOTA', 'DTFATUR', 'STATUSNFE', 'DHPROTOC'] as const;
+        const found = await soft(
+          `SELECT NUNOTA, DTFATUR, STATUSNFE, DHPROTOC FROM TGFCAB WHERE TIPMOV = 'V' AND STATUSNOTA = 'L' AND NUNOTA IN (${saleNumbers.join(',')})`,
+          saleColumns,
+        );
+        found.rows.forEach((cells, index) => {
+          const row = new RowReader('orders', saleColumns, cells, index);
+          sales.set(row.int('NUNOTA'), {
+            invoicedAt: isoDateOfCell(cells[1]),
+            nfe: textCell(cells[2]) === 'A' && textCell(cells[3]) !== null,
+          });
+        });
+      }
+      // Items of the notes that exist.
+      const itemColumns = ['NUNOTA', 'SEQUENCIA', 'CODPROD', 'QTDNEG', 'QTDENTREGUE', 'PENDENTE'] as const;
+      const itemRows = await soft(
+        `SELECT NUNOTA, SEQUENCIA, CODPROD, QTDNEG, QTDENTREGUE, PENDENTE FROM TGFITE WHERE NUNOTA IN (${list}) ORDER BY NUNOTA, SEQUENCIA`,
+        itemColumns,
+      );
+      const itemsOf = new Map<number, ErpBillingItemReading[]>();
+      itemRows.rows.forEach((cells, index) => {
+        const row = new RowReader('orders', itemColumns, cells, index);
+        const quantity = (position: number): string => {
+          const parsed = decimalFromCell(cells[position] ?? '0');
+          return parsed.ok ? parsed.value : '0';
+        };
+        const key = row.int('NUNOTA');
+        const bucket = itemsOf.get(key) ?? [];
+        bucket.push({ sequence: row.int('SEQUENCIA'), productCode: row.int('CODPROD'), ordered: quantity(3), delivered: quantity(4), pending: textCell(cells[5]) });
+        itemsOf.set(key, bucket);
+      });
+      for (const number of chunk) {
+        const invoicedNotes = [...(saleOf.get(number) ?? [])].flatMap((sale) => {
+          const found = sales.get(sale);
+          return found === undefined ? [] : [found];
+        });
+        const dates = invoicedNotes.flatMap((sale) => (sale.invoicedAt === null ? [] : [sale.invoicedAt])).sort();
+        chunkResult.set(number, {
+          cancelled: !present.has(number) && cancelledSet.has(number),
+          invoiced: invoicedNotes.length > 0,
+          invoicedAt: dates[0] ?? null,
+          nfeAuthorized: invoicedNotes.some((sale) => sale.nfe),
+          items: present.has(number) ? (itemsOf.get(number) ?? []) : [],
+        });
+      }
+      } catch (error) {
+        if (!(error instanceof SankhyaGatewayError)) throw error;
+        // Any failed query: no facts for this batch (never a partial guess) and the code goes up to be logged.
+        for (const number of chunk) failed.set(number, error.code);
+        continue;
+      }
+      for (const [number, facts] of chunkResult) result.set(number, facts);
+    }
+    return { facts: result, failed };
   }
 
   /**
@@ -902,6 +1008,16 @@ function textCell(cell: unknown): string | null {
   if (cell === null || cell === undefined) return null;
   const text = typeof cell === 'string' ? cell.trim() : typeof cell === 'number' ? String(cell) : '';
   return text === '' ? null : text;
+}
+
+/** `YYYY-MM-DD` of a Sankhya date cell (`dd/mm/yyyy[ hh:mm:ss]` or ISO); null when absent or unreadable. */
+function isoDateOfCell(cell: unknown): string | null {
+  const text = textCell(cell);
+  if (text === null) return null;
+  const br = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(text);
+  if (br !== null) return `${br[3]}-${br[2]}-${br[1]}`;
+  const iso = /^(\d{4}-\d{2}-\d{2})/.exec(text);
+  return iso === null ? null : (iso[1] ?? null);
 }
 
 function invalidOrderQuery(detail: string): SankhyaGatewayError {

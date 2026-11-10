@@ -39,7 +39,7 @@ import { PrintOrderButton } from "../components/print-order-button";
 import { QueryError } from "../components/query-error";
 import { customerQueryOptions, orderEntryConfigurationQueryOptions, ordersQueryOptions, type OrdersParams } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
-import { deliveryErrorText, erpReleaseLabels, erpStatusText, formatCount, orderReference, orderReviewLabel, orderReviewReasons, orderStatusLabels, orderStatusView } from "../lib/labels";
+import { deliveryErrorText, erpBillingLabels, erpReleaseLabels, erpStatusText, formatCount, orderReference, orderReviewLabel, orderReviewReasons, orderStatusLabels, orderStatusView } from "../lib/labels";
 import { MAX_ORDER_PRODUCTS, ORDER_DATE_FIELDS, ORDER_STATUSES, type OrdersSearch } from "../lib/route-search";
 import { asDate, asOneOf, compact } from "../lib/search-params";
 import { useSearchBox } from "../lib/use-search-box";
@@ -375,7 +375,11 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
                       {order.erpStatus ? (
                         <span className="mt-0.5 block text-fg-muted">Sankhya: {erpStatusText(order.erpStatus).label}</span>
                       ) : null}
-                      {order.erpRelease ? (
+                      {order.erpBilling ? (
+                        <span className="mt-0.5 block" title={erpBillingLabels[order.erpBilling.state].hint}>
+                          <StatusDot tone={erpBillingLabels[order.erpBilling.state].tone}>{erpBillingLabels[order.erpBilling.state].label}</StatusDot>
+                        </span>
+                      ) : order.erpRelease ? (
                         <span className="mt-0.5 block">
                           <StatusDot tone={erpReleaseLabels[order.erpRelease.state].tone}>{erpReleaseLabels[order.erpRelease.state].label}</StatusDot>
                         </span>

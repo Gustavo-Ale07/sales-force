@@ -1235,6 +1235,18 @@ export interface components {
                     state: "awaiting" | "released" | "denied";
                 }[];
             } | null;
+            erpBilling?: {
+                /** @enum {string} */
+                state: "cancelled" | "denied" | "awaiting_release" | "invoiced" | "awaiting_billing" | "sent";
+                invoicedAt?: string | null;
+                nfeAuthorized?: boolean;
+                items?: {
+                    sequence: number;
+                    productCode: number;
+                    invoicedQuantity: string;
+                    cutQuantity: string;
+                }[];
+            } | null;
             erpDelivery?: {
                 errorClass: string;
                 errorCode: string | null;
@@ -1365,6 +1377,18 @@ export interface components {
                     label: string | null;
                     /** @enum {string} */
                     state: "awaiting" | "released" | "denied";
+                }[];
+            } | null;
+            erpBilling?: {
+                /** @enum {string} */
+                state: "cancelled" | "denied" | "awaiting_release" | "invoiced" | "awaiting_billing" | "sent";
+                invoicedAt?: string | null;
+                nfeAuthorized?: boolean;
+                items?: {
+                    sequence: number;
+                    productCode: number;
+                    invoicedQuantity: string;
+                    cutQuantity: string;
                 }[];
             } | null;
             erpDelivery?: {

@@ -1,6 +1,6 @@
 import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { erpReleaseEventText, erpReleaseLabels, erpStatusText } from "../lib/labels";
+import { erpBillingItemText, erpBillingLabels, erpBillingText, erpReleaseEventText, erpReleaseLabels, erpStatusText } from "../lib/labels";
 import { ORDER_ID, customer, customerDetail, customersPage, orderDetail, orderListItem, ordersPage, orderEntryConfiguration, pricedList, product, productsPage } from "../test/fixtures";
 import { renderApp, type Handlers } from "../test/harness";
 
@@ -33,6 +33,25 @@ describe("release (liberação) labels", () => {
   it("names an event by its description, else 'evento N'", () => {
     expect(erpReleaseEventText({ code: 3, label: "Limite de crédito", state: "released" })).toBe("Limite de crédito: liberado");
     expect(erpReleaseEventText({ code: 13, label: null, state: "denied" })).toBe("evento 13: negado");
+  });
+});
+
+describe("billing (faturamento) labels", () => {
+  it("uses the owner colours and never relies on colour alone (every state has a label)", () => {
+    expect(erpBillingLabels.invoiced).toMatchObject({ label: "Faturado", tone: "success" });
+    expect(erpBillingLabels.awaiting_billing).toMatchObject({ label: "Aguardando faturamento", tone: "info" });
+    expect(erpBillingLabels.cancelled).toMatchObject({ label: "Cancelado", tone: "neutral" });
+    expect(erpBillingLabels.denied).toMatchObject({ label: "Negado", tone: "danger" });
+    expect(erpBillingLabels.awaiting_release).toMatchObject({ label: "Aguardando liberação", tone: "warning" });
+    expect(erpBillingLabels.sent.label).toBe("Enviado (sem confirmação)");
+  });
+  it("says the invoicing date and the NF-e only when present; cut quantities show beside the invoiced ones", () => {
+    expect(erpBillingText({ state: "invoiced", invoicedAt: "2026-11-09", nfeAuthorized: true })).toBe("Faturado em 09/11/2026 · NF-e autorizada.");
+    expect(erpBillingText({ state: "invoiced" })).toBe("Faturado.");
+    expect(erpBillingText({ state: "invoiced", invoicedAt: "2026-11-09", nfeAuthorized: false })).toBe("Faturado em 09/11/2026.");
+    expect(erpBillingText({ state: "awaiting_billing" })).toBe("Liberado e confirmado; aguardando o faturamento.");
+    expect(erpBillingItemText({ sequence: 1, productCode: 4158, invoicedQuantity: "4", cutQuantity: "6" })).toBe("faturado 4 · cortado 6");
+    expect(erpBillingItemText({ sequence: 1, productCode: 4158, invoicedQuantity: "10", cutQuantity: "0" })).toBe("faturado 10");
   });
 });
 
