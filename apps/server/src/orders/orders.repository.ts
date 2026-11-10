@@ -156,7 +156,7 @@ export class OrdersRepository {
     scope: CustomerScope,
     customerCode: number,
     executor: Executor = this.db,
-  ): Promise<{ orderCount: number; negotiationTypeCode: number | null; negotiationOrderCount: number }> {
+  ): Promise<{ orderCount: number; negotiationTypeCode: number | null; negotiationOrderCount: number; lastFreightType: string | null }> {
     const rows = await executor
       .select({
         negotiationTypeCode: salesOrder.negotiationTypeCode,
@@ -177,7 +177,26 @@ export class OrdersRepository {
       .filter((row) => row.negotiationTypeCode !== null)
       .sort((a, b) => b.orders - a.orders || Number(b.latest) - Number(a.latest));
     const top = known[0];
-    return { orderCount, negotiationTypeCode: top?.negotiationTypeCode ?? null, negotiationOrderCount: top?.orders ?? 0 };
+    // The freight of the most recent of those orders that carries one: the customer chooses per order, so the last choice is the best guess.
+    const [lastFreight] = await executor
+      .select({ freightType: salesOrder.freightType })
+      .from(salesOrder)
+      .where(
+        and(
+          scopeCondition(scope),
+          eqInt(salesOrder.customerCode, customerCode),
+          inArray(salesOrder.status, ['awaiting_approval', 'approved', 'queued', 'sent']),
+          sql`${salesOrder.freightType} is not null`,
+        ),
+      )
+      .orderBy(desc(salesOrder.draftNumber))
+      .limit(1);
+    return {
+      orderCount,
+      negotiationTypeCode: top?.negotiationTypeCode ?? null,
+      negotiationOrderCount: top?.orders ?? 0,
+      lastFreightType: lastFreight?.freightType ?? null,
+    };
   }
 
   /** Inserts the order unless the client request id already exists (`null` = a concurrent create won). */
@@ -310,7 +329,7 @@ export class OrdersRepository {
 
   async updateOrder(
     id: string,
-    values: Partial<Pick<NewOrder, 'customerCode' | 'sellerCode' | 'status' | 'negotiationTypeCode' | 'topCode' | 'carrierCode' | 'notes' | 'estimatedTotal' | 'discountAuthority' | 'version' | 'configVersionId' | 'updatedAt'>>,
+    values: Partial<Pick<NewOrder, 'customerCode' | 'sellerCode' | 'status' | 'negotiationTypeCode' | 'topCode' | 'carrierCode' | 'freightType' | 'notes' | 'estimatedTotal' | 'discountAuthority' | 'version' | 'configVersionId' | 'updatedAt'>>,
     executor: Executor,
   ): Promise<OrderRow> {
     const [row] = await executor.update(salesOrder).set(values).where(eq(salesOrder.id, id)).returning();

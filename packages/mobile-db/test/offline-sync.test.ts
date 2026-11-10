@@ -209,6 +209,28 @@ describe("saveOrderDraft", () => {
   });
 });
 
+describe("order freight type", () => {
+  it("is kept on the draft and in the create command; a draft may stay without it", async () => {
+    const id = await saveOrderDraft(db, env, input([item(1)], { freightType: "CIF" }));
+    expect(await getDraft(db, id)).toMatchObject({ freightType: "CIF" });
+    const [op] = await listOutbox(db, id);
+    expect(op?.payload.request).toMatchObject({ freightType: "CIF" });
+
+    const plain = await saveOrderDraft(db, env, input([item(1)]));
+    expect(await getDraft(db, plain)).toMatchObject({ freightType: null });
+    const [plainOp] = await listOutbox(db, plain);
+    expect(plainOp?.payload.request).not.toHaveProperty("freightType");
+  });
+
+  it("an edit changes it in the unsent command", async () => {
+    const id = await saveOrderDraft(db, env, input([item(1)], { freightType: "FOB" }));
+    await saveOrderDraft(db, env, input([item(1)], { localId: id, freightType: "SEM_FRETE" }));
+    expect(await getDraft(db, id)).toMatchObject({ freightType: "SEM_FRETE" });
+    const ops = await listOutbox(db, id);
+    expect(ops.at(-1)?.payload.request).toMatchObject({ freightType: "SEM_FRETE" });
+  });
+});
+
 describe("order TOP and carrier (D-A, D-C)", () => {
   it("keeps them on the draft and in the create command, and sends the TOP only when one was chosen", async () => {
     const id = await saveOrderDraft(db, env, input([item(1)], { topCode: 1000, carrierCode: 55 }));

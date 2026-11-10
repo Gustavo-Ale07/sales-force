@@ -18,6 +18,7 @@ const ORDER: DeliveryOrder = {
   negotiationTypeCode: 11,
   topCode: null,
   carrierCode: null,
+  freightType: 'FOB',
   expedicao: false,
   notes: 'Entregar pela manhã, falar com Maria 11 99999-0000',
   createdAt: new Date('2026-10-30T02:30:00Z'),
@@ -185,6 +186,21 @@ describe('verifyWrittenOrder (D-7)', () => {
     // no IPI reference (or a tariff line): nothing to compare
     expect(verifyWrittenOrder([four], note({ lineIpi: '9.41', total: '300.00' }))).toEqual({ ok: true });
     expect(verifyWrittenOrder([four], note({ total: '300.00' }), new Map([[4158, { status: 'tariff' } as const]]))).toEqual({ ok: true });
+  });
+});
+
+describe('freight type', () => {
+  it.each(['CIF', 'FOB', 'SEM_FRETE'] as const)('flows from the order into the write request: %s', (freightType) => {
+    const header = resolveHeader({ ...ORDER, freightType }, config());
+    if (!header.ok) throw new Error('header');
+    const built = buildOrderRequest({ ...ORDER, freightType }, [ITEM], header.value, 'AD_TESTE');
+    expect(built).toMatchObject({ ok: true, value: { freightType } });
+  });
+
+  it('refuses to build the request without a freight type', () => {
+    const header = resolveHeader(ORDER, config());
+    if (!header.ok) throw new Error('header');
+    expect(buildOrderRequest({ ...ORDER, freightType: null }, [ITEM], header.value, 'AD_TESTE')).toMatchObject({ ok: false, code: 'missing_freight_type' });
   });
 });
 

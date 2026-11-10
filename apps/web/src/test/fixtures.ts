@@ -142,6 +142,7 @@ export function orderListItem(overrides: Partial<ApiSchema<"OrderListItem">> = {
     status: "draft",
     topCode: null,
     carrierCode: null,
+    freightType: null,
     estimatedTotal: "25",
     itemCount: 1,
     itemPreview: ["Cabo flexível 2,5 mm"],

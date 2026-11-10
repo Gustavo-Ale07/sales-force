@@ -918,6 +918,7 @@ export interface components {
             customerCode: number;
             topCode?: number | null;
             carrierCode?: number | null;
+            freightType?: components["schemas"]["FreightType"] | null;
             negotiationTypeCode: number | null;
             notes: string | null;
             items: components["schemas"]["OrderItemInput"][];
@@ -991,6 +992,7 @@ export interface components {
             orderCount: number;
             mostUsedNegotiationTypeCode: number | null;
             mostUsedNegotiationOrderCount: number;
+            lastFreightType: components["schemas"]["FreightType"] | null;
         };
         /** @enum {string} */
         CustomerSort: "name" | "-name" | "code" | "-code";
@@ -1065,6 +1067,8 @@ export interface components {
         };
         /** @enum {string} */
         FieldSupport: "SUPPORTED" | "READ_ONLY" | "IGNORED_UNTIL_NEEDED";
+        /** @enum {string} */
+        FreightType: "CIF" | "FOB" | "SEM_FRETE";
         /** @enum {string} */
         GatewayMode: "fake" | "live" | "unknown";
         HealthResponse: {
@@ -1204,6 +1208,7 @@ export interface components {
             status: components["schemas"]["OrderStatus"];
             topCode: number | null;
             carrierCode: number | null;
+            freightType: components["schemas"]["FreightType"] | null;
             estimatedTotal: components["schemas"]["DecimalString"];
             itemCount: number;
             isPartial: boolean;
@@ -1334,6 +1339,7 @@ export interface components {
             status: components["schemas"]["OrderStatus"];
             topCode: number | null;
             carrierCode: number | null;
+            freightType: components["schemas"]["FreightType"] | null;
             estimatedTotal: components["schemas"]["DecimalString"];
             itemCount: number;
             itemPreview: string[];
@@ -1535,6 +1541,7 @@ export interface components {
             customerCode: number;
             topCode?: number | null;
             carrierCode?: number | null;
+            freightType?: components["schemas"]["FreightType"] | null;
             negotiationTypeCode: number | null;
             notes: string | null;
             items: components["schemas"]["OrderItemInput"][];

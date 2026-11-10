@@ -51,7 +51,7 @@ import { QueryError } from "../components/query-error";
 import { SaveTemplateDialog } from "../components/save-template-dialog";
 import { ApiRequestError } from "../lib/api";
 import { ERP_SUBMISSION_DISABLED, convertQuote, createOrder, replaceOrder, submitOrder, verifyOrderDelivery } from "../lib/api-mutations";
-import { carriersQueryOptions, orderEntryConfigurationQueryOptions, customerQueryOptions, orderQueryOptions, queryKeys } from "../lib/api-queries";
+import { carriersQueryOptions, customerOrderHabitsQueryOptions, orderEntryConfigurationQueryOptions, customerQueryOptions, orderQueryOptions, queryKeys } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { useLoadedDataset, requireDataset } from "../lib/dataset";
 import { approvalsEnabled } from "../lib/discount-authority";
@@ -75,6 +75,7 @@ import {
 import { documentKindOf, documentVocabulary, isOrderDeletable, type DocumentKind } from "@salesforce/domain";
 
 type OrderDetail = ApiSchema<"OrderDetail">;
+type FreightType = NonNullable<OrderDetail["freightType"]>;
 
 
 export const SUBMIT_DISABLED_MESSAGE =
@@ -235,6 +236,10 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
   /** Optional carrier (D-C): no default. */
   const [carrierChoice, setCarrierChoice] = useState<number | null>(order?.carrierCode ?? null);
   const carriers = useQuery(carriersQueryOptions(api));
+  /** Freight (required to send, not to save): `undefined` = not touched, so the customer's last choice is suggested; `null` = explicitly empty. */
+  const [freightChoice, setFreightChoice] = useState<FreightType | null | undefined>(order ? order.freightType : undefined);
+  const habits = useQuery({ ...customerOrderHabitsQueryOptions(api, customer?.code ?? 0), enabled: !order && customer !== null });
+  const freightType: FreightType | null = freightChoice !== undefined ? freightChoice : (habits.data?.lastFreightType ?? null);
   const [notes, setNotes] = useState(order?.notes ?? "");
   const [lines, setLines] = useState<EditorLine[]>(() =>
     order ? order.items.map((item, index) => lineFromOrderItem(item, `saved-${index}`)) : [],
@@ -295,15 +300,17 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
     negotiation: number | null | undefined;
     top: number | undefined;
     carrier: number | null;
+    freight: FreightType | null | undefined;
     notes: string;
     lines: readonly EditorLine[];
-  }) => JSON.stringify([state.customerCode, state.negotiation, state.top ?? null, state.carrier, state.notes, state.lines.map((l) => [l.productCode, l.quantityText, l.discountText.trim()])]);
+  }) => JSON.stringify([state.customerCode, state.negotiation, state.top ?? null, state.carrier, state.freight ?? null, state.notes, state.lines.map((l) => [l.productCode, l.quantityText, l.discountText.trim()])]);
   const [baseline] = useState(() =>
     snapshot({
       customerCode: order ? order.customerCode : (initialCustomer?.code ?? null),
       negotiation: order ? order.negotiationTypeCode : undefined,
       top: order?.topCode ?? undefined,
       carrier: order?.carrierCode ?? null,
+      freight: order ? order.freightType : undefined,
       notes: order?.notes ?? "",
       lines: order ? order.items.map((item) => lineFromOrderItem(item, "baseline")) : [],
     }),
@@ -315,6 +322,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
       negotiation: negotiationChoice,
       top: topChoice,
       carrier: carrierChoice,
+      freight: freightChoice,
       notes,
       lines,
     }) !== baseline;
@@ -346,6 +354,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
     negotiationTypeCode,
     topCode: orderTopCode,
     carrierCode: carrierChoice,
+    freightType,
     notes: notes.trim() === "" ? null : notes.trim(),
     items: toRequestItems(lines),
   };
@@ -794,6 +803,19 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                     {carrier.name}
                   </option>
                 ))}
+              </Select>
+            </FormField>
+            <FormField label="Frete" hint="CIF: o frete é por conta de quem vende. FOB: por conta do cliente. Obrigatório para enviar.">
+              <Select
+                size="md"
+                disabled={readOnly}
+                value={freightType ?? ""}
+                onChange={(event) => setFreightChoice(event.target.value === "" ? null : (event.target.value as FreightType))}
+              >
+                <option value="">Selecione…</option>
+                <option value="CIF">CIF</option>
+                <option value="FOB">FOB</option>
+                <option value="SEM_FRETE">Sem frete</option>
               </Select>
             </FormField>
             <FormField label="Observações" className="md:col-span-2" hint="Até 2.000 caracteres.">

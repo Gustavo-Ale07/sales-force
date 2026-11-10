@@ -35,6 +35,13 @@ export type OrderStatus = z.infer<typeof OrderStatusSchema>;
  * What the customer's own orders RECORDED IN SALES FORCE say about how they buy (order-screen customer strip). Never Sankhya/ERP
  * history (not mirrored): a purchase made elsewhere is not counted, so no "never bought" is derived from this.
  */
+/**
+ * Freight of the order (owner data, Vidya production): who pays the freight, or none. Own-carrier freight (R/D) is not offered.
+ * Sent to the ERP as CIF_FOB C | F | S with TIPFRETE N | N | S (NEEDS VALIDATION in the Sandbox).
+ */
+export const FreightTypeSchema = named('FreightType', z.enum(['CIF', 'FOB', 'SEM_FRETE']));
+export type FreightType = z.infer<typeof FreightTypeSchema>;
+
 export const CustomerOrderHabitsSchema = named(
   'CustomerOrderHabits',
   z.object({
@@ -44,6 +51,8 @@ export const CustomerOrderHabitsSchema = named(
     mostUsedNegotiationTypeCode: codeInt().nullable(),
     /** How many of the `orderCount` orders used it. */
     mostUsedNegotiationOrderCount: z.number().int().nonnegative(),
+    /** Freight of the customer's most recent Sales Force order that carries one (same orders as above); `null` = none yet. Pre-fills the next order. */
+    lastFreightType: FreightTypeSchema.nullable(),
   }),
 );
 export type CustomerOrderHabits = z.infer<typeof CustomerOrderHabitsSchema>;
@@ -157,6 +166,8 @@ export const OrderListItemSchema = named(
     topCode: codeInt().nullable(),
     /** Optional carrier chosen on the order (D-C), or `null`. */
     carrierCode: codeInt().nullable(),
+    /** Freight chosen on the order, or `null` while the draft has none (required to send). */
+    freightType: FreightTypeSchema.nullable(),
     /** Estimate from list prices; the final value is calculated by the ERP. */
     estimatedTotal: DecimalStringSchema,
     itemCount: z.number().int().min(0),
@@ -383,6 +394,8 @@ const orderDraftFields = {
    * inactive code answers 400 `validation_failed` with issue `carrier_unknown`.
    */
   carrierCode: codeInt().nullable().optional(),
+  /** Freight (CIF, FOB or SEM_FRETE); may be empty on a draft, required to send. Omitted keeps the current one on replace, `null` clears it. */
+  freightType: FreightTypeSchema.nullable().optional(),
   negotiationTypeCode: codeInt().nullable(),
   notes: z.string().max(2000).nullable(),
   items: z.array(OrderItemInputSchema).max(MAX_ORDER_ITEMS),

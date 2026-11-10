@@ -65,6 +65,8 @@ export interface SaveDraftInput {
   readonly topCode?: number | null;
   /** Optional carrier (D-C). `null`/absent = none. */
   readonly carrierCode?: number | null;
+  /** Freight (required to send, not to save). `null`/absent = not chosen. */
+  readonly freightType?: FreightType | null;
   readonly notes: string | null;
   readonly items: readonly DraftItemInput[];
   /**
@@ -72,6 +74,13 @@ export interface SaveDraftInput {
    * missing or differs from the dataset confirmed now: an order is never stamped with a dataset it was not priced under.
    */
   readonly loadedDataset: DatasetIdentity | null;
+}
+
+/** Freight chosen on the order; the same three values as the server contract. */
+export type FreightType = "CIF" | "FOB" | "SEM_FRETE";
+
+function freightTypeOf(value: unknown): FreightType | null {
+  return value === "CIF" || value === "FOB" || value === "SEM_FRETE" ? value : null;
 }
 
 export interface DraftRecord {
@@ -83,6 +92,7 @@ export interface DraftRecord {
   readonly negotiationTypeCode: number | null;
   readonly topCode: number | null;
   readonly carrierCode: number | null;
+  readonly freightType: FreightType | null;
   readonly notes: string | null;
   readonly status: DraftStatus;
   readonly remoteId: string | null;
@@ -142,6 +152,8 @@ export interface OrderCommandPayload {
     readonly topCode?: number;
     /** `null` = no carrier (clears it on replace); omitted on commands queued before carriers existed. */
     readonly carrierCode?: number | null;
+    /** Omitted on commands queued before the freight existed (the server keeps the current one on replace). */
+    readonly freightType?: FreightType;
     readonly notes: string | null;
     readonly items: readonly { productCode: number; quantity: string; discountPercent?: string }[];
   };
@@ -151,7 +163,7 @@ export interface OrderCommandPayload {
 /* ---------- row mapping ---------- */
 
 export const DRAFT_COLUMNS = `d.local_id, d.owner_account_id, d.client_request_id, d.customer_code, d.customer_name,
-  d.negotiation_type_code, d.top_code, d.carrier_code, d.notes, d.status, d.remote_id, d.remote_version, d.remote_draft_number, d.estimated_total,
+  d.negotiation_type_code, d.top_code, d.carrier_code, d.freight_type, d.notes, d.status, d.remote_id, d.remote_version, d.remote_draft_number, d.estimated_total,
   d.last_error, d.price_review, d.server_snapshot, d.created_at, d.updated_at, d.dataset_environment, d.dataset_id, d.eligibility,
   (SELECT count(*) FROM local_order_item i WHERE i.draft_local_id = d.local_id) AS item_count`;
 
@@ -178,6 +190,7 @@ export function toDraft(row: SqlRow): DraftRecord {
     negotiationTypeCode: nullableNumber(row.negotiation_type_code),
     topCode: nullableNumber(row.top_code),
     carrierCode: nullableNumber(row.carrier_code),
+    freightType: freightTypeOf(row.freight_type),
     notes: nullableString(row.notes),
     status: String(row.status) as DraftStatus,
     remoteId: nullableString(row.remote_id),
@@ -376,13 +389,14 @@ export async function countOutbox(db: SqlExecutor, ownerAccountId: string, datas
 
 /* ---------- payload ---------- */
 
-export function buildPayload(input: Pick<SaveDraftInput, "customerCode" | "negotiationTypeCode" | "topCode" | "carrierCode" | "notes" | "items">): OrderCommandPayload {
+export function buildPayload(input: Pick<SaveDraftInput, "customerCode" | "negotiationTypeCode" | "topCode" | "carrierCode" | "freightType" | "notes" | "items">): OrderCommandPayload {
   return {
     request: {
       customerCode: input.customerCode,
       negotiationTypeCode: input.negotiationTypeCode,
       ...(input.topCode !== undefined && input.topCode !== null ? { topCode: input.topCode } : {}),
       carrierCode: input.carrierCode ?? null,
+      ...(input.freightType !== undefined && input.freightType !== null ? { freightType: input.freightType } : {}),
       notes: input.notes,
       items: input.items.map((item) => ({
         productCode: item.productCode,
@@ -501,9 +515,9 @@ export async function saveOrderDraft(db: SqlDatabase, env: OfflineEnv, input: Sa
       const localId = env.newId();
       const key = env.newId();
       await tx.execute(
-        `INSERT INTO local_order_draft (local_id, owner_account_id, client_request_id, customer_code, customer_name, negotiation_type_code, top_code, carrier_code, notes, status, created_at, updated_at, dataset_environment, dataset_id, eligibility)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_sync', ?, ?, ?, ?, 'eligible')`,
-        [localId, input.ownerAccountId, key, input.customerCode, input.customerName, input.negotiationTypeCode, input.topCode ?? null, input.carrierCode ?? null, input.notes, now, now, confirmed.environment, confirmed.datasetId],
+        `INSERT INTO local_order_draft (local_id, owner_account_id, client_request_id, customer_code, customer_name, negotiation_type_code, top_code, carrier_code, freight_type, notes, status, created_at, updated_at, dataset_environment, dataset_id, eligibility)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_sync', ?, ?, ?, ?, 'eligible')`,
+        [localId, input.ownerAccountId, key, input.customerCode, input.customerName, input.negotiationTypeCode, input.topCode ?? null, input.carrierCode ?? null, input.freightType ?? null, input.notes, now, now, confirmed.environment, confirmed.datasetId],
       );
       await insertItems(tx, localId, input.items);
       await insertOp(tx, env, { type: "order.create", idempotencyKey: key, payload, baseVersion: null, draftLocalId: localId, dataset: confirmed });
@@ -562,9 +576,9 @@ export async function saveOrderDraft(db: SqlDatabase, env: OfflineEnv, input: Sa
     }
 
     await tx.execute(
-      `UPDATE local_order_draft SET client_request_id = ?, customer_code = ?, customer_name = ?, negotiation_type_code = ?, top_code = ?, carrier_code = ?, notes = ?,
+      `UPDATE local_order_draft SET client_request_id = ?, customer_code = ?, customer_name = ?, negotiation_type_code = ?, top_code = ?, carrier_code = ?, freight_type = ?, notes = ?,
          status = ?, last_error = NULL, updated_at = ? WHERE local_id = ?`,
-      [clientRequestId, input.customerCode, input.customerName, input.negotiationTypeCode, input.topCode ?? null, input.carrierCode ?? null, input.notes, status, now, draft.localId],
+      [clientRequestId, input.customerCode, input.customerName, input.negotiationTypeCode, input.topCode ?? null, input.carrierCode ?? null, input.freightType ?? null, input.notes, status, now, draft.localId],
     );
     await insertItems(tx, draft.localId, input.items);
     return draft.localId;

@@ -15,6 +15,12 @@ export const orderDocumentStatusLabels: Record<ApiSchema<"OrderStatus">, string>
   unknown: "Verificando envio…",
 };
 
+export const freightTypeLabels: Record<NonNullable<OrderDetail["freightType"]>, string> = {
+  CIF: "CIF (frete por conta de quem vende)",
+  FOB: "FOB (frete por conta do cliente)",
+  SEM_FRETE: "Sem frete",
+};
+
 /** The order screen's data, restricted by the domain allow-list (never cost/margin: P-20), rendered with the shared PLAC template. */
 export interface OrderPrintExtras {
   /** Quote/order TOP rules from the installation configuration (J3); absent = printed as an order. */
@@ -33,6 +39,7 @@ export function buildOrderHtml(order: OrderDetail, origin: string, extras: Order
     erpNumber: order.erpNumber,
     customerCode: order.customerCode,
     customerName: order.customerName,
+    ...(order.freightType === null ? {} : { conditions: [{ label: "Frete", value: freightTypeLabels[order.freightType] }] }),
     statusLabel: orderDocumentStatusLabels[order.status],
     createdAt: order.createdAt,
     notes: order.notes,

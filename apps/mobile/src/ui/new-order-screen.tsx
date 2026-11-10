@@ -160,9 +160,9 @@ export function NewOrderScreen({
   // What the editor held when it was last loaded or saved; an order that differs from it has unsaved edits to protect.
   const baselineRef = useRef(orderSignature(null, []));
   /** Header options the seller changed in this session (`undefined` = untouched, the saved or default value stands). */
-  const [choice, setChoice] = useState<{ top?: number; negotiation?: number; carrier?: number | null }>({});
+  const [choice, setChoice] = useState<{ top?: number; negotiation?: number; carrier?: number | null; freight?: "CIF" | "FOB" | "SEM_FRETE" | null }>({});
   const [carriers, setCarriers] = useState<readonly Carrier[] | null>(null);
-  const choiceHeader = { ...(choice.top === undefined ? {} : { top: choice.top }), ...(choice.negotiation === undefined ? {} : { negotiation: choice.negotiation }), ...(choice.carrier === undefined ? {} : { carrier: choice.carrier }) };
+  const choiceHeader = { ...(choice.top === undefined ? {} : { top: choice.top }), ...(choice.negotiation === undefined ? {} : { negotiation: choice.negotiation }), ...(choice.carrier === undefined ? {} : { carrier: choice.carrier }), ...(choice.freight === undefined ? {} : { freight: choice.freight }) };
   const finished = savedLocal !== null || savedOrder !== null;
   const dirty =
     !finished &&
@@ -295,6 +295,8 @@ export function NewOrderScreen({
   const negotiationTypeCode = choice.negotiation !== undefined ? choice.negotiation : savedNegotiation;
   const savedCarrier = localDraft?.carrierCode ?? editingOrder?.carrierCode ?? null;
   const carrierCode = choice.carrier !== undefined ? choice.carrier : savedCarrier;
+  const savedFreight = localDraft?.freightType ?? editingOrder?.freightType ?? null;
+  const freightType = choice.freight !== undefined ? choice.freight : savedFreight;
 
   // Optional list; offline-first adapters answer from what the device stored, and a failure just leaves the choice empty.
   useEffect(() => {
@@ -481,6 +483,7 @@ export function NewOrderScreen({
           negotiationTypeCode,
           topCode,
           carrierCode,
+          freightType,
           notes: localDraft?.notes ?? null,
           lines,
           loadedDataset: config.status === "ready" ? datasetIdentityOf(config.value) : null,
@@ -517,6 +520,7 @@ export function NewOrderScreen({
         negotiationTypeCode,
         ...(topCode === null ? {} : { topCode }),
         ...(carrierCode === null && (editingOrder?.carrierCode ?? null) === null ? {} : { carrierCode }),
+        ...(freightType === null ? {} : { freightType }),
         notes: editingOrder !== null ? editingOrder.notes : null,
         items: toRequestItems(lines),
       };
@@ -697,6 +701,8 @@ export function NewOrderScreen({
                 carriers={carriers}
                 carrierCode={carrierCode}
                 onCarrierChange={(code) => setChoice((current) => ({ ...current, carrier: code }))}
+                freightType={freightType}
+                onFreightChange={(value) => setChoice((current) => ({ ...current, freight: value }))}
               />
             )}
             <CartView

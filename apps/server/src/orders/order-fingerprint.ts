@@ -9,6 +9,8 @@ export interface FingerprintInput {
   readonly topCode?: number | null | undefined;
   /** Same rule as `topCode`: part of the content only when the request names a carrier. */
   readonly carrierCode?: number | null | undefined;
+  /** Same rule: part of the content only when the request names a freight type. */
+  readonly freightType?: string | null | undefined;
   readonly items: readonly { readonly productCode: number; readonly quantity: string; readonly discountPercent?: string | undefined }[];
 }
 
@@ -45,9 +47,10 @@ export function orderFingerprint(input: FingerprintInput): string {
         : [item.productCode, canonicalQuantity(item.quantity)],
     ),
   ];
-  const extras: Record<string, number>[] = [];
+  const extras: Record<string, number | string>[] = [];
   if (input.topCode !== undefined && input.topCode !== null) extras.push({ topCode: input.topCode });
   if (input.carrierCode !== undefined && input.carrierCode !== null) extras.push({ carrierCode: input.carrierCode });
+  if (input.freightType !== undefined && input.freightType !== null) extras.push({ freightType: input.freightType });
   const canonical = JSON.stringify(extras.length === 0 ? base : [...base, ...extras]);
   return createHash('sha256').update(canonical).digest('hex');
 }

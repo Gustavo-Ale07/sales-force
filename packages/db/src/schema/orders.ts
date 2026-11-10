@@ -73,6 +73,8 @@ export const salesOrder = pgTable(
     sourceOrderId: uuid('source_order_id'),
     /** Optional carrier chosen on the order (D-C); validated against the carrier mirror, no FK (mirror rows are soft-deleted). */
     carrierCode: integer('carrier_code'),
+    /** Freight chosen on the order: CIF, FOB or SEM_FRETE (never a default). Null while the draft has none; required to send. */
+    freightType: text('freight_type'),
     /** D-O: ERP "expedição" flag, stamped at creation from sales.expedicaoDefault; never a seller input. Born false. */
     expedicao: boolean('expedicao').notNull().default(false),
     notes: text('notes'),

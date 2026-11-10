@@ -96,6 +96,7 @@ const deliveryCodeLabels: Record<string, string> = {
   top_not_eligible: "TOP do pedido não permitida para envio",
   missing_stock_location: "Local de estoque não configurado — avise o TI",
   missing_negotiation_type: "Tipo de negociação não informado",
+  missing_freight_type: "Frete não informado",
   no_items: "Pedido sem itens",
   missing_unit: "Item sem unidade",
   no_price: "Item sem preço",

@@ -15,13 +15,24 @@ export interface OrderHeaderOptionsProps {
   readonly carriers: readonly Carrier[] | null;
   readonly carrierCode: number | null;
   readonly onCarrierChange: (code: number | null) => void;
+  /** Freight: required to send the order, not to save the draft. `null` = not chosen. */
+  readonly freightType: FreightType | null;
+  readonly onFreightChange: (value: FreightType) => void;
 }
+
+type FreightType = "CIF" | "FOB" | "SEM_FRETE";
+
+const FREIGHT_OPTIONS: readonly { readonly value: FreightType; readonly label: string }[] = [
+  { value: "CIF", label: "CIF" },
+  { value: "FOB", label: "FOB" },
+  { value: "SEM_FRETE", label: "Sem frete" },
+];
 
 /**
  * "Opções do pedido": the TOP (Pedido or Orçamento, D-A) and the negotiation type (D-B: only the sellable ones). A group
  * with nothing to choose is not drawn. What is eligible is decided by the server; this is only the picker.
  */
-export function OrderHeaderOptions({ sales, topCode, negotiationTypeCode, onTopChange, onNegotiationChange, carriers, carrierCode, onCarrierChange }: OrderHeaderOptionsProps) {
+export function OrderHeaderOptions({ sales, topCode, negotiationTypeCode, onTopChange, onNegotiationChange, carriers, carrierCode, onCarrierChange, freightType, onFreightChange }: OrderHeaderOptionsProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const tops = topOptions(sales.orderTops);
   const negotiations = sellableNegotiationTypes(sales.negotiationTypes);
@@ -78,6 +89,27 @@ export function OrderHeaderOptions({ sales, topCode, negotiationTypeCode, onTopC
           )}
         </View>
       )}
+      <View style={styles.group}>
+        <Text style={styles.caption}>Frete (obrigatório para enviar)</Text>
+        <View style={styles.chips}>
+          {FREIGHT_OPTIONS.map((option) => {
+            const selected = option.value === freightType;
+            return (
+              <Pressable
+                key={option.value}
+                style={[styles.chip, selected && styles.chipActive]}
+                onPress={() => onFreightChange(option.value)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+                accessibilityLabel={`Frete ${option.label}`}
+              >
+                <Text style={[styles.chipText, selected && styles.chipTextActive]}>{option.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Text style={styles.hint}>CIF: o frete é por conta de quem vende. FOB: por conta do cliente.</Text>
+      </View>
       <View style={styles.group}>
         <Text style={styles.caption}>Transportadora (opcional)</Text>
         <Pressable

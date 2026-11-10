@@ -1,3 +1,4 @@
+import { FreightTypeSchema, type FreightType } from '@salesforce/contracts';
 import type { DiscountAuthorityStatus, OrderApproval, OrderDetail, OrderItemDetail as OrderItemDto, OrderListItem, OrderReview, OrderStatus, ProductImage } from '@salesforce/contracts';
 import { computeOrderIpi, computeOrderTotals, customerOrderBlock, normalizeDecimalString, type IpiRate } from '@salesforce/domain';
 import { isBlockedRaw } from '../mirror/mirror.repository.js';
@@ -7,6 +8,12 @@ import type { ApprovalWithDecider, OrderCustomerState, OrderItemRow, OrderListRo
 export interface IpiLookup {
   readonly codes: ReadonlyMap<number, number>;
   readonly rates: ReadonlyMap<number, IpiRate>;
+}
+
+/** The stored freight text as a freight type; anything else (never written by the API) reads as none. */
+export function freightTypeOf(value: string | null): FreightType | null {
+  const parsed = FreightTypeSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 }
 
 export function toOrderApproval(found: ApprovalWithDecider | null): OrderApproval | null {
@@ -136,6 +143,7 @@ export function toOrderListItem(row: OrderListRow): OrderListItem {
     status: order.status as OrderStatus,
     topCode: order.topCode,
     carrierCode: order.carrierCode,
+    freightType: freightTypeOf(order.freightType),
     estimatedTotal: order.estimatedTotal,
     itemCount: row.itemCount,
     itemPreview: [...row.itemPreview],
@@ -200,6 +208,7 @@ export function toOrderDetail(
     status: order.status as OrderStatus,
     topCode: order.topCode,
     carrierCode: order.carrierCode,
+    freightType: freightTypeOf(order.freightType),
     estimatedTotal: order.estimatedTotal,
     itemCount: dtoItems.length,
     isPartial: totals.isPartial,

@@ -54,6 +54,8 @@ export interface RemoteOrder {
   readonly negotiationTypeCode: number | null;
   readonly topCode: number | null;
   readonly carrierCode: number | null;
+  /** Absent on a server older than the freight field. */
+  readonly freightType?: "CIF" | "FOB" | "SEM_FRETE" | null;
   readonly notes: string | null;
   readonly estimatedTotal: string;
   readonly items: readonly RemoteOrderItem[];
@@ -224,11 +226,11 @@ export async function adoptRemoteDraft(
     const now = isoNow(env);
     const localId = env.newId();
     await tx.execute(
-      `INSERT INTO local_order_draft (local_id, owner_account_id, client_request_id, customer_code, customer_name, negotiation_type_code, top_code, carrier_code, notes,
+      `INSERT INTO local_order_draft (local_id, owner_account_id, client_request_id, customer_code, customer_name, negotiation_type_code, top_code, carrier_code, freight_type, notes,
          status, remote_id, remote_version, remote_draft_number, estimated_total, created_at, updated_at, dataset_environment, dataset_id, eligibility)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?, ?, ?, ?, ?, ?, ?, ?, 'eligible')`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?, ?, ?, ?, ?, ?, ?, ?, 'eligible')`,
       [
-        localId, input.ownerAccountId, input.clientRequestId, order.customerCode, order.customerName, order.negotiationTypeCode, order.topCode, order.carrierCode,
+        localId, input.ownerAccountId, input.clientRequestId, order.customerCode, order.customerName, order.negotiationTypeCode, order.topCode, order.carrierCode, order.freightType ?? null,
         order.notes, order.id, order.version, order.draftNumber, order.estimatedTotal, now, now, confirmed.environment, confirmed.datasetId,
       ],
     );
@@ -671,9 +673,9 @@ export async function resolveConflict(
         );
       }
       await tx.execute(
-        `UPDATE local_order_draft SET remote_version = ?, customer_code = ?, customer_name = ?, negotiation_type_code = ?, top_code = ?, carrier_code = ?, notes = ?,
+        `UPDATE local_order_draft SET remote_version = ?, customer_code = ?, customer_name = ?, negotiation_type_code = ?, top_code = ?, carrier_code = ?, freight_type = ?, notes = ?,
            estimated_total = ?, server_snapshot = NULL, price_review = NULL, updated_at = ? WHERE local_id = ?`,
-        [server.version, server.customerCode, server.customerName, server.negotiationTypeCode, server.topCode, server.carrierCode, server.notes, server.estimatedTotal, now, draftLocalId],
+        [server.version, server.customerCode, server.customerName, server.negotiationTypeCode, server.topCode, server.carrierCode, server.freightType ?? null, server.notes, server.estimatedTotal, now, draftLocalId],
       );
     }
     await refreshDraftStatus(tx, draftLocalId);

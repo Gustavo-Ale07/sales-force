@@ -4217,6 +4217,16 @@
               }
             ]
           },
+          "freightType": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FreightType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "negotiationTypeCode": {
             "anyOf": [
               {
@@ -4679,12 +4689,23 @@
           "mostUsedNegotiationOrderCount": {
             "type": "integer",
             "minimum": 0
+          },
+          "lastFreightType": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FreightType"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
           "orderCount",
           "mostUsedNegotiationTypeCode",
-          "mostUsedNegotiationOrderCount"
+          "mostUsedNegotiationOrderCount",
+          "lastFreightType"
         ],
         "additionalProperties": false
       },
@@ -5005,6 +5026,14 @@
           "SUPPORTED",
           "READ_ONLY",
           "IGNORED_UNTIL_NEEDED"
+        ]
+      },
+      "FreightType": {
+        "type": "string",
+        "enum": [
+          "CIF",
+          "FOB",
+          "SEM_FRETE"
         ]
       },
       "GatewayMode": {
@@ -5662,6 +5691,16 @@
               }
             ]
           },
+          "freightType": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FreightType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "estimatedTotal": {
             "$ref": "#/components/schemas/DecimalString"
           },
@@ -5986,6 +6025,7 @@
           "status",
           "topCode",
           "carrierCode",
+          "freightType",
           "estimatedTotal",
           "itemCount",
           "isPartial",
@@ -6419,6 +6459,16 @@
               }
             ]
           },
+          "freightType": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FreightType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "estimatedTotal": {
             "$ref": "#/components/schemas/DecimalString"
           },
@@ -6634,6 +6684,7 @@
           "status",
           "topCode",
           "carrierCode",
+          "freightType",
           "estimatedTotal",
           "itemCount",
           "itemPreview",
@@ -7435,6 +7486,16 @@
               {
                 "type": "integer",
                 "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "freightType": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FreightType"
               },
               {
                 "type": "null"

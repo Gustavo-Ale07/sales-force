@@ -16,6 +16,7 @@ function request(items: OrderWriteRequest['items']): OrderWriteRequest {
     topCode: 1001,
     negotiationTypeCode: 11,
     carrierCode: null,
+    freightType: 'FOB',
     expedicao: false,
     stockLocationCode: 209,
     orderDate: '2026-11-09',

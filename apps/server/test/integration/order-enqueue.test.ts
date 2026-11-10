@@ -39,6 +39,7 @@ const body = (items?: unknown[], over: Record<string, unknown> = {}) => ({
   clientRequestId: randomUUID(),
   customerCode: customer,
   negotiationTypeCode: 2,
+  freightType: 'FOB',
   notes: 'teste',
   items: items ?? [{ productCode: priced[0]?.code, quantity: '2' }],
   ...over,
@@ -116,6 +117,16 @@ describe('API-side enqueue for the ERP (SNK-7 D-5, D-M)', () => {
     await bindTo(on, id, 'production');
     const response = await on.call('seller1', 'POST', `/orders/${id}/submit`);
     expect(response.status).toBe(409);
+    expect(await outboxOf(on, id)).toHaveLength(0);
+  });
+
+  it('refuses an order without a freight type (a draft may be saved without it)', async () => {
+    const id = await draft(on);
+    await bindToSandbox(on, id);
+    await on.database.handle.db.execute(sql`update sales_order set freight_type = null where id = ${id}`);
+    const missing = await on.call('seller1', 'POST', `/orders/${id}/submit`);
+    expect(missing.status).toBe(400);
+    expect(JSON.stringify(missing.body)).toContain('missing_freight_type');
     expect(await outboxOf(on, id)).toHaveLength(0);
   });
 

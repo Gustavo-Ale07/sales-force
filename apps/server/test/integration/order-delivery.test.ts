@@ -140,8 +140,8 @@ async function world(options: { mode?: 'dry_run' | 'live'; book?: FakeOrderBook;
     const outboxId = randomUUID();
     const env = over.env === undefined ? 'sandbox' : over.env;
     await pool.query(
-      `INSERT INTO sales_order (id, customer_code, seller_code, created_by_account_id, status, negotiation_type_code, notes, client_request_id, config_version_id, dataset_origin, erp_environment, external_origin_id, created_at)
-       VALUES ($1, 77, 9, $2, 'queued', 11, $3, $4, $5, 'sankhya', $6, $8, $7)`,
+      `INSERT INTO sales_order (id, customer_code, seller_code, created_by_account_id, status, negotiation_type_code, freight_type, notes, client_request_id, config_version_id, dataset_origin, erp_environment, external_origin_id, created_at)
+       VALUES ($1, 77, 9, $2, 'queued', 11, 'FOB', $3, $4, $5, 'sankhya', $6, $8, $7)`,
       [orderId, accountId, over.notes ?? 'Entregar pela manha', randomUUID(), configId, env, new Date(START), orderId],
     );
     await pool.query(
@@ -620,6 +620,7 @@ describe('live delivery', () => {
       topCode: 1001,
       negotiationTypeCode: 11,
       carrierCode: null,
+      freightType: 'FOB',
       expedicao: false,
       stockLocationCode: 209,
       orderDate: '2026-10-30',

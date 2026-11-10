@@ -36,6 +36,8 @@ export interface DeliveryOrder {
   /** The order's own header TOP when it carries one; the configured default otherwise. */
   readonly topCode: number | null;
   readonly carrierCode: number | null;
+  /** Freight chosen on the order (required to send); null only on a legacy row, which then fails with `missing_freight_type`. */
+  readonly freightType: 'CIF' | 'FOB' | 'SEM_FRETE' | null;
   /** D-O: the order's own expedição flag (born from configuration, sent as AD_EXPEDICAO). */
   readonly expedicao: boolean;
   readonly notes: string | null;
@@ -72,6 +74,7 @@ export type BuildProblemCode =
   | 'top_not_eligible'
   | 'missing_stock_location'
   | 'missing_negotiation_type'
+  | 'missing_freight_type'
   | 'no_items'
   | 'missing_unit'
   | 'no_price';
@@ -107,6 +110,7 @@ export function buildOrderRequest(
   originField: string,
 ): BuildResult<OrderWriteRequest> {
   if (order.negotiationTypeCode === null) return fail('missing_negotiation_type', 'The order has no negotiation type.');
+  if (order.freightType === null) return fail('missing_freight_type', 'The order has no freight type.');
   if (items.length === 0) return fail('no_items', 'The order has no lines.');
   const lines: OrderWriteRequest['items'][number][] = [];
   for (const item of items) {
@@ -133,6 +137,7 @@ export function buildOrderRequest(
       topCode: header.topCode,
       negotiationTypeCode: order.negotiationTypeCode,
       carrierCode: header.carrierCode,
+      freightType: order.freightType,
       expedicao: order.expedicao,
       stockLocationCode: header.stockLocationCode,
       orderDate: header.orderDate,

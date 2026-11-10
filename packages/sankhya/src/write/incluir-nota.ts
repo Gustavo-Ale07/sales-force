@@ -33,9 +33,24 @@ export function usesInformedPrice(request: OrderWriteRequest): boolean {
   return request.items.some((item) => item.discountPercent !== null && Number(item.discountPercent) > 0);
 }
 
+/**
+ * Freight on the header. Owner data (Vidya production, 2026-11-10): CIF/FOB leave with TIPFRETE 'N' (outside the note) in
+ * about 97% of cases and no freight leaves CIF_FOB 'S' with TIPFRETE 'S'. NEEDS VALIDATION in the Sandbox (not yet in
+ * `sankhya-spike.md`). Until now no TIPFRETE was sent (the ERP default applied).
+ */
+const FREIGHT_WIRE = {
+  CIF: { CIF_FOB: 'C', TIPFRETE: 'N' },
+  FOB: { CIF_FOB: 'F', TIPFRETE: 'N' },
+  SEM_FRETE: { CIF_FOB: 'S', TIPFRETE: 'S' },
+} as const;
+
 /** Pure and deterministic: same request, same payload (this is what the dry run stores). */
 export function buildIncluirNotaBody(request: OrderWriteRequest): Wire {
   const informedPrice = usesInformedPrice(request);
+  const freight = FREIGHT_WIRE[request.freightType];
+  if (freight === undefined) {
+    throw new SankhyaGatewayError('validation', { code: 'invalid_freight_type', message: 'The freight type must be CIF, FOB or SEM_FRETE.' });
+  }
   const header: Wire = {
     NUNOTA: empty(),
     CODPARC: value(request.customerCode),
@@ -45,6 +60,8 @@ export function buildIncluirNotaBody(request: OrderWriteRequest): Wire {
     CODEMP: value(request.companyCode),
     TIPMOV: value(MOVEMENT_TYPE_ORDER),
     [request.originField]: value(request.originId),
+    CIF_FOB: value(freight.CIF_FOB),
+    TIPFRETE: value(freight.TIPFRETE),
     AD_EXPEDICAO: value(request.expedicao ? 'S' : 'N'),
   };
   if (request.sellerCode !== null) header['CODVEND'] = value(request.sellerCode);

@@ -211,6 +211,13 @@
       "when": 1793991511507,
       "tag": "0029_sync_refresh_progress_at",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1794320620942,
+      "tag": "0030_order_freight_type",
+      "breakpoints": true
     }
   ]
 }

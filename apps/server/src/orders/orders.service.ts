@@ -47,7 +47,7 @@ import { assertEligibleForErpSubmission } from './erp-eligibility.guard.js';
 import { deleteOrderDeliveries, enqueueOrderDelivery, requestDeliveryVerification, requeueRejectedDelivery } from './order-erp-delivery.js';
 import { orderFingerprint } from './order-fingerprint.js';
 import { InstallationConfigurationService } from '../configuration/configuration.service.js';
-import { erpDeliveryOf, toOrderApproval, toOrderDetail, toOrderListItem } from './order.mapper.js';
+import { erpDeliveryOf, freightTypeOf, toOrderApproval, toOrderDetail, toOrderListItem } from './order.mapper.js';
 import { OrdersRepository, type Executor, type OrderCounts, type OrderRow } from './orders.repository.js';
 
 type ValidDraft = Extract<DraftOutcome, { ok: true }>;
@@ -208,6 +208,7 @@ export class OrdersService {
           negotiationTypeCode: body.negotiationTypeCode,
           topCode,
           carrierCode,
+          freightType: body.freightType ?? null,
           // D-O: born from the installation default (pilot 'N' = not marked), never from the request.
           expedicao: context.configuration.sales.expedicaoDefault === 'S',
           sourceOrderId: hooks.sourceOrderId ?? null,
@@ -257,6 +258,7 @@ export class OrdersService {
       orderCount: habits.orderCount,
       mostUsedNegotiationTypeCode: habits.negotiationTypeCode,
       mostUsedNegotiationOrderCount: habits.negotiationOrderCount,
+      lastFreightType: freightTypeOf(habits.lastFreightType),
     };
   }
 
@@ -328,6 +330,8 @@ export class OrdersService {
         expectedDataset: body.expectedDataset,
         customerCode: customer.code,
         negotiationTypeCode: null,
+        // The latest order's freight, or the customer's last choice when that order had none (the seller can change it).
+        freightType: freightTypeOf(source.freightType) ?? freightTypeOf((await this.orders.orderHabitsOf(context.scope, customer.code)).lastFreightType),
         notes: null,
         items: usable.map((line) => ({ productCode: line.productCode, quantity: line.quantity })),
       },
@@ -510,6 +514,7 @@ export class OrdersService {
           negotiationTypeCode: body.negotiationTypeCode,
           topCode: requestedTop === undefined ? locked.topCode : requestedTop,
           carrierCode: requestedCarrier === undefined ? locked.carrierCode : requestedCarrier,
+          freightType: body.freightType === undefined ? locked.freightType : body.freightType,
           notes: body.notes,
           estimatedTotal: draft.totals.estimatedTotal,
           status: statusAfterEdit(locked.status as Parameters<typeof statusAfterEdit>[0]),
@@ -755,6 +760,7 @@ export class OrdersService {
       const items = await this.orders.itemsOf(locked.id, tx);
       const issues = [
         ...(locked.negotiationTypeCode === null ? [{ path: 'negotiationTypeCode', code: 'missing_negotiation_type' }] : []),
+        ...(freightTypeOf(locked.freightType) === null ? [{ path: 'freightType', code: 'missing_freight_type' }] : []),
         ...orderErpIssues(
           items.map((item) => ({
             lineNo: item.lineNo,

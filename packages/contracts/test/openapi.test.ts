@@ -113,6 +113,7 @@ describe('OpenAPI generation', () => {
       'clientRequestId',
       'customerCode',
       'expectedDataset',
+      'freightType',
       'items',
       'negotiationTypeCode',
       'notes',

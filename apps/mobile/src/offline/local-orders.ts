@@ -40,6 +40,8 @@ export interface SaveLocalDraftInput {
   readonly topCode?: number | null;
   /** Optional carrier (D-C). */
   readonly carrierCode?: number | null;
+  /** Freight (CIF | FOB | SEM_FRETE): required to send, not to save. */
+  readonly freightType?: "CIF" | "FOB" | "SEM_FRETE" | null;
   readonly notes: string | null;
   readonly lines: readonly EditorLine[];
   /** The dataset the editor was loaded under (from the entry configuration it showed); `null` = unknown, the save is refused. */
@@ -164,6 +166,7 @@ export function createLocalOrdersPort(deps: {
         negotiationTypeCode: input.negotiationTypeCode,
         ...(input.topCode === undefined ? {} : { topCode: input.topCode }),
         ...(input.carrierCode === undefined ? {} : { carrierCode: input.carrierCode }),
+        ...(input.freightType === undefined ? {} : { freightType: input.freightType }),
         notes: input.notes,
         items: toDraftItems(input.lines),
         loadedDataset: input.loadedDataset,

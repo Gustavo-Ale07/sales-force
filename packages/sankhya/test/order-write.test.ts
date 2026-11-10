@@ -35,6 +35,7 @@ function request(overrides: Partial<OrderWriteRequest> = {}): OrderWriteRequest 
     topCode: 1001,
     negotiationTypeCode: 11,
     carrierCode: null,
+    freightType: 'FOB',
     expedicao: false,
     stockLocationCode: 209,
     orderDate: '2026-10-30',
@@ -59,6 +60,8 @@ describe('CACSP.incluirNota payload (SNK-7 D-8, F-44)', () => {
           CODEMP: wrap('1'),
           TIPMOV: wrap('P'),
           [FIELD]: wrap(ORIGIN),
+          CIF_FOB: wrap('F'),
+          TIPFRETE: wrap('N'),
           AD_EXPEDICAO: wrap('N'),
           CODVEND: wrap('7'),
         },
@@ -77,6 +80,20 @@ describe('CACSP.incluirNota payload (SNK-7 D-8, F-44)', () => {
         },
       },
     });
+  });
+
+  it.each([
+    ['CIF', 'C', 'N'],
+    ['FOB', 'F', 'N'],
+    ['SEM_FRETE', 'S', 'S'],
+  ] as const)('sends the freight %s as CIF_FOB %s and TIPFRETE %s', (freightType, cifFob, tipFrete) => {
+    const header = (buildIncluirNotaBody(request({ freightType })) as { nota: { cabecalho: Record<string, unknown> } }).nota.cabecalho;
+    expect(header['CIF_FOB']).toEqual(wrap(cifFob));
+    expect(header['TIPFRETE']).toEqual(wrap(tipFrete));
+  });
+
+  it('refuses an unknown freight type before any request', () => {
+    expect(() => buildIncluirNotaBody(request({ freightType: 'R' as never }))).toThrowError(expect.objectContaining({ kind: 'validation' }));
   });
 
   it('sends AD_EXPEDICAO as N for an order born unmarked and S only when the order carries the flag (D-O)', () => {

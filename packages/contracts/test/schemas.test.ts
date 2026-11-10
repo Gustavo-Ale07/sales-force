@@ -289,6 +289,7 @@ describe('order requests', () => {
       status: 'draft',
       topCode: 1001,
       carrierCode: null,
+      freightType: null,
       estimatedTotal: '25.00',
       itemCount: 2,
       isPartial: true,

@@ -39,6 +39,7 @@ export function toRemoteOrder(order: OrderDetail): RemoteOrder {
     negotiationTypeCode: order.negotiationTypeCode,
     topCode: order.topCode,
     carrierCode: order.carrierCode,
+    freightType: order.freightType,
     notes: order.notes,
     estimatedTotal: order.estimatedTotal,
     items: order.items.map((item) => ({

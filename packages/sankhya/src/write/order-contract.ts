@@ -38,6 +38,8 @@ export interface OrderWriteRequest {
   readonly negotiationTypeCode: number;
   /** CODPARCTRANSP, only when the header carries one. */
   readonly carrierCode: number | null;
+  /** Freight type chosen on the order: CIF_FOB 'C' | 'F' | 'S' and TIPFRETE 'N' (CIF/FOB) or 'S' (no freight). */
+  readonly freightType: 'CIF' | 'FOB' | 'SEM_FRETE';
   /** AD_EXPEDICAO: 'S' when true, 'N' when false (D-O). */
   readonly expedicao: boolean;
   /** CODLOCALORIG, from `sales.orderStockLocationCode`. */

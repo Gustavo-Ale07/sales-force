@@ -25,6 +25,7 @@ import { validateInstallationConfiguration } from '../configuration/validate.js'
 import { AUDIT_ACTIONS, type AuditDetail, type AuditService } from '../iam/audit.service.js';
 import type { Logger } from '../observability/logger.js';
 import { maskStoredError } from '../observability/mask-error-message.js';
+import { freightTypeOf } from '../orders/order.mapper.js';
 import { uuidv7 } from '../platform/ids.js';
 import type { Clock } from '../platform/tokens.js';
 import {
@@ -775,6 +776,7 @@ function toDelivery(order: OrderRow): DeliveryOrder {
     // The order's own TOP (D-A); null falls back to the configured default. The carrier (D-C/D-8) travels as CODPARCTRANSP when set.
     topCode: order.topCode,
     carrierCode: order.carrierCode,
+    freightType: freightTypeOf(order.freightType),
     expedicao: order.expedicao,
     notes: order.notes,
     createdAt: order.createdAt,

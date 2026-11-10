@@ -135,4 +135,11 @@ export const migrations: readonly Migration[] = [
     name: "order_item_ipi_reference",
     statements: [`ALTER TABLE local_order_item ADD COLUMN ipi_json TEXT`],
   },
+  {
+    // Freight chosen on the order (CIF | FOB | SEM_FRETE). Expand-only, nullable: NULL = not chosen yet (a draft may stay without it; the server
+    // refuses to send an order without a freight type).
+    version: 6,
+    name: "order_freight_type",
+    statements: [`ALTER TABLE local_order_draft ADD COLUMN freight_type TEXT`],
+  },
 ];
