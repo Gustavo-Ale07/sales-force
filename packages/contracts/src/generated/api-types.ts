@@ -904,6 +904,7 @@ export interface components {
                 liberationEventLabels?: {
                     [key: string]: string;
                 };
+                confirmAfterInclude?: boolean;
             };
             provenance?: {
                 [key: string]: components["schemas"]["ConfigurationProvenanceEntry"];
@@ -1466,9 +1467,14 @@ export interface components {
         ProductGroup: {
             code: number;
             name: string;
+            parentCode: number | null;
+            degree: number;
+            hasChildren: boolean;
         };
         ProductGroupsResponse: {
             items: components["schemas"]["ProductGroup"][];
+            hierarchical: boolean;
+            hasUngrouped: boolean;
         };
         ProductImage: {
             version: string;
@@ -1613,7 +1619,7 @@ export interface components {
             reused?: boolean;
         };
         /** @enum {string} */
-        SyncRefreshEntity: "configuration" | "sellers" | "customers" | "products" | "priceTables" | "priceTableVersions" | "listPrices" | "carriers" | "ipiRates" | "openTitles" | "orderStatus";
+        SyncRefreshEntity: "configuration" | "sellers" | "customers" | "products" | "productGroups" | "priceTables" | "priceTableVersions" | "listPrices" | "carriers" | "ipiRates" | "openTitles" | "orderStatus";
         /** @enum {string} */
         SyncRefreshPhase: "cadastros" | "precos" | "pedidos" | "concluido";
         /** @enum {string} */

@@ -55,6 +55,28 @@ export const erpCarrier = pgTable('erp_carrier', {
 });
 
 /**
+ * Product group hierarchy (TGFGRU): code, name, parent, degree (1 = top level), the analytic flag (the group itself holds
+ * products) and the active flag. `parent_code` is null for a top-level group; the hierarchy is read by `parent_code`, never by
+ * code prefix. Group 0 ("sem grupo") is never mirrored. Complete snapshot every run. Feeds the Grupo > Subgrupo > Linha filter.
+ */
+export const erpProductGroup = pgTable(
+  'erp_product_group',
+  {
+    code: integer('code').primaryKey(),
+    name: text('name').notNull(),
+    parentCode: integer('parent_code'),
+    degree: integer('degree').notNull(),
+    analytic: boolean('analytic').notNull(),
+    active: boolean('active').notNull(),
+    ...mirrorColumns(),
+  },
+  (t) => [
+    // Serves: children of a group (cascading filter) and the top level (parent_code is null).
+    index('erp_product_group_parent_idx').on(t.parentCode).where(sql`${t.deletedAt} is null`),
+  ],
+);
+
+/**
  * IPI rates (TGFIPI): code, description, rate in percent and the tariff (pauta) flag. Used for the display ESTIMATE of the
  * IPI only (D-D); the ERP calculates the real value. Replaced in full on every run (a handful of rows).
  */

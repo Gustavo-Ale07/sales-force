@@ -6,7 +6,6 @@ import {
   Input,
   Pagination,
   SearchInput,
-  Select,
   SkeletonLines,
   Table,
   TableBody,
@@ -19,7 +18,8 @@ import {
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { productGroupsQueryOptions, productsQueryOptions } from "../lib/api-queries";
+import { productsQueryOptions } from "../lib/api-queries";
+import { EMPTY_GROUP_PATH, GroupCascadeFilter, groupFilterValue, type GroupPath } from "./group-cascade-filter";
 import { useApi } from "../lib/app-context";
 import { parseQuantityInput, quantityProblemMessages } from "../lib/order-draft";
 import type { ProductRow } from "../lib/price-types";
@@ -71,15 +71,14 @@ export function ProductMultiSelect({
 }: ProductMultiSelectProps) {
   const api = useApi();
   const [search, setSearch] = useState("");
-  const [group, setGroup] = useState("");
+  const [group, setGroup] = useState<GroupPath>(EMPTY_GROUP_PATH);
   const [page, setPage] = useState(1);
   const debounced = useDebounced(search.trim(), 300);
 
-  const groups = useQuery(productGroupsQueryOptions(api));
   const query = useQuery(
     productsQueryOptions(api, {
       search: debounced || undefined,
-      group: group === "" ? undefined : Number(group),
+      group: groupFilterValue(group),
       customerCode,
       sellable: "true",
       pageSize: PAGE_SIZE,
@@ -133,23 +132,14 @@ export function ProductMultiSelect({
           placeholder="Código, descrição ou referência"
           wrapperClassName="min-w-[220px] flex-1"
         />
-        <Select
-          size="md"
-          aria-label="Grupo dos produtos a selecionar"
-          value={group}
-          onChange={(event) => {
-            setGroup(event.target.value);
+        <GroupCascadeFilter
+          path={group}
+          ariaSuffix=" dos produtos a selecionar"
+          onChange={(next) => {
+            setGroup(next);
             setPage(1);
           }}
-          wrapperClassName="w-full sm:w-[200px]"
-        >
-          <option value="">Todos os grupos</option>
-          {(groups.data?.items ?? []).map((item) => (
-            <option key={item.code} value={item.code}>
-              {item.name}
-            </option>
-          ))}
-        </Select>
+        />
       </div>
 
       <div aria-live="polite" aria-busy={query.isFetching}>

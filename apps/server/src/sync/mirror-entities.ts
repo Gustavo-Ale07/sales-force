@@ -8,9 +8,10 @@ import {
   erpPriceTable,
   erpPriceTableVersion,
   erpProduct,
+  erpProductGroup,
   erpSeller,
 } from '@salesforce/db';
-import type { Carrier, Customer, OpenTitle, DirectoryUser, ListPrice, PriceTable, PriceTableVersion, Product, Seller } from '@salesforce/domain';
+import type { Carrier, Customer, OpenTitle, DirectoryUser, ListPrice, PriceTable, PriceTableVersion, Product, ProductGroup, Seller } from '@salesforce/domain';
 import {
   SankhyaGatewayError,
   type GatewayDescription,
@@ -42,6 +43,7 @@ export const MIRROR_ENTITIES = [
   'carriers',
   'ipiRates',
   'openTitles',
+  'productGroups',
 ] as const satisfies readonly ReadEntity[];
 
 export type MirrorEntity = (typeof MIRROR_ENTITIES)[number];
@@ -397,6 +399,28 @@ const openTitles: MirrorEntitySpec = {
     })),
 };
 
+/**
+ * Product group hierarchy (TGFGRU): code, name, parent, degree, analytic and active flags. A complete snapshot every run (a
+ * few hundred rows). Group 0 ("sem grupo") is never read (`CODGRUPOPROD > 0`). The hierarchy is the parent link, never a code prefix.
+ */
+const productGroups: MirrorEntitySpec = {
+  entity: 'productGroups',
+  requires: ['productGroups'],
+  table: erpProductGroup,
+  keyProps: ['code'],
+  read: (context) =>
+    mapped<ProductGroup>(context.gateway.readProductGroups(readOptions(context)), (row) => ({
+      key: [keyColumn('productGroups', 'code', row.code)],
+      content: {
+        name: row.name,
+        parentCode: row.parentCode === null ? null : keyColumn('productGroups', 'parentCode', row.parentCode),
+        degree: keyColumn('productGroups', 'degree', row.degree),
+        analytic: row.analytic,
+        active: row.active,
+      },
+    })),
+};
+
 export const MIRROR_SPECS: Readonly<Record<MirrorEntity, MirrorEntitySpec>> = {
   sellers,
   customers,
@@ -408,4 +432,5 @@ export const MIRROR_SPECS: Readonly<Record<MirrorEntity, MirrorEntitySpec>> = {
   carriers,
   ipiRates,
   openTitles,
+  productGroups,
 };

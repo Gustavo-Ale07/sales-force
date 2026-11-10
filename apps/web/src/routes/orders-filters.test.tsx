@@ -144,7 +144,7 @@ describe("Vendas: filtros comerciais", () => {
 
   it("the group narrows the product list; \"Limpar seleção\" then Aplicar filtro removes the product filter", async () => {
     const { user, calls } = renderApp("/pedidos?products=%5B12%5D", {
-      handlers: handlers({ "GET /product-groups": { body: { items: [{ code: 7, name: "Cabos" }] } } }),
+      handlers: handlers({ "GET /product-groups": { body: { items: [{ code: 7, name: "Cabos", parentCode: null, degree: 1, hasChildren: false }], hierarchical: true, hasUngrouped: false } } }),
     });
     await screen.findByText("Pedido nº 12");
     await user.click(screen.getByRole("button", { name: "Filtrar por produtos" }));

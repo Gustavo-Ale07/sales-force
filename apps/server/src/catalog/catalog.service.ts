@@ -77,7 +77,7 @@ export class CatalogService {
   async listGroups(user: CurrentUser): Promise<ProductGroupsResponse> {
     const { configuration } = await this.policy.accessContext(user);
     const groups = await this.mirror.listProductGroups(configuration.products.showInactive);
-    return { items: groups.map((group) => ({ code: group.code, name: group.name ?? `Grupo ${group.code}` })) };
+    return groups;
   }
 
   async listCarriers(user: CurrentUser): Promise<CarriersResponse> {

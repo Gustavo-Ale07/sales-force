@@ -9,8 +9,10 @@ import {
   erpCarrier,
   erpIpiRate,
   erpOpenTitle,
+  erpProductGroup,
   type Database,
 } from '@salesforce/db';
+import { subtreeOf, visibleGroups, type GroupNode, type GroupRow } from './product-groups.js';
 import type { CustomerScope, IpiRate, OpenTitle, PriceTableVersion } from '@salesforce/domain';
 import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, not, or, sql, type SQL } from 'drizzle-orm';
 import { DATABASE } from '../platform/tokens.js';
@@ -103,6 +105,7 @@ export type ListPriceStateFilter = 'priced' | 'zero' | 'none';
 /** Catalog rules already derived from the installation configuration (the caller passes them in). */
 export interface ProductFilter {
   readonly search?: string | undefined;
+  /** Group code; its descendants of any depth are included (resolved here by the hierarchy). `0` = "Sem grupo". */
   readonly group?: number | undefined;
   readonly sellable?: boolean | undefined;
   readonly priceState?: ListPriceStateFilter | undefined;
@@ -415,7 +418,33 @@ export class MirrorRepository {
     return sql`(${erpProduct.active} = true and ${erpProduct.usageCode} is not null and ${usage})`;
   }
 
-  private productWhere(filter: ProductFilter, versionId: number | null): SQL | undefined {
+  /** Group codes a group filter covers: the group and all its descendants; empty hierarchy table = the group alone (flat). */
+  private async groupCodesOf(group: number | undefined): Promise<readonly number[] | undefined> {
+    if (group === undefined || group === 0) return undefined;
+    return subtreeOf(await this.loadGroups(), group);
+  }
+
+  private async loadGroups(): Promise<GroupRow[]> {
+    return this.db
+      .select({
+        code: erpProductGroup.code,
+        name: erpProductGroup.name,
+        parentCode: erpProductGroup.parentCode,
+        degree: erpProductGroup.degree,
+        active: erpProductGroup.active,
+      })
+      .from(erpProductGroup)
+      .where(isNull(erpProductGroup.deletedAt));
+  }
+
+  private groupCondition(group: number | undefined, groupCodes: readonly number[] | undefined): SQL | undefined {
+    if (group === undefined) return undefined;
+    // "Sem grupo": no group, or the ERP's group 0.
+    if (group === 0) return or(isNull(erpProduct.groupCode), eq(erpProduct.groupCode, 0));
+    return groupCodes === undefined || groupCodes.length === 0 ? eqInt(erpProduct.groupCode, group) : inArray(erpProduct.groupCode, [...groupCodes]);
+  }
+
+  private productWhere(filter: ProductFilter, versionId: number | null, groupCodes?: readonly number[]): SQL | undefined {
     const digits = filter.search === undefined ? null : digitsOf(filter.search);
     const searchCondition =
       filter.search === undefined
@@ -444,7 +473,7 @@ export class MirrorRepository {
         : hasVersion
           ? sql`${erpListPrice.unitPrice} > 0`
           : sql`false`,
-      filter.group === undefined ? undefined : eqInt(erpProduct.groupCode, filter.group),
+      this.groupCondition(filter.group, groupCodes),
       filter.sellable === undefined ? undefined : filter.sellable ? sellable : not(sellable),
       priceCondition,
       searchCondition,
@@ -456,7 +485,8 @@ export class MirrorRepository {
     versionId: number | null,
     page: Page,
   ): Promise<{ rows: PricedProductRow[]; total: number }> {
-    const where = this.productWhere(filter, versionId);
+    const groupCodes = await this.groupCodesOf(filter.group);
+    const where = this.productWhere(filter, versionId, groupCodes);
     const order =
       filter.sort === 'description'
         ? [asc(erpProduct.description), asc(erpProduct.code)]
@@ -474,17 +504,18 @@ export class MirrorRepository {
         .orderBy(...order)
         .limit(page.pageSize)
         .offset(offsetOf(page.page, page.pageSize)),
-      this.countProducts(filter, versionId),
+      this.countProducts(filter, versionId, groupCodes),
     ]);
     return { rows, total };
   }
 
-  async countProducts(filter: ProductFilter, versionId: number | null): Promise<number> {
+  async countProducts(filter: ProductFilter, versionId: number | null, resolvedGroupCodes?: readonly number[]): Promise<number> {
+    const groupCodes = resolvedGroupCodes ?? (await this.groupCodesOf(filter.group));
     const [row] = await this.db
       .select({ total: sql<number>`count(*)::int` })
       .from(erpProduct)
       .leftJoin(erpListPrice, this.priceJoin(versionId))
-      .where(this.productWhere(filter, versionId));
+      .where(this.productWhere(filter, versionId, groupCodes));
     return row?.total ?? 0;
   }
 
@@ -579,19 +610,37 @@ export class MirrorRepository {
     return rows.length > 0;
   }
 
-  async listProductGroups(showInactive: boolean): Promise<{ code: number; name: string | null }[]> {
-    const rows = await this.db
-      .select({ code: erpProduct.groupCode, name: sql<string | null>`max(${erpProduct.groupName})` })
-      .from(erpProduct)
-      .where(
-        and(
-          isNull(erpProduct.deletedAt),
-          isNotNull(erpProduct.groupCode),
-          showInactive ? undefined : eq(erpProduct.active, true),
-        ),
-      )
-      .groupBy(erpProduct.groupCode)
-      .orderBy(sql`max(${erpProduct.groupName}) asc nulls last`, asc(erpProduct.groupCode));
-    return rows.flatMap((row) => (row.code === null ? [] : [{ code: row.code, name: row.name }]));
+  /**
+   * Groups for the Grupo > Subgrupo > Linha filter. While `erp_product_group` is empty (new table, before its first sync) it falls
+   * back to the flat list derived from the products (`hierarchical: false`, no parent). `hasUngrouped` = some counted product has
+   * no group (null or 0), which makes the client offer "Sem grupo".
+   */
+  async listProductGroups(showInactive: boolean): Promise<{ items: GroupNode[]; hierarchical: boolean; hasUngrouped: boolean }> {
+    const counted = and(isNull(erpProduct.deletedAt), showInactive ? undefined : eq(erpProduct.active, true));
+    const [rows, groups, ungrouped] = await Promise.all([
+      this.db
+        .select({ code: erpProduct.groupCode, name: sql<string | null>`max(${erpProduct.groupName})` })
+        .from(erpProduct)
+        .where(and(counted, isNotNull(erpProduct.groupCode), sql`${erpProduct.groupCode} <> 0`))
+        .groupBy(erpProduct.groupCode),
+      this.loadGroups(),
+      this.db
+        .select({ one: sql<number>`1` })
+        .from(erpProduct)
+        .where(and(counted, or(isNull(erpProduct.groupCode), eq(erpProduct.groupCode, 0))))
+        .limit(1),
+    ]);
+    const hasUngrouped = ungrouped.length > 0;
+    if (groups.length === 0) {
+      const flat = rows.flatMap((row) =>
+        row.code === null
+          ? []
+          : [{ code: row.code, name: row.name ?? `Grupo ${row.code}`, parentCode: null, degree: 1, hasChildren: false }],
+      );
+      flat.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR') || a.code - b.code);
+      return { items: flat, hierarchical: false, hasUngrouped };
+    }
+    const withProducts = new Set(rows.flatMap((row) => (row.code === null ? [] : [row.code])));
+    return { items: visibleGroups(groups, withProducts), hierarchical: true, hasUngrouped };
   }
 }

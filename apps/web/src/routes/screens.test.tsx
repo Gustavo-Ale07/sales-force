@@ -216,7 +216,7 @@ describe("Cliente (customer detail)", () => {
 });
 
 describe("Catálogo (products)", () => {
-  const groups = { "GET /product-groups": { body: { items: [{ code: 30, name: "Balões" }] } } };
+  const groups = { "GET /product-groups": { body: { items: [{ code: 30, name: "Balões", parentCode: null, degree: 1, hasChildren: false }], hierarchical: true, hasUngrouped: false } } };
 
   it("shows 'Sem preço' for a product without price, never zero, and marks an explicit zero price distinctly", async () => {
     renderApp("/produtos", {

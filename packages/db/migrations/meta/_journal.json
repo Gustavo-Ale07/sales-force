@@ -218,6 +218,13 @@
       "when": 1794320620942,
       "tag": "0030_order_freight_type",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1794329433987,
+      "tag": "0031_erp_product_group",
+      "breakpoints": true
     }
   ]
 }

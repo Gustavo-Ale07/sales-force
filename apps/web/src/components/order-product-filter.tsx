@@ -9,7 +9,6 @@ import {
   Pagination,
   SearchInput,
   SegmentedControl,
-  Select,
   SkeletonLines,
   Table,
   TableBody,
@@ -23,7 +22,8 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Boxes, ChevronDown } from "lucide-react";
 import { useEffect, useState } from "react";
-import { productGroupsQueryOptions, productQueryOptions, productsQueryOptions } from "../lib/api-queries";
+import { productQueryOptions, productsQueryOptions } from "../lib/api-queries";
+import { EMPTY_GROUP_PATH, GroupCascadeFilter, groupFilterValue, type GroupPath } from "./group-cascade-filter";
 import { useApi } from "../lib/app-context";
 import { useDebounced } from "../lib/use-debounced";
 import { QueryError } from "./query-error";
@@ -120,15 +120,14 @@ function ProductFilterContent({
   const [picked, setPicked] = useState<number[]>([...initial]);
   const [match, setMatch] = useState<ProductMatch>(initialMatch);
   const [search, setSearch] = useState("");
-  const [group, setGroup] = useState("");
+  const [group, setGroup] = useState<GroupPath>(EMPTY_GROUP_PATH);
   const [page, setPage] = useState(1);
   const debounced = useDebounced(search.trim(), 300);
 
-  const groups = useQuery(productGroupsQueryOptions(api));
   const query = useQuery(
     productsQueryOptions(api, {
       search: debounced || undefined,
-      group: group === "" ? undefined : Number(group),
+      group: groupFilterValue(group),
       pageSize: PAGE_SIZE,
       page,
       sort: "description",
@@ -181,23 +180,14 @@ function ProductFilterContent({
             placeholder="Nome, código ou referência"
             wrapperClassName="min-w-[220px] flex-1"
           />
-          <Select
-            size="md"
-            aria-label="Grupo dos produtos do filtro"
-            value={group}
-            onChange={(event) => {
-              setGroup(event.target.value);
+          <GroupCascadeFilter
+            path={group}
+            ariaSuffix=" dos produtos do filtro"
+            onChange={(next) => {
+              setGroup(next);
               setPage(1);
             }}
-            wrapperClassName="w-full sm:w-[200px]"
-          >
-            <option value="">Todos os grupos</option>
-            {(groups.data?.items ?? []).map((item) => (
-              <option key={item.code} value={item.code}>
-                {item.name}
-              </option>
-            ))}
-          </Select>
+          />
         </div>
 
         {picked.length > 1 ? (

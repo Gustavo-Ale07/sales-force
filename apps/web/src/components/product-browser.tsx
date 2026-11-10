@@ -6,7 +6,6 @@ import {
   Input,
   Pagination,
   SearchInput,
-  Select,
   SkeletonLines,
   Table,
   TableBody,
@@ -20,11 +19,12 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { useState } from "react";
-import { productGroupsQueryOptions, productsQueryOptions } from "../lib/api-queries";
+import { productsQueryOptions } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { discountProblemMessages, parseDiscountInput, parseQuantityInput, quantityProblemMessages } from "../lib/order-draft";
 import type { ProductRow } from "../lib/price-types";
 import { useDebounced } from "../lib/use-debounced";
+import { EMPTY_GROUP_PATH, GroupCascadeFilter, groupFilterValue, type GroupPath } from "./group-cascade-filter";
 import { PriceCell } from "./price-cell";
 import { ProductImage } from "./product-image";
 import { QueryError } from "./query-error";
@@ -34,11 +34,12 @@ const PAGE_SIZE = 20;
 /** Search, group and page of the table; kept by the host so they survive switching to the cart and back. */
 export interface ProductFilters {
   search: string;
-  group: string;
+  /** Selected codes of the Grupo > Subgrupo > Linha cascade. */
+  group: GroupPath;
   page: number;
 }
 
-export const INITIAL_PRODUCT_FILTERS: ProductFilters = { search: "", group: "", page: 1 };
+export const INITIAL_PRODUCT_FILTERS: ProductFilters = { search: "", group: EMPTY_GROUP_PATH, page: 1 };
 
 export interface ProductBrowserProps {
   filters: ProductFilters;
@@ -67,11 +68,10 @@ export function ProductBrowser({ filters, onFiltersChange, customerCode, cartQua
   const [discountProblems, setDiscountProblems] = useState<Record<number, string>>({});
   const debounced = useDebounced(search.trim(), 300);
 
-  const groups = useQuery(productGroupsQueryOptions(api));
   const query = useQuery({
     ...productsQueryOptions(api, {
       search: debounced || undefined,
-      group: group === "" ? undefined : Number(group),
+      group: groupFilterValue(group),
       customerCode: customerCode ?? 0,
       sellable: "true",
       pageSize: PAGE_SIZE,
@@ -117,20 +117,7 @@ export function ProductBrowser({ filters, onFiltersChange, customerCode, cartQua
           placeholder="Código, descrição ou referência"
           wrapperClassName="min-w-[220px] flex-1"
         />
-        <Select
-          size="md"
-          aria-label="Grupo"
-          value={group}
-          onChange={(event) => onFiltersChange({ ...filters, group: event.target.value, page: 1 })}
-          wrapperClassName="w-full sm:w-[200px]"
-        >
-          <option value="">Todos os grupos</option>
-          {(groups.data?.items ?? []).map((item) => (
-            <option key={item.code} value={item.code}>
-              {item.name}
-            </option>
-          ))}
-        </Select>
+        <GroupCascadeFilter path={group} onChange={(next) => onFiltersChange({ ...filters, group: next, page: 1 })} />
       </div>
       <div aria-live="polite" aria-busy={query.isFetching}>
         {query.isPending ? (

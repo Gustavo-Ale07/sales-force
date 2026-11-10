@@ -4143,6 +4143,9 @@
                   "minLength": 1,
                   "maxLength": 100
                 }
+              },
+              "confirmAfterInclude": {
+                "type": "boolean"
               }
             },
             "additionalProperties": false
@@ -7125,11 +7128,32 @@
           },
           "name": {
             "type": "string"
+          },
+          "parentCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "degree": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "hasChildren": {
+            "type": "boolean"
           }
         },
         "required": [
           "code",
-          "name"
+          "name",
+          "parentCode",
+          "degree",
+          "hasChildren"
         ],
         "additionalProperties": false
       },
@@ -7141,10 +7165,18 @@
             "items": {
               "$ref": "#/components/schemas/ProductGroup"
             }
+          },
+          "hierarchical": {
+            "type": "boolean"
+          },
+          "hasUngrouped": {
+            "type": "boolean"
           }
         },
         "required": [
-          "items"
+          "items",
+          "hierarchical",
+          "hasUngrouped"
         ],
         "additionalProperties": false
       },
@@ -7897,6 +7929,7 @@
           "sellers",
           "customers",
           "products",
+          "productGroups",
           "priceTables",
           "priceTableVersions",
           "listPrices",

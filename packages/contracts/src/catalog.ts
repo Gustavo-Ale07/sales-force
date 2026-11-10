@@ -69,13 +69,28 @@ export type PriceContext = z.infer<typeof PriceContextSchema>;
 
 export const ProductGroupSchema = named(
   'ProductGroup',
-  z.object({ code: codeInt(), name: z.string() }),
+  z.object({
+    code: codeInt(),
+    name: z.string(),
+    /** `null` = top level of the cascade (Grupo). */
+    parentCode: codeInt().nullable(),
+    /** Level as the ERP reports it (1 = Grupo); the cascade itself follows `parentCode`. */
+    degree: z.number().int().min(1),
+    /** The next level (Subgrupo / Linha) has options under this group. */
+    hasChildren: z.boolean(),
+  }),
 );
 export type ProductGroup = z.infer<typeof ProductGroupSchema>;
 
 export const ProductGroupsResponseSchema = named(
   'ProductGroupsResponse',
-  z.object({ items: z.array(ProductGroupSchema) }),
+  z.object({
+    items: z.array(ProductGroupSchema),
+    /** `false` = the hierarchy is not mirrored yet: a flat list, no parent/child. */
+    hierarchical: z.boolean(),
+    /** Some product has no group: the filter offers "Sem grupo" (the `group` query value `0`). */
+    hasUngrouped: z.boolean(),
+  }),
 );
 export type ProductGroupsResponse = z.infer<typeof ProductGroupsResponseSchema>;
 

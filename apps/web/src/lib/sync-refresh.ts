@@ -17,6 +17,7 @@ export const ENTITY_LABELS: Record<SyncRefreshStep["entity"], string> = {
   sellers: "Vendedores",
   customers: "Clientes",
   products: "Produtos",
+  productGroups: "Grupos de produtos",
   priceTables: "Tabelas de preço",
   priceTableVersions: "Versões das tabelas de preço",
   listPrices: "Preços de lista",
@@ -43,7 +44,7 @@ export function seesRefreshDetail(role: string): boolean {
 
 /** The three blocks of the detail view (D-AC C2). */
 export const REFRESH_GROUPS: ReadonlyArray<{ title: string; entities: ReadonlyArray<SyncRefreshStep["entity"]> }> = [
-  { title: "Cadastros", entities: ["configuration", "sellers", "customers", "products", "carriers"] },
+  { title: "Cadastros", entities: ["configuration", "sellers", "customers", "products", "productGroups", "carriers"] },
   { title: "Preços", entities: ["priceTables", "priceTableVersions", "listPrices", "ipiRates"] },
   { title: "Financeiro e pedidos", entities: ["openTitles", "orderStatus"] },
 ];
@@ -54,6 +55,7 @@ export const ENTITY_ACTION: Record<SyncRefreshStep["entity"], string> = {
   sellers: "Lendo vendedores…",
   customers: "Lendo clientes…",
   products: "Lendo produtos…",
+  productGroups: "Lendo grupos de produtos…",
   priceTables: "Lendo tabelas de preço…",
   priceTableVersions: "Lendo versões das tabelas…",
   listPrices: "Lendo preços de lista…",

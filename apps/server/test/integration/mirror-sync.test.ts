@@ -25,6 +25,7 @@ const TABLES: Record<MirrorEntity, string> = {
   sellers: 'erp_seller',
   customers: 'erp_customer',
   products: 'erp_product',
+  productGroups: 'erp_product_group',
   priceTables: 'erp_price_table',
   priceTableVersions: 'erp_price_table_version',
   listPrices: 'erp_list_price',

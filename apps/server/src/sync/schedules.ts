@@ -43,9 +43,9 @@ export function mirrorSchedulesFromSettings(settings: MirrorScheduleSettings): M
     // Full mirror off: only the login directory may still run, and only sellers + directoryUsers (never customers, products or prices).
     if (settings.AUTH_DIRECTORY_SYNC_ENABLED === true) {
       const cron = settings.AUTH_DIRECTORY_SYNC_CRON ?? DEFAULT_MIRROR_CRONS.sellers;
-      return { sellers: cron, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: cron, carriers: null, ipiRates: null, openTitles: null };
+      return { sellers: cron, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: cron, carriers: null, ipiRates: null, openTitles: null, productGroups: null };
     }
-    return { sellers: null, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: null, carriers: null, ipiRates: null, openTitles: null };
+    return { sellers: null, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: null, carriers: null, ipiRates: null, openTitles: null, productGroups: null };
   }
   return {
     sellers: settings.SYNC_CRON_SELLERS,
@@ -63,5 +63,7 @@ export function mirrorSchedulesFromSettings(settings: MirrorScheduleSettings): M
     ipiRates: settings.SYNC_CRON_PRICES,
     // Open titles move on their own 30-minute schedule (D-I).
     openTitles: settings.SYNC_CRON_OPEN_TITLES ?? DEFAULT_MIRROR_CRONS.openTitles,
+    // The group hierarchy classifies products: it moves with the product knob.
+    productGroups: settings.SYNC_CRON_PRODUCTS,
   };
 }
