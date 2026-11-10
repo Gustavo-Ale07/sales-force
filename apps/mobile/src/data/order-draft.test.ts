@@ -182,8 +182,8 @@ describe("discounts in the preview", () => {
   });
 
   it("rounds each line once, half-up", () => {
-    // 3 x 0.35 = 1.05; 15% off = 0.8925 -> 0.89
-    expect(previewDraft([priced("a", "15", "0.35")]).lines[0]?.item?.estimatedLineTotal).toBe("0.89");
+    // D-AK: unit discount 0.35 x 15% = 0.0525 -> 0.05; 3 x (0.35 - 0.05) = 0.90
+    expect(previewDraft([priced("a", "15", "0.35")]).lines[0]?.item?.estimatedLineTotal).toBe("0.90");
   });
 
   it("flags an invalid discount on that line only and keeps it out of the sum", () => {
