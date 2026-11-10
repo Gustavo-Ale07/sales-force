@@ -83,7 +83,7 @@ describe("release (liberação) on the order screens", () => {
         "GET /orders/:id": { body: orderDetail({ erpRelease }) },
       },
     });
-    expect(await screen.findByText("Enviado ao Sankhya, aguardando liberação.")).toBeInTheDocument();
+    expect(await screen.findByText("Aguardando a liberação no Sankhya.")).toBeInTheDocument();
     expect(screen.getByText("Liberação exigida pela TOP: aguardando liberação")).toBeInTheDocument();
     expect(screen.getByText("Limite de crédito: liberado")).toBeInTheDocument();
   });

@@ -155,7 +155,7 @@ export const erpReleaseLabels: Record<ErpReleaseState, { label: string; tone: To
 
 /** Reassurance shown on the order detail; "awaiting" is not an alarm. */
 export const erpReleaseMessages: Record<ErpReleaseState, string> = {
-  awaiting: "Enviado ao Sankhya, aguardando liberação.",
+  awaiting: "Aguardando a liberação no Sankhya.",
   released: "Liberado no Sankhya.",
   denied: "A liberação foi negada no Sankhya.",
 };
@@ -171,10 +171,10 @@ type ErpBillingState = ErpBilling["state"];
 export const erpBillingLabels: Record<ErpBillingState, { label: string; tone: Tone; hint: string }> = {
   cancelled: { label: "Cancelado", tone: "neutral", hint: "O pedido foi cancelado no Sankhya." },
   denied: { label: "Negado", tone: "danger", hint: "A liberação foi negada no Sankhya." },
-  awaiting_release: { label: "Aguardando liberação", tone: "warning", hint: "Enviado ao Sankhya, aguardando liberação." },
+  awaiting_release: { label: "Aguardando liberação", tone: "warning", hint: "Aguardando a liberação no Sankhya." },
   invoiced: { label: "Faturado", tone: "success", hint: "O pedido foi faturado no Sankhya." },
   awaiting_billing: { label: "Aguardando faturamento", tone: "info", hint: "Liberado e confirmado; aguardando o faturamento." },
-  sent: { label: "Enviado (sem confirmação)", tone: "neutral", hint: "Enviado ao Sankhya, ainda sem confirmação da nota." },
+  sent: { label: "Enviado (sem confirmação)", tone: "neutral", hint: "A nota ainda não foi confirmada no Sankhya." },
 };
 
 /** "Faturado em 09/11/2026" for the detail; the date arrives as YYYY-MM-DD. */
