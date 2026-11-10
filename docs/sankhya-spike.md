@@ -1049,3 +1049,17 @@ Customers: the rule columns are discovered through `USER_TAB_COLUMNS` (`TABLE_NA
 - **Owner-run production read (SELECT only, 90 days; counts only, no order data):** item cut observed on 2 orders (78 items; 16 fully cut with `QTDENTREGUE = 0` and no `TGFVAR` line for the item, 62 partial with `QTDATENDIDA = QTDENTREGUE`). The header of a cut order is `STATUSNOTA = 'L'`, `PENDENTE = 'N'`, identical to a fully invoiced one: only the items tell (`QTDENTREGUE < QTDNEG` with item `PENDENTE = 'N'`). This matches the implemented rule (cut = `QTDNEG - QTDENTREGUE` when the item is not pending). Order cancellation shows in `TGFCAB_EXC` (81 orders of `TIPMOV 'P'`, 90 days); `TGFCAN` held 58 cancelled notes, all also in `TGFCAB_EXC` and none still in `TGFCAB`. The code reads both tables for notes absent from `TGFCAB`; a missing note alone is never a cancellation.
 - **Still NEEDS VALIDATION:** (1) the "cortado" rule on a case created in the Sandbox (the production evidence above is read-only and from the owner, not a Sandbox case); (2) cancellation of an order that was ALREADY invoiced (the sale note is cancelled, the order note stays): the current code shows "Faturado" while the sale note stays `STATUSNOTA = 'L'`, and does not detect the cancelled sale note.
 - **Failure handling:** if any billing query of a batch fails, the batch gets no billing facts, the worker logs one warning with the error code(s) and the order count (no order data) and keeps the stored billing state; the release lines are still delivered.
+
+
+### 9.56 Sandbox x Production comparison (owner-run, read-only, 2026-11-10) — facts VALIDATED by SELECT; behaviours NEEDS VALIDATION
+
+Catalogue and configuration comparison only (no order data, no write, no probe by the Force). Differences that matter before the pilot:
+
+- **`TGFCAB.AD_FORCEORIGEM` exists only in the Sandbox.** It must be created in production before the pilot (field type "Texto padrão", `VARCHAR2(100)`; anyone with Sankhya open must reopen the screen to see it). Until then ERP order submission stays disabled (SNK-4, SNK-5).
+- **AD_ columns only in production:** `AD_GERAQTDVOLZERO`, `AD_SEP*`, `AD_QTDFALTA`, `AD_QTDSEP`, `AD_MOTFALTA`. The trigger `INX_TRG_TGFCAB_QTDVOL_ZERO` also exists only in production and was NOT exercised in the Sandbox: its effect on an order created by the Force is NEEDS VALIDATION before the pilot.
+- **TOP 1001:** equal in both environments.
+- **Negotiation types (`TGFTPV`) differ in mobility:** 1, 17, 59 and 62 only in the Sandbox; 30, 45, 48, 105 and 145 only in production. Test with types present in both: 2 to 6 and 11 to 26.
+- **Price tables (`TGFNTA`):** in production only 5 and 6 have mobility S (0, 3, 9 and 13 are N); in the Sandbox 0, 3, 5, 6 and 9 are S and table 13 does not exist. The current `NUTAB` of table 5 is 13 in the Sandbox and 11 in production; prices for products 1453 and 315 are the same in both.
+- **Releasers (`TSILIM`):** the releasers of events 2, 3, 13 and 44 exist in both environments (users 9 and 11 only in production).
+- **`DESCMAX`:** 2.108 active production products have `DESCMAX` null. The behaviour of event 2 (discount limit) with a null `DESCMAX` is NEEDS VALIDATION in the Sandbox.
+- **`AGRUPMIN` (block 5, quantity step):** laminates PT 1453 and 1440 have `AGRUPMIN` 0,2 in production and null in the Sandbox; napkins CX 315, 314 and 316 and product 4158 have null. In the Sandbox a laminate therefore tests the unit step (0,01), not 0,2.
