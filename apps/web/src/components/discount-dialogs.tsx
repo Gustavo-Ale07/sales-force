@@ -82,6 +82,12 @@ function MassDiscountContent({ lines, onApply, onOpenChange }: Pick<MassDiscount
   const problem = touched && !parsed.ok ? discountProblemMessages[parsed.problem] : null;
   const priced = lines.filter((line) => line.price.state !== "none").length;
   const withoutPrice = lines.length - priced;
+  const withDiscount = lines.filter((line) => {
+    if (line.price.state === "none") return false;
+    const current = parseDiscountInput(line.discountText);
+    return current.ok && current.value !== "0";
+  }).length;
+  const before = useMemo(() => previewDraft(lines).totals.estimatedTotal, [lines]);
   const after = useMemo(() => {
     if (!parsed.ok) return null;
     return previewDraft(applyDiscount(lines, storedText(parsed.value), () => true).lines).totals.estimatedTotal;
@@ -100,7 +106,7 @@ function MassDiscountContent({ lines, onApply, onOpenChange }: Pick<MassDiscount
   return (
     <>
       <DialogContent
-        title="Desconto em massa"
+        title="Desconto no pedido todo"
         description="O mesmo percentual em todos os itens do carrinho. Substitui os descontos já informados."
         className="max-w-md"
         footer={
@@ -124,7 +130,7 @@ function MassDiscountContent({ lines, onApply, onOpenChange }: Pick<MassDiscount
               <div className="flex flex-col gap-1">
                 <PercentInput
                   {...controlProps}
-                  label="Desconto em massa (%)"
+                  label="Desconto no pedido todo (%)"
                   value={text}
                   invalid={problem !== null}
                   describedBy={problem ? "mass-discount-error" : undefined}
@@ -142,9 +148,16 @@ function MassDiscountContent({ lines, onApply, onOpenChange }: Pick<MassDiscount
             {plural(priced, "item recebe", "itens recebem")} o desconto.
             {withoutPrice > 0 ? ` ${plural(withoutPrice, "item sem preço fica", "itens sem preço ficam")} de fora.` : ""}
           </p>
+          {withDiscount > 0 ? (
+            <p className="m-0 text-sm text-warn" role="status" data-testid="mass-discount-replaces">
+              {plural(withDiscount, "item já tem desconto e será substituído", "itens já têm desconto e serão substituídos")}.
+            </p>
+          ) : null}
           {after !== null ? (
-            <p className="m-0 text-sm" aria-live="polite">
-              <span className="text-fg-muted">Total estimado depois do desconto: </span>
+            <p className="m-0 text-sm" aria-live="polite" data-testid="mass-discount-preview">
+              <span className="text-fg-muted">Total estimado: de </span>
+              <Money value={before} />
+              <span className="text-fg-muted"> por </span>
               <strong>
                 <Money value={after} />
               </strong>

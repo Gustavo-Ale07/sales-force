@@ -46,8 +46,8 @@ async function setupCartWithTwoLines() {
 describe("NewOrderScreen discounts (mass and group apply, DISC-1/MOB-4)", () => {
   it("applies one discount percentage to every line in the cart (mass apply)", async () => {
     await setupCartWithTwoLines();
-    await pressAndSettle(screen.getByRole("button", { name: "Desconto em massa" }));
-    await fireEvent.changeText(screen.getByLabelText("Desconto em massa (%)"), "10");
+    await pressAndSettle(screen.getByRole("button", { name: "Desconto no pedido todo" }));
+    await fireEvent.changeText(screen.getByLabelText("Desconto no pedido todo (%)"), "10");
     await pressAndSettle(screen.getByRole("button", { name: "Aplicar desconto" }));
 
     expect((screen.getByLabelText("Desconto de Copo 200 ml").props as { value: string }).value).toBe("10");
@@ -79,8 +79,8 @@ describe("NewOrderScreen discounts (mass and group apply, DISC-1/MOB-4)", () => 
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Sem preço ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (2)" }));
 
-    await pressAndSettle(screen.getByRole("button", { name: "Desconto em massa" }));
-    await fireEvent.changeText(screen.getByLabelText("Desconto em massa (%)"), "10");
+    await pressAndSettle(screen.getByRole("button", { name: "Desconto no pedido todo" }));
+    await fireEvent.changeText(screen.getByLabelText("Desconto no pedido todo (%)"), "10");
     await pressAndSettle(screen.getByRole("button", { name: "Aplicar desconto" }));
 
     expect((screen.getByLabelText("Desconto de Copo 200 ml").props as { value: string }).value).toBe("10");

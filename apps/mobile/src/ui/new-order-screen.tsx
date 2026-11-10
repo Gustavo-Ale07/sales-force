@@ -670,9 +670,9 @@ export function NewOrderScreen({
                     style={styles.toolbarButton}
                     onPress={() => setMassDiscountOpen(true)}
                     accessibilityRole="button"
-                    accessibilityLabel="Desconto em massa"
+                    accessibilityLabel="Desconto no pedido todo"
                   >
-                    <Text style={styles.toolbarButtonText}>Desconto em massa</Text>
+                    <Text style={styles.toolbarButtonText}>Desconto no pedido todo</Text>
                   </Pressable>
                   <Pressable
                     style={styles.toolbarButton}
@@ -766,7 +766,7 @@ export function NewOrderScreen({
 
       <DiscountSheet
         visible={massDiscountOpen}
-        title="Desconto em massa"
+        title="Desconto no pedido todo"
         description="Aplica um desconto percentual a todos os itens do carrinho."
         lines={lines}
         match={() => true}

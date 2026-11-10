@@ -843,7 +843,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                   title={lines.length === 0 ? "Adicione itens ao carrinho para aplicar desconto" : undefined}
                   onClick={() => setMassDiscountOpen(true)}
                 >
-                  Desconto em massa
+                  Desconto no pedido todo
                 </Button>
                 {lines.length > 0 ? (
                   <Button

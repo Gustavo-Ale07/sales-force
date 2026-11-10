@@ -306,6 +306,18 @@ describe("applyDiscount", () => {
     expect(applyDiscount(second, "", () => true).lines.every((l) => l.discountText === "")).toBe(true);
   });
 
+  it("whole order: the preview total after applying equals the sum of lines rounded per unit (D-AK), with and without a previous discount", () => {
+    const odd = [
+      line({ key: "p", quantityText: "3", discountText: "50", price: { state: "priced", unitPrice: "10.35", tableCode: 5, versionId: 9 } }),
+      line({ key: "q", quantityText: "7", price: { state: "priced", unitPrice: "10.35", tableCode: 5, versionId: 9 } }),
+    ];
+    const applied = applyDiscount(odd, "5", () => true).lines;
+    // unit discount 10.35 x 5% = 0.5175 -> 0.52 per unit (half-up); net unit 9.83; 3 x 9.83 = 29.49, 7 x 9.83 = 68.81
+    expect(previewDraft(applied).totals.estimatedTotal).toBe("98.30");
+    // 0% (empty text) removes every discount and returns to the list total: 10 x 10.35
+    expect(previewDraft(applyDiscount(applied, "", () => true).lines).totals.estimatedTotal).toBe("103.50");
+  });
+
   it("does not mutate the input", () => {
     applyDiscount(lines, "10", () => true);
     expect(lines.every((l) => l.discountText === "")).toBe(true);
