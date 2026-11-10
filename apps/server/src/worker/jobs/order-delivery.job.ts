@@ -40,6 +40,9 @@ export class OrderErpStatusJob implements JobHandler<Record<string, never>> {
   constructor(private readonly service: OrderErpStatusService) {}
 
   async handle(_payload: Record<string, never>, context: JobContext): Promise<void> {
-    await this.service.runOnce(context.signal === undefined ? {} : { signal: context.signal });
+    const options = context.signal === undefined ? {} : { signal: context.signal };
+    await this.service.runOnce(options);
+    // Release (liberação) is read apart from the status: one failing read never blocks the other.
+    await this.service.runReleaseOnce(options);
   }
 }

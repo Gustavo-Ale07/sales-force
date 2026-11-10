@@ -8,6 +8,7 @@ import type {
   Product,
   ProductGroup,
 } from '@salesforce/domain';
+import { isReleaseLineDenied } from '@salesforce/domain';
 import { assertSafeScope, selectEffectiveVersions, type ReadScope } from '../read-scope.js';
 
 /** D-V: columns of TGFPAR in the connected schema (names only). */
@@ -55,6 +56,8 @@ import type {
   OrderWriteRequest,
   WrittenOrder,
   ErpOrderStatusReading,
+  ErpOrderReleaseReading,
+  ErpReleaseLineReading,
   WrittenOrderItem,
 } from '../write/order-contract.js';
 import { assertBaseUrlAllowed, assertRequestUrlAllowed } from './host-guard.js';
@@ -582,6 +585,95 @@ export class RealSankhyaGateway implements SankhyaGateway {
     return { erpOrderNumber: reader.int('NUNOTA'), confirmed: reader.nullableText('STATUSNOTA') === 'L' };
   }
 
+  /**
+   * Release facts of notes already included (NUNOTA known). SELECT only. Names validated by the owner in DBExplorer
+   * (`sankhya-spike.md` 9.53); access of the integration user is still NEEDS VALIDATION in the Sandbox:
+   * TGFCAB (STATUSNOTA, AD_STATUS, PENDENTE), TSILIB (TABELA = 'TGFCAB', NUCHAVE = NUNOTA: EVENTO, DHLIB, REPROVADO, VLRLIBERADO) and
+   * VGFLIBEVE.DESCRICAO. The releasing user is never selected. Every number is validated as a positive integer before it
+   * reaches the SQL text.
+   */
+  async readOrderReleaseFacts(erpOrderNumbers: readonly number[], options?: OrderCallOptions): Promise<readonly ErpOrderReleaseReading[]> {
+    for (const number of erpOrderNumbers) {
+      if (!Number.isInteger(number) || number < 1) throw invalidOrderQuery('the order number is not a positive integer');
+    }
+    const headers = new Map<number, { statusNota: string | null; adStatus: string | null; pending: string | null }>();
+    const lines = new Map<number, Array<{ event: number; released: boolean; denied: boolean }>>();
+    for (let start = 0; start < erpOrderNumbers.length; start += RELEASE_READ_CHUNK) {
+      const list = erpOrderNumbers.slice(start, start + RELEASE_READ_CHUNK).join(',');
+      const headerColumns = ['NUNOTA', 'STATUSNOTA', 'AD_STATUS', 'PENDENTE'] as const;
+      const header = await this.#query(
+        `SELECT NUNOTA, STATUSNOTA, AD_STATUS, PENDENTE FROM TGFCAB WHERE NUNOTA IN (${list})`,
+        headerColumns,
+        options?.signal,
+      );
+      header.rows.forEach((cells, index) => {
+        const row = new RowReader('orders', headerColumns, cells, index);
+        headers.set(row.int('NUNOTA'), { statusNota: textCell(cells[1]), adStatus: textCell(cells[2]), pending: textCell(cells[3]) });
+      });
+      const lineColumns = ['NUCHAVE', 'EVENTO', 'DHLIB', 'REPROVADO', 'VLRLIBERADO'] as const;
+      const released = await this.#query(
+        `SELECT NUCHAVE, EVENTO, DHLIB, REPROVADO, VLRLIBERADO FROM TSILIB WHERE TABELA = 'TGFCAB' AND NUCHAVE IN (${list})`,
+        lineColumns,
+        options?.signal,
+      );
+      released.rows.forEach((cells, index) => {
+        const row = new RowReader('orders', lineColumns, cells, index);
+        const key = row.int('NUCHAVE');
+        const bucket = lines.get(key) ?? [];
+        const releasedAt = textCell(cells[2]);
+        const amountText = textCell(cells[4]);
+        const amount = amountText === null ? Number.NaN : Number(amountText.replace(',', '.'));
+        bucket.push({
+          event: row.int('EVENTO'),
+          released: releasedAt !== null,
+          // Vidya rule: REPROVADO = 'S', or released (dated) with VLRLIBERADO = 0.
+          denied: isReleaseLineDenied({ released: releasedAt !== null, reproved: textCell(cells[3]) === 'S', releasedAmount: Number.isFinite(amount) ? amount : null }),
+        });
+        lines.set(key, bucket);
+      });
+    }
+    const descriptions = await this.#releaseEventDescriptions([...lines.values()].flatMap((bucket) => bucket.map((line) => line.event)), options);
+    return erpOrderNumbers.map((erpOrderNumber): ErpOrderReleaseReading => {
+      const header = headers.get(erpOrderNumber);
+      const mapped: ErpReleaseLineReading[] = (lines.get(erpOrderNumber) ?? []).map((line) => ({
+        ...line,
+        description: descriptions.get(line.event) ?? null,
+      }));
+      return {
+        erpOrderNumber,
+        found: header !== undefined,
+        statusNota: header?.statusNota ?? null,
+        adStatus: header?.adStatus ?? null,
+        pending: header?.pending ?? null,
+        lines: mapped,
+      };
+    });
+  }
+
+  /**
+   * VGFLIBEVE.DESCRICAO of the events seen. The description is a label only: if the ERP refuses this one query as invalid
+   * (an unvalidated column), the release STATE is still delivered, with no descriptions; any other failure is thrown.
+   */
+  async #releaseEventDescriptions(events: readonly number[], options?: OrderCallOptions): Promise<Map<number, string>> {
+    const distinct = [...new Set(events)].sort((a, b) => a - b);
+    const result = new Map<number, string>();
+    if (distinct.length === 0) return result;
+    const columns = ['EVENTO', 'DESCRICAO'] as const;
+    let response;
+    try {
+      response = await this.#query(`SELECT EVENTO, DESCRICAO FROM VGFLIBEVE WHERE EVENTO IN (${distinct.join(',')})`, columns, options?.signal);
+    } catch (error) {
+      if (error instanceof SankhyaGatewayError && error.kind === 'validation') return result;
+      throw error;
+    }
+    response.rows.forEach((cells, index) => {
+      const row = new RowReader('orders', columns, cells, index);
+      const text = textCell(cells[1]);
+      if (text !== null) result.set(row.int('EVENTO'), text.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100));
+    });
+    return result;
+  }
+
   /** NEEDS VALIDATION (spike 9.48 item 9): where the ERP status facts live is not known; no query is invented. */
   readOrderStatusFacts(erpOrderNumbers: readonly number[], options?: OrderCallOptions): Promise<readonly ErpOrderStatusReading[]> {
     void erpOrderNumbers;
@@ -797,6 +889,16 @@ function whereClause(spec: QueryShape): string {
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Notes per release query: the numbers sit in an IN list, so the text stays short. */
+const RELEASE_READ_CHUNK = 100;
+
+/** A scalar cell as trimmed text; null, undefined and blank are null (a numeric cell is read as its digits). */
+function textCell(cell: unknown): string | null {
+  if (cell === null || cell === undefined) return null;
+  const text = typeof cell === 'string' ? cell.trim() : typeof cell === 'number' ? String(cell) : '';
+  return text === '' ? null : text;
+}
 
 function invalidOrderQuery(detail: string): SankhyaGatewayError {
   return new SankhyaGatewayError('validation', { code: 'invalid_order_query', message: `Order lookup refused: ${detail}.` });

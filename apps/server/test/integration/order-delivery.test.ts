@@ -109,6 +109,7 @@ async function world(options: { mode?: 'dry_run' | 'live'; book?: FakeOrderBook;
       return fake.readWrittenOrder(number, o);
     },
     readOrderStatusFacts: (numbers, o) => fake.readOrderStatusFacts(numbers, o),
+    readOrderReleaseFacts: (numbers, o) => fake.readOrderReleaseFacts(numbers, o),
   };
   const now = () => new Date(clock.ms);
   const settings: OrderDeliverySettings = {

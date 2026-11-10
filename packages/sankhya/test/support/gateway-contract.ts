@@ -144,6 +144,7 @@ export function runGatewayContract(label: string, subject: ContractSubject): voi
         'findOrderByOrigin',
         'readWrittenOrder',
         'readOrderStatusFacts',
+        'readOrderReleaseFacts',
       ]);
       const names = new Set<string>();
       for (let proto: object | null = Object.getPrototypeOf(gateway); proto && proto !== Object.prototype; proto = Object.getPrototypeOf(proto)) {

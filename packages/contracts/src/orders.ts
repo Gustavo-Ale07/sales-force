@@ -184,6 +184,21 @@ export const OrderListItemSchema = named(
       })
       .nullable(),
     /**
+     * ERP release (liberação) state of a sent order, from its release lines; `null` when none was read or the ERP has no
+     * release lines. "Awaiting" is the NORMAL state of a freshly sent order. `events` (description per line) only on the
+     * order detail; the releasing user is never exposed.
+     */
+    erpRelease: z
+      .object({
+        state: z.enum(['awaiting', 'released', 'denied']),
+        checkedAt: IsoTimestampSchema,
+        events: z
+          .array(z.object({ code: z.number().int().min(0), label: z.string().nullable(), state: z.enum(['awaiting', 'released', 'denied']) }))
+          .optional(),
+      })
+      .nullable()
+      .optional(),
+    /**
      * Why the last ERP delivery was refused (K3, D-X): class and stable code, never the stored text. Present only
      * on `rejected` orders; clients map it to a human label. `message` is the ERP's own short refusal text and is set
      * only when the ERP refused the order (`erp_refused_order`): masked, at most 200 characters, no request data.

@@ -1218,6 +1218,17 @@ export interface components {
                     label: string | null;
                 }[];
             } | null;
+            erpRelease?: {
+                /** @enum {string} */
+                state: "awaiting" | "released" | "denied";
+                checkedAt: components["schemas"]["IsoTimestamp"];
+                events?: {
+                    code: number;
+                    label: string | null;
+                    /** @enum {string} */
+                    state: "awaiting" | "released" | "denied";
+                }[];
+            } | null;
             erpDelivery?: {
                 errorClass: string;
                 errorCode: string | null;
@@ -1336,6 +1347,17 @@ export interface components {
                 releaseEvents?: {
                     code: number;
                     label: string | null;
+                }[];
+            } | null;
+            erpRelease?: {
+                /** @enum {string} */
+                state: "awaiting" | "released" | "denied";
+                checkedAt: components["schemas"]["IsoTimestamp"];
+                events?: {
+                    code: number;
+                    label: string | null;
+                    /** @enum {string} */
+                    state: "awaiting" | "released" | "denied";
                 }[];
             } | null;
             erpDelivery?: {

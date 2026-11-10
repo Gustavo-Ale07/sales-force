@@ -1,7 +1,7 @@
 import type { DiscountAuthorityStatus, OrderApproval, OrderDetail, OrderItemDetail as OrderItemDto, OrderListItem, OrderReview, OrderStatus, ProductImage } from '@salesforce/contracts';
 import { computeOrderIpi, computeOrderTotals, customerOrderBlock, normalizeDecimalString, type IpiRate } from '@salesforce/domain';
 import { isBlockedRaw } from '../mirror/mirror.repository.js';
-import { decodeReleaseEventCodes } from './release-events.js';
+import { decodeReleaseDetail, decodeReleaseEventCodes, storedReleaseState } from './release-events.js';
 import type { ApprovalWithDecider, OrderCustomerState, OrderItemRow, OrderListRow, OrderRow } from './orders.repository.js';
 
 export interface IpiLookup {
@@ -62,6 +62,18 @@ export function erpStatusOf(order: OrderRow, liberationEventLabels?: Readonly<Re
     label: liberationEventLabels[String(code)] ?? null,
   }));
   return releaseEvents.length === 0 ? base : { ...base, releaseEvents };
+}
+
+/**
+ * ERP release state as last read by the worker; null until read or when the ERP has no release lines. The event list
+ * (description per line) is a detail-only addition (`withEvents`). The releasing user is never stored, so never exposed.
+ */
+export function erpReleaseOf(order: OrderRow, withEvents = false): OrderListItem['erpRelease'] {
+  const detail = decodeReleaseDetail(order.erpStatusDetail);
+  if (detail === null) return null;
+  const base = { state: storedReleaseState(detail), checkedAt: detail.checkedAt };
+  if (!withEvents) return base;
+  return { ...base, events: detail.lines.map((line) => ({ code: line.code, label: line.description, state: line.state })) };
 }
 
 /**
@@ -130,6 +142,7 @@ export function toOrderListItem(row: OrderListRow): OrderListItem {
     isPartial: row.unpricedCount > 0,
     erpNumber: order.erpNumber,
     erpStatus: erpStatusOf(order),
+    erpRelease: erpReleaseOf(order),
     erpDelivery: erpDeliveryOf(order.status, row.deliveryErrorClass, row.deliveryErrorMessage),
     review: reviewOf(order.status, row),
     version: order.version,
@@ -192,6 +205,7 @@ export function toOrderDetail(
     isPartial: totals.isPartial,
     erpNumber: order.erpNumber,
     erpStatus: erpStatusOf(order, liberationEventLabels),
+    erpRelease: erpReleaseOf(order, true),
     erpDelivery: erpDeliveryOf(order.status, lastDelivery?.errorClass ?? null, lastDelivery?.message ?? null),
     review: reviewOf(order.status, customer),
     version: order.version,

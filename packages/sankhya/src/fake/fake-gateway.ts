@@ -24,6 +24,7 @@ import type {
   OrderWriteRequest,
   WrittenOrder,
   ErpOrderStatusReading,
+  ErpOrderReleaseReading,
 } from '../write/order-contract.js';
 import { FakeOrderBook } from './fake-order-book.js';
 import { assertSafeScope, customerExclusion, mobilityAllowed, selectEffectiveVersions } from '../read-scope.js';
@@ -266,6 +267,10 @@ export class FakeGateway implements SankhyaGateway {
   findOrderByOrigin(originField: string, originId: string, options?: OrderCallOptions): Promise<ErpOrderRef | null> {
     void originField;
     return this.#order(options, () => this.#orders.find(originId));
+  }
+
+  readOrderReleaseFacts(erpOrderNumbers: readonly number[], options?: OrderCallOptions): Promise<readonly ErpOrderReleaseReading[]> {
+    return this.#order(options, () => this.#orders.releaseOf(erpOrderNumbers));
   }
 
   readOrderStatusFacts(erpOrderNumbers: readonly number[], options?: OrderCallOptions): Promise<readonly ErpOrderStatusReading[]> {

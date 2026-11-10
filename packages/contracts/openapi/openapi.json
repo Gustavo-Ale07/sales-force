@@ -5743,6 +5743,66 @@
               }
             ]
           },
+          "erpRelease": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "awaiting",
+                      "released",
+                      "denied"
+                    ]
+                  },
+                  "checkedAt": {
+                    "$ref": "#/components/schemas/IsoTimestamp"
+                  },
+                  "events": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "label": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "awaiting",
+                            "released",
+                            "denied"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "label",
+                        "state"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "state",
+                  "checkedAt"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "erpDelivery": {
             "anyOf": [
               {
@@ -6438,6 +6498,66 @@
                   "code",
                   "label",
                   "invoiceNumber",
+                  "checkedAt"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "erpRelease": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "awaiting",
+                      "released",
+                      "denied"
+                    ]
+                  },
+                  "checkedAt": {
+                    "$ref": "#/components/schemas/IsoTimestamp"
+                  },
+                  "events": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "label": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "awaiting",
+                            "released",
+                            "denied"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "label",
+                        "state"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "state",
                   "checkedAt"
                 ],
                 "additionalProperties": false

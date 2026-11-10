@@ -142,6 +142,28 @@ export function erpStatusText(status: ErpStatus): { label: string; detail: strin
   return { label: status.label, detail: `pendente: ${events.map((event) => event.label ?? `evento ${event.code}`).join(", ")}` };
 }
 
+type ErpRelease = NonNullable<ApiSchema<"OrderListItem">["erpRelease"]>;
+type ErpReleaseState = ErpRelease["state"];
+
+/** Release (liberação) state beside the Sankhya status. "Aguardando liberação" is the normal state of a sent order: amber, calm. */
+export const erpReleaseLabels: Record<ErpReleaseState, { label: string; tone: Tone }> = {
+  awaiting: { label: "Aguardando liberação", tone: "warning" },
+  released: { label: "Liberado", tone: "success" },
+  denied: { label: "Negado", tone: "danger" },
+};
+
+/** Reassurance shown on the order detail; "awaiting" is not an alarm. */
+export const erpReleaseMessages: Record<ErpReleaseState, string> = {
+  awaiting: "Enviado ao Sankhya, aguardando liberação.",
+  released: "Liberado no Sankhya.",
+  denied: "A liberação foi negada no Sankhya.",
+};
+
+/** One line per release event, with the event description (or "evento N" when the ERP gave none) and its state. */
+export function erpReleaseEventText(event: NonNullable<ErpRelease["events"]>[number]): string {
+  return `${event.label ?? `evento ${event.code}`}: ${erpReleaseLabels[event.state].label.toLowerCase()}`;
+}
+
 /** pt-BR count with thousands separator. Counts are integers, never money. */
 export function formatCount(value: number): string {
   return new Intl.NumberFormat("pt-BR").format(value);

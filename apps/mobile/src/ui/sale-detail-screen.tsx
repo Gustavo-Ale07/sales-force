@@ -10,6 +10,7 @@ import type { LocalOrdersPort } from "../offline/local-orders";
 import { shareOrderPdf, type OrderPdfPort } from "../offline/order-pdf";
 import { saleValue } from "../offline/sales";
 import { approvalViewOf, type ApprovalView, type DiscountAuthorityMode } from "../offline/approval-status";
+import { releaseViewOf } from "../offline/release-status";
 import { saleActions, saleExplanation } from "../offline/sales-status";
 import { colors, spacing } from "../theme";
 import { SaleBadgeView, describeSaleValue } from "./sale-parts";
@@ -150,6 +151,7 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
     }
   }
 
+  const release = releaseViewOf(draft.serverSnapshot);
   const canDuplicateAsOrder = draft.status === "synced" && draft.remoteId !== null && tops !== null && isQuotationTop(effectiveTop, tops);
 
   async function duplicateAsOrder() {
@@ -217,6 +219,15 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
             <Text style={styles.meta}>{draft.remoteDraftNumber !== null ? `${tops !== null && isQuotationTop(effectiveTop, tops) ? "Orçamento" : "Pedido"} nº ${draft.remoteDraftNumber}` : "Sem número ainda"}</Text>
           </View>
           <Text style={styles.explanation}>{saleExplanation(draft)}</Text>
+          {release !== null && (
+            <View accessibilityLabel="Liberação no Sankhya">
+              <Text style={[styles.releaseLabel, { color: release.tone === "success" ? colors.ok : release.tone === "danger" ? colors.red : colors.warning }]}>{release.label}</Text>
+              <Text style={styles.meta}>{release.message}</Text>
+              {release.events.map((line) => (
+                <Text key={line} style={styles.meta}>{line}</Text>
+              ))}
+            </View>
+          )}
           <Text style={styles.meta}>{`Criado em ${formatDateTime(draft.createdAt)}`}</Text>
           <Text style={styles.meta}>{`Última alteração ${formatDateTime(draft.updatedAt)}`}</Text>
           {effectiveTop !== null && (
@@ -363,6 +374,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: colors.surface, borderRadius: 8, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: spacing.sm },
   customer: { fontSize: 20, fontWeight: "800", color: colors.text },
   statusLine: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  releaseLabel: { fontSize: 14, fontWeight: "700" },
   explanation: { fontSize: 14, color: colors.text },
   meta: { fontSize: 13, color: colors.textMuted },
   notes: { fontSize: 14, color: colors.text },

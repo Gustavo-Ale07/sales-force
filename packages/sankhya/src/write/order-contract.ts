@@ -121,7 +121,36 @@ export interface ErpOrderStatusReading {
   readonly releaseEventCodes?: readonly number[];
 }
 
+/**
+ * One release line of an ERP note (TSILIB, TABELA = 'TGFCAB'). Who released it is deliberately NOT read.
+ * `description` is VGFLIBEVE.DESCRICAO (null when the event has none or the description could not be read).
+ */
+export interface ErpReleaseLineReading {
+  readonly event: number;
+  readonly description: string | null;
+  /** DHLIB is filled. */
+  readonly released: boolean;
+  /** REPROVADO = 'S', or dated with VLRLIBERADO = 0 (`isReleaseLineDenied`, domain). */
+  readonly denied: boolean;
+}
+
+/**
+ * Release facts of one note already included in the ERP (NUNOTA known). Header columns are carried as read and not
+ * interpreted yet (billing is a later block); only `lines` feed the release state.
+ */
+export interface ErpOrderReleaseReading {
+  readonly erpOrderNumber: number;
+  /** The note exists in TGFCAB. */
+  readonly found: boolean;
+  readonly statusNota: string | null;
+  readonly adStatus: string | null;
+  readonly pending: string | null;
+  readonly lines: readonly ErpReleaseLineReading[];
+}
+
 export interface SankhyaOrderReadPort {
+  /** Release state source (read-only): one entry per requested number, `found` false when TGFCAB has none. */
+  readOrderReleaseFacts(erpOrderNumbers: readonly number[], options?: OrderCallOptions): Promise<readonly ErpOrderReleaseReading[]>;
   /** Status facts of already sent orders (P2); one entry per requested number, `found` false when the ERP has none. */
   readOrderStatusFacts(erpOrderNumbers: readonly number[], options?: OrderCallOptions): Promise<readonly ErpOrderStatusReading[]>;
   /** SNK-4 origin check: exact match on the dedicated origin field, `null` when absent. */

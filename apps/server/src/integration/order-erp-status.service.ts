@@ -4,7 +4,7 @@ import { isSankhyaGatewayError, type SankhyaOrderReadPort } from '@salesforce/sa
 import { and, asc, eq, gte, isNotNull, sql } from 'drizzle-orm';
 import { describeSyncFailure, type SyncFailure } from '../sync/failure.js';
 import type { Logger } from '../observability/logger.js';
-import { encodeReleaseEventCodes } from '../orders/release-events.js';
+import { decodeReleaseDetail, encodeReleaseDetail, encodeReleaseEventCodes, storedReleaseState, type StoredReleaseDetail } from '../orders/release-events.js';
 import type { Clock } from '../platform/tokens.js';
 
 /** Orders older than this are no longer polled (P2). */
@@ -106,4 +106,65 @@ export class OrderErpStatusService {
     }
     return { checked: due.length, updated };
   }
+
+  /**
+   * Release (liberação) state of sent orders whose ERP number is known: one SELECT-only read through the gateway, stored as
+   * a versioned detail on the order. Independent of `runOnce` (billing/status is a later block): an unreadable release
+   * leaves the stored one untouched, and an order the ERP has no release lines for has none stored. Orders already
+   * released are not read again; denied and awaiting ones are, until they settle or age out.
+   */
+  async runReleaseOnce(options: { signal?: AbortSignal } = {}): Promise<OrderErpStatusRun> {
+    const { db, gateway, logger } = this.deps;
+    const now = this.deps.now();
+    const since = new Date(now.getTime() - ERP_STATUS_MAX_AGE_DAYS * 24 * 3600_000);
+    const candidates = await db.db
+      .select({ id: salesOrder.id, erpNumber: salesOrder.erpNumber, detail: salesOrder.erpStatusDetail })
+      .from(salesOrder)
+      .where(and(eq(salesOrder.status, 'sent'), isNotNull(salesOrder.erpNumber), gte(salesOrder.createdAt, since)))
+      .orderBy(asc(salesOrder.updatedAt))
+      .limit(ERP_STATUS_BATCH);
+    const due = candidates.filter((row) => {
+      const stored = decodeReleaseDetail(row.detail);
+      return stored === null || storedReleaseState(stored) !== 'released';
+    });
+    if (due.length === 0) return { checked: 0, updated: 0 };
+    const numbers = due.flatMap((row) => (row.erpNumber === null ? [] : [row.erpNumber]));
+    let readings;
+    try {
+      readings = await gateway.readOrderReleaseFacts(numbers, options.signal === undefined ? {} : { signal: options.signal });
+    } catch (error) {
+      const failure = describeSyncFailure(error);
+      const notImplemented = failure.errorCode === 'not_implemented';
+      const quiet = notImplemented && this.#lastNotImplementedWarnAt !== null && now.getTime() - this.#lastNotImplementedWarnAt < NOT_IMPLEMENTED_WARN_EVERY_MS;
+      if (notImplemented && !quiet) this.#lastNotImplementedWarnAt = now.getTime();
+      if (!quiet) logger.warn(
+        { errorClass: failure.errorClass, errorCode: failure.errorCode, detail: failure.message, orders: numbers.length },
+        'ERP order release read failed; the stored release states are kept and the next run retries',
+      );
+      return { checked: 0, updated: 0, failed: true, failure };
+    }
+    const byNumber = new Map(readings.map((reading) => [reading.erpOrderNumber, reading]));
+    let updated = 0;
+    for (const row of due) {
+      const reading = row.erpNumber === null ? undefined : byNumber.get(row.erpNumber);
+      // A note the ERP cannot find keeps what was stored (a missing note is not "no release").
+      if (reading === undefined || !reading.found) continue;
+      const next = encodeReleaseDetail(reading.lines, now);
+      // No change in the lines: keep the row untouched (the reading time is only stored with a change).
+      const stored = decodeReleaseDetail(row.detail);
+      if (stored !== null && next !== null && sameLines(stored, decodeReleaseDetail(next))) continue;
+      if (stored === null && next === null) continue;
+      await db.db.update(salesOrder).set({ erpStatusDetail: next }).where(eq(salesOrder.id, row.id));
+      updated += 1;
+    }
+    return { checked: due.length, updated };
+  }
+}
+
+function sameLines(a: StoredReleaseDetail, b: StoredReleaseDetail | null): boolean {
+  if (b === null || a.lines.length !== b.lines.length) return false;
+  return a.lines.every((line, index) => {
+    const other = b.lines[index];
+    return other !== undefined && other.code === line.code && other.state === line.state && other.description === line.description;
+  });
 }

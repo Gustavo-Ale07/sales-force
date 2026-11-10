@@ -8,6 +8,8 @@ import type {
   WrittenOrder,
   ErpOrderStatusFactsReading,
   ErpOrderStatusReading,
+  ErpOrderReleaseReading,
+  ErpReleaseLineReading,
 } from '../write/order-contract.js';
 
 /**
@@ -63,6 +65,8 @@ export class FakeOrderBook {
   readonly statusFacts = new Map<number, ErpOrderStatusFactsReading>();
   /** Release event codes a test sets for an order number (D6b). */
   readonly releaseEventCodes = new Map<number, readonly number[]>();
+  /** Release (TSILIB) lines a test sets for an order number; an order without lines has no release state. */
+  readonly releaseLines = new Map<number, readonly ErpReleaseLineReading[]>();
   readonly #scripts: Record<FakeOrderOperation, FakeOrderOutcome[]> = { include: [], confirm: [], find: [], read: [] };
   readonly #options: FakeOrderBookOptions;
   #next: number;
@@ -117,6 +121,17 @@ export class FakeOrderBook {
     if (matches.length > 1) throw new AmbiguousOriginError(matches.map((order) => order.erpOrderNumber));
     const found = matches[0];
     return found === undefined ? null : { erpOrderNumber: found.erpOrderNumber, confirmed: found.confirmed };
+  }
+
+  releaseOf(erpOrderNumbers: readonly number[]): ErpOrderReleaseReading[] {
+    return erpOrderNumbers.map((erpOrderNumber) => ({
+      erpOrderNumber,
+      found: this.orders.some((order) => order.erpOrderNumber === erpOrderNumber) || this.releaseLines.has(erpOrderNumber),
+      statusNota: null,
+      adStatus: null,
+      pending: null,
+      lines: [...(this.releaseLines.get(erpOrderNumber) ?? [])],
+    }));
   }
 
   statusOf(erpOrderNumbers: readonly number[]): ErpOrderStatusReading[] {

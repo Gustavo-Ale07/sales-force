@@ -350,6 +350,72 @@ describe('real adapter order writes (mock transport only, no network)', () => {
     await expect(gateway.findOrderByOrigin(FIELD, ORIGIN)).rejects.toMatchObject({ kind: 'permanent', code: 'ambiguous_origin', erpOrderNumbers: [2475, 2476] });
   });
 
+  it('reads the release lines of included notes with SELECTs only, never the releasing user', async () => {
+    const { gateway, mock } = setup();
+    mock.forced.push(ok(['NUNOTA', 'STATUSNOTA', 'AD_STATUS', 'PENDENTE'], [[2506, 'A', null, 'S'], [2507, 'L', 'X', 'N'], [2508, 'L', null, 'N']]));
+    mock.forced.push(
+      ok(
+        ['NUCHAVE', 'EVENTO', 'DHLIB', 'REPROVADO', 'VLRLIBERADO'],
+        [
+          [2506, 44, null, 'N', null],
+          [2506, 2, null, null, 0],
+          [2506, 3, '10/11/2026 09:10:00', 'N', 152.4],
+          [2507, 13, null, 'S', null],
+          [2508, 2, '10/11/2026 09:10:00', 'N', 0],
+        ],
+      ),
+    );
+    mock.forced.push(ok(['EVENTO', 'DESCRICAO'], [[2, ' Desconto   de produto '], [3, 'Limite de crédito'], [13, 'Valor mínimo'], [44, 'Liberação exigida pela TOP']]));
+    const readings = await gateway.readOrderReleaseFacts([2506, 2507, 2508, 9999]);
+    const sqls = mock.queries().map((query) => query.sql);
+    expect(sqls).toEqual([
+      'SELECT NUNOTA, STATUSNOTA, AD_STATUS, PENDENTE FROM TGFCAB WHERE NUNOTA IN (2506,2507,2508,9999)',
+      "SELECT NUCHAVE, EVENTO, DHLIB, REPROVADO, VLRLIBERADO FROM TSILIB WHERE TABELA = 'TGFCAB' AND NUCHAVE IN (2506,2507,2508,9999)",
+      'SELECT EVENTO, DESCRICAO FROM VGFLIBEVE WHERE EVENTO IN (2,3,13,44)',
+    ]);
+    for (const sql of sqls) expect(sql).toMatch(/^SELECT /);
+    expect(sqls.join(' ')).not.toContain('CODUSULIB');
+    expect(readings).toEqual([
+      {
+        erpOrderNumber: 2506,
+        found: true,
+        statusNota: 'A',
+        adStatus: null,
+        pending: 'S',
+        lines: [
+          { event: 44, description: 'Liberação exigida pela TOP', released: false, denied: false },
+          { event: 2, description: 'Desconto de produto', released: false, denied: false },
+          { event: 3, description: 'Limite de crédito', released: true, denied: false },
+        ],
+      },
+      // Denied by REPROVADO = 'S'.
+      { erpOrderNumber: 2507, found: true, statusNota: 'L', adStatus: 'X', pending: 'N', lines: [{ event: 13, description: 'Valor mínimo', released: false, denied: true }] },
+      // Denied by VLRLIBERADO = 0 on a dated line (a normal release, above, has an amount above zero).
+      { erpOrderNumber: 2508, found: true, statusNota: 'L', adStatus: null, pending: 'N', lines: [{ event: 2, description: 'Desconto de produto', released: true, denied: true }] },
+      { erpOrderNumber: 9999, found: false, statusNota: null, adStatus: null, pending: null, lines: [] },
+    ]);
+  });
+
+  it('keeps the release state when only the event description query is refused, and fails on any other error', async () => {
+    const first = setup();
+    first.mock.forced.push(ok(['NUNOTA', 'STATUSNOTA', 'AD_STATUS', 'PENDENTE'], [[2506, 'A', null, null]]));
+    first.mock.forced.push(ok(['NUCHAVE', 'EVENTO', 'DHLIB', 'REPROVADO', 'VLRLIBERADO'], [[2506, 44, null, null, null]]));
+    first.mock.forced.push(httpStatus(400));
+    expect((await first.gateway.readOrderReleaseFacts([2506]))[0]?.lines).toEqual([{ event: 44, description: null, released: false, denied: false }]);
+    const second = setup();
+    second.mock.forced.push(ok(['NUNOTA', 'STATUSNOTA', 'AD_STATUS', 'PENDENTE'], [[2506, 'A', null, null]]));
+    second.mock.forced.push(ok(['NUCHAVE', 'EVENTO', 'DHLIB', 'REPROVADO', 'VLRLIBERADO'], [[2506, 44, null, null, null]]));
+    second.mock.forced.push(httpStatus(503));
+    await expect(second.gateway.readOrderReleaseFacts([2506])).rejects.toBeInstanceOf(SankhyaGatewayError);
+  });
+
+  it('refuses an order number that is not a positive integer before any query', async () => {
+    const { gateway, mock } = setup();
+    await expect(gateway.readOrderReleaseFacts([2506, 0])).rejects.toMatchObject({ kind: 'validation' });
+    await expect(gateway.readOrderReleaseFacts([1.5])).rejects.toMatchObject({ kind: 'validation' });
+    expect(mock.queries()).toHaveLength(0);
+  });
+
   it('rereads header and item prices for the D-7 check', async () => {
     const { gateway, mock } = setup();
     mock.forced.push(ok(['NUNOTA', 'STATUSNOTA', 'VLRNOTA', 'VLRIPI'], [[2475, 'A', 274.85, 8.65]]));

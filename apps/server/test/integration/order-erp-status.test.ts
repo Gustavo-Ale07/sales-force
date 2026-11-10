@@ -4,6 +4,7 @@ import { FakeGateway, FakeOrderBook, NotImplementedError, SankhyaGatewayError, t
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { OrderErpStatusService } from '../../src/integration/order-erp-status.service.js';
+import { decodeReleaseDetail, storedReleaseState } from '../../src/orders/release-events.js';
 import { createLogger } from '../../src/observability/logger.js';
 import { closeAllThenStop, createMigratedDatabase, startPostgres, type MigratedDatabase, type TestPostgres } from '../helpers/postgres.js';
 
@@ -202,5 +203,81 @@ describe('sync.erp.orderStatus (SNK-7 P2)', () => {
     const id = await w.seed(7009);
     await w.service.runOnce();
     expect(await w.row(id)).toMatchObject({ erpStatusCode: -1, erpStatusLabel: 'DESCONHECIDO' });
+  });
+});
+
+describe('sync.erp.orderStatus - release (liberação), included notes only', () => {
+  const line = (event: number, over: { released?: boolean; denied?: boolean; description?: string | null } = {}) => ({
+    event,
+    description: over.description ?? null,
+    released: over.released ?? false,
+    denied: over.denied ?? false,
+  });
+  const stateOf = async (w: Awaited<ReturnType<typeof world>>, id: string) => {
+    const order = await w.row(id);
+    const detail = decodeReleaseDetail(order?.erpStatusDetail);
+    return detail === null ? null : storedReleaseState(detail);
+  };
+
+  it('awaiting (the normal state of a sent 1001 order), released and denied, each stored from the release lines', async () => {
+    const w = await world();
+    const awaiting = await w.seed(7101);
+    const released = await w.seed(7102);
+    const denied = await w.seed(7103);
+    w.book.releaseLines.set(7101, [line(44, { description: 'Liberação exigida pela TOP' }), line(2, { released: true })]);
+    w.book.releaseLines.set(7102, [line(44, { released: true }), line(3, { released: true })]);
+    w.book.releaseLines.set(7103, [line(44), line(13, { denied: true })]);
+    expect(await w.service.runReleaseOnce()).toEqual({ checked: 3, updated: 3 });
+    expect(await stateOf(w, awaiting)).toBe('awaiting');
+    expect(await stateOf(w, released)).toBe('released');
+    expect(await stateOf(w, denied)).toBe('denied');
+    expect(decodeReleaseDetail((await w.row(awaiting))?.erpStatusDetail)?.lines.map((l) => l.description)).toEqual([null, 'Liberação exigida pela TOP']);
+  });
+
+  it('a note with no release lines has no release state, and the status columns are not touched', async () => {
+    const w = await world();
+    const id = await w.seed(7104, { statusCode: 2 });
+    w.book.releaseLines.set(7104, []);
+    expect(await w.service.runReleaseOnce()).toEqual({ checked: 1, updated: 0 });
+    expect(await stateOf(w, id)).toBeNull();
+    expect((await w.row(id))?.erpStatusCode).toBe(2);
+  });
+
+  it('moves from awaiting to released on a later read and then stops reading that order', async () => {
+    const w = await world();
+    const id = await w.seed(7105);
+    w.book.releaseLines.set(7105, [line(44)]);
+    await w.service.runReleaseOnce();
+    expect(await stateOf(w, id)).toBe('awaiting');
+    w.book.releaseLines.set(7105, [line(44, { released: true })]);
+    expect(await w.service.runReleaseOnce()).toEqual({ checked: 1, updated: 1 });
+    expect(await stateOf(w, id)).toBe('released');
+    expect(await w.service.runReleaseOnce()).toEqual({ checked: 0, updated: 0 });
+  });
+
+  it('does not read orders that are not sent, have no ERP number or are older than 90 days', async () => {
+    const w = await world();
+    await w.seed(7106, { status: 'queued' });
+    await w.seed(null);
+    await w.seed(7107, { ageDays: 91 });
+    expect(await w.service.runReleaseOnce()).toEqual({ checked: 0, updated: 0 });
+  });
+
+  it('keeps the stored release when the read fails, and when the ERP cannot find the note', async () => {
+    const w = await world();
+    const id = await w.seed(7108);
+    w.book.releaseLines.set(7108, [line(44)]);
+    await w.service.runReleaseOnce();
+    const failing = new OrderErpStatusService({
+      db: w.database.handle,
+      gateway: { readOrderReleaseFacts: () => Promise.reject(new SankhyaGatewayError('unavailable', { code: 'down', message: 'down' })) } as never,
+      logger: createLogger({ level: 'silent', service: 'test' }),
+      now: () => new Date(NOW),
+    });
+    expect(await failing.runReleaseOnce()).toMatchObject({ checked: 0, updated: 0, failed: true });
+    expect(await stateOf(w, id)).toBe('awaiting');
+    w.book.releaseLines.delete(7108);
+    expect(await w.service.runReleaseOnce()).toEqual({ checked: 1, updated: 0 });
+    expect(await stateOf(w, id)).toBe('awaiting');
   });
 });

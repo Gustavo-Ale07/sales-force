@@ -16,7 +16,7 @@ export interface SyncRefreshRunnerDeps {
   /** Present only with CONFIG_SYNC_FROM_SANKHYA=1. */
   readonly configuration?: Pick<ConfigurationSyncService, 'run'>;
   /** Present only while the order-write switch is on. */
-  readonly orderStatus?: Pick<OrderErpStatusService, 'runOnce'>;
+  readonly orderStatus?: Pick<OrderErpStatusService, 'runOnce'> & Partial<Pick<OrderErpStatusService, 'runReleaseOnce'>>;
   readonly logger: Logger;
   readonly now: Clock;
 }
@@ -101,11 +101,20 @@ export class SyncRefreshRunner {
       const { orderStatus } = this.deps;
       if (orderStatus === undefined) return skipped('Envio de pedidos ao Sankhya desativado nesta instalação.');
       const result = await orderStatus.runOnce(withSignal);
+      // Release (liberação) has its own read: a status read that is not available yet must not hide a working release read.
+      const release = orderStatus.runReleaseOnce === undefined ? undefined : await orderStatus.runReleaseOnce(withSignal);
       if (result.failed === true) {
         const code = result.failure?.errorCode ?? 'order_status_read_failed';
         // The real ERP status read is not validated yet (SNK-7 P2): "not available on this installation", neutral, not a failure.
-        if (code === 'not_implemented') return skipped('Status dos pedidos no Sankhya: ainda não disponível');
+        if (code === 'not_implemented') {
+          if (release !== undefined && release.failed !== true) return { status: 'ok', rowsRead: release.checked, reason: null };
+          return skipped('Status dos pedidos no Sankhya: ainda não disponível');
+        }
         throw new PermanentJobError(`A consulta ao Sankhya falhou (${code}); os status guardados foram mantidos.`, { code });
+      }
+      if (release?.failed === true) {
+        const code = release.failure?.errorCode ?? 'order_release_read_failed';
+        if (code !== 'not_implemented') throw new PermanentJobError(`A consulta de liberação ao Sankhya falhou (${code}); os estados guardados foram mantidos.`, { code });
       }
       return { status: 'ok', rowsRead: result.checked, reason: null };
     }

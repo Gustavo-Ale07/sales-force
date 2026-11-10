@@ -56,7 +56,7 @@ import { useApi } from "../lib/app-context";
 import { useLoadedDataset, requireDataset } from "../lib/dataset";
 import { approvalsEnabled } from "../lib/discount-authority";
 import { describeApiError, submitConflictText } from "../lib/error-message";
-import { deliveryErrorText, erpNoteDiverged, erpNoteDivergedText, erpStatusText, orderReference, orderReviewLabel, orderReviewReasons, orderStatusView } from "../lib/labels";
+import { deliveryErrorText, erpNoteDiverged, erpNoteDivergedText, erpReleaseEventText, erpReleaseLabels, erpReleaseMessages, erpStatusText, orderReference, orderReviewLabel, orderReviewReasons, orderStatusView } from "../lib/labels";
 import {
   describeIssue,
   discountProblemMessages,
@@ -628,6 +628,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
             <>
               <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
               {order?.erpStatus ? <ErpStatusBadges status={order.erpStatus} /> : null}
+              {order?.erpRelease ? <StatusBadge tone={erpReleaseLabels[order.erpRelease.state].tone}>{erpReleaseLabels[order.erpRelease.state].label}</StatusBadge> : null}
               {order?.expedicao === undefined ? null : <StatusBadge tone="neutral">{order.expedicao ? "Expedição: marcada" : "Expedição: não marcada"}</StatusBadge>}
             </>
           ) : undefined
@@ -650,6 +651,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
       {customer ? <CustomerContextBar customerCode={customer.code} customerName={customer.name} onOpenFicha={() => setFichaOpen(true)} /> : null}
 
       {notice}
+      {order?.erpRelease ? <ErpReleasePanel release={order.erpRelease} /> : null}
       {!installationEnabled ? (
         <Alert tone="warning" title="Pedidos ainda não habilitados">
           A instalação ainda não está habilitada para pedidos. Você pode consultar, mas não salvar.
@@ -1319,6 +1321,23 @@ function ErpStatusBadges({ status }: { status: NonNullable<ApiSchema<"OrderDetai
       <StatusBadge tone="info">{`Sankhya: ${label}`}</StatusBadge>
       {detail ? <StatusBadge tone="warning">{detail}</StatusBadge> : null}
     </>
+  );
+}
+
+/** Release (liberação) in the order detail: a calm sentence and the reason (event description) per release line. */
+function ErpReleasePanel({ release }: { release: NonNullable<ApiSchema<"OrderDetail">["erpRelease"]> }) {
+  const events = release.events ?? [];
+  return (
+    <div className="mb-3 text-sm text-fg-muted" data-testid="erp-release">
+      <p>{erpReleaseMessages[release.state]}</p>
+      {events.length > 0 ? (
+        <ul className="mt-1 list-disc pl-5">
+          {events.map((event) => (
+            <li key={event.code}>{erpReleaseEventText(event)}</li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 
