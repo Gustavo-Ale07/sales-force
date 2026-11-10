@@ -129,6 +129,11 @@ const ErpSchema = z.strictObject({
   orderStatusDisplay: z.array(OrderStatusDisplaySchema).optional(),
   /** D6b: display names of ERP release (TSILIB) event codes, keyed by the code as text. Optional; unnamed codes show as the code. */
   liberationEventLabels: z.record(z.string().regex(/^\d{1,9}$/), z.string().min(1).max(100)).optional(),
+  /**
+   * Confirm the note in the ERP right after it is included and reread (CACSP.confirmarNota, like Vidya does). Absent/false = the
+   * note stays included and is NOT confirmed. NEEDS VALIDATION in the Sandbox before turning on.
+   */
+  confirmAfterInclude: z.boolean().optional(),
 });
 
 const GeneralSchema = z.strictObject({

@@ -47,9 +47,17 @@ describe('decideFailure', () => {
   });
 
   it('a refusal at confirmation or reread parks: the order exists in the ERP', () => {
-    for (const phase of ['verify', 'reread'] as const) {
+    for (const phase of ['verify', 'reread', 'confirm'] as const) {
       expect(decideFailure(err('validation'), facts({ phase, mayExist: true, hasErpNumber: true })).kind).toBe('park');
     }
+  });
+
+  it('a timeout or 5xx at confirmation retries only the confirmation (unknown, backoff); after the last attempt it parks, never rejects', () => {
+    expect(decideFailure(err('temporary'), facts({ phase: 'confirm', mayExist: true, hasErpNumber: true, attemptCount: 2 }))).toMatchObject({
+      kind: 'retry',
+      status: 'unknown',
+    });
+    expect(decideFailure(err('unavailable'), facts({ phase: 'confirm', mayExist: true, hasErpNumber: true, attemptCount: MAX_DELIVERY_ATTEMPTS })).kind).toBe('park');
   });
 
   it('auth retries slowly without consuming an attempt', () => {

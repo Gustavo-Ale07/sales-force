@@ -1,5 +1,6 @@
 import { computeDiscountedLineTotal, computeLineDiscountAmount, computeLineTotal, estimateItemIpi, sumTotals, type DecimalString } from '@salesforce/domain';
 import { usesInformedPrice } from '../write/incluir-nota.js';
+import type { ConfirmOrderResult } from '../write/confirmar-nota.js';
 import { AmbiguousOriginError, SankhyaGatewayError } from '../errors.js';
 import type {
   ErpOrderRef,
@@ -22,7 +23,9 @@ import type {
 export type FakeOrderOutcome =
   | { readonly kind: 'ok' }
   | { readonly kind: 'error'; readonly error: SankhyaGatewayError }
-  | { readonly kind: 'created_then_error'; readonly error: SankhyaGatewayError };
+  | { readonly kind: 'created_then_error'; readonly error: SankhyaGatewayError }
+  /** `confirm` only: the ERP holds the confirmation behind a pending release; the note stays unconfirmed (not an error). */
+  | { readonly kind: 'release_pending' };
 
 export type FakeOrderOperation = 'include' | 'confirm' | 'find' | 'read';
 
@@ -100,7 +103,7 @@ export class FakeOrderBook {
     return { erpOrderNumber: stored.erpOrderNumber };
   }
 
-  confirm(erpOrderNumber: number): void {
+  confirm(erpOrderNumber: number): ConfirmOrderResult {
     this.calls.push({ operation: 'confirm', erpOrderNumber });
     const outcome = this.#take('confirm');
     if (outcome.kind === 'error') throw outcome.error;
@@ -108,14 +111,17 @@ export class FakeOrderBook {
     if (stored === undefined) {
       throw new SankhyaGatewayError('validation', { code: 'order_not_found', message: 'The order to confirm does not exist in the ERP.' });
     }
+    if (outcome.kind === 'release_pending') return { outcome: 'release_pending', maskedResponse: '{"status":"1","fake":"release pending"}' };
+    const already = stored.confirmed;
     stored.confirmed = true;
     if (outcome.kind === 'created_then_error') throw outcome.error;
+    return { outcome: already ? 'already_confirmed' : 'confirmed', maskedResponse: '{"status":"1","fake":true}' };
   }
 
   find(originId: string): ErpOrderRef | null {
     this.calls.push({ operation: 'find', originId });
     const outcome = this.#take('find');
-    if (outcome.kind !== 'ok') throw outcome.error;
+    if (outcome.kind === 'error' || outcome.kind === 'created_then_error') throw outcome.error;
     const matches = this.orders.filter((order) => order.request.originId === originId);
     // K2: like the real lookup, more than one note with the same origin id is an error, never "the first one".
     if (matches.length > 1) throw new AmbiguousOriginError(matches.map((order) => order.erpOrderNumber));
@@ -163,7 +169,7 @@ export class FakeOrderBook {
   read(erpOrderNumber: number): WrittenOrder | null {
     this.calls.push({ operation: 'read', erpOrderNumber });
     const outcome = this.#take('read');
-    if (outcome.kind !== 'ok') throw outcome.error;
+    if (outcome.kind === 'error' || outcome.kind === 'created_then_error') throw outcome.error;
     const found = this.orders.find((order) => order.erpOrderNumber === erpOrderNumber);
     if (found === undefined) return null;
     const priceOf = this.#options.priceOf ?? ((): DecimalString => '10');

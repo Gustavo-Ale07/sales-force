@@ -1,4 +1,5 @@
 import type { DecimalString } from '@salesforce/domain';
+import type { ConfirmOrderResult } from './confirmar-nota.js';
 
 /**
  * Order delivery contract (SNK-7). Everything the worker hands to the gateway is already resolved from
@@ -93,8 +94,12 @@ export interface SankhyaWritePort {
    * `findOrderByOrigin` returned null for the same `originId` (SNK-4).
    */
   includeOrder(request: OrderWriteRequest, options?: OrderCallOptions): Promise<IncludeOrderResult>;
-  /** Second step (D-4). Redoing it for an already confirmed order must be harmless. */
-  confirmOrder(erpOrderNumber: number, options?: OrderCallOptions): Promise<void>;
+  /**
+   * Second step (CACSP.confirmarNota, NEEDS VALIDATION in the Sandbox). Idempotent: an already confirmed note is
+   * `already_confirmed`; a confirmation held by a pending release is `release_pending` (not an error); any other ERP
+   * refusal throws a `validation` error with the readable reason. Never re-includes.
+   */
+  confirmOrder(erpOrderNumber: number, options?: OrderCallOptions): Promise<ConfirmOrderResult>;
 }
 
 /**

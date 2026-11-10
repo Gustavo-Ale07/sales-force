@@ -49,6 +49,8 @@ import { decimalFromCell } from '../decimal.js';
 import { ORDER_WRITE_DISABLED, isValidOriginField, type OrderWriteSettings } from '../write/order-write-config.js';
 import { assertSandboxHost } from '../write/host-allowlist.js';
 import { INCLUIR_NOTA_PATH, buildIncluirNotaRequestText, parseIncluirNotaResponse } from '../write/incluir-nota.js';
+import { CONFIRMAR_NOTA_PATH, buildConfirmarNotaRequestText, parseConfirmarNotaResponse } from '../write/confirmar-nota.js';
+import type { ConfirmOrderResult } from '../write/confirmar-nota.js';
 import type {
   ErpOrderRef,
   IncludeOrderResult,
@@ -556,13 +558,15 @@ export class RealSankhyaGateway implements SankhyaGateway {
     return parseIncluirNotaResponse(response.status, response.body, parseRetryAfterMs(response.headers['retry-after']));
   }
 
-  /** NEEDS VALIDATION: the CACSP.confirmarNota request shape is not recorded anywhere (SNK-7 D-4, D-10). */
-  confirmOrder(erpOrderNumber: number, options?: OrderCallOptions): Promise<void> {
-    void erpOrderNumber;
-    void options;
-    return Promise.reject(
-      new NotImplementedError('confirmOrder: the CACSP.confirmarNota request shape is not validated. NEEDS VALIDATION S3 (SNK-7 D-4, D-10).'),
-    );
+  /**
+   * CACSP.confirmarNota. NEEDS VALIDATION: the request shape comes from an unofficial community SDK, not from the
+   * Sandbox. Same gate as `includeOrder` (live Sandbox configuration only); the caller enables it with
+   * `erp.confirmAfterInclude`, off by default.
+   */
+  async confirmOrder(erpOrderNumber: number, options?: OrderCallOptions): Promise<ConfirmOrderResult> {
+    if (this.#orderWrite.mode !== 'live') throw new NotImplementedError(ORDER_WRITE_NOT_ENABLED_MESSAGE);
+    const response = await this.#write(CONFIRMAR_NOTA_PATH, buildConfirmarNotaRequestText(erpOrderNumber), options?.signal);
+    return parseConfirmarNotaResponse(response.status, response.body, parseRetryAfterMs(response.headers['retry-after']));
   }
 
   async findOrderByOrigin(originField: string, originId: string, options?: OrderCallOptions): Promise<ErpOrderRef | null> {

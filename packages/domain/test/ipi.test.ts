@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyItemIpi, computeOrderIpi, computeOrderIpiFromRefs, estimateItemIpi, type IpiRate } from '../src/index.js';
+import { classifyItemIpi, computeDiscountedLineTotal, computeOrderIpi, computeOrderIpiFromRefs, estimateItemIpi, type IpiRate } from '../src/index.js';
 
 const rates = new Map<number, IpiRate>([
   [5, { code: 5, percentual: '3.25', byTariff: false, description: 'x' }],
@@ -40,6 +40,27 @@ describe('classifyItemIpi', () => {
   });
   it('unpriced line is unavailable', () => {
     expect(classifyItemIpi(null, 6, rates)).toEqual({ status: 'unavailable' });
+  });
+});
+
+describe('grand total equals the ERP VLRNOTA (D-AK): sum of net lines + IPI per line', () => {
+  const total = (discountPercent: string) => {
+    const net = computeDiscountedLineTotal('3', '8.20', discountPercent);
+    return { net, ...computeOrderIpi([{ lineNetTotal: net, ipiCode: 5 }], net, rates) };
+  };
+
+  it('without discount: 24.60 + 0.80 = 25.40 (order 2507)', () => {
+    const r = total('0');
+    expect(r.net).toBe('24.60');
+    expect(r.ipiEstimated).toBe('0.80');
+    expect(r.grandTotalEstimated).toBe('25.40');
+  });
+
+  it('with discount: IPI is taken on the net line (3 x (8.20 - 0.41) = 23.37; IPI 0.76; total 24.13)', () => {
+    const r = total('5');
+    expect(r.net).toBe('23.37');
+    expect(r.ipiEstimated).toBe('0.76');
+    expect(r.grandTotalEstimated).toBe('24.13');
   });
 });
 

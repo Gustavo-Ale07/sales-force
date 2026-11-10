@@ -26,6 +26,7 @@ import type {
   ErpOrderStatusReading,
   ErpOrderReleaseReading,
 } from '../write/order-contract.js';
+import type { ConfirmOrderResult } from '../write/confirmar-nota.js';
 import { FakeOrderBook } from './fake-order-book.js';
 import { assertSafeScope, customerExclusion, mobilityAllowed, selectEffectiveVersions } from '../read-scope.js';
 import { DEMO_CONFIGURATION } from './demo-configuration.js';
@@ -260,7 +261,7 @@ export class FakeGateway implements SankhyaGateway {
     return this.#order(options, () => this.#orders.include(request));
   }
 
-  confirmOrder(erpOrderNumber: number, options?: OrderCallOptions): Promise<void> {
+  confirmOrder(erpOrderNumber: number, options?: OrderCallOptions): Promise<ConfirmOrderResult> {
     return this.#order(options, () => this.#orders.confirm(erpOrderNumber));
   }
 

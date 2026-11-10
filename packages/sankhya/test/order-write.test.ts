@@ -197,8 +197,8 @@ describe('fake order book (SNK-7)', () => {
     expect(await gateway.findOrderByOrigin(FIELD, ORIGIN)).toBeNull();
     const { erpOrderNumber } = await gateway.includeOrder(request({ items: [{ productCode: 55, quantity: '2', unit: 'UN', discountPercent: '8', listUnitPrice: '10' }] }));
     expect(await gateway.findOrderByOrigin(FIELD, ORIGIN)).toEqual({ erpOrderNumber, confirmed: false });
-    await gateway.confirmOrder(erpOrderNumber);
-    await gateway.confirmOrder(erpOrderNumber);
+    expect((await gateway.confirmOrder(erpOrderNumber)).outcome).toBe('confirmed');
+    expect((await gateway.confirmOrder(erpOrderNumber)).outcome).toBe('already_confirmed');
     const reread = await gateway.readWrittenOrder(erpOrderNumber);
     expect(reread?.confirmed).toBe(true);
     expect(reread?.items).toEqual([{ productCode: 55, quantity: '2', unitPrice: '10', discountPercent: '8', discountAmount: '1.60', ipiAmount: '0.00' }]);
@@ -341,12 +341,21 @@ describe('real adapter order writes (mock transport only, no network)', () => {
     expect(mock.writes()).toHaveLength(1);
   });
 
-  it('confirmOrder is NEEDS VALIDATION and performs no HTTP call', async () => {
-    const { gateway, mock } = setup({ orderWrite: LIVE });
+  it('confirmOrder refuses without any HTTP call when order writing is not live', async () => {
+    const { gateway, mock } = setup();
     const failure = await gateway.confirmOrder(2475).catch((error: unknown) => error);
     expect(failure).toBeInstanceOf(NotImplementedError);
-    expect((failure as Error).message).toContain('NEEDS VALIDATION');
     expect(mock.calls).toHaveLength(0);
+  });
+
+  it('confirmOrder posts the (NEEDS VALIDATION) confirmarNota request and reads the answer', async () => {
+    const { gateway, mock } = setup({ orderWrite: LIVE });
+    mock.writeResponses.push({ status: 200, headers: {}, body: JSON.stringify({ status: '1', responseBody: {} }) });
+    const result = await gateway.confirmOrder(2475);
+    expect(result.outcome).toBe('confirmed');
+    const [call] = mock.writes();
+    expect(call?.url).toBe('https://api.sandbox.sankhya.com.br/gateway/v1/mgecom/service.sbr?serviceName=CACSP.confirmarNota&outputType=json');
+    expect(JSON.parse(call?.body ?? '{}')).toEqual({ serviceName: 'CACSP.confirmarNota', requestBody: { nota: { NUNOTA: { $: '2475' } } } });
   });
 
   it('looks an order up by origin with a strictly validated field and UUID', async () => {

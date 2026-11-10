@@ -74,6 +74,15 @@ export { BUDGET_EXHAUSTED_CODE, budgetedTransport, DEFAULT_LIVE_REQUEST_BUDGET, 
 export { createFetchTransport, type HttpRequest, type HttpResponse, type HttpTransport } from './real/transport.js';
 export type { SankhyaCredentials } from './real/token-provider.js';
 export * from './write/order-contract.js';
+export {
+  CONFIRMAR_NOTA_PATH,
+  buildConfirmarNotaBody,
+  buildConfirmarNotaRequestText,
+  maskConfirmResponse,
+  parseConfirmarNotaResponse,
+  type ConfirmOrderOutcome,
+  type ConfirmOrderResult,
+} from './write/confirmar-nota.js';
 export { FakeOrderBook, type FakeOrderBookOptions, type FakeOrderCall, type FakeOrderOperation, type FakeOrderOutcome, type FakeStoredOrder } from './fake/fake-order-book.js';
 export {
   INCLUIR_NOTA_PATH,

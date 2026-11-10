@@ -159,6 +159,8 @@ export interface InstallationConfiguration {
     readonly orderStatusDisplay?: readonly OrderStatusDisplay[];
     /** D6b: display names of ERP release event codes (key = code as text). */
     readonly liberationEventLabels?: Readonly<Record<string, string>>;
+    /** Confirm the note in the ERP after include + reread (CACSP.confirmarNota). Absent = off. NEEDS VALIDATION in the Sandbox. */
+    readonly confirmAfterInclude?: boolean;
   };
   readonly general: {
     readonly appMinimumVersion?: string;

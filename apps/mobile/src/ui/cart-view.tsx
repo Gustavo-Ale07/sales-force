@@ -162,8 +162,8 @@ export function CartView({ lines, preview, onQuantityChange, onDiscountChange, o
           </View>
         )}
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryTotalLabel}>Total estimado</Text>
-          <Text style={styles.summaryTotalValue}>{money(preview.totals.estimatedTotal)}</Text>
+          <Text style={styles.summaryLabel}>Total sem IPI</Text>
+          <Text style={styles.summaryValue}>{money(preview.totals.estimatedTotal)}</Text>
         </View>
         {preview.totals.isPartial && (
           <Text style={styles.partialNotice}>
@@ -175,8 +175,8 @@ export function CartView({ lines, preview, onQuantityChange, onDiscountChange, o
           <Text style={styles.summaryValue}>{money(preview.ipi.ipiEstimated)}</Text>
         </View>
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>{preview.ipi.isPartial ? "Total parcial estimado (com IPI)" : "Total estimado (com IPI)"}</Text>
-          <Text style={styles.summaryValue}>{money(preview.ipi.grandTotalEstimated)}</Text>
+          <Text style={styles.summaryTotalLabel}>{preview.ipi.isPartial ? "Total parcial com IPI" : "Total com IPI"}</Text>
+          <Text style={styles.summaryTotalValue}>{money(preview.ipi.grandTotalEstimated)}</Text>
         </View>
         {preview.ipi.unavailableLineCount > 0 && (
           <Text style={styles.partialNotice}>{`IPI não disponível em ${preview.ipi.unavailableLineCount} item(ns).`}</Text>

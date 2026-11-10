@@ -95,7 +95,8 @@ describe("Novo pedido", () => {
     const row = screen.getByText("Vela sem preço").closest("tr") as HTMLElement;
     expect(row).toHaveTextContent("Sem preço");
     expect(row).not.toHaveTextContent(/0,00/);
-    expect(screen.getByText("Total parcial estimado")).toBeInTheDocument();
+    expect(screen.getByText("Total parcial sem IPI")).toBeInTheDocument();
+    expect(screen.getByText("Total parcial com IPI")).toBeInTheDocument();
     expect(screen.getByText("1 item sem preço não entra na soma.")).toBeInTheDocument();
     expect(screen.getByTestId("order-total")).toHaveTextContent("31,25");
   });
@@ -303,7 +304,7 @@ describe("Novo pedido", () => {
 
   describe("Produtos | Carrinho", () => {
     const groupHandlers = (): Handlers =>
-      newOrderHandlers({ "GET /product-groups": { body: { items: [{ code: 7, name: "Balões" }, { code: 8, name: "Velas" }] } } });
+      newOrderHandlers({ "GET /product-groups": { body: { items: [{ code: 7, name: "Balões", parentCode: null, degree: 1, hasChildren: false }, { code: 8, name: "Velas", parentCode: null, degree: 1, hasChildren: false }], hierarchical: true, hasUngrouped: false } } });
 
     it("filters the table by group and search on the server, for the selected customer's price table", async () => {
       const { user, calls } = renderApp("/pedidos/novo?customer=1001", { handlers: groupHandlers() });
@@ -973,6 +974,8 @@ describe("Rascunho existente", () => {
   it("is read-only once the order is no longer a draft", async () => {
     renderApp(`/pedidos/${ORDER_ID}`, { handlers: existing(orderDetail({ status: "sent", erpNumber: 555 })) });
     expect(await screen.findByText("Somente leitura")).toBeInTheDocument();
+    // "Enviado ao Sankhya" appears once as the status; the hint no longer repeats the sentence.
+    expect(screen.queryAllByText(/Enviado ao Sankhya\./)).toHaveLength(0);
     expect(screen.queryByRole("button", { name: "Confirmar pedido" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Enviar ao Sankhya" })).not.toBeInTheDocument();
     expect(screen.getByLabelText("Quantidade de Balão látex 9 pol. vermelho")).toHaveAttribute("readonly");

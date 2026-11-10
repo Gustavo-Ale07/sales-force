@@ -85,7 +85,8 @@ test.describe("Cenário 4 — novo pedido, rascunhos e exclusão", () => {
     const unpricedRow = bodyRows(tableRegion(page, "Itens do pedido")).filter({ hasText: UNPRICED_PRODUCT });
     await expect(unpricedRow).toContainText("Sem preço");
     await expect(unpricedRow).not.toContainText("R$");
-    await expect(page.getByText("Total parcial estimado")).toBeVisible();
+    await expect(page.getByText("Total parcial sem IPI")).toBeVisible();
+    await expect(page.getByText("Total parcial com IPI")).toBeVisible();
     await expect(page.getByText("1 item sem preço não entra na soma.")).toBeVisible();
 
     // The editor itself blocks saving a line that is not orderable in this installation (demo configuration), with a
@@ -96,8 +97,8 @@ test.describe("Cenário 4 — novo pedido, rascunhos e exclusão", () => {
     await expect(page).toHaveURL(/\/pedidos\/novo$/);
 
     await page.getByRole("button", { name: `Remover ${UNPRICED_PRODUCT}` }).click();
-    await expect(page.getByLabel("Resumo do pedido").getByRole("term").filter({ hasText: "Total" })).toHaveText("Total estimado");
-    await expect(page.getByText("Total parcial estimado")).toHaveCount(0);
+    await expect(page.getByLabel("Resumo do pedido").getByRole("term").filter({ hasText: "Total" })).toHaveText(["Total sem IPI", "Total com IPI"]);
+    await expect(page.getByText("Total parcial sem IPI")).toHaveCount(0);
     await expect(page.getByTestId("order-total")).toContainText(/R\$\s?\d/);
   });
 

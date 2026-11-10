@@ -1112,8 +1112,8 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                 </>
               ) : null}
               <div className="flex items-baseline gap-2">
-                <dt className="text-fg-muted">{preview.totals.isPartial ? "Total parcial estimado" : "Total estimado"}</dt>
-                <dd className="m-0 text-lg font-semibold" data-testid="order-total">
+                <dt className="text-fg-muted">{preview.totals.isPartial ? "Total parcial sem IPI" : "Total sem IPI"}</dt>
+                <dd className="m-0 font-medium" data-testid="order-total">
                   <Money value={preview.totals.estimatedTotal} />
                 </dd>
               </div>
@@ -1124,8 +1124,8 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                 </dd>
               </div>
               <div className="flex items-baseline gap-2">
-                <dt className="text-fg-muted">{preview.ipi.isPartial ? "Total parcial estimado (com IPI)" : "Total estimado (com IPI)"}</dt>
-                <dd className="m-0 font-semibold" data-testid="order-grand-total">
+                <dt className="text-fg-muted">{preview.ipi.isPartial ? "Total parcial com IPI" : "Total com IPI"}</dt>
+                <dd className="m-0 text-lg font-semibold" data-testid="order-grand-total">
                   <Money value={preview.ipi.grandTotalEstimated} />
                 </dd>
               </div>

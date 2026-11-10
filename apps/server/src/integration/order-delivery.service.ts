@@ -306,6 +306,7 @@ export class OrderDeliveryService {
 
     let phase: DeliveryPhase = 'verify';
     let erpNumber = parseErpNumber(row.erpReference);
+    let alreadyConfirmedInErp = false;
     const mayExist = claimed.previousStatus === 'unknown' || erpNumber !== null;
     try {
       const frozen = await this.resolveFrozen(row, order);
@@ -330,6 +331,7 @@ export class OrderDeliveryService {
       const found = await this.deps.gateway.findOrderByOrigin(settings.originField, order.id, signal === undefined ? {} : { signal });
       if (found !== null) {
         erpNumber = found.erpOrderNumber;
+        alreadyConfirmedInErp = found.confirmed;
         await this.recordErpNumber(row, order, erpNumber, 'linked_existing');
         logger.info({ outboxId: row.id, orderId: order.id, erpNumber }, 'order already in the ERP: linked, not resent');
       } else {
@@ -378,7 +380,7 @@ export class OrderDeliveryService {
         await this.recordErpNumber(row, order, erpNumber, 'awaiting_confirmation');
       }
 
-      // The Force never confirms or releases the note: that is done inside the ERP by the customer's internal team (D-AJ). The include is final.
+      // The include is final; confirming is a separate, idempotent step below (only when `erp.confirmAfterInclude` is on). The Force never releases.
       phase = 'reread';
       const rereadStartedMs = this.deps.now().getTime();
       const written = await this.deps.gateway.readWrittenOrder(erpNumber, signal === undefined ? {} : { signal });
@@ -391,6 +393,28 @@ export class OrderDeliveryService {
         // D-7: the ERP stored something other than what was sent. The order exists there: keep its number.
         await this.finishRejected(row, order, 'validation', verdict.code, divergenceMessage(verdict.code, verdict.productCode, verdict.priceChanged === true), true);
         return;
+      }
+      if (!alreadyConfirmedInErp && (await this.confirmAfterIncludeEnabled())) {
+        // Confirmation (supersedes D-AJ "no confirmation"): the note is already included and verified, so only THIS step is ever
+        // repeated (the origin lookup above runs on every attempt and never re-includes). A pending release is not an error:
+        // the note stays unconfirmed and the order shows "Enviado ao Sankhya. Aguardando liberação.". Any other ERP refusal is a
+        // validation error after the number is known -> parked with the readable reason (never re-included).
+        phase = 'confirm';
+        const confirmStartedMs = this.deps.now().getTime();
+        const confirmation = await this.deps.gateway.confirmOrder(erpNumber, signal === undefined ? {} : { signal });
+        logger.info(
+          {
+            outboxId: row.id,
+            orderId: order.id,
+            phase: 'confirm',
+            erpNumber,
+            confirmation: confirmation.outcome,
+            // NEEDS VALIDATION: the real response format was never observed; the masked text is kept for the Sandbox test.
+            response: maskStoredError(confirmation.maskedResponse).slice(0, REJECTION_LOG_MAX * 4),
+            durationMs: this.deps.now().getTime() - confirmStartedMs,
+          },
+          'order confirmation answered by the ERP',
+        );
       }
       await this.finishSent(row, order, erpNumber);
     } catch (error) {
@@ -497,6 +521,11 @@ export class OrderDeliveryService {
         .where(eq(integrationOutbox.id, row.id));
     }
     return { ok: true, header: resolved.value };
+  }
+
+  /** `erp.confirmAfterInclude` of the current installation configuration; absent = off (NEEDS VALIDATION in the Sandbox first). */
+  private async confirmAfterIncludeEnabled(): Promise<boolean> {
+    return (await this.loadConfiguration()).erp?.confirmAfterInclude === true;
   }
 
   private async loadConfiguration(): Promise<InstallationConfiguration> {

@@ -352,6 +352,90 @@ describe('live delivery', () => {
     expect(audit).toHaveLength(1);
   });
 
+  describe('confirmation after the include (erp.confirmAfterInclude; confirmarNota NEEDS VALIDATION in the Sandbox)', () => {
+    const enabled = (): InstallationConfiguration => {
+      const base = configuration();
+      return { ...base, erp: { ...(base.erp ?? {}), confirmAfterInclude: true } };
+    };
+
+    it('off by default: the note is included and never confirmed', async () => {
+      const w = await world();
+      await w.seed();
+      await w.service.runDue();
+      expect(w.book.count('confirm')).toBe(0);
+    });
+
+    it('on: include, reread, confirm, sent', async () => {
+      const w = await world();
+      await w.setConfiguration(enabled());
+      const { orderId, outboxId } = await w.seed();
+      await w.service.runDue();
+      expect(ops(w.book)).toEqual(['find', 'include', 'read', 'confirm']);
+      expect(w.book.orders[0]?.confirmed).toBe(true);
+      expect(await w.order(orderId)).toMatchObject({ status: 'sent' });
+      expect((await w.outbox(outboxId)).status).toBe('confirmed');
+    });
+
+    it('pending release is not an error: the order is sent, the note stays unconfirmed', async () => {
+      const w = await world();
+      await w.setConfiguration(enabled());
+      w.book.script('confirm', { kind: 'release_pending' });
+      const { orderId, outboxId } = await w.seed();
+      await w.service.runDue();
+      expect(w.book.orders[0]?.confirmed).toBe(false);
+      expect(await w.order(orderId)).toMatchObject({ status: 'sent' });
+      expect(await w.outbox(outboxId)).toMatchObject({ status: 'confirmed', lastErrorMessage: null });
+    });
+
+    it('insufficient stock: parked with the readable reason, never re-included; the confirmation can be repeated', async () => {
+      const w = await world();
+      await w.setConfiguration(enabled());
+      w.book.script('confirm', { kind: 'error', error: new SankhyaGatewayError('validation', { code: 'erp_refused_confirmation', message: 'The ERP did not confirm the order: Estoque insuficiente.' }) });
+      const { orderId, outboxId } = await w.seed();
+      await w.service.runDue();
+      const parked = await w.outbox(outboxId);
+      expect(parked).toMatchObject({ status: 'unknown', nextAttemptAt: null });
+      expect(parked.lastErrorMessage).toContain('Estoque insuficiente');
+      expect(await w.order(orderId)).toMatchObject({ status: 'unknown' });
+      const requested = await w.database.handle.db.transaction(async (tx) =>
+        requestDeliveryVerification(tx, await w.order(orderId), new Date(START)),
+      );
+      expect(requested).toEqual({ kind: 'requested', outboxId });
+      await w.service.runDue();
+      expect(w.book.count('include')).toBe(1);
+      expect(w.book.orders).toHaveLength(1);
+      expect(w.book.orders[0]?.confirmed).toBe(true);
+      expect(await w.order(orderId)).toMatchObject({ status: 'sent' });
+    });
+
+    it('already confirmed in the ERP: no confirmation call at all', async () => {
+      const w = await world();
+      await w.setConfiguration(enabled());
+      w.book.script('include', { kind: 'created_then_error', error: err('unavailable', 'http_503') });
+      await w.seed();
+      await w.service.runDue();
+      w.book.orders[0]!.confirmed = true;
+      w.advance(31_000);
+      await w.service.runDue();
+      expect(w.book.count('confirm')).toBe(0);
+    });
+
+    it('timeout: the note stays included and only the confirmation is repeated', async () => {
+      const w = await world();
+      await w.setConfiguration(enabled());
+      w.book.script('confirm', { kind: 'error', error: err('temporary', 'timeout') });
+      const { orderId, outboxId } = await w.seed();
+      await w.service.runDue();
+      expect(await w.outbox(outboxId)).toMatchObject({ status: 'unknown', lastErrorClass: 'temporary' });
+      w.advance(31_000);
+      await w.service.runDue();
+      expect(w.book.count('include')).toBe(1);
+      expect(w.book.count('confirm')).toBe(2);
+      expect(w.book.orders).toHaveLength(1);
+      expect(await w.order(orderId)).toMatchObject({ status: 'sent' });
+    });
+  });
+
   it('SNK-4: an include whose answer was lost is found by origin and linked, never sent twice', async () => {
     const w = await world();
     w.book.script('include', { kind: 'created_then_error', error: err('unavailable', 'http_503') });

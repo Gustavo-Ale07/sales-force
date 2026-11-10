@@ -47,7 +47,7 @@ export const orderStatusHints: Record<ApiSchema<"OrderStatus">, string> = {
   approved: "Desconto aprovado. Isso não significa que o pedido foi enviado ao Sankhya.",
   approval_rejected: "O aprovador reprovou o desconto. Edite o pedido para ajustar e enviar de novo.",
   queued: "O envio ao Sankhya está em andamento. O pedido ainda não existe no Sankhya.",
-  sent: "Enviado ao Sankhya. A conferência e a liberação são feitas pela Plac dentro do Sankhya; isso não indica faturamento.",
+  sent: "A nota já existe no Sankhya. A liberação e a conferência são feitas pela Plac dentro do Sankhya; este status não indica faturamento.",
   rejected: "O envio ao Sankhya falhou. Veja o motivo no pedido: se a nota já existe no Sankhya, ela não é reenviada.",
   unknown: "Estamos verificando o envio com o Sankhya. Isso se resolve sozinho em instantes.",
 };
