@@ -719,6 +719,33 @@ describe("Novo pedido", () => {
   });
 });
 
+describe("customer strip: monthly limit and most-used negotiation", () => {
+  it("shows the monthly limit and the most-used negotiation (labelled as Force orders) when the server sends them", async () => {
+    renderApp("/pedidos/novo?customer=1001", {
+      handlers: newOrderHandlers({
+        "GET /customers/:code": { body: customerDetail({ creditLimit: "5000", monthlyCreditLimit: "1200" }) },
+        "GET /customers/:code/order-habits": { body: { orderCount: 5, mostUsedNegotiationTypeCode: 4, mostUsedNegotiationOrderCount: 3 } },
+      }),
+    });
+    const strip = await screen.findByRole("region", { name: "Cliente do pedido" });
+    expect(await within(strip).findByText("Limite mensal")).toBeInTheDocument();
+    expect(await within(strip).findByText("Negociação mais usada (pedidos no Force)")).toBeInTheDocument();
+    expect(await within(strip).findByText("30 dias")).toHaveAttribute("title", "3 de 5 pedidos");
+  });
+
+  it("shows neither field when there is no data", async () => {
+    renderApp("/pedidos/novo?customer=1001", {
+      handlers: newOrderHandlers({
+        "GET /customers/:code/order-habits": { body: { orderCount: 0, mostUsedNegotiationTypeCode: null, mostUsedNegotiationOrderCount: 0 } },
+      }),
+    });
+    const strip = await screen.findByRole("region", { name: "Cliente do pedido" });
+    await within(strip).findByText("Limite de crédito");
+    expect(within(strip).queryByText("Limite mensal")).not.toBeInTheDocument();
+    expect(within(strip).queryByText(/Negociação mais usada/)).not.toBeInTheDocument();
+  });
+});
+
 // Regression coverage for the fix to a real bug: order-editor used to call the admin-only GET /configuration,
 // which 403s for sellers/managers. It must use the dedicated, session-scoped GET /order-entry/configuration.
 describe("order-entry configuration source", () => {

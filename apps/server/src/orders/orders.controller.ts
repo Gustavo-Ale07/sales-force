@@ -2,6 +2,7 @@ import { Controller, Inject, Res } from '@nestjs/common';
 import {
   API_BASE_PATH,
   routes,
+  type CustomerOrderHabits,
   type OrderDetail,
   type OrdersResponse,
   type RepeatLastOrderResponse,
@@ -95,6 +96,14 @@ export class OrdersController {
     // 201 when created; 200 with the original draft on a replay of the same request.
     if (replayed) void reply.status(200);
     return result;
+  }
+
+  @ApiRoute(routes.getCustomerOrderHabits)
+  orderHabits(
+    @CurrentUserParam() user: CurrentUser,
+    @Contract() contract: RequestContract<typeof routes.getCustomerOrderHabits>,
+  ): Promise<CustomerOrderHabits> {
+    return this.orders.orderHabits(user, contract.params.code);
   }
 
   @ApiRoute(routes.repeatLastOrder)

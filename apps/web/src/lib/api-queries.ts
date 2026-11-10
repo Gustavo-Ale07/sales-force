@@ -33,6 +33,7 @@ export const queryKeys = {
   customers: (params: CustomersParams) => ["customers", "list", params] as const,
   customer: (code: number) => ["customers", "detail", code] as const,
   customerFinancial: (code: number) => ["customers", "financial", code] as const,
+  customerOrderHabits: (code: number) => ["customers", "order-habits", code] as const,
   productGroups: ["product-groups"] as const,
   products: (params: ProductsParams) => ["products", "list", params] as const,
   product: (code: number, customerCode?: number) => ["products", "detail", code, customerCode ?? null] as const,
@@ -130,6 +131,15 @@ export function customerQueryOptions(api: ApiClient, code: number) {
   return queryOptions({
     queryKey: queryKeys.customer(code),
     queryFn: () => callApi(() => api.GET("/customers/{code}", { params: { path: { code } } })),
+  });
+}
+
+/** How the customer buys according to the orders recorded in Sales Force (never ERP history). */
+export function customerOrderHabitsQueryOptions(api: ApiClient, code: number) {
+  return queryOptions({
+    queryKey: queryKeys.customerOrderHabits(code),
+    queryFn: () => callApi(() => api.GET("/customers/{code}/order-habits", { params: { path: { code } } })),
+    retry: false,
   });
 }
 

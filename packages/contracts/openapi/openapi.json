@@ -990,6 +990,79 @@
         }
       }
     },
+    "/customers/{code}/order-habits": {
+      "get": {
+        "operationId": "getCustomerOrderHabits",
+        "tags": [
+          "orders"
+        ],
+        "summary": "Negotiation type most used in the customer's Sales Force orders (read-only, scoped)",
+        "description": "Counts only orders recorded in Sales Force (sent for approval or delivery; drafts and rejected ones excluded), never Sankhya/ERP history. A customer outside the actor scope answers 404, like a missing one.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Hábitos de pedido do cliente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerOrderHabits"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/product-groups": {
       "get": {
         "operationId": "listProductGroups",
@@ -4321,6 +4394,16 @@
               }
             ]
           },
+          "monthlyCreditLimit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "syncedAt": {
             "$ref": "#/components/schemas/IsoTimestamp"
           }
@@ -4338,6 +4421,7 @@
           "priceTableName",
           "resolvedPriceTable",
           "creditLimit",
+          "monthlyCreditLimit",
           "syncedAt"
         ],
         "additionalProperties": false
@@ -4571,6 +4655,36 @@
           "sellerCode",
           "sellerName",
           "priceTableCode"
+        ],
+        "additionalProperties": false
+      },
+      "CustomerOrderHabits": {
+        "type": "object",
+        "properties": {
+          "orderCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "mostUsedNegotiationTypeCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mostUsedNegotiationOrderCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "orderCount",
+          "mostUsedNegotiationTypeCode",
+          "mostUsedNegotiationOrderCount"
         ],
         "additionalProperties": false
       },

@@ -2,7 +2,7 @@ import { Button, Money, formatDocument, titleCase } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { IdCard } from "lucide-react";
 import type { ReactNode } from "react";
-import { customerQueryOptions } from "../lib/api-queries";
+import { orderEntryConfigurationQueryOptions, customerOrderHabitsQueryOptions, customerQueryOptions } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { CustomerStatus } from "../routes/customers";
 
@@ -24,13 +24,19 @@ function BarField({ label, children }: { label: string; children: ReactNode }) {
 /**
  * Context of the customer the order is being built for, pinned under the navbar (Vidya "Nova venda"): code and
  * name, document, price table, credit limit when the server sends it, status, and the button that opens the
- * Ficha do Cliente without leaving the order. Fields that have no source yet (fiscal classification, most-used
- * negotiation, monthly credit) are not shown rather than invented.
+ * Ficha do Cliente without leaving the order. The monthly credit limit shows only when the server sends it; the most-used
+ * negotiation comes from the orders recorded in Sales Force (so it says so) and shows only when there is one. Fields that
+ * have no source (fiscal classification, "never bought": the ERP order history is not mirrored) are not shown rather than invented.
  */
 export function CustomerContextBar({ customerCode, customerName, onOpenFicha }: CustomerContextBarProps) {
   const api = useApi();
   const query = useQuery({ ...customerQueryOptions(api, customerCode), staleTime: 30_000 });
+  const habits = useQuery({ ...customerOrderHabitsQueryOptions(api, customerCode), staleTime: 30_000 });
+  const configuration = useQuery({ ...orderEntryConfigurationQueryOptions(api), staleTime: 5 * 60_000 });
   const detail = query.data;
+  const usedCode = habits.data?.mostUsedNegotiationTypeCode ?? null;
+  const usedLabel =
+    usedCode === null ? null : (configuration.data?.sales.negotiationTypes.find((type) => type.code === usedCode)?.label ?? `Negociação ${usedCode}`);
   return (
     <section
       aria-label="Cliente do pedido"
@@ -50,6 +56,16 @@ export function CustomerContextBar({ customerCode, customerName, onOpenFicha }: 
           <BarField label="Limite de crédito">
             {detail.creditLimit === null ? <span className="text-fg-faint">Não disponível</span> : <Money value={detail.creditLimit} />}
           </BarField>
+          {typeof detail.monthlyCreditLimit === "string" ? (
+            <BarField label="Limite mensal">
+              <Money value={detail.monthlyCreditLimit} />
+            </BarField>
+          ) : null}
+          {usedLabel !== null && habits.data ? (
+            <BarField label="Negociação mais usada (pedidos no Force)">
+              <span title={`${habits.data.mostUsedNegotiationOrderCount} de ${habits.data.orderCount} pedidos`}>{usedLabel}</span>
+            </BarField>
+          ) : null}
           <CustomerStatus active={detail.active} blocked={detail.blocked} />
         </dl>
       ) : null}

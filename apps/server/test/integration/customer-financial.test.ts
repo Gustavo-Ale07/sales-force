@@ -127,3 +127,12 @@ describe('overdue hint in the portfolio list', () => {
     }
   });
 });
+
+describe('GET /customers/{code} monthly credit limit', () => {
+  it('shows the monthly limit next to the credit limit, and hides both without showCreditLimit', async () => {
+    const shown = await enabled.call('seller1', 'GET', `/customers/${mine}`);
+    expect(shown.body).toMatchObject({ creditLimit: '5000.00', monthlyCreditLimit: '1200.00' });
+    const hidden = await restricted.call('seller1', 'GET', `/customers/${mine}`);
+    expect(hidden.body).toMatchObject({ creditLimit: null, monthlyCreditLimit: null });
+  });
+});

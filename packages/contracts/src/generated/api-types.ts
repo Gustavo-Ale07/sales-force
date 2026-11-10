@@ -310,6 +310,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/customers/{code}/order-habits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Negotiation type most used in the customer's Sales Force orders (read-only, scoped)
+         * @description Counts only orders recorded in Sales Force (sent for approval or delivery; drafts and rejected ones excluded), never Sankhya/ERP history. A customer outside the actor scope answers 404, like a missing one.
+         */
+        get: operations["getCustomerOrderHabits"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/product-groups": {
         parameters: {
             query?: never;
@@ -927,6 +947,7 @@ export interface components {
                 source: "customer" | "fallback";
             } | null;
             creditLimit: components["schemas"]["DecimalString"] | null;
+            monthlyCreditLimit: components["schemas"]["DecimalString"] | null;
             syncedAt: components["schemas"]["IsoTimestamp"];
         };
         CustomerFinancial: {
@@ -965,6 +986,11 @@ export interface components {
             sellerName: string | null;
             priceTableCode: number | null;
             overdue?: boolean;
+        };
+        CustomerOrderHabits: {
+            orderCount: number;
+            mostUsedNegotiationTypeCode: number | null;
+            mostUsedNegotiationOrderCount: number;
         };
         /** @enum {string} */
         CustomerSort: "name" | "-name" | "code" | "-code";
@@ -2322,6 +2348,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CustomerFinancial"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    getCustomerOrderHabits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Hábitos de pedido do cliente */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerOrderHabits"];
                 };
             };
             /** @description Requisição inválida (validation_failed) */

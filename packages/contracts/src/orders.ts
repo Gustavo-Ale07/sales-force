@@ -32,6 +32,23 @@ export const OrderStatusSchema = named(
 export type OrderStatus = z.infer<typeof OrderStatusSchema>;
 
 /**
+ * What the customer's own orders RECORDED IN SALES FORCE say about how they buy (order-screen customer strip). Never Sankhya/ERP
+ * history (not mirrored): a purchase made elsewhere is not counted, so no "never bought" is derived from this.
+ */
+export const CustomerOrderHabitsSchema = named(
+  'CustomerOrderHabits',
+  z.object({
+    /** Orders of the customer sent for approval or delivery in Sales Force (drafts and rejected orders are not counted). */
+    orderCount: z.number().int().nonnegative(),
+    /** Negotiation type used by most of those orders (ties go to the most recent); `null` = no order yet. */
+    mostUsedNegotiationTypeCode: codeInt().nullable(),
+    /** How many of the `orderCount` orders used it. */
+    mostUsedNegotiationOrderCount: z.number().int().nonnegative(),
+  }),
+);
+export type CustomerOrderHabits = z.infer<typeof CustomerOrderHabitsSchema>;
+
+/**
  * A draft that can no longer be sent as it stands. Derived by the server on every read from the CURRENT
  * customer data (never persisted, never a silent change of the draft or of `status`): `needs_review`
  * with `reason: customer_ineligible`; `customerBlock` says why the customer is ineligible.

@@ -66,6 +66,8 @@ export const CustomerDetailSchema = named(
       .nullable(),
     /** Only present when the installation configuration enables showing credit limits. */
     creditLimit: DecimalStringSchema.nullable(),
+    /** Monthly credit limit as reported by the ERP; same flag as `creditLimit`; `null` = not shown or not reported. */
+    monthlyCreditLimit: DecimalStringSchema.nullable(),
     syncedAt: IsoTimestampSchema,
   }),
 );

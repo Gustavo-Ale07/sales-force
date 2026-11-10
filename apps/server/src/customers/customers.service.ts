@@ -83,6 +83,7 @@ export class CustomersService {
         resolved.kind === 'table' ? { code: resolved.code, source: resolved.source } : null,
       // Credit is only shown when the installation configuration enables it (CFG-3...6).
       creditLimit: configuration.customers.creditFeatures.showCreditLimit ? row.creditLimit : null,
+      monthlyCreditLimit: configuration.customers.creditFeatures.showCreditLimit ? row.monthlyCreditLimit : null,
       syncedAt: row.syncedAt.toISOString(),
     };
   }

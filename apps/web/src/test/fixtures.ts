@@ -43,6 +43,7 @@ export function customerDetail(overrides: Partial<ApiSchema<"CustomerDetail">> =
     priceTableName: "Tabela Varejo",
     resolvedPriceTable: { code: 5, source: "customer" },
     creditLimit: null,
+    monthlyCreditLimit: null,
     syncedAt: "2026-09-20T12:00:00.000Z",
     ...overrides,
   };

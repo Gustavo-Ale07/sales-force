@@ -74,6 +74,7 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   // Read-only financial area (D-I): same roles and the same customer scope as getCustomer; the installation
   // configuration decides whether it exists at all (404 when not shown).
   getCustomerFinancial: { roles: EVERY_ROLE },
+  getCustomerOrderHabits: { roles: EVERY_ROLE },
   listProductGroups: { roles: EVERY_ROLE },
   listProducts: { roles: EVERY_ROLE },
   // Carriers (D-C): a read of the mirrored carrier list, open to every role that can create an order.

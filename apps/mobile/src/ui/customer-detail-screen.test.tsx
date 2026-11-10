@@ -6,7 +6,7 @@ import { CustomerDetailScreen } from "./customer-detail-screen";
 const listOnly: CustomerRepository = { list: async () => pageOf([]) };
 
 function detailOf(overrides: Partial<CustomerDetail> = {}): CustomerDetail {
-  return { ...customer(10), priceTableName: null, resolvedPriceTable: null, creditLimit: null, syncedAt: "2026-09-30T12:00:00.000Z", ...overrides };
+  return { ...customer(10), priceTableName: null, resolvedPriceTable: null, creditLimit: null, monthlyCreditLimit: null, syncedAt: "2026-09-30T12:00:00.000Z", ...overrides };
 }
 
 describe("CustomerDetailScreen", () => {

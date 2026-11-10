@@ -41,6 +41,7 @@ import {
   ReplaceOrderRequestSchema,
   DuplicateAsOrderRequestSchema,
   RepeatLastOrderRequestSchema,
+  CustomerOrderHabitsSchema,
 } from './orders.js';
 import { SellersQuerySchema, SellersResponseSchema } from './sellers.js';
 import {
@@ -322,6 +323,20 @@ export const routes = {
     auth: 'session',
     request: { params: CustomerPathSchema },
     responses: { 200: { description: 'Financeiro do cliente', schema: CustomerFinancialSchema } },
+    errors: [400, 401, 403, 404],
+  }),
+
+  getCustomerOrderHabits: defineRoute({
+    operationId: 'getCustomerOrderHabits',
+    method: 'get',
+    path: '/customers/{code}/order-habits',
+    tags: ['orders'],
+    summary: "Negotiation type most used in the customer's Sales Force orders (read-only, scoped)",
+    description:
+      'Counts only orders recorded in Sales Force (sent for approval or delivery; drafts and rejected ones excluded), never Sankhya/ERP history. A customer outside the actor scope answers 404, like a missing one.',
+    auth: 'session',
+    request: { params: CustomerPathSchema },
+    responses: { 200: { description: 'Hábitos de pedido do cliente', schema: CustomerOrderHabitsSchema } },
     errors: [400, 401, 403, 404],
   }),
 

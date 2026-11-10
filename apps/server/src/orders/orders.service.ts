@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type {
   CreateOrderRequest,
+  CustomerOrderHabits,
   DatasetIdentity,
   DiscountAuthorityStatus,
   DuplicateAsOrderRequest,
@@ -245,6 +246,18 @@ export class OrdersService {
       return { order: await this.replayOf(winner, user, fingerprint, context.scope), replayed: true };
     }
     return { order: await this.detailOf(created), replayed: false };
+  }
+
+  /** Negotiation type most used in the customer's Sales Force orders. Same scope rule as every customer read (404 outside it). */
+  async orderHabits(user: CurrentUser, customerCode: number): Promise<CustomerOrderHabits> {
+    const { scope } = await this.policy.accessContext(user);
+    const customer = await this.customers.requireVisible(scope, customerCode);
+    const habits = await this.orders.orderHabitsOf(scope, customer.code);
+    return {
+      orderCount: habits.orderCount,
+      mostUsedNegotiationTypeCode: habits.negotiationTypeCode,
+      mostUsedNegotiationOrderCount: habits.negotiationOrderCount,
+    };
   }
 
   /**

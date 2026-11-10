@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { account, erpCustomer, integrationOrderDryRun, integrationOutbox, salesOrder, salesOrderApproval, salesOrderItem, type AccountRole, type ApprovalLevel, type Database } from '@salesforce/db';
 import type { CustomerScope, OrderItem } from '@salesforce/domain';
-import { and, asc, desc, eq, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { containsText, digitsOf, eqInt, fitsPgInt, inInts, inSellerCodes, offsetOf } from '../platform/sql.js';
 import { DATABASE } from '../platform/tokens.js';
 
@@ -145,6 +145,39 @@ export class OrdersRepository {
       .orderBy(desc(salesOrder.draftNumber))
       .limit(1);
     return row ?? null;
+  }
+
+  /**
+   * Orders of the customer recorded in Sales Force that were sent on (approval, delivery or the ERP): their count and the
+   * negotiation type most of them used (ties go to the most recent). Drafts and rejected orders say nothing about how the
+   * customer buys. Scoped like every other order read (P-21).
+   */
+  async orderHabitsOf(
+    scope: CustomerScope,
+    customerCode: number,
+    executor: Executor = this.db,
+  ): Promise<{ orderCount: number; negotiationTypeCode: number | null; negotiationOrderCount: number }> {
+    const rows = await executor
+      .select({
+        negotiationTypeCode: salesOrder.negotiationTypeCode,
+        orders: sql<number>`count(*)::int`,
+        latest: sql<number>`max(${salesOrder.draftNumber})`,
+      })
+      .from(salesOrder)
+      .where(
+        and(
+          scopeCondition(scope),
+          eqInt(salesOrder.customerCode, customerCode),
+          inArray(salesOrder.status, ['awaiting_approval', 'approved', 'queued', 'sent']),
+        ),
+      )
+      .groupBy(salesOrder.negotiationTypeCode);
+    const orderCount = rows.reduce((sum, row) => sum + row.orders, 0);
+    const known = rows
+      .filter((row) => row.negotiationTypeCode !== null)
+      .sort((a, b) => b.orders - a.orders || Number(b.latest) - Number(a.latest));
+    const top = known[0];
+    return { orderCount, negotiationTypeCode: top?.negotiationTypeCode ?? null, negotiationOrderCount: top?.orders ?? 0 };
   }
 
   /** Inserts the order unless the client request id already exists (`null` = a concurrent create won). */
