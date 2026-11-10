@@ -59,7 +59,7 @@ describe('product group hierarchy', () => {
     expect(ProductGroupsResponseSchema.safeParse(body).success).toBe(true);
     expect(body.hierarchical).toBe(false);
     expect(body.items.every((g: Json) => g.parentCode === null && g.hasChildren === false)).toBe(true);
-    expect(body.items.map((g: Json) => g.code).sort()).toEqual([A, B, C].map(Number).sort());
+    expect(body.items.map((g: Json) => g.code).sort()).toEqual(dataset.productGroups.map((g) => g.code).sort());
     directA = await codesIn(A as number);
     directB = await codesIn(B as number);
     directC = await codesIn(C as number);

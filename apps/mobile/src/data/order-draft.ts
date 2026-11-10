@@ -399,6 +399,7 @@ const issueMessages: Record<DraftIssueCode, string> = {
   invalid_line_number: "Numeração de itens inválida.",
   duplicate_line_number: "Numeração de itens duplicada.",
   invalid_quantity: "Quantidade inválida.",
+  invalid_quantity_step: "Quantidade fora do múltiplo permitido para este produto.",
   invalid_discount: "Desconto inválido.",
   price_state_inconsistent: "Preço inconsistente. Recarregue e tente novamente.",
   price_reference_missing: "Preço sem tabela de referência. Recarregue e tente novamente.",

@@ -45,7 +45,7 @@
 --   erp_carrier (carrier code, name, active flag),
 --   erp_ipi_rate (IPI rate by ERP code, display estimate only),
 --   erp_open_title (open receivable titles, read-only financial information),
---   erp_seller, erp_customer, erp_product,
+--   erp_seller, erp_customer, erp_product, erp_product_group,
 --   erp_price_table, erp_price_table_version,
 --   erp_list_price                        S           S I U          worker mirror-writer upserts + soft delete (no DELETE). API is read-only (mirror.repository)
 --                                         + column UPDATE (synced_at) on erp_customer for force_api only: templates.repository takes
@@ -258,6 +258,7 @@ BEGIN
       ('erp_open_title',                     'force_api',    'SELECT'),
       ('erp_customer',                       'force_api',    'SELECT'),
       ('erp_product',                        'force_api',    'SELECT'),
+      ('erp_product_group',                  'force_api',    'SELECT'),
       ('erp_price_table',                    'force_api',    'SELECT'),
       ('erp_price_table_version',            'force_api',    'SELECT'),
       ('erp_list_price',                     'force_api',    'SELECT'),
@@ -277,6 +278,7 @@ BEGIN
       ('erp_open_title',                     'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_customer',                       'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_product',                        'force_worker', 'SELECT, INSERT, UPDATE'),
+      ('erp_product_group',                  'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_price_table',                    'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_price_table_version',            'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_list_price',                     'force_worker', 'SELECT, INSERT, UPDATE'),

@@ -32,7 +32,7 @@ afterAll(async () => {
   await closeAllThenStop(opened, postgres);
 });
 
-const QUANTITIES = ['0.2', '0.4', '1.2', '10', '0.0001'];
+const QUANTITIES = ['0.2', '0.4', '1.2', '10', '0.01'];
 
 const body = (quantities: readonly string[]) => ({
   clientRequestId: randomUUID(),
@@ -43,7 +43,7 @@ const body = (quantities: readonly string[]) => ({
 });
 
 describe('decimal quantities (P4)', () => {
-  it('stores and returns 0.2, 0.4, 1.2, 10 and 0.0001 exactly, with exact line and order totals', async () => {
+  it('stores and returns 0.2, 0.4, 1.2, 10 and 0.01 exactly, with exact line and order totals', async () => {
     const created = await app.call('seller1', 'POST', '/orders', body(QUANTITIES));
     expect(created.status).toBe(201);
     expect(created.body.items.map((i: Json) => i.quantity)).toEqual(QUANTITIES);
@@ -55,7 +55,7 @@ describe('decimal quantities (P4)', () => {
     expect(created.body.estimatedTotal).toBe(sumTotals(lineTotals));
 
     const rows = await app.database.handle.db.select().from(salesOrderItem).where(eq(salesOrderItem.orderId, created.body.id));
-    expect(rows.map((r) => Number(r.quantity))).toEqual([0.2, 0.4, 1.2, 10, 0.0001]);
+    expect(rows.map((r) => Number(r.quantity))).toEqual([0.2, 0.4, 1.2, 10, 0.01]);
 
     const read = await app.call('seller1', 'GET', `/orders/${created.body.id}`);
     expect(read.body.items.map((i: Json) => i.quantity)).toEqual(QUANTITIES);
@@ -70,7 +70,7 @@ describe('decimal quantities (P4)', () => {
   });
 
   it('refuses a fifth decimal, zero and a comma', async () => {
-    for (const quantity of ['0.00001', '0', '0,2', '-1']) {
+    for (const quantity of ['0.00001', '0.0001', '0.005', '0', '0,2', '-1']) {
       expect((await app.call('seller1', 'POST', '/orders', body([quantity]))).status).toBe(400);
     }
   });
