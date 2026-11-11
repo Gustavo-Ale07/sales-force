@@ -1063,3 +1063,14 @@ Catalogue and configuration comparison only (no order data, no write, no probe b
 - **Releasers (`TSILIM`):** the releasers of events 2, 3, 13 and 44 exist in both environments (users 9 and 11 only in production).
 - **`DESCMAX`:** 2.108 active production products have `DESCMAX` null. The behaviour of event 2 (discount limit) with a null `DESCMAX` is NEEDS VALIDATION in the Sandbox.
 - **`AGRUPMIN` (block 5, quantity step):** laminates PT 1453 and 1440 have `AGRUPMIN` 0,2 in production and null in the Sandbox; napkins CX 315, 314 and 316 and product 4158 have null. In the Sandbox a laminate therefore tests the unit step (0,01), not 0,2.
+
+### 9.57 Sales goals (metas) in production (owner-run, read-only, 2026-11-11) — facts VALIDATED by SELECT; rules NEEDS VALIDATION
+
+Source for the Home ranking/performance goal (read-only; Sankhya is the single source, no Force-side goal configuration):
+
+- **Goal directive 2 ("Meta de Vendas $")** is present in all 56 configs (`AD_TVDYCFGPFM`); the other directives appear in 2 rows each. **Version 1 uses directive 2 only.**
+- **No config has `PERCACRESC`.**
+- **11/2026 has no config:** the Home shows "Sem meta cadastrada para este mês" and only the realized value; it never repeats a previous month's goal.
+- **TOP mapping (`AD_TVDYPFMTOP`):** Sep/Oct configs have no row; only Jun–Aug have (1101 V + 1201 D in Jun/Jul; 1001 V in Jul/Aug). The default for a config without rows (1101 V minus 1201 D) is a HYPOTHESIS to validate with the Vidya: it must be **configurable**, not hardcoded.
+- **More than one config per seller:** CODVEN 67 has 2 configs in 10/2026. When a seller has more than one config in the period, show both, never sum and never pick one.
+- **Realized value is NOT defined yet:** the amount column (`VLRNOTA` or other), the status filter and the date column (`DTNEG` x `DTFATUR`) are pending the owner's confirmation. Do not fix them in code until confirmed (open item).
