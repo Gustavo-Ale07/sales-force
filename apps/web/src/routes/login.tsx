@@ -242,6 +242,12 @@ export function LoginPage() {
             </form>
           </div>
 
+          <p className="mt-4 text-center text-sm">
+            <a href="/downloads" className="text-cta-text underline">
+              Baixar o aplicativo Android
+            </a>
+          </p>
+
           <LoginFooter />
         </section>
       </main>

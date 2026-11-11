@@ -8,6 +8,11 @@ describe("navItemsFor (ROLE-1: convenience only, the server enforces)", () => {
     expect(navItemsFor("admin", true).map((item) => item.to)).toEqual(expect.arrayContaining(["/limites-desconto", "/aprovacoes"]));
   });
 
+  it("offers the app download link to the commercial profiles, never to the technical one", () => {
+    for (const role of ["admin", "manager", "seller"]) expect(navItemsFor(role).map((item) => item.to)).toContain("/downloads");
+    expect(navItemsFor("technical").map((item) => item.to)).not.toContain("/downloads");
+  });
+
   it("shows the technical profile only the integration and settings pages", () => {
     expect(navItemsFor("technical").map((item) => item.to)).toEqual(["/integracao", "/configuracoes"]);
   });

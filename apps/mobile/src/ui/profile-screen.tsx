@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { Account } from "../auth/auth-port";
 import { APP_ENVIRONMENT_LABEL, APP_VERSION, PRODUCT_NAME } from "../app-info";
@@ -9,6 +10,8 @@ export interface ProfileScreenProps extends SyncViewProps {
   readonly account: Account;
   /** Opens the existing local-orders list (Vendas). Absent when the device services are unavailable. */
   readonly onOpenLocalOrders?: () => void;
+  /** In-app APK update (Android builds with a channel). Resolves with the final message; absent = no update section. */
+  readonly onCheckUpdate?: (onStatus: (text: string) => void) => Promise<string>;
   readonly onSignOut: () => void;
 }
 
@@ -30,7 +33,19 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function ProfileScreen({ account, onOpenLocalOrders, onSignOut, ...sync }: ProfileScreenProps) {
+export function ProfileScreen({ account, onOpenLocalOrders, onCheckUpdate, onSignOut, ...sync }: ProfileScreenProps) {
+  const [updateText, setUpdateText] = useState<string | null>(null);
+  const [updating, setUpdating] = useState(false);
+  async function checkUpdate() {
+    if (!onCheckUpdate || updating) return;
+    setUpdating(true);
+    try {
+      setUpdateText(await onCheckUpdate(setUpdateText));
+    } finally {
+      setUpdating(false);
+    }
+  }
+
   function confirmSignOut() {
     const pending = sync.status.pending;
     Alert.alert(
@@ -77,6 +92,15 @@ export function ProfileScreen({ account, onOpenLocalOrders, onSignOut, ...sync }
       <Section title="Configurações">
         <Text style={styles.muted}>Nenhuma configuração disponível nesta versão.</Text>
       </Section>
+
+      {onCheckUpdate !== undefined && (
+        <Section title="Atualização">
+          <Pressable style={styles.link} onPress={() => void checkUpdate()} disabled={updating} accessibilityRole="button" accessibilityLabel="Verificar atualização do aplicativo">
+            <Text style={styles.linkText}>{updating ? "Atualizando…" : "Verificar atualização"}</Text>
+          </Pressable>
+          {updateText !== null && <Text style={styles.muted} accessibilityLiveRegion="polite">{updateText}</Text>}
+        </Section>
+      )}
 
       <Section title="Sobre">
         <InfoRow label="Aplicativo" value={PRODUCT_NAME} />

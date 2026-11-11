@@ -95,6 +95,14 @@ const loginRoute = createRoute({
   component: LoginPage,
 });
 
+/** Downloads center: public on purpose (a phone opens it without signing in); it shows only the published app files. */
+const downloadsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/downloads",
+  staticData: { crumb: "Aplicativo" },
+  component: lazyRouteComponent(() => import("./routes/downloads"), "DownloadsPage"),
+});
+
 const dashboardRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/",
@@ -263,6 +271,7 @@ const appChildren = [
 
 const routeTree = rootRoute.addChildren([
   loginRoute,
+  downloadsRoute,
   appRoute.addChildren(appChildren),
   ...devRoutes,
 ]);

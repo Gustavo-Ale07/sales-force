@@ -40,6 +40,28 @@ describe("app variant", () => {
     expect(base.android.package).toBe("br.com.plac.salesforce.dev");
   });
 
+  it("declares the install permission and fingerprint runtime only for staging", () => {
+    const out = variant.applyVariant(base, STG);
+    expect(out.android.permissions).toEqual(["android.permission.REQUEST_INSTALL_PACKAGES"]);
+    expect(out.runtimeVersion).toEqual({ policy: "fingerprint" });
+    expect(out.plugins).toContain("expo-updates");
+    const dev = variant.applyVariant(base, {});
+    expect(dev.android.permissions).toBeUndefined();
+    expect(dev.updates).toBeUndefined();
+  });
+
+  it("keeps OTA updates disabled without an https EXPO_UPDATES_URL, and never blocks startup when enabled", () => {
+    expect(variant.applyVariant(base, STG).updates).toEqual({ enabled: false });
+    expect(variant.applyVariant(base, { ...STG, EXPO_UPDATES_URL: "http://u.example.com/m" }).updates).toEqual({ enabled: false });
+    expect(variant.applyVariant(base, { ...STG, EXPO_UPDATES_URL: "https://u.example.com/m" }).updates).toEqual({
+      enabled: true,
+      url: "https://u.example.com/m",
+      checkAutomatically: "ON_LOAD",
+      fallbackToCacheTimeout: 0,
+      requestHeaders: { "expo-channel-name": "staging" },
+    });
+  });
+
   it("accepts an https origin with a port and a public 172.x outside the private range", () => {
     expect(variant.stagingProblems({ ...STG, EXPO_PUBLIC_API_URL: "https://api.example.com:8443" })).toEqual([]);
     expect(variant.stagingProblems({ ...STG, EXPO_PUBLIC_API_URL: "https://172.32.0.1" })).toEqual([]);

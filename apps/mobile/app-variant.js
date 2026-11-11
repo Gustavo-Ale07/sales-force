@@ -9,6 +9,17 @@ const STAGING = {
   applicationId: "br.com.plac.force.staging",
 };
 const VARIANTS = new Set(["development", "staging"]);
+const INSTALL_PERMISSION = "android.permission.REQUEST_INSTALL_PACKAGES"; // in-app APK update (stage B, layer 2)
+
+/**
+ * Layer 1 (expo-updates). Channel = variant. The update server URL belongs to the owner's EAS project and is never
+ * committed: it comes from EXPO_UPDATES_URL (https only). Without it, updates stay disabled (fail-closed).
+ */
+function updatesConfig(env, channel) {
+  const url = (env.EXPO_UPDATES_URL ?? "").trim();
+  if (url === "" || !/^https:\/\/[^\s?#@]+$/i.test(url)) return { enabled: false };
+  return { enabled: true, url, checkAutomatically: "ON_LOAD", fallbackToCacheTimeout: 0, requestHeaders: { "expo-channel-name": channel } };
+}
 
 function isPrivateOrLocalHost(host) {
   const h = host.toLowerCase().replace(/^\[|\]$/g, "");
@@ -73,9 +84,12 @@ function applyVariant(config, env = process.env) {
     name: STAGING.name,
     scheme: STAGING.scheme,
     ios: { ...config.ios, bundleIdentifier: STAGING.applicationId },
-    android: { ...config.android, package: STAGING.applicationId, allowBackup: false, blockedPermissions: [...new Set([...(config.android?.blockedPermissions ?? []), "android.permission.SYSTEM_ALERT_WINDOW"])] },
+    android: { ...config.android, package: STAGING.applicationId, allowBackup: false, permissions: [...new Set([...(config.android?.permissions ?? []), INSTALL_PERMISSION])], blockedPermissions: [...new Set([...(config.android?.blockedPermissions ?? []), "android.permission.SYSTEM_ALERT_WINDOW"])] },
+    runtimeVersion: { policy: "fingerprint" },
+    updates: updatesConfig(env, "staging"),
+    plugins: [...new Set([...(config.plugins ?? []), "expo-updates"])],
     extra: { ...extra, appVariant: "staging" },
   };
 }
 
-module.exports = { applyVariant, stagingProblems, isPrivateOrLocalHost, STAGING };
+module.exports = { applyVariant, updatesConfig, INSTALL_PERMISSION, stagingProblems, isPrivateOrLocalHost, STAGING };

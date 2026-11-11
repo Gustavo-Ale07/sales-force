@@ -1,10 +1,12 @@
 import { canAdministerDiscountLimits, canDecideApprovals, canSeeIntegration, canUseCommercial } from "@salesforce/contracts";
-import { List, Percent, Settings, ShieldCheck, Plug, ShoppingCart, Target, Users, type LucideIcon } from "lucide-react";
+import { Download, List, Percent, Settings, ShieldCheck, Plug, ShoppingCart, Target, Users, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
-  to: "/" | "/clientes" | "/produtos" | "/pedidos" | "/integracao" | "/configuracoes" | "/limites-desconto" | "/aprovacoes";
+  to: "/" | "/clientes" | "/produtos" | "/pedidos" | "/integracao" | "/configuracoes" | "/limites-desconto" | "/aprovacoes" | "/downloads";
   label: string;
   icon: LucideIcon;
+  /** Shown to every signed-in profile (the page itself is public). */
+  everyone?: boolean;
   /** Only for the roles that may see the integration (INTEGRATION_ROLES). */
   integrationOnly?: boolean;
   /** Only the administrator (discount limits, W-39). */
@@ -28,6 +30,7 @@ const allNavItems: NavItem[] = [
   { to: "/limites-desconto", label: "Limites de desconto", icon: Percent, adminOnly: true },
   { to: "/integracao", label: "Integração", icon: Plug, integrationOnly: true },
   { to: "/configuracoes", label: "Configurações", icon: Settings, integrationOnly: true },
+  { to: "/downloads", label: "Aplicativo", icon: Download, everyone: true },
 ];
 
 /**
@@ -37,6 +40,7 @@ const allNavItems: NavItem[] = [
  */
 export function navItemsFor(role: string | undefined, approvals = false): NavItem[] {
   return allNavItems.filter((item) => {
+    if (item.everyone) return role !== undefined && canUseCommercial(role);
     // D-M: in `erp` mode the release belongs to Sankhya; the limits and approvals screens do not exist for the user.
     if ((item.approverOnly || item.adminOnly) && !approvals) return false;
     if (item.approverOnly) return role !== undefined && canDecideApprovals(role);
