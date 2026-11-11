@@ -276,6 +276,11 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+    # Android downloads (stage B): published by scripts/publish-android.mjs into this host folder; read-only here. A bind mount
+    # lives outside the image, so it survives every deploy and `up --force-recreate`. Create it first (docs/downloads-center.md);
+    # the folder must be world-readable (0755, files 0644) for the unprivileged nginx user.
+    volumes:
+      - /opt/force-staging/downloads:/usr/share/nginx/downloads-files:ro
     depends_on:
       api:
         condition: service_healthy

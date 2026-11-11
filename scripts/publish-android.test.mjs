@@ -1,6 +1,6 @@
 // Run with: node --test scripts/publish-android.test.mjs
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -21,6 +21,15 @@ test("validate rejects bad channel, version code and minimum above the version",
   assert.ok(validate({ ...base, "version-code": "0", apk: "a.apk", out: "o" }).length > 0);
   assert.ok(validate({ ...base, "min-version-code": "99", apk: "a.apk", out: "o" }).length > 0);
   assert.ok(validate({ ...base, apk: "a.exe", out: "o" }).length > 0);
+});
+
+test("publish refuses --min-version-code above --version-code and writes nothing", async () => {
+  const { apk, out } = setup();
+  await assert.rejects(publish({ ...base, apk, out, "min-version-code": "13" }), /nao pode ser maior/);
+  assert.equal(existsSync(out), false);
+  // equal is allowed (forces exactly this build); lower is the normal case
+  await publish({ ...base, apk, out, "min-version-code": "12" });
+  assert.equal(JSON.parse(readFileSync(join(out, "latest-staging.json"), "utf8")).minVersionCode, 12);
 });
 
 test("publish writes the apk, downloads.json and latest json with the real digest", async () => {

@@ -1,6 +1,6 @@
 # Central de downloads e atualização do app (etapa B)
 
-Status: implementação local; **nada foi publicado nem implantado**. Os trechos de nginx, Caddy e compose abaixo são **instruções** para o dono aplicar; nenhum arquivo de compose, `compose.env*` ou flag foi alterado.
+Status: implementação local; **nada foi implantado nem publicado em servidor**. O volume e o `location` do nginx estão no repositório (entram em vigor no próximo deploy); a pasta do host e a cópia dos arquivos são passos manuais do dono.
 
 ## Peças
 
@@ -12,39 +12,76 @@ Status: implementação local; **nada foi publicado nem implantado**. Os trechos
 | Publicação | `scripts/publish-android.mjs` | Copia o APK, calcula SHA-256 e tamanho, grava os dois JSON de forma atômica. Um `versionCode` publicado é imutável. |
 | Menu e login | `nav-items.ts`, `login.tsx` | Item "Aplicativo" (perfis comerciais) e link "Baixar o aplicativo Android" no login. |
 
-## Publicar uma versão (na máquina do dono, depois do build)
+## Fluxo de publicação ponta a ponta
+
+Endereço do ambiente: `https://force.sistemasplac.com.br`. Os arquivos ficam em `https://force.sistemasplac.com.br/downloads-files/` e a página para o usuário é `https://force.sistemasplac.com.br/downloads`.
+
+1. **Baixar o APK do EAS** no PC do dono (painel do EAS, build do perfil `staging`). Anotar `versionName` e `versionCode` do build.
+2. **Gerar os arquivos de publicação** no PC do dono, na raiz do repositório:
+   ```
+   node scripts/publish-android.mjs --apk <arquivo.apk> --version-name 0.1.0 --version-code 12 --min-version-code 10 --channel staging --out <pasta-local>
+   ```
+   Grava na `<pasta-local>`: `force-staging-12.apk`, `downloads.json` e `latest-staging.json` (SHA-256 e tamanho reais). `--min-version-code` é a versão mínima aceita (apps abaixo dela são obrigados a atualizar). **O script recusa `--min-version-code` maior que `--version-code`** (nunca bloqueia todos os aparelhos) e não escreve nada nesse caso. Um `versionCode` já publicado com conteúdo diferente também é recusado.
+3. **Copiar para a VPS** (duas etapas: a conta de login não escreve em `/opt`):
+   ```
+   ssh <usuario>@<vps> "mkdir -p ~/force-downloads"
+   scp <pasta-local>/* <usuario>@<vps>:force-downloads/
+   ssh <usuario>@<vps>
+   sudo cp ~/force-downloads/force-staging-12.apk /opt/force-staging/downloads/
+   sudo cp ~/force-downloads/downloads.json ~/force-downloads/latest-staging.json /opt/force-staging/downloads/
+   sudo chmod 644 /opt/force-staging/downloads/*
+   rm -r ~/force-downloads
+   ```
+   Copie o APK **antes** dos dois JSON, para o manifesto nunca apontar para um arquivo ainda ausente.
+4. **Testar** (lista abaixo).
+
+Só a **primeira vez** (quando o volume e o `location` do nginx entram no deploy) é preciso recriar o `web` depois do deploy: `deploy/scripts/sf-compose.sh up -d --no-deps --force-recreate web`. Novas versões de APK/JSON **não** exigem reinício: é só copiar os arquivos.
+
+### Preparar a pasta na VPS (uma vez)
 
 ```
-node scripts/publish-android.mjs --apk <arquivo.apk> --version-name 0.1.0 --version-code 12 --min-version-code 10 --channel staging --out <pasta-servida>
+sudo mkdir -p /opt/force-staging/downloads
+sudo chmod 755 /opt/force-staging /opt/force-staging/downloads
 ```
 
-`--min-version-code` é a versão mínima aceita: apps abaixo dela são obrigados a atualizar. Teste: `node --test scripts/publish-android.test.mjs`.
+Pasta e arquivos precisam ser legíveis por todos (755/644): o nginx do `web` roda sem privilégios.
 
-## Servir a pasta (instrução, não aplicada)
+## O que está no repositório
 
-A pasta publicada deve ser servida em `/downloads-files/` na mesma origem do web (a CSP do web não precisa mudar: tudo é `'self'`). Montar a pasta como volume somente leitura no serviço `web` (no compose de staging, sob decisão do dono) e adicionar ao nginx do web:
+- **Volume** em `deploy/docker-compose.staging.yml` (o compose que `deploy/scripts/lib-deploy.sh` e `sf-compose.sh` usam; o `external-edge` só sobrepõe a borda), serviço `web`:
+  ```
+  volumes:
+    - /opt/force-staging/downloads:/usr/share/nginx/downloads-files:ro
+  ```
+  É um bind mount fora da imagem: sobrevive a todo deploy e a `--force-recreate`. A pasta precisa existir no host antes do `up`.
+- **nginx** em `deploy/nginx/default.conf`: `location = /downloads-files/` devolve 404 (a pasta em si), e `location /downloads-files/` usa `root /usr/share/nginx;` (não `alias`), sem `try_files`, `autoindex off`, `disable_symlinks on`, `limit_except GET HEAD { deny all; }` (outros métodos: 403), tipos `apk` e `json`, `Cache-Control: public, max-age=60`, `nosniff` e os cabeçalhos de segurança do servidor repetidos (o `add_header` de um `location` apaga os herdados): CSP `default-src 'none'; sandbox; frame-ancestors 'none'`, `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`.
+- O Caddy (`deploy/staging/Caddyfile`) só repassa ao `web`; nada muda nele.
+
+## Sem colisão e CSP
+
+- `/downloads` é a rota da SPA (cai no `location /`); `/downloads-files/...` exige o prefixo completo com a barra e cai no `location` próprio. O prefixo `/downloads-files/` não casa com `/downloads`, e `/downloads` não casa com o prefixo.
+- A página usa `fetch` à mesma origem (`/downloads-files/downloads.json`), coberto por `connect-src 'self'`; o botão do APK é uma navegação/download de link, que a CSP não restringe. O app lê `latest-staging.json` pela origem da API, que é a mesma do web. A CSP do web não mudou.
+- `apps/web/src/csp.test.ts` continua verde (a CSP dos arquivos de download não declara `script-src`, então não entra no teste de política da aplicação).
+
+## Testes com curl (após o deploy e a cópia dos arquivos)
 
 ```
-location /downloads-files/ {
-    alias /usr/share/nginx/downloads/;
-    types { application/vnd.android.package-archive apk; application/json json; }
-    default_type application/octet-stream;
-    add_header Cache-Control "no-cache" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header Content-Security-Policy "default-src 'none'; sandbox" always;
-    try_files $uri =404;
-}
+H=https://force.sistemasplac.com.br
+curl -sI $H/downloads-files/downloads.json       # esperado: 200, content-type: application/json
+curl -sI $H/downloads-files/latest-staging.json  # esperado: 200, content-type: application/json
+curl -sI $H/downloads-files/force-staging-12.apk # esperado: 200, content-type: application/vnd.android.package-archive
+curl -sI $H/downloads-files/                      # esperado: 404 (a pasta nunca é listada)
+curl -sI -X POST $H/downloads-files/downloads.json # esperado: 403
+curl -sI $H/downloads-files/nao-existe.apk        # esperado: 404
+curl -sI $H/downloads                             # esperado: 200, content-type: text/html (SPA)
 ```
 
-Com Caddy na frente, nada muda (ele só repassa ao web). Exemplo de volume (compose, instrução):
+Conferir também, em `-I` de qualquer um dos três arquivos, `cache-control: public, max-age=60` e `x-content-type-options: nosniff`.
 
-```
-  web:
-    volumes:
-      - /opt/force-staging/downloads:/usr/share/nginx/downloads:ro
-```
+## Desfazer
 
-Observação: `/downloads` (sem sufixo) é a rota da SPA; os arquivos ficam em `/downloads-files/` para não colidir.
+1. Retirar uma versão: apagar o APK da pasta e republicar `downloads.json`/`latest-<canal>.json` anteriores (ou restaurar a cópia). Ajustar `minVersionCode` para baixo se uma versão obrigatória estiver errada.
+2. Desligar o recurso: reverter o commit do volume e do `location` e recriar o `web`; a pasta do host pode ficar (não é usada).
 
 ## Camada 1: atualização de código JavaScript (expo-updates)
 
