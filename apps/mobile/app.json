@@ -2,7 +2,7 @@
   "expo": {
     "name": "Force",
     "slug": "plac-sales-force",
-    "version": "0.0.0",
+    "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/brand/icon-p.png",
     "userInterfaceStyle": "light",
@@ -13,7 +13,8 @@
       "bundleIdentifier": "br.com.plac.salesforce.dev"
     },
     "android": {
-      "package": "br.com.plac.salesforce.dev"
+      "package": "br.com.plac.salesforce.dev",
+      "versionCode": 1
     },
     "extra": {
       "notice": "Identificadores de pacote provisorios de desenvolvimento; o identificador definitivo depende da conta de loja (MOB-3) e nao foi decidido."

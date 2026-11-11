@@ -9,7 +9,7 @@ Status: owner-approved 2026-10-02 for staging only. The agent has not executed a
 | `APP_VARIANT` | unset / `development` | `staging` |
 | Android package / iOS bundle id | `br.com.plac.salesforce.dev` | `br.com.plac.force.staging` |
 | Name / scheme | Force / `salesforce` | Sales Force STG / `salesforce-stg` |
-| API | LAN/dev (`EXPO_PUBLIC_API_URL`, http allowed only by the existing dev-only cleartext flags) | `https://force-staging.sistemasplac.com.br`, https only |
+| API | LAN/dev (`EXPO_PUBLIC_API_URL`, http allowed only by the existing dev-only cleartext flags) | `https://force.sistemasplac.com.br`, https only |
 | Bundle | dev client or local standalone (unchanged) | standalone release bundle: no Metro, no dev client |
 
 Production id (owner ruling 2026-10-28: `br.com.plac.force`; staging = production id + `.staging`) is not set anywhere. A Play/App Store id change later means a new app: decide before launch.
@@ -24,7 +24,7 @@ Production id (owner ruling 2026-10-28: `br.com.plac.force`; staging = productio
 
 The existing `plugins/with-dev-cleartext.js` stays in the plugin list and writes `usesCleartextTraffic="false"` whenever `SF_ALLOW_CLEARTEXT` is unset, so staging manifests forbid cleartext. The JS side (`src/config.ts`) also refuses `http:` outside `__DEV__` unless the dev flags are present. Tests: `src/dev/app-variant.test.ts`.
 
-The `staging` profile in `eas.json` sets `APP_VARIANT`, `SF_BUILD_PROFILE=staging`, `EXPO_PUBLIC_BUILD_PROFILE=staging` and `EXPO_PUBLIC_API_URL` (the project's real mechanism: `EXPO_PUBLIC_*` is inlined at bundle time). `distribution: internal`, `buildType: apk` (an APK installs directly from the EAS internal link/QR; an AAB cannot be sideloaded and is only needed for Play, a later decision), `autoIncrement: true` with `appVersionSource: remote` (EAS owns `versionCode`).
+The `staging` profile in `eas.json` sets `APP_VARIANT`, `SF_BUILD_PROFILE=staging`, `EXPO_PUBLIC_BUILD_PROFILE=staging` and `EXPO_PUBLIC_API_URL` (the project's real mechanism: `EXPO_PUBLIC_*` is inlined at bundle time). `distribution: internal`, `buildType: apk` (an APK installs directly from the EAS internal link/QR; an AAB cannot be sideloaded and is only needed for Play, a later decision), `appVersionSource: local` (no autoIncrement): `version` and `android.versionCode` live only in `app.json`, bumped by hand before each build and read by `scripts/publish-android.mjs` flags.
 
 ## Signing strategy
 
@@ -45,7 +45,7 @@ The `staging` profile in `eas.json` sets `APP_VARIANT`, `SF_BUILD_PROFILE=stagin
 
 ## Blocker for the final artifact (needs external EAS configuration that does not exist yet)
 
-`eas login` (company Expo account), `eas init` (project id/owner in config), the managed Android keystore (`eas credentials`), and the remote `versionCode` (`appVersionSource: remote`, initialised on first build). Until then no signed staging APK can be produced.
+`eas login` (company Expo account), `eas init` (project id/owner in config), the managed Android keystore (`eas credentials`), and the project id. Until then no signed staging APK can be produced.
 
 ## Steps the owner must do (not executed by the agent)
 
@@ -54,11 +54,15 @@ The `staging` profile in `eas.json` sets `APP_VARIANT`, `SF_BUILD_PROFILE=stagin
 3. From `apps/mobile`: `eas init` (links the project; this writes `extra.eas.projectId`/`owner` into the config, review and commit that diff deliberately).
 4. `eas credentials --platform android` and select the `staging` profile: let EAS generate the managed keystore.
 5. Back up the credentials immediately: in the same menu download the keystore, store it with its alias/passwords in the company password manager/secure vault (outside the repo); record the SHA-1/SHA-256 fingerprints. Losing the key means users must reinstall under a new key.
-6. Confirm the API is live at `https://force-staging.sistemasplac.com.br` with a valid certificate (the guard checks the URL shape, not reachability).
+6. Confirm the API is live at `https://force.sistemasplac.com.br` with a valid certificate (the guard checks the URL shape, not reachability).
 7. Build: `eas build --platform android --profile staging`. Install via the internal distribution link; verify the app shows "Sales Force STG", logs in against staging, and that a `http://` URL is refused.
 8. Staging sends nothing to production Sankhya; do not put secrets in `eas.json` env (all values there are public and inlined into the bundle). Secrets, if ever needed, use EAS secrets and never `EXPO_PUBLIC_*`.
 
-Validate locally without Expo servers: `APP_VARIANT=staging EXPO_PUBLIC_API_URL=https://force-staging.sistemasplac.com.br EXPO_OFFLINE=1 npx expo config --type public`.
+Validate locally without Expo servers: `APP_VARIANT=staging EXPO_PUBLIC_API_URL=https://force.sistemasplac.com.br EXPO_OFFLINE=1 npx expo config --type public`.
+
+## Updates URL (EXPO_UPDATES_URL) - where the project id goes
+
+Add one line to `build.staging.env` in `eas.json`, after `EXPO_PUBLIC_API_URL`: `"EXPO_UPDATES_URL": "https://u.expo.dev/<PROJECT_ID>"` (project id from `eas init`). Until then `updatesConfig` keeps expo-updates disabled (fail-closed). Not added yet to avoid a fake id.
 
 ## Not covered
 
