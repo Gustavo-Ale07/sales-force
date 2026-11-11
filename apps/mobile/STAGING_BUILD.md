@@ -40,7 +40,7 @@ The `staging` profile in `eas.json` sets `APP_VARIANT`, `SF_BUILD_PROFILE=stagin
 ## Offline verification (2026-10-02, throwaway copy, repo untouched)
 
 - Prebuild manifest (staging): `usesCleartextTraffic="false"`, `allowBackup="false"`, no `debuggable`, label "Sales Force STG", scheme `salesforce-stg`, `applicationId`/`namespace` `br.com.plac.force.staging`.
-- `expo-dev-client`/`expo-dev-launcher`/`expo-dev-menu` are still autolinked (dependency of the app) but the launcher is compiled as the no-op `disableInRelease` variant in release (`expo.devlauncher.configureInRelease` is unset; never set it). The dev-client URL scheme `exp+plac-sales-force` remains in the manifest. Fully removing the module from staging would need a separate package/profile decision.
+- `expo-dev-client`/`expo-dev-launcher`/`expo-dev-menu` are still autolinked (dependency of the app) but the launcher is compiled as the no-op `disableInRelease` variant in release (`expo.devlauncher.configureInRelease` is unset; never set it). The dev-client URL scheme `exp+force` remains in the manifest. Fully removing the module from staging would need a separate package/profile decision.
 - `expo export --platform android` works offline. Bundle scan: no 127.0.0.1, 192.168., 10.0.2.2, demo domain or demo password. Only `http://localhost:8081` (React Native dev-server fallback, dead in release) and JSON-schema `http://json-schema.org` URLs appear. The whole `app.json` is embedded because `src/app-info.ts` imports it for the version, so the base (dev) package id and the provisional-id notice string ship in the bundle (cosmetic, no secret).
 
 ## Blocker for the final artifact (needs external EAS configuration that does not exist yet)
@@ -60,9 +60,9 @@ The `staging` profile in `eas.json` sets `APP_VARIANT`, `SF_BUILD_PROFILE=stagin
 
 Validate locally without Expo servers: `APP_VARIANT=staging EXPO_PUBLIC_API_URL=https://force.sistemasplac.com.br EXPO_OFFLINE=1 npx expo config --type public`.
 
-## Updates URL (EXPO_UPDATES_URL) - where the project id goes
+## Updates URL (EXPO_UPDATES_URL)
 
-Add one line to `build.staging.env` in `eas.json`, after `EXPO_PUBLIC_API_URL`: `"EXPO_UPDATES_URL": "https://u.expo.dev/<PROJECT_ID>"` (project id from `eas init`). Until then `updatesConfig` keeps expo-updates disabled (fail-closed). Not added yet to avoid a fake id.
+`build.staging.env` in `eas.json` carries `EXPO_UPDATES_URL` (`https://u.expo.dev/<project id>`), right after `EXPO_PUBLIC_API_URL`. The project id (a public identifier, not a secret) comes from `eas init` and is also in `app.json` (`extra.eas.projectId`, plus `owner` and `slug` `force`). If the variable is removed or not https, `updatesConfig` keeps expo-updates disabled (fail-closed).
 
 ## Not covered
 

@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Force",
-    "slug": "plac-sales-force",
+    "slug": "force",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/brand/icon-p.png",
@@ -17,7 +17,10 @@
       "versionCode": 1
     },
     "extra": {
-      "notice": "Identificadores de pacote provisorios de desenvolvimento; o identificador definitivo depende da conta de loja (MOB-3) e nao foi decidido."
+      "notice": "Identificadores de pacote provisorios de desenvolvimento; o identificador definitivo depende da conta de loja (MOB-3) e nao foi decidido.",
+      "eas": {
+        "projectId": "1c87d85a-9a13-4e9a-8b95-43dda00748c5"
+      }
     },
     "plugins": [
       [
@@ -38,6 +41,7 @@
       ],
       "./plugins/with-dev-cleartext.js",
       "./plugins/with-staging-signing-guard.js"
-    ]
+    ],
+    "owner": "plac-industria-e-comercio-de-artigos-para-festas-ltda"
   }
 }

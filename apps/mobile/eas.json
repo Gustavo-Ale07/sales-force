@@ -25,7 +25,8 @@
         "APP_VARIANT": "staging",
         "SF_BUILD_PROFILE": "staging",
         "EXPO_PUBLIC_BUILD_PROFILE": "staging",
-        "EXPO_PUBLIC_API_URL": "https://force.sistemasplac.com.br"
+        "EXPO_PUBLIC_API_URL": "https://force.sistemasplac.com.br",
+        "EXPO_UPDATES_URL": "https://u.expo.dev/1c87d85a-9a13-4e9a-8b95-43dda00748c5"
       },
       "channel": "staging"
     }

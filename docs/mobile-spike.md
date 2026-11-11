@@ -188,7 +188,7 @@ No cost/margin exposure found in the code path. MEDIUM: no server integration te
 
 ### 8.7 Running the app on a phone (LAN dev only)
 
-From `apps/mobile`: `EXPO_PUBLIC_API_URL=http://<PC LAN IPv4>:3000 npx expo start --dev-client --port 8081 --lan`; install with `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`; open the app, or `adb reverse tcp:8081 tcp:8081` and `am start -a android.intent.action.VIEW -d "exp+plac-sales-force://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081"`. The API must listen on the LAN interface with a Windows Firewall rule for the private profile only; never localhost from the phone, never exposed to the internet. Cleartext HTTP to the LAN IP and cookie/CORS behavior on the dev build were NOT verified in this spike.
+From `apps/mobile`: `EXPO_PUBLIC_API_URL=http://<PC LAN IPv4>:3000 npx expo start --dev-client --port 8081 --lan`; install with `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`; open the app, or `adb reverse tcp:8081 tcp:8081` and `am start -a android.intent.action.VIEW -d "exp+force://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081"`. The API must listen on the LAN interface with a Windows Firewall rule for the private profile only; never localhost from the phone, never exposed to the internet. Cleartext HTTP to the LAN IP and cookie/CORS behavior on the dev build were NOT verified in this spike.
 
 ### 8.8 Offline slice on the real device — result (2026-09-30, SM-M556B, LAN dev API)
 
