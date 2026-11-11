@@ -244,7 +244,7 @@ export function LoginPage() {
 
           <p className="mt-4 text-center text-sm">
             <a href="/downloads" className="text-cta-text underline">
-              Baixar o aplicativo Android
+              Baixe o aplicativo
             </a>
           </p>
 

@@ -12,6 +12,14 @@ describe("navItemsFor", () => {
     expect(new Set(items.map((item) => item.icon)).size).toBe(items.length);
   });
 
+  it("has no Aplicativo item and no route to /downloads for any role", () => {
+    for (const role of [undefined, "seller", "manager", "admin"]) {
+      const items = navItemsFor(role, true);
+      expect(items.map((item) => item.label)).not.toContain("Aplicativo");
+      expect(items.map((item) => item.to as string)).not.toContain("/downloads");
+    }
+  });
+
   it("keeps the Vidya order Início, Catálogo, Clientes, Vendas", () => {
     expect(navItemsFor(undefined).map((item) => item.label).slice(0, 4)).toEqual(["Início", "Catálogo", "Clientes", "Vendas"]);
   });

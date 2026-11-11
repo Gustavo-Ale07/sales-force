@@ -114,4 +114,19 @@ describe("login screen", () => {
     expect(screen.queryByText(/^Sales Force$/i)).not.toBeInTheDocument();
     await waitFor(() => expect(document.title).toBe("Instalação Teste"));
   });
+
+  it("offers a discreet text link to the public downloads page", async () => {
+    renderApp("/login", { signedIn: false });
+    const link = await screen.findByRole("link", { name: "Baixe o aplicativo" });
+    expect(link).toHaveAttribute("href", "/downloads");
+  });
+});
+
+describe("authenticated screens", () => {
+  it("do not link to /downloads (the menu has no Aplicativo item)", async () => {
+    renderApp("/", { handlers: shellData });
+    await screen.findByRole("button", { name: /Menu do usuário/ });
+    expect(screen.queryByRole("link", { name: /Aplicativo/ })).not.toBeInTheDocument();
+    expect(document.querySelector('a[href="/downloads"]')).toBeNull();
+  });
 });
