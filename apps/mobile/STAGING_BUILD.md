@@ -64,6 +64,10 @@ Validate locally without Expo servers: `APP_VARIANT=staging EXPO_PUBLIC_API_URL=
 
 `build.staging.env` in `eas.json` carries `EXPO_UPDATES_URL` (`https://u.expo.dev/<project id>`), right after `EXPO_PUBLIC_API_URL`. The project id (a public identifier, not a secret) comes from `eas init` and is also in `app.json` (`extra.eas.projectId`, plus `owner` and `slug` `force`). If the variable is removed or not https, `updatesConfig` keeps expo-updates disabled (fail-closed).
 
+## Runtime version (expo-updates)
+
+`runtimeVersion` is `{ policy: "appVersion" }`, i.e. the app `version` in `app.json`. The `fingerprint` policy was dropped (2026-11-11): the EAS build failed with "Runtime version calculated on local machine not equal to runtime version calculated during build" because the fingerprint computed on Windows differs from the one computed on EAS (Linux) over the pnpm `node_modules`. Rule: whenever a native dependency changes (a new or upgraded package with native code, a config plugin, SDK upgrade), raise `version` in `app.json` (and `android.versionCode`). An OTA update is only delivered to builds with the same `version`; JS-only changes can ship as an update without a bump. `newArchEnabled` was removed from `app.json` (not accepted by the SDK 57 schema; the New Architecture is the only one in React Native 0.86, so behavior is unchanged).
+
 ## Not covered
 
 iOS (needs Apple account/EAS credentials; the bundle id is set, nothing else), Play Store, production profile, OTA updates channel, Sentry. No APK was built and signed: the final manifest and signature are unverified until the EAS build exists (check the signer fingerprint with `apksigner verify --print-certs` against the recorded keystore).

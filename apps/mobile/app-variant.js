@@ -85,7 +85,7 @@ function applyVariant(config, env = process.env) {
     scheme: STAGING.scheme,
     ios: { ...config.ios, bundleIdentifier: STAGING.applicationId },
     android: { ...config.android, package: STAGING.applicationId, allowBackup: false, permissions: [...new Set([...(config.android?.permissions ?? []), INSTALL_PERMISSION])], blockedPermissions: [...new Set([...(config.android?.blockedPermissions ?? []), "android.permission.SYSTEM_ALERT_WINDOW"])] },
-    runtimeVersion: { policy: "fingerprint" },
+    runtimeVersion: { policy: "appVersion" },
     updates: updatesConfig(env, "staging"),
     plugins: [...new Set([...(config.plugins ?? []), "expo-updates"])],
     extra: { ...extra, appVariant: "staging" },

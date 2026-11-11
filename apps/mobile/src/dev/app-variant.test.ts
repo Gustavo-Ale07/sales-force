@@ -40,10 +40,10 @@ describe("app variant", () => {
     expect(base.android.package).toBe("br.com.plac.salesforce.dev");
   });
 
-  it("declares the install permission and fingerprint runtime only for staging", () => {
+  it("declares the install permission and appVersion runtime only for staging", () => {
     const out = variant.applyVariant(base, STG);
     expect(out.android.permissions).toEqual(["android.permission.REQUEST_INSTALL_PACKAGES"]);
-    expect(out.runtimeVersion).toEqual({ policy: "fingerprint" });
+    expect(out.runtimeVersion).toEqual({ policy: "appVersion" });
     expect(out.plugins).toContain("expo-updates");
     const dev = variant.applyVariant(base, {});
     expect(dev.android.permissions).toBeUndefined();
