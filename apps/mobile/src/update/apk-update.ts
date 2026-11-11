@@ -92,7 +92,13 @@ export interface UpdateDeps {
 
 const CHUNK = 256 * 1024;
 
-export async function checkAndUpdate(deps: UpdateDeps): Promise<UpdateResult> {
+export type UpdateNeed =
+  | { readonly kind: "none" }
+  | { readonly kind: "available" | "required"; readonly release: LatestRelease }
+  | { readonly kind: "unavailable"; readonly reason: "no-channel" | "insecure-origin" | "network" | "invalid-manifest" };
+
+/** Reads the manifest and decides; downloads nothing. Never throws: any failure is `unavailable`. */
+export async function checkUpdateNeed(deps: Pick<UpdateDeps, "io" | "apiOrigin" | "channel" | "installedVersionCode" | "onStep">): Promise<UpdateNeed> {
   if (!deps.channel) return { kind: "unavailable", reason: "no-channel" };
   if (!deps.apiOrigin.startsWith("https://")) return { kind: "unavailable", reason: "insecure-origin" };
   const url = manifestUrl(deps.apiOrigin, deps.channel);
@@ -107,7 +113,14 @@ export async function checkAndUpdate(deps: UpdateDeps): Promise<UpdateResult> {
   const release = parseLatest(manifest, deps.channel);
   if (!release) return { kind: "unavailable", reason: "invalid-manifest" };
   const decision = decideUpdate(deps.installedVersionCode, release);
-  if (decision === "none") return { kind: "up-to-date" };
+  return decision === "none" ? { kind: "none" } : { kind: decision, release };
+}
+
+export async function checkAndUpdate(deps: UpdateDeps): Promise<UpdateResult> {
+  const need = await checkUpdateNeed(deps);
+  if (need.kind === "unavailable") return need;
+  if (need.kind === "none") return { kind: "up-to-date" };
+  const { release, kind: decision } = need;
   if (decision === "available" && deps.confirm && !(await deps.confirm(decision, release))) return { kind: "skipped", release };
 
   deps.onStep?.("downloading");

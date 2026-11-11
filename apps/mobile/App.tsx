@@ -9,6 +9,8 @@ import { S7DiagnosticsScreen } from "./src/dev/s7-diagnostics-screen";
 import { colors, spacing } from "./src/theme";
 import { SplashView } from "./src/ui/brand";
 import { Shell } from "./src/ui/shell";
+import { UpdateGate } from "./src/ui/update-gate";
+import { installUpdate, startupUpdateCheck } from "./src/update/device-update";
 
 function ConfigError({ reason }: { reason: "missing" | "invalid" | "insecure" }) {
   return (
@@ -82,7 +84,9 @@ export default function App() {
         ) : !apiConfig.ok ? (
           safe(<ConfigError reason={apiConfig.reason} />)
         ) : boot.phase === "ready" ? (
-          <Shell dependencies={boot.dependencies} />
+          <UpdateGate {...(startupUpdateCheck ? { check: startupUpdateCheck } : {})} install={installUpdate}>
+            <Shell dependencies={boot.dependencies} />
+          </UpdateGate>
         ) : boot.phase === "failed" ? (
           safe(<DatabaseError />)
         ) : (

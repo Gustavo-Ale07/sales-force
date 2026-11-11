@@ -18,14 +18,8 @@ import { HomeScreen } from "./home-screen";
 import { LoginScreen } from "./login-screen";
 import { NewOrderScreen } from "./new-order-screen";
 import { ProductsScreen } from "./products-screen";
-import { apiConfig } from "../config";
-import { installedVersionCode, runApkUpdate } from "../update/apk-update-io";
-import { updateResultMessage, updateStepMessage } from "../update/update-messages";
+import { installUpdate, updateAvailable } from "../update/device-update";
 import { ProfileScreen } from "./profile-screen";
-
-// Update channel = build profile; only distributable builds (staging) have one. Inlined by Expo at bundle time.
-const updateChannel: string | undefined = process.env.EXPO_PUBLIC_BUILD_PROFILE === "staging" ? "staging" : undefined;
-const updateOrigin: string | undefined = apiConfig.ok ? new URL(apiConfig.baseUrl).origin : undefined;
 import { QuarantineScreen } from "./quarantine-screen";
 import { HeaderSyncStatus } from "./sync-status";
 import { useInsets } from "./use-insets";
@@ -359,14 +353,7 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
                       selectTab("sales");
                     },
                   })}
-              {...(updateChannel !== undefined && updateOrigin !== undefined && installedVersionCode() !== null
-                ? {
-                    onCheckUpdate: async (onStatus: (text: string) => void) =>
-                      updateResultMessage(
-                        await runApkUpdate({ apiOrigin: updateOrigin, channel: updateChannel, onStep: (step, progress) => onStatus(updateStepMessage(step, progress)) }),
-                      ),
-                  }
-                : {})}
+              {...(updateAvailable ? { onCheckUpdate: installUpdate } : {})}
               onSignOut={() => void signOut()}
             />
           </Pane>
