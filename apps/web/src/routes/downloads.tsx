@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { PublishedState } from "../components/downloads/cta";
-import { Benefits, Experimental, Hero, HowTo, PhoneSection, SiteFooter, TopBar, WebSection } from "../components/downloads/sections";
+import { Benefits, FinalCall, Help, Hero, HowTo, Platforms, SiteFooter } from "../components/downloads/sections";
 import { loadDownloads } from "../lib/downloads";
 
 /**
@@ -12,8 +12,8 @@ const TEST_CHANNELS: ReadonlySet<string> = new Set(["staging", "sandbox"]);
 /**
  * "Aplicativo": the download centre (public on purpose, so a phone can open it without signing in). The list comes
  * from `downloads.json` (configuration published with the files); nothing here is a literal. No published build
- * (still loading, 404, empty list) renders the same page with the Android action disabled; only a real failure to
- * read the index shows a discreet notice with "Tentar de novo".
+ * (still loading, 404, empty list) renders the same page without the Android download; only a real failure to
+ * read the index shows a notice with "Tentar de novo".
  */
 export function DownloadsPage() {
   const query = useQuery({ queryKey: ["downloads-index"], queryFn: () => loadDownloads(), retry: false });
@@ -27,17 +27,16 @@ export function DownloadsPage() {
         : { kind: "none" };
 
   return (
-    <div className="dl-root min-h-screen bg-[var(--dl-ink)] text-white">
-      <TopBar />
+    <div className="dl-root min-h-screen bg-[var(--sf-bg)] text-[var(--sf-fg)]">
       <main id="conteudo" aria-busy={query.isPending}>
         <Hero state={state} onRetry={() => void query.refetch()} retrying={query.isRefetching} />
-        <PhoneSection state={state} />
-        <WebSection />
+        <Platforms state={state} />
         <Benefits />
-        {newest && TEST_CHANNELS.has(newest.channel) ? <Experimental /> : null}
-        <HowTo item={newest} />
+        <HowTo />
+        <Help state={state} test={newest ? TEST_CHANNELS.has(newest.channel) : false} />
+        <FinalCall state={state} />
       </main>
-      <SiteFooter item={newest} />
+      <SiteFooter />
     </div>
   );
 }

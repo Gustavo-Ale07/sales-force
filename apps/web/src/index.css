@@ -67,12 +67,31 @@ html:has(body[data-scroll-locked]) {
 /* Downloads centre (/downloads): public marketing-style page. System fonts, slow float and scroll reveal;
    all motion is off under prefers-reduced-motion. */
 .dl-root {
-  /* Palette derived only from the Force tokens (--sf-*): CTA red toward the warm dark ink. */
-  --dl-ink: var(--sf-fg);
-  --dl-ink-2: color-mix(in srgb, var(--sf-fg) 94%, var(--sf-red-strong));
-  --dl-wine: color-mix(in srgb, var(--sf-red-strong) 52%, var(--sf-fg));
-  font-family: system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  /* Extra tones the Force palette lacks are tokens here (never loose values); the rest is --sf-*. */
+  --dl-night: #050c3a;
+  --dl-blue: #0a1f86;
+  --dl-red-bright: #e3202b;
+  --dl-red-soft: #ff4d57;
+  --dl-red-soft-2: #ff6b73;
+  --dl-red-deep: #a60f18;
+  --dl-red-dark: #b5121c;
+  --dl-red-darkest: #8f0d16;
+  --dl-glow-red: rgb(217 26 36 / 0.3);
+  --dl-glow-blue: rgb(60 90 255 / 0.28);
+  --dl-ok-bg: #e6f4ea;
+  --dl-ok-fg: #1e6b3a;
+  --dl-soon-bg: #fdf0d8;
+  --dl-soon-fg: #8a5a00;
+  --dl-card-shadow: 0 18px 50px rgb(1 19 106 / 0.07);
+  --dl-hero-bg:
+    radial-gradient(circle at 0% 100%, var(--dl-glow-red), transparent 45%),
+    radial-gradient(circle at 100% 0%, var(--dl-glow-blue), transparent 45%),
+    linear-gradient(135deg, var(--dl-night) 0%, var(--sf-navy) 58%, var(--dl-blue) 100%);
+  font-family: var(--font-sans);
   overflow-x: clip;
+}
+.dl-hero-bg {
+  background: var(--dl-hero-bg);
 }
 .dl-reveal {
   opacity: 0;
