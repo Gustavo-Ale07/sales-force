@@ -18,6 +18,12 @@ import { SankhyaGatewayError } from '../errors.js';
 import type { ReadEntity } from '../gateway.js';
 import { MEDIA_SAMPLE_BYTES, MEDIA_SAMPLE_PERCENTS } from '../media.js';
 import { assertSafeScope, customerExclusion, type ReadScope } from '../read-scope.js';
+import {
+  monthKey,
+  type SalesHistoryCustomerProductRow,
+  type SalesHistoryMonthlyRow,
+  type ValidatedSalesHistoryConfig,
+} from '../sales-history.js';
 
 /**
  * ERP row -> Sales Force type mapping. This is the ONLY place in the repository that names ERP tables
@@ -40,6 +46,8 @@ export interface EntitySpec<T> {
   readonly select: readonly string[];
   readonly columns: readonly string[];
   readonly where?: string;
+  /** Aggregating reads only: the GROUP BY list; the row count then counts groups. */
+  readonly groupBy?: string;
   /** Full primary key, so paging is deterministic (F-23, F-30). */
   readonly orderBy: string;
   /**
@@ -387,6 +395,86 @@ export const OPEN_TITLE_SPEC: EntitySpec<OpenTitle> = {
   },
   keyOf: (title) => [title.nufin],
 };
+
+/**
+ * Sales-history aggregates over TGFCAB / TGFITE (read-only, stage D). The aggregation runs in the ERP (GROUP BY). Every
+ * interpolated value comes from `validateSalesHistoryConfig` (integers, one-letter statuses, a two-value column enum, a
+ * calendar date), never from raw input. NEEDS VALIDATION in the Sandbox: the query shapes, `TGFCAB.CODTIPOPER` as a SQL
+ * column of the note header, and which date field / status set the business uses (spike, sales history entry).
+ * No cost, margin, commission, name or tax id is selected.
+ */
+function salesHistoryWhere(config: ValidatedSalesHistoryConfig, prefix: string): string {
+  const p = prefix;
+  return [
+    `${p}CODPARC > 0`,
+    `${p}STATUSNOTA IN (${config.statusCodes.map((s) => `'${s}'`).join(', ')})`,
+    `${p}CODTIPOPER IN (${config.topCodes.join(', ')})`,
+    `${p}${config.dateField} >= TO_DATE('${config.since}', 'YYYY-MM-DD')`,
+  ].join(' AND ');
+}
+
+export function salesHistoryMonthlySpec(config: ValidatedSalesHistoryConfig): EntitySpec<SalesHistoryMonthlyRow> {
+  const month = `TO_CHAR(${config.dateField}, 'YYYY-MM')`;
+  return {
+    entity: 'salesHistoryMonthly',
+    table: 'TGFCAB',
+    select: [
+      'CODPARC',
+      'NVL(CODVEND, 0) AS CODVEND',
+      `${month} AS MES`,
+      'CODTIPOPER',
+      'COUNT(*) AS QTDNOTAS',
+      'SUM(VLRNOTA) AS VLRTOTAL',
+    ],
+    columns: ['CODPARC', 'CODVEND', 'MES', 'CODTIPOPER', 'QTDNOTAS', 'VLRTOTAL'],
+    where: salesHistoryWhere(config, ''),
+    groupBy: `CODPARC, NVL(CODVEND, 0), ${month}, CODTIPOPER`,
+    orderBy: 'CODPARC, CODVEND, MES, CODTIPOPER',
+    map: (row) => {
+      const mes = row.text('MES');
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes)) return row.reject('MES', 'is not a YYYY-MM month');
+      return {
+        customerCode: row.int('CODPARC'),
+        sellerCode: row.int('CODVEND'),
+        month: mes,
+        topCode: row.int('CODTIPOPER'),
+        noteCount: row.int('QTDNOTAS'),
+        totalAmount: row.nullableDecimal('VLRTOTAL') ?? '0',
+      };
+    },
+    keyOf: (r) => [r.customerCode, r.sellerCode, monthKey(r.month), r.topCode],
+  };
+}
+
+export function salesHistoryCustomerProductSpec(config: ValidatedSalesHistoryConfig): EntitySpec<SalesHistoryCustomerProductRow> {
+  return {
+    entity: 'salesHistoryCustomerProduct',
+    table: 'TGFITE I INNER JOIN TGFCAB C ON C.NUNOTA = I.NUNOTA',
+    select: [
+      'C.CODPARC AS CODPARC',
+      'I.CODPROD AS CODPROD',
+      'C.CODTIPOPER AS CODTIPOPER',
+      'COUNT(DISTINCT C.NUNOTA) AS QTDNOTAS',
+      'SUM(I.QTDNEG) AS QTD',
+      'SUM(NVL(I.VLRTOT, 0) - NVL(I.VLRDESC, 0)) AS VLRLIQ',
+      `TO_CHAR(MAX(C.${config.dateField}), 'YYYY-MM-DD') AS ULTVENDA`,
+    ],
+    columns: ['CODPARC', 'CODPROD', 'CODTIPOPER', 'QTDNOTAS', 'QTD', 'VLRLIQ', 'ULTVENDA'],
+    where: salesHistoryWhere(config, 'C.'),
+    groupBy: 'C.CODPARC, I.CODPROD, C.CODTIPOPER',
+    orderBy: 'CODPARC, CODPROD, CODTIPOPER',
+    map: (row) => ({
+      customerCode: row.int('CODPARC'),
+      productCode: row.int('CODPROD'),
+      topCode: row.int('CODTIPOPER'),
+      noteCount: row.int('QTDNOTAS'),
+      quantity: row.nullableDecimal('QTD') ?? '0',
+      netAmount: row.nullableDecimal('VLRLIQ') ?? '0',
+      lastSaleDate: row.businessDate('ULTVENDA'),
+    }),
+    keyOf: (r) => [r.customerCode, r.productCode, r.topCode],
+  };
+}
 
 /** A selling step is meaningful only when positive; null/0 means "no rule". */
 /** Only a real step is carried; no rule leaves the field out (the same shape as the fake gateway). */

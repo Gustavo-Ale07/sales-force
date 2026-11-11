@@ -17,6 +17,7 @@ import type {
 import type { SankhyaProductMediaPort } from './media.js';
 import type { ReadScope } from './read-scope.js';
 import type { ConfigurationFacts } from './configuration-facts.js';
+import type { SalesHistoryCustomerProductRow, SalesHistoryMonthlyRow, SalesHistoryReadOptions } from './sales-history.js';
 
 /**
  * `SankhyaGateway`: the ERP boundary (P-02, P-03, STACK-2). Inputs and outputs are Sales Force-shaped
@@ -34,6 +35,8 @@ export type ReadEntity =
   | 'carriers'
   | 'ipiRates'
   | 'openTitles'
+  | 'salesHistoryMonthly'
+  | 'salesHistoryCustomerProduct'
   | 'customers'
   | 'products'
   | 'productGroups'
@@ -48,6 +51,8 @@ export const READ_ENTITIES: readonly ReadEntity[] = [
   'carriers',
   'ipiRates',
   'openTitles',
+  'salesHistoryMonthly',
+  'salesHistoryCustomerProduct',
   'customers',
   'products',
   'productGroups',
@@ -123,6 +128,14 @@ export interface SankhyaReadPort {
   readIpiRates(options?: ReadOptions): Snapshot<IpiRate>;
   /** Ordered by `OpenTitle.nufin`. Open receivable titles (read-only financial information, D-I); a complete snapshot every run. */
   readOpenTitles(options?: ReadOptions): Snapshot<OpenTitle>;
+  /**
+   * Ordered by `(customerCode, sellerCode, month, topCode)`. Sales-history aggregate per customer x seller x month x TOP
+   * (SUM of the note value, aggregated by the ERP query). TOPs, statuses, date field and window come from `options.config`
+   * (installation configuration, never literals). A complete snapshot every run; read-only.
+   */
+  readSalesHistoryMonthly(options: SalesHistoryReadOptions): Snapshot<SalesHistoryMonthlyRow>;
+  /** Ordered by `(customerCode, productCode, topCode)`. Sales-history aggregate per customer x product x TOP; same configuration as above. */
+  readSalesHistoryCustomerProduct(options: SalesHistoryReadOptions): Snapshot<SalesHistoryCustomerProductRow>;
   /** Ordered by `Customer.code`. */
   readCustomers(options?: ReadOptions): Snapshot<Customer>;
   /** Ordered by `Product.code`. */

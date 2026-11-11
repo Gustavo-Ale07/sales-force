@@ -2,6 +2,18 @@ export * from './errors.js';
 export { Secret } from './secret.js';
 export * from './gateway.js';
 export {
+  DEFAULT_SALES_HISTORY_WINDOW_MONTHS,
+  SALES_HISTORY_DATE_FIELDS,
+  monthKey,
+  validateSalesHistoryConfig,
+  type SalesHistoryCustomerProductRow,
+  type SalesHistoryDateField,
+  type SalesHistoryMonthlyRow,
+  type SalesHistoryReadConfig,
+  type SalesHistoryReadOptions,
+  type ValidatedSalesHistoryConfig,
+} from './sales-history.js';
+export {
   MAX_MEDIA_SIGNATURE_PAGE,
   MEDIA_CHUNK_BYTES,
   MEDIA_SAMPLE_BYTES,
@@ -42,6 +54,15 @@ export { CONFIG_QUERY_TEXTS, Q1_COLUMN_DISCOVERY_SQL, Q1_DESIRED_COLUMNS, Q1_REQ
 export { createGateway, type CreateGatewayDependencies, type GatewayEnvironment } from './factory.js';
 
 export { FakeGateway, type FakeGatewayFault, type FakeGatewayMediaOptions, type FakeGatewayOptions } from './fake/fake-gateway.js';
+export {
+  DEMO_ORDER_TOP,
+  DEMO_RETURN_TOP,
+  DEMO_SALE_TOP,
+  DEMO_SALES_HISTORY_AS_OF,
+  buildDemoSalesNotes,
+  type DemoSalesNote,
+  type DemoSalesNoteItem,
+} from './fake/demo-sales-history.js';
 export { syntheticProductImage, type SyntheticImageKind } from './fake/media-fixtures.js';
 export { DEMO_ACCOUNTS, DEMO_ACCOUNT_EMAILS, type DemoAccount } from './fake/accounts.js';
 export {

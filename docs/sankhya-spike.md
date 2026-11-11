@@ -1074,3 +1074,18 @@ Source for the Home ranking/performance goal (read-only; Sankhya is the single s
 - **TOP mapping (`AD_TVDYPFMTOP`):** Sep/Oct configs have no row; only Jun–Aug have (1101 V + 1201 D in Jun/Jul; 1001 V in Jul/Aug). The default for a config without rows (1101 V minus 1201 D) is a HYPOTHESIS to validate with the Vidya: it must be **configurable**, not hardcoded.
 - **More than one config per seller:** CODVEN 67 has 2 configs in 10/2026. When a seller has more than one config in the period, show both, never sum and never pick one.
 - **Realized value is NOT defined yet:** the amount column (`VLRNOTA` or other), the status filter and the date column (`DTNEG` x `DTFATUR`) are pending the owner's confirmation. Do not fix them in code until confirmed (open item).
+
+### 9.58 Sales-history mirror reads (stage D, 2026-11-11) — NEEDS VALIDATION in the Sandbox after deploy
+
+Two new READ-ONLY query shapes in `packages/sankhya` (same `DbExplorerSP.executeQuery` path, ordered paging, no new service, no new table beyond `TGFCAB` / `TGFITE`); implemented against the fake and a mocked HTTP layer only, **never executed against Sankhya**:
+
+- **Monthly:** `TGFCAB` grouped by `CODPARC`, `NVL(CODVEND, 0)`, `TO_CHAR(<date>, 'YYYY-MM')`, `CODTIPOPER` with `COUNT(*)` and `SUM(VLRNOTA)`.
+- **Customer x product:** `TGFITE I INNER JOIN TGFCAB C ON C.NUNOTA = I.NUNOTA` grouped by `CODPARC`, `CODPROD`, `CODTIPOPER` with `COUNT(DISTINCT NUNOTA)`, `SUM(QTDNEG)`, `SUM(NVL(VLRTOT,0) - NVL(VLRDESC,0))`, `MAX(<date>)`.
+- Filters (all configuration, validated before reaching SQL): `STATUSNOTA IN (...)`, `CODTIPOPER IN (...)`, `<date> >= TO_DATE('<since>', 'YYYY-MM-DD')`, `CODPARC > 0`. No cost, margin, commission, name or tax-id column is selected.
+
+To validate (do not treat any of this as fact until then):
+
+1. The two aggregate statements run for the integration user (read access to `TGFCAB` and `TGFITE`; `CODTIPOPER`, `DTNEG`, `DTFATUR`, `VLRNOTA`, `VLRTOT`, `VLRDESC`, `QTDNEG` as SQL columns), with `GROUP BY` plus `OFFSET ... FETCH` ordering by the select aliases, and the `COUNT(*)` over a grouped sub-select, in the Oracle dialect (F-19). Observe volume and duration per window (12 months) before any production use.
+2. **Which date field the Vidya uses** (`DTNEG` x `DTFATUR`) and **which status set** counts as a valid sale (`STATUSNOTA = 'L'` is the working default, owner to confirm); which TOPs are sales and which are returns (1101 / 1201 are the hypothesis of 9.57, configurable).
+3. Whether `VLRNOTA` (includes IPI, F-13) or the item-net value is the amount the business means by "sold"; the mirror carries both shapes and does not decide.
+4. Whether notes of other `TIPMOV` / cancelled notes can appear under the chosen TOPs and statuses (cancelled notes are absent from `TGFCAB`, 9.55).

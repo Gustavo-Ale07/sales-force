@@ -15,10 +15,16 @@ import { collect, runGatewayContract } from './support/gateway-contract.js';
 
 runGatewayContract('FakeGateway', {
   create: () => new FakeGateway({ batchSize: 37 }),
-  createFailing: (kind) =>
-    new FakeGateway({
-      faults: [{ entity: 'sellers', afterBatches: 0, error: new SankhyaGatewayError(kind, { code: `fake_${kind}`, message: `synthetic ${kind} failure` }) }],
-    }),
+  createFailing: (kind) => {
+    const error = new SankhyaGatewayError(kind, { code: `fake_${kind}`, message: `synthetic ${kind} failure` });
+    return new FakeGateway({
+      faults: [
+        { entity: 'sellers', afterBatches: 0, error },
+        { entity: 'salesHistoryMonthly', afterBatches: 0, error },
+        { entity: 'salesHistoryCustomerProduct', afterBatches: 0, error },
+      ],
+    });
+  },
 });
 
 const dataset = getDemoDataset();

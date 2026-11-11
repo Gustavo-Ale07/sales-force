@@ -1,5 +1,6 @@
 import { mediaSampleOffsets, mediaSampleWidth, toHex } from '../../src/media.js';
 import type { DemoDataset } from '../../src/fake/demo-data.js';
+import type { DemoSalesNote } from '../../src/fake/demo-sales-history.js';
 import type { HttpRequest, HttpResponse, HttpTransport } from '../../src/real/transport.js';
 
 /**
@@ -145,6 +146,106 @@ export function erpTablesFromDataset(dataset: DemoDataset, dbUtcOffsetMinutes = 
       VLRVENDA: Number(p.unitPrice),
     })),
   };
+}
+
+/** ERP-shaped TGFCAB / TGFITE rows of the synthetic sales notes (header value, dates and TOP; items with gross and discount). */
+export function erpSalesTables(notes: readonly DemoSalesNote[]): ErpTables {
+  return {
+    TGFCAB: notes.map((n) => ({
+      NUNOTA: n.noteId,
+      CODPARC: n.customerCode,
+      CODVEND: n.sellerCode,
+      CODTIPOPER: n.topCode,
+      STATUSNOTA: n.status,
+      DTNEG: n.negotiationDate,
+      DTFATUR: n.billingDate,
+      VLRNOTA: Number(n.amount),
+    })),
+    TGFITE: notes.flatMap((n) =>
+      n.items.map((i) => ({ NUNOTA: n.noteId, CODPROD: i.productCode, QTDNEG: Number(i.quantity), VLRTOT: Number(i.gross), VLRDESC: Number(i.discount) })),
+    ),
+  };
+}
+
+const MICRO = 1_000_000;
+const micro = (value: unknown): bigint => BigInt(Math.round(Number(value ?? 0) * MICRO));
+const fromMicro = (units: bigint): number => Number(units) / MICRO;
+
+/**
+ * Interprets ONLY the two sales-history aggregate shapes (GROUP BY) the adapter emits: it parses the filter out of the SQL text
+ * (status, TOP, date field, window start), aggregates the TGFCAB / TGFITE rows and pages the result.
+ */
+function answerSalesHistory(sql: string, tables: ErpTables): HttpResponse | null {
+  if (!sql.includes(' GROUP BY ')) return null;
+  const isCount = sql.startsWith('SELECT COUNT(*) AS TOTAL FROM (SELECT 1 AS X FROM ');
+  const where = /\bWHERE (.+?) GROUP BY /.exec(sql)?.[1];
+  if (where === undefined) throw new Error(`mock cannot interpret SQL: ${sql}`);
+  const list = (pattern: RegExp): string[] =>
+    ((pattern.exec(where)?.[1] ?? '').split(',').map((v) => v.trim().replace(/^'|'$/g, '')).filter((v) => v !== ''));
+  const statuses = list(/STATUSNOTA IN \(([^)]*)\)/);
+  const tops = list(/CODTIPOPER IN \(([^)]*)\)/).map(Number);
+  const field = /\b(DTNEG|DTFATUR) >= TO_DATE/.exec(where)?.[1] ?? 'DTNEG';
+  const since = /TO_DATE\('(\d{4}-\d{2}-\d{2})', 'YYYY-MM-DD'\)/.exec(where)?.[1] ?? '';
+  const notes = (tables['TGFCAB'] ?? []).filter(
+    (row) =>
+      Number(row['CODPARC']) > 0 &&
+      statuses.includes(String(row['STATUSNOTA'])) &&
+      tops.includes(Number(row['CODTIPOPER'])) &&
+      typeof row[field] === 'string' &&
+      (row[field] as string) >= since,
+  );
+  const join = sql.includes(' INNER JOIN ');
+  const groups = new Map<string, { key: number[]; notes: Set<unknown>; amount: bigint; quantity: bigint; last: string }>();
+  if (!join) {
+    for (const n of notes) {
+      const month = (n[field] as string).slice(0, 7);
+      const key = [Number(n['CODPARC']), Number(n['CODVEND'] ?? 0), Number(month.replace('-', '')), Number(n['CODTIPOPER'])];
+      const id = key.join('|');
+      const g = groups.get(id) ?? { key, notes: new Set(), amount: 0n, quantity: 0n, last: '' };
+      g.notes.add(n['NUNOTA']);
+      g.amount += micro(n['VLRNOTA']);
+      groups.set(id, g);
+    }
+  } else {
+    const byNote = new Map(notes.map((n) => [n['NUNOTA'], n]));
+    for (const i of tables['TGFITE'] ?? []) {
+      const n = byNote.get(i['NUNOTA']);
+      if (n === undefined) continue;
+      const key = [Number(n['CODPARC']), Number(i['CODPROD']), Number(n['CODTIPOPER'])];
+      const id = key.join('|');
+      const date = n[field] as string;
+      const g = groups.get(id) ?? { key, notes: new Set(), amount: 0n, quantity: 0n, last: date };
+      g.notes.add(n['NUNOTA']);
+      g.quantity += micro(i['QTDNEG']);
+      g.amount += micro(i['VLRTOT']) - micro(i['VLRDESC']);
+      if (date > g.last) g.last = date;
+      groups.set(id, g);
+    }
+  }
+  const ordered = [...groups.values()].sort((a, b) => {
+    for (let k = 0; k < a.key.length; k += 1) {
+      const d = (a.key[k] ?? 0) - (b.key[k] ?? 0);
+      if (d !== 0) return d;
+    }
+    return 0;
+  });
+  if (isCount) return ok(['TOTAL'], [[ordered.length]]);
+  const paging = /OFFSET (\d+) ROWS FETCH NEXT (\d+) ROWS ONLY$/.exec(sql);
+  if (paging === null) throw new Error(`mock cannot interpret SQL: ${sql}`);
+  const page = ordered.slice(Number(paging[1]), Number(paging[1]) + Number(paging[2]));
+  if (!join) {
+    return ok(
+      ['CODPARC', 'CODVEND', 'MES', 'CODTIPOPER', 'QTDNOTAS', 'VLRTOTAL'],
+      page.map((g) => {
+        const month = String(g.key[2]);
+        return [g.key[0], g.key[1], `${month.slice(0, 4)}-${month.slice(4)}`, g.key[3], g.notes.size, fromMicro(g.amount)];
+      }),
+    );
+  }
+  return ok(
+    ['CODPARC', 'CODPROD', 'CODTIPOPER', 'QTDNOTAS', 'QTD', 'VLRLIQ', 'ULTVENDA'],
+    page.map((g) => [g.key[0], g.key[1], g.key[2], g.notes.size, fromMicro(g.quantity), fromMicro(g.amount), g.last]),
+  );
 }
 
 const SELECT_RE =
@@ -315,6 +416,8 @@ export class MockSankhya {
   }
 
   #answer(sql: string): HttpResponse {
+    const aggregate = answerSalesHistory(sql, this.tables);
+    if (aggregate !== null) return aggregate;
     const signatures = MEDIA_SIGNATURES_RE.exec(sql);
     if (signatures) {
       const [, where, after, limit] = signatures as unknown as [string, string, string, string];

@@ -33,6 +33,13 @@ import { DEMO_CONFIGURATION } from './demo-configuration.js';
 import type { ConfigurationFacts } from '../configuration-facts.js';
 import { PLAC_CONFIGURATION_FACTS } from './configuration-facts-fixture.js';
 import { getDemoDataset, type DemoDataset } from './demo-data.js';
+import {
+  buildDemoSalesNotes,
+  demoSalesHistoryCustomerProduct,
+  demoSalesHistoryMonthly,
+  type DemoSalesNote,
+} from './demo-sales-history.js';
+import type { SalesHistoryReadOptions } from '../sales-history.js';
 
 export interface FakeGatewayFault {
   readonly entity: ReadEntity;
@@ -55,6 +62,8 @@ export interface FakeGatewayOptions {
   readonly media?: FakeGatewayMediaOptions;
   /** In-memory ERP order tables with scripted outcomes (SNK-7); a private empty book by default. */
   readonly orders?: FakeOrderBook;
+  /** Synthetic sales/return notes behind the sales-history reads; defaults to `buildDemoSalesNotes(dataset)`. */
+  readonly salesNotes?: readonly DemoSalesNote[];
 }
 
 const DEFAULT_BATCH_SIZE = 100;
@@ -84,6 +93,7 @@ export class FakeGateway implements SankhyaGateway {
   readonly #faults: readonly FakeGatewayFault[];
   readonly #media: FakeGatewayMediaOptions;
   readonly #orders: FakeOrderBook;
+  readonly #salesNotes: readonly DemoSalesNote[];
 
   constructor(options: FakeGatewayOptions = {}) {
     const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
@@ -97,6 +107,7 @@ export class FakeGateway implements SankhyaGateway {
     this.#faults = options.faults ?? [];
     this.#media = options.media ?? {};
     this.#orders = options.orders ?? new FakeOrderBook();
+    this.#salesNotes = options.salesNotes ?? buildDemoSalesNotes(this.#dataset);
   }
 
   describe(): GatewayDescription {
@@ -141,6 +152,15 @@ export class FakeGateway implements SankhyaGateway {
   }
   readOpenTitles(options?: ReadOptions) {
     return this.#snapshot('openTitles', this.#dataset.openTitles, options);
+  }
+  readSalesHistoryMonthly(options: SalesHistoryReadOptions) {
+    // Same synchronous validation as the real gateway; the rows are aggregated from synthetic notes with the same filters.
+    const rows = demoSalesHistoryMonthly(this.#salesNotes, options.config);
+    return this.#snapshot('salesHistoryMonthly', rows, options);
+  }
+  readSalesHistoryCustomerProduct(options: SalesHistoryReadOptions) {
+    const rows = demoSalesHistoryCustomerProduct(this.#salesNotes, options.config);
+    return this.#snapshot('salesHistoryCustomerProduct', rows, options);
   }
   readDirectoryUsers(options?: ReadOptions) {
     return this.#snapshot('directoryUsers', this.#dataset.directoryUsers, options);

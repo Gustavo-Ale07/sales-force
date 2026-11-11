@@ -6,6 +6,7 @@ import {
   RealSankhyaGateway,
   Secret,
   SankhyaGatewayError,
+  buildDemoSalesNotes,
   getDemoDataset,
   type HttpRequest,
   type SankhyaErrorKind,
@@ -17,6 +18,7 @@ import {
   TEST_BASE_URL,
   TEST_CREDENTIALS,
   TEST_HOST,
+  erpSalesTables,
   erpTablesFromDataset,
   httpStatus,
   ok,
@@ -38,7 +40,10 @@ function credentials(overrides: Partial<typeof TEST_CREDENTIALS> = {}) {
 
 function setup(options: { tables?: ErpTables; pageSize?: number; credentialOverrides?: Partial<typeof TEST_CREDENTIALS> } = {}) {
   const clock: ClockRef = { now: 1_800_000_000_000 };
-  const mock = new MockSankhya({ tables: options.tables ?? erpTablesFromDataset(dataset), clock });
+  const mock = new MockSankhya({
+    tables: options.tables ?? { ...erpTablesFromDataset(dataset), ...erpSalesTables(buildDemoSalesNotes(dataset)) },
+    clock,
+  });
   const gateway = new RealSankhyaGateway({
     baseUrl: TEST_BASE_URL,
     allowedHosts: [TEST_HOST],
@@ -119,6 +124,8 @@ describe('capabilities and NotImplemented paths', () => {
       carriers: 'supported',
       ipiRates: 'supported',
       openTitles: 'supported',
+      salesHistoryMonthly: 'supported',
+      salesHistoryCustomerProduct: 'supported',
     });
     expect(description.capabilities.configurationSource).toBeNull();
   });
@@ -480,6 +487,56 @@ describe('tolerant rows: a bad row never rejects the page (H1, H2)', () => {
     const rows = (await collect(gateway.readOpenTitles({ onWarning: (m) => warnings.push(m) }))).rows;
     expect(rows.map((r) => [r.nufin, r.paidAmount])).toEqual([[10, '0'], [13, '0']]);
     expect(warnings).toHaveLength(2);
+  });
+});
+
+describe('sales history: generated SQL (read-only, aggregated in the ERP)', () => {
+  const config = { topCodes: [7201, 7101, 7101], statusCodes: ['L'], dateField: 'DTFATUR' as const, since: '2026-01-01' };
+
+  it('monthly: GROUP BY on TGFCAB with only validated values, no cost/margin/name columns', async () => {
+    const { gateway, mock } = setup({ pageSize: 5 });
+    const rows = (await collect(gateway.readSalesHistoryMonthly({ config }))).rows;
+    expect(rows.length).toBeGreaterThan(0);
+    const sql = mock.queries().map((q) => q.sql ?? '');
+    expect(sql.length).toBeGreaterThanOrEqual(2);
+    const [page] = sql;
+    expect(page).toBe(
+      "SELECT CODPARC, NVL(CODVEND, 0) AS CODVEND, TO_CHAR(DTFATUR, 'YYYY-MM') AS MES, CODTIPOPER, COUNT(*) AS QTDNOTAS, SUM(VLRNOTA) AS VLRTOTAL FROM TGFCAB " +
+        "WHERE CODPARC > 0 AND STATUSNOTA IN ('L') AND CODTIPOPER IN (7101, 7201) AND DTFATUR >= TO_DATE('2026-01-01', 'YYYY-MM-DD') " +
+        "GROUP BY CODPARC, NVL(CODVEND, 0), TO_CHAR(DTFATUR, 'YYYY-MM'), CODTIPOPER ORDER BY CODPARC, CODVEND, MES, CODTIPOPER OFFSET 0 ROWS FETCH NEXT 5 ROWS ONLY",
+    );
+    expect(sql.at(-1)).toMatch(/^SELECT COUNT\(\*\) AS TOTAL FROM \(SELECT 1 AS X FROM TGFCAB WHERE .+ GROUP BY .+\)$/);
+    for (const text of sql) expect(text).not.toMatch(/CUSTO|MARGEM|COMIS|NOMEPARC|CGC_CPF|RAZAOSOCIAL/i);
+  });
+
+  it('customer x product: TGFITE joined to TGFCAB with GROUP BY', async () => {
+    const { gateway, mock } = setup({ pageSize: 5 });
+    await collect(gateway.readSalesHistoryCustomerProduct({ config: { ...config, dateField: 'DTNEG' } }));
+    const [page] = mock.queries().map((q) => q.sql ?? '');
+    expect(page).toBe(
+      "SELECT C.CODPARC AS CODPARC, I.CODPROD AS CODPROD, C.CODTIPOPER AS CODTIPOPER, COUNT(DISTINCT C.NUNOTA) AS QTDNOTAS, SUM(I.QTDNEG) AS QTD, " +
+        "SUM(NVL(I.VLRTOT, 0) - NVL(I.VLRDESC, 0)) AS VLRLIQ, TO_CHAR(MAX(C.DTNEG), 'YYYY-MM-DD') AS ULTVENDA FROM TGFITE I INNER JOIN TGFCAB C ON C.NUNOTA = I.NUNOTA " +
+        "WHERE C.CODPARC > 0 AND C.STATUSNOTA IN ('L') AND C.CODTIPOPER IN (7101, 7201) AND C.DTNEG >= TO_DATE('2026-01-01', 'YYYY-MM-DD') " +
+        "GROUP BY C.CODPARC, I.CODPROD, C.CODTIPOPER ORDER BY CODPARC, CODPROD, CODTIPOPER OFFSET 0 ROWS FETCH NEXT 5 ROWS ONLY",
+    );
+  });
+
+  it('derives the window from the gateway clock when only windowMonths is given, and sends no request for a bad config', async () => {
+    const { gateway, mock } = setup();
+    // clock 1_800_000_000_000 ms = 2027-01-15 UTC; 3 months including January => 2026-11-01
+    await collect(gateway.readSalesHistoryMonthly({ config: { topCodes: [1101], statusCodes: ['L'], windowMonths: 3 } }));
+    expect(mock.queries()[0]?.sql).toContain("DTNEG >= TO_DATE('2026-11-01', 'YYYY-MM-DD')");
+    const before = mock.calls.length;
+    expect(() => gateway.readSalesHistoryMonthly({ config: { ...config, dateField: 'X; DROP' as never } })).toThrow(SankhyaGatewayError);
+    expect(mock.calls.length).toBe(before);
+  });
+
+  it('rejects a row that breaks the contract (bad month) and a short snapshot', async () => {
+    const { gateway, mock } = setup();
+    mock.forced.push(ok(['CODPARC', 'CODVEND', 'MES', 'CODTIPOPER', 'QTDNOTAS', 'VLRTOTAL'], [[1, 0, '2026-13', 7101, 1, 10]]));
+    const failure = (await collect(gateway.readSalesHistoryMonthly({ config })).catch((e: unknown) => e)) as SankhyaGatewayError;
+    expect(failure.kind).toBe('validation');
+    expect(failure.message).toContain('MES');
   });
 });
 

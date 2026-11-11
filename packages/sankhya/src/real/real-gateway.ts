@@ -46,6 +46,12 @@ import {
   ORDER_WRITE_NOT_ENABLED_MESSAGE,
 } from '../gateway.js';
 import { decimalFromCell } from '../decimal.js';
+import {
+  validateSalesHistoryConfig,
+  type SalesHistoryCustomerProductRow,
+  type SalesHistoryMonthlyRow,
+  type SalesHistoryReadOptions,
+} from '../sales-history.js';
 import { ORDER_WRITE_DISABLED, isValidOriginField, type OrderWriteSettings } from '../write/order-write-config.js';
 import { assertSandboxHost } from '../write/host-allowlist.js';
 import { INCLUIR_NOTA_PATH, buildIncluirNotaRequestText, parseIncluirNotaResponse } from '../write/incluir-nota.js';
@@ -93,6 +99,8 @@ import {
   carrierSpec,
   IPI_RATE_SPEC,
   OPEN_TITLE_SPEC,
+  salesHistoryCustomerProductSpec,
+  salesHistoryMonthlySpec,
   compareKeys,
   isRowDiscard,
   type EntitySpec,
@@ -341,6 +349,15 @@ export class RealSankhyaGateway implements SankhyaGateway {
   }
   readOpenTitles(options?: ReadOptions) {
     return this.#paged(OPEN_TITLE_SPEC, options);
+  }
+  readSalesHistoryMonthly(options: SalesHistoryReadOptions): Snapshot<SalesHistoryMonthlyRow> {
+    // Validated synchronously, before any request: a bad configuration never reaches SQL text.
+    const config = validateSalesHistoryConfig(options.config, new Date(this.#now()).toISOString());
+    return this.#paged(salesHistoryMonthlySpec(config), options);
+  }
+  readSalesHistoryCustomerProduct(options: SalesHistoryReadOptions): Snapshot<SalesHistoryCustomerProductRow> {
+    const config = validateSalesHistoryConfig(options.config, new Date(this.#now()).toISOString());
+    return this.#paged(salesHistoryCustomerProductSpec(config), options);
   }
   readCustomers(options?: ReadOptions): Snapshot<Customer> {
     assertSafeScope(options?.scope);
@@ -979,7 +996,7 @@ export class RealSankhyaGateway implements SankhyaGateway {
   }
 }
 
-type QueryShape = Pick<EntitySpec<never>, 'select' | 'table' | 'where' | 'orderBy'>;
+type QueryShape = Pick<EntitySpec<never>, 'select' | 'table' | 'where' | 'groupBy' | 'orderBy'>;
 
 interface QueryResult {
   readonly rows: readonly (readonly unknown[])[];
@@ -987,11 +1004,19 @@ interface QueryResult {
 
 function pageSql(spec: QueryShape, offset: number, pageSize: number): string {
   // Only integers we computed are interpolated; nothing external ever reaches the SQL text.
-  return `SELECT ${spec.select.join(', ')} FROM ${spec.table}${whereClause(spec)} ORDER BY ${spec.orderBy} OFFSET ${offset} ROWS FETCH NEXT ${pageSize} ROWS ONLY`;
+  return `SELECT ${spec.select.join(', ')} FROM ${spec.table}${whereClause(spec)}${groupClause(spec)} ORDER BY ${spec.orderBy} OFFSET ${offset} ROWS FETCH NEXT ${pageSize} ROWS ONLY`;
 }
 
 function countSql(spec: QueryShape): string {
+  // An aggregating read counts groups, not rows.
+  if (spec.groupBy !== undefined) {
+    return `SELECT COUNT(*) AS TOTAL FROM (SELECT 1 AS X FROM ${spec.table}${whereClause(spec)}${groupClause(spec)})`;
+  }
   return `SELECT COUNT(*) AS TOTAL FROM ${spec.table}${whereClause(spec)}`;
+}
+
+function groupClause(spec: QueryShape): string {
+  return spec.groupBy === undefined ? '' : ` GROUP BY ${spec.groupBy}`;
 }
 
 function whereClause(spec: QueryShape): string {
