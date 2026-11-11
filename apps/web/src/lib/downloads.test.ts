@@ -48,8 +48,12 @@ describe("downloads.json parsing", () => {
     for (const bad of [null, 1, "x", [], {}, { items: "x" }]) expect(parseDownloads(bad)).toEqual([]);
   });
 
-  it("fails loudly when the index cannot be fetched", async () => {
-    await expect(loadDownloads((async () => new Response("", { status: 404 })) as unknown as typeof fetch)).rejects.toThrow();
+  it("treats 404 as an empty list but fails loudly on real errors", async () => {
+    const as = (fn: () => Promise<Response>) => fn as unknown as typeof fetch;
+    expect(await loadDownloads(as(async () => new Response("", { status: 404 })))).toEqual([]);
+    await expect(loadDownloads(as(async () => new Response("", { status: 500 })))).rejects.toThrow();
+    await expect(loadDownloads(as(async () => new Response("<html>", { status: 200 })))).rejects.toThrow();
+    await expect(loadDownloads(as(async () => Promise.reject(new TypeError("network"))))).rejects.toThrow();
     const ok = (async () => new Response(JSON.stringify({ items: [valid] }), { status: 200 })) as unknown as typeof fetch;
     expect(await loadDownloads(ok)).toHaveLength(1);
   });

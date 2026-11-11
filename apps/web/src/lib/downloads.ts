@@ -83,7 +83,14 @@ export function parseDownloads(input: unknown): DownloadItem[] {
 }
 
 export async function loadDownloads(fetchImpl: typeof fetch = fetch): Promise<DownloadItem[]> {
-  const response = await fetchImpl(DOWNLOADS_INDEX_URL, { cache: "no-store", headers: { Accept: "application/json" } });
+  const response = await fetchImpl(DOWNLOADS_INDEX_URL, {
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+    signal: AbortSignal.timeout(10_000),
+  });
+  // 404 means "nothing published yet" (the file does not exist), not a failure. Network errors, timeouts, other
+  // statuses and invalid JSON still throw, so the page shows the error state with retry.
+  if (response.status === 404) return [];
   if (!response.ok) throw new Error(`downloads index ${response.status}`);
   return parseDownloads(await response.json());
 }

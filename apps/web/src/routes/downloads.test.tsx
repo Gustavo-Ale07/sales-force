@@ -40,7 +40,23 @@ describe("/downloads (public)", () => {
   it("shows an empty state when nothing is published", async () => {
     stubIndex(() => new Response(JSON.stringify({ items: [] }), { status: 200 }));
     renderApp("/downloads", { signedIn: false });
-    expect(await screen.findByText("Nenhuma versão publicada")).toBeInTheDocument();
+    expect(await screen.findByText("Nenhuma versão disponível ainda")).toBeInTheDocument();
+  });
+
+  it("treats a missing downloads.json (404) as empty, keeps the install guide and shows no error", async () => {
+    stubIndex(() => new Response("", { status: 404 }));
+    renderApp("/downloads", { signedIn: false });
+    expect(await screen.findByText("Nenhuma versão disponível ainda")).toBeInTheDocument();
+    expect(screen.getByText("O aplicativo Android será publicado aqui. Volte em breve.")).toBeInTheDocument();
+    expect(screen.getByText("Como instalar")).toBeInTheDocument();
+    expect(screen.queryByText("Não foi possível carregar a lista de downloads")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Tentar de novo/ })).not.toBeInTheDocument();
+  });
+
+  it("shows an error state for invalid JSON", async () => {
+    stubIndex(() => new Response("<html>not json", { status: 200 }));
+    renderApp("/downloads", { signedIn: false });
+    expect(await screen.findByText("Não foi possível carregar a lista de downloads")).toBeInTheDocument();
   });
 
   it("shows an error state with retry when the index cannot be loaded", async () => {
@@ -53,6 +69,6 @@ describe("/downloads (public)", () => {
   it("ignores a tampered entry instead of rendering it", async () => {
     stubIndex(() => new Response(JSON.stringify({ items: [{ ...item, file: "../../etc/passwd.apk" }] }), { status: 200 }));
     renderApp("/downloads", { signedIn: false });
-    expect(await screen.findByText("Nenhuma versão publicada")).toBeInTheDocument();
+    expect(await screen.findByText("Nenhuma versão disponível ainda")).toBeInTheDocument();
   });
 });

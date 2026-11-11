@@ -76,7 +76,7 @@ export function DownloadsPage() {
         </Card>
       ) : query.data.length === 0 ? (
         <Card>
-          <EmptyState title="Nenhuma versão publicada" description="Peça ao administrador para publicar o aplicativo." />
+          <EmptyState title="Nenhuma versão disponível ainda" description="O aplicativo Android será publicado aqui. Volte em breve." />
         </Card>
       ) : (
         query.data.map((item, index) => <DownloadCard key={item.id} item={item} newest={index === 0} />)
