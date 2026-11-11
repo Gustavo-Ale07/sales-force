@@ -1,5 +1,6 @@
 import {
   createGateway,
+  DEFAULT_SALES_HISTORY_WINDOW_MONTHS,
   GatewayConfigError,
   parseOrderWriteSettings,
   RequestBudget,
@@ -9,6 +10,7 @@ import {
 } from '@salesforce/sankhya';
 import { z } from 'zod';
 import { DEFAULT_MIRROR_CRONS } from '../sync/schedules.js';
+import { salesHistorySyncConfigFromEnv, type SalesHistorySyncConfig } from '../sync/sales-history-config.js';
 import { validateInstallationConfiguration } from '../configuration/validate.js';
 import { setMaskTargets, type MaskTargets } from '../observability/mask-error-message.js';
 import { mediaDirField, mediaDirProblems, mediaMaxBytesField } from './media-env.js';
@@ -59,6 +61,12 @@ const cronField = (defaultValue: string) =>
     .regex(/^\S+(\s+\S+){4}$/,{ error: 'must be a 5-field cron expression, e.g. "*/10 * * * *".' })
     .default(defaultValue);
 
+const topListField = z
+  .string()
+  .regex(/^(\d+(\s*,\s*\d+)*)?$/, { error: 'must be a comma-separated list of TOP codes, e.g. "1000,2000" (empty = none).' })
+  .default('')
+  .transform((value) => (value.trim() === '' ? [] : value.split(',').map((part) => Number(part.trim()))));
+
 export const WorkerEnvSchema = z.object({
   NODE_ENV: nodeEnvField,
   DATABASE_URL: databaseUrlField,
@@ -91,6 +99,24 @@ export const WorkerEnvSchema = z.object({
   SYNC_CRON_PRICES: cronField(DEFAULT_MIRROR_CRONS.prices),
   /** Open receivable titles (read-only financial information). */
   SYNC_CRON_OPEN_TITLES: cronField(DEFAULT_MIRROR_CRONS.openTitles),
+  /** Sales-history mirror (read-only aggregates). PROPOSED daily off-hours schedule; runs only when SALES_HISTORY_SALE_TOPS is set. */
+  SYNC_CRON_SALES_HISTORY: cronField(DEFAULT_MIRROR_CRONS.salesHistory),
+  /**
+   * Sales history (CFG-3), all NEEDS VALIDATION with the ERP owner: comma-separated TOP codes that count as a sale / a return.
+   * Empty = the sales-history mirror is off. No default TOP: the values belong to the installation, never to the source.
+   */
+  SALES_HISTORY_SALE_TOPS: topListField,
+  SALES_HISTORY_RETURN_TOPS: topListField,
+  /** `STATUSNOTA` letters of a valid note (comma-separated). Default `L` is the simplest reading, to confirm with the ERP owner. */
+  SALES_HISTORY_STATUS_CODES: z
+    .string()
+    .regex(/^[A-Z](\s*,\s*[A-Z])*$/, { error: 'must be comma-separated uppercase status letters, e.g. "L".' })
+    .default('L')
+    .transform((value) => value.split(',').map((part) => part.trim())),
+  /** Note date that places a sale in a month: `DTNEG` (negotiation) or `DTFATUR` (invoicing). To confirm with the ERP owner. */
+  SALES_HISTORY_DATE_FIELD: z.enum(['DTNEG', 'DTFATUR'], { error: "must be 'DTNEG' or 'DTFATUR'." }).default('DTNEG'),
+  /** Calendar months of history kept (the current month included). */
+  SALES_HISTORY_WINDOW_MONTHS: integerField({ min: 1, max: 120 }, DEFAULT_SALES_HISTORY_WINDOW_MONTHS),
   /**
    * Login-directory mirror: keeps ONLY `sellers` + `directoryUsers` fresh (read-only) so the Sankhya-only login can create and
    * reconcile accounts. Off by default; works with `SYNC_MIRROR_ENABLED=false` and never enables another entity. When the full
@@ -167,6 +193,8 @@ export interface WorkerConfig {
   readonly orderWrite: OrderWriteSettings;
   /** M3: set only in order-write `live` mode. */
   readonly orderRequestBudget: RequestBudget | null;
+  /** CFG-3: the sales-history TOP/status/window configuration; `null` = not configured (the mirror stays off). */
+  readonly salesHistory: SalesHistorySyncConfig | null;
 }
 
 /**
@@ -230,10 +258,13 @@ export function loadWorkerConfig(source: EnvSource): WorkerConfig {
   const orderWrite = parseOrderWriteSettings({ ...withoutEmptyValues(source) });
   for (const problem of orderWrite.problems) if (!problems.includes(problem)) problems.push(problem);
 
+  const salesHistory = env === undefined ? { config: null, problems: [] } : salesHistorySyncConfigFromEnv(env);
+  problems.push(...salesHistory.problems);
+
   if (env === undefined || gateway === undefined || problems.length > 0) {
     throw new EnvValidationError('Worker', problems);
   }
   setMaskTargets(sankhyaMaskTargets(source));
   const orderRequestBudget = orderWrite.settings.requestBudget === null ? null : new RequestBudget(orderWrite.settings.requestBudget);
-  return { env, gateway, gatewayDescription: gateway.describe(), orderWrite: orderWrite.settings, orderRequestBudget };
+  return { env, gateway, gatewayDescription: gateway.describe(), orderWrite: orderWrite.settings, orderRequestBudget, salesHistory: salesHistory.config };
 }

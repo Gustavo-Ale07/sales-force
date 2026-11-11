@@ -6,6 +6,9 @@ import {
   type GatewayDescription,
   type ReadEntity,
   type ReadOptions,
+  type SalesHistoryReadOptions,
+  DEMO_RETURN_TOP,
+  DEMO_SALE_TOP,
 } from '@salesforce/sankhya';
 import { syncState } from '@salesforce/db';
 import { eq } from 'drizzle-orm';
@@ -13,8 +16,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createLogger } from '../../src/observability/logger.js';
 import { summarizeIntegration } from '../../src/platform/integration-summary.js';
 import { recordWorkerHeartbeat } from '../../src/platform/worker-heartbeat.js';
-import { MIRROR_ENTITIES, mirrorQueueName, type MirrorEntity } from '../../src/sync/mirror-entities.js';
+import { MIRROR_ENTITIES, isSnapshotReplaceEntity, mirrorQueueName, type MirrorEntity } from '../../src/sync/mirror-entities.js';
 import { MirrorSyncService } from '../../src/sync/mirror-sync.service.js';
+import type { SalesHistorySyncConfig } from '../../src/sync/sales-history-config.js';
 import { mirrorSchedulesFromSettings } from '../../src/sync/schedules.js';
 import { installQueues } from '../../src/worker/queue-installer.js';
 import { QUEUE_NAMES, QUEUE_REGISTRY, type QueueSpec } from '../../src/worker/queues.js';
@@ -33,6 +37,8 @@ const TABLES: Record<MirrorEntity, string> = {
   carriers: 'erp_carrier',
   ipiRates: 'erp_ipi_rate',
   openTitles: 'erp_open_title',
+  salesHistoryMonthly: 'erp_sales_history_monthly',
+  salesHistoryCustomerProduct: 'erp_sales_history_customer_product',
 };
 
 let postgres: TestPostgres;
@@ -65,12 +71,26 @@ async function stateOf(database: MigratedDatabase, entity: string) {
   return row;
 }
 
-function serviceFor(database: MigratedDatabase, gateway: FakeGateway, now: () => Date = () => new Date()): MirrorSyncService {
+// Synthetic TOPs of the fake gateway: the sales-history configuration (CFG-3) is always supplied by the caller.
+const SALES_HISTORY: SalesHistorySyncConfig = {
+  tops: { saleTopCodes: [DEMO_SALE_TOP], returnTopCodes: [DEMO_RETURN_TOP] },
+  statusCodes: ['L'],
+  dateField: 'DTNEG',
+  windowMonths: 12,
+};
+
+function serviceFor(
+  database: MigratedDatabase,
+  gateway: FakeGateway,
+  now: () => Date = () => new Date(),
+  salesHistory: SalesHistorySyncConfig | null = SALES_HISTORY,
+): MirrorSyncService {
   return new MirrorSyncService({
     db: database.handle,
     gateway,
     logger: createLogger({ level: 'silent', service: 'worker' }),
     now,
+    salesHistory,
   });
 }
 
@@ -130,6 +150,12 @@ class ScriptedGateway extends FakeGateway {
   override readCustomers(options?: ReadOptions) {
     return this.#wrap('customers', super.readCustomers(options));
   }
+  override readSalesHistoryMonthly(options: SalesHistoryReadOptions) {
+    return this.#wrap('salesHistoryMonthly', super.readSalesHistoryMonthly(options));
+  }
+  override readSalesHistoryCustomerProduct(options: SalesHistoryReadOptions) {
+    return this.#wrap('salesHistoryCustomerProduct', super.readSalesHistoryCustomerProduct(options));
+  }
 }
 
 describe('mirror sync (RF-SNK-1/2/8 subset, WP 0.8)', () => {
@@ -148,7 +174,9 @@ describe('mirror sync (RF-SNK-1/2/8 subset, WP 0.8)', () => {
     expect(await count(database, TABLES.priceTables)).toBe(source.priceTables.length);
     expect(await count(database, TABLES.priceTableVersions)).toBe(source.priceTableVersions.length);
     expect(await count(database, TABLES.listPrices)).toBe(source.listPrices.length);
-    for (const table of Object.values(TABLES)) expect(await count(database, table, 'deleted_at is not null')).toBe(0);
+    for (const [entity, table] of Object.entries(TABLES)) {
+      if (!isSnapshotReplaceEntity(entity as MirrorEntity)) expect(await count(database, table, 'deleted_at is not null')).toBe(0);
+    }
 
     for (const entity of MIRROR_ENTITIES) {
       const state = await stateOf(database, entity);
@@ -178,7 +206,7 @@ describe('mirror sync (RF-SNK-1/2/8 subset, WP 0.8)', () => {
 
     const second = await service.runAll();
     expect(second.failures).toEqual([]);
-    for (const result of second.results) {
+    for (const result of second.results.filter((r) => !isSnapshotReplaceEntity(r.entity))) {
       expect(result.stats).toMatchObject({ created: 0, updated: 0, reactivated: 0, deactivated: 0 });
       expect(result.stats?.unchanged).toBe(result.stats?.read);
     }
@@ -445,6 +473,8 @@ describe('mirror jobs through pg-boss (retry / dead-letter)', () => {
       SYNC_CRON_PRODUCTS: '0 3 * * *',
       SYNC_CRON_PRICES: '0 3 * * *',
       SYNC_CRON_OPEN_TITLES: '0 3 * * *',
+      SYNC_CRON_SALES_HISTORY: '0 3 * * *',
+      SALES_HISTORY_CONFIGURED: true,
     });
     const runtime = new WorkerRuntime({
       logger,

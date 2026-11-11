@@ -26,6 +26,9 @@ const S: Priv[] = ['SELECT'];
 const SIU: Priv[] = ['SELECT', 'INSERT', 'UPDATE'];
 const SIUD: Priv[] = ['SELECT', 'INSERT', 'UPDATE', 'DELETE'];
 const MIRROR = ['erp_seller', 'erp_directory_user', 'erp_carrier', 'erp_ipi_rate', 'erp_open_title', 'erp_customer', 'erp_product', 'erp_product_group', 'erp_price_table', 'erp_price_table_version', 'erp_list_price'];
+const SID: Priv[] = ['SELECT', 'INSERT', 'DELETE'];
+// Atomic snapshot-replacement mirrors (sales history): the worker deletes and re-inserts the whole window in one transaction.
+const REPLACED_MIRROR = ['erp_sales_history_monthly', 'erp_sales_history_customer_product'];
 
 /** The matrix documented in db-roles.sql. A table absent here must have no api/worker privilege at all. */
 const EXPECTED: Record<string, { api: Priv[]; worker: Priv[] }> = {
@@ -48,6 +51,7 @@ const EXPECTED: Record<string, { api: Priv[]; worker: Priv[] }> = {
   product_media: { api: S, worker: SIUD },
   schema_migration: { api: S, worker: [] },
   ...Object.fromEntries(MIRROR.map((t) => [t, { api: S, worker: SIU }])),
+  ...Object.fromEntries(REPLACED_MIRROR.map((t) => [t, { api: S, worker: SID }])),
 };
 
 let pgc: TestPostgres;

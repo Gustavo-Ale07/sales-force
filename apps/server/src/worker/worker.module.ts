@@ -19,6 +19,7 @@ import {
 } from '../integration/order-delivery.service.js';
 import { OrderErpStatusService } from '../integration/order-erp-status.service.js';
 import type { RequestBudget, SankhyaReadPort } from '@salesforce/sankhya';
+import type { SalesHistorySyncConfig } from '../sync/sales-history-config.js';
 import { ConfigurationSyncService } from '../sync/configuration-sync.service.js';
 import { SyncRefreshRunner } from '../sync/sync-refresh-runner.service.js';
 import { WorkerRuntime, type WorkerRuntimeOptions } from './runtime.js';
@@ -56,7 +57,13 @@ export class WorkerModule {
   static register(
     deps: InfrastructureDeps,
     options: WorkerRuntimeOptions,
-    mirror?: { readonly gateway: MirrorGateway; readonly schedules: MirrorSchedules; readonly startupSync?: readonly MirrorEntity[] },
+    mirror?: {
+      readonly gateway: MirrorGateway;
+      readonly schedules: MirrorSchedules;
+      readonly startupSync?: readonly MirrorEntity[];
+      /** CFG-3 sales-history configuration; absent/null = those entities are not configured. */
+      readonly salesHistory?: SalesHistorySyncConfig | null;
+    },
     media?: ProductMediaWiring,
     orderDelivery?: OrderDeliveryWiring,
     configurationSync?: ConfigurationSyncWiring,
@@ -71,7 +78,14 @@ export class WorkerModule {
             const mirrorService =
               mirror === undefined
                 ? undefined
-                : new MirrorSyncService({ db, gateway: mirror.gateway, logger, now, readScope: () => loadCurrentReadScope(db.db) });
+                : new MirrorSyncService({
+                    db,
+                    gateway: mirror.gateway,
+                    logger,
+                    now,
+                    readScope: () => loadCurrentReadScope(db.db),
+                    ...(mirror.salesHistory === undefined ? {} : { salesHistory: mirror.salesHistory }),
+                  });
             const configurationService =
               configurationSync === undefined
                 ? undefined

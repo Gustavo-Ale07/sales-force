@@ -115,6 +115,64 @@ export const erpOpenTitle = pgTable(
 );
 
 /**
+ * Sales history, monthly buckets (stage D block 1): sum of the ERP note value per customer x seller x month x TOP over a rolling
+ * window. Which TOPs are sales and which are returns is installation configuration; the worker classifies the TOP when it writes the
+ * snapshot (`top_kind`), so readers need no TOP configuration and cannot drift from the worker. `seller_code` 0 = the note has no seller. `month` is the first day of the calendar month.
+ *
+ * Unlike the entity mirrors this table is an ATOMIC SNAPSHOT REPLACEMENT: each successful run deletes every row and inserts the
+ * freshly read window in ONE transaction (rows that left the window disappear; a failed run changes nothing). So it carries no
+ * content hash and no soft delete. Not a foreign key to customer/seller: the mirrors load independently. No cost or margin column
+ * (P-20); not part of the mobile sync.
+ */
+export const erpSalesHistoryMonthly = pgTable(
+  'erp_sales_history_monthly',
+  {
+    customerCode: integer('customer_code').notNull(),
+    sellerCode: integer('seller_code').notNull(),
+    month: date('month', { mode: 'string' }).notNull(),
+    topCode: integer('top_code').notNull(),
+    topKind: text('top_kind').notNull(),
+    noteCount: integer('note_count').notNull(),
+    totalAmount: numeric('total_amount', { precision: 14, scale: 2 }).notNull(),
+    syncedAt: timestamp('synced_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    primaryKey({ name: 'erp_sales_history_monthly_pk', columns: [t.customerCode, t.sellerCode, t.month, t.topCode] }),
+    check('erp_sales_history_monthly_values_chk', sql`${t.topKind} in ('sale', 'return') and ${t.noteCount} >= 0 and ${t.totalAmount} >= 0 and extract(day from ${t.month}) = 1`),
+    // Serves: per-seller monthly summary and the seller scope filter of every sales-history read (seller_code in (...), month range).
+    index('erp_sales_history_monthly_seller_month_idx').on(t.sellerCode, t.month),
+    // Serves: period reads for an unrestricted scope (month range across all sellers).
+    index('erp_sales_history_monthly_month_idx').on(t.month),
+  ],
+);
+
+/**
+ * Sales history, customer x product buckets (stage D block 1): item quantity and net value (gross minus discount) per customer x
+ * product x TOP over the same rolling window, plus the latest sale date of the bucket. Same atomic snapshot replacement as
+ * `erp_sales_history_monthly` (no content hash, no soft delete). `quantity` is an aggregate sum, deliberately wider than a line
+ * quantity so that one over-scaled sum can never reject a whole snapshot. No cost or margin column (P-20); not part of the mobile sync.
+ */
+export const erpSalesHistoryCustomerProduct = pgTable(
+  'erp_sales_history_customer_product',
+  {
+    customerCode: integer('customer_code').notNull(),
+    productCode: integer('product_code').notNull(),
+    topCode: integer('top_code').notNull(),
+    topKind: text('top_kind').notNull(),
+    noteCount: integer('note_count').notNull(),
+    quantity: numeric('quantity', { precision: 18, scale: 6 }).notNull(),
+    netAmount: numeric('net_amount', { precision: 14, scale: 2 }).notNull(),
+    lastSaleDate: date('last_sale_date', { mode: 'string' }).notNull(),
+    syncedAt: timestamp('synced_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    // The key's leading column serves: everything one customer bought (the per-customer history read).
+    primaryKey({ name: 'erp_sales_history_customer_product_pk', columns: [t.customerCode, t.productCode, t.topCode] }),
+    check('erp_sales_history_customer_product_values_chk', sql`${t.topKind} in ('sale', 'return') and ${t.noteCount} >= 0 and ${t.quantity} >= 0 and ${t.netAmount} >= 0`),
+  ],
+);
+
+/**
  * Official ERP user -> seller relation (TSIUSU.CODUSU / CODVEND), the ONLY user data mirrored: no name, e-mail, credential or
  * permission column exists. Read by the identity module to provision and reconcile seller accounts; never exposed by an endpoint.
  */

@@ -19,7 +19,7 @@ const DRY_RUN_ORIGIN_FIELD_PLACEHOLDER = 'AD_ORIGEM_NAO_CONFIGURADA';
  * installs queue tables (DATA-2) and performs no Sankhya write (SNK-4).
  */
 runMain('worker', async () => {
-  const { env, gateway, gatewayDescription, orderWrite, orderRequestBudget } = loadWorkerConfig(process.env);
+  const { env, gateway, gatewayDescription, orderWrite, orderRequestBudget, salesHistory } = loadWorkerConfig(process.env);
   const logger = createLogger({ level: env.LOG_LEVEL, service: 'worker' });
   const db = createDb(env.DATABASE_URL.reveal(), { max: env.DB_POOL_MAX, applicationName: 'salesforce-worker-app' });
   logPoolErrors(db, logger);
@@ -34,7 +34,12 @@ runMain('worker', async () => {
         health: { host: env.WORKER_HEALTH_HOST, port: env.WORKER_HEALTH_PORT },
         gatewayMode: gatewayDescription.mode,
       },
-      { gateway, schedules: mirrorSchedulesFromSettings(env), startupSync: startupSyncEntities(env) },
+      {
+        gateway,
+        schedules: mirrorSchedulesFromSettings({ ...env, SALES_HISTORY_CONFIGURED: salesHistory !== null }),
+        startupSync: startupSyncEntities(env),
+        salesHistory,
+      },
       env.PRODUCT_MEDIA_SYNC_ENABLED && env.PRODUCT_MEDIA_DIR !== undefined
         ? {
             gateway,

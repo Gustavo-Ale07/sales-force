@@ -12,6 +12,8 @@ export const DEFAULT_MIRROR_CRONS = {
   prices: '*/10 * * * *',
   /** Open receivable titles (read-only financial information, D-I): every 30 minutes. */
   openTitles: '*/30 * * * *',
+  /** Sales history (read-only aggregates over a 12-month window, heavy ERP read): once a day, off-hours (PROPOSED). */
+  salesHistory: '15 3 * * *',
 } as const;
 
 export interface MirrorScheduleSettings {
@@ -22,6 +24,10 @@ export interface MirrorScheduleSettings {
   readonly SYNC_CRON_PRICES: string;
   /** Open receivable titles; defaults to `DEFAULT_MIRROR_CRONS.openTitles` when absent. */
   readonly SYNC_CRON_OPEN_TITLES?: string;
+  /** Sales history; defaults to `DEFAULT_MIRROR_CRONS.salesHistory` when absent. */
+  readonly SYNC_CRON_SALES_HISTORY?: string;
+  /** True only when at least one sale TOP is configured (CFG-3). Absent/false = the sales-history entities have no schedule. */
+  readonly SALES_HISTORY_CONFIGURED?: boolean;
   /** Targeted login-directory mirror (`sellers` + `directoryUsers` only). Independent of `SYNC_MIRROR_ENABLED`. */
   readonly AUTH_DIRECTORY_SYNC_ENABLED?: boolean;
   readonly AUTH_DIRECTORY_SYNC_CRON?: string;
@@ -43,10 +49,11 @@ export function mirrorSchedulesFromSettings(settings: MirrorScheduleSettings): M
     // Full mirror off: only the login directory may still run, and only sellers + directoryUsers (never customers, products or prices).
     if (settings.AUTH_DIRECTORY_SYNC_ENABLED === true) {
       const cron = settings.AUTH_DIRECTORY_SYNC_CRON ?? DEFAULT_MIRROR_CRONS.sellers;
-      return { sellers: cron, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: cron, carriers: null, ipiRates: null, openTitles: null, productGroups: null };
+      return { sellers: cron, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: cron, carriers: null, ipiRates: null, openTitles: null, productGroups: null, salesHistoryMonthly: null, salesHistoryCustomerProduct: null };
     }
-    return { sellers: null, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: null, carriers: null, ipiRates: null, openTitles: null, productGroups: null };
+    return { sellers: null, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: null, carriers: null, ipiRates: null, openTitles: null, productGroups: null, salesHistoryMonthly: null, salesHistoryCustomerProduct: null };
   }
+  const salesHistoryCron = settings.SALES_HISTORY_CONFIGURED === true ? (settings.SYNC_CRON_SALES_HISTORY ?? DEFAULT_MIRROR_CRONS.salesHistory) : null;
   return {
     sellers: settings.SYNC_CRON_SELLERS,
     customers: settings.SYNC_CRON_CUSTOMERS,
@@ -65,5 +72,8 @@ export function mirrorSchedulesFromSettings(settings: MirrorScheduleSettings): M
     openTitles: settings.SYNC_CRON_OPEN_TITLES ?? DEFAULT_MIRROR_CRONS.openTitles,
     // The group hierarchy classifies products: it moves with the product knob.
     productGroups: settings.SYNC_CRON_PRODUCTS,
+    // Sales history: its own daily schedule, and only when the TOP configuration exists (the two tables move together).
+    salesHistoryMonthly: salesHistoryCron,
+    salesHistoryCustomerProduct: salesHistoryCron,
   };
 }

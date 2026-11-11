@@ -76,6 +76,16 @@ export function compareDecimalStrings(a: DecimalString, b: DecimalString): -1 | 
   return left.value.comparedTo(right.value) as -1 | 0 | 1;
 }
 
+const SIGNED_DECIMAL = /^-?\d+(?:\.\d+)?$/;
+
+/** Comparison of decimal strings that may carry a leading minus (a net balance can be negative). Throws on malformed input. */
+export function compareSignedDecimalStrings(a: DecimalString, b: DecimalString): -1 | 0 | 1 {
+  if (typeof a !== 'string' || typeof b !== 'string' || !SIGNED_DECIMAL.test(a) || !SIGNED_DECIMAL.test(b)) {
+    throw new RangeError('Malformed decimal string');
+  }
+  return new Decimal(a).comparedTo(new Decimal(b)) as -1 | 0 | 1;
+}
+
 export function decimalEquals(a: DecimalString, b: DecimalString): boolean {
   return compareDecimalStrings(a, b) === 0;
 }

@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { FakeGateway, getDemoDataset, SankhyaGatewayError, type GatewayDescription } from '@salesforce/sankhya';
+import { DEMO_RETURN_TOP, DEMO_SALE_TOP, FakeGateway, getDemoDataset, SankhyaGatewayError, type GatewayDescription } from '@salesforce/sankhya';
 import { describe, expect, it } from 'vitest';
 import { contentHash } from '../../src/sync/content-hash.js';
 import { describeSyncFailure } from '../../src/sync/failure.js';
@@ -11,20 +11,46 @@ import {
   fitsNumeric,
   MIRROR_ENTITIES,
   MIRROR_SPECS,
+  SNAPSHOT_REPLACE_SPECS,
+  isSnapshotReplaceEntity,
   mirrorQueueName,
   type MirrorGateway,
   type MirrorRow,
 } from '../../src/sync/mirror-entities.js';
 import { mirrorLockObjectId } from '../../src/sync/entity-lock.js';
+import type { SalesHistorySyncConfig } from '../../src/sync/sales-history-config.js';
 import { DEFAULT_MIRROR_CRONS, mirrorSchedulesFromSettings, startupSyncEntities } from '../../src/sync/schedules.js';
 import { PermanentJobError, TransientJobError } from '../../src/worker/job-contract.js';
 import { QUEUE_NAMES, QUEUE_REGISTRY } from '../../src/worker/queues.js';
 
-async function collect(entity: (typeof MIRROR_ENTITIES)[number], gateway: MirrorGateway): Promise<MirrorRow[]> {
+// Synthetic TOPs of the fake gateway; the sales-history configuration is always caller-supplied (CFG-3).
+const SALES_HISTORY: SalesHistorySyncConfig = {
+  tops: { saleTopCodes: [DEMO_SALE_TOP], returnTopCodes: [DEMO_RETURN_TOP] },
+  statusCodes: ['L'],
+  dateField: 'DTNEG',
+  windowMonths: 12,
+};
+
+async function collect(entity: keyof typeof MIRROR_SPECS, gateway: MirrorGateway): Promise<MirrorRow[]> {
   const rows: MirrorRow[] = [];
   for await (const batch of MIRROR_SPECS[entity].read({ gateway, description: gateway.describe(), warn: () => undefined })) {
     rows.push(...batch);
   }
+  return rows;
+}
+
+async function countAny(entity: (typeof MIRROR_ENTITIES)[number], gateway: MirrorGateway): Promise<number> {
+  if (!isSnapshotReplaceEntity(entity)) return (await collect(entity, gateway)).length;
+  let n = 0;
+  const context = { gateway, description: gateway.describe(), warn: () => undefined, salesHistory: SALES_HISTORY };
+  for await (const batch of SNAPSHOT_REPLACE_SPECS[entity].read(context)) n += batch.length;
+  return n;
+}
+
+async function collectRows(entity: 'salesHistoryMonthly' | 'salesHistoryCustomerProduct', config: SalesHistorySyncConfig | undefined, gateway = new FakeGateway()) {
+  const rows: Record<string, unknown>[] = [];
+  const context = { gateway, description: gateway.describe(), warn: () => undefined, ...(config === undefined ? {} : { salesHistory: config }) };
+  for await (const batch of SNAPSHOT_REPLACE_SPECS[entity].read(context)) rows.push(...batch);
   return rows;
 }
 
@@ -66,11 +92,10 @@ describe('decimal handling (DATA-3: no floating point, no silent rounding)', () 
   });
 
   it('keeps an explicit zero price distinct from a missing one (P-09)', () => {
-    const zero = MIRROR_SPECS.listPrices;
     const gateway = new FakeGateway({
       dataset: { ...getDemoDataset(), listPrices: [{ versionId: 1, productCode: 1, unitPrice: '0.00' }] },
     });
-    return collect(zero.entity, gateway).then((rows) => {
+    return collect('listPrices', gateway).then((rows) => {
       expect(rows).toHaveLength(1);
       // Zero stays "0" (a string, never a number), and only rows the ERP returned exist.
       expect(rows[0]?.content).toEqual({ unitPrice: '0' });
@@ -108,8 +133,44 @@ describe('mapping', () => {
       openTitles: dataset.openTitles.length,
     };
     for (const entity of MIRROR_ENTITIES) {
-      expect((await collect(entity, gateway)).length, entity).toBe(expected[entity]);
+      if (isSnapshotReplaceEntity(entity)) {
+        expect(await countAny(entity, gateway), entity).toBeGreaterThan(0);
+      } else {
+        expect(await countAny(entity, gateway), entity).toBe(expected[entity]);
+      }
     }
+  });
+
+  it('sales history: month becomes the first day, the TOP kind comes from the configuration, amounts stay decimal strings', async () => {
+    const monthly = await collectRows('salesHistoryMonthly', SALES_HISTORY);
+    expect(monthly.length).toBeGreaterThan(0);
+    for (const row of monthly) {
+      expect(row['month']).toMatch(/^\d{4}-\d{2}-01$/);
+      expect(row['topKind']).toBe(row['topCode'] === DEMO_SALE_TOP ? 'sale' : 'return');
+      expect(typeof row['totalAmount']).toBe('string');
+    }
+    const products = await collectRows('salesHistoryCustomerProduct', SALES_HISTORY);
+    expect(products.length).toBeGreaterThan(0);
+    for (const row of products) {
+      expect(typeof row['quantity']).toBe('string');
+      expect(typeof row['netAmount']).toBe('string');
+      expect(row['lastSaleDate']).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    }
+  });
+
+  it('sales history: refuses to read without the TOP configuration (no silent default)', async () => {
+    await expect(collectRows('salesHistoryMonthly', undefined)).rejects.toMatchObject({ kind: 'validation' });
+  });
+
+  it('sales history: a TOP that is neither sale nor return is rejected, never dropped', async () => {
+    // The read config lists both sets, so a code outside them can only come from a broken read; simulate it with a narrower mapping config.
+    class WideGateway extends FakeGateway {
+      override readSalesHistoryMonthly(options: Parameters<FakeGateway['readSalesHistoryMonthly']>[0]) {
+        return super.readSalesHistoryMonthly({ ...options, config: { ...options.config, topCodes: [DEMO_SALE_TOP, DEMO_RETURN_TOP] } });
+      }
+    }
+    const narrower: SalesHistorySyncConfig = { ...SALES_HISTORY, tops: { saleTopCodes: [DEMO_SALE_TOP], returnTopCodes: [] } };
+    await expect(collectRows('salesHistoryMonthly', narrower, new WideGateway())).rejects.toMatchObject({ kind: 'validation' });
   });
 
   it('mirrors an IPI code without a rate as 0.00 flagged rate_missing and warns once with count and codes (H1)', async () => {
@@ -262,10 +323,22 @@ describe('schedules, queues and locks', () => {
       priceTables: '4 * * * *',
       priceTableVersions: '4 * * * *',
       listPrices: '4 * * * *',
+      // Sales history has no schedule until its TOPs are configured (CFG-3).
+      salesHistoryMonthly: null,
+      salesHistoryCustomerProduct: null,
     });
     expect(Object.values(mirrorSchedulesFromSettings({ ...settings, SYNC_MIRROR_ENABLED: false })).every((cron) => cron === null)).toBe(
       true,
     );
+  });
+
+  it('schedules the sales-history entities daily by default once configured, on their own knob, and never with the mirror off', () => {
+    const settings = { SYNC_MIRROR_ENABLED: true, SYNC_CRON_SELLERS: '1 * * * *', SYNC_CRON_CUSTOMERS: '2 * * * *', SYNC_CRON_PRODUCTS: '3 * * * *', SYNC_CRON_PRICES: '4 * * * *' };
+    const configured = mirrorSchedulesFromSettings({ ...settings, SALES_HISTORY_CONFIGURED: true });
+    expect(configured.salesHistoryMonthly).toBe(DEFAULT_MIRROR_CRONS.salesHistory);
+    expect(configured.salesHistoryCustomerProduct).toBe(DEFAULT_MIRROR_CRONS.salesHistory);
+    expect(mirrorSchedulesFromSettings({ ...settings, SALES_HISTORY_CONFIGURED: true, SYNC_CRON_SALES_HISTORY: '5 4 * * *' }).salesHistoryMonthly).toBe('5 4 * * *');
+    expect(mirrorSchedulesFromSettings({ ...settings, SYNC_MIRROR_ENABLED: false, SALES_HISTORY_CONFIGURED: true }).salesHistoryMonthly).toBeNull();
   });
 
   it('the login-directory schedule runs ONLY sellers + directoryUsers, even with the full mirror off', () => {

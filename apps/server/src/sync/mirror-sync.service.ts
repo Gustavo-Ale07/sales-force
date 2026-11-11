@@ -1,5 +1,5 @@
 import { schema, type DbHandle } from '@salesforce/db';
-import { isSankhyaGatewayError, type ReadScope } from '@salesforce/sankhya';
+import { isSankhyaGatewayError, SankhyaGatewayError, type ReadScope } from '@salesforce/sankhya';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { errorLogFields, type Logger } from '../observability/logger.js';
 import type { Clock } from '../platform/tokens.js';
@@ -7,13 +7,19 @@ import { TransientJobError } from '../worker/job-contract.js';
 import { withEntityLock } from './entity-lock.js';
 import { MirrorScopeUnavailableError } from './mirror-scope.js';
 import { describeSyncFailure, type SyncFailure } from './failure.js';
+import { sql } from 'drizzle-orm';
 import {
   MIRROR_ENTITIES,
   MIRROR_SPECS,
+  SNAPSHOT_REPLACE_SPECS,
+  isSnapshotReplaceEntity,
   type MirrorEntity,
   type MirrorEntitySpec,
   type MirrorGateway,
+  type MirrorReadContext,
+  type SnapshotReplaceSpec,
 } from './mirror-entities.js';
+import type { SalesHistorySyncConfig } from './sales-history-config.js';
 import { applyBatch, countLive, deactivateMissing, hashRows, prepareSeenTable } from './mirror-writer.js';
 import { markFailed, markRunning, markSucceeded, type Queryable, type RunStats } from './sync-state.js';
 
@@ -22,6 +28,8 @@ export type MirrorRunOutcome =
   | 'completed'
   /** Another run of the same entity holds the lock; nothing was done (not an error). */
   | 'skipped_locked'
+  /** Sales history only: no sale TOP is configured (CFG-3), so nothing is read and nothing is recorded. Not an error. */
+  | 'not_configured'
   /** The gateway cannot read this entity yet (NEEDS VALIDATION); recorded as failed/permanent, no read attempted. */
   | 'unsupported';
 
@@ -49,6 +57,14 @@ export interface MirrorSyncDeps {
    * reads (fake/demo and tests). A rejection fails the run: it never falls back to an unscoped read.
    */
   readonly readScope?: () => Promise<ReadScope>;
+  /** Sales-history TOP/status/window configuration (CFG-3). Absent or `null` = the sales-history entities are not configured. */
+  readonly salesHistory?: SalesHistorySyncConfig | null;
+}
+
+const REPLACE_CHUNK_ROWS = 500;
+
+function isReplaceSpec(spec: MirrorEntitySpec | SnapshotReplaceSpec): spec is SnapshotReplaceSpec {
+  return isSnapshotReplaceEntity(spec.entity);
 }
 
 /** Serializes async work inside one process. */
@@ -107,7 +123,7 @@ export class MirrorSyncService {
 
   async #runLocked(entity: MirrorEntity, signal: AbortSignal | undefined): Promise<MirrorRunResult> {
     const { db, logger } = this.deps;
-    const spec = MIRROR_SPECS[entity];
+    const spec = isSnapshotReplaceEntity(entity) ? SNAPSHOT_REPLACE_SPECS[entity] : MIRROR_SPECS[entity];
 
     const locked = await withEntityLock(db.pool, entity, async (client) => {
       const session = drizzle(client, { schema });
@@ -141,7 +157,7 @@ export class MirrorSyncService {
   }
 
   async #execute(
-    spec: MirrorEntitySpec,
+    spec: MirrorEntitySpec | SnapshotReplaceSpec,
     session: Queryable,
     startedAt: Date,
     signal: AbortSignal | undefined,
@@ -149,6 +165,12 @@ export class MirrorSyncService {
     const { gateway, logger } = this.deps;
     const entity = spec.entity;
     const description = gateway.describe();
+
+    // Not configured is a normal state of an installation that does not use sales history: no read, no sync_state row.
+    if (isSnapshotReplaceEntity(entity) && (this.deps.salesHistory ?? null) === null) {
+      logger.info({ entity }, 'mirror sync skipped: the sales-history TOPs are not configured');
+      return { entity, outcome: 'not_configured', stats: null };
+    }
 
     const unsupported = spec.requires.find((read) => description.capabilities.reads[read] === 'not_implemented');
     if (unsupported !== undefined) {
@@ -166,6 +188,7 @@ export class MirrorSyncService {
     }
 
     await markRunning(session, entity, startedAt);
+    if (isReplaceSpec(spec)) return this.#replaceSnapshot(spec, session, startedAt, signal);
     await prepareSeenTable(session);
 
     const stats: RunStats = { read: 0, created: 0, updated: 0, reactivated: 0, unchanged: 0, deactivated: 0 };
@@ -184,7 +207,7 @@ export class MirrorSyncService {
       );
     }
     const excluded: Record<string, number> = {};
-    const context = {
+    const context: MirrorReadContext = {
       gateway,
       description,
       ...(scope === undefined ? {} : { scope }),
@@ -217,5 +240,55 @@ export class MirrorSyncService {
 
     logger.info({ entity, ...stats, ...(hasExcluded ? { excluded } : {}) }, 'mirror sync completed');
     return { entity, outcome: 'completed', stats, ...(hasExcluded ? { excluded } : {}) };
+  }
+
+  /**
+   * Atomic snapshot replacement (sales history). The whole window is read into memory FIRST (the gateway is never called inside
+   * a database transaction); only when the read finished without error is the table emptied and refilled in ONE transaction
+   * together with the `sync_state` success record. A failed or cancelled run changes nothing, so readers always see one complete
+   * snapshot. Fails closed on an empty snapshot while rows exist (a broken read, not a real "no sales").
+   */
+  async #replaceSnapshot(
+    spec: SnapshotReplaceSpec,
+    session: Queryable,
+    startedAt: Date,
+    signal: AbortSignal | undefined,
+  ): Promise<MirrorRunResult> {
+    const { gateway, logger } = this.deps;
+    const entity = spec.entity;
+    const salesHistory = this.deps.salesHistory ?? undefined;
+    const rows: Readonly<Record<string, unknown>>[] = [];
+    const context: MirrorReadContext = {
+      gateway,
+      description: gateway.describe(),
+      warn: (message: string) => logger.warn({ entity }, message),
+      ...(salesHistory === undefined ? {} : { salesHistory }),
+      ...(signal === undefined ? {} : { signal }),
+    };
+    for await (const batch of spec.read(context)) {
+      signal?.throwIfAborted();
+      for (const row of batch) rows.push(row);
+    }
+
+    const finishedAt = this.deps.now();
+    await session.transaction(async (tx) => {
+      const existing = ((await tx.execute(sql`select count(*)::int as n from ${spec.table}`)).rows[0] as { n: number } | undefined)?.n ?? 0;
+      if (rows.length === 0 && existing > 0) {
+        throw new SankhyaGatewayError('validation', {
+          code: 'empty_snapshot',
+          message: `${entity}: the source returned no rows while the mirror holds rows. The mirror was not changed; check the source and the TOP configuration before repeating the run.`,
+        });
+      }
+      await tx.delete(spec.table);
+      for (let offset = 0; offset < rows.length; offset += REPLACE_CHUNK_ROWS) {
+        const chunk = rows.slice(offset, offset + REPLACE_CHUNK_ROWS).map((row) => ({ ...row, syncedAt: finishedAt }));
+        await tx.insert(spec.table).values(chunk as never);
+      }
+      const stats: RunStats = { read: rows.length, created: rows.length, updated: 0, reactivated: 0, unchanged: 0, deactivated: 0 };
+      await markSucceeded(tx, entity, { startedAt, finishedAt, stats, rowCount: rows.length });
+    });
+
+    logger.info({ entity, rows: rows.length }, 'mirror sync completed (snapshot replaced)');
+    return { entity, outcome: 'completed', stats: { read: rows.length, created: rows.length, updated: 0, reactivated: 0, unchanged: 0, deactivated: 0 } };
   }
 }

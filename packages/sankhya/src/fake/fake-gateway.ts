@@ -93,7 +93,8 @@ export class FakeGateway implements SankhyaGateway {
   readonly #faults: readonly FakeGatewayFault[];
   readonly #media: FakeGatewayMediaOptions;
   readonly #orders: FakeOrderBook;
-  readonly #salesNotes: readonly DemoSalesNote[];
+  /** Built on first use: a small test dataset must still be able to construct the gateway when it never reads sales history. */
+  #salesNotes: readonly DemoSalesNote[] | undefined;
 
   constructor(options: FakeGatewayOptions = {}) {
     const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
@@ -107,7 +108,7 @@ export class FakeGateway implements SankhyaGateway {
     this.#faults = options.faults ?? [];
     this.#media = options.media ?? {};
     this.#orders = options.orders ?? new FakeOrderBook();
-    this.#salesNotes = options.salesNotes ?? buildDemoSalesNotes(this.#dataset);
+    this.#salesNotes = options.salesNotes;
   }
 
   describe(): GatewayDescription {
@@ -153,13 +154,17 @@ export class FakeGateway implements SankhyaGateway {
   readOpenTitles(options?: ReadOptions) {
     return this.#snapshot('openTitles', this.#dataset.openTitles, options);
   }
+  #notes(): readonly DemoSalesNote[] {
+    this.#salesNotes ??= buildDemoSalesNotes(this.#dataset);
+    return this.#salesNotes;
+  }
   readSalesHistoryMonthly(options: SalesHistoryReadOptions) {
     // Same synchronous validation as the real gateway; the rows are aggregated from synthetic notes with the same filters.
-    const rows = demoSalesHistoryMonthly(this.#salesNotes, options.config);
+    const rows = demoSalesHistoryMonthly(this.#notes(), options.config);
     return this.#snapshot('salesHistoryMonthly', rows, options);
   }
   readSalesHistoryCustomerProduct(options: SalesHistoryReadOptions) {
-    const rows = demoSalesHistoryCustomerProduct(this.#salesNotes, options.config);
+    const rows = demoSalesHistoryCustomerProduct(this.#notes(), options.config);
     return this.#snapshot('salesHistoryCustomerProduct', rows, options);
   }
   readDirectoryUsers(options?: ReadOptions) {

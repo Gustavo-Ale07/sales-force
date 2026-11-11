@@ -31,7 +31,7 @@ runMain('sync-once', async () => {
   const entities: MirrorEntity[] =
     requested.length === 0 && !runConfiguration ? [...MIRROR_ENTITIES] : requested.filter(isMirrorEntity);
 
-  const { env, gateway, gatewayDescription } = loadWorkerConfig(process.env);
+  const { env, gateway, gatewayDescription, salesHistory } = loadWorkerConfig(process.env);
   const logger = createLogger({ level: env.LOG_LEVEL, service: 'sync-once' });
   const db = createDb(env.DATABASE_URL.reveal(), { max: 4, applicationName: 'salesforce-sync-once' });
   const out = (line: string) => process.stdout.write(`${line}\n`);
@@ -67,6 +67,7 @@ runMain('sync-once', async () => {
       logger,
       now: () => new Date(),
       readScope: () => loadCurrentReadScope(db.db),
+      salesHistory,
     });
     const { results, failures } = await service.runAll(entities);
     for (const result of results) {

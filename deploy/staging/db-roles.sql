@@ -48,6 +48,8 @@
 --   erp_seller, erp_customer, erp_product, erp_product_group,
 --   erp_price_table, erp_price_table_version,
 --   erp_list_price                        S           S I U          worker mirror-writer upserts + soft delete (no DELETE). API is read-only (mirror.repository)
+--   erp_sales_history_monthly,
+--   erp_sales_history_customer_product    S           S I D          sales-history snapshots (stage D): the worker REPLACES the whole window in one transaction (DELETE + INSERT, no UPDATE). API is read-only (sales-history repository)
 --                                         + column UPDATE (synced_at) on erp_customer for force_api only: templates.repository takes
 --                                           SELECT ... FOR SHARE on the customer row, and PostgreSQL requires an UPDATE privilege for any
 --                                           row lock. Smallest grant that satisfies it; no other erp_* column is writable by the API.
@@ -259,6 +261,8 @@ BEGIN
       ('erp_customer',                       'force_api',    'SELECT'),
       ('erp_product',                        'force_api',    'SELECT'),
       ('erp_product_group',                  'force_api',    'SELECT'),
+      ('erp_sales_history_monthly',          'force_api',    'SELECT'),
+      ('erp_sales_history_customer_product', 'force_api',    'SELECT'),
       ('erp_price_table',                    'force_api',    'SELECT'),
       ('erp_price_table_version',            'force_api',    'SELECT'),
       ('erp_list_price',                     'force_api',    'SELECT'),
@@ -279,6 +283,8 @@ BEGIN
       ('erp_customer',                       'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_product',                        'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_product_group',                  'force_worker', 'SELECT, INSERT, UPDATE'),
+      ('erp_sales_history_monthly',          'force_worker', 'SELECT, INSERT, DELETE'),
+      ('erp_sales_history_customer_product', 'force_worker', 'SELECT, INSERT, DELETE'),
       ('erp_price_table',                    'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_price_table_version',            'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_list_price',                     'force_worker', 'SELECT, INSERT, UPDATE'),

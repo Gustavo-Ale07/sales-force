@@ -9,9 +9,13 @@ import {
   erpPriceTableVersion,
   erpProduct,
   erpProductGroup,
+  erpSalesHistoryCustomerProduct,
+  erpSalesHistoryMonthly,
   erpSeller,
 } from '@salesforce/db';
+import { classifySalesHistoryTop } from '@salesforce/domain';
 import type { Carrier, Customer, OpenTitle, DirectoryUser, ListPrice, PriceTable, PriceTableVersion, Product, ProductGroup, Seller } from '@salesforce/domain';
+import { salesHistoryReadConfig, type SalesHistorySyncConfig } from './sales-history-config.js';
 import {
   SankhyaGatewayError,
   type GatewayDescription,
@@ -44,9 +48,23 @@ export const MIRROR_ENTITIES = [
   'ipiRates',
   'openTitles',
   'productGroups',
+  'salesHistoryMonthly',
+  'salesHistoryCustomerProduct',
 ] as const satisfies readonly ReadEntity[];
 
 export type MirrorEntity = (typeof MIRROR_ENTITIES)[number];
+
+/**
+ * Entities mirrored as an ATOMIC SNAPSHOT REPLACEMENT instead of a hash-diff upsert (sales history): the whole window is read
+ * into memory, then the table is emptied and refilled in ONE transaction. They have no content hash, soft delete or seen table.
+ */
+export const SNAPSHOT_REPLACE_ENTITIES = ['salesHistoryMonthly', 'salesHistoryCustomerProduct'] as const satisfies readonly MirrorEntity[];
+export type SnapshotReplaceEntity = (typeof SNAPSHOT_REPLACE_ENTITIES)[number];
+export type RowMirrorEntity = Exclude<MirrorEntity, SnapshotReplaceEntity>;
+
+export function isSnapshotReplaceEntity(entity: MirrorEntity): entity is SnapshotReplaceEntity {
+  return (SNAPSHOT_REPLACE_ENTITIES as readonly string[]).includes(entity);
+}
 
 export function isMirrorEntity(value: string): value is MirrorEntity {
   return (MIRROR_ENTITIES as readonly string[]).includes(value);
@@ -75,6 +93,8 @@ export interface MirrorReadContext {
   /** Installation-derived read limits (see `deriveReadScope`); absent = unscoped read. */
   readonly scope?: ReadScope;
   readonly description: GatewayDescription;
+  /** Sales-history configuration (CFG-3); only the sales-history entities read it. */
+  readonly salesHistory?: SalesHistorySyncConfig;
   readonly signal?: AbortSignal;
   readonly warn: (message: string) => void;
   /** D-V: rows left out per eligibility criterion (counts only); recorded in `sync_state` and the run log. */
@@ -422,7 +442,112 @@ const productGroups: MirrorEntitySpec = {
     })),
 };
 
-export const MIRROR_SPECS: Readonly<Record<MirrorEntity, MirrorEntitySpec>> = {
+/** Spec of an atomic-replacement entity: rows are complete table rows (Drizzle property names) without `syncedAt`. */
+export interface SnapshotReplaceSpec {
+  readonly entity: SnapshotReplaceEntity;
+  readonly requires: readonly ReadEntity[];
+  readonly table: PgTable;
+  read(context: MirrorReadContext): AsyncIterable<readonly Readonly<Record<string, unknown>>[]>;
+}
+
+function salesHistoryConfigOf(entity: MirrorEntity, context: MirrorReadContext): SalesHistorySyncConfig {
+  if (context.salesHistory === undefined) {
+    throw new SankhyaGatewayError('validation', {
+      code: 'sales_history_not_configured',
+      message: `${entity}: the sales-history TOP configuration is missing; the read was refused.`,
+    });
+  }
+  return context.salesHistory;
+}
+
+/** `YYYY-MM` from the gateway -> the first day of the month, the stored `date`. */
+function monthStart(entity: MirrorEntity, month: string): string {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw invalid(entity, 'month', 'is not a YYYY-MM month');
+  return `${month}-01`;
+}
+
+function topKindOf(entity: MirrorEntity, topCode: number, config: SalesHistorySyncConfig): 'sale' | 'return' {
+  const kind = classifySalesHistoryTop(topCode, config.tops);
+  // The read is filtered to the configured TOPs, so any other code means a broken read: fail closed, never drop silently.
+  if (kind === 'other') throw invalid(entity, 'topCode', 'is neither a configured sale TOP nor a configured return TOP');
+  return kind;
+}
+
+function nonNegativeCount(entity: MirrorEntity, column: string, value: number): number {
+  if (!Number.isInteger(value) || value < 0 || value > 2_147_483_647) throw invalid(entity, column, 'is not a non-negative 32-bit integer');
+  return value;
+}
+
+function dayColumn(entity: MirrorEntity, column: string, value: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(new Date(`${value}T00:00:00Z`).getTime())) {
+    throw invalid(entity, column, 'is not a YYYY-MM-DD date');
+  }
+  return value;
+}
+
+function requiredDecimal(entity: MirrorEntity, column: string, value: string, precision: number, scale: number): string {
+  const out = decimalColumn(entity, column, value, precision, scale);
+  if (out === null) throw invalid(entity, column, 'is missing');
+  return out;
+}
+
+function mappedPlain<T>(snapshot: Snapshot<T>, toRow: (row: T) => Readonly<Record<string, unknown>>): AsyncIterable<readonly Readonly<Record<string, unknown>>[]> {
+  return {
+    async *[Symbol.asyncIterator]() {
+      for await (const batch of snapshot) yield batch.map(toRow);
+    },
+  };
+}
+
+const salesHistoryMonthly: SnapshotReplaceSpec = {
+  entity: 'salesHistoryMonthly',
+  requires: ['salesHistoryMonthly'],
+  table: erpSalesHistoryMonthly,
+  read: (context) => {
+    const config = salesHistoryConfigOf('salesHistoryMonthly', context);
+    return mappedPlain(
+      context.gateway.readSalesHistoryMonthly({ ...readOptions(context), config: salesHistoryReadConfig(config) }),
+      (row) => ({
+        customerCode: keyColumn('salesHistoryMonthly', 'customerCode', row.customerCode),
+        sellerCode: keyColumn('salesHistoryMonthly', 'sellerCode', row.sellerCode),
+        month: monthStart('salesHistoryMonthly', row.month),
+        topCode: keyColumn('salesHistoryMonthly', 'topCode', row.topCode),
+        topKind: topKindOf('salesHistoryMonthly', row.topCode, config),
+        noteCount: nonNegativeCount('salesHistoryMonthly', 'noteCount', row.noteCount),
+        totalAmount: requiredDecimal('salesHistoryMonthly', 'totalAmount', row.totalAmount, 14, 2),
+      }),
+    );
+  },
+};
+
+const salesHistoryCustomerProduct: SnapshotReplaceSpec = {
+  entity: 'salesHistoryCustomerProduct',
+  requires: ['salesHistoryCustomerProduct'],
+  table: erpSalesHistoryCustomerProduct,
+  read: (context) => {
+    const config = salesHistoryConfigOf('salesHistoryCustomerProduct', context);
+    return mappedPlain(
+      context.gateway.readSalesHistoryCustomerProduct({ ...readOptions(context), config: salesHistoryReadConfig(config) }),
+      (row) => ({
+        customerCode: keyColumn('salesHistoryCustomerProduct', 'customerCode', row.customerCode),
+        productCode: keyColumn('salesHistoryCustomerProduct', 'productCode', row.productCode),
+        topCode: keyColumn('salesHistoryCustomerProduct', 'topCode', row.topCode),
+        topKind: topKindOf('salesHistoryCustomerProduct', row.topCode, config),
+        noteCount: nonNegativeCount('salesHistoryCustomerProduct', 'noteCount', row.noteCount),
+        quantity: requiredDecimal('salesHistoryCustomerProduct', 'quantity', row.quantity, 18, 6),
+        netAmount: requiredDecimal('salesHistoryCustomerProduct', 'netAmount', row.netAmount, 14, 2),
+        lastSaleDate: dayColumn('salesHistoryCustomerProduct', 'lastSaleDate', row.lastSaleDate),
+      }),
+    );
+  },
+};
+
+export const SNAPSHOT_REPLACE_SPECS: Readonly<Record<SnapshotReplaceEntity, SnapshotReplaceSpec>> = {
+  salesHistoryMonthly,
+  salesHistoryCustomerProduct,
+};
+
+export const MIRROR_SPECS: Readonly<Record<RowMirrorEntity, MirrorEntitySpec>> = {
   sellers,
   customers,
   products,
