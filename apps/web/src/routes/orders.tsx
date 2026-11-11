@@ -35,11 +35,12 @@ import { useState } from "react";
 import { CustomerPicker } from "../components/customer-picker";
 import { DeleteOrderDialog } from "../components/delete-order-dialog";
 import { OrderProductFilter, PRODUCT_MATCH_OPTIONS, useProductLabel, type ProductMatch } from "../components/order-product-filter";
+import { ErpBillingBadge, ErpReleaseBadge, OrderStatusBadge } from "../components/order-status-badges";
 import { PrintOrderButton } from "../components/print-order-button";
 import { QueryError } from "../components/query-error";
 import { customerQueryOptions, orderEntryConfigurationQueryOptions, ordersQueryOptions, type OrdersParams } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
-import { deliveryErrorText, erpBillingLabels, erpReleaseLabels, erpStatusText, formatCount, orderReference, orderReviewLabel, orderReviewReasons, orderStatusLabels, orderStatusView } from "../lib/labels";
+import { deliveryErrorText, erpStatusText, formatCount, orderReference, orderReviewLabel, orderReviewReasons, orderStatusLabels } from "../lib/labels";
 import { MAX_ORDER_PRODUCTS, ORDER_DATE_FIELDS, ORDER_STATUSES, type OrdersSearch } from "../lib/route-search";
 import { asDate, asOneOf, compact } from "../lib/search-params";
 import { useSearchBox } from "../lib/use-search-box";
@@ -357,7 +358,6 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
               </TableMessageRow>
             ) : (
               query.data.items.map((order) => {
-                const status = orderStatusView(order);
                 return (
                   <TableRow key={order.id} interactive onActivate={() => onOpenOrder(order.id)}>
                     <TableCell>
@@ -371,17 +371,17 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
                       <DateText value={order.createdAt} />
                     </TableCell>
                     <TableCell>
-                      <StatusDot tone={status.tone}>{status.label}</StatusDot>
+                      <OrderStatusBadge order={order} variant="dot" />
                       {order.erpStatus ? (
                         <span className="mt-0.5 block text-fg-muted">Sankhya: {erpStatusText(order.erpStatus).label}</span>
                       ) : null}
                       {order.erpBilling ? (
-                        <span className="mt-0.5 block" title={erpBillingLabels[order.erpBilling.state].hint}>
-                          <StatusDot tone={erpBillingLabels[order.erpBilling.state].tone}>{erpBillingLabels[order.erpBilling.state].label}</StatusDot>
+                        <span className="mt-0.5 block">
+                          <ErpBillingBadge state={order.erpBilling.state} variant="dot" />
                         </span>
                       ) : order.erpRelease ? (
                         <span className="mt-0.5 block">
-                          <StatusDot tone={erpReleaseLabels[order.erpRelease.state].tone}>{erpReleaseLabels[order.erpRelease.state].label}</StatusDot>
+                          <ErpReleaseBadge state={order.erpRelease.state} variant="dot" />
                         </span>
                       ) : null}
                       {order.status === "rejected" && deliveryErrorText(order.erpDelivery) ? (

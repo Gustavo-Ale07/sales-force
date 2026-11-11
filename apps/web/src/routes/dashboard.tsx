@@ -14,7 +14,6 @@ import {
   Reveal,
   StatGrid,
   StatTile,
-  StatusDot,
   Table,
   TableBody,
   TableCaption,
@@ -28,9 +27,10 @@ import {
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, Ban, CheckCircle2, ChevronRight, Plus, Tag } from "lucide-react";
+import { AlertTriangle, BadgeCheck, Ban, CheckCircle2, ChevronRight, FilePen, Package, Plus, Tag, UserCheck, Users, Wallet } from "lucide-react";
 import type { ReactNode } from "react";
 import { findMetric, metricCount, MetricValueOrUnavailable, MetricValueText } from "../components/metric-value";
+import { OrderStatusBadge } from "../components/order-status-badges";
 import { QueryError } from "../components/query-error";
 import { dashboardQueryOptions } from "../lib/api-queries";
 import { useApi, useAppServices } from "../lib/app-context";
@@ -68,7 +68,7 @@ function KpiLink({ to, search, children }: { to: string; search?: Record<string,
     <Link
       to={to as never}
       search={search as never}
-      className="-m-2 block rounded-lg p-2 outline-none transition-colors duration-[var(--sf-dur-fast)] hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ring"
+      className="block rounded-lg no-underline outline-none transition-[translate,box-shadow] duration-[var(--sf-dur-fast)] ease-spring hover:-translate-y-px hover:shadow-card focus-visible:ring-2 focus-visible:ring-ring active:translate-y-0"
     >
       {children}
     </Link>
@@ -145,7 +145,6 @@ function RecentOrders({ orders }: { orders: DashboardResponse["recentOrders"] })
             </TableHeader>
             <TableBody>
               {orders.map((order) => {
-                const status = orderStatusLabels[order.status];
                 return (
                   <TableRow key={order.id}>
                     <TableCell>
@@ -155,7 +154,7 @@ function RecentOrders({ orders }: { orders: DashboardResponse["recentOrders"] })
                     </TableCell>
                     <TableCell>{titleCase(order.customerName)}</TableCell>
                     <TableCell>
-                      <StatusDot tone={status.tone}>{status.label}</StatusDot>
+                      <OrderStatusBadge order={order} variant="dot" />
                     </TableCell>
                     <TableCell numeric>
                       <Money value={order.estimatedTotal} />
@@ -269,24 +268,24 @@ export function DashboardPage() {
         </Card>
       ) : (
         <>
-          <StatGrid className="sm:grid-cols-3">
+          <StatGrid variant="tiles" className="sm:grid-cols-3">
             <KpiLink to="/clientes">
-              <StatTile label="Clientes" value={<MetricValueOrUnavailable metric={customersTotal} />} />
+              <StatTile label="Clientes" icon={<Users size={16} aria-hidden="true" />} tone="accent" value={<MetricValueOrUnavailable metric={customersTotal} />} />
             </KpiLink>
             <KpiLink to="/clientes" search={{ status: "active" }}>
-              <StatTile label="Ativos" value={<MetricValueOrUnavailable metric={customersActive} />} />
+              <StatTile label="Ativos" icon={<UserCheck size={16} aria-hidden="true" />} tone="success" value={<MetricValueOrUnavailable metric={customersActive} />} />
             </KpiLink>
             <KpiLink to="/produtos">
-              <StatTile label="Produtos" value={<MetricValueOrUnavailable metric={productsVisible} />} />
+              <StatTile label="Produtos" icon={<Package size={16} aria-hidden="true" />} tone="info" value={<MetricValueOrUnavailable metric={productsVisible} />} />
             </KpiLink>
             <KpiLink to="/produtos" search={{ sellable: "true" }}>
-              <StatTile label="Vendáveis" value={<MetricValueOrUnavailable metric={productsSellable} />} />
+              <StatTile label="Vendáveis" icon={<BadgeCheck size={16} aria-hidden="true" />} tone="success" value={<MetricValueOrUnavailable metric={productsSellable} />} />
             </KpiLink>
             <KpiLink to="/pedidos" search={{ status: "draft" }}>
-              <StatTile label="Pedidos em aberto" value={<MetricValueOrUnavailable metric={drafts} />} />
+              <StatTile label="Pedidos em aberto" icon={<FilePen size={16} aria-hidden="true" />} tone="warning" value={<MetricValueOrUnavailable metric={drafts} />} />
             </KpiLink>
             <KpiLink to="/pedidos" search={{ status: "draft" }}>
-              <StatTile label="R$ em rascunhos" value={<MetricValueOrUnavailable metric={draftsEstimatedTotal} />} />
+              <StatTile label="R$ em rascunhos" icon={<Wallet size={16} aria-hidden="true" />} tone="neutral" value={<MetricValueOrUnavailable metric={draftsEstimatedTotal} />} />
             </KpiLink>
           </StatGrid>
 

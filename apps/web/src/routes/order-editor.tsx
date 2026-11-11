@@ -56,7 +56,8 @@ import { useApi } from "../lib/app-context";
 import { useLoadedDataset, requireDataset } from "../lib/dataset";
 import { approvalsEnabled } from "../lib/discount-authority";
 import { describeApiError, submitConflictText } from "../lib/error-message";
-import { deliveryErrorText, erpBillingItemText, erpBillingLabels, erpBillingText, erpNoteDiverged, erpNoteDivergedText, erpReleaseEventText, erpReleaseLabels, erpReleaseMessages, erpStatusText, orderReference, orderReviewLabel, orderReviewReasons, orderStatusView } from "../lib/labels";
+import { ErpBillingBadge, ErpReleaseBadge, OrderStatusBadge } from "../components/order-status-badges";
+import { deliveryErrorText, erpBillingItemText, erpBillingText, erpNoteDiverged, erpNoteDivergedText, erpReleaseEventText, erpReleaseMessages, erpStatusText, orderReference, orderReviewLabel, orderReviewReasons, orderStatusView } from "../lib/labels";
 import {
   describeIssue,
   discountProblemMessages,
@@ -636,12 +637,12 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
         badges={
           status ? (
             <>
-              <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
+              {order ? <OrderStatusBadge order={order} /> : <StatusBadge tone={status.tone}>{status.label}</StatusBadge>}
               {order?.erpStatus ? <ErpStatusBadges status={order.erpStatus} /> : null}
               {order?.erpBilling ? (
-                <StatusBadge tone={erpBillingLabels[order.erpBilling.state].tone}>{erpBillingLabels[order.erpBilling.state].label}</StatusBadge>
+                <ErpBillingBadge state={order.erpBilling.state} />
               ) : order?.erpRelease ? (
-                <StatusBadge tone={erpReleaseLabels[order.erpRelease.state].tone}>{erpReleaseLabels[order.erpRelease.state].label}</StatusBadge>
+                <ErpReleaseBadge state={order.erpRelease.state} />
               ) : null}
               {order?.expedicao === undefined ? null : <StatusBadge tone="neutral">{order.expedicao ? "Expedição: marcada" : "Expedição: não marcada"}</StatusBadge>}
             </>

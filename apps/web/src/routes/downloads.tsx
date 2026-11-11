@@ -1,8 +1,14 @@
 import { Badge, Card, CardBody, EmptyState, ErrorState, PageHeader, SkeletonLines, buttonVariants } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Download, Smartphone } from "lucide-react";
+import { Download, Smartphone, Star } from "lucide-react";
 import { formatSize, loadDownloads, type DownloadItem } from "../lib/downloads";
+
+const INSTALL_STEPS = [
+  "Abra esta página no celular e toque em “Baixar para Android”.",
+  "Ao abrir o arquivo, permita a instalação de apps desta origem quando o Android pedir.",
+  "Confira o SHA-256 acima se o seu administrador pedir. O app também se atualiza sozinho depois de instalado.",
+] as const;
 
 function formatDate(iso: string | null): string | null {
   if (!iso) return null;
@@ -13,12 +19,22 @@ function formatDate(iso: string | null): string | null {
 function DownloadCard({ item, newest }: { item: DownloadItem; newest: boolean }) {
   const published = formatDate(item.publishedAt);
   return (
-    <Card>
+    <Card className={newest ? "border-accent ring-1 ring-accent/30" : undefined}>
       <CardBody className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Smartphone size={18} aria-hidden="true" />
+        <div className="flex flex-wrap items-center gap-3">
+          <span
+            aria-hidden="true"
+            className={`inline-flex size-10 shrink-0 items-center justify-center rounded-full ${newest ? "bg-accent-weak text-accent-text" : "bg-surface-3 text-fg-muted"}`}
+          >
+            <Smartphone size={20} />
+          </span>
           <h2 className="text-base font-semibold">{item.label}</h2>
-          {newest ? <Badge tone="success">Versão atual</Badge> : null}
+          {newest ? (
+            <Badge tone="success" className="gap-1">
+              <Star size={11} aria-hidden="true" />
+              Versão atual
+            </Badge>
+          ) : null}
         </div>
         <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4">
           <div>
@@ -44,7 +60,7 @@ function DownloadCard({ item, newest }: { item: DownloadItem; newest: boolean })
         </dl>
         {item.notes ? <p className="text-sm text-fg-muted">{item.notes}</p> : null}
         <div className="flex flex-wrap items-center gap-3">
-          <a className={buttonVariants({ variant: "primary" })} href={item.url} download>
+          <a className={buttonVariants({ variant: newest ? "primary" : "secondary", size: newest ? "lg" : "md" })} href={item.url} download>
             <Download size={16} aria-hidden="true" />
             Baixar para Android
           </a>
@@ -83,11 +99,19 @@ export function DownloadsPage() {
       )}
       <Card>
         <CardBody className="text-sm text-fg-muted">
-          <p className="font-semibold text-fg">Como instalar</p>
-          <ol className="ml-5 list-decimal">
-            <li>Abra esta página no celular e toque em “Baixar para Android”.</li>
-            <li>Ao abrir o arquivo, permita a instalação de apps desta origem quando o Android pedir.</li>
-            <li>Confira o SHA-256 acima se o seu administrador pedir. O app também se atualiza sozinho depois de instalado.</li>
+          <p className="mb-3 font-semibold text-fg">Como instalar</p>
+          <ol className="m-0 flex list-none flex-col gap-3 p-0">
+            {INSTALL_STEPS.map((step, index) => (
+              <li key={step} className="flex items-start gap-3">
+                <span
+                  aria-hidden="true"
+                  className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-accent-weak text-xs font-semibold text-accent-text"
+                >
+                  {index + 1}
+                </span>
+                <span className="pt-0.5">{step}</span>
+              </li>
+            ))}
           </ol>
         </CardBody>
       </Card>

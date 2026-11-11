@@ -30,8 +30,10 @@ function TopNav({ role }: { role: string | undefined }) {
     // max-md: collapse), and up to 5 nav items plus that label don't both fit in the 768-1023px range -- the
     // drawer nav below covers that gap instead of the two colliding.
     <nav aria-label="Principal" className="hidden items-center gap-1.5 lg:flex">
-      {navItemsFor(role, approvals).map(({ to, label }) => (
+      {navItemsFor(role, approvals).map(({ to, label, icon: Icon }) => (
         <Link key={to} to={to} activeOptions={{ exact: to === "/" }} className={topLink}>
+          {/* Icons only from xl: below it the labels alone already use the available width. */}
+          <Icon size={18} strokeWidth={1.75} aria-hidden="true" className="hidden shrink-0 xl:block" />
           {label}
         </Link>
       ))}

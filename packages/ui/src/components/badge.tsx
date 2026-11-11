@@ -1,5 +1,5 @@
 import { cva, type VariantProps } from "class-variance-authority";
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { cn } from "../lib/cn";
 
 export type Tone = "neutral" | "accent" | "success" | "warning" | "danger" | "info";
@@ -41,19 +41,37 @@ const dotClasses: Record<Tone, string> = {
   info: "bg-info",
 };
 
+/** Icon colour for the calm dot variant (the pill inherits its tone text colour). */
+const iconToneClasses: Record<Tone, string> = {
+  neutral: "text-fg-muted",
+  accent: "text-accent",
+  success: "text-ok",
+  warning: "text-warn",
+  danger: "text-danger",
+  info: "text-info",
+};
+
 export interface StatusDotProps extends Omit<ComponentProps<"span">, "children"> {
   tone?: Tone;
   children: string;
+  /** Optional decorative icon (lucide) drawn instead of the dot; the text still carries the meaning. */
+  icon?: ReactNode;
 }
 
 /**
  * Calm status for table rows and detail pages (reference `.pl-status`): coloured dot + plain text, no pill.
  * Same rule as {@link StatusBadge}: the text is always rendered, the dot is decorative.
  */
-export function StatusDot({ tone = "neutral", className, children, ...props }: StatusDotProps) {
+export function StatusDot({ tone = "neutral", icon, className, children, ...props }: StatusDotProps) {
   return (
     <span className={cn("inline-flex items-center gap-2 whitespace-nowrap text-sm text-fg", className)} {...props}>
-      <span aria-hidden="true" className={cn("size-2 shrink-0 rounded-full", dotClasses[tone])} />
+      {icon ? (
+        <span aria-hidden="true" className={cn("inline-flex shrink-0", iconToneClasses[tone])}>
+          {icon}
+        </span>
+      ) : (
+        <span aria-hidden="true" className={cn("size-2 shrink-0 rounded-full", dotClasses[tone])} />
+      )}
       {children}
     </span>
   );
@@ -62,16 +80,24 @@ export function StatusDot({ tone = "neutral", className, children, ...props }: S
 export interface StatusBadgeProps extends Omit<ComponentProps<"span">, "children"> {
   tone?: Tone;
   children: string;
+  /** Optional decorative icon (lucide) drawn instead of the dot; the text still carries the meaning. */
+  icon?: ReactNode;
 }
 
 /**
  * Semantic status (order/customer/integration state). Colour is never the only signal: the text label is
  * always rendered and the dot is decorative. The mapping status -> tone belongs to the screen using it.
  */
-export function StatusBadge({ tone = "neutral", className, children, ...props }: StatusBadgeProps) {
+export function StatusBadge({ tone = "neutral", icon, className, children, ...props }: StatusBadgeProps) {
   return (
     <span className={cn(badgeVariants({ tone, shape: "pill" }), className)} {...props}>
-      <span aria-hidden="true" className="size-2 rounded-full bg-current" />
+      {icon ? (
+        <span aria-hidden="true" className="inline-flex shrink-0">
+          {icon}
+        </span>
+      ) : (
+        <span aria-hidden="true" className="size-2 rounded-full bg-current" />
+      )}
       {children}
     </span>
   );

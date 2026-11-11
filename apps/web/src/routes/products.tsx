@@ -14,6 +14,7 @@ import {
   PageHeader,
   Pagination,
   SearchInput,
+  SegmentedControl,
   StatusDot,
   Select,
   SkeletonLines,
@@ -31,8 +32,11 @@ import {
   titleCase,
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
+import { LayoutGrid, List } from "lucide-react";
+import { useState } from "react";
 import { CustomerPicker } from "../components/customer-picker";
 import { PriceCell } from "../components/price-cell";
+import { ProductGrid } from "../components/product-grid";
 import { ProductImage } from "../components/product-image";
 import { QueryError } from "../components/query-error";
 import {
@@ -114,8 +118,12 @@ export interface ProductsPageProps {
 
 const COLUMNS = 6;
 
+type ProductsView = "list" | "grid";
+
 export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
   const api = useApi();
+  // Display mode only (not a filter): plain component state, no persistence.
+  const [view, setView] = useState<ProductsView>("list");
   const { product: openProduct, ...filters } = params;
   const apiParams: ProductsParams = { ...filters, page: params.page ?? 1, pageSize: params.pageSize ?? 25, sort: params.sort ?? "description" };
   const query = useQuery(productsQueryOptions(api, apiParams));
@@ -220,7 +228,37 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
         </Alert>
       ) : null}
 
+      <div className="flex justify-end">
+        <SegmentedControl<ProductsView>
+          aria-label="Modo de exibição do catálogo"
+          value={view}
+          onValueChange={setView}
+          className="w-auto"
+          options={[
+            { value: "list", label: <span className="inline-flex items-center gap-1.5"><List size={14} aria-hidden="true" />Lista</span>, description: "Ver como tabela" },
+            { value: "grid", label: <span className="inline-flex items-center gap-1.5"><LayoutGrid size={14} aria-hidden="true" />Fotos</span>, description: "Ver como grade de fotos" },
+          ]}
+        />
+      </div>
+
       <Card aria-busy={query.isFetching}>
+        {view === "grid" ? (
+          query.isPending ? (
+            <div aria-busy="true" className="p-4">
+              <SkeletonLines lines={6} label="Carregando produtos…" />
+            </div>
+          ) : query.isError ? (
+            <QueryError error={query.error} onRetry={() => void query.refetch()} retrying={query.isRefetching} compact />
+          ) : query.data.items.length === 0 ? (
+            <EmptyState
+              compact
+              title={hasFilters ? "Nenhum produto encontrado" : "Catálogo vazio"}
+              description={hasFilters ? "Ajuste ou limpe os filtros para ver mais resultados." : "Os produtos aparecem aqui após a sincronização com o Sankhya."}
+            />
+          ) : (
+            <ProductGrid items={query.data.items} onOpen={(code) => onSearchChange(compact({ ...params, product: code }))} />
+          )
+        ) : (
         <Table label="Produtos">
           <TableCaption>Catálogo de produtos</TableCaption>
           <TableHeader>
@@ -284,6 +322,7 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
             )}
           </TableBody>
         </Table>
+        )}
         {query.data ? (
           <Pagination
             page={query.data.page}

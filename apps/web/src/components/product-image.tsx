@@ -32,17 +32,19 @@ export interface ProductImageProps {
   /** Display name for the initials (defaults to the description). */
   name?: string;
   variant?: ProductImageVariant;
+  /** Rendered box in px (defaults to the variant size). The image source still follows `variant`. */
+  size?: number;
   className?: string;
 }
 
-export function ProductImage({ image, description, name, variant = "thumb", className }: ProductImageProps) {
+export function ProductImage({ image, description, name, variant = "thumb", size: sizeOverride, className }: ProductImageProps) {
   // The failure is remembered for the exact src: a new version (new src) is tried again.
   // No fallback to the full original: the server generates a thumbnail for every photo, and the
   // original must never be shipped into list boxes. A failed request shows the initials placeholder.
   const [failed, setFailed] = useState<string[]>([]);
   const primary = image ? productImageSrc(image, variant) : null;
   const src = primary !== null && !failed.includes(primary) ? primary : null;
-  const size = SIZES[variant];
+  const size = sizeOverride ?? SIZES[variant];
   const box = `${variant === "thumb" ? "rounded" : "rounded-md"} border border-line bg-surface-2 shrink-0 ${className ?? ""}`;
 
   if (src) {

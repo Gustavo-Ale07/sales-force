@@ -1,5 +1,5 @@
 import { canAdministerDiscountLimits, canDecideApprovals, canSeeIntegration, canUseCommercial } from "@salesforce/contracts";
-import { Download, List, Percent, Settings, ShieldCheck, Plug, ShoppingCart, Target, Users, type LucideIcon } from "lucide-react";
+import { House, Package, Percent, Plug, Settings, ShieldCheck, ShoppingCart, Smartphone, Users, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   to: "/" | "/clientes" | "/produtos" | "/pedidos" | "/integracao" | "/configuracoes" | "/limites-desconto" | "/aprovacoes" | "/downloads";
@@ -22,15 +22,15 @@ export interface NavItem {
  * Integração is not part of Vidya: it stays as a trailing item that only the integration roles see.
  */
 const allNavItems: NavItem[] = [
-  { to: "/", label: "Início", icon: Target },
-  { to: "/produtos", label: "Catálogo", icon: List },
+  { to: "/", label: "Início", icon: House },
+  { to: "/produtos", label: "Catálogo", icon: Package },
   { to: "/clientes", label: "Clientes", icon: Users },
   { to: "/pedidos", label: "Vendas", icon: ShoppingCart },
   { to: "/aprovacoes", label: "Aprovações", icon: ShieldCheck, approverOnly: true },
   { to: "/limites-desconto", label: "Limites de desconto", icon: Percent, adminOnly: true },
   { to: "/integracao", label: "Integração", icon: Plug, integrationOnly: true },
   { to: "/configuracoes", label: "Configurações", icon: Settings, integrationOnly: true },
-  { to: "/downloads", label: "Aplicativo", icon: Download, everyone: true },
+  { to: "/downloads", label: "Aplicativo", icon: Smartphone, everyone: true },
 ];
 
 /**
