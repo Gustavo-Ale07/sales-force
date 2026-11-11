@@ -67,6 +67,10 @@ html:has(body[data-scroll-locked]) {
 /* Downloads centre (/downloads): public marketing-style page. System fonts, slow float and scroll reveal;
    all motion is off under prefers-reduced-motion. */
 .dl-root {
+  /* Palette derived only from the Force tokens (--sf-*): CTA red toward the warm dark ink. */
+  --dl-ink: var(--sf-fg);
+  --dl-ink-2: color-mix(in srgb, var(--sf-fg) 94%, var(--sf-red-strong));
+  --dl-wine: color-mix(in srgb, var(--sf-red-strong) 52%, var(--sf-fg));
   font-family: system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, "Noto Sans", sans-serif;
   overflow-x: clip;
 }

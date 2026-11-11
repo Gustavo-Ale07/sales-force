@@ -20,8 +20,8 @@ import {
 import { PILL_GHOST, PILL_LIGHT, PILL_OFF, PILL_SOLID, PrimaryCta, type PublishedState } from "./cta";
 import { Reveal, useInView } from "./use-in-view";
 
-const NIGHT = "bg-[#050b2e]";
-const BLACK = "bg-[#02040f]";
+const NIGHT = "bg-[var(--dl-ink-2)]";
+const BLACK = "bg-[var(--dl-ink)]";
 export const H2 = "m-0 text-[clamp(40px,6vw,72px)] font-black uppercase leading-[0.98] tracking-[-0.02em] text-balance";
 const LEAD = "m-0 max-w-xl text-lg leading-relaxed text-white/80 sm:text-xl";
 
@@ -45,18 +45,18 @@ export function TopBar() {
     <header
       className={cn(
         "fixed inset-x-0 top-0 z-40 flex items-center justify-between gap-3 px-4 py-3 transition-colors sm:px-6",
-        scrolled && "bg-[#050b2e]/80 backdrop-blur",
+        scrolled && "bg-[var(--dl-ink)]/85 backdrop-blur",
       )}
     >
       <Link
         to="/downloads"
-        className="inline-flex items-center gap-2 rounded-full bg-white py-1.5 pl-1.5 pr-4 text-lg font-black tracking-tight text-[#01136a] shadow-lg focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/70"
+        className="inline-flex items-center gap-2 rounded-full bg-white py-1.5 pl-1.5 pr-4 text-lg font-black tracking-tight text-[var(--sf-fg)] shadow-lg focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/70"
         aria-label="Force"
       >
         <img src="/brand/icon-p.png" alt="" width={32} height={32} className="size-8 rounded-full" />
         Force
       </Link>
-      <nav aria-label="Seções da página" className="hidden items-center gap-1 rounded-full bg-[#01136a]/45 p-1 backdrop-blur md:flex">
+      <nav aria-label="Seções da página" className="hidden items-center gap-1 rounded-full bg-[var(--dl-ink)]/50 p-1 backdrop-blur md:flex">
         {NAV.map((link) => (
           <a
             key={link.href}
@@ -69,7 +69,7 @@ export function TopBar() {
       </nav>
       <Link
         to="/login"
-        className="inline-flex min-h-10 items-center rounded-full bg-white px-5 text-sm font-extrabold text-[#01136a] shadow-lg hover:bg-[#e6eaff] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/70"
+        className="inline-flex min-h-10 items-center rounded-full bg-white px-5 text-sm font-extrabold text-[var(--sf-fg)] shadow-lg hover:bg-[var(--sf-cta-weak)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/70"
       >
         Entrar
       </Link>
@@ -85,11 +85,11 @@ export function Hero({ state, onRetry, retrying }: { state: PublishedState; onRe
         id="hero"
         ref={heroRef}
         aria-labelledby="dl-hero-title"
-        className="relative overflow-hidden bg-[linear-gradient(180deg,#4a5fe0_0%,#2c3bb5_28%,#101d86_58%,#01136a_80%,#050b2e_100%)] flex min-h-[100svh] flex-col px-5 pt-28 text-center text-white sm:px-8 sm:pt-32"
+        className="relative overflow-hidden bg-[linear-gradient(180deg,var(--sf-red-strong)_0%,var(--dl-wine)_48%,var(--dl-ink)_100%)] flex min-h-[100svh] flex-col px-5 pt-28 text-center text-white sm:px-8 sm:pt-32"
       >
-        <Blob className="-left-24 top-24 size-[420px] bg-[#8ea0ff]/45" />
-        <Blob className="-right-20 top-[38%] size-[380px] bg-[#ff0109]/30" />
-        <Blob className="left-[35%] top-[-120px] size-[320px] bg-white/25" />
+        <Blob className="-left-24 top-24 size-[420px] bg-[var(--sf-red)]/35" />
+        <Blob className="-right-20 top-[38%] size-[380px] bg-[var(--sf-red)]/40" />
+        <Blob className="left-[35%] top-[-120px] size-[320px] bg-white/15" />
         <div className="relative mx-auto flex max-w-5xl flex-col items-center gap-6">
           <h1 id="dl-hero-title" className="m-0 text-[clamp(40px,9vw,96px)] font-black uppercase leading-[0.96] tracking-[-0.025em] text-balance">
             Baixe o Force onde você estiver
@@ -116,15 +116,15 @@ export function Hero({ state, onRetry, retrying }: { state: PublishedState; onRe
         <div className="relative mx-auto mt-auto w-full max-w-[820px] pt-14 sm:pt-16">
           <OrderBoxArt className="dl-float absolute left-0 top-2 z-10 w-14 sm:left-2 sm:w-24 md:-left-4 md:top-4 md:w-32 [--dl-rot:-8deg]" />
           <BubbleArt className="dl-float-slow absolute right-0 top-4 z-10 w-14 sm:right-2 sm:w-24 md:-right-4 md:top-12 md:w-32 [--dl-rot:6deg]" />
-          <div className="mx-auto h-[230px] w-[300px] overflow-hidden sm:h-[260px] sm:w-[360px] md:h-[300px]">
-            <PhoneMock className="mx-auto w-[300px] sm:w-[360px]" />
+          <div className="mx-auto h-[230px] w-[300px] overflow-hidden sm:h-[330px] sm:w-[420px] md:h-[350px]">
+            <PhoneMock className="mx-auto w-[300px] sm:w-[420px]" />
           </div>
         </div>
       </section>
       <div
         aria-hidden="true"
         className={cn(
-          "fixed inset-x-0 bottom-0 z-30 flex justify-center border-t border-white/15 bg-[#01136a]/92 px-4 pb-4 pt-3 backdrop-blur transition duration-300 md:hidden",
+          "fixed inset-x-0 bottom-0 z-30 flex justify-center border-t border-white/15 bg-[var(--dl-ink)]/92 px-4 pb-4 pt-3 backdrop-blur transition duration-300 md:hidden",
           heroVisible ? "translate-y-0 opacity-100" : "pointer-events-none invisible translate-y-full opacity-0",
         )}
       >
@@ -140,12 +140,12 @@ function Frame({ children, className }: { children: ReactNode; className?: strin
   return (
     <div
       className={cn(
-        "relative flex h-[420px] justify-center overflow-hidden rounded-[36px] bg-[linear-gradient(135deg,#1e2b8f_0%,#3b4ed0_60%,#6477ff_100%)] pt-10 sm:h-[540px] sm:rounded-[40px]",
+        "relative flex h-[420px] justify-center overflow-hidden rounded-[36px] bg-[linear-gradient(135deg,var(--sf-red-strong)_0%,var(--dl-wine)_55%,var(--dl-ink)_100%)] pt-10 sm:h-[560px] sm:rounded-[40px]",
         className,
       )}
     >
       <Blob className="-left-10 -top-10 size-64 bg-white/25" />
-      <Blob className="-bottom-16 -right-10 size-64 bg-[#ff0109]/45" />
+      <Blob className="-bottom-16 -right-10 size-64 bg-[var(--sf-red)]/45" />
       {children}
     </div>
   );
@@ -154,10 +154,10 @@ function Frame({ children, className }: { children: ReactNode; className?: strin
 export function PhoneSection({ state }: { state: PublishedState }) {
   return (
     <Section id="celular" labelledBy="dl-phone-title" className={cn(BLACK, "text-white")}>
-      <div className="mx-auto grid max-w-6xl items-center gap-10 md:grid-cols-2 md:gap-16">
+      <div className="mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-2 lg:gap-16">
         <Reveal>
           <Frame>
-            <PhoneMock className="relative w-[250px] sm:w-[290px] [--dl-rot:-3deg] dl-float-slow" />
+            <PhoneMock className="relative w-[250px] sm:w-[340px] [--dl-rot:-3deg] dl-float-slow" />
           </Frame>
         </Reveal>
         <Reveal delay={120} className="flex flex-col items-start gap-6">
@@ -193,8 +193,8 @@ export function PhoneSection({ state }: { state: PublishedState }) {
 export function WebSection() {
   return (
     <Section id="web" labelledBy="dl-web-title" className={cn(NIGHT, "text-white")}>
-      <div className="mx-auto grid max-w-6xl items-center gap-10 md:grid-cols-2 md:gap-16">
-        <Reveal className="order-2 flex flex-col items-start gap-6 md:order-1">
+      <div className="mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-2 lg:gap-16">
+        <Reveal className="order-2 flex flex-col items-start gap-6 lg:order-1">
           <h2 id="dl-web-title" className={H2}>
             No computador, é só abrir
           </h2>
@@ -203,7 +203,7 @@ export function WebSection() {
             Abrir o Force no navegador
           </Link>
         </Reveal>
-        <Reveal delay={120} className="order-1 md:order-2">
+        <Reveal delay={120} className="order-1 lg:order-2">
           <Frame className="items-center px-5 pt-0 sm:px-10">
             <BrowserMock className="relative -rotate-2" />
           </Frame>
@@ -216,14 +216,13 @@ export function WebSection() {
 const BENEFITS = [
   { title: "Funciona offline", text: "Registre pedidos sem sinal. Tudo segue quando a conexão voltar.", Icon: OfflineIcon },
   { title: "Catálogo com fotos", text: "Mostre o produto ao cliente antes de fechar a venda.", Icon: PhotoIcon },
-  { title: "Pedido direto no Sankhya", text: "O pedido segue para o ERP, sem digitar duas vezes.", Icon: OrderIcon },
+  { title: "Pedido direto no Sankhya", text: "Pedido que vai direto para o Sankhya.", Icon: OrderIcon },
   { title: "Atualiza sozinho", text: "As novas versões chegam ao app sem você fazer nada.", Icon: UpdateIcon },
 ] as const;
 
 export function Benefits() {
   return (
-    <Section id="beneficios" labelledBy="dl-benefits-title" className={cn(NIGHT, "text-white")}>
-      <Blob className="left-1/2 top-0 size-[420px] -translate-x-1/2 bg-[#1e2b8f]/60" />
+    <Section id="beneficios" labelledBy="dl-benefits-title" className="bg-[var(--sf-bg)] text-[var(--sf-fg)]">
       <div className="relative mx-auto max-w-6xl">
         <Reveal>
           <h2 id="dl-benefits-title" className={cn(H2, "mx-auto max-w-3xl text-center")}>
@@ -234,12 +233,12 @@ export function Benefits() {
           {BENEFITS.map(({ title, text, Icon }, index) => (
             <li key={title}>
               <Reveal delay={index * 80} className="h-full">
-                <div className="flex h-full flex-col gap-4 rounded-[28px] border border-white/15 bg-white/[0.06] p-7">
-                  <span className="grid size-24 place-items-center rounded-[28px] bg-[linear-gradient(135deg,#1e2b8f,#4a5fe0)] text-white">
+                <div className="flex h-full flex-col gap-4 rounded-[28px] border border-[var(--sf-border)] bg-white p-7 shadow-[var(--sf-shadow-1)]">
+                  <span className="grid size-24 place-items-center rounded-[28px] bg-[linear-gradient(135deg,var(--sf-red-strong),var(--dl-wine))] text-white">
                     <Icon className="size-14" />
                   </span>
-                  <h3 className="m-0 text-2xl font-extrabold leading-tight">{title}</h3>
-                  <p className="m-0 text-base leading-relaxed text-white/80">{text}</p>
+                  <h3 className="m-0 text-2xl font-extrabold leading-tight text-[var(--sf-fg)]">{title}</h3>
+                  <p className="m-0 text-base leading-relaxed text-[var(--sf-fg-muted)]">{text}</p>
                 </div>
               </Reveal>
             </li>
@@ -254,7 +253,7 @@ export function Benefits() {
 export function Experimental() {
   return (
     <Section id="experimental" labelledBy="dl-test-title" className={cn(BLACK, "pb-36 text-center text-white sm:pb-28")}>
-      <Blob className="left-1/2 top-1/2 size-[360px] -translate-x-1/2 -translate-y-1/2 bg-[#ff0109]/25" />
+      <Blob className="left-1/2 top-1/2 size-[360px] -translate-x-1/2 -translate-y-1/2 bg-[var(--sf-red)]/25" />
       <OrderBoxArt className="dl-float absolute left-[6%] top-10 w-16 opacity-90 sm:w-24 [--dl-rot:-10deg]" />
       <BubbleArt className="dl-float-slow absolute right-[8%] top-16 w-16 opacity-90 sm:w-24 [--dl-rot:8deg]" />
       <GearArt className="dl-float absolute bottom-5 right-[8%] w-12 opacity-90 sm:bottom-8 sm:right-[18%] sm:w-20" />
@@ -328,7 +327,7 @@ export function HowTo({ item }: { item: DownloadItem | null }) {
             <li key={step}>
               <Reveal delay={index * 90} className="h-full">
                 <div className="flex h-full flex-col gap-3 rounded-[28px] bg-white/[0.07] p-7">
-                  <span aria-hidden="true" className="text-[88px] font-black leading-none text-[#ff6a70]">
+                  <span aria-hidden="true" className="text-[88px] font-black leading-none text-[var(--sf-red)]">
                     {index + 1}
                   </span>
                   <p className="m-0 text-lg leading-relaxed text-white/90">{step}</p>
@@ -383,7 +382,7 @@ export function HowTo({ item }: { item: DownloadItem | null }) {
 export function SiteFooter({ item }: { item: DownloadItem | null }) {
   const link = "rounded text-white/85 hover:text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white";
   return (
-    <footer className="relative overflow-hidden bg-[linear-gradient(180deg,#050b2e_0%,#1e2b8f_70%,#2c3bb5_100%)] px-5 pt-20 text-white sm:px-8">
+    <footer className="relative overflow-hidden bg-[linear-gradient(180deg,var(--dl-ink)_0%,var(--dl-wine)_55%,var(--sf-red-strong)_100%)] px-5 pt-20 text-white sm:px-8">
       <div className="relative mx-auto flex max-w-6xl flex-col gap-12">
         <div className="grid gap-10 sm:grid-cols-2 md:grid-cols-4">
           <div className="flex flex-col gap-3 md:col-span-2">
@@ -423,8 +422,8 @@ export function SiteFooter({ item }: { item: DownloadItem | null }) {
           </Link>
         </div>
       </div>
-      <div aria-hidden="true" className="relative mt-6 h-[clamp(80px,17vw,260px)] select-none overflow-hidden">
-        <span className="block text-center text-[clamp(140px,34vw,520px)] font-black leading-[0.8] tracking-[-0.04em] text-white/20">Force</span>
+      <div aria-hidden="true" className="relative mt-6 h-[clamp(90px,19vw,290px)] select-none overflow-hidden">
+        <span className="block text-center text-[clamp(140px,34vw,520px)] font-black leading-[0.8] tracking-[-0.04em] text-white/40">Force</span>
       </div>
     </footer>
   );

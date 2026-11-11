@@ -27,7 +27,7 @@ export function DownloadsPage() {
         : { kind: "none" };
 
   return (
-    <div className="dl-root min-h-screen bg-[#02040f] text-white">
+    <div className="dl-root min-h-screen bg-[var(--dl-ink)] text-white">
       <TopBar />
       <main id="conteudo" aria-busy={query.isPending}>
         <Hero state={state} onRetry={() => void query.refetch()} retrying={query.isRefetching} />
