@@ -862,9 +862,13 @@ export function NewOrderScreen({
             return (
               <View key={line.key} style={styles.summaryLine}>
                 <View style={styles.flex}>
-                  <Text style={styles.summaryStrong}>{line.description}</Text>
+                  <Text style={styles.summaryStrong} numberOfLines={2}>{line.description}</Text>
                   <Text style={styles.summaryMeta}>{`${line.quantityText.trim()} ${line.unit} × ${describeListPrice(line.price)}`}</Text>
-                  {hasDiscount(line.discountText) && <Text style={styles.summaryMeta}>{`Desconto ${line.discountText.trim()}%`}</Text>}
+                  {hasDiscount(line.discountText) && (
+                    <Text style={styles.summaryDiscount}>
+                      {`Desconto ${line.discountText.trim().replace(/\s*%$/, "")}%${amounts.discountAmount !== null && amounts.discountAmount !== "0" && amounts.discountAmount !== "0.00" ? ` · − ${formatBrl(amounts.discountAmount) ?? "—"}` : ""}`}
+                    </Text>
+                  )}
                 </View>
                 <Text style={styles.summaryStrong}>{amounts.lineTotal === null ? "—" : (formatBrl(amounts.lineTotal) ?? "—")}</Text>
               </View>
@@ -978,6 +982,7 @@ const styles = StyleSheet.create({
   lockedNote: { fontSize: 13, color: colors.textMuted, padding: spacing.lg },
   summaryStrong: { fontSize: 14, fontWeight: "700", color: colors.text },
   summaryMeta: { fontSize: 12, color: colors.textMuted },
+  summaryDiscount: { fontSize: 12, color: colors.red, fontWeight: "600" },
   summaryLine: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: spacing.md, paddingVertical: spacing.xs },
   hidden: { display: "none" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl, gap: spacing.sm },

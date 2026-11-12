@@ -194,13 +194,13 @@ export function OrderTotals({ preview }: { readonly preview: DraftPreview }) {
   return (
   <View style={styles.summary}>
     <View style={styles.summaryRow}>
-      <Text style={styles.summaryLabel}>Total de itens</Text>
+      <Text style={styles.summaryLabel}>Subtotal da tabela</Text>
       <Text style={styles.summaryValue}>{money(preview.discounts.listTotal)}</Text>
     </View>
     {preview.discounts.discountTotal !== "0" && preview.discounts.discountTotal !== "0.00" && (
       <View style={styles.summaryRow}>
         <Text style={styles.summaryLabel}>{`Descontos (${preview.discounts.discountedLineCount} item(ns))`}</Text>
-        <Text style={styles.summaryValue}>{`-${money(preview.discounts.discountTotal)}`}</Text>
+        <Text style={[styles.summaryValue, styles.summaryDiscountValue]}>{`− ${money(preview.discounts.discountTotal)}`}</Text>
       </View>
     )}
     <View style={styles.summaryRow}>
@@ -315,6 +315,7 @@ const styles = StyleSheet.create({
   summaryRow: { flexDirection: "row", justifyContent: "space-between" },
   summaryLabel: { fontSize: 13, color: colors.textMuted },
   summaryValue: { fontSize: 13, color: colors.text, fontWeight: "600" },
+  summaryDiscountValue: { color: colors.red },
   summaryTotalLabel: { fontSize: 15, fontWeight: "800", color: colors.text, marginTop: spacing.xs },
   summaryTotalValue: { fontSize: 20, fontWeight: "800", color: colors.navy, marginTop: spacing.xs },
   partialNotice: { fontSize: 12, color: colors.warning, marginTop: spacing.xs },

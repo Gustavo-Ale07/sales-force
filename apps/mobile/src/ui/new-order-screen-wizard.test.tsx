@@ -72,6 +72,12 @@ describe("NewOrderScreen as a 4-step wizard", () => {
   it("shows the summary with the items and lets each block jump back to its own step", async () => {
     await toSummary();
     expect(screen.getByText("Copo 200 ml")).toBeTruthy();
+    // Per item: quantity × price; totals block: table subtotal, total without IPI, estimated IPI, total with IPI.
+    expect(screen.getByText("1 UN × R$ 10,00")).toBeTruthy();
+    for (const label of ["Subtotal da tabela", "Total sem IPI", "IPI estimado", /Total (parcial )?com IPI/]) {
+      expect(screen.getByText(label)).toBeTruthy();
+    }
+    expect(screen.queryByText(/^Desconto /)).toBeNull();
 
     await pressAndSettle(screen.getByRole("button", { name: "Editar negociação" }));
     expect(screen.getByLabelText("Etapa 2 de 4: Negociação")).toBeTruthy();
@@ -79,6 +85,23 @@ describe("NewOrderScreen as a 4-step wizard", () => {
     await pressAndSettle(next());
     await pressAndSettle(screen.getByRole("button", { name: "Editar cliente" }));
     expect(screen.getByLabelText("Etapa 1 de 4: Cliente")).toBeTruthy();
+  });
+
+  it("summary shows each discounted item's percentage and deduction in R$, and the discounts total", async () => {
+    await open();
+    await pressAndSettle(await screen.findByText("Padaria Central"));
+    await pressAndSettle(next());
+    await fillMandatoryHeader();
+    await pressAndSettle(next());
+    await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
+    await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
+    await act(async () => {
+      fireEvent.changeText(await screen.findByLabelText("Desconto de Copo 200 ml"), "10");
+    });
+    await pressAndSettle(next());
+    expect(screen.getByText("Desconto 10% · − R$ 1,00")).toBeTruthy();
+    expect(screen.getByText("− R$ 1,00")).toBeTruthy();
+    expect(screen.getByText(/^Descontos \(1 item/)).toBeTruthy();
   });
 
   it("includes the notes typed on the negotiation step in the saved order", async () => {

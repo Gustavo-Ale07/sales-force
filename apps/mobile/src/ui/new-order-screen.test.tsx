@@ -144,7 +144,8 @@ describe("NewOrderScreen", () => {
     // for the equivalent zero-discount case, where all three totals coincide instead).
     await waitFor(() => expect(screen.getAllByText("R$ 9,00")).toHaveLength(2));
     // The card shows the deduction in reais and the discounted subtotal; no deduction line at zero discount.
-    expect(screen.getByText("− R$ 1,00")).toBeTruthy();
+    // Once on the card, once in the totals block ("Descontos").
+    expect(screen.getAllByText("− R$ 1,00")).toHaveLength(2);
     expect(screen.getByText("Subtotal R$ 9,00")).toBeTruthy();
   });
 
