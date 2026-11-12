@@ -7,12 +7,17 @@
 | # | Falta | Efeito | Quem resolve |
 |---|---|---|---|
 | B1 | Relatório S5 do agente do Chrome: campos obrigatórios do parceiro, estrutura de endereço codificado (cidade/bairro/logradouro), exigência de IE por classificação ICMS (C, I, P, R, T, X) | Sem ele não se escreve o mapeador `Partner → serviço Sankhya` nem o formulário de endereço | Dono / agente do Chrome |
-| B2 | Nome da coluna de mobilidade em `TGFPAR` (D-AQ NEEDS VALIDATION) | O mapeador não pode gravar a mobilidade; nunca chutar | Dono |
-| B3 | Criação de `TGFPAR.AD_FORCEORIGEM` no Sandbox (tipo/tamanho comporta `force:<uuid>` = 42 caracteres?) | Idempotência e checagem prévia | Agente do Chrome |
-| B4 | Decisão arquitetural A1 abaixo (sync via worker) | Define a forma da API | Dono |
-| B5 | D-AP continua PROPOSED; este bloco altera P-18 (aprovação do backoffice) para o cadastro feito pelo vendedor | Registrar como decisão D-AR quando o dono aprovar | Dono |
+| B2 | ~~Coluna de mobilidade~~ — **REMOVIDO (dono, 12/11/2026): cliente não usa mobilidade; nada é lido nem gravado; `AD_VIDYA` fora de qualquer regra (D-AQ corrigida).** | — | — |
+| B3 | `TGFPAR.AD_FORCEORIGEM` — **criado no Sandbox: VARCHAR2(100), anulável, sem padrão, tamanho VALIDADO por SELECT; teste de gravação por API/app PENDENTE** | Idempotência e checagem prévia (42 caracteres cabem) | Resolvido, falta o teste T3 |
+| B4 | ~~Decisão A1~~ — **APROVADA (D-AR)** | — | — |
+| B5 | ~~D-AP PROPOSED~~ — **APROVADA (D-AP/D-AQ/D-AR, 12/11/2026)** | — | — |
+| B6 | Valores de `CODTIPPARC`, `CODREG`, `TIPOGERBOLETO` e `CLASSIFICMS` (e a regra de IE por classificação) para o cliente novo: **faltam; não chutar** | Mapeador real do cliente (F6) | Agente do Chrome / dono |
 
-As fatias **sem** B1/B2/B3 podem começar já (seção 3, F1–F6), sempre com o duplo do Sankhya.
+**S5 recebido (agente do Chrome, Sandbox, 12/11/2026; fonte do mapeamento):** obrigatórias sem padrão em `TGFPAR`: `CODPARC` (numeração), `NOMEPARC` (100), `TIPPESSOA` (1), `DTCAD`, `DTALTER`; padrão `S` em `CLIENTE`, `ATIVO`; padrão 0 em `CODVEND`, `CODEND`, `CODBAI`, `CODCID`, `CODREG`, `CODTIPPARC` e outras; nos 20 clientes mais recentes sempre preenchidos: `CODVEND`, `CODEND`, `NUMEND`, `CODBAI`, `CODCID`, `CEP`, `CLASSIFICMS`, `TIPPESSOA`, `TIPOGERBOLETO`, `CODTIPPARC`, `CODREG`, `ATIVO`; parciais: `IDENTINSCESTAD`, `TELEFONE`, `CODTAB`, `EMAIL` (e-mail e telefone opcionais; IE conforme a classificação ICMS). `ACEITACGCREPET = 'N'` (o serviço padrão provavelmente recusa documento repetido — confirmar no T2; a checagem prévia continua, para a mensagem certa). Endereço: `TSIEND`, `TSIBAI`, `TSICID` (`DTALTER` obrigatória em `TSIEND`/`TSIBAI`). Contatos `TGFCTT`: obrigatórias `CODPARC`, `CODCONTATO`; úteis `NOMECONTATO`, `CARGO`, `EMAIL`, `TELEFONE`, `CELULAR`. **Nunca gravar `SENHABT` nem `SENHAACESSO`.**
+
+**Endereço na V1 (decisão do dono):** só logradouro e bairro **existentes** (`TSIEND`/`TSIBAI`), por busca; se não achar: "Peça ao backoffice para cadastrar este logradouro/bairro no Sankhya". Cadastro de logradouro/bairro pelo app = segunda etapa, exige AUTORIZO novo. **F8 desbloqueada** com esse desenho.
+
+As fatias **sem** B6 podem andar já (F0–F5, F7, F9), sempre com o duplo do Sankhya; o mapeador real (F6) para os campos acima, exceto os quatro valores de B6.
 
 ## 1. Arquitetura proposta
 
@@ -28,8 +33,8 @@ As fatias **sem** B1/B2/B3 podem começar já (seção 3, F1–F6), sempre com o
 
 ## 2. Regras fixas (do texto do dono)
 
-- Nasce `CLIENTE='S'`, `ATIVO='S'`, mobilidade `'S'` (coluna: B2), `BLOQUEAR='N'`, tabela padrão **5 por configuração da instalação** (CFG, não literal), `CODVEND` = vendedor da conta; Gerente/Admin escolhem o vendedor entre os que alcançam (escopo servidor). `LIMCRED` **nunca** gravado; tela: "Limite de crédito a definir pelo financeiro".
-- Vendedor não vê nem edita ativo, mobilidade, limite, tabela, situação financeira nem vendedor.
+- Nasce `CLIENTE='S'`, `ATIVO='S'` (sem mobilidade: cliente não usa), `BLOQUEAR='N'`, tabela padrão **5 por configuração da instalação** (CFG, não literal), `CODVEND` = vendedor da conta; Gerente/Admin escolhem o vendedor entre os que alcançam (escopo servidor). `LIMCRED` **nunca** gravado; tela: "Limite de crédito a definir pelo financeiro".
+- Vendedor não vê nem edita ativo, limite, tabela, situação financeira nem vendedor.
 - Duplicidade ao vivo por CPF/CNPJ: na carteira do vendedor → "Cliente já cadastrado na sua carteira" (abre a ficha); fora → "Este CPF/CNPJ já está cadastrado. Peça ao backoffice." Sem nome/dado de outro vendedor (R17, resposta idêntica para qualquer fora-de-escopo).
 - Edição: só telefone, e-mail, contatos, endereços, observações. Servidor rejeita qualquer outro campo (lista **permitida**, não negada). Lê o registro ao vivo, aplica só o diff; se mudou no Sankhya desde a última sincronização, devolve o valor atual e exige confirmação. Auditoria com valor antigo/novo, documentos mascarados.
 - Permissões novas `customers.create`, `customers.update` (deny-by-default; sem conceder a perfil algum sem instrução do dono — **pergunta D1**), limite de criações por usuário/hora, nada de documento/e-mail/telefone em log, migrações aditivas.
@@ -64,12 +69,12 @@ Descrito, nunca executado por mim: o dono define `SANKHYA_CUSTOMER_WRITE_ENABLED
 
 ## 6. Roteiro Sandbox para o dono (T1–T9) e SELECTs para o agente do Chrome
 
-Convenções: nome sempre `TESTE FORCE - NAO USAR …`; máximo 10 clientes; anotar cada CODPARC em `docs/sankhya-spike.md` (seção S5). Nomes de coluna abaixo são os do espelho conhecido; **conferir contra o relatório S5** antes de executar; `<COLUNA_MOBILIDADE>` = B2.
+Convenções: nome sempre `TESTE FORCE - NAO USAR …`; máximo 10 clientes; anotar cada CODPARC em `docs/sankhya-spike.md` (seção S5). Nomes de coluna abaixo são os do espelho conhecido; **conferir contra o relatório S5** antes de executar; (sem mobilidade) = B2.
 
 Consulta base (substituir `:origem`/`:doc`):
 
 ```sql
-SELECT CODPARC, NOMEPARC, TIPPESSOA, CGC_CPF, CLIENTE, ATIVO, <COLUNA_MOBILIDADE>, BLOQUEAR,
+SELECT CODPARC, NOMEPARC, TIPPESSOA, CGC_CPF, CLIENTE, ATIVO, BLOQUEAR,
        CODVEND, CODTAB, LIMCRED, AD_FORCEORIGEM
 FROM TGFPAR
 WHERE AD_FORCEORIGEM = :origem   -- ou: CGC_CPF = :doc
@@ -84,12 +89,12 @@ WHERE AD_FORCEORIGEM = :origem   -- ou: CGC_CPF = :doc
 | T5 | Editar telefone e e-mail | Valores novos no Sankhya, auditoria com antigo/novo | Consulta dos campos de contato do parceiro (nomes: S5) |
 | T6 | Enviar campo bloqueado (ex.: razão social) | Servidor recusa; nada muda | Consulta base inalterada |
 | T7 | Vendedor tenta editar cliente de outro | 403/404 sem revelar dados | Consulta base inalterada |
-| T8 | Conferir regras de nascimento | ATIVO='S', mobilidade 'S', CODVEND do vendedor, CODTAB=5, **LIMCRED nulo/não gravado**, BLOQUEAR='N', CLIENTE='S' | Consulta base |
+| T8 | Conferir regras de nascimento | ATIVO='S', CODVEND do vendedor, CODTAB=5, **LIMCRED nulo/não gravado**, BLOQUEAR='N', CLIENTE='S' | Consulta base |
 | T9 | Abrir o cliente novo no app e no site | Mesmo CODPARC, mesmos dados, sem esperar a sincronização completa | Consulta base × tela |
 
-## 7. Perguntas ao dono
+## 7. Perguntas ao dono (D1, D2 e A1 RESPONDIDAS e aprovadas em 12/11/2026 — ver D-AR)
 
 - **D1** Quais perfis recebem `customers.create`/`customers.update` na instalação PLAC (sugestão: vendedor interno e gerente/admin; representante externo — a decidir)? Sem resposta, ninguém recebe.
 - **D2** Regra de boot da flag de cliente em staging: permitir `true` em staging **somente** com host Sandbox na allowlist e modo explícito `sandbox`?
 - **A1** Aprova a gravação via worker com espera (poll ~10–15 s, 202 se estourar) em vez de credencial de escrita na API?
-- **B1/B2/B3** Relatório S5, nome da coluna de mobilidade e criação de `AD_FORCEORIGEM`.
+- **B6** Valores de `CODTIPPARC`, `CODREG`, `TIPOGERBOLETO` e `CLASSIFICMS` (e a regra de IE por classificação).
