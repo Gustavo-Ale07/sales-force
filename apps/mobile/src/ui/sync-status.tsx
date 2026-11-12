@@ -135,8 +135,8 @@ export function HeaderSyncStatus(view: SyncViewProps) {
 }
 
 const styles = StyleSheet.create({
-  chip: { flexDirection: "row", alignItems: "center", gap: spacing.xs + 2, backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md, minHeight: 44 },
-  chipText: { fontSize: 12, fontWeight: "700", color: colors.text, flexShrink: 1 },
+  chip: { flexDirection: "row", alignItems: "center", gap: spacing.xs + 2, backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.sm, minHeight: 44 },
+  chipText: { fontSize: 11, fontWeight: "700", color: colors.text, flexShrink: 1 },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, gap: spacing.md },
   grabber: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border },

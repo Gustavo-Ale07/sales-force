@@ -389,6 +389,20 @@ describe("Shell", () => {
     expect(screen.getByRole("tab", { name: "Minhas vendas" }).props.accessibilityState.selected).toBe(true);
   });
 
+  it("hides the sales tabs inside the order wizard and returns to Minhas vendas with Sair do pedido", async () => {
+    const { offline } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() });
+    await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
+    await fireEvent.press(await screen.findByRole("tab", { name: "Perfil" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Ver pedidos salvos neste aparelho" }));
+    await screen.findByText("Nenhuma venda pendente.");
+    await fireEvent.press(screen.getByRole("button", { name: "Nova venda" }));
+    expect(screen.queryByRole("tab", { name: "Minhas vendas" })).toBeNull();
+    expect(screen.getByLabelText("Etapa 1 de 4: Cliente")).toBeTruthy();
+    // Nothing to lose yet: leaves without a confirmation.
+    await fireEvent.press(screen.getByRole("button", { name: "Sair do pedido" }));
+    expect(screen.getByRole("tab", { name: "Minhas vendas" }).props.accessibilityState.selected).toBe(true);
+  });
+
   it("says so when the seller enters offline with the saved session", async () => {
     const { offline } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() });
     const connectivity = fakeConnectivity("offline");

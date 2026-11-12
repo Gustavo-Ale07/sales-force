@@ -292,7 +292,7 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
             )}
           </Pane>
           <Pane active={tab === "sales"} visited={visited.has("sales")}>
-            {services !== null && (
+            {services !== null && salesView === "orders" && (
               <View style={styles.segments} accessibilityRole="tablist">
                 {(["orders", "newOrder"] as const).map((key) => (
                   <Pressable
@@ -314,7 +314,17 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
               <NewOrderScreen
                 repositories={repositories}
                 onUnauthenticated={expire}
-                {...(services === null ? {} : { localOrders: services.localOrders, resumeLocalId, onResumeConsumed: clearResume })}
+                {...(services === null
+                  ? {}
+                  : {
+                      localOrders: services.localOrders,
+                      resumeLocalId,
+                      onResumeConsumed: clearResume,
+                      onExit: () => {
+                        setSalesView("orders");
+                        setSalesReset((n) => n + 1);
+                      },
+                    })}
                 startRequest={startRequest}
                 onStartConsumed={clearStart}
               />

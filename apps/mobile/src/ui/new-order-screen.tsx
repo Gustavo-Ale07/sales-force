@@ -115,6 +115,8 @@ export interface NewOrderScreenProps {
   /** With `lines` (a duplicated sale) the cart opens pre-filled as a brand-new order; an order in progress is never replaced silently. */
   readonly startRequest?: { readonly nonce: number; readonly customer: PickedCustomer; readonly lines?: readonly EditorLine[] } | null;
   readonly onStartConsumed?: () => void;
+  /** Leaves the wizard back to the sales list. The order in progress stays on this screen (it is only hidden), so nothing is lost. */
+  readonly onExit?: () => void;
 }
 
 /**
@@ -133,6 +135,7 @@ export function NewOrderScreen({
   onResumeConsumed,
   startRequest = null,
   onStartConsumed,
+  onExit,
 }: NewOrderScreenProps) {
   const [step, setStep] = useState<Step>("customer");
   /** Step 3 shows either the catalog or the cart as its own view (never both, never a permanent panel). */
@@ -141,6 +144,18 @@ export function NewOrderScreen({
   const [stepError, setStepError] = useState<string | null>(null);
   const [customer, setCustomer] = useState<PickedCustomer | null>(null);
   const [lines, setLines] = useState<readonly EditorLine[]>([]);
+
+  function requestExit() {
+    if (onExit === undefined) return;
+    if (customer === null && lines.length === 0) {
+      onExit();
+      return;
+    }
+    Alert.alert("Sair do pedido?", "O pedido em andamento fica guardado. Para continuar, toque em Novo pedido.", [
+      { text: "Continuar editando", style: "cancel" },
+      { text: "Sair", onPress: onExit },
+    ]);
+  }
   const lineCounter = useRef(0);
   const nextKey = () => `line-${(lineCounter.current += 1)}`;
   // One idempotency key per distinct payload: a retry after a lost response resends the same key, an edited payload gets a new one.
@@ -914,7 +929,7 @@ export function NewOrderScreen({
 
   return (
     <View style={styles.flex}>
-      <WizardProgress step={step} aside={step === "customer" ? undefined : customer?.name} />
+      <WizardProgress step={step} customerName={step === "customer" ? undefined : customer?.name} onExit={onExit === undefined ? undefined : requestExit} />
       {stepError !== null && (
         <Text style={styles.stepError} accessibilityRole="alert">
           {stepError}

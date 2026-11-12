@@ -13,26 +13,43 @@ export const WIZARD_STEP_LABEL: Record<WizardStep, string> = {
 };
 
 /** "Etapa 2 de 4 · Negociação" plus a thin bar: one short line, nothing else on screen. */
-export function WizardProgress({ step, aside }: { readonly step: WizardStep; readonly aside?: string | undefined }) {
+export function WizardProgress({
+  step,
+  customerName,
+  onExit,
+}: {
+  readonly step: WizardStep;
+  readonly customerName?: string | undefined;
+  /** When given, shows an exit control (the caller confirms before leaving). */
+  readonly onExit?: (() => void) | undefined;
+}) {
   const index = WIZARD_STEPS.indexOf(step) + 1;
   return (
-    <View
-      style={styles.progress}
-      accessibilityRole="progressbar"
-      accessibilityLabel={`Etapa ${index} de ${WIZARD_STEPS.length}: ${WIZARD_STEP_LABEL[step]}`}
-      accessibilityValue={{ min: 1, max: WIZARD_STEPS.length, now: index }}
-    >
-      <View style={styles.progressText}>
-        <Text style={styles.progressStep}>{`Etapa ${index} de ${WIZARD_STEPS.length} · ${WIZARD_STEP_LABEL[step]}`}</Text>
-        {aside !== undefined && (
-          <Text style={styles.progressAside} numberOfLines={1}>
-            {aside}
-          </Text>
-        )}
+    <View style={styles.progress}>
+      <View
+        style={styles.progressText}
+        accessibilityRole="progressbar"
+        accessibilityLabel={`Etapa ${index} de ${WIZARD_STEPS.length}: ${WIZARD_STEP_LABEL[step]}`}
+        accessibilityValue={{ min: 1, max: WIZARD_STEPS.length, now: index }}
+      >
+        <Text style={styles.progressTitle} numberOfLines={1}>
+          {WIZARD_STEP_LABEL[step]}
+        </Text>
+        <Text style={styles.progressStep}>{`${index} de ${WIZARD_STEPS.length}`}</Text>
       </View>
+      {onExit !== undefined && (
+        <Pressable style={styles.exit} onPress={onExit} accessibilityRole="button" accessibilityLabel="Sair do pedido">
+          <Text style={styles.exitText}>✕</Text>
+        </Pressable>
+      )}
       <View style={styles.track}>
         <View style={[styles.fill, { width: `${(index / WIZARD_STEPS.length) * 100}%` }]} />
       </View>
+      {customerName !== undefined && (
+        <Text style={styles.progressAside} numberOfLines={1}>
+          {customerName}
+        </Text>
+      )}
     </View>
   );
 }
@@ -128,9 +145,12 @@ export function NotesField({ value, onChange }: { readonly value: string; readon
 
 const styles = StyleSheet.create({
   progress: { backgroundColor: colors.surface, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, gap: spacing.xs, borderBottomWidth: 1, borderBottomColor: colors.border },
-  progressText: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
-  progressStep: { fontSize: 12, fontWeight: "700", color: colors.navy },
-  progressAside: { fontSize: 12, color: colors.textMuted, flexShrink: 1 },
+  progressText: { flexDirection: "row", alignItems: "baseline", gap: spacing.sm, paddingRight: 48 },
+  progressTitle: { fontSize: 16, fontWeight: "800", color: colors.navy, flexShrink: 1 },
+  progressStep: { fontSize: 12, fontWeight: "600", color: colors.textMuted },
+  progressAside: { fontSize: 12, color: colors.textMuted, paddingBottom: spacing.xs },
+  exit: { position: "absolute", top: 0, right: spacing.xs, width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  exitText: { fontSize: 18, color: colors.textMuted, fontWeight: "700" },
   track: { height: 3, backgroundColor: colors.border, borderRadius: 2, overflow: "hidden", marginBottom: spacing.xs },
   fill: { height: 3, backgroundColor: colors.navy },
   footer: {
