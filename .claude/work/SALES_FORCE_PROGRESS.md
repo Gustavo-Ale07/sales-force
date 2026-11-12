@@ -714,3 +714,6 @@ O dono identificou que a `SEED_DEV_PASSWORD` gerada na rodada anterior (nota "2�
 - `prefers-reduced-motion: reduce` — Ctrl K abre em ~50ms (efetivamente instantâneo, como esperado).
 
 Nenhum código foi alterado nesta nota (só `deploy/.env`, git-ignored, nunca commitado). FASE A permanece **integralmente concluída e agora re-verificada** após o 2º reset de banco/senha. FASE B continua **NÃO iniciada**, aguardando autorização explícita do dono.
+
+## 2026-11-12 — checkpoint
+Ver `.claude/work/CHECKPOINT_2026-11-12.md`: item 6 (visibilidade de cliente) commitado em `e2b7a8e`; falta F0, F2–F7, F9, F8 do cadastro de cliente, e os blocos de mobilidade/preço de produto e UX de sincronização.
