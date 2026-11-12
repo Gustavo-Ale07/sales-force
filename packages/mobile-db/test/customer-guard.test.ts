@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   countOutbox,
+  CUSTOMER_BLOCK_MESSAGES,
   CUSTOMER_UNAVAILABLE_MESSAGE,
+  customerBlockMessage,
   discardLocalDraft,
   getDraft,
   getDraftItems,
@@ -49,10 +51,11 @@ function input(customerCode: number): SaveDraftInput {
 class Server implements OrderTransport {
   requests: string[] = [];
   failWith: TransportErrorKind | null = null;
+  failReason: string | undefined = undefined;
   private seq = 0;
   async createOrder(key: string, request: OrderCommandPayload["request"]): Promise<RemoteOrder> {
     this.requests.push(`POST ${key}`);
-    if (this.failWith !== null) throw new TransportError(this.failWith, "recusado", 409);
+    if (this.failWith !== null) throw new TransportError(this.failWith, "recusado", 409, this.failReason);
     return this.remote(`order-${++this.seq}`, 1, request);
   }
   async replaceOrder(id: string, version: number, request: OrderCommandPayload["request"]): Promise<RemoteOrder> {
@@ -105,18 +108,18 @@ beforeEach(async () => {
 
 describe("customer availability guard (local, indicative)", () => {
   it.each([
-    ["blocked", { code: 77, name: "C", blocked: true }],
-    ["inactive", { code: 77, name: "C", active: false }],
-  ])("holds a draft whose cached customer is %s: nothing is sent, nothing is changed or deleted", async (_label, customer) => {
+    ["blocked", { code: 77, name: "C", blocked: true }, CUSTOMER_BLOCK_MESSAGES.customer_blocked],
+    ["inactive", { code: 77, name: "C", active: false }, CUSTOMER_BLOCK_MESSAGES.customer_inactive],
+  ])("holds a draft whose cached customer is %s: nothing is sent, nothing is changed or deleted", async (_label, customer, expected) => {
     await cache([customer]);
     const id = await saveOrderDraft(db, env, input(77));
     const result = await push();
     expect(result).toMatchObject({ attempted: 0, accepted: 0, stoppedBy: "idle" });
     expect(server.requests).toEqual([]);
     const [op] = await listOutbox(db, id);
-    expect(op).toMatchObject({ state: "pending", attempts: 0, lastError: CUSTOMER_UNAVAILABLE_MESSAGE });
+    expect(op).toMatchObject({ state: "pending", attempts: 0, lastError: expected });
     const draft = await getDraft(db, id);
-    expect(draft).toMatchObject({ status: "sync_error", remoteId: null, lastError: CUSTOMER_UNAVAILABLE_MESSAGE });
+    expect(draft).toMatchObject({ status: "sync_error", remoteId: null, lastError: expected });
     expect(isCustomerUnavailableMessage(draft?.lastError ?? null)).toBe(true);
     expect(await getDraftItems(db, id)).toHaveLength(1);
   });
@@ -174,7 +177,7 @@ describe("customer availability guard (local, indicative)", () => {
     server.requests.length = 0;
     await push();
     expect(server.requests).toEqual([]);
-    expect(await getDraft(db, id)).toMatchObject({ status: "sync_error", lastError: CUSTOMER_UNAVAILABLE_MESSAGE });
+    expect(await getDraft(db, id)).toMatchObject({ status: "sync_error", lastError: CUSTOMER_BLOCK_MESSAGES.customer_blocked });
     expect((await getDraft(db, id))?.remoteId).not.toBeNull();
   });
 
@@ -196,9 +199,32 @@ describe("server answer customer_ineligible", () => {
     await push();
     expect(server.requests).toHaveLength(1);
     const [op] = await listOutbox(db, id);
-    expect(op).toMatchObject({ state: "rejected", lastError: CUSTOMER_UNAVAILABLE_MESSAGE });
-    expect(await getDraft(db, id)).toMatchObject({ status: "sync_error", lastError: CUSTOMER_UNAVAILABLE_MESSAGE });
+    expect(op).toMatchObject({ state: "rejected", lastError: CUSTOMER_BLOCK_MESSAGES.customer_unavailable });
+    expect(await getDraft(db, id)).toMatchObject({ status: "sync_error", lastError: CUSTOMER_BLOCK_MESSAGES.customer_unavailable });
     expect(await getDraftItems(db, id)).toHaveLength(1);
+  });
+
+  it.each([
+    ["customer_inactive", "Este cliente está inativo no ERP."],
+    ["customer_blocked", "Este cliente está bloqueado no ERP."],
+    ["customer_without_seller", "Este cliente não tem vendedor vinculado. Peça ao backoffice para vincular um vendedor."],
+    ["customer_unavailable", "Este cliente não está disponível para pedidos."],
+    [undefined, "Este cliente não está disponível para pedidos."],
+  ])("states the cause (%s) in the seller's words", async (reason, text) => {
+    const id = await saveOrderDraft(db, env, input(77));
+    server.failWith = "customer_ineligible";
+    server.failReason = reason;
+    await push();
+    const [op] = await listOutbox(db, id);
+    expect(op).toMatchObject({ state: "rejected", lastError: text });
+    const draft = await getDraft(db, id);
+    expect(draft).toMatchObject({ status: "sync_error", lastError: text });
+    expect(isCustomerUnavailableMessage(draft?.lastError ?? null)).toBe(true);
+    expect(customerBlockMessage(reason)).toBe(text);
+  });
+
+  it("still recognises the generic text stored by earlier app versions", () => {
+    expect(isCustomerUnavailableMessage(CUSTOMER_UNAVAILABLE_MESSAGE)).toBe(true);
   });
 
   it("keeps the root reason through the create+replace cascade: still the unavailable-customer state", async () => {
@@ -212,9 +238,9 @@ describe("server answer customer_ineligible", () => {
     await push();
     const ops = await listOutbox(db, id);
     expect(ops.map((op) => op.state)).toEqual(["rejected", "rejected"]);
-    expect(ops.map((op) => op.lastError)).toEqual([CUSTOMER_UNAVAILABLE_MESSAGE, CUSTOMER_UNAVAILABLE_MESSAGE]);
+    expect(ops.map((op) => op.lastError)).toEqual([CUSTOMER_BLOCK_MESSAGES.customer_unavailable, CUSTOMER_BLOCK_MESSAGES.customer_unavailable]);
     const draft = await getDraft(db, id);
-    expect(draft).toMatchObject({ status: "sync_error", lastError: CUSTOMER_UNAVAILABLE_MESSAGE });
+    expect(draft).toMatchObject({ status: "sync_error", lastError: CUSTOMER_BLOCK_MESSAGES.customer_unavailable });
     expect(isCustomerUnavailableMessage(draft?.lastError ?? null)).toBe(true);
   });
 
@@ -241,7 +267,7 @@ describe("server answer customer_ineligible", () => {
     await push();
     expect(server.requests).toEqual([]);
     const [op] = await listOutbox(db, id);
-    expect(op).toMatchObject({ state: "pending", attempts: 1, lastError: CUSTOMER_UNAVAILABLE_MESSAGE });
-    expect(await getDraft(db, id)).toMatchObject({ status: "sync_error", lastError: CUSTOMER_UNAVAILABLE_MESSAGE });
+    expect(op).toMatchObject({ state: "pending", attempts: 1, lastError: CUSTOMER_BLOCK_MESSAGES.customer_blocked });
+    expect(await getDraft(db, id)).toMatchObject({ status: "sync_error", lastError: CUSTOMER_BLOCK_MESSAGES.customer_blocked });
   });
 });

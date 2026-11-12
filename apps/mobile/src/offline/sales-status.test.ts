@@ -1,6 +1,6 @@
 import type { DraftStatus } from "@salesforce/mobile-db";
 import { draftRecord } from "../test-doubles";
-import { CUSTOMER_UNAVAILABLE_MESSAGE } from "@salesforce/mobile-db";
+import { CUSTOMER_BLOCK_MESSAGES, CUSTOMER_UNAVAILABLE_MESSAGE } from "@salesforce/mobile-db";
 import { saleActions, saleBadge, saleExplanation, salesGroupOf } from "./sales-status";
 
 const ALL: DraftStatus[] = ["local_only", "pending_sync", "syncing", "synced", "sync_error", "conflict", "needs_review"];
@@ -62,6 +62,14 @@ describe("customer unavailable (held draft)", () => {
     expect(saleBadge(held)).toEqual({ label: "Cliente indisponível", tone: "warning" });
     expect(saleExplanation(held)).toContain("Cliente indisponível — revise o rascunho");
     expect(saleExplanation(held)).toMatch(/não será enviado/i);
+  });
+
+  it("states the stored cause in the explanation", () => {
+    const noSeller = draftRecord({ status: "sync_error", lastError: CUSTOMER_BLOCK_MESSAGES.customer_without_seller });
+    expect(saleBadge(noSeller).label).toBe("Cliente indisponível");
+    expect(saleExplanation(noSeller)).toContain("Este cliente não tem vendedor vinculado.");
+    expect(saleExplanation(noSeller)).not.toMatch(/inativo ou bloqueado/);
+    expect(saleActions(noSeller).resend).toBe(false);
   });
 
   it("blocks resending but still allows review (continue), copy and local delete of a never-sent draft", () => {

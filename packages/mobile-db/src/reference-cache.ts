@@ -313,6 +313,15 @@ export const META_KEYS = {
  * `true` when the cached customer is inactive or blocked. A customer that is not in the cache is NOT ineligible (unknown:
  * the server decides). Indicative only; authorization and eligibility stay server-side (P-21).
  */
+export async function customerBlockOf(db: SqlExecutor, code: number): Promise<"customer_inactive" | "customer_blocked" | null> {
+  const rows = await db.query<SqlRow>(
+    `SELECT (COALESCE(json_extract(data, '$.active'), 1) = 0) AS inactive FROM cache_customer WHERE code = ? AND (COALESCE(json_extract(data, '$.active'), 1) = 0 OR ${BLOCKED_SQL}) LIMIT 1`,
+    [code],
+  );
+  if (rows.length === 0) return null;
+  return Number(rows[0]?.inactive) === 1 ? "customer_inactive" : "customer_blocked";
+}
+
 export async function isCustomerUnavailable(db: SqlExecutor, code: number): Promise<boolean> {
   const rows = await db.query<SqlRow>(
     `SELECT 1 AS hit FROM cache_customer WHERE code = ? AND (COALESCE(json_extract(data, '$.active'), 1) = 0 OR ${BLOCKED_SQL}) LIMIT 1`,

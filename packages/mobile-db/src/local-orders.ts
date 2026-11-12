@@ -30,8 +30,29 @@ import { isoNow, type OfflineEnv } from "./offline-env";
  */
 export const CUSTOMER_UNAVAILABLE_MESSAGE = "Cliente indisponível — revise o rascunho";
 
+/** Why a customer cannot receive the order (same vocabulary as the domain `customerOrderBlock` and the server `details.reason`). */
+export type CustomerBlockReason = "customer_unavailable" | "customer_inactive" | "customer_blocked" | "customer_without_seller";
+
+/** One seller-facing text per cause (owner-approved 2026-11-12). They are the stored `lastError`, so each one is also a marker. */
+export const CUSTOMER_BLOCK_MESSAGES: Readonly<Record<CustomerBlockReason, string>> = {
+  customer_unavailable: "Este cliente não está disponível para pedidos.",
+  customer_inactive: "Este cliente está inativo no ERP.",
+  customer_blocked: "Este cliente está bloqueado no ERP.",
+  customer_without_seller: "Este cliente não tem vendedor vinculado. Peça ao backoffice para vincular um vendedor.",
+};
+
+/** The text for a cause; an unknown or missing cause gets the neutral "unavailable" text, never a wrong specific one. */
+export function customerBlockMessage(reason?: string | null): string {
+  return reason !== undefined && reason !== null && Object.hasOwn(CUSTOMER_BLOCK_MESSAGES, reason)
+    ? CUSTOMER_BLOCK_MESSAGES[reason as CustomerBlockReason]
+    : CUSTOMER_BLOCK_MESSAGES.customer_unavailable;
+}
+
+/** Every stored text that marks a held draft: the per-cause ones plus the generic text written by earlier app versions. */
+export const CUSTOMER_HELD_MESSAGES: readonly string[] = [CUSTOMER_UNAVAILABLE_MESSAGE, ...Object.values(CUSTOMER_BLOCK_MESSAGES)];
+
 export function isCustomerUnavailableMessage(lastError: string | null): boolean {
-  return lastError === CUSTOMER_UNAVAILABLE_MESSAGE;
+  return lastError !== null && CUSTOMER_HELD_MESSAGES.includes(lastError);
 }
 
 export type DraftStatus = "local_only" | "pending_sync" | "syncing" | "synced" | "sync_error" | "conflict" | "needs_review";
@@ -363,12 +384,13 @@ export interface OutboxCounts {
  * command of another dataset (or a legacy one) is never "pending", whatever state it is still stored in.
  */
 export async function countOutbox(db: SqlExecutor, ownerAccountId: string, dataset?: DatasetIdentity | null): Promise<OutboxCounts> {
+  const heldMarks = CUSTOMER_HELD_MESSAGES.map(() => "?").join(", ");
   const rows = await db.query<SqlRow>(
-    `SELECT o.state AS state, o.dataset_environment AS dataset_environment, o.dataset_id AS dataset_id, o.eligibility AS eligibility, (o.last_error = ?) AS held, count(*) AS n
+    `SELECT o.state AS state, o.dataset_environment AS dataset_environment, o.dataset_id AS dataset_id, o.eligibility AS eligibility, (COALESCE(o.last_error, '') IN (${heldMarks})) AS held, count(*) AS n
      FROM outbox o JOIN local_order_draft d ON d.local_id = o.draft_local_id
      WHERE d.owner_account_id = ? AND o.state IN ('pending', 'sending', 'rejected', 'conflict', 'needs_review')
-     GROUP BY o.state, o.dataset_environment, o.dataset_id, o.eligibility, (o.last_error = ?)`,
-    [CUSTOMER_UNAVAILABLE_MESSAGE, ownerAccountId, CUSTOMER_UNAVAILABLE_MESSAGE],
+     GROUP BY o.state, o.dataset_environment, o.dataset_id, o.eligibility, (COALESCE(o.last_error, '') IN (${heldMarks}))`,
+    [...CUSTOMER_HELD_MESSAGES, ownerAccountId, ...CUSTOMER_HELD_MESSAGES],
   );
   const counts = { pending: 0, sending: 0, needsAttention: 0 };
   for (const row of rows) {

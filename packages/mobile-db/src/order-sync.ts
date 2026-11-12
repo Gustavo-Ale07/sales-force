@@ -1,6 +1,7 @@
 import type { SqlDatabase, SqlExecutor, SqlRow } from "./connection";
 import {
-  CUSTOMER_UNAVAILABLE_MESSAGE,
+  customerBlockMessage,
+  type CustomerBlockReason,
   getDraft,
   getDraftItems,
   isNeverSent,
@@ -15,7 +16,7 @@ import {
 } from "./local-orders";
 import { DatasetUnavailableError, classifyEligibility, ineligibleMessage, readExpectedDataset, sameDataset, type DatasetIdentity, type IneligibleReason } from "./dataset-identity";
 import { isoNow, type OfflineEnv } from "./offline-env";
-import { isCustomerUnavailable } from "./reference-cache";
+import { customerBlockOf } from "./reference-cache";
 
 /**
  * Push side of the offline slice: delivers outbox order commands to the server, one request at a time, and applies
@@ -80,6 +81,8 @@ export class TransportError extends Error {
     readonly kind: TransportErrorKind,
     message: string,
     readonly status = 0,
+    /** Machine cause of a `customer_ineligible` refusal (`customer_inactive`, `customer_blocked`, `customer_without_seller`…). */
+    readonly reason?: string,
   ) {
     super(message);
     this.name = "TransportError";
@@ -149,7 +152,7 @@ export function describeFailure(error: TransportError): string {
     case "dataset_mismatch":
       return ineligibleMessage("dataset_mismatch");
     case "customer_ineligible":
-      return CUSTOMER_UNAVAILABLE_MESSAGE;
+      return customerBlockMessage(error.reason);
     case "validation":
       return error.message !== "" ? error.message : "O servidor recusou este pedido. Revise os dados.";
   }
@@ -409,7 +412,7 @@ async function applyPermanent(db: SqlDatabase, env: OfflineEnv, op: OutboxRecord
         `UPDATE outbox SET state = 'rejected', last_error = ?, updated_at = ? WHERE draft_local_id = ? AND state = 'pending' AND local_id <> ?`,
         [
           // An unavailable customer stays the stated reason for the whole chain; other causes keep the generic text.
-          error.kind === "customer_ineligible" ? CUSTOMER_UNAVAILABLE_MESSAGE : "O envio inicial deste pedido foi recusado; esta alteração não foi enviada.",
+          error.kind === "customer_ineligible" ? customerBlockMessage(error.reason) : "O envio inicial deste pedido foi recusado; esta alteração não foi enviada.",
           now,
           op.draftLocalId,
           op.localId,
@@ -450,11 +453,11 @@ async function quarantineDraft(db: SqlDatabase, env: OfflineEnv, draftLocalId: s
 }
 
 /** Marks every unsent command of the draft as held for an unavailable customer (state `pending`, no attempt counted). */
-async function holdForCustomer(db: SqlDatabase, env: OfflineEnv, draftLocalId: string): Promise<void> {
+async function holdForCustomer(db: SqlDatabase, env: OfflineEnv, draftLocalId: string, reason: CustomerBlockReason): Promise<void> {
   await db.transaction(async (tx) => {
     await tx.execute(
       "UPDATE outbox SET last_error = ?, next_attempt_at = NULL, updated_at = ? WHERE draft_local_id = ? AND state = 'pending'",
-      [CUSTOMER_UNAVAILABLE_MESSAGE, isoNow(env), draftLocalId],
+      [customerBlockMessage(reason), isoNow(env), draftLocalId],
     );
     await refreshDraftStatus(tx, draftLocalId);
   });
@@ -529,8 +532,9 @@ export async function pushOutbox(
     // CUSTOMER GUARD (indicative; the server stays authoritative): a customer the cache says is inactive or blocked is
     // not sent to. The command is kept untouched (same key, same payload, zero attempts) and re-evaluated on every run,
     // so it goes out by itself if the customer becomes available again. Nothing is converted, rewritten or deleted.
-    if (await isCustomerUnavailable(db, draft.customerCode)) {
-      await holdForCustomer(db, env, draft.localId);
+    const customerBlock = await customerBlockOf(db, draft.customerCode);
+    if (customerBlock !== null) {
+      await holdForCustomer(db, env, draft.localId, customerBlock);
       heldDrafts.add(draft.localId);
       continue;
     }

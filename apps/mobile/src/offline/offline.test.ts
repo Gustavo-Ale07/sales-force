@@ -26,6 +26,13 @@ describe("toTransportError", () => {
     expect(kindOf({ status: 422, message: "x" })).toBe("validation");
   });
 
+  it("carries the cause of a customer refusal so the draft can say why", () => {
+    expect(toTransportError(new ApiRequestError({ status: 409, code: "customer_without_seller", message: "x" })).reason).toBe("customer_without_seller");
+    expect(toTransportError(new ApiRequestError({ status: 409, code: "customer_ineligible", message: "x", reason: "customer_blocked" })).reason).toBe(
+      "customer_blocked",
+    );
+  });
+
   it("never lets a raw technical message reach the seller for validation failures", () => {
     const error = toTransportError(new ApiRequestError({ status: 422, message: "Network request failed" }));
     expect(error.message).not.toMatch(/Network request failed/);

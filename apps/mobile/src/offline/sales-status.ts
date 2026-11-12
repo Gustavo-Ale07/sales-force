@@ -1,4 +1,4 @@
-import { isCustomerUnavailableMessage, type DraftRecord, type DraftStatus, type SalesGroup } from "@salesforce/mobile-db";
+import { CUSTOMER_UNAVAILABLE_MESSAGE, isCustomerUnavailableMessage, type DraftRecord, type DraftStatus, type SalesGroup } from "@salesforce/mobile-db";
 
 /**
  * "Enviados" means accepted by the Force backend — NOT delivered to, confirmed by or invoiced in Sankhya. The device carries no
@@ -47,7 +47,9 @@ export function saleBadge(view: StatusView): SaleBadge {
 /** Where the order is and what the seller should do, in plain words (detail screen). */
 export function saleExplanation(draft: Pick<DraftRecord, "status" | "remoteId" | "lastError">): string {
   if (isCustomerUnavailable(draft)) {
-    return "Cliente indisponível — revise o rascunho. O cadastro deste cliente mudou (inativo ou bloqueado), por isso o pedido não será enviado enquanto isso não for resolvido. Nada foi alterado ou apagado.";
+    // The stored text is the cause itself (inativo, bloqueado, sem vendedor…); an old generic marker keeps the old wording.
+    const cause = draft.lastError === CUSTOMER_UNAVAILABLE_MESSAGE ? "O cadastro deste cliente mudou (inativo ou bloqueado)." : draft.lastError;
+    return `Cliente indisponível — revise o rascunho. ${cause} O pedido não será enviado enquanto isso não for resolvido. Nada foi alterado ou apagado.`;
   }
   switch (draft.status) {
     case "local_only":
