@@ -7,6 +7,7 @@ export * from './pricing.js';
 export * from './directory-seller.js';
 export * from './scope.js';
 export * from './customer-eligibility.js';
+export * from './customer-registration.js';
 export * from './ordering.js';
 export * from './templates.js';
 export * from './erp-eligibility.js';
