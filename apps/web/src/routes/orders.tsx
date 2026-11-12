@@ -209,7 +209,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
           (selectedProducts.length > 0 || params.productSearch !== undefined ? 1 : 0)
         }
       >
-        <FilterField label="Nº do pedido ou cliente" className="lg:col-span-4">
+        <FilterField label="Nº do pedido ou cliente" keepVisible className="lg:col-span-4">
           <SearchInput
             size="md"
             value={searchText}

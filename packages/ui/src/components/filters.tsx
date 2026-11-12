@@ -34,7 +34,7 @@ export function FilterBar({ className, grid, activeCount, children, ...props }: 
         </span>
         <ChevronDown size={15} aria-hidden="true" className={open ? "rotate-180" : undefined} />
       </button>
-      <div id={bodyId} className={cn(layout, !open && "max-sm:hidden")}>
+      <div id={bodyId} className={cn(layout, !open && "max-sm:[&>*:not([data-keep])]:hidden")}>
         {children}
       </div>
     </form>
@@ -45,12 +45,14 @@ export interface FilterFieldProps {
   label: string;
   children: ReactNode;
   className?: string;
+  /** Stays visible while a collapsible FilterBar is closed (below 640px), e.g. the search field. */
+  keepVisible?: boolean;
 }
 
 /** Compact labelled filter control (label above, small caps). */
-export function FilterField({ label, children, className }: FilterFieldProps) {
+export function FilterField({ label, children, className, keepVisible }: FilterFieldProps) {
   return (
-    <label className={cn("flex min-w-0 flex-col gap-1", className)}>
+    <label data-keep={keepVisible ? "" : undefined} className={cn("flex min-w-0 flex-col gap-1", className)}>
       <span className="text-xs font-medium text-fg-muted">{label}</span>
       {children}
     </label>

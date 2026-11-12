@@ -155,7 +155,7 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
         grid
         activeCount={[params.search, params.group, params.sellable, params.priceState, params.customerCode].filter((value) => value !== undefined).length}
       >
-        <FilterField label="Busca" className="lg:col-span-6">
+        <FilterField label="Busca" keepVisible className="lg:col-span-6">
           <SearchInput
             size="md"
             value={searchText}

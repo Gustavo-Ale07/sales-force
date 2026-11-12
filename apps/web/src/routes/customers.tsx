@@ -86,7 +86,7 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
       <PageHeader title="Clientes" count={query.data ? query.data.total.toLocaleString("pt-BR") : undefined} />
 
       {portfolio && portfolio.metrics.length > 0 ? (
-        <section aria-label={portfolio.label}>
+        <section aria-label={portfolio.label} className="max-sm:hidden">
           <StatGrid className="sm:grid-cols-4">
               {portfolio.metrics.map((metric) => {
                 const visual = METRIC_VISUALS[metric.key];
@@ -110,7 +110,7 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
         grid
         activeCount={[params.search, params.status, params.sellerCode, params.hasPriceTable].filter((value) => value !== undefined).length}
       >
-        <FilterField label="Busca" className={withSellers ? "lg:col-span-4" : "sm:col-span-2 lg:col-span-6"}>
+        <FilterField label="Busca" keepVisible className={withSellers ? "lg:col-span-4" : "sm:col-span-2 lg:col-span-6"}>
           <SearchInput
             size="md"
             value={searchText}
