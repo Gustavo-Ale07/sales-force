@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { customer, draftRecord, fakeLocalOrders, fakeOrders, fakeProducts, orderEntryConfiguration, pageOf, product } from "../test-doubles";
 import { NewOrderScreen } from "./new-order-screen";
+import { fillMandatoryHeader } from "./fill-mandatory-header";
 
 async function pressAndSettle(element: unknown, delayMs = 100) {
   await act(async () => {
@@ -36,7 +37,7 @@ const config = orderEntryConfiguration({
   },
 });
 
-async function openCart(localOrders = fakeLocalOrders(), carriers: readonly { code: number; name: string }[] = [], onNegotiation?: () => Promise<void>) {
+async function openCart(localOrders = fakeLocalOrders(), carriers: readonly { code: number; name: string }[] = [{ code: 7, name: "Transportes Alfa" }], onNegotiation?: () => Promise<void>) {
   const repositories = {
     customers: { list: async () => pageOf([customer(10, { name: "Padaria Central" })]) },
     products: fakeProducts({ list: async () => pageOf([copo]) }),
@@ -46,6 +47,7 @@ async function openCart(localOrders = fakeLocalOrders(), carriers: readonly { co
   await pressAndSettle(await screen.findByText("Padaria Central"));
   await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
   if (onNegotiation) await onNegotiation();
+  await fillMandatoryHeader();
   await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
   await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
   await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
@@ -53,7 +55,7 @@ async function openCart(localOrders = fakeLocalOrders(), carriers: readonly { co
 
 describe("NewOrderScreen order options (D-A, D-B)", () => {
   it("offers the TOPs and only the sellable negotiation types", async () => {
-    await openCart(fakeLocalOrders(), [], async () => {
+    await openCart(fakeLocalOrders(), undefined, async () => {
       expect(screen.getByRole("radio", { name: "Operação Pedido (TOP 1001)" })).toBeTruthy();
       expect(screen.getByRole("radio", { name: "Operação Orçamento (TOP 1000)" })).toBeTruthy();
       expect(screen.getByRole("radio", { name: "Negociação À vista" })).toBeTruthy();
@@ -64,35 +66,45 @@ describe("NewOrderScreen order options (D-A, D-B)", () => {
 
   it("saves the chosen TOP and negotiation type on the local draft", async () => {
     const save = jest.fn(async (input: { negotiationTypeCode: number | null }) => draftRecord({ negotiationTypeCode: input.negotiationTypeCode }));
-    await openCart(fakeLocalOrders([], { save: save as never }), [], async () => {
+    await openCart(fakeLocalOrders([], { save: save as never }), undefined, async () => {
       await pressAndSettle(screen.getByRole("radio", { name: "Operação Orçamento (TOP 1000)" }));
       await pressAndSettle(screen.getByRole("radio", { name: "Negociação 30 dias" }));
     });
     await saveFromSummary("Salvar rascunho");
-    expect(save).toHaveBeenCalledWith(expect.objectContaining({ topCode: 1000, negotiationTypeCode: 3, carrierCode: null }));
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ topCode: 1000, negotiationTypeCode: 3, carrierCode: 7 }));
   });
 
-  it("sends no TOP when none was chosen, leaving the default to the server", async () => {
+  it("saves the header chosen on the mandatory step (nothing is preselected)", async () => {
     const save = jest.fn(async () => draftRecord());
     await openCart(fakeLocalOrders([], { save: save as never }));
     await saveFromSummary("Salvar rascunho");
-    expect(save).toHaveBeenCalledWith(expect.objectContaining({ topCode: null, negotiationTypeCode: 1 }));
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ negotiationTypeCode: 1, freightType: "CIF", carrierCode: 7 }));
   });
 
-  it("saves the chosen carrier, and 'Nenhuma' clears it", async () => {
+  it("saves the chosen carrier; the sheet offers real carriers only, no 'Nenhuma'", async () => {
     const save = jest.fn(async () => draftRecord());
-    await openCart(fakeLocalOrders([], { save: save as never }), [{ code: 7, name: "Rápido" }], async () => {
+    await openCart(fakeLocalOrders([], { save: save as never }), [{ code: 9, name: "Rápido" }], async () => {
       await pressAndSettle(screen.getByRole("button", { name: "Escolher transportadora" }));
+      expect(screen.queryByText("Nenhuma")).toBeNull();
       await pressAndSettle(screen.getByRole("button", { name: "Transportadora Rápido" }));
     });
     await saveFromSummary("Salvar rascunho");
-    expect(save).toHaveBeenCalledWith(expect.objectContaining({ carrierCode: 7 }));
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ carrierCode: 9 }));
   });
 
-  it("degrades gracefully when no carrier list is available", async () => {
-    await openCart(fakeLocalOrders(), [], async () => {
-      expect(screen.getByText(/lista de transportadoras não está disponível/)).toBeTruthy();
-      expect(screen.getByRole("button", { name: "Escolher transportadora" }).props.accessibilityState?.disabled).toBe(true);
-    });
+  it("blocks Avançar on the negotiation step and lists exactly what is missing", async () => {
+    const repositories = {
+      customers: { list: async () => pageOf([customer(10, { name: "Padaria Central" })]) },
+      products: fakeProducts({ list: async () => pageOf([copo]) }),
+      orders: fakeOrders({ getEntryConfiguration: async () => config, listCarriers: async () => [] }),
+    };
+    await render(<NewOrderScreen repositories={repositories} onUnauthenticated={() => undefined} localOrders={fakeLocalOrders()} />);
+    await pressAndSettle(await screen.findByText("Padaria Central"));
+    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    expect(screen.getByText(/lista de transportadoras não está disponível/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Escolher transportadora" }).props.accessibilityState?.disabled).toBe(true);
+    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    expect(screen.getByText(/Preencha para continuar:.*Tipo de negociação.*Frete.*Transportadora/)).toBeTruthy();
+    expect(screen.getByLabelText("Etapa 2 de 4: Negociação")).toBeTruthy();
   });
 });

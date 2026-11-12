@@ -2,6 +2,7 @@ import { Alert } from "react-native";
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { customer, draftRecord, fakeLocalOrders, fakeOrders, fakeProducts, orderEntryConfiguration, pageOf, product } from "../test-doubles";
 import { NewOrderScreen, type NewOrderScreenProps } from "./new-order-screen";
+import { fillMandatoryHeader } from "./fill-mandatory-header";
 
 // Same act()/FlatList timer hygiene as new-order-screen.test.tsx.
 async function pressAndSettle(element: unknown, delayMs = 100) {
@@ -39,6 +40,7 @@ async function withOneItem(mode: "erp" | "force", props: Partial<NewOrderScreenP
   const view = await render(element(mode, props));
   await pressAndSettle(await screen.findByText("Padaria Central"));
   await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+  await fillMandatoryHeader();
   await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
   await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
   await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));

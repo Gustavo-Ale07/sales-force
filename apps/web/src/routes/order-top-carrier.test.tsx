@@ -2,7 +2,7 @@ import type { ApiSchema } from "@salesforce/contracts/client";
 import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { ORDER_ID, customer, customerDetail, customersPage, orderDetail, orderEntryConfiguration, orderItem, pricedList, product, productsPage } from "../test/fixtures";
-import { apiError, callsTo, renderApp, type Handlers } from "../test/harness";
+import { apiError, callsTo, fillOrderHeader, renderApp, type Handlers } from "../test/harness";
 
 const NEW_ID = "0190a000-0000-7000-8000-0000000000bb";
 const config: ApiSchema<"OrderEntryConfiguration"> = {
@@ -32,10 +32,10 @@ const base = (extra: Handlers = {}): Handlers => ({
 describe("TOP do pedido e transportadora (D-A, D-C)", () => {
   it("offers only the eligible TOPs with the default selected, and sellable negotiation types", async () => {
     renderApp("/pedidos/novo?customer=1001", { handlers: base() });
-    const top = await screen.findByLabelText("Tipo de operação (TOP)");
+    const top = await screen.findByLabelText(/Tipo de operação \(TOP\)/);
     await waitFor(() => expect(top).toHaveValue("1001"));
     expect(within(top).getAllByRole("option").map((o) => o.textContent)).toEqual(["Pedido (TOP 1001)", "Orçamento (TOP 1000)"]);
-    const negotiation = screen.getByLabelText("Tipo de negociação");
+    const negotiation = screen.getByLabelText(/Tipo de negociação/);
     expect(within(negotiation).queryByRole("option", { name: "Devolução" })).not.toBeInTheDocument();
     expect(within(negotiation).queryByRole("option", { name: "Troca" })).not.toBeInTheDocument();
     expect(within(negotiation).getByRole("option", { name: "30 dias" })).toBeInTheDocument();
@@ -45,11 +45,12 @@ describe("TOP do pedido e transportadora (D-A, D-C)", () => {
     const { user, calls } = renderApp("/pedidos/novo?customer=1001", {
       handlers: base({ "POST /orders": { status: 201, body: orderDetail({ id: NEW_ID }) } }),
     });
-    const carrier = await screen.findByLabelText("Transportadora");
+    const carrier = await screen.findByLabelText(/^Transportadora/);
     await waitFor(() => expect(within(carrier).getAllByRole("option")).toHaveLength(3));
     expect(carrier).toHaveValue("");
-    await user.selectOptions(screen.getByLabelText("Tipo de operação (TOP)"), "1000");
+    await user.selectOptions(screen.getByLabelText(/Tipo de operação \(TOP\)/), "1000");
     await user.selectOptions(carrier, "9");
+    await fillOrderHeader(user);
     await user.click(await screen.findByRole("button", { name: "Produtos" }));
     await user.click(await screen.findByRole("button", { name: /^Adicionar .*Balão/ }));
     // J3: with a quote TOP selected the button says "orçamento".
@@ -59,13 +60,29 @@ describe("TOP do pedido e transportadora (D-A, D-C)", () => {
     expect(callsTo(calls, "POST", "/orders")[0]?.body).toMatchObject({ topCode: 1000, carrierCode: 9 });
   });
 
+  it("starts with negotiation, freight and carrier empty and blocks the save, marking what is missing", async () => {
+    const { user, calls } = renderApp("/pedidos/novo?customer=1001", {
+      handlers: base({ "POST /orders": { status: 201, body: orderDetail({ id: NEW_ID }) } }),
+    });
+    const negotiation = await screen.findByLabelText(/Tipo de negociação/);
+    expect(negotiation).toHaveValue("");
+    expect(screen.getByLabelText(/^Frete/)).toHaveValue("");
+    expect(await screen.findByLabelText(/^Transportadora/)).toHaveValue("");
+    await user.click(await screen.findByRole("button", { name: "Produtos" }));
+    await user.click(await screen.findByRole("button", { name: /^Adicionar .*Balão/ }));
+    await user.click(screen.getByRole("button", { name: "Confirmar pedido" }));
+    expect((await screen.findAllByText("Obrigatório")).length).toBe(3);
+    expect(callsTo(calls, "POST", "/orders")).toHaveLength(0);
+  });
+
   it("explains an unknown carrier issue from the server", async () => {
     const { user } = renderApp("/pedidos/novo?customer=1001", {
       handlers: base({
         "POST /orders": apiError(400, "validation_failed", "Inválido", { issues: [{ path: "carrierCode", code: "carrier_unknown", message: "x" }] }),
       }),
     });
-    await user.selectOptions(await screen.findByLabelText("Transportadora"), "7").catch(() => undefined);
+    await user.selectOptions(await screen.findByLabelText(/^Transportadora/), "7").catch(() => undefined);
+    await fillOrderHeader(user);
     await user.click(await screen.findByRole("button", { name: "Produtos" }));
     await user.click(await screen.findByRole("button", { name: /^Adicionar .*Balão/ }));
     await user.click(screen.getByRole("button", { name: "Confirmar pedido" }));

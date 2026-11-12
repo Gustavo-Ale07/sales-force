@@ -3,6 +3,7 @@ import { ApiRequestError } from "../data/api";
 import type { CreateOrderRequest, CustomerRepository, OrderDetail, OrderRepository, ProductRepository } from "../data/ports";
 import { customer, fakeOrders, fakeProducts, networkError, orderDetail, orderEntryConfiguration, pageOf, product, unauthenticatedError } from "../test-doubles";
 import { NewOrderScreen } from "./new-order-screen";
+import { fillMandatoryHeader } from "./fill-mandatory-header";
 
 // fireEvent.press is synchronous and only wraps the event dispatch itself in act(); a handler's own async
 // continuation (e.g. save()'s catch/finally, or a FlatList's internal cell-range-update timer scheduled by the
@@ -61,6 +62,7 @@ async function pickCustomerAndOpenProducts(overrides: Overrides = {}) {
   await setup(overrides);
   await pressAndSettle(await screen.findByText("Padaria Central"));
   await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+  await fillMandatoryHeader();
   await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
   expect(screen.getByText("Copo 200 ml")).toBeTruthy();
 }
@@ -140,7 +142,7 @@ describe("NewOrderScreen", () => {
     let captured: CreateOrderRequest | undefined;
     const created: OrderDetail = orderDetail({ draftNumber: 42, customerCode: 10, customerName: "Padaria Central", estimatedTotal: "9.00" });
     const orders = fakeOrders({
-      getEntryConfiguration: async () => orderEntryConfiguration({ sales: { defaultNegotiationTypeCode: 3, negotiationTypes: [], orderBehavior: { allowDraftWithoutPrice: false }, discountAuthorityMode: "force", orderTops: { defaultTopCode: null, quotationTopCode: null, eligibleTopCodes: [] } } }),
+      getEntryConfiguration: async () => orderEntryConfiguration({ sales: { defaultNegotiationTypeCode: 3, negotiationTypes: [{ code: 3, label: "À vista" }], orderBehavior: { allowDraftWithoutPrice: false }, discountAuthorityMode: "force", orderTops: { defaultTopCode: 1001, quotationTopCode: null, eligibleTopCodes: [1001] } } }),
       create: async (request) => {
         captured = request;
         return created;
@@ -156,6 +158,8 @@ describe("NewOrderScreen", () => {
     expect(screen.getByText("Rascunho salvo")).toBeTruthy();
     expect(screen.getByText("Pedido nº 42 · Padaria Central")).toBeTruthy();
     expect(captured).toEqual({
+      carrierCode: 7,
+      freightType: "CIF",
       clientRequestId: expect.any(String),
       expectedDataset: { environment: "production", datasetId: "mirror-real-001" },
       customerCode: 10,
@@ -285,11 +289,12 @@ describe("NewOrderScreen", () => {
       list: async () => pageOf([product(9, { description: "Sem preço", listPrice: { state: "none", tableCode: null, versionId: null, noPriceReason: "no_resolved_table" } })]),
     });
     const orders = fakeOrders({
-      getEntryConfiguration: async () => orderEntryConfiguration({ sales: { defaultNegotiationTypeCode: null, negotiationTypes: [], orderBehavior: { allowDraftWithoutPrice: false }, discountAuthorityMode: "force", orderTops: { defaultTopCode: null, quotationTopCode: null, eligibleTopCodes: [] } }, products: { productWithoutPrice: { orderable: false } } }),
+      getEntryConfiguration: async () => orderEntryConfiguration({ sales: { defaultNegotiationTypeCode: null, negotiationTypes: [{ code: 3, label: "À vista" }], orderBehavior: { allowDraftWithoutPrice: false }, discountAuthorityMode: "force", orderTops: { defaultTopCode: 1001, quotationTopCode: null, eligibleTopCodes: [1001] } }, products: { productWithoutPrice: { orderable: false } } }),
     });
     await setup({ products, orders });
     await pressAndSettle(await screen.findByText("Padaria Central"));
     await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await fillMandatoryHeader();
     await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Sem preço ao carrinho" }));
     await pressAndSettle(await screen.findByRole("tab", { name: "Carrinho (1)" }));

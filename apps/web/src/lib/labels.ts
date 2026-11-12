@@ -97,6 +97,7 @@ const deliveryCodeLabels: Record<string, string> = {
   missing_stock_location: "Local de estoque não configurado — avise o TI",
   missing_negotiation_type: "Tipo de negociação não informado",
   missing_freight_type: "Frete não informado",
+  missing_carrier: "Transportadora não informada",
   no_items: "Pedido sem itens",
   missing_unit: "Item sem unidade",
   no_price: "Item sem preço",

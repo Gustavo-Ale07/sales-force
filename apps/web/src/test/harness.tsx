@@ -2,7 +2,7 @@ import type { ApiSchema } from "@salesforce/contracts/client";
 import { Toaster, TooltipProvider } from "@salesforce/ui";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createWebApiClient } from "../lib/api";
 import { createApiAuthClient } from "../lib/api-auth-client";
@@ -114,6 +114,7 @@ export function renderApp(initialPath: string, options: RenderOptions = {}) {
     "GET /ready": { body: ready },
     "GET /configuration": { body: configuration },
     "GET /order-entry/configuration": { body: orderEntryConfiguration },
+    "GET /carriers": { body: { items: [{ code: 7, name: "Transportes Alfa" }, { code: 9, name: "Beta Cargas" }] } },
     ...handlers,
   });
   const api = createWebApiClient({ fetch: mock.fetch, origin: "http://localhost" });
@@ -135,6 +136,25 @@ export function renderApp(initialPath: string, options: RenderOptions = {}) {
 }
 
 export const callsTo = (calls: MockRequest[], method: string, path: string) => calls.filter((call) => call.method === method && call.path === path);
+
+/** Fills the mandatory header (negotiation, freight, carrier) of the new-order form; only what is still empty is touched. */
+export async function fillOrderHeader(user: ReturnType<typeof userEvent.setup>) {
+  const negotiation = await screen.findByLabelText(/Tipo de negociação/);
+  if ((negotiation as HTMLSelectElement).value === "") {
+    await waitFor(() => {
+      if (within(negotiation).queryAllByRole("option").length < 2) throw new Error("negotiation types not loaded");
+    });
+    const first = within(negotiation).getAllByRole("option")[1] as HTMLOptionElement;
+    await user.selectOptions(negotiation, first.value);
+  }
+  const freight = await screen.findByLabelText(/^Frete/);
+  if ((freight as HTMLSelectElement).value === "") await user.selectOptions(freight, "CIF");
+  const carrier = await screen.findByLabelText(/^Transportadora/);
+  await waitFor(() => {
+    if (within(carrier).queryAllByRole("option").length < 2) throw new Error("carriers not loaded");
+  });
+  if ((carrier as HTMLSelectElement).value === "") await user.selectOptions(carrier, "7");
+}
 
 /** Opens the user menu from the keyboard (Enter on the trigger): also proves the menu is keyboard reachable. */
 export async function openUserMenu(user: ReturnType<typeof userEvent.setup>) {

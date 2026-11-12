@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useRef, useState } from "react";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
+import type { OrderHeaderIssueCode } from "@salesforce/domain";
 import { sellableNegotiationTypes, topLabel, topOptions } from "../data/order-header";
 import type { Carrier, OrderEntryConfiguration } from "../data/ports";
 import { colors, spacing } from "../theme";
@@ -11,13 +12,18 @@ export interface OrderHeaderOptionsProps {
   readonly negotiationTypeCode: number | null;
   readonly onTopChange: (code: number) => void;
   readonly onNegotiationChange: (code: number) => void;
-  /** Optional carrier (D-C). `null` list = still loading; empty = nothing to choose from (offline with no stored list). */
+  /** Mandatory carrier. `null` list = still loading; empty = nothing to choose from (offline with no stored list). */
   readonly carriers: readonly Carrier[] | null;
   readonly carrierCode: number | null;
-  readonly onCarrierChange: (code: number | null) => void;
-  /** Freight: required to send the order, not to save the draft. `null` = not chosen. */
+  readonly onCarrierChange: (code: number) => void;
+  /** Mandatory freight. `null` = not chosen. */
   readonly freightType: FreightType | null;
   readonly onFreightChange: (value: FreightType) => void;
+  /** Header fields still missing (shared domain rule); highlighted once `showMissing`. */
+  readonly missing?: readonly OrderHeaderIssueCode[];
+  readonly showMissing?: boolean;
+  /** Vertical offset of each field inside the scroll content, so the screen can scroll to the first empty one. */
+  readonly onFieldOffset?: (code: OrderHeaderIssueCode, y: number) => void;
 }
 
 type FreightType = "CIF" | "FOB" | "SEM_FRETE";
@@ -32,19 +38,38 @@ const FREIGHT_OPTIONS: readonly { readonly value: FreightType; readonly label: s
  * "Opções do pedido": the TOP (Pedido or Orçamento, D-A) and the negotiation type (D-B: only the sellable ones). A group
  * with nothing to choose is not drawn. What is eligible is decided by the server; this is only the picker.
  */
-export function OrderHeaderOptions({ sales, topCode, negotiationTypeCode, onTopChange, onNegotiationChange, carriers, carrierCode, onCarrierChange, freightType, onFreightChange }: OrderHeaderOptionsProps) {
+export function OrderHeaderOptions({ sales, topCode, negotiationTypeCode, onTopChange, onNegotiationChange, carriers, carrierCode, onCarrierChange, freightType, onFreightChange, missing = [], showMissing = false, onFieldOffset }: OrderHeaderOptionsProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const boxY = useRef(0);
+  const isMissing = (code: OrderHeaderIssueCode) => showMissing && missing.includes(code);
+  const groupProps = (code: OrderHeaderIssueCode) => ({
+    style: [styles.group, isMissing(code) && styles.groupMissing],
+    onLayout: (event: LayoutChangeEvent) => onFieldOffset?.(code, boxY.current + event.nativeEvent.layout.y),
+  });
+  const caption = (label: string, code: OrderHeaderIssueCode) => (
+    <Text style={[styles.caption, isMissing(code) && styles.captionMissing]}>
+      {label}
+      <Text style={styles.required}> *</Text>
+      {isMissing(code) ? " — obrigatório" : ""}
+    </Text>
+  );
   const tops = topOptions(sales.orderTops);
   const negotiations = sellableNegotiationTypes(sales.negotiationTypes);
   const currentTop = topCode ?? sales.orderTops.defaultTopCode;
   const currentNegotiationHidden = negotiationTypeCode !== null && !negotiations.some((type) => type.code === negotiationTypeCode);
   const currentCarrier = carrierCode === null ? null : (carriers?.find((carrier) => carrier.code === carrierCode)?.name ?? `Transportadora ${carrierCode}`);
   return (
-    <View style={styles.box} accessibilityLabel="Opções do pedido">
+    <View
+      style={styles.box}
+      accessibilityLabel="Opções do pedido"
+      onLayout={(event) => {
+        boxY.current = event.nativeEvent.layout.y;
+      }}
+    >
       <Text style={styles.title}>Opções do pedido</Text>
       {tops.length > 0 && (
-        <View style={styles.group}>
-          <Text style={styles.caption}>Tipo de operação</Text>
+        <View {...groupProps("missing_top")}>
+          {caption("Tipo de operação", "missing_top")}
           <View style={styles.chips}>
             {tops.map((option) => {
               const selected = option.code === currentTop;
@@ -65,8 +90,8 @@ export function OrderHeaderOptions({ sales, topCode, negotiationTypeCode, onTopC
         </View>
       )}
       {negotiations.length > 0 && (
-        <View style={styles.group}>
-          <Text style={styles.caption}>Tipo de negociação</Text>
+        <View {...groupProps("missing_negotiation_type")}>
+          {caption("Tipo de negociação", "missing_negotiation_type")}
           <View style={styles.chips}>
             {negotiations.map((type) => {
               const selected = type.code === negotiationTypeCode;
@@ -89,8 +114,8 @@ export function OrderHeaderOptions({ sales, topCode, negotiationTypeCode, onTopC
           )}
         </View>
       )}
-      <View style={styles.group}>
-        <Text style={styles.caption}>Frete (obrigatório para enviar)</Text>
+      <View {...groupProps("missing_freight_type")}>
+        {caption("Frete", "missing_freight_type")}
         <View style={styles.chips}>
           {FREIGHT_OPTIONS.map((option) => {
             const selected = option.value === freightType;
@@ -110,8 +135,8 @@ export function OrderHeaderOptions({ sales, topCode, negotiationTypeCode, onTopC
         </View>
         <Text style={styles.hint}>CIF: o frete é por conta de quem vende. FOB: por conta do cliente.</Text>
       </View>
-      <View style={styles.group}>
-        <Text style={styles.caption}>Transportadora (opcional)</Text>
+      <View {...groupProps("missing_carrier")}>
+        {caption("Transportadora", "missing_carrier")}
         <Pressable
           style={styles.chip}
           onPress={() => setPickerOpen(true)}
@@ -119,7 +144,7 @@ export function OrderHeaderOptions({ sales, topCode, negotiationTypeCode, onTopC
           accessibilityRole="button"
           accessibilityLabel="Escolher transportadora"
         >
-          <Text style={styles.chipText}>{currentCarrier ?? "Nenhuma"}</Text>
+          <Text style={styles.chipText}>{currentCarrier ?? "Escolher transportadora"}</Text>
         </Pressable>
         {carriers !== null && carriers.length === 0 && carrierCode === null && (
           <Text style={styles.hint}>A lista de transportadoras não está disponível agora. Conecte-se para escolher uma.</Text>
@@ -130,9 +155,9 @@ export function OrderHeaderOptions({ sales, topCode, negotiationTypeCode, onTopC
           <View style={styles.sheet}>
             <Text style={styles.title}>Transportadora</Text>
             <ScrollView>
-              {[{ code: null, name: "Nenhuma" }, ...(carriers ?? [])].map((carrier) => (
+              {(carriers ?? []).map((carrier) => (
                 <Pressable
-                  key={carrier.code ?? "none"}
+                  key={carrier.code}
                   style={styles.option}
                   onPress={() => {
                     onCarrierChange(carrier.code);
@@ -161,6 +186,9 @@ const styles = StyleSheet.create({
   box: { margin: spacing.md, padding: spacing.md, borderRadius: 8, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, gap: spacing.sm },
   title: { fontSize: 14, fontWeight: "700", color: colors.text },
   group: { gap: spacing.xs },
+  groupMissing: { borderLeftWidth: 3, borderLeftColor: colors.warning, paddingLeft: spacing.sm },
+  captionMissing: { color: colors.warning, fontWeight: "700" },
+  required: { color: colors.warning, fontWeight: "700" },
   caption: { fontSize: 12, color: colors.textMuted },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   chip: { paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: 16, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DatasetChangedError, DatasetUnavailableError, type DraftRecord } from "@salesforce/mobile-db";
+import { ORDER_HEADER_ISSUE_LABEL, orderHeaderIssues, type OrderHeaderIssueCode } from "@salesforce/domain";
 import { datasetIdentityOf } from "../offline/reference-source";
 import { Alert, AppState, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ApiRequestError } from "../data/api";
@@ -299,14 +300,21 @@ export function NewOrderScreen({
       ? localDraft.negotiationTypeCode
       : editingOrder !== null
         ? editingOrder.negotiationTypeCode
-        : config.status === "ready"
-          ? config.value.sales.defaultNegotiationTypeCode
-          : null;
+        : null; // mandatory and chosen by the seller: a new order starts with no negotiation type (owner ruling 2026-11-12)
   const negotiationTypeCode = choice.negotiation !== undefined ? choice.negotiation : savedNegotiation;
   const savedCarrier = localDraft?.carrierCode ?? editingOrder?.carrierCode ?? null;
   const carrierCode = choice.carrier !== undefined ? choice.carrier : savedCarrier;
   const savedFreight = localDraft?.freightType ?? editingOrder?.freightType ?? null;
   const freightType = choice.freight !== undefined ? choice.freight : savedFreight;
+  // Shared rule (site, app and server): TOP, negotiation, freight and carrier are mandatory; only the notes are optional.
+  const missingHeader = orderHeaderIssues({
+    topCode: topCode ?? (config.status === "ready" ? config.value.sales.orderTops.defaultTopCode : null),
+    negotiationTypeCode,
+    freightType,
+    carrierCode,
+  });
+  const fieldOffsets = useRef<Partial<Record<OrderHeaderIssueCode, number>>>({});
+  const negotiationScrollRef = useRef<ScrollView>(null);
   const savedNotes = localDraft !== null ? localDraft.notes : (editingOrder?.notes ?? null);
   const notesText = choice.notes !== undefined ? choice.notes : (savedNotes ?? "");
   /** Empty text is "no notes" (`null`), as before the field existed. */
@@ -465,7 +473,15 @@ export function NewOrderScreen({
   /** Message for the first thing missing in `from`, or `null` when the seller may advance. Presentation only: the server still revalidates everything. */
   function validateStep(from: Step): string | null {
     if (from === "customer") return customer === null ? "Selecione um cliente para continuar." : null;
-    if (from === "negotiation") return notesText.length > NOTES_MAX ? `As observações aceitam até ${NOTES_MAX} caracteres.` : null;
+    if (from === "negotiation") {
+      if (missingHeader.length > 0) {
+        const first = missingHeader[0];
+        const offset = first === undefined ? undefined : fieldOffsets.current[first];
+        if (offset !== undefined) negotiationScrollRef.current?.scrollTo({ y: Math.max(0, offset - 8), animated: true });
+        return `Preencha para continuar: ${missingHeader.map((code) => ORDER_HEADER_ISSUE_LABEL[code]).join(", ")}.`;
+      }
+      return notesText.length > NOTES_MAX ? `As observações aceitam até ${NOTES_MAX} caracteres.` : null;
+    }
     if (from === "products") {
       if (lines.length === 0) return "Adicione ao menos um produto para continuar.";
       if (!preview.valid) return "Corrija a quantidade ou o desconto dos itens do carrinho para continuar.";
@@ -707,7 +723,7 @@ export function NewOrderScreen({
 
   function renderNegotiationStep() {
     return (
-      <ScrollView style={styles.flex} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={negotiationScrollRef} style={styles.flex} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         {config.status === "loading" && <Text style={styles.lockedNote}>Carregando as opções do pedido…</Text>}
         {config.status === "error" && <Text style={styles.footerNotice}>{config.error.message}</Text>}
         {config.status === "ready" && (
@@ -722,6 +738,11 @@ export function NewOrderScreen({
             onCarrierChange={(code) => setChoice((current) => ({ ...current, carrier: code }))}
             freightType={freightType}
             onFreightChange={(value) => setChoice((current) => ({ ...current, freight: value }))}
+            missing={missingHeader}
+            showMissing={stepError !== null || localDraft !== null || editingOrder !== null}
+            onFieldOffset={(code, y) => {
+              fieldOffsets.current[code] = y;
+            }}
           />
         )}
         <NotesField value={notesText} onChange={setNotes} />
@@ -823,7 +844,10 @@ export function NewOrderScreen({
           {sales !== null && effectiveTop !== null && <SummaryRow label="Operação" value={topLabel(effectiveTop, sales.orderTops)} />}
           <SummaryRow label="Negociação" value={negotiationName ?? "Não informada"} />
           <SummaryRow label="Frete" value={freightLabel ?? "Não informado"} />
-          <SummaryRow label="Transportadora" value={carrierName ?? "Nenhuma"} />
+          <SummaryRow label="Transportadora" value={carrierName ?? "Não informada"} />
+          {missingHeader.length > 0 && (
+            <Text style={styles.footerNotice}>{`Falta preencher para enviar: ${missingHeader.map((code) => ORDER_HEADER_ISSUE_LABEL[code]).join(", ")}. Toque em Editar negociação.`}</Text>
+          )}
           <SummaryRow label="Observações" value={notesValue ?? "—"} />
         </SummaryBlock>
 
@@ -852,7 +876,6 @@ export function NewOrderScreen({
           </Text>
         )}
         {config.status === "error" && <Text style={styles.footerNotice}>{config.error.message}</Text>}
-        {freightType === null && <Text style={styles.footerInfo}>Frete não informado: ele é obrigatório para enviar o pedido, não para salvar o rascunho.</Text>}
         {lines.length > 0 && !preview.valid && <Text style={styles.footerNotice}>Há quantidade ou desconto inválido no carrinho. Corrija em Produtos.</Text>}
         {blockedLineCount > 0 && (
           <Text style={styles.footerNotice}>{`${blockedLineCount} item(ns) sem preço não podem ser salvos nesta instalação. Remova-os ou aguarde a atualização de preços.`}</Text>

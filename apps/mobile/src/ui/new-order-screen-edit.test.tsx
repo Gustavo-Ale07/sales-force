@@ -3,6 +3,7 @@ import { ApiRequestError } from "../data/api";
 import type { OrderDetail, OrderRepository, ReplaceOrderRequest } from "../data/ports";
 import { customer, fakeOrders, fakeProducts, orderDetail, orderItem, pageOf, product } from "../test-doubles";
 import { NewOrderScreen } from "./new-order-screen";
+import { fillMandatoryHeader } from "./fill-mandatory-header";
 
 // See new-order-screen.test.tsx for why press is wrapped in an async act() with a real-timer delay, and why the
 // file waits out FlatList's internal cell-range-update timer in afterEach. Split into its own file (mobile-engineer,
@@ -35,6 +36,7 @@ async function saveAFreshDraft(orders: OrderRepository) {
   await render(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} />);
   await pressAndSettle(await screen.findByText("Padaria Central"));
   await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+  await fillMandatoryHeader();
   await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
   await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
   await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
@@ -169,6 +171,7 @@ describe("NewOrderScreen — reopening a saved draft for editing (PUT /orders/{i
     await render(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={onUnauthenticated} />);
     await pressAndSettle(await screen.findByText("Padaria Central"));
     await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await fillMandatoryHeader();
     await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));

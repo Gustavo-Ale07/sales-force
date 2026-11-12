@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import type { CustomerRepository, ProductRepository } from "../data/ports";
 import { customer, fakeOrders, fakeProducts, orderDetail, orderItem, pageOf, product } from "../test-doubles";
 import { NewOrderScreen } from "./new-order-screen";
+import { fillMandatoryHeader } from "./fill-mandatory-header";
 
 // Catalog-group discount edge cases (MOB-4a) split out of new-order-screen-discounts.test.tsx to keep each file's
 // VirtualizedList timer bookkeeping small (see .claude/work handoff §11). Same press/settle rationale as
@@ -45,6 +46,7 @@ async function reopenDraftAndOpenGroupSheet(codes: number[], products: ProductRe
   await render(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} />);
   await pressAndSettle(await screen.findByText("Padaria Central"));
   await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+  await fillMandatoryHeader();
   await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
   for (const code of codes) {
     await pressAndSettle(await screen.findByRole("button", { name: `Adicionar Produto ${code} ao carrinho` }));
@@ -105,6 +107,7 @@ describe("NewOrderScreen catalog-group discount edge cases (MOB-4a)", () => {
     await render(<NewOrderScreen repositories={{ customers, products, orders: fakeOrders() }} onUnauthenticated={jest.fn()} />);
     await pressAndSettle(await screen.findByText("Padaria Central"));
     await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await fillMandatoryHeader();
     await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Produto avulso ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));

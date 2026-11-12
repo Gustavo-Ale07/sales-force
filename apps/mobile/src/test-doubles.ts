@@ -76,7 +76,7 @@ export function orderEntryConfiguration(overrides: Partial<OrderEntryConfigurati
   return {
     dataset: { environment: "production", datasetId: "mirror-real-001" },
     general: { enabled: true },
-    sales: { defaultNegotiationTypeCode: null, negotiationTypes: [], orderBehavior: { allowDraftWithoutPrice: false }, discountAuthorityMode: "force", orderTops: { defaultTopCode: null, quotationTopCode: null, eligibleTopCodes: [] } },
+    sales: { defaultNegotiationTypeCode: null, negotiationTypes: [{ code: 3, label: "À vista" }], orderBehavior: { allowDraftWithoutPrice: false }, discountAuthorityMode: "force", orderTops: { defaultTopCode: 1001, quotationTopCode: null, eligibleTopCodes: [] } },
     products: { productWithoutPrice: { orderable: false } },
     ...overrides,
   };
@@ -140,7 +140,7 @@ export function fakeOrders(overrides: Partial<OrderRepository> = {}): OrderRepos
     duplicateAsOrder: async () => {
       throw new Error("unused");
     },
-    listCarriers: async () => [],
+    listCarriers: async () => [{ code: 7, name: "Transportes Alfa" }],
     ...overrides,
   };
 }

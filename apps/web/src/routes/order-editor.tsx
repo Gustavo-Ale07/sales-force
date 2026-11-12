@@ -55,7 +55,7 @@ import { QueryError } from "../components/query-error";
 import { SaveTemplateDialog } from "../components/save-template-dialog";
 import { ApiRequestError } from "../lib/api";
 import { ERP_SUBMISSION_DISABLED, convertQuote, createOrder, replaceOrder, submitOrder, verifyOrderDelivery } from "../lib/api-mutations";
-import { carriersQueryOptions, customerOrderHabitsQueryOptions, orderEntryConfigurationQueryOptions, customerQueryOptions, orderQueryOptions, queryKeys } from "../lib/api-queries";
+import { carriersQueryOptions,orderEntryConfigurationQueryOptions, customerQueryOptions, orderQueryOptions, queryKeys } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { useLoadedDataset, requireDataset } from "../lib/dataset";
 import { approvalsEnabled } from "../lib/discount-authority";
@@ -78,7 +78,15 @@ import {
   type EditorLine,
 } from "../lib/order-draft";
 
-import { documentKindOf, documentVocabulary, isOrderDeletable, type DocumentKind } from "@salesforce/domain";
+import { documentKindOf, documentVocabulary, isOrderDeletable, ORDER_HEADER_ISSUE_LABEL, orderHeaderIssues, type DocumentKind, type OrderHeaderIssueCode } from "@salesforce/domain";
+
+/** DOM ids of the mandatory header fields, so the first empty one can be focused. */
+const HEADER_FIELD_ID: Record<OrderHeaderIssueCode, string> = {
+  missing_top: "order-top",
+  missing_negotiation_type: "order-negotiation",
+  missing_freight_type: "order-freight",
+  missing_carrier: "order-carrier",
+};
 
 type OrderDetail = ApiSchema<"OrderDetail">;
 type FreightType = NonNullable<OrderDetail["freightType"]>;
@@ -239,13 +247,12 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
   const [negotiationChoice, setNegotiationChoice] = useState<number | null | undefined>(order ? order.negotiationTypeCode : undefined);
   /** `undefined` = the installation default order TOP; a number = chosen (D-A). */
   const [topChoice, setTopChoice] = useState<number | undefined>(order?.topCode ?? undefined);
-  /** Optional carrier (D-C): no default. */
+  /** Mandatory carrier: no default; a real carrier code picked on purpose. */
   const [carrierChoice, setCarrierChoice] = useState<number | null>(order?.carrierCode ?? null);
   const carriers = useQuery(carriersQueryOptions(api));
-  /** Freight (required to send, not to save): `undefined` = not touched, so the customer's last choice is suggested; `null` = explicitly empty. */
-  const [freightChoice, setFreightChoice] = useState<FreightType | null | undefined>(order ? order.freightType : undefined);
-  const habits = useQuery({ ...customerOrderHabitsQueryOptions(api, customer?.code ?? 0), enabled: !order && customer !== null });
-  const freightType: FreightType | null = freightChoice !== undefined ? freightChoice : (habits.data?.lastFreightType ?? null);
+  /** Freight (mandatory): starts empty, never suggested; the seller chooses. */
+  const [freightChoice, setFreightChoice] = useState<FreightType | null>(order ? order.freightType : null);
+  const freightType: FreightType | null = freightChoice;
   const [notes, setNotes] = useState(order?.notes ?? "");
   const [lines, setLines] = useState<EditorLine[]>(() =>
     order ? order.items.map((item, index) => lineFromOrderItem(item, `saved-${index}`)) : [],
@@ -298,8 +305,8 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
   // J3: the header TOP decides whether this is an order or a quote, and the texts follow.
   const docKind = documentKindOf(orderTopCode, { quoteTopCodes: orderTops?.quoteTopCodes, quotationTopCode: orderTops?.quotationTopCode });
   const vocab = documentVocabulary(docKind, order ? (order.erpNumber ?? order.draftNumber) : null);
-  const negotiationTypeCode =
-    negotiationChoice !== undefined ? negotiationChoice : (config.data?.sales.defaultNegotiationTypeCode ?? null);
+  // Mandatory and chosen by the seller: no installation default is preselected.
+  const negotiationTypeCode = negotiationChoice ?? null;
 
   const snapshot = (state: {
     customerCode: number | null;
@@ -480,9 +487,24 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
 
   const canSaveTemplate = customer !== null && lines.length > 0 && preview.valid;
   const canSave = !readOnly && customer !== null && preview.valid && installationEnabled && !hasBlockedLines && (order === null || dirty || (order.status === "draft" && order.review === null));
+  // Shared rule (site, app, server): TOP, negotiation, freight and carrier are mandatory; saving here also sends.
+  const headerIssues = orderHeaderIssues({ topCode: orderTopCode, negotiationTypeCode, freightType, carrierCode: carrierChoice });
+  const [headerAttempted, setHeaderAttempted] = useState(false);
+  const headerError = (code: OrderHeaderIssueCode) => (headerAttempted && headerIssues.includes(code) ? "Obrigatório" : undefined);
   const onSubmitForm = (event: FormEvent) => {
     event.preventDefault();
-    if (canSave && !save.isPending) save.mutate();
+    if (!canSave || save.isPending) return;
+    if (headerIssues.length > 0) {
+      setHeaderAttempted(true);
+      toast({ title: "Preencha os campos obrigatórios", description: headerIssues.map((code) => ORDER_HEADER_ISSUE_LABEL[code]).join(", "), tone: "danger" });
+      const first = headerIssues[0];
+      const id = first === undefined ? undefined : HEADER_FIELD_ID[first];
+      const element = id === undefined ? null : document.getElementById(id);
+      element?.scrollIntoView({ block: "center", behavior: "smooth" });
+      element?.focus({ preventScroll: true });
+      return;
+    }
+    save.mutate();
   };
 
   const requestCustomer = (picked: PickedCustomer | null) => {
@@ -767,14 +789,20 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                 <CustomerPicker {...controlProps} selected={customer} onSelect={(picked) => requestCustomer(picked)} disabled={readOnly} />
               )}
             </FormField>
-            <FormField label="Tipo de negociação" hint={config.isError ? "Tipos de negociação indisponíveis no momento." : undefined}>
+            <FormField
+              label="Tipo de negociação"
+              required
+              id="order-negotiation"
+              error={headerError("missing_negotiation_type")}
+              hint={config.isError ? "Tipos de negociação indisponíveis no momento." : undefined}
+            >
               <Select
                 size="md"
                 disabled={readOnly || negotiationTypes.length === 0}
                 value={negotiationTypeCode ?? ""}
                 onChange={(event) => setNegotiationChoice(event.target.value === "" ? null : Number(event.target.value))}
               >
-                <option value="">Não informado</option>
+                <option value="">Selecione…</option>
                 {negotiationTypes.map((type) => (
                   <option key={type.code} value={type.code}>
                     {type.label}
@@ -783,7 +811,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
               </Select>
             </FormField>
             {topOptions.length > 0 ? (
-              <FormField label="Tipo de operação (TOP)">
+              <FormField label="Tipo de operação (TOP)" required id="order-top" error={headerError("missing_top")}>
                 <Select
                   size="md"
                   disabled={readOnly}
@@ -799,14 +827,20 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                 </Select>
               </FormField>
             ) : null}
-            <FormField label="Transportadora" hint={carriers.isError ? "Transportadoras indisponíveis no momento." : undefined}>
+            <FormField
+              label="Transportadora"
+              required
+              id="order-carrier"
+              error={headerError("missing_carrier")}
+              hint={carriers.isError ? "Transportadoras indisponíveis no momento." : undefined}
+            >
               <Select
                 size="md"
                 disabled={readOnly || (carrierItems.length === 0 && carrierChoice === null)}
                 value={carrierChoice ?? ""}
                 onChange={(event) => setCarrierChoice(event.target.value === "" ? null : Number(event.target.value))}
               >
-                <option value="">Sem transportadora</option>
+                <option value="">Selecione…</option>
                 {carrierUnlisted ? <option value={carrierChoice}>{`Transportadora ${carrierChoice} (indisponível)`}</option> : null}
                 {carrierItems.map((carrier) => (
                   <option key={carrier.code} value={carrier.code}>
@@ -815,7 +849,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                 ))}
               </Select>
             </FormField>
-            <FormField label="Frete" hint="CIF: o frete é por conta de quem vende. FOB: por conta do cliente. Obrigatório para enviar.">
+            <FormField label="Frete" required id="order-freight" error={headerError("missing_freight_type")} hint="CIF: o frete é por conta de quem vende. FOB: por conta do cliente.">
               <Select
                 size="md"
                 disabled={readOnly}

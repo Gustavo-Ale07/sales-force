@@ -12,7 +12,7 @@ import {
   product,
   productsPage,
 } from "../test/fixtures";
-import { callsTo, renderApp, type Handlers } from "../test/harness";
+import { callsTo, fillOrderHeader, renderApp, type Handlers } from "../test/harness";
 
 // Full-screen renders with typing: give them room when turbo runs every package suite in parallel.
 vi.setConfig({ testTimeout: 20_000 });
@@ -34,6 +34,7 @@ const handlers = (extra: Handlers = {}): Handlers => ({
 type User = ReturnType<typeof renderApp>["user"];
 
 async function addProduct(user: User, description: string) {
+  await fillOrderHeader(user);
   const produtos = await screen.findByRole("button", { name: "Produtos" });
   if (produtos.getAttribute("aria-pressed") !== "true") await user.click(produtos);
   const add = await screen.findByRole("button", { name: new RegExp(`^Adicionar .*${description}`) });

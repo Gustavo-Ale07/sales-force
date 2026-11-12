@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-
 import type { CustomerRepository, ProductRepository } from "../data/ports";
 import { customer, fakeOrders, fakeProducts, orderDetail, orderItem, pageOf, product } from "../test-doubles";
 import { NewOrderScreen } from "./new-order-screen";
+import { fillMandatoryHeader } from "./fill-mandatory-header";
 
 // See new-order-screen.test.tsx for why press/long-press are wrapped in an async act() with a real-timer delay,
 // and why the file waits out FlatList's internal cell-range-update timer in afterEach: both apply here too
@@ -48,6 +49,7 @@ async function setupCartWithTwoLines() {
   await render(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} />);
   await pressAndSettle(await screen.findByText("Padaria Central"));
   await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+  await fillMandatoryHeader();
   await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
   await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
   await pressAndSettle(screen.getByRole("button", { name: "Adicionar Prato 20cm ao carrinho" }));
@@ -80,13 +82,14 @@ describe("NewOrderScreen discounts (mass and group apply, DISC-1/MOB-4)", () => 
       getEntryConfiguration: async () => ({
         dataset: { environment: "production", datasetId: "mirror-real-001" },
         general: { enabled: true },
-        sales: { defaultNegotiationTypeCode: null, negotiationTypes: [], orderBehavior: { allowDraftWithoutPrice: false }, discountAuthorityMode: "force", orderTops: { defaultTopCode: null, quotationTopCode: null, eligibleTopCodes: [] } },
+        sales: { defaultNegotiationTypeCode: null, negotiationTypes: [{ code: 3, label: "À vista" }], orderBehavior: { allowDraftWithoutPrice: false }, discountAuthorityMode: "force", orderTops: { defaultTopCode: 1001, quotationTopCode: null, eligibleTopCodes: [1001] } },
         products: { productWithoutPrice: { orderable: true } },
       }),
     });
     await render(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} />);
     await pressAndSettle(await screen.findByText("Padaria Central"));
     await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await fillMandatoryHeader();
     await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Sem preço ao carrinho" }));
@@ -160,6 +163,7 @@ describe("NewOrderScreen catalog-group discount (MOB-4a: automatic bucketing by 
     await render(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} />);
     await pressAndSettle(await screen.findByText("Padaria Central"));
     await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await fillMandatoryHeader();
     await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Prato 20cm ao carrinho" }));
@@ -198,13 +202,14 @@ describe("NewOrderScreen catalog-group discount (MOB-4a: automatic bucketing by 
       getEntryConfiguration: async () => ({
         dataset: { environment: "production", datasetId: "mirror-real-001" },
         general: { enabled: true },
-        sales: { defaultNegotiationTypeCode: null, negotiationTypes: [], orderBehavior: { allowDraftWithoutPrice: false }, discountAuthorityMode: "force", orderTops: { defaultTopCode: null, quotationTopCode: null, eligibleTopCodes: [] } },
+        sales: { defaultNegotiationTypeCode: null, negotiationTypes: [{ code: 3, label: "À vista" }], orderBehavior: { allowDraftWithoutPrice: false }, discountAuthorityMode: "force", orderTops: { defaultTopCode: 1001, quotationTopCode: null, eligibleTopCodes: [1001] } },
         products: { productWithoutPrice: { orderable: true } },
       }),
     });
     await render(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} />);
     await pressAndSettle(await screen.findByText("Padaria Central"));
     await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await fillMandatoryHeader();
     await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo sem preço ao carrinho" }));
@@ -238,6 +243,7 @@ describe("NewOrderScreen catalog-group discount (MOB-4a: automatic bucketing by 
     await render(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} />);
     await pressAndSettle(await screen.findByText("Padaria Central"));
     await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await fillMandatoryHeader();
     await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
@@ -271,6 +277,7 @@ describe("NewOrderScreen catalog-group discount (MOB-4a: automatic bucketing by 
     await render(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} />);
     await pressAndSettle(await screen.findByText("Padaria Central"));
     await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await fillMandatoryHeader();
     await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));

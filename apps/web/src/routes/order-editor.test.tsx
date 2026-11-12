@@ -18,7 +18,7 @@ import {
   product,
   productsPage,
 } from "../test/fixtures";
-import { apiError, callsTo, renderApp, type Handlers } from "../test/harness";
+import { apiError, callsTo, fillOrderHeader, renderApp, type Handlers } from "../test/harness";
 import { SUBMIT_AWAITING_MESSAGE, SUBMIT_BLOCKED_MESSAGE, SUBMIT_DISABLED_MESSAGE } from "./order-editor";
 
 const FORBIDDEN_TERMS = /custo|margem|cost|margin/i;
@@ -37,6 +37,7 @@ const newOrderHandlers = (extra: Handlers = {}): Handlers => ({
 
 /** Adds a product from the "Produtos" table, then shows the cart (where the lines are edited). */
 async function addProduct(user: ReturnType<typeof renderApp>["user"], description: string) {
+  await fillOrderHeader(user);
   const produtos = await screen.findByRole("button", { name: "Produtos" });
   if (produtos.getAttribute("aria-pressed") !== "true") await user.click(produtos);
   const add = await screen.findByRole("button", { name: new RegExp(`^Adicionar .*${description}`) });
@@ -773,14 +774,15 @@ describe("order-entry configuration source", () => {
         })),
       ),
     });
-    const select = await screen.findByRole("combobox", { name: "Tipo de negociação" });
+    const select = await screen.findByRole("combobox", { name: /Tipo de negociação/ });
     await waitFor(() => expect(select).toBeEnabled());
     expect(within(select).getAllByRole("option").map((option) => option.textContent)).toEqual([
-      "Não informado",
+      "Selecione…",
       "Faturado 60 dias",
       "Cartão",
     ]);
-    expect(select).toHaveValue("9");
+    // Mandatory and chosen by the seller: the installation default is no longer preselected.
+    expect(select).toHaveValue("");
   });
 
   it("does not silently fall back to an empty configuration when the endpoint succeeds", async () => {

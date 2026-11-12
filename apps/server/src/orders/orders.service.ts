@@ -22,6 +22,7 @@ import {
   isQuotationTopCode,
   normalizeDecimalString,
   orderErpIssues,
+  orderHeaderIssues,
   presentSkips,
   recomputeOrderAuthority,
   resolveOrderTopCode,
@@ -118,6 +119,13 @@ function discountedLines(items: readonly { readonly discountPercent: string }[])
 
 /** D-AK: reread divergences of a note that already exists in the ERP: never resent (Reenviar only links to it and rejects again). */
 const ERP_DIVERGENCE_CODES: ReadonlySet<string> = new Set(['price_divergence', 'discount_divergence', 'item_mismatch', 'ipi_divergence', 'total_divergence']);
+
+const HEADER_ISSUE_PATH = {
+  missing_top: 'topCode',
+  missing_negotiation_type: 'negotiationTypeCode',
+  missing_freight_type: 'freightType',
+  missing_carrier: 'carrierCode',
+} as const;
 
 @Injectable()
 export class OrdersService {
@@ -759,8 +767,8 @@ export class OrdersService {
       assertEligibleForErpSubmission(locked, { environment: this.dataset?.environment ?? '' });
       const items = await this.orders.itemsOf(locked.id, tx);
       const issues = [
-        ...(locked.negotiationTypeCode === null ? [{ path: 'negotiationTypeCode', code: 'missing_negotiation_type' }] : []),
-        ...(freightTypeOf(locked.freightType) === null ? [{ path: 'freightType', code: 'missing_freight_type' }] : []),
+        // Mandatory header (owner ruling 2026-11-12): TOP, negotiation, freight and carrier; the same rule the site and the app apply.
+        ...orderHeaderIssues({ topCode: locked.topCode, negotiationTypeCode: locked.negotiationTypeCode, freightType: freightTypeOf(locked.freightType), carrierCode: locked.carrierCode }).map((code) => ({ path: HEADER_ISSUE_PATH[code], code })),
         ...orderErpIssues(
           items.map((item) => ({
             lineNo: item.lineNo,

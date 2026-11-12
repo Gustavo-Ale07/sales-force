@@ -14,7 +14,7 @@ import {
   product,
   productsPage,
 } from "../test/fixtures";
-import { apiError, callsTo, renderApp, type Handlers } from "../test/harness";
+import { apiError, callsTo, fillOrderHeader, renderApp, type Handlers } from "../test/harness";
 
 /** The dataset identity is propagated explicitly: the one the screen LOADED under (order-entry configuration), never a
  * fresh read at submit time; unknown identity blocks the write; 409 dataset_mismatch asks for a reload, no auto retry. */
@@ -44,6 +44,7 @@ const customerPage = (extra: Handlers = {}): Handlers => ({
 });
 
 async function fillAndSave(user: ReturnType<typeof renderApp>["user"], qty = "2") {
+  await fillOrderHeader(user);
   const produtos = await screen.findByRole("button", { name: "Produtos" });
   if (produtos.getAttribute("aria-pressed") !== "true") await user.click(produtos);
   const add = await screen.findByRole("button", { name: /^Adicionar .*Balão/ });

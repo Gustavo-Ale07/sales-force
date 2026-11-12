@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { customer, draftRecord, fakeLocalOrders, fakeOrders, fakeProducts, pageOf, product } from "../test-doubles";
 import { NewOrderScreen } from "./new-order-screen";
+import { fillMandatoryHeader } from "./fill-mandatory-header";
 
 async function pressAndSettle(element: unknown, delayMs = 100) {
   await act(async () => {
@@ -41,6 +42,7 @@ describe("NewOrderScreen as a 4-step wizard", () => {
     await pressAndSettle(await screen.findByText("Padaria Central"));
     await pressAndSettle(next());
     expect(screen.getByLabelText("Etapa 2 de 4: Negociação")).toBeTruthy();
+    await fillMandatoryHeader();
     await pressAndSettle(next());
     expect(screen.getByLabelText("Etapa 3 de 4: Produtos")).toBeTruthy();
     await pressAndSettle(next());
@@ -60,6 +62,7 @@ describe("NewOrderScreen as a 4-step wizard", () => {
     await open(localOrders);
     await pressAndSettle(await screen.findByText("Padaria Central"));
     await pressAndSettle(next());
+    await fillMandatoryHeader();
     await pressAndSettle(next());
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(next());
@@ -86,6 +89,7 @@ describe("NewOrderScreen as a 4-step wizard", () => {
     await act(async () => {
       fireEvent.changeText(screen.getByLabelText("Observações do pedido"), "Entregar pela manhã");
     });
+    await fillMandatoryHeader();
     await pressAndSettle(next());
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(next());
