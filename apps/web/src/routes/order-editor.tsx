@@ -9,6 +9,10 @@ import {
   Dialog,
   DialogClose,
   DialogContent,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   FieldError,
   FieldHint,
   FormField,
@@ -32,7 +36,7 @@ import {
 } from "@salesforce/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useBlocker } from "@tanstack/react-router";
-import { BookmarkPlus, Percent, Save, Trash2, X } from "lucide-react";
+import { BookmarkPlus, MoreHorizontal, Percent, Save, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { BulkEntryDialog, type BulkEntryItem } from "../components/bulk-entry-dialog";
 import { CustomerContextBar } from "../components/customer-context-bar";
@@ -754,7 +758,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
         </Alert>
       ) : null}
 
-      <form onSubmit={onSubmitForm} noValidate aria-label="Pedido" className="flex flex-col gap-3">
+      <form onSubmit={onSubmitForm} noValidate aria-label="Pedido" className="flex flex-col gap-3 max-sm:pb-4">
         <Card>
           <CardHeader title="Dados do pedido" />
           <CardBody className="grid gap-3 md:grid-cols-2">
@@ -1175,7 +1179,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
         </Card>
 
         <div className="sticky bottom-0 z-20 -mx-3 flex flex-wrap items-center justify-end gap-2 border-t border-line bg-surface px-3 py-2 shadow-[0_-2px_6px_rgba(0,0,0,0.06)] md:-mx-6 md:px-6">
-          <p className="m-0 w-full text-sm text-fg-muted sm:mr-auto sm:w-auto">
+          <p className="m-0 min-w-0 flex-1 text-sm text-fg-muted sm:mr-auto sm:flex-none">
             Total: <strong className="text-base text-ok">
               <Money value={preview.totals.estimatedTotal} />
             </strong>
@@ -1185,11 +1189,11 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
               Remova os itens sem preço para salvar.
             </p>
           ) : null}
-          <Button type="button" variant="ghost" className="flex-1 sm:flex-none" leftIcon={<X size={14} aria-hidden="true" />} onClick={onClose}>
+          <Button type="button" variant="ghost" className="max-sm:hidden" leftIcon={<X size={14} aria-hidden="true" />} onClick={onClose}>
             {readOnly ? "Voltar" : "Cancelar"}
           </Button>
           <Button
-              className="flex-1 sm:flex-none"
+            className="max-sm:hidden"
             type="button"
             variant="secondary"
             leftIcon={<BookmarkPlus size={14} aria-hidden="true" />}
@@ -1201,7 +1205,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
           </Button>
           {order && isOrderDeletable(order.status, order.erpNumber) ? (
             <Button
-              className="flex-1 sm:flex-none"
+              className="max-sm:hidden"
               type="button"
               variant="danger-outline"
               leftIcon={<Trash2 size={14} aria-hidden="true" />}
@@ -1210,9 +1214,30 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
               Excluir
             </Button>
           ) : null}
+          <div className="sm:hidden">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="secondary" leftIcon={<MoreHorizontal size={14} aria-hidden="true" />} aria-label="Mais ações">
+                  Mais
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem disabled={customer === null || lines.length === 0 || !preview.valid} onSelect={() => setSavingTemplate(true)}>
+                  <BookmarkPlus size={14} aria-hidden="true" /> Salvar como recorrente
+                </DropdownMenuItem>
+                {order && isOrderDeletable(order.status, order.erpNumber) ? (
+                  <DropdownMenuItem destructive onSelect={() => setDeleting(true)}>
+                    <Trash2 size={14} aria-hidden="true" /> Excluir
+                  </DropdownMenuItem>
+                ) : null}
+                <DropdownMenuItem onSelect={onClose}>
+                  <X size={14} aria-hidden="true" /> {readOnly ? "Voltar" : "Cancelar"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
           {!readOnly ? (
             <Button
-              className="flex-1 sm:flex-none"
               type="submit"
               variant="primary"
               leftIcon={<Save size={14} aria-hidden="true" />}
