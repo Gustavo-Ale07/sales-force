@@ -132,7 +132,7 @@ function RecentOrders({ orders }: { orders: DashboardResponse["recentOrders"] })
             <p className="m-0 mb-2 text-xs font-medium text-fg-muted">Situação dos pedidos recentes</p>
             <SimpleBarChart data={distribution} />
           </CardBody>
-          <Table label="Pedidos recentes">
+          <Table label="Pedidos recentes" cards>
             <TableCaption>Pedidos recentes</TableCaption>
             <TableHeader>
               <TableRow>
@@ -147,20 +147,20 @@ function RecentOrders({ orders }: { orders: DashboardResponse["recentOrders"] })
               {orders.map((order) => {
                 return (
                   <TableRow key={order.id}>
-                    <TableCell>
+                    <TableCell card="title">
                       <Link to="/pedidos/$id" params={{ id: order.id }} className="font-medium text-accent hover:underline">
                         {orderReference(order)}
                       </Link>
                     </TableCell>
-                    <TableCell>{titleCase(order.customerName)}</TableCell>
-                    <TableCell>
+                    <TableCell label="Cliente">{titleCase(order.customerName)}</TableCell>
+                    <TableCell label="Situação">
                       <OrderStatusBadge order={order} variant="dot" />
                     </TableCell>
-                    <TableCell numeric>
+                    <TableCell numeric label="Total estimado">
                       <Money value={order.estimatedTotal} />
                       {order.isPartial ? <span className="ml-1 text-fg-muted">(parcial)</span> : null}
                     </TableCell>
-                    <TableCell>
+                    <TableCell label="Atualizado em">
                       <DateText value={order.updatedAt} withTime />
                     </TableCell>
                   </TableRow>

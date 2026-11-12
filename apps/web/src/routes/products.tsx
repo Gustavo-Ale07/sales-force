@@ -259,7 +259,7 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
             <ProductGrid items={query.data.items} onOpen={(code) => onSearchChange(compact({ ...params, product: code }))} />
           )
         ) : (
-        <Table label="Produtos">
+        <Table label="Produtos" cards>
           <TableCaption>Catálogo de produtos</TableCaption>
           <TableHeader>
             <TableRow>
@@ -296,8 +296,8 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
             ) : (
               query.data.items.map((product) => (
                 <TableRow key={product.code} interactive onActivate={() => onSearchChange(compact({ ...params, product: product.code }))}>
-                  <TableCell className="tabular-nums text-fg-muted">{product.code}</TableCell>
-                  <TableCell wrap className="min-w-[12rem]">
+                  <TableCell label="Código" className="tabular-nums text-fg-muted">{product.code}</TableCell>
+                  <TableCell wrap card="title" className="min-w-[12rem] max-sm:order-first">
                     <span className="flex items-center gap-2">
                       <ProductImage image={product.image} description={product.description} name={titleCase(product.description)} />
                       <span className="min-w-0">
@@ -306,15 +306,15 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
                       </span>
                     </span>
                   </TableCell>
-                  <TableCell>{product.groupName ?? "—"}</TableCell>
-                  <TableCell>{product.unit}</TableCell>
-                  <TableCell>
+                  <TableCell card="hide">{product.groupName ?? "—"}</TableCell>
+                  <TableCell label="Unidade">{product.unit}</TableCell>
+                  <TableCell label="Venda">
                     <span className="inline-flex flex-wrap items-center gap-x-4 gap-y-1">
                       <StatusDot tone={product.sellable ? "success" : "neutral"}>{product.sellable ? "Vendável" : "Não vendável"}</StatusDot>
                       {product.active ? null : <StatusDot tone="neutral">Inativo</StatusDot>}
                     </span>
                   </TableCell>
-                  <TableCell numeric>
+                  <TableCell numeric label="Preço de lista">
                     <PriceCell price={product.listPrice} />
                   </TableCell>
                 </TableRow>

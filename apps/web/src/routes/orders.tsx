@@ -304,7 +304,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
       ) : null}
 
       <Card aria-busy={query.isFetching}>
-        <Table label="Pedidos">
+        <Table label="Pedidos" cards>
           <TableCaption>Pedidos e rascunhos</TableCaption>
           <TableHeader>
             <TableRow>
@@ -360,17 +360,17 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
               query.data.items.map((order) => {
                 return (
                   <TableRow key={order.id} interactive onActivate={() => onOpenOrder(order.id)}>
-                    <TableCell>
+                    <TableCell label="Pedido">
                       <span className="font-medium">{orderReference(order)}</span>
                     </TableCell>
-                    <TableCell wrap className="min-w-[10rem]">
+                    <TableCell wrap card="title" className="min-w-[10rem] max-sm:order-first">
                       {titleCase(order.customerName)}
                       <ItemPreview names={order.itemPreview} total={order.itemCount} />
                     </TableCell>
-                    <TableCell>
+                    <TableCell card="hide">
                       <DateText value={order.createdAt} />
                     </TableCell>
-                    <TableCell>
+                    <TableCell label="Situação">
                       <OrderStatusBadge order={order} variant="dot" />
                       {order.erpStatus ? (
                         <span className="mt-0.5 block text-fg-muted">Sankhya: {erpStatusText(order.erpStatus).label}</span>
@@ -393,15 +393,15 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
                         </span>
                       ) : null}
                     </TableCell>
-                    <TableCell numeric>{formatCount(order.itemCount)}</TableCell>
-                    <TableCell numeric>
+                    <TableCell numeric card="hide">{formatCount(order.itemCount)}</TableCell>
+                    <TableCell numeric label="Total estimado">
                       <Money value={order.estimatedTotal} />
                       {order.isPartial ? <span className="ml-1 text-fg-muted">(parcial)</span> : null}
                     </TableCell>
-                    <TableCell>
+                    <TableCell card="hide">
                       <DateText value={order.updatedAt} withTime />
                     </TableCell>
-                    <TableCell>
+                    <TableCell card="action">
                       <div className="flex items-center gap-1">
                         <PrintOrderButton
                           orderId={order.id}

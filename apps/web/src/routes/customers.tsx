@@ -169,7 +169,7 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
       ) : null}
 
       <Card aria-busy={query.isFetching}>
-        <Table label="Clientes">
+        <Table label="Clientes" cards>
           <TableCaption>Carteira de clientes</TableCaption>
           <TableHeader>
             <TableRow>
@@ -216,8 +216,8 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
             ) : (
               query.data.items.map((customer) => (
                 <TableRow key={customer.code} interactive className="group" onActivate={() => onOpenCustomer(customer.code)}>
-                  <TableCell className="tabular-nums text-fg-muted">{customer.code}</TableCell>
-                  <TableCell wrap className="min-w-[12rem]">
+                  <TableCell label="Código" className="tabular-nums text-fg-muted">{customer.code}</TableCell>
+                  <TableCell wrap card="title" className="min-w-[12rem] max-sm:order-first">
                     <span className="flex items-center gap-2">
                       <Avatar name={titleCase(customer.name)} seed={String(customer.code)} size="sm" />
                       <span className="min-w-0">
@@ -226,19 +226,19 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
                       </span>
                     </span>
                   </TableCell>
-                  <TableCell>{formatDocument(customer.document)}</TableCell>
-                  <TableCell>
+                  <TableCell label="Documento">{formatDocument(customer.document)}</TableCell>
+                  <TableCell label="Situação">
                     <CustomerStatus active={customer.active} blocked={customer.blocked} overdue={customer.overdue === true} />
                   </TableCell>
-                  <TableCell>{customer.sellerName ?? <span className="text-fg-faint">—</span>}</TableCell>
-                  <TableCell>
+                  <TableCell label="Vendedor">{customer.sellerName ?? <span className="text-fg-faint">—</span>}</TableCell>
+                  <TableCell card="hide">
                     {customer.priceTableCode === null ? (
                       <span className="text-fg-faint">Sem tabela</span>
                     ) : (
                       `Tabela ${customer.priceTableCode}`
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell card="action">
                     {/* Straight to a new order for this customer; the click must not also open the customer. */}
                     {/* On hover-capable screens the action shows on row hover/focus; touch screens keep it visible. */}
                     <Button

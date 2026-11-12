@@ -959,7 +959,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                 </div>
               ) : null}
               {removedBar}
-              <Table label="Itens do pedido">
+              <Table label="Itens do pedido" cards>
                 <TableCaption>Itens do pedido</TableCaption>
                 <TableHeader>
                   <TableRow>
@@ -1004,8 +1004,8 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                             />
                           </TableCell>
                         )}
-                        <TableCell numeric>{index + 1}</TableCell>
-                        <TableCell wrap>
+                        <TableCell numeric card="hide">{index + 1}</TableCell>
+                        <TableCell wrap card="title" className="max-sm:order-first">
                           <span className="flex items-center gap-2">
                             <ProductImage image={line.image} description={line.description} name={titleCase(line.description)} />
                             <span className="min-w-0">
@@ -1015,8 +1015,8 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                           </span>
                           {blocked ? <FieldError>Este item não pode ser pedido sem preço nesta instalação.</FieldError> : null}
                         </TableCell>
-                        <TableCell>{line.unit}</TableCell>
-                        <TableCell>
+                        <TableCell label="Unidade">{line.unit}</TableCell>
+                        <TableCell label="Quantidade">
                           <Input
                             size="sm"
                             inputMode="decimal"
@@ -1036,10 +1036,10 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                           />
                           {problem ? <FieldError id={errorId}>{quantityProblemText(problem, line.quantityStep)}</FieldError> : null}
                         </TableCell>
-                        <TableCell numeric>
+                        <TableCell numeric label="Preço unitário">
                           <PriceCell price={listPriceOfLine(line.price)} />
                         </TableCell>
-                        <TableCell>
+                        <TableCell label="Desconto (%)">
                           <Input
                             size="sm"
                             inputMode="decimal"
@@ -1062,13 +1062,13 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                           />
                           {discountProblem ? <FieldError id={discountErrorId}>{discountProblemMessages[discountProblem]}</FieldError> : null}
                         </TableCell>
-                        <TableCell numeric>
+                        <TableCell numeric label="Total estimado">
                           <Money
                             value={linePreview?.item?.estimatedLineTotal ?? null}
                             fallback={line.price.state === "none" ? NO_PRICE_TEXT : "—"}
                           />
                         </TableCell>
-                        <TableCell>
+                        <TableCell card="action">
                           {readOnly ? null : (
                             <Button
                               type="button"

@@ -9,13 +9,29 @@ export interface TableProps extends ComponentProps<"table"> {
   /** Tailwind max-height class enabling the sticky header, e.g. "max-h-[60vh]". */
   maxHeightClassName?: string;
   containerClassName?: string;
+  /**
+   * Below 640px each body row becomes a card (no horizontal scroll): cells with `label` show it before the value,
+   * `card="title"` is the highlighted line, `card="hide"` drops a secondary cell, `card="action"` sits at the bottom.
+   * At 640px and above the table is unchanged.
+   */
+  cards?: boolean;
 }
+
+const CARD_CLASSES = [
+  "max-sm:block max-sm:[&_thead]:hidden max-sm:[&_tbody]:block max-sm:[&_tbody]:space-y-2 max-sm:[&_tbody]:p-3 max-sm:[&_tr]:block",
+  "max-sm:[&_tr[data-card-row]]:flex max-sm:[&_tr[data-card-row]]:flex-col max-sm:[&_tr[data-card-row]]:rounded-lg max-sm:[&_tr[data-card-row]]:border max-sm:[&_tr[data-card-row]]:border-line max-sm:[&_tr[data-card-row]]:bg-surface max-sm:[&_tr[data-card-row]]:px-3 max-sm:[&_tr[data-card-row]]:py-2.5",
+  "max-sm:[&_td]:block max-sm:[&_td]:h-auto max-sm:[&_td]:border-0 max-sm:[&_td]:px-0 max-sm:[&_td]:py-0.5 max-sm:[&_td]:whitespace-normal max-sm:[&_td]:text-left",
+  "max-sm:[&_td[data-label]]:flex max-sm:[&_td[data-label]]:items-baseline max-sm:[&_td[data-label]]:justify-between max-sm:[&_td[data-label]]:gap-3",
+  "max-sm:[&_td[data-label]]:before:content-[attr(data-label)] max-sm:[&_td[data-label]]:before:text-xs max-sm:[&_td[data-label]]:before:text-fg-muted max-sm:[&_td[data-label]]:before:shrink-0",
+  "max-sm:[&_td[data-label]]:text-right",
+  "max-sm:[&_td[data-card=hide]]:hidden max-sm:[&_td[data-card=title]]:pb-1 max-sm:[&_td[data-card=title]]:text-base max-sm:[&_td[data-card=title]]:font-semibold max-sm:[&_td[data-card=action]]:pt-2",
+].join(" ");
 
 /**
  * Dense data table. The container is a focusable, labelled scroll region (keyboard scrolling) and
  * ArrowUp/ArrowDown/Home/End move focus between interactive rows (`<TableRow interactive>`).
  */
-export function Table({ label, maxHeightClassName, containerClassName, className, children, ...props }: TableProps) {
+export function Table({ label, maxHeightClassName, containerClassName, className, cards, children, ...props }: TableProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -48,7 +64,7 @@ export function Table({ label, maxHeightClassName, containerClassName, className
       onKeyDown={onKeyDown}
       className={cn("overflow-auto", maxHeightClassName, containerClassName)}
     >
-      <table className={cn("min-w-full border-collapse text-sm", className)} {...props}>
+      <table className={cn("min-w-full border-collapse text-sm", cards && CARD_CLASSES, className)} {...props}>
         {children}
       </table>
     </div>
@@ -73,6 +89,7 @@ export interface TableRowProps extends ComponentProps<"tr"> {
 export function TableRow({ className, selected, interactive, onActivate, onKeyDown, onClick, ...props }: TableRowProps) {
   return (
     <tr
+      data-card-row=""
       data-interactive={interactive || undefined}
       tabIndex={interactive ? 0 : undefined}
       data-selected={selected || undefined}
@@ -153,11 +170,17 @@ export interface TableCellProps extends ComponentProps<"td"> {
   numeric?: boolean;
   /** Allow long text to wrap instead of forcing one line. */
   wrap?: boolean;
+  /** Card layout (<640px, `<Table cards>`): caption shown before the value. */
+  label?: string;
+  /** Card layout role: "title" highlighted line, "hide" omitted, "action" bottom line. */
+  card?: "title" | "hide" | "action";
 }
 
-export function TableCell({ className, numeric, wrap, ...props }: TableCellProps) {
+export function TableCell({ className, numeric, wrap, label, card, ...props }: TableCellProps) {
   return (
     <td
+      data-label={label}
+      data-card={card}
       className={cn(
         "h-14 border-b border-line px-4 align-middle",
         // A wrapping cell (a description) never shrinks below a readable width: the table scrolls inside its card instead.
