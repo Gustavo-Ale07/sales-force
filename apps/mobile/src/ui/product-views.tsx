@@ -45,7 +45,7 @@ function ProductThumb({ product, size }: { product: ProductListItem; size: "card
       {uri === null ? (
         <Text style={[styles.thumbText, size === "row" && styles.thumbTextRow]}>{initials}</Text>
       ) : (
-        <Image source={{ uri }} style={styles.thumbImage} resizeMode="cover" onError={() => setFailedKey(key)} testID={`product-thumb-${product.code}`} />
+        <Image source={{ uri }} style={styles.thumbImage} resizeMode="contain" onError={() => setFailedKey(key)} testID={`product-thumb-${product.code}`} />
       )}
     </View>
   );
@@ -145,7 +145,7 @@ export const ProductRow = memo(RowImpl);
 
 const styles = StyleSheet.create({
   thumb: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  thumbCard: { height: 56, borderRadius: 8, alignSelf: "stretch" },
+  thumbCard: { aspectRatio: 1, borderRadius: 8, alignSelf: "stretch" },
   thumbRow: { width: 48, height: 48, borderRadius: 8 },
   thumbImage: { width: "100%", height: "100%" },
   thumbText: { fontSize: 22, fontWeight: "800", color: colors.textMuted },

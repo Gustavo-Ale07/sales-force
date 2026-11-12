@@ -44,6 +44,7 @@ describe("ProductThumb in the catalog", () => {
     await render(ui(true));
     expect(await screen.findByTestId("product-thumb-1", { includeHiddenElements: true }, { timeout: 5000 })).toBeTruthy();
     expect(screen.getByTestId("product-thumb-1", { includeHiddenElements: true }).props.source.uri).toMatch(/^file:\/\/\/images\/p1-/);
+    expect(screen.getByTestId("product-thumb-1", { includeHiddenElements: true }).props.resizeMode).toBe("contain");
     expect(requested).toEqual([1]);
   });
 
