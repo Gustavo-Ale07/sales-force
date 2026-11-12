@@ -150,7 +150,11 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
     <>
       <PageHeader title="Catálogo de produtos" count={query.data ? query.data.total.toLocaleString("pt-BR") : undefined} />
 
-      <FilterBar aria-label="Filtros do catálogo" grid>
+      <FilterBar
+        aria-label="Filtros do catálogo"
+        grid
+        activeCount={[params.search, params.group, params.sellable, params.priceState, params.customerCode].filter((value) => value !== undefined).length}
+      >
         <FilterField label="Busca" className="lg:col-span-6">
           <SearchInput
             size="md"

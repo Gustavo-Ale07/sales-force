@@ -105,7 +105,11 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
         </section>
       ) : null}
 
-      <FilterBar aria-label="Filtros da carteira" grid>
+      <FilterBar
+        aria-label="Filtros da carteira"
+        grid
+        activeCount={[params.search, params.status, params.sellerCode, params.hasPriceTable].filter((value) => value !== undefined).length}
+      >
         <FilterField label="Busca" className={withSellers ? "lg:col-span-4" : "sm:col-span-2 lg:col-span-6"}>
           <SearchInput
             size="md"

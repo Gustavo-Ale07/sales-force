@@ -1,5 +1,5 @@
-import { X } from "lucide-react";
-import type { ComponentProps, ReactNode } from "react";
+import { ChevronDown, SlidersHorizontal, X } from "lucide-react";
+import { useId, useState, type ComponentProps, type ReactNode } from "react";
 import { cn } from "../lib/cn";
 
 /**
@@ -7,14 +7,37 @@ import { cn } from "../lib/cn";
  * With `grid` the fields sit on a 12-column grid (1 column on phones, 2 on tablets): give each field a
  * `lg:col-span-*` so every row adds up to 12 and the bar has no gaps.
  */
-export function FilterBar({ className, grid, ...props }: ComponentProps<"form"> & { grid?: boolean }) {
+export function FilterBar({ className, grid, activeCount, children, ...props }: ComponentProps<"form"> & { grid?: boolean; activeCount?: number }) {
+  const [open, setOpen] = useState(false);
+  const bodyId = useId();
+  const layout = grid ? "grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-12" : "flex flex-wrap items-end gap-3";
+  if (activeCount === undefined) {
+    return (
+      <form role="search" className={cn(layout, className)} onSubmit={(event) => event.preventDefault()} {...props}>
+        {children}
+      </form>
+    );
+  }
+  // Collapsible below 640px: the list comes first, the fields sit behind a "Filtros" button with the active count.
   return (
-    <form
-      role="search"
-      className={cn(grid ? "grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-12" : "flex flex-wrap items-end gap-3", className)}
-      onSubmit={(event) => event.preventDefault()}
-      {...props}
-    />
+    <form role="search" className={cn("flex flex-col gap-3", className)} onSubmit={(event) => event.preventDefault()} {...props}>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={bodyId}
+        onClick={() => setOpen((value) => !value)}
+        className="inline-flex min-h-11 items-center justify-between gap-2 rounded-md border border-line bg-surface px-3 text-sm font-semibold sm:hidden"
+      >
+        <span className="inline-flex items-center gap-2">
+          <SlidersHorizontal size={15} aria-hidden="true" />
+          {activeCount > 0 ? `Filtros (${activeCount})` : "Filtros"}
+        </span>
+        <ChevronDown size={15} aria-hidden="true" className={open ? "rotate-180" : undefined} />
+      </button>
+      <div id={bodyId} className={cn(layout, !open && "max-sm:hidden")}>
+        {children}
+      </div>
+    </form>
   );
 }
 

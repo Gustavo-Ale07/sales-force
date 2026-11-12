@@ -200,7 +200,15 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
         }
       />
 
-      <FilterBar aria-label="Filtros de pedidos" grid>
+      <FilterBar
+        aria-label="Filtros de pedidos"
+        grid
+        activeCount={
+          [params.search, params.status, params.customerCode].filter((value) => value !== undefined).length +
+          (hasPeriod ? 1 : 0) +
+          (selectedProducts.length > 0 || params.productSearch !== undefined ? 1 : 0)
+        }
+      >
         <FilterField label="Nº do pedido ou cliente" className="lg:col-span-4">
           <SearchInput
             size="md"
