@@ -25,6 +25,11 @@ export function isValidSellerCode(code: unknown): code is number {
   return typeof code === 'number' && Number.isSafeInteger(code) && code >= 1;
 }
 
+/** Roles whose customer scope is the whole portfolio, with no seller link needed (same allow-list as the scope below). */
+export function hasWholePortfolioAccess(role: AccountRole): boolean {
+  return role === 'admin' || role === 'manager';
+}
+
 /**
  * Portfolio scope outcome (P-21; enforced server-side, never by UI filtering). The role check is an
  * allow-list: admin/manager see everything; a seller needs at least one VALID seller link (code >= 1)
@@ -42,7 +47,7 @@ export function resolveCustomerScopeOutcome(
   config: InstallationConfiguration,
 ): CustomerScopeOutcome {
   const role: string = actor.role;
-  if (role === 'admin' || role === 'manager') return { ok: true, scope: { kind: 'all' } };
+  if (hasWholePortfolioAccess(actor.role)) return { ok: true, scope: { kind: 'all' } };
   if (role !== 'seller') return { ok: false, reason: 'role_not_permitted' };
 
   const strategy = config.customers.portfolioOwnership.strategy;

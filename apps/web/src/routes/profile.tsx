@@ -1,3 +1,4 @@
+import { hasWholePortfolioAccess } from "@salesforce/domain";
 import { Alert, Avatar, Card, CardBody, CardHeader, KeyValue, KeyValueList, PageHeader, SkeletonLines, titleCase } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { QueryError } from "../components/query-error";
@@ -74,10 +75,10 @@ export function ProfilePage() {
           <CardBody>
             <KeyValueList>
               <KeyValue label="Vendedores vinculados">
-                {user.sellerCodes.length === 0 ? "Nenhum vendedor vinculado" : user.sellerCodes.join(", ")}
+                {user.sellerCodes.length === 0 ? (hasWholePortfolioAccess(user.role) ? "Nenhum (acesso a toda a carteira)" : "Nenhum vendedor vinculado") : user.sellerCodes.join(", ")}
               </KeyValue>
             </KeyValueList>
-            {user.sellerCodes.length === 0 ? (
+            {user.sellerCodes.length === 0 && !hasWholePortfolioAccess(user.role) ? (
               <p className="m-0 mt-2 text-xs text-fg-muted">
                 Sem vendedor vinculado, a carteira de clientes e os pedidos ficam fora do seu alcance. Peça o vínculo ao administrador.
               </p>

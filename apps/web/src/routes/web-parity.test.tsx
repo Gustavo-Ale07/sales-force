@@ -161,6 +161,22 @@ describe("Meu perfil e atualização de dados", () => {
     expect(await screen.findByText("Nenhum vendedor vinculado")).toBeInTheDocument();
   });
 
+  const profileWith = (role: string) => {
+    const body = session(true).body as { account: Record<string, unknown> };
+    renderApp("/perfil", { handlers: { ...shell, "GET /auth/session": { body: { ...body, account: { ...body.account, role, sellerCodes: [] } } } } });
+  };
+
+  it("warns about the out-of-reach portfolio only for a seller without a link", async () => {
+    profileWith("seller");
+    expect(await screen.findByText(/ficam fora do seu alcance/)).toBeInTheDocument();
+  });
+
+  it.each(["manager", "admin"])("does not warn a %s without a seller link (whole portfolio)", async (role) => {
+    profileWith(role);
+    expect(await screen.findByText("Nenhum (acesso a toda a carteira)")).toBeInTheDocument();
+    expect(screen.queryByText(/ficam fora do seu alcance/)).not.toBeInTheDocument();
+  });
+
   const REFRESH_ID = "0190a000-0000-7000-8000-0000000000f1";
   const refreshBody = (over: Record<string, unknown> = {}, failedEntity?: string) => ({
     id: REFRESH_ID,

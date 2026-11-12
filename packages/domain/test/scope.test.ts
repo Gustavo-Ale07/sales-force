@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   canActorSeeCustomer,
+  hasWholePortfolioAccess,
   defaultUnconfiguredConfiguration,
   isCustomerInScope,
   resolveCustomerScope,
@@ -189,5 +190,14 @@ describe('customer scope by portfolioOwnership strategy', () => {
     const unconfigured = defaultUnconfiguredConfiguration();
     expect(canActorSeeCustomer(seller([900]), makeCustomer({ sellerCode: 900 }), unconfigured)).toBe(false);
     expect(canActorSeeCustomer(manager, makeCustomer({ sellerCode: 900 }), unconfigured)).toBe(true);
+  });
+});
+
+describe("hasWholePortfolioAccess", () => {
+  it("is true only for the roles whose customer scope is every customer (admin, manager)", () => {
+    expect(hasWholePortfolioAccess("admin")).toBe(true);
+    expect(hasWholePortfolioAccess("manager")).toBe(true);
+    expect(hasWholePortfolioAccess("seller")).toBe(false);
+    expect(hasWholePortfolioAccess("technical")).toBe(false);
   });
 });
