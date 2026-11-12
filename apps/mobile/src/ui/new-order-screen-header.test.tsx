@@ -8,6 +8,15 @@ async function pressAndSettle(element: unknown, delayMs = 100) {
     await new Promise<void>((resolve) => setTimeout(() => resolve(), delayMs));
   });
 }
+
+// The save button lives on the summary step: from the cart, "Avançar" gets there (already there when editing).
+async function saveFromSummary(name: string) {
+  const next = screen.queryByRole("button", { name: "Avançar" });
+  if (next !== null) await pressAndSettle(next);
+  // Moving between steps auto-saves a local draft, after which the same button reads "Salvar alterações".
+  const button = screen.queryByRole("button", { name }) ?? screen.getByRole("button", { name: name === "Salvar rascunho" ? "Salvar alterações" : "Salvar rascunho" });
+  await pressAndSettle(button);
+}
 afterEach(async () => {
   await new Promise<void>((resolve) => setTimeout(() => resolve(), 400));
 });
@@ -27,7 +36,7 @@ const config = orderEntryConfiguration({
   },
 });
 
-async function openCart(localOrders = fakeLocalOrders(), carriers: readonly { code: number; name: string }[] = []) {
+async function openCart(localOrders = fakeLocalOrders(), carriers: readonly { code: number; name: string }[] = [], onNegotiation?: () => Promise<void>) {
   const repositories = {
     customers: { list: async () => pageOf([customer(10, { name: "Padaria Central" })]) },
     products: fakeProducts({ list: async () => pageOf([copo]) }),
@@ -35,48 +44,55 @@ async function openCart(localOrders = fakeLocalOrders(), carriers: readonly { co
   };
   await render(<NewOrderScreen repositories={repositories} onUnauthenticated={() => undefined} localOrders={localOrders} />);
   await pressAndSettle(await screen.findByText("Padaria Central"));
+  await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+  if (onNegotiation) await onNegotiation();
+  await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
   await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
   await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
 }
 
 describe("NewOrderScreen order options (D-A, D-B)", () => {
   it("offers the TOPs and only the sellable negotiation types", async () => {
-    await openCart();
-    expect(screen.getByRole("radio", { name: "Operação Pedido (TOP 1001)" })).toBeTruthy();
-    expect(screen.getByRole("radio", { name: "Operação Orçamento (TOP 1000)" })).toBeTruthy();
-    expect(screen.getByRole("radio", { name: "Negociação À vista" })).toBeTruthy();
-    expect(screen.getByRole("radio", { name: "Negociação 30 dias" })).toBeTruthy();
-    expect(screen.queryByRole("radio", { name: "Negociação Antigo" })).toBeNull();
+    await openCart(fakeLocalOrders(), [], async () => {
+      expect(screen.getByRole("radio", { name: "Operação Pedido (TOP 1001)" })).toBeTruthy();
+      expect(screen.getByRole("radio", { name: "Operação Orçamento (TOP 1000)" })).toBeTruthy();
+      expect(screen.getByRole("radio", { name: "Negociação À vista" })).toBeTruthy();
+      expect(screen.getByRole("radio", { name: "Negociação 30 dias" })).toBeTruthy();
+      expect(screen.queryByRole("radio", { name: "Negociação Antigo" })).toBeNull();
+    });
   });
 
   it("saves the chosen TOP and negotiation type on the local draft", async () => {
     const save = jest.fn(async (input: { negotiationTypeCode: number | null }) => draftRecord({ negotiationTypeCode: input.negotiationTypeCode }));
-    await openCart(fakeLocalOrders([], { save: save as never }));
-    await pressAndSettle(screen.getByRole("radio", { name: "Operação Orçamento (TOP 1000)" }));
-    await pressAndSettle(screen.getByRole("radio", { name: "Negociação 30 dias" }));
-    await pressAndSettle(screen.getByRole("button", { name: "Salvar rascunho" }));
+    await openCart(fakeLocalOrders([], { save: save as never }), [], async () => {
+      await pressAndSettle(screen.getByRole("radio", { name: "Operação Orçamento (TOP 1000)" }));
+      await pressAndSettle(screen.getByRole("radio", { name: "Negociação 30 dias" }));
+    });
+    await saveFromSummary("Salvar rascunho");
     expect(save).toHaveBeenCalledWith(expect.objectContaining({ topCode: 1000, negotiationTypeCode: 3, carrierCode: null }));
   });
 
   it("sends no TOP when none was chosen, leaving the default to the server", async () => {
     const save = jest.fn(async () => draftRecord());
     await openCart(fakeLocalOrders([], { save: save as never }));
-    await pressAndSettle(screen.getByRole("button", { name: "Salvar rascunho" }));
+    await saveFromSummary("Salvar rascunho");
     expect(save).toHaveBeenCalledWith(expect.objectContaining({ topCode: null, negotiationTypeCode: 1 }));
   });
 
   it("saves the chosen carrier, and 'Nenhuma' clears it", async () => {
     const save = jest.fn(async () => draftRecord());
-    await openCart(fakeLocalOrders([], { save: save as never }), [{ code: 7, name: "Rápido" }]);
-    await pressAndSettle(screen.getByRole("button", { name: "Escolher transportadora" }));
-    await pressAndSettle(screen.getByRole("button", { name: "Transportadora Rápido" }));
-    await pressAndSettle(screen.getByRole("button", { name: "Salvar rascunho" }));
+    await openCart(fakeLocalOrders([], { save: save as never }), [{ code: 7, name: "Rápido" }], async () => {
+      await pressAndSettle(screen.getByRole("button", { name: "Escolher transportadora" }));
+      await pressAndSettle(screen.getByRole("button", { name: "Transportadora Rápido" }));
+    });
+    await saveFromSummary("Salvar rascunho");
     expect(save).toHaveBeenCalledWith(expect.objectContaining({ carrierCode: 7 }));
   });
 
   it("degrades gracefully when no carrier list is available", async () => {
-    await openCart();
-    expect(screen.getByText(/lista de transportadoras não está disponível/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Escolher transportadora" }).props.accessibilityState?.disabled).toBe(true);
+    await openCart(fakeLocalOrders(), [], async () => {
+      expect(screen.getByText(/lista de transportadoras não está disponível/)).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Escolher transportadora" }).props.accessibilityState?.disabled).toBe(true);
+    });
   });
 });

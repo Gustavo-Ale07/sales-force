@@ -150,45 +150,52 @@ export function CartView({ lines, preview, onQuantityChange, onDiscountChange, o
         />
       ))}
 
-      <View style={styles.summary}>
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Total de itens</Text>
-          <Text style={styles.summaryValue}>{money(preview.discounts.listTotal)}</Text>
-        </View>
-        {preview.discounts.discountTotal !== "0" && preview.discounts.discountTotal !== "0.00" && (
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>{`Descontos (${preview.discounts.discountedLineCount} item(ns))`}</Text>
-            <Text style={styles.summaryValue}>{`-${money(preview.discounts.discountTotal)}`}</Text>
-          </View>
-        )}
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Total sem IPI</Text>
-          <Text style={styles.summaryValue}>{money(preview.totals.estimatedTotal)}</Text>
-        </View>
-        {preview.totals.isPartial && (
-          <Text style={styles.partialNotice}>
-            {`Pedido parcial: ${preview.totals.unpricedLineCount} item(ns) sem preço não entram no total.`}
-          </Text>
-        )}
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>IPI estimado</Text>
-          <Text style={styles.summaryValue}>{money(preview.ipi.ipiEstimated)}</Text>
-        </View>
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryTotalLabel}>{preview.ipi.isPartial ? "Total parcial com IPI" : "Total com IPI"}</Text>
-          <Text style={styles.summaryTotalValue}>{money(preview.ipi.grandTotalEstimated)}</Text>
-        </View>
-        {preview.ipi.unavailableLineCount > 0 && (
-          <Text style={styles.partialNotice}>{`IPI não disponível em ${preview.ipi.unavailableLineCount} item(ns).`}</Text>
-        )}
-        {preview.ipi.exemptLineCount > 0 && (
-          <Text style={styles.partialNotice}>{`IPI isento/não informado em ${preview.ipi.exemptLineCount} item(ns).`}</Text>
-        )}
-        {preview.ipi.tariffLineCount > 0 && (
-          <Text style={styles.partialNotice}>{`IPI por pauta — não estimado em ${preview.ipi.tariffLineCount} item(ns).`}</Text>
-        )}
-      </View>
+      <OrderTotals preview={preview} />
     </ScrollView>
+  );
+}
+
+/** Totals block (items, discounts, IPI, grand total): same numbers as the cart, reused by the order summary. */
+export function OrderTotals({ preview }: { readonly preview: DraftPreview }) {
+  return (
+  <View style={styles.summary}>
+    <View style={styles.summaryRow}>
+      <Text style={styles.summaryLabel}>Total de itens</Text>
+      <Text style={styles.summaryValue}>{money(preview.discounts.listTotal)}</Text>
+    </View>
+    {preview.discounts.discountTotal !== "0" && preview.discounts.discountTotal !== "0.00" && (
+      <View style={styles.summaryRow}>
+        <Text style={styles.summaryLabel}>{`Descontos (${preview.discounts.discountedLineCount} item(ns))`}</Text>
+        <Text style={styles.summaryValue}>{`-${money(preview.discounts.discountTotal)}`}</Text>
+      </View>
+    )}
+    <View style={styles.summaryRow}>
+      <Text style={styles.summaryLabel}>Total sem IPI</Text>
+      <Text style={styles.summaryValue}>{money(preview.totals.estimatedTotal)}</Text>
+    </View>
+    {preview.totals.isPartial && (
+      <Text style={styles.partialNotice}>
+        {`Pedido parcial: ${preview.totals.unpricedLineCount} item(ns) sem preço não entram no total.`}
+      </Text>
+    )}
+    <View style={styles.summaryRow}>
+      <Text style={styles.summaryLabel}>IPI estimado</Text>
+      <Text style={styles.summaryValue}>{money(preview.ipi.ipiEstimated)}</Text>
+    </View>
+    <View style={styles.summaryRow}>
+      <Text style={styles.summaryTotalLabel}>{preview.ipi.isPartial ? "Total parcial com IPI" : "Total com IPI"}</Text>
+      <Text style={styles.summaryTotalValue}>{money(preview.ipi.grandTotalEstimated)}</Text>
+    </View>
+    {preview.ipi.unavailableLineCount > 0 && (
+      <Text style={styles.partialNotice}>{`IPI não disponível em ${preview.ipi.unavailableLineCount} item(ns).`}</Text>
+    )}
+    {preview.ipi.exemptLineCount > 0 && (
+      <Text style={styles.partialNotice}>{`IPI isento/não informado em ${preview.ipi.exemptLineCount} item(ns).`}</Text>
+    )}
+    {preview.ipi.tariffLineCount > 0 && (
+      <Text style={styles.partialNotice}>{`IPI por pauta — não estimado em ${preview.ipi.tariffLineCount} item(ns).`}</Text>
+    )}
+  </View>
   );
 }
 

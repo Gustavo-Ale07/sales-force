@@ -413,6 +413,8 @@ describe("Shell", () => {
 
     await fireEvent.press(screen.getByRole("button", { name: /Padaria Central, código 10/ }));
     await fireEvent.press(await screen.findByRole("button", { name: "Novo pedido" }));
+    // The customer is already chosen: the order opens on Negociação; Avançar reaches the catalog.
+    await fireEvent.press(await screen.findByRole("button", { name: "Avançar" }));
     expect(await screen.findByText("Copo 200 ml")).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Vendas" }).props.accessibilityState.selected).toBe(true);
   });

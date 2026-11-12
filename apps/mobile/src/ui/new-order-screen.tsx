@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DatasetChangedError, DatasetUnavailableError, type DraftRecord } from "@salesforce/mobile-db";
 import { datasetIdentityOf } from "../offline/reference-source";
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, AppState, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ApiRequestError } from "../data/api";
 import { describeDataError, type DataErrorInfo } from "../data/errors";
 import {
   decrementLineQuantity,
   incrementLineQuantity,
   isLinePriceOrderable,
+  lineAmountsOf,
   lineFromOrderItem,
   lineFromProduct,
   orderSignature,
@@ -22,18 +23,22 @@ import { ERP_DISCOUNT_NOTICE } from "../offline/approval-status";
 import { describeDraftStatus, type LocalOrdersPort } from "../offline/local-orders";
 import { newClientRequestId } from "../lib/uuid";
 import { OrderHeaderOptions } from "./order-header-options";
+import { NOTES_MAX, NotesField, SummaryBlock, SummaryRow, WIZARD_STEPS, WizardFooter, WizardProgress, type WizardStep } from "./order-wizard-parts";
+import { topLabel } from "../data/order-header";
+import { describeListPrice } from "../lib/money";
 import { colors, spacing } from "../theme";
-import { CartView } from "./cart-view";
+import { CartView, OrderTotals } from "./cart-view";
 import { CustomerPicker } from "./customer-picker";
 import { DiscountSheet } from "./discount-sheet";
 import { GroupDiscountSheet } from "./group-discount-sheet";
 import { ProductPicker } from "./product-picker";
 import type { ProductOrderActions } from "./product-views";
 
-type Step = "customer" | "products" | "cart";
+/** The order is a 4-step wizard: Cliente → Negociação → Produtos → Resumo. Step 3 also has its own cart view. */
+type Step = WizardStep;
 
 /** Enough of a customer to display and to send as `customerCode`; a saved/reopened draft never carries the full catalog row. */
-type PickedCustomer = Pick<CustomerListItem, "code" | "name">;
+type PickedCustomer = Pick<CustomerListItem, "code" | "name"> & Partial<Pick<CustomerListItem, "document" | "tradeName" | "overdue">>;
 
 interface SaveFailure {
   readonly title: string;
@@ -129,6 +134,10 @@ export function NewOrderScreen({
   onStartConsumed,
 }: NewOrderScreenProps) {
   const [step, setStep] = useState<Step>("customer");
+  /** Step 3 shows either the catalog or the cart as its own view (never both, never a permanent panel). */
+  const [productsView, setProductsView] = useState<"catalog" | "cart">("catalog");
+  /** Why the seller cannot advance yet; cleared on any step change or edit. */
+  const [stepError, setStepError] = useState<string | null>(null);
   const [customer, setCustomer] = useState<PickedCustomer | null>(null);
   const [lines, setLines] = useState<readonly EditorLine[]>([]);
   const lineCounter = useRef(0);
@@ -160,9 +169,9 @@ export function NewOrderScreen({
   // What the editor held when it was last loaded or saved; an order that differs from it has unsaved edits to protect.
   const baselineRef = useRef(orderSignature(null, []));
   /** Header options the seller changed in this session (`undefined` = untouched, the saved or default value stands). */
-  const [choice, setChoice] = useState<{ top?: number; negotiation?: number; carrier?: number | null; freight?: "CIF" | "FOB" | "SEM_FRETE" | null }>({});
+  const [choice, setChoice] = useState<{ top?: number; negotiation?: number; carrier?: number | null; freight?: "CIF" | "FOB" | "SEM_FRETE" | null; notes?: string }>({});
   const [carriers, setCarriers] = useState<readonly Carrier[] | null>(null);
-  const choiceHeader = { ...(choice.top === undefined ? {} : { top: choice.top }), ...(choice.negotiation === undefined ? {} : { negotiation: choice.negotiation }), ...(choice.carrier === undefined ? {} : { carrier: choice.carrier }), ...(choice.freight === undefined ? {} : { freight: choice.freight }) };
+  const choiceHeader = { ...(choice.top === undefined ? {} : { top: choice.top }), ...(choice.negotiation === undefined ? {} : { negotiation: choice.negotiation }), ...(choice.carrier === undefined ? {} : { carrier: choice.carrier }), ...(choice.freight === undefined ? {} : { freight: choice.freight }), ...(choice.notes === undefined ? {} : { notes: choice.notes }) };
   const finished = savedLocal !== null || savedOrder !== null;
   const dirty =
     !finished &&
@@ -184,12 +193,13 @@ export function NewOrderScreen({
     const begin = () => {
       resetOrder();
       setCustomer(startCustomer);
+      // The customer is already chosen: the wizard opens on the first step that still needs the seller (Negociação).
       if (startLines === undefined) {
-        setStep("products");
+        goToStep("negotiation");
         return;
       }
       setLines(startLines.map((line) => ({ ...line, key: nextKey() })));
-      setStep("cart");
+      goToStep("summary");
     };
     // Nothing at risk: an empty cart, or an order already saved (its success screen is showing).
     if (current.lines.length === 0 || current.finished) {
@@ -197,7 +207,7 @@ export function NewOrderScreen({
       return;
     }
     if (startLines === undefined && current.customer?.code === startCustomer.code) {
-      setStep("products");
+      goToStep("products");
       return;
     }
     // An order with items is in progress for another customer: never replace it silently.
@@ -205,7 +215,7 @@ export function NewOrderScreen({
       "Você já possui um pedido em andamento",
       `Pedido de ${current.customer?.name ?? "outro cliente"} com ${current.lines.length} ${current.lines.length === 1 ? "item" : "itens"}. Iniciar um novo pedido descarta os itens que ainda não foram salvos.`,
       [
-        { text: "Continuar pedido atual", onPress: () => setStep("cart") },
+        { text: "Continuar pedido atual", onPress: () => goToStep("products") },
         { text: "Iniciar novo pedido", style: "destructive", onPress: begin },
         { text: "Cancelar", style: "cancel" },
       ],
@@ -233,7 +243,7 @@ export function NewOrderScreen({
           setSavedOrder(null);
           setEditingOrder(null);
           setSaveFailure(null);
-          setStep("cart");
+          goToStep("summary");
         };
         // Opening another order over unsaved edits would silently throw them away: ask first.
         if (!inProgress.current.dirty) {
@@ -297,6 +307,10 @@ export function NewOrderScreen({
   const carrierCode = choice.carrier !== undefined ? choice.carrier : savedCarrier;
   const savedFreight = localDraft?.freightType ?? editingOrder?.freightType ?? null;
   const freightType = choice.freight !== undefined ? choice.freight : savedFreight;
+  const savedNotes = localDraft !== null ? localDraft.notes : (editingOrder?.notes ?? null);
+  const notesText = choice.notes !== undefined ? choice.notes : (savedNotes ?? "");
+  /** Empty text is "no notes" (`null`), as before the field existed. */
+  const notesValue = notesText.trim() === "" ? null : notesText;
 
   // Optional list; offline-first adapters answer from what the device stored, and a failure just leaves the choice empty.
   useEffect(() => {
@@ -338,7 +352,21 @@ export function NewOrderScreen({
     setEditingOrder(null);
     setSelectionMode(false);
     setSelected(new Set());
-    setStep("customer");
+    goToStep("customer");
+  }
+
+  function goToStep(next: Step, view: "catalog" | "cart" = "catalog") {
+    setStep(next);
+    setProductsView(view);
+    setStepError(null);
+  }
+
+  function setNotes(text: string) {
+    setStepError(null);
+    setChoice((current) => {
+      const { notes: _previous, ...rest } = current;
+      return text === (savedNotes ?? "") ? rest : { ...rest, notes: text };
+    });
   }
 
   /** Reopens the just-saved draft for editing (the only entry point this slice has — there is no order-list screen yet). */
@@ -352,7 +380,7 @@ export function NewOrderScreen({
     setSaveFailure(null);
     setSelectionMode(false);
     setSelected(new Set());
-    setStep("cart");
+    goToStep("summary");
   }
 
   /** Discards local edits and reloads the authoritative order after a `version_conflict` / `order_not_editable`. */
@@ -414,10 +442,11 @@ export function NewOrderScreen({
     setSelected(new Set([key]));
   }
 
-  function changeCustomer() {
-    if (lines.length === 0) {
-      setCustomer(null);
-      setStep("customer");
+  /** Picking in step 1. Choosing another customer over a filled cart asks first, because the cart is emptied. */
+  function selectCustomer(picked: PickedCustomer) {
+    setStepError(null);
+    if (customer === null || customer.code === picked.code || lines.length === 0) {
+      setCustomer(picked);
       return;
     }
     Alert.alert("Trocar cliente", "O carrinho atual será esvaziado. Deseja continuar?", [
@@ -427,11 +456,41 @@ export function NewOrderScreen({
         style: "destructive",
         onPress: () => {
           setLines([]);
-          setCustomer(null);
-          setStep("customer");
+          setCustomer(picked);
         },
       },
     ]);
+  }
+
+  /** Message for the first thing missing in `from`, or `null` when the seller may advance. Presentation only: the server still revalidates everything. */
+  function validateStep(from: Step): string | null {
+    if (from === "customer") return customer === null ? "Selecione um cliente para continuar." : null;
+    if (from === "negotiation") return notesText.length > NOTES_MAX ? `As observações aceitam até ${NOTES_MAX} caracteres.` : null;
+    if (from === "products") {
+      if (lines.length === 0) return "Adicione ao menos um produto para continuar.";
+      if (!preview.valid) return "Corrija a quantidade ou o desconto dos itens do carrinho para continuar.";
+      if (blockedLineCount > 0) return `${blockedLineCount} item(ns) sem preço não podem ser salvos nesta instalação. Remova-os ou aguarde a atualização de preços.`;
+    }
+    return null;
+  }
+
+  function goNext() {
+    const message = validateStep(step);
+    if (message !== null) {
+      setStepError(message);
+      return;
+    }
+    const next = WIZARD_STEPS[WIZARD_STEPS.indexOf(step) + 1];
+    if (next === undefined) return;
+    void autoSave();
+    goToStep(next);
+  }
+
+  function goBack() {
+    const previous = WIZARD_STEPS[WIZARD_STEPS.indexOf(step) - 1];
+    if (previous === undefined) return;
+    void autoSave();
+    goToStep(previous);
   }
 
   function addProduct(product: ProductListItem) {
@@ -471,26 +530,59 @@ export function NewOrderScreen({
     setLines((current) => current.map((line) => (line.key === key ? { ...line, discountText: text } : line)));
   }
 
+  /** Writes the order to this device (same path as "Salvar"); returns the stored draft. */
+  async function persistLocal(port: LocalOrdersPort, picked: PickedCustomer): Promise<DraftRecord> {
+    const saved = await port.save({
+      localId: localDraft?.localId ?? null,
+      customer: picked,
+      negotiationTypeCode,
+      topCode,
+      carrierCode,
+      freightType,
+      notes: notesValue,
+      lines,
+      loadedDataset: config.status === "ready" ? datasetIdentityOf(config.value) : null,
+    });
+    baselineRef.current = orderSignature(picked.code, lines);
+    setChoice({});
+    setLocalDraft(saved);
+    return saved;
+  }
+
+  /**
+   * Silent draft save between steps and when the app goes to the background (offline path only; online there is
+   * no local draft and nothing is created on the server behind the seller's back). Only a complete, valid cart is
+   * stored, exactly what "Salvar rascunho" accepts; a failure here stays silent and the final save reports it.
+   */
+  async function autoSave() {
+    if (localOrders === undefined || customer === null || saving || finished || !dirty) return;
+    if (lines.length === 0 || !preview.valid || blockedLineCount > 0) return;
+    try {
+      await persistLocal(localOrders, customer);
+    } catch {
+      // The explicit save reports the problem.
+    }
+  }
+
+  // The app-state listener must call the latest closure (current lines/choice), never a stale one.
+  const autoSaveRef = useRef(autoSave);
+  useEffect(() => {
+    autoSaveRef.current = autoSave;
+  });
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state !== "active") void autoSaveRef.current();
+    });
+    return () => subscription.remove();
+  }, []);
+
   async function save() {
     if (customer === null || saving) return;
     setSaving(true);
     setSaveFailure(null);
     if (localOrders !== undefined) {
       try {
-        const saved = await localOrders.save({
-          localId: localDraft?.localId ?? null,
-          customer,
-          negotiationTypeCode,
-          topCode,
-          carrierCode,
-          freightType,
-          notes: localDraft?.notes ?? null,
-          lines,
-          loadedDataset: config.status === "ready" ? datasetIdentityOf(config.value) : null,
-        });
-        baselineRef.current = orderSignature(customer.code, lines);
-        setChoice({});
-        setLocalDraft(saved);
+        const saved = await persistLocal(localOrders, customer);
         setSavedLocal(saved);
       } catch (error) {
         setSaveFailure({
@@ -521,7 +613,7 @@ export function NewOrderScreen({
         ...(topCode === null ? {} : { topCode }),
         ...(carrierCode === null && (editingOrder?.carrierCode ?? null) === null ? {} : { carrierCode }),
         ...(freightType === null ? {} : { freightType }),
-        notes: editingOrder !== null ? editingOrder.notes : null,
+        notes: notesValue,
         items: toRequestItems(lines),
       };
       if (editingOrder !== null) {
@@ -585,125 +677,116 @@ export function NewOrderScreen({
     );
   }
 
-  if (step === "customer") {
+  const orderable = lines.length > 0 && preview.valid && blockedLineCount === 0;
+  const total = formatBrl(preview.ipi.grandTotalEstimated) ?? "—";
+  const itemsInfo = `${lines.length} ${lines.length === 1 ? "item" : "itens"} · ${total}`;
+  const saveLabel = editingOrder !== null || localDraft !== null ? "Salvar alterações" : "Salvar rascunho";
+
+  function renderCustomerStep() {
     return (
       <View style={styles.flex}>
-        <Text style={styles.stepTitle}>Selecione o cliente</Text>
-        <CustomerPicker
-          customers={repositories.customers}
-          onSelect={(picked) => {
-            setCustomer(picked);
-            setStep("products");
-          }}
-          onUnauthenticated={onUnauthenticated}
-        />
+        {customer !== null && (
+          <View style={styles.selectedCustomer} accessibilityLabel={`Cliente selecionado: ${customer.name}`}>
+            <Text style={styles.selectedCaption}>Cliente selecionado</Text>
+            <Text style={styles.selectedName}>{customer.name}</Text>
+            <Text style={styles.selectedMeta}>{`Código ${customer.code}${customer.document != null ? ` · ${customer.document}` : ""}`}</Text>
+            {customer.overdue === true && <Text style={styles.selectedWarn}>Possui títulos vencidos (informativo)</Text>}
+          </View>
+        )}
+        {editingOrder !== null ? (
+          <Text style={styles.lockedNote}>O cliente de um pedido já salvo não pode ser trocado. Para outro cliente, inicie um novo pedido.</Text>
+        ) : (
+          <>
+            <Text style={styles.stepTitle}>{customer === null ? "Selecione o cliente" : "Trocar de cliente"}</Text>
+            <CustomerPicker customers={repositories.customers} onSelect={selectCustomer} onUnauthenticated={onUnauthenticated} />
+          </>
+        )}
       </View>
     );
   }
 
-  return (
-    <View style={styles.flex}>
-      <View style={styles.customerBar}>
-        <View style={styles.customerInfo}>
-          <Text style={styles.customerCaption}>Cliente</Text>
-          <Text style={styles.customerName} numberOfLines={1}>
-            {customer?.name}
-          </Text>
-        </View>
-        {editingOrder === null && (
-          <Pressable onPress={changeCustomer} accessibilityRole="button" accessibilityLabel="Trocar cliente">
-            <Text style={styles.changeCustomer}>Trocar</Text>
-          </Pressable>
+  function renderNegotiationStep() {
+    return (
+      <ScrollView style={styles.flex} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        {config.status === "loading" && <Text style={styles.lockedNote}>Carregando as opções do pedido…</Text>}
+        {config.status === "error" && <Text style={styles.footerNotice}>{config.error.message}</Text>}
+        {config.status === "ready" && (
+          <OrderHeaderOptions
+            sales={config.value.sales}
+            topCode={topCode}
+            negotiationTypeCode={negotiationTypeCode}
+            onTopChange={(code) => setChoice((current) => ({ ...current, top: code }))}
+            onNegotiationChange={(code) => setChoice((current) => ({ ...current, negotiation: code }))}
+            carriers={carriers}
+            carrierCode={carrierCode}
+            onCarrierChange={(code) => setChoice((current) => ({ ...current, carrier: code }))}
+            freightType={freightType}
+            onFreightChange={(value) => setChoice((current) => ({ ...current, freight: value }))}
+          />
         )}
-      </View>
+        <NotesField value={notesText} onChange={setNotes} />
+      </ScrollView>
+    );
+  }
 
-      <View style={styles.pills} accessibilityRole="tablist">
-        <Pressable
-          style={[styles.pill, step === "products" && styles.pillActive]}
-          onPress={() => setStep("products")}
-          accessibilityRole="tab"
-          accessibilityState={{ selected: step === "products" }}
-        >
-          <Text style={[styles.pillText, step === "products" && styles.pillTextActive]}>Produtos</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.pill, step === "cart" && styles.pillActive]}
-          onPress={() => setStep("cart")}
-          accessibilityRole="tab"
-          accessibilityState={{ selected: step === "cart" }}
-        >
-          <Text style={[styles.pillText, step === "cart" && styles.pillTextActive]}>
-            {`Carrinho${lines.length > 0 ? ` (${lines.length})` : ""}`}
-          </Text>
-        </Pressable>
-      </View>
-
-      {/* Kept mounted (only hidden) in the cart step, so the catalog search, filters and Grade/Lista survive the round trip. */}
-      <View style={step === "products" ? styles.flex : styles.hidden}>
-        <ProductPicker
-          products={repositories.products}
-          actions={productActions}
-          onUnauthenticated={onUnauthenticated}
-        />
-      </View>
-      {step !== "products" && (
-        <View style={styles.flex}>
-          {lines.length > 0 && (
-            <View style={styles.cartToolbar}>
-              <Pressable
-                style={styles.toolbarButton}
-                onPress={toggleSelectionMode}
-                accessibilityRole="button"
-                accessibilityLabel={selectionMode ? "Cancelar seleção" : "Selecionar itens"}
-              >
-                <Text style={styles.toolbarButtonText}>{selectionMode ? "Cancelar seleção" : "Selecionar itens"}</Text>
-              </Pressable>
-              {selectionMode ? (
+  function renderProductsStep() {
+    return (
+      <View style={styles.flex}>
+        <View style={styles.pills} accessibilityRole="tablist">
+          <Pressable
+            style={[styles.pill, productsView === "catalog" && styles.pillActive]}
+            onPress={() => setProductsView("catalog")}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: productsView === "catalog" }}
+          >
+            <Text style={[styles.pillText, productsView === "catalog" && styles.pillTextActive]}>Produtos</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.pill, productsView === "cart" && styles.pillActive]}
+            onPress={() => setProductsView("cart")}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: productsView === "cart" }}
+          >
+            <Text style={[styles.pillText, productsView === "cart" && styles.pillTextActive]}>{`Carrinho${lines.length > 0 ? ` (${lines.length})` : ""}`}</Text>
+          </Pressable>
+        </View>
+        {/* Kept mounted (only hidden) in the cart view, so the catalog search, filters and Grade/Lista survive the round trip. */}
+        <View style={productsView === "catalog" ? styles.flex : styles.hidden}>
+          <ProductPicker products={repositories.products} actions={productActions} onUnauthenticated={onUnauthenticated} />
+        </View>
+        {productsView === "cart" && (
+          <View style={styles.flex}>
+            {lines.length > 0 && (
+              <View style={styles.cartToolbar}>
                 <Pressable
-                  style={[styles.toolbarButton, selected.size === 0 && styles.toolbarButtonDisabled]}
-                  onPress={() => setSelectedDiscountOpen(true)}
-                  disabled={selected.size === 0}
+                  style={styles.toolbarButton}
+                  onPress={toggleSelectionMode}
                   accessibilityRole="button"
-                  accessibilityLabel="Aplicar desconto aos selecionados"
+                  accessibilityLabel={selectionMode ? "Cancelar seleção" : "Selecionar itens"}
                 >
-                  <Text style={styles.toolbarButtonText}>{`Desconto (${selected.size})`}</Text>
+                  <Text style={styles.toolbarButtonText}>{selectionMode ? "Cancelar seleção" : "Selecionar itens"}</Text>
                 </Pressable>
-              ) : (
-                <>
+                {selectionMode ? (
                   <Pressable
-                    style={styles.toolbarButton}
-                    onPress={() => setMassDiscountOpen(true)}
+                    style={[styles.toolbarButton, selected.size === 0 && styles.toolbarButtonDisabled]}
+                    onPress={() => setSelectedDiscountOpen(true)}
+                    disabled={selected.size === 0}
                     accessibilityRole="button"
-                    accessibilityLabel="Desconto no pedido todo"
+                    accessibilityLabel="Aplicar desconto aos selecionados"
                   >
-                    <Text style={styles.toolbarButtonText}>Desconto no pedido todo</Text>
+                    <Text style={styles.toolbarButtonText}>{`Desconto (${selected.size})`}</Text>
                   </Pressable>
-                  <Pressable
-                    style={styles.toolbarButton}
-                    onPress={() => setGroupDiscountOpen(true)}
-                    accessibilityRole="button"
-                    accessibilityLabel="Desconto por grupo"
-                  >
-                    <Text style={styles.toolbarButtonText}>Desconto por grupo</Text>
-                  </Pressable>
-                </>
-              )}
-            </View>
-          )}
-          <ScrollView style={styles.flex}>
-            {config.status === "ready" && (
-              <OrderHeaderOptions
-                sales={config.value.sales}
-                topCode={topCode}
-                negotiationTypeCode={negotiationTypeCode}
-                onTopChange={(code) => setChoice((current) => ({ ...current, top: code }))}
-                onNegotiationChange={(code) => setChoice((current) => ({ ...current, negotiation: code }))}
-                carriers={carriers}
-                carrierCode={carrierCode}
-                onCarrierChange={(code) => setChoice((current) => ({ ...current, carrier: code }))}
-                freightType={freightType}
-                onFreightChange={(value) => setChoice((current) => ({ ...current, freight: value }))}
-              />
+                ) : (
+                  <>
+                    <Pressable style={styles.toolbarButton} onPress={() => setMassDiscountOpen(true)} accessibilityRole="button" accessibilityLabel="Desconto no pedido todo">
+                      <Text style={styles.toolbarButtonText}>Desconto no pedido todo</Text>
+                    </Pressable>
+                    <Pressable style={styles.toolbarButton} onPress={() => setGroupDiscountOpen(true)} accessibilityRole="button" accessibilityLabel="Desconto por grupo">
+                      <Text style={styles.toolbarButtonText}>Desconto por grupo</Text>
+                    </Pressable>
+                  </>
+                )}
+              </View>
             )}
             <CartView
               lines={lines}
@@ -716,21 +799,63 @@ export function NewOrderScreen({
               onToggleSelect={toggleSelect}
               onLongPressLine={enterSelectionWith}
             />
-          </ScrollView>
-        </View>
-      )}
+          </View>
+        )}
+      </View>
+    );
+  }
 
-      <View style={styles.footer}>
-        {config.status === "error" && <Text style={styles.footerNotice}>{config.error.message}</Text>}
-        {config.status === "ready" && config.value.sales.discountAuthorityMode === "erp" && lines.length > 0 && (
+  function renderSummaryStep() {
+    const sales = config.status === "ready" ? config.value.sales : null;
+    const effectiveTop = topCode ?? sales?.orderTops.defaultTopCode ?? null;
+    const negotiationName = negotiationTypeCode === null ? null : (sales?.negotiationTypes.find((type) => type.code === negotiationTypeCode)?.label ?? `Código ${negotiationTypeCode}`);
+    const carrierName = carrierCode === null ? null : (carriers?.find((carrier) => carrier.code === carrierCode)?.name ?? `Transportadora ${carrierCode}`);
+    const freightLabel = freightType === null ? null : freightType === "SEM_FRETE" ? "Sem frete" : freightType;
+    const hasDiscount = (text: string) => text.trim() !== "" && Number(text.replace(",", ".")) > 0;
+    return (
+      <ScrollView style={styles.flex} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <SummaryBlock title="Cliente" editLabel="Editar cliente" onEdit={editingOrder === null ? () => goToStep("customer") : undefined}>
+          <Text style={styles.summaryStrong}>{customer?.name}</Text>
+          {customer !== null && <Text style={styles.summaryMeta}>{`Código ${customer.code}${customer.document != null ? ` · ${customer.document}` : ""}`}</Text>}
+        </SummaryBlock>
+
+        <SummaryBlock title="Negociação" editLabel="Editar negociação" onEdit={() => goToStep("negotiation")}>
+          {sales !== null && effectiveTop !== null && <SummaryRow label="Operação" value={topLabel(effectiveTop, sales.orderTops)} />}
+          <SummaryRow label="Negociação" value={negotiationName ?? "Não informada"} />
+          <SummaryRow label="Frete" value={freightLabel ?? "Não informado"} />
+          <SummaryRow label="Transportadora" value={carrierName ?? "Nenhuma"} />
+          <SummaryRow label="Observações" value={notesValue ?? "—"} />
+        </SummaryBlock>
+
+        <SummaryBlock title={`Produtos (${lines.length})`} editLabel="Editar produtos" onEdit={() => goToStep("products", "cart")}>
+          {lines.length === 0 && <Text style={styles.summaryMeta}>Nenhum item no carrinho.</Text>}
+          {lines.map((line, index) => {
+            const amounts = lineAmountsOf(preview.lines[index] ?? { key: line.key, item: null });
+            return (
+              <View key={line.key} style={styles.summaryLine}>
+                <View style={styles.flex}>
+                  <Text style={styles.summaryStrong}>{line.description}</Text>
+                  <Text style={styles.summaryMeta}>{`${line.quantityText.trim()} ${line.unit} × ${describeListPrice(line.price)}`}</Text>
+                  {hasDiscount(line.discountText) && <Text style={styles.summaryMeta}>{`Desconto ${line.discountText.trim()}%`}</Text>}
+                </View>
+                <Text style={styles.summaryStrong}>{amounts.lineTotal === null ? "—" : (formatBrl(amounts.lineTotal) ?? "—")}</Text>
+              </View>
+            );
+          })}
+        </SummaryBlock>
+
+        <OrderTotals preview={preview} />
+
+        {lines.length > 0 && sales?.discountAuthorityMode === "erp" && (
           <Text style={styles.footerInfo} accessibilityLabel="Liberação de descontos no Sankhya">
             {ERP_DISCOUNT_NOTICE}
           </Text>
         )}
+        {config.status === "error" && <Text style={styles.footerNotice}>{config.error.message}</Text>}
+        {freightType === null && <Text style={styles.footerInfo}>Frete não informado: ele é obrigatório para enviar o pedido, não para salvar o rascunho.</Text>}
+        {lines.length > 0 && !preview.valid && <Text style={styles.footerNotice}>Há quantidade ou desconto inválido no carrinho. Corrija em Produtos.</Text>}
         {blockedLineCount > 0 && (
-          <Text style={styles.footerNotice}>
-            {`${blockedLineCount} item(ns) sem preço não podem ser salvos nesta instalação. Remova-os ou aguarde a atualização de preços.`}
-          </Text>
+          <Text style={styles.footerNotice}>{`${blockedLineCount} item(ns) sem preço não podem ser salvos nesta instalação. Remova-os ou aguarde a atualização de preços.`}</Text>
         )}
         {saveFailure !== null && (
           <View style={styles.failureBox} accessibilityRole="alert">
@@ -752,23 +877,28 @@ export function NewOrderScreen({
             <Text style={styles.discardButtonText}>{localDraft !== null || editingOrder !== null ? "Descartar alterações" : "Descartar pedido"}</Text>
           </Pressable>
         )}
-        <Pressable
-          style={[
-            styles.primaryButton,
-            (lines.length === 0 || !preview.valid || blockedLineCount > 0 || saving) && styles.primaryButtonDisabled,
-          ]}
-          onPress={() => void save()}
-          disabled={lines.length === 0 || !preview.valid || blockedLineCount > 0 || saving}
-          accessibilityRole="button"
-          accessibilityLabel={editingOrder !== null || localDraft !== null ? "Salvar alterações" : "Salvar rascunho"}
-        >
-          {saving ? (
-            <ActivityIndicator color={colors.onNavy} />
-          ) : (
-            <Text style={styles.primaryButtonText}>{editingOrder !== null || localDraft !== null ? "Salvar alterações" : "Salvar rascunho"}</Text>
-          )}
-        </Pressable>
-      </View>
+      </ScrollView>
+    );
+  }
+
+  return (
+    <View style={styles.flex}>
+      <WizardProgress step={step} aside={step === "customer" ? undefined : customer?.name} />
+      {stepError !== null && (
+        <Text style={styles.stepError} accessibilityRole="alert">
+          {stepError}
+        </Text>
+      )}
+      {step === "customer" && renderCustomerStep()}
+      {step === "negotiation" && renderNegotiationStep()}
+      {step === "products" && renderProductsStep()}
+      {step === "summary" && renderSummaryStep()}
+
+      {step === "summary" ? (
+        <WizardFooter onBack={goBack} onNext={() => void save()} nextLabel={saveLabel} nextDisabled={!orderable || saving} busy={saving} />
+      ) : (
+        <WizardFooter onBack={step === "customer" ? null : goBack} onNext={goNext} nextLabel="Avançar" info={step === "products" ? itemsInfo : undefined} />
+      )}
 
       <DiscountSheet
         visible={massDiscountOpen}
@@ -811,23 +941,20 @@ export function NewOrderScreen({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  scrollContent: { padding: spacing.md, gap: spacing.sm, paddingBottom: spacing.xl },
+  stepError: { fontSize: 13, fontWeight: "600", color: colors.text, backgroundColor: colors.errorBackground, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
+  selectedCustomer: { margin: spacing.md, marginBottom: 0, padding: spacing.md, borderRadius: 8, borderWidth: 2, borderColor: colors.navy, backgroundColor: colors.surface, gap: 2 },
+  selectedCaption: { fontSize: 11, color: colors.textMuted },
+  selectedName: { fontSize: 16, fontWeight: "800", color: colors.text },
+  selectedMeta: { fontSize: 13, color: colors.textMuted },
+  selectedWarn: { fontSize: 12, fontWeight: "700", color: colors.warning },
+  lockedNote: { fontSize: 13, color: colors.textMuted, padding: spacing.lg },
+  summaryStrong: { fontSize: 14, fontWeight: "700", color: colors.text },
+  summaryMeta: { fontSize: 12, color: colors.textMuted },
+  summaryLine: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: spacing.md, paddingVertical: spacing.xs },
   hidden: { display: "none" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl, gap: spacing.sm },
   stepTitle: { fontSize: 16, fontWeight: "700", color: colors.text, padding: spacing.lg, paddingBottom: 0 },
-  customerBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  customerInfo: { flex: 1 },
-  customerCaption: { fontSize: 11, color: colors.textMuted },
-  customerName: { fontSize: 15, fontWeight: "700", color: colors.text },
-  changeCustomer: { color: colors.navy, fontWeight: "700", fontSize: 13 },
   pills: { flexDirection: "row", gap: spacing.sm, padding: spacing.md },
   pill: { flex: 1, alignItems: "center", paddingVertical: spacing.sm, borderRadius: 20, backgroundColor: colors.background },
   pillActive: { backgroundColor: colors.navy },
@@ -853,13 +980,6 @@ const styles = StyleSheet.create({
   },
   toolbarButtonDisabled: { opacity: 0.5 },
   toolbarButtonText: { color: colors.navy, fontWeight: "700", fontSize: 13 },
-  footer: {
-    padding: spacing.lg,
-    gap: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.surface,
-  },
   footerNotice: { fontSize: 12, color: colors.warning },
   footerInfo: { fontSize: 12, color: colors.textMuted },
   discardButton: { alignItems: "center", paddingVertical: spacing.sm },

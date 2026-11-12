@@ -18,6 +18,15 @@ async function pressAndSettle(element: unknown, delayMs = 100) {
   });
 }
 
+// The save button lives on the summary step: from the cart, "Avançar" gets there (already there when editing).
+async function saveFromSummary(name: string) {
+  const next = screen.queryByRole("button", { name: "Avançar" });
+  if (next !== null) await pressAndSettle(next);
+  // Moving between steps auto-saves a local draft, after which the same button reads "Salvar alterações".
+  const button = screen.queryByRole("button", { name }) ?? screen.getByRole("button", { name: name === "Salvar rascunho" ? "Salvar alterações" : "Salvar rascunho" });
+  await pressAndSettle(button);
+}
+
 // CustomerPicker/ProductPicker mount a real FlatList (VirtualizedList), which schedules an internal setTimeout
 // (~updateCellsBatchingPeriod) for its cell-range update after every render of its data. RTL's automatic
 // unmount-on-cleanup does not reliably cancel it; if it fires later while a *different* interaction's own act()
@@ -51,6 +60,8 @@ async function setup(overrides: Overrides = {}) {
 async function pickCustomerAndOpenProducts(overrides: Overrides = {}) {
   await setup(overrides);
   await pressAndSettle(await screen.findByText("Padaria Central"));
+  await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+  await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
   expect(screen.getByText("Copo 200 ml")).toBeTruthy();
 }
 
@@ -74,7 +85,8 @@ describe("NewOrderScreen", () => {
 
   it("shows the current customer discreetly and steps the quantity from the catalog card, removing the line at one unit", async () => {
     await pickCustomerAndOpenProducts();
-    expect(screen.getByText("Cliente")).toBeTruthy();
+    // The customer shows only as the discreet aside of the progress header.
+    expect(screen.getAllByText("Padaria Central").length).toBeGreaterThan(0);
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("button", { name: "Copo 200 ml, já no carrinho, adicionar outra unidade" }));
     expect(screen.getByLabelText("Quantidade no carrinho: 2")).toBeTruthy();
@@ -139,7 +151,7 @@ describe("NewOrderScreen", () => {
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
     fireEvent.changeText(await screen.findByLabelText("Desconto de Copo 200 ml"), "10");
     await waitFor(() => expect(screen.getAllByText("R$ 9,00")).toHaveLength(3));
-    await pressAndSettle(screen.getByRole("button", { name: "Salvar rascunho" }));
+    await saveFromSummary("Salvar rascunho");
 
     expect(screen.getByText("Rascunho salvo")).toBeTruthy();
     expect(screen.getByText("Pedido nº 42 · Padaria Central")).toBeTruthy();
@@ -167,22 +179,24 @@ describe("NewOrderScreen", () => {
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
 
-    await pressAndSettle(screen.getByRole("button", { name: "Salvar rascunho" }));
+    await saveFromSummary("Salvar rascunho");
     expect(capturedIds).toHaveLength(1);
     expect(screen.getByText(/Sem conexão com o servidor/)).toBeTruthy();
 
     // Retry with the exact same payload (e.g. the request actually landed server-side but the response was lost):
     // must reuse the same clientRequestId so the server can replay instead of rejecting a duplicate.
-    await pressAndSettle(screen.getByRole("button", { name: "Salvar rascunho" }));
+    await saveFromSummary("Salvar rascunho");
     expect(capturedIds).toHaveLength(2);
     expect(capturedIds[1]).toBe(capturedIds[0]);
 
     // Now the cart changes (a discount is applied): the payload differs, so a fresh id must be minted —
     // otherwise the server would answer idempotency_conflict forever and the user could never save again.
+    await pressAndSettle(screen.getByRole("button", { name: "Editar produtos" }));
+    await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
     fireEvent.changeText(await screen.findByLabelText("Desconto de Copo 200 ml"), "10");
     await waitFor(() => expect(screen.getAllByText("R$ 9,00")).toHaveLength(3));
     shouldFail = false;
-    await pressAndSettle(screen.getByRole("button", { name: "Salvar rascunho" }));
+    await saveFromSummary("Salvar rascunho");
     expect(capturedIds).toHaveLength(3);
     expect(capturedIds[2]).not.toBe(capturedIds[0]);
     expect(screen.getByText("Rascunho salvo")).toBeTruthy();
@@ -202,7 +216,7 @@ describe("NewOrderScreen", () => {
     await pickCustomerAndOpenProducts({ orders });
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
-    await pressAndSettle(screen.getByRole("button", { name: "Salvar rascunho" }));
+    await saveFromSummary("Salvar rascunho");
 
     expect(screen.getByText("Corrija os itens antes de salvar")).toBeTruthy();
     expect(screen.getByText("Item 1: Desconto inválido.")).toBeTruthy();
@@ -217,7 +231,7 @@ describe("NewOrderScreen", () => {
     await pickCustomerAndOpenProducts({ orders });
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
-    await pressAndSettle(screen.getByRole("button", { name: "Salvar rascunho" }));
+    await saveFromSummary("Salvar rascunho");
 
     expect(screen.getByText(/Sem conexão com o servidor/)).toBeTruthy();
   });
@@ -238,7 +252,7 @@ describe("NewOrderScreen", () => {
     await pickCustomerAndOpenProducts({ orders });
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
-    await pressAndSettle(screen.getByRole("button", { name: "Salvar rascunho" }));
+    await saveFromSummary("Salvar rascunho");
     expect(captured?.expectedDataset).toEqual({ environment: "production", datasetId: "mirror-real-001" });
   });
 
@@ -248,7 +262,7 @@ describe("NewOrderScreen", () => {
     await pickCustomerAndOpenProducts({ orders });
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
-    await pressAndSettle(screen.getByRole("button", { name: "Salvar rascunho" }));
+    await saveFromSummary("Salvar rascunho");
     expect(create).not.toHaveBeenCalled();
     expect(screen.getByText(/Conecte-se à internet para criar pedidos/)).toBeTruthy();
   });
@@ -262,7 +276,7 @@ describe("NewOrderScreen", () => {
     await pickCustomerAndOpenProducts({ orders });
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
-    await pressAndSettle(screen.getByRole("button", { name: "Salvar rascunho" }));
+    await saveFromSummary("Salvar rascunho");
     expect(screen.getByText("Os dados do servidor mudaram")).toBeTruthy();
   });
 
@@ -275,11 +289,17 @@ describe("NewOrderScreen", () => {
     });
     await setup({ products, orders });
     await pressAndSettle(await screen.findByText("Padaria Central"));
+    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Sem preço ao carrinho" }));
     await pressAndSettle(await screen.findByRole("tab", { name: "Carrinho (1)" }));
 
-    expect(screen.getByText(/item\(ns\) sem preço não podem ser salvos nesta instalação/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Salvar rascunho" }).props.accessibilityState.disabled).toBe(true);
+    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+
+    // The wizard refuses to reach the summary (where saving lives) and explains why.
+    expect(screen.getAllByText(/item\(ns\) sem preço não podem ser salvos nesta instalação/).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Etapa 3 de 4: Produtos")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Salvar rascunho" })).toBeNull();
   });
 
   it("expires the session when the entry configuration read answers 401", async () => {

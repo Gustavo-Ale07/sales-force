@@ -13,6 +13,15 @@ async function pressAndSettle(element: unknown, delayMs = 100) {
   });
 }
 
+// The save button lives on the summary step: from the cart, "Avançar" gets there (already there when editing).
+async function saveFromSummary(name: string) {
+  const next = screen.queryByRole("button", { name: "Avançar" });
+  if (next !== null) await pressAndSettle(next);
+  // Moving between steps auto-saves a local draft, after which the same button reads "Salvar alterações".
+  const button = screen.queryByRole("button", { name }) ?? screen.getByRole("button", { name: name === "Salvar rascunho" ? "Salvar alterações" : "Salvar rascunho" });
+  await pressAndSettle(button);
+}
+
 afterEach(async () => {
   await new Promise<void>((resolve) => setTimeout(() => resolve(), 400));
 });
@@ -35,12 +44,16 @@ async function reopenDraftAndOpenGroupSheet(codes: number[], products: ProductRe
   const orders = fakeOrders({ create: async () => saved });
   await render(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} />);
   await pressAndSettle(await screen.findByText("Padaria Central"));
+  await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+  await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
   for (const code of codes) {
     await pressAndSettle(await screen.findByRole("button", { name: `Adicionar Produto ${code} ao carrinho` }));
   }
   await pressAndSettle(screen.getByRole("tab", { name: `Carrinho (${codes.length})` }));
-  await pressAndSettle(screen.getByRole("button", { name: "Salvar rascunho" }));
+  await saveFromSummary("Salvar rascunho");
   await pressAndSettle(screen.getByRole("button", { name: "Editar pedido" }));
+  await pressAndSettle(screen.getByRole("button", { name: "Editar produtos" }));
+  await pressAndSettle(screen.getByRole("tab", { name: `Carrinho (${codes.length})` }));
   await pressAndSettle(screen.getByRole("button", { name: "Desconto por grupo" }));
 }
 
@@ -91,6 +104,8 @@ describe("NewOrderScreen catalog-group discount edge cases (MOB-4a)", () => {
     });
     await render(<NewOrderScreen repositories={{ customers, products, orders: fakeOrders() }} onUnauthenticated={jest.fn()} />);
     await pressAndSettle(await screen.findByText("Padaria Central"));
+    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Produto avulso ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
     await pressAndSettle(screen.getByRole("button", { name: "Desconto por grupo" }));

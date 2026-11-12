@@ -38,6 +38,8 @@ function element(mode: "erp" | "force", props: Partial<NewOrderScreenProps> = {}
 async function withOneItem(mode: "erp" | "force", props: Partial<NewOrderScreenProps> = {}) {
   const view = await render(element(mode, props));
   await pressAndSettle(await screen.findByText("Padaria Central"));
+  await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+  await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
   await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
   await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
   return view;
@@ -46,11 +48,13 @@ async function withOneItem(mode: "erp" | "force", props: Partial<NewOrderScreenP
 describe("NewOrderScreen discount authority mode (D-L)", () => {
   it("tells the seller that discounts above the limit are released in Sankhya after sending, when the installation uses erp", async () => {
     await withOneItem("erp");
+    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     expect(screen.getByText("Descontos acima do permitido passam pela liberação no Sankhya depois do envio.")).toBeTruthy();
   });
 
   it("shows no such notice in force mode", async () => {
     await withOneItem("force");
+    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     expect(screen.queryByText(/liberação no Sankhya/)).toBeNull();
   });
 });
@@ -59,10 +63,11 @@ describe("NewOrderScreen confirmations", () => {
   it("offers Descartar only when there is something unsaved, and asks before throwing it away", async () => {
     const alert = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
     await withOneItem("force");
+    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     await pressAndSettle(screen.getByRole("button", { name: "Descartar" }));
     expect(alert).toHaveBeenCalledWith("Descartar pedido?", expect.any(String), expect.any(Array));
     // Nothing was discarded yet.
-    expect(screen.getByRole("tab", { name: "Carrinho (1)" })).toBeTruthy();
+    expect(screen.getByLabelText("Etapa 4 de 4: Resumo")).toBeTruthy();
     const buttons = alert.mock.calls[0]?.[2] as { text: string; onPress?: () => void }[];
     await act(async () => buttons.find((b) => b.text === "Descartar")?.onPress?.());
     await settle();
@@ -95,6 +100,6 @@ describe("NewOrderScreen confirmations", () => {
     await view.rerender(element("force", { localOrders, resumeLocalId: "other" }));
     await settle();
     expect(alert).not.toHaveBeenCalled();
-    expect(screen.getByText("Mercado Sul")).toBeTruthy();
+    expect(screen.getAllByText("Mercado Sul").length).toBeGreaterThan(0);
   });
 });

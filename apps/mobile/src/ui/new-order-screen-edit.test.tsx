@@ -14,6 +14,15 @@ async function pressAndSettle(element: unknown, delayMs = 100) {
   });
 }
 
+// The save button lives on the summary step: from the cart, "Avançar" gets there (already there when editing).
+async function saveFromSummary(name: string) {
+  const next = screen.queryByRole("button", { name: "Avançar" });
+  if (next !== null) await pressAndSettle(next);
+  // Moving between steps auto-saves a local draft, after which the same button reads "Salvar alterações".
+  const button = screen.queryByRole("button", { name }) ?? screen.getByRole("button", { name: name === "Salvar rascunho" ? "Salvar alterações" : "Salvar rascunho" });
+  await pressAndSettle(button);
+}
+
 afterEach(async () => {
   await new Promise<void>((resolve) => setTimeout(() => resolve(), 400));
 });
@@ -25,9 +34,11 @@ async function saveAFreshDraft(orders: OrderRepository) {
   });
   await render(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} />);
   await pressAndSettle(await screen.findByText("Padaria Central"));
+  await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+  await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
   await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
   await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
-  await pressAndSettle(screen.getByRole("button", { name: "Salvar rascunho" }));
+  await saveFromSummary("Salvar rascunho");
   expect(await screen.findByText("Rascunho salvo")).toBeTruthy();
 }
 
@@ -45,9 +56,11 @@ describe("NewOrderScreen — reopening a saved draft for editing (PUT /orders/{i
 
     await pressAndSettle(screen.getByRole("button", { name: "Editar pedido" }));
 
-    expect(screen.getByRole("tab", { name: "Carrinho (1)" })).toBeTruthy();
+    // Reopening lands on the summary, with the rebuilt line and the edit-mode save button.
     expect(screen.getByText("Copo 200 ml")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Salvar alterações" })).toBeTruthy();
+    await pressAndSettle(screen.getByRole("button", { name: "Editar produtos" }));
+    expect(screen.getByRole("tab", { name: "Carrinho (1)" })).toBeTruthy();
     // The customer stays fixed while editing an existing draft in this slice: no "Trocar" action.
     expect(screen.queryByRole("button", { name: "Trocar cliente" })).toBeNull();
   });
@@ -73,12 +86,14 @@ describe("NewOrderScreen — reopening a saved draft for editing (PUT /orders/{i
     });
     await saveAFreshDraft(orders);
     await pressAndSettle(screen.getByRole("button", { name: "Editar pedido" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Editar produtos" }));
+    await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
 
     fireEvent.changeText(screen.getByLabelText("Quantidade de Copo 200 ml"), "2");
     await waitFor(() => expect((screen.getByLabelText("Quantidade de Copo 200 ml").props as { value: string }).value).toBe("2"));
     await fireEvent.changeText(screen.getByLabelText("Desconto de Copo 200 ml"), "10");
 
-    await pressAndSettle(screen.getByRole("button", { name: "Salvar alterações" }));
+    await saveFromSummary("Salvar alterações");
 
     expect(captured).toEqual({
       id: "0190a0c0-0000-7000-8000-000000000099",
@@ -117,13 +132,15 @@ describe("NewOrderScreen — reopening a saved draft for editing (PUT /orders/{i
     });
     await saveAFreshDraft(orders);
     await pressAndSettle(screen.getByRole("button", { name: "Editar pedido" }));
-    await pressAndSettle(screen.getByRole("button", { name: "Salvar alterações" }));
+    await saveFromSummary("Salvar alterações");
 
     expect(screen.getByText("O rascunho foi alterado em outro lugar")).toBeTruthy();
     const reloadButton = screen.getByRole("button", { name: "Recarregar pedido" });
     await pressAndSettle(reloadButton);
 
     expect(screen.queryByText("O rascunho foi alterado em outro lugar")).toBeNull();
+    await pressAndSettle(screen.getByRole("button", { name: "Editar produtos" }));
+    await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
     await waitFor(() => expect((screen.getByLabelText("Quantidade de Copo 200 ml").props as { value: string }).value).toBe("5"));
   });
 
@@ -151,11 +168,13 @@ describe("NewOrderScreen — reopening a saved draft for editing (PUT /orders/{i
     });
     await render(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={onUnauthenticated} />);
     await pressAndSettle(await screen.findByText("Padaria Central"));
+    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
-    await pressAndSettle(screen.getByRole("button", { name: "Salvar rascunho" }));
+    await saveFromSummary("Salvar rascunho");
     await pressAndSettle(screen.getByRole("button", { name: "Editar pedido" }));
-    await pressAndSettle(screen.getByRole("button", { name: "Salvar alterações" }));
+    await saveFromSummary("Salvar alterações");
     await pressAndSettle(screen.getByRole("button", { name: "Recarregar pedido" }));
 
     expect(onUnauthenticated).toHaveBeenCalled();

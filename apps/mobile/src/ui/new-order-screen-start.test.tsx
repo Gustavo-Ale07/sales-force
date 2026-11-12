@@ -39,14 +39,19 @@ describe("NewOrderScreen started from a customer sheet", () => {
     await render(element({ startRequest: { nonce: 1, customer: padaria }, onStartConsumed: consumed }));
     await settle();
     expect(consumed).toHaveBeenCalled();
+    // The customer is chosen, so the order opens on the negotiation step; one Avançar reaches the catalog.
+    expect(screen.getByLabelText("Etapa 2 de 4: Negociação")).toBeTruthy();
+    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     expect(screen.getByText("Copo 200 ml")).toBeTruthy();
-    expect(screen.getByText("Padaria Central")).toBeTruthy();
+    expect(screen.getAllByText("Padaria Central").length).toBeGreaterThan(0);
     expect(screen.queryByText("Selecione o cliente")).toBeNull();
   });
 
   async function withCartOf(startWith: typeof padaria) {
     const view = await render(element());
     await pressAndSettle(await screen.findByText(startWith.name));
+    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     expect(screen.getByRole("tab", { name: "Carrinho (1)" })).toBeTruthy();
     return view;
@@ -67,7 +72,7 @@ describe("NewOrderScreen started from a customer sheet", () => {
     await act(async () => buttons?.[0]?.onPress?.());
     await settle();
     // The cart and its customer are untouched.
-    expect(screen.getByText("Padaria Central")).toBeTruthy();
+    expect(screen.getAllByText("Padaria Central").length).toBeGreaterThan(0);
     expect(screen.getByRole("tab", { name: "Carrinho (1)" })).toBeTruthy();
   });
 
@@ -97,6 +102,8 @@ describe("NewOrderScreen started from a customer sheet", () => {
     const alert = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
     const view = await render(element());
     await pressAndSettle(await screen.findByText("Padaria Central"));
+    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     await view.rerender(element({ startRequest: { nonce: 2, customer: mercado } }));
     await settle();
     expect(alert).not.toHaveBeenCalled();
@@ -110,15 +117,19 @@ describe("NewOrderScreen started from a duplicated sale", () => {
   it("opens the cart pre-filled as a new, unsaved order", async () => {
     await render(element({ startRequest: { nonce: 1, customer: padaria, lines: copy } }));
     await settle();
+    // A duplicated sale opens on the summary, with the copied lines ready to review.
+    expect(screen.getByLabelText("Etapa 4 de 4: Resumo")).toBeTruthy();
+    expect(screen.getAllByText("Padaria Central").length).toBeGreaterThan(0);
+    await pressAndSettle(screen.getByRole("button", { name: "Editar produtos" }));
     expect(screen.getByRole("tab", { name: "Carrinho (1)" })).toBeTruthy();
-    expect(screen.getByText("Copo 200 ml")).toBeTruthy();
-    expect(screen.getByText("Padaria Central")).toBeTruthy();
   });
 
   it("never replaces an order in progress silently, even for the same customer", async () => {
     const alert = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
     const view = await render(element());
     await pressAndSettle(await screen.findByText("Padaria Central"));
+    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await view.rerender(element({ startRequest: { nonce: 2, customer: padaria, lines: copy } }));
     await settle();
