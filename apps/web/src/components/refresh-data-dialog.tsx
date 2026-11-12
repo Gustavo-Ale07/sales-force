@@ -43,7 +43,7 @@ export function RefreshDataDialog({ open, onClose, role }: RefreshDataDialogProp
   const [detailsOpen, setDetailsOpen] = useState(false);
   // Seconds since the run last advanced (percent, step or status): drives the "waiting" line and the non-blocking "slow" state (D-AD).
   const [quiet, setQuiet] = useState(0);
-  const advancedAt = useRef(Date.now());
+  const advancedAt = useRef(0);
 
   const start = useMutation({ mutationFn: () => startSyncRefresh(api) });
   const refreshId = start.data?.id ?? null;
@@ -71,13 +71,13 @@ export function RefreshDataDialog({ open, onClose, role }: RefreshDataDialogProp
   const done = refresh?.status === "done";
 
   // Seconds since the dialog opened (manager's discreet line); it stops when the run ends.
+  // Closing resets the timer and the details panel (state adjusted while rendering, not in an effect).
+  if (!open && (elapsed !== 0 || detailsOpen)) {
+    setElapsed(0);
+    setDetailsOpen(false);
+  }
   useEffect(() => {
-    if (!open) {
-      setElapsed(0);
-      setDetailsOpen(false);
-      return undefined;
-    }
-    if (done) return undefined;
+    if (!open || done) return undefined;
     const startedAt = Date.now() - elapsed * 1000;
     const timer = setInterval(() => setElapsed(Math.floor((Date.now() - startedAt) / 1000)), 1000);
     return () => clearInterval(timer);
@@ -98,7 +98,9 @@ export function RefreshDataDialog({ open, onClose, role }: RefreshDataDialogProp
     refresh === undefined ? "none" : `${refresh.id}|${refresh.status}|${percentNow}|${"steps" in refresh ? (refresh as SyncRefresh).steps.map((step) => step.status[0]).join("") : refresh.phase}`;
   useEffect(() => {
     advancedAt.current = Date.now();
-    setQuiet(0);
+    // Reset from a callback (not synchronously in the effect body).
+    const reset = setTimeout(() => setQuiet(0), 0);
+    return () => clearTimeout(reset);
   }, [signature, open]);
   useEffect(() => {
     if (!open || done) return undefined;

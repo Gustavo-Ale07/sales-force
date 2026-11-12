@@ -30,15 +30,17 @@ export function SendProgressDialog({ orderId, kind, reference, onClose, onDelete
   const api = useApi();
   const queryClient = useQueryClient();
   const [startedAt, setStartedAt] = useState(0);
-  const [timedOut, setTimedOut] = useState(false);
+  // The wait that ran out is identified by (order, attempt): a new order or a resend starts a fresh wait without resetting state in an effect.
+  const [timedOutKey, setTimedOutKey] = useState<string | null>(null);
+  const waitKey = `${orderId ?? ""}|${startedAt}`;
+  const timedOut = timedOutKey === waitKey;
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    setTimedOut(false);
     if (orderId === null) return undefined;
-    const timer = setTimeout(() => setTimedOut(true), SEND_WAIT_MS);
+    const timer = setTimeout(() => setTimedOutKey(waitKey), SEND_WAIT_MS);
     return () => clearTimeout(timer);
-  }, [orderId, startedAt]);
+  }, [orderId, waitKey]);
 
   const query = useQuery({
     ...orderQueryOptions(api, orderId ?? ""),
