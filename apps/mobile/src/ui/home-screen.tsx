@@ -136,7 +136,7 @@ export function HomeScreen({ account, active, repositories, localOrders, syncSta
         )}
         {onSyncNow !== undefined && (
           <ActionRow
-            title={syncing ? "Sincronizando..." : "Sincronizar agora"}
+            title={syncing ? "Sincronizando…" : "Sincronizar agora"}
             detail={offline ? "Requer conexão com a internet" : undefined}
             onPress={onSyncNow}
             disabled={syncing || offline}

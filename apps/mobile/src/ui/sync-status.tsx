@@ -5,6 +5,7 @@ import type { SyncStatus } from "@salesforce/mobile-db";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import { describeSyncChip, describeSyncStatus, type SyncTone } from "../offline/sync-status-text";
 import { colors, spacing } from "../theme";
+import { SyncIcon } from "./sync-icon";
 
 const TONE_COLOR: Record<SyncTone, string> = {
   ok: colors.ok,
@@ -38,8 +39,10 @@ export function SyncStatusChip({ status, connectivity, onPress }: Pick<SyncViewP
   const { text, tone } = describeSyncChip(status, connectivity);
   return (
     <Pressable style={styles.chip} onPress={onPress} accessibilityRole="button" accessibilityLabel={`Status de sincronização: ${text}`}>
-      <View style={[styles.dot, { backgroundColor: TONE_COLOR[tone] }]} />
-      <Text style={styles.chipText}>{text}</Text>
+      <SyncIcon tone={tone} syncing={status.phase === "syncing"} color={TONE_COLOR[tone]} size={14} />
+      <Text style={styles.chipText} numberOfLines={1}>
+        {text}
+      </Text>
     </Pressable>
   );
 }
@@ -84,7 +87,8 @@ export function SyncPanel({ status, connectivity, onSyncNow, quarantinedCount = 
         accessibilityLabel="Sincronizar agora"
         accessibilityState={{ disabled: syncing || offline }}
       >
-        <Text style={styles.syncButtonText}>{syncing ? "Sincronizando..." : "Sincronizar agora"}</Text>
+        {syncing && <SyncIcon tone="busy" syncing color={colors.onNavy} size={16} />}
+        <Text style={styles.syncButtonText}>{syncing ? "Sincronizando…" : "Sincronizar agora"}</Text>
       </Pressable>
       {offline && <Text style={styles.hint}>Sem conexão: a sincronização acontece quando a rede voltar.</Text>}
     </View>
@@ -132,8 +136,7 @@ export function HeaderSyncStatus(view: SyncViewProps) {
 
 const styles = StyleSheet.create({
   chip: { flexDirection: "row", alignItems: "center", gap: spacing.xs + 2, backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md, minHeight: 44 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  chipText: { fontSize: 12, fontWeight: "700", color: colors.text },
+  chipText: { fontSize: 12, fontWeight: "700", color: colors.text, flexShrink: 1 },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, gap: spacing.md },
   grabber: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border },
@@ -143,7 +146,7 @@ const styles = StyleSheet.create({
   rowLabel: { fontSize: 14, color: colors.textMuted, flexShrink: 1, minWidth: 100 },
   rowValue: { fontSize: 14, fontWeight: "700", color: colors.text, flexShrink: 1, textAlign: "right" },
   errorNote: { fontSize: 13, color: colors.text, backgroundColor: colors.errorBackground, borderRadius: 6, padding: spacing.sm },
-  syncButton: { backgroundColor: colors.navy, borderRadius: 8, minHeight: 48, alignItems: "center", justifyContent: "center", marginTop: spacing.sm },
+  syncButton: { backgroundColor: colors.navy, borderRadius: 8, minHeight: 48, alignItems: "center", justifyContent: "center", marginTop: spacing.sm, flexDirection: "row", gap: spacing.sm },
   syncButtonDisabled: { opacity: 0.5 },
   syncButtonText: { color: colors.onNavy, fontSize: 15, fontWeight: "700" },
   quarantine: { gap: spacing.xs, borderRadius: 6, backgroundColor: colors.errorBackground, padding: spacing.sm },

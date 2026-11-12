@@ -8,21 +8,26 @@ export interface SyncStatusText {
   readonly tone: SyncTone;
 }
 
+/** How long after a sync the chip keeps saying "Atualizado agora". */
+export const JUST_NOW_MS = 60_000;
+
 /** Short label for the compact header status. Same precedence as `describeSyncStatus`. */
-export function describeSyncChip(status: SyncStatus, connectivity: ConnectivityState): SyncStatusText {
-  if (status.phase === "syncing") return { text: "Sincronizando", tone: "busy" };
-  if (status.phase === "auth_required" || status.phase === "error") return { text: "Erro", tone: "error" };
+export function describeSyncChip(status: SyncStatus, connectivity: ConnectivityState, now: number = Date.now()): SyncStatusText {
+  if (status.phase === "syncing") return { text: "Sincronizando…", tone: "busy" };
+  if (status.phase === "auth_required" || status.phase === "error") return { text: "Falhou. Tentar de novo", tone: "error" };
   if (connectivity === "offline" || status.phase === "offline") {
     return { text: status.pending > 0 ? `Offline · ${status.pending}` : "Offline", tone: "offline" };
   }
   if (status.needsAttention > 0) return { text: "Erro", tone: "error" };
   if (status.pending > 0) return { text: `Pendências (${status.pending})`, tone: "pending" };
-  return status.lastSyncedAt !== null ? { text: "Sincronizado", tone: "ok" } : { text: "Online", tone: "ok" };
+  if (status.lastSyncedAt === null) return { text: "Online", tone: "ok" };
+  const age = now - new Date(status.lastSyncedAt).getTime();
+  return age >= 0 && age < JUST_NOW_MS ? { text: "Atualizado agora", tone: "ok" } : { text: "Sincronizado", tone: "ok" };
 }
 
 /** The indicator wording. Technical errors never reach the seller; each state says what happens to their work. */
 export function describeSyncStatus(status: SyncStatus, connectivity: ConnectivityState): SyncStatusText {
-  if (status.phase === "syncing") return { text: "Sincronizando...", tone: "busy" };
+  if (status.phase === "syncing") return { text: "Sincronizando…", tone: "busy" };
   if (status.phase === "auth_required") return { text: "Sessão expirada — entre novamente para sincronizar", tone: "error" };
   if (status.phase === "error") return { text: "Erro ao sincronizar", tone: "error" };
   if (connectivity === "offline" || status.phase === "offline") {

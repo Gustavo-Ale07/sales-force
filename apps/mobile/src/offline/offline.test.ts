@@ -74,7 +74,7 @@ describe("offline session gate", () => {
 
 describe("describeSyncStatus", () => {
   it("uses the wording the seller sees, never a technical error", () => {
-    expect(describeSyncStatus({ ...idle, phase: "syncing" }, "online").text).toBe("Sincronizando...");
+    expect(describeSyncStatus({ ...idle, phase: "syncing" }, "online").text).toBe("Sincronizando…");
     expect(describeSyncStatus(idle, "online").text).toBe("✓ Sincronizado");
     expect(describeSyncStatus({ ...idle, pending: 2 }, "online").text).toBe("↑ Alterações pendentes (2)");
     expect(describeSyncStatus({ ...idle, pending: 2 }, "offline").text).toBe("Sem conexão — alterações salvas neste dispositivo");
