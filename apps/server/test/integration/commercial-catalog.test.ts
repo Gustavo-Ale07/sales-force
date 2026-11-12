@@ -64,7 +64,8 @@ describe('sellers', () => {
 });
 
 describe('customers: scope, search, filters, pagination', () => {
-  const inScope = (sellerCode: number) => dataset.customers.filter((c) => isCustomerInScope(c, { kind: 'sellers', sellerCodes: [sellerCode] }));
+  const shown = (c: { active: boolean; blocked: boolean }) => c.active && !c.blocked;
+  const inScope = (sellerCode: number) => dataset.customers.filter((c) => shown(c) && isCustomerInScope(c, { kind: 'sellers', sellerCodes: [sellerCode] }));
 
   it('a seller sees exactly their own portfolio; a manager sees all', async () => {
     const own = await allPages('seller1', '/customers');
@@ -72,13 +73,13 @@ describe('customers: scope, search, filters, pagination', () => {
     expect(own.every((c) => c.sellerCode === SELLER_1)).toBe(true);
 
     const all = await allPages('manager', '/customers');
-    expect(all).toHaveLength(dataset.customers.length);
+    expect(all).toHaveLength(dataset.customers.filter(shown).length);
   });
 
   it('paginates with a stable total', async () => {
     const first = await ctx.call('manager', 'GET', '/customers?page=1&pageSize=10&sort=code');
     const second = await ctx.call('manager', 'GET', '/customers?page=2&pageSize=10&sort=code');
-    expect(first.body.total).toBe(dataset.customers.length);
+    expect(first.body.total).toBe(dataset.customers.filter(shown).length);
     expect(first.body.items).toHaveLength(10);
     expect(second.body.items[0].code).toBeGreaterThan(first.body.items[9].code);
     expect(CustomersResponseSchema.safeParse(first.body).success).toBe(true);
@@ -103,17 +104,19 @@ describe('customers: scope, search, filters, pagination', () => {
     expect(underscore.body.total).toBe(0);
   });
 
-  it('filters by status, seller and price table presence (seller filter cannot widen a seller scope)', async () => {
-    const blocked = await allPages('manager', '/customers?status=blocked');
-    expect(blocked.map((c) => c.code).sort()).toEqual(dataset.customers.filter((c) => c.blocked).map((c) => c.code).sort());
-    expect(blocked.every((c) => c.blocked)).toBe(true);
+  it('lists only active, unblocked customers (D-AQ) and has no status filter', async () => {
+    const all = await allPages('manager', '/customers');
+    const visible = dataset.customers.filter((c) => c.active && !c.blocked).map((c) => c.code).sort();
+    expect(all.map((c) => c.code).sort()).toEqual(visible);
+    expect(all.every((c) => c.active && !c.blocked)).toBe(true);
+    const hidden = dataset.customers.find((c) => !c.active || c.blocked);
+    if (hidden !== undefined) expect((await ctx.call('manager', 'GET', `/customers/${hidden.code}`)).status).toBe(404);
+  });
 
-    const inactive = await allPages('manager', '/customers?status=inactive');
-    expect(inactive.map((c) => c.code).sort()).toEqual(dataset.customers.filter((c) => !c.active).map((c) => c.code).sort());
-
+  it('filters by seller and price table presence (seller filter cannot widen a seller scope)', async () => {
     const noTable = await allPages('manager', '/customers?hasPriceTable=false');
     expect(noTable.every((c) => c.priceTableCode === null)).toBe(true);
-    expect(noTable).toHaveLength(dataset.customers.filter((c) => c.priceTableCode === null).length);
+    expect(noTable).toHaveLength(dataset.customers.filter((c) => c.priceTableCode === null && c.active && !c.blocked).length);
 
     const other = await ctx.call('seller1', 'GET', `/customers?sellerCode=${SELLER_2}`);
     expect(other.status).toBe(200);
@@ -274,11 +277,11 @@ describe('dashboard', () => {
     expect(DashboardResponseSchema.safeParse(manager.body).success).toBe(true);
     const metric = (body: Json, group: string, key: string): Json =>
       body.groups.find((g: Json) => g.key === group).metrics.find((m: Json) => m.key === key);
-    expect(metric(manager.body, 'portfolio', 'customers_total').value.value).toBe(dataset.customers.length);
+    expect(metric(manager.body, 'portfolio', 'customers_total').value.value).toBe(dataset.customers.filter((c) => c.active && !c.blocked).length);
 
     const seller = await ctx.call('seller1', 'GET', '/dashboard');
     expect(metric(seller.body, 'portfolio', 'customers_total').value.value).toBe(
-      dataset.customers.filter((c) => c.sellerCode === SELLER_1).length,
+      dataset.customers.filter((c) => c.active && !c.blocked && c.sellerCode === SELLER_1).length,
     );
     expect(metric(seller.body, 'credit', 'credit_indicators').value).toBeNull();
     expect(metric(seller.body, 'positivation', 'positivation_rate').value).toBeNull();

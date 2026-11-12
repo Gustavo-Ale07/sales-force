@@ -32,17 +32,11 @@ const names = async (request: Parameters<typeof searchCustomers>[1]) =>
 const base = { search: "", page: 1, pageSize: 25 };
 
 describe("customer cache filters", () => {
-  it("filters by status with the API meaning (active excludes blocked)", async () => {
-    expect(await names({ ...base, filters: { status: "active" } })).toEqual(["123 Distribuidora", "Açúcar & Cia", "Cantina Norte"]);
-    expect(await names({ ...base, filters: { status: "inactive" } })).toEqual(["Bazar Sul"]);
-    expect(await names({ ...base, filters: { status: "blocked" } })).toEqual(["Bar do Zé"]);
-  });
-
-  it("filters by seller and by having a price table, and combines with search and status", async () => {
+  it("filters by seller and by having a price table, and combines with search", async () => {
     expect(await names({ ...base, filters: { sellerCode: 7 } })).toEqual(["Açúcar & Cia", "Bar do Zé"]);
     expect(await names({ ...base, filters: { hasPriceTable: true } })).toEqual(["Açúcar & Cia", "Bazar Sul"]);
     expect(await names({ ...base, filters: { hasPriceTable: false } })).toEqual(["123 Distribuidora", "Bar do Zé", "Cantina Norte"]);
-    expect(await names({ ...base, search: "ba", filters: { sellerCode: 7, status: "blocked" } })).toEqual(["Bar do Zé"]);
+    expect(await names({ ...base, search: "ba", filters: { sellerCode: 7, hasPriceTable: false } })).toEqual(["Bar do Zé"]);
   });
 
   it("reports the filtered total and starts the window at startAt", async () => {

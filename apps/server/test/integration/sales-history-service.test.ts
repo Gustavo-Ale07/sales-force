@@ -24,11 +24,16 @@ let service: SalesHistoryService;
 const SYNCED_AT = new Date('2026-11-01T03:15:00.000Z');
 const base = { contentHash: 'h', syncedAt: SYNCED_AT };
 
+const CONFIGURATION = {
+  ...DEMO_CONFIGURATION,
+  customers: { ...DEMO_CONFIGURATION.customers, portfolioOwnership: { strategy: 'customer_seller_field' as const } },
+};
+
 const policy = {
   async accessContext(user: CurrentUser) {
-    const outcome = resolveCustomerScopeOutcome(toScopeActor(user), DEMO_CONFIGURATION);
+    const outcome = resolveCustomerScopeOutcome(toScopeActor(user), CONFIGURATION);
     if (!outcome.ok) throw new AppError(outcome.reason === 'no_seller_scope' ? 'no_seller_scope' : 'forbidden');
-    return { configuration: DEMO_CONFIGURATION, configVersionId: 'v', scope: outcome.scope };
+    return { configuration: CONFIGURATION, configVersionId: 'v', scope: outcome.scope };
   },
 } as unknown as PolicyService;
 
@@ -193,6 +198,6 @@ describe('sales-history read service: customer x product history', () => {
 
   it('exposes no cost or margin field', async () => {
     const history = await service.customerProductHistory(user('admin', []), 1);
-    expect(JSON.stringify(history)).not.toMatch(/cost|custo|margin|margem/i);
+    expect(JSON.stringify(history)).not.toMatch(/cost|custo(?!mer)|margin|margem/i);
   });
 });

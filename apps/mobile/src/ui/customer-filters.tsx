@@ -4,12 +4,6 @@ import type { CustomerFilters, CustomerLetter, CustomerSellerOption } from "../d
 import { colors, spacing } from "../theme";
 import { useInsets } from "./use-insets";
 
-const STATUS_OPTIONS: ReadonlyArray<{ value: CustomerFilters["status"]; label: string }> = [
-  { value: undefined, label: "Todos" },
-  { value: "active", label: "Ativos" },
-  { value: "inactive", label: "Inativos" },
-  { value: "blocked", label: "Bloqueados" },
-];
 const PRICE_TABLE_OPTIONS: ReadonlyArray<{ value: boolean | undefined; label: string }> = [
   { value: undefined, label: "Todos" },
   { value: true, label: "Com tabela" },
@@ -17,10 +11,8 @@ const PRICE_TABLE_OPTIONS: ReadonlyArray<{ value: boolean | undefined; label: st
 ];
 
 export function countActiveFilters(filters: CustomerFilters): number {
-  return (filters.status !== undefined ? 1 : 0) + (filters.sellerCode !== undefined ? 1 : 0) + (filters.hasPriceTable !== undefined ? 1 : 0);
+  return (filters.sellerCode !== undefined ? 1 : 0) + (filters.hasPriceTable !== undefined ? 1 : 0);
 }
-
-const STATUS_LABEL = { active: "Ativos", inactive: "Inativos", blocked: "Bloqueados" } as const;
 
 export interface FilterChip {
   readonly key: string;
@@ -56,7 +48,6 @@ export function FilterChips({
   onChange: (next: CustomerFilters) => void;
 }) {
   const chips: FilterChip[] = [];
-  if (filters.status !== undefined) chips.push({ key: "status", label: STATUS_LABEL[filters.status], remove: () => onChange({ ...filters, status: undefined }) });
   if (filters.sellerCode !== undefined) {
     const seller = sellers.find((option) => option.code === filters.sellerCode);
     chips.push({ key: "seller", label: `Vendedor: ${seller?.name ?? filters.sellerCode}`, remove: () => onChange({ ...filters, sellerCode: undefined }) });
@@ -115,7 +106,6 @@ function FiltersBody({ filters, sellers, onApply }: FiltersBodyProps) {
   return (
     <>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-        <Options label="Situação" options={STATUS_OPTIONS} value={draft.status} onSelect={(status) => setDraft({ ...draft, status })} />
         {sellers.length > 0 && <Options label="Vendedor" options={sellerOptions} value={draft.sellerCode} onSelect={(sellerCode) => setDraft({ ...draft, sellerCode })} />}
         <Options label="Tabela de preço" options={PRICE_TABLE_OPTIONS} value={draft.hasPriceTable} onSelect={(hasPriceTable) => setDraft({ ...draft, hasPriceTable })} />
       </ScrollView>

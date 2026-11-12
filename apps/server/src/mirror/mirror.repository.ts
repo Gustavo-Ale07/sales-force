@@ -66,12 +66,9 @@ export interface CustomerStateRow {
   readonly live: boolean;
 }
 
-export type CustomerStatusFilter = 'active' | 'inactive' | 'blocked';
-
 export interface CustomerListFilter {
   readonly scope: CustomerScope;
   readonly search?: string | undefined;
-  readonly status?: CustomerStatusFilter | undefined;
   readonly sellerCode?: number | undefined;
   readonly hasPriceTable?: boolean | undefined;
   readonly sort: 'name' | '-name' | 'code' | '-code';
@@ -119,8 +116,6 @@ export interface ProductFilter {
 
 export interface CustomerCounts {
   readonly total: number;
-  readonly active: number;
-  readonly blocked: number;
   readonly withoutPriceTable: number;
 }
 
@@ -181,8 +176,13 @@ export class MirrorRepository {
       );
   }
 
+  /**
+   * Customers the Force shows (owner ruling 2026-11-12, D-AQ): `ATIVO = 'S'` and `BLOQUEAR <> 'S'`. One rule for web and
+   * mobile; a customer outside it disappears from every list, ficha and from the device cache at its next pull. Orders
+   * and drafts already created read names through `customerNames`/`customerStates`, which do not use this rule.
+   */
   private liveCustomer(): SQL[] {
-    return [isNull(erpCustomer.deletedAt), eq(erpCustomer.isCustomer, true)];
+    return [isNull(erpCustomer.deletedAt), eq(erpCustomer.isCustomer, true), eq(erpCustomer.active, true), not(blockedSql)];
   }
 
   async listCustomers(
@@ -200,16 +200,10 @@ export class MirrorRepository {
             digits === null ? undefined : eqInt(erpCustomer.code, Number(digits)),
           );
 
-    let statusCondition: SQL | undefined;
-    if (filter.status === 'active') statusCondition = and(eq(erpCustomer.active, true), not(blockedSql));
-    else if (filter.status === 'inactive') statusCondition = eq(erpCustomer.active, false);
-    else if (filter.status === 'blocked') statusCondition = blockedSql;
-
     const where = and(
       ...this.liveCustomer(),
       scopeCondition(filter.scope),
       searchCondition,
-      statusCondition,
       filter.sellerCode === undefined ? undefined : eqInt(erpCustomer.sellerCode, filter.sellerCode),
       filter.hasPriceTable === undefined
         ? undefined
@@ -242,10 +236,11 @@ export class MirrorRepository {
    * One customer, only when it lies inside the scope (the scope is part of the WHERE, so an
    * out-of-scope customer is indistinguishable from a missing one).
    */
-  async findCustomer(scope: CustomerScope, code: number): Promise<CustomerRow | null> {
+  async findCustomer(scope: CustomerScope, code: number, options: { includeHidden?: boolean } = {}): Promise<CustomerRow | null> {
     if (!fitsPgInt(code)) return null;
+    const base = options.includeHidden === true ? [isNull(erpCustomer.deletedAt), eq(erpCustomer.isCustomer, true)] : this.liveCustomer();
     const [row] = await this.customerSelect()
-      .where(and(...this.liveCustomer(), eq(erpCustomer.code, code), scopeCondition(scope)))
+      .where(and(...base, eq(erpCustomer.code, code), scopeCondition(scope)))
       .limit(1);
     return row ?? null;
   }
@@ -332,16 +327,12 @@ export class MirrorRepository {
     const [row] = await this.db
       .select({
         total: sql<number>`count(*)::int`,
-        active: sql<number>`(count(*) filter (where ${erpCustomer.active} and not ${blockedSql}))::int`,
-        blocked: sql<number>`(count(*) filter (where ${blockedSql}))::int`,
         withoutPriceTable: sql<number>`(count(*) filter (where ${erpCustomer.priceTableCode} is null))::int`,
       })
       .from(erpCustomer)
       .where(and(...this.liveCustomer(), scopeCondition(scope)));
     return {
       total: row?.total ?? 0,
-      active: row?.active ?? 0,
-      blocked: row?.blocked ?? 0,
       withoutPriceTable: row?.withoutPriceTable ?? 0,
     };
   }

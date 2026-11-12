@@ -196,7 +196,7 @@ export class OrdersService {
     const existing = await this.orders.findByClientRequestId(body.clientRequestId);
     if (existing !== null) return { order: await this.replayOf(existing, user, fingerprint, context.scope), replayed: true };
 
-    const customer = await this.customers.requireVisible(context.scope, body.customerCode);
+    const customer = await this.customers.requireForOrder(context.scope, body.customerCode);
     assertCustomerEligible(customer);
     const topCode = this.resolveTop(context.configuration, body.topCode);
     const carrierCode = (await this.resolveCarrier(body.carrierCode)) ?? null;
@@ -260,7 +260,7 @@ export class OrdersService {
   /** Negotiation type most used in the customer's Sales Force orders. Same scope rule as every customer read (404 outside it). */
   async orderHabits(user: CurrentUser, customerCode: number): Promise<CustomerOrderHabits> {
     const { scope } = await this.policy.accessContext(user);
-    const customer = await this.customers.requireVisible(scope, customerCode);
+    const customer = await this.customers.requireForOrder(scope, customerCode);
     const habits = await this.orders.orderHabitsOf(scope, customer.code);
     return {
       orderCount: habits.orderCount,
@@ -284,7 +284,7 @@ export class OrdersService {
   async repeatLast(user: CurrentUser, customerCode: number, body: RepeatLastOrderRequest): Promise<RepeatLastOrderResult> {
     assertDatasetMatches(this.dataset, body.expectedDataset);
     const context = await this.policy.accessContext(user);
-    const customer = await this.customers.requireVisible(context.scope, customerCode);
+    const customer = await this.customers.requireForOrder(context.scope, customerCode);
     assertCustomerEligible(customer);
 
     // Idempotency comes first, before any resolution of "the latest order" or reclassification of its
@@ -395,7 +395,7 @@ export class OrdersService {
     if (targetTop === null) {
       throw new AppError('conflict', { message: 'A instalação não tem um tipo de operação de pedido configurado.', details: { reason: 'order_top_not_configured' } });
     }
-    const customer = await this.customers.requireVisible(context.scope, source.customerCode);
+    const customer = await this.customers.requireForOrder(context.scope, source.customerCode);
     assertCustomerEligible(customer);
 
     const sourceItems = await this.orders.itemsOf(source.id);
@@ -492,7 +492,7 @@ export class OrdersService {
     this.assertEditable(current, body.expectedVersion);
     assertOriginMatchesConfiguration(current.datasetOrigin, context.configuration.source.kind);
 
-    const customer = await this.customers.requireVisible(context.scope, body.customerCode);
+    const customer = await this.customers.requireForOrder(context.scope, body.customerCode);
     assertCustomerEligible(customer);
     // No TOP in the request keeps the order's current one; a named TOP must be eligible.
     const requestedTop = body.topCode === undefined ? undefined : this.resolveTop(context.configuration, body.topCode);

@@ -21,11 +21,9 @@ export interface CustomerLike {
 
 /**
  * Customer list filters that run inside SQLite over the cached JSON (no schema change). Same meaning as the API's
- * `status` / `sellerCode` / `hasPriceTable` query: `active` = active and not blocked; `inactive` = not active;
- * `blocked` = blocked flag set.
+ * `sellerCode` / `hasPriceTable` query. There is no status filter: the server sends only active, unblocked customers (D-AQ).
  */
 export interface CustomerCacheFilters {
-  readonly status?: "active" | "inactive" | "blocked";
   readonly sellerCode?: number;
   readonly hasPriceTable?: boolean;
 }
@@ -165,13 +163,8 @@ function searchClause(search: string): { where: string; params: (string | number
   return { where: whereOf(conditions), params };
 }
 
-const BLOCKED_SQL = "COALESCE(json_extract(data, '$.blocked'), 0) = 1";
-
 function customerClause(search: string, filters: CustomerCacheFilters | undefined): { where: string; params: (string | number)[] } {
   const { conditions, params } = searchConditions(search);
-  if (filters?.status === "active") conditions.push(`COALESCE(json_extract(data, '$.active'), 1) = 1 AND NOT (${BLOCKED_SQL})`);
-  else if (filters?.status === "inactive") conditions.push("COALESCE(json_extract(data, '$.active'), 1) = 0");
-  else if (filters?.status === "blocked") conditions.push(BLOCKED_SQL);
   if (filters?.sellerCode !== undefined) {
     conditions.push("json_extract(data, '$.sellerCode') = ?");
     params.push(filters.sellerCode);
@@ -308,6 +301,8 @@ export const META_KEYS = {
   account: "session.last_account",
   lastAuthAt: "session.last_online_at",
 } as const;
+
+const BLOCKED_SQL = "COALESCE(json_extract(data, '$.blocked'), 0) = 1";
 
 /**
  * `true` when the cached customer is inactive or blocked. A customer that is not in the cache is NOT ineligible (unknown:

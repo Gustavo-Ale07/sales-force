@@ -741,14 +741,6 @@
             }
           },
           {
-            "name": "status",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/CustomerStatusFilter"
-            }
-          },
-          {
             "name": "sellerCode",
             "in": "query",
             "required": false,
@@ -4719,14 +4711,6 @@
           "-name",
           "code",
           "-code"
-        ]
-      },
-      "CustomerStatusFilter": {
-        "type": "string",
-        "enum": [
-          "active",
-          "inactive",
-          "blocked"
         ]
       },
       "CustomerWithoutPriceTablePolicy": {

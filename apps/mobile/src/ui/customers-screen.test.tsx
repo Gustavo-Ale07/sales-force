@@ -56,8 +56,8 @@ describe("CustomersScreen", () => {
       return {
         list: async (request) => {
           requests.push(request);
-          const status = request.filters?.status;
-          const rows = [customer(1, { name: "Açúcar" }), customer(2, { name: "Bar", blocked: true })].filter((c) => (status === "blocked" ? c.blocked : true));
+          const sellerCode = request.filters?.sellerCode;
+          const rows = [customer(1, { name: "Açúcar", sellerCode: 7 }), customer(2, { name: "Bar", sellerCode: 9 })].filter((c) => (sellerCode === undefined ? true : c.sellerCode === sellerCode));
           return pageOf(rows, rows.length);
         },
         sellers: async () => sellers,
@@ -74,26 +74,35 @@ describe("CustomersScreen", () => {
       await render(<CustomersScreen customers={repo(requests)} onUnauthenticated={noop} />);
       await screen.findByText("Açúcar");
       await fireEvent.press(screen.getByRole("button", { name: "Filtros" }));
-      await fireEvent.press(screen.getByRole("radio", { name: "Bloqueados" }));
+      await fireEvent.press(screen.getByRole("radio", { name: "Bia" }));
       await fireEvent.press(screen.getByRole("button", { name: "Aplicar filtros" }));
       expect(await screen.findByText("1 resultado")).toBeTruthy();
       expect(screen.queryByText("Açúcar")).toBeNull();
-      expect(screen.getByRole("button", { name: "Remover filtro Bloqueados" })).toBeTruthy();
-      expect(last(requests).filters).toEqual({ status: "blocked" });
+      expect(screen.getByRole("button", { name: "Remover filtro Vendedor: Bia" })).toBeTruthy();
+      expect(last(requests).filters).toEqual({ sellerCode: 9 });
     });
 
-    it("combines status and seller, removes one chip, then clears everything", async () => {
+    it("offers no status filter: customers are always active and unblocked", async () => {
+      await render(<CustomersScreen customers={repo()} onUnauthenticated={noop} />);
+      await screen.findByText("Açúcar");
+      await fireEvent.press(screen.getByRole("button", { name: "Filtros" }));
+      expect(screen.queryByText("Situação")).toBeNull();
+      expect(screen.queryByRole("radio", { name: "Bloqueados" })).toBeNull();
+      expect(screen.queryByRole("radio", { name: "Inativos" })).toBeNull();
+    });
+
+    it("combines seller and price table, removes one chip, then clears everything", async () => {
       const requests: CustomerPageRequest[] = [];
       await render(<CustomersScreen customers={repo(requests)} onUnauthenticated={noop} />);
       await screen.findByText("Açúcar");
       await fireEvent.press(screen.getByRole("button", { name: "Filtros" }));
-      await fireEvent.press(screen.getByRole("radio", { name: "Ativos" }));
+      await fireEvent.press(screen.getByRole("radio", { name: "Sem tabela" }));
       await fireEvent.press(screen.getByRole("radio", { name: "Ana" }));
       await fireEvent.press(screen.getByRole("button", { name: "Aplicar filtros" }));
       await screen.findByRole("button", { name: "Remover filtro Vendedor: Ana" });
-      expect(last(requests).filters).toEqual({ status: "active", sellerCode: 7 });
+      expect(last(requests).filters).toEqual({ hasPriceTable: false, sellerCode: 7 });
 
-      await fireEvent.press(screen.getByRole("button", { name: "Remover filtro Ativos" }));
+      await fireEvent.press(screen.getByRole("button", { name: "Remover filtro Sem tabela de preço" }));
       await screen.findByRole("button", { name: "Remover filtro Vendedor: Ana" });
       expect(last(requests).filters).toEqual({ sellerCode: 7 });
 
@@ -103,31 +112,32 @@ describe("CustomersScreen", () => {
       expect(await screen.findByText("2 clientes")).toBeTruthy();
     });
 
+
     it("hides the seller filter and the index when the repository cannot provide them", async () => {
       await render(<CustomersScreen customers={{ list: async () => pageOf([customer(1, { name: "Açúcar" })]) }} onUnauthenticated={noop} />);
       await screen.findByText("Açúcar");
       expect(screen.queryByRole("button", { name: "Índice alfabético" })).toBeNull();
       await fireEvent.press(screen.getByRole("button", { name: "Filtros" }));
       expect(screen.queryByText("Vendedor")).toBeNull();
-      expect(screen.getByText("Situação")).toBeTruthy();
+      expect(screen.getByText("Tabela de preço")).toBeTruthy();
     });
 
     it("says so when the filters match nobody", async () => {
-      const customers: CustomerRepository = { list: async (request) => pageOf(request.filters?.status === "inactive" ? [] : [customer(1, { name: "Açúcar" })]) };
+      const customers: CustomerRepository = { list: async (request) => pageOf(request.filters?.hasPriceTable === false ? [] : [customer(1, { name: "Açúcar" })]) };
       await render(<CustomersScreen customers={customers} onUnauthenticated={noop} />);
       await screen.findByText("Açúcar");
       await fireEvent.press(screen.getByRole("button", { name: "Filtros" }));
-      await fireEvent.press(screen.getByRole("radio", { name: "Inativos" }));
+      await fireEvent.press(screen.getByRole("radio", { name: "Sem tabela" }));
       await fireEvent.press(screen.getByRole("button", { name: "Aplicar filtros" }));
       expect(await screen.findByText("Nenhum cliente com estes filtros.")).toBeTruthy();
     });
 
     it("blames the search and the filters together when both match nobody", async () => {
-      const customers: CustomerRepository = { list: async (request) => pageOf(request.filters?.status === "inactive" || request.search === "zzz" ? [] : [customer(1, { name: "Açúcar" })]) };
+      const customers: CustomerRepository = { list: async (request) => pageOf(request.filters?.hasPriceTable === false || request.search === "zzz" ? [] : [customer(1, { name: "Açúcar" })]) };
       await render(<CustomersScreen customers={customers} onUnauthenticated={noop} />);
       await screen.findByText("Açúcar");
       await fireEvent.press(screen.getByRole("button", { name: "Filtros" }));
-      await fireEvent.press(screen.getByRole("radio", { name: "Inativos" }));
+      await fireEvent.press(screen.getByRole("radio", { name: "Sem tabela" }));
       await fireEvent.press(screen.getByRole("button", { name: "Aplicar filtros" }));
       await fireEvent.changeText(screen.getByPlaceholderText(/Buscar/), "zzz");
       expect(await screen.findByText("Nenhum cliente encontrado para “zzz” com estes filtros.")).toBeTruthy();

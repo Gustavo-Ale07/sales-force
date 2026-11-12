@@ -46,8 +46,6 @@ export class DashboardService {
         demo: false,
         metrics: [
           { key: 'customers_total', label: 'Clientes na carteira', value: count(customers.total), description: null },
-          { key: 'customers_active', label: 'Clientes ativos e liberados', value: count(customers.active), description: null },
-          { key: 'customers_blocked', label: 'Clientes bloqueados', value: count(customers.blocked), description: null },
           {
             key: 'customers_without_price_table',
             label: 'Clientes sem tabela de preço',

@@ -35,15 +35,9 @@ import { MetricValueText, METRIC_VISUALS } from "../components/metric-value";
 import { QueryError } from "../components/query-error";
 import { customersQueryOptions, dashboardQueryOptions, sellersQueryOptions, type CustomersParams } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
-import { CUSTOMER_STATUSES, type CustomersSearch } from "../lib/route-search";
+import { type CustomersSearch } from "../lib/route-search";
 import { asInt, asOneOf, compact } from "../lib/search-params";
 import { useSearchBox } from "../lib/use-search-box";
-
-const statusLabels: Record<ApiSchema<"CustomerStatusFilter">, string> = {
-  active: "Ativos",
-  inactive: "Inativos",
-  blocked: "Bloqueados",
-};
 
 export interface CustomersPageProps {
   params: CustomersSearch;
@@ -78,7 +72,7 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
   const withSellers = sellerOptions.length > 1;
   const sellerName = sellerOptions.find((s) => s.code === params.sellerCode)?.name;
   const hasFilters =
-    params.search !== undefined || params.status !== undefined || params.sellerCode !== undefined || params.hasPriceTable !== undefined;
+    params.search !== undefined || params.sellerCode !== undefined || params.hasPriceTable !== undefined;
   const clearAll = () => onSearchChange(compact({ sort: params.sort, pageSize: params.pageSize }));
 
   return (
@@ -87,7 +81,7 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
 
       {portfolio && portfolio.metrics.length > 0 ? (
         <section aria-label={portfolio.label} className="max-sm:hidden">
-          <StatGrid className="sm:grid-cols-4">
+          <StatGrid className="sm:grid-cols-2">
               {portfolio.metrics.map((metric) => {
                 const visual = METRIC_VISUALS[metric.key];
                 return (
@@ -108,9 +102,9 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
       <FilterBar
         aria-label="Filtros da carteira"
         grid
-        activeCount={[params.search, params.status, params.sellerCode, params.hasPriceTable].filter((value) => value !== undefined).length}
+        activeCount={[params.search, params.sellerCode, params.hasPriceTable].filter((value) => value !== undefined).length}
       >
-        <FilterField label="Busca" keepVisible className={withSellers ? "lg:col-span-4" : "sm:col-span-2 lg:col-span-6"}>
+        <FilterField label="Busca" keepVisible className={withSellers ? "lg:col-span-6" : "sm:col-span-2 lg:col-span-9"}>
           <SearchInput
             size="md"
             value={searchText}
@@ -118,16 +112,6 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
             placeholder="Código, nome ou documento"
             aria-label="Buscar cliente por código, nome ou documento"
           />
-        </FilterField>
-        <FilterField label="Situação" className={withSellers ? "lg:col-span-2" : "lg:col-span-3"}>
-          <Select size="md" value={params.status ?? ""} onChange={(e) => change({ status: asOneOf(e.target.value, CUSTOMER_STATUSES) })}>
-            <option value="">Todas</option>
-            {CUSTOMER_STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {statusLabels[status]}
-              </option>
-            ))}
-          </Select>
         </FilterField>
         {withSellers ? (
           <FilterField label="Vendedor" className="lg:col-span-3">
@@ -157,7 +141,6 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
       {hasFilters ? (
         <div className="flex flex-wrap items-center gap-1.5" aria-label="Filtros ativos">
           {params.search ? <FilterChip onRemove={() => change({ search: undefined })}>{`Busca: ${params.search}`}</FilterChip> : null}
-          {params.status ? <FilterChip onRemove={() => change({ status: undefined })}>{statusLabels[params.status]}</FilterChip> : null}
           {params.sellerCode !== undefined ? (
             <FilterChip onRemove={() => change({ sellerCode: undefined })}>{`Vendedor: ${sellerName ?? params.sellerCode}`}</FilterChip>
           ) : null}

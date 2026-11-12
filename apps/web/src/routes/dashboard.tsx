@@ -27,7 +27,7 @@ import {
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, BadgeCheck, Ban, CheckCircle2, ChevronRight, FilePen, Package, Plus, Tag, UserCheck, Users, Wallet } from "lucide-react";
+import { AlertTriangle, BadgeCheck, CheckCircle2, ChevronRight, FilePen, Package, Plus, Tag, Users, Wallet } from "lucide-react";
 import type { ReactNode } from "react";
 import { findMetric, metricCount, MetricValueOrUnavailable, MetricValueText } from "../components/metric-value";
 import { OrderStatusBadge } from "../components/order-status-badges";
@@ -189,8 +189,6 @@ export function DashboardPage() {
 
   const groups = query.data?.groups ?? [];
   const customersTotal = findMetric(groups, "portfolio", "customers_total");
-  const customersActive = findMetric(groups, "portfolio", "customers_active");
-  const customersBlocked = findMetric(groups, "portfolio", "customers_blocked");
   const customersWithoutPriceTable = findMetric(groups, "portfolio", "customers_without_price_table");
   const productsVisible = findMetric(groups, "catalog", "products_visible");
   const productsSellable = findMetric(groups, "catalog", "products_sellable");
@@ -201,14 +199,6 @@ export function DashboardPage() {
   const positivationRate = findMetric(groups, "positivation", "positivation_rate");
 
   const attentionItems: AttentionItemDef[] = [
-    {
-      key: "customers_blocked",
-      count: metricCount(customersBlocked),
-      icon: <Ban size={15} aria-hidden="true" />,
-      title: (n) => `${n === 1 ? "1 cliente bloqueado" : `${n} clientes bloqueados`}`,
-      to: "/clientes",
-      search: { status: "blocked" },
-    },
     {
       key: "customers_without_price_table",
       count: metricCount(customersWithoutPriceTable),
@@ -271,9 +261,6 @@ export function DashboardPage() {
           <StatGrid variant="tiles" className="sm:grid-cols-3">
             <KpiLink to="/clientes">
               <StatTile label="Clientes" icon={<Users size={16} aria-hidden="true" />} tone="accent" value={<MetricValueOrUnavailable metric={customersTotal} />} />
-            </KpiLink>
-            <KpiLink to="/clientes" search={{ status: "active" }}>
-              <StatTile label="Ativos" icon={<UserCheck size={16} aria-hidden="true" />} tone="success" value={<MetricValueOrUnavailable metric={customersActive} />} />
             </KpiLink>
             <KpiLink to="/produtos">
               <StatTile label="Produtos" icon={<Package size={16} aria-hidden="true" />} tone="info" value={<MetricValueOrUnavailable metric={productsVisible} />} />

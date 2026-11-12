@@ -998,8 +998,6 @@ export interface components {
         /** @enum {string} */
         CustomerSort: "name" | "-name" | "code" | "-code";
         /** @enum {string} */
-        CustomerStatusFilter: "active" | "inactive" | "blocked";
-        /** @enum {string} */
         CustomerWithoutPriceTablePolicy: "no_resolved_table" | "use_fallback_table";
         CustomersResponse: {
             items: components["schemas"]["CustomerListItem"][];
@@ -2282,7 +2280,6 @@ export interface operations {
         parameters: {
             query?: {
                 search?: string;
-                status?: components["schemas"]["CustomerStatusFilter"];
                 sellerCode?: number;
                 hasPriceTable?: "true" | "false";
                 sort?: components["schemas"]["CustomerSort"];

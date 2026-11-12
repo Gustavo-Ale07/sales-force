@@ -305,8 +305,6 @@ export function dashboard(overrides: Partial<ApiSchema<"DashboardResponse">> = {
         demo: false,
         metrics: [
           { key: "customers_total", label: "Clientes na carteira", value: metricCount(1250), description: null },
-          { key: "customers_active", label: "Clientes ativos e liberados", value: metricCount(1180), description: null },
-          { key: "customers_blocked", label: "Clientes bloqueados", value: metricCount(12), description: null },
           { key: "customers_without_price_table", label: "Clientes sem tabela de preço", value: metricCount(34), description: null },
         ],
       },

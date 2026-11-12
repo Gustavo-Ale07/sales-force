@@ -1,6 +1,6 @@
 import type { ApiSchema } from "@salesforce/contracts/client";
 import { Money, formatPercent, type Tone } from "@salesforce/ui";
-import { Ban, AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import type { ReactNode } from "react";
 import { formatCount } from "../lib/labels";
 
@@ -26,7 +26,6 @@ export function metricCount(metric: Metric | undefined): number | null {
  * the two screens from drifting into different treatments of the same data.
  */
 export const METRIC_VISUALS: Partial<Record<string, { tone: Tone; icon: ReactNode }>> = {
-  customers_blocked: { tone: "danger", icon: <Ban size={13} aria-hidden="true" /> },
   products_sellable_without_price: { tone: "warning", icon: <AlertTriangle size={13} aria-hidden="true" /> },
 };
 

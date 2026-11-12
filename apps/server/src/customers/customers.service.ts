@@ -48,7 +48,6 @@ export class CustomersService {
       {
         scope,
         search: query.search,
-        status: query.status,
         sellerCode: query.sellerCode,
         hasPriceTable: query.hasPriceTable,
         sort: query.sort,
@@ -131,6 +130,13 @@ export class CustomersService {
   /** Customer inside the scope, or 404. Shared with the catalog and orders modules. */
   async requireVisible(scope: CustomerScope, code: number): Promise<CustomerRow> {
     const row = await this.mirror.findCustomer(scope, code);
+    if (row === null) throw new AppError('not_found');
+    return row;
+  }
+
+  /** Like `requireVisible`, but also returns an inactive/blocked customer so order writes refuse it with its reason (409), not 404. */
+  async requireForOrder(scope: CustomerScope, code: number): Promise<CustomerRow> {
+    const row = await this.mirror.findCustomer(scope, code, { includeHidden: true });
     if (row === null) throw new AppError('not_found');
     return row;
   }

@@ -13,14 +13,8 @@ import {
 
 export const CustomerSortSchema = named('CustomerSort', z.enum(['name', '-name', 'code', '-code']));
 
-export const CustomerStatusFilterSchema = named(
-  'CustomerStatusFilter',
-  z.enum(['active', 'inactive', 'blocked']),
-);
-
 export const CustomersQuerySchema = z.object({
   search: querySearch().optional(),
-  status: CustomerStatusFilterSchema.optional(),
   sellerCode: queryInt(0).optional(),
   hasPriceTable: queryBoolean().optional(),
   sort: CustomerSortSchema.default('name'),

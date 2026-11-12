@@ -16,7 +16,6 @@ export function createRemoteCustomerRepository(api: ApiClient): CustomerReposito
               page,
               pageSize,
               sort: "name",
-              status: filters?.status,
               sellerCode: filters?.sellerCode,
               hasPriceTable: filters?.hasPriceTable === undefined ? undefined : filters.hasPriceTable ? "true" : "false",
             },

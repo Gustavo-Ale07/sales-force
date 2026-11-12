@@ -37,9 +37,8 @@ export interface Page<T> {
 
 export type CustomerDetail = ApiSchema<"CustomerDetail">;
 
-/** Same meaning as the API query: active = active and not blocked; inactive = not active; blocked = blocked flag. */
+/** Same meaning as the API query. There is no status filter: the Force lists only active, unblocked customers (D-AQ). */
 export interface CustomerFilters {
-  readonly status?: "active" | "inactive" | "blocked";
   readonly sellerCode?: number;
   readonly hasPriceTable?: boolean;
 }

@@ -7,7 +7,6 @@ import { asDate, asInt, asIntList, asOneOf, asPageSize, asString, compact } from
  */
 export interface CustomersSearch {
   search?: string;
-  status?: ApiSchema<"CustomerStatusFilter">;
   sellerCode?: number;
   hasPriceTable?: "true" | "false";
   sort?: ApiSchema<"CustomerSort">;
@@ -15,7 +14,6 @@ export interface CustomersSearch {
   pageSize?: number;
 }
 
-export const CUSTOMER_STATUSES = ["active", "inactive", "blocked"] as const;
 export const CUSTOMER_SORTS = ["name", "-name", "code", "-code"] as const;
 
 export function parseCustomersSearch(raw: Record<string, unknown>): CustomersSearch {
@@ -23,7 +21,6 @@ export function parseCustomersSearch(raw: Record<string, unknown>): CustomersSea
   const pageSize = asPageSize(raw.pageSize);
   return compact({
     search: asString(raw.search),
-    status: asOneOf(raw.status, CUSTOMER_STATUSES),
     sellerCode: asInt(raw.sellerCode, 0),
     hasPriceTable: asOneOf(raw.hasPriceTable === true ? "true" : raw.hasPriceTable === false ? "false" : raw.hasPriceTable, ["true", "false"] as const),
     sort: asOneOf(raw.sort, CUSTOMER_SORTS),
