@@ -128,10 +128,22 @@ function CartLine({ line, preview, onQuantityChange, onDiscountChange, onRemove,
       </View>
 
       <View style={styles.amounts}>
-        {hasDiscount ? <Text style={styles.discountAmount}>{`− ${money(amounts.discountAmount)}`}</Text> : <View />}
-        <Text style={styles.lineTotal} accessibilityLabel={`Subtotal ${money(amounts.lineTotal)}`}>
-          {`Subtotal ${money(amounts.lineTotal)}`}
-        </Text>
+        <View style={styles.amountRow}>
+          <Text style={styles.amountLabel} numberOfLines={1}>
+            {noPrice ? "Tabela" : `Tabela · ${line.quantityText.trim()} ${line.unit} × ${describeListPrice(line.price)}`}
+          </Text>
+          <Text style={styles.amountValue}>{money(amounts.subtotal)}</Text>
+        </View>
+        {hasDiscount && (
+          <View style={styles.amountRow}>
+            <Text style={styles.discountLabel}>{`Desconto ${line.discountText.trim().replace(/\s*%$/, "")}%`}</Text>
+            <Text style={styles.discountAmount}>{`− ${money(amounts.discountAmount)}`}</Text>
+          </View>
+        )}
+        <View style={styles.amountRow}>
+          <Text style={styles.amountLabelStrong}>{hasDiscount ? "Subtotal com desconto" : "Subtotal"}</Text>
+          <Text style={styles.lineTotal}>{money(amounts.lineTotal)}</Text>
+        </View>
       </View>
     </View>
   );
@@ -300,7 +312,12 @@ const styles = StyleSheet.create({
   },
   inputDisabled: { color: colors.textMuted, backgroundColor: colors.border },
   error: { color: colors.red, fontSize: 11 },
-  amounts: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: spacing.md },
+  amounts: { gap: 2 },
+  amountRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: spacing.md },
+  amountLabel: { flex: 1, fontSize: 12, color: colors.textMuted },
+  amountValue: { fontSize: 13, color: colors.text },
+  amountLabelStrong: { flex: 1, fontSize: 13, fontWeight: "700", color: colors.text },
+  discountLabel: { flex: 1, fontSize: 12, color: colors.red },
   discountAmount: { fontSize: 13, color: colors.red, fontWeight: "700" },
   lineTotal: { fontSize: 16, fontWeight: "800", color: colors.navy },
   summary: {

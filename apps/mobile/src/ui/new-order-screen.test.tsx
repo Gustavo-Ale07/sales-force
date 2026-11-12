@@ -82,12 +82,13 @@ describe("NewOrderScreen", () => {
     expect(screen.getByText("Copo 200 ml")).toBeTruthy();
     // The line subtotal never shows for a zero discount (see cart-view.tsx); the line total, the order
     // summary's "Total de itens" and its "Total estimado" all coincide at "R$ 10,00" with one undiscounted line.
-    expect(screen.getAllByText("R$ 10,00")).toHaveLength(3);
+    expect(screen.getAllByText("R$ 10,00")).toHaveLength(5);
     // Card: unit price with R$ and unit, "%" beside the discount field, stepper, subtotal in R$.
     expect(screen.getByText("R$ 10,00 por UN")).toBeTruthy();
     expect(screen.getAllByText("%").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByRole("button", { name: "Aumentar quantidade de Copo 200 ml" })).toBeTruthy();
-    expect(screen.getByText("Subtotal R$ 10,00")).toBeTruthy();
+    expect(screen.getByText("Subtotal")).toBeTruthy();
+    expect(screen.getByText("Tabela · 1 UN × R$ 10,00")).toBeTruthy();
     // At one unit the "−" is inert (removing is the explicit "Remover").
     expect(screen.getByRole("button", { name: "Diminuir quantidade de Copo 200 ml" }).props.accessibilityState?.disabled).toBe(true);
   });
@@ -124,7 +125,7 @@ describe("NewOrderScreen", () => {
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
     expect(screen.getByDisplayValue("2")).toBeTruthy();
     // The line total (now "Subtotal R$ 20,00", so not an exact match), "Total de itens" and "Total estimado" all coincide at "R$ 20,00" with one undiscounted line.
-    expect(screen.getAllByText("R$ 20,00")).toHaveLength(3);
+    expect(screen.getAllByText("R$ 20,00")).toHaveLength(5);
   });
 
   it("removes a line from the cart", async () => {
@@ -142,11 +143,13 @@ describe("NewOrderScreen", () => {
     fireEvent.changeText(await screen.findByLabelText("Desconto de Copo 200 ml"), "10");
     // The discounted line total and the order summary's "Total estimado" coincide at "R$ 9,00" (see test above
     // for the equivalent zero-discount case, where all three totals coincide instead).
-    await waitFor(() => expect(screen.getAllByText("R$ 9,00")).toHaveLength(2));
+    await waitFor(() => expect(screen.getAllByText("R$ 9,00")).toHaveLength(3));
     // The card shows the deduction in reais and the discounted subtotal; no deduction line at zero discount.
     // Once on the card, once in the totals block ("Descontos").
     expect(screen.getAllByText("− R$ 1,00")).toHaveLength(2);
-    expect(screen.getByText("Subtotal R$ 9,00")).toBeTruthy();
+    expect(screen.getByText("Subtotal com desconto")).toBeTruthy();
+    expect(screen.getByText("Tabela · 1 UN × R$ 10,00")).toBeTruthy();
+    expect(screen.getByText("Desconto 10%")).toBeTruthy();
   });
 
   it("saves the draft sending only product, quantity and discount, never a price", async () => {
@@ -163,7 +166,7 @@ describe("NewOrderScreen", () => {
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
     fireEvent.changeText(await screen.findByLabelText("Desconto de Copo 200 ml"), "10");
-    await waitFor(() => expect(screen.getAllByText("R$ 9,00")).toHaveLength(2));
+    await waitFor(() => expect(screen.getAllByText("R$ 9,00")).toHaveLength(3));
     await saveFromSummary("Salvar rascunho");
 
     expect(screen.getByText("Rascunho salvo")).toBeTruthy();
@@ -209,7 +212,7 @@ describe("NewOrderScreen", () => {
     await pressAndSettle(screen.getByRole("button", { name: "Editar produtos" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
     fireEvent.changeText(await screen.findByLabelText("Desconto de Copo 200 ml"), "10");
-    await waitFor(() => expect(screen.getAllByText("R$ 9,00")).toHaveLength(2));
+    await waitFor(() => expect(screen.getAllByText("R$ 9,00")).toHaveLength(3));
     shouldFail = false;
     await saveFromSummary("Salvar rascunho");
     expect(capturedIds).toHaveLength(3);
