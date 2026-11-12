@@ -42,6 +42,10 @@ export function DiscountSheet({ visible, title, description, lines, match, onApp
   const withoutPrice = matched.length - priced;
   const parsed = parseDiscountInput(text);
   const problem = touched && !parsed.ok ? discountProblemMessages[parsed.problem] : null;
+  // The apply button is disabled until the percentage is valid, and the line under it says exactly why.
+  const empty = text.trim() === "";
+  const canApply = parsed.ok && !empty;
+  const disabledReason = empty ? "Digite o percentual de desconto para aplicar. Para tirar o desconto, use Remover." : null;
 
   function submit() {
     setTouched(true);
@@ -61,19 +65,23 @@ export function DiscountSheet({ visible, title, description, lines, match, onApp
         <View style={styles.sheet} accessibilityRole="none">
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.description}>{description}</Text>
-          <TextInput
-            style={[styles.input, problem !== null && styles.inputInvalid]}
-            value={text}
-            onChangeText={(value) => {
-              setText(value);
-              setTouched(true);
-            }}
-            keyboardType="decimal-pad"
-            placeholder="0"
-            autoFocus
-            accessibilityLabel={`${title} (%)`}
-          />
+          <View style={styles.inputRow}>
+            <TextInput
+              style={[styles.input, problem !== null && styles.inputInvalid]}
+              value={text}
+              onChangeText={(value) => {
+                setText(value);
+                setTouched(true);
+              }}
+              keyboardType="decimal-pad"
+              placeholder="0"
+              autoFocus
+              accessibilityLabel={`${title} (%)`}
+            />
+            <Text style={styles.percentSign}>%</Text>
+          </View>
           {problem !== null && <Text style={styles.error}>{problem}</Text>}
+          {disabledReason !== null && <Text style={styles.info}>{disabledReason}</Text>}
           <Text style={styles.info} accessibilityLiveRegion="polite">
             {`${priced} ${priced === 1 ? "item recebe" : "itens recebem"} o desconto.`}
             {withoutPrice > 0 ? ` ${withoutPrice} ${withoutPrice === 1 ? "item sem preço fica" : "itens sem preço ficam"} de fora.` : ""}
@@ -85,7 +93,14 @@ export function DiscountSheet({ visible, title, description, lines, match, onApp
             <Pressable style={styles.secondaryButton} onPress={remove} accessibilityRole="button" accessibilityLabel="Remover descontos">
               <Text style={styles.secondaryButtonText}>Remover</Text>
             </Pressable>
-            <Pressable style={styles.primaryButton} onPress={submit} accessibilityRole="button" accessibilityLabel="Aplicar desconto">
+            <Pressable
+              style={[styles.primaryButton, !canApply && styles.primaryButtonDisabled]}
+              onPress={submit}
+              disabled={!canApply}
+              accessibilityRole="button"
+              accessibilityLabel="Aplicar desconto"
+              accessibilityState={{ disabled: !canApply }}
+            >
               <Text style={styles.primaryButtonText}>Aplicar</Text>
             </Pressable>
           </View>
@@ -106,7 +121,12 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 17, fontWeight: "800", color: colors.text },
   description: { fontSize: 13, color: colors.textMuted },
+  inputRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  percentSign: { fontSize: 20, fontWeight: "800", color: colors.textMuted },
+  primaryButtonDisabled: { opacity: 0.5 },
   input: {
+    flex: 1,
+    minHeight: 44,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 8,

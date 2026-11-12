@@ -1,6 +1,8 @@
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import {
+  decrementLineQuantity,
   discountProblemMessages,
+  incrementLineQuantity,
   lineAmountsOf,
   quantityProblemMessages,
   type DraftPreview,
@@ -32,6 +34,10 @@ interface CartLineProps {
 function CartLine({ line, preview, onQuantityChange, onDiscountChange, onRemove, selectionMode, selected, onToggleSelect, onLongPress }: CartLineProps) {
   const amounts = lineAmountsOf(preview);
   const noPrice = line.price.state === "none";
+  const decrement = decrementLineQuantity(line);
+  // At the minimum step the "−" is inert: taking an item out of the cart is the explicit "Remover" button.
+  const canDecrement = decrement?.kind === "set";
+  const hasDiscount = amounts.discountAmount !== null && amounts.discountAmount !== "0" && amounts.discountAmount !== "0.00";
   return (
     <View style={[styles.line, selected && styles.lineSelected]} accessible>
       <Pressable
@@ -46,11 +52,15 @@ function CartLine({ line, preview, onQuantityChange, onDiscountChange, onRemove,
           <View style={[styles.checkbox, selected && styles.checkboxChecked]}>{selected && <Text style={styles.checkboxMark}>✓</Text>}</View>
         )}
         <View style={styles.lineHeaderText}>
-          <Text style={styles.name}>{line.description}</Text>
-          <Text style={styles.meta}>{`Código ${line.productCode} · ${line.unit} · ${describeListPrice(line.price)}`}</Text>
+          <Text style={styles.name} numberOfLines={2}>
+            {line.description}
+          </Text>
+          <Text style={styles.meta}>{`Cód. ${line.productCode} · ${line.unit}`}</Text>
+          <Text style={styles.unitPrice}>{noPrice ? "Sem preço" : `${describeListPrice(line.price)} por ${line.unit}`}</Text>
         </View>
         {!selectionMode && (
           <Pressable
+            style={styles.removeButton}
             onPress={() => onRemove(line.key)}
             accessibilityRole="button"
             accessibilityLabel={`Remover ${line.description} do carrinho`}
@@ -62,30 +72,55 @@ function CartLine({ line, preview, onQuantityChange, onDiscountChange, onRemove,
       </Pressable>
 
       <View style={styles.fields}>
-        <View style={styles.field}>
+        <View style={styles.fieldWide}>
           <Text style={styles.fieldLabel}>Quantidade</Text>
-          <TextInput
-            style={styles.input}
-            value={line.quantityText}
-            onChangeText={(text) => onQuantityChange(line.key, text)}
-            keyboardType="decimal-pad"
-            accessibilityLabel={`Quantidade de ${line.description}`}
-          />
+          <View style={styles.stepperRow}>
+            <Pressable
+              style={[styles.stepButton, !canDecrement && styles.stepButtonDisabled]}
+              onPress={() => decrement?.kind === "set" && onQuantityChange(line.key, decrement.quantityText)}
+              disabled={!canDecrement}
+              accessibilityRole="button"
+              accessibilityLabel={`Diminuir quantidade de ${line.description}`}
+            >
+              <Text style={styles.stepText}>−</Text>
+            </Pressable>
+            <TextInput
+              style={[styles.input, styles.quantityInput]}
+              value={line.quantityText}
+              onChangeText={(text) => onQuantityChange(line.key, text)}
+              keyboardType="decimal-pad"
+              selectTextOnFocus
+              accessibilityLabel={`Quantidade de ${line.description}`}
+            />
+            <Pressable
+              style={styles.stepButton}
+              onPress={() => onQuantityChange(line.key, incrementLineQuantity(line).quantityText)}
+              accessibilityRole="button"
+              accessibilityLabel={`Aumentar quantidade de ${line.description}`}
+            >
+              <Text style={styles.stepText}>+</Text>
+            </Pressable>
+            <Text style={styles.unitBeside}>{line.unit}</Text>
+          </View>
           {preview.quantityProblem !== undefined && (
             <Text style={styles.error}>{quantityProblemMessages[preview.quantityProblem]}</Text>
           )}
         </View>
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Desconto %</Text>
-          <TextInput
-            style={[styles.input, noPrice && styles.inputDisabled]}
-            value={line.discountText}
-            onChangeText={(text) => onDiscountChange(line.key, text)}
-            keyboardType="decimal-pad"
-            editable={!noPrice}
-            placeholder={noPrice ? "—" : "0"}
-            accessibilityLabel={`Desconto de ${line.description}`}
-          />
+        <View style={styles.fieldNarrow}>
+          <Text style={styles.fieldLabel}>Desconto</Text>
+          <View style={styles.percentRow}>
+            <TextInput
+              style={[styles.input, styles.percentInput, noPrice && styles.inputDisabled]}
+              value={line.discountText}
+              onChangeText={(text) => onDiscountChange(line.key, text)}
+              keyboardType="decimal-pad"
+              editable={!noPrice}
+              placeholder={noPrice ? "—" : "0"}
+              selectTextOnFocus
+              accessibilityLabel={`Desconto de ${line.description}`}
+            />
+            <Text style={styles.percentSign}>%</Text>
+          </View>
           {preview.discountProblem !== undefined && (
             <Text style={styles.error}>{discountProblemMessages[preview.discountProblem]}</Text>
           )}
@@ -93,11 +128,10 @@ function CartLine({ line, preview, onQuantityChange, onDiscountChange, onRemove,
       </View>
 
       <View style={styles.amounts}>
-        <Text style={styles.amountText}>{`Subtotal ${money(amounts.subtotal)}`}</Text>
-        {amounts.discountAmount !== null && amounts.discountAmount !== "0" && amounts.discountAmount !== "0.00" && (
-          <Text style={styles.amountText}>{`Desconto -${money(amounts.discountAmount)}`}</Text>
-        )}
-        <Text style={styles.lineTotal}>{money(amounts.lineTotal)}</Text>
+        {hasDiscount ? <Text style={styles.discountAmount}>{`− ${money(amounts.discountAmount)}`}</Text> : <View />}
+        <Text style={styles.lineTotal} accessibilityLabel={`Subtotal ${money(amounts.lineTotal)}`}>
+          {`Subtotal ${money(amounts.lineTotal)}`}
+        </Text>
       </View>
     </View>
   );
@@ -229,11 +263,32 @@ const styles = StyleSheet.create({
   checkboxMark: { color: colors.onNavy, fontSize: 13, fontWeight: "800" },
   name: { fontSize: 15, fontWeight: "700", color: colors.text },
   meta: { fontSize: 12, color: colors.textMuted },
+  unitPrice: { fontSize: 13, color: colors.text, fontWeight: "600" },
+  removeButton: { minHeight: 44, minWidth: 44, justifyContent: "center", alignItems: "flex-end" },
   remove: { color: colors.red, fontWeight: "700", fontSize: 13 },
-  fields: { flexDirection: "row", gap: spacing.md },
-  field: { flex: 1, gap: 4 },
+  fields: { flexDirection: "row", gap: spacing.md, alignItems: "flex-start" },
+  fieldWide: { flex: 3, gap: 4 },
+  fieldNarrow: { flex: 2, gap: 4 },
   fieldLabel: { fontSize: 12, color: colors.textMuted, fontWeight: "600" },
+  stepperRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  stepButton: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.navy,
+  },
+  stepButtonDisabled: { opacity: 0.35 },
+  stepText: { fontSize: 22, fontWeight: "700", color: colors.navy, lineHeight: 26 },
+  quantityInput: { flex: 1, minWidth: 44, textAlign: "center" },
+  unitBeside: { fontSize: 12, color: colors.textMuted, fontWeight: "600" },
+  percentRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  percentInput: { flex: 1, minWidth: 48, textAlign: "right" },
+  percentSign: { fontSize: 16, fontWeight: "700", color: colors.textMuted },
   input: {
+    minHeight: 44,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 6,
@@ -245,8 +300,8 @@ const styles = StyleSheet.create({
   },
   inputDisabled: { color: colors.textMuted, backgroundColor: colors.border },
   error: { color: colors.red, fontSize: 11 },
-  amounts: { flexDirection: "row", justifyContent: "flex-end", alignItems: "center", gap: spacing.md },
-  amountText: { fontSize: 12, color: colors.textMuted },
+  amounts: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: spacing.md },
+  discountAmount: { fontSize: 13, color: colors.red, fontWeight: "700" },
   lineTotal: { fontSize: 16, fontWeight: "800", color: colors.navy },
   summary: {
     backgroundColor: colors.surface,

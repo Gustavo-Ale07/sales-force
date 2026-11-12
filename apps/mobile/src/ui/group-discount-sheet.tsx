@@ -119,8 +119,7 @@ export function GroupDiscountSheet({ visible, lines, products, onApply, onClose 
         <View style={styles.sheet} accessibilityRole="none">
           <Text style={styles.title}>Desconto por grupo</Text>
           <Text style={styles.description}>
-            Um percentual por grupo de produtos do catálogo, para os itens do carrinho que pertencem a ele. Deixe em branco o grupo
-            que não deve mudar.
+            Informe o desconto (%) de cada grupo. Grupo em branco não muda.
           </Text>
 
           {loading ? (
@@ -150,14 +149,17 @@ export function GroupDiscountSheet({ visible, lines, products, onApply, onClose 
                           <Text style={styles.rowCount}>{`${plural(row.count, "item", "itens")} no carrinho`}</Text>
                         </View>
                         <View style={styles.rowField}>
-                          <TextInput
-                            style={[styles.input, problem !== undefined && styles.inputInvalid]}
-                            value={values[row.key] ?? ""}
-                            onChangeText={(text) => setValues((current) => ({ ...current, [row.key]: text }))}
-                            keyboardType="decimal-pad"
-                            placeholder="0"
-                            accessibilityLabel={`Desconto do grupo ${row.name} (%)`}
-                          />
+                          <View style={styles.percentRow}>
+                            <TextInput
+                              style={[styles.input, problem !== undefined && styles.inputInvalid]}
+                              value={values[row.key] ?? ""}
+                              onChangeText={(text) => setValues((current) => ({ ...current, [row.key]: text }))}
+                              keyboardType="decimal-pad"
+                              placeholder="0"
+                              accessibilityLabel={`Desconto do grupo ${row.name} (%)`}
+                            />
+                            <Text style={styles.percentSign}>%</Text>
+                          </View>
                           {problem !== undefined && <Text style={styles.error}>{problem}</Text>}
                         </View>
                       </View>
@@ -168,6 +170,11 @@ export function GroupDiscountSheet({ visible, lines, products, onApply, onClose 
             </>
           )}
 
+          {!canApply && !loading && rows.length > 0 && (
+            <Text style={styles.disabledReason}>
+              {problems.size > 0 ? "Corrija os percentuais indicados para aplicar." : "Digite o percentual de ao menos um grupo para aplicar."}
+            </Text>
+          )}
           <View style={styles.buttons}>
             <Pressable style={styles.secondaryButton} onPress={onClose} accessibilityRole="button" accessibilityLabel="Cancelar">
               <Text style={styles.secondaryButtonText}>Cancelar</Text>
@@ -220,8 +227,13 @@ const styles = StyleSheet.create({
   rowInfo: { flex: 1, minWidth: 0, gap: 2 },
   rowName: { fontSize: 14, fontWeight: "700", color: colors.text },
   rowCount: { fontSize: 12, color: colors.textMuted },
-  rowField: { width: 96, gap: 4 },
+  rowField: { width: 112, gap: 4 },
+  percentRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  percentSign: { fontSize: 16, fontWeight: "700", color: colors.textMuted },
+  disabledReason: { fontSize: 12, color: colors.textMuted },
   input: {
+    flex: 1,
+    minHeight: 44,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 6,

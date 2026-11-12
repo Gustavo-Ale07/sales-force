@@ -785,7 +785,8 @@ export function NewOrderScreen({
                   accessibilityRole="button"
                   accessibilityLabel={selectionMode ? "Cancelar seleção" : "Selecionar itens"}
                 >
-                  <Text style={styles.toolbarButtonText}>{selectionMode ? "Cancelar seleção" : "Selecionar itens"}</Text>
+                  <Text style={styles.toolbarIcon}>{selectionMode ? "✕" : "☑"}</Text>
+                  <Text style={styles.toolbarButtonText} numberOfLines={1}>{selectionMode ? "Cancelar" : "Selecionar"}</Text>
                 </Pressable>
                 {selectionMode ? (
                   <Pressable
@@ -795,15 +796,18 @@ export function NewOrderScreen({
                     accessibilityRole="button"
                     accessibilityLabel="Aplicar desconto aos selecionados"
                   >
-                    <Text style={styles.toolbarButtonText}>{`Desconto (${selected.size})`}</Text>
+                    <Text style={styles.toolbarIcon}>%</Text>
+                    <Text style={styles.toolbarButtonText} numberOfLines={1}>{`Desconto (${selected.size})`}</Text>
                   </Pressable>
                 ) : (
                   <>
                     <Pressable style={styles.toolbarButton} onPress={() => setMassDiscountOpen(true)} accessibilityRole="button" accessibilityLabel="Desconto no pedido todo">
-                      <Text style={styles.toolbarButtonText}>Desconto no pedido todo</Text>
+                      <Text style={styles.toolbarIcon}>%</Text>
+                      <Text style={styles.toolbarButtonText} numberOfLines={1}>Desc. geral</Text>
                     </Pressable>
                     <Pressable style={styles.toolbarButton} onPress={() => setGroupDiscountOpen(true)} accessibilityRole="button" accessibilityLabel="Desconto por grupo">
-                      <Text style={styles.toolbarButtonText}>Desconto por grupo</Text>
+                      <Text style={styles.toolbarIcon}>▦</Text>
+                      <Text style={styles.toolbarButtonText} numberOfLines={1}>Por grupo</Text>
                     </Pressable>
                   </>
                 )}
@@ -985,24 +989,28 @@ const styles = StyleSheet.create({
   pillTextActive: { color: colors.onNavy },
   cartToolbar: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: spacing.sm,
     padding: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     backgroundColor: colors.surface,
   },
+  // One row of equal buttons (icon + short label), each at least 44 high: the full wording lives in accessibilityLabel.
   toolbarButton: {
-    flexGrow: 1,
-    flexBasis: "30%",
+    flex: 1,
+    minHeight: 44,
+    flexDirection: "row",
     alignItems: "center",
-    paddingVertical: spacing.sm,
+    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: spacing.sm,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.navy,
   },
   toolbarButtonDisabled: { opacity: 0.5 },
-  toolbarButtonText: { color: colors.navy, fontWeight: "700", fontSize: 13 },
+  toolbarIcon: { color: colors.navy, fontWeight: "800", fontSize: 15 },
+  toolbarButtonText: { color: colors.navy, fontWeight: "700", fontSize: 13, flexShrink: 1 },
   footerNotice: { fontSize: 12, color: colors.warning },
   footerInfo: { fontSize: 12, color: colors.textMuted },
   discardButton: { alignItems: "center", paddingVertical: spacing.sm },
