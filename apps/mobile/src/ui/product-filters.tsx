@@ -2,16 +2,10 @@ import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import type { ProductFilters, ProductGroupOption } from "../data/ports";
 import { colors, spacing } from "../theme";
-import { ChipRow, Options, Sheet, type FilterChip } from "./customer-filters";
-
-const PRICE_OPTIONS: ReadonlyArray<{ value: ProductFilters["priceState"]; label: string }> = [
-  { value: undefined, label: "Todos" },
-  { value: "priced", label: "Com preço" },
-  { value: "none", label: "Sem preço" },
-];
+import { ChipRow, Sheet, type FilterChip } from "./customer-filters";
 
 export function countActiveProductFilters(filters: ProductFilters): number {
-  return (filters.groupCodes?.length ?? 0) + (filters.priceState !== undefined ? 1 : 0);
+  return filters.groupCodes?.length ?? 0;
 }
 
 export function groupLabel(groups: readonly ProductGroupOption[], code: number): string {
@@ -30,10 +24,6 @@ export function ProductFilterChips({ filters, groups, onChange }: { filters: Pro
     label: `Grupo: ${groupLabel(groups, code)}`,
     remove: () => onChange(withoutEmptyGroups({ ...filters, groupCodes: (filters.groupCodes ?? []).filter((candidate) => candidate !== code) })),
   }));
-  if (filters.priceState !== undefined) {
-    const { priceState: _removed, ...rest } = filters;
-    chips.push({ key: "price", label: filters.priceState === "priced" ? "Com preço" : "Sem preço", remove: () => onChange(rest) });
-  }
   return <ChipRow chips={chips} onClear={() => onChange({})} />;
 }
 
@@ -61,7 +51,6 @@ function ProductFiltersBody({ filters, groups, onApply, onCancel }: BodyProps) {
   return (
     <>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <Options label="Preço" options={PRICE_OPTIONS} value={draft.priceState} onSelect={(priceState) => setDraft(priceState === undefined ? (({ priceState: _p, ...rest }) => rest)(draft) : { ...draft, priceState })} />
         {groups.length > 0 && (
           <View style={styles.groupBlock}>
             <Text style={styles.groupTitle}>Grupo</Text>
@@ -113,7 +102,7 @@ function ProductFiltersBody({ filters, groups, onApply, onCancel }: BodyProps) {
 }
 
 /**
- * Bottom sheet with the filters the product data really supports: price state and group (multi-select). The ERP
+ * Bottom sheet with the one filter the product data supports: group (multi-select). No price filter: the catalog only holds priced products. The ERP
  * mirror delivers a flat group code only (no subgroup/hierarchy), so the group list is flat by design.
  */
 export function ProductFiltersSheet({ visible, onClose, ...body }: Omit<BodyProps, "onCancel"> & { visible: boolean; onClose: () => void }) {

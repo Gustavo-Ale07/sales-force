@@ -6,7 +6,7 @@ const ID = "018f0000-0000-7000-8000-000000000001";
 const ok = { ok: true, status: 200 } as Response;
 const fail = (status: number) => ({ response: { ok: false, status, headers: new Headers() } as Response, error: { code: "x", message: "x" } });
 
-const step = (entity: string, status: string): { entity: string; status: string; durationMs: null; reason: string | null; lastSuccessAt: null } => ({ entity, status, durationMs: null, reason: null, lastSuccessAt: null });
+const step = (entity: string, status: string): { entity: string; status: string; durationMs: null; reason: string | null; lastSuccessAt: null; mobility?: unknown[] } => ({ entity, status, durationMs: null, reason: null, lastSuccessAt: null });
 const detail = (status: string, steps: ReturnType<typeof step>[]) => ({ id: ID, status, requestedAt: "2026-11-13T12:00:00.000Z", startedAt: null, finishedAt: null, steps });
 const basic = (status: string, extra: Record<string, unknown> = {}) => ({ id: ID, status, progressPercent: 50, phase: "precos", finishedAt: null, hasWarnings: false, ...extra });
 
@@ -55,6 +55,19 @@ describe("refreshOnDemand (POST /sync/refresh, then follow it until done)", () =
     });
     const outcome = await createReferenceSource(api, instant).refreshOnDemand!(() => undefined);
     expect(outcome).toEqual({ failed: true, failedSteps: ["Preços", "Transportadoras"] });
+  });
+
+  it("detail view: carries the mobility counts of the steps (staff only); the seller view never has them", async () => {
+    const mobility = [{ kind: "products", visible: 90, hidden: 10, keptPrevious: false }, { kind: "tops", visible: 2, hidden: 0, keptPrevious: true }];
+    const { api } = apiWith({
+      post: () => answer({ ...detail("done", [{ ...step("products", "ok"), mobility: [mobility[0]] }, { ...step("configuration", "ok"), mobility: [mobility[1]] }]), reused: true }),
+      gets: [],
+    });
+    const outcome = await createReferenceSource(api, instant).refreshOnDemand!(() => undefined);
+    expect(outcome).toEqual({ failed: false, failedSteps: [], mobility });
+
+    const seller = apiWith({ post: () => answer({ ...basic("done", { phase: "concluido", hasWarnings: true }), reused: true }), gets: [] });
+    expect(await createReferenceSource(seller.api, instant).refreshOnDemand!(() => undefined)).toEqual({ failed: true, failedSteps: [] });
   });
 
   it("seller basic view: progress by phase and failure known only through hasWarnings", async () => {

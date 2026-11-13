@@ -34,15 +34,15 @@ describe("product cache filters", () => {
     expect(await descriptions({ ...base, filters: { groupCodes: [20, 30] } })).toEqual(["Aguarrás 0,9L", "Rolo de lã"]);
   });
 
-  it("filters by price state: priced includes an explicit zero row, none is a missing price", async () => {
-    expect(await descriptions({ ...base, filters: { priceState: "priced" } })).toEqual(["Aguarrás 0,9L", "Rolo de lã", "Tinta Acrílica 18L"]);
-    expect(await descriptions({ ...base, filters: { priceState: "none" } })).toEqual(["Produto sem grupo", "Tinta Esmalte 3,6L"]);
+  it("ignores a price-state filter (removed 2026-11-13: the catalog only holds priced products)", async () => {
+    const all = await descriptions({ ...base });
+    expect(await descriptions({ ...base, filters: { priceState: "none" } } as never)).toEqual(all);
   });
 
-  it("combines search, group and price, and reports the filtered total", async () => {
-    const page = await db.transaction((tx) => searchProducts<ProductLike>(tx, { ...base, search: "tinta", filters: { groupCodes: [10], priceState: "none" } }));
-    expect(page.items.map((p) => p.description)).toEqual(["Tinta Esmalte 3,6L"]);
-    expect(page.total).toBe(1);
+  it("combines search and group, and reports the filtered total", async () => {
+    const page = await db.transaction((tx) => searchProducts<ProductLike>(tx, { ...base, search: "tinta", filters: { groupCodes: [10] } }));
+    expect(page.items.map((p) => p.description)).toEqual(["Tinta Acrílica 18L", "Tinta Esmalte 3,6L"]);
+    expect(page.total).toBe(2);
     expect(await descriptions({ ...base, search: "tinta", filters: { groupCodes: [20] } })).toEqual([]);
   });
 

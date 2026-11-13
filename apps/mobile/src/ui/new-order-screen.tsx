@@ -788,7 +788,7 @@ export function NewOrderScreen({
         </View>
         {/* Kept mounted (only hidden) in the cart view, so the catalog search, filters and Grade/Lista survive the round trip. */}
         <View style={productsView === "catalog" ? styles.flex : styles.hidden}>
-          <ProductPicker products={repositories.products} actions={productActions} onUnauthenticated={onUnauthenticated} />
+          <ProductPicker products={repositories.products} customerCode={customer?.code} actions={productActions} onUnauthenticated={onUnauthenticated} />
         </View>
         {productsView === "cart" && (
           <View style={styles.flex}>

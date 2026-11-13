@@ -2,7 +2,9 @@ import type { SqlDatabase, SqlExecutor, SqlRow } from "./connection";
 import {
   CUSTOMER_HELD_MESSAGES,
   customerBlockMessage,
+  PRODUCT_BLOCK_MESSAGES,
   type CustomerBlockReason,
+  type ProductBlockReason,
   getDraft,
   getDraftItems,
   isNeverSent,
@@ -18,6 +20,7 @@ import {
 import { DatasetUnavailableError, classifyEligibility, ineligibleMessage, readExpectedDataset, sameDataset, type DatasetIdentity, type IneligibleReason } from "./dataset-identity";
 import { isoNow, type OfflineEnv } from "./offline-env";
 import { pendingCustomerBlockOf } from "./pending-customer-guard";
+import { productBlockOf } from "./product-guard";
 import { customerBlockOf } from "./reference-cache";
 
 /**
@@ -459,12 +462,13 @@ async function quarantineDraft(db: SqlDatabase, env: OfflineEnv, draftLocalId: s
   });
 }
 
-/** Marks every unsent command of the draft as held for an unavailable customer (state `pending`, no attempt counted). */
-async function holdForCustomer(db: SqlDatabase, env: OfflineEnv, draftLocalId: string, reason: CustomerBlockReason): Promise<void> {
+/** Marks every unsent command of the draft as held for an unavailable customer or a line that cannot be sold (state `pending`, no attempt counted). */
+async function holdForCustomer(db: SqlDatabase, env: OfflineEnv, draftLocalId: string, reason: CustomerBlockReason | ProductBlockReason): Promise<void> {
+  const message = Object.hasOwn(PRODUCT_BLOCK_MESSAGES, reason) ? PRODUCT_BLOCK_MESSAGES[reason as ProductBlockReason] : customerBlockMessage(reason);
   await db.transaction(async (tx) => {
     await tx.execute(
       "UPDATE outbox SET last_error = ?, next_attempt_at = NULL, updated_at = ? WHERE draft_local_id = ? AND state = 'pending'",
-      [customerBlockMessage(reason), isoNow(env), draftLocalId],
+      [message, isoNow(env), draftLocalId],
     );
     await refreshDraftStatus(tx, draftLocalId);
   });
@@ -486,7 +490,7 @@ export async function reevaluateHeldOrders(db: SqlDatabase, env: OfflineEnv, own
   for (const row of rows) {
     const draft = await getDraft(db, String(row.local_id));
     if (draft === null) continue;
-    const block = pendingCustomerBlockOf(draft.customerCode) ?? (await customerBlockOf(db, draft.customerCode));
+    const block = pendingCustomerBlockOf(draft.customerCode) ?? (await customerBlockOf(db, draft.customerCode)) ?? (await productBlockOf(db, draft.localId, draft.customerCode));
     if (block !== null) {
       await holdForCustomer(db, env, draft.localId, block);
       continue;
@@ -573,7 +577,8 @@ export async function pushOutbox(
     // not sent to. The command is kept untouched (same key, same payload, zero attempts) and re-evaluated on every run,
     // so it goes out by itself if the customer becomes available again. Nothing is converted, rewritten or deleted.
     // A customer the ERP has not confirmed yet (local code, or confirmed but not yet in the mirror) is held the same way.
-    const customerBlock = pendingCustomerBlockOf(draft.customerCode) ??(await customerBlockOf(db, draft.customerCode));
+    // The same hold covers a line whose product lost mobility or price (owner 2026-11-13): the lines are checked after the customer.
+    const customerBlock = pendingCustomerBlockOf(draft.customerCode) ?? (await customerBlockOf(db, draft.customerCode)) ?? (await productBlockOf(db, draft.localId, draft.customerCode));
     if (customerBlock !== null) {
       await holdForCustomer(db, env, draft.localId, customerBlock);
       heldDrafts.add(draft.localId);

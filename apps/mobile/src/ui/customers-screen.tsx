@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import type { CustomerFilters, CustomerLetter, CustomerListItem, CustomerPageRequest, CustomerRepository, CustomerSellerOption } from "../data/ports";
-import { describePendingBadge, isUnconfirmedCustomer } from "../data/pending-status";
+import { describePendingBadge, hasNoSeller, isUnconfirmedCustomer } from "../data/pending-status";
 import { colors, spacing } from "../theme";
 import { CustomerFiltersSheet, CustomerIndexSheet, FilterChips, countActiveFilters } from "./customer-filters";
 import { PagedListView } from "./paged-list-view";
@@ -17,12 +17,13 @@ export function describeCustomerStatus(customer: Pick<CustomerListItem, "active"
 
 function CustomerRow({ customer, onOpen }: { customer: CustomerListItem; onOpen: (customer: CustomerListItem) => void }) {
   const status = describeCustomerStatus(customer);
+  const noSeller = hasNoSeller(customer);
   return (
     <Pressable
       style={styles.row}
       onPress={() => onOpen(customer)}
       accessibilityRole="button"
-      accessibilityLabel={`${customer.name}${isUnconfirmedCustomer(customer) ? "" : `, código ${customer.code}`}${status !== null ? `, ${status}` : ""}. Abrir ficha`}
+      accessibilityLabel={`${customer.name}${isUnconfirmedCustomer(customer) ? "" : `, código ${customer.code}`}${status !== null ? `, ${status}` : ""}${noSeller ? ", Sem vendedor" : ""}. Abrir ficha`}
     >
       <View style={styles.nameLine}>
         <Text style={styles.name} numberOfLines={2}>{customer.name}</Text>
@@ -30,6 +31,7 @@ function CustomerRow({ customer, onOpen }: { customer: CustomerListItem; onOpen:
       </View>
       {customer.tradeName !== null && customer.tradeName !== customer.name && <Text style={styles.meta} numberOfLines={1}>{customer.tradeName}</Text>}
       <Text style={styles.meta} numberOfLines={1}>{isUnconfirmedCustomer(customer) ? (customer.document ?? "") : `Código ${customer.code}${customer.document !== null ? ` · ${customer.document}` : ""}`}</Text>
+      {noSeller && <Text style={styles.noSeller}>Sem vendedor</Text>}
       {customer.sellerName !== null && <Text style={styles.seller} numberOfLines={1}>{`Vendedor: ${customer.sellerName}`}</Text>}
     </Pressable>
   );
@@ -183,6 +185,7 @@ const styles = StyleSheet.create({
   nameLine: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: spacing.sm },
   name: { flex: 1, fontSize: 16, fontWeight: "700", color: colors.text },
   meta: { fontSize: 13, color: colors.textMuted },
+  noSeller: { fontSize: 12, fontWeight: "700", color: colors.warning },
   seller: { fontSize: 12, color: colors.textMuted, opacity: 0.85 },
   status: { fontSize: 12, fontWeight: "700", color: colors.warning },
   toolbar: { gap: spacing.sm },

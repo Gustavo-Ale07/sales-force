@@ -15,13 +15,15 @@ export interface ProductBrowserProps {
   readonly actions?: ProductOrderActions | undefined;
   /** Screen title ("Catálogo"); omitted inside an order, where the order header already gives the context. */
   readonly title?: string | undefined;
+  /** Order customer (selection mode): reloads the catalog of this customer's price table when it changes. */
+  readonly customerCode?: number | undefined;
 }
 
 /**
  * The one product browser: search, group/price filters, Grid/Lista toggle and the truthful count. Used by the
  * Catálogo tab (consultation) and by the product step of Novo pedido (selection), so both share the same rules.
  */
-export function ProductBrowser({ products, onUnauthenticated, connectivity, actions, title }: ProductBrowserProps) {
+export function ProductBrowser({ products, onUnauthenticated, connectivity, actions, title, customerCode }: ProductBrowserProps) {
   const offlineSuffix = connectivity === "offline" ? " · dados salvos neste aparelho" : "";
   const [mode, setMode] = useState<ProductViewMode>("grid");
   const [filters, setFilters] = useState<ProductFilters>({});
@@ -38,7 +40,7 @@ export function ProductBrowser({ products, onUnauthenticated, connectivity, acti
     };
   }, [products]);
 
-  const extra = useMemo(() => (active > 0 ? { filters } : {}), [active, filters]);
+  const extra = useMemo(() => ({ ...(active > 0 ? { filters } : {}), ...(customerCode === undefined ? {} : { customerCode }) }), [active, filters, customerCode]);
   const onSearchChange = useCallback(() => undefined, []);
 
   const header = (

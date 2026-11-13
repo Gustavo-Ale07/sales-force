@@ -12,6 +12,8 @@ import {
   customerSellers,
   searchCustomers,
   productGroups,
+  customerPriceTableOf,
+  cachedPriceTableCodes,
   searchProducts,
   setMeta,
   type OfflineEnv,
@@ -73,7 +75,11 @@ export function createOfflineFirstRepositories(deps: {
     products: {
       async list(request) {
         if (!(await cacheReady())) return remote.products.list(request);
-        const page = await searchProducts<ProductListItem>(db, request);
+        const { customerCode, ...local } = request;
+        // The order customer's table, when its prices are on this device; otherwise the base catalog (reference table).
+        const table = customerCode === undefined ? null : ((await customerPriceTableOf(db, customerCode)) ?? null);
+        const hasTable = table !== null && (await cachedPriceTableCodes(db)).includes(table);
+        const page = await searchProducts<ProductListItem>(db, hasTable ? { ...local, priceTableCode: table } : local);
         return { items: page.items, page: page.page, pageSize: page.pageSize, total: page.total };
       },
       async groups() {

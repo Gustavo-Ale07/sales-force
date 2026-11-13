@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text } from "react-native";
 import type { CustomerListItem, CustomerRepository } from "../data/ports";
-import { isUnconfirmedCustomer, PENDING_CUSTOMER_ORDER_MESSAGE } from "../data/pending-status";
+import { hasNoSeller, isUnconfirmedCustomer, PENDING_CUSTOMER_ORDER_MESSAGE } from "../data/pending-status";
 import { colors, spacing } from "../theme";
 import { describeCustomerStatus } from "./customers-screen";
 import { PagedListView } from "./paged-list-view";
@@ -28,6 +28,7 @@ function PickRow({ customer, onSelect, allowUnavailable }: { customer: CustomerL
       <Text style={styles.meta}>
         {unconfirmed ? (customer.document ?? "") : `Código ${customer.code}${customer.document !== null ? ` · ${customer.document}` : ""}`}
       </Text>
+      {hasNoSeller(customer) && <Text style={styles.status}>Sem vendedor</Text>}
       {status !== null && <Text style={styles.status}>{status}</Text>}
       {unconfirmed && <Text style={styles.status}>{PENDING_CUSTOMER_ORDER_MESSAGE}</Text>}
     </Pressable>

@@ -405,6 +405,8 @@ const issueMessages: Record<DraftIssueCode, string> = {
   price_reference_missing: "Preço sem tabela de referência. Recarregue e tente novamente.",
   line_total_mismatch: "Total do item divergente do calculado. Recarregue e tente novamente.",
   line_not_orderable: "Este item não pode ser pedido sem preço nesta instalação.",
+  product_without_price: "Produto sem preço",
+  product_without_mobility: "Produto sem mobilidade",
   product_unknown: "Produto não encontrado.",
   product_not_sellable: "Produto indisponível para venda.",
   negotiation_type_not_configured: "Tipo de negociação não configurado nesta instalação.",

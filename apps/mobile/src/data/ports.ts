@@ -87,12 +87,15 @@ export interface CustomerRepository {
 /** Catalog filters, available only where they can run in the local database (`groups` present). */
 export interface ProductFilters {
   readonly groupCodes?: readonly number[];
-  /** `priced` = has a list price; `none` = "Sem preço". */
-  readonly priceState?: "priced" | "none";
 }
 
 export interface ProductPageRequest extends PageRequest {
   readonly filters?: ProductFilters;
+  /**
+   * The order customer: the catalog shows only products with a price above zero in this customer's price table (no table =
+   * the catalog reference table). Absent = the catalog without a customer (reference table).
+   */
+  readonly customerCode?: number;
 }
 
 /** A catalog group present on this device. The ERP mirror has no group hierarchy, so the list is flat. */

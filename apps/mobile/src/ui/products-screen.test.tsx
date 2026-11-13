@@ -45,12 +45,10 @@ function catalog(requests: ProductPageRequest[] = [], items: readonly ProductLis
       requests.push(request);
       const search = (request.search ?? "").toLowerCase();
       const groupCodes = request.filters?.groupCodes;
-      const priceState = request.filters?.priceState;
       const rows = items.filter(
         (item) =>
           (search === "" || item.description.toLowerCase().includes(search) || String(item.code) === search) &&
-          (groupCodes === undefined || (item.groupCode !== null && groupCodes.includes(item.groupCode))) &&
-          (priceState === undefined || (priceState === "none") === (item.listPrice.state === "none")),
+          (groupCodes === undefined || (item.groupCode !== null && groupCodes.includes(item.groupCode))),
       );
       return pageOf(rows, rows.length);
     },
@@ -147,19 +145,22 @@ describe("ProductsScreen (Catálogo)", () => {
     await screen.findByText("Tinta Azul 18L");
     await fireEvent.press(screen.getByRole("button", { name: "Filtros" }));
     await fireEvent.press(screen.getByRole("checkbox", { name: "Tintas, 2 produtos" }));
-    await fireEvent.press(screen.getByRole("radio", { name: "Com preço" }));
     await fireEvent.press(screen.getByRole("button", { name: "Aplicar filtros" }));
     await fireEvent.changeText(screen.getByPlaceholderText("Buscar por código ou descrição"), "verde");
     expect(await screen.findByText("1 resultado")).toBeTruthy();
-    expect(last(requests)).toMatchObject({ search: "verde", filters: { groupCodes: [10], priceState: "priced" } });
-
-    await fireEvent.press(screen.getByRole("button", { name: "Remover filtro Com preço" }));
-    await screen.findByRole("button", { name: "Remover filtro Grupo: Tintas" });
-    expect(last(requests).filters).toEqual({ groupCodes: [10] });
+    expect(last(requests)).toMatchObject({ search: "verde", filters: { groupCodes: [10] } });
 
     await fireEvent.press(screen.getByRole("button", { name: "Limpar filtros" }));
     expect(screen.queryByRole("button", { name: "Remover filtro Grupo: Tintas" })).toBeNull();
     expect(last(requests).filters).toBeUndefined();
+  });
+
+  it("has no price filter (owner 2026-11-13): only products with a price are in the catalog", async () => {
+    await render(<ProductsScreen products={catalog()} onUnauthenticated={noop} />);
+    await screen.findByText("Tinta Azul 18L");
+    await fireEvent.press(screen.getByRole("button", { name: "Filtros" }));
+    expect(screen.queryByRole("radio", { name: "Com preço" })).toBeNull();
+    expect(screen.queryByRole("radio", { name: "Sem preço" })).toBeNull();
   });
 
   it("says so when the filters match nobody", async () => {

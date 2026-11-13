@@ -1,6 +1,6 @@
 import type { DraftStatus } from "@salesforce/mobile-db";
 import { draftRecord } from "../test-doubles";
-import { CUSTOMER_BLOCK_MESSAGES, CUSTOMER_UNAVAILABLE_MESSAGE } from "@salesforce/mobile-db";
+import { CUSTOMER_BLOCK_MESSAGES, CUSTOMER_UNAVAILABLE_MESSAGE, PRODUCT_BLOCK_MESSAGES } from "@salesforce/mobile-db";
 import { saleActions, saleBadge, saleExplanation, salesGroupOf } from "./sales-status";
 
 const ALL: DraftStatus[] = ["local_only", "pending_sync", "syncing", "synced", "sync_error", "conflict", "needs_review"];
@@ -74,6 +74,14 @@ describe("customer unavailable (held draft)", () => {
 
   it("blocks resending but still allows review (continue), copy and local delete of a never-sent draft", () => {
     expect(saleActions(held)).toEqual({ continue: true, duplicate: true, delete: true, resend: false });
+  });
+
+  it.each([PRODUCT_BLOCK_MESSAGES.product_without_mobility, PRODUCT_BLOCK_MESSAGES.product_without_price])("a line that lost mobility or price ('%s'): own badge, reason stated, never offered for resending", (reason) => {
+    const blocked = draftRecord({ status: "sync_error", lastError: reason });
+    expect(saleBadge(blocked)).toEqual({ label: "Produto indisponível", tone: "warning" });
+    expect(saleExplanation(blocked)).toContain(reason);
+    expect(saleExplanation(blocked)).toMatch(/não será enviado/i);
+    expect(saleActions(blocked)).toEqual({ continue: true, duplicate: true, delete: true, resend: false });
   });
 
   it("an ordinary error keeps its generic treatment", () => {

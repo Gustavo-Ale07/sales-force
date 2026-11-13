@@ -120,7 +120,7 @@ function makeSource(script: Partial<Script> = {}): { source: ReferenceSource; st
     fetchProducts: async () => {
       state.calls.push("products");
       if (state.failProducts) throw new TransportError("network", "queda", 0);
-      return [{ code: 9, description: "Produto", unit: "UN", groupCode: 1, groupName: "G" } as never];
+      return [{ code: 9, description: "Produto", unit: "UN", groupCode: 1, groupName: "G", listPrice: { state: "priced", unitPrice: "10.00", tableCode: 5, versionId: 1 } } as never];
     },
     fetchEntryConfiguration: async () => {
       state.calls.push("configuration");
@@ -264,6 +264,17 @@ describe("failures keep the previous base whole and say why", () => {
     expect(await names()).toEqual(["Do servidor"]);
     expect(status).toMatchObject({ phase: "idle", failure: "sankhya_unavailable", lastError: SYNC_FAILURE_TEXT.sankhya_unavailable, failedSteps: ["Preços"], lastSyncedAt: stamp });
     expect(await getMeta(db, "sync.last_success_at")).toBe(stamp);
+  });
+
+  it("carries the mobility counts of the refresh into the status, and drops them on the next run without", async () => {
+    await seed();
+    const counts = [{ kind: "products" as const, visible: 5, hidden: 1, keptPrevious: true }];
+    let withCounts = true;
+    const { source } = makeSource({ refresh: async () => ({ failed: false, failedSteps: [], ...(withCounts ? { mobility: counts } : {}) }) });
+    const m = manager(source);
+    expect((await m.sync("manual")).mobility).toEqual(counts);
+    withCounts = false;
+    expect((await m.sync("manual")).mobility ?? []).toEqual([]);
   });
 
   it("a download that dies midway (products) leaves the whole previous base untouched", async () => {

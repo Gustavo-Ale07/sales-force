@@ -104,3 +104,27 @@ describe("header sync status", () => {
     expect(style.minHeight).toBeGreaterThanOrEqual(44);
   });
 });
+
+describe("SyncPanel mobility detail (owner 2026-11-13)", () => {
+  const mobility = [
+    { kind: "products" as const, visible: 90, hidden: 10, keptPrevious: false },
+    { kind: "tops" as const, visible: 2, hidden: 1, keptPrevious: false },
+  ];
+
+  it("shows visible/hidden counts per kind when the server sent them (staff detail view)", async () => {
+    await render(<SyncPanel status={{ ...idle, mobility }} connectivity="online" onSyncNow={noop} />);
+    expect(screen.getByText("Produtos: 90 visíveis, 10 ocultos")).toBeTruthy();
+    expect(screen.getByText("Tipos de operação: 2 visíveis, 1 oculto")).toBeTruthy();
+    expect(screen.queryByText(/Configuração de mobilidade incompleta/)).toBeNull();
+  });
+
+  it("warns when the server kept the previous base", async () => {
+    await render(<SyncPanel status={{ ...idle, mobility: [{ kind: "negotiationTypes", visible: 3, hidden: 0, keptPrevious: true }] }} connectivity="online" onSyncNow={noop} />);
+    expect(screen.getByText("Configuração de mobilidade incompleta — avise o TI; mantida a base anterior")).toBeTruthy();
+  });
+
+  it("the seller view (no mobility) shows nothing about mobility", async () => {
+    await render(<SyncPanel status={idle} connectivity="online" onSyncNow={noop} />);
+    expect(screen.queryByText(/visíveis|mobilidade/)).toBeNull();
+  });
+});

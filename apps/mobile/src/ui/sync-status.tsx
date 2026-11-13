@@ -58,6 +58,8 @@ function Row({ label, value, valueColor }: { label: string; value: string; value
   );
 }
 
+const MOBILITY_LABEL = { products: "Produtos", tops: "Tipos de operação", negotiationTypes: "Condições de pagamento" } as const;
+
 /** Status, last sync, pending count and the manual action. Shared by the header sheet and Perfil. */
 export function SyncPanel({ status, connectivity, onSyncNow, quarantinedCount = 0, onOpenQuarantine, now }: SyncViewProps) {
   const { text, tone } = describeSyncStatus(status, connectivity);
@@ -74,6 +76,12 @@ export function SyncPanel({ status, connectivity, onSyncNow, quarantinedCount = 
       {!syncing && status.failure === "sankhya_unavailable" && (status.failedSteps?.length ?? 0) > 0 && (
         <Text style={styles.hint}>{`Não atualizado: ${(status.failedSteps ?? []).join(", ")}`}</Text>
       )}
+      {!syncing && (status.mobility ?? []).some((m) => m.keptPrevious) && (
+        <Text style={styles.errorNote}>Configuração de mobilidade incompleta — avise o TI; mantida a base anterior</Text>
+      )}
+      {!syncing && (status.mobility ?? []).filter((m) => !m.keptPrevious).map((m) => (
+        <Text key={m.kind} style={styles.progress}>{`${MOBILITY_LABEL[m.kind]}: ${m.visible} ${m.visible === 1 ? "visível" : "visíveis"}, ${m.hidden} ${m.hidden === 1 ? "oculto" : "ocultos"}`}</Text>
+      ))}
       <Row label="Última sincronização" value={formatDateTime(status.lastSyncedAt)} />
       {age !== null && <Row label="Dados atualizados" value={age.text} valueColor={age.stale ? colors.warning : colors.text} />}
       <Row label="Alterações pendentes" value={String(status.pending)} />

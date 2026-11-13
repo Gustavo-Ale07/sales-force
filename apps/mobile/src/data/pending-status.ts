@@ -7,6 +7,14 @@ export const PENDING_CUSTOMER_ORDER_MESSAGE = "Este cliente ainda não foi confi
 export const PENDING_CREDIT_NOTE = "Limite de crédito a definir pelo financeiro";
 
 /** A customer created here that cannot take orders yet (waiting, queued or refused). One the ERP confirmed already can. */
+/**
+ * "Sem vendedor" seal: a confirmed customer with no seller. A customer created on this device has no seller until the ERP
+ * answers, so it never carries the seal. Display only; whether such a customer may be ordered for is an open owner question.
+ */
+export function hasNoSeller(customer: { readonly sellerCode: number | null; readonly pending?: unknown }): boolean {
+  return customer.sellerCode === null && customer.pending === undefined;
+}
+
 export function isUnconfirmedCustomer(customer: Pick<CustomerListItem, "pending">): boolean {
   return customer.pending !== undefined && customer.pending.state !== "confirmed";
 }

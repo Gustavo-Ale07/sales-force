@@ -32,10 +32,10 @@ export function createRemoteCustomerRepository(api: ApiClient): CustomerReposito
 
 export function createRemoteProductRepository(api: ApiClient): ProductRepository {
   return {
-    async list({ search, page, pageSize }) {
+    async list({ search, page, pageSize, customerCode }) {
       const body = await callApi(() =>
         api.GET("/products", {
-          params: { query: { search: search === "" ? undefined : search, page, pageSize, sort: "description" } },
+          params: { query: { search: search === "" ? undefined : search, page, pageSize, sort: "description", ...(customerCode === undefined ? {} : { customerCode }) } },
         }),
       );
       return { items: body.items, page: body.page, pageSize: body.pageSize, total: body.total };

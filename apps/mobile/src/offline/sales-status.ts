@@ -1,4 +1,4 @@
-import { CUSTOMER_UNAVAILABLE_MESSAGE, isCustomerUnavailableMessage, type DraftRecord, type DraftStatus, type SalesGroup } from "@salesforce/mobile-db";
+import { CUSTOMER_UNAVAILABLE_MESSAGE, isCustomerUnavailableMessage, PRODUCT_BLOCK_MESSAGES, type DraftRecord, type DraftStatus, type SalesGroup } from "@salesforce/mobile-db";
 
 /**
  * "Enviados" means accepted by the Force backend — NOT delivered to, confirmed by or invoiced in Sankhya. The device carries no
@@ -19,13 +19,19 @@ type StatusView = Pick<DraftRecord, "status" | "remoteId"> & Partial<Pick<DraftR
 
 /** A draft held back because its customer is no longer available (local guard or the server answer `customer_ineligible`). */
 export function isCustomerUnavailable(draft: Pick<DraftRecord, "status"> & Partial<Pick<DraftRecord, "lastError">>): boolean {
-  return draft.status === "sync_error" && isCustomerUnavailableMessage(draft.lastError ?? null);
+  return draft.status === "sync_error" && isCustomerUnavailableMessage(draft.lastError ?? null) && !isProductBlocked(draft);
+}
+
+/** A draft held because a line lost its mobility or its price after a sync (local guard; the server also refuses on send). */
+export function isProductBlocked(draft: Pick<DraftRecord, "status"> & Partial<Pick<DraftRecord, "lastError">>): boolean {
+  return draft.status === "sync_error" && Object.values(PRODUCT_BLOCK_MESSAGES).includes(draft.lastError ?? "");
 }
 
 /** Compact list badge; one per real state of the sync engine. */
 export function saleBadge(view: StatusView): SaleBadge {
   const { status, remoteId } = view;
   if (isCustomerUnavailable(view)) return { label: "Cliente indisponível", tone: "warning" };
+  if (isProductBlocked(view)) return { label: "Produto indisponível", tone: "warning" };
   switch (status) {
     case "local_only":
       return { label: "Rascunho", tone: "neutral" };
@@ -50,6 +56,9 @@ export function saleExplanation(draft: Pick<DraftRecord, "status" | "remoteId" |
     // The stored text is the cause itself (inativo, bloqueado, sem vendedor…); an old generic marker keeps the old wording.
     const cause = draft.lastError === CUSTOMER_UNAVAILABLE_MESSAGE ? "O cadastro deste cliente mudou (inativo ou bloqueado)." : draft.lastError;
     return `Cliente indisponível — revise o rascunho. ${cause} O pedido não será enviado enquanto isso não for resolvido. Nada foi alterado ou apagado.`;
+  }
+  if (isProductBlocked(draft)) {
+    return `${draft.lastError} — revise os itens do pedido. O pedido não será enviado enquanto isso não for resolvido. Nada foi alterado ou apagado.`;
   }
   switch (draft.status) {
     case "local_only":
@@ -90,6 +99,6 @@ export function saleActions(draft: Pick<DraftRecord, "status" | "remoteId"> & Pa
     duplicate: true,
     delete: !held && draft.status !== "syncing",
     // A draft held for an unavailable customer is never offered for resending: sending stays blocked until it is reviewed.
-    resend: !isCustomerUnavailable(draft) && (draft.status === "sync_error" || draft.status === "pending_sync"),
+    resend: !isCustomerUnavailable(draft) && !isProductBlocked(draft) && (draft.status === "sync_error" || draft.status === "pending_sync"),
   };
 }

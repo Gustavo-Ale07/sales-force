@@ -11,7 +11,7 @@ import {
   settleConfirmedCustomers,
   type CustomerRegistrationTransport,
 } from "./pending-customers";
-import { META_KEYS, deleteMeta, getMeta, replaceCustomers, replaceProducts, setMeta, type CustomerLike, type ProductLike } from "./reference-cache";
+import { META_KEYS, cachedPriceTableCodes, countPriceRows, deleteMeta, getMeta, replaceCustomers, replacePriceTables, replaceProducts, setMeta, type CustomerLike, type PriceTableSnapshot, type ProductLike } from "./reference-cache";
 
 /**
  * Where the reference data comes from. The server stays authoritative and delivers only what the actor's scope
@@ -20,6 +20,12 @@ import { META_KEYS, deleteMeta, getMeta, replaceCustomers, replaceProducts, setM
 export interface ReferenceSource {
   fetchCustomers(): Promise<readonly CustomerLike[]>;
   fetchProducts(): Promise<readonly ProductLike[]>;
+  /**
+   * Prices of EACH price table the visible customers use (owner 2026-11-13), one representative customer per table (the server
+   * resolves a customer's table). Optional and best-effort: a table that cannot be read is simply left out (its previous prices
+   * stay); a failure here never fails the pull.
+   */
+  fetchPriceTables?(representatives: readonly { readonly tableCode: number; readonly customerCode: number }[]): Promise<readonly PriceTableSnapshot[]>;
   /** Order-entry configuration as the API delivers it (JSON-serializable); `null` when the server has none. */
   fetchEntryConfiguration(): Promise<unknown>;
   /** Dataset the server serves (`null` = the server cannot tell: fail closed, nothing is cached or sent). */
@@ -39,15 +45,28 @@ export interface RefreshProgress {
   readonly percent: number | null;
 }
 
+/** How many items of a kind the mobility field shows/hides, and whether the anti-empty guard kept the previous data. */
+export interface MobilityCount {
+  readonly kind: "products" | "tops" | "negotiationTypes";
+  readonly visible: number;
+  readonly hidden: number;
+  readonly keptPrevious: boolean;
+}
+
 /** `failed` = at least one step of the refresh failed (the ERP could not be read); `failedSteps` names them when the server says. */
 export interface RefreshOutcome {
   readonly failed: boolean;
   readonly failedSteps: readonly string[];
+  /** Mobility counts per kind (owner 2026-11-13). Present only in the server's detail view (staff); the seller view never has them. */
+  readonly mobility?: readonly MobilityCount[];
 }
 
 export interface PullResult {
   readonly customers: number;
   readonly products: number;
+  /** Price tables kept on the device after this pull, and their price rows (size indicator). */
+  readonly priceTables: number;
+  readonly priceRows: number;
 }
 
 /**
@@ -61,6 +80,20 @@ export async function pullReferenceData(db: SqlDatabase, env: OfflineEnv, source
   const before = await source.fetchDatasetIdentity();
   if (before === null) throw new DatasetIdentityError();
   const [customers, products, configuration] = await Promise.all([source.fetchCustomers(), source.fetchProducts(), source.fetchEntryConfiguration()]);
+  // One representative customer per distinct price table (never for a customer without a table: those use the base catalog).
+  const representatives = new Map<number, number>();
+  for (const customer of customers) {
+    const table = customer.priceTableCode;
+    if (table !== null && table !== undefined && !representatives.has(table)) representatives.set(table, customer.code);
+  }
+  let priceTables: readonly PriceTableSnapshot[] = [];
+  if (source.fetchPriceTables !== undefined && representatives.size > 0) {
+    try {
+      priceTables = await source.fetchPriceTables([...representatives].map(([tableCode, customerCode]) => ({ tableCode, customerCode })));
+    } catch {
+      priceTables = [];
+    }
+  }
   const after = await source.fetchDatasetIdentity();
   if (!sameDataset(before, after)) throw new DatasetIdentityError("O conjunto de dados do servidor mudou durante a atualização.");
   // The carrier list is a convenience: when it cannot be read the previous list stays, unless it belongs to another dataset.
@@ -81,6 +114,10 @@ export async function pullReferenceData(db: SqlDatabase, env: OfflineEnv, source
     // A customer confirmed by the ERP is replaced by its real mirror record (no duplicate in the list).
     await settleConfirmedCustomers(tx);
     await replaceProducts(tx, products);
+    // Tables still used by a customer but not read this time keep their previous prices; the rest are dropped.
+    const used = new Set(representatives.keys());
+    const keepTables = (await cachedPriceTableCodes(tx)).filter((code) => used.has(code) && !priceTables.some((t) => t.tableCode === code));
+    await replacePriceTables(tx, priceTables.filter((t) => used.has(t.tableCode)), { keepTables });
     await setMeta(tx, META_KEYS.customersSyncedAt, now, now);
     await setMeta(tx, META_KEYS.productsSyncedAt, now, now);
     await setMeta(tx, META_KEYS.entryConfiguration, JSON.stringify(configuration ?? null), now);
@@ -90,7 +127,8 @@ export async function pullReferenceData(db: SqlDatabase, env: OfflineEnv, source
     else if (!sameDataset(previousDataset, before)) await deleteMeta(tx, META_KEYS.carriers);
     await setMeta(tx, META_KEYS.cacheOwner, ownerAccountId, now);
   });
-  return { customers: customers.length, products: products.length };
+  const kept = await db.transaction(async (tx) => ({ tables: (await cachedPriceTableCodes(tx)).length, rows: await countPriceRows(tx) }));
+  return { customers: customers.length, products: products.length, priceTables: kept.tables, priceRows: kept.rows };
 }
 
 /* ---------- sync manager ---------- */
@@ -126,6 +164,8 @@ export interface SyncStatus {
   readonly failure?: SyncFailure | null;
   /** Friendly names of the refresh steps that failed on the server (Sankhya could not be read). */
   readonly failedSteps?: readonly string[];
+  /** Mobility counts of the last refresh (staff detail view only; empty/absent for a seller). */
+  readonly mobility?: readonly MobilityCount[];
   /** Orders that need attention, with the reason. */
   readonly attention?: readonly AttentionItem[];
   /** Step being run right now (only while `phase` is `syncing`). */
@@ -208,6 +248,7 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
     let lastError: string | null = null;
     let failureCause: SyncFailure | null = null;
     let failedSteps: readonly string[] = [];
+    let mobility: readonly MobilityCount[] = [];
     let pulled = false;
     const setFailure = (failure: Failure): void => {
       phase = failure.phase;
@@ -274,6 +315,7 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
             const outcome = await deps.source.refreshOnDemand((progress) => {
               publish({ ...status, phase: "syncing", progress });
             });
+            mobility = outcome.mobility ?? [];
             if (outcome.failed) {
               failedSteps = outcome.failedSteps;
               failureCause = "sankhya_unavailable";
@@ -302,7 +344,7 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
       lastSyncedAt = now;
       await setMeta(deps.db, "sync.last_success_at", now, now).catch(() => undefined);
     }
-    return publish({ phase, ...counts, lastSyncedAt, lastError, failure: failureCause, failedSteps, progress: null });
+    return publish({ phase, ...counts, lastSyncedAt, lastError, failure: failureCause, failedSteps, mobility, progress: null });
   };
 
   const start = (reason: SyncReason, pull: boolean): Promise<SyncStatus> => {

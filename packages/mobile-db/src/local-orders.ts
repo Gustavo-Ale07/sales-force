@@ -50,8 +50,16 @@ export function customerBlockMessage(reason?: string | null): string {
     : CUSTOMER_BLOCK_MESSAGES.customer_unavailable;
 }
 
+/** Why a line of the draft can no longer be sold (owner 2026-11-13); same codes as the server issue codes. Stored as the marker. */
+export type ProductBlockReason = "product_without_mobility" | "product_without_price";
+
+export const PRODUCT_BLOCK_MESSAGES: Readonly<Record<ProductBlockReason, string>> = {
+  product_without_mobility: "Produto sem mobilidade",
+  product_without_price: "Produto sem preço",
+};
+
 /** Every stored text that marks a held draft: the per-cause ones plus the generic text written by earlier app versions. */
-export const CUSTOMER_HELD_MESSAGES: readonly string[] = [CUSTOMER_UNAVAILABLE_MESSAGE, ...Object.values(CUSTOMER_BLOCK_MESSAGES)];
+export const CUSTOMER_HELD_MESSAGES: readonly string[] = [CUSTOMER_UNAVAILABLE_MESSAGE, ...Object.values(CUSTOMER_BLOCK_MESSAGES), ...Object.values(PRODUCT_BLOCK_MESSAGES)];
 
 export function isCustomerUnavailableMessage(lastError: string | null): boolean {
   return lastError !== null && CUSTOMER_HELD_MESSAGES.includes(lastError);

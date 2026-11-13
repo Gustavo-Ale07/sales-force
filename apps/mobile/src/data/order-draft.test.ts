@@ -250,16 +250,21 @@ describe("isLinePriceOrderable", () => {
     expect(isLinePriceOrderable("priced", config(false, false))).toBe(true);
   });
 
-  it("follows the installation configuration for lines without price", () => {
-    expect(isLinePriceOrderable("none", config(true, true))).toBe(true);
+  it("a line without price (or zero) is never orderable, whatever the legacy configuration says (owner 2026-11-13)", () => {
+    expect(isLinePriceOrderable("none", config(true, true))).toBe(false);
     expect(isLinePriceOrderable("none", config(false, true))).toBe(false);
-    expect(isLinePriceOrderable("none", config(true, false))).toBe(false);
+    expect(isLinePriceOrderable("zero", config(true, true))).toBe(false);
   });
 });
 
 describe("describeIssue", () => {
   it("names the item (1-based) and uses a pt-BR message", () => {
     expect(describeIssue({ path: "items[2]", code: "product_not_sellable" })).toBe("Item 3: Produto indisponível para venda.");
+  });
+
+  it("explains a product that lost its mobility or its price (server 400 validation_failed on send)", () => {
+    expect(describeIssue({ path: "items[0]", code: "product_without_mobility" })).toBe("Item 1: Produto sem mobilidade");
+    expect(describeIssue({ path: "items[3]", code: "product_without_price" })).toBe("Item 4: Produto sem preço");
   });
 
   it("falls back to the server message, then a generic one, for unknown codes", () => {

@@ -1,4 +1,4 @@
-import { TransportError, type DatasetIdentity, type RefreshOutcome, type RefreshProgress, type ReferenceSource } from "@salesforce/mobile-db";
+import { TransportError, type DatasetIdentity, type MobilityCount, type PriceTableSnapshot, type RefreshOutcome, type RefreshProgress, type ReferenceSource } from "@salesforce/mobile-db";
 import { ApiRequestError, callApi, type ApiClient } from "../data/api";
 import type { CustomerListItem, OrderEntryConfiguration, ProductListItem } from "../data/ports";
 import { toTransportError } from "./transport";
@@ -66,6 +66,7 @@ const PHASE_LABEL: Readonly<Record<string, string>> = {
 interface RefreshStepView {
   readonly entity: string;
   readonly status: string;
+  readonly mobility?: readonly MobilityCount[];
 }
 
 interface RefreshView {
@@ -93,7 +94,8 @@ function progressOf(view: RefreshView): RefreshProgress {
 function outcomeOf(view: RefreshView): RefreshOutcome {
   if (view.steps !== undefined) {
     const failedSteps = [...new Set(view.steps.filter((s) => s.status === "failed").map((s) => labelOf(s.entity)))];
-    return { failed: failedSteps.length > 0, failedSteps };
+    const mobility = view.steps.flatMap((s) => s.mobility ?? []);
+    return { failed: failedSteps.length > 0, failedSteps, ...(mobility.length > 0 ? { mobility } : {}) };
   }
   // The seller's view carries no entity names: only whether something failed.
   return { failed: view.hasWarnings === true, failedSteps: [] };
@@ -150,6 +152,28 @@ export function createReferenceSource(api: ApiClient, timing: RefreshTiming = {}
             }>,
         ),
       ),
+    // The server resolves prices in the table of the customer it is given and lists only products priced above zero there (owner
+    // 2026-11-13). One representative customer per table; a table that cannot be read is left out (its previous prices stay).
+    fetchPriceTables: async (representatives) => {
+      const tables: PriceTableSnapshot[] = [];
+      for (const { tableCode, customerCode } of representatives) {
+        try {
+          const items = await fetchAllPages<ProductListItem>(
+            (page) =>
+              callApi(() => api.GET("/products", { params: { query: { page, pageSize: PAGE_SIZE, sort: "description", customerCode } } })) as Promise<{
+                items: readonly ProductListItem[];
+                total: number;
+              }>,
+          );
+          const prices = items.filter((p) => p.listPrice.state === "priced").map((p) => ({ productCode: p.code, listPrice: p.listPrice }));
+          tables.push({ tableCode, prices });
+        } catch (error) {
+          // No connection: nothing else will answer either. Anything else (one table refused): try the next table.
+          if (error instanceof ApiRequestError && error.isNetwork) break;
+        }
+      }
+      return tables;
+    },
     fetchEntryConfiguration: () => guard(() => callApi(() => api.GET("/order-entry/configuration"))),
     // Same endpoint the online carrier picker uses; the pull treats a failure here as non-fatal.
     fetchCarriers: () => guard(async () => (await callApi(() => api.GET("/carriers"))).items),

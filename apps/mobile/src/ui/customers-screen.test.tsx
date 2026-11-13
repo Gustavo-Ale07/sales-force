@@ -17,6 +17,25 @@ describe("CustomersScreen", () => {
     expect(screen.getByText(/Código 10 · 12345678000190/)).toBeTruthy();
   });
 
+  it("marks a customer without a seller with the 'Sem vendedor' seal (and only that one)", async () => {
+    const customers: CustomerRepository = {
+      list: async () => pageOf([customer(1, { name: "Sem dono", sellerCode: null }), customer(2, { name: "Com dono", sellerCode: 7, sellerName: "Ana" })], 2),
+    };
+    await render(<CustomersScreen customers={customers} onUnauthenticated={noop} />);
+    await screen.findByText("Sem dono");
+    expect(screen.getAllByText("Sem vendedor")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: /Sem dono, código 1, Sem vendedor/ })).toBeTruthy();
+  });
+
+  it("does not seal a customer created on this device (its seller is set by the server)", async () => {
+    const customers: CustomerRepository = {
+      list: async () => pageOf([customer(-1, { name: "Novo", sellerCode: null, pending: { state: "queued" } } as never)], 1),
+    };
+    await render(<CustomersScreen customers={customers} onUnauthenticated={noop} />);
+    await screen.findByText("Novo");
+    expect(screen.queryByText("Sem vendedor")).toBeNull();
+  });
+
   it("says the data comes from this device when offline", async () => {
     const customers: CustomerRepository = { list: async () => pageOf([customer(1, { name: "Mercado Sul" })], 1) };
     await render(<CustomersScreen customers={customers} onUnauthenticated={noop} connectivity="offline" />);

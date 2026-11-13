@@ -190,4 +190,20 @@ export const migrations: readonly Migration[] = [
       `UPDATE pending_customer SET document = '', name = '', search_text = '', payload = 'null' WHERE state IN ('confirmed', 'rejected')`,
     ],
   },
+  {
+    // Owner 2026-11-13: the device keeps the list price of every product in EACH price table of the visible customers, so the
+    // catalog can be filtered per customer's table fully offline. `price_json` is the list-price context the API delivered
+    // (unit price, table, version); a product appears for a table only when its row here is priced above zero. Expand-only,
+    // a cache the pull replaces (never edited locally, never holds cost or margin: P-20).
+    version: 9,
+    name: "cache_table_price",
+    statements: [
+      `CREATE TABLE cache_table_price (
+        table_code   INTEGER NOT NULL,
+        product_code INTEGER NOT NULL,
+        price_json   TEXT NOT NULL,
+        PRIMARY KEY (table_code, product_code)
+      ) STRICT, WITHOUT ROWID`,
+    ],
+  },
 ];

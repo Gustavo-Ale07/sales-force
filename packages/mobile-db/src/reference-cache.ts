@@ -56,20 +56,24 @@ export interface ProductLike {
   readonly groupCode?: number | null;
   readonly groupName?: string | null;
   /** Only `state` is read here (price-state filter); the rest of the list price is opaque to the cache. */
-  readonly listPrice?: { readonly state: string };
+  readonly listPrice?: unknown;
 }
 
 /**
  * Catalog filters that run in SQLite over the cached rows (no schema change; `group_code` is already indexed).
- * `priced` = a price row exists (an explicit zero row included); `none` = no price resolved ("Sem preço").
+ * No price filter (owner 2026-11-13): the server sends only products with a price above zero.
  */
 export interface ProductCacheFilters {
   readonly groupCodes?: readonly number[];
-  readonly priceState?: "priced" | "none";
 }
 
 export interface ProductCacheRequest extends CachePageRequest {
   readonly filters?: ProductCacheFilters;
+  /**
+   * List the catalog of this price table (the order customer's table): only products with a price above zero in it, shown with
+   * that table's price. Absent = the base catalog (reference table). The caller checks `cachedPriceTableCodes` first.
+   */
+  readonly priceTableCode?: number;
 }
 
 export interface ProductGroupEntry {
@@ -259,13 +263,75 @@ function productClause(search: string, filters: ProductCacheFilters | undefined)
     conditions.push(`group_code IN (${filters.groupCodes.map(() => "?").join(", ")})`);
     params.push(...filters.groupCodes);
   }
-  if (filters?.priceState === "priced") conditions.push("json_extract(data, '$.listPrice.state') IN ('priced', 'zero')");
-  else if (filters?.priceState === "none") conditions.push("COALESCE(json_extract(data, '$.listPrice.state'), 'none') = 'none'");
   return { where: whereOf(conditions), params };
 }
 
-export function searchProducts<T extends ProductLike>(tx: SqlExecutor, request: ProductCacheRequest): Promise<CachePage<T>> {
-  return searchTable<T>(tx, "cache_product", request, productClause(request.search, request.filters));
+export async function searchProducts<T extends ProductLike>(tx: SqlExecutor, request: ProductCacheRequest): Promise<CachePage<T>> {
+  const clause = productClause(request.search, request.filters);
+  if (request.priceTableCode === undefined) return searchTable<T>(tx, "cache_product", request, clause);
+  // Same conditions, qualified for the join (the base columns keep their names; the price table only adds its own).
+  const joined = `cache_product p JOIN cache_table_price t ON t.product_code = p.code AND t.table_code = ? AND ${PRICED_SQL}`;
+  const where = clause.where.replace(/(search_text|group_code|data)/g, "p.$1");
+  const params = [request.priceTableCode, ...clause.params];
+  const totalRow = (await tx.query<SqlRow>(`SELECT count(*) AS n FROM ${joined} ${where}`, params))[0];
+  const rows = await tx.query<SqlRow>(
+    `SELECT p.data AS data, t.price_json AS price_json FROM ${joined} ${where} ORDER BY p.sort_text, p.code LIMIT ? OFFSET ?`,
+    [...params, request.pageSize, (request.page - 1) * request.pageSize],
+  );
+  return {
+    items: rows.map((row) => ({ ...(JSON.parse(String(row.data)) as T), listPrice: JSON.parse(String(row.price_json)) as T["listPrice"] })),
+    page: request.page,
+    pageSize: request.pageSize,
+    total: Number(totalRow?.n ?? 0),
+  };
+}
+
+/** A price row that makes a product orderable: priced above zero (a zero or missing price never does). */
+const PRICED_SQL = "json_extract(t.price_json, '$.state') = 'priced'";
+
+/** One price table as delivered: the list-price context of every product that has a row in it. */
+export interface PriceTableSnapshot {
+  readonly tableCode: number;
+  readonly prices: readonly { readonly productCode: number; readonly listPrice: unknown }[];
+}
+
+/**
+ * Replaces the price rows of the given tables (each fully, in one go) and removes every table that is neither given nor in
+ * `keepTables` (a table no customer uses any more). Never edited locally.
+ */
+export async function replacePriceTables(tx: SqlExecutor, tables: readonly PriceTableSnapshot[], options: { readonly keepTables?: readonly number[] } = {}): Promise<void> {
+  const keep = new Set([...tables.map((t) => t.tableCode), ...(options.keepTables ?? [])]);
+  const existing = await cachedPriceTableCodes(tx);
+  for (const code of existing) if (!keep.has(code)) await tx.execute("DELETE FROM cache_table_price WHERE table_code = ?", [code]);
+  for (const table of tables) {
+    await tx.execute("DELETE FROM cache_table_price WHERE table_code = ?", [table.tableCode]);
+    await insertBatches(
+      tx,
+      table.prices,
+      "table_code, product_code, price_json",
+      "(?, ?, ?)",
+      (row) => [table.tableCode, row.productCode, JSON.stringify(row.listPrice)],
+      "cache_table_price",
+    );
+  }
+}
+
+/** Price table of a cached customer: a code, `null` (no table: base catalog) or `undefined` (customer not on this device). */
+export async function customerPriceTableOf(tx: SqlExecutor, customerCode: number): Promise<number | null | undefined> {
+  const rows = await tx.query<SqlRow>("SELECT json_extract(data, '$.priceTableCode') AS table_code FROM cache_customer WHERE code = ?", [customerCode]);
+  const row = rows[0];
+  if (row === undefined) return undefined;
+  return row.table_code === null || row.table_code === undefined ? null : Number(row.table_code);
+}
+
+/** Price tables whose prices are on this device (ascending). */
+export async function cachedPriceTableCodes(tx: SqlExecutor): Promise<number[]> {
+  const rows = await tx.query<SqlRow>("SELECT DISTINCT table_code FROM cache_table_price ORDER BY table_code");
+  return rows.map((row) => Number(row.table_code));
+}
+
+export async function countPriceRows(tx: SqlExecutor): Promise<number> {
+  return Number((await tx.query<SqlRow>("SELECT count(*) AS n FROM cache_table_price"))[0]?.n ?? 0);
 }
 
 /** Groups present in the cached catalog (flat: the ERP mirror has no group hierarchy), for the group filter. */
@@ -277,7 +343,15 @@ export async function productGroups(tx: SqlExecutor): Promise<ProductGroupEntry[
   return rows.map((row) => ({ code: Number(row.group_code), name: row.group_name === null ? null : String(row.group_name), count: Number(row.n) }));
 }
 
-export async function getCachedProduct<T extends ProductLike>(tx: SqlExecutor, code: number): Promise<T | null> {
+export async function getCachedProduct<T extends ProductLike>(tx: SqlExecutor, code: number, priceTableCode?: number): Promise<T | null> {
+  if (priceTableCode !== undefined) {
+    const rows = await tx.query<SqlRow>(
+      `SELECT p.data AS data, t.price_json AS price_json FROM cache_product p JOIN cache_table_price t ON t.product_code = p.code AND t.table_code = ? AND ${PRICED_SQL} WHERE p.code = ?`,
+      [priceTableCode, code],
+    );
+    const hit = rows[0];
+    return hit === undefined ? null : ({ ...(JSON.parse(String(hit.data)) as T), listPrice: JSON.parse(String(hit.price_json)) as T["listPrice"] });
+  }
   const rows = await tx.query<SqlRow>("SELECT data FROM cache_product WHERE code = ?", [code]);
   const row = rows[0];
   return row === undefined ? null : (JSON.parse(String(row.data)) as T);
