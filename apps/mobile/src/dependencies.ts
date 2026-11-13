@@ -1,6 +1,6 @@
 import { createHttpAuth } from "./auth/http-auth";
 import type { AuthPort } from "./auth/auth-port";
-import { createDeviceConnectivity, type ConnectivityPort } from "./connectivity/connectivity";
+import { createDeviceConnectivity, type ConnectivityPort, type ConnectivityState } from "./connectivity/connectivity";
 import { createMobileApiClient } from "./data/api";
 import type { Repositories } from "./data/ports";
 import { createRemoteRepositories } from "./data/remote-repositories";
@@ -25,11 +25,20 @@ export interface AppDependencies {
 export function createAppDependencies(baseUrl: string, db: SqlDatabase): AppDependencies {
   const api = createMobileApiClient(baseUrl);
   const remote = createRemoteRepositories(api);
+  const connectivity = createDeviceConnectivity();
+  // The sync engine tells "no internet" from "Force server not answering" with the device's own state (kept for the app's life).
+  let internet: ConnectivityState = "unknown";
+  void connectivity.getState().then((state) => {
+    internet = state;
+  }).catch(() => undefined);
+  connectivity.subscribe((state) => {
+    internet = state;
+  });
   return {
     auth: createHttpAuth(api),
     repositories: remote,
-    connectivity: createDeviceConnectivity(),
+    connectivity,
     orderPdf: createExpoOrderPdf(),
-    offline: createOfflineServices({ db, api, remote, imageFileSystem: createExpoImageFileSystem() }),
+    offline: createOfflineServices({ db, api, remote, imageFileSystem: createExpoImageFileSystem(), internetState: () => internet }),
   };
 }

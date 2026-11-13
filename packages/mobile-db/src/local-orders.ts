@@ -411,6 +411,43 @@ export async function countOutbox(db: SqlExecutor, ownerAccountId: string, datas
   return counts;
 }
 
+/** One order the seller must look at, with the reason in the seller's words. */
+export interface AttentionItem {
+  readonly localId: string;
+  readonly customerName: string;
+  readonly reason: string;
+}
+
+const ATTENTION_FALLBACK: Readonly<Record<string, string>> = {
+  needs_review: "O preço mudou — revise o pedido.",
+  conflict: "O pedido mudou no servidor — revise antes de enviar.",
+  rejected: "O pedido não foi aceito — revise os dados.",
+  pending: "O pedido está retido — revise.",
+};
+
+/** Orders that need attention (rejected, conflict, price review, held for the customer), one per draft, newest first. */
+export async function listAttentionItems(db: SqlExecutor, ownerAccountId: string, limit = 10): Promise<AttentionItem[]> {
+  const heldMarks = CUSTOMER_HELD_MESSAGES.map(() => "?").join(", ");
+  const rows = await db.query<SqlRow>(
+    `SELECT d.local_id AS local_id, d.customer_name AS customer_name, o.state AS state, o.last_error AS last_error
+     FROM outbox o JOIN local_order_draft d ON d.local_id = o.draft_local_id
+     WHERE d.owner_account_id = ? AND (o.state IN ('rejected', 'conflict', 'needs_review') OR (o.state = 'pending' AND COALESCE(o.last_error, '') IN (${heldMarks})))
+     ORDER BY o.updated_at DESC, o.rowid DESC`,
+    [ownerAccountId, ...CUSTOMER_HELD_MESSAGES],
+  );
+  const seen = new Set<string>();
+  const items: AttentionItem[] = [];
+  for (const row of rows) {
+    const localId = String(row.local_id);
+    if (seen.has(localId)) continue;
+    seen.add(localId);
+    const lastError = row.last_error === null || row.last_error === undefined ? "" : String(row.last_error);
+    items.push({ localId, customerName: String(row.customer_name), reason: lastError !== "" ? lastError : (ATTENTION_FALLBACK[String(row.state)] ?? "Revise o pedido.") });
+    if (items.length >= limit) break;
+  }
+  return items;
+}
+
 /* ---------- payload ---------- */
 
 export function buildPayload(input: Pick<SaveDraftInput, "customerCode" | "negotiationTypeCode" | "topCode" | "carrierCode" | "freightType" | "notes" | "items">): OrderCommandPayload {

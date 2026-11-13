@@ -1,5 +1,6 @@
 import type { SqlDatabase, SqlExecutor, SqlRow } from "./connection";
 import {
+  CUSTOMER_HELD_MESSAGES,
   customerBlockMessage,
   type CustomerBlockReason,
   getDraft,
@@ -467,6 +468,39 @@ async function holdForCustomer(db: SqlDatabase, env: OfflineEnv, draftLocalId: s
     );
     await refreshDraftStatus(tx, draftLocalId);
   });
+}
+
+/**
+ * Re-checks every draft marked as held for its customer against the CURRENT cache (run after each sync pull). A mark whose cause is
+ * gone is cleared (the draft goes back to waiting; nothing is sent here); a mark whose cause changed gets the new text. Returns how
+ * many drafts were released. Never changes attempts, keys or payloads.
+ */
+export async function reevaluateHeldOrders(db: SqlDatabase, env: OfflineEnv, ownerAccountId: string): Promise<number> {
+  const marks = CUSTOMER_HELD_MESSAGES.map(() => "?").join(", ");
+  const rows = await db.query<SqlRow>(
+    `SELECT DISTINCT d.local_id AS local_id FROM local_order_draft d JOIN outbox o ON o.draft_local_id = d.local_id
+     WHERE d.owner_account_id = ? AND o.state = 'pending' AND o.last_error IN (${marks})`,
+    [ownerAccountId, ...CUSTOMER_HELD_MESSAGES],
+  );
+  let released = 0;
+  for (const row of rows) {
+    const draft = await getDraft(db, String(row.local_id));
+    if (draft === null) continue;
+    const block = pendingCustomerBlockOf(draft.customerCode) ?? (await customerBlockOf(db, draft.customerCode));
+    if (block !== null) {
+      await holdForCustomer(db, env, draft.localId, block);
+      continue;
+    }
+    await db.transaction(async (tx) => {
+      await tx.execute(
+        `UPDATE outbox SET last_error = NULL, updated_at = ? WHERE draft_local_id = ? AND state = 'pending' AND last_error IN (${marks})`,
+        [isoNow(env), draft.localId, ...CUSTOMER_HELD_MESSAGES],
+      );
+      await refreshDraftStatus(tx, draft.localId);
+    });
+    released += 1;
+  }
+  return released;
 }
 
 /** Moves every draft of the owner with unresolved commands that is definitely not eligible (legacy, other dataset) out of delivery. */

@@ -26,8 +26,9 @@ export interface PendingCustomersPort {
   /** "Refazer": what the seller typed in a refused customer, to pre-fill the form. Changes nothing. */
   redo(clientRequestId: string): Promise<CreatePendingCustomerInput["request"]>;
   /**
-   * Whether the "Novo cliente" entry point should be offered: `false` while the server's last answer was "customer creation is
-   * off" (409 customer_write_disabled; no other signal exists). Turns back on with any accepted answer or after an hour.
+   * Whether the "Novo cliente" entry point should be offered: `false` when the last sync's configuration said
+   * `general.clientCreationEnabled === false` (re-read at every sync, no expiry), or after a 409 customer_write_disabled
+   * until the next sync. The next sync saying "on" turns it back. Absent in the configuration = not hidden, not inferred.
    */
   creationAvailable(): Promise<boolean>;
   list(search?: string): Promise<PendingCustomerRecord[]>;

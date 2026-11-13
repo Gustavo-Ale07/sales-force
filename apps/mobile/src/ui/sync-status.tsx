@@ -3,7 +3,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useInsets } from "./use-insets";
 import type { SyncStatus } from "@salesforce/mobile-db";
 import type { ConnectivityState } from "../connectivity/connectivity";
-import { describeSyncChip, describeSyncStatus, type SyncTone } from "../offline/sync-status-text";
+import { describeConnection, describeSyncChip, describeSyncStatus, type SyncTone } from "../offline/sync-status-text";
 import { colors, spacing } from "../theme";
 import { SyncIcon } from "./sync-icon";
 
@@ -64,10 +64,22 @@ export function SyncPanel({ status, connectivity, onSyncNow, quarantinedCount = 
   return (
     <View style={styles.panel}>
       <Row label="Situação" value={text} valueColor={TONE_COLOR[tone]} />
-      <Row label="Conexão" value={offline ? "Sem conexão" : connectivity === "online" ? "Online" : "Verificando"} />
+      <Row label="Conexão" value={describeConnection(status, connectivity)} />
+      {syncing && status.progress != null && (
+        <Text style={styles.progress}>{status.progress.percent === null ? status.progress.label : `${status.progress.label} (${status.progress.percent}%)`}</Text>
+      )}
+      {!syncing && status.failure === "sankhya_unavailable" && (status.failedSteps?.length ?? 0) > 0 && (
+        <Text style={styles.hint}>{`Não atualizado: ${(status.failedSteps ?? []).join(", ")}`}</Text>
+      )}
       <Row label="Última sincronização" value={formatDateTime(status.lastSyncedAt)} />
       <Row label="Alterações pendentes" value={String(status.pending)} />
       {status.needsAttention > 0 && <Row label="Pedidos que precisam de atenção" value={String(status.needsAttention)} valueColor={colors.red} />}
+      {(status.attention ?? []).map((item) => (
+        <View key={item.localId} style={styles.attentionItem}>
+          <Text style={styles.attentionCustomer}>{item.customerName}</Text>
+          <Text style={styles.attentionReason}>{item.reason}</Text>
+        </View>
+      ))}
       {quarantinedCount > 0 && onOpenQuarantine !== undefined && (
         <View style={styles.quarantine}>
           <Text style={styles.quarantineText}>Pedidos antigos retidos não são enviados ao Force. Você pode consultá-los ou descartá-los.</Text>
@@ -154,4 +166,8 @@ const styles = StyleSheet.create({
   quarantineLink: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", minHeight: 44 },
   quarantineLinkText: { fontSize: 14, fontWeight: "700", color: colors.navy },
   hint: { fontSize: 12, color: colors.textMuted, textAlign: "center" },
+  progress: { fontSize: 13, color: colors.textMuted },
+  attentionItem: { gap: 2, borderRadius: 6, backgroundColor: colors.errorBackground, padding: spacing.sm },
+  attentionCustomer: { fontSize: 14, fontWeight: "700", color: colors.text },
+  attentionReason: { fontSize: 13, color: colors.text },
 });

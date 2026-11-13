@@ -532,14 +532,14 @@ describe("is customer creation available? (derived from the last server answer)"
     expect(await isCustomerCreationAvailable(db, env)).toBe(true);
   });
 
-  it("the 'off' answer expires after an hour so the entry point can come back and learn again", async () => {
+  it("the 'off' answer has no expiry (owner 2026-11-13): only a sync that says 'on' turns it back", async () => {
     await create();
     erp.script = [fail("server", "customer_write_disabled")];
     await push();
     clock = new Date("2026-11-13T12:59:00.000Z");
     expect(await isCustomerCreationAvailable(db, env)).toBe(false);
-    clock = new Date("2026-11-13T13:01:00.000Z");
-    expect(await isCustomerCreationAvailable(db, env)).toBe(true);
+    clock = new Date("2026-11-14T13:01:00.000Z");
+    expect(await isCustomerCreationAvailable(db, env)).toBe(false);
   });
 });
 

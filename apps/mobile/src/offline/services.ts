@@ -1,4 +1,4 @@
-import { createSyncManager, type OfflineEnv, type SqlDatabase, type SyncManager } from "@salesforce/mobile-db";
+import { createSyncManager, type InternetState, type OfflineEnv, type SqlDatabase, type SyncManager } from "@salesforce/mobile-db";
 import type { Account } from "../auth/auth-port";
 import type { ApiClient } from "../data/api";
 import type { Repositories } from "../data/ports";
@@ -37,6 +37,8 @@ export function createOfflineServices(deps: {
   readonly env?: OfflineEnv;
   readonly imageFileSystem?: ImageFileSystem;
   readonly onUnexpectedError?: (error: unknown) => void;
+  /** Device internet state (OS check), so a failed sync says "no internet" or "server unavailable" correctly. */
+  readonly internetState?: () => InternetState;
 }): OfflineServices {
   const env: OfflineEnv = deps.env ?? { now: () => new Date(), newId: newClientRequestId };
   const transport = createOrderTransport(deps.api);
@@ -57,6 +59,7 @@ export function createOfflineServices(deps: {
         source,
         ownerAccountId: account.id,
         ...(deps.onUnexpectedError === undefined ? {} : { onUnexpectedError: deps.onUnexpectedError }),
+        ...(deps.internetState === undefined ? {} : { internetState: deps.internetState }),
       });
       const services: AccountServices = {
         repositories: createOfflineFirstRepositories({ db: deps.db, env, ownerAccountId: account.id, remote: deps.remote }),

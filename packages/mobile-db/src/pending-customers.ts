@@ -7,10 +7,12 @@ import { deleteMeta, getMeta, setMeta, upsertCustomer, type CustomerLike } from 
 /** Seller-facing text while the server says customer creation is switched off on this installation. The customer stays queued. */
 export const CUSTOMER_CREATION_NOT_RELEASED = "Cadastro de cliente ainda não liberado, vamos tentar de novo";
 
-/** When the server last answered 409 `customer_write_disabled` (ISO). It is the only signal: no endpoint or configuration exposes it. */
-const CREATION_OFF_META = "customers.creation_disabled_at";
-/** The "off" answer is trusted for this long, then the entry point may come back and the next attempt learns again. */
-const CREATION_OFF_TTL_MS = 3_600_000;
+/**
+ * "0" while customer creation is switched off. The source of truth is `general.clientCreationEnabled` of the order-entry
+ * configuration, re-read at every sync (owner 2026-11-13); a 409 `customer_write_disabled` may also set it until the next sync.
+ * No expiry: only a sync (or an accepted answer) turns it back on.
+ */
+const CREATION_OFF_META = "customers.creation_enabled";
 
 /**
  * Customers the seller created in the app that the ERP has not confirmed yet (customer-write plan A2, F7).
@@ -235,11 +237,30 @@ export async function redoPendingCustomer(db: SqlExecutor, ownerAccountId: strin
   return row.request;
 }
 
-/** `false` while the server's last answer was "customer creation is off" (stale after an hour); `true` otherwise, also when unknown. */
-export async function isCustomerCreationAvailable(db: SqlExecutor, env: OfflineEnv): Promise<boolean> {
-  const at = await getMeta(db, CREATION_OFF_META);
-  if (at === null) return true;
-  return env.now().getTime() - new Date(at).getTime() >= CREATION_OFF_TTL_MS;
+/** `false` while the last configuration (or a 409) said "customer creation is off"; `true` otherwise, also when unknown. */
+export async function isCustomerCreationAvailable(db: SqlExecutor, _env?: OfflineEnv): Promise<boolean> {
+  return (await getMeta(db, CREATION_OFF_META)) !== "0";
+}
+
+/**
+ * Applies the creation signal of a freshly pulled configuration (inside the pull transaction). `false` hides the entry point;
+ * `true` shows it and clears the "not released" notice of waiting customers (they are due again); absent = unknown: nothing is
+ * hidden and nothing is inferred.
+ */
+export async function applyCustomerCreationSignal(tx: SqlExecutor, configuration: unknown, now: string): Promise<void> {
+  const general = typeof configuration === "object" && configuration !== null ? (configuration as { general?: unknown }).general : undefined;
+  const flag = typeof general === "object" && general !== null ? (general as { clientCreationEnabled?: unknown }).clientCreationEnabled : undefined;
+  if (flag === false) {
+    await setMeta(tx, CREATION_OFF_META, "0", now);
+    return;
+  }
+  if ((await getMeta(tx, CREATION_OFF_META)) !== null) await deleteMeta(tx, CREATION_OFF_META);
+  if (flag === true) {
+    await tx.execute(
+      "UPDATE pending_customer SET last_error = NULL, next_attempt_at = NULL, updated_at = ? WHERE last_error = ? AND state IN ('queued', 'awaiting_erp')",
+      [now, CUSTOMER_CREATION_NOT_RELEASED],
+    );
+  }
 }
 
 export async function getPendingCustomer(db: SqlExecutor, ownerAccountId: string, clientRequestId: string): Promise<PendingCustomerRecord | null> {
@@ -394,7 +415,7 @@ async function settleFromServer(db: SqlDatabase, env: OfflineEnv, transport: Cus
 }
 
 async function noteCreationAnswer(db: SqlExecutor, env: OfflineEnv, disabled: boolean): Promise<void> {
-  if (disabled) await setMeta(db, CREATION_OFF_META, isoNow(env), isoNow(env));
+  if (disabled) await setMeta(db, CREATION_OFF_META, "0", isoNow(env));
   else if ((await getMeta(db, CREATION_OFF_META)) !== null) await deleteMeta(db, CREATION_OFF_META);
 }
 
