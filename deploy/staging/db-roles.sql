@@ -59,6 +59,8 @@
 --   sales_order_approval                  S I U       -              orders approvals (discount approval requests: INSERT on submit, UPDATE on decision or invalidation; never deleted)
 --   customer_order_template               S I U       -              templates.repository
 --   customer_order_template_item          S I U D     -              templates.repository (items replaced)
+--   customer_registration                 S I         S U            api: INSERT of the registration request (hourly-limit count, idempotent replay and open-document lookup read it); worker: reads the status and closes it (confirmed/rejected/unknown) on delivery. Never deleted
+--   customer_registration_refusal         S I         -              api: INSERT of a duplicate-document refusal and the hourly-limit count; carries no document data (account, reason, time). Worker never touches it
 --   integration_outbox                    S I U D     S U            api: INSERT on submit (same transaction as order -> queued); DELETE with its order (D-Y, never-delivered orders only; the dry-run record goes by cascade);
 --                                                                       worker: claims and closes deliveries (SNK-7). The order gate trigger reads sales_order as the invoking role.
 --   integration_order_dry_run             -           S I D          worker: dry-run payload record (SNK-7 D-6); DELETE by the 30-day purge. The API reads only order_id, created_at and payload_hash (column grant, D-Z), never the payload
@@ -248,6 +250,8 @@ BEGIN
       ('sales_order_approval',               'force_api',    'SELECT, INSERT, UPDATE'),
       ('integration_outbox',                 'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
       ('customer_order_template',            'force_api',    'SELECT, INSERT, UPDATE'),
+      ('customer_registration',              'force_api',    'SELECT, INSERT'),
+      ('customer_registration_refusal',      'force_api',    'SELECT, INSERT'),
       ('audit_log',                          'force_api',    'INSERT'),
       ('installation_configuration_version', 'force_api',    'SELECT'),
       ('sync_state',                         'force_api',    'SELECT'),
@@ -275,6 +279,7 @@ BEGIN
       ('audit_log',                          'force_worker', 'INSERT'),
       ('sync_state',                         'force_worker', 'SELECT, INSERT, UPDATE'),
       ('sync_refresh',                       'force_worker', 'SELECT, UPDATE'),
+      ('customer_registration',              'force_worker', 'SELECT, UPDATE'),
       ('erp_seller',                         'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_directory_user',                 'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_carrier',                        'force_worker', 'SELECT, INSERT, UPDATE'),

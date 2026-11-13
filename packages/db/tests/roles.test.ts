@@ -46,6 +46,8 @@ const EXPECTED: Record<string, { api: Priv[]; worker: Priv[] }> = {
   sales_order_approval: { api: SIU, worker: [] },
   customer_order_template: { api: SIU, worker: [] },
   customer_order_template_item: { api: SIUD, worker: [] },
+  customer_registration: { api: ['SELECT', 'INSERT'], worker: ['SELECT', 'UPDATE'] },
+  customer_registration_refusal: { api: ['SELECT', 'INSERT'], worker: [] },
   integration_outbox: { api: SIUD, worker: ['SELECT', 'UPDATE'] },
   integration_order_dry_run: { api: [], worker: ['SELECT', 'INSERT', 'DELETE'] },
   product_media: { api: S, worker: SIUD },
