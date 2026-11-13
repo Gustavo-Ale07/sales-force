@@ -24,11 +24,13 @@ import { CLOCK, type Clock } from '../platform/tokens.js';
 /** Texts of the send blocks (owner ruling 2026-11-13). */
 export const PRODUCT_WITHOUT_MOBILITY_MESSAGE = 'Produto sem mobilidade';
 export const PRODUCT_WITHOUT_PRICE_MESSAGE = 'Produto sem preço';
+export const PRODUCT_UNAVAILABLE_MESSAGE = 'Produto indisponível';
+export const PRODUCT_INACTIVE_MESSAGE = 'Produto inativo';
 
 export interface SendBlock {
   readonly lineNo: number;
   readonly productCode: number;
-  readonly code: 'product_without_mobility' | 'product_without_price';
+  readonly code: 'product_without_mobility' | 'product_without_price' | 'product_unavailable' | 'product_inactive';
   readonly message: string;
 }
 
@@ -96,19 +98,21 @@ export class DraftBuilder {
       config,
     );
     const blocks: SendBlock[] = [];
+    const block = (line: { lineNo: number; productCode: number }, code: SendBlock['code'], message: string) =>
+      blocks.push({ lineNo: line.lineNo, productCode: line.productCode, code, message });
     for (const line of lines) {
-      if (!products.has(line.productCode)) {
-        blocks.push({
-          lineNo: line.lineNo,
-          productCode: line.productCode,
-          code: 'product_without_mobility',
-          message: PRODUCT_WITHOUT_MOBILITY_MESSAGE,
-        });
+      const product = products.get(line.productCode);
+      if (product === undefined) {
+        // A row that left the mobility-filtered mirror (soft-deleted) is a known reason; no row at all means the product is
+        // simply not available and nothing says why (never guessed).
+        if (withoutMobility.has(line.productCode)) block(line, 'product_without_mobility', PRODUCT_WITHOUT_MOBILITY_MESSAGE);
+        else block(line, 'product_unavailable', PRODUCT_UNAVAILABLE_MESSAGE);
+      } else if (!product.active && !config.products.showInactive) {
+        block(line, 'product_inactive', PRODUCT_INACTIVE_MESSAGE);
       } else if (prices.get(line.productCode)?.state !== 'priced') {
-        blocks.push({ lineNo: line.lineNo, productCode: line.productCode, code: 'product_without_price', message: PRODUCT_WITHOUT_PRICE_MESSAGE });
+        block(line, 'product_without_price', PRODUCT_WITHOUT_PRICE_MESSAGE);
       }
     }
-    void withoutMobility;
     return blocks;
   }
 

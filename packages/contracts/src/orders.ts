@@ -372,14 +372,14 @@ export const OrderDetailSchema = named(
      * Lines that block sending RIGHT NOW (owner ruling 2026-11-13), derived on every read from the current catalog and the
      * customer's price table; never persisted, never a silent change of the draft. Only on a sendable draft.
      * `product_without_mobility`: the product left the mobile catalog; `product_without_price`: no price above zero in
-     * the customer's table. `message` is the text to show ("Produto sem mobilidade" / "Produto sem preço").
+     * the customer's table. `message` is the text to show ("Produto sem mobilidade" / "Produto sem preço" / "Produto indisponível" / "Produto inativo").
      */
     sendBlocks: z
       .array(
         z.object({
           lineNo: z.number().int(),
           productCode: codeInt(),
-          code: z.enum(['product_without_mobility', 'product_without_price']),
+          code: z.enum(['product_without_mobility', 'product_without_price', 'product_unavailable', 'product_inactive']),
           message: z.string(),
         }),
       )

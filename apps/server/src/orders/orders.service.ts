@@ -698,7 +698,7 @@ export class OrdersService {
         detail: { ...this.auditDetail(order, 0), outcome: 'product_blocked', blockedLines: blocks.length },
       });
       throw new AppError('validation_failed', {
-        message: blocks.some((block) => block.code === 'product_without_mobility') ? PRODUCT_WITHOUT_MOBILITY_MESSAGE : PRODUCT_WITHOUT_PRICE_MESSAGE,
+        message: [...new Set(blocks.map((block) => block.message))].join('; '),
         details: { issues: blocks.map((block) => ({ path: block.code === 'product_without_price' ? `items[${block.lineNo - 1}].priceState` : `items[${block.lineNo - 1}].productCode`, code: block.code })) },
       });
     }

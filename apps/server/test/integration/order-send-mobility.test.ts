@@ -102,6 +102,37 @@ describe('product that lost mobility or price', () => {
     expect(issuesOf(response).map((issue) => issue.code)).toContain('product_without_price');
   });
 
+  it('a product that no longer exists in the mirror blocks sending as "Produto indisponível" (reason not known)', async () => {
+    const code = priced[6]!.code as number;
+    const created = await ctx.call('seller1', 'POST', '/orders', body([code]));
+    expect(created.status).toBe(201);
+    // The mirror row is gone altogether (not merely soft-deleted): nothing says why.
+    await pool().query('update erp_product set code = code + 900000000 where code = $1', [code]);
+    const read = await ctx.call('seller1', 'GET', `/orders/${created.body.id}`);
+    expect(OrderDetailSchema.safeParse(read.body).success).toBe(true);
+    expect(read.body.sendBlocks).toEqual([{ lineNo: 1, productCode: code, code: 'product_unavailable', message: 'Produto indisponível' }]);
+    const submit = await ctx.call('seller1', 'POST', `/orders/${created.body.id}/submit`);
+    expect(submit.status).toBe(400);
+    expect(submit.body.message).toContain('Produto indisponível');
+    expect(issuesOf(submit)).toEqual([{ code: 'product_unavailable', path: 'items[0].productCode' }]);
+    expect((await ctx.call('seller1', 'GET', `/orders/${created.body.id}`)).body.status).toBe('draft');
+    await pool().query('update erp_product set code = code - 900000000 where code = $1', [code + 900000000]);
+  });
+
+  it('an inactive product (the configuration does not show inactive ones) blocks sending as "Produto inativo"', async () => {
+    const code = priced[7]!.code as number;
+    const created = await ctx.call('seller1', 'POST', '/orders', body([code]));
+    expect(created.status).toBe(201);
+    await pool().query('update erp_product set active = false where code = $1', [code]);
+    const read = await ctx.call('seller1', 'GET', `/orders/${created.body.id}`);
+    expect(read.body.sendBlocks).toEqual([{ lineNo: 1, productCode: code, code: 'product_inactive', message: 'Produto inativo' }]);
+    const submit = await ctx.call('seller1', 'POST', `/orders/${created.body.id}/submit`);
+    expect(submit.status).toBe(400);
+    expect(submit.body.message).toContain('Produto inativo');
+    expect(issuesOf(submit)).toEqual([{ code: 'product_inactive', path: 'items[0].productCode' }]);
+    await pool().query('update erp_product set active = true where code = $1', [code]);
+  });
+
   it('keeps the demo configuration untouched (the legacy productWithoutPrice keys are ignored, never required)', () => {
     expect(DEMO_CONFIGURATION.products.productWithoutPrice.orderable).toBe(false);
   });
