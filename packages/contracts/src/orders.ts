@@ -92,6 +92,8 @@ export const DraftIssueCodeSchema = named(
     'price_reference_missing',
     'line_total_mismatch',
     'line_not_orderable',
+    'product_without_price',
+    'product_without_mobility',
     'product_unknown',
     'product_not_sellable',
     'negotiation_type_not_configured',
@@ -366,6 +368,22 @@ export const OrderDetailSchema = named(
     dryRun: z.object({ at: IsoTimestampSchema, payloadHash: z.string() }).nullable().optional(),
     /** D-AA: the order created from this quotation ("Duplicar como pedido"). Force-only link; Sankhya has no ERP link for it. */
     convertedInto: z.object({ id: UuidSchema, draftNumber: z.number().int(), erpNumber: z.number().int().nullable() }).nullable().optional(),
+    /**
+     * Lines that block sending RIGHT NOW (owner ruling 2026-11-13), derived on every read from the current catalog and the
+     * customer's price table; never persisted, never a silent change of the draft. Only on a sendable draft.
+     * `product_without_mobility`: the product left the mobile catalog; `product_without_price`: no price above zero in
+     * the customer's table. `message` is the text to show ("Produto sem mobilidade" / "Produto sem preço").
+     */
+    sendBlocks: z
+      .array(
+        z.object({
+          lineNo: z.number().int(),
+          productCode: codeInt(),
+          code: z.enum(['product_without_mobility', 'product_without_price']),
+          message: z.string(),
+        }),
+      )
+      .optional(),
   }),
 );
 export type OrderDetail = z.infer<typeof OrderDetailSchema>;

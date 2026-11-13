@@ -43,7 +43,7 @@ import { isBlockedRaw, MirrorRepository, type CustomerRow, type CustomerStateRow
 import { assertDatasetMatches } from '../platform/dataset-guard.js';
 import { uuidv7 } from '../platform/ids.js';
 import { CLOCK, DATASET_IDENTITY, ORDER_ENQUEUE_ENABLED, type Clock } from '../platform/tokens.js';
-import { DraftBuilder, type DraftOutcome } from './draft-builder.js';
+import { DraftBuilder, PRODUCT_WITHOUT_MOBILITY_MESSAGE, PRODUCT_WITHOUT_PRICE_MESSAGE, type DraftOutcome, type SendBlock } from './draft-builder.js';
 import { assertEligibleForErpSubmission } from './erp-eligibility.guard.js';
 import { deleteOrderDeliveries, enqueueOrderDelivery, requestDeliveryVerification, requeueRejectedDelivery } from './order-erp-delivery.js';
 import { orderFingerprint } from './order-fingerprint.js';
@@ -687,6 +687,20 @@ export class OrdersService {
       });
       throw new AppError('customer_ineligible', { details: { reason: block } });
     }
+    // Owner ruling 2026-11-13: the products and their prices are revalidated NOW. A product that left the mobile catalog, or
+    // that has no price above zero in the customer's table, blocks sending; the draft is never changed.
+    const blocks = await this.sendBlocksOf(order, context.configuration);
+    if (blocks.length > 0) {
+      await this.audit.record({
+        action: AUDIT_ACTIONS.orderSubmitAttempted,
+        actorAccountId: user.accountId,
+        detail: { ...this.auditDetail(order, 0), outcome: 'product_blocked', blockedLines: blocks.length },
+      });
+      throw new AppError('validation_failed', {
+        message: blocks.some((block) => block.code === 'product_without_mobility') ? PRODUCT_WITHOUT_MOBILITY_MESSAGE : PRODUCT_WITHOUT_PRICE_MESSAGE,
+        details: { issues: blocks.map((block) => ({ path: block.code === 'product_without_price' ? `items[${block.lineNo - 1}].priceState` : `items[${block.lineNo - 1}].productCode`, code: block.code })) },
+      });
+    }
     // An approved order was released by an explicit approval of these very lines (an edit would have reset it).
     // Discount authority is a Sales Force rule only in `force` mode (D-M). In `erp` mode (default) the ERP decides
     // and only structural validity is checked here (below).
@@ -870,7 +884,13 @@ export class OrdersService {
       context.configuration,
     );
     if (!outcome.ok) {
+      const reason = outcome.issues.some((issue) => issue.code === 'product_without_mobility')
+        ? PRODUCT_WITHOUT_MOBILITY_MESSAGE
+        : outcome.issues.some((issue) => issue.code === 'product_without_price')
+          ? PRODUCT_WITHOUT_PRICE_MESSAGE
+          : null;
       throw new AppError('validation_failed', {
+        ...(reason === null ? {} : { message: reason }),
         details: { issues: outcome.issues.map((issue) => ({ path: issue.path, code: issue.code })) },
       });
     }
@@ -920,6 +940,18 @@ export class OrdersService {
     return { active: state.active, blocked: isBlockedRaw(state.blockedRaw), sellerCode: state.sellerCode };
   }
 
+  /** Lines blocking the send right now (see `DraftBuilder.sendBlocks`); only for an order that can still be sent. */
+  private async sendBlocksOf(order: OrderRow, config: InstallationConfiguration): Promise<SendBlock[]> {
+    if (order.status !== 'draft' && order.status !== 'approved' && order.status !== 'rejected') return [];
+    const [items, states] = await Promise.all([this.orders.itemsOf(order.id), this.mirror.customerStates([order.customerCode])]);
+    const state = states.get(order.customerCode);
+    return this.builder.sendBlocks(
+      { code: order.customerCode, sellerCode: state?.sellerCode ?? null, priceTableCode: state?.priceTableCode ?? null },
+      items.map((item) => ({ lineNo: item.lineNo, productCode: item.productCode })),
+      config,
+    );
+  }
+
   private async detailOf(order: OrderRow, showExpedicao = false): Promise<OrderDetail> {
     const [items, states, approval, lastDelivery, dryRun, convertedInto] = await Promise.all([
       this.orders.itemsOf(order.id),
@@ -936,13 +968,16 @@ export class OrdersService {
     // D6b: names for the release events; read only when the order has any.
     const liberationEventLabels =
       order.erpStatusDetail == null ? {} : ((await this.installation.current()).configuration.erp?.liberationEventLabels ?? {});
-    return toOrderDetail(order, items, {
+    const detail = toOrderDetail(order, items, {
       customerName: state?.name ?? null,
       customerActive: state?.active ?? null,
       customerBlockedRaw: state?.blockedRaw ?? null,
       customerSellerCode: state?.sellerCode ?? null,
       customerLive: state?.live ?? null,
     }, images, toOrderApproval(approval), liberationEventLabels, ipiLookup, showExpedicao, lastDelivery, dryRun, convertedInto);
+    // Owner ruling 2026-11-13: lines that would block sending right now (derived, never stored).
+    const sendBlocks = await this.sendBlocksOf(order, (await this.installation.current()).configuration);
+    return sendBlocks.length === 0 ? detail : { ...detail, sendBlocks };
   }
 
   /** Identifiers and counts only: no notes, no free text. */

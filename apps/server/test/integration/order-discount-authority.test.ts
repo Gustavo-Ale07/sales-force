@@ -130,13 +130,19 @@ describe('discount authority on drafts (DISC-2)', () => {
   });
 
   it('a discount on a missing price stays refused outright (no base)', async () => {
-    const none = (await configured.call('manager', 'GET', `/products?customerCode=${customer1}&sellable=true&priceState=none&pageSize=1`)).body.items[0];
-    expect(none).toBeDefined();
-    const response = await configured.call('seller1', 'POST', '/orders', {
-      ...body([]),
-      items: [{ productCode: none.code, quantity: '1', discountPercent: '1' }],
-    });
-    expect(response.status).toBe(400);
+    // Owner ruling 2026-11-13: an unpriced product is not listed any more, so zero a priced one for this case and restore it.
+    const target = priced[priced.length - 1]!;
+    const pool = configured.database.handle.pool;
+    await pool.query('update erp_list_price set unit_price = 0 where product_code = $1 and version_id = $2', [target.code, target.listPrice.versionId]);
+    try {
+      const response = await configured.call('seller1', 'POST', '/orders', {
+        ...body([]),
+        items: [{ productCode: target.code, quantity: '1', discountPercent: '1' }],
+      });
+      expect(response.status).toBe(400);
+    } finally {
+      await pool.query('update erp_list_price set unit_price = $3 where product_code = $1 and version_id = $2', [target.code, target.listPrice.versionId, target.listPrice.unitPrice]);
+    }
   });
 
   it('the audit trail records the routing, never limits, cost or margin', async () => {

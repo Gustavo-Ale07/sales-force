@@ -74,7 +74,7 @@ export interface CompanyRow {
   readonly defaultOrderTopCode: number | null;
 }
 
-/** Q3: current version (`MAX(DHALTER)`) of each `TGFTOP` with `AD_MOBILIDADE = S`. */
+/** Q3: current version (`MAX(DHALTER)`) of EVERY `TGFTOP`; `mobile` is its `AD_MOBILIDADE` (S = true; N/NULL = hidden, kept so the server can count them). */
 export interface EnabledTopRow {
   readonly topCode: number;
   readonly description: string | null;
@@ -97,7 +97,7 @@ export interface TopGroupRow {
   readonly topCode: number;
 }
 
-/** Q5: current version of each `TGFTPV` with `AD_MOBILIDADE = S`. */
+/** Q5: current version (`MAX(DHALTER)`) of EVERY `TGFTPV`; `mobile` is its `AD_MOBILIDADE` (hidden ones kept for counting). */
 export interface NegotiationTypeRow {
   readonly code: number;
   readonly description: string | null;

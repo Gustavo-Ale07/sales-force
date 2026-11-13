@@ -21,6 +21,17 @@ import { toDomainProduct } from '../catalog/catalog.service.js';
 import { MirrorRepository } from '../mirror/mirror.repository.js';
 import { CLOCK, type Clock } from '../platform/tokens.js';
 
+/** Texts of the send blocks (owner ruling 2026-11-13). */
+export const PRODUCT_WITHOUT_MOBILITY_MESSAGE = 'Produto sem mobilidade';
+export const PRODUCT_WITHOUT_PRICE_MESSAGE = 'Produto sem preço';
+
+export interface SendBlock {
+  readonly lineNo: number;
+  readonly productCode: number;
+  readonly code: 'product_without_mobility' | 'product_without_price';
+  readonly message: string;
+}
+
 export interface DraftRequest {
   readonly customer: DraftCustomer;
   readonly negotiationTypeCode: number | null;
@@ -57,13 +68,48 @@ export class DraftBuilder {
     customer: DraftCustomer,
     codes: readonly number[],
     config: InstallationConfiguration,
-  ): Promise<{ products: Map<number, Product>; prices: Map<number, ResolvedPrice> }> {
+  ): Promise<{ products: Map<number, Product>; prices: Map<number, ResolvedPrice>; withoutMobility: Set<number> }> {
     const productCodes = [...new Set(codes)];
     const productRows = await this.mirror.findProducts(productCodes);
     const products = new Map<number, Product>(productRows.map((row) => [row.code, toDomainProduct(row)]));
     const book = await this.pricing.open(this.pricing.forCustomer(customer, config), this.clock());
     const prices = await this.pricing.priceMany(book, productCodes);
-    return { products, prices };
+    // A code that is not a live row is out of the mobility-filtered mirror (AD_MOBILIDADE no longer 'S', or gone): "Produto sem mobilidade".
+    const missing = productCodes.filter((code) => !products.has(code));
+    const withoutMobility = missing.length === 0 ? new Set<number>() : await this.mirror.findRemovedProductCodes(missing);
+    return { products, prices, withoutMobility };
+  }
+
+  /**
+   * Lines of a stored order that block sending NOW (owner ruling 2026-11-13): the product left the mobile catalog, or has no price
+   * above zero in the customer's table. Derived from the current mirror on every call; nothing is stored or changed.
+   */
+  async sendBlocks(
+    customer: DraftCustomer,
+    lines: readonly { readonly lineNo: number; readonly productCode: number }[],
+    config: InstallationConfiguration,
+  ): Promise<SendBlock[]> {
+    if (lines.length === 0) return [];
+    const { products, prices, withoutMobility } = await this.load(
+      customer,
+      lines.map((line) => line.productCode),
+      config,
+    );
+    const blocks: SendBlock[] = [];
+    for (const line of lines) {
+      if (!products.has(line.productCode)) {
+        blocks.push({
+          lineNo: line.lineNo,
+          productCode: line.productCode,
+          code: 'product_without_mobility',
+          message: PRODUCT_WITHOUT_MOBILITY_MESSAGE,
+        });
+      } else if (prices.get(line.productCode)?.state !== 'priced') {
+        blocks.push({ lineNo: line.lineNo, productCode: line.productCode, code: 'product_without_price', message: PRODUCT_WITHOUT_PRICE_MESSAGE });
+      }
+    }
+    void withoutMobility;
+    return blocks;
   }
 
   /**
@@ -85,7 +131,7 @@ export class DraftBuilder {
   }
 
   async build(request: DraftRequest, config: InstallationConfiguration): Promise<DraftOutcome> {
-    const { products, prices } = await this.load(
+    const { products, prices, withoutMobility } = await this.load(
       request.customer,
       request.items.map((item) => item.productCode),
       config,
@@ -100,7 +146,7 @@ export class DraftBuilder {
       const product = products.get(line.productCode);
       const price = prices.get(line.productCode);
       if (product === undefined || price === undefined) {
-        issues.push({ code: 'product_unknown', path: `items[${index}].productCode` });
+        issues.push({ code: withoutMobility.has(line.productCode) ? 'product_without_mobility' : 'product_unknown', path: `items[${index}].productCode` });
         return;
       }
       const item = buildOrderItem({ lineNo: index + 1, product, quantity: line.quantity, price, discountPercent: line.discountPercent });

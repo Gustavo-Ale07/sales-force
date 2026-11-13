@@ -1278,14 +1278,6 @@
             }
           },
           {
-            "name": "priceState",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/ListPriceState"
-            }
-          },
-          {
             "name": "customerCode",
             "in": "query",
             "required": false,
@@ -6373,6 +6365,38 @@
                 "type": "null"
               }
             ]
+          },
+          "sendBlocks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "lineNo": {
+                  "type": "integer"
+                },
+                "productCode": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "product_without_mobility",
+                    "product_without_price"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "lineNo",
+                "productCode",
+                "code",
+                "message"
+              ],
+              "additionalProperties": false
+            }
           }
         },
         "required": [
@@ -8430,6 +8454,40 @@
                 "type": "null"
               }
             ]
+          },
+          "mobility": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "products",
+                    "tops",
+                    "negotiationTypes"
+                  ]
+                },
+                "visible": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "hidden": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "keptPrevious": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "kind",
+                "visible",
+                "hidden",
+                "keptPrevious"
+              ],
+              "additionalProperties": false
+            }
           }
         },
         "required": [

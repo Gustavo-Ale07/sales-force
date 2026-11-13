@@ -110,6 +110,7 @@ export class SyncRefreshService {
         durationMs: step.durationMs,
         reason: step.reason,
         lastSuccessAt: lastSuccess.get(step.entity)?.toISOString() ?? null,
+        ...(step.mobility === undefined ? {} : { mobility: step.mobility }),
       })),
     };
   }
@@ -130,6 +131,6 @@ export function basicOf(detail: SyncRefresh): SyncRefreshBasic {
     progressPercent: done ? 100 : total === 0 ? 0 : Math.floor((finished / total) * 100),
     phase: done || current === undefined ? 'concluido' : SYNC_REFRESH_PHASE_OF[current.entity],
     finishedAt: detail.finishedAt,
-    hasWarnings: detail.steps.some((step) => step.status === 'failed'),
+    hasWarnings: detail.steps.some((step) => step.status === 'failed' || (step.mobility ?? []).some((count) => count.keptPrevious)),
   };
 }

@@ -66,6 +66,17 @@ async function insertExtras(app: CommercialApp): Promise<void> {
       deletedAt: extra.deleted === true ? syncedAt : null,
     })),
   );
+  await insertExtraPrices(app, EXTRA.map((extra) => extra.code));
+}
+
+/** Owner ruling 2026-11-13: only products priced above zero are found, so the synthetic ones get a price in every table version. */
+async function insertExtraPrices(app: CommercialApp, codes: readonly number[]): Promise<void> {
+  await app.database.handle.pool.query(
+    `insert into erp_list_price (version_id, product_code, unit_price, content_hash, synced_at)
+     select v.version_id, c.code, 10, 'test-price', now() from erp_price_table_version v cross join unnest($1::int[]) as c(code)
+     on conflict do nothing`,
+    [codes],
+  );
 }
 
 beforeAll(async () => {
@@ -163,23 +174,22 @@ describe('POST /product-resolutions', () => {
     expect((await ctx.call('seller1', 'GET', '/products/9100030')).status).toBe(404);
   });
 
-  it('treats a product without a price as not found when the configuration hides those (productWithoutPrice.visible=false)', async () => {
-    const strict = await startCommercialApp(postgres, opened, {
+  it('treats a product without a price above zero as not found (owner ruling 2026-11-13; the legacy productWithoutPrice keys are ignored)', async () => {
+    const lenient = await startCommercialApp(postgres, opened, {
       configuration: {
         ...DEMO_CONFIGURATION,
-        products: { ...DEMO_CONFIGURATION.products, productWithoutPrice: { visible: false, orderable: false } },
+        products: { ...DEMO_CONFIGURATION.products, productWithoutPrice: { visible: true, orderable: true } },
       },
     });
-    await insertExtras(strict);
-    const priced = (await allProducts(strict)).find((item) => item.listPrice.state === 'priced');
+    await insertExtras(lenient);
+    await lenient.database.handle.pool.query('delete from erp_list_price where product_code = $1', [9_100_001]);
+    const priced = (await allProducts(lenient)).find((item) => item.listPrice.state === 'priced');
     if (priced === undefined) throw new Error('fixture has no priced product');
-    const { body } = await strict.call('seller1', 'POST', '/product-resolutions', {
+    const { body } = await lenient.call('seller1', 'POST', '/product-resolutions', {
       identifiers: ['ZZ-UNIQ-1', String(priced.code)],
     });
-    // ZZ-UNIQ-1 has no price row in the reference table: hidden, hence not found. A priced product is found.
+    // ZZ-UNIQ-1 has no price row: not found even though the legacy configuration says "visible". A priced product is found.
     expect(body.items.map((item: Json) => item.status)).toEqual(['not_found', 'found']);
-    // The default configuration shows the same product.
-    expect((await resolve('seller1', ['ZZ-UNIQ-1'])).body.items[0].status).toBe('found');
   });
 
   it('ignores soft-deleted products', async () => {
@@ -235,8 +245,9 @@ describe('POST /product-resolutions', () => {
     it("come from the customer's price book when customerCode is given, matching GET /products/{code}", async () => {
       const customer = dataset.customers.find((c) => c.sellerCode === SELLER_1 && c.priceTableCode !== null);
       if (customer === undefined) throw new Error('fixture has no customer of seller 103 with a price table');
-      const sample = dataset.products.find((product) => product.active);
-      if (sample === undefined) throw new Error('fixture has no active product');
+      // Only a product priced above zero in the customer's table is listed (owner ruling 2026-11-13).
+      const sample = (await ctx.call('seller1', 'GET', `/products?customerCode=${customer.code}&pageSize=1`)).body.items[0];
+      if (sample === undefined) throw new Error('fixture has no listed product');
       const detail = await ctx.call('seller1', 'GET', `/products/${sample.code}?customerCode=${customer.code}`);
       const { status, body } = await resolve('seller1', [String(sample.code)], customer.code);
       expect(status).toBe(200);

@@ -72,7 +72,9 @@ describe('list queries', () => {
     // The status filter was removed (D-AQ): the key is no longer part of the query and is ignored, never applied.
     const withLegacyStatus = CustomersQuerySchema.safeParse({ status: 'gone' });
     expect(withLegacyStatus.success && 'status' in withLegacyStatus.data).toBe(false);
-    expect(ProductsQuerySchema.safeParse({ priceState: 'free' }).success).toBe(false);
+    // The price filter was removed (owner ruling 2026-11-13): the key is ignored, never applied; the catalog is always "with price".
+    const withLegacyPrice = ProductsQuerySchema.safeParse({ priceState: 'none' });
+    expect(withLegacyPrice.success && 'priceState' in withLegacyPrice.data).toBe(false);
     expect(OrdersQuerySchema.safeParse({ status: 'shipped' }).success).toBe(false);
   });
 

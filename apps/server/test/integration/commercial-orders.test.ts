@@ -37,7 +37,11 @@ beforeAll(async () => {
   customer2 = c2.code;
   const list = async (query: string): Promise<Json[]> => (await ctx.call('manager', 'GET', `/products?customerCode=${customer1}&pageSize=100&${query}`)).body.items;
   priced = (await list('sellable=true&priceState=priced')).slice(0, 4);
-  unpriced = (await list('sellable=true&priceState=none'))[0];
+  // Owner ruling 2026-11-13: an unpriced product is no longer listed by the API; pick an active one from the dataset that the catalog does not list.
+  const listedCodes = new Set((await list('page=1')).map((p) => p.code));
+  for (let page = 2; page < 30; page += 1) for (const p of (await list(`page=${page}`)).map((x) => x.code)) listedCodes.add(p);
+  const hidden = dataset.products.find((p) => p.active && !listedCodes.has(p.code));
+  unpriced = hidden === undefined ? undefined : { code: hidden.code };
   notSellable = (await list('sellable=false'))[0];
   if (priced.length < 3 || unpriced === undefined || notSellable === undefined) throw new Error('fixture lacks products');
 });
@@ -106,39 +110,22 @@ describe('create draft', () => {
     expect(nonSellable.body.details.issues.map((issue: Json) => issue.code)).toContain('product_not_sellable');
   });
 
-  it('a product without a price is never priced at 0: the configuration says it is not orderable', async () => {
+  it('a product without a price above zero is never accepted: product_without_price (owner ruling 2026-11-13)', async () => {
     const response = await create('seller1', draftBody({ items: [{ productCode: unpriced.code, quantity: '1' }] }));
     expect(response.status).toBe(400);
-    expect(response.body.details.issues.map((issue: Json) => issue.code)).toContain('line_not_orderable');
+    expect(response.body.details.issues.map((issue: Json) => issue.code)).toContain('product_without_price');
   });
 
-  it('a product without a price can be drafted when the installation allows it, and stays "Sem preço" (null, never 0)', async () => {
+  it('the legacy "allow without price" configuration no longer lets an unpriced product in (owner ruling 2026-11-13)', async () => {
     const permissive: InstallationConfiguration = {
       ...DEMO_CONFIGURATION,
       sales: { ...DEMO_CONFIGURATION.sales, orderBehavior: { allowDraftWithoutPrice: true } },
       products: { ...DEMO_CONFIGURATION.products, productWithoutPrice: { visible: true, orderable: true } },
     };
     const other = await startCommercialApp(postgres, opened, { configuration: permissive });
-    const target = (await other.call('manager', 'GET', `/products?customerCode=${customer1}&sellable=true&priceState=none&pageSize=1`)).body.items[0];
-    const response = await other.call('seller1', 'POST', '/orders', {
-      ...draftBody({
-        items: [
-          { productCode: priced[0]?.code, quantity: '1' },
-          { productCode: target.code, quantity: '5' },
-        ],
-      }),
-    });
-    expect(response.status).toBe(201);
-    const line = response.body.items.find((item: Json) => item.productCode === target.code);
-    expect(line.priceState).toBe('none');
-    expect(line.unitListPrice).toBeNull();
-    expect(line.estimatedLineTotal).toBeNull();
-    expect(response.body.isPartial).toBe(true);
-    expect(response.body.totals.unpricedLineCount).toBe(1);
-    // The estimate covers only the priced line: the missing price adds nothing and is not shown as 0.
-    expect(decimalEquals(response.body.totals.estimatedTotal, computeLineTotal('1', priced[0]?.listPrice.unitPrice))).toBe(true);
-    const listed = await other.call('seller1', 'GET', '/orders');
-    expect(listed.body.items[0].isPartial).toBe(true);
+    const response = await other.call('seller1', 'POST', '/orders', draftBody({ items: [{ productCode: priced[0]?.code, quantity: '1' }, { productCode: unpriced.code, quantity: '5' }] }));
+    expect(response.status).toBe(400);
+    expect(response.body.details.issues).toContainEqual({ code: 'product_without_price', path: 'items[1].priceState' });
   });
 
   it('a seller cannot draft for a customer outside their portfolio (404, like an unknown customer)', async () => {
@@ -800,10 +787,9 @@ describe('line discounts (drafts only: authority approval is not decided, R35/R3
       products: { ...DEMO_CONFIGURATION.products, productWithoutPrice: { visible: true, orderable: true } },
     };
     const other = await startCommercialApp(postgres, opened, { configuration: permissive });
-    const target = (await other.call('manager', 'GET', `/products?customerCode=${customer1}&sellable=true&priceState=none&pageSize=1`)).body.items[0];
-    const response = await other.call('seller1', 'POST', '/orders', draftBody({ items: [{ productCode: target.code, quantity: '1', discountPercent: '10' }] }));
+    const response = await other.call('seller1', 'POST', '/orders', draftBody({ items: [{ productCode: unpriced.code, quantity: '1', discountPercent: '10' }] }));
     expect(response.status).toBe(400);
-    expect(response.body.details.issues.map((issue: Json) => issue.code)).toContain('invalid_discount');
+    expect(response.body.details.issues.map((issue: Json) => issue.code)).toContain('product_without_price');
   });
 
   it('idempotency: the same discount replays (200), another is idempotency_conflict, and an explicit 0 equals no discount', async () => {

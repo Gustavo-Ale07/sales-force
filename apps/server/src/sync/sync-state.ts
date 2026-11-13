@@ -20,6 +20,13 @@ export const RunStatsSchema = z.object({
 });
 export type RunStats = z.infer<typeof RunStatsSchema>;
 
+export const MobilityRunSchema = z.object({
+  visible: z.number().int().nonnegative(),
+  hidden: z.number().int().nonnegative(),
+  keptPrevious: z.boolean(),
+});
+export type MobilityRun = z.infer<typeof MobilityRunSchema>;
+
 /**
  * `sync_state.cursor` of a mirror entity. Every run is a FULL snapshot compared by content hash
  * (spike §9.33 item 2: full snapshot + hash diff is the measured-viable strategy; `DTALTER`
@@ -36,6 +43,8 @@ export const MirrorCursorSchema = z.object({
     stats: RunStatsSchema,
     /** D-V: rows left out per eligibility criterion in this run (counts only); absent when the entity has no rule. */
     excluded: z.record(z.string(), z.number().int().nonnegative()).optional(),
+    /** Owner ruling 2026-11-13 (products): AD_MOBILIDADE visible/hidden counts and whether the anti-empty guard kept the previous base. */
+    mobility: MobilityRunSchema.optional(),
   }),
 });
 export type MirrorCursor = z.infer<typeof MirrorCursorSchema>;
@@ -51,7 +60,7 @@ export async function markRunning(db: Queryable, entity: MirrorEntity, at: Date)
 export async function markSucceeded(
   db: Queryable,
   entity: MirrorEntity,
-  input: { startedAt: Date; finishedAt: Date; stats: RunStats; rowCount: number; excluded?: Readonly<Record<string, number>> },
+  input: { startedAt: Date; finishedAt: Date; stats: RunStats; rowCount: number; excluded?: Readonly<Record<string, number>>; mobility?: MobilityRun },
 ): Promise<void> {
   const cursor: MirrorCursor = {
     strategy: 'full_snapshot',
@@ -61,6 +70,7 @@ export async function markSucceeded(
       durationMs: Math.max(0, input.finishedAt.getTime() - input.startedAt.getTime()),
       stats: input.stats,
       ...(input.excluded === undefined ? {} : { excluded: { ...input.excluded } }),
+      ...(input.mobility === undefined ? {} : { mobility: input.mobility }),
     },
   };
   const values = {

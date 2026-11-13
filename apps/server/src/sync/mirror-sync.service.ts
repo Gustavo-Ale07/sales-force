@@ -21,7 +21,8 @@ import {
 } from './mirror-entities.js';
 import type { SalesHistorySyncConfig } from './sales-history-config.js';
 import { applyBatch, countLive, deactivateMissing, hashRows, prepareSeenTable } from './mirror-writer.js';
-import { markFailed, markRunning, markSucceeded, type Queryable, type RunStats } from './sync-state.js';
+import { evaluateMobilityGuard } from '@salesforce/domain';
+import { markFailed, markRunning, markSucceeded, type MobilityRun, type Queryable, type RunStats } from './sync-state.js';
 
 export type MirrorRunOutcome =
   /** The whole snapshot was read and applied. */
@@ -39,6 +40,8 @@ export interface MirrorRunResult {
   readonly stats: RunStats | null;
   /** D-V: rows left out per eligibility criterion (customers, carriers); absent otherwise. */
   readonly excluded?: Readonly<Record<string, number>>;
+  /** Products only (owner ruling 2026-11-13): AD_MOBILIDADE counts and whether the anti-empty guard kept the previous base. */
+  readonly mobility?: MobilityRun;
 }
 
 export interface MirrorRunFailure {
@@ -232,14 +235,32 @@ export class MirrorSyncService {
     // The iteration finished without throwing: the snapshot is complete.
     const finishedAt = this.deps.now();
     const hasExcluded = Object.keys(excluded).length > 0;
+    // Anti-empty-catalog guard (owner ruling 2026-11-13): when AD_MOBILIDADE would hide more than 90 % of the products (or all),
+    // the previous base is kept: nothing is deactivated, the run is recorded with the counts and a warning.
+    let mobility: MobilityRun | undefined;
+    if (entity === 'products' && excluded['mobility'] !== undefined) {
+      const tally = { visible: stats.read, hidden: excluded['mobility'] };
+      const verdict = evaluateMobilityGuard(tally);
+      mobility = { ...tally, keptPrevious: verdict.keepPrevious };
+      if (verdict.keepPrevious) {
+        logger.warn({ entity, ...tally, reason: verdict.reason }, 'mobility guard: the previous product base was kept (avise o TI: confira AD_MOBILIDADE nos produtos)');
+      }
+    }
     await session.transaction(async (tx) => {
-      stats.deactivated = await deactivateMissing(tx, spec, stats.read, finishedAt);
+      stats.deactivated = mobility?.keptPrevious === true ? 0 : await deactivateMissing(tx, spec, stats.read, finishedAt);
       const rowCount = await countLive(tx, spec);
-      await markSucceeded(tx, entity, { startedAt, finishedAt, stats, rowCount, ...(hasExcluded ? { excluded } : {}) });
+      await markSucceeded(tx, entity, {
+        startedAt,
+        finishedAt,
+        stats,
+        rowCount,
+        ...(hasExcluded ? { excluded } : {}),
+        ...(mobility === undefined ? {} : { mobility }),
+      });
     });
 
     logger.info({ entity, ...stats, ...(hasExcluded ? { excluded } : {}) }, 'mirror sync completed');
-    return { entity, outcome: 'completed', stats, ...(hasExcluded ? { excluded } : {}) };
+    return { entity, outcome: 'completed', stats, ...(hasExcluded ? { excluded } : {}), ...(mobility === undefined ? {} : { mobility }) };
   }
 
   /**

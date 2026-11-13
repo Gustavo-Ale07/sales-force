@@ -25,7 +25,11 @@ interface StepResult {
   readonly status: 'ok' | 'skipped';
   readonly rowsRead: number | null;
   readonly reason: string | null;
+  /** Owner ruling 2026-11-13: AD_MOBILIDADE visible/hidden counts per kind. */
+  readonly mobility?: readonly NonNullable<StoredSyncRefreshStep['mobility']>[number][];
 }
+
+const MOBILITY_GUARD_REASON = 'Mobilidade: o Sankhya ocultaria quase tudo; os dados anteriores foram mantidos. Avise o TI para conferir AD_MOBILIDADE.';
 
 /**
  * D-AB B3 (worker side): runs one `sync_refresh` request. Read-only toward Sankhya: it reuses the same services as the
@@ -76,7 +80,13 @@ export class SyncRefreshRunner {
       let next: StoredSyncRefreshStep;
       try {
         const result = await this.#runStep(entity, options.signal);
-        next = { ...steps[index]!, status: result.status, rowsRead: result.rowsRead, reason: result.reason };
+        next = {
+          ...steps[index]!,
+          status: result.status,
+          rowsRead: result.rowsRead,
+          reason: result.reason,
+          ...(result.mobility === undefined ? {} : { mobility: [...result.mobility] }),
+        };
       } catch (error) {
         const failure = describeSyncFailure(error);
         logger.warn({ entity, errorClass: failure.errorClass, errorCode: failure.errorCode }, 'on-demand refresh step failed');
@@ -95,7 +105,14 @@ export class SyncRefreshRunner {
       const { configuration } = this.deps;
       if (configuration === undefined) return skipped('Leitura da configuração desativada nesta instalação.');
       const result = await configuration.run(withSignal);
-      return result.outcome === 'skipped_locked' ? skipped('Outra leitura desta informação já estava em andamento.') : { status: 'ok', rowsRead: null, reason: null };
+      if (result.outcome === 'skipped_locked') return skipped('Outra leitura desta informação já estava em andamento.');
+      const kept = (result.mobility ?? []).some((count) => count.keptPrevious);
+      return {
+        status: 'ok',
+        rowsRead: null,
+        reason: kept ? MOBILITY_GUARD_REASON : null,
+        ...(result.mobility === undefined ? {} : { mobility: result.mobility }),
+      };
     }
     if (entity === 'orderStatus') {
       const { orderStatus } = this.deps;
@@ -121,7 +138,12 @@ export class SyncRefreshRunner {
     const result = await this.deps.mirror.run(entity, withSignal);
     if (result.outcome === 'skipped_locked') return skipped('Outra leitura desta informação já estava em andamento.');
     if (result.outcome === 'unsupported') throw new PermanentJobError('Leitura ainda não disponível para esta informação.');
-    return { status: 'ok', rowsRead: result.stats?.read ?? null, reason: null };
+    return {
+      status: 'ok',
+      rowsRead: result.stats?.read ?? null,
+      reason: result.mobility?.keptPrevious === true ? MOBILITY_GUARD_REASON : null,
+      ...(result.mobility === undefined ? {} : { mobility: [{ kind: 'products' as const, ...result.mobility }] }),
+    };
   }
 }
 

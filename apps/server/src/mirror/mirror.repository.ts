@@ -62,6 +62,8 @@ export interface CustomerStateRow {
   readonly active: boolean;
   readonly blockedRaw: string | null;
   readonly sellerCode: number | null;
+  /** The customer's own price table (`null` = the configured fallback decides). */
+  readonly priceTableCode: number | null;
   /** Not deleted and flagged as a customer. */
   readonly live: boolean;
 }
@@ -107,10 +109,13 @@ export interface ProductFilter {
   /** Group code; its descendants of any depth are included (resolved here by the hierarchy). `0` = "Sem grupo". */
   readonly group?: number | undefined;
   readonly sellable?: boolean | undefined;
+  /**
+   * Internal diagnostic filter (dashboard only; NOT a public query parameter any more). When absent, a product is listed ONLY
+   * with a price above zero in the effective version (owner ruling 2026-11-13).
+   */
   readonly priceState?: ListPriceStateFilter | undefined;
   readonly sellableUsageValues: readonly string[];
   readonly showInactive: boolean;
-  readonly productWithoutPriceVisible: boolean;
   readonly sort: 'description' | '-description' | 'code' | '-code';
 }
 
@@ -316,6 +321,7 @@ export class MirrorRepository {
         active: erpCustomer.active,
         blockedRaw: erpCustomer.blockedRaw,
         sellerCode: erpCustomer.sellerCode,
+        priceTableCode: erpCustomer.priceTableCode,
         live: sql<boolean>`(${erpCustomer.deletedAt} is null and ${erpCustomer.isCustomer})`,
       })
       .from(erpCustomer)
@@ -462,11 +468,8 @@ export class MirrorRepository {
     return and(
       isNull(erpProduct.deletedAt),
       filter.showInactive ? undefined : eq(erpProduct.active, true),
-      filter.productWithoutPriceVisible
-        ? undefined
-        : hasVersion
-          ? sql`${erpListPrice.unitPrice} > 0`
-          : sql`false`,
+      // Owner ruling 2026-11-13: without an explicit diagnostic price state, only products with a price above zero.
+      filter.priceState !== undefined ? undefined : hasVersion ? sql`${erpListPrice.unitPrice} > 0` : sql`false`,
       this.groupCondition(filter.group, groupCodes),
       filter.sellable === undefined ? undefined : filter.sellable ? sellable : not(sellable),
       priceCondition,
@@ -549,6 +552,22 @@ export class MirrorRepository {
       .leftJoin(erpListPrice, this.priceJoin(versionId))
       .where(and(isNull(erpProduct.deletedAt), matches))
       .orderBy(asc(erpProduct.code));
+  }
+
+  /**
+   * Codes (among `codes`) of products the mirror holds only as removed rows: the product is no longer in the mobility-filtered
+   * read (AD_MOBILIDADE no longer 'S', or gone from the ERP). Used to tell "Produto sem mobilidade" from "unknown" (owner ruling 2026-11-13).
+   */
+  async findRemovedProductCodes(codes: readonly number[]): Promise<Set<number>> {
+    const usable = [...new Set(codes.filter(fitsPgInt))];
+    if (usable.length === 0) return new Set();
+    const live = await this.findProducts(usable);
+    const liveCodes = new Set(live.map((row) => row.code));
+    const rows = await this.db
+      .select({ code: erpProduct.code })
+      .from(erpProduct)
+      .where(and(isNotNull(erpProduct.deletedAt), inArray(erpProduct.code, usable)));
+    return new Set(rows.map((row) => row.code).filter((code) => !liveCodes.has(code)));
   }
 
   /** Live products by code (order lines). */

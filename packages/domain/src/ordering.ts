@@ -142,6 +142,8 @@ export type DraftIssueCode =
   | 'price_reference_missing'
   | 'line_total_mismatch'
   | 'line_not_orderable'
+  | 'product_without_price'
+  | 'product_without_mobility'
   | 'product_unknown'
   | 'product_not_sellable'
   | 'negotiation_type_not_configured'
@@ -159,6 +161,11 @@ export interface DraftIssue {
 export interface ValidateDraftOptions {
   /** When given, each line's product must exist and be sellable per configuration. */
   readonly products?: ReadonlyMap<number, Product>;
+  /**
+   * Products the server knows left the mobile catalog (AD_MOBILIDADE no longer `S`): a line for one is refused with
+   * `product_without_mobility`, not reported as unknown. Only consulted together with `products`.
+   */
+  readonly productsWithoutMobility?: ReadonlySet<number>;
 }
 
 /** Deterministic invariants of a draft. Empty list = the draft is consistent. */
@@ -199,11 +206,12 @@ export function validateDraftInvariants(
 
     checkPriceConsistency(item, at, add);
 
-    if (!isLineOrderable(item.priceState, config)) add('line_not_orderable', `${at}.priceState`);
+    if (!isLineOrderable(item.priceState, config)) add('product_without_price', `${at}.priceState`);
 
     if (options.products) {
       const product = options.products.get(item.productCode);
-      if (!product) add('product_unknown', `${at}.productCode`);
+      if (options.productsWithoutMobility?.has(item.productCode) === true) add('product_without_mobility', `${at}.productCode`);
+      else if (!product) add('product_unknown', `${at}.productCode`);
       else if (!isProductSellable(product, config)) add('product_not_sellable', `${at}.productCode`);
       // A quantity off the product's step (AGRUPMIN, else hundredths) is rejected; an invalid quantity is already reported.
       else if (validateQuantity(item.quantity).ok && !isQuantityOnStep(item.quantity, product.quantityStep)) {

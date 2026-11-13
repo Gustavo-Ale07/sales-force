@@ -822,6 +822,8 @@ export class RealSankhyaGateway implements SankhyaGateway {
     response.rows.forEach((cells, index) => {
       const row = new RowReader('orders', columns, cells, index);
       const text = textCell(cells[1]);
+      // Control characters are stripped on purpose (display label from the ERP).
+      // eslint-disable-next-line no-control-regex
       if (text !== null) result.set(row.int('EVENTO'), text.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100));
     });
     return result;

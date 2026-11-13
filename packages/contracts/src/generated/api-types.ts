@@ -1317,6 +1317,13 @@ export interface components {
                 draftNumber: number;
                 erpNumber: number | null;
             } | null;
+            sendBlocks?: {
+                lineNo: number;
+                productCode: number;
+                /** @enum {string} */
+                code: "product_without_mobility" | "product_without_price";
+                message: string;
+            }[];
         };
         OrderEntryConfiguration: {
             dataset: components["schemas"]["DatasetIdentity"] | null;
@@ -1699,6 +1706,13 @@ export interface components {
             durationMs: number | null;
             reason: string | null;
             lastSuccessAt: components["schemas"]["IsoTimestamp"] | null;
+            mobility?: {
+                /** @enum {string} */
+                kind: "products" | "tops" | "negotiationTypes";
+                visible: number;
+                hidden: number;
+                keptPrevious: boolean;
+            }[];
         };
         /** @enum {string} */
         SyncRefreshStepStatus: "pending" | "running" | "ok" | "failed" | "skipped";
@@ -2718,7 +2732,6 @@ export interface operations {
                 search?: string;
                 group?: number;
                 sellable?: "true" | "false";
-                priceState?: components["schemas"]["ListPriceState"];
                 customerCode?: number;
                 sort?: components["schemas"]["ProductSort"];
                 page?: number;

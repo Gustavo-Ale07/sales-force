@@ -139,24 +139,15 @@ describe('selectUsableTemplateLines', () => {
     ]);
   });
 
-  it('a line without a usable price is usable only when the installation allows ordering it', () => {
+  it('a line without a usable price is never usable, even when the legacy keys allow it (ruling 2026-11-13)', () => {
     const permissive: InstallationConfiguration = {
       ...config,
       sales: { ...config.sales, orderBehavior: { allowDraftWithoutPrice: true } },
       products: { ...config.products, productWithoutPrice: { visible: true, orderable: true } },
     };
     const result = selectUsableTemplateLines(lines([4]), products([makeProduct({ code: 4 })]), prices([[4, none]]), permissive);
-    expect(result.usable.map((l) => l.productCode)).toEqual([4]);
-  });
-
-  it('a product the configuration hides from the catalog is skipped as hidden, even when it could be ordered', () => {
-    const hidden: InstallationConfiguration = {
-      ...config,
-      sales: { ...config.sales, orderBehavior: { allowDraftWithoutPrice: true } },
-      products: { ...config.products, productWithoutPrice: { visible: false, orderable: true } },
-    };
-    const result = selectUsableTemplateLines(lines([4]), products([makeProduct({ code: 4 })]), prices([[4, none]]), hidden);
-    expect(result.skipped).toEqual([{ lineNo: 1, productCode: 4, reason: 'product_hidden' }]);
+    expect(result.usable).toEqual([]);
+    expect(result.skipped).toEqual([{ lineNo: 1, productCode: 4, reason: 'no_price' }]);
   });
 
   it('a product with no price entry at all is "no_price", not a crash', () => {

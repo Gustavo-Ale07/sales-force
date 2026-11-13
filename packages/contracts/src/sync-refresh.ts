@@ -36,6 +36,20 @@ export const SyncRefreshStepSchema = named(
     reason: z.string().max(500).nullable(),
     /** Last successful read of this entity (so a failed step can say how old the data it kept is). */
     lastSuccessAt: IsoTimestampSchema.nullable(),
+    /**
+     * Owner ruling 2026-11-13 (detail view only): how many items `AD_MOBILIDADE` shows (`S`) and hides, per kind, and whether the
+     * anti-empty guard kept the previous data (> 90 % or everything hidden). Counts of visibility, not of records read.
+     */
+    mobility: z
+      .array(
+        z.object({
+          kind: z.enum(['products', 'tops', 'negotiationTypes']),
+          visible: z.number().int().min(0),
+          hidden: z.number().int().min(0),
+          keptPrevious: z.boolean(),
+        }),
+      )
+      .optional(),
   }),
 );
 

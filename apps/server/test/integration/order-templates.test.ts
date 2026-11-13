@@ -36,7 +36,11 @@ beforeAll(async () => {
   customer2 = c2.code;
   const list = async (query: string): Promise<Json[]> => (await ctx.call('manager', 'GET', `/products?customerCode=${customer1}&pageSize=100&${query}`)).body.items;
   priced = (await list('sellable=true&priceState=priced')).slice(0, 6);
-  unpriced = (await list('sellable=true&priceState=none'))[0];
+  // Owner ruling 2026-11-13: an unpriced product is no longer listed; take an active dataset product the catalog does not list.
+  const listedCodes = new Set<number>();
+  for (let page = 1; page < 30; page += 1) for (const item of await list(`page=${page}`)) listedCodes.add(item.code as number);
+  const hidden = dataset.products.find((p) => p.active && !listedCodes.has(p.code));
+  unpriced = hidden === undefined ? undefined : { code: hidden.code };
   if (priced.length < 5 || unpriced === undefined) throw new Error('fixture lacks products');
 });
 

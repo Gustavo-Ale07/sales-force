@@ -33,8 +33,9 @@ export function isWithoutUsablePrice(state: ListPriceState): boolean {
 }
 
 /**
- * Catalog visibility: inactive products only when configured; products without a usable price
- * only when configured. Visibility is not sellability.
+ * Catalog visibility: inactive products only when configured; a product without a positive price
+ * never appears (owner ruling 2026-11-13; the legacy `productWithoutPrice.visible` key is ignored).
+ * Visibility is not sellability.
  */
 export function isProductVisible(
   product: Product,
@@ -42,7 +43,7 @@ export function isProductVisible(
   priceState: ListPriceState = 'priced',
 ): boolean {
   if (!product.active && !config.products.showInactive) return false;
-  if (isWithoutUsablePrice(priceState) && !config.products.productWithoutPrice.visible) return false;
+  if (isWithoutUsablePrice(priceState)) return false;
   return true;
 }
 
@@ -146,13 +147,11 @@ export function resolveListPrice(input: ResolveListPriceInput): ResolvedPrice {
 
 /**
  * Whether an order line with this price state may be placed in a draft (server-side rule).
- * Priced lines always; zero/missing only when configuration allows both drafting without a price
- * and ordering products without a price.
+ * Owner ruling 2026-11-13: only a positive price in the customer's table is orderable. The legacy
+ * `productWithoutPrice` / `allowDraftWithoutPrice` keys no longer relax it (the second parameter is
+ * accepted for compatibility and ignored).
  */
-export function isLineOrderable(state: ListPriceState, config: InstallationConfiguration): boolean {
-  if (state === 'priced') return true;
-  return (
-    config.sales.orderBehavior.allowDraftWithoutPrice &&
-    config.products.productWithoutPrice.orderable
-  );
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function isLineOrderable(state: ListPriceState, _config?: InstallationConfiguration): boolean {
+  return state === 'priced';
 }

@@ -7,7 +7,7 @@ import {
   InstallationConfigurationRepository,
   type StoredConfigurationRow,
 } from '../configuration/configuration.repository.js';
-import { overlayConfigurationFacts } from '../configuration/sankhya-overlay.js';
+import { overlayConfigurationFacts, type OverlayMobilityCount } from '../configuration/sankhya-overlay.js';
 import { validateInstallationConfiguration } from '../configuration/validate.js';
 import { errorLogFields, type Logger } from '../observability/logger.js';
 import type { Clock } from '../platform/tokens.js';
@@ -40,12 +40,13 @@ export interface ConfigurationSyncDeps {
 
 export type ConfigurationSyncResult =
   | { readonly outcome: 'skipped_locked' }
-  | { readonly outcome: 'unchanged'; readonly contentHash: string; readonly warnings: number }
+  | { readonly outcome: 'unchanged'; readonly contentHash: string; readonly warnings: number; readonly mobility?: readonly OverlayMobilityCount[] }
   | {
       readonly outcome: 'stored';
       readonly contentHash: string;
       readonly changedKeys: readonly string[];
       readonly warnings: number;
+      readonly mobility?: readonly OverlayMobilityCount[];
     };
 
 /**
@@ -111,7 +112,7 @@ export class ConfigurationSyncService {
 
     const facts = await gateway.readConfigurationFacts(signal === undefined ? {} : { signal });
     assertConfigurationFactsComplete(facts);
-    const overlay = overlayConfigurationFacts({ base: seeded, facts });
+    const overlay = overlayConfigurationFacts({ base: seeded, facts, previous: current });
 
     const validated = validateInstallationConfiguration(structuredClone(overlay.snapshot));
     if (!validated.ok) {
@@ -124,9 +125,9 @@ export class ConfigurationSyncService {
     const finishedAt = (): Date => this.deps.now();
 
     if (contentHash === currentRow.contentHash) {
-      await this.#markSucceeded(startedAt, finishedAt());
+      await this.#markSucceeded(startedAt, finishedAt(), overlay);
       logger.info(this.#report(currentRow.versionLabel, contentHash, [], overlay, 'unchanged'), 'configuration sync: nothing changed');
-      return { outcome: 'unchanged', contentHash, warnings };
+      return { outcome: 'unchanged', contentHash, warnings, mobility: overlay.mobility };
     }
 
     const now = this.deps.now();
@@ -158,9 +159,9 @@ export class ConfigurationSyncService {
     if (stored.outcome === 'stale') {
       throw new TransientJobError('The installation configuration changed while it was being read; the next run repeats the sync.');
     }
-    await this.#markSucceeded(startedAt, finishedAt());
+    await this.#markSucceeded(startedAt, finishedAt(), overlay);
     logger.info(this.#report(snapshot.source.version, contentHash, changedKeys, overlay, 'stored'), 'configuration sync stored a new version');
-    return { outcome: 'stored', contentHash, changedKeys, warnings };
+    return { outcome: 'stored', contentHash, changedKeys, warnings, mobility: overlay.mobility };
   }
 
   /** Report of one run: keys, codes and counts only. No values read from Sankhya, no credential-bearing text. */
@@ -203,12 +204,13 @@ export class ConfigurationSyncService {
       .onConflictDoUpdate({ target: syncState.entity, set: { status: 'running', lastAttemptAt: at } });
   }
 
-  async #markSucceeded(startedAt: Date, finishedAt: Date): Promise<void> {
+  async #markSucceeded(startedAt: Date, finishedAt: Date, overlay: ReturnType<typeof overlayConfigurationFacts>): Promise<void> {
     const values = {
       status: 'succeeded',
       lastSuccessAt: finishedAt,
       lastAttemptAt: startedAt,
       lastFullReconcileAt: finishedAt,
+      cursor: { strategy: 'configuration', mobility: overlay.mobility, warningCodes: overlay.warnings.map((warning) => warning.code) },
       lastErrorClass: null,
       lastErrorMessage: null,
     };

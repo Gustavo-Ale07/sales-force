@@ -51,8 +51,9 @@ export function toConfigurationSummary(configuration: InstallationConfiguration)
       sellableUsageValues: [...configuration.products.sellableUsageValues],
       showInactive: configuration.products.showInactive,
       productWithoutPrice: {
-        visible: configuration.products.productWithoutPrice.visible,
-        orderable: configuration.products.productWithoutPrice.orderable,
+        // Owner ruling 2026-11-13: a product without a price above zero is never listed nor orderable, whatever the legacy keys say.
+        visible: false,
+        orderable: false,
       },
     },
     pricing: toPricingSummary(configuration.pricing),
@@ -108,7 +109,7 @@ export function toOrderEntryConfiguration(
       },
     },
     products: {
-      productWithoutPrice: { orderable: configuration.products.productWithoutPrice.orderable },
+      productWithoutPrice: { orderable: false },
     },
   };
 }

@@ -153,6 +153,41 @@ describe('RealSankhyaGateway.readConfigurationFacts over mocked HTTP', () => {
     expect(facts.q8ProductMobility.rows).toEqual([{ mobile: true, count: 10 }, { mobile: null, count: 2 }]);
   });
 
+  it('Q3 and Q5 read the CURRENT version (highest DHALTER) of every TOP / negotiation type WITH its mobility flag, hidden ones included (so the server can count visible vs hidden)', () => {
+    for (const query of [CONFIG_QUERIES.Q3, CONFIG_QUERIES.Q5]) {
+      expect(query.sql).toContain('MAX(');
+      expect(query.sql).toContain('DHALTER');
+      expect(query.sql).toContain('AD_MOBILIDADE');
+      expect(query.sql).not.toMatch(/AD_MOBILIDADE\s*=\s*'S'/);
+    }
+  });
+
+  it('a TOP or negotiation type whose current version is N or NULL arrives with mobile false / null (never dropped, never true)', async () => {
+    const { gateway, mock } = setup();
+    mock.forced.push(
+      DISCOVERY_PROD,
+      Q1_OK,
+      Q2_OK,
+      ok(CONFIG_QUERIES.Q3.columns, [
+        [1000, 'TOP 1000', 'P', 'S', null, null, '2026-02-01 00:00:00'],
+        [1001, 'TOP 1001', 'P', 'N', null, null, '2026-02-01 00:00:00'],
+        [1002, 'TOP 1002', 'P', null, null, null, '2026-02-01 00:00:00'],
+      ]),
+      Q4_OK,
+      ok(CONFIG_QUERIES.Q5.columns, [
+        [23, 'A', 'S', 'S', 'N', '2026-01-01 00:00:00'],
+        [24, 'B', 'S', 'N', 'N', '2026-01-01 00:00:00'],
+      ]),
+      Q6_OK,
+      Q7_OK,
+      Q8_OK,
+    );
+    const facts = await gateway.readConfigurationFacts();
+    if (!facts.q3EnabledTops.ok || !facts.q5NegotiationTypes.ok) throw new Error('failed');
+    expect(facts.q3EnabledTops.rows.map((t) => [t.topCode, t.mobile])).toEqual([[1000, true], [1001, false], [1002, null]]);
+    expect(facts.q5NegotiationTypes.rows.map((t) => [t.code, t.mobile])).toEqual([[23, true], [24, false]]);
+  });
+
   it('Q1 returning zero rows fails with a classified per-query marker', async () => {
     const { gateway, mock } = setup();
     mock.forced.push(DISCOVERY_PROD, ok(CONFIG_QUERIES.Q1.columns, []), ...REST_OK());

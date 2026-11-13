@@ -5,6 +5,7 @@ import type {
   ConfigQuerySource,
 } from '@salesforce/sankhya';
 import { isQuoteGroupName } from '@salesforce/sankhya';
+import { evaluateMobilityGuard, mobilityTally } from '@salesforce/domain';
 import type { ConfigurationProvenanceEntry, InstallationConfiguration, OrderStatusDisplay } from '@salesforce/domain';
 import { PermanentJobError } from '../worker/job-contract.js';
 import { canonicalJson } from './configuration-hash.js';
@@ -77,7 +78,16 @@ export interface OverlayScopeSummary {
   };
 }
 
+/** Owner ruling 2026-11-13: how many TOPs / negotiation types AD_MOBILIDADE shows and hides, and whether the anti-empty guard kept the previous values. */
+export interface OverlayMobilityCount {
+  readonly kind: 'tops' | 'negotiationTypes';
+  readonly visible: number;
+  readonly hidden: number;
+  readonly keptPrevious: boolean;
+}
+
 export interface OverlayResult {
+  readonly mobility: readonly OverlayMobilityCount[];
   readonly snapshot: InstallationConfiguration;
   readonly entries: readonly OverlayEntry[];
   readonly warnings: readonly OverlayWarning[];
@@ -128,8 +138,11 @@ const sortedUnique = (values: Iterable<number>): number[] => [...new Set(values)
 export function overlayConfigurationFacts(input: {
   readonly base: InstallationConfiguration;
   readonly facts: ConfigurationFacts;
+  /** The configuration in force: the anti-empty guard keeps its TOP / negotiation values (the base when absent). */
+  readonly previous?: InstallationConfiguration;
 }): OverlayResult {
   const { base, facts } = input;
+  const previousDraft = (input.previous ?? base) as unknown as Draft;
   const draft = structuredClone(base) as unknown as Draft;
   const entries: OverlayEntry[] = [];
   const warnings: OverlayWarning[] = [];
@@ -141,9 +154,16 @@ export function overlayConfigurationFacts(input: {
   }
   const q1 = q1Rows[0] as (typeof q1Rows)[number];
   const companies = rowsOf(facts.q2Companies, 'Q2');
-  const tops = rowsOf(facts.q3EnabledTops, 'Q3');
+  const allTops = rowsOf(facts.q3EnabledTops, 'Q3');
+  // Owner ruling 2026-11-13: only AD_MOBILIDADE = 'S' shows; N and NULL hide. The anti-empty guard decides on the counts.
+  const topTally = mobilityTally(allTops.map((top) => top.mobile));
+  const topGuard = evaluateMobilityGuard(topTally);
+  const tops = allTops.filter((top) => top.mobile === true);
   const groups = rowsOf(facts.q4TopGroups, 'Q4');
-  const negotiation = rowsOf(facts.q5NegotiationTypes, 'Q5');
+  const allNegotiation = rowsOf(facts.q5NegotiationTypes, 'Q5');
+  const negotiationTally = mobilityTally(allNegotiation.map((row) => row.mobile));
+  const negotiationGuard = evaluateMobilityGuard(negotiationTally);
+  const negotiation = allNegotiation.filter((row) => row.mobile === true);
   const priceTables = rowsOf(facts.q6PriceTables, 'Q6');
   const statuses = rowsOf(facts.q7OrderStatuses, 'Q7');
   const q8 = rowsOf(facts.q8ProductMobility, 'Q8');
@@ -205,10 +225,24 @@ export function overlayConfigurationFacts(input: {
   const defaultCompanyCode = getPath(draft, 'general.defaultCompanyCode');
   const defaultCompany = companies.find((company) => company.companyCode === defaultCompanyCode);
   const enabledTopCodes = new Set(tops.map((top) => top.topCode));
-  if (defaultCompany === undefined || defaultCompany.defaultOrderTopCode === null) {
+  if (topGuard.keepPrevious) {
+    for (const key of ['sales.orderTopCode', 'sales.eligibleOrderTopCodes', 'sales.skipConfirmationTopCodes']) {
+      const kept = getPath(previousDraft, key);
+      if (kept !== undefined) setPath(draft, key, structuredClone(kept));
+    }
+    warn(
+      'mobility_guard_tops',
+      'sales.eligibleOrderTopCodes',
+      `AD_MOBILIDADE would leave ${topTally.visible} of ${topTally.visible + topTally.hidden} TOPs visible (${topGuard.reason === 'all_hidden' ? 'all hidden' : 'more than 90% hidden'}); the previous TOP lists were kept. Avise o TI: confira AD_MOBILIDADE nas TOPs.`,
+    );
+  } else if (defaultCompany === undefined || defaultCompany.defaultOrderTopCode === null) {
     warn('default_top_not_read', 'sales.orderTopCode', 'The default company has no default TOP in Sankhya; the base order TOP is kept.');
   } else if (!enabledTopCodes.has(defaultCompany.defaultOrderTopCode)) {
-    warn('default_top_not_enabled', 'sales.orderTopCode', 'The default TOP of the company is not enabled (AD_MOBILIDADE) in Sankhya; the base order TOP is kept.');
+    warn(
+      'default_top_not_enabled',
+      'sales.orderTopCode',
+      `Avise o TI: a TOP ${defaultCompany.defaultOrderTopCode} (padrão da empresa ${defaultCompany.companyCode}, TSIEMP.AD_CODTIPOPERPAD) não tem AD_MOBILIDADE = 'S' no Sankhya; a TOP de pedido da base foi mantida.`,
+    );
   } else {
     apply('sales.orderTopCode', fromQuery(q2Source, 'TSIEMP', 'AD_CODTIPOPERPAD'), defaultCompany.defaultOrderTopCode);
   }
@@ -225,7 +259,9 @@ export function overlayConfigurationFacts(input: {
       warn('allowlist_top_not_enabled', 'sales.topAllowlist', `TOPs in the allowlist that are not enabled order TOPs in Sankhya were left out: ${notEnabled.join(', ')}.`);
     }
   }
-  if (eligible.length === 0) {
+  if (topGuard.keepPrevious) {
+    // kept above
+  } else if (eligible.length === 0) {
     warn('no_eligible_top', 'sales.eligibleOrderTopCodes', 'No enabled order TOP remains after the allowlist; the base list is kept.');
   } else {
     apply('sales.eligibleOrderTopCodes', fromQuery(q3Source, 'TGFTOP', 'AD_MOBILIDADE'), eligible);
@@ -251,7 +287,9 @@ export function overlayConfigurationFacts(input: {
   }
 
   // ---- skip-confirmation TOPs (Q3) ----------------------------------------------------------------------------
-  if (tops.length > 0 && tops.every((top) => top.skipConfirmation === null)) {
+  if (topGuard.keepPrevious) {
+    // kept above
+  } else if (tops.length > 0 && tops.every((top) => top.skipConfirmation === null)) {
     warn('skip_confirmation_not_read', 'sales.skipConfirmationTopCodes', 'TGFTOP.AD_PULARCONFIRMACAO is empty for every enabled TOP; the base value is kept.');
   } else if (tops.length > 0) {
     apply(
@@ -288,7 +326,15 @@ export function overlayConfigurationFacts(input: {
     inactive: negotiation.filter((row) => row.active !== true).length,
     excludedByBase: negotiation.filter((row) => row.active === true && exclusions.has(row.code)).length,
   };
-  if (types.length === 0) {
+  if (negotiationGuard.keepPrevious) {
+    const kept = getPath(previousDraft, 'sales.negotiationTypes');
+    if (kept !== undefined) setPath(draft, 'sales.negotiationTypes', structuredClone(kept));
+    warn(
+      'mobility_guard_negotiation_types',
+      'sales.negotiationTypes',
+      `AD_MOBILIDADE would leave ${negotiationTally.visible} of ${negotiationTally.visible + negotiationTally.hidden} negotiation types visible (${negotiationGuard.reason === 'all_hidden' ? 'all hidden' : 'more than 90% hidden'}); the previous list was kept. Avise o TI: confira AD_MOBILIDADE nos tipos de negociação.`,
+    );
+  } else if (types.length === 0) {
     warn('no_negotiation_type', 'sales.negotiationTypes', 'No active negotiation type is enabled in Sankhya; the base list is kept.');
   } else {
     apply('sales.negotiationTypes', fromQuery(facts.q5NegotiationTypes.source, 'TGFTPV', 'AD_MOBILIDADE'), types);
@@ -404,6 +450,10 @@ export function overlayConfigurationFacts(input: {
     base: { kind: 'bootstrap-file', version: base.source.version },
   };
   return {
+    mobility: [
+      { kind: 'tops', ...topTally, keptPrevious: topGuard.keepPrevious },
+      { kind: 'negotiationTypes', ...negotiationTally, keptPrevious: negotiationGuard.keepPrevious },
+    ],
     snapshot: draft as unknown as InstallationConfiguration,
     entries,
     warnings,

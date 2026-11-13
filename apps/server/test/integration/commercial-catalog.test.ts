@@ -202,30 +202,26 @@ describe('products and prices', () => {
     }
   });
 
-  it('a missing price is state none with a null price, never 0; an explicit zero stays zero', async () => {
+  it('owner ruling 2026-11-13: only products priced above zero are listed (a missing price or an explicit zero never appears)', async () => {
     const items = await allPages('manager', '/products');
-    const none = items.filter((p) => p.listPrice.state === 'none');
-    const zero = items.filter((p) => p.listPrice.state === 'zero');
-    expect(none.length).toBeGreaterThan(0);
-    expect(zero.length).toBeGreaterThan(0);
-    for (const item of none) {
-      expect(item.listPrice.unitPrice).toBeNull();
-      expect(item.listPrice.noPriceReason).not.toBeNull();
+    expect(items.length).toBeGreaterThan(0);
+    for (const item of items) {
+      expect(item.listPrice.state).toBe('priced');
+      expect(item.listPrice.unitPrice).not.toBeNull();
+      expect(item.listPrice.unitPrice).not.toBe('0');
     }
-    for (const item of zero) expect(item.listPrice.unitPrice).toBe('0');
   });
 
-  it('filters by sellable, priceState, group and search', async () => {
+  it('filters by sellable, group and search (the price filter is gone)', async () => {
     const sellable = await allPages('manager', '/products?sellable=true');
     expect(sellable.every((p) => p.sellable)).toBe(true);
-    const none = await allPages('manager', '/products?priceState=none');
-    expect(none.every((p) => p.listPrice.state === 'none')).toBe(true);
     const group = dataset.productGroups[0];
     if (group === undefined) throw new Error('fixture has no group');
     const inGroup = await allPages('manager', `/products?group=${group.code}`);
     expect(inGroup.every((p) => p.groupCode === group.code)).toBe(true);
-    const sample = dataset.products[10];
-    if (sample === undefined) throw new Error('fixture has no product');
+    const listed = await allPages('manager', '/products');
+    const sample = dataset.products.find((p) => p.code === listed[10]?.code);
+    if (sample === undefined) throw new Error('fixture has no listed product');
     const found = await ctx.call('manager', 'GET', `/products?search=${encodeURIComponent(sample.description)}&pageSize=100`);
     expect(found.body.items.map((p: Json) => p.code)).toContain(sample.code);
     expect(ProductsResponseSchema.safeParse(found.body).success).toBe(true);

@@ -69,12 +69,20 @@ describe('isProductVisible', () => {
     ['inactive shown when configured', false, 'priced', { showInactive: true }, true],
     ['no price hidden by default', true, 'none', {}, false],
     ['zero price hidden by default', true, 'zero', {}, false],
+    // 2026-11-13: a product without a positive price never appears, whatever the (legacy) configuration key says.
     [
-      'no price shown when configured',
+      'no price stays hidden even when the legacy key says visible',
       true,
       'none',
       { productWithoutPrice: { visible: true, orderable: false } },
+      false,
+    ],
+    [
+      'zero price stays hidden even when the legacy key says visible',
       true,
+      'zero',
+      { productWithoutPrice: { visible: true, orderable: true } },
+      false,
     ],
   ] as const)('%s', (_label, active, state, patch, expected) => {
     expect(isProductVisible(makeProduct({ active }), withProducts(patch), state)).toBe(expected);
@@ -296,9 +304,10 @@ describe('isLineOrderable', () => {
     ['none', false, false, false],
     ['none', true, false, false],
     ['none', false, true, false],
-    ['none', true, true, true],
+    // Owner ruling 2026-11-13: the legacy keys can no longer make an unpriced line orderable.
+    ['none', true, true, false],
     ['zero', false, false, false],
-    ['zero', true, true, true],
+    ['zero', true, true, false],
   ] as const)('%s with allowDraft=%s orderable=%s -> %s', (state, allow, orderable, expected) => {
     expect(isLineOrderable(state, cfg(allow, orderable))).toBe(expected);
   });

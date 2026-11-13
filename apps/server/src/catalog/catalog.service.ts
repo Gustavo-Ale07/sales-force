@@ -55,7 +55,6 @@ export function productFilterOf(config: InstallationConfiguration): Omit<Product
   return {
     sellableUsageValues: config.products.sellableUsageValues,
     showInactive: config.products.showInactive,
-    productWithoutPriceVisible: config.products.productWithoutPrice.visible,
   };
 }
 
@@ -138,7 +137,6 @@ export class CatalogService {
         search: query.search,
         group: query.group,
         sellable: query.sellable,
-        priceState: query.priceState,
         sort: query.sort,
       },
       book.versionId,

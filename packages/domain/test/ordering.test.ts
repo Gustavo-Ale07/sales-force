@@ -241,14 +241,17 @@ describe('validateDraftInvariants', () => {
 
   describe('orderability of lines without a usable price', () => {
     const unpriced = [item(1, '1', none), item(2, '1', zero)];
-    it('rejected by default', () => {
+    it('rejected with the clear reason product_without_price', () => {
       expect(codes(draft(unpriced))).toEqual([
-        'line_not_orderable@items[0].priceState',
-        'line_not_orderable@items[1].priceState',
+        'product_without_price@items[0].priceState',
+        'product_without_price@items[1].priceState',
       ]);
     });
-    it('accepted when configuration allows it', () => {
-      expect(codes(draft(unpriced), allowUnpriced(config))).toEqual([]);
+    it('still rejected when the legacy configuration keys say orderable (owner ruling 2026-11-13)', () => {
+      expect(codes(draft(unpriced), allowUnpriced(config))).toEqual([
+        'product_without_price@items[0].priceState',
+        'product_without_price@items[1].priceState',
+      ]);
     });
     it('rejected in the unconfigured default even for an otherwise valid draft', () => {
       const unconfigured = makeConfig((c) => ({ ...c, sales: { ...c.sales, orderBehavior: { allowDraftWithoutPrice: false } } }));
@@ -267,6 +270,16 @@ describe('validateDraftInvariants', () => {
     it('flags a product not sellable per configuration', () => {
       const other = makeProduct({ code: 3001, usageCode: 'Z9' });
       expect(codes(d, config, { products: new Map([[3001, other]]) })).toEqual(['product_not_sellable@items[0].productCode']);
+    });
+    it('flags a product that left the mobile catalog as product_without_mobility (never as unknown)', () => {
+      expect(codes(d, config, { products: new Map(), productsWithoutMobility: new Set([3001]) })).toEqual([
+        'product_without_mobility@items[0].productCode',
+      ]);
+    });
+    it('without mobility wins over a still-present row of that product', () => {
+      expect(
+        codes(d, config, { products: new Map([[3001, makeProduct({ code: 3001 })]]), productsWithoutMobility: new Set([3001]) }),
+      ).toEqual(['product_without_mobility@items[0].productCode']);
     });
   });
 

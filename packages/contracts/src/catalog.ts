@@ -114,7 +114,6 @@ export const ProductsQuerySchema = z.object({
   search: querySearch().optional(),
   group: queryInt(0).optional(),
   sellable: queryBoolean().optional(),
-  priceState: ListPriceStateSchema.optional(),
   /** When present, prices are resolved for this customer's price table; otherwise the catalog reference table. */
   customerCode: queryInt(0).optional(),
   sort: ProductSortSchema.default('description'),
