@@ -2,6 +2,7 @@ import type { SqlDatabase } from "./connection";
 import { DatasetIdentityError, confirmDataset, readCacheDataset, readExpectedDataset, sameDataset, writeCacheDataset, type DatasetIdentity } from "./dataset-identity";
 import { countOutbox, listAttentionItems, type AttentionItem } from "./local-orders";
 import { isoNow, type OfflineEnv } from "./offline-env";
+import { refreshOrderErpStatuses, type OrderStatusSource } from "./order-erp-status";
 import { pushOutbox, recoverInterrupted, reevaluateHeldOrders, TransportError, type OrderTransport, type PushOptions } from "./order-sync";
 import {
   applyCustomerCreationSignal,
@@ -18,7 +19,7 @@ import { META_KEYS, cachedPriceTableCodes, countPriceRows, deleteMeta, getMeta, 
  * Where the reference data comes from. The server stays authoritative and delivers only what the actor's scope
  * allows (P-21); the client never widens it. Implementations page through the API and return the full snapshot.
  */
-export interface ReferenceSource {
+export interface ReferenceSource extends OrderStatusSource {
   fetchCustomers(): Promise<readonly CustomerLike[]>;
   fetchProducts(): Promise<readonly ProductLike[]>;
   /**
@@ -347,6 +348,8 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
           pulled = true;
           // A price table that could not be read is never reported as a clean sync (its customers may be left without prices).
           if (pulledData.priceTablesFailed.length > 0) setFailure(failureOf("error", "error", PRICE_TABLES_FAILED_TEXT));
+          // ERP status of the orders the device holds (GET /orders?ids=, in scope only). A failed read is reported by the run.
+          await refreshOrderErpStatuses(deps.db, deps.env, deps.source, deps.ownerAccountId);
           // Marked drafts: the cause may be gone with the new base; the ones released go out now.
           const released = await reevaluateHeldOrders(deps.db, deps.env, deps.ownerAccountId);
           if (released > 0) await pushOutbox(deps.db, deps.env, deps.transport, deps.ownerAccountId, { ...pushOptions, currentDataset: await readExpectedDataset(deps.db) });

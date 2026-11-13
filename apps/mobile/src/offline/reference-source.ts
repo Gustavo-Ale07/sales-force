@@ -1,4 +1,4 @@
-import { TransportError, type DatasetIdentity, type MobilityCount, type PriceTableSnapshot, type RefreshOutcome, type RefreshProgress, type ReferenceSource } from "@salesforce/mobile-db";
+import { TransportError, type DatasetIdentity, type MobilityCount, type OrderErpStatus, type PriceTableSnapshot, type RefreshOutcome, type RefreshProgress, type ReferenceSource } from "@salesforce/mobile-db";
 import { ApiRequestError, callApi, type ApiClient } from "../data/api";
 import type { CustomerListItem, OrderEntryConfiguration, ProductListItem } from "../data/ports";
 import { toTransportError } from "./transport";
@@ -40,9 +40,12 @@ export interface RefreshTiming {
   readonly now?: () => number;
   /** Page size of the price-table read (default and server maximum: 1000). */
   readonly priceTablePageSize?: number;
+  /** Page size of `GET /orders?ids=` (the server caps it at 100, also the most ids per call). */
+  readonly orderStatusPageSize?: number;
 }
 
 const PRICE_TABLE_PAGE_SIZE = 1000;
+const ORDER_STATUS_PAGE_SIZE = 100;
 
 /** Friendly names of what the server refreshes (the seller's wording; no ERP names). */
 const ENTITY_LABEL: Readonly<Record<string, string>> = {
@@ -192,6 +195,27 @@ export function createReferenceSource(api: ApiClient, timing: RefreshTiming = {}
       }
       return { tables, failed };
     },
+    // Only the ERP status fields of orders the device holds; the server answers only within the caller's scope.
+    fetchOrderStatuses: (orderIds) =>
+      guard(async () => {
+        const found: OrderErpStatus[] = [];
+        const pageSize = timing.orderStatusPageSize ?? ORDER_STATUS_PAGE_SIZE;
+        for (let page = 1; ; page += 1) {
+          const view = await callApi(() => api.GET("/orders", { params: { query: { ids: orderIds.join(","), page, pageSize } } }));
+          for (const order of view.items) {
+            found.push({
+              orderId: order.id,
+              erpNumber: order.erpNumber,
+              code: order.erpStatus?.code ?? null,
+              label: order.erpStatus?.label ?? null,
+              invoiceNumber: order.erpStatus?.invoiceNumber ?? null,
+              checkedAt: order.erpStatus?.checkedAt ?? null,
+            });
+          }
+          if (view.items.length === 0 || page * pageSize >= view.total) break;
+        }
+        return found;
+      }),
     fetchEntryConfiguration: () => guard(() => callApi(() => api.GET("/order-entry/configuration"))),
     // Same endpoint the online carrier picker uses; the pull treats a failure here as non-fatal.
     fetchCarriers: () => guard(async () => (await callApi(() => api.GET("/carriers"))).items),
