@@ -69,7 +69,9 @@ describe('list queries', () => {
       expect(CustomersQuerySchema.safeParse(query).success).toBe(false);
     }
     expect(CustomersQuerySchema.safeParse({ sort: 'cost' }).success).toBe(false);
-    expect(CustomersQuerySchema.safeParse({ status: 'gone' }).success).toBe(false);
+    // The status filter was removed (D-AQ): the key is no longer part of the query and is ignored, never applied.
+    const withLegacyStatus = CustomersQuerySchema.safeParse({ status: 'gone' });
+    expect(withLegacyStatus.success && 'status' in withLegacyStatus.data).toBe(false);
     expect(ProductsQuerySchema.safeParse({ priceState: 'free' }).success).toBe(false);
     expect(OrdersQuerySchema.safeParse({ status: 'shipped' }).success).toBe(false);
   });
