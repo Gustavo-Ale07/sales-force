@@ -139,11 +139,14 @@ describe('CreateCustomerRequest text hygiene (M-4)', () => {
     ];
     for (const [field, build, read] of fields) {
       it(`${field}: a non-breaking space becomes a regular space`, () => {
-        expect(read(CreateCustomerRequestSchema.parse({ ...base, ...build('Rua Alfa  Beta') }))).toBe('Rua Alfa  Beta');
+        expect(read(CreateCustomerRequestSchema.parse({ ...base, ...build('Rua\u00a0Alfa\u00a0 Beta') }))).toBe('Rua Alfa  Beta');
       });
       it.each([
-        ['Hangul filler U+3164', 'AㅤB'],
-        ['braille blank U+2800', 'A⠀B'],
+        ['Hangul filler U+3164', 'A\u3164B'],
+        ['braille blank U+2800', 'A\u2800B'],
+        ['Hangul choseong filler U+115F', 'A\u115fB'],
+        ['Hangul jungseong filler U+1160', 'A\u1160B'],
+        ['halfwidth Hangul filler U+FFA0', 'A\uffa0B'],
         ['emoji with zero-width joiner', 'A\u{1F468}‍\u{1F469}B'],
       ])(`${field}: refuses %s`, (_label, value) => {
         const found = messages(build(value)).filter((entry) => entry.startsWith(field));

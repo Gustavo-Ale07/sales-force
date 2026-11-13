@@ -21,25 +21,24 @@ export const MAX_CUSTOMER_ADDRESSES = 3;
  * DEL), Unicode format characters (`\p{Cf}`: bidi override/isolate/marks, zero-width space/joiner, word joiner, BOM,
  * soft hyphen) and the line/paragraph separators U+2028/U+2029. Side effect accepted: an emoji ZWJ sequence is refused
  * (the ERP columns are plain names). `notes` is the only multi-line field and additionally keeps `\n` and `\t`.
+ *
+ * Owner ruling 2026-11-13: also refused, because they render as blank text yet are neither controls nor format
+ * characters, the invisible fillers U+115F and U+1160 (Hangul choseong/jungseong filler), U+3164 (Hangul filler),
+ * U+FFA0 (halfwidth Hangul filler) and U+2800 (braille blank).
+ * Normalized instead of refused: a non-breaking space (U+00A0) becomes a regular space; in `notes` CRLF becomes LF
+ * (text pasted from Windows). A bare CR stays refused.
  */
-const NO_HIDDEN_TEXT = /^[^\p{Cc}\p{Cf}\u2028\u2029]*$/u;
-const NO_HIDDEN_MULTILINE_TEXT = /^(?:[^\p{Cc}\p{Cf}\u2028\u2029]|[\n\t])*$/u;
+const NO_HIDDEN_TEXT = /^[^\p{Cc}\p{Cf}\u2028\u2029\u115f\u1160\u3164\uffa0\u2800]*$/u;
+const NO_HIDDEN_MULTILINE_TEXT = /^(?:[^\p{Cc}\p{Cf}\u2028\u2029\u115f\u1160\u3164\uffa0\u2800]|[\n\t])*$/u;
 const HIDDEN_TEXT_MESSAGE = 'Caracteres de controle, invisíveis ou que alteram a direção do texto não são permitidos.';
-// Owner ruling 2026-11-13: also refused, U+3164 (Hangul filler) and U+2800 (braille blank), which render as blank text
-// yet are neither controls nor format characters. Normalized instead of refused: a non-breaking space (U+00A0) becomes a
-// regular space; in `notes` CRLF becomes LF (text pasted from Windows). A bare CR stays refused.
-const INVISIBLE_FILLERS = /[ㅤ⠀]/u;
-const plainSpaces = (value: string) => value.replace(/ /g, ' ');
-const withoutFillers = (value: string) => !INVISIBLE_FILLERS.test(value);
-// The space replacement keeps the length, so the limit and the refusals may run first.
-const text = (max: number) =>
-  z.string().trim().min(1).max(max).regex(NO_HIDDEN_TEXT, HIDDEN_TEXT_MESSAGE).refine(withoutFillers, HIDDEN_TEXT_MESSAGE).transform(plainSpaces);
-// CRLF -> LF changes the length, so it runs before the limit (a pasted 4,000-character text with line breaks must fit).
+// Normalization uses `.overwrite()` (a check, like `.trim()`), never `.transform()`: the schema keeps its string type, its
+// limits, its pattern and its defaults in the published OpenAPI document and the generated client types.
+const plainSpaces = (value: string) => value.replace(/\u00a0/g, ' ');
+const lineFeeds = (value: string) => value.replace(/\r\n/g, '\n');
+const text = (max: number) => z.string().overwrite(plainSpaces).trim().min(1).max(max).regex(NO_HIDDEN_TEXT, HIDDEN_TEXT_MESSAGE);
+// CRLF -> LF shortens the text, so it runs before the limit (a pasted 4,000-character text with line breaks must fit).
 const multilineText = (max: number) =>
-  z
-    .string()
-    .transform((value) => value.replace(/\r\n/g, '\n'))
-    .pipe(z.string().trim().min(1).max(max).regex(NO_HIDDEN_MULTILINE_TEXT, HIDDEN_TEXT_MESSAGE).refine(withoutFillers, HIDDEN_TEXT_MESSAGE).transform(plainSpaces));
+  z.string().overwrite(lineFeeds).overwrite(plainSpaces).trim().min(1).max(max).regex(NO_HIDDEN_MULTILINE_TEXT, HIDDEN_TEXT_MESSAGE);
 
 /**
  * The size and shape of each stored field, the single source of the limits: the API validates the request with them

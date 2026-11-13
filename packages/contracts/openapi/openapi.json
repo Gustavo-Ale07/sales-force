@@ -4386,15 +4386,16 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 100,
-            "pattern": "^[^\\p{Cc}\\p{Cf}\\u2028\\u2029]*$"
+            "pattern": "^[^\\p{Cc}\\p{Cf}\\u2028\\u2029\\u115f\\u1160\\u3164\\uffa0\\u2800]*$"
           },
           "tradeName": {
+            "default": null,
             "anyOf": [
               {
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 100,
-                "pattern": "^[^\\p{Cc}\\p{Cf}\\u2028\\u2029]*$"
+                "pattern": "^[^\\p{Cc}\\p{Cf}\\u2028\\u2029\\u115f\\u1160\\u3164\\uffa0\\u2800]*$"
               },
               {
                 "type": "null"
@@ -4406,12 +4407,13 @@
             "$ref": "#/components/schemas/IcmsClassification"
           },
           "stateRegistration": {
+            "default": null,
             "anyOf": [
               {
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 16,
-                "pattern": "^[^\\p{Cc}\\p{Cf}\\u2028\\u2029]*$"
+                "pattern": "^[^\\p{Cc}\\p{Cf}\\u2028\\u2029\\u115f\\u1160\\u3164\\uffa0\\u2800]*$"
               },
               {
                 "type": "null"
@@ -4445,12 +4447,21 @@
             ]
           },
           "notes": {
-            "type": [
-              "string",
-              "null"
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4000,
+                "pattern": "^(?:[^\\p{Cc}\\p{Cf}\\u2028\\u2029\\u115f\\u1160\\u3164\\uffa0\\u2800]|[\\n\\t])*$"
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "addresses": {
+            "default": [],
             "maxItems": 3,
             "type": "array",
             "items": {
@@ -4639,15 +4650,16 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 6,
-            "pattern": "^[^\\p{Cc}\\p{Cf}\\u2028\\u2029]*$"
+            "pattern": "^[^\\p{Cc}\\p{Cf}\\u2028\\u2029\\u115f\\u1160\\u3164\\uffa0\\u2800]*$"
           },
           "complement": {
+            "default": null,
             "anyOf": [
               {
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 30,
-                "pattern": "^[^\\p{Cc}\\p{Cf}\\u2028\\u2029]*$"
+                "pattern": "^[^\\p{Cc}\\p{Cf}\\u2028\\u2029\\u115f\\u1160\\u3164\\uffa0\\u2800]*$"
               },
               {
                 "type": "null"

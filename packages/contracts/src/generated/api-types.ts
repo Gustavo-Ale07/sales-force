@@ -941,16 +941,20 @@ export interface components {
             clientRequestId: string;
             document: string;
             name: string;
-            tradeName?: string | null;
+            /** @default null */
+            tradeName: string | null;
             /** @default R */
             icmsClassification: components["schemas"]["IcmsClassification"];
-            stateRegistration?: string | null;
+            /** @default null */
+            stateRegistration: string | null;
             /** @default null */
             phone: string | null;
             /** @default null */
             email: string | null;
-            notes?: string | null;
-            addresses?: components["schemas"]["CustomerAddressInput"][];
+            /** @default null */
+            notes: string | null;
+            /** @default [] */
+            addresses: components["schemas"]["CustomerAddressInput"][];
             sellerCode?: number;
         };
         CreateCustomerResponse: {
@@ -983,7 +987,8 @@ export interface components {
             streetCode: number;
             neighborhoodCode: number;
             number: string;
-            complement?: string | null;
+            /** @default null */
+            complement: string | null;
             postalCode: string;
         };
         CustomerDetail: {
