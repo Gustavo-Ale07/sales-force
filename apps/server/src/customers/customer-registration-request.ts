@@ -46,6 +46,11 @@ export type PrepareOutcome =
 export interface RegistrationActor {
   readonly role: 'seller' | 'manager' | 'admin' | 'technical';
   readonly sellerCodes: readonly number[];
+  /**
+   * The seller codes the resolved data scope reaches (`PolicyService.customerScope`): `null` = every seller
+   * (manager/admin). A chosen owner outside it is refused, whatever the role.
+   */
+  readonly allowedSellerCodes?: readonly number[] | null;
 }
 
 /**
@@ -60,7 +65,8 @@ export function prepareCustomerRegistration(body: CreateCustomerRequest, actor: 
   const valid = kind === 'individual' ? isValidCpf(document) : kind === 'company' ? isValidCnpj(document) : false;
   if (kind === null || !valid) issues.push({ path: 'document', code: 'invalid_document', message: 'CPF ou CNPJ inválido.' });
 
-  const sellerCode = chooseSeller(body.sellerCode, actor);
+  const chosen = chooseSeller(body.sellerCode, actor);
+  const sellerCode = chosen !== null && actor.allowedSellerCodes != null && !actor.allowedSellerCodes.includes(chosen) ? null : chosen;
   if (sellerCode === null) {
     issues.push({
       path: 'sellerCode',

@@ -49,11 +49,22 @@ export class CustomerRegistrationService {
       });
     }
     // A seller without a valid link is refused here (no_seller_scope); the technical profile is refused by the route policy.
-    await this.policy.customerScope(user);
+    const scope = await this.policy.customerScope(user);
 
-    const prepared = prepareCustomerRegistration(body, { role: user.role, sellerCodes: user.sellerCodes });
+    const prepared = prepareCustomerRegistration(body, {
+      role: user.role,
+      sellerCodes: user.sellerCodes,
+      allowedSellerCodes: scope.kind === 'sellers' ? scope.sellerCodes : null,
+    });
     if (!prepared.ok) throw new AppError('validation_failed', { details: { issues: prepared.issues } });
     const { payload, fingerprint } = prepared.value;
+
+    // The owner must be a real, active seller of the ERP mirror: a typo or a made-up code never reaches the ERP.
+    if (!(await this.registrations.activeSellerExists(payload.sellerCode))) {
+      throw new AppError('validation_failed', {
+        details: { issues: [{ path: 'sellerCode', code: 'seller_not_found', message: 'Vendedor não encontrado ou inativo.' }] },
+      });
+    }
 
     const existing = await this.registrations.findByRequest(user.accountId, body.clientRequestId);
     if (existing !== null) return { response: this.replayOf(existing, fingerprint), httpStatus: 200 };

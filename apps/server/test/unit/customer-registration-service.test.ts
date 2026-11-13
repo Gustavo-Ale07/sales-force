@@ -33,6 +33,10 @@ class FakeRepo {
   rows: CustomerRegistrationRow[] = [];
   outbox: Array<{ originKey: string; payload: Record<string, unknown> }> = [];
   mirrorDocuments = new Set<string>();
+  sellers = new Set<number>([7, 8]);
+  activeSellerExists(code: number): Promise<boolean> {
+    return Promise.resolve(this.sellers.has(code));
+  }
   recentCount = 0;
   /** Called after every `findById` so a test can play the worker. */
   onPoll: (row: CustomerRegistrationRow) => void = () => undefined;
@@ -71,13 +75,13 @@ class FakeRepo {
   }
 }
 
-function build(options: { enabled?: boolean; timeoutMs?: number } = {}) {
+function build(options: { enabled?: boolean; timeoutMs?: number; scope?: unknown } = {}) {
   const repo = new FakeRepo();
   const audits: Array<{ action: string; detail?: Record<string, unknown> }> = [];
   let now = NOW.getTime();
   const clock = () => new Date(now);
   const service = new CustomerRegistrationService(
-    { customerScope: () => Promise.resolve({ kind: 'all' }) } as unknown as PolicyService,
+    { customerScope: () => Promise.resolve(options.scope ?? { kind: 'all' }) } as unknown as PolicyService,
     repo as unknown as CustomerRegistrationRepository,
     { record: (entry: { action: string; detail?: Record<string, unknown> }) => { audits.push(entry); return Promise.resolve(); } } as unknown as AuditService,
     clock,
@@ -175,6 +179,31 @@ describe('CustomerRegistrationService.create', () => {
     const error = await service.create(user(), request({ document: '11.222.333/0001-82' })).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(AppError);
     expect(error).toMatchObject({ code: 'validation_failed', details: { issues: [{ path: 'document' }] } });
+    expect(repo.rows).toHaveLength(0);
+  });
+
+  it('a manager naming a seller that is not in the mirror (or inactive) is refused, recording nothing', async () => {
+    const { service, repo } = build();
+    await expect(service.create(user({ role: 'manager', sellerCodes: [] }), request({ sellerCode: 999 }))).rejects.toMatchObject({
+      code: 'validation_failed',
+      details: { issues: [{ path: 'sellerCode', code: 'seller_not_found' }] },
+    });
+    expect(repo.rows).toHaveLength(0);
+    expect(repo.outbox).toHaveLength(0);
+  });
+
+  it('a manager naming an existing seller is accepted', async () => {
+    const { service, repo } = build();
+    await service.create(user({ role: 'manager', sellerCodes: [] }), request({ sellerCode: 8 }));
+    expect(repo.outbox[0]?.payload).toMatchObject({ sellerCode: 8 });
+  });
+
+  it('a scope narrower than the role refuses an owner outside it', async () => {
+    const { service, repo } = build({ scope: { kind: 'sellers', sellerCodes: [7] } });
+    await expect(service.create(user({ role: 'manager', sellerCodes: [7] }), request({ sellerCode: 8 }))).rejects.toMatchObject({
+      code: 'validation_failed',
+      details: { issues: [{ path: 'sellerCode' }] },
+    });
     expect(repo.rows).toHaveLength(0);
   });
 

@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { customerRegistration, erpCustomer, integrationOutbox, type Database } from '@salesforce/db';
-import { and, eq, gte, sql } from 'drizzle-orm';
+import { customerRegistration, erpCustomer, erpSeller, integrationOutbox, type Database } from '@salesforce/db';
+import { and, eq, gte, isNull, sql } from 'drizzle-orm';
 import type { Executor } from '../orders/orders.repository.js';
 import { DATABASE } from '../platform/tokens.js';
 
@@ -55,6 +55,15 @@ export class CustomerRegistrationRepository {
   }
 
   /** The document already exists in the ERP mirror (any seller, any state: duplicates are decided globally). */
+  async activeSellerExists(code: number, db: Executor = this.db): Promise<boolean> {
+    const rows = await db
+      .select({ code: erpSeller.code })
+      .from(erpSeller)
+      .where(and(eq(erpSeller.code, code), eq(erpSeller.active, true), isNull(erpSeller.deletedAt)))
+      .limit(1);
+    return rows.length > 0;
+  }
+
   async mirrorHasDocument(taxId: string, db: Executor = this.db): Promise<boolean> {
     const rows = await db
       .select({ code: erpCustomer.code })
