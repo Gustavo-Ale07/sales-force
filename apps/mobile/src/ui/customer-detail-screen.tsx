@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import type { CustomerDetail, CustomerListItem, CustomerRepository } from "../data/ports";
-import { PENDING_CREDIT_NOTE, PENDING_CUSTOMER_ORDER_MESSAGE } from "../data/pending-status";
+import { isUnconfirmedCustomer, PENDING_CREDIT_NOTE, PENDING_CUSTOMER_ORDER_MESSAGE } from "../data/pending-status";
 import { colors, spacing } from "../theme";
 import { describeCustomerStatus } from "./customers-screen";
 
@@ -38,6 +38,8 @@ export interface CustomerDetailScreenProps {
   readonly connectivity?: ConnectivityState;
   readonly onBack: () => void;
   readonly onNewOrder: (customer: CustomerListItem) => void;
+  /** "Refazer" on a refused customer: opens the creation form pre-filled (the form is F8). Absent = no button. */
+  readonly onRedo?: (customer: CustomerListItem) => void;
 }
 
 /**
@@ -47,15 +49,16 @@ export interface CustomerDetailScreenProps {
  * BUSINESS_RULE_UNDEFINED: whether a blocked/inactive customer may start an order is not decided anywhere (domain
  * `blocked` is "not decided here"; BLOQUEAR semantics NEEDS VALIDATION), so the ficha shows the real status only and never blocks.
  */
-export function CustomerDetailScreen({ customer, customers, connectivity, onBack, onNewOrder }: CustomerDetailScreenProps) {
+export function CustomerDetailScreen({ customer, customers, connectivity, onBack, onNewOrder, onRedo }: CustomerDetailScreenProps) {
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
   const online = connectivity !== "offline";
   const status = describeCustomerStatus(customer);
-  const isPending = customer.pending !== undefined;
+  // Waiting, queued or refused: no real code, no orders. A customer the ERP confirmed already has its real code and takes orders.
+  const isPending = isUnconfirmedCustomer(customer);
 
   useEffect(() => {
-    // A customer created on this device does not exist on the server yet: nothing to ask for.
-    if (!online || customers.get === undefined || customer.pending !== undefined) return;
+    // A customer not confirmed yet does not exist on the server: nothing to ask for.
+    if (!online || customers.get === undefined || isPending) return;
     let current = true;
     customers
       .get(customer.code)
@@ -66,7 +69,7 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
     return () => {
       current = false;
     };
-  }, [customer.code, customer.pending, customers, online]);
+  }, [customer.code, isPending, customers, online]);
 
   const hasTradeName = customer.tradeName !== null && customer.tradeName !== customer.name;
   const priceTable =
@@ -121,6 +124,11 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
 
       <View style={styles.footer}>
         {isPending && <Text style={styles.status}>{PENDING_CUSTOMER_ORDER_MESSAGE}</Text>}
+        {customer.pending?.state === "rejected" && onRedo !== undefined && (
+          <Pressable style={styles.cta} onPress={() => onRedo(customer)} accessibilityRole="button" accessibilityLabel="Refazer">
+            <Text style={styles.ctaText}>Refazer</Text>
+          </Pressable>
+        )}
         <Pressable
           style={[styles.cta, isPending && styles.ctaDisabled]}
           onPress={() => !isPending && onNewOrder(customer)}

@@ -539,7 +539,7 @@ export async function pushOutbox(
     // not sent to. The command is kept untouched (same key, same payload, zero attempts) and re-evaluated on every run,
     // so it goes out by itself if the customer becomes available again. Nothing is converted, rewritten or deleted.
     // A customer the ERP has not confirmed yet (local code, or confirmed but not yet in the mirror) is held the same way.
-    const customerBlock = (await pendingCustomerBlockOf(db, draft.customerCode)) ?? (await customerBlockOf(db, draft.customerCode));
+    const customerBlock = pendingCustomerBlockOf(draft.customerCode) ??(await customerBlockOf(db, draft.customerCode));
     if (customerBlock !== null) {
       await holdForCustomer(db, env, draft.localId, customerBlock);
       heldDrafts.add(draft.localId);

@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text } from "react-native";
 import type { CustomerListItem, CustomerRepository } from "../data/ports";
-import { PENDING_CUSTOMER_ORDER_MESSAGE } from "../data/pending-status";
+import { isUnconfirmedCustomer, PENDING_CUSTOMER_ORDER_MESSAGE } from "../data/pending-status";
 import { colors, spacing } from "../theme";
 import { describeCustomerStatus } from "./customers-screen";
 import { PagedListView } from "./paged-list-view";
@@ -8,8 +8,10 @@ import { PagedListView } from "./paged-list-view";
 function PickRow({ customer, onSelect, allowUnavailable }: { customer: CustomerListItem; onSelect: (customer: CustomerListItem) => void; allowUnavailable: boolean }) {
   const status = describeCustomerStatus(customer);
   // A customer the ERP has not confirmed can never start an order, even where blocked/inactive ones are allowed.
-  const unconfirmed = customer.pending !== undefined;
-  const disabled = unconfirmed || (status !== null && !allowUnavailable);
+  const unconfirmed = isUnconfirmedCustomer(customer);
+  // The badge of a customer created here is not a block reason; only blocked/inactive are.
+  const unavailable = customer.blocked || !customer.active;
+  const disabled = unconfirmed || (unavailable && !allowUnavailable);
   return (
     <Pressable
       style={({ pressed }) => [styles.row, disabled && styles.rowDisabled, pressed && !disabled && styles.rowPressed]}

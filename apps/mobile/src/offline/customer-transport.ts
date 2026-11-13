@@ -1,5 +1,6 @@
-import { TransportError, type CustomerRegistrationTransport } from "@salesforce/mobile-db";
+import { TransportError, type CustomerLike, type CustomerRegistrationTransport } from "@salesforce/mobile-db";
 import { ApiRequestError, callApi, type ApiClient } from "../data/api";
+import type { CustomerDetail } from "../data/ports";
 import { toTransportError } from "./transport";
 
 /**
@@ -19,6 +20,21 @@ export function toCustomerTransportError(error: unknown): TransportError {
   return toTransportError(error);
 }
 
+/** The mirror's list shape from a customer sheet: nothing the list does not carry (no credit limit, table name or sync stamp). */
+export function toCustomerLike(detail: CustomerDetail): CustomerLike {
+  return {
+    code: detail.code,
+    name: detail.name,
+    tradeName: detail.tradeName,
+    document: detail.document,
+    active: detail.active,
+    blocked: detail.blocked,
+    sellerCode: detail.sellerCode,
+    sellerName: detail.sellerName,
+    priceTableCode: detail.priceTableCode,
+  };
+}
+
 /** `CustomerRegistrationTransport` over the generated client. The idempotency key is the clientRequestId of every attempt. */
 export function createCustomerTransport(api: ApiClient): CustomerRegistrationTransport {
   return {
@@ -32,6 +48,13 @@ export function createCustomerTransport(api: ApiClient): CustomerRegistrationTra
         return { registrationId: response.registrationId, status: response.status, customerCode: response.customerCode };
       } catch (error) {
         throw toCustomerTransportError(error);
+      }
+    },
+    async getCustomer(code) {
+      try {
+        return toCustomerLike(await callApi(() => api.GET("/customers/{code}", { params: { path: { code } } })));
+      } catch (error) {
+        throw toTransportError(error);
       }
     },
   };

@@ -1,8 +1,11 @@
 import {
   createPendingCustomer,
+  CUSTOMER_CREATION_NOT_RELEASED,
   discardPendingCustomer,
+  isCustomerCreationAvailable,
   listPendingCustomers,
   readExpectedDataset,
+  redoPendingCustomer,
   retryPendingCustomer,
   type CreatePendingCustomerInput,
   type OfflineEnv,
@@ -18,7 +21,15 @@ export { PENDING_CUSTOMER_MESSAGE } from "@salesforce/mobile-db";
  * sync manager delivers them with the same idempotency key. The form is F8: this port is only the data surface.
  */
 export interface PendingCustomersPort {
-  create(request: CreatePendingCustomerInput["request"]): Promise<PendingCustomerRecord>;
+  /** `redoOf` = the refused customer this one replaces ("Refazer"); the refused row is closed only when the new one is saved. */
+  create(request: CreatePendingCustomerInput["request"], options?: { readonly redoOf?: string }): Promise<PendingCustomerRecord>;
+  /** "Refazer": what the seller typed in a refused customer, to pre-fill the form. Changes nothing. */
+  redo(clientRequestId: string): Promise<CreatePendingCustomerInput["request"]>;
+  /**
+   * Whether the "Novo cliente" entry point should be offered: `false` while the server's last answer was "customer creation is
+   * off" (409 customer_write_disabled; no other signal exists). Turns back on with any accepted answer or after an hour.
+   */
+  creationAvailable(): Promise<boolean>;
   list(search?: string): Promise<PendingCustomerRecord[]>;
   /** Makes a waiting customer due now (a refused one cannot be resent as is). */
   resend(clientRequestId: string): Promise<void>;
@@ -35,11 +46,17 @@ export function createPendingCustomersPort(deps: {
 }): PendingCustomersPort {
   const { db, env, ownerAccountId, onChanged } = deps;
   return {
-    async create(request) {
-      const record = await createPendingCustomer(db, env, { ownerAccountId, request });
+    async create(request, options) {
+      const record = await createPendingCustomer(db, env, {
+        ownerAccountId,
+        request,
+        ...(options?.redoOf === undefined ? {} : { replacesRejected: options.redoOf }),
+      });
       onChanged();
       return record;
     },
+    redo: (clientRequestId) => redoPendingCustomer(db, ownerAccountId, clientRequestId),
+    creationAvailable: () => isCustomerCreationAvailable(db, env),
     async list(search = "") {
       return listPendingCustomers(db, ownerAccountId, await readExpectedDataset(db), search);
     },
@@ -59,8 +76,10 @@ export function createPendingCustomersPort(deps: {
  * price table exists for it ("Limite de crédito a definir pelo financeiro" is shown on the sheet).
  */
 export function toPendingListItem(record: PendingCustomerRecord): CustomerListItem {
+  const confirmed = record.state === "confirmed" && record.customerCode !== null;
   return {
-    code: record.localCode,
+    // Confirmed by the ERP: the REAL code (orders allowed). Otherwise the local negative code, which no screen prints.
+    code: confirmed ? (record.customerCode as number) : record.localCode,
     name: record.name,
     tradeName: record.request.tradeName,
     document: record.maskedDocument,
@@ -69,6 +88,11 @@ export function toPendingListItem(record: PendingCustomerRecord): CustomerListIt
     sellerCode: null,
     sellerName: null,
     priceTableCode: null,
-    pending: { clientRequestId: record.clientRequestId, state: record.state, rejectionReason: record.rejectionReason },
+    pending: {
+      clientRequestId: record.clientRequestId,
+      state: record.state,
+      rejectionReason: record.rejectionReason,
+      waitingForRelease: record.lastError === CUSTOMER_CREATION_NOT_RELEASED && record.state !== "confirmed" && record.state !== "rejected",
+    },
   };
 }

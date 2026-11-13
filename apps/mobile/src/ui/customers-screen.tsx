@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import type { CustomerFilters, CustomerLetter, CustomerListItem, CustomerPageRequest, CustomerRepository, CustomerSellerOption } from "../data/ports";
-import { describePendingBadge } from "../data/pending-status";
+import { describePendingBadge, isUnconfirmedCustomer } from "../data/pending-status";
 import { colors, spacing } from "../theme";
 import { CustomerFiltersSheet, CustomerIndexSheet, FilterChips, countActiveFilters } from "./customer-filters";
 import { PagedListView } from "./paged-list-view";
@@ -22,14 +22,14 @@ function CustomerRow({ customer, onOpen }: { customer: CustomerListItem; onOpen:
       style={styles.row}
       onPress={() => onOpen(customer)}
       accessibilityRole="button"
-      accessibilityLabel={`${customer.name}${customer.pending === undefined ? `, código ${customer.code}` : ""}${status !== null ? `, ${status}` : ""}. Abrir ficha`}
+      accessibilityLabel={`${customer.name}${isUnconfirmedCustomer(customer) ? "" : `, código ${customer.code}`}${status !== null ? `, ${status}` : ""}. Abrir ficha`}
     >
       <View style={styles.nameLine}>
         <Text style={styles.name} numberOfLines={2}>{customer.name}</Text>
         {status !== null && <Text style={styles.status}>{status}</Text>}
       </View>
       {customer.tradeName !== null && customer.tradeName !== customer.name && <Text style={styles.meta} numberOfLines={1}>{customer.tradeName}</Text>}
-      <Text style={styles.meta} numberOfLines={1}>{customer.pending !== undefined ? (customer.document ?? "") : `Código ${customer.code}${customer.document !== null ? ` · ${customer.document}` : ""}`}</Text>
+      <Text style={styles.meta} numberOfLines={1}>{isUnconfirmedCustomer(customer) ? (customer.document ?? "") : `Código ${customer.code}${customer.document !== null ? ` · ${customer.document}` : ""}`}</Text>
       {customer.sellerName !== null && <Text style={styles.seller} numberOfLines={1}>{`Vendedor: ${customer.sellerName}`}</Text>}
     </Pressable>
   );

@@ -10,6 +10,8 @@ export type CustomerListItem = ApiSchema<"CustomerListItem"> & {
     readonly clientRequestId: string;
     readonly state: "queued" | "sending" | "awaiting_erp" | "confirmed" | "rejected";
     readonly rejectionReason: string | null;
+    /** The server says customer creation is not released yet; the customer stays queued. */
+    readonly waitingForRelease?: boolean;
   };
 };
 /**

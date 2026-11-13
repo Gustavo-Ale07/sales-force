@@ -127,6 +127,28 @@ export async function replaceCustomers(tx: SqlExecutor, customers: readonly Cust
   );
 }
 
+/**
+ * Writes one customer in the same shape the pull writes it (a customer the ERP just confirmed, before the next pull). Not a
+ * replacement of the snapshot: the other rows stay. The next pull replaces the whole cache as usual.
+ */
+export async function upsertCustomer(tx: SqlExecutor, customer: CustomerLike): Promise<void> {
+  await tx.execute("DELETE FROM cache_customer WHERE code = ?", [customer.code]);
+  await insertBatches(
+    tx,
+    [customer],
+    "code, name, sort_text, search_text, data",
+    "(?, ?, ?, ?, ?)",
+    (row) => [
+      row.code,
+      row.name,
+      normalizeSearchText(row.name),
+      normalizeSearchText([row.code, row.name, row.tradeName ?? "", row.document ?? ""].join(" ")),
+      JSON.stringify(row),
+    ],
+    "cache_customer",
+  );
+}
+
 export async function replaceProducts(tx: SqlExecutor, products: readonly ProductLike[]): Promise<void> {
   await tx.execute("DELETE FROM cache_product");
   await insertBatches(

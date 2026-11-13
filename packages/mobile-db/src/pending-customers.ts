@@ -2,6 +2,15 @@ import type { SqlDatabase, SqlExecutor, SqlRow } from "./connection";
 import { DatasetUnavailableError, readExpectedDataset, sameDataset, type DatasetIdentity } from "./dataset-identity";
 import { isoNow, normalizeSearchText, escapeLike, type OfflineEnv } from "./offline-env";
 import { backoffDelayMs, classifyFailure, TransportError } from "./order-sync";
+import { deleteMeta, getMeta, setMeta, upsertCustomer, type CustomerLike } from "./reference-cache";
+
+/** Seller-facing text while the server says customer creation is switched off on this installation. The customer stays queued. */
+export const CUSTOMER_CREATION_NOT_RELEASED = "Cadastro de cliente ainda não liberado, vamos tentar de novo";
+
+/** When the server last answered 409 `customer_write_disabled` (ISO). It is the only signal: no endpoint or configuration exposes it. */
+const CREATION_OFF_META = "customers.creation_disabled_at";
+/** The "off" answer is trusted for this long, then the entry point may come back and the next attempt learns again. */
+const CREATION_OFF_TTL_MS = 3_600_000;
 
 /**
  * Customers the seller created in the app that the ERP has not confirmed yet (customer-write plan A2, F7).
@@ -69,6 +78,11 @@ export interface PendingCustomerRecord {
 export interface CreatePendingCustomerInput {
   readonly ownerAccountId: string;
   readonly request: PendingCustomerRequest;
+  /**
+   * "Refazer": the id of a REFUSED customer of the same account that this new one replaces. It is closed in the same
+   * transaction as the insert, so a failed creation never loses what the seller typed.
+   */
+  readonly replacesRejected?: string;
 }
 
 export class PendingCustomerError extends Error {
@@ -93,7 +107,8 @@ export function maskDocument(document: string): string {
 }
 
 /** The badge text of a pending customer (list and sheet). */
-export function describePendingCustomer(record: Pick<PendingCustomerRecord, "state" | "rejectionReason">): string {
+export function describePendingCustomer(record: Pick<PendingCustomerRecord, "state" | "rejectionReason" | "lastError">): string {
+  if (record.state !== "confirmed" && record.state !== "rejected" && record.lastError === CUSTOMER_CREATION_NOT_RELEASED) return CUSTOMER_CREATION_NOT_RELEASED;
   switch (record.state) {
     case "queued":
     case "sending":
@@ -101,7 +116,7 @@ export function describePendingCustomer(record: Pick<PendingCustomerRecord, "sta
     case "awaiting_erp":
       return "Aguardando confirmação do Sankhya";
     case "confirmed":
-      return "Confirmado no Sankhya — sincronizando";
+      return "Confirmado no Sankhya — carregando dados";
     case "rejected":
       return `Não aceito: ${record.rejectionReason ?? "o Sankhya recusou o cadastro."}`;
   }
@@ -114,8 +129,8 @@ export function describeCustomerFailure(error: TransportError): string {
       return "Sem conexão com o servidor. Vamos tentar de novo automaticamente.";
     case "server":
       return error.reason === "customer_write_disabled"
-        ? "O cadastro de clientes pelo Force ainda não está habilitado nesta instalação. Vamos tentar de novo mais tarde."
-        : "O servidor está indisponível no momento. Vamos tentar de novo automaticamente.";
+        ? CUSTOMER_CREATION_NOT_RELEASED
+        :"O servidor está indisponível no momento. Vamos tentar de novo automaticamente.";
     case "rate_limit":
       return "Muitas tentativas seguidas. Vamos tentar de novo em instantes.";
     case "auth":
@@ -178,6 +193,10 @@ export async function createPendingCustomer(db: SqlDatabase, env: OfflineEnv, in
       [input.ownerAccountId, document],
     );
     if (open.length > 0) throw new PendingCustomerError("Já existe um cadastro com este CPF/CNPJ aguardando o Sankhya neste aparelho.");
+    if (input.replacesRejected !== undefined) {
+      const old = await getPendingCustomer(tx, input.ownerAccountId, input.replacesRejected);
+      if (old === null || old.state !== "rejected") throw new PendingCustomerError("Só um cadastro não aceito pode ser refeito.");
+    }
     const now = isoNow(env);
     const key = env.newId();
     const request: PendingCustomerRequest = { ...input.request, document };
@@ -197,10 +216,30 @@ export async function createPendingCustomer(db: SqlDatabase, env: OfflineEnv, in
         now,
       ],
     );
+    if (input.replacesRejected !== undefined) {
+      await tx.execute("DELETE FROM pending_customer WHERE client_request_id = ? AND owner_account_id = ? AND state = 'rejected'", [input.replacesRejected, input.ownerAccountId]);
+    }
     const created = await getPendingCustomer(tx, input.ownerAccountId, key);
     if (created === null) throw new Error("pending_customer vanished after its own insert");
     return created;
   });
+}
+
+/**
+ * "Refazer": what the seller typed in a refused customer, to pre-fill the form. The refused row stays untouched until the
+ * new customer is created with `replacesRejected` (the safest order: nothing is lost if the new attempt fails or is abandoned).
+ */
+export async function redoPendingCustomer(db: SqlExecutor, ownerAccountId: string, clientRequestId: string): Promise<PendingCustomerRequest> {
+  const row = await getPendingCustomer(db, ownerAccountId, clientRequestId);
+  if (row === null || row.state !== "rejected") throw new PendingCustomerError("Só um cadastro não aceito pode ser refeito.");
+  return row.request;
+}
+
+/** `false` while the server's last answer was "customer creation is off" (stale after an hour); `true` otherwise, also when unknown. */
+export async function isCustomerCreationAvailable(db: SqlExecutor, env: OfflineEnv): Promise<boolean> {
+  const at = await getMeta(db, CREATION_OFF_META);
+  if (at === null) return true;
+  return env.now().getTime() - new Date(at).getTime() >= CREATION_OFF_TTL_MS;
 }
 
 export async function getPendingCustomer(db: SqlExecutor, ownerAccountId: string, clientRequestId: string): Promise<PendingCustomerRecord | null> {
@@ -270,9 +309,11 @@ export interface RemoteCustomerRegistration {
 /** HTTP surface of the creation. The app adapter maps `ApiRequestError` to `TransportError`. */
 export interface CustomerRegistrationTransport {
   createCustomer(clientRequestId: string, request: PendingCustomerRequest): Promise<RemoteCustomerRegistration>;
+  /** Reads the real customer by its ERP code (`GET /customers/{code}`), in the shape the mirror pull stores. */
+  getCustomer(code: number): Promise<CustomerLike>;
 }
 
-export type PendingCustomerPushStop = "idle" | "offline" | "auth" | "dataset_unconfirmed" | "limit";
+export type PendingCustomerPushStop = "idle" | "offline" | "auth" | "dataset_unconfirmed" | "limit" | "not_released";
 
 export interface PendingCustomerPushResult {
   readonly attempted: number;
@@ -303,7 +344,7 @@ export async function recoverInterruptedCustomers(db: SqlDatabase, env: OfflineE
 
 async function dueRows(db: SqlExecutor, env: OfflineEnv, ownerAccountId: string, dataset: DatasetIdentity, respectBackoff: boolean): Promise<PendingCustomerRecord[]> {
   const rows = await db.query<SqlRow>(
-    `SELECT * FROM pending_customer WHERE owner_account_id = ? AND dataset_environment = ? AND dataset_id = ? AND state IN ('queued', 'awaiting_erp') ORDER BY created_at, seq`,
+    `SELECT * FROM pending_customer WHERE owner_account_id = ? AND dataset_environment = ? AND dataset_id = ? AND state IN ('queued', 'awaiting_erp', 'confirmed') ORDER BY created_at, seq`,
     [ownerAccountId, dataset.environment, dataset.datasetId],
   );
   const now = isoNow(env);
@@ -320,14 +361,41 @@ async function repointDrafts(tx: SqlExecutor, ownerAccountId: string, localCode:
   await tx.execute("UPDATE local_order_draft SET customer_code = ? WHERE owner_account_id = ? AND customer_code = ?", [customerCode, ownerAccountId, localCode]);
 }
 
-async function applyConfirmed(db: SqlDatabase, env: OfflineEnv, row: PendingCustomerRecord, remote: RemoteCustomerRegistration, customerCode: number): Promise<void> {
+async function applyConfirmed(db: SqlDatabase, env: OfflineEnv, row: PendingCustomerRecord, registrationId: string, customerCode: number): Promise<void> {
   await db.transaction(async (tx) => {
     await tx.execute(
       "UPDATE pending_customer SET state = 'confirmed', customer_code = ?, registration_id = ?, last_error = NULL, next_attempt_at = NULL, updated_at = ? WHERE client_request_id = ?",
-      [customerCode, remote.registrationId, isoNow(env), row.clientRequestId],
+      [customerCode, registrationId, isoNow(env), row.clientRequestId],
     );
     await repointDrafts(tx, row.ownerAccountId, row.localCode, customerCode);
   });
+}
+
+/**
+ * The ERP confirmed: bring the REAL customer onto the device now (what the server reads back from the ERP, same shape as the pull),
+ * so it receives orders at once, and drop the local row in the same transaction. When the read fails the row stays `confirmed`
+ * (listed under its real code, orders allowed: the customer does exist) and only the read is retried on the next run.
+ * Returns `"offline"` when the read hit a dead network.
+ */
+async function settleFromServer(db: SqlDatabase, env: OfflineEnv, transport: CustomerRegistrationTransport, row: PendingCustomerRecord, customerCode: number): Promise<"settled" | "waiting" | "offline"> {
+  let customer: CustomerLike;
+  try {
+    customer = await transport.getCustomer(customerCode);
+  } catch (caught) {
+    const text = caught instanceof TransportError ? describeCustomerFailure(caught) : "Não foi possível ler o cliente agora. Vamos tentar de novo.";
+    await db.execute("UPDATE pending_customer SET last_error = ?, updated_at = ? WHERE client_request_id = ?", [text, isoNow(env), row.clientRequestId]);
+    return caught instanceof TransportError && caught.kind === "network" ? "offline" : "waiting";
+  }
+  await db.transaction(async (tx) => {
+    await upsertCustomer(tx, { ...customer, code: customerCode });
+    await tx.execute("DELETE FROM pending_customer WHERE client_request_id = ? AND owner_account_id = ?", [row.clientRequestId, row.ownerAccountId]);
+  });
+  return "settled";
+}
+
+async function noteCreationAnswer(db: SqlExecutor, env: OfflineEnv, disabled: boolean): Promise<void> {
+  if (disabled) await setMeta(db, CREATION_OFF_META, isoNow(env), isoNow(env));
+  else if ((await getMeta(db, CREATION_OFF_META)) !== null) await deleteMeta(db, CREATION_OFF_META);
 }
 
 /**
@@ -354,15 +422,26 @@ export async function pushPendingCustomers(
     if (attempted >= max) return { attempted, confirmed, rejected, stoppedBy: "limit" };
     // The confirmation can change mid-run: nothing further is sent under another dataset.
     if (!sameDataset(await readExpectedDataset(db), startedUnder)) return { attempted, confirmed, rejected, stoppedBy: "dataset_unconfirmed" };
+    if (row.state === "confirmed") {
+      // Already confirmed by the ERP: only the read of the real record is missing. Never a second create.
+      if (row.customerCode === null) continue;
+      attempted += 1;
+      const done = await settleFromServer(db, env, transport, row, row.customerCode);
+      if (done === "offline") return { attempted, confirmed, rejected, stoppedBy: "offline" };
+      continue;
+    }
     attempted += 1;
     const attempts = row.attempts + 1;
     await db.execute("UPDATE pending_customer SET state = 'sending', attempts = ?, updated_at = ? WHERE client_request_id = ?", [attempts, isoNow(env), row.clientRequestId]);
     const resting = row.registrationId === null ? "queued" : "awaiting_erp";
     try {
       const remote = await transport.createCustomer(row.clientRequestId, row.request);
+      await noteCreationAnswer(db, env, false);
       if (remote.status === "confirmed" && remote.customerCode !== null) {
-        await applyConfirmed(db, env, row, remote, remote.customerCode);
+        await applyConfirmed(db, env, row, remote.registrationId, remote.customerCode);
         confirmed += 1;
+        const done = await settleFromServer(db, env, transport, row, remote.customerCode);
+        if (done === "offline") return { attempted, confirmed, rejected, stoppedBy: "offline" };
       } else {
         // pending / unknown (or "confirmed" without a code): the ERP has not answered yet. Ask again with the same key later.
         const next = new Date(env.now().getTime() + backoffDelayMs(attempts)).toISOString();
@@ -387,6 +466,11 @@ export async function pushPendingCustomers(
           row.clientRequestId,
         ]);
         if (error.kind === "network") return { attempted, confirmed, rejected, stoppedBy: "offline" };
+        if (error.kind === "server" && error.reason === "customer_write_disabled") {
+          // The write path is off on this installation: every other queued customer would get the same answer.
+          await noteCreationAnswer(db, env, true);
+          return { attempted, confirmed, rejected, stoppedBy: "not_released" };
+        }
         if (failure === "auth") return { attempted, confirmed, rejected, stoppedBy: "auth" };
         continue;
       }

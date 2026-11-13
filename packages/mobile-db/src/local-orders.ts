@@ -522,7 +522,7 @@ export class DraftNotEditableError extends Error {
 export async function saveOrderDraft(db: SqlDatabase, env: OfflineEnv, input: SaveDraftInput): Promise<string> {
   return db.transaction(async (tx) => {
     // A customer the ERP has not confirmed yet cannot receive an order (customer-write plan A2): nothing is saved.
-    if ((await pendingCustomerBlockOf(tx, input.customerCode)) !== null) throw new PendingCustomerOrderError();
+    if (pendingCustomerBlockOf(input.customerCode) !== null) throw new PendingCustomerOrderError();
     const now = isoNow(env);
     const payload = buildPayload(input);
 

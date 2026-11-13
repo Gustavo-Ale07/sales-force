@@ -1,4 +1,4 @@
-import { TransportError, type OrderTransport, type RemoteOrder, type TransportErrorKind } from "@salesforce/mobile-db";
+import { PENDING_CUSTOMER_MESSAGE, TransportError, type OrderTransport, type RemoteOrder, type TransportErrorKind } from "@salesforce/mobile-db";
 import { ApiRequestError, callApi, type ApiClient } from "../data/api";
 import { describeIssue } from "../data/order-draft";
 import type { OrderDetail } from "../data/ports";
@@ -73,26 +73,29 @@ export function createOrderTransport(api: ApiClient): OrderTransport {
   return {
     // `expectedDataset` is the identity stored on the outbox row (what the draft originated under), never "the current one".
     createOrder: (clientRequestId, request, expectedDataset) =>
-      guard(async () =>
-        toRemoteOrder(
+      guard(async () => {
+        // Last line of defense: a local (negative) customer code is not a Sankhya code and never travels in an order body.
+        if (request.customerCode < 0) throw new TransportError("validation", PENDING_CUSTOMER_MESSAGE);
+        return toRemoteOrder(
           await callApi(() =>
             api.POST("/orders", {
               body: { clientRequestId, expectedDataset: { environment: expectedDataset.environment, datasetId: expectedDataset.datasetId }, ...request, items: [...request.items] },
             }),
           ),
-        ),
-      ),
+        );
+      }),
     replaceOrder: (id, expectedVersion, request, expectedDataset) =>
-      guard(async () =>
-        toRemoteOrder(
+      guard(async () => {
+        if (request.customerCode < 0) throw new TransportError("validation", PENDING_CUSTOMER_MESSAGE);
+        return toRemoteOrder(
           await callApi(() =>
             api.PUT("/orders/{id}", {
               params: { path: { id } },
               body: { expectedVersion, expectedDataset: { environment: expectedDataset.environment, datasetId: expectedDataset.datasetId }, ...request, items: [...request.items] },
             }),
           ),
-        ),
-      ),
+        );
+      }),
     getOrder: (id) => guard(async () => toRemoteOrder(await callApi(() => api.GET("/orders/{id}", { params: { path: { id } } })))),
   };
 }

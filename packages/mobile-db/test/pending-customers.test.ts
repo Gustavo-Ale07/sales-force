@@ -25,7 +25,12 @@ import {
   saveOrderDraft,
   settleConfirmedCustomers,
   TransportError,
+  type CustomerLike,
   type CustomerRegistrationTransport,
+  CUSTOMER_CREATION_NOT_RELEASED,
+  isCustomerCreationAvailable,
+  redoPendingCustomer,
+  searchCustomers,
   type OfflineEnv,
   type OrderTransport,
   type PendingCustomerRequest,
@@ -60,6 +65,14 @@ const request = (over: Partial<PendingCustomerRequest> = {}): PendingCustomerReq
 
 class Erp implements CustomerRegistrationTransport {
   calls: { key: string; request: PendingCustomerRequest }[] = [];
+  reads: number[] = [];
+  /** What `GET /customers/{code}` answers; an Error means the read fails. */
+  customer: CustomerLike | Error | null = null;
+  async getCustomer(code: number): Promise<CustomerLike> {
+    this.reads.push(code);
+    if (this.customer instanceof Error) throw this.customer;
+    return this.customer ?? { code, name: "Padaria Ação Ltda", tradeName: "Padaria Ação", document: "12345678909", active: true, blocked: false, sellerCode: 7, sellerName: "Ana", priceTableCode: null };
+  }
   /** Queue of outcomes; the last one repeats. */
   script: (RemoteCustomerRegistration | TransportError)[] = [];
   async createCustomer(key: string, req: PendingCustomerRequest): Promise<RemoteCustomerRegistration> {
@@ -240,13 +253,18 @@ describe("refusals", () => {
     expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toMatchObject({ state: "rejected", rejectionReason: "CPF/CNPJ inválido." });
   });
 
-  it("customer_write_disabled (409 on this installation) is transient: it stays queued", async () => {
+  it("customer_write_disabled (409) stays queued with the 'not released' text, is not a refusal and does not hammer the other rows", async () => {
     const record = await create();
+    const second = await create(request({ document: "98765432100" }));
     erp.script = [fail("server", "customer_write_disabled")];
     await push();
     const after = await getPendingCustomer(db, OWNER, record.clientRequestId);
-    expect(after?.state).toBe("queued");
-    expect(after?.lastError).toContain("ainda não está habilitado");
+    expect(after).toMatchObject({ state: "queued", rejectionReason: null, lastError: CUSTOMER_CREATION_NOT_RELEASED });
+    expect(CUSTOMER_CREATION_NOT_RELEASED).toBe("Cadastro de cliente ainda não liberado, vamos tentar de novo");
+    expect(describePendingCustomer(after as NonNullable<typeof after>)).toBe(CUSTOMER_CREATION_NOT_RELEASED);
+    expect((await getPendingCustomer(db, OWNER, second.clientRequestId))?.attempts).toBe(0);
+    expect(erp.calls).toHaveLength(1);
+    expect(await countPendingCustomers(db, OWNER, REAL)).toEqual({ pending: 2, needsAttention: 0 });
   });
 
   it("a refused customer can be discarded locally; an in-flight one cannot", async () => {
@@ -289,6 +307,7 @@ describe("confirmation replaces the pending customer", () => {
     const record = await create();
     const draftId = await draftOnPending(record.localCode, "Padaria Ação Ltda");
     erp.script = [confirmedReg(4321)];
+    erp.customer = new TransportError("network", "x"); // the read of the real record fails: confirmed, waiting for its data
     expect(await push()).toMatchObject({ confirmed: 1 });
     expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toMatchObject({ state: "confirmed", customerCode: 4321 });
     expect(await getDraft(db, draftId)).toMatchObject({ customerCode: 4321, customerName: "Padaria Ação Ltda" });
@@ -308,9 +327,53 @@ describe("confirmation replaces the pending customer", () => {
     expect((await getDraft(db, "other"))?.customerCode).toBe(record.localCode);
   });
 
+  it("on 201 the REAL customer is written to the device cache at once, the pending row goes, drafts are re-pointed and an order can start immediately", async () => {
+    const record = await create();
+    const draftId = await draftOnPending(record.localCode, "Padaria Ação Ltda");
+    erp.script = [confirmedReg(4321)];
+    expect(await push()).toMatchObject({ confirmed: 1 });
+    expect(erp.reads).toEqual([4321]);
+    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toBeNull();
+    expect(await listPendingCustomers(db, OWNER, REAL)).toEqual([]);
+    const cached = await searchCustomers<CustomerLike>(db, { search: "", page: 1, pageSize: 20 });
+    expect(cached.items).toEqual([expect.objectContaining({ code: 4321, name: "Padaria Ação Ltda", active: true, blocked: false })]);
+    expect((await getDraft(db, draftId))?.customerCode).toBe(4321);
+    await expect(saveOrderDraft(db, env, { ownerAccountId: OWNER, customerCode: 4321, customerName: "Padaria", negotiationTypeCode: null, notes: null, loadedDataset: REAL, items: [] })).resolves.toBeTypeOf("string");
+  });
+
+  it("following a 202 until it confirms does the same", async () => {
+    const record = await create();
+    erp.script = [waitingReg(), confirmedReg(4321)];
+    await push();
+    expect(erp.reads).toEqual([]);
+    await push();
+    expect(erp.reads).toEqual([4321]);
+    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toBeNull();
+    expect((await searchCustomers<CustomerLike>(db, { search: "ação", page: 1, pageSize: 20 })).total).toBe(1);
+  });
+
+  it("when the read of the real record fails the row stays 'confirmed, waiting for data': listed under the REAL code, orders allowed, and only the read is retried (never a second create)", async () => {
+    const record = await create();
+    erp.script = [confirmedReg(4321)];
+    erp.customer = new TransportError("server", "x");
+    await push();
+    const waiting = await getPendingCustomer(db, OWNER, record.clientRequestId);
+    expect(waiting).toMatchObject({ state: "confirmed", customerCode: 4321 });
+    expect(describePendingCustomer(waiting as NonNullable<typeof waiting>)).toBe("Confirmado no Sankhya — carregando dados");
+    expect(pendingCustomerBlockOf(4321)).toBeNull();
+    await expect(saveOrderDraft(db, env, { ownerAccountId: OWNER, customerCode: 4321, customerName: "Padaria", negotiationTypeCode: null, notes: null, loadedDataset: REAL, items: [] })).resolves.toBeTypeOf("string");
+    erp.customer = null;
+    await push();
+    expect(erp.calls).toHaveLength(1);
+    expect(erp.reads).toEqual([4321, 4321]);
+    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toBeNull();
+    expect((await searchCustomers<CustomerLike>(db, { search: "", page: 1, pageSize: 20 })).total).toBe(1);
+  });
+
   it("the pending row is replaced (removed) when the normal pull delivers the real customer: never listed twice", async () => {
     const record = await create();
     erp.script = [confirmedReg(4321)];
+    erp.customer = new TransportError("network", "x");
     await push();
     expect(await listPendingCustomers(db, OWNER, REAL)).toHaveLength(1); // confirmed, mirror not here yet
     await db.transaction(async (tx) => {
@@ -334,7 +397,7 @@ describe("confirmation replaces the pending customer", () => {
     const status = await manager.sync("manual");
     expect(status.phase).toBe("idle");
     expect(await listPendingCustomers(db, OWNER, REAL)).toEqual([]);
-    expect(await pendingCustomerBlockOf(db, 4321)).toBeNull();
+    expect(pendingCustomerBlockOf(4321)).toBeNull();
   });
 
   it("the sync manager reports offline when the customer push hits a dead network, and counts it as pending", async () => {
@@ -369,16 +432,27 @@ describe("orders are blocked for a customer the ERP has not confirmed", () => {
     expect(PENDING_CUSTOMER_MESSAGE).toBe("Este cliente ainda não foi confirmado pelo Sankhya.");
   });
 
-  it("also refuses a customer confirmed but not yet delivered by the mirror, and allows it afterwards", async () => {
-    await create();
-    erp.script = [confirmedReg(4321)];
+  it("a rejected customer's local code is blocked too", async () => {
+    const record = await create();
+    erp.script = [fail("registration_refused", "customer_rejected")];
     await push();
-    await expect(saveOrderDraft(db, env, draftInput(4321))).rejects.toBeInstanceOf(PendingCustomerOrderError);
-    await db.transaction(async (tx) => {
-      await replaceCustomers(tx, [{ code: 4321, name: "Padaria" }]);
-      await settleConfirmedCustomers(tx);
-    });
-    await expect(saveOrderDraft(db, env, draftInput(4321))).resolves.toBeTypeOf("string");
+    await expect(saveOrderDraft(db, env, draftInput(record.localCode))).rejects.toBeInstanceOf(PendingCustomerOrderError);
+  });
+
+  it("the negative local code never reaches an order command: a command carrying it is held, never handed to the transport", async () => {
+    const orders = new Orders();
+    await db.execute(
+      `INSERT INTO local_order_draft (local_id, owner_account_id, client_request_id, customer_code, customer_name, status, created_at, updated_at, dataset_environment, dataset_id, eligibility)
+       VALUES ('dn', ?, 'kn', -9, 'P', 'pending_sync', '2026-11-13T00:00:00.000Z', '2026-11-13T00:00:00.000Z', ?, ?, 'eligible')`,
+      [OWNER, REAL.environment, REAL.datasetId],
+    );
+    await db.execute(
+      `INSERT INTO outbox (local_id, operation_id, idempotency_key, type, payload, state, attempts, draft_local_id, created_at, updated_at, dataset_environment, dataset_id, eligibility)
+       VALUES ('on', 'oidn', 'kn', 'order.create', '{"request":{"customerCode":-9,"negotiationTypeCode":null,"notes":null,"items":[]},"prices":[]}', 'pending', 0, 'dn', '2026-11-13T00:00:00.000Z', '2026-11-13T00:00:00.000Z', ?, ?, 'eligible')`,
+      [REAL.environment, REAL.datasetId],
+    );
+    await pushOutbox(db, env, orders, OWNER, { respectBackoff: false, currentDataset: REAL });
+    expect(orders.requests).toEqual([]);
   });
 
   it("a draft that already carries a pending code is never sent: held with the same text, zero attempts", async () => {
@@ -401,7 +475,7 @@ describe("orders are blocked for a customer the ERP has not confirmed", () => {
   });
 
   it("an ordinary customer is unaffected", async () => {
-    expect(await pendingCustomerBlockOf(db, 77)).toBeNull();
+    expect(pendingCustomerBlockOf(77)).toBeNull();
     await expect(saveOrderDraft(db, env, draftInput(77))).resolves.toBeTypeOf("string");
   });
 });
@@ -431,6 +505,80 @@ describe("isolation by account and dataset", () => {
     expect(erp.calls).toEqual([]);
     expect(await countPendingCustomers(db, OWNER, FAKE)).toEqual({ pending: 0, needsAttention: 1 });
     expect(await countPendingCustomers(db, OWNER, REAL)).toEqual({ pending: 1, needsAttention: 0 });
+  });
+});
+
+describe("is customer creation available? (derived from the last server answer)", () => {
+  it("is available until the server says the write path is off", async () => {
+    expect(await isCustomerCreationAvailable(db, env)).toBe(true);
+    await create();
+    erp.script = [fail("server", "customer_write_disabled")];
+    await push();
+    expect(await isCustomerCreationAvailable(db, env)).toBe(false);
+  });
+
+  it("any accepted answer (201/200/202) turns it back on", async () => {
+    await create();
+    erp.script = [fail("server", "customer_write_disabled"), waitingReg()];
+    await push();
+    await push();
+    expect(await isCustomerCreationAvailable(db, env)).toBe(true);
+  });
+
+  it("an ordinary outage does not switch it off", async () => {
+    await create();
+    erp.script = [fail("network")];
+    await push();
+    expect(await isCustomerCreationAvailable(db, env)).toBe(true);
+  });
+
+  it("the 'off' answer expires after an hour so the entry point can come back and learn again", async () => {
+    await create();
+    erp.script = [fail("server", "customer_write_disabled")];
+    await push();
+    clock = new Date("2026-11-13T12:59:00.000Z");
+    expect(await isCustomerCreationAvailable(db, env)).toBe(false);
+    clock = new Date("2026-11-13T13:01:00.000Z");
+    expect(await isCustomerCreationAvailable(db, env)).toBe(true);
+  });
+});
+
+describe("redo a refused customer", () => {
+  async function refused(): Promise<string> {
+    const record = await create();
+    erp.script = [fail("registration_refused", "document_already_registered")];
+    await push();
+    return record.clientRequestId;
+  }
+
+  it("hands back exactly what was typed and keeps the refused row until the new one exists", async () => {
+    const id = await refused();
+    const typed = await redoPendingCustomer(db, OWNER, id);
+    expect(typed).toEqual((await getPendingCustomer(db, OWNER, id))?.request);
+    expect(await getPendingCustomer(db, OWNER, id)).toMatchObject({ state: "rejected" });
+  });
+
+  it("creating the new one with `replacesRejected` closes the refused row in the same transaction", async () => {
+    const id = await refused();
+    const fresh = await createPendingCustomer(db, env, { ownerAccountId: OWNER, request: request({ name: "Padaria Corrigida" }), replacesRejected: id });
+    expect(fresh.state).toBe("queued");
+    expect(await getPendingCustomer(db, OWNER, id)).toBeNull();
+    expect((await listPendingCustomers(db, OWNER, REAL)).map((r) => r.name)).toEqual(["Padaria Corrigida"]);
+  });
+
+  it("a failed creation leaves the refused row (and its data) untouched", async () => {
+    const id = await refused();
+    await create(request({ document: "98765432100" }));
+    await expect(createPendingCustomer(db, env, { ownerAccountId: OWNER, request: request({ document: "98765432100" }), replacesRejected: id })).rejects.toBeInstanceOf(PendingCustomerError);
+    expect(await getPendingCustomer(db, OWNER, id)).toMatchObject({ state: "rejected" });
+  });
+
+  it("only a refused row of the same account can be redone or replaced", async () => {
+    const id = await refused();
+    const open = await create(request({ document: "11122233396" }));
+    await expect(redoPendingCustomer(db, OWNER, open.clientRequestId)).rejects.toBeInstanceOf(PendingCustomerError);
+    await expect(redoPendingCustomer(db, "acct-2", id)).rejects.toBeInstanceOf(PendingCustomerError);
+    await expect(createPendingCustomer(db, env, { ownerAccountId: OWNER, request: request({ document: "55544433322" }), replacesRejected: open.clientRequestId })).rejects.toBeInstanceOf(PendingCustomerError);
   });
 });
 
