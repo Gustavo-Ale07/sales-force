@@ -34,6 +34,8 @@ export interface OrderListFilter {
   readonly productMatch?: 'any' | 'all' | undefined;
   /** Orders with a line whose description contains this text (or whose product code equals it, when numeric). */
   readonly productSearch?: string | undefined;
+  /** Only these orders (still inside the scope). */
+  readonly ids?: readonly string[] | undefined;
   readonly sort: 'updatedAt' | '-updatedAt' | 'draftNumber' | '-draftNumber';
 }
 
@@ -354,6 +356,7 @@ export class OrdersRepository {
     const zone = sql.raw(`'${BUSINESS_TIME_ZONE}'`);
     const where = and(
       scopeCondition(filter.scope),
+      filter.ids === undefined ? undefined : inArray(salesOrder.id, [...filter.ids]),
       filter.status === undefined ? undefined : eq(salesOrder.status, filter.status),
       filter.customerCode === undefined ? undefined : eqInt(salesOrder.customerCode, filter.customerCode),
       // The bounds are compared against the raw column so the date indexes stay usable.

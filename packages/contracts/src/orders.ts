@@ -12,6 +12,7 @@ import {
   queryDate,
   queryInt,
   queryIntList,
+  queryUuidList,
   querySearch,
 } from './primitives.js';
 
@@ -124,6 +125,9 @@ export const OrderProductMatchSchema = named('OrderProductMatch', z.enum(['any',
 
 export const MAX_ORDER_PRODUCT_FILTER = 20;
 
+/** Most order ids one list call may ask for (the device refreshing the ERP status of the orders it holds). */
+export const MAX_ORDER_IDS_FILTER = 100;
+
 export const OrdersQuerySchema = z.object({
   search: querySearch().optional(),
   status: OrderStatusSchema.optional(),
@@ -139,6 +143,11 @@ export const OrdersQuerySchema = z.object({
   productMatch: OrderProductMatchSchema.optional(),
   /** Text of a product description (or a product code): orders with a line that contains it. Combines with `productCodes`. */
   productSearch: querySearch().optional(),
+  /**
+   * Order ids, comma-separated (at most 100): only those orders, and only the ones inside the caller's scope (an id outside it is
+   * simply absent). Same list items, so the ERP status of the orders a device holds is read with it (owner ruling 2026-11-13).
+   */
+  ids: queryUuidList(MAX_ORDER_IDS_FILTER).optional(),
   sort: OrderSortSchema.default('-updatedAt'),
   ...paginationQueryShape,
 });

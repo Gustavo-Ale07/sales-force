@@ -165,6 +165,7 @@ export class OrdersService {
         productCodes: query.productCodes,
         productMatch: query.productMatch,
         productSearch: query.productSearch,
+        ids: query.ids,
         sort: query.sort,
       },
       { page: query.page, pageSize: query.pageSize },

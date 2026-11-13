@@ -65,6 +65,13 @@ export const queryIntList = (max: number) =>
     .transform((value) => [...new Set(value.split(',').map(Number))])
     .pipe(z.array(z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)).min(1).max(max));
 
+/** Comma-separated UUIDs (at most `max`, duplicates dropped, order kept). */
+export const queryUuidList = (max: number) =>
+  z
+    .string()
+    .transform((value) => [...new Set(value.split(','))])
+    .pipe(z.array(z.uuid()).min(1).max(max));
+
 export const MAX_PAGE_SIZE = 100;
 export const DEFAULT_PAGE_SIZE = 25;
 
