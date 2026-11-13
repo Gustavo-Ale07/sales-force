@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text } from "react-native";
 import type { CustomerListItem, CustomerRepository } from "../data/ports";
-import { hasNoSeller, isUnconfirmedCustomer, PENDING_CUSTOMER_ORDER_MESSAGE } from "../data/pending-status";
+import { hasNoSeller, isUnconfirmedCustomer, NO_SELLER_ORDER_MESSAGE, PENDING_CUSTOMER_ORDER_MESSAGE } from "../data/pending-status";
 import { colors, spacing } from "../theme";
 import { describeCustomerStatus } from "./customers-screen";
 import { PagedListView } from "./paged-list-view";
@@ -11,7 +11,9 @@ function PickRow({ customer, onSelect, allowUnavailable }: { customer: CustomerL
   const unconfirmed = isUnconfirmedCustomer(customer);
   // The badge of a customer created here is not a block reason; only blocked/inactive are.
   const unavailable = customer.blocked || !customer.active;
-  const disabled = unconfirmed || (unavailable && !allowUnavailable);
+  // A customer without a seller cannot start an order (owner 2026-11-13); filtering past orders may still reach it.
+  const noSeller = hasNoSeller(customer);
+  const disabled = unconfirmed || ((unavailable || noSeller) && !allowUnavailable);
   return (
     <Pressable
       style={({ pressed }) => [styles.row, disabled && styles.rowDisabled, pressed && !disabled && styles.rowPressed]}
@@ -28,7 +30,8 @@ function PickRow({ customer, onSelect, allowUnavailable }: { customer: CustomerL
       <Text style={styles.meta}>
         {unconfirmed ? (customer.document ?? "") : `Código ${customer.code}${customer.document !== null ? ` · ${customer.document}` : ""}`}
       </Text>
-      {hasNoSeller(customer) && <Text style={styles.status}>Sem vendedor</Text>}
+      {noSeller && <Text style={styles.status}>Sem vendedor</Text>}
+      {noSeller && !allowUnavailable && <Text style={styles.status}>{NO_SELLER_ORDER_MESSAGE}</Text>}
       {status !== null && <Text style={styles.status}>{status}</Text>}
       {unconfirmed && <Text style={styles.status}>{PENDING_CUSTOMER_ORDER_MESSAGE}</Text>}
     </Pressable>

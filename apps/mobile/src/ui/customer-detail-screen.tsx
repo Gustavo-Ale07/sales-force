@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import type { CustomerDetail, CustomerListItem, CustomerRepository } from "../data/ports";
-import { isUnconfirmedCustomer, PENDING_CREDIT_NOTE, PENDING_CUSTOMER_ORDER_MESSAGE } from "../data/pending-status";
+import { hasNoSeller, isUnconfirmedCustomer, NO_SELLER_ORDER_MESSAGE, PENDING_CREDIT_NOTE, PENDING_CUSTOMER_ORDER_MESSAGE } from "../data/pending-status";
 import { colors, spacing } from "../theme";
 import { describeCustomerStatus } from "./customers-screen";
 
@@ -55,6 +55,8 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
   const status = describeCustomerStatus(customer);
   // Waiting, queued or refused: no real code, no orders. A customer the ERP confirmed already has its real code and takes orders.
   const isPending = isUnconfirmedCustomer(customer);
+  const noSeller = hasNoSeller(customer);
+  const cannotOrder = isPending || noSeller;
 
   useEffect(() => {
     // A customer not confirmed yet does not exist on the server: nothing to ask for.
@@ -124,18 +126,19 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
 
       <View style={styles.footer}>
         {isPending && <Text style={styles.status}>{PENDING_CUSTOMER_ORDER_MESSAGE}</Text>}
+        {noSeller && <Text style={styles.status}>{NO_SELLER_ORDER_MESSAGE}</Text>}
         {customer.pending?.state === "rejected" && onRedo !== undefined && (
           <Pressable style={styles.cta} onPress={() => onRedo(customer)} accessibilityRole="button" accessibilityLabel="Refazer">
             <Text style={styles.ctaText}>Refazer</Text>
           </Pressable>
         )}
         <Pressable
-          style={[styles.cta, isPending && styles.ctaDisabled]}
-          onPress={() => !isPending && onNewOrder(customer)}
-          disabled={isPending}
+          style={[styles.cta, cannotOrder && styles.ctaDisabled]}
+          onPress={() => !cannotOrder && onNewOrder(customer)}
+          disabled={cannotOrder}
           accessibilityRole="button"
           accessibilityLabel="Novo pedido"
-          accessibilityState={{ disabled: isPending }}
+          accessibilityState={{ disabled: cannotOrder }}
         >
           <Text style={styles.ctaText}>Novo pedido</Text>
         </Pressable>

@@ -3,13 +3,16 @@ import type { CustomerListItem } from "./ports";
 /** Shown wherever an order is attempted for a customer the ERP has not confirmed (rule lives in mobile-db; text is the same). */
 export const PENDING_CUSTOMER_ORDER_MESSAGE = "Este cliente ainda não foi confirmado pelo Sankhya.";
 
+/** Shown in the customer picker (order step 1) for a customer without a seller, who cannot be selected. */
+export const NO_SELLER_ORDER_MESSAGE = "Cliente sem vendedor. Peça ao backoffice para atribuir.";
+
 /** Shown on the customer sheet instead of a credit limit: nothing is invented for a customer that does not exist in the ERP yet. */
 export const PENDING_CREDIT_NOTE = "Limite de crédito a definir pelo financeiro";
 
 /** A customer created here that cannot take orders yet (waiting, queued or refused). One the ERP confirmed already can. */
 /**
  * "Sem vendedor" seal: a confirmed customer with no seller. A customer created on this device has no seller until the ERP
- * answers, so it never carries the seal. Display only; whether such a customer may be ordered for is an open owner question.
+ * answers, so it never carries the seal. Such a customer cannot be picked for an order (owner 2026-11-13).
  */
 export function hasNoSeller(customer: { readonly sellerCode: number | null; readonly pending?: unknown }): boolean {
   return customer.sellerCode === null && customer.pending === undefined;

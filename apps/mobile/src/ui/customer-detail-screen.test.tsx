@@ -52,6 +52,14 @@ describe("CustomerDetailScreen", () => {
     expect(screen.queryByText("Financeiro")).toBeNull();
   });
 
+  it("a customer without a seller cannot start an order from the sheet either (owner 2026-11-13)", async () => {
+    const onNewOrder = jest.fn();
+    await render(<CustomerDetailScreen customer={customer(10, { name: "Sem dono", sellerCode: null })} customers={listOnly} onBack={jest.fn()} onNewOrder={onNewOrder} />);
+    expect(screen.getByText("Cliente sem vendedor. Peça ao backoffice para atribuir.")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Novo pedido" }));
+    expect(onNewOrder).not.toHaveBeenCalled();
+  });
+
   it("goes back and starts a new order for this customer", async () => {
     const onBack = jest.fn();
     const onNewOrder = jest.fn();
