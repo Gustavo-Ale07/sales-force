@@ -21,20 +21,35 @@ describe("reference data syncs only at login and when the seller asks", () => {
     jest.useRealTimers();
   });
 
-  it("the first online mount runs ONE full sync (login)", async () => {
+  it("a real login (login screen) runs ONE full sync", async () => {
     const { manager, sync } = fakeSync();
-    await renderHook(() => useSyncStatus(manager, "online"));
+    await renderHook(() => useSyncStatus(manager, "online", true));
     expect(sync).toHaveBeenCalledTimes(1);
     expect(sync).toHaveBeenCalledWith("login");
   });
 
-  it("mounted offline: nothing runs; the first time it is online it is the login sync", async () => {
+  it("reopening the app with a valid session is NOT a login: it only pushes pending work", async () => {
     const { manager, sync } = fakeSync();
-    const { rerender } = await renderHook((state: ConnectivityState) => useSyncStatus(manager, state), { initialProps: "offline" as ConnectivityState });
+    await renderHook(() => useSyncStatus(manager, "online"));
+    expect(sync).not.toHaveBeenCalledWith("login");
+    expect(sync.mock.calls.every((call: unknown[]) => (call[1] as { pull?: boolean } | undefined)?.pull === false)).toBe(true);
+  });
+
+  it("mounted offline: nothing runs; a real login syncs fully the first time it is online", async () => {
+    const { manager, sync } = fakeSync();
+    const { rerender } = await renderHook((state: ConnectivityState) => useSyncStatus(manager, state, true), { initialProps: "offline" as ConnectivityState });
     expect(sync).not.toHaveBeenCalled();
     await rerender("online");
     expect(sync).toHaveBeenCalledTimes(1);
     expect(sync).toHaveBeenCalledWith("login");
+  });
+
+  it("a reopened session coming online later still never downloads the base", async () => {
+    const { manager, sync } = fakeSync();
+    const { rerender } = await renderHook((state: ConnectivityState) => useSyncStatus(manager, state), { initialProps: "offline" as ConnectivityState });
+    await rerender("online");
+    expect(sync).not.toHaveBeenCalledWith("login");
+    expect(sync.mock.calls.every((call: unknown[]) => (call[1] as { pull?: boolean } | undefined)?.pull === false)).toBe(true);
   });
 
   it("reconnecting later only pushes pending work, it never downloads the base", async () => {

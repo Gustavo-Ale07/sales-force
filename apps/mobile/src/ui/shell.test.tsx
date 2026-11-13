@@ -109,6 +109,24 @@ describe("Shell", () => {
     await waitFor(() => expect(forget).toHaveBeenCalled());
   });
 
+  describe("full sync only on a real login", () => {
+    it("reopening the app with a valid session never runs the login sync", async () => {
+      const { offline, syncNow } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() });
+      await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
+      expect(await screen.findByText("Olá, Ana Vendedora")).toBeTruthy();
+      expect(syncNow).not.toHaveBeenCalledWith("login");
+    });
+
+    it("signing in on the login screen runs the login sync", async () => {
+      const { offline, syncNow } = fakeOffline(null);
+      await render(<Shell dependencies={fakeDependencies({ auth: fakeAuth(), offline })} />);
+      await fireEvent.changeText(await screen.findByLabelText("Usuário"), "ana");
+      await fireEvent.changeText(screen.getByLabelText("Senha"), "segredo-123");
+      await fireEvent.press(screen.getByRole("button", { name: "Entrar" }));
+      await waitFor(() => expect(syncNow).toHaveBeenCalledWith("login"));
+    });
+  });
+
   describe("thumbnail cache lifecycle", () => {
     const imageStore = () => ({ resolve: jest.fn(async () => null), purge: jest.fn(async () => undefined) });
     const idle: SyncStatus = { phase: "idle", pending: 0, needsAttention: 0, lastSyncedAt: null, lastError: null };

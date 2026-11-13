@@ -28,7 +28,7 @@ import { useKeyboardVisible } from "./use-keyboard-visible";
 type Session =
   | { readonly phase: "checking" }
   | { readonly phase: "anonymous" }
-  | { readonly phase: "authenticated"; readonly account: Account; readonly offlineEntry: boolean };
+  | { readonly phase: "authenticated"; readonly account: Account; readonly offlineEntry: boolean; /** Came from the login screen (not a reopened session). */ readonly freshLogin?: boolean };
 type SalesView = "orders" | "newOrder";
 
 /** Offline banner: lists and drafts come from the encrypted database on this device (MOB-6). */
@@ -70,7 +70,7 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
   // One set of services per signed-in account: cache-backed reads, local drafts and the sync manager.
   const services = useMemo(() => (account !== null && offline !== undefined ? offline.forAccount(account) : null), [account, offline]);
   const repositories = services?.repositories ?? dependencies.repositories;
-  const syncStatus = useSyncStatus(services?.sync ?? null, connectivityState);
+  const syncStatus = useSyncStatus(services?.sync ?? null, connectivityState, session.phase === "authenticated" && session.freshLogin === true);
   const clearResume = useCallback(() => setResumeLocalId(null), []);
   const clearStart = useCallback(() => setStartRequest(null), []);
   const inDetail = customerDetail !== null && tab === "customers";
@@ -194,7 +194,7 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
         connectivity={connectivityState}
         onAuthenticated={(signedIn) => {
           void offline?.session.remember(signedIn).catch(() => undefined);
-          setSession({ phase: "authenticated", account: signedIn, offlineEntry: false });
+          setSession({ phase: "authenticated", account: signedIn, offlineEntry: false, freshLogin: true });
         }}
       />
     );

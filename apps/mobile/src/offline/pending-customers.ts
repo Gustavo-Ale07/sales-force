@@ -23,8 +23,11 @@ export { PENDING_CUSTOMER_MESSAGE } from "@salesforce/mobile-db";
 export interface PendingCustomersPort {
   /** `redoOf` = the refused customer this one replaces ("Refazer"); the refused row is closed only when the new one is saved. */
   create(request: CreatePendingCustomerInput["request"], options?: { readonly redoOf?: string }): Promise<PendingCustomerRecord>;
-  /** "Refazer": what the seller typed in a refused customer, to pre-fill the form. Changes nothing. */
-  redo(clientRequestId: string): Promise<CreatePendingCustomerInput["request"]>;
+  /**
+   * "Refazer": checks the refused customer and returns what to pre-fill. Since I-2 the refused row holds no typed data, so the
+   * result is `null` (the seller retypes); the refused row stays, with its reason, until the new one is saved. Changes nothing.
+   */
+  redo(clientRequestId: string): Promise<CreatePendingCustomerInput["request"] | null>;
   /**
    * Whether the "Novo cliente" entry point should be offered: `false` when the last sync's configuration said
    * `general.clientCreationEnabled === false` (re-read at every sync, no expiry), or after a 409 customer_write_disabled
@@ -81,8 +84,9 @@ export function toPendingListItem(record: PendingCustomerRecord): CustomerListIt
   return {
     // Confirmed by the ERP: the REAL code (orders allowed). Otherwise the local negative code, which no screen prints.
     code: confirmed ? (record.customerCode as number) : record.localCode,
-    name: record.name,
-    tradeName: record.request.tradeName,
+    // I-2: once the server answered, the device holds no name; the row is identified by the ERP code or the masked document.
+    name: record.name !== "" ? record.name : confirmed ? `Cliente ${record.customerCode}` : "Cadastro não aceito",
+    tradeName: record.request?.tradeName ?? null,
     document: record.maskedDocument,
     active: true,
     blocked: false,

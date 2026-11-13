@@ -61,7 +61,11 @@ export interface PendingCustomerRecord {
   /** Digits only. Never shown unmasked in a list. */
   readonly document: string;
   readonly maskedDocument: string;
-  readonly request: PendingCustomerRequest;
+  /**
+   * What the seller typed. `null` once the server has CONFIRMED or REFUSED it: I-2 erases every personal field then
+   * (document, name, trade name, IE, phone, e-mail, notes, addresses), and `name` / `document` become `""`.
+   */
+  readonly request: PendingCustomerRequest | null;
   readonly state: PendingCustomerState;
   readonly registrationId: string | null;
   /** The ERP code once confirmed. */
@@ -158,14 +162,15 @@ function nullableString(value: unknown): string | null {
 
 export function toPendingCustomer(row: SqlRow): PendingCustomerRecord {
   const document = String(row.document);
+  const payload = JSON.parse(String(row.payload)) as PendingCustomerRequest | null;
   return {
     localCode: -Number(row.seq),
     clientRequestId: String(row.client_request_id),
     ownerAccountId: String(row.owner_account_id),
     name: String(row.name),
     document,
-    maskedDocument: maskDocument(document),
-    request: JSON.parse(String(row.payload)) as PendingCustomerRequest,
+    maskedDocument: row.masked_document === null || row.masked_document === undefined ? maskDocument(document) : String(row.masked_document),
+    request: payload,
     state: String(row.state) as PendingCustomerState,
     registrationId: nullableString(row.registration_id),
     customerCode: row.customer_code === null || row.customer_code === undefined ? null : Number(row.customer_code),
@@ -203,14 +208,15 @@ export async function createPendingCustomer(db: SqlDatabase, env: OfflineEnv, in
     const key = env.newId();
     const request: PendingCustomerRequest = { ...input.request, document };
     await tx.execute(
-      `INSERT INTO pending_customer (client_request_id, owner_account_id, name, search_text, document, payload, state, attempts, dataset_environment, dataset_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?, ?)`,
+      `INSERT INTO pending_customer (client_request_id, owner_account_id, name, search_text, document, masked_document, payload, state, attempts, dataset_environment, dataset_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?, ?)`,
       [
         key,
         input.ownerAccountId,
         request.name,
         normalizeSearchText([request.name, request.tradeName ?? "", document].join(" ")),
         document,
+        maskDocument(document),
         JSON.stringify(request),
         confirmed.environment,
         confirmed.datasetId,
@@ -228,14 +234,18 @@ export async function createPendingCustomer(db: SqlDatabase, env: OfflineEnv, in
 }
 
 /**
- * "Refazer": what the seller typed in a refused customer, to pre-fill the form. The refused row stays untouched until the
- * new customer is created with `replacesRejected` (the safest order: nothing is lost if the new attempt fails or is abandoned).
+ * "Refazer" a refused customer. Since I-2 the refused row holds no typed data, so there is nothing to pre-fill: the seller
+ * retypes (the result is `null`; it still checks the row is a refused one of this account). The refused row stays, with its
+ * reason, until the new customer is created with `replacesRejected` (nothing is lost if the new attempt is abandoned).
  */
-export async function redoPendingCustomer(db: SqlExecutor, ownerAccountId: string, clientRequestId: string): Promise<PendingCustomerRequest> {
+export async function redoPendingCustomer(db: SqlExecutor, ownerAccountId: string, clientRequestId: string): Promise<PendingCustomerRequest | null> {
   const row = await getPendingCustomer(db, ownerAccountId, clientRequestId);
   if (row === null || row.state !== "rejected") throw new PendingCustomerError("Só um cadastro não aceito pode ser refeito.");
   return row.request;
 }
+
+/** I-2: erases every personal field of a row the server has answered (confirmed or refused); ids, state, ERP code, reason and masked document stay. */
+const ERASE_PERSONAL_DATA_SQL = "document = '', name = '', search_text = '', payload = 'null'";
 
 /** `false` while the last configuration (or a 409) said "customer creation is off"; `true` otherwise, also when unknown. */
 export async function isCustomerCreationAvailable(db: SqlExecutor, _env?: OfflineEnv): Promise<boolean> {
@@ -385,7 +395,7 @@ async function repointDrafts(tx: SqlExecutor, ownerAccountId: string, localCode:
 async function applyConfirmed(db: SqlDatabase, env: OfflineEnv, row: PendingCustomerRecord, registrationId: string, customerCode: number): Promise<void> {
   await db.transaction(async (tx) => {
     await tx.execute(
-      "UPDATE pending_customer SET state = 'confirmed', customer_code = ?, registration_id = ?, last_error = NULL, next_attempt_at = NULL, updated_at = ? WHERE client_request_id = ?",
+      `UPDATE pending_customer SET state = 'confirmed', customer_code = ?, registration_id = ?, last_error = NULL, next_attempt_at = NULL, updated_at = ?, ${ERASE_PERSONAL_DATA_SQL} WHERE client_request_id = ?`,
       [customerCode, registrationId, isoNow(env), row.clientRequestId],
     );
     await repointDrafts(tx, row.ownerAccountId, row.localCode, customerCode);
@@ -451,12 +461,14 @@ export async function pushPendingCustomers(
       if (done === "offline") return { attempted, confirmed, rejected, stoppedBy: "offline" };
       continue;
     }
+    if (row.request === null) continue; // an erased (answered) row is never resent
+    const request = row.request;
     attempted += 1;
     const attempts = row.attempts + 1;
     await db.execute("UPDATE pending_customer SET state = 'sending', attempts = ?, updated_at = ? WHERE client_request_id = ?", [attempts, isoNow(env), row.clientRequestId]);
     const resting = row.registrationId === null ? "queued" : "awaiting_erp";
     try {
-      const remote = await transport.createCustomer(row.clientRequestId, row.request);
+      const remote = await transport.createCustomer(row.clientRequestId, request);
       await noteCreationAnswer(db, env, false);
       if (remote.status === "confirmed" && remote.customerCode !== null) {
         await applyConfirmed(db, env, row, remote.registrationId, remote.customerCode);
@@ -497,7 +509,7 @@ export async function pushPendingCustomers(
       }
       // Permanent: the seller's data stays, the reason is stated, nothing is resent on its own.
       await db.execute(
-        "UPDATE pending_customer SET state = 'rejected', rejection_reason = ?, last_error = NULL, next_attempt_at = NULL, updated_at = ? WHERE client_request_id = ?",
+        `UPDATE pending_customer SET state = 'rejected', rejection_reason = ?, last_error = NULL, next_attempt_at = NULL, updated_at = ?, ${ERASE_PERSONAL_DATA_SQL} WHERE client_request_id = ?`,
         [text, isoNow(env), row.clientRequestId],
       );
       rejected += 1;

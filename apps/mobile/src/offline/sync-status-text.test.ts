@@ -1,5 +1,5 @@
 import type { SyncStatus } from "@salesforce/mobile-db";
-import { describeConnection, describeSyncChip, describeSyncStatus } from "./sync-status-text";
+import { describeConnection, describeSyncAge, describeSyncChip, describeSyncStatus } from "./sync-status-text";
 
 const idle: SyncStatus = { phase: "idle", pending: 0, needsAttention: 0, lastSyncedAt: null, lastError: null, failure: null, failedSteps: [], attention: [], progress: null };
 const noInternet: SyncStatus = { ...idle, phase: "offline", failure: "no_internet", lastError: "x" };
@@ -7,6 +7,29 @@ const serverDown: SyncStatus = { ...idle, phase: "offline", failure: "server_una
 const sankhyaDown: SyncStatus = { ...idle, failure: "sankhya_unavailable", failedSteps: ["Preços"], lastError: "x" };
 const at = (h: number, m: number) => new Date(2026, 10, 13, h, m, 0).toISOString();
 const now = new Date(2026, 10, 13, 18, 0, 0).getTime();
+
+describe("age of the last successful sync", () => {
+  const ago = (ms: number) => new Date(now - ms).toISOString();
+  const MIN = 60_000;
+  const H = 60 * MIN;
+  it("says how old the data is in pt-BR", () => {
+    expect(describeSyncAge(ago(20_000), now)?.text).toBe("agora há pouco");
+    expect(describeSyncAge(ago(5 * MIN), now)?.text).toBe("há 5 min");
+    expect(describeSyncAge(ago(3 * H + 10 * MIN), now)?.text).toBe("há 3 h");
+    expect(describeSyncAge(ago(30 * H), now)?.text).toBe("há 1 dia");
+    expect(describeSyncAge(ago(50 * H), now)?.text).toBe("há 2 dias");
+  });
+  it("is stale (amber) from 24 h on, never before", () => {
+    expect(describeSyncAge(ago(23 * H + 59 * MIN), now)?.stale).toBe(false);
+    expect(describeSyncAge(ago(24 * H), now)?.stale).toBe(true);
+    expect(describeSyncAge(ago(5 * 24 * H), now)?.stale).toBe(true);
+  });
+  it("a clock slightly in the future reads as just now; no sync or garbage gives nothing", () => {
+    expect(describeSyncAge(ago(-5 * MIN), now)).toEqual({ text: "agora há pouco", stale: false });
+    expect(describeSyncAge(null, now)).toBeNull();
+    expect(describeSyncAge("not a date", now)).toBeNull();
+  });
+});
 
 describe("Situação (owner's exact wording, 2026-11-13)", () => {
   it("no internet", () => {

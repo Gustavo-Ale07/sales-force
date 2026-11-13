@@ -3,7 +3,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useInsets } from "./use-insets";
 import type { SyncStatus } from "@salesforce/mobile-db";
 import type { ConnectivityState } from "../connectivity/connectivity";
-import { describeConnection, describeSyncChip, describeSyncStatus, type SyncTone } from "../offline/sync-status-text";
+import { describeConnection, describeSyncAge, describeSyncChip, describeSyncStatus, type SyncTone } from "../offline/sync-status-text";
 import { colors, spacing } from "../theme";
 import { SyncIcon } from "./sync-icon";
 
@@ -32,6 +32,8 @@ export interface SyncViewProps {
   /** Retained ("Pedidos antigos retidos") orders on this device; the link shows only when there are some and a handler is given. */
   readonly quarantinedCount?: number;
   readonly onOpenQuarantine?: () => void;
+  /** Clock for the age line (tests); defaults to the current time. */
+  readonly now?: number;
 }
 
 /** Compact header status: a dot and one short word. Tapping opens the details. */
@@ -57,8 +59,9 @@ function Row({ label, value, valueColor }: { label: string; value: string; value
 }
 
 /** Status, last sync, pending count and the manual action. Shared by the header sheet and Perfil. */
-export function SyncPanel({ status, connectivity, onSyncNow, quarantinedCount = 0, onOpenQuarantine }: SyncViewProps) {
+export function SyncPanel({ status, connectivity, onSyncNow, quarantinedCount = 0, onOpenQuarantine, now }: SyncViewProps) {
   const { text, tone } = describeSyncStatus(status, connectivity);
+  const age = describeSyncAge(status.lastSyncedAt, now);
   const syncing = status.phase === "syncing";
   const offline = connectivity === "offline";
   return (
@@ -72,6 +75,7 @@ export function SyncPanel({ status, connectivity, onSyncNow, quarantinedCount = 
         <Text style={styles.hint}>{`Não atualizado: ${(status.failedSteps ?? []).join(", ")}`}</Text>
       )}
       <Row label="Última sincronização" value={formatDateTime(status.lastSyncedAt)} />
+      {age !== null && <Row label="Dados atualizados" value={age.text} valueColor={age.stale ? colors.warning : colors.text} />}
       <Row label="Alterações pendentes" value={String(status.pending)} />
       {status.needsAttention > 0 && <Row label="Pedidos que precisam de atenção" value={String(status.needsAttention)} valueColor={colors.red} />}
       {(status.attention ?? []).map((item) => (

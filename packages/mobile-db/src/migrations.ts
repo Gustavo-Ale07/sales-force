@@ -175,4 +175,19 @@ export const migrations: readonly Migration[] = [
       `CREATE INDEX pending_customer_code_idx ON pending_customer (customer_code)`,
     ],
   },
+  {
+    // I-2 (owner 2026-11-13): after the server CONFIRMS or REFUSES a customer the device keeps no personal data of it. The refused
+    // row is identified by its masked document only (the same masking every list already shows); the confirmed one by its ERP code.
+    // Expand-only: one nullable column. Rows already confirmed / refused under v7 are erased here (document, name, search text, payload).
+    version: 8,
+    name: "pending_customer_erase_after_answer",
+    statements: [
+      `ALTER TABLE pending_customer ADD COLUMN masked_document TEXT`,
+      `UPDATE pending_customer SET masked_document = CASE length(document)
+         WHEN 11 THEN '***.' || substr(document, 4, 3) || '.' || substr(document, 7, 3) || '-**'
+         WHEN 14 THEN '**.***.' || substr(document, 6, 3) || '/' || substr(document, 9, 4) || '-**'
+         ELSE substr('**************', 1, max(length(document), 1)) END`,
+      `UPDATE pending_customer SET document = '', name = '', search_text = '', payload = 'null' WHERE state IN ('confirmed', 'rejected')`,
+    ],
+  },
 ];

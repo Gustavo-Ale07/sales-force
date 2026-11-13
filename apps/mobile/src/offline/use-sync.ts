@@ -12,7 +12,7 @@ const IDLE: SyncStatus = { phase: "idle", pending: 0, needsAttention: 0, lastSyn
  * being SENT when the device comes back online, on foreground, when new work is waiting and on a slow timer that respects
  * the retry backoff. Offline it never tries (a failed attempt would freeze the order's payload for nothing).
  */
-export function useSyncStatus(sync: SyncManager | null, connectivity: ConnectivityState): SyncStatus {
+export function useSyncStatus(sync: SyncManager | null, connectivity: ConnectivityState, loginSync = false): SyncStatus {
   const [status, setStatus] = useState<SyncStatus>(sync?.getStatus() ?? IDLE);
 
   useEffect(() => {
@@ -26,16 +26,18 @@ export function useSyncStatus(sync: SyncManager | null, connectivity: Connectivi
 
   // The reference base is downloaded only at login (the first online moment of this session) and when the seller taps
   // "Sincronizar agora". Everything else (back online, foreground, timer) only pushes pending work.
+  // Reopening the app with a valid session is NOT a login (owner 2026-11-13): then only pending work is sent.
   const loggedIn = useRef(false);
   useEffect(() => {
     if (sync === null || !online) return;
-    if (!loggedIn.current) {
+    if (!loggedIn.current && loginSync) {
       loggedIn.current = true;
       void sync.sync("login");
     } else {
+      loggedIn.current = true;
       void sync.sync("reconnected", { pull: false });
     }
-  }, [sync, online]);
+  }, [sync, online, loginSync]);
 
   // New local work while online: push it (no cache refresh).
   const waiting = status.pending > 0 && status.phase === "idle";

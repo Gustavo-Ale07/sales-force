@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { StyleSheet } from "react-native";
 import type { SyncStatus } from "@salesforce/mobile-db";
+import { colors } from "../theme";
 import { HeaderSyncStatus, SyncPanel, SyncStatusChip } from "./sync-status";
 
 const idle: SyncStatus = { phase: "idle", pending: 0, needsAttention: 0, lastSyncedAt: null, lastError: null };
@@ -58,6 +59,32 @@ describe("SyncPanel on-demand sync", () => {
     await render(<SyncPanel status={idle} connectivity="online" onSyncNow={onSyncNow} />);
     await fireEvent.press(screen.getByRole("button", { name: "Sincronizar agora" }));
     expect(onSyncNow).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("SyncPanel age of the data", () => {
+  const now = new Date("2026-11-13T18:00:00.000Z").getTime();
+  const ago = (hours: number) => new Date(now - hours * 3_600_000).toISOString();
+  const colorOf = (text: string) => (StyleSheet.flatten(screen.getByText(text).props.style) as { color?: string }).color;
+
+  it("shows how old the last successful sync is, in the normal colour within 24 h", async () => {
+    await render(<SyncPanel status={{ ...idle, lastSyncedAt: ago(3) }} connectivity="online" onSyncNow={noop} now={now} />);
+    expect(screen.getByText("Dados atualizados")).toBeTruthy();
+    expect(screen.getByText("há 3 h")).toBeTruthy();
+    expect(colorOf("há 3 h")).not.toBe(colors.warning);
+  });
+
+  it("turns amber after 24 h and does not sync by itself", async () => {
+    const onSyncNow = jest.fn();
+    await render(<SyncPanel status={{ ...idle, lastSyncedAt: ago(50) }} connectivity="online" onSyncNow={onSyncNow} now={now} />);
+    expect(screen.getByText("há 2 dias")).toBeTruthy();
+    expect(colorOf("há 2 dias")).toBe(colors.warning);
+    expect(onSyncNow).not.toHaveBeenCalled();
+  });
+
+  it("shows no age line when the device never synced", async () => {
+    await render(<SyncPanel status={idle} connectivity="online" onSyncNow={noop} now={now} />);
+    expect(screen.queryByText("Dados atualizados")).toBeNull();
   });
 });
 

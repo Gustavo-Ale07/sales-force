@@ -35,6 +35,25 @@ const clock = (iso: string): string | null => {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 };
 
+/** From this age on the data is highlighted (amber). The device never syncs by itself because of it. */
+export const STALE_AFTER_MS = 24 * 3_600_000;
+
+/** "há 3 h", "há 2 dias": how old the last SUCCESSFUL sync is. `null` when there is none (or the stored value is unreadable). */
+export function describeSyncAge(lastSyncedAt: string | null, now: number = Date.now()): { readonly text: string; readonly stale: boolean } | null {
+  if (lastSyncedAt === null) return null;
+  const at = new Date(lastSyncedAt).getTime();
+  if (Number.isNaN(at)) return null;
+  const age = Math.max(0, now - at);
+  const stale = age >= STALE_AFTER_MS;
+  const minutes = Math.floor(age / 60_000);
+  if (minutes < 1) return { text: "agora há pouco", stale };
+  if (minutes < 60) return { text: `há ${minutes} min`, stale };
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return { text: `há ${hours} h`, stale };
+  const days = Math.floor(hours / 24);
+  return { text: days === 1 ? "há 1 dia" : `há ${days} dias`, stale };
+}
+
 /** The "Conexão" line, e.g. "Internet: ok · Servidor: sem resposta". */
 export function describeConnection(status: SyncStatus, connectivity: ConnectivityState): string {
   const health = healthOf(status, connectivity);
