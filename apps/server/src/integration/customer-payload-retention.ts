@@ -1,5 +1,6 @@
 import { customerRegistration, customerRegistrationRefusal, integrationOutbox, type Database } from '@salesforce/db';
 import { and, eq, inArray, lt, sql } from 'drizzle-orm';
+import type { Logger } from '../observability/logger.js';
 import type { Clock } from '../platform/tokens.js';
 
 /**
@@ -21,11 +22,14 @@ export const PURGED_PAYLOAD = { purged: true } as const;
 /** Refusals only feed the one-hour creation limit; a day is a wide margin. */
 export const CUSTOMER_REFUSAL_RETENTION_HOURS = 24;
 
+const CUTOFF_SKEW_MARGIN_MS = 5 * 60_000;
 const TERMINAL_STATUSES = ['confirmed', 'rejected'];
 
 export interface CustomerPayloadRetentionDeps {
   readonly database: Database;
   readonly now: Clock;
+  /** Optional: where a refused registration delete is reported (falls back to the process warning stream). */
+  readonly logger?: Pick<Logger, 'warn'>;
 }
 
 /**
@@ -41,12 +45,22 @@ export class CustomerPayloadRetention {
   /** Clears the outbox personal data, then deletes old rejected registrations. Returns how many outbox rows were cleared. */
   async purge(retentionDays = CUSTOMER_PAYLOAD_RETENTION_DAYS): Promise<number> {
     const cleared = await this.clearOutbox(retentionDays);
-    await this.deleteRejectedRegistrations(retentionDays);
+    try {
+      await this.deleteRejectedRegistrations(retentionDays);
+    } catch (error) {
+      // The database guard (30 days by ITS clock) can still refuse a row the application considered old. The next daily run
+      // retries; the outbox clearing above must not be lost and the job must not fail for it. Any other failure is real.
+      if ((error as { code?: string; cause?: { code?: string } }).code !== '23514' && (error as { cause?: { code?: string } }).cause?.code !== '23514') throw error;
+      const message = 'customer registration retention: the database refused the delete of old rejected registrations; retried at the next run';
+      if (this.deps.logger === undefined) process.stderr.write(`${message}\n`);
+      else this.deps.logger.warn({ code: 'check_violation' }, message);
+    }
     return cleared;
   }
 
+  /** Margin against clock skew between the application and the database guard, which uses the database clock. */
   private cutoff(retentionDays: number): Date {
-    return new Date(this.deps.now().getTime() - retentionDays * 24 * 3600_000);
+    return new Date(this.deps.now().getTime() - retentionDays * 24 * 3600_000 - CUTOFF_SKEW_MARGIN_MS);
   }
 
   private async clearOutbox(retentionDays: number): Promise<number> {

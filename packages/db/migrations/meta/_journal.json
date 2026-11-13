@@ -274,6 +274,13 @@
       "when": 1794839804103,
       "tag": "0038_customer_registration_update_guard_clamp",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1794926204103,
+      "tag": "0039_customer_outbox_guard",
+      "breakpoints": true
     }
   ]
 }

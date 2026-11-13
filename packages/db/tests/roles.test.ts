@@ -285,6 +285,83 @@ describe('db-roles.sql', () => {
     expect(await run(`UPDATE customer_registration SET status = status, updated_at = updated_at WHERE id = '${confirmed}'`)).toBeUndefined();
   });
 
+  it('integration_outbox: customer_registration rows are never deleted, never rewritten by the API, never backdated; order rows keep working', async () => {
+    const seed = async (n: number, aggregate: string, status: string, age: string) => {
+      const id = `0194a1b2-7c3d-7e4f-8a5b-6c7d8e9f3${String(n).padStart(3, '0')}`;
+      await as(
+        adminDbUrl,
+        `INSERT INTO integration_outbox (id, aggregate_type, aggregate_id, operation, payload, origin_id, status, created_at, updated_at)
+         VALUES ($1, $2, $1, $3, '{"k":"v"}'::jsonb, $4, $5, now() - $6::interval, now() - $6::interval)`,
+        [id, aggregate, aggregate === 'customer_registration' ? 'customer.upsert' : 'other.op', `force:ob:${id}`, status, age],
+      );
+      return id;
+    };
+    const stamp = async (id: string) => (await as<{ t: string }>(adminDbUrl, 'SELECT updated_at::text AS t FROM integration_outbox WHERE id = $1', [id]))[0]!.t;
+    const exists = async (id: string) => (await as(adminDbUrl, 'SELECT 1 FROM integration_outbox WHERE id = $1', [id])).length === 1;
+    const customer = await seed(1, 'customer_registration', 'rejected', '90 days');
+    const pending = await seed(2, 'customer_registration', 'pending', '1 day');
+    const order = await seed(3, 'other_aggregate', 'pending', '90 days');
+
+    // DELETE: denied for every role (the owner included) on customer rows; allowed on order rows.
+    for (const role of ['force_api', 'force_worker', 'force_migrator'] as const) {
+      expect(await sqlState(role, `DELETE FROM integration_outbox WHERE id = '${customer}'`), role).toBeDefined();
+    }
+    expect(await exists(customer)).toBe(true);
+    expect(await sqlState('force_api', `DELETE FROM integration_outbox WHERE id = '${order}'`)).toBeUndefined();
+    expect(await exists(order)).toBe(false);
+
+    // The API never updates a customer row; its order flows are untouched.
+    expect(await sqlState('force_api', `UPDATE integration_outbox SET payload = '{"x":1}'::jsonb WHERE id = '${pending}'`)).toBeDefined();
+    expect(await sqlState('force_api', `UPDATE integration_outbox SET updated_at = now() WHERE id = '${customer}'`)).toBeDefined();
+    expect((await as<{ p: string }>(adminDbUrl, `SELECT payload::text AS p FROM integration_outbox WHERE id = $1`, [pending]))[0]!.p).toBe('{"k": "v"}');
+    const apiOrder = await seed(4, 'other_aggregate', 'pending', '1 day');
+    expect(await sqlState('force_api', `UPDATE integration_outbox SET status = 'processing', updated_at = now() WHERE id = '${apiOrder}'`)).toBeUndefined();
+
+    // updated_at is clamped: never backwards, never beyond now() + 1 minute.
+    const before = await stamp(customer);
+    expect(await sqlState('force_worker', `UPDATE integration_outbox SET updated_at = now() - interval '200 days' WHERE id = '${customer}'`)).toBeUndefined();
+    expect(await stamp(customer)).toBe(before);
+    expect(await sqlState('force_worker', `UPDATE integration_outbox SET updated_at = now() + interval '400 days' WHERE id = '${pending}'`)).toBeUndefined();
+    expect((await as<{ ok: boolean }>(adminDbUrl, `SELECT updated_at <= now() + interval '1 minute' AS ok FROM integration_outbox WHERE id = $1`, [pending]))[0]!.ok).toBe(true);
+
+    // Origin key (once set) and the aggregate binding never change.
+    expect(await sqlState('force_worker', `UPDATE integration_outbox SET origin_id = 'force:other' WHERE id = '${customer}'`)).toBeDefined();
+    expect(await sqlState('force_worker', `UPDATE integration_outbox SET aggregate_id = gen_random_uuid() WHERE id = '${customer}'`)).toBeDefined();
+    expect(await sqlState('force_worker', `UPDATE integration_outbox SET aggregate_type = 'sales_order' WHERE id = '${customer}'`)).toBeDefined();
+
+    // A status change restarts the clock.
+    const stuck = await seed(5, 'customer_registration', 'pending', '90 days');
+    expect(await sqlState('force_worker', `UPDATE integration_outbox SET status = 'rejected', updated_at = now() - interval '90 days' WHERE id = '${stuck}'`)).toBeUndefined();
+    expect((await as<{ ok: boolean }>(adminDbUrl, `SELECT updated_at > now() - interval '1 minute' AS ok FROM integration_outbox WHERE id = $1`, [stuck]))[0]!.ok).toBe(true);
+
+    // Legitimate worker transitions and the retention clearing keep working (clearing does not bump updated_at).
+    const live = await seed(6, 'customer_registration', 'pending', '1 day');
+    expect(await sqlState('force_worker', `UPDATE integration_outbox SET status = 'processing', attempt_count = attempt_count + 1, last_step = 'sending', updated_at = now() WHERE id = '${live}'`)).toBeUndefined();
+    expect(await sqlState('force_worker', `UPDATE integration_outbox SET status = 'confirmed', erp_reference = '77', last_error_message = NULL, updated_at = now() WHERE id = '${live}'`)).toBeUndefined();
+    expect(await sqlState('force_worker', `UPDATE integration_outbox SET payload = '{"purged":true}'::jsonb, last_error_message = NULL WHERE id = '${customer}'`)).toBeUndefined();
+    expect(await stamp(customer)).toBe(before);
+    const noOrigin = await seed(7, 'customer_registration', 'pending', '1 day');
+    await as(adminDbUrl, `ALTER TABLE integration_outbox DISABLE TRIGGER integration_outbox_customer_guard`);
+    await as(adminDbUrl, `UPDATE integration_outbox SET origin_id = NULL WHERE id = $1`, [noOrigin]);
+    await as(adminDbUrl, `ALTER TABLE integration_outbox ENABLE TRIGGER integration_outbox_customer_guard`);
+    expect(await sqlState('force_worker', `UPDATE integration_outbox SET origin_id = 'force:set-once' WHERE id = '${noOrigin}'`)).toBeUndefined();
+  });
+
+  it('customer_registration: a status change restarts the 30-day clock (updated_at = now())', async () => {
+    const accountId = '0194a1b2-7c3d-7e4f-8a5b-6c7d8e9f0a04';
+    await as(adminDbUrl, `INSERT INTO account (id, email, display_name, password_hash, role) VALUES ($1, 'rs@example.test', 'R', 'x', 'seller') ON CONFLICT DO NOTHING`, [accountId]);
+    const id = '0194a1b2-7c3d-7e4f-8a5b-6c7d8e9f4001';
+    await as(
+      adminDbUrl,
+      `INSERT INTO customer_registration (id, client_request_id, request_hash, created_by_account_id, origin_key, status, tax_id, name, created_at, updated_at)
+       VALUES ($1, $1, 'h', $2, 'force:restart', 'pending', '11222333000181', 'Cliente', now() - interval '90 days', now() - interval '90 days')`,
+      [id, accountId],
+    );
+    expect(await sqlState('force_worker', `UPDATE customer_registration SET status = 'rejected', rejection_code = 'x', updated_at = now() - interval '90 days' WHERE id = '${id}'`)).toBeUndefined();
+    expect((await as<{ ok: boolean }>(adminDbUrl, `SELECT updated_at > now() - interval '1 minute' AS ok FROM customer_registration WHERE id = $1`, [id]))[0]!.ok).toBe(true);
+    expect(await sqlState('force_worker', `DELETE FROM customer_registration WHERE id = '${id}'`)).toBeDefined();
+  });
+
   it('api: reads and writes only its own data; cannot DDL, truncate, drop, alter or write the mirror', async () => {
     expect(await sqlState('force_api', 'SELECT count(*) FROM erp_customer')).toBeUndefined();
     expect(await sqlState('force_api', 'SELECT count(*) FROM session')).toBeUndefined();

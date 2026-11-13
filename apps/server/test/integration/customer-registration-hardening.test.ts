@@ -256,7 +256,7 @@ describe('M-5 outbox personal-data retention (customer.upsert)', () => {
   });
 
   it('clears a confirmed or rejected command strictly older than 30 days and keeps row, origin key, state and timestamps', async () => {
-    const old = new Date(NOW.getTime() - 30 * DAY - 1);
+    const old = new Date(NOW.getTime() - 30 * DAY - 6 * 60_000);
     const confirmed = await outboxRow('confirmed', old, { erpReference: '777' });
     const rejected = await outboxRow('rejected', old, { lastErrorClass: 'validation' });
     expect(await retention().purge()).toBeGreaterThanOrEqual(2);
@@ -270,9 +270,9 @@ describe('M-5 outbox personal-data retention (customer.upsert)', () => {
     expect((await read(confirmed))?.erpReference).toBe('777');
   });
 
-  it('exactly 30 days old is kept; one millisecond older is cleared', async () => {
+  it('exactly 30 days old is kept; a few minutes past the skew margin is cleared', async () => {
     const exact = await outboxRow('confirmed', new Date(NOW.getTime() - 30 * DAY));
-    const older = await outboxRow('confirmed', new Date(NOW.getTime() - 30 * DAY - 1));
+    const older = await outboxRow('confirmed', new Date(NOW.getTime() - 30 * DAY - 6 * 60_000));
     await retention().purge();
     expect((await read(exact))?.payload).toEqual(personal);
     expect((await read(older))?.payload).toEqual(PURGED_PAYLOAD);
@@ -316,7 +316,7 @@ describe('retention of finished customer registrations (owner ruling 2026-11-13)
   const retention = () => new CustomerPayloadRetention({ database: db(), now: () => now });
   const refusalRetention = () => new CustomerRefusalRetention({ database: db(), now: () => now });
   const personal = { document: '11222333000181', email: 'pessoa@exemplo.test', notes: 'observação privada', name: 'Fulano' };
-  const OLD = new Date(NOW.getTime() - 30 * DAY - 1);
+  const OLD = new Date(NOW.getTime() - 30 * DAY - 10 * 60_000);
 
   async function registration(status: 'pending' | 'confirmed' | 'rejected' | 'unknown', updatedAt: Date, outboxStatus?: string, lastErrorMessage: string | null = null) {
     const id = uuidv7(updatedAt.getTime());
@@ -399,6 +399,37 @@ describe('retention of finished customer registrations (owner ruling 2026-11-13)
     expect(await outboxRow(old.outboxId)).toMatchObject({ status: 'rejected', aggregateId: old.id });
   });
 
+  it('clock skew: an application clock ahead of the database never makes the purge fail (margin on the cutoff); a clearly old row is still purged', async () => {
+    const real = Date.now();
+    // The app thinks it is 3 minutes later than the database: a row that the database does not yet consider 30 days old.
+    now = new Date(real + 3 * 60_000);
+    const young = await registration('rejected', new Date(real - 30 * DAY + 2 * 60_000), 'rejected');
+    const old = await registration('rejected', new Date(real - 31 * DAY), 'rejected');
+    try {
+      await expect(retention().purge()).resolves.toBeGreaterThanOrEqual(0);
+    } finally {
+      now = NOW;
+    }
+    expect(await registrationRow(young.id)).toBeDefined();
+    expect(await registrationRow(old.id)).toBeUndefined();
+  });
+
+  it('a database refusal of the registration delete is logged and does not fail the job (the outbox clearing already happened)', async () => {
+    const failing = new CustomerPayloadRetention({
+      database: Object.assign(Object.create(db()) as object, { delete: () => { throw Object.assign(new Error('guard'), { code: '23514' }); } }) as unknown as ReturnType<typeof db>,
+      now: () => now,
+    });
+    const { outboxId } = await registration('rejected', OLD, 'rejected');
+    await expect(failing.purge()).resolves.toBeGreaterThanOrEqual(0);
+    expect((await outboxRow(outboxId))?.payload).toEqual(PURGED_PAYLOAD);
+  });
+
+  it('the outbox row of a customer registration cannot be deleted, not even by the table owner (it keeps the origin key)', async () => {
+    const { outboxId } = await registration('rejected', OLD, 'rejected');
+    await expect(db().delete(integrationOutbox).where(eq(integrationOutbox.id, outboxId))).rejects.toThrow();
+    expect(await outboxRow(outboxId)).toBeDefined();
+  });
+
   it('never deletes pending, unknown or confirmed registrations', async () => {
     const ancient = new Date(NOW.getTime() - 400 * DAY);
     const kept = [await registration('pending', ancient), await registration('unknown', ancient), await registration('confirmed', ancient)];
@@ -423,7 +454,9 @@ describe('retention of finished customer registrations (owner ruling 2026-11-13)
     await db().execute(sql`ALTER TABLE customer_registration DISABLE TRIGGER customer_registration_update_guard`);
     await db().update(customerRegistration).set({ status: 'rejected', rejectionCode: 'partner_document_duplicate', updatedAt: OLD }).where(eq(customerRegistration.id, created.id));
     await db().execute(sql`ALTER TABLE customer_registration ENABLE TRIGGER customer_registration_update_guard`);
+    await db().execute(sql`ALTER TABLE integration_outbox DISABLE TRIGGER integration_outbox_customer_guard`);
     await db().update(integrationOutbox).set({ status: 'rejected', nextAttemptAt: null, updatedAt: OLD }).where(eq(integrationOutbox.aggregateId, created.id));
+    await db().execute(sql`ALTER TABLE integration_outbox ENABLE TRIGGER integration_outbox_customer_guard`);
     await retention().purge();
     expect(await registrationRow(created.id)).toBeUndefined();
     const error = await failure(svc.create(sellerUser(seller1, 103), request(document, { clientRequestId })));
