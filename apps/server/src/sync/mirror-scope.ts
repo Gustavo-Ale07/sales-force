@@ -4,23 +4,26 @@ import type { ReadScope } from '@salesforce/sankhya';
 import { eq } from 'drizzle-orm';
 import { validateInstallationConfiguration } from '../configuration/validate.js';
 
+/** The only mobility flag that exists for products: `TGFPRO.AD_MOBILIDADE = 'S'` (owner ruling 2026-11-13). */
+export const PRODUCT_MOBILITY_FIELD = 'AD_MOBILIDADE';
+export const PRODUCT_MOBILITY_ALLOWED: readonly string[] = ['S'];
+
 /**
  * What the mirror reads is decided by the CURRENT installation configuration (CFG-1…6), never by
  * literals in the gateway or here: sellable usage codes, whether inactive products are mirrored, and
- * the price tables to mirror. The mobility field is requested only when the filter is `enforced` AND
- * `validated` (D-S, 2026-11-04): products outside it are then not mirrored at all (a product that leaves
- * the filter is deactivated by the normal missing-row rule). Otherwise the field is not read.
+ * the price tables to mirror. The mobility gate (AD_MOBILIDADE = S) is always applied: products outside it are not mirrored at all (a product that leaves it is deactivated by the normal missing-row rule).
  */
 export function deriveReadScope(config: InstallationConfiguration): ReadScope {
   const tables = config.pricing.mobilePriceTableCodes;
-  const mobility = config.products.mobilityFilter;
   const eligibility = config.customers.eligibility;
-  const mobilityApplies = mobility !== undefined && mobility.mode === 'enforced' && mobility.validation === 'validated';
   return {
     products: {
       usageValues: [...config.products.sellableUsageValues],
       activeOnly: !config.products.showInactive,
-      ...(mobilityApplies ? { mobilitySourceField: mobility.sourceField, mobilityAllowedValues: [...mobility.allowedValues] } : {}),
+      // Owner ruling 2026-11-13 (security review MEDIUM-1): the gate is unconditional, like the TOP and negotiation-type
+      // ones; no configuration block can switch it off or widen it.
+      mobilitySourceField: PRODUCT_MOBILITY_FIELD,
+      mobilityAllowedValues: [...PRODUCT_MOBILITY_ALLOWED],
     },
     ...(eligibility === undefined
       ? {}

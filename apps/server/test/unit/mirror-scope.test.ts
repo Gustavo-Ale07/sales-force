@@ -23,7 +23,10 @@ describe('deriveReadScope (installation configuration -> mirror read scope)', ()
         pricing: { mobilePriceTableCodes: [0, 5] },
       }),
     );
-    expect(scope).toEqual({ products: { usageValues: ['X', 'Y'], activeOnly: true }, priceTableCodes: [0, 5] });
+    expect(scope).toEqual({
+      products: { usageValues: ['X', 'Y'], activeOnly: true, mobilitySourceField: 'AD_MOBILIDADE', mobilityAllowedValues: ['S'] },
+      priceTableCodes: [0, 5],
+    });
   });
 
   it('showInactive widens the product read; an unconfigured table list leaves tables unscoped', () => {
@@ -36,12 +39,17 @@ describe('deriveReadScope (installation configuration -> mirror read scope)', ()
     expect(deriveReadScope(withConfig({ products: { sellableUsageValues: [] } })).products?.usageValues).toEqual([]);
   });
 
-  it('does not ask for the mobility field while the filter is disabled or unvalidated', () => {
-    expect(deriveReadScope(withConfig({})).products?.mobilitySourceField).toBeUndefined();
+  it('always asks for AD_MOBILIDADE = S, with the default configuration (no mobilityFilter block) too (owner ruling 2026-11-13)', () => {
+    const config = withConfig({});
+    expect(config.products.mobilityFilter).toBeUndefined();
+    expect(deriveReadScope(config).products).toMatchObject({ mobilitySourceField: 'AD_MOBILIDADE', mobilityAllowedValues: ['S'] });
+  });
+
+  it('a disabled or unvalidated mobilityFilter block cannot switch the gate off or change the allowed value', () => {
     const pending = withConfig({
-      products: { mobilityFilter: { sourceField: 'AD_MOBILIDADE', allowedValues: ['S'], validation: 'pending_validation', mode: 'disabled' } },
+      products: { mobilityFilter: { sourceField: 'AD_OUTRO', allowedValues: ['S', 'N'], validation: 'pending_validation', mode: 'disabled' } },
     });
-    expect(deriveReadScope(pending).products?.mobilityAllowedValues).toBeUndefined();
+    expect(deriveReadScope(pending).products).toMatchObject({ mobilitySourceField: 'AD_MOBILIDADE', mobilityAllowedValues: ['S'] });
   });
 
   it('asks for the mobility field and its allowed values when enforced and validated (D-S)', () => {
