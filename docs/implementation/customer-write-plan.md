@@ -57,6 +57,17 @@ As fatias **sem** B6 podem andar já (F0–F5, F7, F9), sempre com o duplo do Sa
 | F9 | Mobile+API: edição (Editar na ficha) com confirmação de conflito | F5–F7 |
 | F10 | (Opcional) consulta de CNPJ por API pública atrás de flag | — |
 
+**Estado (2026-11-13):** F0, F2, F3, F4, F5 e F6 feitas e commitadas (F6 = `75ace01`); F7, F8, F9, F10 pendentes.
+
+Desvios do desenho original, já aplicados:
+- sem coluna de origem no espelho (a origem vive no `integration_outbox` e no campo dedicado do Sankhya);
+- sem migração de permissões: `customers.create/update` são entradas de `ROUTE_POLICY` (código), não linhas de banco;
+- a API tem flag própria (`ERP_CUSTOMER_ENQUEUE_ENABLED`, padrão fechada); as duas flags precisam estar ligadas;
+- `PATCH /customers/:id` saiu do F5 e vai para o F9;
+- o vendedor dono do cadastro é validado contra o espelho (existe e está ativo) e contra o escopo do usuário;
+- o worker exige, com a flag ligada, `SANKHYA_CUSTOMER_ORIGIN_FIELD` (campo de origem dedicado, nunca coluna Vidya) e aceita `SANKHYA_CUSTOMER_PRICE_TABLE`;
+- o adaptador real do Sankhya continua recusando a escrita até o T3 (AUTORIZO do dono).
+
 Endereço: se o logradouro/bairro codificado for obrigatório e não houver forma de o vendedor escolher, **parar na F8** e propor a saída no relatório (não inventar).
 
 ## 4. Critérios de aceite (todos com o duplo do Sankhya)
