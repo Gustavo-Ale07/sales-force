@@ -14,7 +14,7 @@ import {
   type ResolveProductsRequest,
   type ResolveProductsResponse,
 } from '@salesforce/contracts';
-import { ipiRefOf, normalizeDecimalString, isProductSellable, isProductVisible, type InstallationConfiguration, type IpiRef, type Product } from '@salesforce/domain';
+import { ipiRefOf, normalizeDecimalString, resolveCustomerPriceTable, isProductSellable, isProductVisible, type InstallationConfiguration, type IpiRef, type Product } from '@salesforce/domain';
 import { CustomersService } from '../customers/customers.service.js';
 import { AppError } from '../http/app-error.js';
 import type { CurrentUser } from '../iam/current-user.js';
@@ -156,17 +156,22 @@ export class CatalogService {
   }
 
   /**
-   * Owner ruling 2026-11-13: the CURRENT prices of one table, for the device. Only a table the installation uses on the
-   * mobile is served (a different or missing one is the same 404); products are the mobility-visible, sellable ones with a
+   * Owner ruling 2026-11-13: the CURRENT prices of one table, for the device. Only a table used by customers inside the
+   * caller's scope is served (any other, or a missing one, is the same 404; the catalog reference table is not served here,
+   * the device never asks for it: it pulls the tables of its visible customers); products are the mobility-visible, sellable ones with a
    * price above zero in the effective version (the mirror only holds mobility products, and the product list keeps
    * priced ones only). The list price and nothing else: no cost, no margin (P-20).
    */
   async priceTablePrices(user: CurrentUser, code: number, query: PriceTablePricesQuery): Promise<PriceTablePricesResponse> {
     const context = await this.policy.accessContext(user);
-    const { pricing } = context.configuration;
-    const served = new Set<number>([...(pricing.mobilePriceTableCodes ?? [])]);
-    if (pricing.fallbackTableCode !== null) served.add(pricing.fallbackTableCode);
-    if (pricing.catalogReferenceTableCode !== null) served.add(pricing.catalogReferenceTableCode);
+    // Owner ruling 2026-11-13: only a table a customer INSIDE the caller's scope resolves to (the domain's own resolution:
+    // the customer's mobile-eligible table, else the configured fallback). Anything else is the same 404 as a missing table.
+    const inScope = await this.mirror.priceTableCodesInScope(context.scope);
+    const served = new Set<number>();
+    for (const tableCode of [...inScope.codes, ...(inScope.hasWithoutTable ? [null] : [])]) {
+      const resolved = resolveCustomerPriceTable({ priceTableCode: tableCode }, context.configuration);
+      if (resolved.kind === 'table') served.add(resolved.code);
+    }
     if (!served.has(code)) throw new AppError('not_found');
     const tableName = await this.mirror.priceTableName(code);
     if (tableName === null) throw new AppError('not_found');

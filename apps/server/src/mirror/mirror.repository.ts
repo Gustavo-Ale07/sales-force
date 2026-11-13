@@ -251,6 +251,19 @@ export class MirrorRepository {
   }
 
   /**
+   * The distinct price table codes the customers INSIDE the scope carry, and whether any of them has none (same live-customer
+   * rule and same scope condition as the customer list). Nothing else about the customers leaves the query.
+   */
+  async priceTableCodesInScope(scope: CustomerScope): Promise<{ codes: number[]; hasWithoutTable: boolean }> {
+    const rows = await this.db
+      .selectDistinct({ code: erpCustomer.priceTableCode })
+      .from(erpCustomer)
+      .where(and(...this.liveCustomer(), scopeCondition(scope)));
+    const codes = rows.flatMap((row) => (row.code === null ? [] : [row.code]));
+    return { codes, hasWithoutTable: rows.some((row) => row.code === null) };
+  }
+
+  /**
    * Open receivable titles of ONE customer (live rows, due date ascending) and when the latest of them was synced. No scope here:
    * the caller has already proved the customer visible (`findCustomer`). Read-only financial information (D-I).
    */

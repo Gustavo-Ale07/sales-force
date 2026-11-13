@@ -414,7 +414,7 @@ export interface paths {
         };
         /**
          * Current list prices of ONE price table (for the device, one table at a time)
-         * @description Only tables the installation uses on the mobile (the configured mobile tables, the fallback and the catalog reference table); any other table, or a missing one, is 404. Only products that are mobility-visible, sellable and priced above zero in the effective version; the list price only (no cost, no margin), ordered by product code. The device keeps these per table and applies the table of the customer it is ordering for.
+         * @description Only tables used by customers within the caller's scope (the customer's mobile-eligible table, or the configured fallback table when a visible customer has none); any other table, or a missing one, is the same 404 (no oracle). Only products that are mobility-visible, sellable and priced above zero in the effective version; the list price only (no cost, no margin), ordered by product code. The device keeps these per table and applies the table of the customer it is ordering for.
          */
         get: operations["getPriceTablePrices"];
         put?: never;

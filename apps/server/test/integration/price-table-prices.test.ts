@@ -4,9 +4,14 @@ import { restrictedKeys, startCommercialApp, type CommercialApp, type Json } fro
 import { closeAllThenStop, startPostgres, type TestPostgres } from '../helpers/postgres.js';
 
 /**
- * Owner ruling 2026-11-13 (A): one price table's CURRENT prices, for the device to keep per table. Server-side rules:
- * only tables the installation uses on the mobile (mobilePriceTableCodes, the fallback and the catalog reference table),
- * only mobility-visible, sellable products with a price above zero, list price only (P-20: no cost, no margin).
+ * Owner ruling 2026-11-13 (A + scope amendment): one price table's CURRENT prices, for the device to keep per table.
+ * Server-side rules: only tables used by customers WITHIN THE CALLER'S SCOPE (the customer's mobile-eligible table, or the
+ * fallback table when a visible customer has none and the configuration says use_fallback_table). Any other table is the
+ * same 404 as a missing one (no oracle). Only mobility-visible, sellable products with a price above zero, list price
+ * only (P-20: no cost, no margin). The catalog reference table is NOT served by this route (the device never asks for it).
+ *
+ * Fixture: seller1 (103) customers all use MAIN (21); every other customer uses DERIVED (22), except one live customer of
+ * seller2 (107) that has no table (so the fallback 23 is reachable for seller2, manager and admin, never for seller1).
  */
 let postgres: TestPostgres;
 const opened: (() => Promise<unknown>)[] = [];
@@ -16,12 +21,22 @@ const pool = () => ctx.database.handle.pool;
 beforeAll(async () => {
   postgres = await startPostgres();
   ctx = await startCommercialApp(postgres, opened);
+  await pool().query(
+    `update erp_customer set price_table_code = case when seller_code = 103 then ${DEMO_MAIN_TABLE_CODE} else ${DEMO_DERIVED_TABLE_CODE} end`,
+  );
+  await pool().query(
+    `update erp_customer set price_table_code = null where code = (select min(code) from erp_customer where seller_code = 107 and deleted_at is null and is_customer and active and blocked_raw is distinct from 'S')`,
+  );
 });
 afterAll(async () => {
   await closeAllThenStop(opened, postgres);
 });
 
-async function pages(who: 'admin' | 'manager' | 'seller1' | 'seller2', code: number, pageSize = 50): Promise<{ first: Json; items: Json[] }> {
+const withoutRequestId = (body: string): string => body.replace(/"requestId":"[^"]*"/, '"requestId":"-"');
+
+type Who ='admin' | 'manager' | 'seller1' | 'seller2';
+
+async function pages(who: Who, code: number, pageSize = 50): Promise<{ first: Json; items: Json[] }> {
   const items: Json[] = [];
   let first: Json | undefined;
   for (let page = 1; page <= 200; page += 1) {
@@ -35,15 +50,55 @@ async function pages(who: 'admin' | 'manager' | 'seller1' | 'seller2', code: num
 }
 
 describe('GET /price-tables/{code}/prices', () => {
-  it('returns the effective version prices of a table the installation uses, to every role', async () => {
-    for (const who of ['admin', 'manager', 'seller1', 'seller2'] as const) {
-      const { first, items } = await pages(who, DEMO_MAIN_TABLE_CODE);
-      expect(first.tableCode).toBe(DEMO_MAIN_TABLE_CODE);
+  it('the fixture gives seller2 a customer without a table', async () => {
+    const response = await ctx.call('seller2', 'GET', '/customers?hasPriceTable=false');
+    expect(response.status).toBe(200);
+    expect(response.body.total).toBeGreaterThan(0);
+  });
+
+  it("returns the effective version prices of a table used by the caller's customers", async () => {
+    const expected: [Who, number][] = [
+      ['seller1', DEMO_MAIN_TABLE_CODE],
+      ['seller2', DEMO_DERIVED_TABLE_CODE],
+      ['seller2', DEMO_FALLBACK_TABLE_CODE],
+      ['manager', DEMO_MAIN_TABLE_CODE],
+      ['manager', DEMO_DERIVED_TABLE_CODE],
+      ['manager', DEMO_FALLBACK_TABLE_CODE],
+      ['admin', DEMO_MAIN_TABLE_CODE],
+      ['admin', DEMO_DERIVED_TABLE_CODE],
+      ['admin', DEMO_FALLBACK_TABLE_CODE],
+    ];
+    for (const [who, code] of expected) {
+      const { first, items } = await pages(who, code);
+      expect(first.tableCode).toBe(code);
       expect(typeof first.tableName).toBe('string');
       expect(typeof first.versionId).toBe('number');
       expect(first.total).toBe(items.length);
-      expect(items.length).toBeGreaterThan(0);
+      // Only MAIN is densely priced in the demo mirror; the others may legitimately hold no sellable priced product.
+      if (code === DEMO_MAIN_TABLE_CODE) expect(items.length).toBeGreaterThan(0);
+      expect(restrictedKeys(first)).toEqual([]);
     }
+  });
+
+  it("another seller's table, a fallback nobody visible needs and a missing table are the same byte-identical 404 (no oracle)", async () => {
+    const missing = await ctx.call('seller1', 'GET', '/price-tables/987654/prices');
+    expect(missing.status).toBe(404);
+    const refusals: [Who, number][] = [
+      ['seller1', DEMO_DERIVED_TABLE_CODE],
+      ['seller1', DEMO_FALLBACK_TABLE_CODE],
+      ['seller2', DEMO_MAIN_TABLE_CODE],
+    ];
+    for (const [who, code] of refusals) {
+      const refused = await ctx.call(who, 'GET', `/price-tables/${code}/prices`);
+      expect(refused.status).toBe(404);
+      // Byte-identical apart from the per-request correlation id.
+      expect(withoutRequestId(refused.response.body)).toBe(withoutRequestId(missing.response.body));
+    }
+  });
+
+  it('the catalog reference table is not served merely because it is configured', async () => {
+    expect(DEMO_CONFIGURATION.pricing.catalogReferenceTableCode).toBe(DEMO_MAIN_TABLE_CODE);
+    expect((await ctx.call('seller2', 'GET', `/price-tables/${DEMO_MAIN_TABLE_CODE}/prices`)).status).toBe(404);
   });
 
   it('carries the list price only, always above zero, once per product, ordered by code (P-20)', async () => {
@@ -88,15 +143,7 @@ describe('GET /price-tables/{code}/prices', () => {
     expect((await ctx.call('seller1', 'GET', `/price-tables/${DEMO_MAIN_TABLE_CODE}/prices?page=${pageCount + 1}&pageSize=${pageSize}`)).body.items).toEqual([]);
   });
 
-  it('a table the installation does not use on the mobile, a missing one and a malformed code are all refused alike', async () => {
-    expect(DEMO_CONFIGURATION.pricing.mobilePriceTableCodes).toBeUndefined();
-    const fallback = await ctx.call('seller1', 'GET', `/price-tables/${DEMO_FALLBACK_TABLE_CODE}/prices`);
-    expect(fallback.status).toBe(200);
-    const unused = await ctx.call('seller1', 'GET', `/price-tables/${DEMO_DERIVED_TABLE_CODE}/prices`);
-    const missing = await ctx.call('seller1', 'GET', '/price-tables/987654/prices');
-    expect(unused.status).toBe(404);
-    expect(missing.status).toBe(404);
-    expect({ code: unused.body.code, message: unused.body.message }).toEqual({ code: missing.body.code, message: missing.body.message });
+  it('a malformed code is a 400', async () => {
     expect((await ctx.call('seller1', 'GET', '/price-tables/abc/prices')).status).toBe(400);
   });
 });
