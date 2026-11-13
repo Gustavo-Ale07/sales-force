@@ -111,3 +111,8 @@ WHERE AD_FORCEORIGEM = :origem   -- ou: CGC_CPF = :doc
 - **D2** Regra de boot da flag de cliente em staging: permitir `true` em staging **somente** com host Sandbox na allowlist e modo explícito `sandbox`?
 - **A1** Aprova a gravação via worker com espera (poll ~10–15 s, 202 se estourar) em vez de credencial de escrita na API?
 - **B6** Valores de `CODTIPPARC`, `CODREG`, `TIPOGERBOLETO` e `CLASSIFICMS` (e a regra de IE por classificação).
+
+## 8. Rulings do dono de 13/11/2026 (registro)
+
+- **IE (substitui "IE opcional"):** obrigatória para pessoa jurídica — informar a IE (até 16 caracteres) OU marcar "Isento", que grava `ISENTO` em maiúsculas (comparação sem diferenciar maiúsculas). Pessoa física não tem o campo (enviar é recusado). Sem validação de formato de IE por estado. Aplicada em `prepareCustomerRegistration` (servidor); o formulário (F8) deve oferecer o campo/caixa "Isento" só para PJ.
+- **Mobilidade (`AD_MOBILIDADE`):** tipos de negociação, TOPs e produtos só aparecem com `AD_MOBILIDADE = 'S'`. Estamos só no Sandbox, então a lista dos 24 tipos sem mobilidade não trava mais a publicação. **Pré-requisito de produção:** antes de ligar o Force no Sankhya de produção, `AD_MOBILIDADE` de TOPs, tipos de negociação e produtos precisa estar preenchido lá (vazio/nulo = oculto; a trava anti-catálogo-vazio avisa, mas não substitui o preenchimento).

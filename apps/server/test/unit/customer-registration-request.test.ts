@@ -7,7 +7,7 @@ const CNPJ = '11.222.333/0001-81';
 const CPF = '529.982.247-25';
 
 function body(overrides: Record<string, unknown> = {}): CreateCustomerRequest {
-  return CreateCustomerRequestSchema.parse({ clientRequestId: ID, document: CNPJ, name: 'Cliente Teste Ltda', ...overrides });
+  return CreateCustomerRequestSchema.parse({ clientRequestId: ID, document: CNPJ, name: 'Cliente Teste Ltda', stateRegistration: '123456789', ...overrides });
 }
 
 const seller = { role: 'seller', sellerCodes: [7] } as const;
@@ -39,8 +39,38 @@ describe('prepareCustomerRegistration', () => {
   });
 
   it('accepts a valid CPF as an individual', () => {
-    const out = prepareCustomerRegistration(body({ document: CPF }), seller);
+    const out = prepareCustomerRegistration(body({ document: CPF, stateRegistration: null }), seller);
     expect(out.ok && out.value.payload.personType).toBe('individual');
+  });
+
+  describe('state registration (IE), owner ruling 2026-11-13', () => {
+    const issue = { path: 'stateRegistration', code: 'state_registration_required' };
+
+    it('a company without IE is refused', () => {
+      expect(prepareCustomerRegistration(body({ stateRegistration: null }), seller)).toMatchObject({ ok: false, issues: [issue] });
+    });
+
+    it('a company with an IE of up to 16 characters is accepted, kept as typed (no per-state format check)', () => {
+      const out = prepareCustomerRegistration(body({ stateRegistration: 'ab-12.345/6' }), seller);
+      expect(out.ok && out.value.payload.stateRegistration).toBe('ab-12.345/6');
+    });
+
+    it.each(['Isento', 'ISENTO', 'isento', ' iSeNtO '])('"%s" means exempt and is stored as ISENTO', (typed) => {
+      const out = prepareCustomerRegistration(body({ stateRegistration: typed }), seller);
+      expect(out.ok && out.value.payload.stateRegistration).toBe('ISENTO');
+    });
+
+    it('an individual has no IE field: sending one is refused', () => {
+      expect(prepareCustomerRegistration(body({ document: CPF, stateRegistration: '123' }), seller)).toMatchObject({
+        ok: false,
+        issues: [{ path: 'stateRegistration', code: 'state_registration_not_applicable' }],
+      });
+    });
+
+    it('an individual without IE is accepted and carries none', () => {
+      const out = prepareCustomerRegistration(body({ document: CPF, stateRegistration: null }), seller);
+      expect(out.ok && out.value.payload.stateRegistration).toBeNull();
+    });
   });
 
   it('refuses a document with wrong check digits', () => {

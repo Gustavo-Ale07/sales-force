@@ -11,7 +11,7 @@ const ID = '0198f0a2-7b1c-7c3e-9a55-0123456789ab';
 const NOW = new Date('2026-11-13T12:00:00Z');
 
 function request(overrides: Record<string, unknown> = {}) {
-  return CreateCustomerRequestSchema.parse({ clientRequestId: ID, document: '11.222.333/0001-81', name: 'Cliente Teste Ltda', ...overrides });
+  return CreateCustomerRequestSchema.parse({ clientRequestId: ID, document: '11.222.333/0001-81', name: 'Cliente Teste Ltda', stateRegistration: '123456789', ...overrides });
 }
 
 function user(overrides: Partial<CurrentUser> = {}): CurrentUser {

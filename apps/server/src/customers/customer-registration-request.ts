@@ -65,6 +65,16 @@ export function prepareCustomerRegistration(body: CreateCustomerRequest, actor: 
   const valid = kind === 'individual' ? isValidCpf(document) : kind === 'company' ? isValidCnpj(document) : false;
   if (kind === null || !valid) issues.push({ path: 'document', code: 'invalid_document', message: 'CPF ou CNPJ inválido.' });
 
+  // IE (owner ruling 2026-11-13): mandatory for a company (the IE or "Isento", stored as ISENTO, case-insensitive);
+  // an individual has no such field. No per-state format validation.
+  const typedIe = body.stateRegistration?.trim() ?? '';
+  const stateRegistration = typedIe.toUpperCase() === 'ISENTO' ? 'ISENTO' : typedIe === '' ? null : typedIe;
+  if (kind === 'company' && stateRegistration === null) {
+    issues.push({ path: 'stateRegistration', code: 'state_registration_required', message: 'Informe a inscrição estadual ou marque "Isento".' });
+  } else if (kind === 'individual' && stateRegistration !== null) {
+    issues.push({ path: 'stateRegistration', code: 'state_registration_not_applicable', message: 'Pessoa física não tem inscrição estadual.' });
+  }
+
   const chosen = chooseSeller(body.sellerCode, actor);
   const sellerCode = chosen !== null && actor.allowedSellerCodes != null && !actor.allowedSellerCodes.includes(chosen) ? null : chosen;
   if (sellerCode === null) {
@@ -84,7 +94,7 @@ export function prepareCustomerRegistration(body: CreateCustomerRequest, actor: 
     name: body.name,
     tradeName: body.tradeName,
     icmsClassification: body.icmsClassification,
-    stateRegistration: body.stateRegistration,
+    stateRegistration,
     sellerCode,
     phone: body.phone,
     email: body.email,
