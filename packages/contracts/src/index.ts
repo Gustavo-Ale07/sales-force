@@ -9,6 +9,7 @@ export * from './access.js';
 export * from './sellers.js';
 export * from './catalog.js';
 export * from './customers.js';
+export * from './customer-write.js';
 export * from './orders.js';
 export * from './discount-limits.js';
 export * from './approvals.js';

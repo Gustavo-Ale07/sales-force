@@ -13,6 +13,7 @@ import {
   ResolveProductsResponseSchema,
 } from './catalog.js';
 import { ConfigurationResponseSchema, OrderEntryConfigurationSchema } from './configuration.js';
+import { CreateCustomerRequestSchema, CreateCustomerResponseSchema } from './customer-write.js';
 import {
   CustomerDetailSchema,
   CustomerFinancialSchema,
@@ -299,6 +300,24 @@ export const routes = {
     request: { query: CustomersQuerySchema },
     responses: { 200: { description: 'Carteira de clientes', schema: CustomersResponseSchema } },
     errors: [400, 401, 403],
+  }),
+  createCustomer: defineRoute({
+    operationId: 'createCustomer',
+    method: 'post',
+    path: '/customers',
+    tags: ['customers'],
+    summary: 'Create a customer in the Force (written to the ERP by the worker)',
+    description:
+      'Records the creation and waits up to 15 s for the ERP confirmation (D-AR). 201 with `status` `confirmed` and the real `customerCode` when confirmed in time; 202 with `status` `pending` when the ERP did not answer in time (the customer stays "aguardando envio ao Sankhya" and is confirmed later; no order can use it meanwhile); 200 with the recorded state on a replay of the same `clientRequestId` and payload. Idempotent per account: 409 idempotency_conflict when the id was used with a different payload. 409 conflict (details.reason `document_already_registered`) when the CPF/CNPJ already exists in the mirror or in another request in flight; `customer_write_disabled` while the installation has not enabled customer writes. Created with the ERP defaults of the installation (active, not blocked, installation price table, the creator as seller); the credit limit is never sent. 400 validation_failed (details.issues) for an invalid document or field. 429 rate_limited beyond the hourly creation limit.',
+    auth: 'session',
+    request: { body: CreateCustomerRequestSchema },
+    maxBodyBytes: 8 * 1024,
+    responses: {
+      201: { description: 'Cliente criado e confirmado no Sankhya', schema: CreateCustomerResponseSchema },
+      200: { description: 'Reenvio idempotente: estado registrado', schema: CreateCustomerResponseSchema },
+      202: { description: 'Aguardando envio ao Sankhya', schema: CreateCustomerResponseSchema },
+    },
+    errors: [400, 401, 403, 409, 429],
   }),
   getCustomer: defineRoute({
     operationId: 'getCustomer',

@@ -61,6 +61,7 @@ const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>
   // Recurring order templates (Phase E). ASSUMPTION (owner ruling in the plan): every role reaches them; which
   // templates it sees is the customer's seller scope (IDOR tests: order-templates.test.ts).
   listOrderTemplates: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  createCustomer: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   createOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   getOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   replaceOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },

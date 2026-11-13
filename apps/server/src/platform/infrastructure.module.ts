@@ -14,7 +14,10 @@ import {
   DATABASE,
   DATABASE_HANDLE,
   LOGGER,
+  CUSTOMER_CONFIRM_WAIT,
+  CUSTOMER_ENQUEUE_ENABLED,
   ORDER_ENQUEUE_ENABLED,
+  type CustomerConfirmWait,
   PRODUCT_IMAGE_SETTINGS,
   PRODUCT_IMAGE_SOURCE,
   READINESS_CACHE_TTL_MS,
@@ -35,6 +38,10 @@ export interface InfrastructureDeps {
   readonly productImageSettings?: Partial<ProductImageSettings>;
   /** API only: queue submitted orders for the ERP (default false = submission stays disabled, SNK-6). */
   readonly orderEnqueueEnabled?: boolean;
+  /** API only: accept customer creations (default false). The worker has its own flag. */
+  readonly customerEnqueueEnabled?: boolean;
+  /** API only: how long a creation waits for the worker (default 15 s; tests shorten it). */
+  readonly customerConfirmWait?: Partial<CustomerConfirmWait>;
 }
 
 /**
@@ -54,6 +61,16 @@ export class InfrastructureModule {
       { provide: READINESS_CACHE_TTL_MS, useValue: deps.readinessCacheTtlMs ?? 0 },
       { provide: DATASET_IDENTITY, useValue: deps.dataset ?? null },
       { provide: ORDER_ENQUEUE_ENABLED, useValue: deps.orderEnqueueEnabled ?? false },
+      { provide: CUSTOMER_ENQUEUE_ENABLED, useValue: deps.customerEnqueueEnabled ?? false },
+      {
+        provide: CUSTOMER_CONFIRM_WAIT,
+        useValue: {
+          timeoutMs: 15_000,
+          pollMs: 500,
+          sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+          ...deps.customerConfirmWait,
+        } satisfies CustomerConfirmWait,
+      },
       { provide: PRODUCT_IMAGE_SOURCE, useValue: deps.productImageSource ?? new NoImageSource() },
       { provide: PRODUCT_IMAGE_SETTINGS, useValue: { ...DEFAULT_PRODUCT_IMAGE_SETTINGS, ...deps.productImageSettings } },
     ];

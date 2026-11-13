@@ -834,6 +834,106 @@
             }
           }
         }
+      },
+      "post": {
+        "operationId": "createCustomer",
+        "tags": [
+          "customers"
+        ],
+        "summary": "Create a customer in the Force (written to the ERP by the worker)",
+        "description": "Records the creation and waits up to 15 s for the ERP confirmation (D-AR). 201 with `status` `confirmed` and the real `customerCode` when confirmed in time; 202 with `status` `pending` when the ERP did not answer in time (the customer stays \"aguardando envio ao Sankhya\" and is confirmed later; no order can use it meanwhile); 200 with the recorded state on a replay of the same `clientRequestId` and payload. Idempotent per account: 409 idempotency_conflict when the id was used with a different payload. 409 conflict (details.reason `document_already_registered`) when the CPF/CNPJ already exists in the mirror or in another request in flight; `customer_write_disabled` while the installation has not enabled customer writes. Created with the ERP defaults of the installation (active, not blocked, installation price table, the creator as seller); the credit limit is never sent. 400 validation_failed (details.issues) for an invalid document or field. 429 rate_limited beyond the hourly creation limit.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCustomerRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reenvio idempotente: estado registrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateCustomerResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Cliente criado e confirmado no Sankhya",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateCustomerResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Aguardando envio ao Sankhya",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateCustomerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflito de estado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Muitas tentativas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/customers/{code}": {
@@ -4175,6 +4275,153 @@
           "disabled"
         ]
       },
+      "CreateCustomerRequest": {
+        "type": "object",
+        "properties": {
+          "clientRequestId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "document": {
+            "type": "string",
+            "minLength": 11,
+            "maxLength": 18
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]*$"
+          },
+          "tradeName": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100,
+                "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]*$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "icmsClassification": {
+            "default": "R",
+            "$ref": "#/components/schemas/IcmsClassification"
+          },
+          "stateRegistration": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20,
+                "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]*$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "phone": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20,
+                "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]*$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "email": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "format": "email",
+                "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notes": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500,
+                "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]*$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "addresses": {
+            "default": [],
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomerAddressInput"
+            }
+          },
+          "sellerCode": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "clientRequestId",
+          "document",
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "CreateCustomerResponse": {
+        "type": "object",
+        "properties": {
+          "registrationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CustomerRegistrationStatus"
+          },
+          "customerCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "originKey": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "registrationId",
+          "status",
+          "customerCode",
+          "originKey"
+        ],
+        "additionalProperties": false
+      },
       "CreateOrderRequest": {
         "type": "object",
         "properties": {
@@ -4293,6 +4540,50 @@
           "expectedDataset",
           "name",
           "items"
+        ],
+        "additionalProperties": false
+      },
+      "CustomerAddressInput": {
+        "type": "object",
+        "properties": {
+          "streetCode": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "neighborhoodCode": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "number": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 10,
+            "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]*$"
+          },
+          "complement": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60,
+                "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]*$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "postalCode": {
+            "type": "string",
+            "pattern": "^\\d{8}$"
+          }
+        },
+        "required": [
+          "streetCode",
+          "neighborhoodCode",
+          "number",
+          "postalCode"
         ],
         "additionalProperties": false
       },
@@ -4704,6 +4995,15 @@
         ],
         "additionalProperties": false
       },
+      "CustomerRegistrationStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "confirmed",
+          "rejected",
+          "unknown"
+        ]
+      },
       "CustomerSort": {
         "type": "string",
         "enum": [
@@ -5043,6 +5343,17 @@
           "status"
         ],
         "additionalProperties": false
+      },
+      "IcmsClassification": {
+        "type": "string",
+        "enum": [
+          "C",
+          "I",
+          "P",
+          "R",
+          "T",
+          "X"
+        ]
       },
       "IntegrationSummary": {
         "type": "object",

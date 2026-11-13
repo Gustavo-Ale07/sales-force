@@ -48,6 +48,14 @@ export const ApiEnvSchema = z.object({
     .enum(['true', 'false'], { error: "must be 'true' or 'false'." })
     .default('false')
     .transform((value) => value === 'true'),
+  /**
+   * D-AR: accept customer creations (`POST /customers`). `false` by default and accepted only on staging: the worker
+   * writes to the ERP only when its own `SANKHYA_CUSTOMER_WRITE_ENABLED` is also on (Sandbox only).
+   */
+  ERP_CUSTOMER_ENQUEUE_ENABLED: z
+    .enum(['true', 'false'], { error: "must be 'true' or 'false'." })
+    .default('false')
+    .transform((value) => value === 'true'),
   /** Argon2id hashes running at once (they block the event loop); beyond it a login answers 429. */
   LOGIN_MAX_CONCURRENT_HASHES: integerField({ min: 1, max: 64 }, 4),
   /** Failed password checks per minute the whole installation tolerates, every client together (login DoS budget). */
@@ -186,6 +194,9 @@ export function parseApiEnv(source: EnvSource): ParsedApiEnv {
     }
     if (parsed.ERP_ORDER_ENQUEUE_ENABLED && parsed.SF_DEPLOY_ENVIRONMENT !== 'staging' && !(parsed.SF_DEPLOY_ENVIRONMENT === undefined && parsed.NODE_ENV !== 'production')) {
       problems.push('ERP_ORDER_ENQUEUE_ENABLED: is only accepted when SF_DEPLOY_ENVIRONMENT=staging (ERP order submission stays disabled elsewhere, SNK-6).');
+    }
+    if (parsed.ERP_CUSTOMER_ENQUEUE_ENABLED && parsed.SF_DEPLOY_ENVIRONMENT !== 'staging' && !(parsed.SF_DEPLOY_ENVIRONMENT === undefined && parsed.NODE_ENV !== 'production')) {
+      problems.push('ERP_CUSTOMER_ENQUEUE_ENABLED: is only accepted when SF_DEPLOY_ENVIRONMENT=staging (customer creation stays disabled elsewhere).');
     }
     if (parsed.SF_ERP_ENVIRONMENT !== undefined && parsed.SF_DATASET_ID === undefined) {
       problems.push('SF_DATASET_ID: is required when SF_ERP_ENVIRONMENT is set (set both or neither).');

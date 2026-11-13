@@ -36,6 +36,8 @@ export const AUDIT_ACTIONS = {
   orderDeleted: 'order.deleted',
   /** D-U (a): a quote that never reached Sankhya became an order in place (ids and TOPs only). */
   orderConverted: 'order.converted',
+  /** D-AR: a customer creation was recorded and queued for the ERP (ids, seller code and person type only; no personal data). */
+  customerRegistrationRequested: 'customer.registration_requested',
   orderTemplateCreated: 'order_template.created',
   orderTemplateReplaced: 'order_template.replaced',
   orderTemplateDeleted: 'order_template.deleted',

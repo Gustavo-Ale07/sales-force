@@ -16,6 +16,20 @@ export const DATASET_IDENTITY = Symbol('DATASET_IDENTITY');
  */
 export const ORDER_ENQUEUE_ENABLED = Symbol('ORDER_ENQUEUE_ENABLED');
 
+/**
+ * Customer-creation switch of the API (`ERP_CUSTOMER_ENQUEUE_ENABLED`, default false): while false, `POST /customers`
+ * answers 409 `customer_write_disabled` and nothing is recorded. Separate from the worker's own flag
+ * (customer-write switch, which only the worker reads): both must be on for a customer to reach the ERP.
+ */
+export const CUSTOMER_ENQUEUE_ENABLED = Symbol('CUSTOMER_ENQUEUE_ENABLED');
+/** How long `POST /customers` waits for the worker's confirmation (D-AR: up to 15 s). */
+export interface CustomerConfirmWait {
+  readonly timeoutMs: number;
+  readonly pollMs: number;
+  readonly sleep: (ms: number) => Promise<void>;
+}
+export const CUSTOMER_CONFIRM_WAIT = Symbol('CUSTOMER_CONFIRM_WAIT');
+
 /** `ProductImageSource` (default: no images). */
 export const PRODUCT_IMAGE_SOURCE = Symbol('PRODUCT_IMAGE_SOURCE');
 /** `ProductImageSettings` (timeout, cache age, size caps). */

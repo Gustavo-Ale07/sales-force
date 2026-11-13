@@ -263,7 +263,11 @@ export interface paths {
         /** Customer portfolio (scoped) */
         get: operations["listCustomers"];
         put?: never;
-        post?: never;
+        /**
+         * Create a customer in the Force (written to the ERP by the worker)
+         * @description Records the creation and waits up to 15 s for the ERP confirmation (D-AR). 201 with `status` `confirmed` and the real `customerCode` when confirmed in time; 202 with `status` `pending` when the ERP did not answer in time (the customer stays "aguardando envio ao Sankhya" and is confirmed later; no order can use it meanwhile); 200 with the recorded state on a replay of the same `clientRequestId` and payload. Idempotent per account: 409 idempotency_conflict when the id was used with a different payload. 409 conflict (details.reason `document_already_registered`) when the CPF/CNPJ already exists in the mirror or in another request in flight; `customer_write_disabled` while the installation has not enabled customer writes. Created with the ERP defaults of the installation (active, not blocked, installation price table, the creator as seller); the credit limit is never sent. 400 validation_failed (details.issues) for an invalid document or field. 429 rate_limited beyond the hourly creation limit.
+         */
+        post: operations["createCustomer"];
         delete?: never;
         options?: never;
         head?: never;
@@ -912,6 +916,34 @@ export interface components {
         };
         /** @enum {string} */
         ConfirmationBehavior: "manual" | "automatic" | "disabled";
+        CreateCustomerRequest: {
+            /** Format: uuid */
+            clientRequestId: string;
+            document: string;
+            name: string;
+            /** @default null */
+            tradeName: string | null;
+            /** @default R */
+            icmsClassification: components["schemas"]["IcmsClassification"];
+            /** @default null */
+            stateRegistration: string | null;
+            /** @default null */
+            phone: string | null;
+            /** @default null */
+            email: string | null;
+            /** @default null */
+            notes: string | null;
+            /** @default [] */
+            addresses: components["schemas"]["CustomerAddressInput"][];
+            sellerCode?: number;
+        };
+        CreateCustomerResponse: {
+            /** Format: uuid */
+            registrationId: string;
+            status: components["schemas"]["CustomerRegistrationStatus"];
+            customerCode: number | null;
+            originKey: string;
+        };
         CreateOrderRequest: {
             /** Format: uuid */
             clientRequestId: string;
@@ -930,6 +962,14 @@ export interface components {
             expectedDataset: components["schemas"]["DatasetIdentity"];
             name: string;
             items: components["schemas"]["OrderTemplateItem"][];
+        };
+        CustomerAddressInput: {
+            streetCode: number;
+            neighborhoodCode: number;
+            number: string;
+            /** @default null */
+            complement: string | null;
+            postalCode: string;
         };
         CustomerDetail: {
             code: number;
@@ -995,6 +1035,8 @@ export interface components {
             mostUsedNegotiationOrderCount: number;
             lastFreightType: components["schemas"]["FreightType"] | null;
         };
+        /** @enum {string} */
+        CustomerRegistrationStatus: "pending" | "confirmed" | "rejected" | "unknown";
         /** @enum {string} */
         CustomerSort: "name" | "-name" | "code" | "-code";
         /** @enum {string} */
@@ -1074,6 +1116,8 @@ export interface components {
             /** @constant */
             status: "ok";
         };
+        /** @enum {string} */
+        IcmsClassification: "C" | "I" | "P" | "R" | "T" | "X";
         IntegrationSummary: {
             /** @enum {string} */
             state: "ok" | "degraded" | "not_configured";
@@ -2321,6 +2365,93 @@ export interface operations {
             };
             /** @description Sem permissão para este recurso */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    createCustomer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCustomerRequest"];
+            };
+        };
+        responses: {
+            /** @description Reenvio idempotente: estado registrado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateCustomerResponse"];
+                };
+            };
+            /** @description Cliente criado e confirmado no Sankhya */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateCustomerResponse"];
+                };
+            };
+            /** @description Aguardando envio ao Sankhya */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateCustomerResponse"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflito de estado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Muitas tentativas */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
