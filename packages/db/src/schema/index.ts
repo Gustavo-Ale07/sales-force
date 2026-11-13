@@ -3,5 +3,6 @@ export * from './iam.js';
 export * from './mirror.js';
 export * from './orders.js';
 export * from './integration.js';
+export * from './customer-registration.js';
 export * from './templates.js';
 export * from './media.js';

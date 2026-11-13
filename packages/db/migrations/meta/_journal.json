@@ -239,6 +239,13 @@
       "when": 1794406217491,
       "tag": "0033_erp_sales_history",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1794570743976,
+      "tag": "0034_customer_registration",
+      "breakpoints": true
     }
   ]
 }

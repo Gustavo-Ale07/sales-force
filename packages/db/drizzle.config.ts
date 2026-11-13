@@ -10,6 +10,7 @@ export default defineConfig({
     './src/schema/mirror.ts',
     './src/schema/orders.ts',
     './src/schema/integration.ts',
+    './src/schema/customer-registration.ts',
     './src/schema/templates.ts',
     './src/schema/media.ts',
   ],
