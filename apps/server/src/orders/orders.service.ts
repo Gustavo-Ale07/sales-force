@@ -16,6 +16,7 @@ import {
   customerOrderBlock,
   datasetOriginForConfigurationSource,
   discountAuthorityModeOf,
+  eligibleOrderTopCodesOf,
   isCustomerInScope,
   isOrderDeletable,
   isOrderEditable,
@@ -647,14 +648,14 @@ export class OrdersService {
     const context = await this.policy.accessContext(user);
     const { scope } = context;
     const order = await this.loadVisible(scope, id);
-    if (order.status === 'awaiting_approval') return this.detailOf(order);
+    if (order.status === 'awaiting_approval') return this.detailOf(order, false, context.configuration);
     if (order.status === 'approval_rejected') {
       throw new AppError('conflict', {
         message: 'Este pedido foi reprovado na aprovação de desconto. Edite o pedido antes de enviá-lo novamente.',
         details: { reason: 'edit_before_resubmitting' },
       });
     }
-    if (order.status === 'queued' && this.enqueueEnabled) return this.detailOf(order); // replay of the same click
+    if (order.status === 'queued' && this.enqueueEnabled) return this.detailOf(order, false, context.configuration); // replay of the same click
     // D-AA "Reenviar": a rejected delivery passes through every check of a first send (customer, authority, ERP binding).
     if (order.status !== 'draft' && order.status !== 'approved' && order.status !== 'rejected') throw new AppError('order_not_editable');
     if (order.status === 'rejected') {
@@ -699,6 +700,26 @@ export class OrdersService {
       throw new AppError('validation_failed', {
         message: blocks.some((block) => block.code === 'product_without_mobility') ? PRODUCT_WITHOUT_MOBILITY_MESSAGE : PRODUCT_WITHOUT_PRICE_MESSAGE,
         details: { issues: blocks.map((block) => ({ path: block.code === 'product_without_price' ? `items[${block.lineNo - 1}].priceState` : `items[${block.lineNo - 1}].productCode`, code: block.code })) },
+      });
+    }
+    // Security review MEDIUM-2 (P-08): the TOP and the negotiation type stored on the draft are revalidated against the
+    // CURRENT configuration; one that left the eligible set blocks sending and the draft is never changed.
+    const headerIssues: { path: string; code: string }[] = [];
+    if (order.topCode !== null && !eligibleOrderTopCodesOf(context.configuration.sales).includes(order.topCode)) {
+      headerIssues.push({ path: 'topCode', code: 'order_top_not_eligible' });
+    }
+    if (order.negotiationTypeCode !== null && !sellableNegotiationTypes(context.configuration.sales).some((type) => type.code === order.negotiationTypeCode)) {
+      headerIssues.push({ path: 'negotiationTypeCode', code: 'negotiation_type_not_configured' });
+    }
+    if (headerIssues.length > 0) {
+      await this.audit.record({
+        action: AUDIT_ACTIONS.orderSubmitAttempted,
+        actorAccountId: user.accountId,
+        detail: { ...this.auditDetail(order, 0), outcome: 'header_not_eligible', issues: headerIssues.length },
+      });
+      throw new AppError('validation_failed', {
+        message: 'O tipo de operação ou a condição de negociação deste pedido não está mais disponível. Edite o pedido antes de enviá-lo.',
+        details: { issues: headerIssues },
       });
     }
     // An approved order was released by an explicit approval of these very lines (an edit would have reset it).
@@ -952,7 +973,9 @@ export class OrdersService {
     );
   }
 
-  private async detailOf(order: OrderRow, showExpedicao = false): Promise<OrderDetail> {
+  private async detailOf(order: OrderRow, showExpedicao = false, loaded?: InstallationConfiguration): Promise<OrderDetail> {
+    // One configuration read per detail (LOW-3): the caller's, when it already has it.
+    const configuration = loaded ?? (await this.installation.current()).configuration;
     const [items, states, approval, lastDelivery, dryRun, convertedInto] = await Promise.all([
       this.orders.itemsOf(order.id),
       this.mirror.customerStates([order.customerCode]),
@@ -967,7 +990,7 @@ export class OrdersService {
     const state = states.get(order.customerCode);
     // D6b: names for the release events; read only when the order has any.
     const liberationEventLabels =
-      order.erpStatusDetail == null ? {} : ((await this.installation.current()).configuration.erp?.liberationEventLabels ?? {});
+      order.erpStatusDetail == null ? {} : (configuration.erp?.liberationEventLabels ?? {});
     const detail = toOrderDetail(order, items, {
       customerName: state?.name ?? null,
       customerActive: state?.active ?? null,
@@ -976,7 +999,7 @@ export class OrdersService {
       customerLive: state?.live ?? null,
     }, images, toOrderApproval(approval), liberationEventLabels, ipiLookup, showExpedicao, lastDelivery, dryRun, convertedInto);
     // Owner ruling 2026-11-13: lines that would block sending right now (derived, never stored).
-    const sendBlocks = await this.sendBlocksOf(order, (await this.installation.current()).configuration);
+    const sendBlocks = await this.sendBlocksOf(order, configuration);
     return sendBlocks.length === 0 ? detail : { ...detail, sendBlocks };
   }
 
