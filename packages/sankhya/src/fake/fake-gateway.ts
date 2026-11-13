@@ -1,5 +1,13 @@
-import type { InstallationConfiguration } from '@salesforce/domain';
+import { normalizeTaxDocument, parseCustomerOriginKey, type Customer, type InstallationConfiguration } from '@salesforce/domain';
 import { SankhyaGatewayError } from '../errors.js';
+import { isValidOriginField } from '../write/order-write-config.js';
+import type {
+  ErpPartnerRef,
+  PartnerCallOptions,
+  PartnerWriteRequest,
+  PartnerWriteResult,
+} from '../write/partner-contract.js';
+import { FakePartnerBook } from './fake-partner-book.js';
 import {
   assertBytesOptions,
   assertSignaturesOptions,
@@ -62,6 +70,8 @@ export interface FakeGatewayOptions {
   readonly media?: FakeGatewayMediaOptions;
   /** In-memory ERP order tables with scripted outcomes (SNK-7); a private empty book by default. */
   readonly orders?: FakeOrderBook;
+  /** In-memory ERP partner table with scripted outcomes (D-AR); a private empty book by default. */
+  readonly partners?: FakePartnerBook;
   /** Synthetic sales/return notes behind the sales-history reads; defaults to `buildDemoSalesNotes(dataset)`. */
   readonly salesNotes?: readonly DemoSalesNote[];
 }
@@ -93,6 +103,7 @@ export class FakeGateway implements SankhyaGateway {
   readonly #faults: readonly FakeGatewayFault[];
   readonly #media: FakeGatewayMediaOptions;
   readonly #orders: FakeOrderBook;
+  readonly #partners: FakePartnerBook;
   /** Built on first use: a small test dataset must still be able to construct the gateway when it never reads sales history. */
   #salesNotes: readonly DemoSalesNote[] | undefined;
 
@@ -108,6 +119,7 @@ export class FakeGateway implements SankhyaGateway {
     this.#faults = options.faults ?? [];
     this.#media = options.media ?? {};
     this.#orders = options.orders ?? new FakeOrderBook();
+    this.#partners = options.partners ?? new FakePartnerBook();
     this.#salesNotes = options.salesNotes;
   }
 
@@ -121,7 +133,7 @@ export class FakeGateway implements SankhyaGateway {
         reads,
         configurationSource: this.#configuration.source.kind,
         readMechanism: 'fixtures',
-        writes: { submitOrder: 'simulated' },
+        writes: { submitOrder: 'simulated', upsertPartner: 'simulated' },
       },
     };
   }
@@ -307,6 +319,53 @@ export class FakeGateway implements SankhyaGateway {
     return this.#order(options, () => this.#orders.read(erpOrderNumber));
   }
 
+  // ---- customer (partner) write (D-AR): in-memory, no network, scripted outcomes ---------------
+
+  upsertPartner(request: PartnerWriteRequest, options?: PartnerCallOptions): Promise<PartnerWriteResult> {
+    return this.#order(options, () => this.#partners.upsert(request, (document) => this.#demoHasDocument(document)));
+  }
+
+  findPartnerByOrigin(originField: string, originKey: string, options?: PartnerCallOptions): Promise<ErpPartnerRef | null> {
+    return this.#order(options, () => {
+      if (!isValidOriginField(originField)) throw invalidPartnerQuery('the origin field name is not valid');
+      if (parseCustomerOriginKey(originKey) === null) throw invalidPartnerQuery('the origin key is not a Force origin key');
+      return this.#partners.findByOrigin(originKey);
+    });
+  }
+
+  findPartnerByDocument(document: string, options?: PartnerCallOptions): Promise<ErpPartnerRef | null> {
+    return this.#order(options, () => {
+      const digits = normalizeTaxDocument(document);
+      const written = this.#partners.findByDocument(digits);
+      if (written !== null) return written;
+      const demo = this.#dataset.customers.find((c) => c.document !== null && normalizeTaxDocument(c.document) === digits);
+      return demo === undefined ? null : { code: demo.code, originKey: null, document: digits };
+    });
+  }
+
+  readWrittenPartner(code: number, options?: PartnerCallOptions): Promise<Customer | null> {
+    return this.#order(options, () => {
+      const stored = this.#partners.read(code);
+      if (stored === null) return this.#dataset.customers.find((c) => c.code === code) ?? null;
+      const r = stored.request;
+      return {
+        code: stored.code,
+        name: r.name,
+        tradeName: r.tradeName,
+        document: r.document,
+        active: true,
+        blocked: false,
+        sellerCode: r.sellerCode,
+        priceTableCode: r.priceTableCode,
+        creditLimit: null,
+      };
+    });
+  }
+
+  #demoHasDocument(document: string): boolean {
+    return this.#dataset.customers.some((c) => c.document !== null && normalizeTaxDocument(c.document) === document);
+  }
+
   #order<T>(options: OrderCallOptions | undefined, action: () => T): Promise<T> {
     try {
       options?.signal?.throwIfAborted();
@@ -337,4 +396,8 @@ export class FakeGateway implements SankhyaGateway {
       },
     };
   }
+}
+
+function invalidPartnerQuery(reason: string): SankhyaGatewayError {
+  return new SankhyaGatewayError('validation', { code: 'invalid_partner_query', message: `Partner lookup refused: ${reason}.` });
 }

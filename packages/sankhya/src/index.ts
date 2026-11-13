@@ -101,6 +101,14 @@ export { BUDGET_EXHAUSTED_CODE, budgetedTransport, DEFAULT_LIVE_REQUEST_BUDGET, 
 export { createFetchTransport, type HttpRequest, type HttpResponse, type HttpTransport } from './real/transport.js';
 export type { SankhyaCredentials } from './real/token-provider.js';
 export * from './write/order-contract.js';
+export * from './write/partner-contract.js';
+export {
+  FakePartnerBook,
+  type FakePartnerCall,
+  type FakePartnerOperation,
+  type FakePartnerOutcome,
+  type FakeStoredPartner,
+} from './fake/fake-partner-book.js';
 export {
   CONFIRMAR_NOTA_PATH,
   buildConfirmarNotaBody,

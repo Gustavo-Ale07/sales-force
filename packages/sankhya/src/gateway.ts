@@ -1,4 +1,5 @@
 import type { SankhyaOrderReadPort, SankhyaWritePort } from './write/order-contract.js';
+import type { SankhyaPartnerWritePort } from './write/partner-contract.js';
 import type {
   ConfigurationSourceKind,
   InstallationConfiguration,
@@ -78,7 +79,11 @@ export interface GatewayDescription {
      * `not_implemented` = no write path active (default; SNK-4 prerequisites V-11/V-13 open);
      * `sandbox_only` = real adapter in live write mode, Sandbox hosts only; `simulated` = the fake.
      */
-    readonly writes: { readonly submitOrder: 'not_implemented' | 'sandbox_only' | 'simulated' };
+    readonly writes: {
+      readonly submitOrder: 'not_implemented' | 'sandbox_only' | 'simulated';
+      /** Customer (partner) upsert, D-AR; same meaning of the three values. */
+      readonly upsertPartner: 'not_implemented' | 'sandbox_only' | 'simulated';
+    };
   };
 }
 
@@ -154,7 +159,12 @@ export interface SankhyaReadPort {
   readListPrices(options?: ReadOptions): Snapshot<ListPrice>;
 }
 
-export interface SankhyaGateway extends SankhyaReadPort, SankhyaProductMediaPort, SankhyaWritePort, SankhyaOrderReadPort {
+export interface SankhyaGateway
+  extends SankhyaReadPort,
+    SankhyaProductMediaPort,
+    SankhyaWritePort,
+    SankhyaPartnerWritePort,
+    SankhyaOrderReadPort {
   describe(): GatewayDescription;
 }
 

@@ -45,6 +45,13 @@ import {
   type Snapshot,
   ORDER_WRITE_NOT_ENABLED_MESSAGE,
 } from '../gateway.js';
+import {
+  PARTNER_WRITE_NOT_ENABLED_MESSAGE,
+  type ErpPartnerRef,
+  type PartnerCallOptions,
+  type PartnerWriteRequest,
+  type PartnerWriteResult,
+} from '../write/partner-contract.js';
 import { decimalFromCell } from '../decimal.js';
 import {
   validateSalesHistoryConfig,
@@ -211,7 +218,8 @@ export class RealSankhyaGateway implements SankhyaGateway {
         reads,
         configurationSource: this.#configurationSource instanceof UnavailableConfigurationSource ? null : this.#configurationSource.kind,
         readMechanism: 'sql_ordered_paging',
-        writes: { submitOrder: this.#orderWrite.mode === 'live' ? 'sandbox_only' : 'not_implemented' },
+        // The real partner mapper arrives in F6 and stays refused until the Sandbox write test (T3) passes.
+        writes: { submitOrder: this.#orderWrite.mode === 'live' ? 'sandbox_only' : 'not_implemented', upsertPartner: 'not_implemented' },
       },
     };
   }
@@ -586,6 +594,24 @@ export class RealSankhyaGateway implements SankhyaGateway {
     if (this.#orderWrite.mode !== 'live') throw new NotImplementedError(ORDER_WRITE_NOT_ENABLED_MESSAGE);
     const response = await this.#write(CONFIRMAR_NOTA_PATH, buildConfirmarNotaRequestText(erpOrderNumber), options?.signal);
     return parseConfirmarNotaResponse(response.status, response.body, parseRetryAfterMs(response.headers['retry-after']));
+  }
+
+  // ---- customer (partner) write (D-AR): refused without any network call until F6 + the Sandbox test ----
+
+  upsertPartner(_request: PartnerWriteRequest, _options?: PartnerCallOptions): Promise<PartnerWriteResult> {
+    return Promise.reject(new NotImplementedError(PARTNER_WRITE_NOT_ENABLED_MESSAGE));
+  }
+
+  findPartnerByOrigin(_originField: string, _originKey: string, _options?: PartnerCallOptions): Promise<ErpPartnerRef | null> {
+    return Promise.reject(new NotImplementedError(PARTNER_WRITE_NOT_ENABLED_MESSAGE));
+  }
+
+  findPartnerByDocument(_document: string, _options?: PartnerCallOptions): Promise<ErpPartnerRef | null> {
+    return Promise.reject(new NotImplementedError(PARTNER_WRITE_NOT_ENABLED_MESSAGE));
+  }
+
+  readWrittenPartner(_code: number, _options?: PartnerCallOptions): Promise<Customer | null> {
+    return Promise.reject(new NotImplementedError(PARTNER_WRITE_NOT_ENABLED_MESSAGE));
   }
 
   async findOrderByOrigin(originField: string, originId: string, options?: OrderCallOptions): Promise<ErpOrderRef | null> {

@@ -120,7 +120,7 @@ export function runGatewayContract(label: string, subject: ContractSubject): voi
       expect(pairs.size).toBeLessThan(versions.length * products.size);
     });
 
-    it('exposes no write method other than the order delivery pair (SNK-7)', () => {
+    it('exposes no write method other than the order delivery pair (SNK-7) and the customer upsert quartet (D-AR)', () => {
       const gateway = subject.create();
       const allowed = new Set<string>([
         'constructor',
@@ -148,6 +148,11 @@ export function runGatewayContract(label: string, subject: ContractSubject): voi
         'readWrittenOrder',
         'readOrderStatusFacts',
         'readOrderReleaseFacts',
+        // D-AR: the customer upsert quartet (write guarded by SANKHYA_CUSTOMER_WRITE_ENABLED in the worker).
+        'upsertPartner',
+        'findPartnerByOrigin',
+        'findPartnerByDocument',
+        'readWrittenPartner',
       ]);
       const names = new Set<string>();
       for (let proto: object | null = Object.getPrototypeOf(gateway); proto && proto !== Object.prototype; proto = Object.getPrototypeOf(proto)) {
