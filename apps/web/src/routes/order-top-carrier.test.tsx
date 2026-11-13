@@ -75,6 +75,22 @@ describe("TOP do pedido e transportadora (D-A, D-C)", () => {
     expect(callsTo(calls, "POST", "/orders")).toHaveLength(0);
   });
 
+  it("blocks the save when only the carrier is missing, pointing at it and sending nothing (F0)", async () => {
+    const { user, calls } = renderApp("/pedidos/novo?customer=1001", {
+      handlers: base({ "POST /orders": { status: 201, body: orderDetail({ id: NEW_ID }) } }),
+    });
+    expect(await screen.findByLabelText(/^Transportadora/)).toHaveValue("");
+    const negotiation = await screen.findByLabelText(/Tipo de negociação/);
+    await waitFor(() => expect(within(negotiation).getAllByRole("option").length).toBeGreaterThan(1));
+    await user.selectOptions(negotiation, "2");
+    await user.selectOptions(screen.getByLabelText(/^Frete/), "CIF");
+    await user.click(await screen.findByRole("button", { name: "Produtos" }));
+    await user.click(await screen.findByRole("button", { name: /^Adicionar .*Balão/ }));
+    await user.click(screen.getByRole("button", { name: "Confirmar pedido" }));
+    expect(await screen.findAllByText("Obrigatório")).toHaveLength(1);
+    expect(callsTo(calls, "POST", "/orders")).toHaveLength(0);
+  });
+
   it("explains an unknown carrier issue from the server", async () => {
     const { user } = renderApp("/pedidos/novo?customer=1001", {
       handlers: base({
