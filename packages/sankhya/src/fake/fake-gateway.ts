@@ -185,10 +185,12 @@ export class FakeGateway implements SankhyaGateway {
   readCustomers(options?: ReadOptions) {
     assertSafeScope(options?.scope);
     const rules = options?.scope?.customers;
-    if (rules === undefined) return this.#snapshot('customers', this.#dataset.customers, options);
+    // CODPARC 0 is the default partner, never a customer (owner ruling 2026-11-13); the real reader filters CODPARC > 0.
+    const realCustomers = this.#dataset.customers.filter((c) => c.code > 0);
+    if (rules === undefined) return this.#snapshot('customers', realCustomers, options);
     // Same rule as the real gateway. A fake partner is a customer by construction: CLIENTE defaults to 'S'.
     const tally: Record<string, number> = {};
-    const rows = this.#dataset.customers.filter((c) => {
+    const rows = realCustomers.filter((c) => {
       const exclusion = customerExclusion(
         c.active,
         (column) => c.sourceAttributes?.[column] ?? (column === 'CLIENTE' ? 'S' : null),

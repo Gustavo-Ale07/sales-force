@@ -97,6 +97,33 @@ describe('real gateway: customers under an eligibility rule', () => {
   });
 });
 
+/** Owner ruling 2026-11-13: CODPARC 0 is the default partner, never a customer, in every read path. */
+describe('partner code 0 is never a customer', () => {
+  const WITH_ZERO: ErpTables = { TGFPAR: [par(0, {}), par(1, {}), par(2, {})] };
+
+  it('real gateway, with an eligibility rule', async () => {
+    const { gateway, mock } = gatewayOver(WITH_ZERO);
+    mock.forced.push(ok(['COLUMN_NAME'], [['CODPARC'], ['CLIENTE'], ['CLASSIFICMS'], ['ATIVO']]));
+    const { rows } = await collect(gateway.readCustomers({ scope: { customers: RULES } }));
+    expect(rows.map((c) => c.code)).toEqual([1, 2]);
+  });
+
+  it('real gateway, without a rule', async () => {
+    const { gateway } = gatewayOver(WITH_ZERO);
+    const { rows } = await collect(gateway.readCustomers());
+    expect(rows.map((c) => c.code)).toEqual([1, 2]);
+  });
+
+  it.each([undefined, { customers: RULES }])('fake gateway, scope %j', async (scope) => {
+    const dataset = getDemoDataset();
+    const base: Customer = dataset.customers[0]!;
+    const customers: Customer[] = [0, -3, 1].map((code) => ({ ...base, code, active: true, sourceAttributes: { CLASSIFICMS: 'R' } }));
+    const gateway = new FakeGateway({ dataset: { ...dataset, customers } });
+    const { rows } = await collect(gateway.readCustomers(scope === undefined ? undefined : { scope }));
+    expect(rows.map((c) => c.code)).toEqual([1]);
+  });
+});
+
 describe('real gateway: carriers (D-V 5)', () => {
   it('reads active carriers only', async () => {
     const { gateway, mock } = gatewayOver({
