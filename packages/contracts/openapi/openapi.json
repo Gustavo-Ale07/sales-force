@@ -4318,7 +4318,7 @@
               {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 20,
+                "maxLength": 16,
                 "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]*$"
               },
               {
@@ -4331,9 +4331,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "minLength": 1,
-                "maxLength": 20,
-                "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]*$"
+                "pattern": "^\\d{1,13}$"
               },
               {
                 "type": "null"
@@ -4345,7 +4343,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "maxLength": 120,
+                "maxLength": 80,
                 "format": "email",
                 "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
               },
@@ -4360,7 +4358,7 @@
               {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 500,
+                "maxLength": 4000,
                 "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]*$"
               },
               {
@@ -4557,7 +4555,7 @@
           "number": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 10,
+            "maxLength": 6,
             "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]*$"
           },
           "complement": {
@@ -4566,7 +4564,7 @@
               {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 60,
+                "maxLength": 30,
                 "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]*$"
               },
               {

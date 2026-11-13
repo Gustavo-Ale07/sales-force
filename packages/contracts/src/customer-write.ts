@@ -4,8 +4,9 @@ import { UuidSchema, codeInt, named, sellerCodeInt } from './primitives.js';
 /**
  * Customer creation in the Force (D-AR). The customer is written to the ERP by the worker through
  * `integration_outbox`; the API only records the request and waits a bounded time for the confirmation.
- * Limits below are conservative upper bounds of the ERP columns and stay NEEDS VALIDATION until the
- * Sandbox write test (T3) confirms them.
+ * Limits below are the ERP column sizes read in the Sandbox (owner, 2026-11-13; see docs/implementation/customer-write-plan.md):
+ * name and trade name 100, document 14 digits, state registration 16, e-mail 80, phone 13 digits, postal code 8 digits,
+ * street number 6, complement 30, notes 4000. Over the limit is refused with a message, never cut.
  */
 
 /** CLASSIFICMS values the seller may pick (docs/implementation/customer-write-plan.md). `R` is the default. */
@@ -25,8 +26,8 @@ export const CustomerAddressInputSchema = named(
   z.strictObject({
     streetCode: codeInt(),
     neighborhoodCode: codeInt(),
-    number: text(10),
-    complement: text(60).nullable().default(null),
+    number: text(6),
+    complement: text(30).nullable().default(null),
     postalCode: z.string().regex(/^\d{8}$/, 'Expected 8 digits'),
   }),
 );
@@ -39,14 +40,14 @@ export const CreateCustomerRequestSchema = named(
     /** Idempotency key, unique per account. Its origin key `force:<id>` is what the ERP stores (SNK-4/SNK-5). */
     clientRequestId: UuidSchema,
     /** CPF or CNPJ, with or without punctuation; validity is checked by the domain. */
-    document: z.string().trim().min(11).max(18),
+    document: z.string().trim().min(11).max(18).refine((value) => value.replace(/\D/g, '').length <= 14, 'O CPF/CNPJ deve ter no máximo 14 dígitos.'),
     name: text(100),
     tradeName: text(100).nullable().default(null),
     icmsClassification: IcmsClassificationSchema.default('R'),
-    stateRegistration: text(20).nullable().default(null),
-    phone: text(20).nullable().default(null),
-    email: z.email().max(120).nullable().default(null),
-    notes: text(500).nullable().default(null),
+    stateRegistration: text(16).nullable().default(null),
+    phone: z.string().trim().regex(/^\d{1,13}$/, 'Telefone: somente dígitos, até 13.').nullable().default(null),
+    email: z.email().max(80).nullable().default(null),
+    notes: text(4000).nullable().default(null),
     addresses: z.array(CustomerAddressInputSchema).max(MAX_CUSTOMER_ADDRESSES).default([]),
     /** Manager/admin only: the seller that owns the customer. A seller always owns what they create. */
     sellerCode: sellerCodeInt().optional(),
