@@ -1,4 +1,5 @@
 import { cachedPriceTableCodes, customerPriceTableOf, isCacheReady, searchProducts, type OfflineEnv, type SqlDatabase } from "@salesforce/mobile-db";
+import { PriceTableNotDownloadedError, describeDataError } from "../data/errors";
 import type { ProductRepository, Repositories } from "../data/ports";
 import { fakeOrders } from "../test-doubles";
 import { createOfflineFirstRepositories } from "./offline-repositories";
@@ -45,10 +46,16 @@ describe("offline catalog per order customer's price table (owner 2026-11-13)", 
     for (const call of search.mock.calls) expect(call[1]).not.toHaveProperty("priceTableCode");
   });
 
-  it("a table that was never downloaded falls back to the base catalog (the server revalidates on send)", async () => {
+  it("a table that was never downloaded does NOT fall back to the base catalog: selection is blocked with the exact message (owner 2026-11-13)", async () => {
     tableOf.mockResolvedValue(77);
-    await products().list({ ...request, customerCode: 42 });
-    expect(search.mock.calls[0]?.[1]).not.toHaveProperty("priceTableCode");
+    const list = products().list({ ...request, customerCode: 42 });
+    await expect(list).rejects.toBeInstanceOf(PriceTableNotDownloadedError);
+    await expect(list).rejects.toThrow("Preços desta tabela ainda não foram baixados. Sincronize.");
+    expect(search).not.toHaveBeenCalled();
+  });
+
+  it("the block reaches the screen as a readable data error with that same message", () => {
+    expect(describeDataError(new PriceTableNotDownloadedError()).message).toBe("Preços desta tabela ainda não foram baixados. Sincronize.");
   });
 
   it("the customer code never reaches the SQL request", async () => {

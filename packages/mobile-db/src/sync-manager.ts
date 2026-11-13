@@ -21,11 +21,12 @@ export interface ReferenceSource {
   fetchCustomers(): Promise<readonly CustomerLike[]>;
   fetchProducts(): Promise<readonly ProductLike[]>;
   /**
-   * Prices of EACH price table the visible customers use (owner 2026-11-13), one representative customer per table (the server
-   * resolves a customer's table). Optional and best-effort: a table that cannot be read is simply left out (its previous prices
-   * stay); a failure here never fails the pull.
+   * Prices of EACH price table the visible customers use (owner 2026-11-13), read by table code from the bulk endpoint. `tables`
+   * are the ones read completely; `failed` the ones whose read failed in a way that may pass (their previous prices stay, only for
+   * the same account and dataset). A table in neither list is not served any more (dropped). An error that stops everything
+   * (no network, session) is THROWN and fails the pull, leaving the previous cache untouched: never swallowed into "no tables".
    */
-  fetchPriceTables?(representatives: readonly { readonly tableCode: number; readonly customerCode: number }[]): Promise<readonly PriceTableSnapshot[]>;
+  fetchPriceTables?(tableCodes: readonly number[]): Promise<PriceTablesFetch>;
   /** Order-entry configuration as the API delivers it (JSON-serializable); `null` when the server has none. */
   fetchEntryConfiguration(): Promise<unknown>;
   /** Dataset the server serves (`null` = the server cannot tell: fail closed, nothing is cached or sent). */
@@ -37,6 +38,11 @@ export interface ReferenceSource {
    * after it returns. Optional so a source without it just downloads. Throws `TransportError` when the server cannot be reached.
    */
   refreshOnDemand?(onProgress: (progress: RefreshProgress) => void): Promise<RefreshOutcome>;
+}
+
+export interface PriceTablesFetch {
+  readonly tables: readonly PriceTableSnapshot[];
+  readonly failed: readonly number[];
 }
 
 /** Friendly (pt-BR) label of the step the server is running; `percent` is null when unknown. */
@@ -67,6 +73,8 @@ export interface PullResult {
   /** Price tables kept on the device after this pull, and their price rows (size indicator). */
   readonly priceTables: number;
   readonly priceRows: number;
+  /** Tables whose read failed in this pull (previous prices kept only for the same account and dataset). */
+  readonly priceTablesFailed: readonly number[];
 }
 
 /**
@@ -80,19 +88,18 @@ export async function pullReferenceData(db: SqlDatabase, env: OfflineEnv, source
   const before = await source.fetchDatasetIdentity();
   if (before === null) throw new DatasetIdentityError();
   const [customers, products, configuration] = await Promise.all([source.fetchCustomers(), source.fetchProducts(), source.fetchEntryConfiguration()]);
-  // One representative customer per distinct price table (never for a customer without a table: those use the base catalog).
-  const representatives = new Map<number, number>();
+  // Each distinct price table the customers use (a customer without a table uses the base catalog).
+  const used = new Set<number>();
   for (const customer of customers) {
     const table = customer.priceTableCode;
-    if (table !== null && table !== undefined && !representatives.has(table)) representatives.set(table, customer.code);
+    if (table !== null && table !== undefined) used.add(table);
   }
   let priceTables: readonly PriceTableSnapshot[] = [];
-  if (source.fetchPriceTables !== undefined && representatives.size > 0) {
-    try {
-      priceTables = await source.fetchPriceTables([...representatives].map(([tableCode, customerCode]) => ({ tableCode, customerCode })));
-    } catch {
-      priceTables = [];
-    }
+  let failedTables: readonly number[] = [];
+  if (source.fetchPriceTables !== undefined && used.size > 0) {
+    const fetched = await source.fetchPriceTables([...used].sort((a, b) => a - b));
+    priceTables = fetched.tables;
+    failedTables = fetched.failed.filter((code) => used.has(code));
   }
   const after = await source.fetchDatasetIdentity();
   if (!sameDataset(before, after)) throw new DatasetIdentityError("O conjunto de dados do servidor mudou durante a atualização.");
@@ -116,9 +123,8 @@ export async function pullReferenceData(db: SqlDatabase, env: OfflineEnv, source
     // A customer confirmed by the ERP is replaced by its real mirror record (no duplicate in the list).
     await settleConfirmedCustomers(tx);
     await replaceProducts(tx, products);
-    // Tables still used by a customer but not read this time keep their previous prices; the rest are dropped.
-    const used = new Set(representatives.keys());
-    const keepTables = sameOwnerAndDataset ? (await cachedPriceTableCodes(tx)).filter((code) => used.has(code) && !priceTables.some((t) => t.tableCode === code)) : [];
+    // Tables whose read FAILED keep their previous prices (same account and dataset only); the rest not read are dropped.
+    const keepTables = sameOwnerAndDataset ? (await cachedPriceTableCodes(tx)).filter((code) => failedTables.includes(code) && !priceTables.some((t) => t.tableCode === code)) : [];
     await replacePriceTables(tx, priceTables.filter((t) => used.has(t.tableCode)), { keepTables });
     await setMeta(tx, META_KEYS.customersSyncedAt, now, now);
     await setMeta(tx, META_KEYS.productsSyncedAt, now, now);
@@ -130,7 +136,7 @@ export async function pullReferenceData(db: SqlDatabase, env: OfflineEnv, source
     await setMeta(tx, META_KEYS.cacheOwner, ownerAccountId, now);
   });
   const kept = await db.transaction(async (tx) => ({ tables: (await cachedPriceTableCodes(tx)).length, rows: await countPriceRows(tx) }));
-  return { customers: customers.length, products: products.length, priceTables: kept.tables, priceRows: kept.rows };
+  return { customers: customers.length, products: products.length, priceTables: kept.tables, priceRows: kept.rows, priceTablesFailed: failedTables };
 }
 
 /* ---------- sync manager ---------- */
@@ -148,6 +154,8 @@ export const SYNC_FAILURE_TEXT: Readonly<Record<SyncFailure, string>> = {
   auth: "Sua sessão expirou. Entre novamente para sincronizar.",
   error: "Erro ao sincronizar",
 };
+
+export const PRICE_TABLES_FAILED_TEXT = "Algumas tabelas de preço não foram baixadas. Sincronize novamente.";
 
 /** What the device can tell about its own internet (the OS check); the manager never probes by itself. */
 export type InternetState = "online" | "offline" | "unknown";
@@ -324,8 +332,10 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
               lastError = SYNC_FAILURE_TEXT.sankhya_unavailable;
             }
           }
-          await pullReferenceData(deps.db, deps.env, deps.source, deps.ownerAccountId);
+          const pulledData = await pullReferenceData(deps.db, deps.env, deps.source, deps.ownerAccountId);
           pulled = true;
+          // A price table that could not be read is never reported as a clean sync (its customers may be left without prices).
+          if (pulledData.priceTablesFailed.length > 0) setFailure(failureOf("error", "error", PRICE_TABLES_FAILED_TEXT));
           // Marked drafts: the cause may be gone with the new base; the ones released go out now.
           const released = await reevaluateHeldOrders(deps.db, deps.env, deps.ownerAccountId);
           if (released > 0) await pushOutbox(deps.db, deps.env, deps.transport, deps.ownerAccountId, { ...pushOptions, currentDataset: await readExpectedDataset(deps.db) });

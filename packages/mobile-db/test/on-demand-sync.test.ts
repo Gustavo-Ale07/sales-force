@@ -195,6 +195,17 @@ describe("sync on demand: refresh first, then download", () => {
   });
 });
 
+describe("price tables that failed are not a clean sync", () => {
+  it("a table that could not be read: the pull is applied but the run says so and does not store a success time", async () => {
+    const { source } = makeSource({ customers: [{ code: 1, name: "Novo", priceTableCode: 3 } as CustomerLike] });
+    const status = await manager({ ...source, fetchPriceTables: async () => ({ tables: [], failed: [3] }) }).sync("manual");
+    expect(await names()).toEqual(["Novo"]);
+    expect(status.failure).toBe("error");
+    expect(status.lastError).toBe("Algumas tabelas de preço não foram baixadas. Sincronize novamente.");
+    expect(status.lastSyncedAt).toBeNull();
+  });
+});
+
 describe("failures keep the previous base whole and say why", () => {
   const seed = async () => {
     const first = makeSource({ customers: [{ code: 1, name: "Antigo" }] });

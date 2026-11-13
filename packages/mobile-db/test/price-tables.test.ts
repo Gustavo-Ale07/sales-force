@@ -97,15 +97,15 @@ describe("pull stores the tables of the visible customers", () => {
     ...over,
   });
 
-  it("asks once per distinct table (a representative customer each), never for a customer without table", async () => {
+  it("asks once per distinct table code, never for a customer without table", async () => {
     const asked: number[][] = [];
     const result = await pullReferenceData(
       db,
       env,
       source({
-        fetchPriceTables: async (representatives) => {
-          asked.push(representatives.map((r) => r.tableCode));
-          return representatives.map((r) => ({ tableCode: r.tableCode, prices: [{ productCode: 1, listPrice: price(r.tableCode, "1.00") }] }));
+        fetchPriceTables: async (codes) => {
+          asked.push([...codes]);
+          return { tables: codes.map((code) => ({ tableCode: code, prices: [{ productCode: 1, listPrice: price(code, "1.00") }] })), failed: [] };
         },
       }),
       "acc",
@@ -121,10 +121,13 @@ describe("pull stores the tables of the visible customers", () => {
       env,
       source({
         fetchDatasetIdentity: async () => ({ environment: "staging", datasetId }),
-        fetchPriceTables: async () => [
-          { tableCode: 3, prices: [{ productCode: 1, listPrice: price(3, "8.00") }] },
-          { tableCode: 77, prices: [{ productCode: 1, listPrice: price(77, "1.00") }] },
-        ],
+        fetchPriceTables: async () => ({
+          tables: [
+            { tableCode: 3, prices: [{ productCode: 1, listPrice: price(3, "8.00") }] },
+            { tableCode: 77, prices: [{ productCode: 1, listPrice: price(77, "1.00") }] },
+          ],
+          failed: [],
+        }),
       }),
       owner,
     );
@@ -132,7 +135,7 @@ describe("pull stores the tables of the visible customers", () => {
 
   it("a table read by ANOTHER account is never kept for this one (price tables are not carried across owners)", async () => {
     await seedPreviousPull("acc-a");
-    await pullReferenceData(db, env, source({ fetchPriceTables: async () => [{ tableCode: 9, prices: [{ productCode: 2, listPrice: price(9, "18.00") }] }] }), "acc-b");
+    await pullReferenceData(db, env, source({ fetchPriceTables: async () => ({ tables: [{ tableCode: 9, prices: [{ productCode: 2, listPrice: price(9, "18.00") }] }], failed: [] }) }), "acc-b");
     expect(await db.transaction((tx) => cachedPriceTableCodes(tx))).toEqual([9]);
   });
 
@@ -141,21 +144,54 @@ describe("pull stores the tables of the visible customers", () => {
     await pullReferenceData(
       db,
       env,
-      source({ fetchDatasetIdentity: async () => ({ environment: "staging", datasetId: "d2" }), fetchPriceTables: async () => [{ tableCode: 9, prices: [{ productCode: 2, listPrice: price(9, "18.00") }] }] }),
+      source({ fetchDatasetIdentity: async () => ({ environment: "staging", datasetId: "d2" }), fetchPriceTables: async () => ({ tables: [{ tableCode: 9, prices: [{ productCode: 2, listPrice: price(9, "18.00") }] }], failed: [] }) }),
       "acc",
     );
     expect(await db.transaction((tx) => cachedPriceTableCodes(tx))).toEqual([9]);
   });
 
-  it("a table that could not be read keeps its previous prices; a table no customer uses any more is dropped", async () => {
+  it("a table whose read failed keeps its previous prices (same account and dataset) and is reported; a table no customer uses any more is dropped", async () => {
     await seedPreviousPull("acc");
-    await pullReferenceData(
+    const result = await pullReferenceData(
       db,
       env,
-      source({ fetchPriceTables: async () => [{ tableCode: 9, prices: [{ productCode: 2, listPrice: price(9, "18.00") }] }] }),
+      source({ fetchPriceTables: async () => ({ tables: [{ tableCode: 9, prices: [{ productCode: 2, listPrice: price(9, "18.00") }] }], failed: [3] }) }),
       "acc",
     );
     expect(await db.transaction((tx) => cachedPriceTableCodes(tx))).toEqual([3, 9]);
+    expect(await listing(3)).toEqual(["1:3:8.00"]);
+    expect(result.priceTablesFailed).toEqual([3]);
+  });
+
+  it("a failed table of ANOTHER account is not kept (nothing carried across owners)", async () => {
+    await seedPreviousPull("acc-a");
+    const result = await pullReferenceData(db, env, source({ fetchPriceTables: async () => ({ tables: [], failed: [3, 9] }) }), "acc-b");
+    expect(await db.transaction((tx) => cachedPriceTableCodes(tx))).toEqual([]);
+    expect(result.priceTablesFailed).toEqual([3, 9]);
+  });
+
+  it("a table the server no longer serves (neither read nor failed) is dropped, not kept", async () => {
+    await seedPreviousPull("acc");
+    await pullReferenceData(db, env, source({ fetchPriceTables: async () => ({ tables: [], failed: [] }) }), "acc");
+    expect(await db.transaction((tx) => cachedPriceTableCodes(tx))).toEqual([]);
+  });
+
+  it("an error of the price source is NOT swallowed into 'no tables': the pull fails and the previous cache stays", async () => {
+    await seedPreviousPull("acc");
+    await expect(
+      pullReferenceData(
+        db,
+        env,
+        source({
+          fetchPriceTables: async () => {
+            throw new Error("boom");
+          },
+        }),
+        "acc",
+      ),
+    ).rejects.toThrow("boom");
+    // (77 was never used by a customer, so the seed pull already dropped it.)
+    expect(await db.transaction((tx) => cachedPriceTableCodes(tx))).toEqual([3]);
     expect(await listing(3)).toEqual(["1:3:8.00"]);
   });
 

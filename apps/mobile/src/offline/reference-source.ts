@@ -38,7 +38,11 @@ export interface RefreshTiming {
   readonly timeoutMs?: number;
   readonly sleep?: (ms: number) => Promise<void>;
   readonly now?: () => number;
+  /** Page size of the price-table read (default and server maximum: 1000). */
+  readonly priceTablePageSize?: number;
 }
+
+const PRICE_TABLE_PAGE_SIZE = 1000;
 
 /** Friendly names of what the server refreshes (the seller's wording; no ERP names). */
 const ENTITY_LABEL: Readonly<Record<string, string>> = {
@@ -106,6 +110,22 @@ export function createReferenceSource(api: ApiClient, timing: RefreshTiming = {}
   const timeoutMs = timing.timeoutMs ?? 180_000;
   const sleep = timing.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const now = timing.now ?? Date.now;
+  const priceTablePageSize = timing.priceTablePageSize ?? PRICE_TABLE_PAGE_SIZE;
+  /**
+   * Reads ONE table page by page. The server may return fewer items than `pageSize` on a page (rows without a price are dropped
+   * after paging) while `total` still counts them, so the loop goes by page number, never by `items.length < pageSize`.
+   */
+  const fetchPriceTable = async (code: number): Promise<PriceTableSnapshot> => {
+    const prices: { productCode: number; listPrice: unknown }[] = [];
+    for (let page = 1; ; page += 1) {
+      const view = await callApi(() => api.GET("/price-tables/{code}/prices", { params: { path: { code }, query: { page, pageSize: priceTablePageSize } } }));
+      for (const item of view.items) {
+        prices.push({ productCode: item.productCode, listPrice: { state: "priced", unitPrice: item.unitPrice, tableCode: view.tableCode, versionId: view.versionId } });
+      }
+      if (view.items.length === 0 || page * priceTablePageSize >= view.total) break;
+    }
+    return { tableCode: code, prices };
+  };
   const guard = async <T>(work: () => Promise<T>): Promise<T> => {
     try {
       return await work();
@@ -152,27 +172,25 @@ export function createReferenceSource(api: ApiClient, timing: RefreshTiming = {}
             }>,
         ),
       ),
-    // The server resolves prices in the table of the customer it is given and lists only products priced above zero there (owner
-    // 2026-11-13). One representative customer per table; a table that cannot be read is left out (its previous prices stay).
-    fetchPriceTables: async (representatives) => {
+    // Bulk endpoint, one table at a time (owner 2026-11-13). 404 = the server does not serve this table (left out); 5xx and the
+    // like = this table failed (previous prices may stay); no network, session or rate limit stop everything and are THROWN.
+    fetchPriceTables: async (tableCodes) => {
       const tables: PriceTableSnapshot[] = [];
-      for (const { tableCode, customerCode } of representatives) {
+      const failed: number[] = [];
+      for (const code of tableCodes) {
         try {
-          const items = await fetchAllPages<ProductListItem>(
-            (page) =>
-              callApi(() => api.GET("/products", { params: { query: { page, pageSize: PAGE_SIZE, sort: "description", customerCode } } })) as Promise<{
-                items: readonly ProductListItem[];
-                total: number;
-              }>,
-          );
-          const prices = items.filter((p) => p.listPrice.state === "priced").map((p) => ({ productCode: p.code, listPrice: p.listPrice }));
-          tables.push({ tableCode, prices });
+          tables.push(await fetchPriceTable(code));
         } catch (error) {
-          // No connection: nothing else will answer either. Anything else (one table refused): try the next table.
-          if (error instanceof ApiRequestError && error.isNetwork) break;
+          const transport = toTransportError(error);
+          if (transport.kind === "not_found") continue;
+          if (transport.kind === "server") {
+            failed.push(code);
+            continue;
+          }
+          throw transport;
         }
       }
-      return tables;
+      return { tables, failed };
     },
     fetchEntryConfiguration: () => guard(() => callApi(() => api.GET("/order-entry/configuration"))),
     // Same endpoint the online carrier picker uses; the pull treats a failure here as non-fatal.

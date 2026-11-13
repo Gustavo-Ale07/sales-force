@@ -1,6 +1,19 @@
 import { ApiRequestError } from "./api";
 
-export type DataErrorKind = "offline" | "unauthenticated" | "forbidden" | "rate_limited" | "unavailable" | "unexpected";
+export type DataErrorKind = "offline" | "unauthenticated" | "forbidden" | "rate_limited" | "unavailable" | "unexpected" | "price_table_missing";
+
+export const PRICE_TABLE_NOT_DOWNLOADED_MESSAGE = "Preços desta tabela ainda não foram baixados. Sincronize.";
+
+/**
+ * The order customer's price table is not on this device. Product selection is blocked: the base catalog is never a substitute for
+ * a table's prices (owner 2026-11-13).
+ */
+export class PriceTableNotDownloadedError extends Error {
+  constructor() {
+    super(PRICE_TABLE_NOT_DOWNLOADED_MESSAGE);
+    this.name = "PriceTableNotDownloadedError";
+  }
+}
 
 export interface DataErrorInfo {
   readonly kind: DataErrorKind;
@@ -14,6 +27,7 @@ export interface DataErrorInfo {
  * explicitly instead of promising offline data that does not exist yet (MOB-2, spike S7 pending).
  */
 export function describeDataError(error: unknown): DataErrorInfo {
+  if (error instanceof PriceTableNotDownloadedError) return { kind: "price_table_missing", message: PRICE_TABLE_NOT_DOWNLOADED_MESSAGE };
   if (!(error instanceof ApiRequestError)) {
     return { kind: "unexpected", message: "Ocorreu um erro inesperado. Tente novamente." };
   }

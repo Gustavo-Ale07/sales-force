@@ -20,6 +20,7 @@ import {
   type SqlDatabase,
 } from "@salesforce/mobile-db";
 import { ApiRequestError } from "../data/api";
+import { PriceTableNotDownloadedError } from "../data/errors";
 import { toPendingListItem } from "./pending-customers";
 import { datasetIdentityOf } from "./reference-source";
 import type { Carrier, CustomerListItem, OrderEntryConfiguration, ProductListItem, Repositories } from "../data/ports";
@@ -76,10 +77,11 @@ export function createOfflineFirstRepositories(deps: {
       async list(request) {
         if (!(await cacheReady())) return remote.products.list(request);
         const { customerCode, ...local } = request;
-        // The order customer's table, when its prices are on this device; otherwise the base catalog (reference table).
+        // The order customer's table. A customer without a table uses the base catalog; a customer WITH a table whose prices are not
+        // on this device blocks product selection (never a fallback to the base catalog).
         const table = customerCode === undefined ? null : ((await customerPriceTableOf(db, customerCode)) ?? null);
-        const hasTable = table !== null && (await cachedPriceTableCodes(db)).includes(table);
-        const page = await searchProducts<ProductListItem>(db, hasTable ? { ...local, priceTableCode: table } : local);
+        if (table !== null && !(await cachedPriceTableCodes(db)).includes(table)) throw new PriceTableNotDownloadedError();
+        const page = await searchProducts<ProductListItem>(db, table !== null ? { ...local, priceTableCode: table } : local);
         return { items: page.items, page: page.page, pageSize: page.pageSize, total: page.total };
       },
       async groups() {
