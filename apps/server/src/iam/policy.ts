@@ -71,7 +71,8 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   // drafts. The second half is not written down anywhere: it follows from the scope rule and stays
   // pending owner ruling R35/R36 (who may act on behalf of whom).
   getDashboard: { roles: EVERY_ROLE },
-  listSellers: { roles: EVERY_ROLE },
+  // Owner ruling 2026-11-13: the seller directory is for manager and admin only; a seller never sees other sellers.
+  listSellers: { roles: ['manager', 'admin'] },
   listCustomers: { roles: EVERY_ROLE },
   getCustomer: { roles: EVERY_ROLE },
   // Read-only financial area (D-I): same roles and the same customer scope as getCustomer; the installation

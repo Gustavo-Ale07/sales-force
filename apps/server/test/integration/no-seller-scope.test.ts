@@ -69,7 +69,6 @@ describe.each([
     ['template create', 'POST', '/customers/1/order-templates', { ...body, name: 'x', items: [{ productCode: 1, quantity: '1' }] }],
     ['dashboard', 'GET', '/dashboard', undefined],
     ['repeat-last', 'POST', '/customers/1/orders/repeat-last', body],
-    ['sellers', 'GET', '/sellers', undefined],
     ['product image', 'GET', '/products/1/image', undefined],
   ];
 

@@ -33,7 +33,8 @@ const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>
   // Commercial routes (Stage 3A). The three roles that exist may use them; the external
   // representative role does not exist yet (AUTH-3 PROPOSED) and gets no grant until the owner decides.
   getDashboard: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  listSellers: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  // Owner ruling 2026-11-13: the seller list is for manager and admin only (a seller never learns other sellers' names or codes).
+  listSellers: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny' },
   listCustomers: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   getCustomer: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   getCustomerFinancial: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
