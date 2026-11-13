@@ -128,6 +128,28 @@ const HEADER_ISSUE_PATH = {
   missing_carrier: 'carrierCode',
 } as const;
 
+/** The TOP and the negotiation type stored on an order against the given configuration (security review MEDIUM-2 / LOW, P-08). */
+function headerEligibilityIssues(
+  order: { readonly topCode: number | null; readonly negotiationTypeCode: number | null },
+  configuration: InstallationConfiguration,
+): { path: string; code: string }[] {
+  const issues: { path: string; code: string }[] = [];
+  if (order.topCode !== null && !eligibleOrderTopCodesOf(configuration.sales).includes(order.topCode)) {
+    issues.push({ path: 'topCode', code: 'order_top_not_eligible' });
+  }
+  if (order.negotiationTypeCode !== null && !sellableNegotiationTypes(configuration.sales).some((type) => type.code === order.negotiationTypeCode)) {
+    issues.push({ path: 'negotiationTypeCode', code: 'negotiation_type_not_configured' });
+  }
+  return issues;
+}
+
+function headerNotEligibleError(issues: { path: string; code: string }[]): AppError {
+  return new AppError('validation_failed', {
+    message: 'O tipo de operação ou a condição de negociação deste pedido não está mais disponível. Edite o pedido antes de enviá-lo.',
+    details: { issues },
+  });
+}
+
 @Injectable()
 export class OrdersService {
   constructor(
@@ -705,23 +727,14 @@ export class OrdersService {
     }
     // Security review MEDIUM-2 (P-08): the TOP and the negotiation type stored on the draft are revalidated against the
     // CURRENT configuration; one that left the eligible set blocks sending and the draft is never changed.
-    const headerIssues: { path: string; code: string }[] = [];
-    if (order.topCode !== null && !eligibleOrderTopCodesOf(context.configuration.sales).includes(order.topCode)) {
-      headerIssues.push({ path: 'topCode', code: 'order_top_not_eligible' });
-    }
-    if (order.negotiationTypeCode !== null && !sellableNegotiationTypes(context.configuration.sales).some((type) => type.code === order.negotiationTypeCode)) {
-      headerIssues.push({ path: 'negotiationTypeCode', code: 'negotiation_type_not_configured' });
-    }
+    const headerIssues = headerEligibilityIssues(order, context.configuration);
     if (headerIssues.length > 0) {
       await this.audit.record({
         action: AUDIT_ACTIONS.orderSubmitAttempted,
         actorAccountId: user.accountId,
         detail: { ...this.auditDetail(order, 0), outcome: 'header_not_eligible', issues: headerIssues.length },
       });
-      throw new AppError('validation_failed', {
-        message: 'O tipo de operação ou a condição de negociação deste pedido não está mais disponível. Edite o pedido antes de enviá-lo.',
-        details: { issues: headerIssues },
-      });
+      throw headerNotEligibleError(headerIssues);
     }
     // An approved order was released by an explicit approval of these very lines (an edit would have reset it).
     // Discount authority is a Sales Force rule only in `force` mode (D-M). In `erp` mode (default) the ERP decides
@@ -801,6 +814,10 @@ export class OrdersService {
       if (locked.status !== 'draft' && locked.status !== 'approved' && locked.status !== 'rejected') throw new AppError('order_not_editable');
       if (locked.version !== seen.version) throw new AppError('version_conflict', { details: { currentVersion: locked.version } });
       assertEligibleForErpSubmission(locked, { environment: this.dataset?.environment ?? '' });
+      // Security review LOW (P-08): the configuration may have changed since the request snapshot; the header binding of the
+      // LOCKED row is checked again against the configuration as it is now (read right here, never the stale snapshot).
+      const headerIssues = headerEligibilityIssues(locked, (await this.installation.current()).configuration);
+      if (headerIssues.length > 0) throw headerNotEligibleError(headerIssues);
       const items = await this.orders.itemsOf(locked.id, tx);
       const issues = [
         // Mandatory header (owner ruling 2026-11-12): TOP, negotiation, freight and carrier; the same rule the site and the app apply.
