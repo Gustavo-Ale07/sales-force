@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- tests patch deliberately malformed facts */
 import { PLAC_CONFIGURATION_FACTS, type ConfigurationFacts, type EnabledTopRow } from '@salesforce/sankhya';
 import { describe, expect, it } from 'vitest';
+import { toOrderEntryConfiguration } from '../../src/configuration/configuration-summary.js';
 import { overlayConfigurationFacts } from '../../src/configuration/sankhya-overlay.js';
 import { baseConfiguration } from '../helpers/overlay-base.js';
 
@@ -82,5 +83,20 @@ describe('AD_MOBILIDADE on TOPs and negotiation types (owner ruling 2026-11-13)'
     const warning = out.warnings.find((w) => w.code === 'default_top_not_enabled');
     expect(warning?.message).toMatch(/avise o TI/i);
     expect(warning?.message).toContain('1001');
+  });
+
+  it('what leaves the server in the order-entry configuration is already filtered: no hidden TOP, no hidden negotiation type (D)', () => {
+    const out = run((f) => {
+      (f['q3EnabledTops'].rows as EnabledTopRow[]).find((t) => t.topCode === 1000)!.mobile = false;
+      f['q5NegotiationTypes'].rows[0].mobile = false;
+    });
+    const entry = toOrderEntryConfiguration(out.snapshot, null);
+    expect(entry.sales.orderTops.eligibleTopCodes).not.toContain(1000);
+    expect(entry.sales.orderTops.eligibleTopCodes).toContain(1001);
+    expect(entry.sales.negotiationTypes.map((type) => type.code)).not.toContain(1);
+    expect(entry.sales.negotiationTypes.length).toBeGreaterThan(0);
+    // The default is one of the offered types or absent, never a hidden one.
+    const offered = entry.sales.negotiationTypes.map((type) => type.code);
+    expect(entry.sales.defaultNegotiationTypeCode === null || offered.includes(entry.sales.defaultNegotiationTypeCode)).toBe(true);
   });
 });
