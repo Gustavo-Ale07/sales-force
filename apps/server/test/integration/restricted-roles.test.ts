@@ -105,7 +105,8 @@ beforeAll(async () => {
 
   mirror = new MirrorSyncService({
     db: workerDb,
-    gateway: new FakeGateway({ batchSize: 50 }),
+    // The mobility gate (AD_MOBILIDADE = S) is unconditional, so the demo products are marked mobile-enabled.
+    gateway: new FakeGateway({ batchSize: 50, dataset: { ...getDemoDataset(), products: getDemoDataset().products.map((product) => ({ ...product, mobilityCode: 'S' })) } }),
     logger,
     now: () => new Date(),
     readScope: () => loadCurrentReadScope(workerDb.db),

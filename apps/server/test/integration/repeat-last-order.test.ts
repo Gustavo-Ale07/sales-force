@@ -294,7 +294,12 @@ describe('repeat last order: a new independent draft from the customer\'s most r
       try {
         const retry = await repeatLast('seller1', customer1, clientRequestId);
         expect(retry.status).toBe(200);
-        expect(retry.body).toEqual(first.body);
+        // Same draft; only its live send blocks reflect the catalog now (owner ruling 2026-11-13, H: an inactive product is blocked).
+        const { sendBlocks: retryBlocks, ...retryOrder } = retry.body.order;
+        const { sendBlocks: _firstBlocks, ...firstOrder } = first.body.order;
+        expect(retryOrder).toEqual(firstOrder);
+        expect(retry.body.skippedLines).toEqual(first.body.skippedLines);
+        expect(retryBlocks.map((block: { code: string }) => block.code)).toEqual(['product_inactive']);
         expect(retry.body.order.id).toBe(first.body.order.id);
         expect(await ctx.database.handle.db.select().from(salesOrder).where(eq(salesOrder.clientRequestId, clientRequestId))).toHaveLength(1);
       } finally {
