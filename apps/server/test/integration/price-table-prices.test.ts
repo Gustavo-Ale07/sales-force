@@ -11,6 +11,7 @@ import { closeAllThenStop, startPostgres, type TestPostgres } from '../helpers/p
 let postgres: TestPostgres;
 const opened: (() => Promise<unknown>)[] = [];
 let ctx: CommercialApp;
+const pool = () => ctx.database.handle.pool;
 
 beforeAll(async () => {
   postgres = await startPostgres();
@@ -66,6 +67,25 @@ describe('GET /price-tables/{code}/prices', () => {
       expect(product.listPrice.state).toBe('priced');
       expect(byCode.get(product.code)).toBe(product.listPrice.unitPrice);
     }
+  });
+
+  it('unpriced and zero-price products are excluded by the query: every page but the last is full and total counts only priced rows', async () => {
+    const pageSize = 3;
+    const all = await pages('seller1', DEMO_MAIN_TABLE_CODE, 100);
+    const total = all.first.total as number;
+    // The mirror holds products without a price or with a zero price that the table must not count.
+    const rows = await pool().query<{ n: number }>('select count(*)::int as n from erp_product where deleted_at is null');
+    expect(rows.rows[0]!.n).toBeGreaterThan(total);
+    const seen: number[] = [];
+    const pageCount = Math.ceil(total / pageSize);
+    for (let page = 1; page <= pageCount; page += 1) {
+      const response = await ctx.call('seller1', 'GET', `/price-tables/${DEMO_MAIN_TABLE_CODE}/prices?page=${page}&pageSize=${pageSize}`);
+      expect(response.body.total).toBe(total);
+      expect(response.body.items.length).toBe(page < pageCount ? pageSize : total - pageSize * (pageCount - 1));
+      seen.push(...(response.body.items as Json[]).map((item) => item.productCode as number));
+    }
+    expect(seen).toEqual(all.items.map((item) => item.productCode as number));
+    expect((await ctx.call('seller1', 'GET', `/price-tables/${DEMO_MAIN_TABLE_CODE}/prices?page=${pageCount + 1}&pageSize=${pageSize}`)).body.items).toEqual([]);
   });
 
   it('a table the installation does not use on the mobile, a missing one and a malformed code are all refused alike', async () => {
