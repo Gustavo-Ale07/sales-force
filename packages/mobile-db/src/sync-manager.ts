@@ -3,6 +3,13 @@ import { DatasetIdentityError, confirmDataset, readExpectedDataset, sameDataset,
 import { countOutbox } from "./local-orders";
 import { isoNow, type OfflineEnv } from "./offline-env";
 import { pushOutbox, recoverInterrupted, TransportError, type OrderTransport, type PushOptions } from "./order-sync";
+import {
+  countPendingCustomers,
+  pushPendingCustomers,
+  recoverInterruptedCustomers,
+  settleConfirmedCustomers,
+  type CustomerRegistrationTransport,
+} from "./pending-customers";
 import { META_KEYS, deleteMeta, getMeta, replaceCustomers, replaceProducts, setMeta, type CustomerLike, type ProductLike } from "./reference-cache";
 
 /**
@@ -53,6 +60,8 @@ export async function pullReferenceData(db: SqlDatabase, env: OfflineEnv, source
     await writeCacheDataset(tx, before, now);
     await confirmDataset(tx, before, now);
     await replaceCustomers(tx, customers);
+    // A customer confirmed by the ERP is replaced by its real mirror record (no duplicate in the list).
+    await settleConfirmedCustomers(tx);
     await replaceProducts(tx, products);
     await setMeta(tx, META_KEYS.customersSyncedAt, now, now);
     await setMeta(tx, META_KEYS.productsSyncedAt, now, now);
@@ -85,6 +94,8 @@ export interface SyncManagerDeps {
   readonly db: SqlDatabase;
   readonly env: OfflineEnv;
   readonly transport: OrderTransport;
+  /** Delivery of customers created in the app (F7). Absent = none are sent (they stay queued on the device). */
+  readonly customerTransport?: CustomerRegistrationTransport;
   readonly source: ReferenceSource;
   readonly ownerAccountId: string;
   /** Called with unexpected (non-transport) errors, for logging. */
@@ -121,8 +132,10 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
   };
 
   const counters = async (): Promise<{ pending: number; needsAttention: number }> => {
-    const counts = await countOutbox(deps.db, deps.ownerAccountId, await readExpectedDataset(deps.db));
-    return { pending: counts.pending + counts.sending, needsAttention: counts.needsAttention };
+    const dataset = await readExpectedDataset(deps.db);
+    const counts = await countOutbox(deps.db, deps.ownerAccountId, dataset);
+    const customers = await countPendingCustomers(deps.db, deps.ownerAccountId, dataset);
+    return { pending: counts.pending + counts.sending + customers.pending, needsAttention: counts.needsAttention + customers.needsAttention };
   };
 
   const run = async (reason: SyncReason, pull: boolean): Promise<SyncStatus> => {
@@ -131,6 +144,7 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
     let lastError: string | null = null;
     try {
       await recoverInterrupted(deps.db, deps.env);
+      await recoverInterruptedCustomers(deps.db, deps.env);
       // Confirm the dataset with the server before anything is sent (only when there is something to send or to pull).
       let confirmed = true;
       if (pull || (await counters()).pending > 0) {
@@ -155,9 +169,23 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
         currentDataset: await readExpectedDataset(deps.db),
         ...(deps.onUnexpectedError === undefined ? {} : { onUnexpectedError: deps.onUnexpectedError }),
       };
-      const pushed = confirmed
-        ? await pushOutbox(deps.db, deps.env, deps.transport, deps.ownerAccountId, pushOptions)
-        : { attempted: 0, accepted: 0, failed: 0, stoppedBy: "idle" as const };
+      // Customers first: a confirmation re-points drafts before their orders are sent. A dead network or session stops the whole run.
+      let customerStop: "offline" | "auth" | null = null;
+      if (confirmed && deps.customerTransport !== undefined) {
+        const sentCustomers = await pushPendingCustomers(deps.db, deps.env, deps.customerTransport, deps.ownerAccountId, {
+          currentDataset: pushOptions.currentDataset ?? null,
+          respectBackoff: pushOptions.respectBackoff ?? true,
+          ...(deps.onUnexpectedError === undefined ? {} : { onUnexpectedError: deps.onUnexpectedError }),
+        });
+        // A refused customer is not a sync error: it shows as "needs attention" through the counters.
+        if (sentCustomers.stoppedBy === "offline" || sentCustomers.stoppedBy === "auth") customerStop = sentCustomers.stoppedBy;
+      }
+      const pushed =
+        customerStop !== null
+          ? { attempted: 0, accepted: 0, failed: 0, stoppedBy: customerStop }
+          : confirmed
+            ? await pushOutbox(deps.db, deps.env, deps.transport, deps.ownerAccountId, pushOptions)
+            : { attempted: 0, accepted: 0, failed: 0, stoppedBy: "idle" as const };
       if (!confirmed) {
         // phase/lastError already set by the failed confirmation
       } else if (pushed.stoppedBy === "dataset_unconfirmed") {

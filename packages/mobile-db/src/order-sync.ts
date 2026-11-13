@@ -16,6 +16,7 @@ import {
 } from "./local-orders";
 import { DatasetUnavailableError, classifyEligibility, ineligibleMessage, readExpectedDataset, sameDataset, type DatasetIdentity, type IneligibleReason } from "./dataset-identity";
 import { isoNow, type OfflineEnv } from "./offline-env";
+import { pendingCustomerBlockOf } from "./pending-customer-guard";
 import { customerBlockOf } from "./reference-cache";
 
 /**
@@ -74,7 +75,9 @@ export type TransportErrorKind =
   | "not_found"
   | "dataset_mismatch"
   /** The server refused because the customer is no longer eligible (inactive, blocked, unavailable). */
-  | "customer_ineligible";
+  | "customer_ineligible"
+  /** The server definitively refused to register a customer (`reason`: `document_already_registered`, `customer_rejected`). */
+  | "registration_refused";
 
 export class TransportError extends Error {
   constructor(
@@ -116,6 +119,7 @@ export function classifyFailure(kind: TransportErrorKind): FailureClass {
     case "idempotency_conflict":
     case "not_found":
     case "customer_ineligible":
+    case "registration_refused":
       return "permanent";
     case "dataset_mismatch":
       return "dataset";
@@ -153,6 +157,8 @@ export function describeFailure(error: TransportError): string {
       return ineligibleMessage("dataset_mismatch");
     case "customer_ineligible":
       return customerBlockMessage(error.reason);
+    case "registration_refused":
+      return "O servidor recusou o cadastro do cliente.";
     case "validation":
       return error.message !== "" ? error.message : "O servidor recusou este pedido. Revise os dados.";
   }
@@ -532,7 +538,8 @@ export async function pushOutbox(
     // CUSTOMER GUARD (indicative; the server stays authoritative): a customer the cache says is inactive or blocked is
     // not sent to. The command is kept untouched (same key, same payload, zero attempts) and re-evaluated on every run,
     // so it goes out by itself if the customer becomes available again. Nothing is converted, rewritten or deleted.
-    const customerBlock = await customerBlockOf(db, draft.customerCode);
+    // A customer the ERP has not confirmed yet (local code, or confirmed but not yet in the mirror) is held the same way.
+    const customerBlock = (await pendingCustomerBlockOf(db, draft.customerCode)) ?? (await customerBlockOf(db, draft.customerCode));
     if (customerBlock !== null) {
       await holdForCustomer(db, env, draft.localId, customerBlock);
       heldDrafts.add(draft.localId);

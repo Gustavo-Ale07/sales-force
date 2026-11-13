@@ -7,6 +7,7 @@ import {
   sameDataset,
   getMeta,
   isoNow,
+  listPendingCustomers,
   customerLetters,
   customerSellers,
   searchCustomers,
@@ -17,6 +18,7 @@ import {
   type SqlDatabase,
 } from "@salesforce/mobile-db";
 import { ApiRequestError } from "../data/api";
+import { toPendingListItem } from "./pending-customers";
 import { datasetIdentityOf } from "./reference-source";
 import type { Carrier, CustomerListItem, OrderEntryConfiguration, ProductListItem, Repositories } from "../data/ports";
 
@@ -44,9 +46,18 @@ export function createOfflineFirstRepositories(deps: {
         const page = await searchCustomers<CustomerListItem>(db, request);
         // With a jump (startAt) the total is what is left from that row on, so "has more" stays truthful.
         const total = Math.max(0, page.total - Math.max(0, request.startAt ?? 0));
-        return { items: page.items, page: page.page, pageSize: page.pageSize, total };
+        // Customers created on this device and not yet mirrored come first on page 1, at once, without waiting for a
+        // sync. They have no seller or price table, so a seller / price-table filter excludes them.
+        const filters = request.filters;
+        const wantsPending = (request.startAt ?? 0) === 0 && filters?.sellerCode === undefined && filters?.hasPriceTable === undefined;
+        if (!wantsPending) return { items: page.items, page: page.page, pageSize: page.pageSize, total };
+        const pending = (await listPendingCustomers(db, ownerAccountId, await readExpectedDataset(db), request.search)).map(toPendingListItem);
+        const items = request.page <= 1 ? [...pending, ...page.items] : page.items;
+        return { items, page: page.page, pageSize: page.pageSize, total: total + pending.length };
       },
       async get(code) {
+        // A local customer has no server detail; the sheet is built from the list item.
+        if (code < 0) throw new Error("Customer detail is not available for a pending customer");
         if (remote.customers.get === undefined) throw new Error("Customer detail is not available");
         return remote.customers.get(code);
       },

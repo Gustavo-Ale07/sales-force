@@ -1,7 +1,17 @@
 import type { ApiSchema } from "@salesforce/contracts/client";
 
 /** Wire shapes: the generated OpenAPI types are the source of truth for what the API returns (STACK-4). */
-export type CustomerListItem = ApiSchema<"CustomerListItem">;
+export type CustomerListItem = ApiSchema<"CustomerListItem"> & {
+  /**
+   * Present only on a customer created on this device that the ERP has not mirrored yet (F7). Its `code` is a negative
+   * local one; it has no seller, price table or credit data. Never delivered by the API.
+   */
+  readonly pending?: {
+    readonly clientRequestId: string;
+    readonly state: "queued" | "sending" | "awaiting_erp" | "confirmed" | "rejected";
+    readonly rejectionReason: string | null;
+  };
+};
 /**
  * List price as the typed client delivers it. openapi-fetch's `Readable` helper drops properties typed exactly
  * `null` (`noPriceReason` on priced/zero, `unitPrice` on none), so response types lack them although the server

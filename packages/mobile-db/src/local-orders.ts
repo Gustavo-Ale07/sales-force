@@ -11,6 +11,7 @@ import {
   type IneligibleReason,
 } from "./dataset-identity";
 import { isoNow, type OfflineEnv } from "./offline-env";
+import { PENDING_CUSTOMER_MESSAGE, PendingCustomerOrderError, pendingCustomerBlockOf } from "./pending-customer-guard";
 
 /**
  * Local order drafts and the outbox commands that carry them to the server.
@@ -31,7 +32,7 @@ import { isoNow, type OfflineEnv } from "./offline-env";
 export const CUSTOMER_UNAVAILABLE_MESSAGE = "Cliente indisponível — revise o rascunho";
 
 /** Why a customer cannot receive the order (same vocabulary as the domain `customerOrderBlock` and the server `details.reason`). */
-export type CustomerBlockReason = "customer_unavailable" | "customer_inactive" | "customer_blocked" | "customer_without_seller";
+export type CustomerBlockReason = "customer_unavailable" | "customer_inactive" | "customer_blocked" | "customer_without_seller" | "customer_pending";
 
 /** One seller-facing text per cause (owner-approved 2026-11-12). They are the stored `lastError`, so each one is also a marker. */
 export const CUSTOMER_BLOCK_MESSAGES: Readonly<Record<CustomerBlockReason, string>> = {
@@ -39,6 +40,7 @@ export const CUSTOMER_BLOCK_MESSAGES: Readonly<Record<CustomerBlockReason, strin
   customer_inactive: "Este cliente está inativo no ERP.",
   customer_blocked: "Este cliente está bloqueado no ERP.",
   customer_without_seller: "Este cliente não tem vendedor vinculado. Peça ao backoffice para vincular um vendedor.",
+  customer_pending: PENDING_CUSTOMER_MESSAGE,
 };
 
 /** The text for a cause; an unknown or missing cause gets the neutral "unavailable" text, never a wrong specific one. */
@@ -519,6 +521,8 @@ export class DraftNotEditableError extends Error {
  */
 export async function saveOrderDraft(db: SqlDatabase, env: OfflineEnv, input: SaveDraftInput): Promise<string> {
   return db.transaction(async (tx) => {
+    // A customer the ERP has not confirmed yet cannot receive an order (customer-write plan A2): nothing is saved.
+    if ((await pendingCustomerBlockOf(tx, input.customerCode)) !== null) throw new PendingCustomerOrderError();
     const now = isoNow(env);
     const payload = buildPayload(input);
 

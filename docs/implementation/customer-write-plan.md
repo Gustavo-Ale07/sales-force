@@ -57,7 +57,7 @@ As fatias **sem** B6 podem andar já (F0–F5, F7, F9), sempre com o duplo do Sa
 | F9 | Mobile+API: edição (Editar na ficha) com confirmação de conflito | F5–F7 |
 | F10 | (Opcional) consulta de CNPJ por API pública atrás de flag | — |
 
-**Estado (2026-11-13):** F0, F2, F3, F4, F5 e F6 feitas e commitadas (F6 = `75ace01`); F7, F8, F9, F10 pendentes.
+**Estado (2026-11-13):** F0, F2, F3, F4, F5, F6 e F7 feitas e commitadas (F6 = `75ace01`); F8, F9, F10 pendentes. F7: cliente pendente em `pending_customer` (migração v7), código local negativo, pedido bloqueado no seletor, em `saveOrderDraft` e em `pushOutbox`.
 
 Dívida técnica registrada (dono aceitou por ora): `mirrorHasDocument` varre `erp_customer` sem índice (~6 mil linhas). Quando crescer, migração **aditiva** com índice sobre o documento (`tax_id`, parcial para `deleted_at is null`), criado `CONCURRENTLY`.
 

@@ -15,6 +15,8 @@ export * from "./local-orders";
 export * from "./sales-query";
 export * from "./order-sync";
 export * from "./sync-manager";
+export * from "./pending-customer-guard";
+export * from "./pending-customers";
 
 export type LocalStorageStatus = { readonly available: true };
 

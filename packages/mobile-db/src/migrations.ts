@@ -142,4 +142,37 @@ export const migrations: readonly Migration[] = [
     name: "order_freight_type",
     statements: [`ALTER TABLE local_order_draft ADD COLUMN freight_type TEXT`],
   },
+  {
+    // Customers created in the app that the ERP has not confirmed yet (customer-write plan A2, F7). Expand-only: one new table,
+    // nothing existing is touched. `seq` gives the negative local customer code (-seq) and is never reused (AUTOINCREMENT).
+    // `client_request_id` is the local id AND the idempotency key of `POST /customers`, reused verbatim on every retry (SNK-4).
+    // `payload` is the request the seller typed (kept intact on a refusal); no credit limit, price table or status exists here (P-20).
+    version: 7,
+    name: "pending_customer",
+    statements: [
+      `CREATE TABLE pending_customer (
+        seq                 INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_request_id   TEXT NOT NULL UNIQUE,
+        owner_account_id    TEXT NOT NULL,
+        name                TEXT NOT NULL,
+        search_text         TEXT NOT NULL,
+        document            TEXT NOT NULL,
+        payload             TEXT NOT NULL,
+        state               TEXT NOT NULL DEFAULT 'queued'
+                            CHECK (state IN ('queued', 'sending', 'awaiting_erp', 'confirmed', 'rejected')),
+        registration_id     TEXT,
+        customer_code       INTEGER,
+        rejection_reason    TEXT,
+        last_error          TEXT,
+        attempts            INTEGER NOT NULL DEFAULT 0,
+        next_attempt_at     TEXT,
+        dataset_environment TEXT NOT NULL,
+        dataset_id          TEXT NOT NULL,
+        created_at          TEXT NOT NULL,
+        updated_at          TEXT NOT NULL
+      ) STRICT`,
+      `CREATE INDEX pending_customer_owner_state_idx ON pending_customer (owner_account_id, state)`,
+      `CREATE INDEX pending_customer_code_idx ON pending_customer (customer_code)`,
+    ],
+  },
 ];

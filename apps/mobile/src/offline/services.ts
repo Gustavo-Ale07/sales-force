@@ -7,7 +7,9 @@ import type { ProductImageStore } from "../images/image-store";
 import { createAccountProductImages } from "../images/product-images";
 import { newClientRequestId } from "../lib/uuid";
 import { createLocalOrdersPort, type LocalOrdersPort } from "./local-orders";
+import { createCustomerTransport } from "./customer-transport";
 import { createOfflineFirstRepositories } from "./offline-repositories";
+import { createPendingCustomersPort, type PendingCustomersPort } from "./pending-customers";
 import { createReferenceSource } from "./reference-source";
 import { createOfflineSessionStore, type OfflineSessionStore } from "./session";
 import { createOrderTransport } from "./transport";
@@ -16,6 +18,8 @@ import { createOrderTransport } from "./transport";
 export interface AccountServices {
   readonly repositories: Repositories;
   readonly localOrders: LocalOrdersPort;
+  /** Customers created on this device and waiting for the ERP (F7). */
+  readonly pendingCustomers: PendingCustomersPort;
   readonly sync: SyncManager;
   /** Authenticated, bounded thumbnail files of this account (absent when the build has no image file system). */
   readonly productImages?: ProductImageStore;
@@ -36,6 +40,7 @@ export function createOfflineServices(deps: {
 }): OfflineServices {
   const env: OfflineEnv = deps.env ?? { now: () => new Date(), newId: newClientRequestId };
   const transport = createOrderTransport(deps.api);
+  const customerTransport = createCustomerTransport(deps.api);
   const source = createReferenceSource(deps.api);
   const managers = new Map<string, AccountServices>();
 
@@ -48,6 +53,7 @@ export function createOfflineServices(deps: {
         db: deps.db,
         env,
         transport,
+        customerTransport,
         source,
         ownerAccountId: account.id,
         ...(deps.onUnexpectedError === undefined ? {} : { onUnexpectedError: deps.onUnexpectedError }),
@@ -63,6 +69,14 @@ export function createOfflineServices(deps: {
           onChanged: () => {
             // Counters only. Delivery is triggered by the sync hook when the device is online, so an offline save
             // never burns a delivery attempt (an attempted create is frozen).
+            void sync.refresh();
+          },
+        }),
+        pendingCustomers: createPendingCustomersPort({
+          db: deps.db,
+          env,
+          ownerAccountId: account.id,
+          onChanged: () => {
             void sync.refresh();
           },
         }),

@@ -44,6 +44,7 @@ function fakeOffline(
     forAccount: () => ({
       repositories,
       localOrders,
+      pendingCustomers: { create: jest.fn(), list: async () => [], resend: async () => undefined, discard: async () => undefined },
       sync,
       ...(productImages === undefined ? {} : { productImages }),
     }),

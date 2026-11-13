@@ -1,12 +1,15 @@
 import { Pressable, StyleSheet, Text } from "react-native";
 import type { CustomerListItem, CustomerRepository } from "../data/ports";
+import { PENDING_CUSTOMER_ORDER_MESSAGE } from "../data/pending-status";
 import { colors, spacing } from "../theme";
 import { describeCustomerStatus } from "./customers-screen";
 import { PagedListView } from "./paged-list-view";
 
 function PickRow({ customer, onSelect, allowUnavailable }: { customer: CustomerListItem; onSelect: (customer: CustomerListItem) => void; allowUnavailable: boolean }) {
   const status = describeCustomerStatus(customer);
-  const disabled = status !== null && !allowUnavailable;
+  // A customer the ERP has not confirmed can never start an order, even where blocked/inactive ones are allowed.
+  const unconfirmed = customer.pending !== undefined;
+  const disabled = unconfirmed || (status !== null && !allowUnavailable);
   return (
     <Pressable
       style={({ pressed }) => [styles.row, disabled && styles.rowDisabled, pressed && !disabled && styles.rowPressed]}
@@ -21,9 +24,10 @@ function PickRow({ customer, onSelect, allowUnavailable }: { customer: CustomerL
         <Text style={styles.meta}>{customer.tradeName}</Text>
       )}
       <Text style={styles.meta}>
-        {`Código ${customer.code}${customer.document !== null ? ` · ${customer.document}` : ""}`}
+        {unconfirmed ? (customer.document ?? "") : `Código ${customer.code}${customer.document !== null ? ` · ${customer.document}` : ""}`}
       </Text>
       {status !== null && <Text style={styles.status}>{status}</Text>}
+      {unconfirmed && <Text style={styles.status}>{PENDING_CUSTOMER_ORDER_MESSAGE}</Text>}
     </Pressable>
   );
 }

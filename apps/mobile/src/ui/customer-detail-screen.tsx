@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import type { CustomerDetail, CustomerListItem, CustomerRepository } from "../data/ports";
+import { PENDING_CREDIT_NOTE, PENDING_CUSTOMER_ORDER_MESSAGE } from "../data/pending-status";
 import { colors, spacing } from "../theme";
 import { describeCustomerStatus } from "./customers-screen";
 
@@ -50,9 +51,11 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
   const online = connectivity !== "offline";
   const status = describeCustomerStatus(customer);
+  const isPending = customer.pending !== undefined;
 
   useEffect(() => {
-    if (!online || customers.get === undefined) return;
+    // A customer created on this device does not exist on the server yet: nothing to ask for.
+    if (!online || customers.get === undefined || customer.pending !== undefined) return;
     let current = true;
     customers
       .get(customer.code)
@@ -63,7 +66,7 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
     return () => {
       current = false;
     };
-  }, [customer.code, customers, online]);
+  }, [customer.code, customer.pending, customers, online]);
 
   const hasTradeName = customer.tradeName !== null && customer.tradeName !== customer.name;
   const priceTable =
@@ -84,14 +87,20 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
         <View style={styles.header}>
           <Text style={styles.name} accessibilityRole="header">{customer.name}</Text>
           {hasTradeName && <Text style={styles.trade}>{customer.tradeName}</Text>}
-          <Text style={styles.meta}>{`Código ${customer.code}${customer.document !== null ? ` · ${customer.document}` : ""}`}</Text>
+          <Text style={styles.meta}>{isPending ? (customer.document ?? "") : `Código ${customer.code}${customer.document !== null ? ` · ${customer.document}` : ""}`}</Text>
           {status !== null && <Text style={styles.status}>{status}</Text>}
         </View>
 
         <Section title="Dados principais">
-          <Field label="Código" value={String(customer.code)} />
+          {!isPending && <Field label="Código" value={String(customer.code)} />}
           {customer.document !== null && <Field label="Documento" value={customer.document} />}
         </Section>
+
+        {isPending && (
+          <Section title="Financeiro">
+            <Text style={styles.fieldValue}>{PENDING_CREDIT_NOTE}</Text>
+          </Section>
+        )}
 
         {(customer.sellerCode !== null || priceTable !== null) && (
           <Section title="Comercial">
@@ -111,7 +120,15 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
       </ScrollView>
 
       <View style={styles.footer}>
-        <Pressable style={styles.cta} onPress={() => onNewOrder(customer)} accessibilityRole="button" accessibilityLabel="Novo pedido">
+        {isPending && <Text style={styles.status}>{PENDING_CUSTOMER_ORDER_MESSAGE}</Text>}
+        <Pressable
+          style={[styles.cta, isPending && styles.ctaDisabled]}
+          onPress={() => !isPending && onNewOrder(customer)}
+          disabled={isPending}
+          accessibilityRole="button"
+          accessibilityLabel="Novo pedido"
+          accessibilityState={{ disabled: isPending }}
+        >
           <Text style={styles.ctaText}>Novo pedido</Text>
         </Pressable>
       </View>
@@ -138,5 +155,6 @@ const styles = StyleSheet.create({
   note: { fontSize: 12, color: colors.textMuted },
   footer: { padding: spacing.lg, gap: spacing.sm, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
   cta: { minHeight: 50, borderRadius: 8, backgroundColor: colors.red, alignItems: "center", justifyContent: "center" },
+  ctaDisabled: { opacity: 0.4 },
   ctaText: { color: colors.onNavy, fontSize: 16, fontWeight: "800" },
 });
