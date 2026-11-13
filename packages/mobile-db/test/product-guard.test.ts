@@ -107,7 +107,12 @@ describe("product guard (local, indicative; the server revalidates)", () => {
     expect(server.requests).toEqual([]);
     expect(result.attempted).toBe(0);
     expect(await lastErrors()).toEqual([PRODUCT_BLOCK_MESSAGES.product_without_mobility]);
-    expect(PRODUCT_BLOCK_MESSAGES.product_without_mobility).toBe("Produto sem mobilidade");
+    expect(PRODUCT_BLOCK_MESSAGES).toEqual({
+      product_without_mobility: "Produto sem mobilidade",
+      product_without_price: "Produto sem preço",
+      product_unavailable: "Produto indisponível",
+      product_inactive: "Produto inativo",
+    });
     expect(await countOutbox(db, OWNER, REAL)).toMatchObject({ pending: 0, needsAttention: 1 });
     expect((await listAttentionItems(db, OWNER))[0]?.reason).toBe("Produto sem mobilidade");
   });

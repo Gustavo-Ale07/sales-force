@@ -393,7 +393,9 @@ export function isLinePriceOrderable(
   return isLineOrderable(state, config as Parameters<typeof isLineOrderable>[1]);
 }
 
-const issueMessages: Record<DraftIssueCode, string> = {
+/** The reasons of `sendBlocks` the server also sends as issue codes (08d3460); the contract enum of issue codes does not list the last two yet. */
+type SendBlockCode = "product_unavailable" | "product_inactive";
+const issueMessages: Record<DraftIssueCode | SendBlockCode, string> = {
   installation_not_enabled: "A instalação ainda não está habilitada para pedidos.",
   status_not_editable: "Este pedido não pode mais ser editado.",
   invalid_line_number: "Numeração de itens inválida.",
@@ -407,6 +409,8 @@ const issueMessages: Record<DraftIssueCode, string> = {
   line_not_orderable: "Este item não pode ser pedido sem preço nesta instalação.",
   product_without_price: "Produto sem preço",
   product_without_mobility: "Produto sem mobilidade",
+  product_unavailable: "Produto indisponível",
+  product_inactive: "Produto inativo",
   product_unknown: "Produto não encontrado.",
   product_not_sellable: "Produto indisponível para venda.",
   negotiation_type_not_configured: "Tipo de negociação não configurado nesta instalação.",

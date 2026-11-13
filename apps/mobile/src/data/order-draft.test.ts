@@ -267,6 +267,11 @@ describe("describeIssue", () => {
     expect(describeIssue({ path: "items[3]", code: "product_without_price" })).toBe("Item 4: Produto sem preço");
   });
 
+  it("uses the exact server texts for the four send-block reasons (owner 2026-11-13)", () => {
+    expect(describeIssue({ path: "items[0]", code: "product_unavailable" })).toBe("Item 1: Produto indisponível");
+    expect(describeIssue({ path: "items[1]", code: "product_inactive" })).toBe("Item 2: Produto inativo");
+  });
+
   it("falls back to the server message, then a generic one, for unknown codes", () => {
     expect(describeIssue({ path: "notes", code: "novo_codigo", message: "Texto do servidor" })).toBe("Texto do servidor");
     expect(describeIssue({ path: "notes", code: "novo_codigo" })).toBe("Dado inválido.");

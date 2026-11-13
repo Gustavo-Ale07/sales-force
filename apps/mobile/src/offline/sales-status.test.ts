@@ -76,7 +76,7 @@ describe("customer unavailable (held draft)", () => {
     expect(saleActions(held)).toEqual({ continue: true, duplicate: true, delete: true, resend: false });
   });
 
-  it.each([PRODUCT_BLOCK_MESSAGES.product_without_mobility, PRODUCT_BLOCK_MESSAGES.product_without_price])("a line that lost mobility or price ('%s'): own badge, reason stated, never offered for resending", (reason) => {
+  it.each([PRODUCT_BLOCK_MESSAGES.product_without_mobility, PRODUCT_BLOCK_MESSAGES.product_without_price, PRODUCT_BLOCK_MESSAGES.product_unavailable, PRODUCT_BLOCK_MESSAGES.product_inactive])("a line that lost mobility or price ('%s'): own badge, reason stated, never offered for resending", (reason) => {
     const blocked = draftRecord({ status: "sync_error", lastError: reason });
     expect(saleBadge(blocked)).toEqual({ label: "Produto indisponível", tone: "warning" });
     expect(saleExplanation(blocked)).toContain(reason);
