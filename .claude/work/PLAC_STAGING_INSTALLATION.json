@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "source": {
     "kind": "bootstrap-file",
-    "version": "plac-staging-2026-11-04",
+    "version": "plac-staging-2026-11-13",
     "syncedAt": "2026-10-02T00:00:00.000Z"
   },
   "general": {
@@ -172,8 +172,8 @@
   "pricing": {
     "customerTableStrategy": "customer_table",
     "fallbackStrategy": "fixed_table",
-    "fallbackTableCode": 0,
-    "catalogReferenceTableCode": null,
+    "fallbackTableCode": 5,
+    "catalogReferenceTableCode": 5,
     "missingPrice": "no_price_state",
     "mobilePriceTableCodes": [
       0,

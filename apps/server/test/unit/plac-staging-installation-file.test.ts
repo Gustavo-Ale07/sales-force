@@ -24,7 +24,12 @@ describe('PLAC staging base file (.claude/work/PLAC_STAGING_INSTALLATION.json)',
       erp: Record<string, unknown>;
       financial: Record<string, unknown>;
     };
-    expect(file.source).toMatchObject({ kind: 'bootstrap-file', version: 'plac-staging-2026-11-04' });
+    expect(file.source).toMatchObject({ kind: 'bootstrap-file', version: 'plac-staging-2026-11-13' });
+    // Owner ruling 2026-11-13: table 5 is both the price fallback (customer without table) and the catalog reference table.
+    const pricing = (file as unknown as { pricing: Record<string, unknown> }).pricing;
+    expect(pricing['fallbackTableCode']).toBe(5);
+    expect(pricing['catalogReferenceTableCode']).toBe(5);
+    expect(pricing['mobilePriceTableCodes']).toContain(5);
     // D-I: read-only financial area on; credit checks stay off (nothing blocks a sale).
     expect(file.financial).toEqual({ showFinancialArea: true, overdueTitles: true, creditChecks: false });
     expect(file.sales['eligibleOrderTopCodes']).toEqual([1001, 1000]);
