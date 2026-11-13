@@ -403,7 +403,7 @@ export const OrderEntryConfigurationSchema = named(
       /** K8: what the API applies right now (`ERP_ORDER_ENQUEUE_ENABLED`): whether submitting a document queues it for Sankhya. Absent = unknown. */
       erpSubmissionEnabled: z.boolean().optional(),
       /** Customer creation released on this installation; absent = unknown (older server). Re-read at every sync. */
-      customerCreationEnabled: z.boolean().optional(),
+      clientCreationEnabled: z.boolean().optional(),
     }),
     sales: z.strictObject({
       defaultNegotiationTypeCode: codeInt().nullable(),

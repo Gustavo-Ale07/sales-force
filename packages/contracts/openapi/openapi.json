@@ -6426,7 +6426,7 @@
               "erpSubmissionEnabled": {
                 "type": "boolean"
               },
-              "customerCreationEnabled": {
+              "clientCreationEnabled": {
                 "type": "boolean"
               }
             },
