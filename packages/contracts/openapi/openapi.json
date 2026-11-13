@@ -1452,6 +1452,100 @@
         }
       }
     },
+    "/price-tables/{code}/prices": {
+      "get": {
+        "operationId": "getPriceTablePrices",
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Current list prices of ONE price table (for the device, one table at a time)",
+        "description": "Only tables the installation uses on the mobile (the configured mobile tables, the fallback and the catalog reference table); any other table, or a missing one, is 404. Only products that are mobility-visible, sellable and priced above zero in the effective version; the list price only (no cost, no margin), ordered by product code. The device keeps these per table and applies the table of the customer it is ordering for.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1000,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Preços vigentes da tabela",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceTablePricesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/products/{code}/image": {
       "get": {
         "operationId": "getProductImage",
@@ -1740,6 +1834,14 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 100
+            }
+          },
+          {
+            "name": "ids",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
             }
           },
           {
@@ -6370,7 +6472,9 @@
                   "type": "string",
                   "enum": [
                     "product_without_mobility",
-                    "product_without_price"
+                    "product_without_price",
+                    "product_unavailable",
+                    "product_inactive"
                   ]
                 },
                 "message": {
@@ -7460,6 +7564,74 @@
           "tableCode",
           "tableName",
           "source"
+        ],
+        "additionalProperties": false
+      },
+      "PriceTablePrice": {
+        "type": "object",
+        "properties": {
+          "productCode": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "unitPrice": {
+            "$ref": "#/components/schemas/DecimalString"
+          }
+        },
+        "required": [
+          "productCode",
+          "unitPrice"
+        ],
+        "additionalProperties": false
+      },
+      "PriceTablePricesResponse": {
+        "type": "object",
+        "properties": {
+          "tableCode": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "tableName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "versionId": {
+            "type": "integer"
+          },
+          "effectiveFrom": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PriceTablePrice"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "tableCode",
+          "tableName",
+          "versionId",
+          "effectiveFrom",
+          "items",
+          "page",
+          "pageSize",
+          "total"
         ],
         "additionalProperties": false
       },

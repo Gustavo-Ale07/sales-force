@@ -405,6 +405,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/price-tables/{code}/prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Current list prices of ONE price table (for the device, one table at a time)
+         * @description Only tables the installation uses on the mobile (the configured mobile tables, the fallback and the catalog reference table); any other table, or a missing one, is 404. Only products that are mobility-visible, sellable and priced above zero in the effective version; the list price only (no cost, no margin), ordered by product code. The device keeps these per table and applies the table of the customer it is ordering for.
+         */
+        get: operations["getPriceTablePrices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/{code}/image": {
         parameters: {
             query?: never;
@@ -1316,7 +1336,7 @@ export interface components {
                 lineNo: number;
                 productCode: number;
                 /** @enum {string} */
-                code: "product_without_mobility" | "product_without_price";
+                code: "product_without_mobility" | "product_without_price" | "product_unavailable" | "product_inactive";
                 message: string;
             }[];
         };
@@ -1516,6 +1536,20 @@ export interface components {
             tableName: string | null;
             /** @enum {string} */
             source: "customer" | "fallback" | "catalog_reference" | "none";
+        };
+        PriceTablePrice: {
+            productCode: number;
+            unitPrice: components["schemas"]["DecimalString"];
+        };
+        PriceTablePricesResponse: {
+            tableCode: number;
+            tableName: string | null;
+            versionId: number;
+            effectiveFrom: string;
+            items: components["schemas"]["PriceTablePrice"][];
+            page: number;
+            pageSize: number;
+            total: number;
         };
         ProductDetail: {
             code: number;
@@ -2845,6 +2879,67 @@ export interface operations {
             };
         };
     };
+    getPriceTablePrices: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path: {
+                code: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Preços vigentes da tabela */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceTablePricesResponse"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     getProductImage: {
         parameters: {
             query?: {
@@ -3001,6 +3096,7 @@ export interface operations {
                 productCodes?: string;
                 productMatch?: components["schemas"]["OrderProductMatch"];
                 productSearch?: string;
+                ids?: string;
                 sort?: components["schemas"]["OrderSort"];
                 page?: number;
                 pageSize?: number;
