@@ -10,6 +10,7 @@ import {
   PageHeader,
   Pagination,
   SearchInput,
+  StatusBadge,
   StatusDot,
   Select,
   SortableHead,
@@ -217,7 +218,13 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
                   <TableCell label="Situação">
                     <CustomerStatus active={customer.active} blocked={customer.blocked} overdue={customer.overdue === true} />
                   </TableCell>
-                  <TableCell label="Vendedor">{customer.sellerName ?? <span className="text-fg-faint">—</span>}</TableCell>
+                  <TableCell label="Vendedor">
+                    {customer.sellerCode === null ? (
+                      <StatusBadge tone="warning">Sem vendedor</StatusBadge>
+                    ) : (
+                      (customer.sellerName ?? <span className="text-fg-faint">—</span>)
+                    )}
+                  </TableCell>
                   <TableCell card="hide">
                     {customer.priceTableCode === null ? (
                       <span className="text-fg-faint">Sem tabela</span>

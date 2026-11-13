@@ -204,6 +204,26 @@ describe("Novo pedido", () => {
       expect(within(dialog).getByRole("button", { name: /Comercial Alfa Ltda/ })).not.toHaveTextContent("Sem vendedor");
     });
 
+    it("blocks picking a customer without a seller, explaining why (aria-disabled, not only color)", async () => {
+      const { user } = renderApp("/pedidos/novo", {
+        handlers: newOrderHandlers({
+          "GET /customers": { body: customersPage([customer(), customer({ code: 1003, name: "Gama Ltda", sellerCode: null, sellerName: null })]) },
+        }),
+      });
+      await user.click(await screen.findByRole("button", { name: /^Cliente/ }));
+      const dialog = await screen.findByRole("dialog", { name: "Selecionar cliente" });
+      const gama = await within(dialog).findByRole("button", { name: /Gama Ltda/ });
+      expect(gama).toHaveAttribute("aria-disabled", "true");
+      expect(gama).toHaveAccessibleDescription("Cliente sem vendedor. Peça ao backoffice para atribuir.");
+      expect(within(dialog).getByText("Cliente sem vendedor. Peça ao backoffice para atribuir.")).toBeInTheDocument();
+      await user.click(gama);
+      expect(screen.getByRole("dialog", { name: "Selecionar cliente" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /^Cliente.*1003/ })).not.toBeInTheDocument();
+      // a customer with a seller is still selectable
+      await user.click(within(dialog).getByRole("button", { name: /Comercial Alfa Ltda/ }));
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Selecionar cliente" })).not.toBeInTheDocument());
+    });
+
     it("sends the typed search to the server and shows an empty state", async () => {
       const { user, calls } = renderApp("/pedidos/novo", {
         handlers: newOrderHandlers({ "GET /customers": { body: customersPage([]) } }),

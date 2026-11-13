@@ -97,6 +97,15 @@ describe("Carteira (customers)", () => {
     await waitFor(() => expect(router.state.location.pathname).toBe("/clientes/1001"));
   });
 
+  it("seals a customer without a seller as 'Sem vendedor' and does not seal one with a seller", async () => {
+    renderApp("/clientes", {
+      handlers: { "GET /customers": { body: customersPage([customer(), customer({ code: 1003, name: "Gama Ltda", sellerCode: null, sellerName: null })]) } },
+    });
+    const gama = (await screen.findByText("Gama Ltda")).closest("tr");
+    expect(gama).toHaveTextContent("Sem vendedor");
+    expect(screen.getByText("Comercial Alfa Ltda").closest("tr")).not.toHaveTextContent("Sem vendedor");
+  });
+
   it("offers a new order for the customer straight from the row, without opening the customer", async () => {
     const { user, router } = renderApp("/clientes", { handlers: { "GET /customers": { body: customersPage([customer()]) } } });
     const action = await screen.findByRole("link", { name: "Novo pedido para Comercial Alfa Ltda" });

@@ -21,6 +21,7 @@ import { useDebounced } from "../lib/use-debounced";
 export type PickedCustomer = Pick<ApiSchema<"CustomerListItem">, "code" | "name">;
 
 const RESULT_LIMIT = 20;
+const NO_SELLER_MESSAGE = "Cliente sem vendedor. Peça ao backoffice para atribuir.";
 
 function CardField({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -33,11 +34,18 @@ function CardField({ label, children }: { label: string; children: ReactNode }) 
 
 /** One result: code + legal name as the title, avatar with initials, label/value pairs (Vidya "seletor de cliente"). */
 function CustomerCard({ customer, onPick }: { customer: ApiSchema<"CustomerListItem">; onPick: () => void }) {
+  const noSeller = customer.sellerCode === null;
+  const reasonId = `customer-${customer.code}-no-seller`;
   return (
     <button
       type="button"
-      onClick={onPick}
-      className="flex w-full flex-col gap-2 rounded-lg border border-line bg-surface p-3 text-left transition-[border-color,box-shadow] duration-150 ease-spring hover:border-accent hover:shadow-sm focus-visible:border-accent focus-visible:outline-2 focus-visible:outline-ring"
+      onClick={noSeller ? undefined : onPick}
+      aria-disabled={noSeller ? true : undefined}
+      aria-describedby={noSeller ? reasonId : undefined}
+      className={cn(
+        "flex w-full flex-col gap-2 rounded-lg border border-line bg-surface p-3 text-left transition-[border-color,box-shadow] duration-150 ease-spring focus-visible:border-accent focus-visible:outline-2 focus-visible:outline-ring",
+        noSeller ? "cursor-not-allowed bg-surface-2 text-fg-muted" : "hover:border-accent hover:shadow-sm",
+      )}
     >
       <span className="flex items-center gap-3">
         <Avatar name={customer.name} seed={String(customer.code)} size="lg" className="rounded-full" aria-hidden="true" role="presentation" />
@@ -54,6 +62,11 @@ function CustomerCard({ customer, onPick }: { customer: ApiSchema<"CustomerListI
         <CardField label="Nome fantasia">{customer.tradeName ? titleCase(customer.tradeName) : "—"}</CardField>
         <CardField label="Vendedor">{customer.sellerName ?? "—"}</CardField>
       </dl>
+      {noSeller ? (
+        <span id={reasonId} className="text-xs font-medium text-warn">
+          {NO_SELLER_MESSAGE}
+        </span>
+      ) : null}
     </button>
   );
 }
