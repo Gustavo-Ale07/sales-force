@@ -85,7 +85,6 @@ export interface ProductsSearch {
   search?: string;
   group?: number;
   sellable?: "true" | "false";
-  priceState?: ApiSchema<"ListPriceState">;
   customerCode?: number;
   sort?: ApiSchema<"ProductSort">;
   page?: number;
@@ -94,7 +93,6 @@ export interface ProductsSearch {
   product?: number;
 }
 
-export const PRICE_STATES = ["priced", "zero", "none"] as const;
 export const PRODUCT_SORTS = ["description", "-description", "code", "-code"] as const;
 export const BOOLEAN_TEXT = ["true", "false"] as const;
 
@@ -106,7 +104,6 @@ export function parseProductsSearch(raw: Record<string, unknown>): ProductsSearc
     search: asString(raw.search),
     group: asInt(raw.group, 0),
     sellable: asOneOf(sellable, BOOLEAN_TEXT),
-    priceState: asOneOf(raw.priceState, PRICE_STATES),
     customerCode: asInt(raw.customerCode, 0),
     sort: asOneOf(raw.sort, PRODUCT_SORTS),
     page: page !== undefined && page > 1 ? page : undefined,

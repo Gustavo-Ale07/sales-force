@@ -27,7 +27,7 @@ import {
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, BadgeCheck, CheckCircle2, ChevronRight, FilePen, Package, Plus, Tag, Users, Wallet } from "lucide-react";
+import { BadgeCheck, CheckCircle2, ChevronRight, FilePen, Package, Plus, Tag, Users, Wallet } from "lucide-react";
 import type { ReactNode } from "react";
 import { findMetric, metricCount, MetricValueOrUnavailable, MetricValueText } from "../components/metric-value";
 import { OrderStatusBadge } from "../components/order-status-badges";
@@ -192,7 +192,6 @@ export function DashboardPage() {
   const customersWithoutPriceTable = findMetric(groups, "portfolio", "customers_without_price_table");
   const productsVisible = findMetric(groups, "catalog", "products_visible");
   const productsSellable = findMetric(groups, "catalog", "products_sellable");
-  const productsSellableWithoutPrice = findMetric(groups, "catalog", "products_sellable_without_price");
   const drafts = findMetric(groups, "orders", "drafts");
   const draftsEstimatedTotal = findMetric(groups, "orders", "drafts_estimated_total");
   const creditIndicators = findMetric(groups, "credit", "credit_indicators");
@@ -206,14 +205,6 @@ export function DashboardPage() {
       title: (n) => `${n === 1 ? "1 cliente sem tabela de preço" : `${n} clientes sem tabela de preço`}`,
       to: "/clientes",
       search: { hasPriceTable: "false" },
-    },
-    {
-      key: "products_sellable_without_price",
-      count: metricCount(productsSellableWithoutPrice),
-      icon: <AlertTriangle size={15} aria-hidden="true" />,
-      title: (n) => `${n === 1 ? "1 produto vendável sem preço" : `${n} produtos vendáveis sem preço`}`,
-      to: "/produtos",
-      search: { sellable: "true", priceState: "none" },
     },
   ];
   const pendingAttention = attentionItems.filter((item) => item.count !== null && item.count > 0);

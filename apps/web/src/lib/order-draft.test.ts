@@ -3,6 +3,7 @@ import { noPriceList, orderItem, pricedList, product, zeroList } from "../test/f
 import {
   applyDiscount,
   describeIssue,
+  issuesByLine,
   discountTextOf,
   isLinePriceOrderable,
   lineFromOrderItem,
@@ -168,8 +169,8 @@ describe("isLinePriceOrderable", () => {
     expect(isLinePriceOrderable("priced", config(false, false))).toBe(true);
   });
 
-  it("follows the installation configuration for lines without price", () => {
-    expect(isLinePriceOrderable("none", config(true, true))).toBe(true);
+  it("never orders a line without price, whatever the installation configuration says (owner ruling 2026-11-13)", () => {
+    expect(isLinePriceOrderable("none", config(true, true))).toBe(false);
     expect(isLinePriceOrderable("none", config(false, true))).toBe(false);
     expect(isLinePriceOrderable("none", config(true, false))).toBe(false);
   });
@@ -183,6 +184,23 @@ describe("describeIssue", () => {
   it("falls back to the server message, then a generic one, for unknown codes", () => {
     expect(describeIssue({ path: "notes", code: "novo_codigo", message: "Texto do servidor" })).toBe("Texto do servidor");
     expect(describeIssue({ path: "notes", code: "novo_codigo" })).toBe("Dado inválido.");
+  });
+});
+
+describe("catalog gate messages (owner ruling 2026-11-13)", () => {
+  it("describes the price and mobility issues in pt-BR", () => {
+    expect(describeIssue({ path: "items[0].priceState", code: "product_without_price" })).toBe("Item 1: Produto sem preço");
+    expect(describeIssue({ path: "items[1].productCode", code: "product_without_mobility" })).toBe("Item 2: Produto sem mobilidade");
+  });
+
+  it("groups line issues by 0-based line index, leaves header issues out", () => {
+    const byLine = issuesByLine([
+      { path: "items[1].priceState", code: "product_without_price" },
+      { path: "items[1].productCode", code: "product_without_mobility" },
+      { path: "notes", code: "x", message: "y" },
+    ]);
+    expect([...byLine.keys()]).toEqual([1]);
+    expect(byLine.get(1)).toEqual(["Produto sem preço", "Produto sem mobilidade"]);
   });
 });
 

@@ -192,6 +192,18 @@ describe("Novo pedido", () => {
       expect(beta).toHaveTextContent("Bloqueado");
     });
 
+    it("seals a customer without a seller as 'Sem vendedor' and does not seal one with a seller", async () => {
+      const { user } = renderApp("/pedidos/novo", {
+        handlers: newOrderHandlers({
+          "GET /customers": { body: customersPage([customer(), customer({ code: 1003, name: "Gama Ltda", sellerCode: null, sellerName: null })]) },
+        }),
+      });
+      await user.click(await screen.findByRole("button", { name: /^Cliente/ }));
+      const dialog = await screen.findByRole("dialog", { name: "Selecionar cliente" });
+      expect(await within(dialog).findByRole("button", { name: /Gama Ltda/ })).toHaveTextContent("Sem vendedor");
+      expect(within(dialog).getByRole("button", { name: /Comercial Alfa Ltda/ })).not.toHaveTextContent("Sem vendedor");
+    });
+
     it("sends the typed search to the server and shows an empty state", async () => {
       const { user, calls } = renderApp("/pedidos/novo", {
         handlers: newOrderHandlers({ "GET /customers": { body: customersPage([]) } }),
@@ -539,13 +551,13 @@ describe("Novo pedido", () => {
       expect(screen.queryByRole("dialog", { name: "Lançamento múltiplo" })).not.toBeInTheDocument();
     });
 
-    it("selects every orderable product of the page at once and defaults the quantity to 1", async () => {
+    it("selects every orderable product of the page at once (never one without price) and defaults the quantity to 1", async () => {
       const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: newOrderHandlers() });
       const dialog = await open(user);
       await user.click(await within(dialog).findByLabelText("Selecionar todos os produtos desta página"));
-      await user.click(within(dialog).getByRole("button", { name: "Adicionar 2 itens" }));
+      await user.click(within(dialog).getByRole("button", { name: "Adicionar 1 item" }));
       expect(screen.getByLabelText("Quantidade de Balão látex 9 pol. vermelho")).toHaveValue("1");
-      expect(screen.getByLabelText("Quantidade de Vela sem preço")).toHaveValue("1");
+      expect(screen.queryByLabelText("Quantidade de Vela sem preço")).not.toBeInTheDocument();
     });
 
     it("does not let a product without price be selected when the installation forbids it", async () => {
@@ -814,6 +826,32 @@ describe("Rascunho existente", () => {
     // D-AA: a saved document that was never sent can be sent without editing: the one button is "Confirmar pedido".
     expect(screen.getByRole("button", { name: "Confirmar pedido" })).toBeEnabled();
     expect(screen.queryByRole("button", { name: "Enviar ao Sankhya" })).not.toBeInTheDocument();
+  });
+
+  it("shows the server's sendBlocks on the offending line and disables sending while any exists", async () => {
+    const order = orderDetail({ sendBlocks: [{ lineNo: 1, productCode: 2001, code: "product_without_mobility", message: "Produto sem mobilidade" }] });
+    renderApp(`/pedidos/${ORDER_ID}`, { handlers: existing(order) });
+    expect(await screen.findByRole("heading", { name: /^Pedido nº 12/ })).toBeInTheDocument();
+    expect(await screen.findByText("Produto sem mobilidade")).toBeInTheDocument();
+    expect(screen.getByTestId("send-blocked-reason")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirmar pedido" })).toBeDisabled();
+  });
+
+  it("shows the 400 validation messages for price/mobility on the offending line", async () => {
+    const { user } = renderApp(`/pedidos/${ORDER_ID}`, {
+      handlers: existing(orderDetail(), {
+        "PUT /orders/:id": apiError(400, "validation_failed", "x", {
+          issues: [{ path: "items[0].priceState", code: "product_without_price" }],
+          requestId: "req-v-2",
+        }),
+      }),
+    });
+    const quantity = await screen.findByLabelText("Quantidade de Balão látex 9 pol. vermelho");
+    await user.clear(quantity);
+    await user.type(quantity, "3");
+    await user.click(screen.getByRole("button", { name: "Confirmar pedido" }));
+    expect(await screen.findByText("Item 1: Produto sem preço")).toBeInTheDocument();
+    expect(screen.getAllByText("Produto sem preço").length).toBeGreaterThan(0);
   });
 
   it("ends the submit action in the 'ERP submission disabled' message, never a success", async () => {

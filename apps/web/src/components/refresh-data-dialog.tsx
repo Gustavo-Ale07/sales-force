@@ -16,6 +16,7 @@ import {
   STEP_STATE,
   clockTime,
   currentStep,
+  mobilityNote,
   seesRefreshDetail,
   stepNote,
   stepProgress,
@@ -151,7 +152,8 @@ export function RefreshDataDialog({ open, onClose, role }: RefreshDataDialogProp
             ? "Iniciando a atualização…"
             : PHASE_CAPTION[phase];
   const meta = detail ? `${counted.finished} de ${counted.total} · ${elapsed} s` : done && hasWarnings ? "Os dados anteriores continuam disponíveis. Tente de novo em instantes." : null;
-  const showList = detail !== null && (detailsOpen || hasWarnings);
+  const mobilityKept = steps.some((step) => step.mobility?.some((row) => row.keptPrevious));
+  const showList = detail !== null && (detailsOpen || hasWarnings || mobilityKept);
 
   const attention = Boolean(startError || loadError || hasWarnings || stalled);
 
@@ -183,7 +185,7 @@ export function RefreshDataDialog({ open, onClose, role }: RefreshDataDialogProp
               return (
                 <StepGroup key={group.title} title={group.title} tone="dark">
                   {rows.map((step) => (
-                    <StepRow key={step.entity} tone="dark" state={STEP_STATE[step.status]} label={ENTITY_LABELS[step.entity]} note={stepNote(step)} />
+                    <StepRow key={step.entity} tone="dark" state={STEP_STATE[step.status]} label={ENTITY_LABELS[step.entity]} note={[stepNote(step), mobilityNote(step)].filter(Boolean).join(" ") || null} />
                   ))}
                 </StepGroup>
               );

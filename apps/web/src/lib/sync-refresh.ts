@@ -95,4 +95,18 @@ export function stepNote(step: SyncRefreshStep): string | null {
   return step.reason ? `${step.reason} ${kept}` : kept;
 }
 
+const MOBILITY_KIND_LABELS = { products: "Produtos", tops: "TOPs", negotiationTypes: "Tipos de negociação" } as const;
+export const MOBILITY_KEPT_WARNING = "Configuração de mobilidade incompleta — avise o TI; mantida a base anterior";
+
+/** Detail view only (the server sends `mobility` only to admin/manager/technical): visible/hidden counts per kind, plus the anti-empty warning. */
+export function mobilityNote(step: SyncRefreshStep): string | null {
+  const rows = step.mobility;
+  if (!rows || rows.length === 0) return null;
+  const counts = rows
+    .map((row) => `${MOBILITY_KIND_LABELS[row.kind]}: ${row.visible.toLocaleString("pt-BR")} visíveis, ${row.hidden.toLocaleString("pt-BR")} ocultos`)
+    .join("; ");
+  const kept = rows.some((row) => row.keptPrevious);
+  return `Mobilidade — ${counts}${kept ? `. ${MOBILITY_KEPT_WARNING}` : ""}`;
+}
+
 export const STEP_STATE = { pending: "pending", running: "running", ok: "done", failed: "failed", skipped: "skipped" } as const;

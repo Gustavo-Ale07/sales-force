@@ -64,6 +64,7 @@ import { ErpBillingBadge, ErpReleaseBadge, OrderStatusBadge } from "../component
 import { deliveryErrorText, erpBillingItemText, erpBillingText, erpNoteDiverged, erpNoteDivergedText, erpReleaseEventText, erpReleaseMessages, erpStatusText, orderReference, orderReviewLabel, orderReviewReasons, orderStatusView } from "../lib/labels";
 import {
   describeIssue,
+  issuesByLine,
   discountProblemMessages,
   isLinePriceOrderable,
   lineFromOrderItem,
@@ -486,7 +487,16 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
   };
 
   const canSaveTemplate = customer !== null && lines.length > 0 && preview.valid;
-  const canSave = !readOnly && customer !== null && preview.valid && installationEnabled && !hasBlockedLines && (order === null || dirty || (order.status === "draft" && order.review === null));
+  // Owner ruling 2026-11-13: lines that lost mobility or price block the sending of the SAVED document. Once the seller edits
+  // the lines the list is stale (line numbers move), so the button is released and the server (authoritative) answers on save.
+  const sendBlocks = order?.sendBlocks ?? [];
+  const sendBlocked = !dirty && sendBlocks.length > 0;
+  const saveIssuesByLine = issuesByLine(save.error instanceof ApiRequestError ? save.error.issues : []);
+  const lineBlockMessages = (index: number): string[] => [
+    ...(dirty ? [] : sendBlocks.filter((block) => block.lineNo === index + 1).map((block) => block.message)),
+    ...(saveIssuesByLine.get(index) ?? []),
+  ];
+  const canSave = !readOnly && customer !== null && preview.valid && installationEnabled && !hasBlockedLines && !sendBlocked && (order === null || dirty || (order.status === "draft" && order.review === null));
   // Shared rule (site, app, server): TOP, negotiation, freight and carrier are mandatory; saving here also sends.
   const headerIssues = orderHeaderIssues({ topCode: orderTopCode, negotiationTypeCode, freightType, carrierCode: carrierChoice });
   const [headerAttempted, setHeaderAttempted] = useState(false);
@@ -1048,6 +1058,9 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                             </span>
                           </span>
                           {blocked ? <FieldError>Este item não pode ser pedido sem preço nesta instalação.</FieldError> : null}
+                          {[...new Set(lineBlockMessages(index))].map((message) => (
+                            <FieldError key={message}>{message}</FieldError>
+                          ))}
                         </TableCell>
                         <TableCell label="Unidade">{line.unit}</TableCell>
                         <TableCell label="Quantidade">
@@ -1218,6 +1231,11 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
               <Money value={preview.totals.estimatedTotal} />
             </strong>
           </p>
+          {!readOnly && sendBlocked ? (
+            <p className="m-0 w-full text-xs text-danger sm:w-auto" role="status" data-testid="send-blocked-reason">
+              Envio bloqueado: {sendBlocks.length === 1 ? "1 item" : `${sendBlocks.length} itens`} sem mobilidade ou sem preço. Remova-os para enviar.
+            </p>
+          ) : null}
           {!readOnly && hasBlockedLines ? (
             <p className="m-0 w-full text-xs text-danger sm:w-auto" role="status" data-testid="save-blocked-reason">
               Remova os itens sem preço para salvar.

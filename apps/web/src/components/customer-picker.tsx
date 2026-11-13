@@ -44,6 +44,7 @@ function CustomerCard({ customer, onPick }: { customer: ApiSchema<"CustomerListI
         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">
           {customer.code} – {titleCase(customer.name)}
         </span>
+        {customer.sellerCode === null ? <StatusBadge tone="warning">Sem vendedor</StatusBadge> : null}
         {!customer.active ? <StatusBadge tone="neutral">Inativo</StatusBadge> : null}
         {customer.blocked ? <StatusBadge tone="danger">Bloqueado</StatusBadge> : null}
       </span>

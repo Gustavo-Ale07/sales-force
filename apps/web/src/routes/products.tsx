@@ -48,16 +48,10 @@ import {
 } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { priceContextSourceLabels } from "../lib/labels";
-import { BOOLEAN_TEXT, PRICE_STATES, type ProductsSearch } from "../lib/route-search";
+import { BOOLEAN_TEXT, type ProductsSearch } from "../lib/route-search";
 import { asInt, asOneOf, compact } from "../lib/search-params";
 import { useSearchBox } from "../lib/use-search-box";
 
-
-const priceStateLabels: Record<ApiSchema<"ListPriceState">, string> = {
-  priced: "Com preço",
-  zero: "Preço zero",
-  none: "Sem preço",
-};
 
 function sortDirection(sort: ProductsSearch["sort"], field: "description" | "code"): SortDirection | null {
   if (sort === field) return "asc";
@@ -141,7 +135,6 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
     params.search !== undefined ||
     params.group !== undefined ||
     params.sellable !== undefined ||
-    params.priceState !== undefined ||
     params.customerCode !== undefined;
   const clearAll = () => onSearchChange(compact({ sort: params.sort, pageSize: params.pageSize }));
   const context = query.data?.priceContext;
@@ -153,7 +146,7 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
       <FilterBar
         aria-label="Filtros do catálogo"
         grid
-        activeCount={[params.search, params.group, params.sellable, params.priceState, params.customerCode].filter((value) => value !== undefined).length}
+        activeCount={[params.search, params.group, params.sellable, params.customerCode].filter((value) => value !== undefined).length}
       >
         <FilterField label="Busca" keepVisible className="lg:col-span-6">
           <SearchInput
@@ -195,16 +188,6 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
             <option value="false">Não vendáveis</option>
           </Select>
         </FilterField>
-        <FilterField label="Preço" className="sm:col-span-2 lg:col-span-4">
-          <Select size="md" value={params.priceState ?? ""} onChange={(e) => change({ priceState: asOneOf(e.target.value, PRICE_STATES) })}>
-            <option value="">Todos</option>
-            {PRICE_STATES.map((state) => (
-              <option key={state} value={state}>
-                {priceStateLabels[state]}
-              </option>
-            ))}
-          </Select>
-        </FilterField>
       </FilterBar>
 
       {hasFilters ? (
@@ -214,7 +197,6 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
           {params.sellable ? (
             <FilterChip onRemove={() => change({ sellable: undefined })}>{params.sellable === "true" ? "Vendáveis" : "Não vendáveis"}</FilterChip>
           ) : null}
-          {params.priceState ? <FilterChip onRemove={() => change({ priceState: undefined })}>{priceStateLabels[params.priceState]}</FilterChip> : null}
           {params.customerCode !== undefined ? (
             <FilterChip onRemove={() => change({ customerCode: undefined })}>{`Cliente: ${pricingCustomer.data?.name ?? params.customerCode}`}</FilterChip>
           ) : null}

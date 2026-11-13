@@ -89,8 +89,6 @@ export function settingGroups(config: Configuration): SettingGroup[] {
       rows: [
         { key: "products.sellableUsageValues", label: "Usos vendáveis", value: config.products.sellableUsageValues.join(", ") || NONE },
         { key: "products.showInactive", label: "Mostra inativos", value: yesNo(config.products.showInactive) },
-        { key: "products.productWithoutPrice.visible", label: "Sem preço: visível", value: yesNo(config.products.productWithoutPrice.visible) },
-        { key: "products.productWithoutPrice.orderable", label: "Sem preço: pode ser pedido", value: yesNo(config.products.productWithoutPrice.orderable) },
       ],
     },
     {

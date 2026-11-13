@@ -138,8 +138,6 @@ function ConfigurationView({ data }: { data: ApiSchema<"ConfigurationResponse"> 
               <KeyValue label="Empresas habilitadas">{formatCount(config.general.enabledCompanyCodes.length)}</KeyValue>
               <KeyValue label="Tipos de negociação">{formatCount(config.sales.negotiationTypes.length)}</KeyValue>
               <KeyValue label="Rascunho sem preço">{yesNo(config.sales.orderBehavior.allowDraftWithoutPrice)}</KeyValue>
-              <KeyValue label="Produto sem preço visível">{yesNo(config.products.productWithoutPrice.visible)}</KeyValue>
-              <KeyValue label="Produto sem preço pode ser pedido">{yesNo(config.products.productWithoutPrice.orderable)}</KeyValue>
               <KeyValue label="Exibe limite de crédito">{yesNo(config.customers.creditFeatures.showCreditLimit)}</KeyValue>
             </KeyValueList>
           </CardBody>

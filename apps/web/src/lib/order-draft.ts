@@ -279,6 +279,8 @@ const issueMessages: Record<DraftIssueCode, string> = {
   price_reference_missing: "Preço sem tabela de referência. Recarregue o rascunho e tente novamente.",
   line_total_mismatch: "Total do item divergente do calculado. Recarregue o rascunho e tente novamente.",
   line_not_orderable: "Este item não pode ser pedido sem preço nesta instalação.",
+  product_without_price: "Produto sem preço",
+  product_without_mobility: "Produto sem mobilidade",
   product_unknown: "Produto não encontrado.",
   product_not_sellable: "Produto indisponível para venda.",
   negotiation_type_not_configured: "Tipo de negociação não configurado nesta instalação.",
@@ -295,6 +297,19 @@ export function describeIssue(issue: { path: string; code: string; message?: str
   const text = (issueMessages as Record<string, string | undefined>)[issue.code] ?? issue.message ?? "Dado inválido.";
   const match = ITEM_PATH.exec(issue.path);
   return match ? `Item ${Number(match[1]) + 1}: ${text}` : text;
+}
+
+/** Server validation issues that point at a line (`items[n]...`), grouped by 0-based line index, to be shown on the offending line. */
+export function issuesByLine(issues: readonly { path: string; code: string; message?: string }[]): Map<number, string[]> {
+  const result = new Map<number, string[]>();
+  for (const issue of issues) {
+    const match = ITEM_PATH.exec(issue.path);
+    if (!match) continue;
+    const index = Number(match[1]);
+    const text = (issueMessages as Record<string, string | undefined>)[issue.code] ?? issue.message ?? "Dado inválido.";
+    result.set(index, [...(result.get(index) ?? []), text]);
+  }
+  return result;
 }
 
 /**
