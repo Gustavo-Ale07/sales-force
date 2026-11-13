@@ -8,6 +8,8 @@ import {
   type ProductListItem,
   type ProductResolutionItem,
   type ProductsQuery,
+  type PriceTablePricesQuery,
+  type PriceTablePricesResponse,
   type ProductsResponse,
   type ResolveProductsRequest,
   type ResolveProductsResponse,
@@ -150,6 +152,44 @@ export class CatalogService {
       pageSize: query.pageSize,
       total,
       priceContext: await this.pricing.priceContext(book),
+    };
+  }
+
+  /**
+   * Owner ruling 2026-11-13: the CURRENT prices of one table, for the device. Only a table the installation uses on the
+   * mobile is served (a different or missing one is the same 404); products are the mobility-visible, sellable ones with a
+   * price above zero in the effective version (the mirror only holds mobility products, and the product list keeps
+   * priced ones only). The list price and nothing else: no cost, no margin (P-20).
+   */
+  async priceTablePrices(user: CurrentUser, code: number, query: PriceTablePricesQuery): Promise<PriceTablePricesResponse> {
+    const context = await this.policy.accessContext(user);
+    const { pricing } = context.configuration;
+    const served = new Set<number>([...(pricing.mobilePriceTableCodes ?? [])]);
+    if (pricing.fallbackTableCode !== null) served.add(pricing.fallbackTableCode);
+    if (pricing.catalogReferenceTableCode !== null) served.add(pricing.catalogReferenceTableCode);
+    if (!served.has(code)) throw new AppError('not_found');
+    const tableName = await this.mirror.priceTableName(code);
+    if (tableName === null) throw new AppError('not_found');
+    const book = await this.pricing.open({ customerCode: null, table: { kind: 'table', code, source: 'fallback' }, source: 'catalog_reference' }, this.clock());
+    const version = book.versions.find((candidate) => candidate.versionId === book.versionId);
+    // A table with no effective version has no current prices: an empty page, never a made-up one.
+    if (book.versionId === null || version === undefined) {
+      return { tableCode: code, tableName, versionId: 0, effectiveFrom: book.at, items: [], page: query.page, pageSize: query.pageSize, total: 0 };
+    }
+    const { rows, total } = await this.mirror.listProducts(
+      { ...productFilterOf(context.configuration), sellable: true, sort: 'code' },
+      book.versionId,
+      { page: query.page, pageSize: query.pageSize },
+    );
+    return {
+      tableCode: code,
+      tableName,
+      versionId: book.versionId,
+      effectiveFrom: version.effectiveFrom,
+      items: rows.flatMap((row) => (row.unitPrice === null ? [] : [{ productCode: row.code, unitPrice: normalizeDecimalString(row.unitPrice) }])),
+      page: query.page,
+      pageSize: query.pageSize,
+      total,
     };
   }
 

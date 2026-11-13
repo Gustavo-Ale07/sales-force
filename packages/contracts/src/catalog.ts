@@ -288,3 +288,37 @@ export const ResolveProductsResponseSchema = named(
   }),
 );
 export type ResolveProductsResponse = z.infer<typeof ResolveProductsResponseSchema>;
+
+/** Prices of one table are downloaded whole by the device, so this page may be larger than the catalog's. */
+export const MAX_PRICE_TABLE_PAGE_SIZE = 1000;
+
+export const PriceTablePathSchema = z.object({ code: queryInt(0) });
+
+export const PriceTablePricesQuerySchema = z.object({
+  page: queryInt(1).default(1),
+  pageSize: queryInt(1, MAX_PRICE_TABLE_PAGE_SIZE).default(MAX_PRICE_TABLE_PAGE_SIZE),
+});
+export type PriceTablePricesQuery = z.infer<typeof PriceTablePricesQuerySchema>;
+
+/** One product price of the table: the list price only, never cost or margin (P-20). */
+export const PriceTablePriceSchema = named(
+  'PriceTablePrice',
+  z.object({ productCode: codeInt(), unitPrice: DecimalStringSchema }),
+);
+export type PriceTablePrice = z.infer<typeof PriceTablePriceSchema>;
+
+export const PriceTablePricesResponseSchema = named(
+  'PriceTablePricesResponse',
+  z.object({
+    tableCode: codeInt(),
+    tableName: z.string().nullable(),
+    /** The effective version the prices belong to. */
+    versionId: z.number().int(),
+    effectiveFrom: z.string(),
+    items: z.array(PriceTablePriceSchema),
+    page: z.number().int().min(1),
+    pageSize: z.number().int().min(1).max(MAX_PRICE_TABLE_PAGE_SIZE),
+    total: z.number().int().min(0),
+  }),
+);
+export type PriceTablePricesResponse = z.infer<typeof PriceTablePricesResponseSchema>;

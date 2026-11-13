@@ -4,6 +4,7 @@ import {
   routes,
   type ProductDetail,
   type CarriersResponse,
+  type PriceTablePricesResponse,
   type ProductGroupsResponse,
   type ProductsResponse,
   type ResolveProductsResponse,
@@ -38,6 +39,14 @@ export class CatalogController {
     @Contract() contract: RequestContract<typeof routes.listProducts>,
   ): Promise<ProductsResponse> {
     return this.catalog.list(user, contract.query);
+  }
+
+  @ApiRoute(routes.getPriceTablePrices)
+  priceTablePrices(
+    @CurrentUserParam() user: CurrentUser,
+    @Contract() contract: RequestContract<typeof routes.getPriceTablePrices>,
+  ): Promise<PriceTablePricesResponse> {
+    return this.catalog.priceTablePrices(user, contract.params.code, contract.query);
   }
 
   @ApiRoute(routes.getProduct)

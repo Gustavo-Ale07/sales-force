@@ -44,6 +44,8 @@ const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>
   listProducts: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   getProduct: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   getProductImage: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  // Owner ruling 2026-11-13: one price table's current list prices, same roles as the catalog it mirrors.
+  getPriceTablePrices: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   // ASSUMPTION (pending owner confirmation): a read of the same catalog as listProducts, open to every role.
   resolveProducts: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   listOrders: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },

@@ -86,6 +86,9 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   getProduct: { roles: EVERY_ROLE },
   // Same catalog read as getProduct (product visibility and seller scope are enforced by the handler).
   getProductImage: { roles: EVERY_ROLE },
+  // Owner ruling 2026-11-13: list prices of ONE price table the installation uses on the mobile (the handler refuses any other
+  // table as 404). List price only, mobility-visible products only (P-20: no cost, no margin).
+  getPriceTablePrices: { roles: EVERY_ROLE },
   // ASSUMPTION (pending owner confirmation): resolving pasted/imported product identifiers is a read of the
   // same catalog as listProducts, so it is open to every role; the customer scope still applies to prices.
   resolveProducts: { roles: EVERY_ROLE },
