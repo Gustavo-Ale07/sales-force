@@ -119,5 +119,37 @@ describe('CreateCustomerRequest text hygiene (M-4)', () => {
     it('refuses a bare carriage return (only \\n and \\t are kept)', () => {
       expect(messages({ notes: 'a\rb' }).some((entry) => entry.startsWith('notes'))).toBe(true);
     });
+
+    it('normalizes CRLF to LF instead of refusing it (text pasted from Windows)', () => {
+      const parsed = CreateCustomerRequestSchema.parse({ ...base, notes: 'linha 1\r\nlinha 2\r\n\r\nlinha 4' });
+      expect(parsed.notes).toBe('linha 1\nlinha 2\n\nlinha 4');
+    });
+
+    it('counts the normalized text against the limit (CRLF becomes one character)', () => {
+      const raw = 'a'.repeat(3000) + 'x\r\n'.repeat(400); // 4200 raw characters, 3800 once normalized
+      expect(CreateCustomerRequestSchema.safeParse({ ...base, notes: raw }).success).toBe(true);
+    });
+  });
+
+  describe('NBSP, invisible fillers and emoji sequences (owner ruling 2026-11-13)', () => {
+    const fields: Array<[string, (value: string) => Record<string, unknown>, (parsed: ReturnType<typeof CreateCustomerRequestSchema.parse>) => unknown]> = [
+      ['name', (v) => ({ name: v }), (p) => p.name],
+      ['notes', (v) => ({ notes: v }), (p) => p.notes],
+      ['addresses.0.complement', (v) => ({ addresses: [{ ...address, complement: v }] }), (p) => p.addresses[0]?.complement],
+    ];
+    for (const [field, build, read] of fields) {
+      it(`${field}: a non-breaking space becomes a regular space`, () => {
+        expect(read(CreateCustomerRequestSchema.parse({ ...base, ...build('Rua Alfa  Beta') }))).toBe('Rua Alfa  Beta');
+      });
+      it.each([
+        ['Hangul filler U+3164', 'AㅤB'],
+        ['braille blank U+2800', 'A⠀B'],
+        ['emoji with zero-width joiner', 'A\u{1F468}‍\u{1F469}B'],
+      ])(`${field}: refuses %s`, (_label, value) => {
+        const found = messages(build(value)).filter((entry) => entry.startsWith(field));
+        expect(found.length).toBeGreaterThan(0);
+        expect(found.join(' ')).toMatch(/não são permitidos/);
+      });
+    }
   });
 });

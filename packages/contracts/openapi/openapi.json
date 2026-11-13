@@ -4287,7 +4287,6 @@
             "pattern": "^[^\\p{Cc}\\p{Cf}\\u2028\\u2029]*$"
           },
           "tradeName": {
-            "default": null,
             "anyOf": [
               {
                 "type": "string",
@@ -4305,7 +4304,6 @@
             "$ref": "#/components/schemas/IcmsClassification"
           },
           "stateRegistration": {
-            "default": null,
             "anyOf": [
               {
                 "type": "string",
@@ -4345,21 +4343,12 @@
             ]
           },
           "notes": {
-            "default": null,
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 4000,
-                "pattern": "^(?:[^\\p{Cc}\\p{Cf}\\u2028\\u2029]|[\\n\\t])*$"
-              },
-              {
-                "type": "null"
-              }
+            "type": [
+              "string",
+              "null"
             ]
           },
           "addresses": {
-            "default": [],
             "maxItems": 3,
             "type": "array",
             "items": {
@@ -4551,7 +4540,6 @@
             "pattern": "^[^\\p{Cc}\\p{Cf}\\u2028\\u2029]*$"
           },
           "complement": {
-            "default": null,
             "anyOf": [
               {
                 "type": "string",

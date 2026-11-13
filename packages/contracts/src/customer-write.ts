@@ -25,8 +25,21 @@ export const MAX_CUSTOMER_ADDRESSES = 3;
 const NO_HIDDEN_TEXT = /^[^\p{Cc}\p{Cf}\u2028\u2029]*$/u;
 const NO_HIDDEN_MULTILINE_TEXT = /^(?:[^\p{Cc}\p{Cf}\u2028\u2029]|[\n\t])*$/u;
 const HIDDEN_TEXT_MESSAGE = 'Caracteres de controle, invisíveis ou que alteram a direção do texto não são permitidos.';
-const text = (max: number) => z.string().trim().min(1).max(max).regex(NO_HIDDEN_TEXT, HIDDEN_TEXT_MESSAGE);
-const multilineText = (max: number) => z.string().trim().min(1).max(max).regex(NO_HIDDEN_MULTILINE_TEXT, HIDDEN_TEXT_MESSAGE);
+// Owner ruling 2026-11-13: also refused, U+3164 (Hangul filler) and U+2800 (braille blank), which render as blank text
+// yet are neither controls nor format characters. Normalized instead of refused: a non-breaking space (U+00A0) becomes a
+// regular space; in `notes` CRLF becomes LF (text pasted from Windows). A bare CR stays refused.
+const INVISIBLE_FILLERS = /[ㅤ⠀]/u;
+const plainSpaces = (value: string) => value.replace(/ /g, ' ');
+const withoutFillers = (value: string) => !INVISIBLE_FILLERS.test(value);
+// The space replacement keeps the length, so the limit and the refusals may run first.
+const text = (max: number) =>
+  z.string().trim().min(1).max(max).regex(NO_HIDDEN_TEXT, HIDDEN_TEXT_MESSAGE).refine(withoutFillers, HIDDEN_TEXT_MESSAGE).transform(plainSpaces);
+// CRLF -> LF changes the length, so it runs before the limit (a pasted 4,000-character text with line breaks must fit).
+const multilineText = (max: number) =>
+  z
+    .string()
+    .transform((value) => value.replace(/\r\n/g, '\n'))
+    .pipe(z.string().trim().min(1).max(max).regex(NO_HIDDEN_MULTILINE_TEXT, HIDDEN_TEXT_MESSAGE).refine(withoutFillers, HIDDEN_TEXT_MESSAGE).transform(plainSpaces));
 
 /**
  * The size and shape of each stored field, the single source of the limits: the API validates the request with them

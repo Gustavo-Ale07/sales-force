@@ -921,20 +921,16 @@ export interface components {
             clientRequestId: string;
             document: string;
             name: string;
-            /** @default null */
-            tradeName: string | null;
+            tradeName?: string | null;
             /** @default R */
             icmsClassification: components["schemas"]["IcmsClassification"];
-            /** @default null */
-            stateRegistration: string | null;
+            stateRegistration?: string | null;
             /** @default null */
             phone: string | null;
             /** @default null */
             email: string | null;
-            /** @default null */
-            notes: string | null;
-            /** @default [] */
-            addresses: components["schemas"]["CustomerAddressInput"][];
+            notes?: string | null;
+            addresses?: components["schemas"]["CustomerAddressInput"][];
             sellerCode?: number;
         };
         CreateCustomerResponse: {
@@ -967,8 +963,7 @@ export interface components {
             streetCode: number;
             neighborhoodCode: number;
             number: string;
-            /** @default null */
-            complement: string | null;
+            complement?: string | null;
             postalCode: string;
         };
         CustomerDetail: {
