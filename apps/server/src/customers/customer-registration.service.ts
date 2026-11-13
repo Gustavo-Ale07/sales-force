@@ -188,10 +188,27 @@ export class CustomerRegistrationService {
    */
   private documentTaken(holder: DocumentHolder | null, scope: CustomerScope | null): AppError {
     return new AppError('conflict', {
-      message: holder !== null && scope !== null && inPortfolio(holder, scope) ? describeHolder(holder) : GENERIC_DUPLICATE_MESSAGE,
+      message: holder !== null && scope !== null ? messageFor(holder, scope) : GENERIC_DUPLICATE_MESSAGE,
       details: { reason: 'document_already_registered' },
     });
   }
+}
+
+/**
+ * What the asker may be told about the holder. Inside the portfolio: name and code. A scope that reaches every seller
+ * (manager/admin) is also told the code and situation of a holder that is inactive, blocked or deleted in the ERP, never
+ * its name or seller (owner ruling 2026-11-13). Everyone else: the generic text.
+ */
+function messageFor(holder: DocumentHolder, scope: CustomerScope): string {
+  if (inPortfolio(holder, scope)) return describeHolder(holder);
+  if (scope.kind === 'all' && holder.source === 'mirror') return describeUnusableHolder(holder);
+  return GENERIC_DUPLICATE_MESSAGE;
+}
+
+function describeUnusableHolder(holder: Extract<DocumentHolder, { source: 'mirror' }>): string {
+  const situation = [holder.inactive ? 'inativo' : null, holder.blocked ? 'bloqueado' : null, holder.deleted ? 'excluído' : null].filter((part) => part !== null);
+  if (situation.length === 0) return GENERIC_DUPLICATE_MESSAGE;
+  return `Já existe com este documento, código ${holder.code}, ${situation.join(' e ')} no Sankhya. Procure o backoffice.`;
 }
 
 export const GENERIC_DUPLICATE_MESSAGE = 'Não foi possível cadastrar este documento. Procure o backoffice.';
@@ -210,7 +227,12 @@ function describeHolder(holder: DocumentHolder): string {
 }
 
 /** PostgreSQL unique violation on one of the indexes that make a request id single-use. */
-const REQUEST_ID_INDEXES: ReadonlySet<string> = new Set(['customer_registration_origin_key_uq', 'customer_registration_account_request_uq']);
+const REQUEST_ID_INDEXES: ReadonlySet<string> = new Set([
+  'customer_registration_origin_key_uq',
+  'customer_registration_account_request_uq',
+  // The origin key stays in the outbox after a rejected registration is purged (30 days): the old request id is still spent.
+  'integration_outbox_origin_id_uq',
+]);
 
 function isRequestIdCollision(error: unknown): boolean {
   for (let current: unknown = error, depth = 0; typeof current === 'object' && current !== null && depth < 4; depth += 1) {

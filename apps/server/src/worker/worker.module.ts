@@ -20,7 +20,7 @@ import {
 import { OrderErpStatusService } from '../integration/order-erp-status.service.js';
 import type { RequestBudget, SankhyaPartnerWritePort, SankhyaReadPort } from '@salesforce/sankhya';
 import { CustomerDeliveryService, type CustomerDeliverySettings } from '../integration/customer-delivery.service.js';
-import { CustomerPayloadRetention } from '../integration/customer-payload-retention.js';
+import { CustomerPayloadRetention, CustomerRefusalRetention } from '../integration/customer-payload-retention.js';
 import { DrizzleCustomerDeliveryStore } from '../integration/customer-delivery.store.js';
 import type { SalesHistorySyncConfig } from '../sync/sales-history-config.js';
 import { ConfigurationSyncService } from '../sync/configuration-sync.service.js';
@@ -129,6 +129,7 @@ export class WorkerModule {
                   }),
               ...(configurationService === undefined ? {} : { configurationSync: { service: configurationService } }),
               customerPayloadRetention: { service: new CustomerPayloadRetention({ database: db.db, now }) },
+              customerRefusalRetention: { service: new CustomerRefusalRetention({ database: db.db, now }) },
               ...(customerDelivery === undefined
                 ? {}
                 : {

@@ -25,6 +25,8 @@ export const QUEUE_NAMES = {
   integrationOrderDryRunPurge: 'integration.order.dry-run-purge',
   /** Clears personal data of finished `customer.upsert` outbox rows older than 30 days (D-AR M-5). Always scheduled: the data outlives the write switch. */
   integrationCustomerPayloadPurge: 'integration.customer.payload-purge',
+  /** Deletes refused-duplicate records older than 24 hours (owner ruling 2026-11-13). Always scheduled. */
+  integrationCustomerRefusalPurge: 'integration.customer.refusal-purge',
   /** Reads the ERP status of sent orders (SNK-7 P2). Read-only; scheduled together with order delivery. */
   syncErpOrderStatus: 'sync.erp.orderStatus',
   /** Reads the Vidya configuration inside Sankhya and stores a new configuration version (CFG-8). Only with CONFIG_SYNC_FROM_SANKHYA=1. */
@@ -46,6 +48,8 @@ export const CUSTOMER_DELIVERY_TRIGGER_MS = 2000;
 export const ORDER_DRY_RUN_PURGE_CRON = '17 3 * * *';
 /** Daily, off-peak, after the dry-run purge. */
 export const CUSTOMER_PAYLOAD_PURGE_CRON = '27 3 * * *';
+/** Daily, off-peak, after the payload purge. */
+export const CUSTOMER_REFUSAL_PURGE_CRON = '41 3 * * *';
 /** Every 15 minutes (P2). */
 export const ORDER_ERP_STATUS_CRON = '*/15 * * * *';
 
@@ -175,6 +179,17 @@ export const QUEUE_REGISTRY: readonly QueueSpec[] = [
   },
   {
     name: QUEUE_NAMES.integrationCustomerPayloadPurge,
+    options: {
+      policy: 'short',
+      retryLimit: 0,
+      expireInSeconds: 600,
+      retentionSeconds: 3600,
+      deleteAfterSeconds: 24 * 3600,
+      deadLetter: QUEUE_NAMES.deadLetter,
+    },
+  },
+  {
+    name: QUEUE_NAMES.integrationCustomerRefusalPurge,
     options: {
       policy: 'short',
       retryLimit: 0,

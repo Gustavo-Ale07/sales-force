@@ -9,7 +9,7 @@ import { CustomerRegistrationRepository } from '../../src/customers/customer-reg
 import { AuditService } from '../../src/iam/audit.service.js';
 import type { CurrentUser } from '../../src/iam/current-user.js';
 import type { PolicyService } from '../../src/iam/policy.service.js';
-import { CustomerPayloadRetention, CUSTOMER_PAYLOAD_RETENTION_DAYS, PURGED_PAYLOAD } from '../../src/integration/customer-payload-retention.js';
+import { CustomerPayloadRetention, CustomerRefusalRetention, CUSTOMER_PAYLOAD_RETENTION_DAYS, PURGED_PAYLOAD } from '../../src/integration/customer-payload-retention.js';
 import { AppError } from '../../src/http/app-error.js';
 import { uuidv7 } from '../../src/platform/ids.js';
 import { startCommercialApp, type CommercialApp } from '../helpers/commercial-app.js';
@@ -192,6 +192,26 @@ describe('I-1 the message depends on the portfolio; status, code and details nev
   });
 });
 
+describe('I-1 a manager is told code and situation of an inactive, blocked or deleted holder; a seller is not (real database)', () => {
+  it('manager/admin scope: code and situation only, no name; seller scope: the generic text', async () => {
+    const cases: Array<[Partial<typeof erpCustomer.$inferInsert>, string]> = [
+      [{ active: false }, 'inativo'],
+      [{ blockedRaw: 'S' }, 'bloqueado'],
+      [{ deletedAt: NOW }, 'excluído'],
+    ];
+    for (const [change, situation] of cases) {
+      const document = freshDocument();
+      const code = await seedMirrorCustomer(document, { sellerCode: 103, ...change });
+      const asManager = await failure(service({ kind: 'all' }).create(user(manager, 'manager', []), request(document, { sellerCode: 103 })));
+      expect(asManager.message).toBe(`Já existe com este documento, código ${code}, ${situation} no Sankhya. Procure o backoffice.`);
+      expect(asManager.message).not.toContain('Metalúrgica');
+      const asSeller = await failure(service({ kind: 'sellers', sellerCodes: [103] }).create(sellerUser(seller1, 103), request(document)));
+      expect(asSeller.message).toBe(GENERIC_DUPLICATE_MESSAGE);
+      expect(asSeller.details).toEqual(asManager.details);
+    }
+  });
+});
+
 describe('M-1 a request id used by another account (real unique index)', () => {
   it('answers idempotency_conflict (409) and reveals nothing of the other account', async () => {
     const clientRequestId = randomUUID();
@@ -288,6 +308,139 @@ describe('M-5 outbox personal-data retention (customer.upsert)', () => {
     const after = await read(id);
     expect(await retention().purge()).toBe(0);
     expect(await read(id)).toEqual(after);
+  });
+});
+
+/** Owner ruling 2026-11-13: error text and payload of finished commands go at 30 days; rejected registrations are deleted; refusals live 24 h. */
+describe('retention of finished customer registrations (owner ruling 2026-11-13)', () => {
+  const retention = () => new CustomerPayloadRetention({ database: db(), now: () => now });
+  const refusalRetention = () => new CustomerRefusalRetention({ database: db(), now: () => now });
+  const personal = { document: '11222333000181', email: 'pessoa@exemplo.test', notes: 'observação privada', name: 'Fulano' };
+  const OLD = new Date(NOW.getTime() - 30 * DAY - 1);
+
+  async function registration(status: 'pending' | 'confirmed' | 'rejected' | 'unknown', updatedAt: Date, outboxStatus?: string, lastErrorMessage: string | null = null) {
+    const id = uuidv7(updatedAt.getTime());
+    const clientRequestId = randomUUID();
+    const taxId = freshDocument();
+    await db().insert(customerRegistration).values({
+      id,
+      clientRequestId,
+      requestHash: 'h',
+      createdByAccountId: seller1,
+      originKey: `force:${clientRequestId}`,
+      status,
+      taxId,
+      name: T('Retenção'),
+      sellerCode: 103,
+      erpCustomerCode: status === 'confirmed' ? 4_000_000 + documentSeed : null,
+      rejectionCode: status === 'rejected' ? 'partner_document_duplicate' : null,
+      createdAt: updatedAt,
+      updatedAt,
+    });
+    const outboxId = uuidv7(updatedAt.getTime());
+    await db().insert(integrationOutbox).values({
+      id: outboxId,
+      aggregateType: 'customer_registration',
+      aggregateId: id,
+      operation: 'customer.upsert',
+      payload: personal,
+      originId: `force:${clientRequestId}`,
+      status: outboxStatus ?? status,
+      nextAttemptAt: status === 'pending' || status === 'unknown' ? updatedAt : null,
+      lastErrorClass: lastErrorMessage === null ? null : 'validation',
+      lastErrorMessage,
+      createdAt: updatedAt,
+      updatedAt,
+    });
+    return { id, outboxId, taxId };
+  }
+  const registrationRow = async (id: string) => (await db().select().from(customerRegistration).where(eq(customerRegistration.id, id)))[0];
+  const outboxRow = async (id: string) => (await db().select().from(integrationOutbox).where(eq(integrationOutbox.id, id)))[0];
+
+  it('clears the error message and the payload of terminal outbox rows after 30 days; keeps key, state and reference', async () => {
+    const confirmed = await registration('confirmed', OLD, 'confirmed', 'transient: detalhe com Fulano 11222333000181');
+    const rejected = await registration('rejected', OLD, 'rejected', 'partner_document_duplicate: CNPJ 11222333000181 de Fulano');
+    await retention().purge();
+    for (const { outboxId } of [confirmed, rejected]) {
+      const row = await outboxRow(outboxId);
+      expect(row?.lastErrorMessage).toBeNull();
+      expect(row?.payload).toEqual(PURGED_PAYLOAD);
+      expect(row?.originId).toMatch(/^force:/);
+      expect(row?.lastErrorClass).toBe('validation'); // the class is a stable code, not free text: kept
+    }
+  });
+
+  it('a terminal row whose payload was purged earlier but still has an error text is cleared too (idempotent afterwards)', async () => {
+    const { outboxId } = await registration('rejected', OLD, 'rejected', 'texto antigo');
+    await db().update(integrationOutbox).set({ payload: PURGED_PAYLOAD }).where(eq(integrationOutbox.id, outboxId));
+    expect(await retention().purge()).toBeGreaterThanOrEqual(1);
+    expect((await outboxRow(outboxId))?.lastErrorMessage).toBeNull();
+    expect(await retention().purge()).toBe(0);
+  });
+
+  it('does not touch the error text of a row that can still be delivered, however old', async () => {
+    const { outboxId } = await registration('unknown', new Date(NOW.getTime() - 400 * DAY), 'unknown', 'detalhe');
+    await retention().purge();
+    expect((await outboxRow(outboxId))?.lastErrorMessage).toBe('detalhe');
+  });
+
+  it('keeps tax id and name of a confirmed registration (the duplicate-check key), however old', async () => {
+    const { id, taxId } = await registration('confirmed', new Date(NOW.getTime() - 400 * DAY), 'confirmed');
+    await retention().purge();
+    expect(await registrationRow(id)).toMatchObject({ taxId, name: T('Retenção'), status: 'confirmed' });
+  });
+
+  it('deletes a rejected registration strictly older than 30 days and keeps its outbox row (the origin key stays spent)', async () => {
+    const old = await registration('rejected', OLD, 'rejected');
+    const exact = await registration('rejected', new Date(NOW.getTime() - 30 * DAY), 'rejected');
+    await retention().purge();
+    expect(await registrationRow(old.id)).toBeUndefined();
+    expect(await registrationRow(exact.id)).toBeDefined();
+    expect(await outboxRow(old.outboxId)).toMatchObject({ status: 'rejected', aggregateId: old.id });
+  });
+
+  it('never deletes pending, unknown or confirmed registrations', async () => {
+    const ancient = new Date(NOW.getTime() - 400 * DAY);
+    const kept = [await registration('pending', ancient), await registration('unknown', ancient), await registration('confirmed', ancient)];
+    await retention().purge();
+    for (const { id } of kept) expect(await registrationRow(id)).toBeDefined();
+  });
+
+  it('never deletes a rejected registration whose outbox row can still be delivered (reprocessing)', async () => {
+    const reprocessed = await registration('rejected', OLD, 'pending');
+    await retention().purge();
+    expect(await registrationRow(reprocessed.id)).toBeDefined();
+  });
+
+  it('the same request id after the purge is an idempotency conflict, never a 500 (the outbox keeps the origin key)', async () => {
+    const clientRequestId = randomUUID();
+    const svc = service({ kind: 'all' });
+    const document = freshDocument();
+    const first = await svc.create(sellerUser(seller1, 103), request(document, { clientRequestId }));
+    expect(first.httpStatus).toBe(202);
+    const created =(await db().select().from(customerRegistration).where(eq(customerRegistration.clientRequestId, clientRequestId)))[0]!;
+    await db().update(customerRegistration).set({ status: 'rejected', rejectionCode: 'partner_document_duplicate', updatedAt: OLD }).where(eq(customerRegistration.id, created.id));
+    await db().update(integrationOutbox).set({ status: 'rejected', nextAttemptAt: null, updatedAt: OLD }).where(eq(integrationOutbox.aggregateId, created.id));
+    await retention().purge();
+    expect(await registrationRow(created.id)).toBeUndefined();
+    const error = await failure(svc.create(sellerUser(seller1, 103), request(document, { clientRequestId })));
+    expect(error.code).toBe('idempotency_conflict');
+  });
+
+  it('refusals: deletes those older than 24 hours, keeps the last 24 hours (the hourly limit reads one hour)', async () => {
+    const at = (ms: number) => new Date(NOW.getTime() - ms);
+    const ids = { old: uuidv7(at(25 * 3600_000).getTime()), exact: uuidv7(at(24 * 3600_000).getTime()), recent: uuidv7(at(3600_000).getTime()) };
+    await db().insert(customerRegistrationRefusal).values([
+      { id: ids.old, accountId: seller1, reason: 'document_already_registered', createdAt: at(24 * 3600_000 + 1) },
+      { id: ids.exact, accountId: seller1, reason: 'document_already_registered', createdAt: at(24 * 3600_000) },
+      { id: ids.recent, accountId: seller1, reason: 'document_already_registered', createdAt: at(3600_000) },
+    ]);
+    expect(await refusalRetention().purge()).toBeGreaterThanOrEqual(1);
+    const left = (await db().select({ id: customerRegistrationRefusal.id }).from(customerRegistrationRefusal)).map((r) => r.id);
+    expect(left).not.toContain(ids.old);
+    expect(left).toContain(ids.exact);
+    expect(left).toContain(ids.recent);
+    expect(await refusalRetention().purge()).toBe(0);
   });
 });
 

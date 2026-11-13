@@ -16,6 +16,10 @@ export type DocumentHolder =
       readonly sellerCode: number | null;
       /** Active, not deleted and not blocked: only such a customer can be "in someone's portfolio". */
       readonly usable: boolean;
+      /** Why it is not usable (all false when it is). Shown, as a situation only, to a scope that reaches every seller. */
+      readonly inactive: boolean;
+      readonly blocked: boolean;
+      readonly deleted: boolean;
     }
   | { readonly source: 'registration'; readonly code: number | null; readonly name: string; readonly sellerCode: number | null };
 export type NewCustomerRegistration = typeof customerRegistration.$inferInsert;
@@ -117,12 +121,18 @@ export class CustomerRegistrationRepository {
       .orderBy(sql`(${erpCustomer.deletedAt} is null and ${erpCustomer.active}) desc`, erpCustomer.code)
       .limit(1);
     if (customer !== undefined) {
+      const inactive = !customer.active;
+      const blocked = isBlockedRaw(customer.blockedRaw);
+      const deleted = customer.deletedAt !== null;
       return {
         source: 'mirror',
         code: customer.code,
         name: customer.name,
         sellerCode: customer.sellerCode,
-        usable: customer.active && customer.deletedAt === null && !isBlockedRaw(customer.blockedRaw),
+        usable: !inactive && !blocked && !deleted,
+        inactive,
+        blocked,
+        deleted,
       };
     }
     const [open] = await db

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { CustomerPayloadRetention } from '../../integration/customer-payload-retention.js';
+import type { CustomerPayloadRetention, CustomerRefusalRetention } from '../../integration/customer-payload-retention.js';
 import type { CustomerDeliveryService } from '../../integration/customer-delivery.service.js';
 import type { JobContext, JobHandler } from '../job-contract.js';
 import { QUEUE_NAMES } from '../queues.js';
@@ -17,6 +17,18 @@ export class CustomerDeliveryJob implements JobHandler<Record<string, never>> {
 
   async handle(_payload: Record<string, never>, context: JobContext): Promise<void> {
     await this.service.runDue(context.signal === undefined ? {} : { signal: context.signal });
+  }
+}
+
+/** `integration.customer.refusal-purge`: deletes refused-duplicate records older than 24 hours (owner ruling 2026-11-13). */
+export class CustomerRefusalPurgeJob implements JobHandler<Record<string, never>> {
+  readonly queue = QUEUE_NAMES.integrationCustomerRefusalPurge;
+  readonly payload = z.object({});
+
+  constructor(private readonly retention: CustomerRefusalRetention) {}
+
+  async handle(): Promise<void> {
+    await this.retention.purge();
   }
 }
 

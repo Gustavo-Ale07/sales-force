@@ -12,7 +12,7 @@ const DOC = '11222333000181';
 const GENERIC = 'Não foi possível cadastrar este documento. Procure o backoffice.';
 
 function mirrorHolder(overrides: Partial<Extract<DocumentHolder, { source: 'mirror' }>> = {}): DocumentHolder {
-  return { source: 'mirror', code: 555, name: 'Metalúrgica Alfa Ltda', sellerCode: 7, usable: true, ...overrides };
+  return { source: 'mirror', code: 555, name: 'Metalúrgica Alfa Ltda', sellerCode: 7, usable: true, inactive: false, blocked: false, deleted: false, ...overrides };
 }
 const NOW = new Date('2026-11-13T12:00:00Z');
 
@@ -284,7 +284,7 @@ describe('CustomerRegistrationService duplicate refusal (I-1)', () => {
   describe('(b) the message depends on the portfolio, the status and the shape do not', () => {
     const cases: Array<[string, Partial<Extract<DocumentHolder, { source: 'mirror' }>>]> = [
       ['a customer of another seller', { sellerCode: 8 }],
-      ['an inactive or blocked customer of the seller', { sellerCode: 7, usable: false }],
+      ['an inactive or blocked customer of the seller', { sellerCode: 7, usable: false, inactive: true }],
       ['a customer without a seller', { sellerCode: null }],
     ];
 
@@ -338,11 +338,31 @@ describe('CustomerRegistrationService duplicate refusal (I-1)', () => {
       }
     });
 
-    it('a manager is still given the generic message for an inactive or blocked customer', async () => {
-      const { service, repo } = build({ scope: { kind: 'all' } });
-      repo.mirror.set(DOC, mirrorHolder({ sellerCode: 8, usable: false }));
-      const error = (await service.create(user({ role: 'manager', sellerCodes: [] }), request({ sellerCode: 8 })).catch((e: unknown) => e)) as AppError;
-      expect(error.message).toBe(GENERIC);
+    it.each([
+      ['inactive', { inactive: true }, 'Já existe com este documento, código 555, inativo no Sankhya. Procure o backoffice.'],
+      ['blocked', { blocked: true }, 'Já existe com este documento, código 555, bloqueado no Sankhya. Procure o backoffice.'],
+      ['deleted', { deleted: true }, 'Já existe com este documento, código 555, excluído no Sankhya. Procure o backoffice.'],
+      ['inactive and blocked', { inactive: true, blocked: true }, 'Já existe com este documento, código 555, inativo e bloqueado no Sankhya. Procure o backoffice.'],
+    ] as const)('a manager or admin (scope: everyone) is told code and situation only for a %s customer', async (_label, flags, expected) => {
+      for (const role of ['manager', 'admin'] as const) {
+        const { service, repo } = build({ scope: { kind: 'all' } });
+        repo.mirror.set(DOC, mirrorHolder({ sellerCode: 8, usable: false, ...flags }));
+        const error = (await service.create(user({ role, sellerCodes: [] }), request({ sellerCode: 8 })).catch((e: unknown) => e)) as AppError;
+        expect(error.message).toBe(expected);
+        expect(error.code).toBe('conflict');
+        expect(error.details).toEqual({ reason: 'document_already_registered' });
+        expect(error.message).not.toContain('Metalúrgica');
+      }
+    });
+
+    it('a seller keeps the generic message for an inactive, blocked or deleted holder, whoever owns it', async () => {
+      for (const flags of [{ inactive: true }, { blocked: true }, { deleted: true }]) {
+        for (const sellerCode of [7, 8, null]) {
+          const { service, repo } = build({ scope: sellerScope });
+          repo.mirror.set(DOC, mirrorHolder({ sellerCode, usable: false, ...flags }));
+          expect((await refusal(service, user())).message).toBe(GENERIC);
+        }
+      }
     });
 
     it('a manager whose scope is a subset of sellers gets the generic message for a customer outside it', async () => {
@@ -383,7 +403,8 @@ describe('CustomerRegistrationService duplicate refusal (I-1)', () => {
 
 /** M-1: the same request id used by another account is a conflict, not a 500, and reveals nothing. */
 describe('CustomerRegistrationService request id owned by another account (M-1)', () => {
-  it.each(['customer_registration_origin_key_uq', 'customer_registration_account_request_uq'])('a unique violation on %s answers 409 idempotency_conflict', async (constraint) => {
+  // integration_outbox_origin_id_uq: the registration row of an old request was purged (30 days) but its outbox row, which keeps the origin key, was not.
+it.each(['customer_registration_origin_key_uq', 'customer_registration_account_request_uq', 'integration_outbox_origin_id_uq'])('a unique violation on %s answers 409 idempotency_conflict', async (constraint) => {
     const { service, repo } = build();
     repo.insertFailure = { code: '23505', constraint };
     const error = (await service.create(user({ accountId: 'acc-2' }), request()).catch((e: unknown) => e)) as AppError;

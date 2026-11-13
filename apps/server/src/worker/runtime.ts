@@ -25,8 +25,8 @@ import type { ConfigurationSyncService } from '../sync/configuration-sync.servic
 import { ConfigurationSyncJob } from './jobs/configuration-sync.job.js';
 import type { SyncRefreshRunner } from '../sync/sync-refresh-runner.service.js';
 import { SyncRefreshJob } from './jobs/sync-refresh.job.js';
-import { CustomerDeliveryJob, CustomerPayloadPurgeJob } from './jobs/customer-delivery.job.js';
-import type { CustomerPayloadRetention } from '../integration/customer-payload-retention.js';
+import { CustomerDeliveryJob, CustomerPayloadPurgeJob, CustomerRefusalPurgeJob } from './jobs/customer-delivery.job.js';
+import type { CustomerPayloadRetention, CustomerRefusalRetention } from '../integration/customer-payload-retention.js';
 import type { CustomerDeliveryService } from '../integration/customer-delivery.service.js';
 
 /** How often the worker looks for "Atualizar dados" requests recorded by the API. */
@@ -38,6 +38,7 @@ import {
   ORDER_DELIVERY_CRON,
   ORDER_DRY_RUN_PURGE_CRON,
   CUSTOMER_PAYLOAD_PURGE_CRON,
+  CUSTOMER_REFUSAL_PURGE_CRON,
   ORDER_ERP_STATUS_CRON,
   QUEUE_NAMES,
   QUEUE_REGISTRY,
@@ -105,6 +106,8 @@ export interface WorkerRuntimeDeps {
    */
   /** Personal-data retention of finished customer commands (M-5). Independent of the customer-write switch: the data persists after it is turned off. */
   readonly customerPayloadRetention?: { readonly service: CustomerPayloadRetention };
+  /** Daily purge of refused-duplicate records older than 24 hours. Independent of the customer-write switch. */
+  readonly customerRefusalRetention?: { readonly service: CustomerRefusalRetention };
   readonly customerDelivery?: { readonly service: CustomerDeliveryService; readonly triggerMs?: number };
   /**
    * Configuration read from Sankhya (CFG-8). Present only when CONFIG_SYNC_FROM_SANKHYA=1: the handler is then
@@ -198,8 +201,9 @@ export class WorkerRuntime {
               ...(orderDelivery.status === undefined ? [] : [new OrderErpStatusJob(orderDelivery.status)]),
             ];
       const { customerDelivery } = this.deps;
-      const { customerPayloadRetention } = this.deps;
+      const { customerPayloadRetention, customerRefusalRetention } = this.deps;
       const customerHandlers = [
+        ...(customerRefusalRetention === undefined ? [] : [new CustomerRefusalPurgeJob(customerRefusalRetention.service)]),
         ...(customerDelivery === undefined ? [] : [new CustomerDeliveryJob(customerDelivery.service)]),
         ...(customerPayloadRetention === undefined ? [] : [new CustomerPayloadPurgeJob(customerPayloadRetention.service)]),
       ];
@@ -281,6 +285,10 @@ export class WorkerRuntime {
       if (queues.some((spec) => spec.name === QUEUE_NAMES.integrationCustomerPayloadPurge)) {
         if (customerPayloadRetention === undefined) await boss.unschedule(QUEUE_NAMES.integrationCustomerPayloadPurge);
         else await boss.schedule(QUEUE_NAMES.integrationCustomerPayloadPurge, CUSTOMER_PAYLOAD_PURGE_CRON, {});
+      }
+      if (queues.some((spec) => spec.name === QUEUE_NAMES.integrationCustomerRefusalPurge)) {
+        if (customerRefusalRetention === undefined) await boss.unschedule(QUEUE_NAMES.integrationCustomerRefusalPurge);
+        else await boss.schedule(QUEUE_NAMES.integrationCustomerRefusalPurge, CUSTOMER_REFUSAL_PURGE_CRON, {});
       }
       if (customerDelivery !== undefined && customerHandlers.length > 0) this.#startCustomerTrigger(customerDelivery);
 
