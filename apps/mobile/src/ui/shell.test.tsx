@@ -30,6 +30,7 @@ function fakeOffline(
   localOrders: LocalOrdersPort = fakeLocalOrders(),
   productImages?: ProductImageStore,
   repositories: Repositories = fakeDependencies().repositories,
+  unsent = 0,
 ) {
   const syncNow = jest.fn(async () => status);
   const sync: SyncManager = {
@@ -39,7 +40,11 @@ function fakeOffline(
     refresh: async () => status,
   };
   const forget = jest.fn(async () => undefined);
+  const endSession = jest.fn(async () => ({ cleared: unsent === 0, unsent }));
   const offline: OfflineServices = {
+    unsentWork: async () => unsent,
+    endSession,
+    wipeAll: async () => undefined,
     session: { load: async () => remembered, remember: async () => undefined, forget },
     forAccount: () => ({
       repositories,
@@ -49,7 +54,7 @@ function fakeOffline(
       ...(productImages === undefined ? {} : { productImages }),
     }),
   };
-  return { offline, forget, syncNow };
+  return { offline, forget, syncNow, endSession };
 }
 
 const unreachable = () =>
@@ -107,6 +112,40 @@ describe("Shell", () => {
     await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
     await signOutFromProfile();
     await waitFor(() => expect(forget).toHaveBeenCalled());
+  });
+
+  describe("sign-out and the local cache (owner 2026-11-13)", () => {
+    const confirmText = async (unsent: number) => {
+      const { offline, endSession } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() }, undefined, undefined, undefined, undefined, unsent);
+      let message = "";
+      const alert = jest.spyOn(Alert, "alert").mockImplementation((_title, text, buttons) => {
+        message = String(text);
+        buttons?.find((button) => button.style === "destructive")?.onPress?.();
+      });
+      await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
+      await fireEvent.press(await screen.findByRole("tab", { name: "Perfil" }));
+      await fireEvent.press(screen.getByRole("button", { name: "Sair" }));
+      await waitFor(() => expect(endSession).toHaveBeenCalled());
+      alert.mockRestore();
+      return { message, endSession };
+    };
+
+    it("nothing unsent: says the downloaded data is cleared, and asks the services to clear it for this account", async () => {
+      const { message, endSession } = await confirmText(0);
+      expect(message).toMatch(/serão apagados/);
+      expect(endSession).toHaveBeenCalledWith(account.id);
+    });
+
+    it("something unsent: warns how many were not sent and that they stay on the device", async () => {
+      const { message } = await confirmText(3);
+      expect(message).toContain("3 itens ainda não enviados");
+      expect(message).toMatch(/continuam salvos/);
+    });
+
+    it("one unsent item is singular", async () => {
+      const { message } = await confirmText(1);
+      expect(message).toContain("1 item ainda não enviado");
+    });
   });
 
   describe("full sync only on a real login", () => {

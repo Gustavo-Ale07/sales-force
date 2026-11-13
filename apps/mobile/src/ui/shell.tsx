@@ -151,8 +151,8 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
   /**
    * Explicit sign-out. A failed server logout is never swallowed: the session may still be valid on the server, so the
    * seller is told and STAYS signed in (retry or cancel). There is deliberately no "leave anyway" path: it would look like
-   * a sign-out while the server session is still open. Nothing local is deleted either way: drafts and
-   * the outbox stay for the next sign-in (data-loss risk; wiping is an owner decision).
+   * a sign-out while the server session is still open. Drafts and the outbox are never deleted by
+   * a sign-out; the downloaded cache is cleared only when nothing is unsent (owner 2026-11-13).
    */
   async function signOut() {
     try {
@@ -174,6 +174,8 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
   async function leaveDevice() {
     // Forget the remembered account; drafts and unsent orders stay on the device for the next sign-in.
     await offline?.session.forget().catch(() => undefined);
+    // Nothing unsent: the downloaded cache goes too. Something unsent: everything stays, isolated per account (the warning was shown before).
+    if (account !== null) await offline?.endSession(account.id).catch(() => undefined);
     // Thumbnails are a cache of the signed-in account's catalog: gone with the sign-out (they are re-fetchable).
     await services?.productImages?.purge().catch(() => undefined);
     setQuarantineOpen(false);
@@ -365,6 +367,7 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
                   })}
               {...(updateAvailable ? { onCheckUpdate: installUpdate } : {})}
               onSignOut={() => void signOut()}
+              {...(account !== null && offline !== undefined ? { loadUnsent: () => offline.unsentWork(account.id) } : {})}
             />
           </Pane>
           {quarantineOpen && services !== null && (

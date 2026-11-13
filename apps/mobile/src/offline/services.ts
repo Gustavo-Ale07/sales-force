@@ -1,4 +1,4 @@
-import { createSyncManager, type InternetState, type OfflineEnv, type SqlDatabase, type SyncManager } from "@salesforce/mobile-db";
+import { clearReferenceCache, countUnsentLocalWork, createSyncManager, wipeLocalDatabase, type InternetState, type OfflineEnv, type SqlDatabase, type SyncManager } from "@salesforce/mobile-db";
 import type { Account } from "../auth/auth-port";
 import type { ApiClient } from "../data/api";
 import type { Repositories } from "../data/ports";
@@ -28,6 +28,15 @@ export interface AccountServices {
 export interface OfflineServices {
   readonly session: OfflineSessionStore;
   forAccount(account: Account): AccountServices;
+  /** Orders and customers of this account that never reached the server (what a sign-out or a wipe would leave behind or lose). */
+  unsentWork(accountId: string): Promise<number>;
+  /**
+   * After an ordinary sign-out: with nothing unsent the downloaded cache is cleared; with something unsent (or an unknown count)
+   * everything stays on the device, isolated per account, and the count is returned so the seller can be told.
+   */
+  endSession(accountId: string): Promise<{ readonly cleared: boolean; readonly unsent: number | null }>;
+  /** Revocation or deactivation: deletes the whole local database (orders, outbox, pending customers, cache), pending work included. */
+  wipeAll(): Promise<void>;
 }
 
 export function createOfflineServices(deps: {
@@ -48,6 +57,23 @@ export function createOfflineServices(deps: {
 
   return {
     session: createOfflineSessionStore(deps.db, env),
+    unsentWork: (accountId) => countUnsentLocalWork(deps.db, accountId),
+    async endSession(accountId) {
+      let unsent: number;
+      try {
+        unsent = await countUnsentLocalWork(deps.db, accountId);
+      } catch {
+        return { cleared: false, unsent: null };
+      }
+      if (unsent > 0) return { cleared: false, unsent };
+      await clearReferenceCache(deps.db);
+      managers.clear();
+      return { cleared: true, unsent: 0 };
+    },
+    async wipeAll() {
+      await wipeLocalDatabase(deps.db);
+      managers.clear();
+    },
     forAccount(account) {
       const existing = managers.get(account.id);
       if (existing !== undefined) return existing;

@@ -13,6 +13,8 @@ export interface ProfileScreenProps extends SyncViewProps {
   /** In-app APK update (Android builds with a channel). Resolves with the final message; absent = no update section. */
   readonly onCheckUpdate?: (onStatus: (text: string) => void) => Promise<string>;
   readonly onSignOut: () => void;
+  /** Orders and customers of this account not yet sent (outbox + queue). Absent = falls back to the sync counters. */
+  readonly loadUnsent?: () => Promise<number>;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -33,7 +35,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function ProfileScreen({ account, onOpenLocalOrders, onCheckUpdate, onSignOut, ...sync }: ProfileScreenProps) {
+export function ProfileScreen({ account, onOpenLocalOrders, onCheckUpdate, onSignOut, loadUnsent, ...sync }: ProfileScreenProps) {
   const [updateText, setUpdateText] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
   async function checkUpdate() {
@@ -46,13 +48,20 @@ export function ProfileScreen({ account, onOpenLocalOrders, onCheckUpdate, onSig
     }
   }
 
-  function confirmSignOut() {
-    const pending = sync.status.pending;
+  async function confirmSignOut() {
+    let unsent = sync.status.pending + sync.status.needsAttention;
+    if (loadUnsent !== undefined) {
+      try {
+        unsent = await loadUnsent();
+      } catch {
+        // Unknown count: keep the counters, which only err on the side of warning.
+      }
+    }
     Alert.alert(
       "Sair do Force",
-      pending > 0
-        ? `Há ${pending} ${pending === 1 ? "alteração pendente" : "alterações pendentes"} neste aparelho. Elas continuam salvas e serão enviadas no próximo acesso.`
-        : "Pedidos salvos neste aparelho continuam guardados para o próximo acesso.",
+      unsent > 0
+        ? `Há ${unsent} ${unsent === 1 ? "item ainda não enviado" : "itens ainda não enviados"} neste aparelho. Eles continuam salvos, só para esta conta, e serão enviados quando você entrar de novo e sincronizar.`
+        : "Os dados baixados (clientes, produtos e preços) serão apagados deste aparelho. Entre de novo para baixá-los.",
       [
         { text: "Cancelar", style: "cancel" },
         { text: "Sair", style: "destructive", onPress: onSignOut },
@@ -108,7 +117,7 @@ export function ProfileScreen({ account, onOpenLocalOrders, onCheckUpdate, onSig
         {APP_ENVIRONMENT_LABEL !== null && <InfoRow label="Ambiente" value={APP_ENVIRONMENT_LABEL} />}
       </Section>
 
-      <Pressable style={styles.signOut} onPress={confirmSignOut} accessibilityRole="button" accessibilityLabel="Sair">
+      <Pressable style={styles.signOut} onPress={() => void confirmSignOut()} accessibilityRole="button" accessibilityLabel="Sair">
         <Text style={styles.signOutText}>Sair</Text>
       </Pressable>
     </ScrollView>
