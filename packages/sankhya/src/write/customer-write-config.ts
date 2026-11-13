@@ -11,9 +11,16 @@ import { SANDBOX_WRITE_HOSTS, writeHostRefusal } from './host-allowlist.js';
  */
 export interface CustomerWriteSettings {
   readonly enabled: boolean;
+  /**
+   * Dedicated origin column of the ERP partner (SNK-5), from `SANKHYA_CUSTOMER_ORIGIN_FIELD`. Required while enabled;
+   * never a literal in code and never the Vidya columns.
+   */
+  readonly originField: string | null;
+  /** Default price table of a new customer (`SANKHYA_CUSTOMER_PRICE_TABLE`, a positive integer); `null` = the ERP default applies. */
+  readonly priceTableCode: number | null;
 }
 
-export const CUSTOMER_WRITE_DISABLED: CustomerWriteSettings = Object.freeze({ enabled: false });
+export const CUSTOMER_WRITE_DISABLED: CustomerWriteSettings = Object.freeze({ enabled: false, originField: null, priceTableCode: null });
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -43,7 +50,20 @@ export function parseCustomerWriteSettings(env: Env): { settings: CustomerWriteS
   if (baseUrl === undefined || writeHostRefusal(baseUrl) !== null) {
     problems.push(`SANKHYA_CUSTOMER_WRITE_ENABLED=true requires SANKHYA_BASE_URL to be exactly one of the Sandbox write hosts fixed in code (${SANDBOX_WRITE_HOSTS.length} allowed).`);
   }
-  return { settings: { enabled: problems.length === 0 }, problems };
+  const originField = value(env, 'SANKHYA_CUSTOMER_ORIGIN_FIELD');
+  if (originField === undefined || !/^[A-Za-z][A-Za-z0-9_]{0,29}$/.test(originField) || /^AD_(VDYORIG|NUVIDYA)$/i.test(originField)) {
+    problems.push('SANKHYA_CUSTOMER_ORIGIN_FIELD must name the dedicated partner origin column (letters, digits, underscore) and never a Vidya column (SNK-5).');
+  }
+  const rawTable = value(env, 'SANKHYA_CUSTOMER_PRICE_TABLE');
+  let priceTableCode: number | null = null;
+  if (rawTable !== undefined) {
+    if (!/^[1-9][0-9]{0,8}$/.test(rawTable)) problems.push('SANKHYA_CUSTOMER_PRICE_TABLE must be a positive integer when set.');
+    else priceTableCode = Number(rawTable);
+  }
+  return {
+    settings: { enabled: problems.length === 0, originField: problems.length === 0 ? (originField ?? null) : null, priceTableCode },
+    problems,
+  };
 }
 
 /** Health-page text; carries no host, credential or identifier. */

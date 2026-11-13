@@ -38,6 +38,12 @@ export const AUDIT_ACTIONS = {
   orderConverted: 'order.converted',
   /** D-AR: a customer creation was recorded and queued for the ERP (ids, seller code and person type only; no personal data). */
   customerRegistrationRequested: 'customer.registration_requested',
+  /** D-AR: the worker created (or adopted by origin) the customer in the ERP and reread it (ids and codes only). */
+  customerErpCreated: 'customer.erp_created',
+  /** D-AR: the ERP refused the creation for good (class and stable code only; no personal data). */
+  customerErpRejected: 'customer.erp_rejected',
+  /** D-AR: the outcome is not known (or the reread did not match) and a person has to look. */
+  customerErpUnknown: 'customer.erp_unknown',
   orderTemplateCreated: 'order_template.created',
   orderTemplateReplaced: 'order_template.replaced',
   orderTemplateDeleted: 'order_template.deleted',

@@ -25,11 +25,15 @@ import type { ConfigurationSyncService } from '../sync/configuration-sync.servic
 import { ConfigurationSyncJob } from './jobs/configuration-sync.job.js';
 import type { SyncRefreshRunner } from '../sync/sync-refresh-runner.service.js';
 import { SyncRefreshJob } from './jobs/sync-refresh.job.js';
+import { CustomerDeliveryJob } from './jobs/customer-delivery.job.js';
+import type { CustomerDeliveryService } from '../integration/customer-delivery.service.js';
 
 /** How often the worker looks for "Atualizar dados" requests recorded by the API. */
 export const SYNC_REFRESH_POLL_MS = 2_000;
 import {
   CONFIGURATION_SYNC_CRON,
+  CUSTOMER_DELIVERY_CRON,
+  CUSTOMER_DELIVERY_TRIGGER_MS,
   ORDER_DELIVERY_CRON,
   ORDER_DRY_RUN_PURGE_CRON,
   ORDER_ERP_STATUS_CRON,
@@ -93,6 +97,12 @@ export interface WorkerRuntimeDeps {
    */
   readonly orderDelivery?: { readonly service: OrderDeliveryService; readonly status?: OrderErpStatusService };
   /**
+   * ERP customer delivery (D-AR). Present only when the worker-side customer-write switch is on (Sandbox/staging); absent = no
+   * handler, and a schedule stored by an earlier configuration is dropped. The short trigger runs the same sweep every
+   * couple of seconds (the API waits up to 15 s); claiming uses SKIP LOCKED, so overlapping runs are safe.
+   */
+  readonly customerDelivery?: { readonly service: CustomerDeliveryService; readonly triggerMs?: number };
+  /**
    * Configuration read from Sankhya (CFG-8). Present only when CONFIG_SYNC_FROM_SANKHYA=1: the handler is then
    * registered, `sync.configuration` scheduled every 15 minutes and enqueued once at start. Absent = no handler, and a
    * schedule stored by an earlier configuration is dropped.
@@ -118,6 +128,7 @@ export class WorkerRuntime {
   #healthServer: HealthServer | undefined;
   #started = false;
   #refreshTimer: ReturnType<typeof setInterval> | undefined;
+  #customerTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(private readonly deps: WorkerRuntimeDeps) {
     this.health = new WorkerHealth(deps.now);
@@ -182,6 +193,8 @@ export class WorkerRuntime {
               new OrderDryRunPurgeJob(orderDelivery.service),
               ...(orderDelivery.status === undefined ? [] : [new OrderErpStatusJob(orderDelivery.status)]),
             ];
+      const { customerDelivery } = this.deps;
+      const customerHandlers = customerDelivery === undefined ? [] : [new CustomerDeliveryJob(customerDelivery.service)];
       const { configurationSync } = this.deps;
       const configurationHandlers = configurationSync === undefined ? [] : [new ConfigurationSyncJob(configurationSync.service)];
       const { syncRefresh } = this.deps;
@@ -195,6 +208,7 @@ export class WorkerRuntime {
         ...mirrorHandlers,
         ...mediaHandlers,
         ...orderHandlers,
+        ...customerHandlers,
         ...configurationHandlers,
         ...(this.deps.extraHandlers ?? []),
       ];
@@ -250,6 +264,13 @@ export class WorkerRuntime {
         if (orderDelivery === undefined || (queue === QUEUE_NAMES.syncErpOrderStatus && orderDelivery.status === undefined)) await boss.unschedule(queue);
         else await boss.schedule(queue, cron, {});
       }
+
+      if (queues.some((spec) => spec.name === QUEUE_NAMES.integrationCustomerDeliver)) {
+        // Disabled (the default): drop a schedule stored by an earlier configuration.
+        if (customerDelivery === undefined) await boss.unschedule(QUEUE_NAMES.integrationCustomerDeliver);
+        else await boss.schedule(QUEUE_NAMES.integrationCustomerDeliver, CUSTOMER_DELIVERY_CRON, {});
+      }
+      if (customerDelivery !== undefined && customerHandlers.length > 0) this.#startCustomerTrigger(customerDelivery);
 
       if (queues.some((spec) => spec.name === QUEUE_NAMES.syncConfiguration)) {
         if (configurationSync === undefined) {
@@ -315,9 +336,28 @@ export class WorkerRuntime {
     this.#refreshTimer = setInterval(() => void tick(), refresh.pollMs ?? SYNC_REFRESH_POLL_MS);
   }
 
+  /** Short-interval sweep of due customer creations; never overlaps itself, and a failing run only logs. */
+  #startCustomerTrigger(delivery: { readonly service: CustomerDeliveryService; readonly triggerMs?: number }): void {
+    let busy = false;
+    const tick = async () => {
+      if (busy) return;
+      busy = true;
+      try {
+        await delivery.service.runDue();
+      } catch (error) {
+        this.deps.logger.warn({ err: error }, 'customer delivery trigger failed; the next tick retries');
+      } finally {
+        busy = false;
+      }
+    };
+    this.#customerTimer = setInterval(() => void tick(), delivery.triggerMs ?? CUSTOMER_DELIVERY_TRIGGER_MS);
+  }
+
   async #stopBoss(graceful: boolean): Promise<void> {
     if (this.#refreshTimer !== undefined) clearInterval(this.#refreshTimer);
     this.#refreshTimer = undefined;
+    if (this.#customerTimer !== undefined) clearInterval(this.#customerTimer);
+    this.#customerTimer = undefined;
     const boss = this.#boss;
     this.#boss = undefined;
     if (boss === undefined) return;

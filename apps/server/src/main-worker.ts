@@ -19,7 +19,7 @@ const DRY_RUN_ORIGIN_FIELD_PLACEHOLDER = 'AD_ORIGEM_NAO_CONFIGURADA';
  * installs queue tables (DATA-2) and performs no Sankhya write (SNK-4).
  */
 runMain('worker', async () => {
-  const { env, gateway, gatewayDescription, orderWrite, orderRequestBudget, salesHistory } = loadWorkerConfig(process.env);
+  const { env, gateway, gatewayDescription, orderWrite, customerWrite, orderRequestBudget, salesHistory } = loadWorkerConfig(process.env);
   const logger = createLogger({ level: env.LOG_LEVEL, service: 'worker' });
   const db = createDb(env.DATABASE_URL.reveal(), { max: env.DB_POOL_MAX, applicationName: 'salesforce-worker-app' });
   logPoolErrors(db, logger);
@@ -72,6 +72,11 @@ runMain('worker', async () => {
           },
       // CFG-8: configuration read from Sankhya exists only when explicitly enabled (default off).
       env.CONFIG_SYNC_FROM_SANKHYA ? { gateway } : undefined,
+      // D-AR: customer delivery exists only with the customer-write switch on, which loadWorkerConfig already
+      // limited to staging + Sandbox + allow-listed host, and which requires the dedicated origin field.
+      customerWrite.enabled && customerWrite.originField !== null
+        ? { gateway, settings: { originField: customerWrite.originField, priceTableCode: customerWrite.priceTableCode } }
+        : undefined,
     ),
     { logger: new NestPinoLogger(logger), abortOnError: false },
   );

@@ -8,16 +8,32 @@ const ON = {
   SANKHYA_BASE_URL: 'https://api.sandbox.sankhya.com.br',
   NODE_ENV: 'production',
   SF_DEPLOY_ENVIRONMENT: 'staging',
+  SANKHYA_CUSTOMER_ORIGIN_FIELD: 'AD_FORCEORIGEM',
 };
 
 describe('customer write settings (D-AR, flag closed by default)', () => {
   it('is closed by default and needs nothing', () => {
-    expect(parseCustomerWriteSettings({})).toEqual({ settings: { enabled: false }, problems: [] });
+    expect(parseCustomerWriteSettings({})).toEqual({ settings: { enabled: false, originField: null, priceTableCode: null }, problems: [] });
     expect(parseCustomerWriteSettings({ SANKHYA_CUSTOMER_WRITE_ENABLED: 'false' }).settings.enabled).toBe(false);
   });
 
   it('opens only on staging, against the Sandbox allowlist, with the explicit sandbox mode', () => {
-    expect(parseCustomerWriteSettings(ON)).toEqual({ settings: { enabled: true }, problems: [] });
+    expect(parseCustomerWriteSettings(ON)).toEqual({ settings: { enabled: true, originField: 'AD_FORCEORIGEM', priceTableCode: null }, problems: [] });
+  });
+
+  it('reads the default price table of a new customer', () => {
+    expect(parseCustomerWriteSettings({ ...ON, SANKHYA_CUSTOMER_PRICE_TABLE: '5' }).settings.priceTableCode).toBe(5);
+  });
+
+  it.each([
+    ['missing origin field', { SANKHYA_CUSTOMER_ORIGIN_FIELD: undefined }],
+    ['a Vidya origin column', { SANKHYA_CUSTOMER_ORIGIN_FIELD: 'AD_VDYORIG' }],
+    ['an origin field that is not a column name', { SANKHYA_CUSTOMER_ORIGIN_FIELD: 'x; drop' }],
+    ['a price table that is not a positive integer', { SANKHYA_CUSTOMER_PRICE_TABLE: '0' }],
+  ])('refuses at boot: %s', (_name, override) => {
+    const r = parseCustomerWriteSettings({ ...ON, ...override });
+    expect(r.settings.enabled).toBe(false);
+    expect(r.problems.length).toBeGreaterThan(0);
   });
 
   it('rejects garbage values', () => {
@@ -45,7 +61,7 @@ describe('customer write settings (D-AR, flag closed by default)', () => {
   });
 
   it('describes itself for the health page without secrets', () => {
-    expect(describeCustomerWrite({ enabled: false })).toBe('escrita de cliente: desligada');
-    expect(describeCustomerWrite({ enabled: true })).toBe('escrita de cliente: ligada (Sandbox)');
+    expect(describeCustomerWrite({ enabled: false, originField: null, priceTableCode: null })).toBe('escrita de cliente: desligada');
+    expect(describeCustomerWrite({ enabled: true, originField: 'AD_FORCEORIGEM', priceTableCode: null })).toBe('escrita de cliente: ligada (Sandbox)');
   });
 });

@@ -19,6 +19,8 @@ export const QUEUE_NAMES = {
   mediaProducts: 'media.products',
   /** Sweep of due `integration_outbox` order deliveries (SNK-7). Scheduled only while order writing is enabled. */
   integrationOrderDeliver: 'integration.order.deliver',
+  /** Sweep of due `customer.upsert` outbox rows (D-AR). Registered and scheduled only while customer writing is enabled. */
+  integrationCustomerDeliver: 'integration.customer.deliver',
   /** Removes dry-run payload records older than 30 days (SNK-7 D-6). */
   integrationOrderDryRunPurge: 'integration.order.dry-run-purge',
   /** Reads the ERP status of sent orders (SNK-7 P2). Read-only; scheduled together with order delivery. */
@@ -34,6 +36,10 @@ export const CONFIGURATION_SYNC_CRON = '*/15 * * * *';
 
 /** Every minute; the outbox row decides what is actually due (`next_attempt_at`). */
 export const ORDER_DELIVERY_CRON = '* * * * *';
+/** Safety net for customer delivery; the short trigger below makes the API's 15 s wait realistic. */
+export const CUSTOMER_DELIVERY_CRON = '* * * * *';
+/** The worker looks for a due customer creation this often (the API waits up to 15 s for the answer). */
+export const CUSTOMER_DELIVERY_TRIGGER_MS = 2000;
 /** Daily, off-peak. */
 export const ORDER_DRY_RUN_PURGE_CRON = '17 3 * * *';
 /** Every 15 minutes (P2). */
@@ -96,6 +102,18 @@ export const QUEUE_REGISTRY: readonly QueueSpec[] = [
   // retries a sweep; the next minute's tick is the retry. `short` keeps at most one queued.
   {
     name: QUEUE_NAMES.integrationOrderDeliver,
+    options: {
+      policy: 'short',
+      retryLimit: 0,
+      expireInSeconds: 600,
+      retentionSeconds: 3600,
+      deleteAfterSeconds: 24 * 3600,
+      deadLetter: QUEUE_NAMES.deadLetter,
+    },
+  },
+  // Customer delivery sweeps (D-AR): same shape as the order sweep; the outbox row carries retries and backoff.
+  {
+    name: QUEUE_NAMES.integrationCustomerDeliver,
     options: {
       policy: 'short',
       retryLimit: 0,

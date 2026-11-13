@@ -18,7 +18,9 @@ import {
   type OrderDeliverySettings,
 } from '../integration/order-delivery.service.js';
 import { OrderErpStatusService } from '../integration/order-erp-status.service.js';
-import type { RequestBudget, SankhyaReadPort } from '@salesforce/sankhya';
+import type { RequestBudget, SankhyaPartnerWritePort, SankhyaReadPort } from '@salesforce/sankhya';
+import { CustomerDeliveryService, type CustomerDeliverySettings } from '../integration/customer-delivery.service.js';
+import { DrizzleCustomerDeliveryStore } from '../integration/customer-delivery.store.js';
 import type { SalesHistorySyncConfig } from '../sync/sales-history-config.js';
 import { ConfigurationSyncService } from '../sync/configuration-sync.service.js';
 import { SyncRefreshRunner } from '../sync/sync-refresh-runner.service.js';
@@ -40,6 +42,12 @@ export interface OrderDeliveryWiring {
   readonly settings: OrderDeliverySettings;
   /** M3: request cap of the delivery (live mode only). */
   readonly budget?: RequestBudget | null;
+}
+
+/** ERP customer delivery wiring (D-AR); passed only when the worker-side customer-write switch is on (Sandbox/staging). */
+export interface CustomerDeliveryWiring {
+  readonly gateway: SankhyaPartnerWritePort;
+  readonly settings: CustomerDeliverySettings;
 }
 
 /** Configuration read from Sankhya (CFG-8); passed only when CONFIG_SYNC_FROM_SANKHYA=1. Read port only. */
@@ -67,6 +75,7 @@ export class WorkerModule {
     media?: ProductMediaWiring,
     orderDelivery?: OrderDeliveryWiring,
     configurationSync?: ConfigurationSyncWiring,
+    customerDelivery?: CustomerDeliveryWiring,
   ): DynamicModule {
     return {
       module: WorkerModule,
@@ -118,6 +127,19 @@ export class WorkerModule {
                     },
                   }),
               ...(configurationService === undefined ? {} : { configurationSync: { service: configurationService } }),
+              ...(customerDelivery === undefined
+                ? {}
+                : {
+                    customerDelivery: {
+                      service: new CustomerDeliveryService({
+                        store: new DrizzleCustomerDeliveryStore(db.db, new AuditService(db.db, now)),
+                        gateway: customerDelivery.gateway,
+                        settings: customerDelivery.settings,
+                        logger,
+                        now,
+                      }),
+                    },
+                  }),
               ...(mirrorService === undefined
                 ? {}
                 : {
