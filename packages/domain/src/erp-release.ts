@@ -1,5 +1,5 @@
 /**
- * Release (liberação) state of an ERP order, from the facts of its release lines (TSILIB). Pure and deterministic:
+ * Release (liberação) state of an ERP order, from the facts of its release lines. Pure and deterministic:
  * it knows no Sankhya table or column. Owner rule (2026-11-10):
  *  - denied: some line is denied;
  *  - awaiting: some line has no release date and is not denied;

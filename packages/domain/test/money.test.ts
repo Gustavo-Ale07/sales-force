@@ -167,7 +167,7 @@ describe('discount', () => {
     expect(computeLineDiscountAmount('10', '28.94', '8')).toBe('23.20');
     expect(computeDiscountedLineTotal('10', '28.94', '8')).toBe('266.20'); // the old one-shot rounding gave 266.25
     expect(computeUnitDiscount('118.26', '7')).toBe('8.28');
-    expect(computeLineDiscountAmount('60', '118.26', '7')).toBe('496.80'); // VLRDESC, not 496.69
+    expect(computeLineDiscountAmount('60', '118.26', '7')).toBe('496.80'); // ERP stored discount, not 496.69
     expect(computeUnitDiscount('158.65', '7')).toBe('11.11');
     expect(computeLineDiscountAmount('15', '158.65', '7')).toBe('166.65');
     // order B: 4158 x 50 and 4159 x 10 at 8%

@@ -43,7 +43,7 @@ describe('classifyItemIpi', () => {
   });
 });
 
-describe('grand total equals the ERP VLRNOTA (D-AK): sum of net lines + IPI per line', () => {
+describe('grand total equals the ERP note total (D-AK): sum of net lines + IPI per line', () => {
   const total = (discountPercent: string) => {
     const net = computeDiscountedLineTotal('3', '8.20', discountPercent);
     return { net, ...computeOrderIpi([{ lineNetTotal: net, ipiCode: 5 }], net, rates) };

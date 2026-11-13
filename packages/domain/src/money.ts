@@ -156,7 +156,7 @@ export function computeUnitDiscount(unitPrice: DecimalString, discountPercent: D
   return p.value.mul(d.value).div(100).toDecimalPlaces(DISCOUNT_SCALE, Decimal.ROUND_HALF_UP).toFixed(DISCOUNT_SCALE);
 }
 
-/** Discount amount of a line, as the ERP stores it in VLRDESC: quantity x the per-unit rounded discount (D-AK). */
+/** Discount amount of a line, as the ERP stores it: quantity x the per-unit rounded discount (D-AK). */
 export function computeLineDiscountAmount(
   quantity: DecimalString,
   unitPrice: DecimalString,

@@ -27,7 +27,7 @@ describe('isReleaseLineDenied', () => {
 });
 
 describe('releaseStateOf', () => {
-  it('has no release state without TSILIB lines', () => {
+  it('has no release state without release lines', () => {
     expect(releaseStateOf([])).toBeNull();
   });
 

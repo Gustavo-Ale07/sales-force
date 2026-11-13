@@ -91,7 +91,7 @@ export interface Product {
   readonly reference: string | null;
   /** ERP IPI code pointing to a mirrored rate; undefined = not requested, null = none. Display estimate only (D-D). */
   readonly ipiCode?: number | null;
-  /** Selling step (TGFPRO.AGRUPMIN): quantities are multiples of it. undefined = not requested, null = none (step 0.01). */
+  /** Selling step (ERP product minimum-group field): quantities are multiples of it. undefined = not requested, null = none (step 0.01). */
   readonly quantityStep?: string | null;
 }
 

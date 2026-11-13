@@ -13,10 +13,10 @@ export type ErpBillingState = 'cancelled' | 'denied' | 'awaiting_release' | 'inv
 export const ERP_BILLING_STATES: readonly ErpBillingState[] = ['cancelled', 'denied', 'awaiting_release', 'invoiced', 'awaiting_billing', 'sent'];
 
 export interface ErpBillingFacts {
-  /** The note is gone from TGFCAB and was found in the cancellation tables. A missing note alone is NOT a cancellation. */
+  /** The note is gone from the ERP order header and was found in the cancellation tables. A missing note alone is NOT a cancellation. */
   readonly cancelled: boolean;
   readonly releaseState: ErpReleaseState | null;
-  /** A released sale note (TIPMOV 'V', STATUSNOTA 'L') exists with a TGFVAR link to this order. */
+  /** A released sale note (sale movement type, released status) exists with a link to this order. */
   readonly invoiced: boolean;
   /** STATUSNOTA of the order note ('A' not confirmed, 'L' confirmed). */
   readonly statusNota: string | null;
