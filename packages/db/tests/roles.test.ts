@@ -239,7 +239,7 @@ describe('db-roles.sql', () => {
     expect(await exists(old)).toBe(false);
   });
 
-  it('worker: cannot unsettle a confirmed row or backdate updated_at, so the delete guard cannot be bypassed through UPDATE', async () => {
+  it('worker: cannot unsettle a confirmed row, and updated_at never goes backwards, so the delete guard cannot be bypassed through UPDATE', async () => {
     const accountId = '0194a1b2-7c3d-7e4f-8a5b-6c7d8e9f0a02';
     await as(adminDbUrl, `INSERT INTO account (id, email, display_name, password_hash, role) VALUES ($1, 'upd@example.test', 'U', 'x', 'seller') ON CONFLICT DO NOTHING`, [accountId]);
     const seed = async (n: number, status: string, age: string) => {
@@ -256,15 +256,28 @@ describe('db-roles.sql', () => {
     const confirmed = await seed(1, 'confirmed', '90 days');
     // Confirmed never moves to another status (rejected would make it deletable).
     expect(await run(`UPDATE customer_registration SET status = 'rejected', erp_customer_code = NULL, updated_at = now() WHERE id = '${confirmed}'`)).toBeDefined();
-    // No backdating.
-    expect(await run(`UPDATE customer_registration SET updated_at = now() - interval '120 days' WHERE id = '${confirmed}'`)).toBeDefined();
+    // No backdating: the value is clamped to the stored one (no rejection, so clock skew cannot break a settle), never walked back.
+    const stamp = async (id: string) => (await as<{ t: string }>(adminDbUrl, 'SELECT updated_at::text AS t FROM customer_registration WHERE id = $1', [id]))[0]!.t;
+    const before = await stamp(confirmed);
+    expect(await run(`UPDATE customer_registration SET updated_at = now() - interval '120 days' WHERE id = '${confirmed}'`)).toBeUndefined();
+    expect(await stamp(confirmed)).toBe(before);
+    const steps = Array.from({ length: 100 }, () => `UPDATE customer_registration SET updated_at = updated_at - interval '30 seconds' WHERE id = '${confirmed}'`);
+    expect(await run(steps.join(';'))).toBeUndefined();
+    expect(await stamp(confirmed)).toBe(before);
     const pending = await seed(2, 'pending', '1 day');
-    expect(await run(`UPDATE customer_registration SET updated_at = now() - interval '90 days' WHERE id = '${pending}'`)).toBeDefined();
-    // The bypass attempt: reject, backdate, delete.
+    const pendingBefore = await stamp(pending);
+    expect(await run(`UPDATE customer_registration SET updated_at = now() - interval '90 days' WHERE id = '${pending}'`)).toBeUndefined();
+    expect(await stamp(pending)).toBe(pendingBefore);
+    // The bypass attempt: reject, backdate, delete. The date stays recent, so the delete is still denied.
     const victim = await seed(3, 'pending', '1 day');
-    expect(await run(`UPDATE customer_registration SET status = 'rejected', rejection_code = 'x', updated_at = now() - interval '90 days' WHERE id = '${victim}'`)).toBeDefined();
+    expect(await run(`UPDATE customer_registration SET status = 'rejected', rejection_code = 'x', updated_at = now() - interval '90 days' WHERE id = '${victim}'`)).toBeUndefined();
     expect(await run(`DELETE FROM customer_registration WHERE id = '${victim}'`)).toBeDefined();
     expect((await as(adminDbUrl, 'SELECT 1 FROM customer_registration WHERE id = ANY($1)', [[confirmed, victim]])).length).toBe(2);
+    // Not pushed into the future either (a row that never ages would escape the purge); a confirmed code never changes.
+    expect(await run(`UPDATE customer_registration SET updated_at = now() + interval '400 days' WHERE id = '${pending}'`)).toBeUndefined();
+    const aged = (await as<{ ok: boolean }>(adminDbUrl, `SELECT updated_at <= now() + interval '1 minute' AS ok FROM customer_registration WHERE id = $1`, [pending]))[0]!.ok;
+    expect(aged).toBe(true);
+    expect(await run(`UPDATE customer_registration SET erp_customer_code = 9999 WHERE id = '${confirmed}'`)).toBeDefined();
     // Legitimate transitions keep working.
     expect(await run(`UPDATE customer_registration SET status = 'unknown', updated_at = now() WHERE id = '${pending}'`)).toBeUndefined();
     expect(await run(`UPDATE customer_registration SET status = 'confirmed', erp_customer_code = 3001, updated_at = now() WHERE id = '${pending}'`)).toBeUndefined();
