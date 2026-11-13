@@ -76,6 +76,12 @@ export class CustomerRegistrationService {
     }
 
     const created = await this.attempt(async (tx) => {
+      // The pre-check above is only a fast path: the authoritative count runs under a per-account lock, so parallel
+      // requests of one account cannot all pass it.
+      await this.registrations.lockAccount(user.accountId, tx);
+      if ((await this.registrations.countSince(user.accountId, new Date(at.getTime() - HOUR_MS), tx)) >= MAX_CUSTOMER_CREATIONS_PER_HOUR) {
+        throw new AppError('rate_limited', { retryAfterSeconds: 600 });
+      }
       await this.registrations.lockDocument(payload.document, tx);
       // A retry that raced the original request is the same request, not a duplicate.
       const winner = await this.registrations.findByRequest(user.accountId, body.clientRequestId, tx);

@@ -290,3 +290,22 @@ describe('M-5 outbox personal-data retention (customer.upsert)', () => {
     expect(await read(id)).toEqual(after);
   });
 });
+
+describe('security review: the hourly limit is atomic per account (runs last, it exhausts the hour of the manager)', () => {
+  it('parallel attempts of one account cannot overshoot the hourly limit (count and record are atomic per account)', async () => {
+    const document = freshDocument();
+    await seedMirrorCustomer(document);
+    const svc = service({ kind: 'all' });
+    const countFor = async () =>
+      (await db().select().from(customerRegistrationRefusal).where(eq(customerRegistrationRefusal.accountId, manager))).length +
+      (await db().select().from(customerRegistration).where(eq(customerRegistration.createdByAccountId, manager))).length;
+    const before = await countFor();
+    const outcomes = await Promise.all(
+      Array.from({ length: MAX_CUSTOMER_CREATIONS_PER_HOUR + 10 }, () =>
+        failure(svc.create(user(manager, 'manager', [101]), request(document))).then((e) => e.code),
+      ),
+    );
+    expect((await countFor()) - before).toBeLessThanOrEqual(MAX_CUSTOMER_CREATIONS_PER_HOUR);
+    expect(outcomes.filter((code) => code === 'rate_limited').length).toBeGreaterThanOrEqual(10);
+  });
+});

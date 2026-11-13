@@ -26,6 +26,8 @@ export const CUSTOMER_UPSERT_OPERATION = 'customer.upsert';
 
 /** First key of the two-integer advisory lock space of customer creators (`SFCR`). */
 const REGISTRATION_LOCK_NAMESPACE = 0x53464352;
+/** Second namespace (`SFCA`): one lock per account, taken before the document lock (fixed order, no deadlock). */
+const ACCOUNT_LOCK_NAMESPACE = 0x53464341;
 
 /**
  * Storage of customer-creation requests (D-AR). Writes the request row and its outbox command in one
@@ -42,6 +44,11 @@ export class CustomerRegistrationRepository {
   /** Serializes creators of the same document, so two requests cannot both pass the duplicate check. */
   async lockDocument(taxId: string, tx: Executor): Promise<void> {
     await tx.execute(sql`select pg_advisory_xact_lock(${REGISTRATION_LOCK_NAMESPACE}::int, hashtext(${taxId}))`);
+  }
+
+  /** Serializes the creators of one account, so the hourly count and the record that raises it are atomic (security review). */
+  async lockAccount(accountId: string, tx: Executor): Promise<void> {
+    await tx.execute(sql`select pg_advisory_xact_lock(${ACCOUNT_LOCK_NAMESPACE}::int, hashtext(${accountId}))`);
   }
 
   async findByRequest(accountId: string, clientRequestId: string, db: Executor = this.db): Promise<CustomerRegistrationRow | null> {

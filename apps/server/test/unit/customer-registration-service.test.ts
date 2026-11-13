@@ -57,6 +57,9 @@ class FakeRepo {
   lockDocument(): Promise<void> {
     return Promise.resolve();
   }
+  lockAccount(): Promise<void> {
+    return Promise.resolve();
+  }
   findByRequest(accountId: string, clientRequestId: string): Promise<CustomerRegistrationRow | null> {
     return Promise.resolve(this.rows.find((r) => r.createdByAccountId === accountId && r.clientRequestId === clientRequestId) ?? null);
   }
