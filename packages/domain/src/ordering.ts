@@ -144,6 +144,8 @@ export type DraftIssueCode =
   | 'line_not_orderable'
   | 'product_without_price'
   | 'product_without_mobility'
+  | 'product_unavailable'
+  | 'product_inactive'
   | 'product_unknown'
   | 'product_not_sellable'
   | 'negotiation_type_not_configured'
