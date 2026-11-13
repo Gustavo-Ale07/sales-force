@@ -3,6 +3,8 @@ import {
   DEFAULT_SALES_HISTORY_WINDOW_MONTHS,
   GatewayConfigError,
   parseOrderWriteSettings,
+  parseCustomerWriteSettings,
+  type CustomerWriteSettings,
   RequestBudget,
   type GatewayDescription,
   type OrderWriteSettings,
@@ -191,6 +193,8 @@ export interface WorkerConfig {
   readonly gatewayDescription: GatewayDescription;
   /** SNK-7 D-1: ERP order submission switches. Disabled unless explicitly enabled; worker only. */
   readonly orderWrite: OrderWriteSettings;
+  /** D-AR: customer upsert to Sankhya; closed by default, Sandbox-on-staging only. */
+  readonly customerWrite: CustomerWriteSettings;
   /** M3: set only in order-write `live` mode. */
   readonly orderRequestBudget: RequestBudget | null;
   /** CFG-3: the sales-history TOP/status/window configuration; `null` = not configured (the mirror stays off). */
@@ -258,6 +262,9 @@ export function loadWorkerConfig(source: EnvSource): WorkerConfig {
   const orderWrite = parseOrderWriteSettings({ ...withoutEmptyValues(source) });
   for (const problem of orderWrite.problems) if (!problems.includes(problem)) problems.push(problem);
 
+  const customerWrite = parseCustomerWriteSettings({ ...withoutEmptyValues(source) });
+  for (const problem of customerWrite.problems) if (!problems.includes(problem)) problems.push(problem);
+
   const salesHistory = env === undefined ? { config: null, problems: [] } : salesHistorySyncConfigFromEnv(env);
   problems.push(...salesHistory.problems);
 
@@ -266,5 +273,5 @@ export function loadWorkerConfig(source: EnvSource): WorkerConfig {
   }
   setMaskTargets(sankhyaMaskTargets(source));
   const orderRequestBudget = orderWrite.settings.requestBudget === null ? null : new RequestBudget(orderWrite.settings.requestBudget);
-  return { env, gateway, gatewayDescription: gateway.describe(), orderWrite: orderWrite.settings, orderRequestBudget, salesHistory: salesHistory.config };
+  return { env, gateway, gatewayDescription: gateway.describe(), orderWrite: orderWrite.settings, customerWrite: customerWrite.settings, orderRequestBudget, salesHistory: salesHistory.config };
 }

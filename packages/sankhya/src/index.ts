@@ -41,6 +41,12 @@ export {
   type OrderWriteMode,
   type OrderWriteSettings,
 } from './write/order-write-config.js';
+export {
+  CUSTOMER_WRITE_DISABLED,
+  describeCustomerWrite,
+  parseCustomerWriteSettings,
+  type CustomerWriteSettings,
+} from './write/customer-write-config.js';
 export { SANDBOX_WRITE_HOSTS, assertSandboxHost, writeHostRefusal } from './write/host-allowlist.js';
 export * from './configuration-facts.js';
 export {
