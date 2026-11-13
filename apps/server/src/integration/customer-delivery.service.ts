@@ -1,3 +1,4 @@
+import { CustomerFieldSchemas, IcmsClassificationSchema, MAX_CUSTOMER_ADDRESSES } from '@salesforce/contracts';
 import type { Customer } from '@salesforce/domain';
 import { isSankhyaGatewayError, type SankhyaPartnerWritePort } from '@salesforce/sankhya';
 import { z } from 'zod';
@@ -6,29 +7,35 @@ import type { Clock } from '../platform/tokens.js';
 import { decideFailure, STALE_PROCESSING_MS, type DeliveryOutcome, type DeliveryPhase } from './order-delivery.policy.js';
 import type { CustomerDeliveryStore, ClaimedCustomerCommand, CustomerFailureRecord } from './customer-delivery.store.js';
 
-/** The command as the API wrote it (job payloads are external input: validated, never trusted). */
+/**
+ * The command as the API wrote it (job payloads are external input: validated, never trusted). M-2: the size and shape
+ * of every free field are the contract's own schemas (`CustomerFieldSchemas`, `IcmsClassificationSchema`), so the limits
+ * exist once and a payload that does not satisfy them is a permanent rejection, never sent to the ERP.
+ */
 export const CustomerUpsertCommandSchema = z.object({
   version: z.literal(1),
   originKey: z.string().regex(/^force:[0-9a-f-]{36}$/),
   document: z.string().regex(/^[0-9]{11}$|^[0-9]{14}$/),
   personType: z.enum(['individual', 'company']),
-  name: z.string().min(1),
-  tradeName: z.string().nullable(),
-  icmsClassification: z.string().min(1),
-  stateRegistration: z.string().nullable(),
+  name: CustomerFieldSchemas.name,
+  tradeName: CustomerFieldSchemas.tradeName.nullable(),
+  icmsClassification: IcmsClassificationSchema,
+  stateRegistration: CustomerFieldSchemas.stateRegistration.nullable(),
   sellerCode: z.number().int().min(1),
-  phone: z.string().nullable(),
-  email: z.string().nullable(),
-  notes: z.string().nullable(),
-  addresses: z.array(
-    z.object({
-      streetCode: z.number().int(),
-      neighborhoodCode: z.number().int(),
-      number: z.string(),
-      complement: z.string().nullable(),
-      postalCode: z.string(),
-    }),
-  ),
+  phone: CustomerFieldSchemas.phone.nullable(),
+  email: CustomerFieldSchemas.email.nullable(),
+  notes: CustomerFieldSchemas.notes.nullable(),
+  addresses: z
+    .array(
+      z.object({
+        streetCode: z.number().int(),
+        neighborhoodCode: z.number().int(),
+        number: CustomerFieldSchemas.addressNumber,
+        complement: CustomerFieldSchemas.addressComplement.nullable(),
+        postalCode: CustomerFieldSchemas.postalCode,
+      }),
+    )
+    .max(MAX_CUSTOMER_ADDRESSES),
 });
 export type CustomerUpsertCommand = z.infer<typeof CustomerUpsertCommandSchema>;
 

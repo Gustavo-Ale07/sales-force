@@ -271,6 +271,64 @@ describe('CustomerDeliveryService', () => {
     expect(store.rows[0]).toMatchObject({ status: 'rejected', rejectionCode: 'invalid_command' });
   });
 
+  /** M-2: the worker repeats the contract's limits, so a payload written by anything but the current API never reaches the ERP. */
+  describe('the stored command keeps the size and shape limits of the contract (M-2)', () => {
+    const address = { streetCode: 1, neighborhoodCode: 2, number: '123456', complement: 'c'.repeat(30), postalCode: '01310100' };
+    const atLimit = {
+      ...COMMAND,
+      name: 'N'.repeat(100),
+      tradeName: 'R'.repeat(100),
+      stateRegistration: 'I'.repeat(16),
+      email: `${'a'.repeat(68)}@exemplo.com`,
+      phone: '1'.repeat(13),
+      notes: `${'o'.repeat(3990)}\n\tfim`,
+      icmsClassification: 'X',
+      addresses: [address],
+    };
+
+    it('delivers a command exactly at every limit', async () => {
+      const { service, store, partners } = build();
+      store.add(atLimit);
+      await service.runDue();
+      expect(store.rows[0]).toMatchObject({ status: 'confirmed' });
+      expect(partners.count('upsert')).toBe(1);
+    });
+
+    it.each([
+      ['name', { name: 'N'.repeat(101) }],
+      ['tradeName', { tradeName: 'R'.repeat(101) }],
+      ['stateRegistration', { stateRegistration: 'I'.repeat(17) }],
+      ['email', { email: `${'a'.repeat(72)}@exemplo.com` }],
+      ['email shape', { email: 'sem-arroba' }],
+      ['phone', { phone: '1'.repeat(14) }],
+      ['phone with punctuation', { phone: '(11) 99999-0000' }],
+      ['notes', { notes: 'o'.repeat(4001) }],
+      ['address number', { addresses: [{ ...address, number: '1234567' }] }],
+      ['address complement', { addresses: [{ ...address, complement: 'c'.repeat(31) }] }],
+      ['postal code', { addresses: [{ ...address, postalCode: '01310-100' }] }],
+      ['postal code length', { addresses: [{ ...address, postalCode: '0131010' }] }],
+      ['icmsClassification outside the list', { icmsClassification: 'Z' }],
+      ['empty icmsClassification', { icmsClassification: '' }],
+      ['document of 15 digits', { document: '112223330001811' }],
+      ['document of 12 digits', { document: '112223330001' }],
+      ['document with punctuation', { document: '11.222.333/0001-81' }],
+      ['bidi override in the name', { name: 'Cliente\u202eLtda' }],
+      ['zero-width space in the trade name', { tradeName: 'Fantasia\u200b' }],
+      ['line separator in the number', { addresses: [{ ...address, number: '1\u20282' }] }],
+      ['control character in the notes', { notes: 'a\u0000b' }],
+    ])('rejects for good, with nothing sent to the ERP: %s', async (_label, change) => {
+      const { service, store, partners, advance } = build();
+      store.add({ ...COMMAND, ...change });
+      await service.runDue();
+      expect(partners.calls).toHaveLength(0);
+      expect(store.rows[0]).toMatchObject({ status: 'rejected', registration: 'rejected', rejectionCode: 'invalid_command', nextAttemptAt: null });
+      // Never retried: a later sweep finds nothing to do.
+      advance(24 * 3600_000);
+      expect(await service.runDue()).toMatchObject({ processed: 0 });
+      expect(partners.calls).toHaveLength(0);
+    });
+  });
+
   it('a registration that is no longer pending is not delivered', async () => {
     const { service, store, partners } = build();
     store.add(COMMAND, 'rejected');

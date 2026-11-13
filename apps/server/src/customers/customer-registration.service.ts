@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { CreateCustomerRequest, CreateCustomerResponse } from '@salesforce/contracts';
+import type { CustomerScope } from '@salesforce/domain';
 import { AppError } from '../http/app-error.js';
 import { AUDIT_ACTIONS, AuditService } from '../iam/audit.service.js';
 import type { CurrentUser } from '../iam/current-user.js';
@@ -7,7 +8,7 @@ import { PolicyService } from '../iam/policy.service.js';
 import { uuidv7 } from '../platform/ids.js';
 import { CLOCK, CUSTOMER_ENQUEUE_ENABLED, CUSTOMER_CONFIRM_WAIT, type Clock, type CustomerConfirmWait } from '../platform/tokens.js';
 import { prepareCustomerRegistration } from './customer-registration-request.js';
-import { CustomerRegistrationRepository, type CustomerRegistrationRow } from './customer-registration.repository.js';
+import { CustomerRegistrationRepository, type CustomerRegistrationRow, type DocumentHolder } from './customer-registration.repository.js';
 
 /** Creations one account may start per hour (abuse and duplicate-flood guard). */
 export const MAX_CUSTOMER_CREATIONS_PER_HOUR = 30;
@@ -74,13 +75,22 @@ export class CustomerRegistrationService {
       throw new AppError('rate_limited', { retryAfterSeconds: 600 });
     }
 
-    const created = await this.registrations.transaction(async (tx) => {
+    const created = await this.attempt(async (tx) => {
       await this.registrations.lockDocument(payload.document, tx);
       // A retry that raced the original request is the same request, not a duplicate.
       const winner = await this.registrations.findByRequest(user.accountId, body.clientRequestId, tx);
       if (winner !== null) return { kind: 'replay' as const, row: winner };
-      if ((await this.registrations.mirrorHasDocument(payload.document, tx)) || (await this.registrations.openRegistrationHasDocument(payload.document, tx))) {
-        throw this.documentTaken();
+      const holder = await this.registrations.findDocumentHolder(payload.document, tx);
+      if (holder !== null) {
+        // I-1: the refused attempt is recorded (it counts toward the hourly limit) and audited with identifiers only.
+        // The refusal commits; the error is raised after the transaction so the record is not rolled back with it.
+        const refusalId = uuidv7(at.getTime());
+        await this.registrations.recordRefusal({ id: refusalId, accountId: user.accountId, reason: 'document_already_registered', at }, tx);
+        await this.audit.record(
+          { action: AUDIT_ACTIONS.customerRegistrationRefused, actorAccountId: user.accountId, detail: { refusalId, reason: 'document_already_registered' } },
+          tx,
+        );
+        return { kind: 'refused' as const, holder };
       }
       const row = await this.registrations.insert(
         {
@@ -114,9 +124,23 @@ export class CustomerRegistrationService {
       return { kind: 'created' as const, row };
     });
 
+    if (created.kind === 'refused') throw this.documentTaken(created.holder, scope);
     if (created.kind === 'replay') return { response: this.replayOf(created.row, fingerprint), httpStatus: 200 };
     const settled = await this.awaitSettled(created.row.id);
     return { response: this.toResponse(settled), httpStatus: settled.status === 'confirmed' ? 201 : 202 };
+  }
+
+  /**
+   * Runs the recording transaction. M-1: a request id already used (by this or ANOTHER account) hits a unique index of
+   * the registration; that is an idempotency conflict (409), never a 500, and it says nothing about the other account.
+   */
+  private async attempt<T>(work: (tx: Parameters<Parameters<CustomerRegistrationRepository['transaction']>[0]>[0]) => Promise<T>): Promise<T> {
+    try {
+      return await this.registrations.transaction(work);
+    } catch (error) {
+      if (isRequestIdCollision(error)) throw new AppError('idempotency_conflict', { cause: error });
+      throw error;
+    }
   }
 
   /** Same id and same content: the recorded state. Same id, other content: the id is unusable. */
@@ -141,7 +165,8 @@ export class CustomerRegistrationService {
   private toResponse(row: CustomerRegistrationRow): CreateCustomerResponse {
     if (row.status === 'rejected') {
       const reason = REJECTION_REASONS[row.rejectionCode ?? ''];
-      if (reason === 'document_already_registered') throw this.documentTaken();
+      // The ERP found the document; whose it is was never looked up against this asker's portfolio: generic text.
+      if (reason === 'document_already_registered') throw this.documentTaken(null, null);
       throw new AppError('conflict', {
         message: 'O Sankhya recusou o cadastro do cliente. Confira os dados e tente novamente.',
         details: { reason: 'customer_rejected' },
@@ -150,10 +175,42 @@ export class CustomerRegistrationService {
     return { registrationId: row.id, status: row.status as CreateCustomerResponse['status'], customerCode: row.erpCustomerCode, originKey: row.originKey };
   }
 
-  private documentTaken(): AppError {
+  /**
+   * I-1: one status, one code and one `details` for every duplicate; only the text differs. Who holds the document is
+   * said only when the holder is an active customer (or a registration in progress) in the asker's portfolio; for anyone
+   * else the answer is the generic one, with no name and no seller, so a refusal never reveals data outside the scope.
+   */
+  private documentTaken(holder: DocumentHolder | null, scope: CustomerScope | null): AppError {
     return new AppError('conflict', {
-      message: 'Já existe um cliente com este CPF/CNPJ.',
+      message: holder !== null && scope !== null && inPortfolio(holder, scope) ? describeHolder(holder) : GENERIC_DUPLICATE_MESSAGE,
       details: { reason: 'document_already_registered' },
     });
   }
+}
+
+export const GENERIC_DUPLICATE_MESSAGE = 'Não foi possível cadastrar este documento. Procure o backoffice.';
+
+/** Active (or in progress) and owned by a seller the asker's scope reaches; scope `all` reaches every seller. */
+function inPortfolio(holder: DocumentHolder, scope: CustomerScope): boolean {
+  if (holder.source === 'mirror' && !holder.usable) return false;
+  if (scope.kind === 'all') return true;
+  return holder.sellerCode !== null && scope.sellerCodes.includes(holder.sellerCode);
+}
+
+function describeHolder(holder: DocumentHolder): string {
+  return holder.code === null
+    ? `Já existe um cadastro em andamento para este CPF/CNPJ: ${holder.name}.`
+    : `Já existe um cliente com este CPF/CNPJ na sua carteira: ${holder.name} (código ${holder.code}).`;
+}
+
+/** PostgreSQL unique violation on one of the indexes that make a request id single-use. */
+const REQUEST_ID_INDEXES: ReadonlySet<string> = new Set(['customer_registration_origin_key_uq', 'customer_registration_account_request_uq']);
+
+function isRequestIdCollision(error: unknown): boolean {
+  for (let current: unknown = error, depth = 0; typeof current === 'object' && current !== null && depth < 4; depth += 1) {
+    const { code, constraint, cause } = current as { code?: unknown; constraint?: unknown; cause?: unknown };
+    if (code === '23505' && typeof constraint === 'string' && REQUEST_ID_INDEXES.has(constraint)) return true;
+    current = cause;
+  }
+  return false;
 }

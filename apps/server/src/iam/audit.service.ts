@@ -38,6 +38,8 @@ export const AUDIT_ACTIONS = {
   orderConverted: 'order.converted',
   /** D-AR: a customer creation was recorded and queued for the ERP (ids, seller code and person type only; no personal data). */
   customerRegistrationRequested: 'customer.registration_requested',
+  /** D-AR (I-1): a creation was refused because the document is taken (refusal id and reason code only; no document, name or holder). */
+  customerRegistrationRefused: 'customer.registration_refused',
   /** D-AR: the worker created (or adopted by origin) the customer in the ERP and reread it (ids and codes only). */
   customerErpCreated: 'customer.erp_created',
   /** D-AR: the ERP refused the creation for good (class and stable code only; no personal data). */

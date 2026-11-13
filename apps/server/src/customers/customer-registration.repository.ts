@@ -1,10 +1,23 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { customerRegistration, erpCustomer, erpSeller, integrationOutbox, type Database } from '@salesforce/db';
+import { customerRegistration, customerRegistrationRefusal, erpCustomer, erpSeller, integrationOutbox, type Database } from '@salesforce/db';
 import { and, eq, gte, isNull, sql } from 'drizzle-orm';
+import { isBlockedRaw } from '../mirror/mirror.repository.js';
 import type { Executor } from '../orders/orders.repository.js';
 import { DATABASE } from '../platform/tokens.js';
 
 export type CustomerRegistrationRow = typeof customerRegistration.$inferSelect;
+
+/** The holder of a document as stored; what may be shown of it is the service's decision (I-1). */
+export type DocumentHolder =
+  | {
+      readonly source: 'mirror';
+      readonly code: number;
+      readonly name: string;
+      readonly sellerCode: number | null;
+      /** Active, not deleted and not blocked: only such a customer can be "in someone's portfolio". */
+      readonly usable: boolean;
+    }
+  | { readonly source: 'registration'; readonly code: number | null; readonly name: string; readonly sellerCode: number | null };
 export type NewCustomerRegistration = typeof customerRegistration.$inferInsert;
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
@@ -45,13 +58,26 @@ export class CustomerRegistrationRepository {
     return row ?? null;
   }
 
-  /** Serves the per-account hourly limit (index `customer_registration_account_created_idx`). */
+  /**
+   * Attempts of one account since `since`: creations started plus attempts refused before anything was recorded (I-1: a
+   * refused duplicate counts, so the limit cannot be bypassed to probe documents). Serves the per-account hourly limit
+   * (indexes `customer_registration_account_created_idx` and `customer_registration_refusal_account_created_idx`).
+   */
   async countSince(accountId: string, since: Date, db: Executor = this.db): Promise<number> {
-    const [row] = await db
+    const [created] = await db
       .select({ n: sql<number>`count(*)::int` })
       .from(customerRegistration)
       .where(and(eq(customerRegistration.createdByAccountId, accountId), gte(customerRegistration.createdAt, since)));
-    return row?.n ?? 0;
+    const [refused] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(customerRegistrationRefusal)
+      .where(and(eq(customerRegistrationRefusal.accountId, accountId), gte(customerRegistrationRefusal.createdAt, since)));
+    return (created?.n ?? 0) + (refused?.n ?? 0);
+  }
+
+  /** Records a refused attempt: account, instant and reason code only (no document, no name, no hash). */
+  async recordRefusal(input: { readonly id: string; readonly accountId: string; readonly reason: 'document_already_registered'; readonly at: Date }, tx: Executor): Promise<void> {
+    await tx.insert(customerRegistrationRefusal).values({ id: input.id, accountId: input.accountId, reason: input.reason, createdAt: input.at });
   }
 
   /** The document already exists in the ERP mirror (any seller, any state: duplicates are decided globally). */
@@ -64,23 +90,40 @@ export class CustomerRegistrationRepository {
     return rows.length > 0;
   }
 
-  async mirrorHasDocument(taxId: string, db: Executor = this.db): Promise<boolean> {
-    const rows = await db
-      .select({ code: erpCustomer.code })
+  /**
+   * Who holds the document: the ERP mirror first (any seller, any state: duplicates are decided globally), then a
+   * registration still in flight or already confirmed (index `customer_registration_tax_id_open_idx`). The caller decides
+   * how much of it the asker may be told.
+   */
+  async findDocumentHolder(taxId: string, db: Executor = this.db): Promise<DocumentHolder | null> {
+    const [customer] = await db
+      .select({
+        code: erpCustomer.code,
+        name: erpCustomer.name,
+        sellerCode: erpCustomer.sellerCode,
+        active: erpCustomer.active,
+        blockedRaw: erpCustomer.blockedRaw,
+        deletedAt: erpCustomer.deletedAt,
+      })
       .from(erpCustomer)
       .where(sql`regexp_replace(${erpCustomer.taxId}, '[^0-9]', '', 'g') = ${taxId}`)
+      .orderBy(sql`(${erpCustomer.deletedAt} is null and ${erpCustomer.active}) desc`, erpCustomer.code)
       .limit(1);
-    return rows.length > 0;
-  }
-
-  /** Another request for the same document is still in flight or already confirmed (index `customer_registration_tax_id_open_idx`). */
-  async openRegistrationHasDocument(taxId: string, db: Executor = this.db): Promise<boolean> {
-    const rows = await db
-      .select({ id: customerRegistration.id })
+    if (customer !== undefined) {
+      return {
+        source: 'mirror',
+        code: customer.code,
+        name: customer.name,
+        sellerCode: customer.sellerCode,
+        usable: customer.active && customer.deletedAt === null && !isBlockedRaw(customer.blockedRaw),
+      };
+    }
+    const [open] = await db
+      .select({ name: customerRegistration.name, sellerCode: customerRegistration.sellerCode, erpCustomerCode: customerRegistration.erpCustomerCode })
       .from(customerRegistration)
       .where(and(eq(customerRegistration.taxId, taxId), sql`${customerRegistration.status} in ('pending', 'unknown', 'confirmed')`))
       .limit(1);
-    return rows.length > 0;
+    return open === undefined ? null : { source: 'registration', code: open.erpCustomerCode, name: open.name, sellerCode: open.sellerCode };
   }
 
   async insert(row: NewCustomerRegistration, tx: Executor): Promise<CustomerRegistrationRow> {

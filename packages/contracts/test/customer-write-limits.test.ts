@@ -58,3 +58,66 @@ describe('CreateCustomerRequest field limits (TGFPAR)', () => {
     expect(CreateCustomerRequestSchema.safeParse({ ...base, document: '11.222.333/0001-81' }).success).toBe(true);
   });
 });
+
+/**
+ * M-4 (security review of D-AR): text that reaches the ERP and other people's screens must not carry control,
+ * invisible or direction-changing characters. Categories: C0/C1 controls, Unicode format characters (\p{Cf}: bidi
+ * override/isolate, zero-width, word joiner, BOM...) and the line/paragraph separators U+2028/U+2029. Observations
+ * (`notes`) are the only free text field: they keep newline and tab, nothing else of those categories.
+ */
+describe('CreateCustomerRequest text hygiene (M-4)', () => {
+  const singleLineFields: Array<[string, (value: string) => Record<string, unknown>]> = [
+    ['name', (v) => ({ name: v })],
+    ['tradeName', (v) => ({ tradeName: v })],
+    ['stateRegistration', (v) => ({ stateRegistration: v })],
+    ['addresses.0.number', (v) => ({ addresses: [{ ...address, number: v }] })],
+    ['addresses.0.complement', (v) => ({ addresses: [{ ...address, complement: v }] })],
+  ];
+  const forbidden: Array<[string, string]> = [
+    ['C0 control (NUL)', 'A\u0000B'],
+    ['C0 control (ESC)', 'A\u001bB'],
+    ['DEL', 'A\u007fB'],
+    ['C1 control (NEL)', 'A\u0085B'],
+    ['bidi override (RLO)', 'A\u202eB'],
+    ['bidi isolate (RLI)', 'A\u2067B'],
+    ['bidi mark (RLM)', 'A\u200fB'],
+    ['zero-width space', 'A\u200bB'],
+    ['zero-width joiner', 'A\u200dB'],
+    ['word joiner', 'A\u2060B'],
+    ['byte order mark', 'A\ufeffB'],
+    ['soft hyphen', 'A\u00adB'],
+    ['line separator U+2028', 'A\u2028B'],
+    ['paragraph separator U+2029', 'A\u2029B'],
+    ['tab in a single-line field', 'A\tB'],
+    ['newline in a single-line field', 'A\nB'],
+  ];
+
+  for (const [field, build] of singleLineFields) {
+    it.each(forbidden)(`${field} refuses %s with a clear message`, (_label, value) => {
+      const found = messages(build(value)).filter((entry) => entry.startsWith(field));
+      expect(found.length).toBeGreaterThan(0);
+      expect(found.join(' ')).toMatch(/não são permitidos/);
+    });
+  }
+
+  it('keeps accented and ordinary text', () => {
+    const result = CreateCustomerRequestSchema.safeParse({ ...base, name: 'Indústria João & Filhos — Ltda. (Matriz) nº 5' });
+    expect(result.success).toBe(true);
+  });
+
+  describe('notes (the only multi-line field)', () => {
+    it('keeps newline and tab', () => {
+      expect(CreateCustomerRequestSchema.safeParse({ ...base, notes: 'linha 1\n\tlinha 2' }).success).toBe(true);
+    });
+
+    it.each(forbidden.filter(([label]) => !label.includes('single-line')))('refuses %s', (_label, value) => {
+      const found = messages({ notes: value }).filter((entry) => entry.startsWith('notes'));
+      expect(found.length).toBeGreaterThan(0);
+      expect(found.join(' ')).toMatch(/não são permitidos/);
+    });
+
+    it('refuses a bare carriage return (only \\n and \\t are kept)', () => {
+      expect(messages({ notes: 'a\rb' }).some((entry) => entry.startsWith('notes'))).toBe(true);
+    });
+  });
+});

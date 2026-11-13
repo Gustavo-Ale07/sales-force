@@ -16,9 +16,33 @@ export type IcmsClassification = z.infer<typeof IcmsClassificationSchema>;
 
 export const MAX_CUSTOMER_ADDRESSES = 3;
 
-// eslint-disable-next-line no-control-regex
-const noControl = /^[^\u0000-\u001f\u007f-\u009f]*$/;
-const text = (max: number) => z.string().trim().min(1).max(max).regex(noControl, 'Control characters are not allowed');
+/**
+ * Text hygiene (M-4). Refused, never stripped: C0/C1 controls (`\p{Cc}`, includes tab, newline, carriage return and
+ * DEL), Unicode format characters (`\p{Cf}`: bidi override/isolate/marks, zero-width space/joiner, word joiner, BOM,
+ * soft hyphen) and the line/paragraph separators U+2028/U+2029. Side effect accepted: an emoji ZWJ sequence is refused
+ * (the ERP columns are plain names). `notes` is the only multi-line field and additionally keeps `\n` and `\t`.
+ */
+const NO_HIDDEN_TEXT = /^[^\p{Cc}\p{Cf}\u2028\u2029]*$/u;
+const NO_HIDDEN_MULTILINE_TEXT = /^(?:[^\p{Cc}\p{Cf}\u2028\u2029]|[\n\t])*$/u;
+const HIDDEN_TEXT_MESSAGE = 'Caracteres de controle, invisíveis ou que alteram a direção do texto não são permitidos.';
+const text = (max: number) => z.string().trim().min(1).max(max).regex(NO_HIDDEN_TEXT, HIDDEN_TEXT_MESSAGE);
+const multilineText = (max: number) => z.string().trim().min(1).max(max).regex(NO_HIDDEN_MULTILINE_TEXT, HIDDEN_TEXT_MESSAGE);
+
+/**
+ * The size and shape of each stored field, the single source of the limits: the API validates the request with them
+ * and the worker validates the stored command with the same schemas (M-2), so the numbers exist once.
+ */
+export const CustomerFieldSchemas = {
+  name: text(100),
+  tradeName: text(100),
+  stateRegistration: text(16),
+  phone: z.string().trim().regex(/^\d{1,13}$/, 'Telefone: somente dígitos, até 13.'),
+  email: z.email().max(80),
+  notes: multilineText(4000),
+  addressNumber: text(6),
+  addressComplement: text(30),
+  postalCode: z.string().regex(/^\d{8}$/, 'Expected 8 digits'),
+} as const;
 
 /** Street and neighborhood come from the ERP catalogues (V1 never creates them): codes only. */
 export const CustomerAddressInputSchema = named(
@@ -26,9 +50,9 @@ export const CustomerAddressInputSchema = named(
   z.strictObject({
     streetCode: codeInt(),
     neighborhoodCode: codeInt(),
-    number: text(6),
-    complement: text(30).nullable().default(null),
-    postalCode: z.string().regex(/^\d{8}$/, 'Expected 8 digits'),
+    number: CustomerFieldSchemas.addressNumber,
+    complement: CustomerFieldSchemas.addressComplement.nullable().default(null),
+    postalCode: CustomerFieldSchemas.postalCode,
   }),
 );
 export type CustomerAddressInput = z.infer<typeof CustomerAddressInputSchema>;
@@ -41,13 +65,13 @@ export const CreateCustomerRequestSchema = named(
     clientRequestId: UuidSchema,
     /** CPF or CNPJ, with or without punctuation; validity is checked by the domain. */
     document: z.string().trim().min(11).max(18).refine((value) => value.replace(/\D/g, '').length <= 14, 'O CPF/CNPJ deve ter no máximo 14 dígitos.'),
-    name: text(100),
-    tradeName: text(100).nullable().default(null),
+    name: CustomerFieldSchemas.name,
+    tradeName: CustomerFieldSchemas.tradeName.nullable().default(null),
     icmsClassification: IcmsClassificationSchema.default('R'),
-    stateRegistration: text(16).nullable().default(null),
-    phone: z.string().trim().regex(/^\d{1,13}$/, 'Telefone: somente dígitos, até 13.').nullable().default(null),
-    email: z.email().max(80).nullable().default(null),
-    notes: text(4000).nullable().default(null),
+    stateRegistration: CustomerFieldSchemas.stateRegistration.nullable().default(null),
+    phone: CustomerFieldSchemas.phone.nullable().default(null),
+    email: CustomerFieldSchemas.email.nullable().default(null),
+    notes: CustomerFieldSchemas.notes.nullable().default(null),
     addresses: z.array(CustomerAddressInputSchema).max(MAX_CUSTOMER_ADDRESSES).default([]),
     /** Manager/admin only: the seller that owns the customer. A seller always owns what they create. */
     sellerCode: sellerCodeInt().optional(),

@@ -25,7 +25,8 @@ import type { ConfigurationSyncService } from '../sync/configuration-sync.servic
 import { ConfigurationSyncJob } from './jobs/configuration-sync.job.js';
 import type { SyncRefreshRunner } from '../sync/sync-refresh-runner.service.js';
 import { SyncRefreshJob } from './jobs/sync-refresh.job.js';
-import { CustomerDeliveryJob } from './jobs/customer-delivery.job.js';
+import { CustomerDeliveryJob, CustomerPayloadPurgeJob } from './jobs/customer-delivery.job.js';
+import type { CustomerPayloadRetention } from '../integration/customer-payload-retention.js';
 import type { CustomerDeliveryService } from '../integration/customer-delivery.service.js';
 
 /** How often the worker looks for "Atualizar dados" requests recorded by the API. */
@@ -36,6 +37,7 @@ import {
   CUSTOMER_DELIVERY_TRIGGER_MS,
   ORDER_DELIVERY_CRON,
   ORDER_DRY_RUN_PURGE_CRON,
+  CUSTOMER_PAYLOAD_PURGE_CRON,
   ORDER_ERP_STATUS_CRON,
   QUEUE_NAMES,
   QUEUE_REGISTRY,
@@ -101,6 +103,8 @@ export interface WorkerRuntimeDeps {
    * handler, and a schedule stored by an earlier configuration is dropped. The short trigger runs the same sweep every
    * couple of seconds (the API waits up to 15 s); claiming uses SKIP LOCKED, so overlapping runs are safe.
    */
+  /** Personal-data retention of finished customer commands (M-5). Independent of the customer-write switch: the data persists after it is turned off. */
+  readonly customerPayloadRetention?: { readonly service: CustomerPayloadRetention };
   readonly customerDelivery?: { readonly service: CustomerDeliveryService; readonly triggerMs?: number };
   /**
    * Configuration read from Sankhya (CFG-8). Present only when CONFIG_SYNC_FROM_SANKHYA=1: the handler is then
@@ -194,7 +198,11 @@ export class WorkerRuntime {
               ...(orderDelivery.status === undefined ? [] : [new OrderErpStatusJob(orderDelivery.status)]),
             ];
       const { customerDelivery } = this.deps;
-      const customerHandlers = customerDelivery === undefined ? [] : [new CustomerDeliveryJob(customerDelivery.service)];
+      const { customerPayloadRetention } = this.deps;
+      const customerHandlers = [
+        ...(customerDelivery === undefined ? [] : [new CustomerDeliveryJob(customerDelivery.service)]),
+        ...(customerPayloadRetention === undefined ? [] : [new CustomerPayloadPurgeJob(customerPayloadRetention.service)]),
+      ];
       const { configurationSync } = this.deps;
       const configurationHandlers = configurationSync === undefined ? [] : [new ConfigurationSyncJob(configurationSync.service)];
       const { syncRefresh } = this.deps;
@@ -269,6 +277,10 @@ export class WorkerRuntime {
         // Disabled (the default): drop a schedule stored by an earlier configuration.
         if (customerDelivery === undefined) await boss.unschedule(QUEUE_NAMES.integrationCustomerDeliver);
         else await boss.schedule(QUEUE_NAMES.integrationCustomerDeliver, CUSTOMER_DELIVERY_CRON, {});
+      }
+      if (queues.some((spec) => spec.name === QUEUE_NAMES.integrationCustomerPayloadPurge)) {
+        if (customerPayloadRetention === undefined) await boss.unschedule(QUEUE_NAMES.integrationCustomerPayloadPurge);
+        else await boss.schedule(QUEUE_NAMES.integrationCustomerPayloadPurge, CUSTOMER_PAYLOAD_PURGE_CRON, {});
       }
       if (customerDelivery !== undefined && customerHandlers.length > 0) this.#startCustomerTrigger(customerDelivery);
 

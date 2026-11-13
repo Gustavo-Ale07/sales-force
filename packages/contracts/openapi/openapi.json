@@ -4292,7 +4292,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 100,
-            "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]*$"
+            "pattern": "^[^\\p{Cc}\\p{Cf}\\u2028\\u2029]*$"
           },
           "tradeName": {
             "default": null,
@@ -4301,7 +4301,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 100,
-                "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]*$"
+                "pattern": "^[^\\p{Cc}\\p{Cf}\\u2028\\u2029]*$"
               },
               {
                 "type": "null"
@@ -4319,7 +4319,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 16,
-                "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]*$"
+                "pattern": "^[^\\p{Cc}\\p{Cf}\\u2028\\u2029]*$"
               },
               {
                 "type": "null"
@@ -4359,7 +4359,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 4000,
-                "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]*$"
+                "pattern": "^(?:[^\\p{Cc}\\p{Cf}\\u2028\\u2029]|[\\n\\t])*$"
               },
               {
                 "type": "null"
@@ -4556,7 +4556,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 6,
-            "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]*$"
+            "pattern": "^[^\\p{Cc}\\p{Cf}\\u2028\\u2029]*$"
           },
           "complement": {
             "default": null,
@@ -4565,7 +4565,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 30,
-                "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]*$"
+                "pattern": "^[^\\p{Cc}\\p{Cf}\\u2028\\u2029]*$"
               },
               {
                 "type": "null"
