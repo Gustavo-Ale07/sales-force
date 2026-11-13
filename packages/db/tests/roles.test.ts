@@ -208,6 +208,37 @@ describe('db-roles.sql', () => {
     expect(await sqlState('force_worker', 'INSERT INTO customer_registration_refusal DEFAULT VALUES')).toBe(DENIED);
   });
 
+  it('worker: DELETE on customer_registration is limited by a trigger to rejected rows older than 30 days', async () => {
+    const accountId = '0194a1b2-7c3d-7e4f-8a5b-6c7d8e9f0a01';
+    await as(adminDbUrl, `INSERT INTO account (id, email, display_name, password_hash, role) VALUES ($1, 'del@example.test', 'D', 'x', 'seller') ON CONFLICT DO NOTHING`, [accountId]);
+    const seed = async (n: number, status: string, age: string) => {
+      const id = `0194a1b2-7c3d-7e4f-8a5b-6c7d8e9f1${String(n).padStart(3, '0')}`;
+      await as(
+        adminDbUrl,
+        `INSERT INTO customer_registration (id, client_request_id, request_hash, created_by_account_id, origin_key, status, tax_id, name, erp_customer_code, created_at, updated_at)
+         VALUES ($1, $1, 'h', $2, $6, $3, '11222333000181', 'Cliente', $4, now() - $5::interval, now() - $5::interval)`,
+        [id, accountId, status, status === 'confirmed' ? 1000 + n : null, age, `force:${id}`],
+      );
+      return id;
+    };
+    const remove = (id: string) => sqlState('force_worker', `DELETE FROM customer_registration WHERE id = '${id}'`);
+    const exists = async (id: string) => (await as(adminDbUrl, 'SELECT 1 FROM customer_registration WHERE id = $1', [id])).length === 1;
+
+    const kept = [
+      await seed(1, 'confirmed', '90 days'),
+      await seed(2, 'pending', '90 days'),
+      await seed(3, 'unknown', '90 days'),
+      await seed(4, 'rejected', '29 days'),
+    ];
+    for (const id of kept) {
+      expect(await remove(id), id).toBeDefined();
+      expect(await exists(id), id).toBe(true);
+    }
+    const old = await seed(5, 'rejected', '31 days');
+    expect(await remove(old)).toBeUndefined();
+    expect(await exists(old)).toBe(false);
+  });
+
   it('api: reads and writes only its own data; cannot DDL, truncate, drop, alter or write the mirror', async () => {
     expect(await sqlState('force_api', 'SELECT count(*) FROM erp_customer')).toBeUndefined();
     expect(await sqlState('force_api', 'SELECT count(*) FROM session')).toBeUndefined();
