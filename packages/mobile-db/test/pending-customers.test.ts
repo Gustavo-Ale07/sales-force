@@ -17,6 +17,7 @@ import {
   migrations,
   pendingCustomerBlockOf,
   pushOutbox,
+  purgeRefusedCustomers,
   pushPendingCustomers,
   recoverInterruptedCustomers,
   replaceCustomers,
@@ -234,12 +235,13 @@ describe("refusals", () => {
   it.each([
     ["document_already_registered", "Já existe um cliente com este CPF/CNPJ."],
     ["customer_rejected", "O Sankhya recusou o cadastro do cliente. Confira os dados."],
-  ])("409 %s -> rejected with a readable reason, personal data erased (I-2), never resent", async (reason, text) => {
+  ])("409 %s -> rejected with a readable reason, typed data kept for the 7-day window (owner 2026-11-13), never resent", async (reason, text) => {
     const record = await create();
     erp.script = [fail("registration_refused", reason)];
     expect(await push()).toMatchObject({ rejected: 1 });
     const after = await getPendingCustomer(db, OWNER, record.clientRequestId);
-    expect(after).toMatchObject({ state: "rejected", rejectionReason: text, request: null, name: "", document: "", maskedDocument: "***.456.789-**" });
+    expect(after).toMatchObject({ state: "rejected", rejectionReason: text, name: "Padaria Ação Ltda", document: "12345678909", maskedDocument: "***.456.789-**" });
+    expect(after?.request).not.toBeNull();
     expect(describePendingCustomer(after as NonNullable<typeof after>)).toBe(`Não aceito: ${text}`);
     await push();
     expect(erp.calls).toHaveLength(1);
@@ -543,7 +545,7 @@ describe("is customer creation available? (derived from the last server answer)"
   });
 });
 
-describe("I-2: personal data does not outlive the server's answer", () => {
+describe("I-2 (owner rulings 2026-11-13): personal data does not outlive the server's answer", () => {
   const PERSONAL = ["12345678909", "Padaria Ação", "11 99999-0000", "obs", "01001000", "123.456.789-09"];
   async function rowDump(): Promise<string> {
     return JSON.stringify(await db.query("SELECT * FROM pending_customer"));
@@ -556,14 +558,111 @@ describe("I-2: personal data does not outlive the server's answer", () => {
     expect(dump).toContain("dono@padaria.example");
   });
 
-  it("a refusal erases document, name, trade name, phone, e-mail, IE, notes and addresses from every column; reason and masked document stay", async () => {
-    const record = await create(request({ email: "dono@padaria.example", stateRegistration: "123456789" }));
+  const DAY = 24 * 60 * 60 * 1000;
+  const refusedRow = async (over: Partial<PendingCustomerRequest> = {}) => {
+    const record = await create(request({ email: "dono@padaria.example", ...over }));
     erp.script = [fail("registration_refused", "customer_rejected")];
     await push();
+    return record;
+  };
+
+  it("a refusal keeps what the seller typed for up to 7 days (to redo); the list identifies it by name, masked document and reason", async () => {
+    const record = await refusedRow();
+    const row = await getPendingCustomer(db, OWNER, record.clientRequestId);
+    expect(row).toMatchObject({ state: "rejected", name: "Padaria Ação Ltda", document: "12345678909", maskedDocument: "***.456.789-**", rejectionReason: "O Sankhya recusou o cadastro do cliente. Confira os dados." });
+    expect(row?.request).toMatchObject({ email: "dono@padaria.example", phone: "11 99999-0000" });
+    expect(await listPendingCustomers(db, OWNER, REAL, "padaria")).toHaveLength(1);
+  });
+
+  it("after 7 days a purge erases every typed field of the refused row (an unreferenced one is removed); before that nothing changes", async () => {
+    const record = await refusedRow();
+    clock = new Date(clock.getTime() + 7 * DAY - 1000);
+    expect(await purgeRefusedCustomers(db, env)).toBe(0);
+    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toMatchObject({ document: "12345678909" });
+    clock = new Date(clock.getTime() + 1000);
+    expect(await purgeRefusedCustomers(db, env)).toBe(1);
+    expect(await rowDump()).toBe("[]");
+    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toBeNull();
+  });
+
+  it("a refused row still referenced by a draft is erased but never deleted", async () => {
+    const record = await refusedRow();
+    await db.execute(
+      `INSERT INTO local_order_draft (local_id, owner_account_id, client_request_id, customer_code, customer_name, status, created_at, updated_at, dataset_environment, dataset_id, eligibility)
+       VALUES ('d1', ?, 'k1', ?, 'P', 'pending_sync', '2026-11-13T00:00:00.000Z', '2026-11-13T00:00:00.000Z', ?, ?, 'eligible')`,
+      [OWNER, record.localCode, REAL.environment, REAL.datasetId],
+    );
+    clock = new Date(clock.getTime() + 8 * DAY);
+    expect(await purgeRefusedCustomers(db, env)).toBe(1);
+    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toMatchObject({ state: "rejected", name: "", document: "", request: null, maskedDocument: "***.456.789-**" });
+    const dump = JSON.stringify(await db.query("SELECT * FROM pending_customer"));
+    for (const value of [...PERSONAL, "dono@padaria.example", "Padaria Ação Ltda"]) expect(dump).not.toContain(value);
+    // a second purge has nothing left to do
+    expect(await purgeRefusedCustomers(db, env)).toBe(0);
+  });
+
+  it("a refused row referenced only by an outbox command is kept too", async () => {
+    const record = await refusedRow();
+    await db.execute(
+      `INSERT INTO outbox (local_id, operation_id, idempotency_key, type, payload, state, attempts, created_at, updated_at, dataset_environment, dataset_id, eligibility)
+       VALUES ('o1', 'oid1', 'k1', 'order.create', '{"request":{"customerCode":${record.localCode},"items":[]},"prices":[]}', 'pending', 0, 'a', 'a', ?, ?, 'eligible')`,
+      [REAL.environment, REAL.datasetId],
+    );
+    clock = new Date(clock.getTime() + 8 * DAY);
+    await purgeRefusedCustomers(db, env);
+    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toMatchObject({ state: "rejected", document: "", request: null });
+  });
+
+  it("redo within the window hands the typed data back to pre-fill; after the purge it needs retyping", async () => {
+    const record = await refusedRow();
+    expect(await redoPendingCustomer(db, OWNER, record.clientRequestId)).toMatchObject({ name: "Padaria Ação Ltda", email: "dono@padaria.example" });
+    clock = new Date(clock.getTime() + 8 * DAY);
+    await purgeRefusedCustomers(db, env);
+    await expect(redoPendingCustomer(db, OWNER, record.clientRequestId)).rejects.toBeInstanceOf(PendingCustomerError);
+  });
+
+  it("redoing (replacesRejected) or discarding removes the typed data at once, before the 7 days", async () => {
+    const first = await refusedRow();
+    await createPendingCustomer(db, env, { ownerAccountId: OWNER, request: request({ name: "Outra Padaria", document: "98765432100" }), replacesRejected: first.clientRequestId });
+    expect(await rowDump()).not.toContain("12345678909");
+    erp.script = [fail("registration_refused", "customer_rejected")];
+    await push();
+    const second = (await listPendingCustomers(db, OWNER, REAL))[0];
+    await discardPendingCustomer(db, OWNER, (second as NonNullable<typeof second>).clientRequestId);
+    expect(await rowDump()).toBe("[]");
+  });
+
+  it("the purge covers every account's rows on the device and never touches a customer still waiting", async () => {
+    await refusedRow();
+    const waiting = await create(request({ document: "98765432100" }), "acct-2");
+    clock = new Date(clock.getTime() + 30 * DAY);
+    expect(await purgeRefusedCustomers(db, env)).toBe(1);
+    expect(await getPendingCustomer(db, "acct-2", waiting.clientRequestId)).toMatchObject({ state: "queued", document: "98765432100" });
+  });
+
+  it("the sync manager purges on every run and on refresh (app start / foreground), by the injected clock", async () => {
+    const record = await refusedRow();
+    const source: ReferenceSource = { fetchCustomers: async () => [], fetchProducts: async () => [], fetchEntryConfiguration: async () => null, fetchDatasetIdentity: async () => REAL };
+    const manager = createSyncManager({ db, env, transport: new Orders(), customerTransport: erp, source, ownerAccountId: OWNER });
+    clock = new Date(clock.getTime() + 8 * DAY);
+    await manager.refresh();
+    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toBeNull();
+    const second = await refusedRow({ document: "11122233396" });
+    clock = new Date(clock.getTime() + 8 * DAY);
+    await manager.sync("foreground", { pull: false });
+    expect(await getPendingCustomer(db, OWNER, second.clientRequestId)).toBeNull();
+  });
+
+  it("a confirmation erases document, e-mail and phone (and everything else typed) at once; only the name and the ERP code stay", async () => {
+    const record = await create(request({ email: "dono@padaria.example" }));
+    erp.script = [confirmedReg(4321)];
+    erp.customer = new TransportError("network", "x");
+    await push();
     const dump = await rowDump();
-    for (const value of [...PERSONAL, "dono@padaria.example", "123456789", "Padaria Ação Ltda"]) expect(dump).not.toContain(value);
-    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toMatchObject({ state: "rejected", rejectionReason: "O Sankhya recusou o cadastro do cliente. Confira os dados.", maskedDocument: "***.456.789-**", localCode: record.localCode });
-    expect(await listPendingCustomers(db, OWNER, REAL)).toHaveLength(1);
+    for (const value of ["12345678909", "123.456.789-09", "11 99999-0000", "dono@padaria.example", "obs", "01001000"]) expect(dump).not.toContain(value);
+    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toMatchObject({ state: "confirmed", customerCode: 4321, request: null, name: "Padaria Ação Ltda", document: "", maskedDocument: "" });
+    expect(await listPendingCustomers(db, OWNER, REAL, "padaria")).toHaveLength(1);
+    expect(await listPendingCustomers(db, OWNER, REAL, "123456")).toEqual([]);
   });
 
   it("a confirmation whose real record could not be read yet keeps only the ERP code and identifiers", async () => {
@@ -572,8 +671,8 @@ describe("I-2: personal data does not outlive the server's answer", () => {
     erp.customer = new TransportError("network", "x");
     await push();
     const dump = await rowDump();
-    for (const value of [...PERSONAL, "dono@padaria.example", "Padaria Ação Ltda"]) expect(dump).not.toContain(value);
-    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toMatchObject({ state: "confirmed", customerCode: 4321, registrationId: "reg-1", request: null, name: "" });
+    for (const value of [...PERSONAL.filter((v) => v !== "Padaria Ação"), "dono@padaria.example"]) expect(dump).not.toContain(value);
+    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toMatchObject({ state: "confirmed", customerCode: 4321, registrationId: "reg-1", request: null, name: "Padaria Ação Ltda" });
     // the retry of the read still works with only the code, and never creates a second customer
     erp.customer = null;
     await push();
@@ -588,10 +687,12 @@ describe("I-2: personal data does not outlive the server's answer", () => {
     await expect(create()).resolves.toMatchObject({ state: "queued" });
   });
 
-  it("an erased row is never found by name or document search", async () => {
+  it("a purged row is never found by name or document search", async () => {
     await create();
     erp.script = [fail("registration_refused", "customer_rejected")];
     await push();
+    clock = new Date(clock.getTime() + 8 * DAY);
+    await purgeRefusedCustomers(db, env);
     expect(await listPendingCustomers(db, OWNER, REAL, "padaria")).toEqual([]);
     expect(await listPendingCustomers(db, OWNER, REAL, "123456")).toEqual([]);
   });
@@ -641,9 +742,9 @@ describe("redo a refused customer", () => {
     return record.clientRequestId;
   }
 
-  it("redo needs retyping: nothing is handed back (the data was erased) and the refused row stays, with its reason, until the new one exists", async () => {
+  it("redo hands back what was typed (within the 7 days) and the refused row stays, with its reason, until the new one exists", async () => {
     const id = await refused();
-    expect(await redoPendingCustomer(db, OWNER, id)).toBeNull();
+    expect(await redoPendingCustomer(db, OWNER, id)).toMatchObject({ name: "Padaria Ação Ltda", document: "12345678909" });
     expect(await getPendingCustomer(db, OWNER, id)).toMatchObject({ state: "rejected", rejectionReason: "Já existe um cliente com este CPF/CNPJ." });
   });
 

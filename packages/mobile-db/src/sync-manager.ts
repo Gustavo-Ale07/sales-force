@@ -6,6 +6,7 @@ import { pushOutbox, recoverInterrupted, reevaluateHeldOrders, TransportError, t
 import {
   applyCustomerCreationSignal,
   countPendingCustomers,
+  purgeRefusedCustomers,
   pushPendingCustomers,
   recoverInterruptedCustomers,
   settleConfirmedCustomers,
@@ -252,7 +253,17 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
 
   const offlineFailure = (): Failure => (internet() === "offline" ? failureOf("no_internet", "offline") : failureOf("server_unavailable", "offline"));
 
+  /** Privacy window of refused customers (I-2): runs at app start (refresh), on every sync and on foreground; never fails a run. */
+  const purgePrivacyWindow = async (): Promise<void> => {
+    try {
+      await purgeRefusedCustomers(deps.db, deps.env);
+    } catch (error) {
+      deps.onUnexpectedError?.(error);
+    }
+  };
+
   const run = async (reason: SyncReason, pull: boolean): Promise<SyncStatus> => {
+    await purgePrivacyWindow();
     publish({ ...status, phase: "syncing", progress: null, ...(await counters()) });
     let phase: SyncPhase = "idle";
     let lastError: string | null = null;
@@ -392,6 +403,7 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
       return () => listeners.delete(listener);
     },
     async refresh() {
+      await purgePrivacyWindow();
       const lastSyncedAt = status.lastSyncedAt ?? (await getMeta(deps.db, "sync.last_success_at"));
       return publish({ ...status, ...(await counters()), lastSyncedAt });
     },

@@ -192,6 +192,23 @@ describe("the negative local code is never shown as a real code", () => {
   });
 });
 
+describe("list identity under the I-2 rulings (owner 2026-11-13)", () => {
+  it("a refused row is identified by name, masked CPF/CNPJ and reason", () => {
+    const item = toPendingListItem(record({ state: "rejected", rejectionReason: "Já existe um cliente com este CPF/CNPJ." }));
+    expect(item).toMatchObject({ name: "Padaria Nova", document: "***.456.789-**", pending: { state: "rejected", rejectionReason: "Já existe um cliente com este CPF/CNPJ." } });
+  });
+
+  it("a refused row whose data was purged still reads 'Cadastro não aceito' with the masked document", () => {
+    expect(toPendingListItem(record({ state: "rejected", name: "", document: "", request: null, rejectionReason: "x" }))).toMatchObject({ name: "Cadastro não aceito", document: "***.456.789-**" });
+  });
+
+  it("a confirmed row keeps its name and shows no document; without a name it reads 'Cliente {código}'", () => {
+    const named = toPendingListItem(record({ state: "confirmed", customerCode: 4321, document: "", maskedDocument: "", request: null }));
+    expect(named).toMatchObject({ code: 4321, name: "Padaria Nova", document: null });
+    expect(toPendingListItem(record({ state: "confirmed", customerCode: 4321, name: "", document: "", maskedDocument: "", request: null })).name).toBe("Cliente 4321");
+  });
+});
+
 describe("a customer the ERP confirmed but whose data is still being read", () => {
   const item = toPendingListItem(record({ localCode: -3, state: "confirmed", customerCode: 4321 }));
 

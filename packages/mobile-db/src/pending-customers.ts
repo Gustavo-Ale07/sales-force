@@ -62,8 +62,8 @@ export interface PendingCustomerRecord {
   readonly document: string;
   readonly maskedDocument: string;
   /**
-   * What the seller typed. `null` once the server has CONFIRMED or REFUSED it: I-2 erases every personal field then
-   * (document, name, trade name, IE, phone, e-mail, notes, addresses), and `name` / `document` become `""`.
+   * What the seller typed. `null` once the server has CONFIRMED it (I-2: only the name and the ERP code stay), or once a REFUSED
+   * one is older than `REFUSED_RETENTION_MS` (then `name` / `document` are `""` too). A refused one keeps it until then.
    */
   readonly request: PendingCustomerRequest | null;
   readonly state: PendingCustomerState;
@@ -234,9 +234,9 @@ export async function createPendingCustomer(db: SqlDatabase, env: OfflineEnv, in
 }
 
 /**
- * "Refazer" a refused customer. Since I-2 the refused row holds no typed data, so there is nothing to pre-fill: the seller
- * retypes (the result is `null`; it still checks the row is a refused one of this account). The refused row stays, with its
- * reason, until the new customer is created with `replacesRejected` (nothing is lost if the new attempt is abandoned).
+ * "Refazer" a refused customer: returns what the seller typed, to pre-fill (`null` once the retention window erased it; the seller
+ * retypes). It checks the row is a refused one of this account. The refused row stays, with its reason, until the new customer is
+ * created with `replacesRejected` (nothing is lost if the new attempt is abandoned), which removes it at once.
  */
 export async function redoPendingCustomer(db: SqlExecutor, ownerAccountId: string, clientRequestId: string): Promise<PendingCustomerRequest | null> {
   const row = await getPendingCustomer(db, ownerAccountId, clientRequestId);
@@ -244,8 +244,45 @@ export async function redoPendingCustomer(db: SqlExecutor, ownerAccountId: strin
   return row.request;
 }
 
-/** I-2: erases every personal field of a row the server has answered (confirmed or refused); ids, state, ERP code, reason and masked document stay. */
-const ERASE_PERSONAL_DATA_SQL = "document = '', name = '', search_text = '', payload = 'null'";
+/**
+ * I-2 (owner 2026-11-13). CONFIRMED: the document, e-mail, phone and every other typed field go at once; only the name and the ERP
+ * code stay. REFUSED: the typed data stays for `REFUSED_RETENTION_MS` (to redo it), then `purgeRefusedCustomers` erases it;
+ * "Refazer" and discarding remove it at once.
+ */
+const ERASE_ALL_SQL = "document = '', name = '', search_text = '', payload = 'null'";
+
+/** How long the typed data of a REFUSED customer may stay on the device (owner 2026-11-13). */
+export const REFUSED_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Erases the typed data of every refused customer older than the retention window (any account on this device; the injected clock
+ * decides). A row some draft or outbox command still points at keeps its row (erased, with masked document and reason); any other is
+ * removed. Run on app start, sync and foreground. Returns how many rows it erased or removed.
+ */
+export async function purgeRefusedCustomers(db: SqlDatabase, env: OfflineEnv): Promise<number> {
+  const limit = new Date(env.now().getTime() - REFUSED_RETENTION_MS).toISOString();
+  return db.transaction(async (tx) => {
+    const due = await tx.query<SqlRow>(
+      "SELECT client_request_id, seq, (document <> '' OR payload <> 'null' OR name <> '' OR search_text <> '') AS has_data FROM pending_customer WHERE state = 'rejected' AND updated_at <= ?",
+      [limit],
+    );
+    let touched = 0;
+    for (const row of due) {
+      const localCode = -Number(row.seq);
+      const referenced =
+        (await tx.query<SqlRow>("SELECT 1 AS hit FROM local_order_draft WHERE customer_code = ? LIMIT 1", [localCode])).length > 0 ||
+        (await tx.query<SqlRow>("SELECT 1 AS hit FROM outbox WHERE json_extract(payload, '$.request.customerCode') = ? LIMIT 1", [localCode])).length > 0;
+      if (!referenced) {
+        await tx.execute("DELETE FROM pending_customer WHERE client_request_id = ?", [String(row.client_request_id)]);
+        touched += 1;
+      } else if (Number(row.has_data) === 1) {
+        await tx.execute(`UPDATE pending_customer SET ${ERASE_ALL_SQL} WHERE client_request_id = ?`, [String(row.client_request_id)]);
+        touched += 1;
+      }
+    }
+    return touched;
+  });
+}
 
 /** `false` while the last configuration (or a 409) said "customer creation is off"; `true` otherwise, also when unknown. */
 export async function isCustomerCreationAvailable(db: SqlExecutor, _env?: OfflineEnv): Promise<boolean> {
@@ -395,8 +432,8 @@ async function repointDrafts(tx: SqlExecutor, ownerAccountId: string, localCode:
 async function applyConfirmed(db: SqlDatabase, env: OfflineEnv, row: PendingCustomerRecord, registrationId: string, customerCode: number): Promise<void> {
   await db.transaction(async (tx) => {
     await tx.execute(
-      `UPDATE pending_customer SET state = 'confirmed', customer_code = ?, registration_id = ?, last_error = NULL, next_attempt_at = NULL, updated_at = ?, ${ERASE_PERSONAL_DATA_SQL} WHERE client_request_id = ?`,
-      [customerCode, registrationId, isoNow(env), row.clientRequestId],
+      `UPDATE pending_customer SET state = 'confirmed', customer_code = ?, registration_id = ?, last_error = NULL, next_attempt_at = NULL, updated_at = ?, document = '', masked_document = '', search_text = ?, payload = 'null' WHERE client_request_id = ?`,
+      [customerCode, registrationId, isoNow(env), normalizeSearchText(row.name), row.clientRequestId],
     );
     await repointDrafts(tx, row.ownerAccountId, row.localCode, customerCode);
   });
@@ -507,9 +544,9 @@ export async function pushPendingCustomers(
         if (failure === "auth") return { attempted, confirmed, rejected, stoppedBy: "auth" };
         continue;
       }
-      // Permanent: the seller's data stays, the reason is stated, nothing is resent on its own.
+      // Permanent: the typed data stays for the retention window (REFUSED_RETENTION_MS), the reason is stated, nothing is resent on its own.
       await db.execute(
-        `UPDATE pending_customer SET state = 'rejected', rejection_reason = ?, last_error = NULL, next_attempt_at = NULL, updated_at = ?, ${ERASE_PERSONAL_DATA_SQL} WHERE client_request_id = ?`,
+        `UPDATE pending_customer SET state = 'rejected', rejection_reason = ?, last_error = NULL, next_attempt_at = NULL, updated_at = ? WHERE client_request_id = ?`,
         [text, isoNow(env), row.clientRequestId],
       );
       rejected += 1;

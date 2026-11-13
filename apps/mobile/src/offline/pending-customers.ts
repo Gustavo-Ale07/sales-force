@@ -84,10 +84,11 @@ export function toPendingListItem(record: PendingCustomerRecord): CustomerListIt
   return {
     // Confirmed by the ERP: the REAL code (orders allowed). Otherwise the local negative code, which no screen prints.
     code: confirmed ? (record.customerCode as number) : record.localCode,
-    // I-2: once the server answered, the device holds no name; the row is identified by the ERP code or the masked document.
+    // A refused row is identified by name + masked document + reason (typed data kept 7 days, then erased); a confirmed one by its name, or
+    // by "Cliente {código}" while it has none.
     name: record.name !== "" ? record.name : confirmed ? `Cliente ${record.customerCode}` : "Cadastro não aceito",
     tradeName: record.request?.tradeName ?? null,
-    document: record.maskedDocument,
+    document: record.maskedDocument === "" ? null : record.maskedDocument,
     active: true,
     blocked: false,
     sellerCode: null,
