@@ -1323,6 +1323,7 @@ export interface components {
             general: {
                 enabled: boolean;
                 erpSubmissionEnabled?: boolean;
+                customerCreationEnabled?: boolean;
             };
             sales: {
                 defaultNegotiationTypeCode: number | null;

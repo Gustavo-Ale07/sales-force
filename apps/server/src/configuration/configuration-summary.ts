@@ -86,12 +86,14 @@ export function toOrderEntryConfiguration(
   configuration: InstallationConfiguration,
   dataset: DatasetIdentity | null,
   erpSubmissionEnabled?: boolean,
+  customerCreationEnabled?: boolean,
 ): OrderEntryConfiguration {
   return {
     dataset: dataset === null ? null : { environment: dataset.environment, datasetId: dataset.datasetId },
     general: {
       enabled: configuration.general.enabled,
       ...(erpSubmissionEnabled === undefined ? {} : { erpSubmissionEnabled }),
+      ...(customerCreationEnabled === undefined ? {} : { customerCreationEnabled }),
     },
     sales: {
       defaultNegotiationTypeCode: configuration.sales.defaultNegotiationTypeCode,

@@ -6425,6 +6425,9 @@
               },
               "erpSubmissionEnabled": {
                 "type": "boolean"
+              },
+              "customerCreationEnabled": {
+                "type": "boolean"
               }
             },
             "required": [
