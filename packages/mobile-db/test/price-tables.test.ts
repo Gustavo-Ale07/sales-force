@@ -115,8 +115,40 @@ describe("pull stores the tables of the visible customers", () => {
     expect(await db.transaction((tx) => cachedPriceTableCodes(tx))).toEqual([3, 9]);
   });
 
+  const seedPreviousPull = async (owner: string, datasetId = "d1") => {
+    await pullReferenceData(
+      db,
+      env,
+      source({
+        fetchDatasetIdentity: async () => ({ environment: "staging", datasetId }),
+        fetchPriceTables: async () => [
+          { tableCode: 3, prices: [{ productCode: 1, listPrice: price(3, "8.00") }] },
+          { tableCode: 77, prices: [{ productCode: 1, listPrice: price(77, "1.00") }] },
+        ],
+      }),
+      owner,
+    );
+  };
+
+  it("a table read by ANOTHER account is never kept for this one (price tables are not carried across owners)", async () => {
+    await seedPreviousPull("acc-a");
+    await pullReferenceData(db, env, source({ fetchPriceTables: async () => [{ tableCode: 9, prices: [{ productCode: 2, listPrice: price(9, "18.00") }] }] }), "acc-b");
+    expect(await db.transaction((tx) => cachedPriceTableCodes(tx))).toEqual([9]);
+  });
+
+  it("a table read under ANOTHER dataset is never kept after the dataset changed", async () => {
+    await seedPreviousPull("acc", "d1");
+    await pullReferenceData(
+      db,
+      env,
+      source({ fetchDatasetIdentity: async () => ({ environment: "staging", datasetId: "d2" }), fetchPriceTables: async () => [{ tableCode: 9, prices: [{ productCode: 2, listPrice: price(9, "18.00") }] }] }),
+      "acc",
+    );
+    expect(await db.transaction((tx) => cachedPriceTableCodes(tx))).toEqual([9]);
+  });
+
   it("a table that could not be read keeps its previous prices; a table no customer uses any more is dropped", async () => {
-    await db.transaction((tx) => replacePriceTables(tx, [{ tableCode: 3, prices: [{ productCode: 1, listPrice: price(3, "8.00") }] }, { tableCode: 77, prices: [{ productCode: 1, listPrice: price(77, "1.00") }] }]));
+    await seedPreviousPull("acc");
     await pullReferenceData(
       db,
       env,

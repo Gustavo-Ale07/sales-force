@@ -1,5 +1,5 @@
 import type { SqlDatabase } from "./connection";
-import { DatasetIdentityError, confirmDataset, readExpectedDataset, sameDataset, writeCacheDataset, type DatasetIdentity } from "./dataset-identity";
+import { DatasetIdentityError, confirmDataset, readCacheDataset, readExpectedDataset, sameDataset, writeCacheDataset, type DatasetIdentity } from "./dataset-identity";
 import { countOutbox, listAttentionItems, type AttentionItem } from "./local-orders";
 import { isoNow, type OfflineEnv } from "./offline-env";
 import { pushOutbox, recoverInterrupted, reevaluateHeldOrders, TransportError, type OrderTransport, type PushOptions } from "./order-sync";
@@ -98,6 +98,8 @@ export async function pullReferenceData(db: SqlDatabase, env: OfflineEnv, source
   if (!sameDataset(before, after)) throw new DatasetIdentityError("O conjunto de dados do servidor mudou durante a atualização.");
   // The carrier list is a convenience: when it cannot be read the previous list stays, unless it belongs to another dataset.
   const previousDataset = await readExpectedDataset(db);
+  // Prices carried over from the previous pull are trusted only when that pull was this account's, under this same dataset.
+  const sameOwnerAndDataset = (await getMeta(db, META_KEYS.cacheOwner)) === ownerAccountId && sameDataset(await readCacheDataset(db), before);
   let carriers: readonly unknown[] | null = null;
   if (source.fetchCarriers !== undefined) {
     try {
@@ -116,7 +118,7 @@ export async function pullReferenceData(db: SqlDatabase, env: OfflineEnv, source
     await replaceProducts(tx, products);
     // Tables still used by a customer but not read this time keep their previous prices; the rest are dropped.
     const used = new Set(representatives.keys());
-    const keepTables = (await cachedPriceTableCodes(tx)).filter((code) => used.has(code) && !priceTables.some((t) => t.tableCode === code));
+    const keepTables = sameOwnerAndDataset ? (await cachedPriceTableCodes(tx)).filter((code) => used.has(code) && !priceTables.some((t) => t.tableCode === code)) : [];
     await replacePriceTables(tx, priceTables.filter((t) => used.has(t.tableCode)), { keepTables });
     await setMeta(tx, META_KEYS.customersSyncedAt, now, now);
     await setMeta(tx, META_KEYS.productsSyncedAt, now, now);
