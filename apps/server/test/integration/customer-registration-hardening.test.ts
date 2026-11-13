@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { auditLog, customerRegistration, customerRegistrationRefusal, erpCustomer, integrationOutbox } from '@salesforce/db';
 import { CreateCustomerRequestSchema } from '@salesforce/contracts';
 import { DEMO_ACCOUNT_EMAILS } from '@salesforce/sankhya';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GENERIC_DUPLICATE_MESSAGE, MAX_CUSTOMER_CREATIONS_PER_HOUR, CustomerRegistrationService } from '../../src/customers/customer-registration.service.js';
 import { CustomerRegistrationRepository } from '../../src/customers/customer-registration.repository.js';
@@ -419,7 +419,10 @@ describe('retention of finished customer registrations (owner ruling 2026-11-13)
     const first = await svc.create(sellerUser(seller1, 103), request(document, { clientRequestId }));
     expect(first.httpStatus).toBe(202);
     const created =(await db().select().from(customerRegistration).where(eq(customerRegistration.clientRequestId, clientRequestId)))[0]!;
+    // Backdating is what the update guard forbids the application; the fixture ages the row as the table owner.
+    await db().execute(sql`ALTER TABLE customer_registration DISABLE TRIGGER customer_registration_update_guard`);
     await db().update(customerRegistration).set({ status: 'rejected', rejectionCode: 'partner_document_duplicate', updatedAt: OLD }).where(eq(customerRegistration.id, created.id));
+    await db().execute(sql`ALTER TABLE customer_registration ENABLE TRIGGER customer_registration_update_guard`);
     await db().update(integrationOutbox).set({ status: 'rejected', nextAttemptAt: null, updatedAt: OLD }).where(eq(integrationOutbox.aggregateId, created.id));
     await retention().purge();
     expect(await registrationRow(created.id)).toBeUndefined();

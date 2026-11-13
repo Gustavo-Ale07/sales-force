@@ -239,6 +239,39 @@ describe('db-roles.sql', () => {
     expect(await exists(old)).toBe(false);
   });
 
+  it('worker: cannot unsettle a confirmed row or backdate updated_at, so the delete guard cannot be bypassed through UPDATE', async () => {
+    const accountId = '0194a1b2-7c3d-7e4f-8a5b-6c7d8e9f0a02';
+    await as(adminDbUrl, `INSERT INTO account (id, email, display_name, password_hash, role) VALUES ($1, 'upd@example.test', 'U', 'x', 'seller') ON CONFLICT DO NOTHING`, [accountId]);
+    const seed = async (n: number, status: string, age: string) => {
+      const id = `0194a1b2-7c3d-7e4f-8a5b-6c7d8e9f2${String(n).padStart(3, '0')}`;
+      await as(
+        adminDbUrl,
+        `INSERT INTO customer_registration (id, client_request_id, request_hash, created_by_account_id, origin_key, status, tax_id, name, erp_customer_code, created_at, updated_at)
+         VALUES ($1, $1, 'h', $2, $6, $3, '11222333000181', 'Cliente', $4, now() - $5::interval, now() - $5::interval)`,
+        [id, accountId, status, status === 'confirmed' ? 2000 + n : null, age, `force:${id}`],
+      );
+      return id;
+    };
+    const run = (sql: string) => sqlState('force_worker', sql);
+    const confirmed = await seed(1, 'confirmed', '90 days');
+    // Confirmed never moves to another status (rejected would make it deletable).
+    expect(await run(`UPDATE customer_registration SET status = 'rejected', erp_customer_code = NULL, updated_at = now() WHERE id = '${confirmed}'`)).toBeDefined();
+    // No backdating.
+    expect(await run(`UPDATE customer_registration SET updated_at = now() - interval '120 days' WHERE id = '${confirmed}'`)).toBeDefined();
+    const pending = await seed(2, 'pending', '1 day');
+    expect(await run(`UPDATE customer_registration SET updated_at = now() - interval '90 days' WHERE id = '${pending}'`)).toBeDefined();
+    // The bypass attempt: reject, backdate, delete.
+    const victim = await seed(3, 'pending', '1 day');
+    expect(await run(`UPDATE customer_registration SET status = 'rejected', rejection_code = 'x', updated_at = now() - interval '90 days' WHERE id = '${victim}'`)).toBeDefined();
+    expect(await run(`DELETE FROM customer_registration WHERE id = '${victim}'`)).toBeDefined();
+    expect((await as(adminDbUrl, 'SELECT 1 FROM customer_registration WHERE id = ANY($1)', [[confirmed, victim]])).length).toBe(2);
+    // Legitimate transitions keep working.
+    expect(await run(`UPDATE customer_registration SET status = 'unknown', updated_at = now() WHERE id = '${pending}'`)).toBeUndefined();
+    expect(await run(`UPDATE customer_registration SET status = 'confirmed', erp_customer_code = 3001, updated_at = now() WHERE id = '${pending}'`)).toBeUndefined();
+    expect(await run(`UPDATE customer_registration SET status = 'rejected', rejection_code = 'duplicate_document', updated_at = now() WHERE id = '${victim}'`)).toBeUndefined();
+    expect(await run(`UPDATE customer_registration SET status = status, updated_at = updated_at WHERE id = '${confirmed}'`)).toBeUndefined();
+  });
+
   it('api: reads and writes only its own data; cannot DDL, truncate, drop, alter or write the mirror', async () => {
     expect(await sqlState('force_api', 'SELECT count(*) FROM erp_customer')).toBeUndefined();
     expect(await sqlState('force_api', 'SELECT count(*) FROM session')).toBeUndefined();

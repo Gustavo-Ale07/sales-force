@@ -260,6 +260,13 @@
       "when": 1794667004103,
       "tag": "0036_customer_registration_delete_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1794753404103,
+      "tag": "0037_customer_registration_update_guard",
+      "breakpoints": true
     }
   ]
 }
