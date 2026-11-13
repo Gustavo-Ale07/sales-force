@@ -59,8 +59,8 @@
 --   sales_order_approval                  S I U       -              orders approvals (discount approval requests: INSERT on submit, UPDATE on decision or invalidation; never deleted)
 --   customer_order_template               S I U       -              templates.repository
 --   customer_order_template_item          S I U D     -              templates.repository (items replaced)
---   customer_registration                 S I         S U            api: INSERT of the registration request (hourly-limit count, idempotent replay and open-document lookup read it); worker: reads the status and closes it (confirmed/rejected/unknown) on delivery. Never deleted
---   customer_registration_refusal         S I         -              api: INSERT of a duplicate-document refusal and the hourly-limit count; carries no document data (account, reason, time). Worker never touches it
+--   customer_registration                 S I         S D + U(cols)  api: INSERT of the registration request (hourly-limit count, idempotent replay and open-document lookup read it); worker: reads the status and closes it (confirmed/rejected/unknown) on delivery through a COLUMN grant UPDATE (status, erp_customer_code, rejection_code, updated_at) only; DELETE by the 30-day retention of rejected rows. The API never updates or deletes
+--   customer_registration_refusal         S I         S D            api: INSERT of a duplicate-document refusal and the hourly-limit count; carries no document data (account, reason, time). Worker: DELETE by the 24-hour purge (reads only to select by age), never inserts or updates
 --   integration_outbox                    S I U D     S U            api: INSERT on submit (same transaction as order -> queued); DELETE with its order (D-Y, never-delivered orders only; the dry-run record goes by cascade);
 --                                                                       worker: claims and closes deliveries (SNK-7). The order gate trigger reads sales_order as the invoking role.
 --   integration_order_dry_run             -           S I D          worker: dry-run payload record (SNK-7 D-6); DELETE by the 30-day purge. The API reads only order_id, created_at and payload_hash (column grant, D-Z), never the payload
@@ -279,7 +279,8 @@ BEGIN
       ('audit_log',                          'force_worker', 'INSERT'),
       ('sync_state',                         'force_worker', 'SELECT, INSERT, UPDATE'),
       ('sync_refresh',                       'force_worker', 'SELECT, UPDATE'),
-      ('customer_registration',              'force_worker', 'SELECT, UPDATE'),
+      ('customer_registration',              'force_worker', 'SELECT, DELETE'),
+      ('customer_registration_refusal',      'force_worker', 'SELECT, DELETE'),
       ('erp_seller',                         'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_directory_user',                 'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_carrier',                        'force_worker', 'SELECT, INSERT, UPDATE'),
@@ -316,6 +317,10 @@ BEGIN
   -- it can change nothing else of an existing version (payload and hash stay immutable for it).
   IF to_regclass('public.installation_configuration_version') IS NOT NULL THEN
     GRANT UPDATE (is_current) ON public.installation_configuration_version TO force_worker;
+  END IF;
+  -- D-AR: the worker closes a registration (status, ERP code, stable rejection code) and nothing else of it.
+  IF to_regclass('public.customer_registration') IS NOT NULL THEN
+    GRANT UPDATE (status, erp_customer_code, rejection_code, updated_at) ON public.customer_registration TO force_worker;
   END IF;
 END
 $lock$;

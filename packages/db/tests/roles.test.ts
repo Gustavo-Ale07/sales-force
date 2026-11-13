@@ -46,8 +46,11 @@ const EXPECTED: Record<string, { api: Priv[]; worker: Priv[] }> = {
   sales_order_approval: { api: SIU, worker: [] },
   customer_order_template: { api: SIU, worker: [] },
   customer_order_template_item: { api: SIUD, worker: [] },
-  customer_registration: { api: ['SELECT', 'INSERT'], worker: ['SELECT', 'UPDATE'] },
-  customer_registration_refusal: { api: ['SELECT', 'INSERT'], worker: [] },
+  // Worker: SELECT + DELETE (30-day retention of rejected rows) + column-level UPDATE (status, erp_customer_code,
+  // rejection_code, updated_at) only; the column grant is checked below.
+  customer_registration: { api: ['SELECT', 'INSERT'], worker: ['SELECT', 'DELETE'] },
+  // Worker: SELECT + DELETE for the 24-hour purge; never inserts or updates.
+  customer_registration_refusal: { api: ['SELECT', 'INSERT'], worker: ['SELECT', 'DELETE'] },
   integration_outbox: { api: SIUD, worker: ['SELECT', 'UPDATE'] },
   integration_order_dry_run: { api: [], worker: ['SELECT', 'INSERT', 'DELETE'] },
   product_media: { api: S, worker: SIUD },
@@ -183,6 +186,26 @@ describe('db-roles.sql', () => {
     // The migrator owns everything it created.
     const foreign = await as(adminDbUrl, `SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind IN ('r', 'S', 'v') AND pg_get_userbyid(c.relowner) <> 'force_migrator'`);
     expect(foreign).toEqual([]);
+  });
+
+  it('worker: UPDATE on customer_registration is column-level (status, erp_customer_code, rejection_code, updated_at) and nothing wider', async () => {
+    const updatable = async (role: string) =>
+      (await as<{ c: string }>(
+        adminDbUrl,
+        `SELECT column_name AS c FROM information_schema.column_privileges WHERE table_schema = 'public' AND table_name = 'customer_registration' AND grantee = $1 AND privilege_type = 'UPDATE' ORDER BY column_name`,
+        [role],
+      )).map((r) => r.c);
+    expect(await updatable('force_worker')).toEqual(['erp_customer_code', 'rejection_code', 'status', 'updated_at']);
+    expect(await updatable('force_api')).toEqual([]);
+    expect(await sqlState('force_worker', `UPDATE customer_registration SET status = status, erp_customer_code = erp_customer_code, rejection_code = rejection_code, updated_at = updated_at`)).toBeUndefined();
+    for (const column of ['tax_id', 'name', 'origin_key', 'request_hash', 'seller_code', 'created_by_account_id', 'client_request_id', 'created_at', 'id']) {
+      expect(await sqlState('force_worker', `UPDATE customer_registration SET ${column} = ${column}`), column).toBe(DENIED);
+    }
+    expect(await sqlState('force_worker', 'INSERT INTO customer_registration DEFAULT VALUES')).toBe(DENIED);
+    expect(await sqlState('force_worker', 'DELETE FROM customer_registration WHERE false')).toBeUndefined();
+    expect(await sqlState('force_worker', 'DELETE FROM customer_registration_refusal WHERE false')).toBeUndefined();
+    expect(await sqlState('force_worker', 'UPDATE customer_registration_refusal SET reason = reason')).toBe(DENIED);
+    expect(await sqlState('force_worker', 'INSERT INTO customer_registration_refusal DEFAULT VALUES')).toBe(DENIED);
   });
 
   it('api: reads and writes only its own data; cannot DDL, truncate, drop, alter or write the mirror', async () => {
