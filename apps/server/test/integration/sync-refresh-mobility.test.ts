@@ -97,4 +97,21 @@ describe('refresh result carries the AD_MOBILIDADE counts', () => {
     expect(step?.reason).toMatch(/avise o TI/i);
     expect(await w.api.get(started.id, seller)).toMatchObject({ hasWarnings: true });
   });
+
+  it('the response of start() to a seller carries no mobility counts either, even when it reuses a run that has them (server-side)', async () => {
+    const w = await world();
+    const first = await w.api.start(manager);
+    await w
+      .runner({
+        mirror: {
+          run: async (entity) => (entity === 'products' ? w.ok(entity, { mobility: { visible: 4, hidden: 96, keptPrevious: true } }) : w.ok(entity)),
+        },
+      })
+      .run(first.id);
+    const again = await w.api.start(seller);
+    expect(again.id).toBe(first.id);
+    expect(again).toMatchObject({ reused: true, hasWarnings: true });
+    const text = JSON.stringify(again);
+    for (const word of ['mobility', 'keptPrevious', 'hidden', 'visible', 'steps', 'products']) expect(text).not.toContain(word);
+  });
 });

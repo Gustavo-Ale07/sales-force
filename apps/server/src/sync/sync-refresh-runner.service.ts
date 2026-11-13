@@ -92,7 +92,10 @@ export class SyncRefreshRunner {
         logger.warn({ entity, errorClass: failure.errorClass, errorCode: failure.errorCode }, 'on-demand refresh step failed');
         next = { ...steps[index]!, status: 'failed', reason: failure.message };
       }
-      steps[index] = { ...next, durationMs: Math.max(0, now().getTime() - startedAt) };
+      const durationMs = Math.max(0, now().getTime() - startedAt);
+      steps[index] = { ...next, durationMs };
+      // Counts and timings only: no rows, names or amounts (owner ruling 2026-11-13, F).
+      logger.info({ refreshId: id, entity, status: next.status, durationMs, rowsRead: next.rowsRead }, 'on-demand refresh step finished');
       await save();
     }
     await db.db.update(syncRefresh).set({ status: 'done', finishedAt: now(), steps }).where(eq(syncRefresh.id, id));

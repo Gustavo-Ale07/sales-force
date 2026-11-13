@@ -87,7 +87,7 @@ describe('AD_MOBILIDADE on TOPs and negotiation types (owner ruling 2026-11-13)'
 
   it('what leaves the server in the order-entry configuration is already filtered: no hidden TOP, no hidden negotiation type (D)', () => {
     const out = run((f) => {
-      (f['q3EnabledTops'].rows as EnabledTopRow[]).find((t) => t.topCode === 1000)!.mobile = false;
+      ((f['q3EnabledTops'].rows as EnabledTopRow[]).find((t) => t.topCode === 1000) as any).mobile = false;
       f['q5NegotiationTypes'].rows[0].mobile = false;
     });
     const entry = toOrderEntryConfiguration(out.snapshot, null);

@@ -97,6 +97,11 @@ class ProcessMutex {
  * - `sync_state`: `running` at the start; `succeeded` (with last success time, counters and live row
  *   count) or `failed` (class + secret-free message, previous success data kept). `/ready` reads it.
  */
+/** Size of a batch as JSON, for the logs only (an estimate of the payload the gateway returned; never logged itself). */
+function approximateBytes(batch: unknown): number {
+  return Buffer.byteLength(JSON.stringify(batch) ?? '', 'utf8');
+}
+
 export class MirrorSyncService {
   readonly #mutex = new ProcessMutex();
 
@@ -221,8 +226,12 @@ export class MirrorSyncService {
       ...(signal === undefined ? {} : { signal }),
     };
 
+    // Metrics for the logs (counts and sizes only): how long the whole read took and roughly how much the gateway returned.
+    const readStartedAt = Date.now();
+    let payloadBytes = 0;
     for await (const batch of spec.read(context)) {
       signal?.throwIfAborted();
+      payloadBytes += approximateBytes(batch);
       const rows = hashRows(batch);
       const counts = await session.transaction((tx) => applyBatch(tx, spec, rows, startedAt));
       stats.read += rows.length;
@@ -259,7 +268,7 @@ export class MirrorSyncService {
       });
     });
 
-    logger.info({ entity, ...stats, ...(hasExcluded ? { excluded } : {}) }, 'mirror sync completed');
+    logger.info({ entity, ...stats, ...(hasExcluded ? { excluded } : {}), durationMs: Date.now() - readStartedAt, payloadBytes }, 'mirror sync completed');
     return { entity, outcome: 'completed', stats, ...(hasExcluded ? { excluded } : {}), ...(mobility === undefined ? {} : { mobility }) };
   }
 
@@ -286,8 +295,11 @@ export class MirrorSyncService {
       ...(salesHistory === undefined ? {} : { salesHistory }),
       ...(signal === undefined ? {} : { signal }),
     };
+    const readStartedAt = Date.now();
+    let payloadBytes = 0;
     for await (const batch of spec.read(context)) {
       signal?.throwIfAborted();
+      payloadBytes += approximateBytes(batch);
       for (const row of batch) rows.push(row);
     }
 
@@ -309,7 +321,7 @@ export class MirrorSyncService {
       await markSucceeded(tx, entity, { startedAt, finishedAt, stats, rowCount: rows.length });
     });
 
-    logger.info({ entity, rows: rows.length }, 'mirror sync completed (snapshot replaced)');
+    logger.info({ entity, rows: rows.length, durationMs: Date.now() - readStartedAt, payloadBytes }, 'mirror sync completed (snapshot replaced)');
     return { entity, outcome: 'completed', stats: { read: rows.length, created: rows.length, updated: 0, reactivated: 0, unchanged: 0, deactivated: 0 } };
   }
 }
