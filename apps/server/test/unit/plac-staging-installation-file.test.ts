@@ -38,11 +38,12 @@ describe('PLAC staging base file (.claude/work/PLAC_STAGING_INSTALLATION.json)',
       mobilityFilter: { mode: 'enforced', validation: 'validated' },
       productWithoutPrice: { visible: false, orderable: false },
     });
-    // D-V 4: customers = active + CLIENTE + reseller (CLASSIFICMS = R, initial hypothesis to validate at the first sync).
+    // D-V 4 as widened by the owner (2026-11-13): active + CLIENTE; the CLASSIFICMS = R reseller hypothesis was
+    // not fiscal and not an order rule, so it no longer limits who is mirrored.
     expect((file as unknown as { customers: Record<string, unknown> }).customers['eligibility']).toEqual({
       activeOnly: true,
       requiredFlags: ['CLIENTE'],
-      columnIn: [{ column: 'CLASSIFICMS', values: ['R'] }],
+      columnIn: [],
     });
     expect(file.sales['discountAuthority']).toMatchObject({ mode: 'erp' });
     expect(file.erp['liberationEventLabels']).toEqual({ '44': 'liberação exigida pela TOP', '18': 'confirmação de nota' });

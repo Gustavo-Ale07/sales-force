@@ -147,14 +147,7 @@
       "requiredFlags": [
         "CLIENTE"
       ],
-      "columnIn": [
-        {
-          "column": "CLASSIFICMS",
-          "values": [
-            "R"
-          ]
-        }
-      ]
+      "columnIn": []
     }
   },
   "products": {
