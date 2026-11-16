@@ -31,3 +31,6 @@ Visual/aparelho/iOS/Maestro; nada lido nem escrito no Sankhya real; staging real
 
 ## Sandbox (SELECTs I e J)
 Pendentes: a aba do Sandbox pediu login; nada foi consultado nem digitado. Retomar quando o dono logar (só SELECT, contagens e códigos).
+
+## Regra de liberação do push
+typecheck e build com dist novo antes de liberar push (staging falhou em e42e816 por dist antigo de contracts/domain escondendo TS2739 no mapa de textos do site; corrigido).

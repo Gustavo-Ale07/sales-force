@@ -193,6 +193,11 @@ describe("catalog gate messages (owner ruling 2026-11-13)", () => {
     expect(describeIssue({ path: "items[1].productCode", code: "product_without_mobility" })).toBe("Item 2: Produto sem mobilidade");
   });
 
+  it("describes the unavailable and inactive product issues with the texts the server sends (owner ruling 2026-11-13)", () => {
+    expect(describeIssue({ path: "items[0].productCode", code: "product_unavailable" })).toBe("Item 1: Produto indisponível");
+    expect(describeIssue({ path: "items[2].productCode", code: "product_inactive" })).toBe("Item 3: Produto inativo");
+  });
+
   it("groups line issues by 0-based line index, leaves header issues out", () => {
     const byLine = issuesByLine([
       { path: "items[1].priceState", code: "product_without_price" },
