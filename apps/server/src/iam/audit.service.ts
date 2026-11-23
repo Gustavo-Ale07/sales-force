@@ -16,6 +16,10 @@ export const AUDIT_ACTIONS = {
   accountPasswordChanged: 'account.password_changed',
   accountStatusChanged: 'account.status_changed',
   accountSellerLinked: 'account.seller_linked',
+  /** The account set or replaced its own profile photo (version and size only; never image content). */
+  accountPhotoChanged: 'account.photo_changed',
+  /** The account removed its own profile photo. */
+  accountPhotoRemoved: 'account.photo_removed',
   /** A scoped request was refused because the account has no valid seller link (ids only, no PII). */
   noSellerScope: 'authz.no_seller_scope',
   /** External login refused: the directory seller does not agree with the account link (no codes, no PII). */

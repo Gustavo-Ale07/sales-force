@@ -8,7 +8,9 @@ import {
   type ProductImageSource,
 } from '../catalog/product-image.js';
 import type { Logger } from '../observability/logger.js';
+import type { ObjectStore } from '../media/object-store.js';
 import {
+  ACCOUNT_PHOTO_STORE,
   CLOCK,
   DATASET_IDENTITY,
   DATABASE,
@@ -36,6 +38,8 @@ export interface InfrastructureDeps {
   /** Product image source (default: `NoImageSource`, no product has an image). */
   readonly productImageSource?: ProductImageSource;
   readonly productImageSettings?: Partial<ProductImageSettings>;
+  /** API only: object store for profile photos (default none: the photo routes answer 503). */
+  readonly accountPhotoStore?: ObjectStore;
   /** API only: queue submitted orders for the ERP (default false = submission stays disabled, SNK-6). */
   readonly orderEnqueueEnabled?: boolean;
   /** API only: accept customer creations (default false). The worker has its own flag. */
@@ -71,6 +75,7 @@ export class InfrastructureModule {
           ...deps.customerConfirmWait,
         } satisfies CustomerConfirmWait,
       },
+      { provide: ACCOUNT_PHOTO_STORE, useValue: deps.accountPhotoStore ?? null },
       { provide: PRODUCT_IMAGE_SOURCE, useValue: deps.productImageSource ?? new NoImageSource() },
       { provide: PRODUCT_IMAGE_SETTINGS, useValue: { ...DEFAULT_PRODUCT_IMAGE_SETTINGS, ...deps.productImageSettings } },
     ];

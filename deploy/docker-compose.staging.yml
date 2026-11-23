@@ -149,12 +149,15 @@ services:
       EXTERNAL_DIRECTORY_MAX_AGE_MINUTES: ${EXTERNAL_DIRECTORY_MAX_AGE_MINUTES:-120}
       VERIFIER_URL: http://verifier:3002
       # Product photos: read-only view of the volume the worker fills (INTERIM filesystem store, V-05/STACK-7).
+      # Own profile photos: a WRITABLE volume of the API alone (INTERIM filesystem store, V-05/STACK-7).
+      ACCOUNT_PHOTO_DIR: /var/lib/sales-force/account-photos
       PRODUCT_MEDIA_DIR: /var/lib/sales-force/product-media
       PRODUCT_MEDIA_MAX_BYTES: ${PRODUCT_MEDIA_MAX_BYTES:-5242880}
       # Largest GENERATED thumbnail served (the worker renders every photo's own 256 px WebP, bounded at 256 KiB).
       PRODUCT_MEDIA_THUMB_MAX_BYTES: ${PRODUCT_MEDIA_THUMB_MAX_BYTES:-262144}
     volumes:
       - product_media:/var/lib/sales-force/product-media:ro
+      - account_photos:/var/lib/sales-force/account-photos
     command: ["node", "dist/main-api.js"]
     # `verifier`: the API is the only caller of the internal identity verifier.
     networks: [backend, edge, verifier]
@@ -477,5 +480,7 @@ volumes:
   # Product photos (INTERIM filesystem object store). Persistent, included in the host/volume backup scope;
   # never part of an image or of the repository. Replaced by S3-compatible storage once V-05 closes.
   product_media:
+  # Own profile photos (INTERIM filesystem object store, written by the API). Persistent and in the backup scope.
+  account_photos:
   caddy_data:
   caddy_config:

@@ -44,6 +44,8 @@ runMain('api', async () => {
     orderEnqueueEnabled: env.ERP_ORDER_ENQUEUE_ENABLED,
     customerEnqueueEnabled: env.ERP_CUSTOMER_ENQUEUE_ENABLED,
     trustProxy: env.TRUST_PROXY,
+    // Profile photos: the API writes its own store (never the ERP). Unset = the photo routes answer 503.
+    ...(env.ACCOUNT_PHOTO_DIR === undefined ? {} : { accountPhotoStore: new FilesystemObjectStore(env.ACCOUNT_PHOTO_DIR) }),
     // Product photos: read-only view of what the worker stored (never the ERP). Unset = no product has an image.
     ...(env.PRODUCT_MEDIA_DIR === undefined
       ? {}

@@ -100,6 +100,11 @@ export const ApiEnvSchema = z.object({
    * Product photos: absolute path of the persistent directory the worker fills (mounted read-only into
    * the API). Unset = no product has an image. The API only reads it; it never calls the ERP.
    */
+  /**
+   * Profile photos: absolute path of a persistent directory the API WRITES (object store of the account photos; separate
+   * from the product media, which is mounted read-only). Unset = photo routes answer 503 and no session carries a photo.
+   */
+  ACCOUNT_PHOTO_DIR: mediaDirField,
   PRODUCT_MEDIA_DIR: mediaDirField,
   PRODUCT_MEDIA_MAX_BYTES: mediaMaxBytesField,
   /** Largest generated thumbnail the API reads and serves (the worker bounds its rendition at 256 KiB; keep this >= that). */
@@ -213,7 +218,7 @@ export function parseApiEnv(source: EnvSource): ParsedApiEnv {
         problems.push('SF_DATASET_ID: is required when NODE_ENV=production (the installation must declare its dataset identity).');
       }
     }
-    problems.push(...origins.problems,...passwordHashProblems(parsed), ...externalLoginProblems(parsed), ...mediaDirProblems(parsed.PRODUCT_MEDIA_DIR));
+    problems.push(...origins.problems,...passwordHashProblems(parsed), ...externalLoginProblems(parsed), ...mediaDirProblems(parsed.PRODUCT_MEDIA_DIR), ...mediaDirProblems(parsed.ACCOUNT_PHOTO_DIR).map((p) => p.replace('PRODUCT_MEDIA_DIR', 'ACCOUNT_PHOTO_DIR')));
     return problems;
   });
   const dataset =

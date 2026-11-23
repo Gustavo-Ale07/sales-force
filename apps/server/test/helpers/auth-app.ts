@@ -1,3 +1,4 @@
+import type { ObjectStore } from '../../src/media/object-store.js';
 import { Controller, Get, Module, Post, type Type } from '@nestjs/common';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { SESSION_COOKIE_NAME, routes, type DatasetIdentity, type RouteDefinition } from '@salesforce/contracts';
@@ -91,6 +92,8 @@ export interface AuthAppOptions {
   readonly dataset?: DatasetIdentity | null;
   readonly productImageSource?: ProductImageSource;
   readonly productImageSettings?: Partial<ProductImageSettings>;
+  /** Object store of the profile photos (default none: the photo routes answer 503). */
+  readonly accountPhotoStore?: ObjectStore;
   /** Opens the API-side enqueue of orders for the ERP (default off, as shipped). */
   readonly orderEnqueueEnabled?: boolean;
 }
@@ -109,6 +112,7 @@ export async function startAuthApp(
   const auth = testAuthConfig(options.authOverrides);
 
   const imageDeps = {
+    ...(options.accountPhotoStore === undefined ? {} : { accountPhotoStore: options.accountPhotoStore }),
     ...(options.productImageSource === undefined ? {} : { productImageSource: options.productImageSource }),
     ...(options.productImageSettings === undefined ? {} : { productImageSettings: options.productImageSettings }),
   };

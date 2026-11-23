@@ -112,6 +112,7 @@ describe('OpenAPI generation', () => {
       'carrierCode',
       'clientRequestId',
       'customerCode',
+      'discountAboveLimitAccepted',
       'expectedDataset',
       'freightType',
       'items',

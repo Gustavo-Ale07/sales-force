@@ -35,6 +35,7 @@
 --   table                                 force_api   force_worker   evidence
 --   account                               S I U       -              iam/account.repository (create, rehash, status), session join, demo-accounts check; account CLI
 --   session                               S I U D     -              iam/session.repository
+--   account_photo                         S I U D     iam/account-photo.repository (profile photo metadata, one row per account; the bytes are in the object store; D: photo removal)
 --   account_seller_link                   S I U D     -              account.repository (upsert); account CLI; D: removal of an automatic (sankhya_auto) link when the ERP relation ends
 --   auth_throttle                         S I U D     -              iam/throttle.repository (clear on success/unlock, purge)
 --   audit_log                             I           -              iam/audit.service. Append-only: no S/U/D (never read by code)
@@ -245,6 +246,7 @@ BEGIN
     SELECT * FROM (VALUES
       ('account',                            'force_api',    'SELECT, INSERT, UPDATE'),
       ('account_seller_link',                'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
+      ('account_photo',                      'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
       ('session',                            'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
       ('auth_throttle',                      'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
       ('sales_order_item',                   'force_api',    'SELECT, INSERT, UPDATE, DELETE'),

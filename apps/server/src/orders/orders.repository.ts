@@ -355,7 +355,7 @@ export class OrdersRepository {
 
   async updateOrder(
     id: string,
-    values: Partial<Pick<NewOrder, 'customerCode' | 'sellerCode' | 'status' | 'negotiationTypeCode' | 'topCode' | 'carrierCode' | 'freightType' | 'notes' | 'estimatedTotal' | 'discountAuthority' | 'version' | 'configVersionId' | 'updatedAt'>>,
+    values: Partial<Pick<NewOrder, 'customerCode' | 'sellerCode' | 'status' | 'negotiationTypeCode' | 'topCode' | 'carrierCode' | 'freightType' | 'discountAboveLimitAccepted' | 'notes' | 'estimatedTotal' | 'discountAuthority' | 'version' | 'configVersionId' | 'updatedAt'>>,
     executor: Executor,
   ): Promise<OrderRow> {
     const [row] = await executor.update(salesOrder).set(values).where(eq(salesOrder.id, id)).returning();

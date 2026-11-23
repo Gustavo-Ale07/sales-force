@@ -104,6 +104,36 @@ export const accountSellerLink = pgTable(
 );
 
 /**
+ * Profile photo metadata: one row per account (replace on change, delete on removal). The bytes live in object storage
+ * (P-17: no bytea) under `storage_key`; the stored rendition is always the server-made square WebP (EXIF/metadata
+ * stripped), never the upload. Not mirrored to Sankhya and not part of the sync stream.
+ */
+export const accountPhoto = pgTable(
+  'account_photo',
+  {
+    accountId: uuid('account_id')
+      .primaryKey()
+      .references(() => account.id, { onDelete: 'cascade' }),
+    contentType: text('content_type').notNull(),
+    byteLength: integer('byte_length').notNull(),
+    /** Square side in pixels of the stored rendition. */
+    sizePx: integer('size_px').notNull(),
+    /** sha256 hex (64 lowercase chars) of the stored bytes; its prefix is the public `version` and the ETag. */
+    contentHash: text('content_hash').notNull(),
+    /** Opaque key inside the object store: account-photos/<accountId>/<sha256>. */
+    storageKey: text('storage_key').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check('account_photo_content_type_chk', sql`${t.contentType} in ('image/webp', 'image/jpeg', 'image/png')`),
+    check('account_photo_byte_length_chk', sql`${t.byteLength} > 0`),
+    check('account_photo_size_px_chk', sql`${t.sizePx} > 0`),
+    check('account_photo_content_hash_chk', sql`${t.contentHash} ~ '^[0-9a-f]{64}$'`),
+  ],
+);
+
+/**
  * Login throttling state (RF-IAM-2; Stage 1b). One row per throttle key: a hash of the normalized
  * e-mail (progressive lockout, identical for existing and unknown accounts so it never reveals
  * which e-mails are registered) or a client address (failure rate limit). Counters live in

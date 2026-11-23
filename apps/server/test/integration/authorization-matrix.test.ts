@@ -20,6 +20,10 @@ import { startPostgres, type TestPostgres, closeAllThenStop } from '../helpers/p
 type Expectation = 'allow' | 'deny';
 const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>>> = {
   logout: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'allow', operations: 'allow' },
+  // Own profile photo: every profile that can sign in (the routes name no account; own-only is asserted in account-photo.test.ts).
+  putProfilePhoto: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'allow', operations: 'allow' },
+  deleteProfilePhoto: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'allow', operations: 'allow' },
+  getProfilePhoto: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'allow', operations: 'allow' },
   getConfiguration: { admin: 'allow', manager: 'deny', seller: 'deny', technical: 'allow', operations: 'deny' },
   // W-39 discount limits (DISC-3): admin only; manager, seller and technical are denied.
   getDiscountLimits: { admin: 'allow', manager: 'deny', seller: 'deny', technical: 'deny', operations: 'deny' },

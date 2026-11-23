@@ -9,6 +9,7 @@ import {
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { Contract, ApiRoute, type RequestContract } from '../http/route.js';
 import { CLOCK, type Clock } from '../platform/tokens.js';
+import { AccountPhotoService } from './account-photo.service.js';
 import { AuthService, type RequestMeta } from './auth.service.js';
 import type { AuthConfig } from './auth-config.js';
 import { readCookie, serializeClearedSessionCookie, serializeSessionCookie } from './cookies.js';
@@ -31,6 +32,7 @@ export class AuthController {
     @Inject(AuthService) private readonly auth: AuthService,
     @Inject(AUTH_CONFIG) private readonly config: AuthConfig,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(AccountPhotoService) private readonly photos: AccountPhotoService,
   ) {}
 
   @ApiRoute(routes.login)
@@ -44,7 +46,7 @@ export class AuthController {
       'set-cookie',
       serializeSessionCookie(token, user.sessionExpiresAt, this.clock(), { secure: this.config.secureCookies }),
     );
-    return this.auth.toSessionBody(user);
+    return this.withPhoto(this.auth.toSessionBody(user));
   }
 
   /** Always 200: `authenticated` says whether a live session exists (the SPA probes it on load). */
@@ -65,7 +67,12 @@ export class AuthController {
         serializeSessionCookie(token, resolved.user.sessionExpiresAt, this.clock(), { secure: this.config.secureCookies }),
       );
     }
-    return this.auth.toSessionBody(resolved.user);
+    return this.withPhoto(this.auth.toSessionBody(resolved.user));
+  }
+
+  /** Additive: the version of the account's profile photo (cache key of GET /me/photo), null when there is none. */
+  private async withPhoto(session: LoginResponse): Promise<LoginResponse> {
+    return { ...session, account: { ...session.account, photoVersion: await this.photos.versionOf(session.account.id) } };
   }
 
   @ApiRoute(routes.logout)

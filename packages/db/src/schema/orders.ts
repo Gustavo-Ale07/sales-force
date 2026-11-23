@@ -77,6 +77,8 @@ export const salesOrder = pgTable(
     /** Freight chosen on the order: CIF, FOB or SEM_FRETE (never a default). Null while the draft has none; required to send. */
     freightType: text('freight_type'),
     /** D-O: ERP "expedição" flag, stamped at creation from sales.expedicaoDefault; never a seller input. Born false. */
+    /** Informational mark: the seller confirmed a discount above the product limit. Never gates anything server-side; absent = false. */
+    discountAboveLimitAccepted: boolean('discount_above_limit_accepted').notNull().default(false),
     expedicao: boolean('expedicao').notNull().default(false),
     notes: text('notes'),
     /** Estimate from list prices only (sum of priced lines); the ERP computes the final value. */

@@ -79,9 +79,12 @@ services:
       SF_DATASET_ID: ${SF_DATASET_ID:-plac-sandbox-real-1}
       # No SANKHYA_* here: the API never reads Sankhya settings (STACK-2/STACK-3).
       # Product photos: read-only view of the volume the worker fills (INTERIM filesystem store, V-05/STACK-7).
+      # Own profile photos: a WRITABLE volume of the API alone (INTERIM filesystem store, V-05/STACK-7).
+      ACCOUNT_PHOTO_DIR: /var/lib/sales-force/account-photos
       PRODUCT_MEDIA_DIR: /var/lib/sales-force/product-media
     volumes:
       - product_media:/var/lib/sales-force/product-media:ro
+      - account_photos:/var/lib/sales-force/account-photos
     command: ["node", "dist/main-api.js"]
     # Debugging only; the browser goes through the web container. Loopback binding, optional.
     ports:
@@ -172,3 +175,5 @@ services:
 volumes:
   pgdata:
   product_media:
+  # Own profile photos (INTERIM filesystem object store, written by the API). Persistent and in the backup scope.
+  account_photos:

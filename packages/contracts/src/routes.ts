@@ -1,5 +1,12 @@
 import type { z } from 'zod';
-import { LoginRequestSchema, LoginResponseSchema, SessionResponseSchema } from './auth.js';
+import {
+  LoginRequestSchema,
+  LoginResponseSchema,
+  PHOTO_UPLOAD_MAX_BODY_BYTES,
+  ProfilePhotoSchema,
+  PutProfilePhotoRequestSchema,
+  SessionResponseSchema,
+} from './auth.js';
 import {
   ProductDetailQuerySchema,
   ProductDetailSchema,
@@ -162,6 +169,52 @@ export const routes = {
     request: {},
     responses: { 204: { description: 'Sessão encerrada' } },
     errors: [401],
+  }),
+  putProfilePhoto: defineRoute({
+    operationId: 'putProfilePhoto',
+    method: 'put',
+    path: '/me/photo',
+    tags: ['auth'],
+    summary: "Set or replace the caller's own profile photo",
+    description:
+      'Own photo only (there is no way to name another account). Body: the image base64-encoded (jpeg, png or webp, up to 5 MiB decoded) with its declared content type and an optional crop rectangle in pixels (after EXIF orientation). The server checks the magic bytes against the declared type, refuses animated or oversized (> 32 megapixels) images, crops to a centre square, downsizes to at most 512 px and re-encodes as WebP without any metadata (EXIF, location). 400 validation_failed (details.issues: photo_type_not_allowed, photo_content_mismatch, photo_too_large, photo_unreadable, photo_crop_invalid, photo_too_small); 429 rate_limited when changed again within 5 seconds; 503 service_unavailable when photo storage is not configured or unreachable. 200 returns the new version. Not mirrored to the ERP.',
+    auth: 'session',
+    request: { body: PutProfilePhotoRequestSchema },
+    maxBodyBytes: PHOTO_UPLOAD_MAX_BODY_BYTES,
+    responses: { 200: { description: 'Foto salva', schema: ProfilePhotoSchema } },
+    errors: [400, 401, 403, 429, 503],
+  }),
+  deleteProfilePhoto: defineRoute({
+    operationId: 'deleteProfilePhoto',
+    method: 'delete',
+    path: '/me/photo',
+    tags: ['auth'],
+    summary: "Remove the caller's own profile photo",
+    description: 'Idempotent: 204 whether or not a photo existed. Audited when one was removed.',
+    auth: 'session',
+    request: {},
+    responses: { 204: { description: 'Foto removida' } },
+    errors: [401, 403, 503],
+  }),
+  getProfilePhoto: defineRoute({
+    operationId: 'getProfilePhoto',
+    method: 'get',
+    path: '/me/photo',
+    tags: ['auth'],
+    summary: "The caller's own profile photo (binary)",
+    description:
+      'Authenticated only, own photo only. 404 when there is none. Always a square WebP of at most 512 px. The ETag is the photo version (the same value as photoVersion in the session); send it in If-None-Match to get 304. Cache-Control is private; nosniff.',
+    auth: 'session',
+    request: {},
+    responses: {
+      200: {
+        description: 'Imagem',
+        binary: { contentTypes: ['image/webp'] },
+        headers: { ETag: 'Photo version', 'Cache-Control': 'private, max-age (revalidate with If-None-Match)', 'Content-Disposition': 'inline' },
+      },
+      304: { description: 'Imagem inalterada (If-None-Match)' },
+    },
+    errors: [401, 403, 404, 503],
   }),
   getSession: defineRoute({
     operationId: 'getSession',

@@ -35,6 +35,9 @@ export const PRODUCT_IMAGE_SOURCE = Symbol('PRODUCT_IMAGE_SOURCE');
 /** `ProductImageSettings` (timeout, cache age, size caps). */
 export const PRODUCT_IMAGE_SETTINGS = Symbol('PRODUCT_IMAGE_SETTINGS');
 
+/** `ObjectStore` for profile photos, or null when the installation has no photo storage configured (the routes answer 503). */
+export const ACCOUNT_PHOTO_STORE = Symbol('ACCOUNT_PHOTO_STORE');
+
 /** Injected time source; tests replace it (no hidden `Date.now()` in application services). */
 export type Clock = () => Date;
 export const systemClock: Clock = () => new Date();

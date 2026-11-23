@@ -191,6 +191,8 @@ export const OrderListItemSchema = named(
     carrierCode: codeInt().nullable(),
     /** Freight chosen on the order, or `null` while the draft has none (required to send). */
     freightType: FreightTypeSchema.nullable(),
+    /** Informational: the seller confirmed a discount above the product limit. Never blocks or changes state; the server always sends it (false when never marked); optional so older fixtures stay valid. */
+    discountAboveLimitAccepted: z.boolean().optional(),
     /** Estimate from list prices; the final value is calculated by the ERP. */
     estimatedTotal: DecimalStringSchema,
     itemCount: z.number().int().min(0),
@@ -472,6 +474,8 @@ const orderDraftFields = {
   carrierCode: codeInt().nullable().optional(),
   /** Freight (CIF, FOB or SEM_FRETE); may be empty on a draft, required to send. Omitted keeps the current one on replace, `null` clears it. */
   freightType: FreightTypeSchema.nullable().optional(),
+  /** Informational mark (discount above the product limit confirmed by the seller). Optional; omitted = false on create, unchanged on replace. Never gates anything. */
+  discountAboveLimitAccepted: z.boolean().optional(),
   negotiationTypeCode: codeInt().nullable(),
   notes: z.string().max(2000).nullable(),
   items: z.array(OrderItemInputSchema).max(MAX_ORDER_ITEMS),

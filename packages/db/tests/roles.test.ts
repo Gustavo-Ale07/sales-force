@@ -34,6 +34,7 @@ const REPLACED_MIRROR = ['erp_sales_history_monthly', 'erp_sales_history_custome
 const EXPECTED: Record<string, { api: Priv[]; worker: Priv[] }> = {
   account: { api: SIU, worker: [] },
   session: { api: SIUD, worker: [] },
+  account_photo: { api: SIUD, worker: [] },
   account_seller_link: { api: SIUD, worker: [] },
   auth_throttle: { api: SIUD, worker: [] },
   audit_log: { api: ['INSERT'], worker: ['INSERT'] },

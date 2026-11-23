@@ -2,6 +2,9 @@ import { Global, Module, type DynamicModule, type Provider } from '@nestjs/commo
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigurationModule } from '../configuration/configuration.module.js';
 import { AccessGuard } from './access.guard.js';
+import { AccountPhotoController } from './account-photo.controller.js';
+import { AccountPhotoRepository } from './account-photo.repository.js';
+import { AccountPhotoService } from './account-photo.service.js';
 import { AccountRepository } from './account.repository.js';
 import { AccountService } from './account.service.js';
 import { AuditService } from './audit.service.js';
@@ -43,11 +46,13 @@ export class IamModule {
     return {
       module: IamModule,
       imports: [ConfigurationModule],
-      controllers: [AuthController],
+      controllers: [AuthController, AccountPhotoController],
       providers: [
         { provide: AUTH_CONFIG, useValue: config },
         { provide: PASSWORD_HASHER, useValue: new Argon2idPasswordHasher(config.passwordHash) },
         AccountRepository,
+        AccountPhotoRepository,
+        AccountPhotoService,
         SessionRepository,
         ThrottleRepository,
         AuditService,

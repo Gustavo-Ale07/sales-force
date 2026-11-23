@@ -201,6 +201,215 @@
         }
       }
     },
+    "/me/photo": {
+      "put": {
+        "operationId": "putProfilePhoto",
+        "tags": [
+          "auth"
+        ],
+        "summary": "Set or replace the caller's own profile photo",
+        "description": "Own photo only (there is no way to name another account). Body: the image base64-encoded (jpeg, png or webp, up to 5 MiB decoded) with its declared content type and an optional crop rectangle in pixels (after EXIF orientation). The server checks the magic bytes against the declared type, refuses animated or oversized (> 32 megapixels) images, crops to a centre square, downsizes to at most 512 px and re-encodes as WebP without any metadata (EXIF, location). 400 validation_failed (details.issues: photo_type_not_allowed, photo_content_mismatch, photo_too_large, photo_unreadable, photo_crop_invalid, photo_too_small); 429 rate_limited when changed again within 5 seconds; 503 service_unavailable when photo storage is not configured or unreachable. 200 returns the new version. Not mirrored to the ERP.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutProfilePhotoRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Foto salva",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfilePhoto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Muitas tentativas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Serviço indisponível",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteProfilePhoto",
+        "tags": [
+          "auth"
+        ],
+        "summary": "Remove the caller's own profile photo",
+        "description": "Idempotent: 204 whether or not a photo existed. Audited when one was removed.",
+        "responses": {
+          "204": {
+            "description": "Foto removida"
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Serviço indisponível",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "getProfilePhoto",
+        "tags": [
+          "auth"
+        ],
+        "summary": "The caller's own profile photo (binary)",
+        "description": "Authenticated only, own photo only. 404 when there is none. Always a square WebP of at most 512 px. The ETag is the photo version (the same value as photoVersion in the session); send it in If-None-Match to get 304. Cache-Control is private; nosniff.",
+        "responses": {
+          "200": {
+            "description": "Imagem",
+            "headers": {
+              "ETag": {
+                "description": "Photo version",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "private, max-age (revalidate with If-None-Match)",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Disposition": {
+                "description": "inline",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Imagem inalterada (If-None-Match)"
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Serviço indisponível",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/auth/session": {
       "get": {
         "operationId": "getSession",
@@ -3693,6 +3902,18 @@
               "type": "integer",
               "minimum": 0
             }
+          },
+          "photoVersion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -4819,6 +5040,9 @@
                 "type": "null"
               }
             ]
+          },
+          "discountAboveLimitAccepted": {
+            "type": "boolean"
           },
           "negotiationTypeCode": {
             "anyOf": [
@@ -6350,6 +6574,9 @@
               }
             ]
           },
+          "discountAboveLimitAccepted": {
+            "type": "boolean"
+          },
           "estimatedTotal": {
             "$ref": "#/components/schemas/DecimalString"
           },
@@ -7322,6 +7549,9 @@
               }
             ]
           },
+          "discountAboveLimitAccepted": {
+            "type": "boolean"
+          },
           "estimatedTotal": {
             "$ref": "#/components/schemas/DecimalString"
           },
@@ -7989,6 +8219,34 @@
         ],
         "additionalProperties": false
       },
+      "PhotoCrop": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "y": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "width",
+          "height"
+        ],
+        "additionalProperties": false
+      },
       "PortfolioOwnershipStrategy": {
         "type": "string",
         "enum": [
@@ -8475,6 +8733,60 @@
         ],
         "additionalProperties": false
       },
+      "ProfilePhoto": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "contentType": {
+            "type": "string",
+            "const": "image/webp"
+          },
+          "sizePx": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          }
+        },
+        "required": [
+          "version",
+          "contentType",
+          "sizePx",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "PutProfilePhotoRequest": {
+        "type": "object",
+        "properties": {
+          "contentType": {
+            "type": "string",
+            "enum": [
+              "image/jpeg",
+              "image/png",
+              "image/webp"
+            ]
+          },
+          "dataBase64": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 6990511
+          },
+          "crop": {
+            "$ref": "#/components/schemas/PhotoCrop"
+          }
+        },
+        "required": [
+          "contentType",
+          "dataBase64"
+        ],
+        "additionalProperties": false
+      },
       "ReadyResponse": {
         "type": "object",
         "properties": {
@@ -8854,6 +9166,9 @@
                 "type": "null"
               }
             ]
+          },
+          "discountAboveLimitAccepted": {
+            "type": "boolean"
           },
           "negotiationTypeCode": {
             "anyOf": [

@@ -1,0 +1,1 @@
+ALTER TABLE "sales_order" ADD COLUMN "discount_above_limit_accepted" boolean DEFAULT false NOT NULL;

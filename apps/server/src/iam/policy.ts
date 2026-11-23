@@ -47,6 +47,10 @@ const SYNC_REFRESH_ROLES: readonly AccountRole[] = [...COMMERCIAL_ROLES, 'techni
 export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   // Any authenticated account may end its own session.
   logout: { roles: ACCOUNT_ROLES },
+  // Own profile photo only (the routes name no account): every profile that can sign in, `technical` and `operations` included.
+  putProfilePhoto: { roles: ACCOUNT_ROLES },
+  deleteProfilePhoto: { roles: ACCOUNT_ROLES },
+  getProfilePhoto: { roles: ACCOUNT_ROLES },
   // "Usuários, integrações, configurações: Admin" (project-spec 8.2) plus the `technical` profile (ROLE-1: integration
   // and sync status, technical configuration; this is the only route that exposes them). The detail of `/ready`
   // follows this same grant (health.controller.ts), so it is visible to admin and technical only; manager, seller

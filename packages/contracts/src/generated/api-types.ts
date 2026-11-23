@@ -81,6 +81,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/photo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The caller's own profile photo (binary)
+         * @description Authenticated only, own photo only. 404 when there is none. Always a square WebP of at most 512 px. The ETag is the photo version (the same value as photoVersion in the session); send it in If-None-Match to get 304. Cache-Control is private; nosniff.
+         */
+        get: operations["getProfilePhoto"];
+        /**
+         * Set or replace the caller's own profile photo
+         * @description Own photo only (there is no way to name another account). Body: the image base64-encoded (jpeg, png or webp, up to 5 MiB decoded) with its declared content type and an optional crop rectangle in pixels (after EXIF orientation). The server checks the magic bytes against the declared type, refuses animated or oversized (> 32 megapixels) images, crops to a centre square, downsizes to at most 512 px and re-encodes as WebP without any metadata (EXIF, location). 400 validation_failed (details.issues: photo_type_not_allowed, photo_content_mismatch, photo_too_large, photo_unreadable, photo_crop_invalid, photo_too_small); 429 rate_limited when changed again within 5 seconds; 503 service_unavailable when photo storage is not configured or unreachable. 200 returns the new version. Not mirrored to the ERP.
+         */
+        put: operations["putProfilePhoto"];
+        post?: never;
+        /**
+         * Remove the caller's own profile photo
+         * @description Idempotent: 204 whether or not a photo existed. Audited when one was removed.
+         */
+        delete: operations["deleteProfilePhoto"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/session": {
         parameters: {
             query?: never;
@@ -794,6 +822,7 @@ export interface components {
             displayName: string;
             role: components["schemas"]["AccountRole"];
             sellerCodes: number[];
+            photoVersion?: string | null;
         };
         /** @enum {string} */
         AccountRole: "admin" | "manager" | "seller" | "technical" | "operations";
@@ -1027,6 +1056,7 @@ export interface components {
             topCode?: number | null;
             carrierCode?: number | null;
             freightType?: components["schemas"]["FreightType"] | null;
+            discountAboveLimitAccepted?: boolean;
             negotiationTypeCode: number | null;
             notes: string | null;
             items: components["schemas"]["OrderItemInput"][];
@@ -1327,6 +1357,7 @@ export interface components {
             topCode: number | null;
             carrierCode: number | null;
             freightType: components["schemas"]["FreightType"] | null;
+            discountAboveLimitAccepted?: boolean;
             estimatedTotal: components["schemas"]["DecimalString"];
             itemCount: number;
             isPartial: boolean;
@@ -1493,6 +1524,7 @@ export interface components {
             topCode: number | null;
             carrierCode: number | null;
             freightType: components["schemas"]["FreightType"] | null;
+            discountAboveLimitAccepted?: boolean;
             estimatedTotal: components["schemas"]["DecimalString"];
             itemCount: number;
             itemPreview: string[];
@@ -1618,6 +1650,12 @@ export interface components {
             pageSize: number;
             total: number;
         };
+        PhotoCrop: {
+            x: number;
+            y: number;
+            width: number;
+            height: number;
+        };
         /** @enum {string} */
         PortfolioOwnershipStrategy: "customer_seller_field" | "explicit_account_links" | "all_visible";
         PriceContext: {
@@ -1711,6 +1749,19 @@ export interface components {
             total: number;
             priceContext: components["schemas"]["PriceContext"];
         };
+        ProfilePhoto: {
+            version: string;
+            /** @constant */
+            contentType: "image/webp";
+            sizePx: number;
+            updatedAt: components["schemas"]["IsoTimestamp"];
+        };
+        PutProfilePhotoRequest: {
+            /** @enum {string} */
+            contentType: "image/jpeg" | "image/png" | "image/webp";
+            dataBase64: string;
+            crop?: components["schemas"]["PhotoCrop"];
+        };
         ReadyResponse: {
             /** @enum {string} */
             status: "ready" | "degraded" | "not_ready";
@@ -1783,6 +1834,7 @@ export interface components {
             topCode?: number | null;
             carrierCode?: number | null;
             freightType?: components["schemas"]["FreightType"] | null;
+            discountAboveLimitAccepted?: boolean;
             negotiationTypeCode: number | null;
             notes: string | null;
             items: components["schemas"]["OrderItemInput"][];
@@ -2044,6 +2096,189 @@ export interface operations {
             };
             /** @description Não autenticado */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    getProfilePhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Imagem */
+            200: {
+                headers: {
+                    /** @description Photo version */
+                    ETag?: string;
+                    /** @description private, max-age (revalidate with If-None-Match) */
+                    "Cache-Control"?: string;
+                    /** @description inline */
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/webp": string;
+                };
+            };
+            /** @description Imagem inalterada (If-None-Match) */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Serviço indisponível */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    putProfilePhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutProfilePhotoRequest"];
+            };
+        };
+        responses: {
+            /** @description Foto salva */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfilePhoto"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Muitas tentativas */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Serviço indisponível */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    deleteProfilePhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Foto removida */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Serviço indisponível */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

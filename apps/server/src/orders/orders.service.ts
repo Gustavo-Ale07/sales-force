@@ -242,6 +242,7 @@ export class OrdersService {
           topCode,
           carrierCode,
           freightType: body.freightType ?? null,
+          discountAboveLimitAccepted: body.discountAboveLimitAccepted ?? false,
           // D-O: born from the installation default (pilot 'N' = not marked), never from the request.
           expedicao: context.configuration.sales.expedicaoDefault === 'S',
           sourceOrderId: hooks.sourceOrderId ?? null,
@@ -548,6 +549,7 @@ export class OrdersService {
           topCode: requestedTop === undefined ? locked.topCode : requestedTop,
           carrierCode: requestedCarrier === undefined ? locked.carrierCode : requestedCarrier,
           freightType: body.freightType === undefined ? locked.freightType : body.freightType,
+          discountAboveLimitAccepted: body.discountAboveLimitAccepted === undefined ? locked.discountAboveLimitAccepted : body.discountAboveLimitAccepted,
           notes: body.notes,
           estimatedTotal: draft.totals.estimatedTotal,
           status: statusAfterEdit(locked.status as Parameters<typeof statusAfterEdit>[0]),
@@ -1035,6 +1037,7 @@ export class OrdersService {
       itemCount,
       // Discounts are sensitive actions (CLAUDE.md §6): the trail shows that lines carry one, never the amounts.
       ...(discountedLineCount > 0 ? { discountedLineCount, discountAuthority: order.discountAuthority } : {}),
+      ...(order.discountAboveLimitAccepted ? { discountAboveLimitAccepted: true } : {}),
     };
   }
 }
