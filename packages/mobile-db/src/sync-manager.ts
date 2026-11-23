@@ -1,6 +1,6 @@
 import type { SqlDatabase } from "./connection";
 import { DatasetIdentityError, confirmDataset, readCacheDataset, readExpectedDataset, sameDataset, writeCacheDataset, type DatasetIdentity } from "./dataset-identity";
-import { countOutbox, getDraft, listAttentionItems, type AttentionItem, type DraftRecord } from "./local-orders";
+import { countOutbox, getDraft, listAttentionItems, listOutbox, type AttentionItem, type DraftRecord } from "./local-orders";
 import { isoNow, type OfflineEnv } from "./offline-env";
 import { refreshOneOrderErpStatus, refreshOrderErpStatuses, type OrderStatusSource } from "./order-erp-status";
 import { countSendRequests, pushOutbox, pushSendRequests, recoverInterrupted, reevaluateHeldOrders, TransportError, type OrderTransport, type PushOptions, type PushStop } from "./order-sync";
@@ -625,11 +625,13 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
       const startedAt = deps.env.now().getTime();
       const left = (): number => waitMs - (deps.env.now().getTime() - startedAt);
       const readDraft = (): Promise<DraftRecord | null> => getDraft(deps.db, localId);
-      const settled = (draft: DraftRecord | null): ConfirmOutcome | null => {
+      /** True when a command of the order was definitively rejected. A pending command that only failed transiently also shows the draft as `sync_error`, but it is NOT a refusal: it is resent. */
+      const rejectedOps = async (): Promise<boolean> => (await listOutbox(deps.db, localId)).some((op) => op.state === "rejected");
+      const settled = (draft: DraftRecord | null, rejected: boolean): ConfirmOutcome | null => {
         if (draft === null) return { kind: "queued" };
         if (draft.sendState === "refused") return { kind: "refused", code: draft.sendCode ?? "send_refused", message: draft.sendError };
         if (draft.status === "conflict") return { kind: "refused", code: "version_conflict", message: draft.lastError };
-        if (draft.status === "sync_error" || draft.status === "needs_review") return { kind: "refused", code: null, message: draft.lastError };
+        if ((draft.status === "sync_error" && rejected) || draft.status === "needs_review") return { kind: "refused", code: null, message: draft.lastError };
         if (draft.sendState === "submitted") {
           if (draft.sendCode === "awaiting_approval") return { kind: "awaiting_approval" };
           if (draft.sendCode === "approval_rejected") return { kind: "refused", code: "edit_before_resubmitting", message: null };
@@ -642,11 +644,11 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
         for (let round = 0; round < 2; round += 1) {
           await Promise.race([manager.sync("after_save", { pull: false }), sleep(Math.max(0, left()))]);
           const draft = await readDraft();
-          if (settled(draft) !== null || draft?.sendState !== "requested" || draft.sendAttempts > 0 || left() <= 0) break;
+          if (settled(draft, await rejectedOps()) !== null || draft?.sendState !== "requested" || draft.sendAttempts > 0 || left() <= 0) break;
         }
       }
       const draft = await readDraft();
-      const verdict = settled(draft);
+      const verdict = settled(draft, await rejectedOps());
       if (verdict !== null) return verdict;
       if (draft?.sendState !== "submitted" || draft.remoteId === null) return { kind: "queued" };
       // 2. The server took it; the worker writes the note. Read the Sankhya number until it arrives or the wait ends.

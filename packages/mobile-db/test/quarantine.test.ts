@@ -42,6 +42,9 @@ class SpyTransport implements OrderTransport {
     this.calls.push(`PUT ${id}`);
     throw new TransportError("network", "sem rede");
   }
+  async submitOrder(): Promise<never> {
+    throw new TransportError("server", "submit not expected here", 500);
+  }
   async getOrder(id: string): Promise<RemoteOrder> {
     this.calls.push(`GET ${id}`);
     throw new TransportError("network", "sem rede");

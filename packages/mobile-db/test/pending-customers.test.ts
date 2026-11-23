@@ -97,6 +97,9 @@ class Orders implements OrderTransport {
   async replaceOrder(): Promise<never> {
     throw new TransportError("network", "x");
   }
+  async submitOrder(): Promise<never> {
+    throw new TransportError("server", "submit not expected here", 500);
+  }
   async getOrder(): Promise<never> {
     throw new TransportError("not_found", "x");
   }

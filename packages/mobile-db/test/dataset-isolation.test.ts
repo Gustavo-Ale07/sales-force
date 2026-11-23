@@ -93,6 +93,9 @@ class SpyTransport implements OrderTransport {
     this.sentDatasets.pop();
     return { ...created, id };
   }
+  async submitOrder(): Promise<never> {
+    throw new TransportError("server", "submit not expected here", 500);
+  }
   async getOrder(): Promise<RemoteOrder> {
     this.calls.push("GET");
     throw new Error("not used");
@@ -221,7 +224,7 @@ describe("migration v3", () => {
     await insertLegacy(old, A, "1");
     await insertLegacy(old, A, "2", "needs_review");
     const report = await runMigrations(old, migrations);
-    expect(report.applied).toEqual([3, 4, 5, 6, 7, 8, 9]);
+    expect(report.applied).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11]);
     expect((await listDrafts(old, A)).map((d) => [d.dataset, d.eligibility])).toEqual([
       [null, "unchecked"],
       [null, "unchecked"],

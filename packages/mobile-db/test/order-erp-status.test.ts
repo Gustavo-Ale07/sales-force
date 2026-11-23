@@ -126,9 +126,29 @@ describe("sync manager runs the status download after the pull", () => {
     expect(await getOrderErpStatuses(db, ["o-1"])).toEqual([status("o-1")]);
   });
 
-  it("a failure reading the statuses is reported by the run, not hidden", async () => {
+  it("a non-auth failure reading the statuses keeps the last known status and the run stays clean (daf1486: secondary data)", async () => {
     await hold(OWNER, "o-1");
+    await run(source(async () => [status("o-1")]));
     const result = await run(source(async () => { throw new TransportError("server", "x", 503); }));
-    expect(result.failure).not.toBeNull();
+    expect(result.failure).toBeNull();
+    expect(result.phase).toBe("idle");
+    expect(result.lastSyncedAt).not.toBeNull();
+    expect(result.steps?.find((s) => s.id === "orders")).toMatchObject({ state: "done", note: "mantida a última situação" });
+    expect(await getOrderErpStatuses(db, ["o-1"])).toEqual([status("o-1")]);
+  });
+
+  it("a dead session while reading the statuses is NOT swallowed: the run needs a new login", async () => {
+    await hold(OWNER, "o-1");
+    const result = await run(source(async () => { throw new TransportError("auth", "x", 401); }));
+    expect(result.phase).toBe("auth_required");
+    expect(result.failure).toBe("auth");
+  });
+
+  it("an unexpected (non-transport) error is logged, never fails the run", async () => {
+    await hold(OWNER, "o-1");
+    const logged: unknown[] = [];
+    const result = await createSyncManager({ db, env, transport, source: source(async () => { throw new Error("boom"); }), ownerAccountId: OWNER, internetState: () => "online", onUnexpectedError: (e) => logged.push(e) }).sync("manual");
+    expect(result.failure).toBeNull();
+    expect(logged).toHaveLength(1);
   });
 });

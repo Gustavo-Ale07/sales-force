@@ -64,6 +64,9 @@ class Server implements OrderTransport {
     this.requests.push(`PUT ${id}`);
     return this.remote(id, version + 1, request);
   }
+  async submitOrder(): Promise<never> {
+    throw new TransportError("server", "submit not expected here", 500);
+  }
   async getOrder(): Promise<RemoteOrder> {
     throw new TransportError("not_found", "x", 404);
   }

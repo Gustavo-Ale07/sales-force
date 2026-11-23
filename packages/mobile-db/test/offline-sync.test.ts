@@ -133,6 +133,9 @@ class FakeServer implements OrderTransport {
     return next;
   }
 
+  async submitOrder(): Promise<never> {
+    throw new TransportError("server", "submit not expected here", 500);
+  }
   async getOrder(id: string): Promise<RemoteOrder> {
     const order = this.orders.get(id);
     if (order === undefined) throw new TransportError("not_found", "x", 404);

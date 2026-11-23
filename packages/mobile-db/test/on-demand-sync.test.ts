@@ -80,6 +80,9 @@ class Orders implements OrderTransport {
   async replaceOrder(): Promise<RemoteOrder> {
     throw new TransportError("validation", "x");
   }
+  async submitOrder(): Promise<never> {
+    throw new TransportError("server", "submit not expected here", 500);
+  }
   async getOrder(): Promise<RemoteOrder> {
     throw new TransportError("not_found", "x", 404);
   }
