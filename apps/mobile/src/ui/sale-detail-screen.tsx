@@ -143,6 +143,23 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [heldKey]);
 
+  // A refused send says why once when the order is opened (the server's reason as the catalog popup, with its way out).
+  const refusedCode = loaded?.draft.sendState === "refused" ? (loaded.draft.sendCode ?? "send_refused") : null;
+  const refusedKey = refusedCode === null ? null : `${localId}:${refusedCode}:${loaded?.draft.sendAttempts ?? 0}`;
+  const announcedRefusal = useRef<string | null>(null);
+  useEffect(() => {
+    if (refusedCode === null || refusedKey === announcedRefusal.current) return;
+    announcedRefusal.current = refusedKey;
+    errors.reportCode(
+      refusedCode,
+      { retry: () => void act(() => localOrders.requestSend(localId)), change_customer: () => onContinue(localId) },
+      loaded?.draft.sendError ?? undefined,
+      loaded?.draft.sendError && ["validation_failed", "header_not_eligible", "send_refused"].includes(refusedCode) ? { message: loaded.draft.sendError } : undefined,
+    );
+    // Announce once per order and cause.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refusedKey]);
+
   if (missing) {
     return (
       <View style={styles.center}>
@@ -239,7 +256,7 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
           <Text style={styles.customer}>{draft.customerName}</Text>
           <Text style={styles.meta}>{`Cliente ${draft.customerCode}`}</Text>
           <View style={styles.statusLine}>
-            <SaleBadgeView status={draft.status} remoteId={draft.remoteId} lastError={draft.lastError} />
+            <SaleBadgeView status={draft.status} remoteId={draft.remoteId} lastError={draft.lastError} sendState={draft.sendState} sendCode={draft.sendCode} />
             <Text style={styles.meta}>{draft.remoteDraftNumber !== null ? `${tops !== null && isQuotationTop(effectiveTop, tops) ? "Orçamento" : "Pedido"} nº ${draft.remoteDraftNumber}` : "Sem número ainda"}</Text>
           </View>
           <Text style={styles.explanation}>{saleExplanation(draft)}</Text>
@@ -340,6 +357,16 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
           {actions.continue && (
             <Pressable style={styles.primary} onPress={() => onContinue(draft.localId)} accessibilityRole="button" accessibilityLabel="Continuar pedido">
               <Text style={styles.primaryText}>Continuar pedido</Text>
+            </Pressable>
+          )}
+          {actions.send && (
+            <Pressable
+              style={styles.primary}
+              onPress={() => void act(() => localOrders.requestSend(draft.localId))}
+              accessibilityRole="button"
+              accessibilityLabel={draft.sendState === "refused" ? "Reenviar pedido" : tops !== null && isQuotationTop(effectiveTop, tops) ? "Enviar orçamento" : "Enviar pedido"}
+            >
+              <Text style={styles.primaryText}>{draft.sendState === "refused" ? "Reenviar" : tops !== null && isQuotationTop(effectiveTop, tops) ? "Enviar orçamento" : "Enviar pedido"}</Text>
             </Pressable>
           )}
           {actions.resend && (

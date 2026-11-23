@@ -63,10 +63,13 @@ export interface WizardFooterProps {
   readonly busy?: boolean;
   /** One short line (e.g. "3 itens · R$ 120,00") shown between the buttons; never a panel. */
   readonly info?: string | undefined;
+  /** A second, quieter action beside the primary one (summary step: "Salvar pedido"). */
+  readonly secondaryLabel?: string | undefined;
+  readonly onSecondary?: (() => void) | undefined;
 }
 
 /** Compact one-line navigation (about 52 dp): Voltar · [info] · Avançar. */
-export function WizardFooter({ onBack, onNext, nextLabel, nextAccessibilityLabel, nextDisabled = false, busy = false, info }: WizardFooterProps) {
+export function WizardFooter({ onBack, onNext, nextLabel, nextAccessibilityLabel, nextDisabled = false, busy = false, info, secondaryLabel, onSecondary }: WizardFooterProps) {
   return (
     <View style={styles.footer}>
       {onBack !== null ? (
@@ -80,6 +83,18 @@ export function WizardFooter({ onBack, onNext, nextLabel, nextAccessibilityLabel
         <Text style={styles.info} numberOfLines={1}>
           {info}
         </Text>
+      )}
+      {secondaryLabel !== undefined && onSecondary !== undefined && (
+        <Pressable
+          style={[styles.secondary, (nextDisabled || busy) && styles.nextDisabled]}
+          onPress={onSecondary}
+          disabled={nextDisabled || busy}
+          accessibilityRole="button"
+          accessibilityLabel={secondaryLabel}
+          accessibilityState={{ disabled: nextDisabled || busy }}
+        >
+          <Text style={styles.backText}>{secondaryLabel}</Text>
+        </Pressable>
       )}
       <Pressable
         style={[styles.next, nextDisabled && styles.nextDisabled]}
@@ -165,6 +180,7 @@ const styles = StyleSheet.create({
   },
   back: { minWidth: 72, minHeight: 44, alignItems: "center", justifyContent: "center" },
   backText: { color: colors.navy, fontWeight: "700", fontSize: 14 },
+  secondary: { minHeight: 44, borderRadius: 8, borderWidth: 1, borderColor: colors.navy, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.md },
   info: { flex: 1, fontSize: 12, color: colors.textMuted, textAlign: "center" },
   next: { flexGrow: 1, flexBasis: 0, minHeight: 44, borderRadius: 8, backgroundColor: colors.navy, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.md },
   nextDisabled: { opacity: 0.5 },

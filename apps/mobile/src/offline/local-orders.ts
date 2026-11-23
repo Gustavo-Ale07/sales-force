@@ -10,6 +10,7 @@ import {
   listOperationalDrafts,
   listQuarantinedDrafts,
   readExpectedDataset,
+  requestOrderSend,
   resolveConflict,
   saveOrderDraft,
   type ConflictResolution,
@@ -44,6 +45,8 @@ export interface SaveLocalDraftInput {
   readonly freightType?: "CIF" | "FOB" | "SEM_FRETE" | null;
   readonly notes: string | null;
   readonly lines: readonly EditorLine[];
+  /** "Enviar pedido" (true) / "Salvar pedido" (false) on the summary step; absent (autosave) keeps the request as it is. */
+  readonly sendRequested?: boolean;
   /** The dataset the editor was loaded under (from the entry configuration it showed); `null` = unknown, the save is refused. */
   readonly loadedDataset: DatasetIdentity | null;
 }
@@ -77,6 +80,8 @@ export interface LocalOrdersPort {
   discardQuarantined(localId: string): Promise<void>;
   acknowledgePriceReview(localId: string): Promise<void>;
   resolveConflict(localId: string, resolution: ConflictResolution): Promise<void>;
+  /** "Enviar pedido" / "Reenviar" for an order already saved: records the request; the sync delivers it (offline it waits). */
+  requestSend(localId: string): Promise<void>;
   /**
    * "Duplicar como pedido" (D-B): asks the server for a new order draft from a sent quotation, under the dataset the
    * quotation itself was created under, and brings it onto this device. Online only; a retry reuses the same
@@ -169,6 +174,7 @@ export function createLocalOrdersPort(deps: {
         ...(input.freightType === undefined ? {} : { freightType: input.freightType }),
         notes: input.notes,
         items: toDraftItems(input.lines),
+        ...(input.sendRequested === undefined ? {} : { sendRequested: input.sendRequested }),
         loadedDataset: input.loadedDataset,
       });
       const draft = await getDraft(db, id);
@@ -206,6 +212,10 @@ export function createLocalOrdersPort(deps: {
     },
     async resolveConflict(localId, resolution) {
       await resolveConflict(db, env, transport, localId, resolution);
+      onChanged();
+    },
+    async requestSend(localId) {
+      await requestOrderSend(db, env, ownerAccountId, localId);
       onChanged();
     },
     async duplicateAsOrder(localId) {

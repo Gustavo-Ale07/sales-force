@@ -59,8 +59,21 @@ export const ERROR_CATALOG = {
   idempotency_conflict: { title: "Pedido antigo", message: "Esta solicitação já foi registrada com outros dados. Refaça o pedido.", action: "none" },
   dataset_mismatch: { title: "Dados desatualizados", message: "O servidor mudou desde que você abriu o pedido. Sincronize e abra o pedido de novo.", action: "go_sync" },
   installation_not_enabled: { title: "Pedidos não habilitados", message: "A instalação ainda não aceita pedidos. Fale com o backoffice.", action: "none" },
-  erp_submission_disabled: { title: "Envio ao ERP desligado", message: "O envio de pedidos está desligado por enquanto.", action: "none" },
-  discount_blocked: { title: "Desconto bloqueado", message: "O desconto passa do seu limite. Reduza ou peça aprovação.", action: "none" },
+  erp_submission_disabled: { title: "Envio ao Sankhya desligado", message: "O envio ao Sankhya está desligado por enquanto. O pedido ficou salvo no Force e nada foi enviado.", action: "none" },
+  discount_blocked: { title: "Desconto bloqueado", message: "O desconto passa do limite permitido. Reduza o desconto e envie de novo.", action: "none" },
+  awaiting_approval: { title: "Aguardando aprovação", message: "O desconto precisa da aprovação de um gestor. O pedido segue depois da aprovação.", action: "none" },
+  needs_manager_approval: { title: "Precisa de aprovação", message: "O desconto deste pedido precisa da aprovação de um gestor antes do envio.", action: "none" },
+  edit_before_resubmitting: { title: "Desconto reprovado", message: "O desconto foi reprovado. Edite o pedido antes de enviá-lo de novo.", action: "none" },
+  approval_required_before_resend: { title: "Desconto exige aprovação", message: "O desconto deste pedido agora exige aprovação. Exclua o pedido e faça um novo.", action: "none" },
+  header_not_eligible: { title: "Operação indisponível", message: "O tipo de operação ou a condição de negociação deste pedido não está mais disponível. Edite o pedido e envie de novo.", action: "none" },
+  invalid_status: { title: "Pedido não pode ser enviado", message: "A situação deste pedido não permite o envio.", action: "reload" },
+  legacy_dataset: { title: "Pedido de versão antiga", message: "Este pedido é de uma versão antiga dos dados e não pode ser enviado. Refaça o pedido.", action: "none" },
+  dataset_not_erp: { title: "Pedido de teste", message: "Este pedido foi criado com dados de teste e não pode ser enviado ao Sankhya. Refaça o pedido com cliente e produtos reais.", action: "none" },
+  environment_unbound: { title: "Pedido sem ambiente", message: "Este pedido não está ligado a um ambiente do Sankhya. Refaça o pedido.", action: "none" },
+  environment_mismatch: { title: "Outro ambiente", message: "Este pedido foi criado para outro ambiente do Sankhya e não pode ser enviado aqui. Refaça o pedido.", action: "none" },
+  delivery_diverged: { title: "Nota com valores diferentes", message: "A nota deste pedido já existe no Sankhya com valores diferentes. Peça à TI para conferir; o aplicativo não reenvia.", action: "none" },
+  ambiguous_origin: { title: "Mais de uma nota", message: "Há mais de uma nota com este pedido no Sankhya. Peça à TI para conferir.", action: "none" },
+  send_refused: { title: "Envio recusado", message: "O servidor recusou o envio deste pedido. Revise os dados e envie de novo.", action: "none" },
   approval_not_pending: { title: "Aprovação já resolvida", message: "Este pedido não espera mais aprovação. Recarregue.", action: "reload" },
   conflict: { title: "Conflito", message: "O registro mudou. Sincronize e tente de novo.", action: "go_sync" },
 
@@ -132,6 +145,8 @@ function transportKey(error: TransportError): string {
       return known(error.reason) !== null ? error.reason! : "registration_refused";
     case "validation":
       return "validation_failed";
+    case "send_refused":
+      return known(error.reason) !== null ? error.reason! : "send_refused";
     default:
       return error.kind;
   }
@@ -153,6 +168,7 @@ export function describeProblem(error: unknown): Problem {
     ]);
     if (error.isNetwork) return make("offline", ERROR_CATALOG.offline, details);
     if (error.code === "customer_ineligible" && known(error.reason) !== null) return make(error.reason!, (ERROR_CATALOG as Record<string, ProblemText>)[error.reason!]!, details);
+    if (error.code === "conflict" && known(error.reason) !== null) return make(error.reason!, (ERROR_CATALOG as Record<string, ProblemText>)[error.reason!]!, details);
     if (error.issues.length > 0) {
       return make("validation_failed", { ...ERROR_CATALOG.validation_failed, title: "Corrija os itens", message: error.issues.map(describeIssue).join("\n") }, details);
     }

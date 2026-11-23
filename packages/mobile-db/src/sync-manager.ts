@@ -3,7 +3,7 @@ import { DatasetIdentityError, confirmDataset, readCacheDataset, readExpectedDat
 import { countOutbox, listAttentionItems, type AttentionItem } from "./local-orders";
 import { isoNow, type OfflineEnv } from "./offline-env";
 import { refreshOrderErpStatuses, type OrderStatusSource } from "./order-erp-status";
-import { pushOutbox, recoverInterrupted, reevaluateHeldOrders, TransportError, type OrderTransport, type PushOptions } from "./order-sync";
+import { countSendRequests, pushOutbox, pushSendRequests, recoverInterrupted, reevaluateHeldOrders, TransportError, type OrderTransport, type PushOptions, type PushStop } from "./order-sync";
 import {
   applyCustomerCreationSignal,
   countPendingCustomers,
@@ -315,7 +315,12 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
     const counts = await countOutbox(deps.db, deps.ownerAccountId, dataset);
     const customers = await countPendingCustomers(deps.db, deps.ownerAccountId, dataset);
     const attention = await listAttentionItems(deps.db, deps.ownerAccountId);
-    return { pending: counts.pending + counts.sending + customers.pending, needsAttention: counts.needsAttention + customers.needsAttention, attention };
+    const sends = await countSendRequests(deps.db, deps.ownerAccountId, dataset);
+    return {
+      pending: counts.pending + counts.sending + customers.pending + sends.waiting,
+      needsAttention: counts.needsAttention + customers.needsAttention + sends.refused,
+      attention,
+    };
   };
 
   const offlineFailure = (): Failure => (internet() === "offline" ? failureOf("no_internet", "offline") : failureOf("server_unavailable", "offline"));
@@ -399,12 +404,24 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
         if (sentCustomers.stoppedBy === "offline" || sentCustomers.stoppedBy === "auth") customerStop = sentCustomers.stoppedBy;
         sentCount += sentCustomers.confirmed;
       }
-      const pushed =
+      const outboxPushed: { attempted: number; accepted: number; failed: number; stoppedBy: PushStop } =
         customerStop !== null
           ? { attempted: 0, accepted: 0, failed: 0, stoppedBy: customerStop }
           : confirmed
             ? await pushOutbox(deps.db, deps.env, deps.transport, deps.ownerAccountId, pushOptions)
-            : { attempted: 0, accepted: 0, failed: 0, stoppedBy: "idle" as const };
+            : { attempted: 0, accepted: 0, failed: 0, stoppedBy: "idle" };
+      // "Enviar pedido" requests go AFTER the create/replace queue (the server submits what the seller saved), and only while the
+      // outbox push was clean. A refusal is a state the seller sees (needs attention), not a failed run.
+      const outboxClean = confirmed && customerStop === null && outboxPushed.failed === 0 && (outboxPushed.stoppedBy === "idle" || outboxPushed.stoppedBy === "limit");
+      const sendPushed = outboxClean
+        ? await pushSendRequests(deps.db, deps.env, deps.transport, deps.ownerAccountId, { ...pushOptions, currentDataset: await readExpectedDataset(deps.db) })
+        : { attempted: 0, submitted: 0, failed: 0, refused: 0, stoppedBy: "idle" as PushStop };
+      const pushed = {
+        attempted: outboxPushed.attempted + sendPushed.attempted,
+        accepted: outboxPushed.accepted + sendPushed.submitted,
+        failed: outboxPushed.failed + (sendPushed.failed - sendPushed.refused),
+        stoppedBy: outboxClean && sendPushed.stoppedBy !== "limit" ? sendPushed.stoppedBy : outboxPushed.stoppedBy,
+      };
       sentCount += pushed.accepted;
       const pushClean = customerStop === null && confirmed && pushed.failed === 0 && !["dataset_unconfirmed", "dataset_mismatch", "offline", "auth"].includes(pushed.stoppedBy);
       if (pull && pushClean) onStep({ id: "push", state: "done", count: sentCount, total: steps?.find((step) => step.id === "push")?.total ?? sentCount });
@@ -447,7 +464,11 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
           onStep({ id: "orders", state: "done" });
           // Marked drafts: the cause may be gone with the new base; the ones released go out now.
           const released = await reevaluateHeldOrders(deps.db, deps.env, deps.ownerAccountId);
-          if (released > 0) await pushOutbox(deps.db, deps.env, deps.transport, deps.ownerAccountId, { ...pushOptions, currentDataset: await readExpectedDataset(deps.db) });
+          if (released > 0) {
+            const releasedOptions = { ...pushOptions, currentDataset: await readExpectedDataset(deps.db) };
+            await pushOutbox(deps.db, deps.env, deps.transport, deps.ownerAccountId, releasedOptions);
+            await pushSendRequests(deps.db, deps.env, deps.transport, deps.ownerAccountId, releasedOptions);
+          }
         } catch (error) {
           failedSteps = [];
           setFailure(describeFailure(error, internet()));

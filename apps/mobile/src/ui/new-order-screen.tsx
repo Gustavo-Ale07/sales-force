@@ -519,8 +519,9 @@ export function NewOrderScreen({
   }
 
   /** Writes the order to this device (same path as "Salvar"); returns the stored draft. */
-  async function persistLocal(port: LocalOrdersPort, picked: PickedCustomer): Promise<DraftRecord> {
+  async function persistLocal(port: LocalOrdersPort, picked: PickedCustomer, sendRequested?: boolean): Promise<DraftRecord> {
     const saved = await port.save({
+      ...(sendRequested === undefined ? {} : { sendRequested }),
       localId: localDraft?.localId ?? null,
       customer: picked,
       negotiationTypeCode,
@@ -564,17 +565,18 @@ export function NewOrderScreen({
     return () => subscription.remove();
   }, []);
 
-  async function save() {
+  /** `send` = "Enviar pedido" (saves and asks the sync to deliver it to Sankhya); otherwise "Salvar" only keeps it. */
+  async function save(send = false) {
     if (customer === null || saving) return;
     setSaving(true);
     if (localOrders !== undefined) {
       try {
-        const saved = await persistLocal(localOrders, customer);
+        const saved = await persistLocal(localOrders, customer, send);
         setSavedLocal(saved);
       } catch (error) {
         errors.report(
           error,
-          { retry: () => void save() },
+          { retry: () => void save(send) },
           {
             title: "Não foi possível salvar",
             ...(error instanceof DatasetUnavailableError || error instanceof DatasetChangedError
@@ -621,7 +623,7 @@ export function NewOrderScreen({
         onUnauthenticated();
         return;
       }
-      errors.report(error, { retry: () => void save(), reload: () => void reload(), change_customer: () => goToStep("customer") });
+      errors.report(error, { retry: () => void save(send), reload: () => void reload(), change_customer: () => goToStep("customer") });
     } finally {
       setSaving(false);
     }
@@ -636,9 +638,9 @@ export function NewOrderScreen({
   if (savedLocal !== null) {
     return (
       <View style={styles.center}>
-        <Text style={styles.successTitle}>{`${kindTitle} salvo neste aparelho`}</Text>
+        <Text style={styles.successTitle}>{savedLocal.sendState === "requested" ? `${kindTitle} aguardando envio` : `${kindTitle} salvo neste aparelho`}</Text>
         <Text style={styles.successMeta}>{savedLocal.customerName}</Text>
-        <Text style={styles.successMeta}>{describeDraftStatus(savedLocal.status)}</Text>
+        <Text style={styles.successMeta}>{savedLocal.sendState === "requested" ? "Aguardando envio" : describeDraftStatus(savedLocal.status)}</Text>
         <Pressable style={styles.primaryButton} onPress={resetOrder} accessibilityRole="button" accessibilityLabel="Novo pedido">
           <Text style={styles.primaryButtonText}>Novo pedido</Text>
         </Pressable>
@@ -675,6 +677,7 @@ export function NewOrderScreen({
   const total = formatBrl(preview.ipi.grandTotalEstimated) ?? "—";
   const itemsInfo = `${lines.length} ${lines.length === 1 ? "item" : "itens"} · ${total}`;
   const saveLabel = editingOrder !== null || localDraft !== null ? "Salvar alterações" : `Salvar ${kindWord}`;
+  const sendLabel = `Enviar ${kindWord}`;
 
   // Negociação: "Próximo" stays off until every mandatory field is filled (the missing ones are highlighted in the form).
   const nextBlocked =
@@ -891,7 +894,19 @@ export function NewOrderScreen({
       {step === "summary" && renderSummaryStep()}
 
       {step === "summary" ? (
-        <WizardFooter onBack={goBack} onNext={() => void save()} nextLabel={saveLabel} nextDisabled={!orderable || saving} busy={saving} />
+        localOrders !== undefined ? (
+          <WizardFooter
+            onBack={goBack}
+            onNext={() => void save(true)}
+            nextLabel={sendLabel}
+            nextDisabled={!orderable || saving}
+            busy={saving}
+            secondaryLabel={saveLabel}
+            onSecondary={() => void save(false)}
+          />
+        ) : (
+          <WizardFooter onBack={goBack} onNext={() => void save()} nextLabel={saveLabel} nextDisabled={!orderable || saving} busy={saving} />
+        )
       ) : (
         <WizardFooter
           onBack={step === "customer" ? null : goBack}

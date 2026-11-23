@@ -206,4 +206,21 @@ export const migrations: readonly Migration[] = [
       ) STRICT, WITHOUT ROWID`,
     ],
   },
+  {
+    // "Enviar pedido" from the app: the seller's request to send the order to the ERP is a persisted command that lives with the
+    // draft (NOT an outbox row: the create/replace queue keeps its ordering and coalescing). Expand-only, all nullable/defaulted.
+    // send_state: NULL = never asked · requested = waiting for the network / its turn · refused = the server definitively
+    // refused (send_code = catalog problem code, send_error = seller text; only the seller re-requests) · submitted = the
+    // server took it (send_code = the server order status: queued, sent, unknown, awaiting_approval, approved...).
+    version: 10,
+    name: "order_send_request",
+    statements: [
+      `ALTER TABLE local_order_draft ADD COLUMN send_state TEXT CHECK (send_state IS NULL OR send_state IN ('requested', 'refused', 'submitted'))`,
+      `ALTER TABLE local_order_draft ADD COLUMN send_code TEXT`,
+      `ALTER TABLE local_order_draft ADD COLUMN send_error TEXT`,
+      `ALTER TABLE local_order_draft ADD COLUMN send_attempts INTEGER NOT NULL DEFAULT 0`,
+      `ALTER TABLE local_order_draft ADD COLUMN send_next_attempt_at TEXT`,
+      `ALTER TABLE local_order_draft ADD COLUMN send_requested_at TEXT`,
+    ],
+  },
 ];

@@ -106,6 +106,11 @@ export interface SaveDraftInput {
   readonly notes: string | null;
   readonly items: readonly DraftItemInput[];
   /**
+   * "Enviar pedido" (true) or "Salvar pedido" (false) from the summary step: records or cancels the request to send the order to
+   * the ERP in the same transaction as the save. Absent (autosave, other edits) = keep the request as it is.
+   */
+  readonly sendRequested?: boolean;
+  /**
    * The dataset the editor's prices/customer came from (read when the editor opened). The save is rejected when it is
    * missing or differs from the dataset confirmed now: an order is never stamped with a dataset it was not priced under.
    */
@@ -117,6 +122,25 @@ export type FreightType = "CIF" | "FOB" | "SEM_FRETE";
 
 function freightTypeOf(value: unknown): FreightType | null {
   return value === "CIF" || value === "FOB" || value === "SEM_FRETE" ? value : null;
+}
+
+/**
+ * The seller's request to send the order to the ERP, persisted with the draft (a command of the device queue that is not an
+ * outbox row, so the create/replace ordering stays untouched). `requested` = waiting for the network or for its turn; `refused` =
+ * the server definitively refused (needs the seller); `submitted` = the server took it (`sendCode` = the server order status).
+ */
+export type SendState = "requested" | "refused" | "submitted";
+
+/** Server order statuses of a submitted order that can still be edited (same set as the web editor and `isOrderEditable`); every other submitted status is read-only. */
+export const SUBMITTED_EDITABLE_STATUSES: readonly string[] = ["draft", "awaiting_approval", "approval_rejected"];
+
+/** True when the order was handed to the server and may no longer be edited or re-sent from the app. */
+export function isSubmittedReadOnly(draft: Pick<DraftRecord, "sendState" | "sendCode">): boolean {
+  return draft.sendState === "submitted" && !SUBMITTED_EDITABLE_STATUSES.includes(draft.sendCode ?? "");
+}
+
+function sendStateOf(value: unknown): SendState | null {
+  return value === "requested" || value === "refused" || value === "submitted" ? value : null;
 }
 
 export interface DraftRecord {
@@ -144,6 +168,15 @@ export interface DraftRecord {
   /** Dataset the draft was priced against; `null` = LEGACY_LOCAL (created before dataset identity existed). */
   readonly dataset: DatasetIdentity | null;
   readonly eligibility: Eligibility;
+  /** "Enviar pedido" request (see `SendState`); `null` = the seller only saved. */
+  readonly sendState: SendState | null;
+  /** `refused`: catalog problem code of the refusal. `submitted`: the server order status (queued, sent, awaiting_approval...). */
+  readonly sendCode: string | null;
+  /** `refused`: the seller-facing text kept as a fallback when the catalog has no entry. */
+  readonly sendError: string | null;
+  readonly sendAttempts: number;
+  readonly sendNextAttemptAt: string | null;
+  readonly sendRequestedAt: string | null;
 }
 
 export interface PriceReviewEntry {
@@ -201,6 +234,7 @@ export interface OrderCommandPayload {
 export const DRAFT_COLUMNS = `d.local_id, d.owner_account_id, d.client_request_id, d.customer_code, d.customer_name,
   d.negotiation_type_code, d.top_code, d.carrier_code, d.freight_type, d.notes, d.status, d.remote_id, d.remote_version, d.remote_draft_number, d.estimated_total,
   d.last_error, d.price_review, d.server_snapshot, d.created_at, d.updated_at, d.dataset_environment, d.dataset_id, d.eligibility,
+  d.send_state, d.send_code, d.send_error, d.send_attempts, d.send_next_attempt_at, d.send_requested_at,
   (SELECT count(*) FROM local_order_item i WHERE i.draft_local_id = d.local_id) AS item_count`;
 
 function nullableNumber(value: unknown): number | null {
@@ -241,6 +275,12 @@ export function toDraft(row: SqlRow): DraftRecord {
     itemCount: Number(row.item_count),
     dataset: datasetOf(row),
     eligibility: String(row.eligibility) as Eligibility,
+    sendState: sendStateOf(row.send_state),
+    sendCode: nullableString(row.send_code),
+    sendError: nullableString(row.send_error),
+    sendAttempts: Number(row.send_attempts ?? 0),
+    sendNextAttemptAt: nullableString(row.send_next_attempt_at),
+    sendRequestedAt: nullableString(row.send_requested_at),
   };
 }
 
@@ -458,6 +498,19 @@ export async function listAttentionItems(db: SqlExecutor, ownerAccountId: string
     items.push({ localId, customerName: String(row.customer_name), reason: lastError !== "" ? lastError : (ATTENTION_FALLBACK[String(row.state)] ?? "Revise o pedido.") });
     if (items.length >= limit) break;
   }
+  // Orders the server refused to send to the ERP wait for the seller too (the reason is the stored refusal text).
+  if (items.length < limit) {
+    const refused = await db.query<SqlRow>(
+      "SELECT local_id, customer_name, send_error FROM local_order_draft WHERE owner_account_id = ? AND send_state = 'refused' ORDER BY updated_at DESC, local_id",
+      [ownerAccountId],
+    );
+    for (const row of refused) {
+      const localId = String(row.local_id);
+      if (seen.has(localId) || items.length >= limit) continue;
+      seen.add(localId);
+      items.push({ localId, customerName: String(row.customer_name), reason: row.send_error === null || row.send_error === undefined ? "O envio do pedido foi recusado — revise." : String(row.send_error) });
+    }
+  }
   return items;
 }
 
@@ -597,6 +650,7 @@ export async function saveOrderDraft(db: SqlDatabase, env: OfflineEnv, input: Sa
       );
       await insertItems(tx, localId, input.items);
       await insertOp(tx, env, { type: "order.create", idempotencyKey: key, payload, baseVersion: null, draftLocalId: localId, dataset: confirmed });
+      if (input.sendRequested === true) await writeSendRequest(tx, localId, now);
       return localId;
     }
 
@@ -607,6 +661,11 @@ export async function saveOrderDraft(db: SqlDatabase, env: OfflineEnv, input: Sa
       throw new DraftNotEditableError("Este pedido é de outro conjunto de dados e não pode ser alterado.");
     }
     assertLoadedUnderConfirmed();
+    // A sent order is read-only (queued/sent/unknown on the server); an order awaiting the discount approval may be edited, which
+    // invalidates the approval request exactly like the server (it goes back to draft and must be sent again).
+    if (isSubmittedReadOnly(draft)) {
+      throw new DraftNotEditableError("Este pedido já foi enviado ao Sankhya e não pode ser alterado.");
+    }
     const allOps = await listOutbox(tx, draft.localId);
     const create = allOps.filter((op) => op.type === "order.create").at(-1);
     const createRejected = create?.state === "rejected";
@@ -657,7 +716,38 @@ export async function saveOrderDraft(db: SqlDatabase, env: OfflineEnv, input: Sa
       [clientRequestId, input.customerCode, input.customerName, input.negotiationTypeCode, input.topCode ?? null, input.carrierCode ?? null, input.freightType ?? null, input.notes, status, now, draft.localId],
     );
     await insertItems(tx, draft.localId, input.items);
+    if (input.sendRequested === true) await writeSendRequest(tx, draft.localId, now);
+    // Plain save, or an edit: the old refusal/approval no longer describes this data; nothing is requested.
+    else if (input.sendRequested === false || draft.sendState === "refused" || draft.sendState === "submitted") await clearSendRequest(tx, draft.localId);
     return draft.localId;
+  });
+}
+
+/** Records the seller's request to send the order to the ERP (fresh attempt counter; the delivery waits for the create/replace queue). */
+async function writeSendRequest(tx: SqlExecutor, localId: string, now: string): Promise<void> {
+  await tx.execute(
+    `UPDATE local_order_draft SET send_state = 'requested', send_code = NULL, send_error = NULL, send_attempts = 0, send_next_attempt_at = NULL, send_requested_at = ? WHERE local_id = ?`,
+    [now, localId],
+  );
+}
+
+async function clearSendRequest(tx: SqlExecutor, localId: string): Promise<void> {
+  await tx.execute(
+    `UPDATE local_order_draft SET send_state = NULL, send_code = NULL, send_error = NULL, send_attempts = 0, send_next_attempt_at = NULL, send_requested_at = NULL WHERE local_id = ?`,
+    [localId],
+  );
+}
+
+/**
+ * "Reenviar": the seller asks again to send an order already held on the device (a refused send, or a delivery the ERP side
+ * refused). Nothing is sent here; the queue does it. A read-only sent order (queued/sent/unknown) is never re-requested.
+ */
+export async function requestOrderSend(db: SqlDatabase, env: OfflineEnv, ownerAccountId: string, localId: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    const draft = await getDraft(tx, localId);
+    if (draft === null || draft.ownerAccountId !== ownerAccountId) throw new DraftNotEditableError("Pedido não encontrado neste aparelho.");
+    if (isSubmittedReadOnly(draft)) return;
+    await writeSendRequest(tx, localId, isoNow(env));
   });
 }
 

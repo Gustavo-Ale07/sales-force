@@ -2,6 +2,8 @@ import type { SqlDatabase, SqlExecutor, SqlRow } from "./connection";
 import {
   CUSTOMER_HELD_MESSAGES,
   customerBlockMessage,
+  DRAFT_COLUMNS,
+  toDraft,
   PRODUCT_BLOCK_MESSAGES,
   type CustomerBlockReason,
   type ProductBlockReason,
@@ -81,7 +83,9 @@ export type TransportErrorKind =
   /** The server refused because the customer is no longer eligible (inactive, blocked, unavailable). */
   | "customer_ineligible"
   /** The server definitively refused to register a customer (`reason`: `document_already_registered`, `customer_rejected`). */
-  | "registration_refused";
+  | "registration_refused"
+  /** The server definitively refused to SEND the order to the ERP (`reason` = the catalog problem code: `customer_without_seller`, `erp_submission_disabled`, ...). */
+  | "send_refused";
 
 export class TransportError extends Error {
   constructor(
@@ -102,6 +106,19 @@ export interface OrderTransport {
   createOrder(clientRequestId: string, request: OrderCommandPayload["request"], expectedDataset: DatasetIdentity): Promise<RemoteOrder>;
   replaceOrder(id: string, expectedVersion: number, request: OrderCommandPayload["request"], expectedDataset: DatasetIdentity): Promise<RemoteOrder>;
   getOrder(id: string): Promise<RemoteOrder>;
+  /**
+   * `POST /orders/{id}/submit`: sends the order to the ERP (server-side revalidation, then the worker delivers). Replaying it for an order
+   * the server already took returns the current state (never a second delivery). A definitive refusal throws `send_refused`.
+   */
+  submitOrder(id: string, expectedDataset: DatasetIdentity): Promise<SubmittedOrder>;
+}
+
+/** What the device needs from the server's answer to a submit. */
+export interface SubmittedOrder {
+  /** Server order status after the call: `queued`, `sent`, `unknown`, `awaiting_approval`, `approved`, `rejected`... */
+  readonly status: string;
+  readonly version: number;
+  readonly erpNumber: number | null;
 }
 
 /* ---------- error classification ---------- */
@@ -124,6 +141,7 @@ export function classifyFailure(kind: TransportErrorKind): FailureClass {
     case "not_found":
     case "customer_ineligible":
     case "registration_refused":
+    case "send_refused":
       return "permanent";
     case "dataset_mismatch":
       return "dataset";
@@ -163,6 +181,8 @@ export function describeFailure(error: TransportError): string {
       return customerBlockMessage(error.reason);
     case "registration_refused":
       return "O servidor recusou o cadastro do cliente.";
+    case "send_refused":
+      return error.message !== "" ? error.message : "O servidor recusou o envio deste pedido.";
     case "validation":
       return error.message !== "" ? error.message : "O servidor recusou este pedido. Revise os dados.";
   }
@@ -639,6 +659,124 @@ export async function pushOutbox(
     }
   }
   return { attempted, accepted, failed, stoppedBy: "limit", quarantined };
+}
+
+/* ---------- send requests ("Enviar pedido") ---------- */
+
+export interface SendPushResult {
+  readonly attempted: number;
+  /** Orders the server took (queued, sent, awaiting approval...). */
+  readonly submitted: number;
+  /** Requests that failed in this run (transient or refused). */
+  readonly failed: number;
+  /** Requests the server definitively refused in this run (now waiting for the seller). */
+  readonly refused: number;
+  readonly stoppedBy: PushStop;
+}
+
+/**
+ * Delivers the seller's "send to the ERP" requests. It runs AFTER the create/replace queue: a request is attempted only when its draft
+ * is on the server (remote id) and no command of the draft is still queued, so the server submits exactly what the seller saved. The
+ * server revalidates everything (customer, products, header, discount authority) and is authoritative: a definitive refusal marks the
+ * request `refused` with the catalog code (no blind retry; only the seller re-requests); a transient failure keeps it `requested` with
+ * backoff. Replaying a request is safe: the server answers a repeated submit with the current state and never queues a second delivery.
+ */
+export async function pushSendRequests(
+  db: SqlDatabase,
+  env: OfflineEnv,
+  transport: OrderTransport,
+  ownerAccountId: string,
+  options: PushOptions = {},
+): Promise<SendPushResult> {
+  const respectBackoff = options.respectBackoff ?? true;
+  const max = options.maxOperations ?? DEFAULT_MAX_OPERATIONS;
+  let attempted = 0;
+  let submitted = 0;
+  let failed = 0;
+  let refused = 0;
+  const startedUnder = options.currentDataset ?? null;
+  const skipped = new Set<string>();
+
+  while (attempted < max) {
+    const rows = await db.query<SqlRow>(
+      `SELECT ${DRAFT_COLUMNS} FROM local_order_draft d
+       WHERE d.owner_account_id = ? AND d.send_state = 'requested' AND d.remote_id IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM outbox o WHERE o.draft_local_id = d.local_id)
+       ORDER BY d.send_requested_at, d.local_id`,
+      [ownerAccountId],
+    );
+    const nowIso = isoNow(env);
+    const draft = rows
+      .map(toDraft)
+      .find((candidate) => !skipped.has(candidate.localId) && !(respectBackoff && candidate.sendNextAttemptAt !== null && candidate.sendNextAttemptAt > nowIso));
+    if (draft === undefined) return { attempted, submitted, failed, refused, stoppedBy: "idle" };
+    const fresh = await readExpectedDataset(db);
+    if (fresh === null || !sameDataset(fresh, startedUnder)) return { attempted, submitted, failed, refused, stoppedBy: "dataset_unconfirmed" };
+    const verdict = classifyEligibility({ rowOwnerAccountId: draft.ownerAccountId, currentOwnerAccountId: ownerAccountId, rowDataset: draft.dataset, current: fresh });
+    if (verdict !== "eligible" || draft.dataset === null) {
+      skipped.add(draft.localId); // an ineligible draft is quarantined by the create/replace guard; nothing is sent for it
+      continue;
+    }
+    attempted += 1;
+    const attemptsNow = draft.sendAttempts + 1;
+    try {
+      const outcome = await transport.submitOrder(draft.remoteId as string, draft.dataset);
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          `UPDATE local_order_draft SET send_state = 'submitted', send_code = ?, send_error = NULL, send_attempts = ?, send_next_attempt_at = NULL, remote_version = ? WHERE local_id = ? AND send_state = 'requested'`,
+          [outcome.status, attemptsNow, outcome.version, draft.localId],
+        );
+      });
+      submitted += 1;
+    } catch (caught) {
+      const error = caught instanceof TransportError ? caught : new TransportError("server", "Falha inesperada.");
+      if (!(caught instanceof TransportError)) options.onUnexpectedError?.(caught);
+      const failure = classifyFailure(error.kind);
+      failed += 1;
+      if (failure === "transient" || failure === "auth") {
+        // Nothing is concluded: the request stays and is repeated (same order id, so the server can only ever hold one delivery).
+        const next = failure === "auth" ? null : new Date(env.now().getTime() + backoffDelayMs(attemptsNow)).toISOString();
+        await db.execute(
+          "UPDATE local_order_draft SET send_attempts = ?, send_next_attempt_at = ?, send_error = ? WHERE local_id = ? AND send_state = 'requested'",
+          [attemptsNow, next, describeFailure(error), draft.localId],
+        );
+        if (failure === "auth") return { attempted, submitted, failed, refused, stoppedBy: "auth" };
+        if (error.kind === "network") return { attempted, submitted, failed, refused, stoppedBy: "offline" };
+        skipped.add(draft.localId);
+        continue;
+      }
+      // A definitive answer ("this order cannot be sent as it is"): kept for the seller with the reason; never retried blindly.
+      refused += 1;
+      await db.execute(
+        "UPDATE local_order_draft SET send_state = 'refused', send_code = ?, send_error = ?, send_attempts = ?, send_next_attempt_at = NULL WHERE local_id = ? AND send_state = 'requested'",
+        [error.reason ?? "send_refused", describeFailure(error), attemptsNow, draft.localId],
+      );
+      if (failure === "dataset") return { attempted, submitted, failed, refused, stoppedBy: "dataset_mismatch" };
+    }
+  }
+  return { attempted, submitted, failed, refused, stoppedBy: "limit" };
+}
+
+/** Counts for the indicator: requests waiting to be delivered and refused ones the seller must look at. */
+export async function countSendRequests(
+  db: SqlExecutor,
+  ownerAccountId: string,
+  dataset?: DatasetIdentity | null,
+): Promise<{ readonly waiting: number; readonly refused: number }> {
+  // With a confirmed dataset only the requests of THAT dataset count (another dataset's drafts are never delivered from here).
+  const scoped = dataset === undefined || dataset === null;
+  const rows = await db.query<SqlRow>(
+    `SELECT send_state, count(*) AS n FROM local_order_draft WHERE owner_account_id = ? AND send_state IN ('requested', 'refused')
+       ${scoped ? "" : "AND dataset_environment = ? AND dataset_id = ?"} GROUP BY send_state`,
+    scoped ? [ownerAccountId] : [ownerAccountId, dataset.environment, dataset.datasetId],
+  );
+  let waiting = 0;
+  let refused = 0;
+  for (const row of rows) {
+    if (row.send_state === "requested") waiting = Number(row.n);
+    else refused = Number(row.n);
+  }
+  return { waiting, refused };
 }
 
 /* ---------- seller actions on sync outcomes ---------- */
