@@ -6,7 +6,7 @@ import type { ConnectivityState } from "../connectivity/connectivity";
 import type { Repositories } from "../data/ports";
 import { pickResumableDraft } from "../offline/home-summary";
 import type { LocalOrdersPort } from "../offline/local-orders";
-import { colors, spacing } from "../theme";
+import { colors, fontSize, radius, spacing } from "../theme";
 import { roleLabel } from "./account-labels";
 
 export interface HomeScreenProps {
@@ -162,13 +162,13 @@ export function HomeScreen({ account, active, repositories, localOrders, syncSta
 
 const styles = StyleSheet.create({
   content: { padding: spacing.lg, gap: spacing.lg },
-  greeting: { fontSize: 22, fontWeight: "800", color: colors.navy },
+  greeting: { fontSize: fontSize.title, fontWeight: "800", color: colors.navy },
   role: { fontSize: 14, color: colors.textMuted, marginTop: spacing.xs },
   section: { gap: spacing.sm },
   sectionTitle: { fontSize: 13, fontWeight: "800", color: colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 },
   action: {
     backgroundColor: colors.surface,
-    borderRadius: 10,
+    borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: spacing.lg,
@@ -187,15 +187,15 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexBasis: "45%",
     backgroundColor: colors.surface,
-    borderRadius: 10,
+    borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     gap: 2,
   },
-  tileValue: { fontSize: 24, fontWeight: "800", color: colors.navy },
+  tileValue: { fontSize: fontSize.headline, fontWeight: "800", color: colors.navy },
   tileLabel: { fontSize: 13, color: colors.textMuted },
-  card: { backgroundColor: colors.surface, borderRadius: 10, borderWidth: 1, borderColor: colors.border, padding: spacing.lg },
+  card: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.lg },
   empty: { fontSize: 14, color: colors.textMuted },
 });

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
+import { withModal } from "../test-render";
 import { StyleSheet } from "react-native";
 import type { SyncStatus } from "@salesforce/mobile-db";
 import { colors } from "../theme";
@@ -91,17 +92,40 @@ describe("SyncPanel age of the data", () => {
 describe("header sync status", () => {
   it("closing the sheet and opening the retained orders happen together", async () => {
     const onOpenQuarantine = jest.fn();
-    await render(<HeaderSyncStatus status={{ ...idle, needsAttention: 1 }} connectivity="online" onSyncNow={noop} quarantinedCount={1} onOpenQuarantine={onOpenQuarantine} />);
+    await render(withModal(<HeaderSyncStatus status={{ ...idle, phase: "error", needsAttention: 1 }} connectivity="online" onSyncNow={noop} quarantinedCount={1} onOpenQuarantine={onOpenQuarantine} />));
     await fireEvent.press(screen.getByRole("button", { name: /Status de sincronização/ }));
+    await fireEvent.press(await screen.findByRole("button", { name: "Ver detalhes" }));
     await fireEvent.press(await screen.findByRole("button", { name: "Ver pedidos antigos retidos" }));
     expect(onOpenQuarantine).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("button", { name: "Ver pedidos antigos retidos" })).toBeNull();
   });
 
-  it("the chip is at least 44 points tall (touch target)", async () => {
+  it("the indicator is at least 44 x 44 points (touch target)", async () => {
     await render(<SyncStatusChip status={idle} connectivity="online" onPress={noop} />);
-    const style = StyleSheet.flatten(screen.getByRole("button", { name: /Status de sincronização/ }).props.style) as { minHeight?: number };
+    const style = StyleSheet.flatten(screen.getByRole("button", { name: /Status de sincronização/ }).props.style) as { minHeight?: number; minWidth?: number };
     expect(style.minHeight).toBeGreaterThanOrEqual(44);
+    expect(style.minWidth).toBeGreaterThanOrEqual(44);
+  });
+
+  it("tap opens the standard popup 'Última sincronização às HH:MM' with 'Sincronizar agora'", async () => {
+    const onSyncNow = jest.fn();
+    const at = new Date(2026, 10, 23, 10, 41).toISOString();
+    await render(withModal(<HeaderSyncStatus status={{ ...idle, lastSyncedAt: at }} connectivity="online" onSyncNow={onSyncNow} />));
+    await fireEvent.press(screen.getByRole("button", { name: /Status de sincronização/ }));
+    expect(await screen.findByText("Última sincronização às 10:41")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Ver detalhes" })).toBeNull();
+    await fireEvent.press(screen.getByRole("button", { name: "Sincronizar agora" }));
+    expect(onSyncNow).toHaveBeenCalledTimes(1);
+  });
+
+  it("on failure the popup gives the reason in seller language, 'Ver detalhes' and 'Tentar de novo'", async () => {
+    const onSyncNow = jest.fn();
+    await render(withModal(<HeaderSyncStatus status={{ ...idle, phase: "error", lastError: "x" }} connectivity="online" onSyncNow={onSyncNow} />));
+    await fireEvent.press(screen.getByRole("button", { name: /Status de sincronização/ }));
+    expect(await screen.findByText("Erro ao sincronizar")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Ver detalhes" })).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Tentar de novo" }));
+    expect(onSyncNow).toHaveBeenCalledTimes(1);
   });
 });
 

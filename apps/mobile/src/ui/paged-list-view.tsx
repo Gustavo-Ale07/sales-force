@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactElement, type ReactNode } from "react";
 import { ActivityIndicator, FlatList, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { Page, PageRequest } from "../data/ports";
 import { usePagedList } from "../data/use-paged-list";
-import { colors, control, radius, spacing } from "../theme";
+import { colors, control, fontSize, radius, spacing } from "../theme";
 
 const SEARCH_DEBOUNCE_MS = 400;
 
@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.sm },
   // Search and filters stay fixed over a solid background; the list scrolls under a subtle divider.
   topBlock: { gap: spacing.sm, backgroundColor: colors.background, paddingBottom: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
-  title: { fontSize: 22, fontWeight: "800", color: colors.navy },
+  title: { fontSize: fontSize.title, fontWeight: "800", color: colors.navy },
   subtitle: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
   search: {
     borderWidth: 1,
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
   centered: { alignItems: "center", gap: spacing.xs, marginTop: spacing.xl, paddingHorizontal: spacing.lg },
   centeredText: { textAlign: "center", color: colors.textMuted, fontSize: 14 },
   emptyTitle: { textAlign: "center", color: colors.text, fontSize: 16, fontWeight: "700" },
-  notice: { backgroundColor: colors.errorBackground, borderRadius: 8, padding: spacing.lg, gap: spacing.sm },
+  notice: { backgroundColor: colors.errorBackground, borderRadius: radius.md, padding: spacing.lg, gap: spacing.sm },
   noticeText: { color: colors.text, fontSize: 14 },
   retryTarget: { minHeight: 44, justifyContent: "center" },
   retry: { color: colors.red, fontWeight: "700", fontSize: 14 },

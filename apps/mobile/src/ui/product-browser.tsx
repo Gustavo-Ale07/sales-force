@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import type { ProductFilters, ProductGroupOption, ProductListItem, ProductPageRequest, ProductRepository } from "../data/ports";
-import { colors, spacing } from "../theme";
+import { colors, control, radius, spacing } from "../theme";
 import { PagedListView } from "./paged-list-view";
 import { ProductFilterChips, ProductFiltersSheet, countActiveProductFilters } from "./product-filters";
 import { ProductCard, ProductRow, type ProductOrderActions, type ProductViewMode } from "./product-views";
@@ -130,11 +130,11 @@ export function ProductBrowser({ products, onUnauthenticated, connectivity, acti
 const styles = StyleSheet.create({
   toolbar: { gap: spacing.sm },
   toolbarRow: { flexDirection: "row", gap: spacing.sm, alignItems: "center", justifyContent: "space-between" },
-  tool: { minHeight: 44, minWidth: 72, paddingHorizontal: spacing.lg, borderRadius: 8, borderWidth: 1, borderColor: colors.navy, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
+  tool: { minHeight: control.height, minWidth: 72, paddingHorizontal: spacing.lg, borderRadius: radius.md, borderWidth: 1, borderColor: colors.navy, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
   toolOn: { backgroundColor: colors.navy },
   toolText: { color: colors.navy, fontWeight: "700", fontSize: 14 },
   toolTextOn: { color: colors.onNavy },
-  toggle: { flexDirection: "row", borderRadius: 8, borderWidth: 1, borderColor: colors.navy, overflow: "hidden" },
+  toggle: { flexDirection: "row", borderRadius: radius.md, borderWidth: 1, borderColor: colors.navy, overflow: "hidden" },
   toggleItem: { minHeight: 44, minWidth: 72, paddingHorizontal: spacing.md, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
   toggleItemOn: { backgroundColor: colors.navy },
   toggleText: { color: colors.navy, fontWeight: "700", fontSize: 14 },

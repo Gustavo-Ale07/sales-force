@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { CustomerFilters, CustomerLetter, CustomerSellerOption } from "../data/ports";
-import { colors, spacing } from "../theme";
+import { colors, radius, spacing } from "../theme";
 import { useInsets } from "./use-insets";
 
 const PRICE_TABLE_OPTIONS: ReadonlyArray<{ value: boolean | undefined; label: string }> = [
@@ -195,12 +195,12 @@ const styles = StyleSheet.create({
   optionText: { fontSize: 14, fontWeight: "600", color: colors.text },
   optionTextOn: { color: colors.onNavy },
   actions: { flexDirection: "row", gap: spacing.md },
-  secondary: { flex: 1, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: 8, borderWidth: 1, borderColor: colors.navy },
+  secondary: { flex: 1, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: radius.md, borderWidth: 1, borderColor: colors.navy },
   secondaryText: { color: colors.navy, fontWeight: "700", fontSize: 15 },
-  primary: { flex: 2, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: 8, backgroundColor: colors.navy },
+  primary: { flex: 2, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: radius.md, backgroundColor: colors.navy },
   primaryText: { color: colors.onNavy, fontWeight: "700", fontSize: 15 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  letter: { width: 48, height: 48, alignItems: "center", justifyContent: "center", borderRadius: 8, borderWidth: 1, borderColor: colors.border },
+  letter: { width: 48, height: 48, alignItems: "center", justifyContent: "center", borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   letterOff: { opacity: 0.35 },
   letterText: { fontSize: 16, fontWeight: "700", color: colors.text },
   hint: { fontSize: 12, color: colors.textMuted },

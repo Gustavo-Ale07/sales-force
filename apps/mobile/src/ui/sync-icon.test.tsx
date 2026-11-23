@@ -23,6 +23,8 @@ describe("describeSyncChip wording", () => {
 });
 
 describe("SyncIcon", () => {
+  afterEach(() => jest.restoreAllMocks());
+
   it("spins while syncing, and is a static check / alert otherwise", async () => {
     await render(<SyncIcon tone="busy" syncing color="#000" />);
     expect(screen.getByTestId("sync-icon-spinner", { includeHiddenElements: true })).toBeTruthy();
@@ -39,9 +41,28 @@ describe("SyncIcon", () => {
     expect(JSON.stringify(style)).toContain("0deg");
   });
 
-  it("the header chip shows the spinner while syncing", async () => {
+  it("the header indicator shows the spinner while syncing and NO text", async () => {
     await render(<SyncStatusChip status={{ ...idle, phase: "syncing" }} connectivity="online" onPress={noop} />);
     expect(screen.getByTestId("sync-icon-spinner", { includeHiddenElements: true })).toBeTruthy();
-    expect(screen.getByText("Sincronizando…")).toBeTruthy();
+    expect(screen.queryByText("Sincronizando…")).toBeNull();
+    expect(screen.getByRole("button", { name: "Status de sincronização: Sincronizando…" })).toBeTruthy();
+  });
+
+  const shapes: Array<[string, SyncStatus, string]> = [
+      ["sync-mark-ok", { ...idle, lastSyncedAt: "2026-01-01T10:00:00.000Z" }, "Sincronizado"],
+      ["sync-mark-busy", { ...idle, phase: "syncing" }, "Sincronizando…"],
+      ["sync-mark-count", { ...idle, pending: 3 }, "Pendências (3)"],
+      ["sync-mark-error", { ...idle, phase: "error", lastError: "x" }, "Falhou. Tentar de novo"],
+  ];
+  it.each(shapes)("%s: own SHAPE, an accessibility label and no visible word (never color alone)", async (testID, status, label) => {
+    await render(<SyncStatusChip status={status} connectivity="online" onPress={noop} />);
+    expect(screen.getByTestId(testID)).toBeTruthy();
+    expect(screen.getByRole("button", { name: `Status de sincronização: ${label}` })).toBeTruthy();
+    expect(screen.queryByText(label)).toBeNull();
+  });
+
+  it("the amber mark carries the count of waiting changes (9+ when large)", async () => {
+    await render(<SyncStatusChip status={{ ...idle, pending: 12 }} connectivity="online" onPress={noop} />);
+    expect(screen.getByText("9+")).toBeTruthy();
   });
 });

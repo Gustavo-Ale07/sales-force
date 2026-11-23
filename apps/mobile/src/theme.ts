@@ -26,5 +26,8 @@ export const radius = { md: 8, pill: 999 } as const;
 /** One height for every touch control of a row (search field, segmented control, filter button, secondary buttons); also the minimum touch target. */
 export const control = { height: 44, heightLarge: 48 } as const;
 
+/** App header: fixed content height (the status bar inset is added on top); holds the 44 px indicator centered with the logo. */
+export const HEADER_HEIGHT = 52;
+
 /** Font sizes in use: a short scale instead of ad-hoc values. */
 export const fontSize = { caption: 12, body: 14, bodyLarge: 16, title: 20, headline: 24 } as const;

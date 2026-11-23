@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import type { CustomerFilters, CustomerLetter, CustomerListItem, CustomerPageRequest, CustomerRepository, CustomerSellerOption } from "../data/ports";
 import { describePendingBadge, hasNoSeller, isUnconfirmedCustomer } from "../data/pending-status";
-import { colors, spacing } from "../theme";
+import { colors, control, radius, spacing } from "../theme";
 import { CustomerFiltersSheet, CustomerIndexSheet, FilterChips, countActiveFilters } from "./customer-filters";
 import { PagedListView } from "./paged-list-view";
 
@@ -173,7 +173,7 @@ export function CustomersScreen({ customers, onUnauthenticated, connectivity, on
 const styles = StyleSheet.create({
   row: {
     backgroundColor: colors.surface,
-    borderRadius: 8,
+    borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: spacing.md,
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
   status: { fontSize: 12, fontWeight: "700", color: colors.warning },
   toolbar: { gap: spacing.sm },
   toolbarRow: { flexDirection: "row", gap: spacing.sm },
-  tool: { minHeight: 44, minWidth: 72, paddingHorizontal: spacing.lg, borderRadius: 8, borderWidth: 1, borderColor: colors.navy, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
+  tool: { minHeight: control.height, minWidth: 72, paddingHorizontal: spacing.lg, borderRadius: radius.md, borderWidth: 1, borderColor: colors.navy, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
   jump: { minHeight: 44, justifyContent: "center" },
   jumpText: { color: colors.navy, fontSize: 13, fontWeight: "700" },
   toolOn: { backgroundColor: colors.navy },

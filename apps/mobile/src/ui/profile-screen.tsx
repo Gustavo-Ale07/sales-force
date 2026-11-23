@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { Account } from "../auth/auth-port";
 import { APP_BUILD_LABEL, APP_ENVIRONMENT_LABEL, PRODUCT_NAME } from "../app-info";
-import { colors, spacing } from "../theme";
+import { colors, radius, spacing } from "../theme";
 import { Icon } from "./icons";
 import { initialsOf, roleLabel } from "./account-labels";
 import { useAppModal } from "./app-modal";
@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
   role: { fontSize: 14, color: colors.textMuted },
   section: { gap: spacing.sm },
   sectionTitle: { fontSize: 13, fontWeight: "800", color: colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 },
-  card: { backgroundColor: colors.surface, borderRadius: 10, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, gap: spacing.sm },
+  card: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, gap: spacing.sm },
   row: { flexDirection: "row", justifyContent: "space-between", gap: spacing.md },
   rowLabel: { fontSize: 14, color: colors.textMuted },
   rowValue: { fontSize: 14, fontWeight: "700", color: colors.text, flexShrink: 1, textAlign: "right" },
@@ -144,6 +144,6 @@ const styles = StyleSheet.create({
   link: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", minHeight: 44 },
   linkText: { fontSize: 15, fontWeight: "600", color: colors.navy },
   linkHint: { fontSize: 14, color: colors.textMuted },
-  signOut: { borderWidth: 1, borderColor: colors.red, borderRadius: 8, minHeight: 48, alignItems: "center", justifyContent: "center", marginBottom: spacing.lg },
+  signOut: { borderWidth: 1, borderColor: colors.red, borderRadius: radius.md, minHeight: 48, alignItems: "center", justifyContent: "center", marginBottom: spacing.lg },
   signOutText: { color: colors.red, fontSize: 15, fontWeight: "800" },
 });

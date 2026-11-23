@@ -4,7 +4,8 @@ import { useInsets } from "./use-insets";
 import type { SyncStatus } from "@salesforce/mobile-db";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import { describeConnection, describeSyncAge, describeSyncChip, describeSyncStatus, type SyncTone } from "../offline/sync-status-text";
-import { colors, spacing } from "../theme";
+import { colors, control, radius, spacing } from "../theme";
+import { useAppModal } from "./app-modal";
 import { Icon } from "./icons";
 import { SyncIcon } from "./sync-icon";
 
@@ -37,17 +38,45 @@ export interface SyncViewProps {
   readonly now?: number;
 }
 
-/** Compact header status: a dot and one short word. Tapping opens the details. */
+/**
+ * Icon-only header indicator (no text): a line cloud like the bottom-bar icons with a mark whose SHAPE says the state (never color alone):
+ * up to date = check, syncing = spinning ring (still when the system reduces motion), waiting orders = count, offline = dash, failure = "!".
+ * The spoken label carries the full wording. 44 x 44 touch target.
+ */
 export function SyncStatusChip({ status, connectivity, onPress }: Pick<SyncViewProps, "status" | "connectivity"> & { onPress: () => void }) {
   const { text, tone } = describeSyncChip(status, connectivity);
+  const syncing = status.phase === "syncing";
+  const color = TONE_COLOR[tone];
+  const waiting = status.pending > 0 && (tone === "pending" || tone === "offline");
   return (
     <Pressable style={styles.chip} onPress={onPress} accessibilityRole="button" accessibilityLabel={`Status de sincronização: ${text}`}>
-      <SyncIcon tone={tone} syncing={status.phase === "syncing"} color={TONE_COLOR[tone]} size={14} />
-      <Text style={styles.chipText} numberOfLines={1}>
-        {text}
-      </Text>
+      <View style={styles.cloudBox}>
+        <Icon name="cloud" color={colors.navy} size={26} />
+        <View testID={`sync-mark-${syncing ? "busy" : waiting ? "count" : tone}`} style={[styles.mark, !syncing && { backgroundColor: color }]}>
+          {syncing ? (
+            <SyncIcon tone="busy" syncing color={colors.warning} size={14} />
+          ) : tone === "ok" ? (
+            <Icon name="check" color={colors.onNavy} size={11} />
+          ) : waiting ? (
+            <Text style={styles.markCount}>{status.pending > 9 ? "9+" : String(status.pending)}</Text>
+          ) : tone === "offline" ? (
+            <View style={styles.markDash} />
+          ) : (
+            <Icon name="alert" color={colors.onNavy} size={11} />
+          )}
+        </View>
+      </View>
     </Pressable>
   );
+}
+
+/** "Última sincronização às HH:MM" (the title of the header popup). */
+export function describeLastSyncTitle(lastSyncedAt: string | null): string {
+  if (lastSyncedAt === null) return "Ainda não sincronizado";
+  const date = new Date(lastSyncedAt);
+  if (Number.isNaN(date.getTime())) return "Ainda não sincronizado";
+  const two = (value: number) => String(value).padStart(2, "0");
+  return `Última sincronização às ${two(date.getHours())}:${two(date.getMinutes())}`;
 }
 
 function Row({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
@@ -138,9 +167,25 @@ export function SyncDetailsSheet({ visible, onClose, ...view }: SyncViewProps & 
 /** Chip + its details sheet, for the app header. */
 export function HeaderSyncStatus(view: SyncViewProps) {
   const [open, setOpen] = useState(false);
+  const modal = useAppModal();
+  /** The standard popup: last sync time + "Sincronizar agora"; on failure the reason in seller language, "Ver detalhes" and "Tentar de novo". */
+  const showPopup = () => {
+    const failed = view.status.phase === "error" || view.status.phase === "auth_required" || view.status.phase === "offline" || view.status.failure != null;
+    const { text } = describeSyncStatus(view.status, view.connectivity);
+    modal.show({
+      variant: failed ? "error" : "info",
+      title: describeLastSyncTitle(view.status.lastSyncedAt),
+      ...(failed ? { message: text } : view.status.pending > 0 ? { message: `Alterações pendentes: ${view.status.pending}` } : {}),
+      buttons: [
+        { label: failed ? "Tentar de novo" : "Sincronizar agora", role: "primary", onPress: view.onSyncNow },
+        ...(failed || view.status.needsAttention > 0 || (view.quarantinedCount ?? 0) > 0 ? [{ label: "Ver detalhes", role: "secondary" as const, onPress: () => setOpen(true) }] : []),
+        { label: "Fechar", role: "cancel" as const },
+      ],
+    });
+  };
   return (
     <>
-      <SyncStatusChip status={view.status} connectivity={view.connectivity} onPress={() => setOpen(true)} />
+      <SyncStatusChip status={view.status} connectivity={view.connectivity} onPress={showPopup} />
       <SyncDetailsSheet
         visible={open}
         onClose={() => setOpen(false)}
@@ -160,8 +205,11 @@ export function HeaderSyncStatus(view: SyncViewProps) {
 }
 
 const styles = StyleSheet.create({
-  chip: { flexDirection: "row", alignItems: "center", gap: spacing.xs + 2, backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.sm, minHeight: 44 },
-  chipText: { fontSize: 11, fontWeight: "700", color: colors.text, flexShrink: 1 },
+  chip: { minWidth: control.height, minHeight: control.height, alignItems: "center", justifyContent: "center" },
+  cloudBox: { width: 36, height: 32, borderRadius: radius.md, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
+  mark: { position: "absolute", right: -4, bottom: -4, minWidth: 16, height: 16, borderRadius: 8, borderWidth: 1.5, borderColor: colors.navy, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", paddingHorizontal: 2 },
+  markCount: { color: colors.onNavy, fontSize: 10, fontWeight: "800" },
+  markDash: { width: 7, height: 2, borderRadius: 1, backgroundColor: colors.onNavy },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, gap: spacing.md },
   grabber: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border },

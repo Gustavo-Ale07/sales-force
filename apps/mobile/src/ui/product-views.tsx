@@ -3,7 +3,7 @@ import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import type { ProductListItem } from "../data/ports";
 import { useProductImages } from "../images/product-image-context";
 import { describeListPrice } from "../lib/money";
-import { colors, spacing } from "../theme";
+import { colors, control, fontSize, radius, spacing } from "../theme";
 import { QuantityField } from "./quantity-field";
 
 export type ProductViewMode = "grid" | "list";
@@ -167,15 +167,15 @@ export const ProductRow = memo(RowImpl);
 
 const styles = StyleSheet.create({
   thumb: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  thumbCard: { aspectRatio: 1, borderRadius: 8, alignSelf: "stretch" },
-  thumbRow: { width: 48, height: 48, borderRadius: 8 },
+  thumbCard: { aspectRatio: 1, borderRadius: radius.md, alignSelf: "stretch" },
+  thumbRow: { width: 48, height: 48, borderRadius: radius.md },
   thumbImage: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
-  thumbText: { fontSize: 22, fontWeight: "800", color: colors.textMuted },
+  thumbText: { fontSize: fontSize.title, fontWeight: "800", color: colors.textMuted },
   thumbTextRow: { fontSize: 16 },
-  card: { flex: 1, backgroundColor: colors.surface, borderRadius: 10, borderWidth: 1, borderColor: colors.border, padding: spacing.sm, margin: spacing.xs, gap: 2 },
+  card: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.sm, margin: spacing.xs, gap: 2 },
   cardName: { fontSize: 14, fontWeight: "700", color: colors.text, marginTop: spacing.xs, minHeight: 36 },
   cardAction: { marginTop: spacing.xs, alignItems: "stretch" },
-  row: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, borderRadius: 8, borderWidth: 1, borderColor: colors.border, padding: spacing.sm, marginBottom: spacing.xs + 2, gap: spacing.sm },
+  row: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.sm, marginBottom: spacing.xs + 2, gap: spacing.sm },
   rowInfo: { flex: 1, gap: 1 },
   rowName: { fontSize: 15, fontWeight: "700", color: colors.text },
   meta: { fontSize: 12, color: colors.textMuted },
@@ -183,11 +183,11 @@ const styles = StyleSheet.create({
   price: { fontSize: 15, fontWeight: "800", color: colors.navy },
   noPrice: { color: colors.textMuted, fontStyle: "italic", fontWeight: "600" },
   notSellable: { fontSize: 12, fontWeight: "700", color: colors.warning },
-  add: { minHeight: 44, minWidth: 88, paddingHorizontal: spacing.md, borderRadius: 8, backgroundColor: colors.navy, alignItems: "center", justifyContent: "center" },
+  add: { minHeight: control.height, minWidth: 88, paddingHorizontal: spacing.md, borderRadius: radius.md, backgroundColor: colors.navy, alignItems: "center", justifyContent: "center" },
   addPressed: { opacity: 0.8 },
   addText: { color: colors.onNavy, fontWeight: "700", fontSize: 13 },
-  stepper: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderRadius: 8, borderWidth: 1, borderColor: colors.navy, minHeight: 44 },
+  stepper: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderRadius: radius.md, borderWidth: 1, borderColor: colors.navy, minHeight: 44 },
   step: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
-  stepText: { fontSize: 22, fontWeight: "700", color: colors.navy },
+  stepText: { fontSize: fontSize.title, fontWeight: "700", color: colors.navy },
   qty: { minWidth: 28, textAlign: "center", fontSize: 15, fontWeight: "800", color: colors.text },
 });

@@ -8,7 +8,7 @@ import { lineFromProduct, type EditorLine } from "../data/order-draft";
 import { ProductImageProvider } from "../images/product-image-context";
 import { evaluateOfflineAccess } from "../offline/session";
 import { useSyncStatus } from "../offline/use-sync";
-import { colors, spacing } from "../theme";
+import { colors, HEADER_HEIGHT, spacing } from "../theme";
 import { AppModalProvider } from "./app-modal";
 import { ErrorActionsContext, useErrorPopup } from "./use-error-popup";
 import { BottomNav, type MainTab } from "./bottom-nav";
@@ -351,8 +351,8 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   return (
     <View style={styles.flex}>
       <StatusBar barStyle="light-content" />
-      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
-        <BrandLogo height={26} />
+      <View style={[styles.header, { paddingTop: insets.top, height: insets.top + HEADER_HEIGHT }]}>
+        <BrandLogo height={24} />
         <View style={styles.headerSpacer} />
         {services !== null && <HeaderSyncStatus {...syncView} />}
       </View>
@@ -488,7 +488,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     backgroundColor: colors.navy,
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
   },
   headerSpacer: { flex: 1 },
   offlineNotice: { backgroundColor: colors.errorBackground, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },

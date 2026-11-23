@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import type { CustomerDetail, CustomerListItem, CustomerRepository } from "../data/ports";
 import { hasNoSeller, isUnconfirmedCustomer, NO_SELLER_ORDER_MESSAGE, PENDING_CREDIT_NOTE, PENDING_CUSTOMER_ORDER_MESSAGE } from "../data/pending-status";
-import { colors, spacing } from "../theme";
+import { colors, fontSize, radius, spacing } from "../theme";
 import { BackLink } from "./back-link";
 import { describeCustomerStatus } from "./customers-screen";
 
@@ -153,18 +153,18 @@ const styles = StyleSheet.create({
   backText: { fontSize: 16, fontWeight: "700", color: colors.navy },
   content: { padding: spacing.lg, gap: spacing.lg },
   header: { gap: 2 },
-  name: { fontSize: 22, fontWeight: "800", color: colors.navy },
+  name: { fontSize: fontSize.title, fontWeight: "800", color: colors.navy },
   trade: { fontSize: 15, color: colors.text },
   meta: { fontSize: 14, color: colors.textMuted },
   status: { fontSize: 13, fontWeight: "700", color: colors.warning, marginTop: spacing.xs },
-  section: { backgroundColor: colors.surface, borderRadius: 8, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: spacing.sm },
+  section: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: spacing.sm },
   sectionTitle: { fontSize: 14, fontWeight: "800", color: colors.navy },
   field: { gap: 1 },
   fieldLabel: { fontSize: 12, color: colors.textMuted },
   fieldValue: { fontSize: 15, color: colors.text, fontWeight: "600" },
   note: { fontSize: 12, color: colors.textMuted },
   footer: { padding: spacing.lg, gap: spacing.sm, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
-  cta: { minHeight: 50, borderRadius: 8, backgroundColor: colors.red, alignItems: "center", justifyContent: "center" },
+  cta: { minHeight: 50, borderRadius: radius.md, backgroundColor: colors.red, alignItems: "center", justifyContent: "center" },
   ctaDisabled: { opacity: 0.4 },
   ctaText: { color: colors.onNavy, fontSize: 16, fontWeight: "800" },
 });

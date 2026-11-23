@@ -5,7 +5,7 @@ import type { CustomerListItem, CustomerRepository } from "../data/ports";
 import { brDateToIso, isoToBrDate, type SalesFilters, type SalesPeriod } from "../offline/sales";
 import { STAGE_FILTER_OPTIONS } from "../offline/erp-stage";
 import { saleBadge } from "../offline/sales-status";
-import { colors, spacing } from "../theme";
+import { colors, radius, spacing } from "../theme";
 import { ChipRow, Options, Sheet, type FilterChip } from "./customer-filters";
 import { CustomerPicker } from "./customer-picker";
 
@@ -168,20 +168,20 @@ const styles = StyleSheet.create({
   scrollContent: { gap: spacing.lg },
   group: { gap: spacing.sm },
   groupTitle: { fontSize: 14, fontWeight: "700", color: colors.textMuted },
-  field: { minHeight: 48, borderRadius: 8, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, justifyContent: "center", backgroundColor: colors.surface },
+  field: { minHeight: 48, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, justifyContent: "center", backgroundColor: colors.surface },
   fieldText: { fontSize: 15, color: colors.text, fontWeight: "600" },
   fieldPlaceholder: { color: colors.textMuted, fontWeight: "400" },
   inline: { minHeight: 44, justifyContent: "center" },
   clearText: { color: colors.red, fontSize: 13, fontWeight: "700" },
   dates: { flexDirection: "row", gap: spacing.sm },
   dateBox: { flex: 1, gap: 2 },
-  input: { minHeight: 48, borderRadius: 8, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, fontSize: 15, color: colors.text, backgroundColor: colors.surface },
+  input: { minHeight: 48, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, fontSize: 15, color: colors.text, backgroundColor: colors.surface },
   inputInvalid: { borderColor: colors.red },
   invalid: { fontSize: 12, color: colors.red },
   actions: { flexDirection: "row", gap: spacing.md },
-  secondary: { flex: 1, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: 8, borderWidth: 1, borderColor: colors.navy },
+  secondary: { flex: 1, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: radius.md, borderWidth: 1, borderColor: colors.navy },
   secondaryText: { color: colors.navy, fontWeight: "700", fontSize: 15 },
-  primary: { flex: 2, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: 8, backgroundColor: colors.navy },
+  primary: { flex: 2, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: radius.md, backgroundColor: colors.navy },
   primaryOff: { opacity: 0.5 },
   primaryText: { color: colors.onNavy, fontWeight: "700", fontSize: 15 },
   picker: { flex: 1, backgroundColor: colors.background, padding: spacing.lg, gap: spacing.md },

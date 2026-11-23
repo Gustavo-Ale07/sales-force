@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import type { ProductFilters, ProductGroupOption } from "../data/ports";
-import { colors, spacing } from "../theme";
+import { colors, radius, spacing } from "../theme";
 import { Icon } from "./icons";
 import { ChipRow, Sheet, type FilterChip } from "./customer-filters";
 
@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
   scrollContent: { gap: spacing.lg },
   groupBlock: { gap: spacing.sm },
   groupTitle: { fontSize: 14, fontWeight: "700", color: colors.textMuted },
-  search: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: spacing.md, minHeight: 44, fontSize: 15, color: colors.text, backgroundColor: colors.surface },
+  search: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.md, minHeight: 44, fontSize: 15, color: colors.text, backgroundColor: colors.surface },
   empty: { fontSize: 13, color: colors.textMuted },
   groupRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, minHeight: 48 },
   box: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: colors.navy, alignItems: "center", justifyContent: "center" },
@@ -128,8 +128,8 @@ const styles = StyleSheet.create({
   groupName: { flex: 1, fontSize: 15, color: colors.text },
   groupCount: { fontSize: 13, color: colors.textMuted },
   actions: { flexDirection: "row", gap: spacing.sm },
-  secondary: { flex: 1, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: 8, borderWidth: 1, borderColor: colors.navy },
+  secondary: { flex: 1, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: radius.md, borderWidth: 1, borderColor: colors.navy },
   secondaryText: { color: colors.navy, fontWeight: "700", fontSize: 14 },
-  primary: { flex: 1.4, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: 8, backgroundColor: colors.navy },
+  primary: { flex: 1.4, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: radius.md, backgroundColor: colors.navy },
   primaryText: { color: colors.onNavy, fontWeight: "700", fontSize: 15 },
 });
