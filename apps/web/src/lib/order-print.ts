@@ -35,7 +35,8 @@ export interface OrderPrintExtras {
 export function buildOrderHtml(order: OrderDetail, origin: string, extras: OrderPrintExtras = {}): string {
   const model = toOrderDocument({
     kind: documentKindOf(order.topCode, extras.topRules ?? {}),
-    draftNumber: order.draftNumber,
+    // The internal number is never shown (owner rule 2026-11-23): identity is the Sankhya number only.
+    draftNumber: null,
     erpNumber: order.erpNumber,
     customerCode: order.customerCode,
     customerName: order.customerName,
@@ -50,6 +51,7 @@ export function buildOrderHtml(order: OrderDetail, origin: string, extras: Order
   return renderOrderHtml(model, {
     logoSrc: `${origin}/brand/plac-logo.png`,
     brandName: 'PLAC',
+    ...(order.erpNumber == null ? {} : { title: `${model.kind === "quote" ? "Orçamento" : "Pedido"} ${order.erpNumber}` }),
     ...(extras.issuedAt === undefined ? {} : { issuedAt: extras.issuedAt }),
     ...(extras.sellerName === undefined ? {} : { sellerName: extras.sellerName }),
     ...(extras.company === undefined ? {} : { company: extras.company }),

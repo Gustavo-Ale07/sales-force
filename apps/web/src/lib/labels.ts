@@ -78,9 +78,9 @@ export const orderReviewReasons: Record<NonNullable<ApiSchema<"OrderListItem">["
   customer_without_seller: "O cliente deste pedido está sem vendedor vinculado.",
 };
 
-/** Reference shown for an order: the Sankhya number once it exists there, otherwise the draft number. */
-export function orderReference(order: Pick<ApiSchema<"OrderListItem">, "draftNumber" | "erpNumber">, kind: DocumentKind = "order"): string {
-  return documentVocabulary(kind, order.erpNumber ?? order.draftNumber).title;
+/** Reference shown for an order: the Sankhya number once it exists there; before that only "Pedido"/"Orçamento" (the internal number is never shown). */
+export function orderReference(order: Pick<ApiSchema<"OrderListItem">, "erpNumber">, kind: DocumentKind = "order"): string {
+  return documentVocabulary(kind, order.erpNumber ?? null).title;
 }
 
 type ErpDelivery = NonNullable<ApiSchema<"OrderListItem">["erpDelivery"]>;

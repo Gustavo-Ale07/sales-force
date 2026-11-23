@@ -284,7 +284,7 @@ describe("Novo pedido", () => {
       await user.click(within(dialog).getByRole("tab", { name: /Financeiro/ }));
       expect(await within(dialog).findByText(/5.000,00/)).toBeInTheDocument();
       await user.click(within(dialog).getByRole("tab", { name: /Vendas/ }));
-      expect(await within(dialog).findByText("Pedido nº 12")).toBeInTheDocument();
+      expect(await within(dialog).findByRole("link", { name: "Pedido" })).toBeInTheDocument();
       await user.click(within(dialog).getByRole("tab", { name: /Engajamento/ }));
       expect(within(dialog).getByText("Engajamento indisponível")).toBeInTheDocument();
       await user.click(within(dialog).getByRole("button", { name: "Fechar" }));
@@ -669,7 +669,7 @@ describe("Novo pedido", () => {
     expect(JSON.stringify(created?.body)).not.toMatch(/price|preco|total/i);
     expect(created?.body).toHaveProperty("clientRequestId", expect.stringMatching(/^[0-9a-f-]{36}$/));
     expect(created?.body).toHaveProperty("expectedDataset", testDataset);
-    expect(await screen.findByRole("heading", { name: /^Pedido nº 12/ })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /^Pedido/ })).toBeInTheDocument();
   });
 
   it("resends the same idempotency key when a failed save is retried unchanged", async () => {
@@ -840,8 +840,8 @@ describe("Rascunho existente", () => {
 
   it("loads the saved items with the prices and totals sent by the server", async () => {
     renderApp(`/pedidos/${ORDER_ID}`, { handlers: existing() });
-    expect(await screen.findByRole("heading", { name: /^Pedido nº 12/ })).toBeInTheDocument();
-    expect(screen.getByLabelText("Quantidade de Balão látex 9 pol. vermelho")).toHaveValue("2");
+    expect(await screen.findByRole("heading", { name: /^Pedido/ })).toBeInTheDocument();
+    expect(await screen.findByLabelText("Quantidade de Balão látex 9 pol. vermelho")).toHaveValue("2");
     expect(screen.getByTestId("order-total")).toHaveTextContent("25,00");
     // D-AA: a saved document that was never sent can be sent without editing: the one button is "Confirmar pedido".
     expect(screen.getByRole("button", { name: "Confirmar pedido" })).toBeEnabled();
@@ -851,7 +851,7 @@ describe("Rascunho existente", () => {
   it("shows the server's sendBlocks on the offending line and disables sending while any exists", async () => {
     const order = orderDetail({ sendBlocks: [{ lineNo: 1, productCode: 2001, code: "product_without_mobility", message: "Produto sem mobilidade" }] });
     renderApp(`/pedidos/${ORDER_ID}`, { handlers: existing(order) });
-    expect(await screen.findByRole("heading", { name: /^Pedido nº 12/ })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /^Pedido/ })).toBeInTheDocument();
     expect(await screen.findByText("Produto sem mobilidade")).toBeInTheDocument();
     expect(screen.getByTestId("send-blocked-reason")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Confirmar pedido" })).toBeDisabled();
@@ -1049,7 +1049,7 @@ describe("Rascunho existente", () => {
       }),
     });
     await user.click(await screen.findByRole("button", { name: "Excluir" }));
-    const dialog = await screen.findByRole("dialog", { name: /^Excluir .* nº \d+\?$/ });
+    const dialog = await screen.findByRole("dialog", { name: /^Excluir .*?$/ });
     expect(within(dialog).getByText("Isso não pode ser desfeito.")).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "Excluir" }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/pedidos"));

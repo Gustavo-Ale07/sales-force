@@ -45,7 +45,7 @@ describe("Início (dashboard)", () => {
     // It is not shown as a row of "Não disponível": one quiet note names it instead.
     expect(screen.getByTestId("indicators-without-data")).toHaveTextContent(/Sem dados nesta instalação:.*Indicadores de crédito/);
     expect(screen.getByText(/Escopo: Vendedor 7/)).toBeInTheDocument();
-    expect(screen.getByText("Pedido nº 12")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Pedido" })).toBeInTheDocument();
   });
 
   it("marks demonstration data", async () => {
@@ -175,7 +175,7 @@ describe("Cliente (customer detail)", () => {
     expect(await screen.findByText("Nenhum título em aberto")).toBeInTheDocument();
     expect(screen.queryByText("Limite de crédito", { selector: "dt" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: /Vendas/ }));
-    expect(await screen.findByText("Pedido nº 12")).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Pedido" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Novo pedido/ })).toHaveAttribute("href", expect.stringContaining("customer=1001"));
   });
 
@@ -311,11 +311,11 @@ describe("Rascunhos (orders)", () => {
     expect(await screen.findByText(/O envio ao Sankhya ainda não está habilitado/)).toBeInTheDocument();
     off.unmount();
     const on = renderApp("/pedidos", { handlers: withFlag(true) });
-    expect(await screen.findByText("Pedido nº 12")).toBeInTheDocument();
+    await screen.findAllByText("Comercial Alfa Ltda");
     await waitFor(() => expect(screen.queryByText(/ainda não está habilitado/)).not.toBeInTheDocument());
     on.unmount();
     renderApp("/pedidos", { handlers: withFlag(undefined) });
-    expect(await screen.findByText("Pedido nº 12")).toBeInTheDocument();
+    await screen.findAllByText("Comercial Alfa Ltda");
     expect(screen.queryByText(/ainda não está habilitado/)).not.toBeInTheDocument();
   });
 
@@ -323,15 +323,15 @@ describe("Rascunhos (orders)", () => {
     const { user, router } = renderApp("/pedidos", {
       handlers: { "GET /orders": { body: ordersPage([orderListItem(), orderListItem({ id: "0190a000-0000-7000-8000-0000000000bb", draftNumber: 13, isPartial: true, status: "draft" })]) } },
     });
-    expect(await screen.findByText("Pedido nº 12")).toBeInTheDocument();
+    await screen.findAllByText("Comercial Alfa Ltda");
     expect(screen.getByText("(parcial)")).toBeInTheDocument();
-    await user.click(screen.getByText("Pedido nº 12"));
+    await user.click((await screen.findAllByText("Comercial Alfa Ltda"))[0]!);
     await waitFor(() => expect(router.state.location.pathname).toBe(`/pedidos/${ORDER_ID}`));
   });
 
   it("D-Y: offers Excluir only when the document never reached Sankhya (no ERP number, not queued)", async () => {
     renderApp("/pedidos", { handlers: { "GET /orders": { body: ordersPage([orderListItem(), orderListItem({ id: "0190a000-0000-7000-8000-0000000000bb", draftNumber: 13, status: "sent", erpNumber: 555 })]) } } });
-    expect(await screen.findByText("Pedido nº 12")).toBeInTheDocument();
+    await screen.findAllByText("Comercial Alfa Ltda");
     expect(screen.getAllByRole("button", { name: /^Excluir/ })).toHaveLength(1);
     expect(screen.getByText("Pedido nº 555")).toBeInTheDocument();
   });
@@ -347,8 +347,8 @@ describe("Rascunhos (orders)", () => {
         },
       },
     });
-    await user.click(await screen.findByRole("button", { name: "Excluir Pedido nº 12" }));
-    const dialog = await screen.findByRole("dialog", { name: "Excluir pedido nº 12?" });
+    await user.click(await screen.findByRole("button", { name: "Excluir Pedido" }));
+    const dialog = await screen.findByRole("dialog", { name: "Excluir pedido?" });
     await user.click(within(dialog).getByRole("button", { name: "Excluir" }));
     expect(await screen.findByText("Nenhum pedido ainda")).toBeInTheDocument();
     expect(callsTo(calls, "DELETE", `/orders/${ORDER_ID}`)).toHaveLength(1);
@@ -361,8 +361,8 @@ describe("Rascunhos (orders)", () => {
         "DELETE /orders/:id": apiError(409, "order_not_editable", "Pedido não pode ser excluído.", { requestId: "req-d-1" }),
       },
     });
-    await user.click(await screen.findByRole("button", { name: "Excluir Pedido nº 12" }));
-    const dialog = await screen.findByRole("dialog", { name: "Excluir pedido nº 12?" });
+    await user.click(await screen.findByRole("button", { name: "Excluir Pedido" }));
+    const dialog = await screen.findByRole("dialog", { name: "Excluir pedido?" });
     await user.click(within(dialog).getByRole("button", { name: "Excluir" }));
     expect(await within(dialog).findByText("req-d-1")).toBeInTheDocument();
   });

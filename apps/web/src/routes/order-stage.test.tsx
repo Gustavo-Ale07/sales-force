@@ -129,11 +129,12 @@ describe("Situação no Sankhya: linha do tempo no pedido", () => {
     expect(within(heading).queryByText("Enviado ao Sankhya")).toBeNull();
   });
 
-  it("the editor title for a draft is 'Pedido nº N' and the status badge says 'Não enviado'", async () => {
+  it("the editor title for a draft is just Pedido and the status badge says Não enviado", async () => {
     renderApp(`/pedidos/${ORDER_ID}`, { handlers: detailHandlers(orderDetail()) });
-    const heading = await screen.findByRole("heading", { level: 1, name: /^Pedido nº 12/ });
+    await screen.findByRole("button", { name: "Confirmar pedido" });
+    const heading = screen.getByRole("heading", { level: 1, name: /^Pedido(?! nº)/ });
     expect(within(heading).getByText(/^não enviado$/i)).toBeInTheDocument();
-    expect(heading.textContent ?? "").not.toMatch(/rascunho/i);
+    expect(heading.textContent ?? "").not.toMatch(/rascunho|nº/i);
   });
 });
 
@@ -207,7 +208,7 @@ describe("Situação no Sankhya: lista de pedidos", () => {
         orderListItem({ draftNumber: 12, status: "sent", erpNumber: 5001, erpStage: stage("in_dispatch") }),
         orderListItem({ id: OTHER, draftNumber: 13, status: "sent", erpNumber: 5002, erpStage: stage("invoiced") }),
         orderListItem({ id: THIRD, draftNumber: 14, status: "sent", erpNumber: 5003, erpStage: null }),
-        orderListItem({ id: "0190a000-0000-7000-8000-0000000000dd", draftNumber: 15, status: "draft" }),
+        orderListItem({ id: "0190a000-0000-7000-8000-0000000000dd", draftNumber: 15, customerName: "Cliente Rascunhado", status: "draft" }),
       ];
       const wanted = request.search.get("stage");
       return { body: ordersPage(wanted ? all.filter((order) => order.erpStage?.stage === wanted) : all) };
@@ -224,17 +225,17 @@ describe("Situação no Sankhya: lista de pedidos", () => {
     expect(within(stageRow).queryByText("Enviado ao Sankhya")).toBeNull();
     expect(within(rowOf("Pedido nº 5002")).getByText("Faturado")).toBeInTheDocument();
     expect(within(rowOf("Pedido nº 5003")).getByText("Enviado ao Sankhya")).toBeInTheDocument();
-    expect(within(rowOf("Pedido nº 15")).getByText(/^não enviado$/i)).toBeInTheDocument();
+    expect(within(rowOf("Cliente Rascunhado")).getByText(/^não enviado$/i)).toBeInTheDocument();
   });
 
   it("a stage on a non-sent order does not override the status badge", async () => {
     renderApp("/pedidos", {
       handlers: {
         ...list(),
-        "GET /orders": { body: ordersPage([orderListItem({ draftNumber: 20, status: "queued", erpStage: stage("sent_to_force") })]) },
+        "GET /orders": { body: ordersPage([orderListItem({ draftNumber: 20, customerName: "Cliente Fila", status: "queued", erpStage: stage("sent_to_force") })]) },
       },
     });
-    const row = (await screen.findByText("Pedido nº 20")).closest("tr") as HTMLElement;
+    const row = (await screen.findByText("Cliente Fila")).closest("tr") as HTMLElement;
     expect(within(row).queryByText("Enviado ao Force")).toBeNull();
   });
 
@@ -345,7 +346,7 @@ describe("Texto visível: sem 'rascunho'", () => {
 
   it("the orders list renders without the word", async () => {
     renderApp("/pedidos", { handlers: { "GET /orders": { body: ordersPage([orderListItem()]) }, "GET /customers": { body: customersPage([customer()]) } } });
-    await screen.findByText("Pedido nº 12");
+    await screen.findAllByText("Comercial Alfa Ltda");
     expect(document.body.textContent ?? "").not.toMatch(/rascunho/i);
     expect(screen.getAllByText(/^não enviado$/i).length).toBeGreaterThan(0);
   });

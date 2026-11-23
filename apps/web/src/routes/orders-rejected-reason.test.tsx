@@ -19,7 +19,7 @@ describe("K3: motivo da falha de envio", () => {
 
   it("an order that is not rejected shows no reason", async () => {
     renderApp("/pedidos", { handlers: handlers([orderListItem({ status: "draft" })]) });
-    await screen.findByText("Pedido nº 12");
+    await screen.findAllByText("Comercial Alfa Ltda");
     expect(screen.queryByText(/avise o TI/)).not.toBeInTheDocument();
   });
 

@@ -306,7 +306,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
   const orderTopCode = topChoice ?? orderTops?.defaultTopCode ?? null;
   // J3: the header TOP decides whether this is an order or a quote, and the texts follow.
   const docKind = documentKindOf(orderTopCode, { quoteTopCodes: orderTops?.quoteTopCodes, quotationTopCode: orderTops?.quotationTopCode });
-  const vocab = documentVocabulary(docKind, order ? (order.erpNumber ?? order.draftNumber) : null);
+  const vocab = documentVocabulary(docKind, order ? (order.erpNumber ?? null) : null);
   // Mandatory and chosen by the seller: no installation default is preselected.
   const negotiationTypeCode = negotiationChoice ?? null;
 
@@ -747,7 +747,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
         </Alert>
       ) : null}
       {order?.convertedInto ? (
-        <Alert tone="info" title={`CONVERTIDO EM PEDIDO nº ${order.convertedInto.erpNumber ?? order.convertedInto.draftNumber}`}>
+        <Alert tone="info" title={order.convertedInto.erpNumber != null ? `CONVERTIDO EM PEDIDO nº ${order.convertedInto.erpNumber}` : "CONVERTIDO EM PEDIDO"}>
           Este orçamento originou um pedido no Sales Force. No Sankhya o orçamento continua como está: não há vínculo entre os dois documentos.
         </Alert>
       ) : null}
