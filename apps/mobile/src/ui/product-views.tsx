@@ -112,7 +112,7 @@ function CardImpl({ product, quantity, actions }: ViewProps) {
       <ProductThumb product={product} size="card" />
       <Text style={styles.cardName} numberOfLines={2}>{product.description}</Text>
       <Text style={styles.meta} numberOfLines={1}>{`Cód. ${product.code} · ${product.unit}`}</Text>
-      {product.groupName !== null && <Text style={styles.group} numberOfLines={1}>{product.groupName}</Text>}
+      <Text style={styles.group} numberOfLines={1}>{product.groupName ?? " "}</Text>
       <Text style={[styles.price, noPrice && styles.noPrice]}>{priceLabel(product)}</Text>
       {actions !== undefined && (
         <View style={styles.cardAction}>
@@ -144,10 +144,10 @@ export const ProductCard = memo(CardImpl);
 export const ProductRow = memo(RowImpl);
 
 const styles = StyleSheet.create({
-  thumb: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  thumb: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   thumbCard: { aspectRatio: 1, borderRadius: 8, alignSelf: "stretch" },
   thumbRow: { width: 48, height: 48, borderRadius: 8 },
-  thumbImage: { width: "100%", height: "100%" },
+  thumbImage: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
   thumbText: { fontSize: 22, fontWeight: "800", color: colors.textMuted },
   thumbTextRow: { fontSize: 16 },
   card: { flex: 1, backgroundColor: colors.surface, borderRadius: 10, borderWidth: 1, borderColor: colors.border, padding: spacing.sm, margin: spacing.xs, gap: 2 },
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
   rowInfo: { flex: 1, gap: 1 },
   rowName: { fontSize: 15, fontWeight: "700", color: colors.text },
   meta: { fontSize: 12, color: colors.textMuted },
-  group: { fontSize: 11, color: colors.textMuted, opacity: 0.85 },
+  group: { minHeight: 14, fontSize: 11, color: colors.textMuted, opacity: 0.85 },
   price: { fontSize: 15, fontWeight: "800", color: colors.navy },
   noPrice: { color: colors.textMuted, fontStyle: "italic", fontWeight: "600" },
   notSellable: { fontSize: 12, fontWeight: "700", color: colors.warning },
