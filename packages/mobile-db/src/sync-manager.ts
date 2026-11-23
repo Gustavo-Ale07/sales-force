@@ -269,6 +269,11 @@ export interface SyncManager {
    * run in flight (single-flight); a call that wants the download while a push-only run is in flight runs it right after.
    */
   sync(reason: SyncReason, options?: { readonly pull?: boolean }): Promise<SyncStatus>;
+  /**
+   * Asks the full sync in flight to stop. It takes effect at the next checkpoint BEFORE the atomic swap of the local base (the
+   * previous base stays intact); once the swap started the run finishes. Orders already sent stay sent. No-op otherwise.
+   */
+  cancel?(): void;
   getStatus(): SyncStatus;
   subscribe(listener: (status: SyncStatus) => void): () => void;
   /** Recomputes counters from the database (after a local save). */
@@ -296,8 +301,17 @@ function describeFailure(error: unknown, internet: InternetState): Failure {
   return failureOf("error", "error");
 }
 
+/** The seller cancelled the run before the local swap; the previous base is untouched. */
+class SyncCancelledError extends Error {
+  constructor() {
+    super("sync cancelled");
+    this.name = "SyncCancelledError";
+  }
+}
+
 export function createSyncManager(deps: SyncManagerDeps): SyncManager {
   const listeners = new Set<(status: SyncStatus) => void>();
+  let cancelRequested = false;
   let status: SyncStatus = { phase: "idle", pending: 0, needsAttention: 0, lastSyncedAt: null, lastError: null, failure: null, failedSteps: [], attention: [], progress: null, steps: null };
   let inFlight: Promise<SyncStatus> | null = null;
   let inFlightPulls = false;
@@ -354,6 +368,18 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
       );
       publish({ ...status, phase: "syncing", steps });
     };
+    cancelRequested = false;
+    let saveStarted = false;
+    /** Checkpoint: a cancel stops the run only BEFORE the single atomic swap of the local base (never after it starts). */
+    const checkpoint = (): void => {
+      if (cancelRequested && !saveStarted) throw new SyncCancelledError();
+    };
+    const onPullStep = (event: SyncStepEvent): void => {
+      if (event.id === "save") saveStarted = true;
+      else checkpoint();
+      onStep(event);
+    };
+    let cancelled = false;
     publish({ ...status, phase: "syncing", progress: null, steps, ...(await counters()) });
     let phase: SyncPhase = "idle";
     let lastError: string | null = null;
@@ -440,9 +466,11 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
       } else if (pull) {
         try {
           // The server refreshes from the ERP first; the download happens only after it is done. Failed steps do not stop the download.
+          checkpoint();
           if (deps.source.refreshOnDemand !== undefined) {
             onStep({ id: "server", state: "running" });
             const outcome = await deps.source.refreshOnDemand((progress) => {
+              checkpoint();
               publish({ ...status, phase: "syncing", progress });
             });
             mobility = outcome.mobility ?? [];
@@ -454,14 +482,21 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
             }
           }
           if (deps.source.refreshOnDemand === undefined) onStep({ id: "server", state: "done" });
-          const pulledData = await pullReferenceData(deps.db, deps.env, deps.source, deps.ownerAccountId, onStep);
+          const pulledData = await pullReferenceData(deps.db, deps.env, deps.source, deps.ownerAccountId, onPullStep);
           pulled = true;
           // A price table that could not be read is never reported as a clean sync (its customers may be left without prices).
           if (pulledData.priceTablesFailed.length > 0) setFailure(failureOf("error", "error", PRICE_TABLES_FAILED_TEXT));
-          // ERP status of the orders the device holds (GET /orders?ids=, in scope only). A failed read is reported by the run.
+          // ERP status of the orders the device holds (GET /orders?ids=, in scope only). Secondary data: the base is already saved,
+          // so a failed read keeps the last known status and never fails the run (only a dead session does: it needs a new login).
           onStep({ id: "orders", state: "running", count: 0, total: null });
-          await refreshOrderErpStatuses(deps.db, deps.env, deps.source, deps.ownerAccountId, (done, total) => onStep({ id: "orders", state: "running", count: done, total }));
-          onStep({ id: "orders", state: "done" });
+          try {
+            await refreshOrderErpStatuses(deps.db, deps.env, deps.source, deps.ownerAccountId, (done, total) => onStep({ id: "orders", state: "running", count: done, total }));
+            onStep({ id: "orders", state: "done" });
+          } catch (error) {
+            if (error instanceof TransportError && error.kind === "auth") throw error;
+            if (!(error instanceof TransportError)) deps.onUnexpectedError?.(error);
+            onStep({ id: "orders", state: "done", note: "mantida a última situação" });
+          }
           // Marked drafts: the cause may be gone with the new base; the ones released go out now.
           const released = await reevaluateHeldOrders(deps.db, deps.env, deps.ownerAccountId);
           if (released > 0) {
@@ -470,9 +505,17 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
             await pushSendRequests(deps.db, deps.env, deps.transport, deps.ownerAccountId, releasedOptions);
           }
         } catch (error) {
-          failedSteps = [];
-          setFailure(describeFailure(error, internet()));
-          if (!(error instanceof TransportError) && !(error instanceof DatasetIdentityError)) deps.onUnexpectedError?.(error);
+          if (error instanceof SyncCancelledError) {
+            // Nothing of the new base was written (the swap is one transaction that had not started).
+            cancelled = true;
+            phase = "idle";
+            lastError = null;
+            failureCause = null;
+          } else {
+            failedSteps = [];
+            setFailure(describeFailure(error, internet()));
+          }
+          if (!cancelled && !(error instanceof TransportError) && !(error instanceof DatasetIdentityError)) deps.onUnexpectedError?.(error);
         }
       }
     } catch (error) {
@@ -486,6 +529,7 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
       lastSyncedAt = now;
       await setMeta(deps.db, "sync.last_success_at", now, now).catch(() => undefined);
     }
+    if (cancelled) steps = null;
     if (steps !== null) {
       const failedRun = phase !== "idle";
       // A run that failed before the server step even started failed while sending.
@@ -525,6 +569,9 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
         return queued;
       }
       return start(reason, wantsPull);
+    },
+    cancel() {
+      if (inFlight !== null && inFlightPulls) cancelRequested = true;
     },
     getStatus: () => status,
     subscribe(listener) {

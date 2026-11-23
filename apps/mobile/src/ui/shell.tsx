@@ -122,6 +122,9 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   const syncNow = useCallback(() => {
     void services?.sync.sync("manual");
   }, [services]);
+  const cancelSync = useCallback(() => {
+    services?.sync.cancel?.();
+  }, [services]);
 
   const selectTab = useCallback((next: MainTab) => {
     setTab(next);
@@ -276,7 +279,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
       )}
       {/* Android is edge-to-edge: the window no longer resizes for the keyboard, so the body avoids it itself. */}
       <ErrorActionsContext.Provider value={errorActions}>
-      <SyncProgressOverlay status={syncStatus} onRetry={syncNow} />
+      <SyncProgressOverlay status={syncStatus} onRetry={syncNow} {...(services?.sync.cancel === undefined ? {} : { onCancel: cancelSync })} />
       <ProductImageProvider store={services?.productImages ?? null} online={connectivityState !== "offline"}>
       <KeyboardAvoidingView style={styles.flex} behavior="padding">
         <View style={styles.flex}>
