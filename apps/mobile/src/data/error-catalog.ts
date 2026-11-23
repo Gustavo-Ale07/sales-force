@@ -1,6 +1,7 @@
 import {
   CUSTOMER_BLOCK_MESSAGES,
   CUSTOMER_UNAVAILABLE_MESSAGE,
+  LEGACY_CUSTOMER_UNAVAILABLE_MESSAGE,
   DatasetChangedError,
   DatasetUnavailableError,
   DraftNotEditableError,
@@ -51,8 +52,8 @@ export const ERROR_CATALOG = {
   // Orders
   validation_failed: { title: "Dados inválidos", message: "Revise o pedido e tente de novo.", action: "none" },
   version_conflict: { title: "Pedido alterado em outro lugar", message: "Recarregue para ver a versão atual. Suas alterações não salvas serão perdidas.", action: "reload" },
-  order_not_editable: { title: "Pedido não editável", message: "Ele já não é um rascunho. Recarregue para ver a situação.", action: "reload" },
-  not_editable: { title: "Pedido não editável", message: "Ele já não é um rascunho. Recarregue para ver a situação.", action: "reload" },
+  order_not_editable: { title: "Pedido não editável", message: "Ele já não pode ser editado. Recarregue para ver a situação.", action: "reload" },
+  not_editable: { title: "Pedido não editável", message: "Ele já não pode ser editado. Recarregue para ver a situação.", action: "reload" },
   idempotency_conflict: { title: "Pedido antigo", message: "Esta solicitação já foi registrada com outros dados. Refaça o pedido.", action: "none" },
   dataset_mismatch: { title: "Dados desatualizados", message: "O servidor mudou desde que você abriu o pedido. Sincronize e abra o pedido de novo.", action: "go_sync" },
   installation_not_enabled: { title: "Pedidos não habilitados", message: "A instalação ainda não aceita pedidos. Fale com o backoffice.", action: "none" },
@@ -185,7 +186,7 @@ export function describeProblem(error: unknown): Problem {
  */
 export function codeOfHeldMessage(lastError: string | null): string | null {
   if (lastError === null) return null;
-  if (lastError === CUSTOMER_UNAVAILABLE_MESSAGE) return "customer_unavailable";
+  if (lastError === CUSTOMER_UNAVAILABLE_MESSAGE || lastError === LEGACY_CUSTOMER_UNAVAILABLE_MESSAGE) return "customer_unavailable";
   const customer = (Object.keys(CUSTOMER_BLOCK_MESSAGES) as (keyof typeof CUSTOMER_BLOCK_MESSAGES)[]).find((key) => CUSTOMER_BLOCK_MESSAGES[key] === lastError);
   if (customer !== undefined) return customer;
   const product = (Object.keys(PRODUCT_BLOCK_MESSAGES) as (keyof typeof PRODUCT_BLOCK_MESSAGES)[]).find((key) => PRODUCT_BLOCK_MESSAGES[key] === lastError);

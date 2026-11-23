@@ -684,9 +684,9 @@ export async function resolveConflict(
   resolution: ConflictResolution,
 ): Promise<void> {
   const draft = await getDraft(db, draftLocalId);
-  if (draft === null || draft.remoteId === null) throw new ConflictResolutionError("Não há conflito para resolver neste rascunho.");
+  if (draft === null || draft.remoteId === null) throw new ConflictResolutionError("Não há conflito para resolver neste pedido.");
   const conflicted = (await listOutbox(db, draftLocalId)).find((op) => op.state === "conflict");
-  if (conflicted === undefined) throw new ConflictResolutionError("Não há conflito para resolver neste rascunho.");
+  if (conflicted === undefined) throw new ConflictResolutionError("Não há conflito para resolver neste pedido.");
   const server = (draft.serverSnapshot as RemoteOrder | null) ?? (await transport.getOrder(draft.remoteId));
 
   await db.transaction(async (tx) => {

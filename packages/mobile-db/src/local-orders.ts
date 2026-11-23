@@ -29,7 +29,10 @@ import { PENDING_CUSTOMER_MESSAGE, PendingCustomerOrderError, pendingCustomerBlo
  * Seller-facing wording of a draft held back because its customer is no longer available. It doubles as the marker the
  * screens use to label the state (`isCustomerUnavailableMessage`): no schema column is needed and the draft keeps its status machinery.
  */
-export const CUSTOMER_UNAVAILABLE_MESSAGE = "Cliente indisponível — revise o rascunho";
+export const CUSTOMER_UNAVAILABLE_MESSAGE = "Cliente indisponível — revise o pedido";
+
+/** The text earlier app versions stored for the same state; rows on devices may still carry it, so it keeps being recognized. */
+export const LEGACY_CUSTOMER_UNAVAILABLE_MESSAGE = "Cliente indisponível — revise o rascunho";
 
 /** Why a customer cannot receive the order (same vocabulary as the domain `customerOrderBlock` and the server `details.reason`). */
 export type CustomerBlockReason = "customer_unavailable" | "customer_inactive" | "customer_blocked" | "customer_without_seller" | "customer_pending";
@@ -61,7 +64,7 @@ export const PRODUCT_BLOCK_MESSAGES: Readonly<Record<ProductBlockReason, string>
 };
 
 /** Every stored text that marks a held draft: the per-cause ones plus the generic text written by earlier app versions. */
-export const CUSTOMER_HELD_MESSAGES: readonly string[] = [CUSTOMER_UNAVAILABLE_MESSAGE, ...Object.values(CUSTOMER_BLOCK_MESSAGES), ...Object.values(PRODUCT_BLOCK_MESSAGES)];
+export const CUSTOMER_HELD_MESSAGES: readonly string[] = [CUSTOMER_UNAVAILABLE_MESSAGE, LEGACY_CUSTOMER_UNAVAILABLE_MESSAGE, ...Object.values(CUSTOMER_BLOCK_MESSAGES), ...Object.values(PRODUCT_BLOCK_MESSAGES)];
 
 export function isCustomerUnavailableMessage(lastError: string | null): boolean {
   return lastError !== null && CUSTOMER_HELD_MESSAGES.includes(lastError);
@@ -598,7 +601,7 @@ export async function saveOrderDraft(db: SqlDatabase, env: OfflineEnv, input: Sa
     }
 
     const draft = await getDraft(tx, input.localId);
-    if (draft === null || draft.ownerAccountId !== input.ownerAccountId) throw new DraftNotEditableError("Rascunho não encontrado neste aparelho.");
+    if (draft === null || draft.ownerAccountId !== input.ownerAccountId) throw new DraftNotEditableError("Pedido não encontrado neste aparelho.");
     // A draft of another dataset (or a legacy one) is never edited: its commands would carry the old identity and be refused.
     if (!isOperationalEligibility(draft.eligibility) || !sameDataset(draft.dataset, confirmed)) {
       throw new DraftNotEditableError("Este pedido é de outro conjunto de dados e não pode ser alterado.");
@@ -618,7 +621,7 @@ export async function saveOrderDraft(db: SqlDatabase, env: OfflineEnv, input: Sa
     if (draft.remoteId === null) {
       const openCreate = ops.filter((op) => op.type === "order.create").at(-1);
       const laterReplaces = ops.filter((op) => op.type === "order.replace" && op.state === "pending" && op.attempts === 0);
-      if (create === undefined) throw new DraftNotEditableError("Rascunho sem comando de criação.");
+      if (create === undefined) throw new DraftNotEditableError("Pedido sem comando de criação.");
       if (openCreate !== undefined && openCreate.state === "pending" && openCreate.attempts === 0) {
         await setOpPayload(tx, env, openCreate, payload);
       } else if (createRejected) {

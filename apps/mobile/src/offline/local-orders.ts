@@ -173,7 +173,7 @@ export function createLocalOrdersPort(deps: {
       });
       const draft = await getDraft(db, id);
       onChanged();
-      if (draft === null) throw new Error("Rascunho não encontrado após salvar.");
+      if (draft === null) throw new Error("Pedido não encontrado após salvar.");
       return draft;
     },
     // Only normal work for the confirmed dataset: legacy / other-dataset orders are not resumable orders (they are not listed on any screen; they are only counted in the sync indicator's attention counter).

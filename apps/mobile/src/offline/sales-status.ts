@@ -1,4 +1,4 @@
-import { CUSTOMER_UNAVAILABLE_MESSAGE, isCustomerUnavailableMessage, PRODUCT_BLOCK_MESSAGES, type DraftRecord, type DraftStatus, type SalesGroup } from "@salesforce/mobile-db";
+import { CUSTOMER_UNAVAILABLE_MESSAGE, LEGACY_CUSTOMER_UNAVAILABLE_MESSAGE, isCustomerUnavailableMessage, PRODUCT_BLOCK_MESSAGES, type DraftRecord, type DraftStatus, type SalesGroup } from "@salesforce/mobile-db";
 
 /**
  * "Enviados" means accepted by the Force backend — NOT delivered to, confirmed by or invoiced in Sankhya. The device carries no
@@ -34,7 +34,7 @@ export function saleBadge(view: StatusView): SaleBadge {
   if (isProductBlocked(view)) return { label: "Produto indisponível", tone: "warning" };
   switch (status) {
     case "local_only":
-      return { label: "Rascunho", tone: "neutral" };
+      return { label: "Somente no aparelho", tone: "neutral" };
     case "pending_sync":
       return { label: remoteId === null ? "Aguardando envio" : "Alteração aguardando envio", tone: "warning" };
     case "syncing":
@@ -54,8 +54,8 @@ export function saleBadge(view: StatusView): SaleBadge {
 export function saleExplanation(draft: Pick<DraftRecord, "status" | "remoteId" | "lastError">): string {
   if (isCustomerUnavailable(draft)) {
     // The stored text is the cause itself (inativo, bloqueado, sem vendedor…); an old generic marker keeps the old wording.
-    const cause = draft.lastError === CUSTOMER_UNAVAILABLE_MESSAGE ? "O cadastro deste cliente mudou (inativo ou bloqueado)." : draft.lastError;
-    return `Cliente indisponível — revise o rascunho. ${cause} O pedido não será enviado enquanto isso não for resolvido. Nada foi alterado ou apagado.`;
+    const cause = (draft.lastError === CUSTOMER_UNAVAILABLE_MESSAGE || draft.lastError === LEGACY_CUSTOMER_UNAVAILABLE_MESSAGE) ? "O cadastro deste cliente mudou (inativo ou bloqueado)." : draft.lastError;
+    return `Cliente indisponível — revise o pedido. ${cause} O pedido não será enviado enquanto isso não for resolvido. Nada foi alterado ou apagado.`;
   }
   if (isProductBlocked(draft)) {
     return `${draft.lastError} — revise os itens do pedido. O pedido não será enviado enquanto isso não for resolvido. Nada foi alterado ou apagado.`;

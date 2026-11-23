@@ -92,7 +92,7 @@ export function ProfileScreen({ account, onOpenLocalOrders, onCheckUpdate, onSig
       </Section>
 
       {onOpenLocalOrders !== undefined && (
-        <Section title="Pedidos locais / Rascunhos">
+        <Section title="Pedidos neste aparelho">
           <Pressable style={styles.link} onPress={onOpenLocalOrders} accessibilityRole="button" accessibilityLabel="Ver pedidos salvos neste aparelho">
             <Text style={styles.linkText}>Ver pedidos salvos neste aparelho</Text>
             <Text style={styles.linkHint}>{sync.status.pending > 0 ? `${sync.status.pending} pendente(s)` : "›"}</Text>

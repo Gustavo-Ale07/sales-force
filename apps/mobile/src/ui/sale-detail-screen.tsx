@@ -208,7 +208,7 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
   function confirmDelete() {
     void (async () => {
       const confirmed = await modal.confirm({
-        title: "Excluir rascunho?",
+        title: tops !== null && isQuotationTop(effectiveTop, tops) ? "Excluir orçamento?" : "Excluir pedido?",
         message: "Este pedido será removido deste aparelho e não será enviado ao Force. Esta ação não pode ser desfeita.",
         confirmLabel: "Excluir",
         destructive: true,
