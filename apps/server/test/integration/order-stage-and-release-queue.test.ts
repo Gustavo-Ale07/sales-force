@@ -8,7 +8,7 @@ import { OrderErpStatusService, ORDER_STAGE_ON_DEMAND_REUSE_MS } from '../../src
 import { createLogger } from '../../src/observability/logger.js';
 import { createTestAccount, TEST_PASSWORD, TEST_ORIGIN } from '../helpers/auth.js';
 import { loginCookie } from '../helpers/auth-app.js';
-import { restrictedKeys, startCommercialApp, type CommercialApp, type Json } from '../helpers/commercial-app.js';
+import { restrictedKeys, startCommercialApp, type Json } from '../helpers/commercial-app.js';
 import { closeAllThenStop, startPostgres, type TestPostgres } from '../helpers/postgres.js';
 
 /**
