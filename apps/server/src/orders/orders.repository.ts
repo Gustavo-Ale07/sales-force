@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { account, erpCustomer, integrationOrderDryRun, integrationOutbox, salesOrder, salesOrderApproval, salesOrderErpStage, salesOrderItem, type AccountRole, type SalesOrderErpStageRow, type ApprovalLevel, type Database } from '@salesforce/db';
-import type { CustomerScope, OrderItem } from '@salesforce/domain';
+import type { CustomerScope, OrderItem, OrderStageCode } from '@salesforce/domain';
 import { and, asc, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { containsText, digitsOf, eqInt, fitsPgInt, inInts, inSellerCodes, offsetOf } from '../platform/sql.js';
 import { DATABASE } from '../platform/tokens.js';
@@ -36,6 +36,8 @@ export interface OrderListFilter {
   readonly productSearch?: string | undefined;
   /** Only these orders (still inside the scope). */
   readonly ids?: readonly string[] | undefined;
+  /** Stage following Sankhya, same classification as the list chip (see `stageCondition`). */
+  readonly stage?: OrderStageCode | undefined;
   readonly sort: 'updatedAt' | '-updatedAt' | 'draftNumber' | '-draftNumber';
 }
 
@@ -106,6 +108,20 @@ function productTextCondition(term: string | undefined): SQL | undefined {
 function matchingLinesFirst(codes: readonly number[] | undefined): SQL {
   const usable = (codes ?? []).filter(fitsPgInt);
   return usable.length === 0 ? sql`` : sql`(${inInts(salesOrderItem.productCode, usable)}) desc, `;
+}
+
+/**
+ * Stage filter, the same classification as the list chip (`erpStageOf`): the stored worker stage wins; `sent_to_force` and
+ * `send_error` are derived (queued / rejected, no stored stage, no ERP number); every other order (drafts, sent but never read)
+ * has no stage and matches none. Needs the `sales_order_erp_stage` left join.
+ */
+function stageCondition(stage: OrderStageCode | undefined): SQL | undefined {
+  if (stage === undefined) return undefined;
+  if (stage === 'sent_to_force' || stage === 'send_error') {
+    const status = stage === 'sent_to_force' ? 'queued' : 'rejected';
+    return sql`(${salesOrderErpStage.orderId} is null and ${salesOrder.erpNumber} is null and ${salesOrder.status} = ${status})`;
+  }
+  return sql`${salesOrderErpStage.stage} = ${stage}`;
 }
 
 function scopeCondition(scope: CustomerScope): SQL | undefined {
@@ -372,6 +388,7 @@ export class OrdersRepository {
       filter.to === undefined ? undefined : sql`${dateColumn} < (${filter.to}::date + 1)::timestamp at time zone ${zone}`,
       productCondition(filter.productCodes, filter.productMatch),
       productTextCondition(filter.productSearch),
+      stageCondition(filter.stage),
       searchCondition,
     );
     const previewFirst = matchingLinesFirst(filter.productCodes);
@@ -409,6 +426,7 @@ export class OrdersRepository {
         .select({ total: sql<number>`count(*)::int` })
         .from(salesOrder)
         .leftJoin(erpCustomer, eq(erpCustomer.code, salesOrder.customerCode))
+        .leftJoin(salesOrderErpStage, eq(salesOrderErpStage.orderId, salesOrder.id))
         .where(where),
     ]);
     return { rows, total: totals[0]?.total ?? 0 };

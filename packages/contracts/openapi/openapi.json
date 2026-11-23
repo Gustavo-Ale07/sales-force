@@ -1845,6 +1845,25 @@
             }
           },
           {
+            "name": "stage",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sent_to_force",
+                "send_error",
+                "quotation",
+                "received",
+                "in_review",
+                "financial_check",
+                "in_dispatch",
+                "in_invoicing",
+                "invoiced"
+              ]
+            }
+          },
+          {
             "name": "sort",
             "in": "query",
             "required": false,

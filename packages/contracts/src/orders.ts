@@ -130,6 +130,9 @@ export const MAX_ORDER_PRODUCT_FILTER = 20;
 /** Most order ids one list call may ask for (the device refreshing the ERP status of the orders it holds). */
 export const MAX_ORDER_IDS_FILTER = 100;
 
+/** Stage codes of the order following Sankhya (same list as the domain `ORDER_STAGE_CODES`; a test keeps them aligned). */
+export const OrderStageCodeSchema = z.enum(['sent_to_force', 'send_error', 'quotation', 'received', 'in_review', 'financial_check', 'in_dispatch', 'in_invoicing', 'invoiced']);
+
 export const OrdersQuerySchema = z.object({
   search: querySearch().optional(),
   status: OrderStatusSchema.optional(),
@@ -150,6 +153,12 @@ export const OrdersQuerySchema = z.object({
    * simply absent). Same list items, so the ERP status of the orders a device holds is read with it (owner ruling 2026-11-13).
    */
   ids: queryUuidList(MAX_ORDER_IDS_FILTER).optional(),
+  /**
+   * Stage following Sankhya, the same classification as the `erpStage` chip (read-only, additive). Orders read by the worker match
+   * their stored stage; `sent_to_force` (queued, no note yet) and `send_error` (rejected, no note) are derived from the order's own
+   * delivery state while no stage is stored. Drafts and orders with no known stage match no stage. `total` counts the filter.
+   */
+  stage: OrderStageCodeSchema.optional(),
   sort: OrderSortSchema.default('-updatedAt'),
   ...paginationQueryShape,
 });
@@ -249,7 +258,7 @@ export const OrderListItemSchema = named(
      */
     erpStage: z
       .object({
-        stage: z.enum(['sent_to_force', 'send_error', 'quotation', 'received', 'in_review', 'financial_check', 'in_dispatch', 'in_invoicing', 'invoiced']),
+        stage: OrderStageCodeSchema,
         label: z.string(),
         pendingSector: z.string().nullable(),
         nunota: z.number().int().nullable(),

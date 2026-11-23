@@ -1,7 +1,10 @@
+import { ORDER_STAGE_CODES } from '@salesforce/domain';
 import { describe, expect, it } from 'vitest';
 import {
   InstallationConfigurationSchema,
   OrderListItemSchema,
+  OrderStageCodeSchema,
+  OrdersQuerySchema,
   ReleaseQueueCountQuerySchema,
   ReleaseQueueCountResponseSchema,
   ReleaseQueueItemSchema,
@@ -96,6 +99,13 @@ describe('erpStage on the order list DTO', () => {
     expect(stageSchema.safeParse({ ...stage, checkedAt: null, readError: null }).success).toBe(true);
     expect(stageSchema.safeParse(null).success).toBe(true);
     expect(stageSchema.safeParse(undefined).success).toBe(true);
+  });
+
+  it('the contract stage codes equal the domain ORDER_STAGE_CODES; the orders query filters by them only', () => {
+    expect([...OrderStageCodeSchema.options].sort()).toEqual([...ORDER_STAGE_CODES].sort());
+    expect(OrdersQuerySchema.safeParse({ stage: 'in_review' }).success).toBe(true);
+    expect(OrdersQuerySchema.safeParse({}).success).toBe(true);
+    expect(OrdersQuerySchema.safeParse({ stage: 'draft' }).success).toBe(false);
   });
 
   it.each(['sent_to_force', 'send_error', 'quotation', 'received', 'in_review', 'financial_check', 'in_dispatch', 'in_invoicing', 'invoiced'])('accepts stage %s', (code) => {

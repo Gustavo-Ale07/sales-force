@@ -3227,6 +3227,7 @@ export interface operations {
                 productMatch?: components["schemas"]["OrderProductMatch"];
                 productSearch?: string;
                 ids?: string;
+                stage?: "sent_to_force" | "send_error" | "quotation" | "received" | "in_review" | "financial_check" | "in_dispatch" | "in_invoicing" | "invoiced";
                 sort?: components["schemas"]["OrderSort"];
                 page?: number;
                 pageSize?: number;
