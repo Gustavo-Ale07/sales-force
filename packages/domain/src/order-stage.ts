@@ -49,7 +49,7 @@ export interface OrderStageRules {
   readonly bothSectorsEvents: readonly number[];
 }
 
-/** Defaults of an installation that configures nothing: the PLAC survey values. Overridable through `erp.orderStage`. */
+/** Defaults of an installation that configures nothing: the values measured in the first installation survey. Overridable through `erp.orderStage`. */
 export const DEFAULT_ORDER_STAGE_RULES: OrderStageRules = {
   reviewEvents: [{ event: 44, cascadeSequence: 1 }, { event: 2 }],
   reviewSector: 'Pedidos',
