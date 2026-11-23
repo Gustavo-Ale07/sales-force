@@ -1,7 +1,7 @@
-import { Alert } from "react-native";
-import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, within } from "@testing-library/react-native";
 import { customer, fakeOrders, fakeProducts, pageOf, product } from "../test-doubles";
 import { NewOrderScreen, type NewOrderScreenProps } from "./new-order-screen";
+import { withModal } from "../test-render";
 import { fillMandatoryHeader } from "./fill-mandatory-header";
 
 // Same act()/FlatList timer hygiene as new-order-screen.test.tsx.
@@ -28,8 +28,11 @@ const repositories = {
 };
 
 function element(props: Partial<NewOrderScreenProps> = {}) {
-  return <NewOrderScreen repositories={repositories} onUnauthenticated={() => undefined} {...props} />;
+  return withModal(<NewOrderScreen repositories={repositories} onUnauthenticated={() => undefined} {...props} />);
 }
+
+/** The app modal's dialog is labelled with its title; buttons are scoped to it. */
+const dialog = (title: string) => within(screen.getByLabelText(title));
 
 const padaria = { code: 10, name: "Padaria Central" };
 const mercado = { code: 20, name: "Mercado Sul" };
@@ -40,10 +43,10 @@ describe("NewOrderScreen started from a customer sheet", () => {
     await render(element({ startRequest: { nonce: 1, customer: padaria }, onStartConsumed: consumed }));
     await settle();
     expect(consumed).toHaveBeenCalled();
-    // The customer is chosen, so the order opens on the negotiation step; one Avançar reaches the catalog.
+    // The customer is chosen, so the order opens on the negotiation step; one Próximo reaches the catalog.
     expect(screen.getByLabelText("Etapa 2 de 4: Negociação")).toBeTruthy();
     await fillMandatoryHeader();
-    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Próximo" }));
     expect(screen.getByText("Copo 200 ml")).toBeTruthy();
     expect(screen.getAllByText("Padaria Central").length).toBeGreaterThan(0);
     expect(screen.queryByText("Selecione o cliente")).toBeNull();
@@ -52,27 +55,23 @@ describe("NewOrderScreen started from a customer sheet", () => {
   async function withCartOf(startWith: typeof padaria) {
     const view = await render(element());
     await pressAndSettle(await screen.findByText(startWith.name));
-    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     await fillMandatoryHeader();
-    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Próximo" }));
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     expect(screen.getByRole("tab", { name: "Carrinho (1)" })).toBeTruthy();
     return view;
   }
 
   it("asks before replacing an order in progress for another customer, and keeps it on 'Continuar pedido atual'", async () => {
-    const alert = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
     const view = await withCartOf(padaria);
     await view.rerender(element({ startRequest: { nonce: 2, customer: mercado } }));
     await settle();
 
-    expect(alert).toHaveBeenCalledTimes(1);
-    const [title, message, buttons] = alert.mock.calls[0]!;
-    expect(title).toBe("Você já possui um pedido em andamento");
-    expect(message).toContain("Padaria Central");
-    expect(buttons?.map((button) => button.text)).toEqual(["Continuar pedido atual", "Iniciar novo pedido", "Cancelar"]);
+    const ask = dialog("Você já possui um pedido em andamento");
+    expect(ask.getByText(/Padaria Central/)).toBeTruthy();
+    for (const label of ["Continuar pedido atual", "Iniciar novo pedido", "Cancelar"]) expect(ask.getByRole("button", { name: label })).toBeTruthy();
 
-    await act(async () => buttons?.[0]?.onPress?.());
+    await pressAndSettle(ask.getByRole("button", { name: "Continuar pedido atual" }));
     await settle();
     // The cart and its customer are untouched.
     expect(screen.getAllByText("Padaria Central").length).toBeGreaterThan(0);
@@ -80,37 +79,31 @@ describe("NewOrderScreen started from a customer sheet", () => {
   });
 
   it("starts a fresh order for the new customer only after 'Iniciar novo pedido'", async () => {
-    const alert = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
     const view = await withCartOf(padaria);
     await view.rerender(element({ startRequest: { nonce: 2, customer: mercado } }));
     await settle();
-    const buttons = alert.mock.calls[0]![2]!;
-
-    await act(async () => buttons[1]?.onPress?.());
+    await pressAndSettle(dialog("Você já possui um pedido em andamento").getByRole("button", { name: "Iniciar novo pedido" }));
     await settle();
     expect(screen.getByText("Mercado Sul")).toBeTruthy();
     expect(screen.queryByRole("tab", { name: "Carrinho (1)" })).toBeNull();
   });
 
   it("does not ask when the order in progress is already for the same customer", async () => {
-    const alert = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
     const view = await withCartOf(padaria);
     await view.rerender(element({ startRequest: { nonce: 2, customer: padaria } }));
     await settle();
-    expect(alert).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText("Você já possui um pedido em andamento")).toBeNull();
     expect(screen.getByRole("tab", { name: "Carrinho (1)" })).toBeTruthy();
   });
 
   it("does not ask when there is a customer but no items yet", async () => {
-    const alert = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
     const view = await render(element());
     await pressAndSettle(await screen.findByText("Padaria Central"));
-    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     await fillMandatoryHeader();
-    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Próximo" }));
     await view.rerender(element({ startRequest: { nonce: 2, customer: mercado } }));
     await settle();
-    expect(alert).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText("Você já possui um pedido em andamento")).toBeNull();
     expect(screen.getByText("Mercado Sul")).toBeTruthy();
   });
 });
@@ -129,16 +122,14 @@ describe("NewOrderScreen started from a duplicated sale", () => {
   });
 
   it("never replaces an order in progress silently, even for the same customer", async () => {
-    const alert = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
     const view = await render(element());
     await pressAndSettle(await screen.findByText("Padaria Central"));
-    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     await fillMandatoryHeader();
-    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Próximo" }));
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await view.rerender(element({ startRequest: { nonce: 2, customer: padaria, lines: copy } }));
     await settle();
-    expect(alert).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("Você já possui um pedido em andamento")).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Carrinho (1)" })).toBeTruthy();
   });
 });

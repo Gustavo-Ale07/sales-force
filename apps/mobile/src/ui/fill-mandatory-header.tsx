@@ -9,7 +9,7 @@ async function press(element: unknown, delayMs = 60) {
 
 /**
  * Test helper for the Negociação step: negotiation type, freight and carrier are mandatory (owner ruling 2026-11-12),
- * so a test that walks the wizard picks them before "Avançar". Touches only what is still empty.
+ * so a test that walks the wizard picks them before "Próximo". Touches only what is still empty.
  */
 export async function fillMandatoryHeader(): Promise<void> {
   const negotiationChips = await screen.findAllByLabelText(/^Negociação /);

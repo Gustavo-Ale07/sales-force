@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-
 import type { CustomerRepository, ProductRepository } from "../data/ports";
 import { customer, fakeOrders, fakeProducts, orderDetail, orderItem, pageOf, product } from "../test-doubles";
 import { NewOrderScreen } from "./new-order-screen";
+import { withModal } from "../test-render";
 import { fillMandatoryHeader } from "./fill-mandatory-header";
 
 // See new-order-screen.test.tsx for why press/long-press are wrapped in an async act() with a real-timer delay,
@@ -16,12 +17,12 @@ async function pressAndSettle(element: unknown, delayMs = 100) {
   });
 }
 
-// The save button lives on the summary step: from the cart, "Avançar" gets there (already there when editing).
+// The save button lives on the summary step: from the cart, "Próximo" gets there (already there when editing).
 async function saveFromSummary(name: string) {
-  const next = screen.queryByRole("button", { name: "Avançar" });
+  const next = screen.queryByRole("button", { name: "Próximo" });
   if (next !== null) await pressAndSettle(next);
   // Moving between steps auto-saves a local draft, after which the same button reads "Salvar alterações".
-  const button = screen.queryByRole("button", { name }) ?? screen.getByRole("button", { name: name === "Salvar rascunho" ? "Salvar alterações" : "Salvar rascunho" });
+  const button = screen.queryByRole("button", { name }) ?? screen.getByRole("button", { name: name === "Salvar pedido" ? "Salvar alterações" : "Salvar pedido" });
   await pressAndSettle(button);
 }
 
@@ -46,11 +47,10 @@ async function setupCartWithTwoLines() {
       ]),
   });
   const orders = fakeOrders();
-  await render(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} />);
+  await render(withModal(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} />));
   await pressAndSettle(await screen.findByText("Padaria Central"));
-  await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
   await fillMandatoryHeader();
-  await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+  await pressAndSettle(screen.getByRole("button", { name: "Próximo" }));
   await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
   await pressAndSettle(screen.getByRole("button", { name: "Adicionar Prato 20cm ao carrinho" }));
   await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (2)" }));
@@ -86,11 +86,10 @@ describe("NewOrderScreen discounts (mass and group apply, DISC-1/MOB-4)", () => 
         products: { productWithoutPrice: { orderable: true } },
       }),
     });
-    await render(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} />);
+    await render(withModal(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} />));
     await pressAndSettle(await screen.findByText("Padaria Central"));
-    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     await fillMandatoryHeader();
-    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Próximo" }));
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Sem preço ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (2)" }));
@@ -160,11 +159,10 @@ describe("NewOrderScreen catalog-group discount (MOB-4a: automatic bucketing by 
         ]),
     });
     const orders = fakeOrders();
-    await render(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} />);
+    await render(withModal(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} />));
     await pressAndSettle(await screen.findByText("Padaria Central"));
-    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     await fillMandatoryHeader();
-    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Próximo" }));
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Prato 20cm ao carrinho" }));
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 300 ml ao carrinho" }));
@@ -206,11 +204,10 @@ describe("NewOrderScreen catalog-group discount (MOB-4a: automatic bucketing by 
         products: { productWithoutPrice: { orderable: true } },
       }),
     });
-    await render(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} />);
+    await render(withModal(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} />));
     await pressAndSettle(await screen.findByText("Padaria Central"));
-    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     await fillMandatoryHeader();
-    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Próximo" }));
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo sem preço ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (2)" }));
@@ -240,14 +237,13 @@ describe("NewOrderScreen catalog-group discount (MOB-4a: automatic bucketing by 
         product(code, { description: "Copo 200 ml", groupCode: 30, groupName: "Copos", listPrice: { state: "priced", unitPrice: "10.00", tableCode: 1, versionId: 1 } }),
     });
     const orders = fakeOrders({ create: async () => saved });
-    await render(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} />);
+    await render(withModal(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} />));
     await pressAndSettle(await screen.findByText("Padaria Central"));
-    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     await fillMandatoryHeader();
-    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Próximo" }));
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
-    await saveFromSummary("Salvar rascunho");
+    await saveFromSummary("Salvar pedido");
     await pressAndSettle(screen.getByRole("button", { name: "Editar pedido" }));
     await pressAndSettle(screen.getByRole("button", { name: "Editar produtos" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
@@ -274,14 +270,13 @@ describe("NewOrderScreen catalog-group discount (MOB-4a: automatic bucketing by 
       },
     });
     const orders = fakeOrders({ create: async () => saved });
-    await render(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} />);
+    await render(withModal(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} />));
     await pressAndSettle(await screen.findByText("Padaria Central"));
-    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     await fillMandatoryHeader();
-    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Próximo" }));
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
-    await saveFromSummary("Salvar rascunho");
+    await saveFromSummary("Salvar pedido");
     await pressAndSettle(screen.getByRole("button", { name: "Editar pedido" }));
     await pressAndSettle(screen.getByRole("button", { name: "Editar produtos" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));

@@ -3,6 +3,7 @@ import { ApiRequestError } from "../data/api";
 import type { CreateOrderRequest, CustomerRepository, OrderDetail, OrderRepository, ProductRepository } from "../data/ports";
 import { customer, fakeOrders, fakeProducts, networkError, orderDetail, orderEntryConfiguration, pageOf, product, unauthenticatedError } from "../test-doubles";
 import { NewOrderScreen } from "./new-order-screen";
+import { withModal } from "../test-render";
 import { fillMandatoryHeader } from "./fill-mandatory-header";
 
 // fireEvent.press is synchronous and only wraps the event dispatch itself in act(); a handler's own async
@@ -19,12 +20,12 @@ async function pressAndSettle(element: unknown, delayMs = 100) {
   });
 }
 
-// The save button lives on the summary step: from the cart, "Avançar" gets there (already there when editing).
+// The save button lives on the summary step: from the cart, "Próximo" gets there (already there when editing).
 async function saveFromSummary(name: string) {
-  const next = screen.queryByRole("button", { name: "Avançar" });
+  const next = screen.queryByRole("button", { name: "Próximo" });
   if (next !== null) await pressAndSettle(next);
   // Moving between steps auto-saves a local draft, after which the same button reads "Salvar alterações".
-  const button = screen.queryByRole("button", { name }) ?? screen.getByRole("button", { name: name === "Salvar rascunho" ? "Salvar alterações" : "Salvar rascunho" });
+  const button = screen.queryByRole("button", { name }) ?? screen.getByRole("button", { name: name === "Salvar pedido" ? "Salvar alterações" : "Salvar pedido" });
   await pressAndSettle(button);
 }
 
@@ -54,16 +55,15 @@ async function setup(overrides: Overrides = {}) {
     products: overrides.products ?? fakeProducts({ list: async () => pageOf([product(5, { description: "Copo 200 ml", listPrice: { state: "priced", unitPrice: "10.00", tableCode: 1, versionId: 1 } })]) }),
     orders: overrides.orders ?? fakeOrders(),
   };
-  const rendered = await render(<NewOrderScreen repositories={repositories} onUnauthenticated={onUnauthenticated} />);
+  const rendered = await render(withModal(<NewOrderScreen repositories={repositories} onUnauthenticated={onUnauthenticated} />));
   return { onUnauthenticated, repositories, ...rendered };
 }
 
 async function pickCustomerAndOpenProducts(overrides: Overrides = {}) {
   await setup(overrides);
   await pressAndSettle(await screen.findByText("Padaria Central"));
-  await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
   await fillMandatoryHeader();
-  await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+  await pressAndSettle(screen.getByRole("button", { name: "Próximo" }));
   expect(screen.getByText("Copo 200 ml")).toBeTruthy();
 }
 
@@ -167,9 +167,9 @@ describe("NewOrderScreen", () => {
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
     fireEvent.changeText(await screen.findByLabelText("Desconto de Copo 200 ml"), "10");
     await waitFor(() => expect(screen.getAllByText("R$ 9,00")).toHaveLength(3));
-    await saveFromSummary("Salvar rascunho");
+    await saveFromSummary("Salvar pedido");
 
-    expect(screen.getByText("Rascunho salvo")).toBeTruthy();
+    expect(screen.getByText("Pedido salvo")).toBeTruthy();
     expect(screen.getByText("Pedido nº 42 · Padaria Central")).toBeTruthy();
     expect(captured).toEqual({
       carrierCode: 7,
@@ -197,13 +197,13 @@ describe("NewOrderScreen", () => {
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
 
-    await saveFromSummary("Salvar rascunho");
+    await saveFromSummary("Salvar pedido");
     expect(capturedIds).toHaveLength(1);
-    expect(screen.getByText(/Sem conexão com o servidor/)).toBeTruthy();
+    expect(screen.getByText("Sem conexão")).toBeTruthy();
 
     // Retry with the exact same payload (e.g. the request actually landed server-side but the response was lost):
     // must reuse the same clientRequestId so the server can replay instead of rejecting a duplicate.
-    await saveFromSummary("Salvar rascunho");
+    await saveFromSummary("Salvar pedido");
     expect(capturedIds).toHaveLength(2);
     expect(capturedIds[1]).toBe(capturedIds[0]);
 
@@ -214,10 +214,10 @@ describe("NewOrderScreen", () => {
     fireEvent.changeText(await screen.findByLabelText("Desconto de Copo 200 ml"), "10");
     await waitFor(() => expect(screen.getAllByText("R$ 9,00")).toHaveLength(3));
     shouldFail = false;
-    await saveFromSummary("Salvar rascunho");
+    await saveFromSummary("Salvar pedido");
     expect(capturedIds).toHaveLength(3);
     expect(capturedIds[2]).not.toBe(capturedIds[0]);
-    expect(screen.getByText("Rascunho salvo")).toBeTruthy();
+    expect(screen.getByText("Pedido salvo")).toBeTruthy();
   });
 
   it("shows the per-item issues of a rejected save", async () => {
@@ -234,9 +234,9 @@ describe("NewOrderScreen", () => {
     await pickCustomerAndOpenProducts({ orders });
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
-    await saveFromSummary("Salvar rascunho");
+    await saveFromSummary("Salvar pedido");
 
-    expect(screen.getByText("Corrija os itens antes de salvar")).toBeTruthy();
+    expect(screen.getByText("Corrija os itens")).toBeTruthy();
     expect(screen.getByText("Item 1: Desconto inválido.")).toBeTruthy();
   });
 
@@ -249,9 +249,9 @@ describe("NewOrderScreen", () => {
     await pickCustomerAndOpenProducts({ orders });
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
-    await saveFromSummary("Salvar rascunho");
+    await saveFromSummary("Salvar pedido");
 
-    expect(screen.getByText(/Sem conexão com o servidor/)).toBeTruthy();
+    expect(screen.getByText("Sem conexão")).toBeTruthy();
   });
 
   it("sends the dataset the editor loaded under, not a later one", async () => {
@@ -270,7 +270,7 @@ describe("NewOrderScreen", () => {
     await pickCustomerAndOpenProducts({ orders });
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
-    await saveFromSummary("Salvar rascunho");
+    await saveFromSummary("Salvar pedido");
     expect(captured?.expectedDataset).toEqual({ environment: "production", datasetId: "mirror-real-001" });
   });
 
@@ -280,9 +280,9 @@ describe("NewOrderScreen", () => {
     await pickCustomerAndOpenProducts({ orders });
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
-    await saveFromSummary("Salvar rascunho");
+    await saveFromSummary("Salvar pedido");
     expect(create).not.toHaveBeenCalled();
-    expect(screen.getByText(/Conecte-se à internet para criar pedidos/)).toBeTruthy();
+    expect(screen.getByText(/Conecte-se e sincronize para criar pedidos/)).toBeTruthy();
   });
 
   it("explains a 409 dataset_mismatch in pt-BR", async () => {
@@ -294,8 +294,8 @@ describe("NewOrderScreen", () => {
     await pickCustomerAndOpenProducts({ orders });
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
-    await saveFromSummary("Salvar rascunho");
-    expect(screen.getByText("Os dados do servidor mudaram")).toBeTruthy();
+    await saveFromSummary("Salvar pedido");
+    expect(screen.getByText("Dados desatualizados")).toBeTruthy();
   });
 
   it("blocks saving and explains why when a no-price line is not orderable in this installation", async () => {
@@ -307,18 +307,17 @@ describe("NewOrderScreen", () => {
     });
     await setup({ products, orders });
     await pressAndSettle(await screen.findByText("Padaria Central"));
-    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     await fillMandatoryHeader();
-    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Próximo" }));
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Sem preço ao carrinho" }));
     await pressAndSettle(await screen.findByRole("tab", { name: "Carrinho (1)" }));
 
-    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Próximo" }));
 
     // The wizard refuses to reach the summary (where saving lives) and explains why.
     expect(screen.getAllByText(/item\(ns\) sem preço não podem ser salvos nesta instalação/).length).toBeGreaterThan(0);
     expect(screen.getByLabelText("Etapa 3 de 4: Produtos")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Salvar rascunho" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Salvar pedido" })).toBeNull();
   });
 
   it("expires the session when the entry configuration read answers 401", async () => {

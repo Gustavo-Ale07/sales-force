@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import type { CustomerRepository, ProductRepository } from "../data/ports";
 import { customer, fakeOrders, fakeProducts, orderDetail, orderItem, pageOf, product } from "../test-doubles";
 import { NewOrderScreen } from "./new-order-screen";
+import { withModal } from "../test-render";
 import { fillMandatoryHeader } from "./fill-mandatory-header";
 
 // Catalog-group discount edge cases (MOB-4a) split out of new-order-screen-discounts.test.tsx to keep each file's
@@ -14,12 +15,12 @@ async function pressAndSettle(element: unknown, delayMs = 100) {
   });
 }
 
-// The save button lives on the summary step: from the cart, "Avançar" gets there (already there when editing).
+// The save button lives on the summary step: from the cart, "Próximo" gets there (already there when editing).
 async function saveFromSummary(name: string) {
-  const next = screen.queryByRole("button", { name: "Avançar" });
+  const next = screen.queryByRole("button", { name: "Próximo" });
   if (next !== null) await pressAndSettle(next);
   // Moving between steps auto-saves a local draft, after which the same button reads "Salvar alterações".
-  const button = screen.queryByRole("button", { name }) ?? screen.getByRole("button", { name: name === "Salvar rascunho" ? "Salvar alterações" : "Salvar rascunho" });
+  const button = screen.queryByRole("button", { name }) ?? screen.getByRole("button", { name: name === "Salvar pedido" ? "Salvar alterações" : "Salvar pedido" });
   await pressAndSettle(button);
 }
 
@@ -43,16 +44,15 @@ async function reopenDraftAndOpenGroupSheet(codes: number[], products: ProductRe
   });
   const customers: CustomerRepository = { list: async () => pageOf([customer(10, { name: "Padaria Central" })]) };
   const orders = fakeOrders({ create: async () => saved });
-  await render(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} />);
+  await render(withModal(<NewOrderScreen repositories={{ customers, products, orders }} onUnauthenticated={jest.fn()} />));
   await pressAndSettle(await screen.findByText("Padaria Central"));
-  await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
   await fillMandatoryHeader();
-  await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+  await pressAndSettle(screen.getByRole("button", { name: "Próximo" }));
   for (const code of codes) {
     await pressAndSettle(await screen.findByRole("button", { name: `Adicionar Produto ${code} ao carrinho` }));
   }
   await pressAndSettle(screen.getByRole("tab", { name: `Carrinho (${codes.length})` }));
-  await saveFromSummary("Salvar rascunho");
+  await saveFromSummary("Salvar pedido");
   await pressAndSettle(screen.getByRole("button", { name: "Editar pedido" }));
   await pressAndSettle(screen.getByRole("button", { name: "Editar produtos" }));
   await pressAndSettle(screen.getByRole("tab", { name: `Carrinho (${codes.length})` }));
@@ -104,11 +104,10 @@ describe("NewOrderScreen catalog-group discount edge cases (MOB-4a)", () => {
     const products: ProductRepository = fakeProducts({
       list: async () => pageOf([product(5, { description: "Produto avulso", groupCode: null, groupName: null, listPrice: priced("10.00") })]),
     });
-    await render(<NewOrderScreen repositories={{ customers, products, orders: fakeOrders() }} onUnauthenticated={jest.fn()} />);
+    await render(withModal(<NewOrderScreen repositories={{ customers, products, orders: fakeOrders() }} onUnauthenticated={jest.fn()} />));
     await pressAndSettle(await screen.findByText("Padaria Central"));
-    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
     await fillMandatoryHeader();
-    await pressAndSettle(screen.getByRole("button", { name: "Avançar" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Próximo" }));
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Produto avulso ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
     await pressAndSettle(screen.getByRole("button", { name: "Desconto por grupo" }));

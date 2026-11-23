@@ -1,6 +1,7 @@
-import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, within } from "@testing-library/react-native";
 import { customer, draftRecord, fakeLocalOrders, fakeOrders, fakeProducts, pageOf, product } from "../test-doubles";
 import { NewOrderScreen } from "./new-order-screen";
+import { withModal } from "../test-render";
 import { fillMandatoryHeader } from "./fill-mandatory-header";
 
 async function pressAndSettle(element: unknown, delayMs = 100) {
@@ -22,25 +23,24 @@ async function open(localOrders = fakeLocalOrders()) {
     products: fakeProducts({ list: async () => pageOf([copo]) }),
     orders: fakeOrders(),
   };
-  await render(<NewOrderScreen repositories={repositories} onUnauthenticated={() => undefined} localOrders={localOrders} />);
+  await render(withModal(<NewOrderScreen repositories={repositories} onUnauthenticated={() => undefined} localOrders={localOrders} />));
 }
 
-const next = () => screen.getByRole("button", { name: "Avançar" });
+const next = () => screen.getByRole("button", { name: "Próximo" });
 
 describe("NewOrderScreen as a 4-step wizard", () => {
   it("starts on step 1 of 4 and cannot advance without a customer", async () => {
     await open();
     expect(screen.getByLabelText("Etapa 1 de 4: Cliente")).toBeTruthy();
     await screen.findByText("Padaria Central");
+    expect(next().props.accessibilityState.disabled).toBe(true);
     await pressAndSettle(next());
-    expect(screen.getByText("Selecione um cliente para continuar.")).toBeTruthy();
     expect(screen.getByLabelText("Etapa 1 de 4: Cliente")).toBeTruthy();
   });
 
   it("walks Cliente → Negociação → Produtos and refuses an empty cart with a clear message", async () => {
     await open();
     await pressAndSettle(await screen.findByText("Padaria Central"));
-    await pressAndSettle(next());
     expect(screen.getByLabelText("Etapa 2 de 4: Negociação")).toBeTruthy();
     await fillMandatoryHeader();
     await pressAndSettle(next());
@@ -53,7 +53,6 @@ describe("NewOrderScreen as a 4-step wizard", () => {
   it("goes back with Voltar, one step at a time", async () => {
     await open();
     await pressAndSettle(await screen.findByText("Padaria Central"));
-    await pressAndSettle(next());
     await pressAndSettle(screen.getByRole("button", { name: "Voltar" }));
     expect(screen.getByLabelText("Etapa 1 de 4: Cliente")).toBeTruthy();
   });
@@ -61,7 +60,6 @@ describe("NewOrderScreen as a 4-step wizard", () => {
   async function toSummary(localOrders = fakeLocalOrders()) {
     await open(localOrders);
     await pressAndSettle(await screen.findByText("Padaria Central"));
-    await pressAndSettle(next());
     await fillMandatoryHeader();
     await pressAndSettle(next());
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
@@ -90,7 +88,6 @@ describe("NewOrderScreen as a 4-step wizard", () => {
   it("summary shows each discounted item's percentage and deduction in R$, and the discounts total", async () => {
     await open();
     await pressAndSettle(await screen.findByText("Padaria Central"));
-    await pressAndSettle(next());
     await fillMandatoryHeader();
     await pressAndSettle(next());
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
@@ -108,7 +105,6 @@ describe("NewOrderScreen as a 4-step wizard", () => {
     const save = jest.fn(async () => draftRecord());
     await open(fakeLocalOrders([], { save: save as never }));
     await pressAndSettle(await screen.findByText("Padaria Central"));
-    await pressAndSettle(next());
     await act(async () => {
       fireEvent.changeText(screen.getByLabelText("Observações do pedido"), "Entregar pela manhã");
     });
@@ -116,7 +112,7 @@ describe("NewOrderScreen as a 4-step wizard", () => {
     await pressAndSettle(next());
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(next());
-    await pressAndSettle(screen.getByRole("button", { name: /^Salvar (rascunho|alterações)$/ }));
+    await pressAndSettle(screen.getByRole("button", { name: /^Salvar (pedido|orçamento|alterações)$/ }));
     expect(save).toHaveBeenCalledWith(expect.objectContaining({ notes: "Entregar pela manhã" }));
   });
 
@@ -126,12 +122,88 @@ describe("NewOrderScreen as a 4-step wizard", () => {
     expect(save).toHaveBeenCalled();
   });
 
+  it("picking a customer advances to Negociação by itself, with Próximo locked until the negotiation is complete", async () => {
+    await open();
+    await pressAndSettle(await screen.findByText("Padaria Central"));
+    expect(screen.getByLabelText("Etapa 2 de 4: Negociação")).toBeTruthy();
+    // Nothing is preselected: every mandatory field is highlighted and Próximo is off.
+    expect(screen.getByText(/Tipo de negociação.*obrigatório/)).toBeTruthy();
+    expect(screen.getByText(/Frete.*obrigatório/)).toBeTruthy();
+    expect(screen.getByText(/Transportadora.*obrigatório/)).toBeTruthy();
+    expect(next().props.accessibilityState.disabled).toBe(true);
+    await pressAndSettle(next());
+    expect(screen.getByLabelText("Etapa 2 de 4: Negociação")).toBeTruthy();
+
+    await fillMandatoryHeader();
+    expect(screen.queryByText(/obrigatório/)).toBeNull();
+    expect(next().props.accessibilityState.disabled).toBe(false);
+    await pressAndSettle(next());
+    expect(screen.getByLabelText("Etapa 3 de 4: Produtos")).toBeTruthy();
+  });
+
+  it("shows the quantity of lines as a badge on the cart tab", async () => {
+    await open();
+    await pressAndSettle(await screen.findByText("Padaria Central"));
+    await fillMandatoryHeader();
+    await pressAndSettle(next());
+    expect(screen.getByRole("tab", { name: "Carrinho" })).toBeTruthy();
+    await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
+    const tab = screen.getByRole("tab", { name: "Carrinho (1)" });
+    expect(within(tab).getByText("1")).toBeTruthy();
+  });
+
+  it("advances to Negociação again after confirming a customer change that clears a full cart", async () => {
+    const repositories = {
+      customers: { list: async () => pageOf([customer(10, { name: "Padaria Central" }), customer(20, { name: "Mercado Sul" })]) },
+      products: fakeProducts({ list: async () => pageOf([copo]) }),
+      orders: fakeOrders(),
+    };
+    await render(withModal(<NewOrderScreen repositories={repositories} onUnauthenticated={() => undefined} localOrders={fakeLocalOrders()} />));
+    await pressAndSettle(await screen.findByText("Padaria Central"));
+    await fillMandatoryHeader();
+    await pressAndSettle(next());
+    await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
+    await pressAndSettle(next());
+    await pressAndSettle(screen.getByRole("button", { name: "Editar cliente" }));
+    expect(screen.getByLabelText("Etapa 1 de 4: Cliente")).toBeTruthy();
+
+    // Another customer with items in the cart: nothing changes until the modal is confirmed.
+    await pressAndSettle(await screen.findByText("Mercado Sul"));
+    expect(screen.getByLabelText("Etapa 1 de 4: Cliente")).toBeTruthy();
+    const dialog = within(screen.getByLabelText("Trocar de cliente?"));
+    await pressAndSettle(dialog.getByRole("button", { name: "Continuar" }));
+
+    expect(screen.getByLabelText("Etapa 2 de 4: Negociação")).toBeTruthy();
+    expect(screen.getAllByText("Mercado Sul").length).toBeGreaterThan(0);
+    // The cart was emptied by the change.
+    await fillMandatoryHeader();
+    await pressAndSettle(next());
+    expect(screen.queryByRole("tab", { name: "Carrinho (1)" })).toBeNull();
+  });
+
+  it("keeps the cart and the customer step when the customer change is cancelled", async () => {
+    const repositories = {
+      customers: { list: async () => pageOf([customer(10, { name: "Padaria Central" }), customer(20, { name: "Mercado Sul" })]) },
+      products: fakeProducts({ list: async () => pageOf([copo]) }),
+      orders: fakeOrders(),
+    };
+    await render(withModal(<NewOrderScreen repositories={repositories} onUnauthenticated={() => undefined} localOrders={fakeLocalOrders()} />));
+    await pressAndSettle(await screen.findByText("Padaria Central"));
+    await fillMandatoryHeader();
+    await pressAndSettle(next());
+    await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
+    await pressAndSettle(next());
+    await pressAndSettle(screen.getByRole("button", { name: "Editar cliente" }));
+    await pressAndSettle(await screen.findByText("Mercado Sul"));
+    await pressAndSettle(within(screen.getByLabelText("Trocar de cliente?")).getByRole("button", { name: "Cancelar" }));
+    expect(screen.getByLabelText("Etapa 1 de 4: Cliente")).toBeTruthy();
+    expect(screen.getByLabelText("Cliente selecionado: Padaria Central")).toBeTruthy();
+  });
+
   it("does not auto-save while there is nothing to save yet", async () => {
     const save = jest.fn(async () => draftRecord());
     await open(fakeLocalOrders([], { save: save as never }));
     await pressAndSettle(await screen.findByText("Padaria Central"));
-    await pressAndSettle(next());
-    await pressAndSettle(next());
     expect(save).not.toHaveBeenCalled();
   });
 });
