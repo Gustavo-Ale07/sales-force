@@ -162,20 +162,38 @@ describe('restricted data never reaches the document (P-20)', () => {
   });
 });
 
-describe('estimated IPI in the document (D-D)', () => {
-  it('shows IPI estimado and the total with IPI only when the source carries them', () => {
+describe('title without a number', () => {
+  it('quote and order without draft number print just the noun, never a placeholder', () => {
+    const quote = renderOrderHtml(toOrderDocument({ ...source, draftNumber: null, kind: 'quote' }));
+    const order = renderOrderHtml(toOrderDocument({ ...source, draftNumber: null, kind: 'order' }));
+    expect(quote).not.toContain('sem número ainda');
+    expect(order).not.toContain('sem número ainda');
+    expect(quote).toContain('<title>Orçamento</title>');
+    expect(order).toContain('<title>Pedido</title>');
+  });
+
+  it('with a number the title still carries it', () => {
+    const quote = renderOrderHtml(toOrderDocument({ ...source, draftNumber: 42, kind: 'quote' }));
+    expect(quote).toContain('<title>Orçamento 42</title>');
+  });
+});
+
+describe('IPI and totals labels in the document (D-D)', () => {
+  it('shows IPI and Total com IPI only when the source carries them, without the word estimado', () => {
     const plain = renderOrderHtml(toOrderDocument(source));
-    expect(plain).not.toContain('IPI estimado');
-    const withIpi = renderOrderHtml(
-      toOrderDocument({ ...source, ipi: { ipiEstimated: '1.60', grandTotalEstimated: '18.03', isPartial: false } }),
-    );
-    expect(withIpi).toContain('IPI estimado: R$');
-    expect(withIpi).toContain('Total estimado (com IPI)');
-    expect(withIpi).not.toContain('Total parcial estimado (com IPI)');
-    const partial = renderOrderHtml(
-      toOrderDocument({ ...source, ipi: { ipiEstimated: '1.60', grandTotalEstimated: '18.03', isPartial: true } }),
-    );
-    expect(partial).toContain('Total parcial estimado (com IPI)');
+    expect(plain).not.toContain('IPI:');
+    expect(plain).not.toContain('Total com IPI');
+    expect(plain).toContain('<div class="total">Total: R$ 13.890,29</div>');
+    expect(plain).not.toContain('estimado');
+    for (const isPartial of [false, true]) {
+      const html = renderOrderHtml(
+        toOrderDocument({ ...source, ipi: { ipiEstimated: '1.60', grandTotalEstimated: '18.03', isPartial } }),
+      );
+      expect(html).toContain('<div class="total">IPI: R$ 1,60</div>');
+      expect(html).toContain('<div class="total">Total com IPI: R$ 18,03</div>');
+      expect(html).not.toContain('estimado');
+      expect(html).not.toContain('calculado no Sankhya');
+    }
   });
 });
 
@@ -222,7 +240,8 @@ describe('D-W template (J4)', () => {
     expect(html).toContain('28 DDL');
     expect(html).toContain('IPI %');
     expect(html).toContain('5%');
-    expect(html).toContain('IPI estimado');
+    expect(html).toContain('IPI: R$');
+    expect(html).not.toContain('estimado');
     expect(html).toContain('Observações');
   });
 

@@ -15,7 +15,7 @@ exports[`D-W template (J4) > never carries restricted fields and matches the lay
 <section><h2>Itens</h2>
 <table><thead><tr><th>Item</th><th>Código</th><th>Descrição</th><th>Un.</th><th class="n">Quantidade</th><th class="n">Preço unit.</th><th class="n">Desconto</th><th class="n">IPI %</th><th class="n">Total</th></tr></thead>
 <tbody><tr><td>1</td><td>10</td><td>Cabo flexível 2,5mm</td><td>RL</td><td class="n">1.250,5</td><td class="n">R$ 12,3456</td><td class="n">10%</td><td class="n">5%</td><td class="n">R$ 13.890,29</td></tr><tr><td>2</td><td>11</td><td>Tomada</td><td>UN</td><td class="n">3</td><td class="n">Sem preço</td><td class="n">—</td><td class="n">—</td><td class="n">Sem preço</td></tr></tbody></table>
-<div class="total">Total estimado: R$ 13.890,29</div><div class="hint">Valor parcial: 1 item(ns) sem preço.</div><div class="total">IPI estimado: R$ 1,60</div><div class="total">Total parcial estimado (com IPI): R$ 18,03</div><div class="hint">IPI estimado a partir das alíquotas disponíveis (apenas nos itens com alíquota); o valor final é calculado no Sankhya.</div>
+<div class="total">Total: R$ 13.890,29</div><div class="hint">Valor parcial: 1 item(ns) sem preço.</div><div class="total">IPI: R$ 1,60</div><div class="total">Total com IPI: R$ 18,03</div>
 </section>
 <section><h2>Observações</h2><div class="notes">Entregar pela manhã</div></section>
 <footer>Emitido pelo Sales Force em 04/11/2026 14:05 · Maria Vendedora</footer>

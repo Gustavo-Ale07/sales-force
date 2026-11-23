@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   countOutbox,
   CUSTOMER_BLOCK_MESSAGES,
+  CUSTOMER_HELD_MESSAGES,
   CUSTOMER_UNAVAILABLE_MESSAGE,
+  LEGACY_CUSTOMER_UNAVAILABLE_MESSAGE,
   customerBlockMessage,
   discardLocalDraft,
   getDraft,
@@ -125,9 +127,25 @@ describe("customer availability guard (local, indicative)", () => {
   });
 
   it("says it in the seller's words and does not look like a technical error", () => {
-    expect(CUSTOMER_UNAVAILABLE_MESSAGE).toBe("Cliente indisponível — revise o rascunho");
+    expect(CUSTOMER_UNAVAILABLE_MESSAGE).toBe("Cliente indisponível — revise o pedido");
     expect(isCustomerUnavailableMessage("Sem conexão")).toBe(false);
     expect(isCustomerUnavailableMessage(null)).toBe(false);
+  });
+
+  it("the text stored by earlier app versions is still recognized, and the word rascunho is gone from the current one", () => {
+    expect(LEGACY_CUSTOMER_UNAVAILABLE_MESSAGE).toBe("Cliente indisponível — revise o rascunho");
+    expect(LEGACY_CUSTOMER_UNAVAILABLE_MESSAGE).not.toBe(CUSTOMER_UNAVAILABLE_MESSAGE);
+    expect(CUSTOMER_UNAVAILABLE_MESSAGE).not.toContain("rascunho");
+    expect(isCustomerUnavailableMessage(LEGACY_CUSTOMER_UNAVAILABLE_MESSAGE)).toBe(true);
+    expect(isCustomerUnavailableMessage(CUSTOMER_UNAVAILABLE_MESSAGE)).toBe(true);
+    expect(CUSTOMER_HELD_MESSAGES).toContain(LEGACY_CUSTOMER_UNAVAILABLE_MESSAGE);
+  });
+
+  it("a draft held with the legacy stored text is still released/held by the same helpers", async () => {
+    await cache([{ code: 77, name: "C", active: true, blocked: false }]);
+    const id = await saveOrderDraft(db, env, input(77));
+    await db.execute("UPDATE local_order_draft SET status = 'sync_error', last_error = ? WHERE local_id = ?", [LEGACY_CUSTOMER_UNAVAILABLE_MESSAGE, id]);
+    expect(isCustomerUnavailableMessage((await getDraft(db, id))?.lastError ?? null)).toBe(true);
   });
 
   it("sends normally when the customer is active, or not in the cache (unknown is not ineligible; the server decides)", async () => {

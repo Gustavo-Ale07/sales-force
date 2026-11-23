@@ -650,6 +650,19 @@ describe("sync manager", () => {
     const phases: string[] = [];
     manager.subscribe((s) => phases.push(s.phase));
     await manager.sync("manual");
-    expect(phases).toEqual(["syncing", "idle"]);
+    // A full sync publishes one "syncing" status per real step event; phases are only syncing, then one final idle.
+    expect(phases[0]).toBe("syncing");
+    expect(phases.at(-1)).toBe("idle");
+    expect(phases.slice(0, -1).every((p) => p === "syncing")).toBe(true);
+    expect(phases.filter((p) => p === "idle")).toHaveLength(1);
+  });
+
+  it("a push-only run publishes exactly syncing then idle, with steps null", async () => {
+    const manager = createSyncManager({ db, env, transport: server, source, ownerAccountId: OWNER });
+    const seen: { phase: string; steps: unknown }[] = [];
+    manager.subscribe((s) => seen.push({ phase: s.phase, steps: s.steps ?? null }));
+    await manager.sync("after_save", { pull: false });
+    expect(seen.map((s) => s.phase)).toEqual(["syncing", "idle"]);
+    expect(seen.every((s) => s.steps === null)).toBe(true);
   });
 });
