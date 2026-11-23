@@ -87,7 +87,10 @@ describe('ExternalAccountService.createExternalAccount', () => {
     const dump = JSON.stringify(rows);
     expect(dump).toContain(id);
     expect(dump).toContain('operator-test');
-    for (const secret of [SANKHYA_PASSWORD, EXTERNAL_ID, 'Passphrase']) expect(dump).not.toContain(secret);
+    // The ids in the rows are random UUIDs: their hex digits can contain the short numeric EXTERNAL_ID by chance (about 1 run in
+    // several hundred), so the secret scan runs on the dump with every UUID masked. Nothing else is excluded.
+    const masked = dump.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '<uuid>');
+    for (const secret of [SANKHYA_PASSWORD, EXTERNAL_ID, 'Passphrase']) expect(masked).not.toContain(secret);
   });
 
   it('creates an admin without a seller link and refuses a seller code for it', async () => {
