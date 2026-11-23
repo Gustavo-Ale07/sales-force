@@ -16,7 +16,7 @@ import {
 
 const base: OrderStageFacts = {
   nunota: 2506,
-  codtipoper: 1001,
+  codtipoper: 4242,
   statusnota: 'A',
   pendente: 'S',
   ordemcarga: 0,
