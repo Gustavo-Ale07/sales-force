@@ -22,13 +22,14 @@ import type { Carrier, CustomerListItem, OrderDetail, OrderEntryConfiguration, O
 import { formatBrl } from "../lib/money";
 import type { LocalOrdersPort } from "../offline/local-orders";
 import { newClientRequestId } from "../lib/uuid";
+import { FOLLOW_BUDGET_MS, followDelay, orderIdentity } from "../offline/order-number";
 import { useAppModal } from "./app-modal";
 import { useErrorPopup } from "./use-error-popup";
 import { OrderHeaderOptions } from "./order-header-options";
 import { NOTES_MAX, NotesField, SummaryBlock, SummaryRow, WIZARD_STEPS, WizardFooter, WizardProgress, type WizardStep } from "./order-wizard-parts";
 import { isQuotationTop, topLabel } from "../data/order-header";
 import { describeListPrice } from "../lib/money";
-import { colors, spacing } from "../theme";
+import { colors, control, radius, spacing } from "../theme";
 import { Icon } from "./icons";
 import { CartView, OrderTotals } from "./cart-view";
 import { Thumb } from "./product-views";
@@ -69,6 +70,12 @@ export interface NewOrderScreenProps {
   readonly onExit?: () => void;
   /** Filled with the wizard's handle (Back press, save-and-close on tab change); cleared on unmount. */
   readonly controlRef?: MutableRefObject<NewOrderControl | null>;
+  /** Post-confirmation "Ver pedido": opens the read-only detail of the confirmed order in the sales list. */
+  readonly onViewOrder?: (localId: string) => void;
+  /** Post-confirmation "Voltar ao início": goes to the Início tab (the shell applies its tab reset rules). */
+  readonly onGoHome?: () => void;
+  /** The order's number or stage was refreshed while the screen was open or as it was left: the list reloads. */
+  readonly onOrderUpdated?: () => void;
 }
 
 /** What the shell can ask of the wizard. */
@@ -97,6 +104,9 @@ export function NewOrderScreen({
   onStartConsumed,
   onExit,
   controlRef,
+  onViewOrder,
+  onGoHome,
+  onOrderUpdated,
 }: NewOrderScreenProps) {
   const [step, setStep] = useState<Step>("customer");
   /** Step 3 shows either the catalog or the cart as its own view (never both, never a permanent panel). */
@@ -134,6 +144,61 @@ export function NewOrderScreen({
   const [savedLocal, setSavedLocal] = useState<DraftRecord | null>(null);
   /** What "Confirmar" concluded for the order shown on the final screen (`null` = not confirmed). */
   const [confirmResult, setConfirmResult] = useState<ConfirmOutcome | null>(null);
+  /** The follow-up budget ran out without a number: the screen shows the neutral "aguardando envio" state (the queue finishes it). */
+  const [followExpired, setFollowExpired] = useState(false);
+  const orderUpdatedRef = useRef(onOrderUpdated);
+  orderUpdatedRef.current = onOrderUpdated;
+  // After "Confirmar" the screen keeps asking for the Sankhya number (growing intervals, bounded) and shows it as soon as it exists.
+  // Leaving the screen stops the polling and asks once more, so the list already shows the number or the new stage.
+  const followId = savedLocal?.localId ?? null;
+  const following = followId !== null && confirmResult?.kind === "sending";
+  useEffect(() => {
+    const read = localOrders?.readOrderNumber;
+    if (!following || followId === null || localOrders === undefined || read === undefined) return undefined;
+    let active = true;
+    let found = false;
+    let attempt = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const startedAt = Date.now();
+    const schedule = () => {
+      const delay = followDelay(attempt);
+      attempt += 1;
+      if (Date.now() - startedAt + delay > FOLLOW_BUDGET_MS) {
+        setFollowExpired(true);
+        return;
+      }
+      timer = setTimeout(() => void step(), delay);
+    };
+    const step = async () => {
+      let number: number | null = null;
+      try {
+        number = await read.call(localOrders, followId);
+      } catch {
+        // a failed read is just "not yet": the next attempt or the queue completes it
+      }
+      if (!active) return;
+      if (number !== null) {
+        found = true;
+        setConfirmResult({ kind: "sent", erpNumber: number });
+        orderUpdatedRef.current?.();
+        return;
+      }
+      schedule();
+    };
+    schedule();
+    return () => {
+      active = false;
+      if (timer !== null) clearTimeout(timer);
+      if (!found) {
+        void read
+          .call(localOrders, followId)
+          .then((number) => {
+            if (number !== null) orderUpdatedRef.current?.();
+          })
+          .catch(() => undefined);
+      }
+    };
+  }, [following, followId, localOrders]);
   /** The overlay "Enviando ao Sankhya" while the confirm waits for the answer. */
   const [sendingToErp, setSendingToErp] = useState(false);
   /** Synchronous guard against a double tap on "Confirmar" (state updates are too late for the second tap). */
@@ -741,6 +806,7 @@ export function NewOrderScreen({
           errors.reportCode("order_queued", {}, undefined, { title: `${kindTitle} não enviado ao Sankhya`, message: `O ${kindWord} ficou salvo neste aparelho e será enviado assim que possível.` });
         }
       }
+      setFollowExpired(false);
       setConfirmResult(outcome);
       setSavedLocal(latest);
     } finally {
@@ -801,10 +867,11 @@ export function NewOrderScreen({
 
   if (savedLocal !== null) {
     const result = confirmResult;
+    const waiting = result?.kind === "sending" && !followExpired;
     const title =
       result?.kind === "sent"
         ? `${kindTitle} enviado`
-        : result?.kind === "sending"
+        : waiting
           ? "Enviando ao Sankhya"
           : result?.kind === "awaiting_approval"
             ? "Aguardando aprovação"
@@ -815,15 +882,28 @@ export function NewOrderScreen({
       <View style={styles.center}>
         <Text style={styles.successTitle}>{title}</Text>
         <Text style={styles.successMeta}>{savedLocal.customerName}</Text>
-        {result?.kind === "sent" && <Text style={styles.successTotal}>{`Nº ${result.erpNumber}`}</Text>}
-        <Pressable style={styles.primaryButton} onPress={resetOrder} accessibilityRole="button" accessibilityLabel="Novo pedido">
-          <Text style={styles.primaryButtonText}>Novo pedido</Text>
-        </Pressable>
-        {!readOnly && (
-          <Pressable style={styles.secondaryButton} onPress={() => { setSavedLocal(null); setConfirmResult(null); }} accessibilityRole="button" accessibilityLabel="Editar pedido">
-            <Text style={styles.secondaryButtonText}>Editar pedido</Text>
+        {result?.kind === "sent" && <Text style={styles.successTotal}>{orderIdentity(result.erpNumber, isQuotation)}</Text>}
+        {waiting && <ActivityIndicator color={colors.navy} accessibilityLabel="Enviando ao Sankhya" />}
+        <View style={styles.actions}>
+          {onViewOrder !== undefined && (
+            <Pressable style={styles.primaryButton} onPress={() => onViewOrder(savedLocal.localId)} accessibilityRole="button" accessibilityLabel="Ver pedido">
+              <Text style={styles.primaryButtonText}>Ver pedido</Text>
+            </Pressable>
+          )}
+          <Pressable style={styles.secondaryButton} onPress={resetOrder} accessibilityRole="button" accessibilityLabel="Novo pedido">
+            <Text style={styles.secondaryButtonText}>Novo pedido</Text>
           </Pressable>
-        )}
+          {onGoHome !== undefined && (
+            <Pressable style={styles.secondaryButton} onPress={onGoHome} accessibilityRole="button" accessibilityLabel="Voltar ao início">
+              <Text style={styles.secondaryButtonText}>Voltar ao início</Text>
+            </Pressable>
+          )}
+          {!readOnly && (
+            <Pressable style={styles.secondaryButton} onPress={() => { setSavedLocal(null); setConfirmResult(null); }} accessibilityRole="button" accessibilityLabel="Editar pedido">
+              <Text style={styles.secondaryButtonText}>Editar pedido</Text>
+            </Pressable>
+          )}
+        </View>
       </View>
     );
   }
@@ -832,20 +912,22 @@ export function NewOrderScreen({
     return (
       <View style={styles.center}>
         <Text style={styles.successTitle}>{editingOrder !== null ? "Alterações salvas" : `${kindTitle} salvo`}</Text>
-        <Text style={styles.successMeta}>{`Pedido nº ${savedOrder.draftNumber} · ${savedOrder.customerName}`}</Text>
+        <Text style={styles.successMeta}>{savedOrder.customerName}</Text>
         <Text style={styles.successTotal}>{formatBrl(savedOrder.estimatedTotal) ?? "—"}</Text>
         {savedOrder.isPartial && <Text style={styles.partialNotice}>Total parcial: há itens sem preço neste pedido.</Text>}
-        <Pressable style={styles.primaryButton} onPress={resetOrder} accessibilityRole="button" accessibilityLabel="Novo pedido">
-          <Text style={styles.primaryButtonText}>Novo pedido</Text>
-        </Pressable>
-        <Pressable
-          style={styles.secondaryButton}
-          onPress={() => editSavedOrder(savedOrder)}
-          accessibilityRole="button"
-          accessibilityLabel="Editar pedido"
-        >
-          <Text style={styles.secondaryButtonText}>Editar pedido</Text>
-        </Pressable>
+        <View style={styles.actions}>
+          <Pressable style={styles.primaryButton} onPress={resetOrder} accessibilityRole="button" accessibilityLabel="Novo pedido">
+            <Text style={styles.primaryButtonText}>Novo pedido</Text>
+          </Pressable>
+          <Pressable
+            style={styles.secondaryButton}
+            onPress={() => editSavedOrder(savedOrder)}
+            accessibilityRole="button"
+            accessibilityLabel="Editar pedido"
+          >
+            <Text style={styles.secondaryButtonText}>Editar pedido</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -1201,25 +1283,28 @@ const styles = StyleSheet.create({
   failureTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
   failureMessage: { fontSize: 13, color: colors.text },
   reloadLink: { color: colors.navy, fontWeight: "700", fontSize: 13, marginTop: spacing.xs },
+  // The buttons fill the width of the screen (never shrink to the text) and share the app's radius and height tokens.
+  actions: { alignSelf: "stretch", gap: spacing.sm, marginTop: spacing.md },
   primaryButton: {
     backgroundColor: colors.navy,
-    borderRadius: 8,
-    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 48,
+    minHeight: control.heightLarge,
   },
   primaryButtonDisabled: { opacity: 0.5 },
-  primaryButtonText: { color: colors.onNavy, fontSize: 16, fontWeight: "700" },
+  primaryButtonText: { color: colors.onNavy, fontSize: 16, fontWeight: "700", textAlign: "center" },
   secondaryButton: {
-    borderRadius: 8,
-    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
     borderColor: colors.navy,
-    minHeight: 48,
+    minHeight: control.heightLarge,
   },
   secondaryButtonText: { color: colors.navy, fontSize: 15, fontWeight: "700" },
   successTitle: { fontSize: 20, fontWeight: "800", color: colors.text },

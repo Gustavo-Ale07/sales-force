@@ -73,6 +73,10 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   const [visited, setVisited] = useState<ReadonlySet<MainTab>>(() => new Set<MainTab>(["home"]));
   const [salesView, setSalesView] = useState<SalesView>("orders");
   const [salesReset, setSalesReset] = useState(0);
+  /** Bumped when an order's number or stage was refreshed behind the list (post-confirmation follow-up). */
+  const [salesRefresh, setSalesRefresh] = useState(0);
+  /** "Ver pedido" on the post-confirmation screen: the sales list opens this order's detail once per `nonce`. */
+  const [openSaleRequest, setOpenSaleRequest] = useState<{ localId: string; nonce: number } | null>(null);
   /** Bumped when a tab is left: its screen remounts on its initial screen (nothing of it is kept). */
   const [epochs, setEpochs] = useState<Readonly<Record<MainTab, number>>>({ home: 0, customers: 0, sales: 0, catalog: 0, profile: 0 });
   const [saleDetailOpen, setSaleDetailOpen] = useState(false);
@@ -414,6 +418,14 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
                         setSalesView("orders");
                         setSalesReset((n) => n + 1);
                       },
+                      onViewOrder: (localId: string) => {
+                        // The read-only detail of the confirmed order, inside the sales list.
+                        setOpenSaleRequest({ localId, nonce: Date.now() });
+                        setSalesView("orders");
+                        setSalesReset((n) => n + 1);
+                      },
+                      onGoHome: () => selectTab("home"),
+                      onOrderUpdated: () => setSalesRefresh((n) => n + 1),
                     })}
                 startRequest={startRequest}
                 onStartConsumed={clearStart}
@@ -437,6 +449,8 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
                   onDuplicate={duplicateSale}
                   onSyncNow={syncNow}
                   resetSignal={salesReset}
+                  refreshSignal={salesRefresh}
+                  openRequest={openSaleRequest}
                 />
               </View>
             )}

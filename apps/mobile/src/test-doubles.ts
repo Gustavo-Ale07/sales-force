@@ -223,6 +223,7 @@ export function draftRecord(overrides: Partial<DraftRecord> = {}): DraftRecord {
     sendNextAttemptAt: null,
     sendRequestedAt: null,
     erpStage: null,
+    erpNumber: null,
     ...overrides,
   };
 }

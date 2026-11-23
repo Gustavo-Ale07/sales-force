@@ -4,9 +4,10 @@ import { useInsets } from "./use-insets";
 import type { SyncStatus } from "@salesforce/mobile-db";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import { describeConnection, describeSyncAge, describeSyncChip, describeSyncStatus, type SyncTone } from "../offline/sync-status-text";
-import { colors, control, radius, spacing } from "../theme";
+import { colors, control, spacing } from "../theme";
 import { useAppModal } from "./app-modal";
 import { Icon } from "./icons";
+import { RefreshArrows } from "./refresh-arrows";
 import { SyncIcon } from "./sync-icon";
 
 const TONE_COLOR: Record<SyncTone, string> = {
@@ -39,8 +40,9 @@ export interface SyncViewProps {
 }
 
 /**
- * Icon-only header indicator (no text): a line cloud like the bottom-bar icons with a mark whose SHAPE says the state (never color alone):
- * up to date = check, syncing = spinning ring (still when the system reduces motion), waiting orders = count, offline = dash, failure = "!".
+ * Icon-only header indicator (no text): white circular refresh arrows on the navy header with a small corner dot whose SHAPE says the state
+ * (never color alone): up to date = green circle with check, syncing = the arrows spin (still when the system reduces motion), waiting orders =
+ * amber pill with the count, offline = hollow ring with a dash, failure = red rounded square with "!".
  * The spoken label carries the full wording. 44 x 44 touch target.
  */
 export function SyncStatusChip({ status, connectivity, onPress }: Pick<SyncViewProps, "status" | "connectivity"> & { onPress: () => void }) {
@@ -48,23 +50,32 @@ export function SyncStatusChip({ status, connectivity, onPress }: Pick<SyncViewP
   const syncing = status.phase === "syncing";
   const color = TONE_COLOR[tone];
   const waiting = status.pending > 0 && (tone === "pending" || tone === "offline");
+  const markKind = syncing ? "busy" : waiting ? "count" : tone;
   return (
     <Pressable style={styles.chip} onPress={onPress} accessibilityRole="button" accessibilityLabel={`Status de sincronização: ${text}`}>
-      <View style={styles.cloudBox}>
-        <Icon name="cloud" color={colors.navy} size={26} />
-        <View testID={`sync-mark-${syncing ? "busy" : waiting ? "count" : tone}`} style={[styles.mark, !syncing && { backgroundColor: color }]}>
-          {syncing ? (
-            <SyncIcon tone="busy" syncing color={colors.warning} size={14} />
-          ) : tone === "ok" ? (
-            <Icon name="check" color={colors.onNavy} size={11} />
-          ) : waiting ? (
-            <Text style={styles.markCount}>{status.pending > 9 ? "9+" : String(status.pending)}</Text>
-          ) : tone === "offline" ? (
-            <View style={styles.markDash} />
-          ) : (
-            <Icon name="alert" color={colors.onNavy} size={11} />
-          )}
-        </View>
+      <View style={styles.glyph}>
+        <RefreshArrows testID={syncing ? "sync-icon-spinner" : "sync-arrows"} color={colors.onNavy} size={24} spinning={syncing} />
+        {!syncing && (
+          <View
+            testID={`sync-mark-${markKind}`}
+            style={[
+              styles.mark,
+              waiting ? styles.markPill : tone === "error" ? styles.markSquare : tone === "offline" ? styles.markHollow : null,
+              tone === "offline" && !waiting ? { borderColor: color } : { backgroundColor: color },
+            ]}
+          >
+            {waiting ? (
+              <Text style={styles.markCount}>{status.pending > 9 ? "9+" : String(status.pending)}</Text>
+            ) : tone === "ok" ? (
+              <Icon name="check" color={colors.onNavy} size={9} />
+            ) : tone === "offline" ? (
+              <View style={[styles.markDash, { backgroundColor: color }]} />
+            ) : (
+              <Icon name="alert" color={colors.onNavy} size={9} />
+            )}
+          </View>
+        )}
+        {syncing && <View testID="sync-mark-busy" style={styles.markBusy} />}
       </View>
     </Pressable>
   );
@@ -206,10 +217,15 @@ export function HeaderSyncStatus(view: SyncViewProps) {
 
 const styles = StyleSheet.create({
   chip: { minWidth: control.height, minHeight: control.height, alignItems: "center", justifyContent: "center" },
-  cloudBox: { width: 36, height: 32, borderRadius: radius.md, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
-  mark: { position: "absolute", right: -4, bottom: -4, minWidth: 16, height: 16, borderRadius: 8, borderWidth: 1.5, borderColor: colors.navy, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", paddingHorizontal: 2 },
-  markCount: { color: colors.onNavy, fontSize: 10, fontWeight: "800" },
-  markDash: { width: 7, height: 2, borderRadius: 1, backgroundColor: colors.onNavy },
+  glyph: { width: 28, height: 28, alignItems: "center", justifyContent: "center" },
+  // Small state dot on the corner of the white arrows; its SHAPE (circle / pill / rounded square / hollow ring) says the state, not only the color.
+  mark: { position: "absolute", right: -3, bottom: -3, width: 14, height: 14, borderRadius: 7, borderWidth: 1.5, borderColor: colors.navy, alignItems: "center", justifyContent: "center" },
+  markPill: { width: undefined, minWidth: 16, paddingHorizontal: 2, borderRadius: 8 },
+  markSquare: { borderRadius: 3 },
+  markHollow: { backgroundColor: colors.navy, borderColor: colors.warning },
+  markBusy: { position: "absolute", width: 0, height: 0 },
+  markCount: { color: colors.onNavy, fontSize: 9, fontWeight: "800" },
+  markDash: { width: 6, height: 2, borderRadius: 1 },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, gap: spacing.md },
   grabber: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border },

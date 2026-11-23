@@ -10,7 +10,7 @@ let clock: number;
 let seq: number;
 const env: OfflineEnv = { now: () => new Date(clock), newId: () => `id-${String(++seq).padStart(4, "0")}` };
 
-async function draft(customerCode: number, customerName: string, status: DraftStatus, extra: { at?: string; owner?: string; remoteNumber?: number; sentToSankhya?: boolean } = {}): Promise<string> {
+async function draft(customerCode: number, customerName: string, status: DraftStatus, extra: { at?: string; owner?: string; remoteNumber?: number; sankhyaNumber?: number; sentToSankhya?: boolean } = {}): Promise<string> {
   clock = Date.parse(extra.at ?? "2026-09-30T12:00:00.000Z");
   const id = await saveOrderDraft(db, env, {
     ownerAccountId: extra.owner ?? OWNER,
@@ -21,9 +21,10 @@ async function draft(customerCode: number, customerName: string, status: DraftSt
     items: [{ productCode: 1, description: "P", unit: "UN", quantity: "1", discountPercent: "0", priceJson: "{}", groupCode: null, groupName: null }],
     loadedDataset: REAL,
   });
-  await db.execute("UPDATE local_order_draft SET status = ?, remote_draft_number = ?, remote_id = ?, send_state = ? WHERE local_id = ?", [
+  await db.execute("UPDATE local_order_draft SET status = ?, remote_draft_number = ?, erp_number = ?, remote_id = ?, send_state = ? WHERE local_id = ?", [
     status,
     extra.remoteNumber ?? null,
+    extra.sankhyaNumber ?? null,
     extra.remoteNumber === undefined ? null : `r-${id}`,
     extra.sentToSankhya === true || (status === "synced" && extra.sentToSankhya !== false) ? "submitted" : null,
     id,
@@ -96,13 +97,14 @@ describe("queryDrafts — filters", () => {
 });
 
 describe("queryDrafts — text search", () => {
-  it("matches customer name (case-insensitive), customer code and Force order number; never fuzzy", async () => {
-    await draft(101, "Padaria Central", "synced", { remoteNumber: 42 });
+  it("matches customer name (case-insensitive), customer code and Sankhya order number (never the internal Force number); never fuzzy", async () => {
+    await draft(101, "Padaria Central", "synced", { remoteNumber: 7, sankhyaNumber: 42 });
     await draft(202, "Mercado Sul", "pending_sync");
     const by = async (text: string) => (await queryDrafts(db, { ownerAccountId: OWNER, text }, page)).rows.map((r) => r.customerName);
     expect(await by("padaria")).toEqual(["Padaria Central"]);
     expect(await by("202")).toEqual(["Mercado Sul"]);
     expect(await by("42")).toEqual(["Padaria Central"]);
+    expect(await by("7")).toEqual([]);
     expect(await by("zzz")).toEqual([]);
     expect(await by("Pa%")).toEqual([]);
   });

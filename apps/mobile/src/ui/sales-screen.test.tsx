@@ -25,7 +25,7 @@ const ana = draftRecord({ localId: "a", customerCode: 1, customerName: "Ana Merc
 const bia = draftRecord({ localId: "b", customerCode: 2, customerName: "Bia Padaria", status: "sync_error", lastError: "Cliente bloqueado." });
 const caio = draftRecord({ localId: "c", customerCode: 3, customerName: "Caio Atacado", status: "conflict" });
 const dora = draftRecord({ localId: "d", customerCode: 4, customerName: "Dora Bar", status: "needs_review", priceReview: [{ productCode: 9, description: "Copo", cachedUnitPrice: "1.5", serverUnitPrice: "2", serverPriceJson: "{}" }] });
-const eva = draftRecord({ localId: "e", customerCode: 5, customerName: "Eva Empório", status: "synced", remoteId: "r-e", remoteVersion: 1, remoteDraftNumber: 77, estimatedTotal: "300.00", sendState: "submitted", sendCode: "sent" });
+const eva = draftRecord({ localId: "e", customerCode: 5, customerName: "Eva Empório", status: "synced", remoteId: "r-e", remoteVersion: 1, remoteDraftNumber: 7, erpNumber: 77, estimatedTotal: "300.00", sendState: "submitted", sendCode: "sent" });
 const rascunho = draftRecord({ localId: "f", customerCode: 6, customerName: "Fábio Loja", status: "local_only" });
 
 const noop = () => undefined;
@@ -97,6 +97,7 @@ describe("SalesScreen — groups", () => {
     expect(screen.queryByText("Ana Mercearia")).toBeNull();
     expect(screen.getByText("Enviado ao Sankhya")).toBeTruthy();
     expect(screen.getByText(/Pedido nº 77/)).toBeTruthy();
+    expect(screen.queryByText(/Force nº|nº 7$/)).toBeNull();
     expect(screen.getByText("R$ 300,00")).toBeTruthy();
     expect(screen.queryByText(/ERP/)).toBeNull();
   });

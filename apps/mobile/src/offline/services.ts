@@ -95,6 +95,7 @@ export function createOfflineServices(deps: {
           transport,
           ownerAccountId: account.id,
           confirmOrder: (localId) => (sync.confirmOrder !== undefined ? sync.confirmOrder(localId) : Promise.resolve({ kind: "queued" as const })),
+          ...(sync.readOrderNumber === undefined ? {} : { readOrderNumber: (localId: string) => sync.readOrderNumber?.(localId) ?? Promise.resolve(null) }),
           duplicateAsOrder: (id, request) => deps.remote.orders.duplicateAsOrder(id, request),
           onChanged: () => {
             // Counters only. Delivery is triggered by the sync hook when the device is online, so an offline save

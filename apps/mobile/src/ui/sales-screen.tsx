@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { SalesGroup, SyncStatus } from "@salesforce/mobile-db";
 import type { ConnectivityState } from "../connectivity/connectivity";
@@ -6,6 +6,7 @@ import type { CustomerRepository, OrderRepository, PageRequest } from "../data/p
 import { formatBrl } from "../lib/money";
 import type { LocalOrdersPort } from "../offline/local-orders";
 import { EMPTY_SALES_FILTERS, type SalesFilters, type SalesRow, type SalesSummary } from "../offline/sales";
+import { erpNumberOfDraft, isQuotationDraft, orderIdentity } from "../offline/order-number";
 import { saleActions, saleBadge } from "../offline/sales-status";
 import { colors, control, radius, spacing } from "../theme";
 import { Icon } from "./icons";
@@ -27,7 +28,7 @@ export function isEditableSale(draft: SalesRow["draft"]): boolean {
 }
 
 export function describeSaleMeta(draft: SalesRow["draft"]): string {
-  const number = draft.remoteDraftNumber !== null ? `Pedido nº ${draft.remoteDraftNumber}` : "Sem número ainda";
+  const number = orderIdentity(erpNumberOfDraft(draft), isQuotationDraft(draft));
   return `${number} · ${draft.itemCount} ${draft.itemCount === 1 ? "item" : "itens"} · ${formatDateTime(draft.createdAt)}`;
 }
 
@@ -83,6 +84,10 @@ export interface SalesScreenProps {
   readonly onSyncNow: () => void;
   /** Changes whenever the seller taps the "Minhas vendas" segment: an open detail closes and the list shows again. */
   readonly resetSignal?: number;
+  /** Changes when an order's number or stage was refreshed behind the list: the list reloads. */
+  readonly refreshSignal?: number;
+  /** Opens the read-only detail of this order once per `nonce` ("Ver pedido" after confirming). */
+  readonly openRequest?: { readonly localId: string; readonly nonce: number } | null;
   /** Tells the shell whether a sale's detail is open (Android Back closes it first). */
   readonly onDetailChange?: (open: boolean) => void;
 }
@@ -109,7 +114,7 @@ function describeSummary(summary: SalesSummary | null, group: SalesGroup): strin
  * backend) and "Enviados" (accepted by the Force backend — NOT the ERP). Everything is read from the local database,
  * so the whole screen works offline.
  */
-export function SalesScreen({ localOrders, customers, orders, orderPdf, syncStatus, connectivity, onUnauthenticated, onNewSale, onContinue, onDuplicate, onSyncNow, resetSignal = 0, onDetailChange }: SalesScreenProps) {
+export function SalesScreen({ localOrders, customers, orders, orderPdf, syncStatus, connectivity, onUnauthenticated, onNewSale, onContinue, onDuplicate, onSyncNow, resetSignal = 0, refreshSignal = 0, openRequest = null, onDetailChange }: SalesScreenProps) {
   const [filters, setFilters] = useState<SalesFilters>({ group: "unsent", ...EMPTY_SALES_FILTERS });
   const [search, setSearch] = useState("");
   const [summary, setSummary] = useState<SalesSummary | null>(null);
@@ -120,10 +125,16 @@ export function SalesScreen({ localOrders, customers, orders, orderPdf, syncStat
   useEffect(() => {
     onDetailChange?.(openId !== null);
   }, [openId, onDetailChange]);
+  const handledRequest = useRef<number | null>(null);
+  useEffect(() => {
+    if (openRequest === null || handledRequest.current === openRequest.nonce) return;
+    handledRequest.current = openRequest.nonce;
+    setOpenId(openRequest.localId);
+  }, [openRequest, setOpenId]);
   const [changes, setChanges] = useState(0);
   const filtersKey = JSON.stringify(filters);
   // Any sync movement or local action refreshes the list and the counters without polling.
-  const tick = `${changes}:${syncStatus.phase}:${syncStatus.pending}:${syncStatus.needsAttention}:${syncStatus.lastSyncedAt ?? ""}`;
+  const tick = `${changes}:${refreshSignal}:${syncStatus.phase}:${syncStatus.pending}:${syncStatus.needsAttention}:${syncStatus.lastSyncedAt ?? ""}`;
   const active = countActiveSalesFilters(filters);
 
   useEffect(() => {

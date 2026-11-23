@@ -37,6 +37,12 @@ async function sentOrderIds(db: SqlExecutor, ownerAccountId: string): Promise<st
   return rows.map((row) => String(row.remote_id));
 }
 
+/** The Sankhya number never changes once assigned: only a known number is written (an unknown one never clears a known one). */
+async function storeErpNumber(tx: SqlExecutor, ownerAccountId: string, remoteId: string, erpNumber: number | null): Promise<void> {
+  if (erpNumber === null) return;
+  await tx.execute("UPDATE local_order_draft SET erp_number = ? WHERE owner_account_id = ? AND remote_id = ?", [erpNumber, ownerAccountId, remoteId]);
+}
+
 /**
  * Reads the ERP status of every order of this account that exists on the server, in chunks, and stores it. An order the server
  * does not return (outside the scope now) loses its stored status. A failed read THROWS (the caller reports it) and keeps what was
@@ -60,6 +66,7 @@ export async function refreshOrderErpStatuses(db: SqlDatabase, env: OfflineEnv, 
         } else {
           const { stage, ...status } = found;
           await setMeta(tx, keyOf(id), JSON.stringify(status), now);
+          await storeErpNumber(tx, ownerAccountId, id, status.erpNumber ?? stage?.nunota ?? null);
           // Only a stage the server sent replaces the stored one; without it the last known stage stays (offline-safe, old servers).
           if (stage !== undefined && stage !== null) {
             const { stage: code, ...rest } = stage;
@@ -81,6 +88,7 @@ export async function refreshOneOrderErpStatus(db: SqlDatabase, env: OfflineEnv,
   const { stage, ...status } = answered;
   await db.transaction(async (tx) => {
     await setMeta(tx, keyOf(remoteId), JSON.stringify(status), now);
+    await storeErpNumber(tx, ownerAccountId, remoteId, status.erpNumber ?? stage?.nunota ?? null);
     if (stage !== undefined && stage !== null) {
       const { stage: code, ...rest } = stage;
       await tx.execute("UPDATE local_order_draft SET erp_stage = ?, erp_stage_json = ? WHERE owner_account_id = ? AND remote_id = ?", [code, JSON.stringify(rest), ownerAccountId, remoteId]);

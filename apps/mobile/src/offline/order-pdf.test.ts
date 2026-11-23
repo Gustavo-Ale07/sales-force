@@ -21,7 +21,7 @@ describe("orderDocumentOf", () => {
 
   it("maps the local order with decimal quantities, totals from the domain and a Sankhya-worded state", () => {
     const model = orderDocumentOf(draft, [line(), noPrice()]);
-    expect(model.draftNumber).toBe(42);
+    expect(model.draftNumber).toBeNull();
     expect(model.erpNumber).toBeNull();
     expect(model.items[0]).toMatchObject({ quantity: "1.2345", unitListPrice: "10", discountPercent: "10", productDescription: "Cabo <flexível> 2,5mm" });
     expect(model.items[1]).toMatchObject({ unitListPrice: null, estimatedLineTotal: null, quantity: "2" });
@@ -48,7 +48,7 @@ describe("orderDocumentOf", () => {
     expect(html).toContain("Cabo &lt;flexível&gt; 2,5mm");
     expect(html).not.toContain("<flexível>");
     expect(html).toContain("1,2345");
-    expect(html).toContain("Pedido Force nº 42");
+    expect(html).not.toContain("Force nº");
     expect(html).toContain("Entregar cedo");
   });
 });
@@ -120,7 +120,7 @@ describe("shareOrderPdf", () => {
     const calls: string[] = [];
     const port: OrderPdfPort = { sharePdf: async (html, name) => void calls.push(`${name}:${html.length > 100}`) };
     await expect(shareOrderPdf(port, draftRecord({ remoteDraftNumber: 7 }), [line()])).resolves.toEqual({ ok: true });
-    expect(calls).toEqual(["pedido-7:true"]);
+    expect(calls).toEqual(["pedido:true"]);
   });
 
   it("refuses an order without items and turns a port failure into a result, not a crash", async () => {

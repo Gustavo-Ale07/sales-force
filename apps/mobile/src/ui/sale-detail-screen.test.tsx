@@ -60,10 +60,10 @@ describe("SaleDetailScreen Compartilhar PDF", () => {
 
   it("shares the PDF built from local data, works while offline", async () => {
     const shared: string[] = [];
-    const orderPdf = { sharePdf: async (html: string, name: string) => void shared.push(`${name}|${html.includes("Pedido Force nº 3")}`) };
+    const orderPdf = { sharePdf: async (html: string, name: string) => void shared.push(`${name}|${!html.includes("Force nº")}`) };
     await renderWithModal(<SaleDetailScreen localId="x" localOrders={open()} connectivity="offline" orderPdf={orderPdf} onBack={noop} onChanged={noop} onContinue={noop} onDuplicate={noop} onSyncNow={noop} />);
     await fireEvent.press(await screen.findByLabelText("Compartilhar PDF"));
-    await waitFor(() => expect(shared).toEqual(["pedido-3|true"]));
+    await waitFor(() => expect(shared).toEqual(["pedido|true"]));
   });
 
   it("explains a failure in plain words", async () => {

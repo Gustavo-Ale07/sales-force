@@ -1,9 +1,10 @@
 import { render, screen } from "@testing-library/react-native";
-import { AccessibilityInfo } from "react-native";
+import { AccessibilityInfo, StyleSheet } from "react-native";
 import type { SyncStatus } from "@salesforce/mobile-db";
 import { describeSyncChip } from "../offline/sync-status-text";
 import { SyncStatusChip } from "./sync-status";
 import { SyncIcon } from "./sync-icon";
+import { colors } from "../theme";
 
 const idle: SyncStatus = { phase: "idle", pending: 0, needsAttention: 0, lastSyncedAt: null, lastError: null };
 const noop = () => undefined;
@@ -59,6 +60,22 @@ describe("SyncIcon", () => {
     expect(screen.getByTestId(testID)).toBeTruthy();
     expect(screen.getByRole("button", { name: `Status de sincronização: ${label}` })).toBeTruthy();
     expect(screen.queryByText(label)).toBeNull();
+  });
+
+  it("offline has its own hollow-ring mark, distinct from the others", async () => {
+    await render(<SyncStatusChip status={idle} connectivity="offline" onPress={noop} />);
+    expect(screen.getByTestId("sync-mark-offline")).toBeTruthy();
+    expect(screen.getByTestId("sync-arrows", { includeHiddenElements: true })).toBeTruthy();
+  });
+
+  it("is white arrows on the navy header (no white box) in a 44 px touch target", async () => {
+    await render(<SyncStatusChip status={idle} connectivity="online" onPress={noop} />);
+    const button = screen.getByRole("button", { name: /Status de sincronização/ });
+    const flat = StyleSheet.flatten(button.props.style as never) as { minWidth: number; minHeight: number; backgroundColor?: string };
+    expect(flat.minWidth).toBeGreaterThanOrEqual(44);
+    expect(flat.minHeight).toBeGreaterThanOrEqual(44);
+    expect(flat.backgroundColor).toBeUndefined();
+    expect(JSON.stringify(screen.toJSON())).toContain(colors.onNavy);
   });
 
   it("the amber mark carries the count of waiting changes (9+ when large)", async () => {

@@ -1,6 +1,6 @@
 import type { SqlDatabase } from "./connection";
 import { DatasetIdentityError, confirmDataset, readCacheDataset, readExpectedDataset, sameDataset, writeCacheDataset, type DatasetIdentity } from "./dataset-identity";
-import { countOutbox, getDraft, listAttentionItems, listOutbox, type AttentionItem, type DraftRecord } from "./local-orders";
+import { countOutbox, draftErpNumber, getDraft, listAttentionItems, listOutbox, type AttentionItem, type DraftRecord } from "./local-orders";
 import { isoNow, type OfflineEnv } from "./offline-env";
 import { refreshOneOrderErpStatus, refreshOrderErpStatuses, type OrderStatusSource } from "./order-erp-status";
 import { countSendRequests, pushOutbox, pushSendRequests, recoverInterrupted, reevaluateHeldOrders, TransportError, type OrderTransport, type PushOptions, type PushStop } from "./order-sync";
@@ -285,6 +285,11 @@ export interface SyncManager {
    * Sankhya number. Never throws for a failed delivery: the outcome says what happened; whatever is not concluded stays queued.
    */
   confirmOrder?(localId: string, options?: ConfirmOptions): Promise<ConfirmOutcome>;
+  /**
+   * Reads the order's status once from the server (stores number and stage) and returns its Sankhya number, or `null` when it is
+   * not known yet (also offline or on a failed read: the stored value is returned). Used by the post-confirmation screen.
+   */
+  readOrderNumber?(localId: string): Promise<number | null>;
 }
 
 /** How long the seller waits on "Enviando ao Sankhya" before the screen is released (the order keeps going in the queue). One place. */
@@ -623,6 +628,18 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
       const lastSyncedAt = status.lastSyncedAt ?? (await getMeta(deps.db, "sync.last_success_at"));
       return publish({ ...status, ...(await counters()), lastSyncedAt });
     },
+    async readOrderNumber(localId) {
+      const draft = await getDraft(deps.db, localId);
+      if (draft === null || draft.remoteId === null) return null;
+      if (internet() === "offline") return draftErpNumber(draft);
+      try {
+        const read = await refreshOneOrderErpStatus(deps.db, deps.env, deps.source, deps.ownerAccountId, draft.remoteId);
+        return read?.erpNumber ?? read?.stage?.nunota ?? draftErpNumber(draft);
+      } catch (error) {
+        if (!(error instanceof TransportError)) deps.onUnexpectedError?.(error);
+        return draftErpNumber(draft);
+      }
+    },
     async confirmOrder(localId, options) {
       const waitMs = options?.waitMs ?? CONFIRM_WAIT_MS;
       const pollMs = options?.pollMs ?? CONFIRM_POLL_MS;
@@ -660,7 +677,8 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
       for (;;) {
         try {
           const read = await refreshOneOrderErpStatus(deps.db, deps.env, deps.source, deps.ownerAccountId, draft.remoteId);
-          if (read?.erpNumber !== null && read?.erpNumber !== undefined) return { kind: "sent", erpNumber: read.erpNumber };
+          const number = read?.erpNumber ?? read?.stage?.nunota ?? null;
+          if (number !== null) return { kind: "sent", erpNumber: number };
         } catch (error) {
           if (!(error instanceof TransportError)) deps.onUnexpectedError?.(error);
         }

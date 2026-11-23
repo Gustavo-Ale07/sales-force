@@ -168,7 +168,8 @@ describe("NewOrderScreen", () => {
     await saveFromSummary();
 
     expect(screen.getByText("Pedido salvo")).toBeTruthy();
-    expect(screen.getByText("Pedido nº 42 · Padaria Central")).toBeTruthy();
+    expect(screen.getByText("Padaria Central")).toBeTruthy();
+    expect(screen.queryByText(/nº 42/)).toBeNull();
     expect(captured).toEqual({
       carrierCode: 7,
       freightType: "CIF",

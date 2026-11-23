@@ -726,8 +726,8 @@ export async function pushSendRequests(
       const outcome = await transport.submitOrder(draft.remoteId as string, draft.dataset);
       await db.transaction(async (tx) => {
         await tx.execute(
-          `UPDATE local_order_draft SET send_state = 'submitted', send_code = ?, send_error = NULL, send_attempts = ?, send_next_attempt_at = NULL, remote_version = ? WHERE local_id = ? AND send_state = 'requested'`,
-          [outcome.status, attemptsNow, outcome.version, draft.localId],
+          `UPDATE local_order_draft SET send_state = 'submitted', send_code = ?, send_error = NULL, send_attempts = ?, send_next_attempt_at = NULL, remote_version = ?, erp_number = COALESCE(?, erp_number) WHERE local_id = ? AND send_state = 'requested'`,
+          [outcome.status, attemptsNow, outcome.version, outcome.erpNumber ?? null, draft.localId],
         );
       });
       submitted += 1;

@@ -210,6 +210,13 @@ export interface DraftRecord {
   readonly sendRequestedAt: string | null;
   /** Last known stage in Sankhya; `null` = never read (or an old server that does not send it). */
   readonly erpStage: DraftErpStage | null;
+  /** Unique Sankhya number (NUNOTA) as last read; `null` = not known yet. Use `draftErpNumber` to read it. */
+  readonly erpNumber: number | null;
+}
+
+/** The order's Sankhya number: the stored one, else the stage's. The internal Force number is never an identity for the seller. */
+export function draftErpNumber(draft: Pick<DraftRecord, "erpNumber" | "erpStage">): number | null {
+  return draft.erpNumber ?? draft.erpStage?.nunota ?? null;
 }
 
 export interface PriceReviewEntry {
@@ -268,7 +275,7 @@ export const DRAFT_COLUMNS = `d.local_id, d.owner_account_id, d.client_request_i
   d.negotiation_type_code, d.top_code, d.carrier_code, d.freight_type, d.notes, d.status, d.remote_id, d.remote_version, d.remote_draft_number, d.estimated_total,
   d.last_error, d.price_review, d.server_snapshot, d.created_at, d.updated_at, d.dataset_environment, d.dataset_id, d.eligibility,
   d.send_state, d.send_code, d.send_error, d.send_attempts, d.send_next_attempt_at, d.send_requested_at,
-  d.erp_stage, d.erp_stage_json,
+  d.erp_stage, d.erp_stage_json, d.erp_number,
   (SELECT count(*) FROM local_order_item i WHERE i.draft_local_id = d.local_id) AS item_count`;
 
 function nullableNumber(value: unknown): number | null {
@@ -316,6 +323,7 @@ export function toDraft(row: SqlRow): DraftRecord {
     sendNextAttemptAt: nullableString(row.send_next_attempt_at),
     sendRequestedAt: nullableString(row.send_requested_at),
     erpStage: erpStageOf(row.erp_stage, row.erp_stage_json),
+    erpNumber: nullableNumber(row.erp_number),
   };
 }
 

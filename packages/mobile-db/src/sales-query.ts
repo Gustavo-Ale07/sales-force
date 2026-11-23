@@ -79,7 +79,8 @@ function whereOf(filter: DraftFilter): { sql: string; params: SqlValue[] } {
     const parts = ["lower(d.customer_name) LIKE ? ESCAPE '\\'", "d.local_id LIKE ? ESCAPE '\\'"];
     const textParams: SqlValue[] = [`%${like}%`, `${like}%`];
     if (/^\d{1,9}$/.test(text)) {
-      parts.push("d.customer_code = ?", "d.remote_draft_number = ?");
+      // The Sankhya number is the only order number the seller knows (the internal Force number is never shown).
+      parts.push("d.customer_code = ?", "d.erp_number = ?");
       textParams.push(Number(text), Number(text));
     }
     clauses.push(`(${parts.join(" OR ")})`);

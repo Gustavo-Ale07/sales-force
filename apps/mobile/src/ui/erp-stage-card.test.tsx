@@ -35,7 +35,7 @@ describe("ErpStageCard per stage", () => {
       const state = position < index ? "concluída" : position === index ? "etapa atual" : "próxima etapa";
       expect(screen.getByLabelText(`${text}, ${state}`)).toBeTruthy();
     });
-    expect(screen.getByText("Pedido no Sankhya nº 555")).toBeTruthy();
+    expect(screen.getByText("Pedido nº 555")).toBeTruthy();
     expect(screen.getByText(`Situação no Sankhya: ${label} · atualizado em 20/11/2026 10:30`)).toBeTruthy();
   });
 
@@ -56,14 +56,14 @@ describe("ErpStageCard per stage", () => {
 
   it("a quotation shows its number and no timeline", async () => {
     await render(<ErpStageCard stage={view(stage("quotation", "Orçamento", { nunota: 77 }))} />);
-    expect(screen.getByText("Orçamento no Sankhya nº 77")).toBeTruthy();
+    expect(screen.getByText("Orçamento nº 77")).toBeTruthy();
     expect(screen.queryByRole("list")).toBeNull();
   });
 
   it("a Force-side state has no timeline and no Sankhya number", async () => {
     await render(<ErpStageCard stage={view(stage("sent_to_force", "Enviado ao Force"))} />);
     expect(screen.queryByRole("list")).toBeNull();
-    expect(screen.queryByText(/no Sankhya nº/)).toBeNull();
+    expect(screen.queryByText(/Sankhya nº/)).toBeNull();
   });
 });
 

@@ -37,6 +37,7 @@ function draft(localId: string, customerName: string, status: DraftRecord["statu
     sendNextAttemptAt: null,
     sendRequestedAt: null,
     erpStage: null,
+    erpNumber: null,
   };
 }
 

@@ -231,4 +231,11 @@ export const migrations: readonly Migration[] = [
     name: "order_erp_stage",
     statements: [`ALTER TABLE local_order_draft ADD COLUMN erp_stage TEXT`, `ALTER TABLE local_order_draft ADD COLUMN erp_stage_json TEXT`],
   },
+  {
+    // The unique Sankhya number (NUNOTA) of the order, the only number the seller sees once the order is confirmed. Filled by the
+    // submit answer or the status read; read-only on the device. Expand-only, nullable.
+    version: 12,
+    name: "order_erp_number",
+    statements: [`ALTER TABLE local_order_draft ADD COLUMN erp_number INTEGER`],
+  },
 ];

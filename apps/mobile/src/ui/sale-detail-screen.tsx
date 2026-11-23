@@ -7,6 +7,7 @@ import { describeSkippedLines, isQuotationTop, topLabel } from "../data/order-he
 import type { OrderEntryConfiguration, OrderRepository } from "../data/ports";
 import { formatBrl } from "../lib/money";
 import type { LocalOrdersPort } from "../offline/local-orders";
+import { erpNumberOfDraft, isQuotationDraft, orderIdentity } from "../offline/order-number";
 import { shareOrderPdf, type OrderPdfPort } from "../offline/order-pdf";
 import { saleValue } from "../offline/sales";
 import { approvalViewOf, type ApprovalView, type DiscountAuthorityMode } from "../offline/approval-status";
@@ -300,7 +301,7 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
           <Text style={styles.meta}>{`Cliente ${draft.customerCode}`}</Text>
           <View style={styles.statusLine}>
             <SaleBadgeView status={draft.status} remoteId={draft.remoteId} lastError={draft.lastError} sendState={draft.sendState} sendCode={draft.sendCode} erpStage={draft.erpStage} />
-            <Text style={styles.meta}>{draft.remoteDraftNumber !== null ? `${tops !== null && isQuotationTop(effectiveTop, tops) ? "Orçamento" : "Pedido"} nº ${draft.remoteDraftNumber}` : "Sem número ainda"}</Text>
+            <Text style={styles.meta}>{orderIdentity(erpNumberOfDraft(draft), (tops !== null && isQuotationTop(effectiveTop, tops)) || isQuotationDraft(draft))}</Text>
           </View>
           {stage !== null ? <ErpStageCard stage={stage} /> : <Text style={styles.explanation}>{saleExplanation(draft)}</Text>}
           {release !== null && (

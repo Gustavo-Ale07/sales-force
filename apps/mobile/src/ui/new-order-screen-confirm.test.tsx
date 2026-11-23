@@ -22,26 +22,48 @@ const base = orderEntryConfiguration();
 const config = orderEntryConfiguration({ sales: { ...base.sales, orderTops: { defaultTopCode: 1001, quotationTopCode: 1000, eligibleTopCodes: [1000, 1001] } } });
 
 /** Walks the wizard to the summary with a local store whose confirm answers `outcome`; returns the spies. */
-async function toSummary(outcome: ConfirmOutcome | (() => Promise<ConfirmOutcome>), quotation = false) {
+async function toSummary(
+  outcome: ConfirmOutcome | (() => Promise<ConfirmOutcome>),
+  quotation = false,
+  extra: { readOrderNumber?: (id: string) => Promise<number | null>; navigation?: boolean } = {},
+) {
   const saved = draftRecord({ localId: "l1", status: "pending_sync", sendState: "requested", topCode: quotation ? 1000 : 1001 });
   const save = jest.fn(async () => saved);
   const confirm = jest.fn(typeof outcome === "function" ? outcome : async () => outcome);
   const requestSend = jest.fn(async (_id: string) => undefined);
   const exit = jest.fn();
-  const localOrders: LocalOrdersPort = fakeLocalOrders([saved], { save: save as never, confirm, requestSend, get: async () => saved });
+  const viewOrder = jest.fn();
+  const goHome = jest.fn();
+  const localOrders: LocalOrdersPort = fakeLocalOrders([saved], {
+    save: save as never,
+    confirm,
+    requestSend,
+    get: async () => saved,
+    ...(extra.readOrderNumber === undefined ? {} : { readOrderNumber: extra.readOrderNumber }),
+  });
   const repositories = {
     customers: { list: async () => pageOf([customer(10, { name: "Padaria Central" })]) },
     products: fakeProducts({ list: async () => pageOf([copo]) }),
     orders: fakeOrders({ getEntryConfiguration: async () => config, listCarriers: async () => [{ code: 7, name: "Transportes Alfa" }] }),
   };
-  await render(withModal(<NewOrderScreen repositories={repositories} onUnauthenticated={() => undefined} localOrders={localOrders} onExit={exit} />));
+  await render(
+    withModal(
+      <NewOrderScreen
+        repositories={repositories}
+        onUnauthenticated={() => undefined}
+        localOrders={localOrders}
+        onExit={exit}
+        {...(extra.navigation === true ? { onViewOrder: viewOrder, onGoHome: goHome } : {})}
+      />,
+    ),
+  );
   await pressAndSettle(await screen.findByText("Padaria Central"));
   if (quotation) await pressAndSettle(screen.getByRole("radio", { name: "Operação Orçamento (TOP 1000)" }));
   await fillMandatoryHeader();
   await pressAndSettle(screen.getByRole("button", { name: "Próximo" }));
   await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
   await pressAndSettle(screen.getByRole("button", { name: "Próximo" }));
-  return { save, confirm, requestSend, exit, savesBefore: () => save.mock.calls.length };
+  return { save, confirm, requestSend, exit, viewOrder, goHome, savesBefore: () => save.mock.calls.length };
 }
 
 const confirmButton = () => screen.getByRole("button", { name: "Confirmar" });
@@ -84,9 +106,82 @@ describe("NewOrderScreen Confirmar (local path)", () => {
     expect(save.mock.calls.length - before).toBe(1);
     expect(confirm).toHaveBeenCalledWith("l1");
     expect(await screen.findByText("Pedido enviado")).toBeTruthy();
-    expect(screen.getByText("Nº 4321")).toBeTruthy();
+    expect(screen.getByText("Pedido nº 4321")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Editar pedido" })).toBeNull();
     expect(screen.getByRole("button", { name: "Novo pedido" })).toBeTruthy();
+  });
+
+  it("post-confirmation buttons: 'Ver pedido' opens that order, 'Voltar ao início' goes home, 'Novo pedido' starts over", async () => {
+    const { viewOrder, goHome } = await toSummary({ kind: "sent", erpNumber: 4321 }, false, { navigation: true });
+    await pressAndSettle(confirmButton());
+    await pressAndSettle(await screen.findByRole("button", { name: "Ver pedido" }));
+    expect(viewOrder).toHaveBeenCalledWith("l1");
+    await pressAndSettle(screen.getByRole("button", { name: "Voltar ao início" }));
+    expect(goHome).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Novo pedido" })).toBeTruthy();
+  });
+
+  describe("number follow-up while the screen is open", () => {
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    async function confirmWithFakeTimers(read: (id: string) => Promise<number | null>) {
+      const ctx = await toSummary({ kind: "sending" }, false, { readOrderNumber: read });
+      jest.useFakeTimers();
+      await act(async () => {
+        fireEvent.press(confirmButton());
+        await jest.advanceTimersByTimeAsync(10);
+      });
+      return ctx;
+    }
+
+    it("asks again with growing intervals and shows 'Pedido enviado' and the number as soon as it arrives", async () => {
+      const read = jest.fn<Promise<number | null>, [string]>(async () => null);
+      await confirmWithFakeTimers(read);
+      expect(screen.getByText("Enviando ao Sankhya")).toBeTruthy();
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(1_600);
+      });
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(screen.queryByText("Pedido enviado")).toBeNull();
+      read.mockResolvedValue(2511);
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(2_200);
+      });
+      expect(screen.getByText("Pedido enviado")).toBeTruthy();
+      expect(screen.getByText("Pedido nº 2511")).toBeTruthy();
+      const calls = read.mock.calls.length;
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(20_000);
+      });
+      expect(read.mock.calls.length).toBe(calls);
+    });
+
+    it("after the budget it settles into the neutral 'aguardando envio' state, not an error", async () => {
+      const read = jest.fn<Promise<number | null>, [string]>(async () => null);
+      await confirmWithFakeTimers(read);
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(70_000);
+      });
+      expect(screen.getByText("Pedido aguardando envio")).toBeTruthy();
+      expect(screen.queryByText("Enviando ao Sankhya")).toBeNull();
+      expect(screen.queryByText(/erro|falh/i)).toBeNull();
+    });
+
+    it("stops asking when the screen unmounts", async () => {
+      const read = jest.fn<Promise<number | null>, [string]>(async () => null);
+      await confirmWithFakeTimers(read);
+      await act(async () => {
+        screen.unmount();
+      });
+      const calls = read.mock.calls.length;
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(30_000);
+      });
+      // one last read on the way out is allowed; nothing after it
+      expect(read.mock.calls.length - calls).toBeLessThanOrEqual(0);
+    });
   });
 
   it("a quotation says 'Orçamento enviado', following the configured quotation TOP", async () => {

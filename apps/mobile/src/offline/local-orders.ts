@@ -85,6 +85,8 @@ export interface LocalOrdersPort {
   requestSend(localId: string): Promise<void>;
   /** "Confirmar" / "Tentar de novo": delivers the order now and waits briefly for the Sankhya number; whatever is not concluded stays queued. Absent = nothing is attempted (queued). */
   confirm?(localId: string): Promise<ConfirmOutcome>;
+  /** Reads the order's status once and returns its Sankhya number (`null` = not there yet; offline or failed read = what is stored). Absent = nothing to read. */
+  readOrderNumber?(localId: string): Promise<number | null>;
   /**
    * "Duplicar como pedido" (D-B): asks the server for a new order draft from a sent quotation, under the dataset the
    * quotation itself was created under, and brings it onto this device. Online only; a retry reuses the same
@@ -160,6 +162,8 @@ export function createLocalOrdersPort(deps: {
   readonly duplicateAsOrder?: (orderId: string, request: DuplicateAsOrderRequest) => Promise<DuplicateAsOrderResult>;
   /** Sync manager's confirm (deliver now, wait for the number). */
   readonly confirmOrder?: (localId: string) => Promise<ConfirmOutcome>;
+  /** Sync manager's single status read of one order. */
+  readonly readOrderNumber?: (localId: string) => Promise<number | null>;
   /** Called after any change so counters and the indicator update, and a sync can start when online. */
   readonly onChanged: () => void;
 }): LocalOrdersPort {
@@ -228,6 +232,12 @@ export function createLocalOrdersPort(deps: {
       const outcome = await deps.confirmOrder(localId);
       onChanged();
       return outcome;
+    },
+    async readOrderNumber(localId) {
+      if (deps.readOrderNumber === undefined) return null;
+      const number = await deps.readOrderNumber(localId);
+      onChanged();
+      return number;
     },
     async duplicateAsOrder(localId) {
       const source = await getDraft(db, localId);

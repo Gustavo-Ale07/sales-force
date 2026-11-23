@@ -43,7 +43,7 @@ export function ErpStageCard({ stage }: { stage: ErpStageView }) {
           })}
         </View>
       )}
-      {stage.nunota !== null && <Text style={styles.meta}>{`${stage.kind === "quotation" ? "Orçamento" : "Pedido"} no Sankhya nº ${stage.nunota}`}</Text>}
+      {stage.nunota !== null && <Text style={styles.meta}>{`${stage.kind === "quotation" ? "Orçamento" : "Pedido"} nº ${stage.nunota}`}</Text>}
       {stage.invoiceNumber !== null && <Text style={styles.meta}>{`Nota fiscal nº ${stage.invoiceNumber}`}</Text>}
     </View>
   );

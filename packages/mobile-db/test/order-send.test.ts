@@ -222,11 +222,11 @@ describe("migrations v10 (order_send_request) and v11 (order_erp_stage)", () => 
     expect(columnsBefore).not.toContain("send_state");
 
     const report = await runMigrations(old, migrations);
-    expect(report).toEqual({ from: 9, to: 11, applied: [10, 11] });
+    expect(report).toEqual({ from: 9, to: 12, applied: [10, 11, 12] });
 
     const columnsAfter = await columnsOf(old, "local_order_draft");
-    expect(columnsAfter).toEqual(expect.arrayContaining([...columnsBefore, "send_state", "send_code", "send_error", "send_attempts", "send_next_attempt_at", "send_requested_at", "erp_stage", "erp_stage_json"]));
-    expect(columnsAfter).toHaveLength(columnsBefore.length + 8);
+    expect(columnsAfter).toEqual(expect.arrayContaining([...columnsBefore, "send_state", "send_code", "send_error", "send_attempts", "send_next_attempt_at", "send_requested_at", "erp_stage", "erp_stage_json", "erp_number"]));
+    expect(columnsAfter).toHaveLength(columnsBefore.length + 9);
     // old values untouched
     const [row] = (await old.query("SELECT * FROM local_order_draft")) as Record<string, unknown>[];
     for (const [key, value] of Object.entries((before as Record<string, unknown>[])[0] as Record<string, unknown>)) expect(row?.[key]).toEqual(value);
@@ -234,14 +234,14 @@ describe("migrations v10 (order_send_request) and v11 (order_erp_stage)", () => 
     expect(await old.query("SELECT * FROM outbox")).toEqual(outboxBefore);
     expect((await old.query<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")).map((r) => r.name).sort()).toEqual(tablesBefore);
     // defaults for the pre-existing row
-    expect(await getDraft(old, id)).toMatchObject({ sendState: null, sendCode: null, sendError: null, sendAttempts: 0, sendNextAttemptAt: null, sendRequestedAt: null, erpStage: null });
+    expect(await getDraft(old, id)).toMatchObject({ sendState: null, sendCode: null, sendError: null, sendAttempts: 0, sendNextAttemptAt: null, sendRequestedAt: null, erpStage: null, erpNumber: null });
     // the old draft is still editable and a send request can be recorded on it
     await requestOrderSend(old, env, OWNER, id);
     expect((await getDraft(old, id))?.sendState).toBe("requested");
   });
 
-  it("is idempotent and the schema version ends at 11", async () => {
-    expect(await readSchemaVersion(db)).toBe(11);
+  it("is idempotent and the schema version ends at 12", async () => {
+    expect(await readSchemaVersion(db)).toBe(12);
     expect((await runMigrations(db, migrations)).applied).toEqual([]);
   });
 
@@ -805,6 +805,31 @@ describe("SyncManager.confirmOrder", () => {
 
   it("an unknown order id is queued, never an exception", async () => {
     expect(await mk().confirmOrder?.("nope", { sleep: fakeSleep().sleep })).toEqual({ kind: "queued" });
+  });
+
+  it("the Sankhya number is stored on the draft (status read, also from the stage's nunota) and never cleared by a later read without it", async () => {
+    const id = await send();
+    statuses = async () => [number(null, { stage: { stage: "received", label: "Recebido", pendingSector: null, nunota: 2511, invoiceNumber: null, updatedAt: "2026-11-20T11:00:00.000Z", checkedAt: null, readError: null } })];
+    expect(await mk().confirmOrder?.(id, { sleep: fakeSleep().sleep })).toEqual({ kind: "sent", erpNumber: 2511 });
+    expect((await getDraft(db, id))?.erpNumber).toBe(2511);
+    statuses = async () => [number(null)];
+    expect(await mk().readOrderNumber?.(id)).toBe(2511);
+    expect((await getDraft(db, id))?.erpNumber).toBe(2511);
+  });
+
+  it("readOrderNumber: reads once, returns the number as soon as it exists, null before; offline or a failed read returns the stored value", async () => {
+    const id = await send();
+    statuses = async () => [number(null)];
+    const mgr = mk();
+    await pushOnly(mgr);
+    expect(await mgr.readOrderNumber?.(id)).toBeNull();
+    statuses = async () => [number(3030)];
+    expect(await mgr.readOrderNumber?.(id)).toBe(3030);
+    statuses = async () => {
+      throw fail("network");
+    };
+    expect(await mgr.readOrderNumber?.(id)).toBe(3030);
+    expect(await mgr.readOrderNumber?.("nope")).toBeNull();
   });
 
   it("a source without the status capability ends as sending (the server has it)", async () => {

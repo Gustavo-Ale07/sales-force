@@ -32,6 +32,7 @@ function draft(localId: string, status: DraftStatus, updatedAt: string): DraftRe
     sendNextAttemptAt: null,
     sendRequestedAt: null,
     erpStage: null,
+    erpNumber: null,
   };
 }
 
