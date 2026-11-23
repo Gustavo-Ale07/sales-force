@@ -1,0 +1,199 @@
+import {
+  CUSTOMER_BLOCK_MESSAGES,
+  CUSTOMER_UNAVAILABLE_MESSAGE,
+  DatasetChangedError,
+  DatasetUnavailableError,
+  DraftNotEditableError,
+  PRODUCT_BLOCK_MESSAGES,
+  TransportError,
+} from "@salesforce/mobile-db";
+import { ApiRequestError } from "./api";
+import { PriceTableNotDownloadedError } from "./errors";
+import { describeIssue } from "./order-draft";
+
+/**
+ * The one place that turns any failure into seller language (owner 2026-11-13: every error is a useful popup).
+ * Short title, what happened, and ONE action that fixes it. The technical text goes to `details` only.
+ */
+
+/** What the popup's primary button does. The screen supplies the handler; without one the popup only offers "Fechar". */
+export type ProblemAction = "retry" | "change_customer" | "go_sync" | "sign_in" | "reload" | "none";
+
+export const ACTION_LABELS: Record<Exclude<ProblemAction, "none">, string> = {
+  retry: "Tentar de novo",
+  change_customer: "Trocar cliente",
+  go_sync: "Ir para sincronização",
+  sign_in: "Entrar de novo",
+  reload: "Recarregar",
+};
+
+export interface ProblemText {
+  readonly title: string;
+  readonly message: string;
+  readonly action: ProblemAction;
+}
+
+/** Known codes: server `ErrorCode`s, server `details.reason`s, local engine kinds and issue codes. */
+export const ERROR_CATALOG = {
+  // Connectivity and session
+  offline: { title: "Sem conexão", message: "Não foi possível falar com o servidor. Verifique a internet.", action: "retry" },
+  unauthenticated: { title: "Sessão expirada", message: "Entre de novo para continuar. Seus pedidos salvos continuam no aparelho.", action: "sign_in" },
+  invalid_credentials: { title: "Usuário ou senha incorretos", message: "Confira os dados e tente de novo.", action: "retry" },
+  access_not_configured: { title: "Acesso não liberado", message: "Seu usuário ainda não tem acesso. Fale com o backoffice.", action: "none" },
+  forbidden: { title: "Sem permissão", message: "Seu perfil não pode fazer isso.", action: "none" },
+  no_seller_scope: { title: "Sem carteira", message: "Seu usuário não tem vendedor vinculado. Fale com o backoffice.", action: "none" },
+  rate_limited: { title: "Muitas tentativas", message: "Aguarde um pouco e tente de novo.", action: "retry" },
+  service_unavailable: { title: "Servidor indisponível", message: "O serviço está fora do ar por instantes.", action: "retry" },
+  internal_error: { title: "Erro no servidor", message: "Algo falhou do nosso lado. Tente de novo.", action: "retry" },
+  not_found: { title: "Não encontrado", message: "Este registro não existe mais. Sincronize para atualizar.", action: "go_sync" },
+  device_revoked: { title: "Aparelho bloqueado", message: "Este aparelho foi desativado. Fale com o backoffice.", action: "none" },
+
+  // Orders
+  validation_failed: { title: "Dados inválidos", message: "Revise o pedido e tente de novo.", action: "none" },
+  version_conflict: { title: "Pedido alterado em outro lugar", message: "Recarregue para ver a versão atual. Suas alterações não salvas serão perdidas.", action: "reload" },
+  order_not_editable: { title: "Pedido não editável", message: "Ele já não é um rascunho. Recarregue para ver a situação.", action: "reload" },
+  not_editable: { title: "Pedido não editável", message: "Ele já não é um rascunho. Recarregue para ver a situação.", action: "reload" },
+  idempotency_conflict: { title: "Pedido antigo", message: "Esta solicitação já foi registrada com outros dados. Refaça o pedido.", action: "none" },
+  dataset_mismatch: { title: "Dados desatualizados", message: "O servidor mudou desde que você abriu o pedido. Sincronize e abra o pedido de novo.", action: "go_sync" },
+  installation_not_enabled: { title: "Pedidos não habilitados", message: "A instalação ainda não aceita pedidos. Fale com o backoffice.", action: "none" },
+  erp_submission_disabled: { title: "Envio ao ERP desligado", message: "O envio de pedidos está desligado por enquanto.", action: "none" },
+  discount_blocked: { title: "Desconto bloqueado", message: "O desconto passa do seu limite. Reduza ou peça aprovação.", action: "none" },
+  approval_not_pending: { title: "Aprovação já resolvida", message: "Este pedido não espera mais aprovação. Recarregue.", action: "reload" },
+  conflict: { title: "Conflito", message: "O registro mudou. Sincronize e tente de novo.", action: "go_sync" },
+
+  // Customer (server `customer_ineligible.reason` and the local guard)
+  customer_ineligible: { title: "Cliente indisponível", message: "Este cliente não pode receber pedidos agora.", action: "change_customer" },
+  customer_unavailable: { title: "Cliente indisponível", message: "Este cliente não está na sua carteira ou não está disponível.", action: "change_customer" },
+  customer_inactive: { title: "Cliente inativo", message: "Este cliente está inativo no ERP.", action: "change_customer" },
+  customer_blocked: { title: "Cliente bloqueado", message: "Este cliente está bloqueado no ERP.", action: "change_customer" },
+  customer_without_seller: { title: "Cliente sem vendedor", message: "Este cliente não tem vendedor vinculado. Peça ao backoffice para vincular.", action: "change_customer" },
+  customer_pending: { title: "Cliente em análise", message: "O cadastro deste cliente ainda não foi aprovado.", action: "change_customer" },
+  document_already_registered: { title: "Documento já cadastrado", message: "Já existe um cliente com este CPF/CNPJ.", action: "none" },
+  customer_rejected: { title: "Cadastro recusado", message: "O cadastro deste cliente foi recusado. Fale com o backoffice.", action: "none" },
+  registration_refused: { title: "Cadastro recusado", message: "O servidor recusou o cadastro deste cliente.", action: "none" },
+
+  // Products (issue codes and local guards)
+  product_without_price: { title: "Produto sem preço", message: "Este produto está sem preço. Sincronize para atualizar os preços.", action: "go_sync" },
+  product_without_mobility: { title: "Produto sem mobilidade", message: "Este produto não pode ser vendido pelo aplicativo.", action: "none" },
+  product_unavailable: { title: "Produto indisponível", message: "Tire o item do pedido ou sincronize para atualizar o catálogo.", action: "go_sync" },
+  product_inactive: { title: "Produto inativo", message: "Tire o item do pedido.", action: "none" },
+  product_unknown: { title: "Produto não encontrado", message: "Sincronize para atualizar o catálogo.", action: "go_sync" },
+  product_not_sellable: { title: "Produto indisponível", message: "Este produto não pode ser vendido. Tire o item do pedido.", action: "none" },
+  price_table_missing: { title: "Preços não baixados", message: "Os preços desta tabela ainda não estão no aparelho.", action: "go_sync" },
+  dataset_unavailable: { title: "Dados não confirmados", message: "Conecte-se e sincronize para criar pedidos.", action: "go_sync" },
+  dataset_changed: { title: "Dados mudaram", message: "Sincronize e abra o pedido de novo.", action: "go_sync" },
+
+  // Misc
+  pdf_failed: { title: "PDF não gerado", message: "Tente de novo. Não precisa de internet.", action: "retry" },
+  unexpected: { title: "Algo deu errado", message: "Tente de novo. Se continuar, avise o suporte.", action: "retry" },
+} satisfies Record<string, ProblemText>;
+
+const GENERIC: ProblemText = ERROR_CATALOG.unexpected;
+
+export interface Problem extends ProblemText {
+  /** Key into `ERROR_CATALOG` (or `unexpected`). */
+  readonly code: string;
+  /** Technical text for "Ver detalhes": code, HTTP status, server message, protocol. Never shown by default. */
+  readonly details: string;
+}
+
+function detailLines(parts: readonly (readonly [string, string | number | undefined | null])[]): string {
+  return parts
+    .filter(([, value]) => value !== undefined && value !== null && value !== "")
+    .map(([label, value]) => `${label}: ${String(value)}`)
+    .join("\n");
+}
+
+function known(code: string | undefined): ProblemText | null {
+  return code !== undefined && Object.hasOwn(ERROR_CATALOG, code) ? (ERROR_CATALOG as Record<string, ProblemText>)[code] ?? null : null;
+}
+
+function make(code: string, text: ProblemText, details: string, override?: Partial<Pick<ProblemText, "title" | "message">>): Problem {
+  return { code, ...text, ...override, details };
+}
+
+/** Maps a sync-engine kind (`TransportError.kind`) to a catalog key. */
+function transportKey(error: TransportError): string {
+  switch (error.kind) {
+    case "network":
+      return "offline";
+    case "auth":
+      return "unauthenticated";
+    case "rate_limit":
+      return "rate_limited";
+    case "server":
+      return "service_unavailable";
+    case "customer_ineligible":
+      return known(error.reason) !== null ? error.reason! : "customer_ineligible";
+    case "registration_refused":
+      return known(error.reason) !== null ? error.reason! : "registration_refused";
+    case "validation":
+      return "validation_failed";
+    default:
+      return error.kind;
+  }
+}
+
+/**
+ * Any thrown value to a `Problem`. Unknown input never reaches the seller as raw text: it gets the generic popup and the
+ * technical message goes to `details`.
+ */
+export function describeProblem(error: unknown): Problem {
+  if (error instanceof ApiRequestError) {
+    const details = detailLines([
+      ["Código", error.code ?? "sem código"],
+      ["Status", error.status === 0 ? "sem resposta" : error.status],
+      ["Motivo", error.reason],
+      ["Mensagem", error.message],
+      ...error.issues.map((issue) => ["Item", `${issue.path} ${issue.code}`] as const),
+      ["Protocolo", error.correlationId],
+    ]);
+    if (error.isNetwork) return make("offline", ERROR_CATALOG.offline, details);
+    if (error.code === "customer_ineligible" && known(error.reason) !== null) return make(error.reason!, (ERROR_CATALOG as Record<string, ProblemText>)[error.reason!]!, details);
+    if (error.issues.length > 0) {
+      return make("validation_failed", { ...ERROR_CATALOG.validation_failed, title: "Corrija os itens", message: error.issues.map(describeIssue).join("\n") }, details);
+    }
+    const byCode = known(error.code);
+    if (byCode !== null) return make(error.code!, byCode, details);
+    if (error.status === 401) return make("unauthenticated", ERROR_CATALOG.unauthenticated, details);
+    if (error.status === 403) return make("forbidden", ERROR_CATALOG.forbidden, details);
+    if (error.status === 404) return make("not_found", ERROR_CATALOG.not_found, details);
+    if (error.status === 429) {
+      const wait = error.retryAfterSeconds === undefined ? "" : ` Espere ${error.retryAfterSeconds} s.`;
+      return make("rate_limited", ERROR_CATALOG.rate_limited, details, { message: `${ERROR_CATALOG.rate_limited.message}${wait}` });
+    }
+    if (error.status === 503) return make("service_unavailable", ERROR_CATALOG.service_unavailable, details);
+    if (error.status >= 500) return make("internal_error", ERROR_CATALOG.internal_error, details);
+    return make("unexpected", GENERIC, details);
+  }
+  if (error instanceof TransportError) {
+    const key = transportKey(error);
+    const details = detailLines([["Código", error.kind], ["Motivo", error.reason], ["Status", error.status === 0 ? undefined : error.status], ["Mensagem", error.message]]);
+    return make(key, known(key) ?? GENERIC, details);
+  }
+  if (error instanceof PriceTableNotDownloadedError) return make("price_table_missing", ERROR_CATALOG.price_table_missing, detailLines([["Código", "price_table_missing"]]));
+  if (error instanceof DatasetUnavailableError) return make("dataset_unavailable", ERROR_CATALOG.dataset_unavailable, detailLines([["Código", "dataset_unavailable"], ["Mensagem", error.message]]));
+  if (error instanceof DatasetChangedError) return make("dataset_changed", ERROR_CATALOG.dataset_changed, detailLines([["Código", "dataset_changed"], ["Mensagem", error.message]]));
+  if (error instanceof DraftNotEditableError) return make("order_not_editable", ERROR_CATALOG.order_not_editable, detailLines([["Código", "draft_not_editable"], ["Mensagem", error.message]]));
+  if (error instanceof Error) return make("unexpected", GENERIC, detailLines([["Código", error.name], ["Mensagem", error.message]]));
+  return make("unexpected", GENERIC, detailLines([["Código", "desconhecido"]]));
+}
+
+/**
+ * The catalog key behind the text stored as a held draft's `lastError` (local guard or server refusal), or `null` when the
+ * text is not a known marker. Customer and product causes both resolve here.
+ */
+export function codeOfHeldMessage(lastError: string | null): string | null {
+  if (lastError === null) return null;
+  if (lastError === CUSTOMER_UNAVAILABLE_MESSAGE) return "customer_unavailable";
+  const customer = (Object.keys(CUSTOMER_BLOCK_MESSAGES) as (keyof typeof CUSTOMER_BLOCK_MESSAGES)[]).find((key) => CUSTOMER_BLOCK_MESSAGES[key] === lastError);
+  if (customer !== undefined) return customer;
+  const product = (Object.keys(PRODUCT_BLOCK_MESSAGES) as (keyof typeof PRODUCT_BLOCK_MESSAGES)[]).find((key) => PRODUCT_BLOCK_MESSAGES[key] === lastError);
+  return product ?? null;
+}
+
+/** A problem known only by its catalog key (a stored `lastError` marker, a local guard); unknown keys get the generic one. */
+export function problemForCode(code: string, detail?: string): Problem {
+  const text = known(code);
+  return make(text === null ? "unexpected" : code, text ?? GENERIC, detailLines([["Código", code], ["Mensagem", detail]]));
+}

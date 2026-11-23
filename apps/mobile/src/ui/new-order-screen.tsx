@@ -15,7 +15,6 @@ import {
   orderSignature,
   previewDraft,
   toRequestItems,
-  describeIssue,
   type EditorLine,
 } from "../data/order-draft";
 import type { Carrier, CustomerListItem, OrderDetail, OrderEntryConfiguration, OrderRepository, ProductListItem, Repositories } from "../data/ports";
@@ -24,6 +23,7 @@ import { ERP_DISCOUNT_NOTICE } from "../offline/approval-status";
 import { describeDraftStatus, type LocalOrdersPort } from "../offline/local-orders";
 import { newClientRequestId } from "../lib/uuid";
 import { useAppModal } from "./app-modal";
+import { useErrorPopup } from "./use-error-popup";
 import { OrderHeaderOptions } from "./order-header-options";
 import { NOTES_MAX, NotesField, SummaryBlock, SummaryRow, WIZARD_STEPS, WizardFooter, WizardProgress, type WizardStep } from "./order-wizard-parts";
 import { topLabel } from "../data/order-header";
@@ -42,64 +42,6 @@ type Step = WizardStep;
 /** Enough of a customer to display and to send as `customerCode`; a saved/reopened draft never carries the full catalog row. */
 type PickedCustomer = Pick<CustomerListItem, "code" | "name"> & Partial<Pick<CustomerListItem, "document" | "tradeName" | "overdue">>;
 
-interface SaveFailure {
-  readonly title: string;
-  readonly messages: readonly string[];
-  readonly correlationId?: string;
-  /** `version_conflict` / `order_not_editable`: another save happened elsewhere — offer to reload, never silently overwrite it. */
-  readonly reloadable: boolean;
-}
-
-/** Turns a failed save into user-facing text. Per-item issues are listed; the server stays authoritative. Mirrors `apps/web`'s `describeSaveFailure`. */
-function describeSaveFailure(error: unknown): SaveFailure {
-  if (error instanceof ApiRequestError) {
-    if (error.code === "version_conflict") {
-      return {
-        title: "O rascunho foi alterado em outro lugar",
-        messages: ["Recarregue para ver a versão atual. Suas alterações não salvas serão descartadas."],
-        correlationId: error.correlationId,
-        reloadable: true,
-      };
-    }
-    if (error.code === "order_not_editable") {
-      return {
-        title: "Este pedido não pode mais ser editado",
-        messages: ["Ele já não é um rascunho. Recarregue para ver a situação atual."],
-        correlationId: error.correlationId,
-        reloadable: true,
-      };
-    }
-    if (error.code === "dataset_mismatch") {
-      return {
-        title: "Os dados do servidor mudaram",
-        messages: ["Este pedido foi aberto com outro conjunto de dados e não foi salvo. Volte e abra o pedido novamente para continuar."],
-        correlationId: error.correlationId,
-        reloadable: false,
-      };
-    }
-    if (error.code === "idempotency_conflict") {
-      return {
-        title: "Não foi possível salvar",
-        messages: ["Esta solicitação já foi registrada com outros dados. Tente salvar novamente."],
-        correlationId: error.correlationId,
-        reloadable: false,
-      };
-    }
-    if (error.issues.length > 0) {
-      return {
-        title: "Corrija os itens antes de salvar",
-        messages: error.issues.map(describeIssue),
-        correlationId: error.correlationId,
-        reloadable: false,
-      };
-    }
-  }
-  if (error instanceof DatasetUnavailableError) {
-    return { title: "Não foi possível salvar o rascunho", messages: [error.message], reloadable: false };
-  }
-  const info: DataErrorInfo = describeDataError(error);
-  return { title: "Não foi possível salvar o rascunho", messages: [info.message], correlationId: info.correlationId, reloadable: false };
-}
 
 export interface NewOrderScreenProps {
   readonly repositories: Pick<Repositories, "customers" | "products" | "orders">;
@@ -144,6 +86,7 @@ export function NewOrderScreen({
   /** Why the seller cannot advance yet; cleared on any step change or edit. */
   const [stepError, setStepError] = useState<string | null>(null);
   const modal = useAppModal();
+  const errors = useErrorPopup();
   const [customer, setCustomer] = useState<PickedCustomer | null>(null);
   const [lines, setLines] = useState<readonly EditorLine[]>([]);
 
@@ -183,7 +126,6 @@ export function NewOrderScreen({
     { status: "loading" } | { status: "error"; error: DataErrorInfo } | { status: "ready"; value: OrderEntryConfiguration }
   >({ status: "loading" });
   const [saving, setSaving] = useState(false);
-  const [saveFailure, setSaveFailure] = useState<SaveFailure | null>(null);
   const [savedOrder, setSavedOrder] = useState<OrderDetail | null>(null);
   /** The device-local draft being edited (offline-first path); `null` for a fresh order. */
   const [localDraft, setLocalDraft] = useState<DraftRecord | null>(null);
@@ -266,7 +208,6 @@ export function NewOrderScreen({
           setSavedLocal(null);
           setSavedOrder(null);
           setEditingOrder(null);
-          setSaveFailure(null);
           goToStep("summary");
         };
         // Opening another order over unsaved edits would silently throw them away: ask first.
@@ -284,15 +225,15 @@ export function NewOrderScreen({
           ],
         });
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!active) return;
         onResumeConsumed?.();
-        setSaveFailure({ title: "Não foi possível abrir o pedido", messages: ["Tente novamente."], reloadable: false });
+        errors.report(error, undefined, { title: "Não foi possível abrir o pedido" });
       });
     return () => {
       active = false;
     };
-  }, [resumeLocalId, localOrders, onResumeConsumed]);
+  }, [resumeLocalId, localOrders, onResumeConsumed, errors, modal]);
 
   useEffect(() => {
     let active = true;
@@ -313,9 +254,10 @@ export function NewOrderScreen({
           return;
         }
         setConfig({ status: "error", error: info });
+        errors.report(error, { retry: () => void loadConfiguration(orders) }, { title: "Não foi possível carregar os dados do pedido" });
       }
     }
-  }, [repositories.orders, onUnauthenticated]);
+  }, [repositories.orders, onUnauthenticated, errors]);
 
   const savedTopCode = localDraft?.topCode ?? editingOrder?.topCode ?? null;
   const topCode = choice.top !== undefined ? choice.top : savedTopCode;
@@ -380,7 +322,6 @@ export function NewOrderScreen({
     setSavedOrder(null);
     setSavedLocal(null);
     setLocalDraft(null);
-    setSaveFailure(null);
     setEditingOrder(null);
     setSelectionMode(false);
     setSelected(new Set());
@@ -409,7 +350,6 @@ export function NewOrderScreen({
     setCustomer({ code: order.customerCode, name: order.customerName });
     setLines(order.items.map((item, index) => lineFromOrderItem(item, `edit-${index}`)));
     setSavedOrder(null);
-    setSaveFailure(null);
     setSelectionMode(false);
     setSelected(new Set());
     goToStep("summary");
@@ -425,13 +365,12 @@ export function NewOrderScreen({
       setEditingOrder(fresh);
       setCustomer({ code: fresh.customerCode, name: fresh.customerName });
       setLines(fresh.items.map((item, index) => lineFromOrderItem(item, `edit-${index}`)));
-      setSaveFailure(null);
     } catch (error) {
       if (error instanceof ApiRequestError && error.status === 401) {
         onUnauthenticated();
         return;
       }
-      setSaveFailure(describeSaveFailure(error));
+      errors.report(error, { retry: () => void reload() }, { title: "Não foi possível recarregar" });
     }
   }
 
@@ -525,6 +464,7 @@ export function NewOrderScreen({
     const message = validateStep(step);
     if (message !== null) {
       setStepError(message);
+      modal.show({ variant: "error", title: "Falta algo", message });
       return;
     }
     const next = WIZARD_STEPS[WIZARD_STEPS.indexOf(step) + 1];
@@ -626,21 +566,21 @@ export function NewOrderScreen({
   async function save() {
     if (customer === null || saving) return;
     setSaving(true);
-    setSaveFailure(null);
     if (localOrders !== undefined) {
       try {
         const saved = await persistLocal(localOrders, customer);
         setSavedLocal(saved);
       } catch (error) {
-        setSaveFailure({
-          title: "Não foi possível salvar o pedido neste aparelho",
-          messages: [
-            error instanceof DatasetUnavailableError || error instanceof DatasetChangedError
-              ? error.message
-              : "Este pedido não pode mais ser alterado aqui. Abra-o em Pedidos para ver a situação.",
-          ],
-          reloadable: false,
-        });
+        errors.report(
+          error,
+          { retry: () => void save() },
+          {
+            title: "Não foi possível salvar",
+            ...(error instanceof DatasetUnavailableError || error instanceof DatasetChangedError
+              ? {}
+              : { message: "Este pedido não pode mais ser alterado aqui. Abra-o em Pedidos para ver a situação." }),
+          },
+        );
       } finally {
         setSaving(false);
       }
@@ -680,7 +620,7 @@ export function NewOrderScreen({
         onUnauthenticated();
         return;
       }
-      setSaveFailure(describeSaveFailure(error));
+      errors.report(error, { retry: () => void save(), reload: () => void reload(), change_customer: () => goToStep("customer") });
     } finally {
       setSaving(false);
     }
@@ -919,21 +859,6 @@ export function NewOrderScreen({
         {blockedLineCount > 0 && (
           <Text style={styles.footerNotice}>{`${blockedLineCount} item(ns) sem preço não podem ser salvos nesta instalação. Remova-os ou aguarde a atualização de preços.`}</Text>
         )}
-        {saveFailure !== null && (
-          <View style={styles.failureBox} accessibilityRole="alert">
-            <Text style={styles.failureTitle}>{saveFailure.title}</Text>
-            {saveFailure.messages.map((message) => (
-              <Text key={message} style={styles.failureMessage}>
-                {message}
-              </Text>
-            ))}
-            {saveFailure.reloadable && (
-              <Pressable onPress={() => void reload()} accessibilityRole="button" accessibilityLabel="Recarregar pedido">
-                <Text style={styles.reloadLink}>Recarregar</Text>
-              </Pressable>
-            )}
-          </View>
-        )}
         {dirty && !saving && (
           <Pressable style={styles.discardButton} onPress={confirmDiscard} accessibilityRole="button" accessibilityLabel="Descartar">
             <Text style={styles.discardButtonText}>{localDraft !== null || editingOrder !== null ? "Descartar alterações" : "Descartar pedido"}</Text>
@@ -946,11 +871,6 @@ export function NewOrderScreen({
   return (
     <View style={styles.flex}>
       <WizardProgress step={step} customerName={step === "customer" ? undefined : customer?.name} onExit={onExit === undefined ? undefined : requestExit} />
-      {stepError !== null && (
-        <Text style={styles.stepError} accessibilityRole="alert">
-          {stepError}
-        </Text>
-      )}
       {step === "customer" && renderCustomerStep()}
       {step === "negotiation" && renderNegotiationStep()}
       {step === "products" && renderProductsStep()}

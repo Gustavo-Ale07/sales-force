@@ -9,7 +9,8 @@ import { ProductImageProvider } from "../images/product-image-context";
 import { evaluateOfflineAccess } from "../offline/session";
 import { useSyncStatus } from "../offline/use-sync";
 import { colors, spacing } from "../theme";
-import { AppModalProvider, useAppModal } from "./app-modal";
+import { AppModalProvider } from "./app-modal";
+import { ErrorActionsContext, useErrorPopup } from "./use-error-popup";
 import { BottomNav, type MainTab } from "./bottom-nav";
 import { BrandLogo, SplashView } from "./brand";
 import { CustomerDetailScreen } from "./customer-detail-screen";
@@ -61,7 +62,7 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
 
 function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   const { auth, connectivity, offline } = dependencies;
-  const modal = useAppModal();
+  const errors = useErrorPopup();
   const insets = useInsets();
   const keyboardVisible = useKeyboardVisible();
   const [session, setSession] = useState<Session>({ phase: "checking" });
@@ -157,6 +158,8 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   }, [auth, offline]);
 
   const expire = useCallback(() => setSession({ phase: "anonymous" }), []);
+  // Fixing actions every error popup can offer: the sync panel lives in Perfil; an expired session goes back to sign-in.
+  const errorActions = useMemo(() => ({ go_sync: () => selectTab("profile"), sign_in: expire }), [selectTab, expire]);
 
   /**
    * Explicit sign-out. A failed server logout is never swallowed: the session may still be valid on the server, so the
@@ -167,16 +170,16 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   async function signOut() {
     try {
       await auth.logout();
-    } catch {
-      modal.show({
-        variant: "error",
-        title: "Não foi possível encerrar a sessão",
-        message: "Sua sessão no servidor pode continuar aberta. Tente novamente quando houver conexão. Seus pedidos salvos neste aparelho não serão apagados.",
-        buttons: [
-          { label: "Tentar novamente", role: "primary", onPress: () => void signOut() },
-          { label: "Cancelar", role: "cancel" },
-        ],
-      });
+    } catch (error) {
+      // The session may still be open on the server: say so, keep the seller signed in, offer to retry.
+      errors.report(
+        error,
+        { retry: () => void signOut() },
+        {
+          title: "Não foi possível sair",
+          message: "Sua sessão no servidor pode continuar aberta. Tente de novo com internet. Seus pedidos salvos não serão apagados.",
+        },
+      );
       return;
     }
     await leaveDevice();
@@ -245,8 +248,8 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
         setStartRequest({ nonce: Date.now(), customer: { code: opened.draft.customerCode, name: opened.draft.customerName }, lines });
         setSalesView("newOrder");
         selectTab("sales");
-      } catch {
-        modal.show({ variant: "error", title: "Não foi possível duplicar", message: "Tente novamente." });
+      } catch (error) {
+        errors.report(error, { retry: () => duplicateSale(localId) }, { title: "Não foi possível duplicar" });
       }
     })();
   };
@@ -271,6 +274,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
         />
       )}
       {/* Android is edge-to-edge: the window no longer resizes for the keyboard, so the body avoids it itself. */}
+      <ErrorActionsContext.Provider value={errorActions}>
       <ProductImageProvider store={services?.productImages ?? null} online={connectivityState !== "offline"}>
       <KeyboardAvoidingView style={styles.flex} behavior="padding">
         <View style={styles.flex}>
@@ -390,6 +394,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
         {!keyboardVisible && <BottomNav active={tab} onSelect={selectTab} badges={{ sales: syncStatus.pending > 0 || syncStatus.needsAttention > 0 }} />}
       </KeyboardAvoidingView>
       </ProductImageProvider>
+      </ErrorActionsContext.Provider>
     </View>
   );
 }

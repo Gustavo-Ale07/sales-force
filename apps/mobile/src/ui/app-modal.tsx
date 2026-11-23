@@ -60,7 +60,11 @@ export function useAppModal(): AppModalApi {
   return api;
 }
 
-export function AppModalProvider({ children }: { children: ReactNode }) {
+/**
+ * `copyText`: puts text on the clipboard. Not wired yet: the app has no clipboard module (a dependency decision). Without
+ * it the details stay selectable (long press copies), and no "Copiar" button is drawn.
+ */
+export function AppModalProvider({ children, copyText }: { children: ReactNode; copyText?: (text: string) => void | Promise<void> }) {
   const [queue, setQueue] = useState<readonly QueuedModal[]>([]);
   const counter = useRef(0);
 
@@ -95,7 +99,7 @@ export function AppModalProvider({ children }: { children: ReactNode }) {
   return (
     <AppModalContext.Provider value={api}>
       {children}
-      {current !== undefined && <AppModalView key={current.key} options={current.options} onClose={() => dismiss(current.key)} />}
+      {current !== undefined && <AppModalView key={current.key} options={current.options} onClose={() => dismiss(current.key)} copyText={copyText} />}
     </AppModalContext.Provider>
   );
 }
@@ -107,7 +111,7 @@ const VARIANT_STYLE: Record<ModalVariant, { glyph: string; color: string; backgr
 };
 
 /** One dialog on screen. Exported for tests that render it without the provider. */
-export function AppModalView({ options, onClose }: { options: ModalOptions; onClose: () => void }) {
+export function AppModalView({ options, onClose, copyText }: { options: ModalOptions; onClose: () => void; copyText?: (text: string) => void | Promise<void> }) {
   const variant = options.variant ?? "info";
   const look = VARIANT_STYLE[variant];
   const buttons = useMemo(
@@ -115,7 +119,8 @@ export function AppModalView({ options, onClose }: { options: ModalOptions; onCl
     [options.buttons],
   );
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const progress = useRef(new Animated.Value(0)).current;
+  const [copied, setCopied] = useState(false);
+  const [progress] = useState(() => new Animated.Value(0));
   const titleRef = useRef<Text>(null);
 
   useEffect(() => {
@@ -170,6 +175,11 @@ export function AppModalView({ options, onClose }: { options: ModalOptions; onCl
                   <Text style={styles.details} selectable testID="app-modal-details">
                     {options.details}
                   </Text>
+                )}
+                {detailsOpen && copyText !== undefined && (
+                  <Pressable onPress={() => { void copyText(options.details ?? ""); setCopied(true); }} accessibilityRole="button" style={styles.detailsToggle}>
+                    <Text style={styles.detailsToggleText}>{copied ? "Copiado" : "Copiar"}</Text>
+                  </Pressable>
                 )}
               </View>
             )}

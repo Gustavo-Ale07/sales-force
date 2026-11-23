@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { DraftRecord } from "@salesforce/mobile-db";
 import type { ConnectivityState } from "../connectivity/connectivity";
@@ -19,9 +19,12 @@ function releaseToneColor(tone: ReleaseTone): string {
   if (tone === "neutral") return colors.textMuted;
   return colors.warning;
 }
-import { saleActions, saleExplanation } from "../offline/sales-status";
+
 import { colors, spacing } from "../theme";
+import { codeOfHeldMessage } from "../data/error-catalog";
+import { isCustomerUnavailable, isProductBlocked, saleActions, saleExplanation } from "../offline/sales-status";
 import { useAppModal } from "./app-modal";
+import { useErrorPopup } from "./use-error-popup";
 import { SaleBadgeView, describeSaleValue } from "./sale-parts";
 import { formatDateTime } from "./sync-status";
 
@@ -57,6 +60,7 @@ function money(value: string | null): string {
 /** Read-only view of one sale, with only the actions that are safe for its state. Explains what each state means in plain words. */
 export function SaleDetailScreen({ localId, localOrders, connectivity, orders, orderPdf, onBack, onChanged, onContinue, onDuplicate, onSyncNow }: SaleDetailScreenProps) {
   const modal = useAppModal();
+  const errors = useErrorPopup();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [missing, setMissing] = useState(false);
   const [reloads, setReloads] = useState(0);
@@ -118,14 +122,26 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
     async (work: () => Promise<void>, failure = "Tente novamente quando houver conexão.") => {
       try {
         await work();
-      } catch {
-        modal.show({ variant: "error", title: "Não foi possível concluir", message: failure });
+      } catch (error) {
+        errors.report(error, { retry: () => void act(work, failure) }, { title: "Não foi possível concluir" });
       }
       onChanged();
       setReloads((n) => n + 1);
     },
-    [onChanged, modal],
+    [onChanged, errors],
   );
+
+  // A held order (customer or product no longer sellable) says so once when opened, with the way out.
+  const heldCode = loaded === null || !(isCustomerUnavailable(loaded.draft) || isProductBlocked(loaded.draft)) ? null : codeOfHeldMessage(loaded.draft.lastError);
+  const heldKey = heldCode === null ? null : `${localId}:${heldCode}`;
+  const announced = useRef<string | null>(null);
+  useEffect(() => {
+    if (heldCode === null || heldKey === announced.current) return;
+    announced.current = heldKey;
+    errors.reportCode(heldCode, { change_customer: () => onContinue(localId) }, loaded?.draft.lastError ?? undefined);
+    // Announce once per order and cause, not on every reload of the same state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [heldKey]);
 
   if (missing) {
     return (
@@ -157,11 +173,9 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
     const result = await shareOrderPdf(orderPdf, draft, lines);
     setSharing(false);
     if (!result.ok) {
-      modal.show({
-        variant: "error",
-        title: "Não foi possível gerar o PDF",
-        message: result.reason === "empty" ? "Este pedido não tem itens." : "Tente novamente. Não é preciso estar conectado para gerar o PDF.",
-      });
+      if (result.reason === "empty") modal.show({ variant: "error", title: "PDF não gerado", message: "Este pedido não tem itens." });
+      else if (result.reason === "customer_unavailable") errors.reportCode("customer_unavailable", { change_customer: () => onContinue(draft.localId) }, undefined, { title: "PDF não gerado" });
+      else errors.reportCode("pdf_failed", { retry: () => void sharePdf() });
     }
   }
 
