@@ -146,7 +146,7 @@ describe('central policy', () => {
     }
   });
 
-  it('operations (owner ruling 2026-11-23): web only, never mobile; only the release queue, refresh and logout; nothing else', () => {
+  it('operations (owner ruling 2026-11-23): web only, never mobile; only the release queue, refresh, logout and its own profile photo; nothing else', () => {
     expect(isChannelAllowed('operations', 'web')).toBe(true);
     expect(isChannelAllowed('operations', 'mobile')).toBe(false);
     expect(authorizeRoute({ role: 'operations', channel: 'mobile' }, 'listReleaseQueue')).toEqual({ allowed: false, reason: 'channel_not_permitted' });
@@ -154,7 +154,7 @@ describe('central policy', () => {
       .filter(([, policy]) => policy.roles.includes('operations'))
       .map(([operationId]) => operationId)
       .sort();
-    expect(granted).toEqual(['getReleaseQueueCount', 'getSyncRefresh', 'listReleaseQueue', 'logout', 'startSyncRefresh']);
+    expect(granted).toEqual(['deleteProfilePhoto', 'getProfilePhoto', 'getReleaseQueueCount', 'getSyncRefresh', 'listReleaseQueue', 'logout', 'putProfilePhoto', 'startSyncRefresh']);
   });
 
   it('a seller is never granted the release queue (owner ruling 2026-11-23)', () => {
