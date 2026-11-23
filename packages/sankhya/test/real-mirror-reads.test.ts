@@ -219,6 +219,30 @@ describe('readProducts scope (sellable usage, active, optional mobility field)',
     ).toThrow(RangeError);
   });
 
+  it('maps TGFPRO.DESCMAX to maxDiscountPercent; null or blank = absent (no limit registered); DESCMAXFLEX is never selected', async () => {
+    const withLimit = (code: number, descmax: unknown) => ({ CODPROD: code, DESCRPROD: `P${code}`, ATIVO: 'S', USOPROD: 'V', CODGRUPOPROD: 10, DESCMAX: descmax, DESCMAXFLEX: 99, ...base });
+    const { gateway, mock } = gatewayOver({
+      TGFPRO: [
+        // Owner Sandbox facts (2026-11-23): these five products carry DESCMAX = 12.
+        withLimit(4158, 12), withLimit(4159, 12), withLimit(1439, '12'), withLimit(1437, 12), withLimit(3590, 12.0),
+        withLimit(10, null), withLimit(11, ''), withLimit(12, 2), withLimit(13, 100), withLimit(14, 0), withLimit(15, 150), withLimit(16, 12.5),
+      ],
+    });
+    const result = await rows(gateway.readProducts({ scope: { products: { usageValues: ['V'] } } }));
+    const byCode = new Map(result.map((p) => [p.code, p]));
+    for (const code of [4158, 4159, 1439, 1437, 3590]) expect(byCode.get(code)?.maxDiscountPercent).toBe('12');
+    for (const code of [10, 11]) expect(byCode.get(code)).not.toHaveProperty('maxDiscountPercent');
+    expect(byCode.get(12)?.maxDiscountPercent).toBe('2');
+    expect(byCode.get(13)?.maxDiscountPercent).toBe('100');
+    expect(byCode.get(14)?.maxDiscountPercent).toBe('0');
+    // Outside 0..100 is not a percentage: no limit registered, the product itself stays.
+    expect(byCode.get(15)).not.toHaveProperty('maxDiscountPercent');
+    expect(byCode.get(16)?.maxDiscountPercent).toBe('12.5');
+    const text = mock.queries().map((q) => q.sql ?? '').join('\n');
+    expect(text).toContain('DESCMAX');
+    expect(text).not.toContain('DESCMAXFLEX');
+  });
+
   it('an empty usage list selects nothing', async () => {
     const { gateway } = gatewayOver(tables);
     expect(await rows(gateway.readProducts({ scope: { products: { usageValues: [] } } }))).toEqual([]);

@@ -42,6 +42,7 @@ export function toDomainProduct(row: ProductRow): Product {
     brand: row.brand,
     reference: row.reference,
     quantityStep: row.quantityStep === null ? null : normalizeDecimalString(row.quantityStep),
+    maxDiscountPercent: row.maxDiscountPercent === null ? null : normalizeDecimalString(row.maxDiscountPercent),
   };
 }
 
@@ -118,6 +119,7 @@ export class CatalogService {
       groupCode: row.groupCode,
       groupName: row.groupName,
       quantityStep: product.quantityStep ?? null,
+      maxDiscountPercent: product.maxDiscountPercent ?? null,
       listPrice: toListPriceContext(this.pricing.priceOf(book, row.code, row.unitPrice)),
       image,
       ipi,

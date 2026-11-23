@@ -1147,3 +1147,11 @@ Columns used (TSILIB, `TABELA='TGFCAB'`, `NUCHAVE`=NUNOTA, `DHLIB` null):
 | `DHSOLICIT` (request time) | "waiting since" | NOT read: not validated. The queue uses the order time (`order_time`) until validated; the table already has a nullable `requested_at` and the API field `waitingSinceSource` flips to `sankhya_request` |
 
 NEEDS VALIDATION (nothing built on a guess): (a) `CODUSULIB` and the request-time column exist and are readable by the worker user; (b) whether `CODUSULIB` is filled for cascade lines not yet assigned, and whether a null means "any user of the sector"; (c) the user name for a `CODUSULIB` (no TSIUSU name is mirrored; only the code is shown); (d) whether event 13 is truly "Pedidos e Financeiro" (proposal: shown in both sectors, `erp.orderStage.bothSectorsEvents`); (e) whether a Sankhya screen URL can open a note by NUNOTA (no deep link is documented anywhere in this repository: none is built, the row shows NUNOTA to search).
+
+### 9.62 Product discount ceiling `TGFPRO.DESCMAX` (owner Sandbox SELECT, 2026-11-23) — column VALIDATED; semantics NEEDS VALIDATION
+
+Owner facts (Sandbox, SELECT): the discount limit lives in `TGFPRO.DESCMAX` (percent). Products 4158, 4159, 1439, 1437 and 3590 have `DESCMAX = 12`. Of 3789 active products 1591 have `DESCMAX` null (no limit registered); registered values range from 2 to 100.
+
+- Read by the product mirror (`PRODUCT_SPEC`, SELECT only, worker) as `maxDiscountPercent`; null/blank = no limit registered (field absent). A value outside 0..100 is treated as "no limit registered" (the product is kept). The meaning of 0 is NOT validated: carried as "0".
+- `TGFPRO.DESCMAXFLEX` exists; its meaning is UNKNOWN. NEEDS VALIDATION: it is NOT selected, mirrored or used anywhere (a test asserts it is absent from the query).
+- NEEDS VALIDATION (owner): whether a null `DESCMAX` means "no discount allowed" or "no limit" (Force treats it as no limit, no warning); whether the limit applies to the list-price base the Force uses; whether `DESCMAX` is the only ceiling the TOP release (TSILIB) checks. Nothing in Force blocks or changes order state because of it: the field is informational for the clients (docs/implementation/product-discount-ceiling.md).

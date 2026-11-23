@@ -282,6 +282,7 @@ const products: MirrorEntitySpec = {
           usageCode: row.usageCode,
           ipiCode: row.ipiCode ?? null,
           quantityStep: row.quantityStep ?? null,
+          maxDiscountPercent: row.maxDiscountPercent ?? null,
           active: row.active,
         },
       }));

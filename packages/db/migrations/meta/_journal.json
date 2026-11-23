@@ -302,6 +302,13 @@
       "when": 1795451526911,
       "tag": "0042_account_role_operations",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1795457692630,
+      "tag": "0043_erp_product_max_discount",
+      "breakpoints": true
     }
   ]
 }

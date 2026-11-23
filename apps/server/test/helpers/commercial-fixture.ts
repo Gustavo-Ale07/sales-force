@@ -66,6 +66,7 @@ export async function seedDemoMirror(handle: DbHandle, syncedAt: Date = new Date
         usageCode: p.usageCode,
         ipiCode: p.ipiCode ?? null,
         quantityStep: p.quantityStep ?? null,
+        maxDiscountPercent: p.maxDiscountPercent ?? null,
         active: p.active,
         ...base(p),
       })),

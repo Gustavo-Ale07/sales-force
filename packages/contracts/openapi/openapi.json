@@ -8168,6 +8168,12 @@
               "null"
             ]
           },
+          "maxDiscountPercent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "listPrice": {
             "$ref": "#/components/schemas/ListPriceContext"
           },
@@ -8349,6 +8355,12 @@
             ]
           },
           "quantityStep": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "maxDiscountPercent": {
             "type": [
               "string",
               "null"

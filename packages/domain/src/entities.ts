@@ -93,6 +93,12 @@ export interface Product {
   readonly ipiCode?: number | null;
   /** Selling step (ERP product minimum-group field): quantities are multiples of it. undefined = not requested, null = none (step 0.01). */
   readonly quantityStep?: string | null;
+  /**
+   * Discount ceiling registered on the ERP product (percent, `0..100`, registered on the ERP product). undefined = not requested,
+   * null = no limit registered (no warning). Sankhya is the only source: never a literal or a configuration value.
+   * Not cost nor margin (P-20): it is a commercial policy value shown to every authorized profile.
+   */
+  readonly maxDiscountPercent?: string | null;
 }
 
 export interface PriceTable {

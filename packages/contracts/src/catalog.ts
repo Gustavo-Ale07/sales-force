@@ -174,6 +174,11 @@ export const ProductListItemSchema = named(
     groupName: z.string().nullable(),
     /** Additive: selling step (multiples of it); absent or null = hundredths (at most 2 decimals). */
     quantityStep: z.string().nullable().optional(),
+    /**
+     * Additive: discount ceiling registered on the ERP product (percent, decimal text, e.g. "12"). `null` or absent = no
+     * limit registered (clients show no warning). Sankhya is the only source. A product attribute, not cost or margin.
+     */
+    maxDiscountPercent: z.string().nullable().optional(),
     listPrice: ListPriceContextSchema,
     /** `null` (or absent) = the product has no image; the catalog works without one. */
     image: ProductImageSchema.nullable().optional(),

@@ -482,6 +482,17 @@ function stepField(step: string | null): { quantityStep?: string } {
   return step === null ? {} : { quantityStep: step };
 }
 
+/**
+ * DESCMAX (percent discount ceiling registered on the product). Null/blank = no limit registered, so the field is left
+ * out. A value outside 0..100 is not a percentage: treated as "no limit registered" rather than dropping the product.
+ * DESCMAXFLEX is deliberately NOT read (meaning unknown, NEEDS VALIDATION).
+ */
+export function maxDiscountField(value: string | null): { maxDiscountPercent?: string } {
+  if (value === null) return {};
+  const percent = Number(value);
+  return Number.isFinite(percent) && percent >= 0 && percent <= 100 ? { maxDiscountPercent: value } : {};
+}
+
 function positiveStep(value: string | null): string | null {
   return value !== null && Number(value) > 0 ? value : null;
 }
@@ -493,8 +504,8 @@ function positiveStep(value: string | null): string | null {
 export const PRODUCT_SPEC: EntitySpec<Product> = {
   entity: 'products',
   table: 'TGFPRO',
-  select: ['CODPROD', 'DESCRPROD', 'ATIVO', 'USOPROD', 'CODGRUPOPROD', 'CODVOL', 'MARCA', 'REFERENCIA', 'CODIPI', 'AGRUPMIN'],
-  columns: ['CODPROD', 'DESCRPROD', 'ATIVO', 'USOPROD', 'CODGRUPOPROD', 'CODVOL', 'MARCA', 'REFERENCIA', 'CODIPI', 'AGRUPMIN'],
+  select: ['CODPROD', 'DESCRPROD', 'ATIVO', 'USOPROD', 'CODGRUPOPROD', 'CODVOL', 'MARCA', 'REFERENCIA', 'CODIPI', 'AGRUPMIN', 'DESCMAX'],
+  columns: ['CODPROD', 'DESCRPROD', 'ATIVO', 'USOPROD', 'CODGRUPOPROD', 'CODVOL', 'MARCA', 'REFERENCIA', 'CODIPI', 'AGRUPMIN', 'DESCMAX'],
   // `CODPROD = 0` is the ERP placeholder row ("<sem descrição>", Sandbox 2026-09-30): never mirrored.
   where: 'CODPROD > 0',
   orderBy: 'CODPROD',
@@ -510,6 +521,8 @@ export const PRODUCT_SPEC: EntitySpec<Product> = {
     ipiCode: row.nullableInt('CODIPI'),
     // AGRUPMIN (grouping minimum = selling step): null or 0 means no rule (step 0.01).
     ...stepField(positiveStep(row.nullableDecimal('AGRUPMIN'))),
+    // DESCMAX (TGFPRO discount ceiling, percent): absent = no limit registered.
+    ...maxDiscountField(row.nullableDecimal('DESCMAX')),
   }),
   keyOf: (product) => [product.code],
 };

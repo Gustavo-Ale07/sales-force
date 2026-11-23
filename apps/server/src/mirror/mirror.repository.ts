@@ -93,6 +93,8 @@ export interface ProductRow {
   readonly usageCode: string | null;
   /** Selling step (AGRUPMIN), numeric text as stored; null = none. */
   readonly quantityStep: string | null;
+  /** Discount ceiling in percent (DESCMAX), numeric text as stored; null = no limit registered. */
+  readonly maxDiscountPercent: string | null;
   readonly active: boolean;
 }
 
@@ -435,6 +437,7 @@ export class MirrorRepository {
       groupName: erpProduct.groupName,
       usageCode: erpProduct.usageCode,
       quantityStep: erpProduct.quantityStep,
+      maxDiscountPercent: erpProduct.maxDiscountPercent,
       active: erpProduct.active,
     };
   }

@@ -267,6 +267,8 @@ export const erpProduct = pgTable(
     ipiCode: integer('ipi_code'),
     /** Selling step (TGFPRO.AGRUPMIN): quantities are multiples of it. NULL = no rule (step 0.01). */
     quantityStep: numeric('quantity_step', { precision: 14, scale: 4 }),
+    /** Discount ceiling in percent (TGFPRO.DESCMAX). NULL = no limit registered in the ERP. Not cost/margin. */
+    maxDiscountPercent: numeric('max_discount_percent', { precision: 7, scale: 4 }),
     active: boolean('active').notNull(),
     ...mirrorColumns(),
   },

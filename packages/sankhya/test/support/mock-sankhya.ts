@@ -97,6 +97,7 @@ export function erpTablesFromDataset(dataset: DemoDataset, dbUtcOffsetMinutes = 
       REFERENCIA: p.reference,
       CODIPI: p.ipiCode ?? null,
       AGRUPMIN: p.quantityStep ?? null,
+      DESCMAX: p.maxDiscountPercent ?? null,
     })),
     TGFFIN: [
       ...dataset.openTitles.map((t) => ({
