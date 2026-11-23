@@ -178,9 +178,6 @@ export function CartView({ lines, preview, onQuantityChange, onDiscountChange, o
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {!selectionMode && (
-        <Text style={styles.selectionHint}>Toque e segure um item para selecionar vários e aplicar um desconto só a eles.</Text>
-      )}
       {lines.map((line, index) => (
         <CartLine
           key={line.key}
@@ -250,7 +247,6 @@ const styles = StyleSheet.create({
   content: { padding: spacing.lg, gap: spacing.sm, paddingBottom: spacing.xl },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl },
   emptyText: { color: colors.textMuted, textAlign: "center" },
-  selectionHint: { fontSize: 11, color: colors.textMuted, fontStyle: "italic" },
   line: {
     backgroundColor: colors.surface,
     borderRadius: 8,

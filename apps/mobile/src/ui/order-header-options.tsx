@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 import type { OrderHeaderIssueCode } from "@salesforce/domain";
-import { sellableNegotiationTypes, topLabel, topOptions } from "../data/order-header";
+import { sellableNegotiationTypes, topOptions } from "../data/order-header";
 import type { Carrier, OrderEntryConfiguration } from "../data/ports";
 import { colors, spacing } from "../theme";
 
@@ -133,7 +133,6 @@ export function OrderHeaderOptions({ sales, topCode, negotiationTypeCode, onTopC
             );
           })}
         </View>
-        <Text style={styles.hint}>CIF: o frete é por conta de quem vende. FOB: por conta do cliente.</Text>
       </View>
       <View {...groupProps("missing_carrier")}>
         {caption("Transportadora", "missing_carrier")}
@@ -177,7 +176,6 @@ export function OrderHeaderOptions({ sales, topCode, negotiationTypeCode, onTopC
           </View>
         </View>
       </Modal>
-      {tops.length > 0 && currentTop !== null && <Text style={styles.hint}>{`Operação atual: ${topLabel(currentTop, sales.orderTops)}.`}</Text>}
     </View>
   );
 }

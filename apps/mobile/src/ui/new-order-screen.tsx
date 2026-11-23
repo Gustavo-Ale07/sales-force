@@ -19,14 +19,13 @@ import {
 } from "../data/order-draft";
 import type { Carrier, CustomerListItem, OrderDetail, OrderEntryConfiguration, OrderRepository, ProductListItem, Repositories } from "../data/ports";
 import { formatBrl } from "../lib/money";
-import { ERP_DISCOUNT_NOTICE } from "../offline/approval-status";
 import { describeDraftStatus, type LocalOrdersPort } from "../offline/local-orders";
 import { newClientRequestId } from "../lib/uuid";
 import { useAppModal } from "./app-modal";
 import { useErrorPopup } from "./use-error-popup";
 import { OrderHeaderOptions } from "./order-header-options";
 import { NOTES_MAX, NotesField, SummaryBlock, SummaryRow, WIZARD_STEPS, WizardFooter, WizardProgress, type WizardStep } from "./order-wizard-parts";
-import { topLabel } from "../data/order-header";
+import { isQuotationTop, topLabel } from "../data/order-header";
 import { describeListPrice } from "../lib/money";
 import { colors, spacing } from "../theme";
 import { CartView, OrderTotals } from "./cart-view";
@@ -84,7 +83,7 @@ export function NewOrderScreen({
   /** Step 3 shows either the catalog or the cart as its own view (never both, never a permanent panel). */
   const [productsView, setProductsView] = useState<"catalog" | "cart">("catalog");
   /** Why the seller cannot advance yet; cleared on any step change or edit. */
-  const [stepError, setStepError] = useState<string | null>(null);
+  const [, setStepError] = useState<string | null>(null);
   const modal = useAppModal();
   const errors = useErrorPopup();
   const [customer, setCustomer] = useState<PickedCustomer | null>(null);
@@ -420,12 +419,13 @@ export function NewOrderScreen({
     setStepError(null);
     if (customer === null || customer.code === picked.code || lines.length === 0) {
       setCustomer(picked);
+      goToStep("negotiation");
       return;
     }
     modal.show({
       variant: "confirm",
-      title: "Trocar cliente",
-      message: "O carrinho atual será esvaziado. Deseja continuar?",
+      title: "Trocar de cliente?",
+      message: "Os produtos já adicionados serão removidos do pedido.",
       buttons: [
         {
           label: "Continuar",
@@ -433,6 +433,7 @@ export function NewOrderScreen({
           onPress: () => {
             setLines([]);
             setCustomer(picked);
+            goToStep("negotiation");
           },
         },
         { label: "Cancelar", role: "cancel" },
@@ -537,9 +538,9 @@ export function NewOrderScreen({
   }
 
   /**
-   * Silent draft save between steps and when the app goes to the background (offline path only; online there is
+   * Silent save between steps and when the app goes to the background (offline path only; online there is
    * no local draft and nothing is created on the server behind the seller's back). Only a complete, valid cart is
-   * stored, exactly what "Salvar rascunho" accepts; a failure here stays silent and the final save reports it.
+   * stored, exactly what the save button accepts; a failure here stays silent and the final save reports it.
    */
   async function autoSave() {
     if (localOrders === undefined || customer === null || saving || finished || !dirty) return;
@@ -626,10 +627,16 @@ export function NewOrderScreen({
     }
   }
 
+  // Quotation vs order comes from the installation's configured quotation TOP (never a literal code).
+  const salesConfig = config.status === "ready" ? config.value.sales : null;
+  const isQuotation = salesConfig !== null && isQuotationTop(topCode ?? salesConfig.orderTops.defaultTopCode, salesConfig.orderTops);
+  const kindWord = isQuotation ? "orçamento" : "pedido";
+  const kindTitle = isQuotation ? "Orçamento" : "Pedido";
+
   if (savedLocal !== null) {
     return (
       <View style={styles.center}>
-        <Text style={styles.successTitle}>Pedido salvo neste aparelho</Text>
+        <Text style={styles.successTitle}>{`${kindTitle} salvo neste aparelho`}</Text>
         <Text style={styles.successMeta}>{savedLocal.customerName}</Text>
         <Text style={styles.successMeta}>{describeDraftStatus(savedLocal.status)}</Text>
         <Pressable style={styles.primaryButton} onPress={resetOrder} accessibilityRole="button" accessibilityLabel="Novo pedido">
@@ -645,10 +652,10 @@ export function NewOrderScreen({
   if (savedOrder !== null) {
     return (
       <View style={styles.center}>
-        <Text style={styles.successTitle}>{editingOrder !== null ? "Alterações salvas" : "Rascunho salvo"}</Text>
+        <Text style={styles.successTitle}>{editingOrder !== null ? "Alterações salvas" : `${kindTitle} salvo`}</Text>
         <Text style={styles.successMeta}>{`Pedido nº ${savedOrder.draftNumber} · ${savedOrder.customerName}`}</Text>
         <Text style={styles.successTotal}>{formatBrl(savedOrder.estimatedTotal) ?? "—"}</Text>
-        {savedOrder.isPartial && <Text style={styles.partialNotice}>Total parcial: há itens sem preço neste rascunho.</Text>}
+        {savedOrder.isPartial && <Text style={styles.partialNotice}>Total parcial: há itens sem preço neste pedido.</Text>}
         <Pressable style={styles.primaryButton} onPress={resetOrder} accessibilityRole="button" accessibilityLabel="Novo pedido">
           <Text style={styles.primaryButtonText}>Novo pedido</Text>
         </Pressable>
@@ -667,7 +674,12 @@ export function NewOrderScreen({
   const orderable = lines.length > 0 && preview.valid && blockedLineCount === 0;
   const total = formatBrl(preview.ipi.grandTotalEstimated) ?? "—";
   const itemsInfo = `${lines.length} ${lines.length === 1 ? "item" : "itens"} · ${total}`;
-  const saveLabel = editingOrder !== null || localDraft !== null ? "Salvar alterações" : "Salvar rascunho";
+  const saveLabel = editingOrder !== null || localDraft !== null ? "Salvar alterações" : `Salvar ${kindWord}`;
+
+  // Negociação: "Próximo" stays off until every mandatory field is filled (the missing ones are highlighted in the form).
+  const nextBlocked =
+    (step === "customer" && customer === null) ||
+    (step === "negotiation" && (config.status !== "ready" || missingHeader.length > 0 || notesText.length > NOTES_MAX));
 
   function renderCustomerStep() {
     return (
@@ -710,7 +722,7 @@ export function NewOrderScreen({
             freightType={freightType}
             onFreightChange={(value) => setChoice((current) => ({ ...current, freight: value }))}
             missing={missingHeader}
-            showMissing={stepError !== null || localDraft !== null || editingOrder !== null}
+            showMissing
             onFieldOffset={(code, y) => {
               fieldOffsets.current[code] = y;
             }}
@@ -730,16 +742,23 @@ export function NewOrderScreen({
             onPress={() => setProductsView("catalog")}
             accessibilityRole="tab"
             accessibilityState={{ selected: productsView === "catalog" }}
+            accessibilityLabel="Produtos"
           >
-            <Text style={[styles.pillText, productsView === "catalog" && styles.pillTextActive]}>Produtos</Text>
+            <Text style={[styles.pillText, productsView === "catalog" && styles.pillTextActive]}>🧺 Produtos</Text>
           </Pressable>
           <Pressable
             style={[styles.pill, productsView === "cart" && styles.pillActive]}
             onPress={() => setProductsView("cart")}
             accessibilityRole="tab"
             accessibilityState={{ selected: productsView === "cart" }}
+            accessibilityLabel={`Carrinho${lines.length > 0 ? ` (${lines.length})` : ""}`}
           >
-            <Text style={[styles.pillText, productsView === "cart" && styles.pillTextActive]}>{`Carrinho${lines.length > 0 ? ` (${lines.length})` : ""}`}</Text>
+            <Text style={[styles.pillText, productsView === "cart" && styles.pillTextActive]}>🛒 Carrinho</Text>
+            {lines.length > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{lines.length}</Text>
+              </View>
+            )}
           </Pressable>
         </View>
         {/* Kept mounted (only hidden) in the cart view, so the catalog search, filters and Grade/Lista survive the round trip. */}
@@ -821,7 +840,7 @@ export function NewOrderScreen({
           <SummaryRow label="Frete" value={freightLabel ?? "Não informado"} />
           <SummaryRow label="Transportadora" value={carrierName ?? "Não informada"} />
           {missingHeader.length > 0 && (
-            <Text style={styles.footerNotice}>{`Falta preencher para enviar: ${missingHeader.map((code) => ORDER_HEADER_ISSUE_LABEL[code]).join(", ")}. Toque em Editar negociação.`}</Text>
+            <Text style={styles.footerNotice}>{`Falta preencher para enviar: ${missingHeader.map((code) => ORDER_HEADER_ISSUE_LABEL[code]).join(", ")}.`}</Text>
           )}
           <SummaryRow label="Observações" value={notesValue ?? "—"} />
         </SummaryBlock>
@@ -849,11 +868,6 @@ export function NewOrderScreen({
 
         <OrderTotals preview={preview} />
 
-        {lines.length > 0 && sales?.discountAuthorityMode === "erp" && (
-          <Text style={styles.footerInfo} accessibilityLabel="Liberação de descontos no Sankhya">
-            {ERP_DISCOUNT_NOTICE}
-          </Text>
-        )}
         {config.status === "error" && <Text style={styles.footerNotice}>{config.error.message}</Text>}
         {lines.length > 0 && !preview.valid && <Text style={styles.footerNotice}>Há quantidade ou desconto inválido no carrinho. Corrija em Produtos.</Text>}
         {blockedLineCount > 0 && (
@@ -879,7 +893,13 @@ export function NewOrderScreen({
       {step === "summary" ? (
         <WizardFooter onBack={goBack} onNext={() => void save()} nextLabel={saveLabel} nextDisabled={!orderable || saving} busy={saving} />
       ) : (
-        <WizardFooter onBack={step === "customer" ? null : goBack} onNext={goNext} nextLabel="Avançar" info={step === "products" ? itemsInfo : undefined} />
+        <WizardFooter
+          onBack={step === "customer" ? null : goBack}
+          onNext={goNext}
+          nextLabel="Próximo"
+          nextDisabled={nextBlocked}
+          info={step === "products" ? itemsInfo : undefined}
+        />
       )}
 
       <DiscountSheet
@@ -939,10 +959,12 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl, gap: spacing.sm },
   stepTitle: { fontSize: 16, fontWeight: "700", color: colors.text, padding: spacing.lg, paddingBottom: 0 },
   pills: { flexDirection: "row", gap: spacing.sm, padding: spacing.md },
-  pill: { flex: 1, alignItems: "center", paddingVertical: spacing.sm, borderRadius: 20, backgroundColor: colors.background },
+  pill: { flex: 1, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: spacing.xs, paddingVertical: spacing.sm, borderRadius: 20, backgroundColor: colors.background },
   pillActive: { backgroundColor: colors.navy },
   pillText: { fontSize: 14, fontWeight: "600", color: colors.textMuted },
   pillTextActive: { color: colors.onNavy },
+  badge: { minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, backgroundColor: colors.red, alignItems: "center", justifyContent: "center" },
+  badgeText: { color: colors.onNavy, fontSize: 11, fontWeight: "800" },
   cartToolbar: {
     flexDirection: "row",
     gap: spacing.sm,
