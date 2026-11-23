@@ -1966,7 +1966,7 @@
             }
           },
           "201": {
-            "description": "Rascunho criado",
+            "description": "Pedido criado (não enviado)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2131,7 +2131,7 @@
         },
         "responses": {
           "200": {
-            "description": "Rascunho atualizado",
+            "description": "Pedido atualizado (não enviado)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2981,7 +2981,7 @@
         },
         "responses": {
           "200": {
-            "description": "Reenvio idempotente: rascunho original",
+            "description": "Reenvio idempotente: pedido original",
             "content": {
               "application/json": {
                 "schema": {
@@ -2991,7 +2991,7 @@
             }
           },
           "201": {
-            "description": "Rascunho criado a partir do último pedido",
+            "description": "Pedido não enviado criado a partir do último pedido",
             "content": {
               "application/json": {
                 "schema": {
@@ -3085,7 +3085,7 @@
         },
         "responses": {
           "200": {
-            "description": "Reenvio idempotente: rascunho original",
+            "description": "Reenvio idempotente: pedido original",
             "content": {
               "application/json": {
                 "schema": {
@@ -3095,7 +3095,7 @@
             }
           },
           "201": {
-            "description": "Rascunho criado a partir do orçamento",
+            "description": "Pedido não enviado criado a partir do orçamento",
             "content": {
               "application/json": {
                 "schema": {
@@ -3594,7 +3594,7 @@
         },
         "responses": {
           "200": {
-            "description": "Reenvio idempotente: rascunho original",
+            "description": "Reenvio idempotente: pedido original",
             "content": {
               "application/json": {
                 "schema": {
@@ -3604,7 +3604,7 @@
             }
           },
           "201": {
-            "description": "Rascunho criado a partir do modelo",
+            "description": "Pedido não enviado criado a partir do modelo",
             "content": {
               "application/json": {
                 "schema": {

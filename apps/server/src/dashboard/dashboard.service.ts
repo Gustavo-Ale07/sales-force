@@ -77,10 +77,10 @@ export class DashboardService {
         label: 'Pedidos',
         demo: false,
         metrics: [
-          { key: 'drafts', label: 'Rascunhos em aberto', value: count(figures.counts.drafts), description: null },
+          { key: 'drafts', label: 'Não enviados', value: count(figures.counts.drafts), description: null },
           {
             key: 'drafts_estimated_total',
-            label: 'Valor estimado dos rascunhos',
+            label: 'Valor dos pedidos não enviados',
             value: { kind: 'money', value: figures.counts.draftsEstimatedTotal },
             description: 'Estimativa pelo preço de lista; linhas sem preço não entram na soma.',
           },

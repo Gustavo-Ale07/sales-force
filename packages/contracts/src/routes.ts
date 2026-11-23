@@ -483,7 +483,7 @@ export const routes = {
     auth: 'session',
     request: { body: CreateOrderRequestSchema },
     responses: {
-      201: { description: 'Rascunho criado', schema: OrderDetailSchema },
+      201: { description: 'Pedido criado (não enviado)', schema: OrderDetailSchema },
       200: { description: 'Reenvio idempotente: pedido original', schema: OrderDetailSchema },
     },
     errors: [400, 401, 403, 404, 409],
@@ -509,7 +509,7 @@ export const routes = {
       'Full replace. 409 version_conflict when `expectedVersion` is stale; 409 order_not_editable when the order is not a draft. The server recomputes prices and totals. `expectedDataset` is required: 409 dataset_mismatch (the order is not changed) when it differs from the dataset the server declares, or the server declares none.',
     auth: 'session',
     request: { params: OrderPathSchema, body: ReplaceOrderRequestSchema },
-    responses: { 200: { description: 'Rascunho atualizado', schema: OrderDetailSchema } },
+    responses: { 200: { description: 'Pedido atualizado (não enviado)', schema: OrderDetailSchema } },
     errors: [400, 401, 403, 404, 409],
   }),
   deleteOrder: defineRoute({
@@ -647,8 +647,8 @@ export const routes = {
     request: { params: CustomerPathSchema, body: RepeatLastOrderRequestSchema },
     maxBodyBytes: 2 * 1024,
     responses: {
-      201: { description: 'Rascunho criado a partir do último pedido', schema: RepeatLastOrderResponseSchema },
-      200: { description: 'Reenvio idempotente: rascunho original', schema: RepeatLastOrderResponseSchema },
+      201: { description: 'Pedido não enviado criado a partir do último pedido', schema: RepeatLastOrderResponseSchema },
+      200: { description: 'Reenvio idempotente: pedido original', schema: RepeatLastOrderResponseSchema },
     },
     errors: [400, 401, 403, 404, 409],
   }),
@@ -665,8 +665,8 @@ export const routes = {
     request: { params: OrderPathSchema, body: DuplicateAsOrderRequestSchema },
     maxBodyBytes: 2 * 1024,
     responses: {
-      201: { description: 'Rascunho criado a partir do orçamento', schema: RepeatLastOrderResponseSchema },
-      200: { description: 'Reenvio idempotente: rascunho original', schema: RepeatLastOrderResponseSchema },
+      201: { description: 'Pedido não enviado criado a partir do orçamento', schema: RepeatLastOrderResponseSchema },
+      200: { description: 'Reenvio idempotente: pedido original', schema: RepeatLastOrderResponseSchema },
     },
     errors: [400, 401, 403, 404, 409],
   }),
@@ -751,8 +751,8 @@ export const routes = {
     request: { params: OrderTemplatePathSchema, body: UseOrderTemplateRequestSchema },
     maxBodyBytes: 2 * 1024,
     responses: {
-      201: { description: 'Rascunho criado a partir do modelo', schema: UseOrderTemplateResponseSchema },
-      200: { description: 'Reenvio idempotente: rascunho original', schema: UseOrderTemplateResponseSchema },
+      201: { description: 'Pedido não enviado criado a partir do modelo', schema: UseOrderTemplateResponseSchema },
+      200: { description: 'Reenvio idempotente: pedido original', schema: UseOrderTemplateResponseSchema },
     },
     errors: [400, 401, 403, 404, 409],
   }),

@@ -3298,7 +3298,7 @@ export interface operations {
                     "application/json": components["schemas"]["OrderDetail"];
                 };
             };
-            /** @description Rascunho criado */
+            /** @description Pedido criado (não enviado) */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -3427,7 +3427,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Rascunho atualizado */
+            /** @description Pedido atualizado (não enviado) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4058,7 +4058,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Reenvio idempotente: rascunho original */
+            /** @description Reenvio idempotente: pedido original */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4067,7 +4067,7 @@ export interface operations {
                     "application/json": components["schemas"]["RepeatLastOrderResponse"];
                 };
             };
-            /** @description Rascunho criado a partir do último pedido */
+            /** @description Pedido não enviado criado a partir do último pedido */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -4138,7 +4138,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Reenvio idempotente: rascunho original */
+            /** @description Reenvio idempotente: pedido original */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4147,7 +4147,7 @@ export interface operations {
                     "application/json": components["schemas"]["RepeatLastOrderResponse"];
                 };
             };
-            /** @description Rascunho criado a partir do orçamento */
+            /** @description Pedido não enviado criado a partir do orçamento */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -4541,7 +4541,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Reenvio idempotente: rascunho original */
+            /** @description Reenvio idempotente: pedido original */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4550,7 +4550,7 @@ export interface operations {
                     "application/json": components["schemas"]["UseOrderTemplateResponse"];
                 };
             };
-            /** @description Rascunho criado a partir do modelo */
+            /** @description Pedido não enviado criado a partir do modelo */
             201: {
                 headers: {
                     [name: string]: unknown;

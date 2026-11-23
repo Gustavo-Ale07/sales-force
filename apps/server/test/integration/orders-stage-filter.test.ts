@@ -110,6 +110,15 @@ describe('GET /orders?stage=', () => {
     expect(await list('seller1', 'stage=in_review&status=draft')).toEqual({ ids: [], total: 0 });
   });
 
+  it('the dashboard names the unsent orders without the word "rascunho"', async () => {
+    const response = await ctx.call('seller1', 'GET', '/dashboard');
+    expect(response.status).toBe(200);
+    const text = JSON.stringify(response.body);
+    expect(text).toContain('Não enviados');
+    expect(text).toContain('Valor dos pedidos não enviados');
+    expect(text.toLowerCase()).not.toContain('rascunho');
+  });
+
   it('an unknown stage code is a 400', async () => {
     expect((await ctx.call('seller1', 'GET', '/orders?stage=banana')).status).toBe(400);
   });
