@@ -68,10 +68,11 @@ export function activeStageView(view: Pick<DraftRecord, "status"> & Partial<Pick
 
 /** Compact list badge; one per real state of the sync engine. */
 export function saleBadge(view: StatusView): SaleBadge {
-  const { status, remoteId } = view;
+  const { status } = view;
   if (isCustomerUnavailable(view)) return { label: "Cliente indisponível", tone: "warning" };
   if (isProductBlocked(view)) return { label: "Produto indisponível", tone: "warning" };
-  const phase = status === "synced" ? sendPhaseOf(view) : null;
+  // A confirmed order waiting for its create/replace to reach the server is already "Aguardando envio" (status pending_sync).
+  const phase = status === "synced" || view.sendState === "requested" ? sendPhaseOf(view) : null;
   const stage = status === "synced" && STAGE_OVERRIDES_PHASE.includes(phase) ? erpStageViewOf(view.erpStage) : null;
   if (stage !== null) return { label: stage.label, tone: stage.tone };
   if (phase !== null) {
@@ -93,14 +94,12 @@ export function saleBadge(view: StatusView): SaleBadge {
     }
   }
   switch (status) {
+    // No send request yet: the order is still being assembled; it becomes "Aguardando envio" only after "Confirmar".
     case "local_only":
-      return { label: "Somente no aparelho", tone: "neutral" };
     case "pending_sync":
-      return { label: remoteId === null ? "Aguardando envio" : "Alteração aguardando envio", tone: "warning" };
     case "syncing":
-      return { label: "Sincronizando", tone: "info" };
     case "synced":
-      return { label: "Enviado ao Force", tone: "ok" };
+      return { label: "Em andamento", tone: "neutral" };
     case "sync_error":
       return { label: "Erro", tone: "danger" };
     case "conflict":
@@ -120,13 +119,13 @@ export function saleExplanation(draft: Pick<DraftRecord, "status" | "remoteId" |
   if (isProductBlocked(draft)) {
     return `${draft.lastError} — revise os itens do pedido. O pedido não será enviado enquanto isso não for resolvido. Nada foi alterado ou apagado.`;
   }
-  const phase = draft.status === "synced" ? sendPhaseOf(draft) : null;
+  const phase = draft.status === "synced" || draft.sendState === "requested" ? sendPhaseOf(draft) : null;
   if (phase !== null) {
     switch (phase) {
       case "waiting":
-        return "Este pedido está salvo no Force e será enviado ao Sankhya assim que houver conexão.";
+        return "Salvo neste aparelho. Será enviado ao Sankhya assim que possível.";
       case "refused":
-        return `O envio ao Sankhya foi recusado. ${draft.sendError ?? ""} Revise o pedido e envie de novo.`.replace(/\s+/g, " ").trim();
+        return `Não enviado ao Sankhya. ${draft.sendError ?? ""} Corrija o que for preciso e confirme de novo.`.replace(/\s+/g, " ").trim();
       case "in_sankhya":
         return "Este pedido foi enviado ao Sankhya.";
       case "verifying":
@@ -141,15 +140,10 @@ export function saleExplanation(draft: Pick<DraftRecord, "status" | "remoteId" |
   }
   switch (draft.status) {
     case "local_only":
-      return "Este pedido está salvo somente neste aparelho.";
     case "pending_sync":
-      return draft.remoteId === null
-        ? "Este pedido está salvo neste aparelho e será enviado ao Force quando houver conexão."
-        : "As alterações deste pedido estão salvas neste aparelho e serão enviadas quando houver conexão.";
     case "syncing":
-      return "Enviando este pedido ao Force...";
     case "synced":
-      return "Este pedido foi enviado ao Force. O andamento no Sankhya ainda não é acompanhado neste aplicativo.";
+      return "Pedido em andamento neste aparelho.";
     case "sync_error":
       return `Não foi possível enviar este pedido. ${draft.lastError ?? ""} Corrija o que for preciso ou tente enviar novamente.`.replace(/\s+/g, " ").trim();
     case "conflict":
@@ -165,7 +159,7 @@ export interface SaleActions {
   /** Delete the order from this device. Only for an order the Force backend has never received. */
   readonly delete: boolean;
   readonly resend: boolean;
-  /** "Enviar pedido" for an order that is only saved on the Force (never asked to send, or the send was refused: then "Reenviar"). */
+  /** "Confirmar" for an order never confirmed, "Tentar de novo" for one the server refused. */
   readonly send: boolean;
 }
 
@@ -181,10 +175,10 @@ export function saleActions(draft: Pick<DraftRecord, "status" | "remoteId"> & Pa
   const editableSynced = draft.sendState === "refused" || (draft.sendState === "submitted" && !sentToErp);
   return {
     continue: draft.status !== "synced" ? !sentToErp : editableSynced,
-    send: draft.status === "synced" && held && (draft.sendState === undefined || draft.sendState === null || draft.sendState === "refused"),
+    send: (draft.status === "synced" || draft.status === "pending_sync" || draft.status === "local_only") && !isCustomerUnavailable(draft) && !isProductBlocked(draft) && (draft.sendState === undefined || draft.sendState === null || draft.sendState === "refused"),
     duplicate: true,
     delete: !held && draft.status !== "syncing",
     // A draft held for an unavailable customer is never offered for resending: sending stays blocked until it is reviewed.
-    resend: !isCustomerUnavailable(draft) && !isProductBlocked(draft) && (draft.status === "sync_error" || draft.status === "pending_sync"),
+    resend: !isCustomerUnavailable(draft) && !isProductBlocked(draft) && (draft.status === "sync_error" || draft.sendState === "requested"),
   };
 }

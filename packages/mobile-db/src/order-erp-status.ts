@@ -72,6 +72,23 @@ export async function refreshOrderErpStatuses(db: SqlDatabase, env: OfflineEnv, 
   }
 }
 
+/** Reads and stores the ERP status of ONE order (the confirm wait polls this for the Sankhya number). A failed read throws. */
+export async function refreshOneOrderErpStatus(db: SqlDatabase, env: OfflineEnv, source: OrderStatusSource, ownerAccountId: string, remoteId: string): Promise<OrderErpStatus | null> {
+  if (source.fetchOrderStatuses === undefined) return null;
+  const answered = (await source.fetchOrderStatuses([remoteId])).find((status) => status.orderId === remoteId);
+  if (answered === undefined) return null;
+  const now = isoNow(env);
+  const { stage, ...status } = answered;
+  await db.transaction(async (tx) => {
+    await setMeta(tx, keyOf(remoteId), JSON.stringify(status), now);
+    if (stage !== undefined && stage !== null) {
+      const { stage: code, ...rest } = stage;
+      await tx.execute("UPDATE local_order_draft SET erp_stage = ?, erp_stage_json = ? WHERE owner_account_id = ? AND remote_id = ?", [code, JSON.stringify(rest), ownerAccountId, remoteId]);
+    }
+  });
+  return answered;
+}
+
 /** The stored statuses of the given server order ids (those without one are simply absent). */
 export async function getOrderErpStatuses(db: SqlExecutor, orderIds: readonly string[]): Promise<OrderErpStatus[]> {
   const found: OrderErpStatus[] = [];

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { DatasetChangedError, DatasetUnavailableError, type DraftRecord } from "@salesforce/mobile-db";
+import { DatasetChangedError, DatasetUnavailableError, type ConfirmOutcome, type DraftRecord } from "@salesforce/mobile-db";
 import { ORDER_HEADER_ISSUE_LABEL, orderHeaderIssues, type OrderHeaderIssueCode } from "@salesforce/domain";
 import { datasetIdentityOf } from "../offline/reference-source";
-import { AppState, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, AppState, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ApiRequestError } from "../data/api";
+import { codeOfHeldMessage } from "../data/error-catalog";
 import { describeDataError, type DataErrorInfo } from "../data/errors";
 import {
   decrementLineQuantity,
@@ -19,7 +20,7 @@ import {
 } from "../data/order-draft";
 import type { Carrier, CustomerListItem, OrderDetail, OrderEntryConfiguration, OrderRepository, ProductListItem, Repositories } from "../data/ports";
 import { formatBrl } from "../lib/money";
-import { describeDraftStatus, type LocalOrdersPort } from "../offline/local-orders";
+import type { LocalOrdersPort } from "../offline/local-orders";
 import { newClientRequestId } from "../lib/uuid";
 import { useAppModal } from "./app-modal";
 import { useErrorPopup } from "./use-error-popup";
@@ -136,6 +137,12 @@ export function NewOrderScreen({
   /** The device-local draft being edited (offline-first path); `null` for a fresh order. */
   const [localDraft, setLocalDraft] = useState<DraftRecord | null>(null);
   const [savedLocal, setSavedLocal] = useState<DraftRecord | null>(null);
+  /** What "Confirmar" concluded for the order shown on the final screen (`null` = not confirmed). */
+  const [confirmResult, setConfirmResult] = useState<ConfirmOutcome | null>(null);
+  /** The overlay "Enviando ao Sankhya" while the confirm waits for the answer. */
+  const [sendingToErp, setSendingToErp] = useState(false);
+  /** Synchronous guard against a double tap on "Confirmar" (state updates are too late for the second tap). */
+  const confirmingRef = useRef(false);
 
   // What the editor held when it was last loaded or saved; an order that differs from it has unsaved edits to protect.
   const baselineRef = useRef(orderSignature(null, []));
@@ -327,6 +334,7 @@ export function NewOrderScreen({
     setLines([]);
     setSavedOrder(null);
     setSavedLocal(null);
+    setConfirmResult(null);
     setLocalDraft(null);
     setEditingOrder(null);
     setSelectionMode(false);
@@ -582,30 +590,81 @@ export function NewOrderScreen({
     return () => subscription.remove();
   }, []);
 
-  /** `send` = "Enviar pedido" (saves and asks the sync to deliver it to Sankhya); otherwise "Salvar" only keeps it (a send request already made is left untouched). */
-  async function save(send?: boolean) {
-    if (customer === null || saving) return;
+  /** The popup action handlers of a definitive refusal: each takes the seller to the step that fixes it. */
+  function refusalHandlers() {
+    return {
+      change_customer: () => goToStep("customer"),
+      remove_item: () => {
+        setProductsView("cart");
+        goToStep("products");
+      },
+      edit_items: () => {
+        setProductsView("cart");
+        goToStep("products");
+      },
+      edit_header: () => goToStep("negotiation"),
+      reload: () => void reload(),
+    };
+  }
+
+  /**
+   * "Confirmar" concludes the order: saves it on the device with the send request, tries to deliver it to Sankhya right away and waits a
+   * few seconds for the number. Transient failure: it stays queued and is resent by itself. Definitive refusal: popup with the fix, the
+   * order stays editable and is NOT resent.
+   */
+  async function confirmOrder() {
+    if (customer === null || confirmingRef.current || localOrders === undefined) return;
+    confirmingRef.current = true;
     setSaving(true);
-    if (localOrders !== undefined) {
+    try {
+      let saved: DraftRecord;
       try {
-        const saved = await persistLocal(localOrders, customer, send);
-        setSavedLocal(saved);
+        saved = await persistLocal(localOrders, customer, true);
       } catch (error) {
         errors.report(
           error,
-          { retry: () => void save(send) },
+          { retry: () => void confirmOrder() },
           {
-            title: "Não foi possível salvar",
+            title: "Não foi possível confirmar",
             ...(error instanceof DatasetUnavailableError || error instanceof DatasetChangedError
               ? {}
               : { message: "Este pedido não pode mais ser alterado aqui. Abra-o em Pedidos para ver a situação." }),
           },
         );
-      } finally {
-        setSaving(false);
+        return;
       }
-      return;
+      setSendingToErp(true);
+      let outcome: ConfirmOutcome = { kind: "queued" };
+      try {
+        outcome = (await localOrders.confirm?.(saved.localId)) ?? outcome;
+      } catch {
+        // Whatever failed, the order is saved and queued: it is resent by itself.
+      } finally {
+        setSendingToErp(false);
+      }
+      const latest = (await localOrders.get(saved.localId)) ?? saved;
+      setLocalDraft(latest);
+      if (outcome.kind === "refused") {
+        const code = outcome.code ?? codeOfHeldMessage(outcome.message) ?? "validation_failed";
+        const useText = code === "validation_failed" || code === "header_not_eligible";
+        errors.reportCode(code, refusalHandlers(), outcome.message ?? undefined, useText && outcome.message !== null ? { message: outcome.message } : undefined);
+        return;
+      }
+      if (outcome.kind === "queued") {
+        errors.reportCode("order_queued", {}, undefined, { title: `${kindTitle} não enviado ao Sankhya`, message: `O ${kindWord} ficou salvo neste aparelho e será enviado assim que possível.` });
+      }
+      setConfirmResult(outcome);
+      setSavedLocal(latest);
+    } finally {
+      confirmingRef.current = false;
+      setSaving(false);
     }
+  }
+
+  /** Online-only path (no local database wired): creates or replaces the server draft. */
+  async function save() {
+    if (customer === null || saving) return;
+    setSaving(true);
     try {
       // The server compares this with its own dataset before any write: it states the dataset this editor loaded under.
       // Without it nothing is sent (never "whatever is current at POST time").
@@ -640,7 +699,7 @@ export function NewOrderScreen({
         onUnauthenticated();
         return;
       }
-      errors.report(error, { retry: () => void save(send), reload: () => void reload(), change_customer: () => goToStep("customer") });
+      errors.report(error, { retry: () => void save(), reload: () => void reload(), change_customer: () => goToStep("customer") });
     } finally {
       setSaving(false);
     }
@@ -653,17 +712,29 @@ export function NewOrderScreen({
   const kindTitle = isQuotation ? "Orçamento" : "Pedido";
 
   if (savedLocal !== null) {
+    const result = confirmResult;
+    const title =
+      result?.kind === "sent"
+        ? `${kindTitle} enviado`
+        : result?.kind === "sending"
+          ? "Enviando ao Sankhya"
+          : result?.kind === "awaiting_approval"
+            ? "Aguardando aprovação"
+            : `${kindTitle} aguardando envio`;
+    const readOnly = result?.kind === "sent" || result?.kind === "sending";
     return (
       <View style={styles.center}>
-        <Text style={styles.successTitle}>{savedLocal.sendState === "requested" ? `${kindTitle} aguardando envio` : `${kindTitle} salvo neste aparelho`}</Text>
+        <Text style={styles.successTitle}>{title}</Text>
         <Text style={styles.successMeta}>{savedLocal.customerName}</Text>
-        <Text style={styles.successMeta}>{savedLocal.sendState === "requested" ? "Aguardando envio" : describeDraftStatus(savedLocal.status)}</Text>
+        {result?.kind === "sent" && <Text style={styles.successTotal}>{`Nº ${result.erpNumber}`}</Text>}
         <Pressable style={styles.primaryButton} onPress={resetOrder} accessibilityRole="button" accessibilityLabel="Novo pedido">
           <Text style={styles.primaryButtonText}>Novo pedido</Text>
         </Pressable>
-        <Pressable style={styles.secondaryButton} onPress={() => setSavedLocal(null)} accessibilityRole="button" accessibilityLabel="Editar pedido">
-          <Text style={styles.secondaryButtonText}>Editar pedido</Text>
-        </Pressable>
+        {!readOnly && (
+          <Pressable style={styles.secondaryButton} onPress={() => { setSavedLocal(null); setConfirmResult(null); }} accessibilityRole="button" accessibilityLabel="Editar pedido">
+            <Text style={styles.secondaryButtonText}>Editar pedido</Text>
+          </Pressable>
+        )}
       </View>
     );
   }
@@ -693,8 +764,7 @@ export function NewOrderScreen({
   const orderable = lines.length > 0 && preview.valid && blockedLineCount === 0;
   const total = formatBrl(preview.ipi.grandTotalEstimated) ?? "—";
   const itemsInfo = `${lines.length} ${lines.length === 1 ? "item" : "itens"} · ${total}`;
-  const saveLabel = `Salvar ${kindWord}`;
-  const sendLabel = `Enviar ${kindWord}`;
+  const saveLabel = "Confirmar";
 
   // Negociação: "Próximo" stays off until every mandatory field is filled (the missing ones are highlighted in the form).
   const nextBlocked =
@@ -915,15 +985,7 @@ export function NewOrderScreen({
 
       {step === "summary" ? (
         localOrders !== undefined ? (
-          <WizardFooter
-            onBack={goBack}
-            onNext={() => void save(true)}
-            nextLabel={sendLabel}
-            nextDisabled={!orderable || saving}
-            busy={saving}
-            secondaryLabel={saveLabel}
-            onSecondary={() => void save()}
-          />
+          <WizardFooter onBack={goBack} onNext={() => void confirmOrder()} nextLabel={saveLabel} nextDisabled={!orderable || saving} busy={saving} />
         ) : (
           <WizardFooter onBack={goBack} onNext={() => void save()} nextLabel={saveLabel} nextDisabled={!orderable || saving} busy={saving} />
         )
@@ -972,6 +1034,14 @@ export function NewOrderScreen({
         }}
         onClose={() => setGroupDiscountOpen(false)}
       />
+      {sendingToErp && (
+        <View style={styles.sendingOverlay} accessibilityViewIsModal accessibilityLiveRegion="polite" accessibilityLabel="Enviando ao Sankhya">
+          <View style={styles.sendingCard}>
+            <ActivityIndicator color={colors.navy} />
+            <Text style={styles.sendingText}>Enviando ao Sankhya</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -991,6 +1061,9 @@ const styles = StyleSheet.create({
   summaryDiscount: { fontSize: 12, color: colors.red, fontWeight: "600" },
   summaryLine: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: spacing.md, paddingVertical: spacing.xs },
   hidden: { display: "none" },
+  sendingOverlay: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.35)" },
+  sendingCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.xl, paddingVertical: spacing.lg, borderRadius: 12, backgroundColor: colors.surface },
+  sendingText: { fontSize: 16, fontWeight: "700", color: colors.text },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl, gap: spacing.sm },
   stepTitle: { fontSize: 16, fontWeight: "700", color: colors.text, padding: spacing.lg, paddingBottom: 0 },
   pills: { flexDirection: "row", gap: spacing.sm, padding: spacing.md },

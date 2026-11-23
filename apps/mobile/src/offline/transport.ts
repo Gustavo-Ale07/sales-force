@@ -81,6 +81,52 @@ export function toSubmitError(error: unknown): TransportError {
   return refuse(code === "validation_failed" ? "validation_failed" : "send_refused");
 }
 
+/**
+ * THE table of "Confirmar" failure classes (documented in `docs/implementation/order-confirm-flow.md`).
+ * - `transient`: the order stays queued on the device and is resent by itself (backoff on the timer; at once on reconnect, login, foreground and "Sincronizar agora").
+ * - `definitive`: no resend loop; the seller sees the popup with the fixing action and the order stays editable until corrected.
+ * Keys are the catalog codes `toSubmitError` produces (`send_refused.reason`) or the transport kind for the transient ones.
+ */
+export const SUBMIT_FAILURE_CLASS: Readonly<Record<string, "transient" | "definitive">> = {
+  // transient: transport kinds of toSubmitError
+  network: "transient",
+  auth: "transient",
+  rate_limit: "transient",
+  server: "transient",
+  // definitive: send_refused reasons
+  erp_submission_disabled: "definitive",
+  discount_blocked: "definitive",
+  customer_without_seller: "definitive",
+  customer_ineligible: "definitive",
+  customer_inactive: "definitive",
+  customer_blocked: "definitive",
+  customer_pending: "definitive",
+  version_conflict: "definitive",
+  order_not_editable: "definitive",
+  dataset_mismatch: "definitive",
+  edit_before_resubmitting: "definitive",
+  needs_manager_approval: "definitive",
+  approval_required_before_resend: "definitive",
+  invalid_status: "definitive",
+  legacy_dataset: "definitive",
+  dataset_not_erp: "definitive",
+  environment_unbound: "definitive",
+  environment_mismatch: "definitive",
+  delivery_diverged: "definitive",
+  ambiguous_origin: "definitive",
+  header_not_eligible: "definitive",
+  validation_failed: "definitive",
+  not_found: "definitive",
+  forbidden: "definitive",
+  send_refused: "definitive",
+};
+
+/** The class of a failed submit, from the single table above (an unknown reason is definitive: never an endless blind retry). */
+export function submitFailureClass(error: unknown): "transient" | "definitive" {
+  const mapped = toSubmitError(error);
+  return SUBMIT_FAILURE_CLASS[mapped.kind === "send_refused" ? (mapped.reason ?? "send_refused") : mapped.kind] ?? "definitive";
+}
+
 export function toRemoteOrder(order: OrderDetail): RemoteOrder {
   return {
     id: order.id,

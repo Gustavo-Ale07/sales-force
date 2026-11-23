@@ -132,6 +132,32 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
     [onChanged, errors],
   );
 
+  /** "Confirmar" / "Tentar de novo": asks for the send, delivers it now and shows the outcome like the wizard does. Never creates a second note: the order id is the origin. */
+  const [confirming, setConfirming] = useState(false);
+  const confirmingRef = useRef(false);
+  const tryConfirm = useCallback(async () => {
+    if (confirmingRef.current) return;
+    confirmingRef.current = true;
+    setConfirming(true);
+    try {
+      await localOrders.requestSend(localId);
+      const outcome = (await localOrders.confirm?.(localId)) ?? { kind: "queued" as const };
+      if (outcome.kind === "queued") {
+        errors.reportCode("order_queued", {}, undefined, { message: "O pedido ficou salvo neste aparelho e será enviado assim que possível." });
+      } else if (outcome.kind === "refused") {
+        const code = outcome.code ?? codeOfHeldMessage(outcome.message) ?? "validation_failed";
+        errors.reportCode(code, { change_customer: () => onContinue(localId), remove_item: () => onContinue(localId), edit_items: () => onContinue(localId), edit_header: () => onContinue(localId) }, outcome.message ?? undefined, ["validation_failed", "header_not_eligible", "send_refused"].includes(code) && outcome.message !== null ? { message: outcome.message } : undefined);
+      }
+    } catch (error) {
+      errors.report(error, { retry: () => void tryConfirm() }, { title: "Não foi possível concluir" });
+    } finally {
+      confirmingRef.current = false;
+      setConfirming(false);
+      onChanged();
+      setReloads((n) => n + 1);
+    }
+  }, [localOrders, localId, errors, onChanged, onContinue]);
+
   // A held order (customer or product no longer sellable) says so once when opened, with the way out.
   const heldCode = loaded === null || !(isCustomerUnavailable(loaded.draft) || isProductBlocked(loaded.draft)) ? null : codeOfHeldMessage(loaded.draft.lastError);
   const heldKey = heldCode === null ? null : `${localId}:${heldCode}`;
@@ -153,7 +179,7 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
     announcedRefusal.current = refusedKey;
     errors.reportCode(
       refusedCode,
-      { retry: () => void act(() => localOrders.requestSend(localId)), change_customer: () => onContinue(localId) },
+      { retry: () => void tryConfirm(), change_customer: () => onContinue(localId), remove_item: () => onContinue(localId), edit_items: () => onContinue(localId), edit_header: () => onContinue(localId) },
       loaded?.draft.sendError ?? undefined,
       loaded?.draft.sendError && ["validation_failed", "header_not_eligible", "send_refused"].includes(refusedCode) ? { message: loaded.draft.sendError } : undefined,
     );
@@ -374,21 +400,20 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
           )}
           {actions.send && (
             <Pressable
-              style={styles.primary}
-              onPress={() => void act(() => localOrders.requestSend(draft.localId))}
+              style={[styles.primary, confirming && styles.off]}
+              disabled={confirming}
+              onPress={() => void tryConfirm()}
               accessibilityRole="button"
-              accessibilityLabel={draft.sendState === "refused" ? "Reenviar pedido" : tops !== null && isQuotationTop(effectiveTop, tops) ? "Enviar orçamento" : "Enviar pedido"}
+              accessibilityLabel={draft.sendState === "refused" ? "Tentar de novo" : "Confirmar"}
+              accessibilityState={{ disabled: confirming, busy: confirming }}
             >
-              <Text style={styles.primaryText}>{draft.sendState === "refused" ? "Reenviar" : tops !== null && isQuotationTop(effectiveTop, tops) ? "Enviar orçamento" : "Enviar pedido"}</Text>
+              <Text style={styles.primaryText}>{confirming ? "Enviando ao Sankhya" : draft.sendState === "refused" ? "Tentar de novo" : "Confirmar"}</Text>
             </Pressable>
           )}
-          {actions.resend && (
-            <>
-              <Pressable style={[styles.secondary, offline && styles.off]} disabled={offline} onPress={onSyncNow} accessibilityRole="button" accessibilityLabel="Tentar enviar novamente" accessibilityState={{ disabled: offline }}>
-                <Text style={styles.secondaryText}>Tentar enviar novamente</Text>
-              </Pressable>
-              {offline && <Text style={styles.meta}>Sem conexão. O envio acontece sozinho quando a internet voltar.</Text>}
-            </>
+          {actions.resend && !actions.send && (
+            <Pressable style={[styles.secondary, confirming && styles.off]} disabled={confirming} onPress={() => void tryConfirm()} accessibilityRole="button" accessibilityLabel="Tentar de novo" accessibilityState={{ disabled: confirming, busy: confirming }}>
+              <Text style={styles.secondaryText}>{confirming ? "Enviando ao Sankhya" : "Tentar de novo"}</Text>
+            </Pressable>
           )}
           {orderPdf !== undefined && lines.length > 0 && (
             <Pressable style={[styles.secondary, sharing && styles.off]} disabled={sharing} onPress={() => void sharePdf()} accessibilityRole="button" accessibilityLabel="Compartilhar PDF" accessibilityState={{ disabled: sharing, busy: sharing }}>

@@ -703,6 +703,10 @@ export async function saveOrderDraft(db: SqlDatabase, env: OfflineEnv, input: Sa
     await tx.execute("DELETE FROM outbox WHERE draft_local_id = ? AND state = 'rejected'", [draft.localId]);
     const ops = allOps.filter((op) => op.state !== "rejected");
     const last = ops.at(-1);
+    // "Confirmar" repeated (double tap, reopened waiting order) with nothing changed: no new command, no new row, the request stands.
+    if (input.sendRequested === true && draft.sendState === "requested" && last !== undefined && JSON.stringify(last.payload) === JSON.stringify(payload) && !createRejected) {
+      return draft.localId;
+    }
 
     let status: DraftStatus = "pending_sync";
     let clientRequestId = draft.clientRequestId;

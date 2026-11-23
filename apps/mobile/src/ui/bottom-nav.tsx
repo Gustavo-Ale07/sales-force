@@ -14,7 +14,7 @@ export const MAIN_TABS: readonly { readonly key: MainTab; readonly label: string
 ];
 
 /** Fixed bottom navigation. It pads itself with the system inset, so it clears the Android navigation bar and gesture area. */
-export function BottomNav({ active, onSelect, badges = {} }: { active: MainTab; onSelect: (tab: MainTab) => void; badges?: Partial<Record<MainTab, boolean>> }) {
+export function BottomNav({ active, onSelect, badges = {} }: { active: MainTab; onSelect: (tab: MainTab) => void; badges?: Partial<Record<MainTab, number | boolean>> }) {
   const insets = useInsets();
   return (
     <View style={[styles.bar, { paddingBottom: insets.bottom }]} accessibilityRole="tablist">
@@ -33,7 +33,13 @@ export function BottomNav({ active, onSelect, badges = {} }: { active: MainTab; 
             <View style={[styles.indicator, selected && styles.indicatorActive]} />
             <View>
               <Icon name={tab.icon} color={color} />
-              {badges[tab.key] === true && <View style={styles.badge} />}
+              {typeof badges[tab.key] === "number" && (badges[tab.key] as number) > 0 ? (
+                <View style={styles.counter} accessibilityLabel={`${badges[tab.key] as number} pendentes`}>
+                  <Text style={styles.counterText}>{(badges[tab.key] as number) > 99 ? "99+" : String(badges[tab.key])}</Text>
+                </View>
+              ) : (
+                badges[tab.key] === true && <View style={styles.badge} />
+              )}
             </View>
             <Text style={[styles.label, { color }, selected && styles.labelActive]}>{tab.label}</Text>
           </Pressable>
@@ -50,5 +56,7 @@ const styles = StyleSheet.create({
   indicatorActive: { backgroundColor: colors.red },
   label: { fontSize: 11, fontWeight: "600" },
   labelActive: { fontWeight: "800" },
+  counter: { position: "absolute", top: -4, right: -10, minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 4, alignItems: "center", justifyContent: "center", backgroundColor: colors.red },
+  counterText: { color: colors.onNavy, fontSize: 10, fontWeight: "800" },
   badge: { position: "absolute", top: -1, right: -3, width: 9, height: 9, borderRadius: 5, backgroundColor: colors.red, borderWidth: 1, borderColor: colors.surface },
 });

@@ -396,7 +396,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
             </View>
           )}
         </View>
-        {!keyboardVisible && <BottomNav active={tab} onSelect={selectTab} badges={{ sales: syncStatus.pending > 0 || syncStatus.needsAttention > 0 }} />}
+        {!keyboardVisible && <BottomNav active={tab} onSelect={selectTab} badges={{ sales: syncStatus.awaitingOrders ?? 0 }} />}
       </KeyboardAvoidingView>
       </ProductImageProvider>
       </ErrorActionsContext.Provider>

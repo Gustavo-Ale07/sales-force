@@ -1,8 +1,8 @@
 import type { SqlDatabase } from "./connection";
 import { DatasetIdentityError, confirmDataset, readCacheDataset, readExpectedDataset, sameDataset, writeCacheDataset, type DatasetIdentity } from "./dataset-identity";
-import { countOutbox, listAttentionItems, type AttentionItem } from "./local-orders";
+import { countOutbox, getDraft, listAttentionItems, type AttentionItem, type DraftRecord } from "./local-orders";
 import { isoNow, type OfflineEnv } from "./offline-env";
-import { refreshOrderErpStatuses, type OrderStatusSource } from "./order-erp-status";
+import { refreshOneOrderErpStatus, refreshOrderErpStatuses, type OrderStatusSource } from "./order-erp-status";
 import { countSendRequests, pushOutbox, pushSendRequests, recoverInterrupted, reevaluateHeldOrders, TransportError, type OrderTransport, type PushOptions, type PushStop } from "./order-sync";
 import {
   applyCustomerCreationSignal,
@@ -229,6 +229,8 @@ export interface SyncStatus {
   readonly pending: number;
   /** Commands the seller must look at (rejected, conflict, price review). */
   readonly needsAttention: number;
+  /** Confirmed orders waiting to reach Sankhya or refused by it (the Vendas tab counter). */
+  readonly awaitingOrders?: number;
   /** Time of the last SUCCESSFUL sync (pull without failures); persisted. */
   readonly lastSyncedAt: string | null;
   /** Seller-safe text; never a raw technical error. */
@@ -278,7 +280,39 @@ export interface SyncManager {
   subscribe(listener: (status: SyncStatus) => void): () => void;
   /** Recomputes counters from the database (after a local save). */
   refresh(): Promise<SyncStatus>;
+  /**
+   * "Confirmar": tries to deliver the confirmed order now (create/replace, then submit) and waits at most `CONFIRM_WAIT_MS` for the
+   * Sankhya number. Never throws for a failed delivery: the outcome says what happened; whatever is not concluded stays queued.
+   */
+  confirmOrder?(localId: string, options?: ConfirmOptions): Promise<ConfirmOutcome>;
 }
+
+/** How long the seller waits on "Enviando ao Sankhya" before the screen is released (the order keeps going in the queue). One place. */
+export const CONFIRM_WAIT_MS = 8000;
+/** Interval between reads of the order's Sankhya number inside that wait. */
+export const CONFIRM_POLL_MS = 1500;
+
+export interface ConfirmOptions {
+  readonly waitMs?: number;
+  readonly pollMs?: number;
+  /** Test seam; defaults to a timer. */
+  readonly sleep?: (ms: number) => Promise<void>;
+}
+
+/**
+ * Result of "Confirmar":
+ * - `sent`: Sankhya created the order; `erpNumber` is its unique number.
+ * - `sending`: the server took the order and the delivery is running; the number did not arrive within the wait.
+ * - `awaiting_approval`: the server took it and the discount waits for a manager.
+ * - `queued`: transient failure (offline, server/Sankhya unavailable, timeout); saved on the device and resent by itself.
+ * - `refused`: definitive; no resend. `code` = catalog key of the refusal (null = the order is held by a local/outbox problem, `message` says which).
+ */
+export type ConfirmOutcome =
+  | { readonly kind: "sent"; readonly erpNumber: number }
+  | { readonly kind: "sending" }
+  | { readonly kind: "awaiting_approval" }
+  | { readonly kind: "queued" }
+  | { readonly kind: "refused"; readonly code: string | null; readonly message: string | null };
 
 interface Failure {
   readonly phase: SyncPhase;
@@ -324,7 +358,7 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
     return status;
   };
 
-  const counters = async (): Promise<{ pending: number; needsAttention: number; attention: readonly AttentionItem[] }> => {
+  const counters = async (): Promise<{ pending: number; needsAttention: number; awaitingOrders: number; attention: readonly AttentionItem[] }> => {
     const dataset = await readExpectedDataset(deps.db);
     const counts = await countOutbox(deps.db, deps.ownerAccountId, dataset);
     const customers = await countPendingCustomers(deps.db, deps.ownerAccountId, dataset);
@@ -333,6 +367,7 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
     return {
       pending: counts.pending + counts.sending + customers.pending + sends.waiting,
       needsAttention: counts.needsAttention + customers.needsAttention + sends.refused,
+      awaitingOrders: sends.waiting + sends.refused,
       attention,
     };
   };
@@ -555,7 +590,7 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
     return current;
   };
 
-  return {
+  const manager: SyncManager = {
     sync(reason, options) {
       const wantsPull = options?.pull ?? true;
       if (wantsPull && queuedPull !== null) return queuedPull;
@@ -583,5 +618,49 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
       const lastSyncedAt = status.lastSyncedAt ?? (await getMeta(deps.db, "sync.last_success_at"));
       return publish({ ...status, ...(await counters()), lastSyncedAt });
     },
+    async confirmOrder(localId, options) {
+      const waitMs = options?.waitMs ?? CONFIRM_WAIT_MS;
+      const pollMs = options?.pollMs ?? CONFIRM_POLL_MS;
+      const sleep = options?.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+      const startedAt = deps.env.now().getTime();
+      const left = (): number => waitMs - (deps.env.now().getTime() - startedAt);
+      const readDraft = (): Promise<DraftRecord | null> => getDraft(deps.db, localId);
+      const settled = (draft: DraftRecord | null): ConfirmOutcome | null => {
+        if (draft === null) return { kind: "queued" };
+        if (draft.sendState === "refused") return { kind: "refused", code: draft.sendCode ?? "send_refused", message: draft.sendError };
+        if (draft.status === "conflict") return { kind: "refused", code: "version_conflict", message: draft.lastError };
+        if (draft.status === "sync_error" || draft.status === "needs_review") return { kind: "refused", code: null, message: draft.lastError };
+        if (draft.sendState === "submitted") {
+          if (draft.sendCode === "awaiting_approval") return { kind: "awaiting_approval" };
+          if (draft.sendCode === "approval_rejected") return { kind: "refused", code: "edit_before_resubmitting", message: null };
+          return null; // taken by the server: the number is read below
+        }
+        return null;
+      };
+      // 1. Deliver. A run already in flight may have started before this order was saved: one more run when nothing was attempted yet.
+      if (internet() !== "offline") {
+        for (let round = 0; round < 2; round += 1) {
+          await Promise.race([manager.sync("after_save", { pull: false }), sleep(Math.max(0, left()))]);
+          const draft = await readDraft();
+          if (settled(draft) !== null || draft?.sendState !== "requested" || draft.sendAttempts > 0 || left() <= 0) break;
+        }
+      }
+      const draft = await readDraft();
+      const verdict = settled(draft);
+      if (verdict !== null) return verdict;
+      if (draft?.sendState !== "submitted" || draft.remoteId === null) return { kind: "queued" };
+      // 2. The server took it; the worker writes the note. Read the Sankhya number until it arrives or the wait ends.
+      for (;;) {
+        try {
+          const read = await refreshOneOrderErpStatus(deps.db, deps.env, deps.source, deps.ownerAccountId, draft.remoteId);
+          if (read?.erpNumber !== null && read?.erpNumber !== undefined) return { kind: "sent", erpNumber: read.erpNumber };
+        } catch (error) {
+          if (!(error instanceof TransportError)) deps.onUnexpectedError?.(error);
+        }
+        if (left() <= pollMs) return { kind: "sending" };
+        await sleep(pollMs);
+      }
+    },
   };
+  return manager;
 }

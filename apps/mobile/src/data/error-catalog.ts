@@ -18,7 +18,7 @@ import { describeIssue } from "./order-draft";
  */
 
 /** What the popup's primary button does. The screen supplies the handler; without one the popup only offers "Fechar". */
-export type ProblemAction = "retry" | "change_customer" | "go_sync" | "sign_in" | "reload" | "none";
+export type ProblemAction = "retry" | "change_customer" | "go_sync" | "sign_in" | "reload" | "remove_item" | "edit_items" | "edit_header" | "none";
 
 export const ACTION_LABELS: Record<Exclude<ProblemAction, "none">, string> = {
   retry: "Tentar de novo",
@@ -26,6 +26,9 @@ export const ACTION_LABELS: Record<Exclude<ProblemAction, "none">, string> = {
   go_sync: "Ir para sincronização",
   sign_in: "Entrar de novo",
   reload: "Recarregar",
+  remove_item: "Remover item",
+  edit_items: "Revisar itens",
+  edit_header: "Revisar condições",
 };
 
 export interface ProblemText {
@@ -52,20 +55,21 @@ export const ERROR_CATALOG = {
   device_revoked: { title: "Aparelho bloqueado", message: "Este aparelho foi desativado. Fale com o backoffice.", action: "none" },
 
   // Orders
-  validation_failed: { title: "Dados inválidos", message: "Revise o pedido e tente de novo.", action: "none" },
+  validation_failed: { title: "Dados inválidos", message: "Revise o pedido e tente de novo.", action: "edit_items" },
   version_conflict: { title: "Pedido alterado em outro lugar", message: "Recarregue para ver a versão atual. Suas alterações não salvas serão perdidas.", action: "reload" },
   order_not_editable: { title: "Pedido não editável", message: "Ele já não pode ser editado. Recarregue para ver a situação.", action: "reload" },
   not_editable: { title: "Pedido não editável", message: "Ele já não pode ser editado. Recarregue para ver a situação.", action: "reload" },
   idempotency_conflict: { title: "Pedido antigo", message: "Esta solicitação já foi registrada com outros dados. Refaça o pedido.", action: "none" },
   dataset_mismatch: { title: "Dados desatualizados", message: "O servidor mudou desde que você abriu o pedido. Sincronize e abra o pedido de novo.", action: "go_sync" },
   installation_not_enabled: { title: "Pedidos não habilitados", message: "A instalação ainda não aceita pedidos. Fale com o backoffice.", action: "none" },
-  erp_submission_disabled: { title: "Envio ao Sankhya desligado", message: "O envio ao Sankhya está desligado por enquanto. O pedido ficou salvo no Force e nada foi enviado.", action: "none" },
-  discount_blocked: { title: "Desconto bloqueado", message: "O desconto passa do limite permitido. Reduza o desconto e envie de novo.", action: "none" },
+  erp_submission_disabled: { title: "Envio ao Sankhya desligado", message: "O envio ao Sankhya está desligado por enquanto. O pedido ficou salvo e nada foi enviado.", action: "none" },
+  order_queued: { title: "Pedido não enviado ao Sankhya", message: "O pedido ficou salvo neste aparelho e será enviado assim que possível.", action: "none" },
+  discount_blocked: { title: "Desconto bloqueado", message: "O desconto passa do limite permitido. Reduza o desconto e confirme de novo.", action: "edit_items" },
   awaiting_approval: { title: "Aguardando aprovação", message: "O desconto precisa da aprovação de um gestor. O pedido segue depois da aprovação.", action: "none" },
   needs_manager_approval: { title: "Precisa de aprovação", message: "O desconto deste pedido precisa da aprovação de um gestor antes do envio.", action: "none" },
   edit_before_resubmitting: { title: "Desconto reprovado", message: "O desconto foi reprovado. Edite o pedido antes de enviá-lo de novo.", action: "none" },
   approval_required_before_resend: { title: "Desconto exige aprovação", message: "O desconto deste pedido agora exige aprovação. Exclua o pedido e faça um novo.", action: "none" },
-  header_not_eligible: { title: "Operação indisponível", message: "O tipo de operação ou a condição de negociação deste pedido não está mais disponível. Edite o pedido e envie de novo.", action: "none" },
+  header_not_eligible: { title: "Operação indisponível", message: "O tipo de operação ou a condição de negociação deste pedido não está mais disponível. Edite o pedido e confirme de novo.", action: "edit_header" },
   invalid_status: { title: "Pedido não pode ser enviado", message: "A situação deste pedido não permite o envio.", action: "reload" },
   legacy_dataset: { title: "Pedido de versão antiga", message: "Este pedido é de uma versão antiga dos dados e não pode ser enviado. Refaça o pedido.", action: "none" },
   dataset_not_erp: { title: "Pedido de teste", message: "Este pedido foi criado com dados de teste e não pode ser enviado ao Sankhya. Refaça o pedido com cliente e produtos reais.", action: "none" },
@@ -90,11 +94,11 @@ export const ERROR_CATALOG = {
 
   // Products (issue codes and local guards)
   product_without_price: { title: "Produto sem preço", message: "Este produto está sem preço. Sincronize para atualizar os preços.", action: "go_sync" },
-  product_without_mobility: { title: "Produto sem mobilidade", message: "Este produto não pode ser vendido pelo aplicativo.", action: "none" },
+  product_without_mobility: { title: "Produto sem mobilidade", message: "Este produto não pode ser vendido pelo aplicativo.", action: "remove_item" },
   product_unavailable: { title: "Produto indisponível", message: "Tire o item do pedido ou sincronize para atualizar o catálogo.", action: "go_sync" },
-  product_inactive: { title: "Produto inativo", message: "Tire o item do pedido.", action: "none" },
+  product_inactive: { title: "Produto inativo", message: "Tire o item do pedido.", action: "remove_item" },
   product_unknown: { title: "Produto não encontrado", message: "Sincronize para atualizar o catálogo.", action: "go_sync" },
-  product_not_sellable: { title: "Produto indisponível", message: "Este produto não pode ser vendido. Tire o item do pedido.", action: "none" },
+  product_not_sellable: { title: "Produto indisponível", message: "Este produto não pode ser vendido. Tire o item do pedido.", action: "remove_item" },
   price_table_missing: { title: "Preços não baixados", message: "Os preços desta tabela ainda não estão no aparelho.", action: "go_sync" },
   dataset_unavailable: { title: "Dados não confirmados", message: "Conecte-se e sincronize para criar pedidos.", action: "go_sync" },
   dataset_changed: { title: "Dados mudaram", message: "Sincronize e abra o pedido de novo.", action: "go_sync" },

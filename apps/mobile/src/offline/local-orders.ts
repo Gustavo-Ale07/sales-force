@@ -13,6 +13,7 @@ import {
   requestOrderSend,
   resolveConflict,
   saveOrderDraft,
+  type ConfirmOutcome,
   type ConflictResolution,
   type DraftItemInput,
   type DraftItemRecord,
@@ -45,7 +46,7 @@ export interface SaveLocalDraftInput {
   readonly freightType?: "CIF" | "FOB" | "SEM_FRETE" | null;
   readonly notes: string | null;
   readonly lines: readonly EditorLine[];
-  /** "Enviar pedido" (true) / "Salvar pedido" (false) on the summary step; absent (autosave) keeps the request as it is. */
+  /** "Confirmar" (true) on the summary step; absent (autosave) keeps the request as it is. */
   readonly sendRequested?: boolean;
   /** The dataset the editor was loaded under (from the entry configuration it showed); `null` = unknown, the save is refused. */
   readonly loadedDataset: DatasetIdentity | null;
@@ -80,8 +81,10 @@ export interface LocalOrdersPort {
   discardQuarantined(localId: string): Promise<void>;
   acknowledgePriceReview(localId: string): Promise<void>;
   resolveConflict(localId: string, resolution: ConflictResolution): Promise<void>;
-  /** "Enviar pedido" / "Reenviar" for an order already saved: records the request; the sync delivers it (offline it waits). */
+  /** "Confirmar" / "Tentar de novo" for an order already saved: records the request; the sync delivers it (offline it waits). */
   requestSend(localId: string): Promise<void>;
+  /** "Confirmar" / "Tentar de novo": delivers the order now and waits briefly for the Sankhya number; whatever is not concluded stays queued. Absent = nothing is attempted (queued). */
+  confirm?(localId: string): Promise<ConfirmOutcome>;
   /**
    * "Duplicar como pedido" (D-B): asks the server for a new order draft from a sent quotation, under the dataset the
    * quotation itself was created under, and brings it onto this device. Online only; a retry reuses the same
@@ -155,6 +158,8 @@ export function createLocalOrdersPort(deps: {
   readonly ownerAccountId: string;
   /** The online call of D-B; absent = the action is unavailable. */
   readonly duplicateAsOrder?: (orderId: string, request: DuplicateAsOrderRequest) => Promise<DuplicateAsOrderResult>;
+  /** Sync manager's confirm (deliver now, wait for the number). */
+  readonly confirmOrder?: (localId: string) => Promise<ConfirmOutcome>;
   /** Called after any change so counters and the indicator update, and a sync can start when online. */
   readonly onChanged: () => void;
 }): LocalOrdersPort {
@@ -217,6 +222,12 @@ export function createLocalOrdersPort(deps: {
     async requestSend(localId) {
       await requestOrderSend(db, env, ownerAccountId, localId);
       onChanged();
+    },
+    async confirm(localId) {
+      if (deps.confirmOrder === undefined) return { kind: "queued" };
+      const outcome = await deps.confirmOrder(localId);
+      onChanged();
+      return outcome;
     },
     async duplicateAsOrder(localId) {
       const source = await getDraft(db, localId);
