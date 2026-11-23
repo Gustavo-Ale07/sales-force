@@ -239,7 +239,7 @@ export function renderOrderHtml(model: OrderDocumentModel, options: OrderHtmlOpt
   const noun = isQuote ? 'Orçamento' : 'Pedido';
   const forceNumber =
     model.draftNumber === null
-      ? `${noun}${isQuote ? '' : ' Force'} (sem número ainda)`
+      ? noun
       : `${noun}${isQuote ? '' : ' Force'} nº ${escapeHtml(model.draftNumber)}`;
   const erpLine = model.erpNumber === null ? '' : `<div class="meta">${noun} Sankhya nº ${escapeHtml(model.erpNumber)}</div>`;
   const title = options.title ?? (model.draftNumber === null ? noun : `${noun} ${model.draftNumber}`);
@@ -259,7 +259,7 @@ export function renderOrderHtml(model: OrderDocumentModel, options: OrderHtmlOpt
   const ipiBlock =
     model.ipi === undefined
       ? ''
-      : `<div class="total">IPI estimado: ${escapeHtml(formatDocumentMoney(model.ipi.ipiEstimated))}</div><div class="total">${model.ipi.isPartial ? 'Total parcial estimado (com IPI)' : 'Total estimado (com IPI)'}: ${escapeHtml(formatDocumentMoney(model.ipi.grandTotalEstimated))}</div><div class="hint">IPI estimado a partir das alíquotas disponíveis${model.ipi.isPartial ? ' (apenas nos itens com alíquota)' : ''}; o valor final é calculado no Sankhya.</div>`;
+      : `<div class="total">IPI: ${escapeHtml(formatDocumentMoney(model.ipi.ipiEstimated))}</div><div class="total">Total com IPI: ${escapeHtml(formatDocumentMoney(model.ipi.grandTotalEstimated))}</div>`;
   const conditions = (model.conditions ?? [])
     .map((c) => `<div>${escapeHtml(c.label)}: <strong>${escapeHtml(c.value)}</strong></div>`)
     .join('');
@@ -283,7 +283,7 @@ export function renderOrderHtml(model: OrderDocumentModel, options: OrderHtmlOpt
 <section><h2>Itens</h2>
 <table><thead><tr><th>Item</th><th>Código</th><th>Descrição</th><th>Un.</th><th class="n">Quantidade</th><th class="n">Preço unit.</th><th class="n">Desconto</th><th class="n">IPI %</th><th class="n">Total</th></tr></thead>
 <tbody>${rows}</tbody></table>
-<div class="total">Total estimado: ${escapeHtml(formatDocumentMoney(model.totals.estimatedTotal))}</div>${partial}${ipiBlock}
+<div class="total">Total: ${escapeHtml(formatDocumentMoney(model.totals.estimatedTotal))}</div>${partial}${ipiBlock}
 </section>
 <section><h2>Observações</h2><div class="notes">${model.notes === null ? '' : escapeHtml(model.notes)}</div></section>
 <footer>${issued}${seller}</footer>

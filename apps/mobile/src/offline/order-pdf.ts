@@ -1,7 +1,7 @@
 import type { DraftRecord } from "@salesforce/mobile-db";
 import { renderOrderHtml, toOrderDocument, type OrderDocumentModel } from "@salesforce/domain";
 import { previewDraft, type EditorLine } from "../data/order-draft";
-import { saleBadge } from "./sales-status";
+import { isCustomerUnavailable, isProductBlocked, saleBadge } from "./sales-status";
 import { saleValue } from "./sales";
 
 /**
@@ -24,6 +24,15 @@ function erpNumberOf(snapshot: unknown): number | null {
   return typeof value === "number" && Number.isInteger(value) ? value : null;
 }
 
+/**
+ * The badge printed on the PDF. A draft held because its customer or a product is unavailable is an internal review state of the
+ * app: the document never carries that seal ("Cliente indisponível", "Produto indisponível"), it is shown as a plain draft.
+ */
+export function pdfStatusLabelOf(draft: Pick<DraftRecord, "status" | "remoteId" | "lastError">): string {
+  if (isCustomerUnavailable(draft) || isProductBlocked(draft)) return "Rascunho";
+  return saleBadge({ status: draft.status, remoteId: draft.remoteId, lastError: draft.lastError }).label;
+}
+
 export function orderDocumentOf(draft: DraftRecord, lines: readonly EditorLine[]): OrderDocumentModel {
   const preview = previewDraft(lines);
   const items = preview.lines.flatMap((entry) => (entry.item === null ? [] : [entry.item]));
@@ -33,7 +42,7 @@ export function orderDocumentOf(draft: DraftRecord, lines: readonly EditorLine[]
     erpNumber: erpNumberOf(draft.serverSnapshot),
     customerCode: draft.customerCode,
     customerName: draft.customerName,
-    statusLabel: saleBadge({ status: draft.status, remoteId: draft.remoteId, lastError: draft.lastError }).label,
+    statusLabel: pdfStatusLabelOf(draft),
     createdAt: draft.createdAt,
     notes: draft.notes,
     items,
@@ -54,7 +63,7 @@ export function buildOrderPdfHtml(draft: DraftRecord, lines: readonly EditorLine
   return renderOrderHtml(orderDocumentOf(draft, lines), logoSrc === null ? { brandName: 'PLAC' } : { logoSrc, brandName: 'PLAC' });
 }
 
-export type ShareOrderPdfResult = { readonly ok: true } | { readonly ok: false; readonly reason: "empty" | "failed" };
+export type ShareOrderPdfResult = { readonly ok: true } | { readonly ok: false; readonly reason: "empty" | "customer_unavailable" | "failed" };
 
 export async function shareOrderPdf(
   port: OrderPdfPort,
