@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { bodyRows, createDraftViaUi, loginAsSeller, navLink, tableRegion } from "./support/app";
 
 test.describe("Cenário 5 — envio ao Sankhya desabilitado", () => {
-  test("'Enviar ao Sankhya' informa que o envio está desabilitado e o pedido continua rascunho", async ({ page }) => {
+  test("'Enviar ao Sankhya' informa que o envio está desabilitado e o pedido continua não enviado", async ({ page }) => {
     await loginAsSeller(page);
     const { id } = await createDraftViaUi(page);
 
@@ -18,7 +18,7 @@ test.describe("Cenário 5 — envio ao Sankhya desabilitado", () => {
     await expect(alert).toBeVisible();
     // No success wording, and the order is still an editable draft.
     await expect(page.getByText(/enviado com sucesso|pedido enviado/i)).toHaveCount(0);
-    await expect(page.getByText("Rascunho", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText(/^não enviado$/i).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Enviar ao Sankhya" })).toBeEnabled();
 
     // The authoritative check: nothing in the seller's orders left the draft state.
@@ -41,7 +41,7 @@ test.describe("Cenário 5 — envio ao Sankhya desabilitado", () => {
       expect((await submitResponse).status()).toBe(409);
     }
     await navLink(page, "Vendas").click();
-    await expect(bodyRows(tableRegion(page, "Pedidos")).filter({ hasText: "Rascunho nº" }).first()).toBeVisible();
+    await expect(bodyRows(tableRegion(page, "Pedidos")).filter({ hasText: /Pedido nº d+/ }).first()).toBeVisible();
     await expect(bodyRows(tableRegion(page, "Pedidos")).filter({ hasText: /Enviando ao Sankhya|Enviado|Rejeitado/ })).toHaveCount(0);
   });
 });

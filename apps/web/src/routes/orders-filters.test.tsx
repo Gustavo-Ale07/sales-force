@@ -173,7 +173,7 @@ describe("Vendas: filtros comerciais", () => {
     await screen.findByText("Pedido nº 12");
     expect(lastOrdersCall(calls)?.get("page")).toBe("3");
 
-    await user.selectOptions(screen.getByRole("combobox", { name: /Situação/ }), "draft");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Situação" }), "draft");
     await waitFor(() => expect(lastOrdersCall(calls)?.get("status")).toBe("draft"));
     expect(lastOrdersCall(calls)?.get("page")).toBe("1");
 

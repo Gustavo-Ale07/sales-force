@@ -116,7 +116,7 @@ export async function createDraftViaUi(page: Page): Promise<{ id: string; total:
   const total = (await page.getByTestId("order-total").innerText()).trim();
   await page.getByRole("button", { name: "Confirmar pedido" }).click();
   await expect(page).toHaveURL(/\/pedidos\/[0-9a-f-]{36}$/);
-  await expect(page.getByText("Rascunho", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(/^não enviado$/i).first()).toBeVisible();
   const id = page.url().split("/").pop() ?? "";
   return { id, total };
 }

@@ -1,12 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 import { PRICED_PRODUCTS, SELLER_CUSTOMER, UNPRICED_PRODUCT, bodyRows, createDraftViaUi, loginAsSeller, navLink, pickCustomer, addProduct, tableRegion } from "./support/app";
 
-/** The draft's reference ("Rascunho nº 12") as shown in the editor title. */
+/** The order's reference ("Pedido nº 12") as shown in the editor title. */
 async function draftReference(page: Page): Promise<string> {
-  // The status badge sits inside the h1, so the accessible name is "Rascunho nº 12 Rascunho".
-  const heading = page.getByRole("heading", { level: 1, name: /^Rascunho nº \d+/ });
+  // The status badge sits inside the h1, so the accessible name is "Pedido nº 12 não enviado".
+  const heading = page.getByRole("heading", { level: 1, name: /^Pedido nº \d+/ });
   await expect(heading).toBeVisible();
-  const match = /^Rascunho nº \d+/.exec((await heading.innerText()).trim());
+  const match = /^Pedido nº \d+/.exec((await heading.innerText()).trim());
   expect(match).not.toBeNull();
   return match?.[0] ?? "";
 }
@@ -21,7 +21,7 @@ test.describe("Cenário 4 — novo pedido, rascunhos e exclusão", () => {
     await navLink(page, "Vendas").click();
     const row = bodyRows(tableRegion(page, "Pedidos")).filter({ hasText: reference });
     await expect(row).toHaveCount(1);
-    await expect(row).toContainText("Rascunho");
+    await expect(row).toContainText(/não enviado/i);
     await expect(row).toContainText(SELLER_CUSTOMER.name);
     await expect(row).toContainText(total);
     await expect(row.getByRole("cell", { name: "2", exact: true })).toBeVisible();
@@ -133,7 +133,7 @@ test.describe("Cenário 4 — novo pedido, rascunhos e exclusão", () => {
     await expect(dialog).toContainText("Isso não pode ser desfeito.");
     await dialog.getByRole("button", { name: "Manter" }).click();
     await expect(dialog).toBeHidden();
-    await expect(row).toContainText("Rascunho");
+    await expect(row).toContainText(/não enviado/i);
 
     await row.getByRole("button", { name: `Excluir ${reference}` }).click();
     await page.getByRole("dialog", { name: /^Excluir .*\?$/ }).getByRole("button", { name: "Excluir", exact: true }).click();
