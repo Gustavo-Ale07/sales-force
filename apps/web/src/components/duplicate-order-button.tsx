@@ -47,10 +47,10 @@ function skipAfterRefusal(all: OrderDetail["items"], sent: OrderDetail["items"],
 function customerRefusalText(error: unknown): string | null {
   if (!(error instanceof ApiRequestError) || error.status !== 409) return null;
   if (error.code === "customer_ineligible") {
-    return "O cliente deste pedido não pode receber novos pedidos agora (bloqueado, inativo ou fora da sua carteira). Nenhum rascunho foi criado.";
+    return "O cliente deste pedido não pode receber novos pedidos agora (bloqueado, inativo ou fora da sua carteira). Nenhum pedido foi criado.";
   }
   if (error.code === "customer_without_seller") {
-    return "O cliente deste pedido está sem vendedor vinculado. Nenhum rascunho foi criado.";
+    return "O cliente deste pedido está sem vendedor vinculado. Nenhum pedido foi criado.";
   }
   return null;
 }

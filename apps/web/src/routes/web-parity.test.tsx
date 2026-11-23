@@ -115,7 +115,7 @@ describe("Pedido: Duplicar pedido", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Cliente indisponível para novos pedidos");
     expect(alert).toHaveTextContent("não pode receber novos pedidos agora");
-    expect(alert).toHaveTextContent("Nenhum rascunho foi criado.");
+    expect(alert).toHaveTextContent("Nenhum pedido foi criado.");
     expect(screen.queryByRole("button", { name: "Duplicar sem esses itens" })).not.toBeInTheDocument();
   });
 
@@ -134,7 +134,7 @@ describe("Pedido: Duplicar pedido", () => {
     const { calls } = renderApp(`/pedidos/${ORDER_ID}`, { handlers: editorHandlers(orderDetail({ review })) });
     const button = await screen.findByRole("button", { name: "Duplicar pedido" });
     expect(button).toBeDisabled();
-    expect(button).toHaveAttribute("title", expect.stringContaining("O cliente deste rascunho está bloqueado."));
+    expect(button).toHaveAttribute("title", expect.stringContaining("O cliente deste pedido está bloqueado."));
     expect(callsTo(calls, "POST", "/orders")).toHaveLength(0);
   });
 });
@@ -373,7 +373,7 @@ describe("Situação do pedido: textos distintos e honestos", () => {
   it("marks a draft whose customer became ineligible and blocks sending, without changing its status", async () => {
     const review = { status: "needs_review", reason: "customer_ineligible", customerBlock: "customer_blocked" } as const;
     renderApp(`/pedidos/${ORDER_ID}`, { handlers: editorHandlers(orderDetail({ review })) });
-    expect(await screen.findByText("O cliente deste rascunho está bloqueado.", { exact: false })).toBeInTheDocument();
+    expect(await screen.findByText("O cliente deste pedido está bloqueado.", { exact: false })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Enviar ao Sankhya" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Confirmar pedido" })).toBeDisabled();
     expect(screen.getAllByText("não enviado").length).toBeGreaterThan(0);

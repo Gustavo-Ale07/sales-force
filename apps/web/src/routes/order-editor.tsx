@@ -714,7 +714,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
       ) : null}
       {order?.review ? (
         <Alert tone="warning" title={orderReviewLabel}>
-          {orderReviewReasons[order.review.customerBlock]} O envio ao Sankhya fica bloqueado até o cliente voltar a estar disponível; nada no rascunho foi alterado.
+          {orderReviewReasons[order.review.customerBlock]} O envio ao Sankhya fica bloqueado até o cliente voltar a estar disponível; nada no pedido foi alterado.
         </Alert>
       ) : null}
       {order?.status === "unknown" ? (

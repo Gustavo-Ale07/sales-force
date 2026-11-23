@@ -165,7 +165,7 @@ function DesignPage() {
             <StatusBadge tone="warning">Aguardando aprovação</StatusBadge>
             <StatusBadge tone="danger">Rejeitado</StatusBadge>
             <StatusBadge tone="info">Em análise</StatusBadge>
-            <StatusBadge tone="neutral">Rascunho</StatusBadge>
+            <StatusBadge tone="neutral">Não enviado</StatusBadge>
             <StatusBadge tone="accent">Novo</StatusBadge>
             <Badge tone="neutral">12</Badge>
             <Avatar name="Ana Souza" />
@@ -456,7 +456,7 @@ function DesignPage() {
                 <DropdownMenuItem>Duplicar</DropdownMenuItem>
                 <DropdownMenuItem>Abrir</DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem destructive>Excluir rascunho</DropdownMenuItem>
+                <DropdownMenuItem destructive>Excluir pedido</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
             <Tooltip content="Dica contextual">

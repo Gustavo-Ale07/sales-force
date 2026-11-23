@@ -275,9 +275,9 @@ const issueMessages: Record<DraftIssueCode, string> = {
   invalid_quantity: "Quantidade inválida.",
   invalid_quantity_step: "Quantidade fora do múltiplo permitido para este produto.",
   invalid_discount: "Desconto inválido.",
-  price_state_inconsistent: "Preço inconsistente. Recarregue o rascunho e tente novamente.",
-  price_reference_missing: "Preço sem tabela de referência. Recarregue o rascunho e tente novamente.",
-  line_total_mismatch: "Total do item divergente do calculado. Recarregue o rascunho e tente novamente.",
+  price_state_inconsistent: "Preço inconsistente. Recarregue o pedido e tente novamente.",
+  price_reference_missing: "Preço sem tabela de referência. Recarregue o pedido e tente novamente.",
+  line_total_mismatch: "Total do item divergente do calculado. Recarregue o pedido e tente novamente.",
   line_not_orderable: "Este item não pode ser pedido sem preço nesta instalação.",
   product_without_price: "Produto sem preço",
   product_without_mobility: "Produto sem mobilidade",
@@ -288,7 +288,7 @@ const issueMessages: Record<DraftIssueCode, string> = {
   negotiation_type_not_configured: "Tipo de negociação não configurado nesta instalação.",
   order_top_not_eligible: "Tipo de operação (TOP) não permitido nesta instalação.",
   carrier_unknown: "Transportadora inválida ou inativa.",
-  order_total_mismatch: "Total do pedido divergente do calculado. Recarregue o rascunho e tente novamente.",
+  order_total_mismatch: "Total do pedido divergente do calculado. Recarregue o pedido e tente novamente.",
   order_total_out_of_range: "O total do pedido excede o limite permitido.",
 };
 

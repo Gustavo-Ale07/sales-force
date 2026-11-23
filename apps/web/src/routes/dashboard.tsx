@@ -125,7 +125,7 @@ function RecentOrders({ orders }: { orders: DashboardResponse["recentOrders"] })
         }
       />
       {orders.length === 0 ? (
-        <EmptyState compact title="Nenhum pedido recente" description="Os rascunhos e pedidos que você criar aparecem aqui." />
+        <EmptyState compact title="Nenhum pedido recente" description="Os pedidos que você criar aparecem aqui." />
       ) : (
         <>
           <CardBody className="border-b border-line">
@@ -263,7 +263,7 @@ export function DashboardPage() {
               <StatTile label="Pedidos em aberto" icon={<FilePen size={16} aria-hidden="true" />} tone="warning" value={<MetricValueOrUnavailable metric={drafts} />} />
             </KpiLink>
             <KpiLink to="/pedidos" search={{ status: "draft" }}>
-              <StatTile label="R$ em rascunhos" icon={<Wallet size={16} aria-hidden="true" />} tone="neutral" value={<MetricValueOrUnavailable metric={draftsEstimatedTotal} />} />
+              <StatTile label="R$ não enviados" icon={<Wallet size={16} aria-hidden="true" />} tone="neutral" value={<MetricValueOrUnavailable metric={draftsEstimatedTotal} />} />
             </KpiLink>
           </StatGrid>
 

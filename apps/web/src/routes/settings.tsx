@@ -71,7 +71,7 @@ export function settingGroups(config: Configuration): SettingGroup[] {
         { key: "sales.negotiationTypeExclusions", label: "Negociações excluídas", value: codes(config.sales.negotiationTypeExclusions) },
         { key: "sales.orderStockLocationCode", label: "Local de estoque do pedido", value: text(config.sales.orderStockLocationCode) },
         { key: "sales.orderBehavior.decimalQuantities", label: "Quantidades decimais", value: yesNo(config.sales.orderBehavior.decimalQuantities) },
-        { key: "sales.orderBehavior.allowDraftWithoutPrice", label: "Rascunho sem preço", value: yesNo(config.sales.orderBehavior.allowDraftWithoutPrice) },
+        { key: "sales.orderBehavior.allowDraftWithoutPrice", label: "Salvar sem preço", value: yesNo(config.sales.orderBehavior.allowDraftWithoutPrice) },
         { key: "sales.discountAuthorityMode", label: "Liberação de desconto", value: config.sales.discountAuthorityMode === "erp" ? "Sankhya libera" : "Aprovação no Force" },
       ],
     },

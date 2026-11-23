@@ -35,9 +35,9 @@ export function NewOrderRoute() {
 
 const orderNoticeDescriptions: Record<OrderNoticeState["source"], string> = {
   "duplicate-as-order": "O pedido foi criado com os demais itens do orçamento. Confira as quantidades e adicione o que faltar.",
-  template: "O rascunho foi criado com os demais itens do modelo. Confira as quantidades e adicione o que faltar.",
+  template: "O pedido foi criado com os demais itens do modelo. Confira as quantidades e adicione o que faltar.",
   "repeat-last":
-    "O rascunho foi criado com os demais itens do último pedido registrado no Sales Force. Confira as quantidades e adicione o que faltar.",
+    "O pedido foi criado com os demais itens do último pedido registrado no Sales Force. Confira as quantidades e adicione o que faltar.",
 };
 
 export function OrderRoute() {

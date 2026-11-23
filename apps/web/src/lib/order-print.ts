@@ -5,7 +5,7 @@ type OrderDetail = ApiSchema<"OrderDetail">;
 
 /** State texts of the printed order. User text says "Sankhya", not "ERP" (D-L). */
 export const orderDocumentStatusLabels: Record<ApiSchema<"OrderStatus">, string> = {
-  draft: "Rascunho",
+  draft: "Não enviado",
   awaiting_approval: "Aguardando aprovação",
   approved: "Aprovado",
   approval_rejected: "Reprovado na aprovação",

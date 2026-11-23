@@ -194,7 +194,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
       <PageHeader
         title="Vendas"
         count={query.data ? query.data.total.toLocaleString("pt-BR") : undefined}
-        description={submissionEnabled === false ? "Pedidos e rascunhos. O envio ao Sankhya ainda não está habilitado nesta instalação." : "Pedidos e rascunhos."}
+        description={submissionEnabled === false ? "Pedidos. O envio ao Sankhya ainda não está habilitado nesta instalação." : "Pedidos."}
         actions={
           <Button asChild variant="primary" leftIcon={<Plus size={16} strokeWidth={1.75} aria-hidden="true" />}>
             <Link to="/pedidos/novo">Novo pedido</Link>
@@ -326,7 +326,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
 
       <Card aria-busy={query.isFetching}>
         <Table label="Pedidos" cards>
-          <TableCaption>Pedidos e rascunhos</TableCaption>
+          <TableCaption>Pedidos</TableCaption>
           <TableHeader>
             <TableRow>
               <SortableHead
@@ -363,7 +363,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
                 <EmptyState
                   compact
                   title={hasFilters ? "Nenhum pedido encontrado" : "Nenhum pedido ainda"}
-                  description={hasFilters ? "Ajuste ou limpe os filtros para ver mais resultados." : "Crie um novo pedido; ele fica salvo como rascunho."}
+                  description={hasFilters ? "Ajuste ou limpe os filtros para ver mais resultados." : "Crie um novo pedido; ele fica salvo no Sales Force."}
                   action={
                     hasFilters ? (
                       <Button size="sm" variant="secondary" onClick={clearAll}>

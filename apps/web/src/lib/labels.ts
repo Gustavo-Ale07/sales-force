@@ -43,7 +43,7 @@ export function orderStatusView(
 /** One sentence per situation: what it says, and what it does not say about Sankhya. */
 export const orderStatusHints: Record<ApiSchema<"OrderStatus">, string> = {
   draft: "Salvo no Sales Force. Ainda não foi enviado ao Sankhya.",
-  awaiting_approval: "O desconto do pedido aguarda a decisão de um aprovador. Editar o pedido cancela a solicitação e o devolve a rascunho.",
+  awaiting_approval: "O desconto do pedido aguarda a decisão de um aprovador. Editar o pedido cancela a solicitação e o devolve ao estado Não enviado.",
   approved: "Desconto aprovado. Isso não significa que o pedido foi enviado ao Sankhya.",
   approval_rejected: "O aprovador reprovou o desconto. Edite o pedido para ajustar e enviar de novo.",
   queued: "O envio ao Sankhya está em andamento. O pedido ainda não existe no Sankhya.",
@@ -72,10 +72,10 @@ export const priceContextSourceLabels: Record<ApiSchema<"PriceContext">["source"
 export const orderReviewLabel = "Requer revisão";
 
 export const orderReviewReasons: Record<NonNullable<ApiSchema<"OrderListItem">["review"]>["customerBlock"], string> = {
-  customer_unavailable: "O cliente deste rascunho não está mais disponível na sua carteira.",
-  customer_inactive: "O cliente deste rascunho está inativo.",
-  customer_blocked: "O cliente deste rascunho está bloqueado.",
-  customer_without_seller: "O cliente deste rascunho está sem vendedor vinculado.",
+  customer_unavailable: "O cliente deste pedido não está mais disponível na sua carteira.",
+  customer_inactive: "O cliente deste pedido está inativo.",
+  customer_blocked: "O cliente deste pedido está bloqueado.",
+  customer_without_seller: "O cliente deste pedido está sem vendedor vinculado.",
 };
 
 /** Reference shown for an order: the Sankhya number once it exists there, otherwise the draft number. */
