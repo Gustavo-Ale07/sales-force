@@ -30,11 +30,17 @@ import { describeListPrice } from "../lib/money";
 import { colors, spacing } from "../theme";
 import { Icon } from "./icons";
 import { CartView, OrderTotals } from "./cart-view";
+import { Thumb } from "./product-views";
 import { CustomerPicker } from "./customer-picker";
 import { DiscountSheet } from "./discount-sheet";
 import { GroupDiscountSheet } from "./group-discount-sheet";
 import { ProductPicker } from "./product-picker";
 import type { ProductOrderActions } from "./product-views";
+
+function blockedItemsMessage(count: number): string {
+  const subject = count === 1 ? "1 item sem preço não pode ser salvo" : `${count} itens sem preço não podem ser salvos`;
+  return `${subject} nesta instalação. Remova-${count === 1 ? "o" : "os"} ou aguarde a atualização de preços.`;
+}
 
 /** The order is a 4-step wizard: Cliente → Negociação → Produtos → Resumo. Step 3 also has its own cart view. */
 type Step = WizardStep;
@@ -301,7 +307,7 @@ export function NewOrderScreen({
   const preview = useMemo(() => previewDraft(lines), [lines]);
   const productActions = useMemo<ProductOrderActions>(() => {
     const quantities = new Map(lines.map((line) => [line.productCode, line.quantityText]));
-    return { quantityOf: (code) => quantities.get(code), onAdd: addProduct, onDecrement: decrementProduct };
+    return { quantityOf: (code) => quantities.get(code), onAdd: addProduct, onDecrement: decrementProduct, onSetQuantity: setProductQuantity };
     // addProduct/decrementProduct only use functional state updates, so they are safe to capture per `lines` change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lines]);
@@ -457,7 +463,7 @@ export function NewOrderScreen({
     if (from === "products") {
       if (lines.length === 0) return "Adicione ao menos um produto para continuar.";
       if (!preview.valid) return "Corrija a quantidade ou o desconto dos itens do carrinho para continuar.";
-      if (blockedLineCount > 0) return `${blockedLineCount} item(ns) sem preço não podem ser salvos nesta instalação. Remova-os ou aguarde a atualização de preços.`;
+      if (blockedLineCount > 0) return blockedItemsMessage(blockedLineCount);
     }
     return null;
   }
@@ -498,6 +504,16 @@ export function NewOrderScreen({
       if (step === null) return current;
       if (step.kind === "remove") return current.filter((line) => line.key !== existing.key);
       return current.map((line) => (line.key === existing.key ? { ...line, quantityText: step.quantityText } : line));
+    });
+  }
+
+  /** A quantity typed in the catalog field (already validated by `commitQuantityText`); zero takes the product out like "−" at the minimum. */
+  function setProductQuantity(product: ProductListItem, result: { kind: "set"; quantityText: string } | { kind: "remove" }) {
+    setLines((current) => {
+      const existing = current.find((line) => line.productCode === product.code);
+      if (!existing) return current;
+      if (result.kind === "remove") return current.filter((line) => line.key !== existing.key);
+      return current.map((line) => (line.key === existing.key ? { ...line, quantityText: result.quantityText } : line));
     });
   }
 
@@ -857,6 +873,7 @@ export function NewOrderScreen({
             const amounts = lineAmountsOf(preview.lines[index] ?? { key: line.key, item: null });
             return (
               <View key={line.key} style={styles.summaryLine}>
+                <Thumb code={line.productCode} description={line.description} version={line.imageVersion} size="row" />
                 <View style={styles.flex}>
                   <Text style={styles.summaryStrong} numberOfLines={2}>{line.description}</Text>
                   <Text style={styles.summaryMeta}>{`${line.quantityText.trim()} ${line.unit} × ${describeListPrice(line.price)}`}</Text>
@@ -877,7 +894,7 @@ export function NewOrderScreen({
         {config.status === "error" && <Text style={styles.footerNotice}>{config.error.message}</Text>}
         {lines.length > 0 && !preview.valid && <Text style={styles.footerNotice}>Há quantidade ou desconto inválido no carrinho. Corrija em Produtos.</Text>}
         {blockedLineCount > 0 && (
-          <Text style={styles.footerNotice}>{`${blockedLineCount} item(ns) sem preço não podem ser salvos nesta instalação. Remova-os ou aguarde a atualização de preços.`}</Text>
+          <Text style={styles.footerNotice}>{blockedItemsMessage(blockedLineCount)}</Text>
         )}
         {dirty && !saving && (
           <Pressable style={styles.discardButton} onPress={confirmDiscard} accessibilityRole="button" accessibilityLabel="Descartar">

@@ -4,6 +4,7 @@ import type { ProductListItem } from "../data/ports";
 import { useProductImages } from "../images/product-image-context";
 import { describeListPrice } from "../lib/money";
 import { colors, spacing } from "../theme";
+import { QuantityField } from "./quantity-field";
 
 export type ProductViewMode = "grid" | "list";
 
@@ -13,6 +14,8 @@ export interface ProductOrderActions {
   readonly quantityOf: (productCode: number) => string | undefined;
   readonly onAdd: (product: ProductListItem) => void;
   readonly onDecrement: (product: ProductListItem) => void;
+  /** Quantity typed in the field between "−" and "+", already validated; absent = the number is read-only. */
+  readonly onSetQuantity?: (product: ProductListItem, result: { kind: "set"; quantityText: string } | { kind: "remove" }) => void;
 }
 
 /**
@@ -23,22 +26,31 @@ export interface ProductOrderActions {
  * an app-private file, never from a bare remote uri or base64. A row that unmounts cancels a download not yet started.
  */
 function ProductThumb({ product, size }: { product: ProductListItem; size: "card" | "row" }) {
+  return <Thumb code={product.code} description={product.description} version={product.image?.version} size={size} />;
+}
+
+/**
+ * The thumbnail component shared by the grid, the list and the order lines (cart and summary). A line that does not
+ * know the image version (a reopened draft) shows only what is already cached on the device (`peek`), never downloads.
+ */
+export function Thumb({ code, description, version, size }: { code: number; description: string; version?: string | undefined; size: "card" | "row" }) {
   const { store, online } = useProductImages();
-  const version = product.image?.version;
-  const key = `${product.code}|${version ?? ""}`;
+  const key = `${code}|${version ?? ""}`;
   const [resolved, setResolved] = useState<{ readonly key: string; readonly uri: string } | null>(null);
   const [failedKey, setFailedKey] = useState<string | null>(null);
 
   useEffect(() => {
-    if (store === null || version === undefined) return undefined;
+    if (store === null) return undefined;
     const controller = new AbortController();
-    void store.resolve(product.code, { version }, { online, signal: controller.signal }).then((uri) => {
+    const found = version === undefined ? (store.peek?.(code) ?? Promise.resolve(null)) : store.resolve(code, { version }, { online, signal: controller.signal });
+    void found.then((uri) => {
       if (!controller.signal.aborted) setResolved(uri === null ? null : { key, uri });
     });
     return () => controller.abort();
-  }, [store, online, product.code, version, key]);
+  }, [store, online, code, version, key]);
 
   const uri = resolved !== null && resolved.key === key && failedKey !== key ? resolved.uri : null;
+  const product = { code, description };
   const initials = product.description.trim().slice(0, 2).toUpperCase();
   return (
     <View style={[styles.thumb, size === "card" ? styles.thumbCard : styles.thumbRow]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
@@ -80,7 +92,17 @@ function AddControl({ product, quantity, actions }: { product: ProductListItem; 
       >
         <Text style={styles.stepText}>−</Text>
       </Pressable>
-      <Text style={styles.qty} accessibilityLabel={`Quantidade no carrinho: ${quantity}`}>{quantity}</Text>
+      {actions.onSetQuantity !== undefined ? (
+        <QuantityField
+          value={quantity}
+          productName={product.description}
+          zeroRemoves
+          compact
+          onCommit={(result) => actions.onSetQuantity?.(product, result)}
+        />
+      ) : (
+        <Text style={styles.qty} accessibilityLabel={`Quantidade no carrinho: ${quantity}`}>{quantity}</Text>
+      )}
       <Pressable
         style={styles.step}
         onPress={() => actions.onAdd(product)}

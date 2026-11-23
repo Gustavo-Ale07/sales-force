@@ -22,6 +22,8 @@ export interface ResolveOptions {
 export interface ProductImageStore {
   /** A `file://` uri of the thumbnail of `code` at `image.version`, or `null` (placeholder). Never throws. */
   resolve(code: number, image: ProductImageRef, options: ResolveOptions): Promise<string | null>;
+  /** Cached thumbnail of `code` at any version, from the device only (no download). `null` = placeholder. Never throws. */
+  peek?(code: number): Promise<string | null>;
   /** Sign-out: deletes every stored thumbnail and the index. */
   purge(): Promise<void>;
 }
@@ -256,6 +258,21 @@ export function createProductImageStore(deps: ProductImageStoreDeps): ProductIma
         const started = fetchAndStore(code, image.version, scope, options.signal).finally(() => inFlight.delete(key));
         inFlight.set(key, started);
         return await started;
+      } catch {
+        return null;
+      }
+    },
+    async peek(code) {
+      try {
+        await exclusive(dropForeignOwner);
+        const scope = await currentScope();
+        if (scope === null) return null;
+        return await exclusive(async () => {
+          const current = await ensure(scope);
+          const entry = current.entries[String(code)];
+          if (entry === undefined || !(await fs.exists(entry.file))) return null;
+          return fs.uri(entry.file);
+        });
       } catch {
         return null;
       }

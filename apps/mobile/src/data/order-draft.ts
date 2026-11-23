@@ -42,6 +42,8 @@ export interface EditorLine {
   readonly unit: string;
   /** Quantity as typed (pt-BR, decimal comma). */
   readonly quantityText: string;
+  /** Catalog image version, to show the line thumbnail from the same cache as the grid; absent on reopened drafts. */
+  readonly imageVersion?: string;
   /** Discount percentage as typed (pt-BR, decimal comma); empty = no discount. */
   readonly discountText: string;
   readonly price: ListPriceContext;
@@ -148,9 +150,29 @@ export function decrementLineQuantity(line: EditorLine): LineDecrement | null {
   return next <= 0n ? { kind: "remove" } : { kind: "set", quantityText: unitsToText(next) };
 }
 
+export type QuantityCommit =
+  | { kind: "set"; quantityText: string }
+  /** Zero typed where "−" would take the product out of the cart (catalog). */
+  | { kind: "remove" }
+  | { kind: "revert"; problem: QuantityProblem };
+
+/**
+ * A typed quantity confirmed (blur / enter). Same validity as the +/− path: a positive pt-BR decimal of at most 4
+ * places (`parseQuantityInput`), shown normalized. Zero is "remove" when `zeroRemoves` (catalog "−" at the minimum
+ * step removes the product) and otherwise, like the cart "−" at the minimum step, changes nothing: the line goes back
+ * to its last valid value. Invalid or empty text also goes back, with the problem for the inline message.
+ */
+export function commitQuantityText(typed: string, zeroRemoves: boolean): QuantityCommit {
+  const parsed = parseQuantityInput(typed);
+  if (parsed.ok) return { kind: "set", quantityText: unitsToText(toUnits(parsed.value)) };
+  if (parsed.problem === "not_positive" && zeroRemoves) return { kind: "remove" };
+  return { kind: "revert", problem: parsed.problem };
+}
+
 export function lineFromProduct(product: ProductListItem, key: string): EditorLine {
   return {
     key,
+    ...(product.image?.version === undefined ? {} : { imageVersion: product.image.version }),
     productCode: product.code,
     description: product.description,
     unit: product.unit,
