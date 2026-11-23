@@ -26,7 +26,7 @@ export type WaitingSinceSource = z.infer<typeof WaitingSinceSourceSchema>;
 export const ReleaseQueueItemSchema = named(
   'ReleaseQueueItem',
   z.object({
-    /** Unique note number in Sankhya (NUNOTA): what the person searches in the Sankhya release screen. */
+    /** Unique note number in the ERP (the order note key): what the person searches in the Sankhya release screen. */
     nunota: z.number().int().min(1),
     orderId: UuidSchema,
     draftNumber: z.number().int().min(1),
