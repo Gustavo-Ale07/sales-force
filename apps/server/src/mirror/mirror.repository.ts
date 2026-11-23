@@ -126,7 +126,8 @@ export interface CustomerCounts {
 
 /**
  * The customer eligibility predicate compiled to SQL: the SAME rule as the domain `customerOrderBlock(...) === null` that
- * order creation and submission apply (live row, active, not blocked, valid seller CODVEND >= 1). Lists, search, the
+ * order creation and submission apply for the customer state (live row, active, not blocked; the seller check stays in
+ * the order paths, see below). Lists, search, the
  * customer file, the device cache source and the send validation therefore agree on who can receive an order. The
  * installation columns of `customers.eligibility` (flags, columnIn) are applied when the mirror is ingested: a partner
  * outside them is never mirrored live (it is deactivated by the missing-row rule). Blocked, inactive and seller-less
@@ -138,7 +139,8 @@ export function eligibleCustomerConditions(): SQL[] {
     eq(erpCustomer.isCustomer, true),
     eq(erpCustomer.active, true),
     not(blockedSql),
-    sql`${erpCustomer.sellerCode} >= 1`,
+    // No seller condition here on purpose: a customer without a seller stays listed with the "Sem vendedor" seal and cannot
+    // be chosen for an order (owner ruling 2026-11-13); order creation and send refuse it with `customer_without_seller`.
   ];
 }
 
