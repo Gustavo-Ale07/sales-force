@@ -6,7 +6,7 @@ exports[`D-W template (J4) > never carries restricted fields and matches the lay
 <body>
 <header>
 <div><div class="wordmark">PLAC<span>.</span></div></div>
-<div><div class="kind">ORÇAMENTO</div><h1>Orçamento nº 42</h1><div class="meta">Orçamento Sankhya nº 987654</div><div class="meta">Data 30/03/2026</div><div class="badge">Enviado ao Sankhya</div></div>
+<div><div class="kind">ORÇAMENTO</div><h1>Orçamento nº 42</h1><div class="meta">Orçamento nº 987654</div><div class="meta">Data 30/03/2026</div><div class="badge">Enviado ao Sankhya</div></div>
 </header>
 <section class="cols">
 <div><h2>Cliente</h2><div><strong>CASA &amp; CIA LTDA</strong></div><div>Cliente 1500</div></div>

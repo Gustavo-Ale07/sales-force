@@ -74,7 +74,7 @@ describe('renderOrderHtml', () => {
     expect(html).toContain('@page');
     expect(html).toContain('A4');
     expect(html).toContain('Pedido Force nº 42');
-    expect(html).toContain('Pedido Sankhya nº 987654');
+    expect(html).toContain('Pedido nº 987654');
     expect(html).toContain('Enviado ao Sankhya');
     expect(html).toContain('CASA &amp; CIA LTDA');
     expect(html).toContain('1.250,5');

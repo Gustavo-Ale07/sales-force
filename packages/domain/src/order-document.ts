@@ -241,7 +241,7 @@ export function renderOrderHtml(model: OrderDocumentModel, options: OrderHtmlOpt
     model.draftNumber === null
       ? noun
       : `${noun}${isQuote ? '' : ' Force'} nº ${escapeHtml(model.draftNumber)}`;
-  const erpLine = model.erpNumber === null ? '' : `<div class="meta">${noun} Sankhya nº ${escapeHtml(model.erpNumber)}</div>`;
+  const erpLine = model.erpNumber === null ? '' : `<div class="meta">${noun} nº ${escapeHtml(model.erpNumber)}</div>`;
   const title = options.title ?? (model.draftNumber === null ? noun : `${noun} ${model.draftNumber}`);
 
   const rows = model.items

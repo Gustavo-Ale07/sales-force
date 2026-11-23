@@ -21,7 +21,7 @@ describe("Imprimir / PDF", () => {
     expect(callsTo(calls, "GET", "/orders/:id".replace(":id", ORDER_ID))).toHaveLength(1);
     expect(router.state.location.pathname).toBe("/pedidos");
     expect(printed[0]).toContain("#01136A");
-    expect(printed[0]).toContain("Pedido Sankhya nº 777");
+    expect(printed[0]).toContain("Pedido nº 777");
     expect(printed[0]).toContain("Enviado ao Sankhya");
     expect(printed[0]).toContain("Entregar cedo");
     expect(printed[0]).not.toContain("ERP");
