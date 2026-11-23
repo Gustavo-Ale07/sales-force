@@ -24,6 +24,7 @@ import { installUpdate, updateAvailable } from "../update/device-update";
 import { ProfileScreen } from "./profile-screen";
 import { QuarantineScreen } from "./quarantine-screen";
 import { HeaderSyncStatus } from "./sync-status";
+import { SyncProgressOverlay } from "./sync-progress-overlay";
 import { useInsets } from "./use-insets";
 import { useKeyboardVisible } from "./use-keyboard-visible";
 
@@ -275,6 +276,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
       )}
       {/* Android is edge-to-edge: the window no longer resizes for the keyboard, so the body avoids it itself. */}
       <ErrorActionsContext.Provider value={errorActions}>
+      <SyncProgressOverlay status={syncStatus} onRetry={syncNow} />
       <ProductImageProvider store={services?.productImages ?? null} online={connectivityState !== "offline"}>
       <KeyboardAvoidingView style={styles.flex} behavior="padding">
         <View style={styles.flex}>

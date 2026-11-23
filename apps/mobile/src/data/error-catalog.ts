@@ -45,6 +45,8 @@ export const ERROR_CATALOG = {
   no_seller_scope: { title: "Sem carteira", message: "Seu usuário não tem vendedor vinculado. Fale com o backoffice.", action: "none" },
   rate_limited: { title: "Muitas tentativas", message: "Aguarde um pouco e tente de novo.", action: "retry" },
   service_unavailable: { title: "Servidor indisponível", message: "O serviço está fora do ar por instantes.", action: "retry" },
+  sankhya_unavailable: { title: "Sankhya indisponível", message: "Não foi possível ler o Sankhya agora. Mantivemos os dados da última sincronização; tente de novo mais tarde.", action: "retry" },
+  sync_failed: { title: "Não foi possível sincronizar", message: "A sincronização não terminou. Os dados anteriores e seus pedidos salvos continuam no aparelho.", action: "retry" },
   internal_error: { title: "Erro no servidor", message: "Algo falhou do nosso lado. Tente de novo.", action: "retry" },
   not_found: { title: "Não encontrado", message: "Este registro não existe mais. Sincronize para atualizar.", action: "go_sync" },
   device_revoked: { title: "Aparelho bloqueado", message: "Este aparelho foi desativado. Fale com o backoffice.", action: "none" },
