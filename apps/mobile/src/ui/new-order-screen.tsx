@@ -81,10 +81,14 @@ export interface NewOrderScreenProps {
 
 /** What the shell can ask of the wizard. */
 export interface NewOrderControl {
-  /** Android Back: closes a selection, goes back one step, or on the first step saves the order on the device and leaves. */
+  /** Android Back: closes a selection, goes back one step, or on the first step asks (when there is unsaved content) and leaves. */
   back(): void;
-  /** Saves what is in progress on the device (nothing is written for an empty order) and closes the wizard to its initial state. */
-  saveAndClose(): Promise<boolean>;
+  /**
+   * Leaves the wizard by any path (X, Back on step 1, tab switch, Início). An order with unsaved content asks ONCE ("Descartar o
+   * pedido?": Salvar e sair / Descartar / Continuar editando); an empty one leaves with no question and writes nothing.
+   * Resolves true once the wizard closed, false when the seller stayed (or a save failed).
+   */
+  requestLeave(): Promise<boolean>;
 }
 
 /**
@@ -215,6 +219,8 @@ export function NewOrderScreen({
   const [carriers, setCarriers] = useState<readonly Carrier[] | null>(null);
   const choiceHeader = { ...(choice.top === undefined ? {} : { top: choice.top }), ...(choice.negotiation === undefined ? {} : { negotiation: choice.negotiation }), ...(choice.carrier === undefined ? {} : { carrier: choice.carrier }), ...(choice.freight === undefined ? {} : { freight: choice.freight }), ...(choice.notes === undefined ? {} : { notes: choice.notes }) };
   const finished = savedLocal !== null || savedOrder !== null;
+  /** Never saved on purpose: a fresh order, or one restored from the recovery record. */
+  const isNewOrder = localDraft === null || localDraft.kind === "recovery";
   const dirty =
     !finished &&
     orderSignature(customer?.code ?? null, lines, choiceHeader) !== baselineRef.current &&
@@ -245,7 +251,8 @@ export function NewOrderScreen({
     };
     // Nothing at risk: an empty cart, or an order already saved (its success screen is showing).
     if (current.lines.length === 0 || current.finished) {
-      begin();
+      if (current.customer === null && !current.finished) askRecovery(begin);
+      else begin();
       return;
     }
     if (startLines === undefined && current.customer?.code === startCustomer.code) {
@@ -266,6 +273,68 @@ export function NewOrderScreen({
     // Only a new request (nonce) triggers this; the handlers above read the latest state through refs/closures of this run.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startNonce]);
+
+  /**
+   * An order that was being built when the app closed (recovery record) is offered ONCE when a new order starts on an empty
+   * wizard: "Continuar" restores it, "Descartar" deletes it and goes on with `fresh`. Without a record `fresh` runs at once.
+   */
+  function askRecovery(fresh: () => void) {
+    if (localOrders === undefined) {
+      fresh();
+      return;
+    }
+    localOrders
+      .getRecovery()
+      .then((found) => {
+        if (found === null) {
+          fresh();
+          return;
+        }
+        modal.show({
+          variant: "confirm",
+          title: "Continuar o pedido em andamento?",
+          message: `Pedido de ${found.draft.customerName} que não foi salvo. Continue de onde parou ou descarte para começar outro.`,
+          buttons: [
+            {
+              label: "Continuar",
+              role: "primary",
+              onPress: () => {
+                baselineRef.current = orderSignature(found.draft.customerCode, found.lines);
+                setChoice({});
+                setLocalDraft(found.draft);
+                setCustomer({ code: found.draft.customerCode, name: found.draft.customerName });
+                setLines(found.lines);
+                setSavedLocal(null);
+                setSavedOrder(null);
+                setEditingOrder(null);
+                goToStep("summary");
+              },
+            },
+            {
+              label: "Descartar",
+              role: "destructive",
+              onPress: () => {
+                void localOrders
+                  .discardRecovery()
+                  .catch(() => undefined)
+                  .then(fresh);
+              },
+            },
+          ],
+        });
+      })
+      .catch(() => fresh());
+  }
+  // Entering the wizard with nothing pending (a plain "Nova venda"): offer the recovery record once.
+  const entryAsked = useRef(false);
+  useEffect(() => {
+    if (entryAsked.current) return;
+    entryAsked.current = true;
+    if (startRequest !== null || resumeLocalId !== null || localOrders === undefined) return;
+    askRecovery(() => undefined);
+    // Once per mount: the wizard is mounted whenever a new order is opened.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (resumeLocalId === null || localOrders === undefined) return undefined;
@@ -456,7 +525,7 @@ export function NewOrderScreen({
 
   /** Throws away the order being edited (never a saved draft: that one stays on the device). Always asks first. */
   function confirmDiscard() {
-    const saved = localDraft !== null || editingOrder !== null;
+    const saved = (localDraft !== null && localDraft.kind !== "recovery") || editingOrder !== null;
     modal.show({
       variant: "confirm",
       title: saved ? "Descartar alterações?" : "Descartar pedido?",
@@ -464,7 +533,14 @@ export function NewOrderScreen({
         ? "As alterações feitas desde o último salvamento serão perdidas. O pedido salvo continua como estava."
         : "Os itens do carrinho serão removidos e o pedido não será salvo. Esta ação não pode ser desfeita.",
       buttons: [
-        { label: "Descartar", role: "destructive", onPress: resetOrder },
+        {
+          label: "Descartar",
+          role: "destructive",
+          onPress: () => {
+            if (!saved) void localOrders?.discardRecovery().catch(() => undefined);
+            resetOrder();
+          },
+        },
         { label: "Continuar editando", role: "cancel" },
       ],
     });
@@ -666,9 +742,10 @@ export function NewOrderScreen({
   }
 
   /** Writes the order to this device (same path as "Salvar"); returns the stored draft. */
-  async function persistLocal(port: LocalOrdersPort, picked: PickedCustomer, sendRequested?: boolean): Promise<DraftRecord> {
+  async function persistLocal(port: LocalOrdersPort, picked: PickedCustomer, sendRequested?: boolean, recovery = false): Promise<DraftRecord> {
     const saved = await port.save({
       ...(sendRequested === undefined ? {} : { sendRequested }),
+      ...(recovery ? { recovery: true } : {}),
       localId: localDraft?.localId ?? null,
       customer: picked,
       negotiationTypeCode,
@@ -687,15 +764,15 @@ export function NewOrderScreen({
   }
 
   /**
-   * Silent save between steps and when the app goes to the background (offline path only; online there is
-   * no local draft and nothing is created on the server behind the seller's back). Only a complete, valid cart is
-   * stored, exactly what the save button accepts; a failure here stays silent and the final save reports it.
+   * Silent protection against a forced close between steps and when the app goes to the background. It writes a RECOVERY record
+   * only (invisible in the list, never sent, never counted) and only for an order that was never saved: an order saved on purpose
+   * is changed only by "Salvar e sair" or "Confirmar". Only a complete, valid cart is stored; a failure stays silent.
    */
   async function autoSave() {
-    if (localOrders === undefined || customer === null || saving || finished || !dirty) return;
+    if (localOrders === undefined || customer === null || saving || finished || !dirty || !isNewOrder) return;
     if (lines.length === 0 || !preview.valid || blockedLineCount > 0) return;
     try {
-      await persistLocal(localOrders, customer);
+      await persistLocal(localOrders, customer, undefined, true);
     } catch {
       // The explicit save reports the problem.
     }
@@ -718,9 +795,9 @@ export function NewOrderScreen({
    * for an empty order (no customer and no items). A failed save keeps the seller on the screen with the reason.
    */
   async function saveAndExit(): Promise<boolean> {
-    const empty = customer === null && lines.length === 0;
-    if (!finished && !empty && localOrders !== undefined && customer !== null && lines.length > 0 && dirty) {
+    if (!finished && localOrders !== undefined && customer !== null && (isNewOrder || dirty)) {
       try {
+        // Not a recovery save: this creates (or promotes the recovery to) the saved order.
         await persistLocal(localOrders, customer);
       } catch (error) {
         errors.report(error, { retry: () => void saveAndExit() }, { title: "Não foi possível salvar" });
@@ -732,14 +809,62 @@ export function NewOrderScreen({
     return true;
   }
 
-  /** Android Back inside the wizard: selection first, then one step back; on the first step (or the final screen) save and leave. */
+  /** Guards against a second "Descartar o pedido?" while one is open (double tap, Back plus tab). */
+  const leaveAskedRef = useRef(false);
+
+  /**
+   * Every way out of the wizard goes through here. An order with unsaved content asks once; an empty order (or one with nothing
+   * unsaved, or one already confirmed) leaves with no question. Nothing is written for an empty order.
+   */
+  function requestLeave(): Promise<boolean> {
+    if (leaveAskedRef.current) return Promise.resolve(false);
+    const port = localOrders;
+    const unsaved = !finished && port !== undefined && editingOrder === null && (isNewOrder ? customer !== null || lines.length > 0 : dirty);
+    if (!unsaved) {
+      // Emptied after a recovery write: nothing left to protect.
+      if (!finished && port !== undefined && localDraft?.kind === "recovery") void port.discardRecovery().catch(() => undefined);
+      resetOrder();
+      onExit?.();
+      return Promise.resolve(true);
+    }
+    leaveAskedRef.current = true;
+    return new Promise<boolean>((resolve) => {
+      const done = (left: boolean) => {
+        leaveAskedRef.current = false;
+        resolve(left);
+      };
+      modal.show({
+        variant: "confirm",
+        title: "Descartar o pedido?",
+        message: isNewOrder
+          ? "Este pedido ainda não foi salvo. Salve para continuar depois ou descarte para apagá-lo."
+          : "As alterações feitas desde o último salvamento serão perdidas. O pedido salvo continua como estava.",
+        buttons: [
+          { label: "Salvar e sair", role: "primary", onPress: () => void saveAndExit().then(done) },
+          {
+            label: "Descartar",
+            role: "destructive",
+            onPress: () => {
+              if (isNewOrder) void localOrders?.discardRecovery().catch(() => undefined);
+              resetOrder();
+              onExit?.();
+              done(true);
+            },
+          },
+          { label: "Continuar editando", role: "cancel", onPress: () => done(false) },
+        ],
+      });
+    });
+  }
+
+  /** Android Back inside the wizard: selection first, then one step back; on the first step (or the final screen) leave (asks when unsaved). */
   function handleBack() {
     if (selectionMode) {
       cancelSelection();
       return;
     }
     if (finished) {
-      void saveAndExit();
+      void requestLeave();
       return;
     }
     if (step === "products" && productsView === "cart") {
@@ -747,18 +872,18 @@ export function NewOrderScreen({
       return;
     }
     if (WIZARD_STEPS.indexOf(step) <= 0) {
-      void saveAndExit();
+      void requestLeave();
       return;
     }
     goBack();
   }
-  const controlLatest = useRef({ back: handleBack, saveAndClose: saveAndExit });
+  const controlLatest = useRef({ back: handleBack, requestLeave });
   useEffect(() => {
-    controlLatest.current = { back: handleBack, saveAndClose: saveAndExit };
+    controlLatest.current = { back: handleBack, requestLeave };
   });
   useEffect(() => {
     if (controlRef === undefined) return undefined;
-    controlRef.current = { back: () => controlLatest.current.back(), saveAndClose: () => controlLatest.current.saveAndClose() };
+    controlRef.current = { back: () => controlLatest.current.back(), requestLeave: () => controlLatest.current.requestLeave() };
     return () => {
       controlRef.current = null;
     };
@@ -1208,7 +1333,7 @@ export function NewOrderScreen({
 
   return (
     <View style={styles.flex}>
-      <WizardProgress step={step} customerName={step === "customer" ? undefined : customer?.name} onExit={onExit === undefined ? undefined : () => void saveAndExit()} />
+      <WizardProgress step={step} customerName={step === "customer" ? undefined : customer?.name} onExit={onExit === undefined ? undefined : () => void requestLeave()} />
       {step === "customer" && renderCustomerStep()}
       {step === "negotiation" && renderNegotiationStep()}
       {step === "products" && renderProductsStep()}

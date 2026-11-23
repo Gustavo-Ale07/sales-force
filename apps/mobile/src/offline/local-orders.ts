@@ -4,6 +4,8 @@ import {
   countQuarantinedDrafts,
   discardLocalDraft,
   discardQuarantinedDraft,
+  discardRecovery,
+  getRecovery,
   getDraft,
   getDraftItems,
   getQuarantinedDraft,
@@ -52,6 +54,8 @@ export interface SaveLocalDraftInput {
   readonly loadedDataset: DatasetIdentity | null;
   /** The seller accepted a discount above a product limit (local mark; `true` sets it, absent keeps it). Never blocks sending. */
   readonly discountOverLimitAccepted?: boolean;
+  /** Protection against a forced close only: a recovery record, invisible in the list, never sent, never counted. Absent = a saved order. */
+  readonly recovery?: boolean;
 }
 
 export type DuplicateOutcome =
@@ -75,6 +79,10 @@ export interface LocalOrdersPort {
   get(localId: string): Promise<DraftRecord | null>;
   open(localId: string): Promise<OpenedLocalDraft | null>;
   discard(localId: string): Promise<void>;
+  /** The order that was being built when the app closed (recovery record), or `null`. */
+  getRecovery(): Promise<OpenedLocalDraft | null>;
+  /** Deletes the recovery record only; saved orders are never touched. */
+  discardRecovery(): Promise<void>;
   /** Retained (quarantined) drafts: never sent, never listed as operational work. Read-only plus an explicit local discard. */
   listQuarantined(): Promise<QuarantinedDraftRecord[]>;
   countQuarantined(): Promise<number>;
@@ -190,6 +198,7 @@ export function createLocalOrdersPort(deps: {
         ...(input.sendRequested === undefined ? {} : { sendRequested: input.sendRequested }),
         loadedDataset: input.loadedDataset,
         ...(input.discountOverLimitAccepted === true ? { discountOverLimitAccepted: true } : {}),
+        ...(input.recovery === true ? { recovery: true } : {}),
       });
       const draft = await getDraft(db, id);
       onChanged();
@@ -211,6 +220,15 @@ export function createLocalOrdersPort(deps: {
     },
     async discard(localId) {
       await discardLocalDraft(db, ownerAccountId, localId);
+      onChanged();
+    },
+    async getRecovery() {
+      const draft = await getRecovery(db, ownerAccountId);
+      if (draft === null) return null;
+      return { draft, lines: linesFromDraftItems(await getDraftItems(db, draft.localId)) };
+    },
+    async discardRecovery() {
+      await discardRecovery(db, ownerAccountId);
       onChanged();
     },
     listQuarantined: () => listQuarantinedDrafts(db, ownerAccountId),

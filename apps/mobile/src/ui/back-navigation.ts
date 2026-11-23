@@ -23,7 +23,7 @@ export type BackAction =
   /** Safe to ignore: the sync screen cannot be left with Back (its own "Cancelar sincronização" button is the way). */
   | { readonly type: "ignore" }
   | { readonly type: "close_quarantine" }
-  /** The wizard goes back one step; on its first step it saves the order on the device and leaves (the same as "Salvar e sair"). */
+  /** The wizard goes back one step; on its first step it leaves, asking "Descartar o pedido?" once when there is unsaved content (an empty order leaves with no question). */
   | { readonly type: "wizard_back" }
   | { readonly type: "close_customer_detail" }
   | { readonly type: "close_sale_detail" }

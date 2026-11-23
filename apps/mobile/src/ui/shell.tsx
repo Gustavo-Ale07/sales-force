@@ -149,8 +149,8 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
         show();
         return;
       }
-      // An order in progress is saved on the device first (it stays "Salvo no aparelho"); if that fails the seller stays to see why.
-      void order.saveAndClose().then((closed) => {
+      // An order with unsaved content asks first ("Descartar o pedido?"); the tab changes only once the wizard closed (saved or discarded).
+      void order.requestLeave().then((closed) => {
         if (!closed) return;
         resetTab(left);
         show();

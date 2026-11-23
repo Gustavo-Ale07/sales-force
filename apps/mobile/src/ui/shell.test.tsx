@@ -501,6 +501,28 @@ describe("Shell", () => {
     expect(screen.queryByLabelText("Etapa 1 de 4: Cliente")).toBeNull();
   });
 
+  it("switching tab with an unsaved order asks once; the tab changes only after 'Descartar', and 'Continuar editando' stays", async () => {
+    const customers: CustomerRepository = {
+      list: async (request) => (request.pageSize === 1 ? pageOf([]) : pageOf([customer(10, { name: "Padaria Central", document: "12345678000190" })])),
+    };
+    const { offline } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() }, undefined, fakeLocalOrders(), undefined, { customers, products: fakeProducts({ list: async () => pageOf([]) }), orders: fakeOrders() });
+    await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline, repositories: { customers, products: fakeProducts({ list: async () => pageOf([]) }), orders: fakeOrders() } })} />);
+    await fireEvent.press(await screen.findByRole("tab", { name: "Clientes" }));
+    await fireEvent.press(await screen.findByRole("button", { name: /Padaria Central, código 10/ }));
+    await fireEvent.press(await screen.findByRole("button", { name: "Novo pedido" }));
+    await screen.findByLabelText(/^Etapa 2 de 4/);
+    await fireEvent.press(screen.getByRole("tab", { name: "Perfil" }));
+    expect(await screen.findByLabelText("Descartar o pedido?")).toBeTruthy();
+    expect(screen.getAllByLabelText("Descartar o pedido?")).toHaveLength(1);
+    expect(screen.getByRole("tab", { name: "Vendas" }).props.accessibilityState.selected).toBe(true);
+    await pressInModal("Continuar editando");
+    expect(screen.getByRole("tab", { name: "Vendas" }).props.accessibilityState.selected).toBe(true);
+    await fireEvent.press(screen.getByRole("tab", { name: "Perfil" }));
+    await screen.findByLabelText("Descartar o pedido?");
+    await pressInModal("Descartar");
+    await waitFor(() => expect(screen.getByRole("tab", { name: "Perfil" }).props.accessibilityState.selected).toBe(true));
+  });
+
   it("says so when the seller enters offline with the saved session", async () => {
     const { offline } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() });
     const connectivity = fakeConnectivity("offline");
@@ -585,7 +607,7 @@ describe("Shell: Android Back", () => {
     expect(screen.getByRole("tab", { name: "Clientes" }).props.accessibilityState.selected).toBe(true);
   });
 
-  it("inside the order wizard Back on step 1 does 'Salvar e sair' (an empty order writes nothing) and lands on Minhas vendas", async () => {
+  it("inside the order wizard Back on step 1 leaves an empty order with no question (nothing is written) and lands on Minhas vendas", async () => {
     const localOrders = fakeLocalOrders();
     const { offline } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() }, undefined, localOrders);
     await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
