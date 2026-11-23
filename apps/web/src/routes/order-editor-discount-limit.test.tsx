@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { exceedsLimit, formatLimit } from "../lib/discount-limit";
-import { customer, customerDetail, customersPage, orderDetail, pricedList, product, productsPage } from "../test/fixtures";
+import { ORDER_ID, customer, customerDetail, customersPage, orderDetail, orderItem, pricedList, product, productsPage } from "../test/fixtures";
 import { callsTo, fillOrderHeader, renderApp, type Handlers } from "../test/harness";
 
 vi.setConfig({ testTimeout: 20_000 });
@@ -129,6 +129,49 @@ describe("Desconto acima do limite do produto: por item", () => {
     await user.click(confirm);
     await waitFor(() => expect(callsTo(calls, "POST", "/orders")).toHaveLength(1));
     expect(callsTo(calls, "POST", "/orders")[0]?.body).toMatchObject({ items: [{ productCode: 4158, discountPercent: "15" }] });
+  });
+});
+
+describe("Marca discountAboveLimitAccepted", () => {
+  it("is sent as true after Sim and as false when the warning was never accepted", async () => {
+    const { user, calls } = renderApp("/pedidos/novo?customer=1001", {
+      handlers: handlers({ "POST /orders": { status: 201, body: orderDetail() }, "GET /orders/:id": { body: orderDetail() } }),
+    });
+    await cartWith(user, ["Item A"]);
+    await typeDiscount(user, "Item A", "15");
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Sim" }));
+    await waitFor(noDialog);
+    await user.click(screen.getByRole("button", { name: "Confirmar pedido" }));
+    await waitFor(() => expect(callsTo(calls, "POST", "/orders")).toHaveLength(1));
+    expect(callsTo(calls, "POST", "/orders")[0]?.body).toMatchObject({ discountAboveLimitAccepted: true });
+  });
+
+  it("never warns for a draft reloaded with the mark set", async () => {
+    const saved = orderDetail({ discountAboveLimitAccepted: true, items: [orderItem({ productCode: 4158, productDescription: "Item A", unitListPrice: "10", discountPercent: "5" })] });
+    const { user } = renderApp(`/pedidos/${ORDER_ID}`, {
+      handlers: handlers({
+        "GET /orders/:id": { body: saved },
+        "GET /products/:code": { body: { ...product({ code: 4158, maxDiscountPercent: "12" }), usageCode: null, priceContext: catalog.priceContext } },
+      }),
+    });
+    await user.clear(await screen.findByLabelText("Desconto de Item A (%)"));
+    await user.type(screen.getByLabelText("Desconto de Item A (%)"), "20");
+    await user.tab();
+    noDialog();
+  });
+
+  it("an old order without the field (= false) still warns once", async () => {
+    const saved = orderDetail({ items: [orderItem({ productCode: 4158, productDescription: "Item A", unitListPrice: "10", discountPercent: "5" })] });
+    const { user } = renderApp(`/pedidos/${ORDER_ID}`, {
+      handlers: handlers({
+        "GET /orders/:id": { body: saved },
+        "GET /products/:code": { body: { ...product({ code: 4158, maxDiscountPercent: "12" }), usageCode: null, priceContext: catalog.priceContext } },
+      }),
+    });
+    await user.clear(await screen.findByLabelText("Desconto de Item A (%)"));
+    await user.type(screen.getByLabelText("Desconto de Item A (%)"), "20");
+    await user.tab();
+    expect(await screen.findByRole("dialog")).toHaveTextContent(QUESTION);
   });
 });
 

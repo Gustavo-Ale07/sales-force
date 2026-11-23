@@ -366,7 +366,12 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
   // One idempotency key per distinct payload: a retry after a lost response resends the same key, an edited payload gets a new one.
   const requestIdRef = useRef<{ payload: string; id: string } | null>(null);
 
+  // Single above-limit warning per order: the mark comes from the loaded order and is sent back with every save.
+  const aboveLimitAccepted = useRef(order?.discountAboveLimitAccepted === true);
+  const [aboveLimitMark, setAboveLimitMark] = useState(order?.discountAboveLimitAccepted === true);
+
   const body = {
+    discountAboveLimitAccepted: aboveLimitMark,
     customerCode: customer?.code ?? 0,
     negotiationTypeCode,
     topCode: orderTopCode,
@@ -638,9 +643,8 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
 
   /**
    * Discount above the product's registered limit (informational, never blocks saving or sending). The first "Sim" marks the
-   * order and no other limit dialog appears for it. The mark lives in this editor's memory only: the order contract has no field for it.
+   * order and no other limit dialog appears for it. The mark is sent as discountAboveLimitAccepted and restored from the loaded order.
    */
-  const aboveLimitAccepted = useRef(false);
   const limitPromptOpen = useRef(false);
   const discountPrevious = useRef(new Map<string, string>());
   const [limitPrompt, setLimitPrompt] = useState<{ prompt: DiscountLimitPrompt; yes: () => void; no: () => void } | null>(null);
@@ -650,6 +654,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
       prompt,
       yes: () => {
         aboveLimitAccepted.current = true;
+        setAboveLimitMark(true);
         limitPromptOpen.current = false;
         setLimitPrompt(null);
         onYes();
