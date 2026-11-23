@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { Account } from "../auth/auth-port";
 import { APP_BUILD_LABEL, APP_ENVIRONMENT_LABEL, PRODUCT_NAME } from "../app-info";
 import { colors, spacing } from "../theme";
 import { initialsOf, roleLabel } from "./account-labels";
+import { useAppModal } from "./app-modal";
 import { SyncPanel, type SyncViewProps } from "./sync-status";
 
 export interface ProfileScreenProps extends SyncViewProps {
@@ -36,6 +37,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 export function ProfileScreen({ account, onOpenLocalOrders, onCheckUpdate, onSignOut, loadUnsent, ...sync }: ProfileScreenProps) {
+  const modal = useAppModal();
   const [updateText, setUpdateText] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
   async function checkUpdate() {
@@ -57,16 +59,16 @@ export function ProfileScreen({ account, onOpenLocalOrders, onCheckUpdate, onSig
         // Unknown count: keep the counters, which only err on the side of warning.
       }
     }
-    Alert.alert(
-      "Sair do Force",
-      unsent > 0
-        ? `Há ${unsent} ${unsent === 1 ? "item ainda não enviado" : "itens ainda não enviados"} neste aparelho. Eles continuam salvos, só para esta conta, e serão enviados quando você entrar de novo e sincronizar.`
-        : "Os dados baixados (clientes, produtos e preços) serão apagados deste aparelho. Entre de novo para baixá-los.",
-      [
-        { text: "Cancelar", style: "cancel" },
-        { text: "Sair", style: "destructive", onPress: onSignOut },
-      ],
-    );
+    const confirmed = await modal.confirm({
+      title: "Sair do Force",
+      message:
+        unsent > 0
+          ? `Há ${unsent} ${unsent === 1 ? "item ainda não enviado" : "itens ainda não enviados"} neste aparelho. Eles continuam salvos, só para esta conta, e serão enviados quando você entrar de novo e sincronizar.`
+          : "Os dados baixados (clientes, produtos e preços) serão apagados deste aparelho. Entre de novo para baixá-los.",
+      confirmLabel: "Sair",
+      destructive: true,
+    });
+    if (confirmed) onSignOut();
   }
 
   return (

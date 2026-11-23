@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { DraftRecord } from "@salesforce/mobile-db";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import { lineAmountsOf, previewDraft, type EditorLine } from "../data/order-draft";
@@ -21,6 +21,7 @@ function releaseToneColor(tone: ReleaseTone): string {
 }
 import { saleActions, saleExplanation } from "../offline/sales-status";
 import { colors, spacing } from "../theme";
+import { useAppModal } from "./app-modal";
 import { SaleBadgeView, describeSaleValue } from "./sale-parts";
 import { formatDateTime } from "./sync-status";
 
@@ -55,6 +56,7 @@ function money(value: string | null): string {
 
 /** Read-only view of one sale, with only the actions that are safe for its state. Explains what each state means in plain words. */
 export function SaleDetailScreen({ localId, localOrders, connectivity, orders, orderPdf, onBack, onChanged, onContinue, onDuplicate, onSyncNow }: SaleDetailScreenProps) {
+  const modal = useAppModal();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [missing, setMissing] = useState(false);
   const [reloads, setReloads] = useState(0);
@@ -117,12 +119,12 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
       try {
         await work();
       } catch {
-        Alert.alert("Não foi possível concluir", failure);
+        modal.show({ variant: "error", title: "Não foi possível concluir", message: failure });
       }
       onChanged();
       setReloads((n) => n + 1);
     },
-    [onChanged],
+    [onChanged, modal],
   );
 
   if (missing) {
@@ -155,7 +157,11 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
     const result = await shareOrderPdf(orderPdf, draft, lines);
     setSharing(false);
     if (!result.ok) {
-      Alert.alert("Não foi possível gerar o PDF", result.reason === "empty" ? "Este pedido não tem itens." : "Tente novamente. Não é preciso estar conectado para gerar o PDF.");
+      modal.show({
+        variant: "error",
+        title: "Não foi possível gerar o PDF",
+        message: result.reason === "empty" ? "Este pedido não tem itens." : "Tente novamente. Não é preciso estar conectado para gerar o PDF.",
+      });
     }
   }
 
@@ -169,46 +175,42 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
     setDuplicating(false);
     if (!result.ok) {
       const { failure } = result;
-      Alert.alert(failure.title, [failure.message, ...failure.skipped].join("\n"));
+      modal.show({ variant: "error", title: failure.title, message: [failure.message, ...failure.skipped].join("\n") });
       return;
     }
     onChanged();
     if (result.skippedLines.length > 0) {
-      Alert.alert(
-        "Pedido criado com itens a menos",
-        `Estes itens do orçamento não foram copiados:\n${describeSkippedLines(result.skippedLines).join("\n")}`,
-        [{ text: "Abrir pedido", onPress: () => onContinue(result.localId) }],
-      );
+      modal.show({
+        variant: "info",
+        title: "Pedido criado com itens a menos",
+        message: `Estes itens do orçamento não foram copiados:\n${describeSkippedLines(result.skippedLines).join("\n")}`,
+        buttons: [{ label: "Abrir pedido", role: "primary", onPress: () => onContinue(result.localId) }],
+      });
       return;
     }
     onContinue(result.localId);
   }
 
   function confirmDelete() {
-    Alert.alert(
-      "Excluir rascunho?",
-      "Este pedido será removido deste aparelho e não será enviado ao Force. Esta ação não pode ser desfeita.",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Excluir",
-          style: "destructive",
-          onPress: () =>
-            void (async () => {
-              try {
-                await localOrders.discard(draft.localId);
-              } catch {
-                Alert.alert("Não foi possível excluir", "Este pedido já foi enviado ao Force e não pode ser excluído por aqui.");
-                onChanged();
-                setReloads((n) => n + 1);
-                return;
-              }
-              onChanged();
-              onBack();
-            })(),
-        },
-      ],
-    );
+    void (async () => {
+      const confirmed = await modal.confirm({
+        title: "Excluir rascunho?",
+        message: "Este pedido será removido deste aparelho e não será enviado ao Force. Esta ação não pode ser desfeita.",
+        confirmLabel: "Excluir",
+        destructive: true,
+      });
+      if (!confirmed) return;
+      try {
+        await localOrders.discard(draft.localId);
+      } catch {
+        modal.show({ variant: "error", title: "Não foi possível excluir", message: "Este pedido já foi enviado ao Force e não pode ser excluído por aqui." });
+        onChanged();
+        setReloads((n) => n + 1);
+        return;
+      }
+      onChanged();
+      onBack();
+    })();
   }
 
   return (

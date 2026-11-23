@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Alert, BackHandler, KeyboardAvoidingView, Pressable, StatusBar, StyleSheet, Text, View } from "react-native";
+import { BackHandler, KeyboardAvoidingView, Pressable, StatusBar, StyleSheet, Text, View } from "react-native";
 import { useConnectivity } from "../connectivity/use-connectivity";
 import type { Account } from "../auth/auth-port";
 import type { AppDependencies } from "../dependencies";
@@ -9,6 +9,7 @@ import { ProductImageProvider } from "../images/product-image-context";
 import { evaluateOfflineAccess } from "../offline/session";
 import { useSyncStatus } from "../offline/use-sync";
 import { colors, spacing } from "../theme";
+import { AppModalProvider, useAppModal } from "./app-modal";
 import { BottomNav, type MainTab } from "./bottom-nav";
 import { BrandLogo, SplashView } from "./brand";
 import { CustomerDetailScreen } from "./customer-detail-screen";
@@ -51,7 +52,16 @@ function Pane({ active, visited, children }: { active: boolean; visited: boolean
 
 /** Session gate + the signed-in shell (header, tab bodies, bottom navigation). Everything comes through `dependencies` (ports). */
 export function Shell({ dependencies }: { dependencies: AppDependencies }) {
+  return (
+    <AppModalProvider>
+      <ShellBody dependencies={dependencies} />
+    </AppModalProvider>
+  );
+}
+
+function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   const { auth, connectivity, offline } = dependencies;
+  const modal = useAppModal();
   const insets = useInsets();
   const keyboardVisible = useKeyboardVisible();
   const [session, setSession] = useState<Session>({ phase: "checking" });
@@ -158,14 +168,15 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
     try {
       await auth.logout();
     } catch {
-      Alert.alert(
-        "Não foi possível encerrar a sessão",
-        "Sua sessão no servidor pode continuar aberta. Tente novamente quando houver conexão. Seus pedidos salvos neste aparelho não serão apagados.",
-        [
-          { text: "Cancelar", style: "cancel" },
-          { text: "Tentar novamente", onPress: () => void signOut() },
+      modal.show({
+        variant: "error",
+        title: "Não foi possível encerrar a sessão",
+        message: "Sua sessão no servidor pode continuar aberta. Tente novamente quando houver conexão. Seus pedidos salvos neste aparelho não serão apagados.",
+        buttons: [
+          { label: "Tentar novamente", role: "primary", onPress: () => void signOut() },
+          { label: "Cancelar", role: "cancel" },
         ],
-      );
+      });
       return;
     }
     await leaveDevice();
@@ -235,7 +246,7 @@ export function Shell({ dependencies }: { dependencies: AppDependencies }) {
         setSalesView("newOrder");
         selectTab("sales");
       } catch {
-        Alert.alert("Não foi possível duplicar", "Tente novamente.");
+        modal.show({ variant: "error", title: "Não foi possível duplicar", message: "Tente novamente." });
       }
     })();
   };

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DatasetChangedError, DatasetUnavailableError, type DraftRecord } from "@salesforce/mobile-db";
 import { ORDER_HEADER_ISSUE_LABEL, orderHeaderIssues, type OrderHeaderIssueCode } from "@salesforce/domain";
 import { datasetIdentityOf } from "../offline/reference-source";
-import { Alert, AppState, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { AppState, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ApiRequestError } from "../data/api";
 import { describeDataError, type DataErrorInfo } from "../data/errors";
 import {
@@ -23,6 +23,7 @@ import { formatBrl } from "../lib/money";
 import { ERP_DISCOUNT_NOTICE } from "../offline/approval-status";
 import { describeDraftStatus, type LocalOrdersPort } from "../offline/local-orders";
 import { newClientRequestId } from "../lib/uuid";
+import { useAppModal } from "./app-modal";
 import { OrderHeaderOptions } from "./order-header-options";
 import { NOTES_MAX, NotesField, SummaryBlock, SummaryRow, WIZARD_STEPS, WizardFooter, WizardProgress, type WizardStep } from "./order-wizard-parts";
 import { topLabel } from "../data/order-header";
@@ -142,6 +143,7 @@ export function NewOrderScreen({
   const [productsView, setProductsView] = useState<"catalog" | "cart">("catalog");
   /** Why the seller cannot advance yet; cleared on any step change or edit. */
   const [stepError, setStepError] = useState<string | null>(null);
+  const modal = useAppModal();
   const [customer, setCustomer] = useState<PickedCustomer | null>(null);
   const [lines, setLines] = useState<readonly EditorLine[]>([]);
 
@@ -151,10 +153,15 @@ export function NewOrderScreen({
       onExit();
       return;
     }
-    Alert.alert("Sair do pedido?", "O pedido em andamento fica guardado. Para continuar, toque em Novo pedido.", [
-      { text: "Continuar editando", style: "cancel" },
-      { text: "Sair", onPress: onExit },
-    ]);
+    modal.show({
+      variant: "confirm",
+      title: "Sair do pedido?",
+      message: "O pedido em andamento fica guardado. Para continuar, toque em Novo pedido.",
+      buttons: [
+        { label: "Sair", role: "primary", onPress: onExit },
+        { label: "Continuar editando", role: "cancel" },
+      ],
+    });
   }
   const lineCounter = useRef(0);
   const nextKey = () => `line-${(lineCounter.current += 1)}`;
@@ -227,15 +234,16 @@ export function NewOrderScreen({
       return;
     }
     // An order with items is in progress for another customer: never replace it silently.
-    Alert.alert(
-      "Você já possui um pedido em andamento",
-      `Pedido de ${current.customer?.name ?? "outro cliente"} com ${current.lines.length} ${current.lines.length === 1 ? "item" : "itens"}. Iniciar um novo pedido descarta os itens que ainda não foram salvos.`,
-      [
-        { text: "Continuar pedido atual", onPress: () => goToStep("products") },
-        { text: "Iniciar novo pedido", style: "destructive", onPress: begin },
-        { text: "Cancelar", style: "cancel" },
+    modal.show({
+      variant: "confirm",
+      title: "Você já possui um pedido em andamento",
+      message: `Pedido de ${current.customer?.name ?? "outro cliente"} com ${current.lines.length} ${current.lines.length === 1 ? "item" : "itens"}. Iniciar um novo pedido descarta os itens que ainda não foram salvos.`,
+      buttons: [
+        { label: "Continuar pedido atual", role: "primary", onPress: () => goToStep("products") },
+        { label: "Iniciar novo pedido", role: "destructive", onPress: begin },
+        { label: "Cancelar", role: "cancel" },
       ],
-    );
+    });
     // Only a new request (nonce) triggers this; the handlers above read the latest state through refs/closures of this run.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startNonce]);
@@ -266,14 +274,15 @@ export function NewOrderScreen({
           open();
           return;
         }
-        Alert.alert(
-          "Há alterações não salvas",
-          "Abrir outro pedido descarta as alterações do pedido que você está editando.",
-          [
-            { text: "Continuar editando", style: "cancel" },
-            { text: "Descartar e abrir", style: "destructive", onPress: open },
+        modal.show({
+          variant: "confirm",
+          title: "Há alterações não salvas",
+          message: "Abrir outro pedido descarta as alterações do pedido que você está editando.",
+          buttons: [
+            { label: "Descartar e abrir", role: "destructive", onPress: open },
+            { label: "Continuar editando", role: "cancel" },
           ],
-        );
+        });
       })
       .catch(() => {
         if (!active) return;
@@ -428,16 +437,18 @@ export function NewOrderScreen({
 
   /** Throws away the order being edited (never a saved draft: that one stays on the device). Always asks first. */
   function confirmDiscard() {
-    Alert.alert(
-      localDraft !== null || editingOrder !== null ? "Descartar alterações?" : "Descartar pedido?",
-      localDraft !== null || editingOrder !== null
+    const saved = localDraft !== null || editingOrder !== null;
+    modal.show({
+      variant: "confirm",
+      title: saved ? "Descartar alterações?" : "Descartar pedido?",
+      message: saved
         ? "As alterações feitas desde o último salvamento serão perdidas. O pedido salvo continua como estava."
         : "Os itens do carrinho serão removidos e o pedido não será salvo. Esta ação não pode ser desfeita.",
-      [
-        { text: "Continuar editando", style: "cancel" },
-        { text: "Descartar", style: "destructive", onPress: resetOrder },
+      buttons: [
+        { label: "Descartar", role: "destructive", onPress: resetOrder },
+        { label: "Continuar editando", role: "cancel" },
       ],
-    );
+    });
   }
 
   function toggleSelectionMode() {
@@ -472,17 +483,22 @@ export function NewOrderScreen({
       setCustomer(picked);
       return;
     }
-    Alert.alert("Trocar cliente", "O carrinho atual será esvaziado. Deseja continuar?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Continuar",
-        style: "destructive",
-        onPress: () => {
-          setLines([]);
-          setCustomer(picked);
+    modal.show({
+      variant: "confirm",
+      title: "Trocar cliente",
+      message: "O carrinho atual será esvaziado. Deseja continuar?",
+      buttons: [
+        {
+          label: "Continuar",
+          role: "destructive",
+          onPress: () => {
+            setLines([]);
+            setCustomer(picked);
+          },
         },
-      },
-    ]);
+        { label: "Cancelar", role: "cancel" },
+      ],
+    });
   }
 
   /** Message for the first thing missing in `from`, or `null` when the seller may advance. Presentation only: the server still revalidates everything. */

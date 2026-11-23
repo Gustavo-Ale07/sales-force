@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { QuarantinedDraftDetail, QuarantinedDraftRecord } from "@salesforce/mobile-db";
 import type { LocalOrdersPort } from "../offline/local-orders";
 import { QUARANTINE_INTRO, QUARANTINE_TITLE, describeQuarantineReason } from "../offline/quarantine";
 import { colors, spacing } from "../theme";
+import { useAppModal } from "./app-modal";
 import { formatDateTime } from "./sync-status";
 
 export interface QuarantineScreenProps {
@@ -119,6 +120,7 @@ function QuarantineDetail({
   readonly onDiscarded: () => void;
   readonly onRefused: () => void;
 }) {
+  const modal = useAppModal();
   const [detail, setDetail] = useState<Loaded<QuarantinedDraftDetail | null>>({ status: "loading" });
 
   useEffect(() => {
@@ -133,28 +135,23 @@ function QuarantineDetail({
   }, [localOrders, localId]);
 
   function confirmDiscard() {
-    Alert.alert(
-      "Descartar pedido?",
-      "Este pedido será removido deste aparelho e não será enviado ao Force. Esta ação não pode ser desfeita.",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Descartar",
-          style: "destructive",
-          onPress: () =>
-            void (async () => {
-              try {
-                await localOrders.discardQuarantined(localId);
-              } catch {
-                Alert.alert("Não foi possível descartar", "Este pedido pode já ter chegado ao Force e não pode ser descartado por aqui.");
-                onRefused();
-                return;
-              }
-              onDiscarded();
-            })(),
-        },
-      ],
-    );
+    void (async () => {
+      const confirmed = await modal.confirm({
+        title: "Descartar pedido?",
+        message: "Este pedido será removido deste aparelho e não será enviado ao Force. Esta ação não pode ser desfeita.",
+        confirmLabel: "Descartar",
+        destructive: true,
+      });
+      if (!confirmed) return;
+      try {
+        await localOrders.discardQuarantined(localId);
+      } catch {
+        modal.show({ variant: "error", title: "Não foi possível descartar", message: "Este pedido pode já ter chegado ao Force e não pode ser descartado por aqui." });
+        onRefused();
+        return;
+      }
+      onDiscarded();
+    })();
   }
 
   const back = (
