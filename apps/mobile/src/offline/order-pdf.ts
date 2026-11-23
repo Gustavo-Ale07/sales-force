@@ -29,7 +29,7 @@ function erpNumberOf(snapshot: unknown): number | null {
  * app: the document never carries that seal ("Cliente indisponível", "Produto indisponível"), it is shown as a plain draft.
  */
 export function pdfStatusLabelOf(draft: Pick<DraftRecord, "status" | "remoteId" | "lastError">): string {
-  if (isCustomerUnavailable(draft) || isProductBlocked(draft)) return "Rascunho";
+  if (isCustomerUnavailable(draft) || isProductBlocked(draft)) return saleBadge({ status: draft.status, remoteId: draft.remoteId, lastError: null }).label;
   return saleBadge({ status: draft.status, remoteId: draft.remoteId, lastError: draft.lastError }).label;
 }
 
