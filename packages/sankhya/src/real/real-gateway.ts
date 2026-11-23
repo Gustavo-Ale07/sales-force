@@ -72,6 +72,7 @@ import type {
   WrittenOrder,
   ErpOrderStatusReading,
   ErpOrderReleaseReading,
+  ErpOrderStageReading,
   ErpBillingItemReading,
   ErpBillingReading,
   ErpReleaseLineReading,
@@ -700,6 +701,86 @@ export class RealSankhyaGateway implements SankhyaGateway {
         lines: mapped,
         ...(billingPart === undefined ? {} : { billing: billingPart }),
         ...(billingErrorCode === undefined ? {} : { billingErrorCode }),
+      };
+    });
+  }
+
+  /**
+   * Order stage facts (owner production survey 2026-11-23), SELECT only, batched by note number: TGFCAB header
+   * (CODTIPOPER, STATUSNOTA, PENDENTE, ORDEMCARGA), pending TSILIB lines (TABELA = 'TGFCAB', DHLIB IS NULL: EVENTO, SEQCASCATA) and
+   * the TGFVAR link with the NUMNOTA of the linked note. Column names come from the owner's production survey; the integration
+   * user's access to them in the Sandbox is NEEDS VALIDATION (docs/sankhya-spike.md, order stage block). Any failed query fails
+   * the whole call (a gateway error): the caller keeps what it stored; nothing is guessed from a partial read.
+   */
+  async readOrderStageFacts(erpOrderNumbers: readonly number[], options?: OrderCallOptions): Promise<readonly ErpOrderStageReading[]> {
+    for (const number of erpOrderNumbers) {
+      if (!Number.isInteger(number) || number < 1) throw invalidOrderQuery('the order number is not a positive integer');
+    }
+    const signal = options?.signal;
+    const headers = new Map<number, { codtipoper: number | null; statusNota: string | null; pending: string | null; orderCargo: number | null }>();
+    const releases = new Map<number, Array<{ event: number; cascadeSequence: number | null }>>();
+    const links = new Map<number, Set<number>>();
+    const numbers = new Map<number, number | null>();
+    for (let start = 0; start < erpOrderNumbers.length; start += RELEASE_READ_CHUNK) {
+      const list = erpOrderNumbers.slice(start, start + RELEASE_READ_CHUNK).join(',');
+      const headerColumns = ['NUNOTA', 'CODTIPOPER', 'STATUSNOTA', 'PENDENTE', 'ORDEMCARGA'] as const;
+      const header = await this.#query(`SELECT NUNOTA, CODTIPOPER, STATUSNOTA, PENDENTE, ORDEMCARGA FROM TGFCAB WHERE NUNOTA IN (${list})`, headerColumns, signal);
+      header.rows.forEach((cells, index) => {
+        const row = new RowReader('orders', headerColumns, cells, index);
+        headers.set(row.int('NUNOTA'), {
+          codtipoper: row.nullableInt('CODTIPOPER'),
+          statusNota: textCell(cells[2]),
+          pending: textCell(cells[3]),
+          orderCargo: row.nullableInt('ORDEMCARGA'),
+        });
+      });
+      const releaseColumns = ['NUCHAVE', 'EVENTO', 'SEQCASCATA'] as const;
+      const pending = await this.#query(
+        `SELECT NUCHAVE, EVENTO, SEQCASCATA FROM TSILIB WHERE TABELA = 'TGFCAB' AND DHLIB IS NULL AND NUCHAVE IN (${list})`,
+        releaseColumns,
+        signal,
+      );
+      pending.rows.forEach((cells, index) => {
+        const row = new RowReader('orders', releaseColumns, cells, index);
+        const key = row.int('NUCHAVE');
+        const bucket = releases.get(key) ?? [];
+        bucket.push({ event: row.int('EVENTO'), cascadeSequence: row.nullableInt('SEQCASCATA') });
+        releases.set(key, bucket);
+      });
+      const linkColumns = ['NUNOTAORIG', 'NUNOTA'] as const;
+      const linked = await this.#query(`SELECT NUNOTAORIG, NUNOTA FROM TGFVAR WHERE NUNOTAORIG IN (${list})`, linkColumns, signal);
+      linked.rows.forEach((cells, index) => {
+        const row = new RowReader('orders', linkColumns, cells, index);
+        const bucket = links.get(row.int('NUNOTAORIG')) ?? new Set<number>();
+        bucket.add(row.int('NUNOTA'));
+        links.set(row.int('NUNOTAORIG'), bucket);
+      });
+    }
+    const saleNotes = [...new Set([...links.values()].flatMap((set) => [...set]))];
+    for (let start = 0; start < saleNotes.length; start += RELEASE_READ_CHUNK) {
+      const list = saleNotes.slice(start, start + RELEASE_READ_CHUNK).join(',');
+      const numberColumns = ['NUNOTA', 'NUMNOTA'] as const;
+      const found = await this.#query(`SELECT NUNOTA, NUMNOTA FROM TGFCAB WHERE NUNOTA IN (${list})`, numberColumns, signal);
+      found.rows.forEach((cells, index) => {
+        const row = new RowReader('orders', numberColumns, cells, index);
+        numbers.set(row.int('NUNOTA'), row.nullableInt('NUMNOTA'));
+      });
+    }
+    return erpOrderNumbers.map((erpOrderNumber): ErpOrderStageReading => {
+      const header = headers.get(erpOrderNumber);
+      // The earliest linked note that has a number (lowest NUNOTA) gives the invoice number.
+      const linkedNotes = [...(links.get(erpOrderNumber) ?? [])].sort((a, b) => a - b);
+      const invoiceNumber = linkedNotes.map((note) => numbers.get(note) ?? null).find((value) => value !== null && value > 0) ?? null;
+      return {
+        erpOrderNumber,
+        found: header !== undefined,
+        codtipoper: header?.codtipoper ?? null,
+        statusNota: header?.statusNota ?? null,
+        pending: header?.pending ?? null,
+        orderCargo: header?.orderCargo ?? null,
+        pendingReleases: releases.get(erpOrderNumber) ?? [],
+        hasInvoiceLink: linkedNotes.length > 0,
+        invoiceNumber,
       };
     });
   }

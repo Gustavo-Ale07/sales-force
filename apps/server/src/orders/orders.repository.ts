@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { account, erpCustomer, integrationOrderDryRun, integrationOutbox, salesOrder, salesOrderApproval, salesOrderItem, type AccountRole, type ApprovalLevel, type Database } from '@salesforce/db';
+import { account, erpCustomer, integrationOrderDryRun, integrationOutbox, salesOrder, salesOrderApproval, salesOrderErpStage, salesOrderItem, type AccountRole, type SalesOrderErpStageRow, type ApprovalLevel, type Database } from '@salesforce/db';
 import type { CustomerScope, OrderItem } from '@salesforce/domain';
 import { and, asc, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { containsText, digitsOf, eqInt, fitsPgInt, inInts, inSellerCodes, offsetOf } from '../platform/sql.js';
@@ -64,6 +64,8 @@ export interface OrderListRow extends OrderCustomerState {
   /** K3: class and code of the last delivery error; read only for `rejected` orders. */
   readonly deliveryErrorClass: string | null;
   readonly deliveryErrorMessage: string | null;
+  /** Last known Sankhya stage (worker mirror); `null` until the first read. */
+  readonly stage?: SalesOrderErpStageRow | null;
 }
 
 export interface OrderCounts {
@@ -299,6 +301,12 @@ export class OrdersRepository {
     return row ?? null;
   }
 
+  /** Last known Sankhya stage of one order (worker mirror), or `null`. */
+  async erpStageOf(orderId: string, executor: Executor = this.db): Promise<SalesOrderErpStageRow | null> {
+    const [row] = await executor.select().from(salesOrderErpStage).where(eq(salesOrderErpStage.orderId, orderId));
+    return row ?? null;
+  }
+
   async latestApprovalOf(orderId: string, executor: Executor = this.db): Promise<ApprovalWithDecider | null> {
     const [row] = await executor
       .select({ approval: salesOrderApproval, decidedByName: account.displayName })
@@ -378,6 +386,7 @@ export class OrdersRepository {
       this.db
         .select({
           order: salesOrder,
+          stage: salesOrderErpStage,
           customerName: erpCustomer.name,
           customerActive: erpCustomer.active,
           customerBlockedRaw: erpCustomer.blockedRaw,
@@ -391,6 +400,7 @@ export class OrdersRepository {
         })
         .from(salesOrder)
         .leftJoin(erpCustomer, eq(erpCustomer.code, salesOrder.customerCode))
+        .leftJoin(salesOrderErpStage, eq(salesOrderErpStage.orderId, salesOrder.id))
         .where(where)
         .orderBy(...order)
         .limit(page.pageSize)

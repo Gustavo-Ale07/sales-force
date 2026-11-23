@@ -183,7 +183,31 @@ export interface ErpBillingReading {
   readonly items: readonly ErpBillingItemReading[];
 }
 
+/**
+ * Facts the order stage is classified from (owner production survey 2026-11-23): header (TGFCAB), pending releases (TSILIB with
+ * DHLIB null) and the invoicing link (TGFVAR). Interpreted only by the domain (`classifyOrderStage`). Column access of the
+ * integration user is NEEDS VALIDATION in the Sandbox (docs/sankhya-spike.md, order stage block).
+ */
+export interface ErpOrderStageReading {
+  readonly erpOrderNumber: number;
+  /** The note exists in TGFCAB. When false the other facts are empty and the caller keeps what it stored. */
+  readonly found: boolean;
+  readonly codtipoper: number | null;
+  readonly statusNota: string | null;
+  readonly pending: string | null;
+  /** TGFCAB.ORDEMCARGA; null when empty. */
+  readonly orderCargo: number | null;
+  /** TSILIB lines of the note with DHLIB null. */
+  readonly pendingReleases: readonly { readonly event: number; readonly cascadeSequence: number | null }[];
+  /** A TGFVAR link with NUNOTAORIG = this note exists. */
+  readonly hasInvoiceLink: boolean;
+  /** NUMNOTA of the (earliest) linked note; null when none or unreadable. */
+  readonly invoiceNumber: number | null;
+}
+
 export interface SankhyaOrderReadPort {
+  /** Stage facts (read-only, batched by note number): one entry per requested number. */
+  readOrderStageFacts(erpOrderNumbers: readonly number[], options?: OrderCallOptions): Promise<readonly ErpOrderStageReading[]>;
   /** Release state source (read-only): one entry per requested number, `found` false when TGFCAB has none. */
   readOrderReleaseFacts(erpOrderNumbers: readonly number[], options?: OrderCallOptions): Promise<readonly ErpOrderReleaseReading[]>;
   /** Status facts of already sent orders (P2); one entry per requested number, `found` false when the ERP has none. */

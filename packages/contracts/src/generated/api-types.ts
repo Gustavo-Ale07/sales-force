@@ -929,6 +929,15 @@ export interface components {
                     [key: string]: string;
                 };
                 confirmAfterInclude?: boolean;
+                orderStage?: {
+                    reviewEvents?: {
+                        event: number;
+                        cascadeSequence?: number;
+                    }[];
+                    reviewSector?: string;
+                    financialSector?: string;
+                    finalRereadWindowHours?: number;
+                };
             };
             provenance?: {
                 [key: string]: components["schemas"]["ConfigurationProvenanceEntry"];
@@ -1309,6 +1318,21 @@ export interface components {
                     cutQuantity: string;
                 }[];
             } | null;
+            erpStage?: {
+                /** @enum {string} */
+                stage: "sent_to_force" | "send_error" | "quotation" | "received" | "in_review" | "financial_check" | "in_dispatch" | "in_invoicing" | "invoiced";
+                label: string;
+                pendingSector: string | null;
+                nunota: number | null;
+                invoiceNumber: number | null;
+                updatedAt: components["schemas"]["IsoTimestamp"];
+                checkedAt?: components["schemas"]["IsoTimestamp"] | null;
+                readError?: {
+                    errorClass: string;
+                    errorCode: string;
+                    at: components["schemas"]["IsoTimestamp"];
+                } | null;
+            } | null;
             erpDelivery?: {
                 errorClass: string;
                 errorCode: string | null;
@@ -1460,6 +1484,21 @@ export interface components {
                     invoicedQuantity: string;
                     cutQuantity: string;
                 }[];
+            } | null;
+            erpStage?: {
+                /** @enum {string} */
+                stage: "sent_to_force" | "send_error" | "quotation" | "received" | "in_review" | "financial_check" | "in_dispatch" | "in_invoicing" | "invoiced";
+                label: string;
+                pendingSector: string | null;
+                nunota: number | null;
+                invoiceNumber: number | null;
+                updatedAt: components["schemas"]["IsoTimestamp"];
+                checkedAt?: components["schemas"]["IsoTimestamp"] | null;
+                readError?: {
+                    errorClass: string;
+                    errorCode: string;
+                    at: components["schemas"]["IsoTimestamp"];
+                } | null;
             } | null;
             erpDelivery?: {
                 errorClass: string;

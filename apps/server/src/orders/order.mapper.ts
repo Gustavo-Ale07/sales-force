@@ -1,6 +1,7 @@
 import { FreightTypeSchema, type FreightType } from '@salesforce/contracts';
 import type { DiscountAuthorityStatus, OrderApproval, OrderDetail, OrderItemDetail as OrderItemDto, OrderListItem, OrderReview, OrderStatus, ProductImage } from '@salesforce/contracts';
-import { computeOrderIpi, computeOrderTotals, customerOrderBlock, normalizeDecimalString, type IpiRate } from '@salesforce/domain';
+import type { SalesOrderErpStageRow } from '@salesforce/db';
+import { classifyOrderStage, computeOrderIpi, computeOrderTotals, customerOrderBlock, normalizeDecimalString, type IpiRate } from '@salesforce/domain';
 import { isBlockedRaw } from '../mirror/mirror.repository.js';
 import { decodeReleaseDetail, decodeReleaseEventCodes, storedReleaseState } from './release-events.js';
 import type { ApprovalWithDecider, OrderCustomerState, OrderItemRow, OrderListRow, OrderRow } from './orders.repository.js';
@@ -69,6 +70,41 @@ export function erpStatusOf(order: OrderRow, liberationEventLabels?: Readonly<Re
     label: liberationEventLabels[String(code)] ?? null,
   }));
   return releaseEvents.length === 0 ? base : { ...base, releaseEvents };
+}
+
+/**
+ * Stage following Sankhya. Before a note exists (queued / rejected) the stage comes from the Force's own delivery state through the
+ * same domain classification; afterwards from the worker mirror (`sales_order_erp_stage`). `null` = nothing known (never read, a draft,
+ * or an order whose delivery outcome is unknown). The stored stage is kept when the last read failed (`readError`).
+ */
+export function erpStageOf(order: OrderRow, stored: SalesOrderErpStageRow | null | undefined): OrderListItem['erpStage'] {
+  if (stored != null) {
+    return {
+      stage: stored.stage as NonNullable<OrderListItem['erpStage']>['stage'],
+      label: stored.label,
+      pendingSector: stored.pendingSector,
+      nunota: stored.nunota,
+      invoiceNumber: stored.invoiceNumber,
+      updatedAt: stored.updatedAt.toISOString(),
+      checkedAt: stored.checkedAt.toISOString(),
+      readError:
+        stored.lastErrorCode == null || stored.lastErrorAt == null
+          ? null
+          : { errorClass: stored.lastErrorClass ?? 'unclassified', errorCode: stored.lastErrorCode, at: stored.lastErrorAt.toISOString() },
+    };
+  }
+  if (order.erpNumber != null || (order.status !== 'queued' && order.status !== 'rejected')) return null;
+  const stage = classifyOrderStage({
+    nunota: null,
+    statusnota: null,
+    ordemcarga: null,
+    pendingReleases: [],
+    hasInvoiceLink: false,
+    invoiceNumber: null,
+    isQuotation: false,
+    outboxState: order.status === 'rejected' ? 'failed' : 'pending',
+  });
+  return { stage: stage.code as NonNullable<OrderListItem['erpStage']>['stage'], label: stage.label, pendingSector: null, nunota: null, invoiceNumber: null, updatedAt: order.updatedAt.toISOString(), checkedAt: null, readError: null };
 }
 
 /**
@@ -164,6 +200,7 @@ export function toOrderListItem(row: OrderListRow): OrderListItem {
     erpStatus: erpStatusOf(order),
     erpRelease: erpReleaseOf(order),
     erpBilling: erpBillingOf(order),
+    erpStage: erpStageOf(order, row.stage),
     erpDelivery: erpDeliveryOf(order.status, row.deliveryErrorClass, row.deliveryErrorMessage),
     review: reviewOf(order.status, row),
     version: order.version,
@@ -202,6 +239,7 @@ export function toOrderDetail(
   lastDelivery: { errorClass: string | null; message: string | null } | null = null,
   dryRun: { at: Date; payloadHash: string } | null = null,
   convertedInto: { id: string; draftNumber: number; erpNumber: number | null } | null = null,
+  erpStage: SalesOrderErpStageRow | null = null,
 ): OrderDetail {
   const baseItems = items.map((item) => toItemDto(item, images.get(item.productCode)));
   const totals = computeOrderTotals(baseItems);
@@ -229,6 +267,7 @@ export function toOrderDetail(
     erpStatus: erpStatusOf(order, liberationEventLabels),
     erpRelease: erpReleaseOf(order, true),
     erpBilling: erpBillingOf(order, true),
+    erpStage: erpStageOf(order, erpStage),
     erpDelivery: erpDeliveryOf(order.status, lastDelivery?.errorClass ?? null, lastDelivery?.message ?? null),
     review: reviewOf(order.status, customer),
     version: order.version,

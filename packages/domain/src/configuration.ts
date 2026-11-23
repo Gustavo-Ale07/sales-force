@@ -161,6 +161,13 @@ export interface InstallationConfiguration {
     readonly liberationEventLabels?: Readonly<Record<string, string>>;
     /** Confirm the note in the ERP after include + reread (CACSP.confirmarNota). Absent = off. NEEDS VALIDATION in the Sandbox. */
     readonly confirmAfterInclude?: boolean;
+    /** Order stage rules; absent keys use `DEFAULT_ORDER_STAGE_RULES`. */
+    readonly orderStage?: {
+      readonly reviewEvents?: readonly { readonly event: number; readonly cascadeSequence?: number }[];
+      readonly reviewSector?: string;
+      readonly financialSector?: string;
+      readonly finalRereadWindowHours?: number;
+    };
   };
   readonly general: {
     readonly appMinimumVersion?: string;

@@ -10,6 +10,7 @@ import type {
   ErpOrderStatusFactsReading,
   ErpOrderStatusReading,
   ErpOrderReleaseReading,
+  ErpOrderStageReading,
   ErpBillingReading,
   ErpReleaseLineReading,
 } from '../write/order-contract.js';
@@ -151,6 +152,28 @@ export class FakeOrderBook {
         pending: header?.pending ?? null,
         lines: [...(this.releaseLines.get(erpOrderNumber) ?? [])],
         ...(billing === undefined ? {} : { billing }),
+      };
+    });
+  }
+
+  /** Stage facts a test sets for an order number (the state machine: arrival, review, financial, dispatch, invoicing, invoiced). */
+  readonly stageFacts = new Map<number, Omit<ErpOrderStageReading, 'erpOrderNumber'>>();
+
+  stageOf(erpOrderNumbers: readonly number[]): ErpOrderStageReading[] {
+    return erpOrderNumbers.map((erpOrderNumber) => {
+      const set = this.stageFacts.get(erpOrderNumber);
+      if (set !== undefined) return { erpOrderNumber, ...set };
+      const stored = this.orders.find((order) => order.erpOrderNumber === erpOrderNumber);
+      return {
+        erpOrderNumber,
+        found: stored !== undefined,
+        codtipoper: stored === undefined ? null : stored.request.topCode,
+        statusNota: stored === undefined ? null : stored.confirmed ? 'L' : 'A',
+        pending: null,
+        orderCargo: null,
+        pendingReleases: [],
+        hasInvoiceLink: false,
+        invoiceNumber: null,
       };
     });
   }

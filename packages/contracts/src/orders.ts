@@ -241,6 +241,26 @@ export const OrderListItemSchema = named(
       .nullable()
       .optional(),
     /**
+     * Stage of the order following Sankhya (docs/implementation/order-status-following-sankhya.md): decided by the server from
+     * the release, load order and invoicing link, never from AD_STATUS / AD_FAROL / AD_EXPEDICAO. `null`/absent = not known yet
+     * (never read, or not sent). `updatedAt` = when the stage last CHANGED; `checkedAt` = last successful read. `readError` =
+     * the last read failed (the stage and times above are the last known ones): the clients show the standard error popup with a
+     * retry. A quotation (`stage` = 'quotation') shows its number only, no timeline. Optional: old apps ignore it.
+     */
+    erpStage: z
+      .object({
+        stage: z.enum(['sent_to_force', 'send_error', 'quotation', 'received', 'in_review', 'financial_check', 'in_dispatch', 'in_invoicing', 'invoiced']),
+        label: z.string(),
+        pendingSector: z.string().nullable(),
+        nunota: z.number().int().nullable(),
+        invoiceNumber: z.number().int().nullable(),
+        updatedAt: IsoTimestampSchema,
+        checkedAt: IsoTimestampSchema.nullable().optional(),
+        readError: z.object({ errorClass: z.string(), errorCode: z.string(), at: IsoTimestampSchema }).nullable().optional(),
+      })
+      .nullable()
+      .optional(),
+    /**
      * Why the last ERP delivery was refused (K3, D-X): class and stable code, never the stored text. Present only
      * on `rejected` orders; clients map it to a human label. `message` is the ERP's own short refusal text and is set
      * only when the ERP refused the order (`erp_refused_order`): masked, at most 200 characters, no request data.

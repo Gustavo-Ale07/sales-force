@@ -57,6 +57,7 @@
 --   sales_order                           S I U D     -              orders.repository (status moves are UPDATEs; DELETE only for an order that never reached Sankhya, D-Y)
 --   sales_order_item                      S I U D     -              orders.repository (lines are replaced: DELETE + INSERT)
 --   sales_order_approval                  S I U       -              orders approvals (discount approval requests: INSERT on submit, UPDATE on decision or invalidation; never deleted)
+--   sales_order_erp_stage                 S           S I U       worker writes the last known Sankhya stage of a delivered order (cascades with the order); API reads it for the order DTO
 --   customer_order_template               S I U       -              templates.repository
 --   customer_order_template_item          S I U D     -              templates.repository (items replaced)
 --   customer_registration                 S I         S D + U(cols)  api: INSERT of the registration request (hourly-limit count, idempotent replay and open-document lookup read it); worker: reads the status and closes it (confirmed/rejected/unknown) on delivery through a COLUMN grant UPDATE (status, erp_customer_code, rejection_code, updated_at) only; DELETE by the 30-day retention of rejected rows. The API never updates or deletes
@@ -249,6 +250,7 @@ BEGIN
       ('customer_order_template_item',       'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
       ('sales_order',                        'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
       ('sales_order_approval',               'force_api',    'SELECT, INSERT, UPDATE'),
+      ('sales_order_erp_stage',              'force_api',    'SELECT'),
       ('integration_outbox',                 'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
       ('customer_order_template',            'force_api',    'SELECT, INSERT, UPDATE'),
       ('customer_registration',              'force_api',    'SELECT, INSERT'),
@@ -277,6 +279,7 @@ BEGIN
       ('integration_order_dry_run',          'force_worker', 'SELECT, INSERT, DELETE'),
       ('sales_order',                        'force_worker', 'SELECT, UPDATE'),
       ('sales_order_item',                   'force_worker', 'SELECT'),
+      ('sales_order_erp_stage',              'force_worker', 'SELECT, INSERT, UPDATE'),
       ('audit_log',                          'force_worker', 'INSERT'),
       ('sync_state',                         'force_worker', 'SELECT, INSERT, UPDATE'),
       ('sync_refresh',                       'force_worker', 'SELECT, UPDATE'),

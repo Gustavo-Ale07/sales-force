@@ -33,6 +33,7 @@ import type {
   WrittenOrder,
   ErpOrderStatusReading,
   ErpOrderReleaseReading,
+  ErpOrderStageReading,
 } from '../write/order-contract.js';
 import type { ConfirmOrderResult } from '../write/confirmar-nota.js';
 import { FakeOrderBook } from './fake-order-book.js';
@@ -311,6 +312,10 @@ export class FakeGateway implements SankhyaGateway {
 
   readOrderReleaseFacts(erpOrderNumbers: readonly number[], options?: OrderCallOptions): Promise<readonly ErpOrderReleaseReading[]> {
     return this.#order(options, () => this.#orders.releaseOf(erpOrderNumbers));
+  }
+
+  readOrderStageFacts(erpOrderNumbers: readonly number[], options?: OrderCallOptions): Promise<readonly ErpOrderStageReading[]> {
+    return this.#order(options, () => this.#orders.stageOf(erpOrderNumbers));
   }
 
   readOrderStatusFacts(erpOrderNumbers: readonly number[], options?: OrderCallOptions): Promise<readonly ErpOrderStatusReading[]> {

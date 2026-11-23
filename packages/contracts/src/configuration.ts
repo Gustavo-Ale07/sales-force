@@ -134,6 +134,19 @@ const ErpSchema = z.strictObject({
    * note stays included and is NOT confirmed. NEEDS VALIDATION in the Sandbox before turning on.
    */
   confirmAfterInclude: z.boolean().optional(),
+  /**
+   * Order stage rules (docs/implementation/order-status-following-sankhya.md). Every key optional; an absent key uses the domain
+   * default (`DEFAULT_ORDER_STAGE_RULES`). Sankhya-governed values: which pending release events mean "order review", the sector
+   * names shown, and how long an invoiced order is still read.
+   */
+  orderStage: z
+    .strictObject({
+      reviewEvents: z.array(z.strictObject({ event: codeInt(), cascadeSequence: codeInt().optional() })).max(50).optional(),
+      reviewSector: z.string().min(1).max(60).optional(),
+      financialSector: z.string().min(1).max(60).optional(),
+      finalRereadWindowHours: z.number().int().min(0).max(720).optional(),
+    })
+    .optional(),
 });
 
 const GeneralSchema = z.strictObject({

@@ -44,5 +44,7 @@ export class OrderErpStatusJob implements JobHandler<Record<string, never>> {
     await this.service.runOnce(options);
     // Release (liberação) is read apart from the status: one failing read never blocks the other.
     await this.service.runReleaseOnce(options);
+    // Stage following Sankhya (TGFCAB / TSILIB / TGFVAR): own read and own mirror table; a failure here never blocks the others.
+    await this.service.runStageOnce(options);
   }
 }

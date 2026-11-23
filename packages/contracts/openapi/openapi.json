@@ -4332,6 +4332,48 @@
               },
               "confirmAfterInclude": {
                 "type": "boolean"
+              },
+              "orderStage": {
+                "type": "object",
+                "properties": {
+                  "reviewEvents": {
+                    "maxItems": 50,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "event": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "cascadeSequence": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "event"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "reviewSector": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60
+                  },
+                  "financialSector": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60
+                  },
+                  "finalRereadWindowHours": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 720
+                  }
+                },
+                "additionalProperties": false
               }
             },
             "additionalProperties": false
@@ -6295,6 +6337,110 @@
               }
             ]
           },
+          "erpStage": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "stage": {
+                    "type": "string",
+                    "enum": [
+                      "sent_to_force",
+                      "send_error",
+                      "quotation",
+                      "received",
+                      "in_review",
+                      "financial_check",
+                      "in_dispatch",
+                      "in_invoicing",
+                      "invoiced"
+                    ]
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "pendingSector": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "nunota": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "invoiceNumber": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "updatedAt": {
+                    "$ref": "#/components/schemas/IsoTimestamp"
+                  },
+                  "checkedAt": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/IsoTimestamp"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "readError": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "errorClass": {
+                            "type": "string"
+                          },
+                          "errorCode": {
+                            "type": "string"
+                          },
+                          "at": {
+                            "$ref": "#/components/schemas/IsoTimestamp"
+                          }
+                        },
+                        "required": [
+                          "errorClass",
+                          "errorCode",
+                          "at"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "stage",
+                  "label",
+                  "pendingSector",
+                  "nunota",
+                  "invoiceNumber",
+                  "updatedAt"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "erpDelivery": {
             "anyOf": [
               {
@@ -7162,6 +7308,110 @@
                 },
                 "required": [
                   "state"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "erpStage": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "stage": {
+                    "type": "string",
+                    "enum": [
+                      "sent_to_force",
+                      "send_error",
+                      "quotation",
+                      "received",
+                      "in_review",
+                      "financial_check",
+                      "in_dispatch",
+                      "in_invoicing",
+                      "invoiced"
+                    ]
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "pendingSector": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "nunota": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "invoiceNumber": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "updatedAt": {
+                    "$ref": "#/components/schemas/IsoTimestamp"
+                  },
+                  "checkedAt": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/IsoTimestamp"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "readError": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "errorClass": {
+                            "type": "string"
+                          },
+                          "errorCode": {
+                            "type": "string"
+                          },
+                          "at": {
+                            "$ref": "#/components/schemas/IsoTimestamp"
+                          }
+                        },
+                        "required": [
+                          "errorClass",
+                          "errorCode",
+                          "at"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "stage",
+                  "label",
+                  "pendingSector",
+                  "nunota",
+                  "invoiceNumber",
+                  "updatedAt"
                 ],
                 "additionalProperties": false
               },

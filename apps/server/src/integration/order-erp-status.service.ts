@@ -1,7 +1,18 @@
-import { salesOrder, type DbHandle } from '@salesforce/db';
-import { billingItemQuantities, billingStateOf, isFinalBillingState, mapErpOrderStatus, type ErpReleaseState } from '@salesforce/domain';
+import { createHash } from 'node:crypto';
+import { installationConfigurationVersion, salesOrder, salesOrderErpStage, type DbHandle } from '@salesforce/db';
+import {
+  billingItemQuantities,
+  billingStateOf,
+  classifyOrderStage,
+  isFinalBillingState,
+  mapErpOrderStatus,
+  resolveOrderStageRules,
+  type ErpReleaseState,
+  type OrderStageRules,
+} from '@salesforce/domain';
 import { type ErpOrderReleaseReading, type SankhyaOrderReadPort } from '@salesforce/sankhya';
-import { and, asc, eq, gte, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, lt, ne, or, sql } from 'drizzle-orm';
+import { validateInstallationConfiguration } from '../configuration/validate.js';
 import { describeSyncFailure, type SyncFailure } from '../sync/failure.js';
 import type { Logger } from '../observability/logger.js';
 import {
@@ -123,6 +134,11 @@ export class OrderErpStatusService {
    * leaves the stored one untouched, and an order the ERP has no release lines for has none stored. Orders already
    * released are not read again; denied and awaiting ones are, until they settle or age out.
    */
+  /** Order stage following Sankhya; see `runOrderStageOnce`. */
+  runStageOnce(options: OrderStageRunOptions = {}): Promise<OrderErpStatusRun> {
+    return runOrderStageOnce(this.deps, options);
+  }
+
   async runReleaseOnce(options: { signal?: AbortSignal } = {}): Promise<OrderErpStatusRun> {
     const { db, gateway, logger } = this.deps;
     const now = this.deps.now();
@@ -181,6 +197,143 @@ export class OrderErpStatusService {
     }
     return { checked: due.length, updated };
   }
+}
+
+/** Reads of the stage younger than this are reused by an on-demand refresh (login / "Sincronizar agora"). */
+export const ORDER_STAGE_ON_DEMAND_REUSE_MS = 60_000;
+
+export interface OrderStageRunOptions {
+  readonly signal?: AbortSignal;
+  /** Orders whose stage was read less than this long ago are not read again (0 = the scheduled run reads every due order). */
+  readonly reuseMs?: number;
+}
+
+/** Stable, secret-free code of a stage read that could not even start (no current configuration). */
+const CONFIGURATION_UNAVAILABLE_CODE = 'configuration_unavailable';
+
+/**
+ * Order stage following Sankhya (docs/implementation/order-status-following-sankhya.md). One batched SELECT-only read through the
+ * gateway for the delivered, non-final orders; the domain classifies the facts (`classifyOrderStage`); the result is mirrored in
+ * `sales_order_erp_stage`. Read-only toward the ERP and independent of `runOnce` / `runReleaseOnce`: a failed read keeps the stored
+ * stage and its times and records the error class/code on the rows already known. Invoiced orders are read again only inside the
+ * configured window after the stage was reached; nothing here ever changes an order or its delivery state.
+ */
+export async function runOrderStageOnce(deps: OrderErpStatusDeps, options: OrderStageRunOptions = {}): Promise<OrderErpStatusRun> {
+  const { db, gateway, logger } = deps;
+  const now = deps.now();
+  const configured = await loadStageConfiguration(db);
+  if (configured === null) {
+    const failure: SyncFailure = { errorClass: 'permanent', errorCode: CONFIGURATION_UNAVAILABLE_CODE, message: 'No valid installation configuration.', retry: false };
+    logger.warn({ errorCode: CONFIGURATION_UNAVAILABLE_CODE }, 'order stage read skipped: no valid installation configuration');
+    return { checked: 0, updated: 0, failed: true, failure };
+  }
+  const { rules, quotationTopCode } = configured;
+  const since = new Date(now.getTime() - ERP_STATUS_MAX_AGE_DAYS * 24 * 3600_000);
+  const reuseBefore = new Date(now.getTime() - (options.reuseMs ?? 0));
+  const windowStart = new Date(now.getTime() - rules.finalRereadWindowHours * 3600_000);
+  const candidates = await db.db
+    .select({ id: salesOrder.id, erpNumber: salesOrder.erpNumber, stored: salesOrderErpStage })
+    .from(salesOrder)
+    .leftJoin(salesOrderErpStage, eq(salesOrderErpStage.orderId, salesOrder.id))
+    .where(
+      and(
+        eq(salesOrder.status, 'sent'),
+        isNotNull(salesOrder.erpNumber),
+        gte(salesOrder.createdAt, since),
+        // Invoiced: only inside the window after the stage was reached; every other stage keeps being read.
+        or(isNull(salesOrderErpStage.orderId), ne(salesOrderErpStage.stage, 'invoiced'), gt(salesOrderErpStage.updatedAt, windowStart)),
+        // On-demand reuse: a read younger than `reuseMs` is not repeated.
+        options.reuseMs === undefined || options.reuseMs <= 0 ? undefined : or(isNull(salesOrderErpStage.orderId), lt(salesOrderErpStage.checkedAt, reuseBefore)),
+      ),
+    )
+    .orderBy(sql`${salesOrderErpStage.checkedAt} asc nulls first`, asc(salesOrder.createdAt))
+    .limit(ERP_STATUS_BATCH);
+  const due = candidates.flatMap((row) => (row.erpNumber === null ? [] : [{ id: row.id, erpNumber: row.erpNumber, stored: row.stored }]));
+  if (due.length === 0) return { checked: 0, updated: 0 };
+
+  let readings;
+  try {
+    readings = await gateway.readOrderStageFacts(due.map((row) => row.erpNumber), options.signal === undefined ? {} : { signal: options.signal });
+  } catch (error) {
+    const failure = describeSyncFailure(error);
+    if (failure.errorCode !== 'not_implemented') {
+      logger.warn(
+        { errorClass: failure.errorClass, errorCode: failure.errorCode, orders: due.length },
+        'ERP order stage read failed; the stored stages are kept and the next run retries',
+      );
+      const known = due.flatMap((row) => (row.stored === null ? [] : [row.id]));
+      if (known.length > 0) {
+        await db.db
+          .update(salesOrderErpStage)
+          .set({ lastErrorClass: failure.errorClass, lastErrorCode: failure.errorCode ?? failure.errorClass, lastErrorAt: now })
+          .where(inArray(salesOrderErpStage.orderId, known));
+      }
+    }
+    return { checked: 0, updated: 0, failed: true, failure };
+  }
+  const byNumber = new Map(readings.map((reading) => [reading.erpOrderNumber, reading]));
+  let updated = 0;
+  for (const row of due) {
+    const reading = byNumber.get(row.erpNumber);
+    // A note the ERP cannot find keeps what was stored: a missing note is neither a stage nor a cancellation (open validation).
+    if (reading === undefined || !reading.found) continue;
+    const stage = classifyOrderStage(
+      {
+        nunota: row.erpNumber,
+        codtipoper: reading.codtipoper,
+        statusnota: reading.statusNota,
+        pendente: reading.pending,
+        ordemcarga: reading.orderCargo,
+        pendingReleases: reading.pendingReleases,
+        hasInvoiceLink: reading.hasInvoiceLink,
+        invoiceNumber: reading.invoiceNumber,
+        isQuotation: quotationTopCode !== null && reading.codtipoper === quotationTopCode,
+      },
+      rules,
+    );
+    const invoiceNumber = stage.code === 'invoiced' ? reading.invoiceNumber : null;
+    const contentHash = createHash('sha256')
+      .update(JSON.stringify([row.erpNumber, stage.code, stage.label, stage.pendingSector, invoiceNumber]))
+      .digest('hex');
+    if (row.stored !== null && row.stored.contentHash === contentHash) {
+      // Same content: only the reading time moves, and a previous read error is cleared.
+      await db.db
+        .update(salesOrderErpStage)
+        .set({ checkedAt: now, lastErrorClass: null, lastErrorCode: null, lastErrorAt: null })
+        .where(eq(salesOrderErpStage.orderId, row.id));
+      continue;
+    }
+    const values = {
+      nunota: row.erpNumber,
+      stage: stage.code as (typeof salesOrderErpStage.$inferInsert)['stage'],
+      label: stage.label,
+      pendingSector: stage.pendingSector,
+      invoiceNumber,
+      contentHash,
+      updatedAt: now,
+      checkedAt: now,
+      lastErrorClass: null,
+      lastErrorCode: null,
+      lastErrorAt: null,
+    };
+    await db.db
+      .insert(salesOrderErpStage)
+      .values({ orderId: row.id, ...values })
+      .onConflictDoUpdate({ target: salesOrderErpStage.orderId, set: values });
+    updated += 1;
+  }
+  return { checked: due.length, updated };
+}
+
+async function loadStageConfiguration(db: DbHandle): Promise<{ rules: OrderStageRules; quotationTopCode: number | null } | null> {
+  const [current] = await db.db
+    .select({ payload: installationConfigurationVersion.payload })
+    .from(installationConfigurationVersion)
+    .where(eq(installationConfigurationVersion.isCurrent, true));
+  if (current === undefined) return null;
+  const validated = validateInstallationConfiguration(current.payload);
+  if (!validated.ok) return null;
+  return { rules: resolveOrderStageRules(validated.value.erp?.orderStage), quotationTopCode: validated.value.sales.quotationTopCode };
 }
 
 function sameDetail(a: StoredReleaseDetail, b: StoredReleaseDetail | null): boolean {

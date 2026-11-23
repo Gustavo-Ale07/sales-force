@@ -1,0 +1,16 @@
+{
+  "provenance": {
+    "spike": "9.60",
+    "operation": "readOrderStageFacts (shape of the four SELECTs: TGFCAB, TSILIB, TGFVAR, linked TGFCAB)",
+    "date": "2026-11-23",
+    "environment": "synthetic, derived from the owner survey rule; NOT a capture. Column names NEEDS VALIDATION in the Sandbox"
+  },
+  "cases": [
+    { "name": "received", "tgfcab": { "NUNOTA": 900001, "CODTIPOPER": 1001, "STATUSNOTA": "A", "PENDENTE": "S", "ORDEMCARGA": 0 }, "tsilib": [], "tgfvar": [], "expectedStage": "received" },
+    { "name": "in_review", "tgfcab": { "NUNOTA": 900002, "CODTIPOPER": 1001, "STATUSNOTA": "A", "PENDENTE": "S", "ORDEMCARGA": 0 }, "tsilib": [{ "NUCHAVE": 900002, "EVENTO": 44, "SEQCASCATA": 1 }], "tgfvar": [], "expectedStage": "in_review" },
+    { "name": "financial_check", "tgfcab": { "NUNOTA": 900003, "CODTIPOPER": 1001, "STATUSNOTA": "A", "PENDENTE": "S", "ORDEMCARGA": 0 }, "tsilib": [{ "NUCHAVE": 900003, "EVENTO": 44, "SEQCASCATA": 2 }], "tgfvar": [], "expectedStage": "financial_check" },
+    { "name": "in_dispatch", "tgfcab": { "NUNOTA": 900004, "CODTIPOPER": 1001, "STATUSNOTA": "L", "PENDENTE": "S", "ORDEMCARGA": 0 }, "tsilib": [], "tgfvar": [], "expectedStage": "in_dispatch" },
+    { "name": "in_invoicing", "tgfcab": { "NUNOTA": 900005, "CODTIPOPER": 1001, "STATUSNOTA": "L", "PENDENTE": "S", "ORDEMCARGA": 7 }, "tsilib": [], "tgfvar": [], "expectedStage": "in_invoicing" },
+    { "name": "invoiced_with_load_order", "tgfcab": { "NUNOTA": 900006, "CODTIPOPER": 1001, "STATUSNOTA": "L", "PENDENTE": "N", "ORDEMCARGA": 7 }, "tsilib": [], "tgfvar": [{ "NUNOTAORIG": 900006, "NUNOTA": 910006 }], "saleNote": { "NUNOTA": 910006, "NUMNOTA": 5001 }, "expectedStage": "invoiced" }
+  ]
+}

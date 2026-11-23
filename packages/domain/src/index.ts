@@ -24,5 +24,6 @@ export * from './sales-history.js';
 export * from './order-erp-validation.js';
 export * from './erp-order-status.js';
 export * from './billing-status.js';
+export * from './order-stage.js';
 export * from './erp-release.js';
 export * from './order-header.js';

@@ -227,6 +227,8 @@ Headers: protocol version, device identity (session per AUTH-1)
 - Manual "sync now".
 - After saving an order, when online.
 
+Order stage following Sankhya (2026-11-23): the protocol shape is unchanged. The optional `erpStage` object rides on the existing orders DTO (list, detail, orders-by-ids). The on-demand refresh step `orderStatus` (real login, "Sincronizar agora") reads Sankhya through the worker and reuses a read up to 60 s old; offline, the device shows the last known stage with its time. See `docs/implementation/order-status-following-sankhya.md`.
+
 ---
 
 ## 11. Required tests — PROPOSED

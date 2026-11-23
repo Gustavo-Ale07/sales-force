@@ -1106,3 +1106,29 @@ NEEDS VALIDATION (do not treat as fact):
 1. That `TGFTOP`, `TGFTPV` and `TGFPRO` have `AD_MOBILIDADE` populated in production with `'S'` / `'N'` and no other value, and that the expected result is 1.694 products reduced to 1.502 visible ones (counts reported by the owner, not measured by us; the demo fixture does not reproduce them).
 2. **`TGFLOC`, `TGFNAT`, `TGFNTA` and `TSIEMP` without mobility** (where a company, natural-operation or location default would point to a hidden item): no read of these tables is documented, so NO check is implemented. The only where-used message today is a hidden company default TOP ("Avise o TI"). The where-used list for the other tables needs the validated columns first.
 3. Whether other `AD_MOBILIDADE` values than `'S'` / `'N'` exist; today anything but `'S'` hides the item.
+
+### 9.60 Order stage following Sankhya (owner survey 2026-11-23, production, 90 days) — rule from the owner; Sandbox access NEEDS VALIDATION
+
+Source: owner-run read-only survey of production orders of the last 90 days (no contact from this repository). Rule: an order does not change TOP until invoiced (born TOP 1001 and variants; the sale note 1101 and variants appears at invoicing; TOP 1000 = quotation). `AD_STATUS`, `AD_FAROL` and `AD_EXPEDICAO` are NOT used.
+
+Stage derivation (`packages/domain/src/order-stage.ts`, facts read by `SankhyaOrderReadPort.readOrderStageFacts`, SELECT only), first match wins:
+
+1. TGFVAR link exists (`NUNOTAORIG` = order `NUNOTA`) -> Faturado.
+2. `NVL(ORDEMCARGA,0) > 0` (TGFCAB) -> No faturamento.
+3. Pending TSILIB line (`DHLIB` null, `TABELA='TGFCAB'`, `NUCHAVE=NUNOTA`) with event 44 at `SEQCASCATA=1` or event 2 -> Em revisão (sector Pedidos).
+4. Any other pending TSILIB line (event 44 level 2, 3, 13, ...) -> Conferência financeira (sector Financeiro).
+5. `STATUSNOTA='L'` -> Na expedição.
+6. Otherwise -> Recebido no Sankhya.
+
+Events (survey): 44 = cascade release (level 1 Pedidos = order review, level 2 Financeiro = financial check); single events 2 (Pedidos), 3 (Financeiro), 13 (Pedidos e Financeiro). Review events and sector labels are installation configuration (`erp.orderStage`); defaults are the survey values.
+
+Column names `SEQCASCATA`, `ORDEMCARGA` and `NUMNOTA` come from the survey / standard layout and have NOT been read through the worker's service in the Sandbox. TGFCAB `STATUSNOTA`/`PENDENTE`, TSILIB `EVENTO`/`DHLIB`/`REPROVADO` and TGFVAR `NUNOTAORIG`/`NUNOTA` are validated in 9.53 and 9.55.
+
+NEEDS VALIDATION (not invented, nothing built on them):
+
+- (a) How a denied/rejected release looks (TSILIB `REPROVADO`?) and how the seller sees an order "barrado". No stage modeled.
+- (b) How a cancelled/excluded note appears in Sankhya. No "cancelled" stage built; a note not found keeps its last known stage.
+- (c) That TSILIB, TGFVAR and TGFCAB `SEQCASCATA`/`ORDEMCARGA`/`NUMNOTA` are readable through the service and user the worker uses in the Sandbox (the read throws on any failed query; nothing is guessed).
+- (d) Names of events 2, 3, 13 and 44 (VGFLIBEVE). Labels shown are sector-based, not event names.
+- (e) Final sector label of a sale note passing through event 44 again after invoicing.
+- (f) A quotation converted to an order is not linked to its original quotation.

@@ -197,6 +197,52 @@ export type ApprovalLevel = (typeof approvalLevels)[number];
 export const approvalDecisions = ['pending', 'approved', 'rejected', 'invalidated'] as const;
 export type ApprovalDecision = (typeof approvalDecisions)[number];
 
+/** Stage codes of an order following Sankhya (mirrors the domain `OrderStageCode`; the worker only writes the ones read from Sankhya). */
+export const orderErpStageCodes = [
+  'received',
+  'in_review',
+  'financial_check',
+  'in_dispatch',
+  'in_invoicing',
+  'invoiced',
+  'quotation',
+] as const;
+
+/**
+ * Last known Sankhya stage of an order already delivered (one row per order, written only by the worker). Stage and label
+ * come from the domain classification of TGFCAB / TSILIB / TGFVAR facts; `updated_at` moves only when the content hash changes,
+ * `checked_at` on every successful read, and the `last_error_*` columns hold the last failed read (the stage is kept). A
+ * mirror of the ERP state, not business data of the Force: nothing here is ever edited by a user. (Order status following Sankhya.)
+ */
+export const salesOrderErpStage = pgTable(
+  'sales_order_erp_stage',
+  {
+    orderId: uuid('order_id')
+      .primaryKey()
+      .references(() => salesOrder.id, { onDelete: 'cascade' }),
+    /** NUNOTA of the order note (equal to sales_order.erp_number). */
+    nunota: bigint('nunota', { mode: 'number' }).notNull(),
+    stage: text('stage').notNull(),
+    label: text('label').notNull(),
+    pendingSector: text('pending_sector'),
+    /** NUMNOTA of the invoice, once invoiced. */
+    invoiceNumber: bigint('invoice_number', { mode: 'number' }),
+    contentHash: text('content_hash').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+    checkedAt: timestamp('checked_at', { withTimezone: true }).notNull(),
+    lastErrorClass: text('last_error_class'),
+    lastErrorCode: text('last_error_code'),
+    lastErrorAt: timestamp('last_error_at', { withTimezone: true }),
+  },
+  (t) => [
+    check('sales_order_erp_stage_stage_chk', sql`${t.stage} in (${inList(orderErpStageCodes)})`),
+    check('sales_order_erp_stage_error_chk', sql`(${t.lastErrorCode} is null) = (${t.lastErrorAt} is null)`),
+    index('sales_order_erp_stage_due_idx').on(t.stage, t.checkedAt),
+  ],
+);
+export type SalesOrderErpStageRow = typeof salesOrderErpStage.$inferSelect;
+export type NewSalesOrderErpStageRow = typeof salesOrderErpStage.$inferInsert;
+
 /**
  * One discount approval request per submission of an order above its owner authority (DISC-2..6). Append-only history:
  * a decided or invalidated row is never reopened, a new submission creates a new row. At most one is pending per order.

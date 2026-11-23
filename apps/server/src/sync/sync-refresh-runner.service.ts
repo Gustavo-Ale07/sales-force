@@ -1,7 +1,7 @@
 import { SYNC_REFRESH_ENTITIES, type SyncRefreshEntity } from '@salesforce/contracts';
 import { syncRefresh, type DbHandle } from '@salesforce/db';
 import { and, eq } from 'drizzle-orm';
-import type { OrderErpStatusService } from '../integration/order-erp-status.service.js';
+import { ORDER_STAGE_ON_DEMAND_REUSE_MS, type OrderErpStatusService } from '../integration/order-erp-status.service.js';
 import type { Logger } from '../observability/logger.js';
 import type { Clock } from '../platform/tokens.js';
 import type { ConfigurationSyncService } from './configuration-sync.service.js';
@@ -16,7 +16,7 @@ export interface SyncRefreshRunnerDeps {
   /** Present only with CONFIG_SYNC_FROM_SANKHYA=1. */
   readonly configuration?: Pick<ConfigurationSyncService, 'run'>;
   /** Present only while the order-write switch is on. */
-  readonly orderStatus?: Pick<OrderErpStatusService, 'runOnce'> & Partial<Pick<OrderErpStatusService, 'runReleaseOnce'>>;
+  readonly orderStatus?: Pick<OrderErpStatusService, 'runOnce'> & Partial<Pick<OrderErpStatusService, 'runReleaseOnce' | 'runStageOnce'>>;
   readonly logger: Logger;
   readonly now: Clock;
 }
@@ -123,6 +123,12 @@ export class SyncRefreshRunner {
       const result = await orderStatus.runOnce(withSignal);
       // Release (liberação) has its own read: a status read that is not available yet must not hide a working release read.
       const release = orderStatus.runReleaseOnce === undefined ? undefined : await orderStatus.runReleaseOnce(withSignal);
+      // Stage following Sankhya: reads up to one minute old are reused (login / "Sincronizar agora" burst).
+      const stage = orderStatus.runStageOnce === undefined ? undefined : await orderStatus.runStageOnce({ ...withSignal, reuseMs: ORDER_STAGE_ON_DEMAND_REUSE_MS });
+      if (stage?.failed === true) {
+        const code = stage.failure?.errorCode ?? 'order_stage_read_failed';
+        if (code !== 'not_implemented') throw new PermanentJobError(`A consulta da etapa dos pedidos ao Sankhya falhou (${code}); as etapas guardadas foram mantidas.`, { code });
+      }
       if (result.failed === true) {
         const code = result.failure?.errorCode ?? 'order_status_read_failed';
         // The real ERP status read is not validated yet (SNK-7 P2): "not available on this installation", neutral, not a failure.

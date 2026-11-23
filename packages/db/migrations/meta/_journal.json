@@ -281,6 +281,13 @@
       "when": 1794926204103,
       "tag": "0039_customer_outbox_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1795440585036,
+      "tag": "0040_order_erp_stage",
+      "breakpoints": true
     }
   ]
 }
