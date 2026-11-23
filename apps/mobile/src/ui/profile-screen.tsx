@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { Account } from "../auth/auth-port";
-import { APP_ENVIRONMENT_LABEL, APP_VERSION, PRODUCT_NAME } from "../app-info";
+import { APP_BUILD_LABEL, APP_ENVIRONMENT_LABEL, PRODUCT_NAME } from "../app-info";
 import { colors, spacing } from "../theme";
 import { initialsOf, roleLabel } from "./account-labels";
 import { SyncPanel, type SyncViewProps } from "./sync-status";
@@ -113,7 +113,7 @@ export function ProfileScreen({ account, onOpenLocalOrders, onCheckUpdate, onSig
 
       <Section title="Sobre">
         <InfoRow label="Aplicativo" value={PRODUCT_NAME} />
-        <InfoRow label="Versão" value={APP_VERSION} />
+        <InfoRow label="Versão" value={APP_BUILD_LABEL} />
         {APP_ENVIRONMENT_LABEL !== null && <InfoRow label="Ambiente" value={APP_ENVIRONMENT_LABEL} />}
       </Section>
 
