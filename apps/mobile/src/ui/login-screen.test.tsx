@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import type { LoginResult } from "../auth/auth-port";
+import { APP_ENVIRONMENT_LABEL, APP_VERSION, PRODUCT_NAME } from "../app-info";
 import { account, fakeAuth } from "../test-doubles";
 import { LoginScreen, describeLoginFailure } from "./login-screen";
 
@@ -70,6 +71,21 @@ describe("LoginScreen identity and password", () => {
     await fireEvent.press(screen.getByRole("button", { name: "Mostrar senha" }));
     expect(screen.getByLabelText("Senha").props.secureTextEntry).toBe(false);
     expect(screen.getByRole("button", { name: "Ocultar senha" })).toBeTruthy();
+  });
+
+  it("welcomes the seller and shows the exact version line (name, version, DEV badge only in non-production)", async () => {
+    await render(<LoginScreen auth={fakeAuth()} onAuthenticated={jest.fn()} />);
+    expect(screen.getByText("Bem-vindo(a)!")).toBeTruthy();
+    const expected = `${PRODUCT_NAME} · v${APP_VERSION}${APP_ENVIRONMENT_LABEL !== null ? ` · ${APP_ENVIRONMENT_LABEL}` : ""}`;
+    expect(screen.getByText(expected)).toBeTruthy();
+  });
+
+  it("keeps the accessible labels of the restyled form", async () => {
+    await render(<LoginScreen auth={fakeAuth()} onAuthenticated={jest.fn()} />);
+    expect(screen.getByLabelText("Usuário")).toBeTruthy();
+    expect(screen.getByLabelText("Senha")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Entrar" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Mostrar senha" })).toBeTruthy();
   });
 
   it("explains that signing in needs a connection when the device is offline", async () => {

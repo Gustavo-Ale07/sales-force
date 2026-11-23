@@ -22,7 +22,8 @@ describe("salesGroupOf", () => {
 describe("saleBadge", () => {
   it("uses seller wording for each real state; a synced order is \"Enviado ao Force\", never an ERP state", () => {
     const labels = ALL.map((status) => saleBadge(draftRecord({ status })).label);
-    expect(labels).toEqual(["Rascunho", "Aguardando envio", "Sincronizando", "Enviado ao Force", "Erro", "Conflito", "Revisar preço"]);
+    expect(labels).toEqual(["Somente no aparelho", "Aguardando envio", "Sincronizando", "Enviado ao Force", "Erro", "Conflito", "Revisar preço"]);
+    expect(labels.join(" ")).not.toMatch(/rascunho/i);
     // The device does not carry any ERP stage (awaiting / synced / confirmed / invoiced): no label may claim one.
     expect(labels.join(" ")).not.toMatch(/ERP|Sankhya|faturad|confirmad|sincronizado com/i);
   });
@@ -60,7 +61,7 @@ describe("customer unavailable (held draft)", () => {
 
   it("has its own badge and explanation, not the generic error", () => {
     expect(saleBadge(held)).toEqual({ label: "Cliente indisponível", tone: "warning" });
-    expect(saleExplanation(held)).toContain("Cliente indisponível — revise o rascunho");
+    expect(saleExplanation(held)).toContain("Cliente indisponível — revise o pedido");
     expect(saleExplanation(held)).toMatch(/não será enviado/i);
   });
 

@@ -1,11 +1,11 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react-native";
-import { Alert, type AlertButton } from "react-native";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react-native";
 import type { DraftRecord, SyncStatus } from "@salesforce/mobile-db";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import type { EditorLine } from "../data/order-draft";
 import type { LocalOrdersPort } from "../offline/local-orders";
 import { customer, draftRecord, fakeLocalOrders, pageOf } from "../test-doubles";
 import { SalesScreen, type SalesScreenProps } from "./sales-screen";
+import { renderWithModal } from "./test-modal-wrapper";
 
 const idle: SyncStatus = { phase: "idle", pending: 0, needsAttention: 0, lastSyncedAt: null, lastError: null };
 
@@ -50,7 +50,7 @@ async function renderSales(drafts: DraftRecord[], overrides: Partial<SalesScreen
     onSyncNow: jest.fn(),
     ...overrides,
   };
-  const view = await render(<SalesScreen {...props} />);
+  const view = await renderWithModal(<SalesScreen {...props} />);
   return { props, localOrders, view };
 }
 
@@ -59,14 +59,9 @@ async function openSale(name: RegExp) {
   await screen.findByRole("button", { name: "Voltar para Vendas" });
 }
 
-/** Presses the named button of the last Alert. */
-function pressAlert(spy: jest.SpyInstance, text: string) {
-  const buttons = spy.mock.calls.at(-1)?.[2] as AlertButton[];
-  const button = buttons.find((b) => b.text === text);
-  if (button === undefined) throw new Error(`no alert button ${text}`);
-  return act(async () => {
-    await button.onPress?.();
-  });
+/** Presses a button of the in-app dialog (replaces the native Alert). */
+async function pressModal(label: string) {
+  await fireEvent.press(await screen.findByRole("button", { name: label }));
 }
 
 afterEach(async () => {
@@ -86,7 +81,8 @@ describe("SalesScreen — groups", () => {
     expect(screen.getByText("Erro")).toBeTruthy();
     expect(screen.getByText("Conflito")).toBeTruthy();
     expect(screen.getByText("Revisar preço")).toBeTruthy();
-    expect(screen.getByText("Rascunho")).toBeTruthy();
+    expect(screen.getByText("Somente no aparelho")).toBeTruthy();
+    expect(screen.queryByText(/rascunho/i)).toBeNull();
     expect(screen.queryByText("Eva Empório")).toBeNull();
     await fireEvent.press(screen.getByRole("button", { name: "Nova venda" }));
     expect(props.onNewSale).toHaveBeenCalledTimes(1);
@@ -199,25 +195,24 @@ describe("SalesScreen — detail and actions", () => {
   });
 
   it("deletes an unsent order only after an explicit confirmation, and it leaves the list", async () => {
-    const alert = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
     const { localOrders } = await renderSales([rascunho, ana]);
     await openSale(/Fábio Loja/);
     await fireEvent.press(screen.getByRole("button", { name: "Excluir pedido" }));
-    expect(alert.mock.calls.at(-1)?.[0]).toBe("Excluir rascunho?");
-    expect(alert.mock.calls.at(-1)?.[1]).toMatch(/removido deste aparelho e não será enviado/);
+    expect(await screen.findByText("Excluir pedido?")).toBeTruthy();
+    expect(screen.getByText(/removido deste aparelho e não será enviado/)).toBeTruthy();
     expect(localOrders.drafts).toHaveLength(2);
-    await pressAlert(alert, "Excluir");
+    await pressModal("Excluir");
     expect(localOrders.drafts.map((d) => d.localId)).toEqual(["a"]);
     await waitFor(() => expect(screen.queryByRole("button", { name: "Voltar para Vendas" })).toBeNull());
     await waitFor(() => expect(screen.queryByText("Fábio Loja")).toBeNull());
   });
 
   it("keeps the order when the delete is cancelled", async () => {
-    const alert = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
     const { localOrders } = await renderSales([rascunho]);
     await openSale(/Fábio Loja/);
     await fireEvent.press(screen.getByRole("button", { name: "Excluir pedido" }));
-    await pressAlert(alert, "Cancelar");
+    await pressModal("Cancelar");
+    await waitFor(() => expect(screen.queryByText("Excluir pedido?")).toBeNull());
     expect(localOrders.drafts).toHaveLength(1);
   });
 

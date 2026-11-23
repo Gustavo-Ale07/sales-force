@@ -26,14 +26,23 @@ function erpNumberOf(snapshot: unknown): number | null {
 
 /**
  * The badge printed on the PDF. A draft held because its customer or a product is unavailable is an internal review state of the
- * app: the document never carries that seal ("Cliente indisponível", "Produto indisponível"), it is shown as a plain draft.
+ * app: the document never carries that seal ("Cliente indisponível", "Produto indisponível"), it prints the plain local state.
  */
 export function pdfStatusLabelOf(draft: Pick<DraftRecord, "status" | "remoteId" | "lastError">): string {
   if (isCustomerUnavailable(draft) || isProductBlocked(draft)) return saleBadge({ status: draft.status, remoteId: draft.remoteId, lastError: null }).label;
   return saleBadge({ status: draft.status, remoteId: draft.remoteId, lastError: draft.lastError }).label;
 }
 
+/** An order held because its customer is unavailable has no document: the seal is an internal state, so nothing is printed. */
+export class OrderPdfCustomerUnavailableError extends Error {
+  constructor() {
+    super("Cliente indisponível: o PDF deste pedido não é gerado.");
+    this.name = "OrderPdfCustomerUnavailableError";
+  }
+}
+
 export function orderDocumentOf(draft: DraftRecord, lines: readonly EditorLine[]): OrderDocumentModel {
+  if (isCustomerUnavailable(draft)) throw new OrderPdfCustomerUnavailableError();
   const preview = previewDraft(lines);
   const items = preview.lines.flatMap((entry) => (entry.item === null ? [] : [entry.item]));
   const value = saleValue(draft, lines);
@@ -71,6 +80,7 @@ export async function shareOrderPdf(
   lines: readonly EditorLine[],
 ): Promise<ShareOrderPdfResult> {
   if (lines.length === 0) return { ok: false, reason: "empty" };
+  if (isCustomerUnavailable(draft)) return { ok: false, reason: "customer_unavailable" };
   try {
     const logoSrc = port.logoDataUri === undefined ? null : await port.logoDataUri().catch(() => null);
     await port.sharePdf(buildOrderPdfHtml(draft, lines, logoSrc), draft.remoteDraftNumber === null ? "pedido-rascunho" : `pedido-${draft.remoteDraftNumber}`);

@@ -1,6 +1,7 @@
+import { CUSTOMER_BLOCK_MESSAGES, CUSTOMER_UNAVAILABLE_MESSAGE, LEGACY_CUSTOMER_UNAVAILABLE_MESSAGE, PRODUCT_BLOCK_MESSAGES, type DraftRecord } from "@salesforce/mobile-db";
 import { draftRecord } from "../test-doubles";
 import type { EditorLine } from "../data/order-draft";
-import { buildOrderPdfHtml, orderDocumentOf, shareOrderPdf, type OrderPdfPort } from "./order-pdf";
+import { buildOrderPdfHtml, orderDocumentOf, OrderPdfCustomerUnavailableError, pdfStatusLabelOf, shareOrderPdf, type OrderPdfPort } from "./order-pdf";
 
 const line = (over: Partial<EditorLine> = {}): EditorLine => ({
   key: "k1",
@@ -49,6 +50,68 @@ describe("orderDocumentOf", () => {
     expect(html).toContain("1,2345");
     expect(html).toContain("Pedido Force nº 42");
     expect(html).toContain("Entregar cedo");
+  });
+});
+
+describe("unavailable customer (no seal on the document)", () => {
+  const held = draftRecord({ status: "sync_error", lastError: CUSTOMER_UNAVAILABLE_MESSAGE, remoteDraftNumber: 7 });
+  const legacyHeld = draftRecord({ status: "sync_error", lastError: LEGACY_CUSTOMER_UNAVAILABLE_MESSAGE, remoteDraftNumber: 7 });
+
+  it.each([held, legacyHeld])("orderDocumentOf throws the typed error instead of building a document", (draft) => {
+    expect(() => orderDocumentOf(draft, [line()])).toThrow(OrderPdfCustomerUnavailableError);
+    expect(() => buildOrderPdfHtml(draft, [line()], null)).toThrow(OrderPdfCustomerUnavailableError);
+  });
+
+  it("the typed error is an Error with a stable name", () => {
+    const error = new OrderPdfCustomerUnavailableError();
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe("OrderPdfCustomerUnavailableError");
+  });
+
+  it.each([held, legacyHeld])("shareOrderPdf returns customer_unavailable and never calls sharePdf", async (draft) => {
+    const sharePdf = jest.fn(async () => undefined);
+    await expect(shareOrderPdf({ sharePdf }, draft, [line()])).resolves.toEqual({ ok: false, reason: "customer_unavailable" });
+    expect(sharePdf).not.toHaveBeenCalled();
+  });
+
+  it("an order without items is still 'empty' (checked first)", async () => {
+    const sharePdf = jest.fn(async () => undefined);
+    await expect(shareOrderPdf({ sharePdf }, held, [])).resolves.toEqual({ ok: false, reason: "empty" });
+  });
+
+  it("a different held cause (a customer cause stored by the server) is also refused", async () => {
+    const blocked = draftRecord({ status: "sync_error", lastError: CUSTOMER_BLOCK_MESSAGES.customer_blocked });
+    expect(() => orderDocumentOf(blocked, [line()])).toThrow(OrderPdfCustomerUnavailableError);
+  });
+});
+
+describe("pdfStatusLabelOf", () => {
+  const draftStates: DraftRecord["status"][] = ["local_only", "pending_sync", "syncing", "synced", "sync_error", "conflict", "needs_review"];
+  const heldErrors = [...Object.values(PRODUCT_BLOCK_MESSAGES), CUSTOMER_UNAVAILABLE_MESSAGE, LEGACY_CUSTOMER_UNAVAILABLE_MESSAGE, ...Object.values(CUSTOMER_BLOCK_MESSAGES), null, "Erro qualquer"];
+
+  it("never says Rascunho and never carries the held seal, for every state and held cause", () => {
+    for (const status of draftStates) {
+      for (const lastError of heldErrors) {
+        const label = pdfStatusLabelOf({ status, remoteId: status === "synced" ? "r1" : null, lastError });
+        expect(label).not.toMatch(/rascunho/i);
+        const held = status === "sync_error" && lastError !== null && lastError !== "Erro qualquer";
+        if (held) expect(label).not.toMatch(/indispon[ií]vel/i);
+      }
+    }
+  });
+
+  it("a product-blocked order prints the plain local state, not the seal", () => {
+    expect(pdfStatusLabelOf({ status: "sync_error", remoteId: null, lastError: PRODUCT_BLOCK_MESSAGES.product_without_price })).toBe("Erro");
+  });
+
+  it("normal states keep their seller wording", () => {
+    expect(pdfStatusLabelOf({ status: "local_only", remoteId: null, lastError: null })).toBe("Somente no aparelho");
+    expect(pdfStatusLabelOf({ status: "synced", remoteId: "r1", lastError: null })).toBe("Enviado ao Force");
+  });
+
+  it("the document of a product-blocked order is built with that plain label", () => {
+    const draft = draftRecord({ status: "sync_error", lastError: PRODUCT_BLOCK_MESSAGES.product_inactive, remoteDraftNumber: 3 });
+    expect(orderDocumentOf(draft, [line()]).statusLabel).toBe("Erro");
   });
 });
 

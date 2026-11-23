@@ -99,6 +99,49 @@ describe("fetchPriceTables (bulk endpoint, one request chain per table code)", (
   });
 });
 
+describe("progress callbacks (real counts for the sync overlay)", () => {
+  const page = (items: number[], total: number) => ({ data: { items: items.map((code) => ({ code })), total }, response: ok });
+
+  it("fetchCustomers reports (read so far, total) after every page and stops at the total", async () => {
+    const asked: number[] = [];
+    const api = {
+      GET: async (_path: string, init: { params: { query: { page: number } } }) => {
+        asked.push(init.params.query.page);
+        return init.params.query.page === 1 ? page([1, 2], 3) : page([3], 3);
+      },
+    } as unknown as ApiClient;
+    const seen: [number, number][] = [];
+    const all = await createReferenceSource(api).fetchCustomers((read, total) => seen.push([read, total]));
+    expect(all).toHaveLength(3);
+    expect(seen).toEqual([[2, 3], [3, 3]]);
+    expect(asked).toEqual([1, 2]);
+  });
+
+  it("fetchProducts reports the same progress and works without a callback", async () => {
+    const api = { GET: async () => page([1, 2], 2) } as unknown as ApiClient;
+    const seen: [number, number][] = [];
+    expect(await createReferenceSource(api).fetchProducts((read, total) => seen.push([read, total]))).toHaveLength(2);
+    expect(seen).toEqual([[2, 2]]);
+    expect(await createReferenceSource(api).fetchProducts()).toHaveLength(2);
+  });
+
+  it("fetchPriceTables reports (tables visited, tables total, price rows so far); failed and left-out tables count as visited", async () => {
+    const api = {
+      GET: async (_path: string, init: PriceQuery) => {
+        const code = init.params.path.code;
+        if (code === 5) return { data: undefined, response: notFound };
+        if (code === 7) return { data: undefined, response: bad };
+        return { data: body(code, 1, 1000, 1, [{ productCode: 1, unitPrice: "8.00" }]), response: ok };
+      },
+    } as unknown as ApiClient;
+    const seen: [number, number, number][] = [];
+    const result = await createReferenceSource(api).fetchPriceTables!([3, 5, 7, 9], (visited, total, rows) => seen.push([visited, total, rows]));
+    expect(result.tables.map((t) => t.tableCode)).toEqual([3, 9]);
+    expect(result.failed).toEqual([7]);
+    expect(seen).toEqual([[1, 4, 1], [4, 4, 2]]);
+  });
+});
+
 describe("datasetIdentityOf (single adapter for the server dataset declaration)", () => {
   it("maps a declared dataset", () => {
     expect(datasetIdentityOf({ dataset: { environment: "production", datasetId: "mirror-real-001" } })).toEqual({

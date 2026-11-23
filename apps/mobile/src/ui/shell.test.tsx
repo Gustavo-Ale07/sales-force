@@ -1,6 +1,5 @@
 import { fillMandatoryHeader } from "./fill-mandatory-header";
-import { Alert } from "react-native";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react-native";
 import type { CustomerRepository, ProductRepository, Repositories } from "../data/ports";
 import {
   account,
@@ -68,12 +67,15 @@ const signedIn = () => fakeAuth({ getSession: async () => account });
 
 /** Sair lives in Perfil and asks for confirmation; the test accepts it. */
 async function signOutFromProfile() {
-  const alert = jest.spyOn(Alert, "alert").mockImplementation((_title, _message, buttons) => {
-    buttons?.find((button) => button.style === "destructive")?.onPress?.();
-  });
   await fireEvent.press(await screen.findByRole("tab", { name: "Perfil" }));
   await fireEvent.press(screen.getByRole("button", { name: "Sair" }));
-  alert.mockRestore();
+  await pressInModal("Sair");
+}
+
+/** The in-app dialog replaced the native Alert: its buttons live inside `app-modal`. */
+async function pressInModal(label: string) {
+  const dialog = await screen.findByTestId("app-modal");
+  await fireEvent.press(within(dialog).getByRole("button", { name: label }));
 }
 
 describe("Shell", () => {
@@ -117,16 +119,14 @@ describe("Shell", () => {
   describe("sign-out and the local cache (owner 2026-11-13)", () => {
     const confirmText = async (unsent: number) => {
       const { offline, endSession } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() }, undefined, undefined, undefined, undefined, unsent);
-      let message = "";
-      const alert = jest.spyOn(Alert, "alert").mockImplementation((_title, text, buttons) => {
-        message = String(text);
-        buttons?.find((button) => button.style === "destructive")?.onPress?.();
-      });
       await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
       await fireEvent.press(await screen.findByRole("tab", { name: "Perfil" }));
       await fireEvent.press(screen.getByRole("button", { name: "Sair" }));
+      const dialog = await screen.findByTestId("app-modal");
+      // The only text node of the dialog other than the title and the buttons is the message.
+      const message = within(dialog).getByText(/serão apagados|ainda não enviado/).props.children as string;
+      await pressInModal("Sair");
       await waitFor(() => expect(endSession).toHaveBeenCalled());
-      alert.mockRestore();
       return { message, endSession };
     };
 
@@ -232,30 +232,29 @@ describe("Shell", () => {
   });
 
   describe("when the server logout fails", () => {
-    /** Presses Sair, accepts the sign-out confirmation, and answers the failure alert with the button `choose` (if any). */
+    /** Presses Sair, confirms the sign-out dialog, and answers the failure popup with the button `choose` (if any). */
     async function signOutFailing(logout: jest.Mock, choose: string | null) {
       const auth = fakeAuth({ getSession: async () => account, logout });
       const { offline, forget } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() });
       await render(<Shell dependencies={fakeDependencies({ auth, offline })} />);
-      const alert = jest.spyOn(Alert, "alert").mockImplementation((title, _message, buttons) => {
-        if (title === "Sair do Force") buttons?.find((button) => button.style === "destructive")?.onPress?.();
-        else if (choose !== null) buttons?.find((button) => button.text === choose)?.onPress?.();
-      });
       await fireEvent.press(await screen.findByRole("tab", { name: "Perfil" }));
       await fireEvent.press(screen.getByRole("button", { name: "Sair" }));
-      return { alert, forget };
+      await pressInModal("Sair");
+      await waitFor(() => expect(logout).toHaveBeenCalled());
+      if (choose !== null) await pressInModal(choose);
+      return { forget };
     }
 
     it("tells the seller, stays signed in, and keeps every local record untouched", async () => {
       const logout = jest.fn(async () => {
         throw networkError();
       });
-      const { alert, forget } = await signOutFailing(logout, null);
-      await waitFor(() => expect(alert).toHaveBeenCalledWith("Não foi possível encerrar a sessão", expect.stringMatching(/continuar aberta.*pedidos salvos neste aparelho não serão apagados/s), expect.any(Array)));
+      const { forget } = await signOutFailing(logout, null);
+      expect(await screen.findByText("Não foi possível sair")).toBeTruthy();
+      expect(screen.getByText(/continuar aberta.*pedidos salvos não serão apagados/s)).toBeTruthy();
       expect(forget).not.toHaveBeenCalled();
       expect(screen.queryByLabelText("Usuário")).toBeNull(); // still signed in, no silent pretend sign-out
       expect(screen.getByRole("button", { name: "Sair" })).toBeTruthy();
-      alert.mockRestore();
     });
 
     it("can be retried, and signs out once the server confirms", async () => {
@@ -264,42 +263,43 @@ describe("Shell", () => {
         calls += 1;
         if (calls === 1) throw networkError();
       });
-      const { alert, forget } = await signOutFailing(logout, "Tentar novamente");
+      const { forget } = await signOutFailing(logout, null);
+      await screen.findByText("Não foi possível sair");
+      await pressInModal("Tentar de novo");
       expect(await screen.findByLabelText("Usuário")).toBeTruthy();
       expect(logout).toHaveBeenCalledTimes(2);
       expect(forget).toHaveBeenCalled();
-      alert.mockRestore();
     });
 
-    it("offers only Cancelar and Tentar novamente: there is no way to pretend the sign-out worked", async () => {
+    it("offers only Tentar de novo and Fechar: there is no way to pretend the sign-out worked", async () => {
       const logout = jest.fn(async () => {
         throw networkError();
       });
-      const { alert, forget } = await signOutFailing(logout, null);
-      await waitFor(() => expect(alert).toHaveBeenCalledWith("Não foi possível encerrar a sessão", expect.any(String), expect.any(Array)));
-      const failure = alert.mock.calls.find(([title]) => title === "Não foi possível encerrar a sessão");
-      const labels = (failure?.[2] ?? []).map((button) => button.text);
-      expect(labels).toEqual(["Cancelar", "Tentar novamente"]);
-      expect((failure?.[2] ?? []).some((button) => button.style === "destructive")).toBe(false);
+      const { forget } = await signOutFailing(logout, null);
+      const dialog = await screen.findByTestId("app-modal");
+      const labels = within(dialog).getAllByRole("button").map((button) => button.props.accessibilityLabel).filter((label) => label !== undefined); // "Ver detalhes" has no label
+      expect(labels).toEqual(["Tentar de novo", "Fechar"]);
       expect(forget).not.toHaveBeenCalled();
-      alert.mockRestore();
     });
 
-    it("stays signed in after Cancelar and a later attempt can still succeed", async () => {
+    it("stays signed in after Fechar and a later attempt can still succeed", async () => {
       let calls = 0;
       const logout = jest.fn(async () => {
         calls += 1;
         if (calls === 1) throw networkError();
       });
-      const { alert, forget } = await signOutFailing(logout, "Cancelar");
-      await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
+      const { forget } = await signOutFailing(logout, null);
+      await screen.findByText("Não foi possível sair");
+      await pressInModal("Fechar");
+      await waitFor(() => expect(screen.queryByTestId("app-modal")).toBeNull());
+      expect(logout).toHaveBeenCalledTimes(1);
       expect(screen.queryByLabelText("Usuário")).toBeNull();
       expect(forget).not.toHaveBeenCalled();
       await fireEvent.press(screen.getByRole("button", { name: "Sair" }));
+      await pressInModal("Sair");
       expect(await screen.findByLabelText("Usuário")).toBeTruthy();
       expect(logout).toHaveBeenCalledTimes(2);
       expect(forget).toHaveBeenCalled();
-      alert.mockRestore();
     });
   });
 
@@ -486,9 +486,9 @@ describe("Shell", () => {
 
     await fireEvent.press(screen.getByRole("button", { name: /Padaria Central, código 10/ }));
     await fireEvent.press(await screen.findByRole("button", { name: "Novo pedido" }));
-    // The customer is already chosen: the order opens on Negociação; Avançar reaches the catalog.
+    // The customer is already chosen: the order opens on Negociação; Próximo reaches the catalog.
     await fillMandatoryHeader();
-    await fireEvent.press(await screen.findByRole("button", { name: "Avançar" }));
+    await fireEvent.press(await screen.findByRole("button", { name: "Próximo" }));
     expect(await screen.findByText("Copo 200 ml")).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Vendas" }).props.accessibilityState.selected).toBe(true);
   });

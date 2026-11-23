@@ -1,9 +1,9 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
-import { Alert, type AlertButton } from "react-native";
+import { fireEvent, screen, waitFor } from "@testing-library/react-native";
 import { DraftDiscardError, type DraftItemRecord, type QuarantinedDraftDetail, type QuarantinedDraftRecord } from "@salesforce/mobile-db";
 import type { LocalOrdersPort } from "../offline/local-orders";
 import { draftRecord, fakeLocalOrders } from "../test-doubles";
 import { QuarantineScreen } from "./quarantine-screen";
+import { renderWithModal } from "./test-modal-wrapper";
 
 function retained(localId: string, name: string, overrides: Partial<QuarantinedDraftRecord> = {}): QuarantinedDraftRecord {
   return {
@@ -36,13 +36,12 @@ function setup(list: QuarantinedDraftRecord[], overrides: Partial<LocalOrdersPor
   });
   const onBack = jest.fn();
   const onChanged = jest.fn();
-  return { localOrders, onBack, onChanged, discardQuarantined, ...{ render: () => render(<QuarantineScreen localOrders={localOrders} onBack={onBack} onChanged={onChanged} />) } };
+  return { localOrders, onBack, onChanged, discardQuarantined, ...{ render: () => renderWithModal(<QuarantineScreen localOrders={localOrders} onBack={onBack} onChanged={onChanged} />) } };
 }
 
-function acceptAlert(label: string) {
-  return jest.spyOn(Alert, "alert").mockImplementation((_title, _message, buttons?: AlertButton[]) => {
-    buttons?.find((button) => button.text === label)?.onPress?.();
-  });
+/** Presses a button of the in-app dialog (the native Alert is gone). */
+async function pressModal(label: string) {
+  await fireEvent.press(await screen.findByRole("button", { name: label }));
 }
 
 describe("QuarantineScreen", () => {
@@ -89,14 +88,12 @@ describe("QuarantineScreen", () => {
     const ctx = setup([retained("a", "Padaria Central"), retained("b", "Mercado Sul")]);
     await ctx.render();
     await fireEvent.press(await screen.findByRole("button", { name: /Ver pedido retido de Padaria Central/ }));
-    const alert = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
     await fireEvent.press(await screen.findByRole("button", { name: "Descartar pedido retido" }));
-    expect(alert).toHaveBeenCalledWith("Descartar pedido?", expect.stringMatching(/removido deste aparelho.*não será enviado ao Force.*não pode ser desfeita/), expect.any(Array));
+    expect(await screen.findByText("Descartar pedido?")).toBeTruthy();
+    expect(screen.getByText(/removido deste aparelho.*não será enviado ao Force.*não pode ser desfeita/)).toBeTruthy();
     expect(ctx.discardQuarantined).not.toHaveBeenCalled(); // nothing happens until confirmed
-    alert.mockRestore();
 
-    acceptAlert("Descartar");
-    await fireEvent.press(screen.getByRole("button", { name: "Descartar pedido retido" }));
+    await pressModal("Descartar");
     await waitFor(() => expect(ctx.discardQuarantined).toHaveBeenCalledWith("a"));
     expect(ctx.onChanged).toHaveBeenCalled();
     expect(await screen.findByText("Mercado Sul")).toBeTruthy();
@@ -107,9 +104,11 @@ describe("QuarantineScreen", () => {
     const ctx = setup([retained("a", "Padaria Central")]);
     await ctx.render();
     await fireEvent.press(await screen.findByRole("button", { name: /Ver pedido retido de Padaria Central/ }));
-    acceptAlert("Cancelar");
     await fireEvent.press(await screen.findByRole("button", { name: "Descartar pedido retido" }));
+    await pressModal("Cancelar");
+    await waitFor(() => expect(screen.queryByText("Descartar pedido?")).toBeNull());
     expect(ctx.discardQuarantined).not.toHaveBeenCalled();
+    expect(screen.getByText("Copo 200 ml")).toBeTruthy();
   });
 
   it("does not offer discard for an order that may already be on the server, and says why", async () => {
@@ -128,12 +127,10 @@ describe("QuarantineScreen", () => {
     });
     await ctx.render();
     await fireEvent.press(await screen.findByRole("button", { name: /Ver pedido retido de Padaria Central/ }));
-    const alert = jest.spyOn(Alert, "alert").mockImplementation((title, _message, buttons?: AlertButton[]) => {
-      if (title === "Descartar pedido?") buttons?.find((button) => button.text === "Descartar")?.onPress?.();
-    });
     await fireEvent.press(await screen.findByRole("button", { name: "Descartar pedido retido" }));
-    await waitFor(() => expect(alert).toHaveBeenCalledWith("Não foi possível descartar", expect.stringContaining("não pode ser descartado")));
-    alert.mockRestore();
+    await pressModal("Descartar");
+    expect(await screen.findByText("Não foi possível descartar")).toBeTruthy();
+    expect(screen.getByText(/não pode ser descartado/)).toBeTruthy();
   });
 
   it("goes back", async () => {
