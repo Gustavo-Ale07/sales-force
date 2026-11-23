@@ -249,4 +249,20 @@ export const migrations: readonly Migration[] = [
       `ALTER TABLE local_order_draft ADD COLUMN discount_over_limit_accepted INTEGER NOT NULL DEFAULT 0 CHECK (discount_over_limit_accepted IN (0, 1))`,
     ],
   },
+  {
+    // Recovery record (owner 2026-11-23): the autosave of an order still being built is protection against a forced close, not a saved
+    // order. Expand-only: a defaulted column; every existing row stays a saved order ('saved') unless the cleanup below proves otherwise.
+    // Cleanup of the wrong state seen on devices (autosave had queued a server copy that the server refused): an order that was never
+    // confirmed (no send request), never reached the server (no remote id) and sits in `sync_error` cannot be proven saved on purpose,
+    // so it becomes a recovery record (kept, never deleted) and its refused commands are dropped (nothing was accepted by the server).
+    // Confirmed orders and any order the server holds are never touched.
+    version: 14,
+    name: "order_recovery_kind",
+    statements: [
+      `ALTER TABLE local_order_draft ADD COLUMN kind TEXT NOT NULL DEFAULT 'saved' CHECK (kind IN ('saved', 'recovery'))`,
+      `UPDATE local_order_draft SET kind = 'recovery', status = 'local_only', last_error = NULL
+         WHERE send_state IS NULL AND remote_id IS NULL AND status = 'sync_error' AND erp_number IS NULL`,
+      `DELETE FROM outbox WHERE draft_local_id IN (SELECT local_id FROM local_order_draft WHERE kind = 'recovery') AND state IN ('rejected', 'pending')`,
+    ],
+  },
 ];

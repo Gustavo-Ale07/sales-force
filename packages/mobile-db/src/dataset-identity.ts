@@ -134,7 +134,8 @@ export function isOperationalEligibility(value: string): boolean {
 export function operationalDraftSql(dataset: DatasetIdentity | null): { sql: string; params: string[] } {
   if (dataset === null) return { sql: "0", params: [] };
   return {
-    sql: "(d.dataset_environment = ? AND d.dataset_id = ? AND d.eligibility IN ('unchecked', 'eligible'))",
+    // A recovery record (autosave protection of an order still being built) is never listed, counted or sent.
+    sql: "(d.kind = 'saved' AND d.dataset_environment = ? AND d.dataset_id = ? AND d.eligibility IN ('unchecked', 'eligible'))",
     params: [dataset.environment, dataset.datasetId],
   };
 }

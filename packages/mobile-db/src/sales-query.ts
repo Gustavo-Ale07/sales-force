@@ -40,7 +40,8 @@ function marks(values: readonly unknown[]): string {
 }
 
 function whereOf(filter: DraftFilter): { sql: string; params: SqlValue[] } {
-  const clauses = ["d.owner_account_id = ?"];
+  // A recovery record (an order still being built) is never part of the seller's sales.
+  const clauses = ["d.owner_account_id = ?", "d.kind = 'saved'"];
   const params: SqlValue[] = [filter.ownerAccountId];
   if (filter.dataset !== undefined) {
     const operational = operationalDraftSql(filter.dataset);

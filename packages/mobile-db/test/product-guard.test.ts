@@ -42,6 +42,8 @@ function input(productCode: number): SaveDraftInput {
     carrierCode: null,
     notes: null,
     loadedDataset: REAL,
+    // Guards and refusals apply to CONFIRMED orders; the server copy of an order only saved is silent background work (owner 2026-11-23).
+    sendRequested: true,
     items: [{ productCode, description: `Produto ${productCode}`, unit: "UN", quantity: "2", discountPercent: "0", priceJson: JSON.stringify(priced(3, "8.00")), groupCode: 1, groupName: "G" }],
   };
 }

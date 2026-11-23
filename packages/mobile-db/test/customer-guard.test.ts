@@ -46,6 +46,8 @@ function input(customerCode: number): SaveDraftInput {
     carrierCode: null,
     notes: null,
     loadedDataset: REAL,
+    // Guards and refusals apply to CONFIRMED orders; the server copy of an order only saved is silent background work (owner 2026-11-23).
+    sendRequested: true,
     items: [{ productCode: 1, description: "Produto 1", unit: "UN", quantity: "2", discountPercent: "0", priceJson: JSON.stringify({ state: "priced", unitPrice: "10.00" }), groupCode: 1, groupName: "G" }],
   };
 }
@@ -252,7 +254,7 @@ describe("server answer customer_ineligible", () => {
     const id = await saveOrderDraft(db, env, input(77));
     server.failWith = "network";
     await push();
-    await saveOrderDraft(db, env, { ...input(77), localId: id });
+    await saveOrderDraft(db, env, { ...input(77), localId: id, notes: "edit" });
     const queued = await listOutbox(db, id);
     expect(queued.map((op) => op.type)).toEqual(["order.create", "order.replace"]);
     server.failWith = "customer_ineligible";

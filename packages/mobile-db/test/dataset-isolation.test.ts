@@ -224,7 +224,7 @@ describe("migration v3", () => {
     await insertLegacy(old, A, "1");
     await insertLegacy(old, A, "2", "needs_review");
     const report = await runMigrations(old, migrations);
-    expect(report.applied).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
+    expect(report.applied).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
     expect((await listDrafts(old, A)).map((d) => [d.dataset, d.eligibility])).toEqual([
       [null, "unchecked"],
       [null, "unchecked"],
@@ -465,7 +465,9 @@ describe("sync manager with dataset confirmation", () => {
     expect(status.phase).toBe("error");
     expect(status.lastError).toMatch(/conjunto de dados/);
     expect(await readExpectedDataset(db)).toBeNull();
-    expect(status.pending).toBe(1);
+    // The command is kept for the next run; a saved-only order is not "aguardando envio" (owner 2026-11-23).
+    expect(status.pending).toBe(0);
+    expect((await listOutbox(db)).filter((op) => op.state === "pending")).toHaveLength(1);
   });
 
   it("when the server switches dataset, old commands are quarantined, not sent, and the cache is replaced", async () => {

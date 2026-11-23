@@ -463,8 +463,8 @@ describe("orders are blocked for a customer the ERP has not confirmed", () => {
   it("a draft that already carries a pending code is never sent: held with the same text, zero attempts", async () => {
     const record = await create();
     await db.execute(
-      `INSERT INTO local_order_draft (local_id, owner_account_id, client_request_id, customer_code, customer_name, status, created_at, updated_at, dataset_environment, dataset_id, eligibility)
-       VALUES ('d1', ?, 'k1', ?, 'P', 'pending_sync', '2026-11-13T00:00:00.000Z', '2026-11-13T00:00:00.000Z', ?, ?, 'eligible')`,
+      `INSERT INTO local_order_draft (local_id, owner_account_id, client_request_id, customer_code, customer_name, status, created_at, updated_at, dataset_environment, dataset_id, eligibility, send_state)
+       VALUES ('d1', ?, 'k1', ?, 'P', 'pending_sync', '2026-11-13T00:00:00.000Z', '2026-11-13T00:00:00.000Z', ?, ?, 'eligible', 'requested')`,
       [OWNER, record.localCode, REAL.environment, REAL.datasetId],
     );
     await db.execute(

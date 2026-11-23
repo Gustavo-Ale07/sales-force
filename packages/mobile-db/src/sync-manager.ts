@@ -365,9 +365,9 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
 
   const counters = async (): Promise<{ pending: number; needsAttention: number; awaitingOrders: number; attention: readonly AttentionItem[] }> => {
     const dataset = await readExpectedDataset(deps.db);
-    const counts = await countOutbox(deps.db, deps.ownerAccountId, dataset);
+    const counts = await countOutbox(deps.db, deps.ownerAccountId, dataset, "confirmed");
     const customers = await countPendingCustomers(deps.db, deps.ownerAccountId, dataset);
-    const attention = await listAttentionItems(deps.db, deps.ownerAccountId);
+    const attention = await listAttentionItems(deps.db, deps.ownerAccountId, 10, "confirmed");
     const sends = await countSendRequests(deps.db, deps.ownerAccountId, dataset);
     return {
       pending: counts.pending + counts.sending + customers.pending + sends.waiting,
@@ -377,7 +377,13 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
     };
   };
 
-  const offlineFailure = (): Failure => (internet() === "offline" ? failureOf("no_internet", "offline") : failureOf("server_unavailable", "offline"));
+  /** Server copies of orders only saved on the device: sent in the background (timer, foreground), never shown as pending. */
+  const backgroundPending = async (): Promise<number> => {
+    const counts = await countOutbox(deps.db, deps.ownerAccountId, await readExpectedDataset(deps.db), "all");
+    return counts.pending + counts.sending;
+  };
+
+  const offlineFailure =(): Failure => (internet() === "offline" ? failureOf("no_internet", "offline") : failureOf("server_unavailable", "offline"));
 
   /** Privacy window of refused customers (I-2): runs at app start (refresh), on every sync and on foreground; never fails a run. */
   const purgePrivacyWindow = async (): Promise<void> => {
@@ -437,7 +443,7 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
       await recoverInterruptedCustomers(deps.db, deps.env);
       // Confirm the dataset with the server before anything is sent (only when there is something to send or to pull).
       let confirmed = true;
-      if (pull || (await counters()).pending > 0) {
+      if (pull || (await counters()).pending > 0 || (await backgroundPending()) > 0) {
         try {
           const identity = await deps.source.fetchDatasetIdentity();
           await confirmDataset(deps.db, identity, isoNow(deps.env));

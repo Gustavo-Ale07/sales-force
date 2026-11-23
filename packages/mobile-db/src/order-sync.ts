@@ -217,7 +217,11 @@ export function deriveDraftStatus(ops: readonly OutboxRecord[]): { status: Draft
 
 async function refreshDraftStatus(tx: SqlExecutor, localId: string): Promise<void> {
   const ops = await listOutbox(tx, localId);
-  const { status, lastError } = deriveDraftStatus(ops);
+  const derived = deriveDraftStatus(ops);
+  // The server copy of an order that was only saved is background work: its failure (refused, held, backoff) never changes what the
+  // seller sees ("Salvo no aparelho"). The reason surfaces only when the seller presses "Confirmar" (owner 2026-11-23).
+  const confirmed = (await tx.query<SqlRow>("SELECT 1 AS hit FROM local_order_draft WHERE local_id = ? AND send_state IS NOT NULL", [localId])).length > 0;
+  const { status, lastError } = derived.status === "sync_error" && !confirmed ? { status: "pending_sync" as const, lastError: null } : derived;
   await tx.execute("UPDATE local_order_draft SET status = ?, last_error = ? WHERE local_id = ?", [status, lastError, localId]);
 }
 
@@ -601,6 +605,11 @@ export async function pushOutbox(
     // A customer the ERP has not confirmed yet (local code, or confirmed but not yet in the mirror) is held the same way.
     // The same hold covers a line whose product lost mobility or price (owner 2026-11-13): the lines are checked after the customer.
     const customerBlock = pendingCustomerBlockOf(draft.customerCode) ?? (await customerBlockOf(db, draft.customerCode)) ?? (await productBlockOf(db, draft.localId, draft.customerCode));
+    if (customerBlock !== null && draft.sendState === null) {
+      // Only saved (not confirmed): the server copy simply waits; nothing is marked, nothing is shown. The reason shows on "Confirmar".
+      heldDrafts.add(draft.localId);
+      continue;
+    }
     if (customerBlock !== null) {
       await holdForCustomer(db, env, draft.localId, customerBlock);
       heldDrafts.add(draft.localId);
@@ -658,7 +667,8 @@ export async function pushOutbox(
         continue;
       }
       await applyPermanent(db, env, sent, error);
-      failed += 1;
+      // A refused server copy of an order that was only saved is not a failed run: the card stays "Salvo no aparelho".
+      if (draft.sendState !== null) failed += 1;
     }
   }
   return { attempted, accepted, failed, stoppedBy: "limit", quarantined };

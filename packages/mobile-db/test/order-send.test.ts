@@ -233,11 +233,11 @@ describe("migrations v10 (order_send_request) and v11 (order_erp_stage)", () => 
     expect(columnsBefore).not.toContain("send_state");
 
     const report = await runMigrations(old, migrations);
-    expect(report).toEqual({ from: 9, to: 13, applied: [10, 11, 12, 13] });
+    expect(report).toEqual({ from: 9, to: 14, applied: [10, 11, 12, 13, 14] });
 
     const columnsAfter = await columnsOf(old, "local_order_draft");
     expect(columnsAfter).toEqual(expect.arrayContaining([...columnsBefore, "send_state", "send_code", "send_error", "send_attempts", "send_next_attempt_at", "send_requested_at", "erp_stage", "erp_stage_json", "erp_number", "discount_over_limit_accepted"]));
-    expect(columnsAfter).toHaveLength(columnsBefore.length + 10);
+    expect(columnsAfter).toHaveLength(columnsBefore.length + 11);
     // old values untouched
     const [row] = (await old.query("SELECT * FROM local_order_draft")) as Record<string, unknown>[];
     for (const [key, value] of Object.entries((before as Record<string, unknown>[])[0] as Record<string, unknown>)) expect(row?.[key]).toEqual(value);
@@ -251,8 +251,8 @@ describe("migrations v10 (order_send_request) and v11 (order_erp_stage)", () => 
     expect((await getDraft(old, id))?.sendState).toBe("requested");
   });
 
-  it("is idempotent and the schema version ends at 13", async () => {
-    expect(await readSchemaVersion(db)).toBe(13);
+  it("is idempotent and the schema version ends at 14", async () => {
+    expect(await readSchemaVersion(db)).toBe(14);
     expect((await runMigrations(db, migrations)).applied).toEqual([]);
   });
 

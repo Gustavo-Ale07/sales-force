@@ -178,6 +178,7 @@ describe("sync on demand: refresh first, then download", () => {
   it("all ok with an order that needs attention: still 'synced', the order is listed with its reason", async () => {
     await db.transaction((tx) => replaceCustomers(tx, [{ code: 77, name: "C", blocked: true }]));
     await saveOrderDraft(db, env, {
+      sendRequested: true,
       ownerAccountId: OWNER,
       customerCode: 77,
       customerName: "C",
@@ -367,6 +368,7 @@ describe("one run in flight", () => {
 describe("marked drafts are re-evaluated after each sync", () => {
   const draft = (customerCode: number) =>
     saveOrderDraft(db, env, {
+      sendRequested: true,
       ownerAccountId: OWNER,
       customerCode,
       customerName: "C",

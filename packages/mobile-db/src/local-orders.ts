@@ -119,7 +119,15 @@ export interface SaveDraftInput {
   readonly loadedDataset: DatasetIdentity | null;
   /** The seller accepted a discount above a product limit in this order: `true` sets the mark (never cleared); absent = keep it as it is. */
   readonly discountOverLimitAccepted?: boolean;
+  /**
+   * Autosave of an order still being built (protection against a forced close): written as a RECOVERY record, never queued, never sent,
+   * never listed or counted. Any save without this flag (Salvar e sair, Confirmar) makes the record a saved order and queues its command.
+   */
+  readonly recovery?: boolean;
 }
+
+/** `saved` = an order the seller saved or confirmed on purpose; `recovery` = the autosave of an order still being built. */
+export type DraftKind = "saved" | "recovery";
 
 /** Freight chosen on the order; the same three values as the server contract. */
 export type FreightType = "CIF" | "FOB" | "SEM_FRETE";
@@ -218,6 +226,8 @@ export interface DraftRecord {
   readonly erpNumber: number | null;
   /** The seller already accepted a discount above a product limit in this order (no further warning); local, never blocks sending. */
   readonly discountOverLimitAccepted: boolean;
+  /** Absent reads as `saved`. */
+  readonly kind?: DraftKind;
 }
 
 /** The order's Sankhya number: the stored one, else the stage's. The internal Force number is never an identity for the seller. */
@@ -281,7 +291,7 @@ export const DRAFT_COLUMNS = `d.local_id, d.owner_account_id, d.client_request_i
   d.negotiation_type_code, d.top_code, d.carrier_code, d.freight_type, d.notes, d.status, d.remote_id, d.remote_version, d.remote_draft_number, d.estimated_total,
   d.last_error, d.price_review, d.server_snapshot, d.created_at, d.updated_at, d.dataset_environment, d.dataset_id, d.eligibility,
   d.send_state, d.send_code, d.send_error, d.send_attempts, d.send_next_attempt_at, d.send_requested_at,
-  d.erp_stage, d.erp_stage_json, d.erp_number, d.discount_over_limit_accepted,
+  d.erp_stage, d.erp_stage_json, d.erp_number, d.discount_over_limit_accepted, d.kind,
   (SELECT count(*) FROM local_order_item i WHERE i.draft_local_id = d.local_id) AS item_count`;
 
 function nullableNumber(value: unknown): number | null {
@@ -331,6 +341,7 @@ export function toDraft(row: SqlRow): DraftRecord {
     erpStage: erpStageOf(row.erp_stage, row.erp_stage_json),
     erpNumber: nullableNumber(row.erp_number),
     discountOverLimitAccepted: Number(row.discount_over_limit_accepted ?? 0) === 1,
+    kind: row.kind === "recovery" ? "recovery" : "saved",
   };
 }
 
@@ -364,10 +375,33 @@ export async function getDraft(db: SqlExecutor, localId: string): Promise<DraftR
 
 export async function listDrafts(db: SqlExecutor, ownerAccountId: string): Promise<DraftRecord[]> {
   const rows = await db.query<SqlRow>(
-    `SELECT ${DRAFT_COLUMNS} FROM local_order_draft d WHERE d.owner_account_id = ? ORDER BY d.updated_at DESC, d.local_id`,
+    `SELECT ${DRAFT_COLUMNS} FROM local_order_draft d WHERE d.owner_account_id = ? AND d.kind = 'saved' ORDER BY d.updated_at DESC, d.local_id`,
     [ownerAccountId],
   );
   return rows.map(toDraft);
+}
+
+/** The order the seller was building when the app closed without saving (newest first). Never listed with the saved orders. */
+export async function getRecovery(db: SqlExecutor, ownerAccountId: string): Promise<DraftRecord | null> {
+  const rows = await db.query<SqlRow>(
+    `SELECT ${DRAFT_COLUMNS} FROM local_order_draft d WHERE d.owner_account_id = ? AND d.kind = 'recovery' ORDER BY d.updated_at DESC, d.local_id LIMIT 1`,
+    [ownerAccountId],
+  );
+  const row = rows[0];
+  return row === undefined ? null : toDraft(row);
+}
+
+/** Deletes the owner's recovery records (the seller chose "Descartar", or saved the order). Saved orders are never touched. */
+export async function discardRecovery(db: SqlDatabase, ownerAccountId: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    const ids = await tx.query<SqlRow>("SELECT local_id FROM local_order_draft WHERE owner_account_id = ? AND kind = 'recovery'", [ownerAccountId]);
+    for (const row of ids) {
+      const id = String(row.local_id);
+      await tx.execute("DELETE FROM outbox WHERE draft_local_id = ?", [id]);
+      await tx.execute("DELETE FROM local_order_item WHERE draft_local_id = ?", [id]);
+      await tx.execute("DELETE FROM local_order_draft WHERE local_id = ?", [id]);
+    }
+  });
 }
 
 /**
@@ -418,7 +452,7 @@ export function quarantineReasonOf(draft: Pick<DraftRecord, "eligibility" | "dat
   return draft.dataset === null && hasUnresolvedOps ? "legacy_local" : null;
 }
 
-const QUARANTINE_WHERE = `d.owner_account_id = ? AND (
+const QUARANTINE_WHERE = `d.owner_account_id = ? AND d.kind = 'saved' AND (
     d.eligibility NOT IN ('unchecked', 'eligible')
     OR (d.dataset_environment IS NULL AND EXISTS (
       SELECT 1 FROM outbox o WHERE o.draft_local_id = d.local_id AND o.state IN (${UNRESOLVED_STATES.map((s) => `'${s}'`).join(", ")}))))`;
@@ -485,16 +519,25 @@ export interface OutboxCounts {
 }
 
 /**
+ * `all` = every command; `confirmed` = only the commands of orders the seller CONFIRMED (a send request exists), plus real conflicts and
+ * price reviews. The server copy of an order that was only saved ("Salvo no aparelho") is background work: it never counts as
+ * "aguardando envio" nor as a failure (owner 2026-11-23).
+ */
+export type CountScope = "all" | "confirmed";
+
+const CONFIRMED_ONLY = (scope: CountScope): string => (scope === "confirmed" ? " AND (d.send_state IS NOT NULL OR o.state IN ('conflict', 'needs_review'))" : "");
+
+/**
  * Counts for the sync indicator. `needsAttention` = rejected, conflict, price review or not-eligible commands the
  * seller must look at. `pending`/`sending` count only work that can actually be sent: with a confirmed `dataset` given, a
  * command of another dataset (or a legacy one) is never "pending", whatever state it is still stored in.
  */
-export async function countOutbox(db: SqlExecutor, ownerAccountId: string, dataset?: DatasetIdentity | null): Promise<OutboxCounts> {
+export async function countOutbox(db: SqlExecutor, ownerAccountId: string, dataset?: DatasetIdentity | null, scope: CountScope = "all"): Promise<OutboxCounts> {
   const heldMarks = CUSTOMER_HELD_MESSAGES.map(() => "?").join(", ");
   const rows = await db.query<SqlRow>(
     `SELECT o.state AS state, o.dataset_environment AS dataset_environment, o.dataset_id AS dataset_id, o.eligibility AS eligibility, (COALESCE(o.last_error, '') IN (${heldMarks})) AS held, count(*) AS n
      FROM outbox o JOIN local_order_draft d ON d.local_id = o.draft_local_id
-     WHERE d.owner_account_id = ? AND o.state IN ('pending', 'sending', 'rejected', 'conflict', 'needs_review')
+     WHERE d.owner_account_id = ? AND o.state IN ('pending', 'sending', 'rejected', 'conflict', 'needs_review')${CONFIRMED_ONLY(scope)}
      GROUP BY o.state, o.dataset_environment, o.dataset_id, o.eligibility, (COALESCE(o.last_error, '') IN (${heldMarks}))`,
     [...CUSTOMER_HELD_MESSAGES, ownerAccountId, ...CUSTOMER_HELD_MESSAGES],
   );
@@ -530,12 +573,12 @@ const ATTENTION_FALLBACK: Readonly<Record<string, string>> = {
 };
 
 /** Orders that need attention (rejected, conflict, price review, held for the customer), one per draft, newest first. */
-export async function listAttentionItems(db: SqlExecutor, ownerAccountId: string, limit = 10): Promise<AttentionItem[]> {
+export async function listAttentionItems(db: SqlExecutor, ownerAccountId: string, limit = 10, scope: CountScope = "all"): Promise<AttentionItem[]> {
   const heldMarks = CUSTOMER_HELD_MESSAGES.map(() => "?").join(", ");
   const rows = await db.query<SqlRow>(
     `SELECT d.local_id AS local_id, d.customer_name AS customer_name, o.state AS state, o.last_error AS last_error
      FROM outbox o JOIN local_order_draft d ON d.local_id = o.draft_local_id
-     WHERE d.owner_account_id = ? AND (o.state IN ('rejected', 'conflict', 'needs_review') OR (o.state = 'pending' AND COALESCE(o.last_error, '') IN (${heldMarks})))
+     WHERE d.owner_account_id = ? AND (o.state IN ('rejected', 'conflict', 'needs_review') OR (o.state = 'pending' AND COALESCE(o.last_error, '') IN (${heldMarks})))${CONFIRMED_ONLY(scope)}
      ORDER BY o.updated_at DESC, o.rowid DESC`,
     [ownerAccountId, ...CUSTOMER_HELD_MESSAGES],
   );
@@ -694,13 +737,16 @@ export async function saveOrderDraft(db: SqlDatabase, env: OfflineEnv, input: Sa
       if (confirmed === null) throw new DatasetUnavailableError();
       const localId = env.newId();
       const key = env.newId();
+      const recovery = input.recovery === true;
       await tx.execute(
-        `INSERT INTO local_order_draft (local_id, owner_account_id, client_request_id, customer_code, customer_name, negotiation_type_code, top_code, carrier_code, freight_type, notes, status, created_at, updated_at, dataset_environment, dataset_id, eligibility)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_sync', ?, ?, ?, ?, 'eligible')`,
-        [localId, input.ownerAccountId, key, input.customerCode, input.customerName, input.negotiationTypeCode, input.topCode ?? null, input.carrierCode ?? null, input.freightType ?? null, input.notes, now, now, confirmed.environment, confirmed.datasetId],
+        `INSERT INTO local_order_draft (local_id, owner_account_id, client_request_id, customer_code, customer_name, negotiation_type_code, top_code, carrier_code, freight_type, notes, status, created_at, updated_at, dataset_environment, dataset_id, eligibility, kind)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'eligible', ?)`,
+        [localId, input.ownerAccountId, key, input.customerCode, input.customerName, input.negotiationTypeCode, input.topCode ?? null, input.carrierCode ?? null, input.freightType ?? null, input.notes, recovery ? "local_only" : "pending_sync", now, now, confirmed.environment, confirmed.datasetId, recovery ? "recovery" : "saved"],
       );
       await insertItems(tx, localId, input.items);
       if (input.discountOverLimitAccepted === true) await markDiscountOverLimit(tx, localId);
+      // A recovery record has no command: nothing is queued, nothing can be sent.
+      if (recovery) return localId;
       await insertOp(tx, env, { type: "order.create", idempotencyKey: key, payload, baseVersion: null, draftLocalId: localId, dataset: confirmed });
       if (input.sendRequested === true) await writeSendRequest(tx, localId, now);
       return localId;
@@ -714,6 +760,27 @@ export async function saveOrderDraft(db: SqlDatabase, env: OfflineEnv, input: Sa
       throw new DraftNotEditableError("Este pedido é de outro conjunto de dados e não pode ser alterado.");
     }
     assertLoadedUnderConfirmed();
+    if (draft.kind === "recovery") {
+      if (input.recovery !== true) {
+        // "Salvar e sair" / "Confirmar" on an order that only had its recovery record: it becomes a saved order and its command is queued.
+        await tx.execute(
+          `UPDATE local_order_draft SET kind = 'saved', status = 'pending_sync', last_error = NULL, customer_code = ?, customer_name = ?, negotiation_type_code = ?, top_code = ?, carrier_code = ?, freight_type = ?, notes = ?, updated_at = ? WHERE local_id = ?`,
+          [input.customerCode, input.customerName, input.negotiationTypeCode, input.topCode ?? null, input.carrierCode ?? null, input.freightType ?? null, input.notes, now, draft.localId],
+        );
+        await insertItems(tx, draft.localId, input.items);
+        await tx.execute("DELETE FROM outbox WHERE draft_local_id = ?", [draft.localId]);
+        await insertOp(tx, env, { type: "order.create", idempotencyKey: draft.clientRequestId, payload, baseVersion: null, draftLocalId: draft.localId, dataset: draft.dataset });
+        if (input.sendRequested === true) await writeSendRequest(tx, draft.localId, now);
+        return draft.localId;
+      }
+      await tx.execute(
+        `UPDATE local_order_draft SET customer_code = ?, customer_name = ?, negotiation_type_code = ?, top_code = ?, carrier_code = ?, freight_type = ?, notes = ?, updated_at = ? WHERE local_id = ?`,
+        [input.customerCode, input.customerName, input.negotiationTypeCode, input.topCode ?? null, input.carrierCode ?? null, input.freightType ?? null, input.notes, now, draft.localId],
+      );
+      await insertItems(tx, draft.localId, input.items);
+      return draft.localId;
+    }
+    if (input.recovery === true) throw new DraftNotEditableError("Este pedido já está salvo e não usa a proteção contra fechamento.");
     // A sent order is read-only (queued/sent/unknown on the server); an order awaiting the discount approval may be edited, which
     // invalidates the approval request exactly like the server (it goes back to draft and must be sent again).
     if (isSubmittedReadOnly(draft)) {

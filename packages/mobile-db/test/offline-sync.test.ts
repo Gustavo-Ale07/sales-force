@@ -317,7 +317,7 @@ describe("adoptRemoteDraft (order made on the server, e.g. Duplicar como pedido)
 
 describe("idempotency (P-08, SNK-4)", () => {
   it("POST applied, response lost, retry with the same key ⇒ exactly one order", async () => {
-    const id = await saveOrderDraft(db, env, input([item(1)]));
+    const id = await saveOrderDraft(db, env, input([item(1)], { sendRequested: true }));
     server.loseResponseOnce = true;
     const first = await push();
     expect(first.stoppedBy).toBe("offline");
@@ -395,7 +395,7 @@ describe("error classification and retries", () => {
   });
 
   it("validation errors are permanent: rejected once, never retried blindly", async () => {
-    const id = await saveOrderDraft(db, env, input([item(1)]));
+    const id = await saveOrderDraft(db, env, input([item(1)], { sendRequested: true }));
     server.failWith = "validation";
     await push();
     server.failWith = null;
@@ -440,7 +440,7 @@ describe("error classification and retries", () => {
   });
 
   it("error text shown to the seller is never technical", async () => {
-    const id = await saveOrderDraft(db, env, input([item(1)]));
+    const id = await saveOrderDraft(db, env, input([item(1)], { sendRequested: true }));
     server.failWith = "network";
     await push();
     const draft = await getDraft(db, id);
@@ -623,7 +623,9 @@ describe("sync manager", () => {
     const manager = createSyncManager({ db, env, transport: server, source, ownerAccountId: OWNER });
     server.failWith = "network";
     const offline = await manager.sync("manual");
-    expect(offline).toMatchObject({ phase: "offline", pending: 1 });
+    // Only saved: the server copy is background work, not "aguardando envio" (owner 2026-11-23); the command stays queued.
+    expect(offline).toMatchObject({ phase: "offline", pending: 0 });
+    expect((await listOutbox(db)).filter((op) => op.state === "pending")).toHaveLength(1);
     server.failWith = null;
     const online = await manager.sync("reconnected");
     expect(online).toMatchObject({ phase: "idle", pending: 0, needsAttention: 0 });
