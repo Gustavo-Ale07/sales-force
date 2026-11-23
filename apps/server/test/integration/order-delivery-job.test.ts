@@ -70,6 +70,38 @@ function runtimeFor(database: MigratedDatabase, withDelivery: boolean): WorkerRu
   });
 }
 
+describe('order delivery short trigger (number and stage shortly after Confirmar)', () => {
+  it('sweeps on its own short interval, reads the stage only after a sweep that delivered something, and stops with the worker', async () => {
+    const database = await prepared();
+    const logger = createLogger({ level: 'silent', service: 'worker' });
+    const calls = { sweeps: 0, stages: 0 };
+    let delivered = 0;
+    const service = { runDue: async () => { calls.sweeps += 1; const processed = delivered; delivered = 0; return { processed, recovered: 0 }; }, purgeDryRuns: async () => 0 };
+    const status = { runStageOnce: async () => { calls.stages += 1; return { checked: 0, updated: 0 }; }, runOnce: async () => ({ checked: 0, updated: 0 }), runReleaseOnce: async () => ({ checked: 0, updated: 0 }) };
+    const runtime = new WorkerRuntime({
+      logger,
+      db: database.handle,
+      now: () => new Date(),
+      orderDelivery: { service: service as never, status: status as never, triggerMs: 40 },
+      options: { databaseUrl: database.secret, heartbeatCron: '*/5 * * * *', shutdownTimeoutMs: 10_000, health: null, gatewayMode: 'fake', pollingIntervalSeconds: 0.5 },
+    });
+    await runtime.start();
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      expect(calls.sweeps).toBeGreaterThanOrEqual(3);
+      expect(calls.stages).toBe(0);
+      delivered = 1;
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      expect(calls.stages).toBe(1);
+    } finally {
+      await runtime.stop();
+    }
+    const after = calls.sweeps;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(calls.sweeps).toBe(after);
+  });
+});
+
 describe('order delivery queues (SNK-7)', () => {
   it('are registered queues, scheduled only while order writing is enabled, dropped when disabled again', async () => {
     expect(QUEUE_REGISTRY.map((spec) => spec.name)).toEqual(

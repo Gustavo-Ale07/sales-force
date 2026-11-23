@@ -211,3 +211,38 @@ describe('FakeGateway.readOrderStageFacts (contract of the fake)', () => {
     expect(readings[1]?.pendingReleases).toEqual([{ event: 44, cascadeSequence: 1 }]);
   });
 });
+
+describe('owner Sandbox facts of 2026-11-23 (SELECT-only values, replayed through the mocked transport)', () => {
+  it('orders 2508-2511 (STATUSNOTA A, PENDENTE S, ORDEMCARGA 0, no TSILIB, no TGFVAR) are "received" and the 2449/2450/2454 chains are "invoiced"', async () => {
+    const { gateway, mock } = setup();
+    mock.forced.push(
+      ok(HEADER_COLUMNS, [[2508, 1001, 'A', 'S', 0], [2509, 1001, 'A', 'S', 0], [2510, 1001, 'A', 'S', 0], [2511, 1001, 'A', 'S', 0], [2449, 1001, 'A', 'N', 0], [2450, 1001, 'A', 'N', 0], [2454, 1001, 'A', 'N', 0]]),
+      // 2454 has TSILIB event 2 with DHLIB filled: the SELECT (DHLIB IS NULL) returns no row for it.
+      ok(RELEASE_COLUMNS, []),
+      ok(ASSIGNEE_COLUMNS, []),
+      ok(LINK_COLUMNS, [[2449, 2450], [2450, 2451], [2454, 2455]]),
+      ok(NUMBER_COLUMNS, [[2450, null], [2451, null], [2455, null]]),
+    );
+    const readings = await gateway.readOrderStageFacts([2508, 2509, 2510, 2511, 2449, 2450, 2454]);
+    const stageOf = (number: number): string => {
+      const reading = readings.find((candidate) => candidate.erpOrderNumber === number);
+      if (reading === undefined) throw new Error('missing reading');
+      return classifyOrderStage({
+        nunota: number,
+        codtipoper: reading.codtipoper,
+        statusnota: reading.statusNota,
+        pendente: reading.pending,
+        ordemcarga: reading.orderCargo,
+        pendingReleases: reading.pendingReleases,
+        hasInvoiceLink: reading.hasInvoiceLink,
+        invoiceNumber: reading.invoiceNumber,
+        isQuotation: false,
+      }).code;
+    };
+    for (const number of [2508, 2509, 2510, 2511]) expect(stageOf(number)).toBe('received');
+    // Each note that is the origin of a TGFVAR link is invoiced: the first and the converted note of the chain.
+    for (const number of [2449, 2450, 2454]) expect(stageOf(number)).toBe('invoiced');
+    expect(readings.find((reading) => reading.erpOrderNumber === 2454)?.pendingReleases).toEqual([]);
+    for (const query of mock.queries()) expect(query.sql).toMatch(/^SELECT /);
+  });
+});

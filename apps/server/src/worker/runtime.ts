@@ -39,6 +39,7 @@ import {
   ORDER_DRY_RUN_PURGE_CRON,
   CUSTOMER_PAYLOAD_PURGE_CRON,
   CUSTOMER_REFUSAL_PURGE_CRON,
+  ORDER_DELIVERY_TRIGGER_MS,
   ORDER_ERP_STATUS_CRON,
   QUEUE_NAMES,
   QUEUE_REGISTRY,
@@ -98,7 +99,7 @@ export interface WorkerRuntimeDeps {
    * ERP order delivery (SNK-7). Present only when the order-write switch is on (mode dry_run or live);
    * absent = no handler, and a schedule stored by an earlier configuration is dropped.
    */
-  readonly orderDelivery?: { readonly service: OrderDeliveryService; readonly status?: OrderErpStatusService };
+  readonly orderDelivery?: { readonly service: OrderDeliveryService; readonly status?: OrderErpStatusService; readonly triggerMs?: number };
   /**
    * ERP customer delivery (D-AR). Present only when the worker-side customer-write switch is on (Sandbox/staging); absent = no
    * handler, and a schedule stored by an earlier configuration is dropped. The short trigger runs the same sweep every
@@ -136,6 +137,7 @@ export class WorkerRuntime {
   #started = false;
   #refreshTimer: ReturnType<typeof setInterval> | undefined;
   #customerTimer: ReturnType<typeof setInterval> | undefined;
+  #orderTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(private readonly deps: WorkerRuntimeDeps) {
     this.health = new WorkerHealth(deps.now);
@@ -291,6 +293,7 @@ export class WorkerRuntime {
         else await boss.schedule(QUEUE_NAMES.integrationCustomerRefusalPurge, CUSTOMER_REFUSAL_PURGE_CRON, {});
       }
       if (customerDelivery !== undefined && customerHandlers.length > 0) this.#startCustomerTrigger(customerDelivery);
+      if (orderDelivery !== undefined && queues.some((spec) => spec.name === QUEUE_NAMES.integrationOrderDeliver)) this.#startOrderTrigger(orderDelivery);
 
       if (queues.some((spec) => spec.name === QUEUE_NAMES.syncConfiguration)) {
         if (configurationSync === undefined) {
@@ -373,7 +376,32 @@ export class WorkerRuntime {
     this.#customerTimer = setInterval(() => void tick(), delivery.triggerMs ?? CUSTOMER_DELIVERY_TRIGGER_MS);
   }
 
+  /**
+   * Short-interval sweep of due order deliveries (the outbox row decides what is due), so the Sankhya number reaches the Force order
+   * seconds after Confirmar instead of at the next minute boundary. When a sweep delivered something, the stage of the delivered
+   * orders is read right away (read-only), so "Recebido no Sankhya" does not wait for the 15-minute status job. Never overlaps itself;
+   * a failing run only logs.
+   */
+  #startOrderTrigger(delivery: { readonly service: OrderDeliveryService; readonly status?: OrderErpStatusService; readonly triggerMs?: number }): void {
+    let busy = false;
+    const tick = async () => {
+      if (busy) return;
+      busy = true;
+      try {
+        const summary = await delivery.service.runDue();
+        if (summary.processed > 0 && delivery.status !== undefined) await delivery.status.runStageOnce({ reuseMs: 30_000 });
+      } catch (error) {
+        this.deps.logger.warn({ err: error }, 'order delivery trigger failed; the next tick retries');
+      } finally {
+        busy = false;
+      }
+    };
+    this.#orderTimer = setInterval(() => void tick(), delivery.triggerMs ?? ORDER_DELIVERY_TRIGGER_MS);
+  }
+
   async #stopBoss(graceful: boolean): Promise<void> {
+    if (this.#orderTimer !== undefined) clearInterval(this.#orderTimer);
+    this.#orderTimer = undefined;
     if (this.#refreshTimer !== undefined) clearInterval(this.#refreshTimer);
     this.#refreshTimer = undefined;
     if (this.#customerTimer !== undefined) clearInterval(this.#customerTimer);

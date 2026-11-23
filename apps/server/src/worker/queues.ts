@@ -40,6 +40,11 @@ export const CONFIGURATION_SYNC_CRON = '*/15 * * * *';
 
 /** Every minute; the outbox row decides what is actually due (`next_attempt_at`). */
 export const ORDER_DELIVERY_CRON = '* * * * *';
+/**
+ * The worker looks for a due order delivery this often, besides the per-minute cron above (which alone made the app's 8 s
+ * confirmation window unreachable: the cron fires on the minute boundary). Claiming uses SKIP LOCKED: overlapping runs are safe.
+ */
+export const ORDER_DELIVERY_TRIGGER_MS = 2000;
 /** Safety net for customer delivery; the short trigger below makes the API's 15 s wait realistic. */
 export const CUSTOMER_DELIVERY_CRON = '* * * * *';
 /** The worker looks for a due customer creation this often (the API waits up to 15 s for the answer). */

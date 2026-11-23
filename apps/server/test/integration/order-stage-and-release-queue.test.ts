@@ -120,6 +120,28 @@ describe('order stage worker (runOrderStageOnce) with the fake gateway state mac
     expect((await w.stageRow(id))?.label).toBe('Faturado');
   });
 
+  it('owner Sandbox facts 2026-11-23: notes in A/S with no release and no link are "received" with no queue row; linked notes are "invoiced"; a released line (DHLIB filled) is not pending', async () => {
+    const w = await world();
+    const received: string[] = [];
+    for (const nunota of [2508, 2509, 2510, 2511]) {
+      received.push(await w.seed({ erpNumber: nunota, sellerCode: 103, accountEmail: SELLER1, ageMinutes: 3 }));
+      w.book.stageFacts.set(nunota, facts({ statusNota: 'A', orderCargo: 0 }));
+    }
+    const chain = await w.seed({ erpNumber: 2449, sellerCode: 103, accountEmail: SELLER1 });
+    w.book.stageFacts.set(2449, facts({ hasInvoiceLink: true }));
+    // 2454: TSILIB event 2 with DHLIB filled -> the gateway's SELECT (DHLIB IS NULL) returns no pending line.
+    const released = await w.seed({ erpNumber: 2454, sellerCode: 103, accountEmail: SELLER1 });
+    w.book.stageFacts.set(2454, facts({ hasInvoiceLink: true, pendingReleases: [] }));
+    expect(await w.service.runStageOnce()).toEqual({ checked: 6, updated: 6 });
+    for (const id of received) {
+      expect((await w.stageRow(id))?.stage).toBe('received');
+      expect(await w.pendingRows(id)).toHaveLength(0);
+    }
+    expect((await w.stageRow(chain))?.stage).toBe('invoiced');
+    expect((await w.stageRow(released))?.stage).toBe('invoiced');
+    expect(await w.pendingRows(released)).toHaveLength(0);
+  });
+
   it('an unchanged read only moves checked_at (hash equal): stage, label and updated_at stay', async () => {
     const w = await world();
     const id = await w.seed({ erpNumber: 9102, sellerCode: 103, accountEmail: SELLER1 });

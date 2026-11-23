@@ -43,6 +43,8 @@ O app sincroniza pedidos não confirmados com o Force por `POST /orders` como ra
 
 Sem mudança de servidor/contrato. O submit é aceito e enfileirado; o worker grava a nota no Sankhya depois. O app consulta `GET /orders?ids=<id>` (`fetchOrderStatuses`, via `refreshOneOrderErpStatus`) a cada `CONFIRM_POLL_MS` (1,5 s) até vir `erpNumber` ou acabar a janela de 8 s. Se não vier, o estado é `sending` e a atualização normal de status completa depois.
 
+Servidor (2026-11-23): além do cron por minuto (`ORDER_DELIVERY_CRON`, que dispara na virada do minuto e por si só inviabilizava a janela de 8 s), o worker varre a outbox a cada 2 s (`ORDER_DELIVERY_TRIGGER_MS`, `#startOrderTrigger` em `worker/runtime.ts`); quando uma varredura entregou algo, lê logo a etapa (`runStageOnce`) para o pedido sair de "Enviado ao Force" sem esperar o job de 15 min. O `erpNumber` já é gravado no pedido assim que a nota é incluída (`recordErpNumber`), antes da releitura e da confirmação.
+
 ## Idempotência
 
 - Origem do pedido = id do pedido; reenvio do submit é idempotente no servidor.
