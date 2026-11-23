@@ -11,6 +11,13 @@ import {
 } from "../data/order-draft";
 import { describeListPrice, formatBrl } from "../lib/money";
 import { colors, spacing } from "../theme";
+import { QuantityField } from "./quantity-field";
+import { Thumb } from "./product-views";
+import { Icon } from "./icons";
+
+function itemsOf(count: number): string {
+  return count === 1 ? "1 item" : `${count} itens`;
+}
 
 function money(value: string | null): string {
   if (value === null) return "—";
@@ -49,8 +56,9 @@ function CartLine({ line, preview, onQuantityChange, onDiscountChange, onRemove,
         accessibilityLabel={selectionMode ? `Selecionar ${line.description}` : undefined}
       >
         {selectionMode && (
-          <View style={[styles.checkbox, selected && styles.checkboxChecked]}>{selected && <Text style={styles.checkboxMark}>✓</Text>}</View>
+          <View style={[styles.checkbox, selected && styles.checkboxChecked]}>{selected && <Icon name="check" size={16} color={colors.onNavy} />}</View>
         )}
+        <Thumb code={line.productCode} description={line.description} version={line.imageVersion} size="row" />
         <View style={styles.lineHeaderText}>
           <Text style={styles.name} numberOfLines={2}>
             {line.description}
@@ -84,13 +92,11 @@ function CartLine({ line, preview, onQuantityChange, onDiscountChange, onRemove,
             >
               <Text style={styles.stepText}>−</Text>
             </Pressable>
-            <TextInput
-              style={[styles.input, styles.quantityInput]}
+            <QuantityField
               value={line.quantityText}
-              onChangeText={(text) => onQuantityChange(line.key, text)}
-              keyboardType="decimal-pad"
-              selectTextOnFocus
-              accessibilityLabel={`Quantidade de ${line.description}`}
+              productName={line.description}
+              zeroRemoves={false}
+              onCommit={(result) => result.kind === "set" && onQuantityChange(line.key, result.quantityText)}
             />
             <Pressable
               style={styles.stepButton}
@@ -208,7 +214,7 @@ export function OrderTotals({ preview }: { readonly preview: DraftPreview }) {
     </View>
     {preview.discounts.discountTotal !== "0" && preview.discounts.discountTotal !== "0.00" && (
       <View style={styles.summaryRow}>
-        <Text style={styles.summaryLabel}>{`Descontos (${preview.discounts.discountedLineCount} item(ns))`}</Text>
+        <Text style={styles.summaryLabel}>Descontos</Text>
         <Text style={[styles.summaryValue, styles.summaryDiscountValue]}>{`− ${money(preview.discounts.discountTotal)}`}</Text>
       </View>
     )}
@@ -218,11 +224,11 @@ export function OrderTotals({ preview }: { readonly preview: DraftPreview }) {
     </View>
     {preview.totals.isPartial && (
       <Text style={styles.partialNotice}>
-        {`Pedido parcial: ${preview.totals.unpricedLineCount} item(ns) sem preço não entram no total.`}
+        {`Pedido parcial: ${itemsOf(preview.totals.unpricedLineCount)} sem preço ${preview.totals.unpricedLineCount === 1 ? "não entra" : "não entram"} no total.`}
       </Text>
     )}
     <View style={styles.summaryRow}>
-      <Text style={styles.summaryLabel}>IPI estimado</Text>
+      <Text style={styles.summaryLabel}>IPI</Text>
       <Text style={styles.summaryValue}>{money(preview.ipi.ipiEstimated)}</Text>
     </View>
     <View style={styles.summaryRow}>
@@ -230,13 +236,13 @@ export function OrderTotals({ preview }: { readonly preview: DraftPreview }) {
       <Text style={styles.summaryTotalValue}>{money(preview.ipi.grandTotalEstimated)}</Text>
     </View>
     {preview.ipi.unavailableLineCount > 0 && (
-      <Text style={styles.partialNotice}>{`IPI não disponível em ${preview.ipi.unavailableLineCount} item(ns).`}</Text>
+      <Text style={styles.partialNotice}>{`IPI não disponível em ${itemsOf(preview.ipi.unavailableLineCount)}.`}</Text>
     )}
     {preview.ipi.exemptLineCount > 0 && (
-      <Text style={styles.partialNotice}>{`IPI isento/não informado em ${preview.ipi.exemptLineCount} item(ns).`}</Text>
+      <Text style={styles.partialNotice}>{`IPI isento/não informado em ${itemsOf(preview.ipi.exemptLineCount)}.`}</Text>
     )}
     {preview.ipi.tariffLineCount > 0 && (
-      <Text style={styles.partialNotice}>{`IPI por pauta — não estimado em ${preview.ipi.tariffLineCount} item(ns).`}</Text>
+      <Text style={styles.partialNotice}>{`IPI por pauta — não calculado em ${itemsOf(preview.ipi.tariffLineCount)}.`}</Text>
     )}
   </View>
   );

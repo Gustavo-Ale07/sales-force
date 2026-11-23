@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { colors, spacing } from "../theme";
+import { Icon } from "./icons";
 
 export const WIZARD_STEPS = ["customer", "negotiation", "products", "summary"] as const;
 export type WizardStep = (typeof WIZARD_STEPS)[number];
@@ -39,7 +40,7 @@ export function WizardProgress({
       </View>
       {onExit !== undefined && (
         <Pressable style={styles.exit} onPress={onExit} accessibilityRole="button" accessibilityLabel="Sair do pedido">
-          <Text style={styles.exitText}>✕</Text>
+          <Icon name="close" size={20} color={colors.textMuted} />
         </Pressable>
       )}
       <View style={styles.track}>

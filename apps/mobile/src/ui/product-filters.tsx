@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import type { ProductFilters, ProductGroupOption } from "../data/ports";
 import { colors, spacing } from "../theme";
+import { Icon } from "./icons";
 import { ChipRow, Sheet, type FilterChip } from "./customer-filters";
 
 export function countActiveProductFilters(filters: ProductFilters): number {
@@ -77,7 +78,7 @@ function ProductFiltersBody({ filters, groups, onApply, onCancel }: BodyProps) {
                   accessibilityState={{ checked: on }}
                   accessibilityLabel={`${name}, ${group.count} ${group.count === 1 ? "produto" : "produtos"}`}
                 >
-                  <View style={[styles.box, on && styles.boxOn]}>{on && <Text style={styles.tick}>✓</Text>}</View>
+                  <View style={[styles.box, on && styles.boxOn]}>{on && <Icon name="check" size={16} color={colors.onNavy} />}</View>
                   <Text style={styles.groupName} numberOfLines={2}>{name}</Text>
                   <Text style={styles.groupCount}>{group.count}</Text>
                 </Pressable>

@@ -1,6 +1,6 @@
 import { StyleSheet, View } from "react-native";
 
-export type IconName = "home" | "customers" | "sales" | "catalog" | "profile";
+export type IconName = "home" | "customers" | "sales" | "catalog" | "profile" | "products" | "cart" | "check" | "close" | "select";
 
 /** Small line icons drawn with plain views: no icon font or SVG dependency. All fit a 24 x 24 box. */
 export function Icon({ name, color, size = 24 }: { name: IconName; color: string; size?: number }) {
@@ -39,6 +39,46 @@ export function Icon({ name, color, size = 24 }: { name: IconName; color: string
           ))}
         </View>
       );
+    case "products":
+      return (
+        <View style={[box, styles.center]}>
+          <View style={[styles.crate, stroke]}>
+            <View style={[styles.crateLine, { backgroundColor: color }]} />
+          </View>
+        </View>
+      );
+    case "cart":
+      return (
+        <View style={[box, styles.center]}>
+          <View style={[styles.cartHandle, { backgroundColor: color }]} />
+          <View style={[styles.cartBody, stroke]} />
+          <View style={styles.wheels}>
+            <View style={[styles.wheel, { backgroundColor: color }]} />
+            <View style={[styles.wheel, { backgroundColor: color }]} />
+          </View>
+        </View>
+      );
+    case "check":
+      return (
+        <View style={[box, styles.center]}>
+          <View style={[styles.tick, { borderColor: color }]} />
+        </View>
+      );
+    case "close":
+      return (
+        <View style={[box, styles.center]}>
+          <View style={[styles.bar, { backgroundColor: color, transform: [{ rotate: "45deg" }] }]} />
+          <View style={[styles.bar, styles.barCross, { backgroundColor: color, transform: [{ rotate: "-45deg" }] }]} />
+        </View>
+      );
+    case "select":
+      return (
+        <View style={[box, styles.center]}>
+          <View style={[styles.selectBox, stroke]}>
+            <View style={[styles.tickSmall, { borderColor: color }]} />
+          </View>
+        </View>
+      );
     case "profile":
       return (
         <View style={[box, styles.center]}>
@@ -53,6 +93,17 @@ export function Icon({ name, color, size = 24 }: { name: IconName; color: string
 
 const styles = StyleSheet.create({
   center: { alignItems: "center", justifyContent: "center" },
+  crate: { width: 18, height: 16, borderRadius: 3, justifyContent: "center" },
+  crateLine: { height: 2 },
+  cartHandle: { position: "absolute", top: 3, left: 1, width: 5, height: 2, borderRadius: 1 },
+  cartBody: { width: 16, height: 9, borderRadius: 2, marginTop: -3, marginLeft: 3 },
+  wheels: { position: "absolute", bottom: 2, left: 6, flexDirection: "row", gap: 6 },
+  wheel: { width: 4, height: 4, borderRadius: 2 },
+  tick: { width: 7, height: 12, borderTopWidth: 0, borderLeftWidth: 0, borderRightWidth: 2, borderBottomWidth: 2, transform: [{ rotate: "45deg" }], marginTop: -2 },
+  tickSmall: { width: 4, height: 8, borderTopWidth: 0, borderLeftWidth: 0, borderRightWidth: 2, borderBottomWidth: 2, transform: [{ rotate: "45deg" }], marginTop: -2 },
+  selectBox: { width: 18, height: 18, borderRadius: 3, alignItems: "center", justifyContent: "center" },
+  bar: { position: "absolute", width: 18, height: 2, borderRadius: 1 },
+  barCross: {},
   roof: {
     width: 0,
     height: 0,

@@ -83,7 +83,7 @@ export async function shareOrderPdf(
   if (isCustomerUnavailable(draft)) return { ok: false, reason: "customer_unavailable" };
   try {
     const logoSrc = port.logoDataUri === undefined ? null : await port.logoDataUri().catch(() => null);
-    await port.sharePdf(buildOrderPdfHtml(draft, lines, logoSrc), draft.remoteDraftNumber === null ? "pedido-rascunho" : `pedido-${draft.remoteDraftNumber}`);
+    await port.sharePdf(buildOrderPdfHtml(draft, lines, logoSrc), draft.remoteDraftNumber === null ? "pedido" : `pedido-${draft.remoteDraftNumber}`);
     return { ok: true };
   } catch {
     return { ok: false, reason: "failed" };

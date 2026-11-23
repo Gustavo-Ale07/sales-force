@@ -28,6 +28,7 @@ import { NOTES_MAX, NotesField, SummaryBlock, SummaryRow, WIZARD_STEPS, WizardFo
 import { isQuotationTop, topLabel } from "../data/order-header";
 import { describeListPrice } from "../lib/money";
 import { colors, spacing } from "../theme";
+import { Icon } from "./icons";
 import { CartView, OrderTotals } from "./cart-view";
 import { CustomerPicker } from "./customer-picker";
 import { DiscountSheet } from "./discount-sheet";
@@ -565,8 +566,8 @@ export function NewOrderScreen({
     return () => subscription.remove();
   }, []);
 
-  /** `send` = "Enviar pedido" (saves and asks the sync to deliver it to Sankhya); otherwise "Salvar" only keeps it. */
-  async function save(send = false) {
+  /** `send` = "Enviar pedido" (saves and asks the sync to deliver it to Sankhya); otherwise "Salvar" only keeps it (a send request already made is left untouched). */
+  async function save(send?: boolean) {
     if (customer === null || saving) return;
     setSaving(true);
     if (localOrders !== undefined) {
@@ -676,7 +677,7 @@ export function NewOrderScreen({
   const orderable = lines.length > 0 && preview.valid && blockedLineCount === 0;
   const total = formatBrl(preview.ipi.grandTotalEstimated) ?? "—";
   const itemsInfo = `${lines.length} ${lines.length === 1 ? "item" : "itens"} · ${total}`;
-  const saveLabel = editingOrder !== null || localDraft !== null ? "Salvar alterações" : `Salvar ${kindWord}`;
+  const saveLabel = `Salvar ${kindWord}`;
   const sendLabel = `Enviar ${kindWord}`;
 
   // Negociação: "Próximo" stays off until every mandatory field is filled (the missing ones are highlighted in the form).
@@ -747,7 +748,8 @@ export function NewOrderScreen({
             accessibilityState={{ selected: productsView === "catalog" }}
             accessibilityLabel="Produtos"
           >
-            <Text style={[styles.pillText, productsView === "catalog" && styles.pillTextActive]}>🧺 Produtos</Text>
+            <Icon name="products" size={20} color={productsView === "catalog" ? colors.onNavy : colors.textMuted} />
+            <Text style={[styles.pillText, productsView === "catalog" && styles.pillTextActive]}>Produtos</Text>
           </Pressable>
           <Pressable
             style={[styles.pill, productsView === "cart" && styles.pillActive]}
@@ -756,7 +758,8 @@ export function NewOrderScreen({
             accessibilityState={{ selected: productsView === "cart" }}
             accessibilityLabel={`Carrinho${lines.length > 0 ? ` (${lines.length})` : ""}`}
           >
-            <Text style={[styles.pillText, productsView === "cart" && styles.pillTextActive]}>🛒 Carrinho</Text>
+            <Icon name="cart" size={20} color={productsView === "cart" ? colors.onNavy : colors.textMuted} />
+            <Text style={[styles.pillText, productsView === "cart" && styles.pillTextActive]}>Carrinho</Text>
             {lines.length > 0 && (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>{lines.length}</Text>
@@ -778,7 +781,7 @@ export function NewOrderScreen({
                   accessibilityRole="button"
                   accessibilityLabel={selectionMode ? "Cancelar seleção" : "Selecionar itens"}
                 >
-                  <Text style={styles.toolbarIcon}>{selectionMode ? "✕" : "☑"}</Text>
+                  <Icon name={selectionMode ? "close" : "select"} size={18} color={colors.navy} />
                   <Text style={styles.toolbarButtonText} numberOfLines={1}>{selectionMode ? "Cancelar" : "Selecionar"}</Text>
                 </Pressable>
                 {selectionMode ? (
@@ -799,7 +802,7 @@ export function NewOrderScreen({
                       <Text style={styles.toolbarButtonText} numberOfLines={1}>Desc. geral</Text>
                     </Pressable>
                     <Pressable style={styles.toolbarButton} onPress={() => setGroupDiscountOpen(true)} accessibilityRole="button" accessibilityLabel="Desconto por grupo">
-                      <Text style={styles.toolbarIcon}>▦</Text>
+                      <Icon name="catalog" size={18} color={colors.navy} />
                       <Text style={styles.toolbarButtonText} numberOfLines={1}>Por grupo</Text>
                     </Pressable>
                   </>
@@ -902,7 +905,7 @@ export function NewOrderScreen({
             nextDisabled={!orderable || saving}
             busy={saving}
             secondaryLabel={saveLabel}
-            onSecondary={() => void save(false)}
+            onSecondary={() => void save()}
           />
         ) : (
           <WizardFooter onBack={goBack} onNext={() => void save()} nextLabel={saveLabel} nextDisabled={!orderable || saving} busy={saving} />
