@@ -1,8 +1,8 @@
 import { canAdministerDiscountLimits, canDecideApprovals, canSeeIntegration, canUseCommercial } from "@salesforce/contracts";
-import { House, Package, Percent, Plug, Settings, ShieldCheck, ShoppingCart, Users, type LucideIcon } from "lucide-react";
+import { Hourglass, House, Package, Percent, Plug, Settings, ShieldCheck, ShoppingCart, Users, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
-  to: "/" | "/clientes" | "/produtos" | "/pedidos" | "/integracao" | "/configuracoes" | "/limites-desconto" | "/aprovacoes";
+  to: "/" | "/clientes" | "/produtos" | "/pedidos" | "/integracao" | "/configuracoes" | "/limites-desconto" | "/aprovacoes" | "/aguardando-liberacao";
   label: string;
   icon: LucideIcon;
   /** Only for the roles that may see the integration (INTEGRATION_ROLES). */
@@ -11,6 +11,8 @@ export interface NavItem {
   adminOnly?: boolean;
   /** Only who decides discount approvals (manager, admin), W-20. */
   approverOnly?: boolean;
+  /** Only when the API lets the caller see at least one release-queue sector (the count endpoint answered). */
+  releaseQueueOnly?: boolean;
 }
 
 /**
@@ -24,6 +26,7 @@ const allNavItems: NavItem[] = [
   { to: "/produtos", label: "Catálogo", icon: Package },
   { to: "/clientes", label: "Clientes", icon: Users },
   { to: "/pedidos", label: "Vendas", icon: ShoppingCart },
+  { to: "/aguardando-liberacao", label: "Aguardando liberação", icon: Hourglass, releaseQueueOnly: true },
   { to: "/aprovacoes", label: "Aprovações", icon: ShieldCheck, approverOnly: true },
   { to: "/limites-desconto", label: "Limites de desconto", icon: Percent, adminOnly: true },
   { to: "/integracao", label: "Integração", icon: Plug, integrationOnly: true },
@@ -35,8 +38,9 @@ const allNavItems: NavItem[] = [
  * left out. The commercial areas are not for the technical profile (ROLE-1): it sees Integração only. Visibility
  * here is convenience only: the server enforces access.
  */
-export function navItemsFor(role: string | undefined, approvals = false): NavItem[] {
+export function navItemsFor(role: string | undefined, approvals = false, releaseQueue = false): NavItem[] {
   return allNavItems.filter((item) => {
+    if (item.releaseQueueOnly) return releaseQueue && role !== undefined && canUseCommercial(role);
     // D-M: in `erp` mode the release belongs to Sankhya; the limits and approvals screens do not exist for the user.
     if ((item.approverOnly || item.adminOnly) && !approvals) return false;
     if (item.approverOnly) return role !== undefined && canDecideApprovals(role);

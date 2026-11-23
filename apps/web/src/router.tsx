@@ -17,7 +17,7 @@ import { ForceModeGate } from "./components/force-mode-gate";
 import { NotFound, RouteError, RoutePending } from "./components/route-states";
 import { useAppServices } from "./lib/app-context";
 import { sessionQueryOptions, type AuthClient } from "./lib/auth-client";
-import { parseCustomersSearch, parseOrdersSearch, parseProductsSearch } from "./lib/route-search";
+import { parseCustomersSearch, parseOrdersSearch, parseProductsSearch, parseReleaseQueueSearch } from "./lib/route-search";
 import { safeRedirect } from "./lib/safe-redirect";
 import { asInt } from "./lib/search-params";
 import { LoginPage } from "./routes/login";
@@ -166,6 +166,15 @@ const orderDetailRoute = createRoute({
   component: lazyRouteComponent(() => import("./routes/orders-route"), "OrderRoute"),
 });
 
+const releaseQueueRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/aguardando-liberacao",
+  staticData: { crumb: "Aguardando liberação" },
+  // No role gate here: the server (listReleaseQueue) decides who sees which sector and the page shows its 403.
+  validateSearch: (search: Record<string, unknown>) => parseReleaseQueueSearch(search),
+  component: lazyRouteComponent(() => import("./routes/release-queue-route"), "ReleaseQueueRoute"),
+});
+
 const profileRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/perfil",
@@ -262,6 +271,7 @@ const appChildren = [
   customersRoute.addChildren([customersIndexRoute, customerDetailRoute]),
   productsRoute,
   ordersRoute.addChildren([ordersIndexRoute, newOrderRoute, orderDetailRoute]),
+  releaseQueueRoute,
   profileRoute,
   integrationRoute,
   settingsRoute,

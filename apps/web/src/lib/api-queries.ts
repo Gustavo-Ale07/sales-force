@@ -17,6 +17,7 @@ type Query<P extends keyof ApiPaths> = ApiPaths[P] extends { get: { parameters: 
 export type CustomersParams = Query<"/customers">;
 export type ProductsParams = Query<"/products">;
 export type OrdersParams = Query<"/orders">;
+export type ReleaseQueueParams = Query<"/release-queue">;
 
 export const queryKeys = {
   ready: ["ready"] as const,
@@ -25,6 +26,8 @@ export const queryKeys = {
   discountLimits: ["discount-limits"] as const,
   approvals: (page: number, pageSize: number) => ["approvals", "list", page, pageSize] as const,
   approvalsAll: ["approvals"] as const,
+  releaseQueue: (params: ReleaseQueueParams) => ["release-queue", "list", params] as const,
+  releaseQueueCount: ["release-queue", "count"] as const,
   dashboard: ["dashboard"] as const,
   sellers: ["sellers"] as const,
   carriers: ["carriers"] as const,
@@ -85,6 +88,27 @@ export function approvalsQueryOptions(api: ApiClient, page: number, pageSize: nu
     queryKey: queryKeys.approvals(page, pageSize),
     queryFn: () => callApi(() => api.GET("/approvals", { params: { query: { page, pageSize } } })),
     placeholderData: keepPreviousData,
+  });
+}
+
+/** "Aguardando liberação": read-only mirror of the Sankhya release lines; the server decides which sectors the caller sees. */
+export function releaseQueueQueryOptions(api: ApiClient, params: ReleaseQueueParams) {
+  return queryOptions({
+    queryKey: queryKeys.releaseQueue(params),
+    queryFn: () => callApi(() => api.GET("/release-queue", { params: { query: params } })),
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+}
+
+/** Menu counter; a 403 here is what hides the menu item (convenience only, the list endpoint enforces it too). */
+export function releaseQueueCountQueryOptions(api: ApiClient) {
+  return queryOptions({
+    queryKey: queryKeys.releaseQueueCount,
+    queryFn: () => callApi(() => api.GET("/release-queue/count")),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    retry: false,
   });
 }
 

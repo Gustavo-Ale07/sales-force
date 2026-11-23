@@ -7,6 +7,7 @@ import { useAppServices } from "../lib/app-context";
 import { documentTitleBase } from "../lib/brand";
 import { approvalsEnabled, useDiscountAuthorityMode } from "../lib/discount-authority";
 import type { AuthUser } from "../lib/auth-client";
+import { useReleaseQueueAccess } from "../lib/release-queue";
 import { Brand } from "./brand";
 import { CommandMenu } from "./command-menu";
 import { DevAuthBanner } from "./dev-auth-banner";
@@ -23,18 +24,33 @@ import { UserMenu } from "./user-menu";
 const topLink =
   "flex h-11 items-center gap-2 rounded-[12px] px-[18px] text-[15px] font-semibold text-sidebar-fg no-underline transition-[background-color,color] duration-[var(--sf-dur-fast)] ease-spring hover:bg-sidebar-hover hover:text-sidebar-fg-active data-[status=active]:bg-white data-[status=active]:text-[var(--sf-sidebar-bg)] data-[status=active]:shadow-[0_2px_8px_rgba(0,0,0,0.18)]";
 
+/** Counter on the "Aguardando liberação" item; the number is also spoken ("N pedidos aguardando"). */
+function QueueBadge({ total }: { total: number }) {
+  if (total <= 0) return null;
+  return (
+    <>
+      <span aria-hidden="true" className="ml-0.5 inline-flex min-w-5 items-center justify-center rounded-full bg-[var(--sf-red)] px-1.5 text-xs font-bold leading-5 text-white">
+        {total > 99 ? "99+" : total}
+      </span>
+      <span className="sr-only">{`, ${total} ${total === 1 ? "pedido aguardando" : "pedidos aguardando"}`}</span>
+    </>
+  );
+}
+
 function TopNav({ role }: { role: string | undefined }) {
   const approvals = approvalsEnabled(useDiscountAuthorityMode(role));
+  const queue = useReleaseQueueAccess(role);
   return (
     // lg, not md: at md (768px) the integration pill still shows its full label (see integration-pill.tsx's
     // max-md: collapse), and up to 5 nav items plus that label don't both fit in the 768-1023px range -- the
     // drawer nav below covers that gap instead of the two colliding.
     <nav aria-label="Principal" className="hidden items-center gap-1.5 lg:flex">
-      {navItemsFor(role, approvals).map(({ to, label, icon: Icon }) => (
+      {navItemsFor(role, approvals, queue.visible).map(({ to, label, icon: Icon }) => (
         <Link key={to} to={to} activeOptions={{ exact: to === "/" }} className={topLink}>
           {/* Icons only from xl: below it the labels alone already use the available width. */}
           <Icon size={18} strokeWidth={1.75} aria-hidden="true" className="hidden shrink-0 xl:block" />
           {label}
+          {to === "/aguardando-liberacao" ? <QueueBadge total={queue.total} /> : null}
         </Link>
       ))}
     </nav>
@@ -47,9 +63,10 @@ const drawerLink =
 /** Same items as `TopNav`, stacked, for the drawer used below the `lg` breakpoint. */
 function DrawerNav({ role, onNavigate }: { role: string | undefined; onNavigate: () => void }) {
   const approvals = approvalsEnabled(useDiscountAuthorityMode(role));
+  const queue = useReleaseQueueAccess(role);
   return (
     <nav aria-label="Principal" className="flex flex-col gap-1">
-      {navItemsFor(role, approvals).map(({ to, label, icon: Icon }) => (
+      {navItemsFor(role, approvals, queue.visible).map(({ to, label, icon: Icon }) => (
         <Link
           key={to}
           to={to}
@@ -59,6 +76,7 @@ function DrawerNav({ role, onNavigate }: { role: string | undefined; onNavigate:
         >
           <Icon size={18} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
           {label}
+          {to === "/aguardando-liberacao" ? <QueueBadge total={queue.total} /> : null}
         </Link>
       ))}
     </nav>

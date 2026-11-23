@@ -97,7 +97,25 @@ export interface ProductsSearch {
   product?: number;
 }
 
-export const PRODUCT_SORTS = ["description", "-description", "code", "-code"] as const;
+export interface ReleaseQueueSearch {
+  sector?: string;
+  sellerCode?: number;
+  page?: number;
+  pageSize?: number;
+}
+
+export function parseReleaseQueueSearch(raw: Record<string, unknown>): ReleaseQueueSearch {
+  const page = asInt(raw.page, 1);
+  const pageSize = asPageSize(raw.pageSize);
+  return compact({
+    sector: asString(raw.sector, 60),
+    sellerCode: asInt(raw.sellerCode, 0),
+    page: page !== undefined && page > 1 ? page : undefined,
+    pageSize: pageSize !== 25 ? pageSize : undefined,
+  });
+}
+
+export const PRODUCT_SORTS =["description", "-description", "code", "-code"] as const;
 export const BOOLEAN_TEXT = ["true", "false"] as const;
 
 export function parseProductsSearch(raw: Record<string, unknown>): ProductsSearch {
