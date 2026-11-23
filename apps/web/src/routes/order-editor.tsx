@@ -60,6 +60,7 @@ import { useApi } from "../lib/app-context";
 import { useLoadedDataset, requireDataset } from "../lib/dataset";
 import { approvalsEnabled } from "../lib/discount-authority";
 import { describeApiError, submitConflictText } from "../lib/error-message";
+import { ErpStageChip, ErpStagePanel } from "../components/order-stage";
 import { ErpBillingBadge, ErpReleaseBadge, OrderStatusBadge } from "../components/order-status-badges";
 import { deliveryErrorText, erpBillingItemText, erpBillingText, erpNoteDiverged, erpNoteDivergedText, erpReleaseEventText, erpReleaseMessages, erpStatusText, orderReference, orderReviewLabel, orderReviewReasons, orderStatusView } from "../lib/labels";
 import {
@@ -673,7 +674,9 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
         badges={
           status ? (
             <>
-              {order ? <OrderStatusBadge order={order} /> : <StatusBadge tone={status.tone}>{status.label}</StatusBadge>}
+              {order?.erpStage && order.status === "sent" ? (
+                <ErpStageChip stage={order.erpStage} />
+              ) : order ? <OrderStatusBadge order={order} /> : <StatusBadge tone={status.tone}>{status.label}</StatusBadge>}
               {order?.erpStatus ? <ErpStatusBadges status={order.erpStatus} /> : null}
               {order?.erpBilling ? (
                 <ErpBillingBadge state={order.erpBilling.state} />
@@ -702,6 +705,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
       {customer ? <CustomerContextBar customerCode={customer.code} customerName={customer.name} onOpenFicha={() => setFichaOpen(true)} /> : null}
 
       {notice}
+      {order?.erpStage ? <ErpStagePanel stage={order.erpStage} /> : null}
       {order?.erpRelease || order?.erpBilling ? <ErpReleasePanel release={order.erpRelease ?? null} billing={order.erpBilling ?? null} /> : null}
       {!installationEnabled ? (
         <Alert tone="warning" title="Pedidos ainda não habilitados">

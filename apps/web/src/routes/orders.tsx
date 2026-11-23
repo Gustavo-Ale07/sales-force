@@ -35,13 +35,14 @@ import { useState } from "react";
 import { CustomerPicker } from "../components/customer-picker";
 import { DeleteOrderDialog } from "../components/delete-order-dialog";
 import { OrderProductFilter, PRODUCT_MATCH_OPTIONS, useProductLabel, type ProductMatch } from "../components/order-product-filter";
+import { ErpStageChip, stageText } from "../components/order-stage";
 import { ErpBillingBadge, ErpReleaseBadge, OrderStatusBadge } from "../components/order-status-badges";
 import { PrintOrderButton } from "../components/print-order-button";
 import { QueryError } from "../components/query-error";
 import { customerQueryOptions, orderEntryConfigurationQueryOptions, ordersQueryOptions, type OrdersParams } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { deliveryErrorText, erpStatusText, formatCount, orderReference, orderReviewLabel, orderReviewReasons, orderStatusLabels } from "../lib/labels";
-import { MAX_ORDER_PRODUCTS, ORDER_DATE_FIELDS, ORDER_STATUSES, type OrdersSearch } from "../lib/route-search";
+import { MAX_ORDER_PRODUCTS, ORDER_DATE_FIELDS, ORDER_STAGE_FILTERS, ORDER_STATUSES, type OrdersSearch } from "../lib/route-search";
 import { asDate, asOneOf, compact } from "../lib/search-params";
 import { useSearchBox } from "../lib/use-search-box";
 import { isOrderDeletable } from "@salesforce/domain";
@@ -162,7 +163,7 @@ function ProductChip({ code, onRemove }: { code: number; onRemove: () => void })
 
 export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPageProps) {
   const api = useApi();
-  const { products, ...rest } = params;
+  const { products, stage: stageFilter, ...rest } = params;
   const apiParams: OrdersParams = {
     ...rest,
     ...(products ? { productCodes: products.join(",") } : {}),
@@ -181,9 +182,10 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
   const selectedProducts = params.products ?? [];
   const hasPeriod = params.from !== undefined || params.to !== undefined;
   const hasFilters =
-    params.search !== undefined || params.status !== undefined || params.customerCode !== undefined || hasPeriod || selectedProducts.length > 0 || params.productSearch !== undefined;
+    params.search !== undefined || params.status !== undefined || stageFilter !== undefined || params.customerCode !== undefined || hasPeriod || selectedProducts.length > 0 || params.productSearch !== undefined;
   const clearAll = () => onSearchChange(compact({ sort: params.sort, pageSize: params.pageSize }));
   const currentSort = params.sort ?? "-updatedAt";
+  const shownItems = (query.data?.items ?? []).filter((order) => stageFilter === undefined || order.erpStage?.stage === stageFilter);
   const setFrom = (from: string | undefined) => change({ from, to: from !== undefined && params.to !== undefined && params.to < from ? from : params.to });
   const setTo = (to: string | undefined) => change({ to, from: to !== undefined && params.from !== undefined && params.from > to ? to : params.from });
 
@@ -204,7 +206,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
         aria-label="Filtros de pedidos"
         grid
         activeCount={
-          [params.search, params.status, params.customerCode].filter((value) => value !== undefined).length +
+          [params.search, params.status, stageFilter, params.customerCode].filter((value) => value !== undefined).length +
           (hasPeriod ? 1 : 0) +
           (selectedProducts.length > 0 || params.productSearch !== undefined ? 1 : 0)
         }
@@ -227,6 +229,16 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
             {ORDER_STATUSES.map((status) => (
               <option key={status} value={status}>
                 {orderStatusLabels[status].label}
+              </option>
+            ))}
+          </Select>
+        </FilterField>
+        <FilterField label="Situação no Sankhya" className="lg:col-span-3">
+          <Select size="md" value={stageFilter ?? ""} onChange={(e) => change({ stage: asOneOf(e.target.value, ORDER_STAGE_FILTERS) })}>
+            <option value="">Todas</option>
+            {ORDER_STAGE_FILTERS.map((code) => (
+              <option key={code} value={code}>
+                {stageText(code)}
               </option>
             ))}
           </Select>
@@ -287,6 +299,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
         <div className="flex flex-wrap items-center gap-1.5" aria-label="Filtros ativos">
           {params.search ? <FilterChip onRemove={() => change({ search: undefined })}>{`Busca: ${params.search}`}</FilterChip> : null}
           {params.status ? <FilterChip onRemove={() => change({ status: undefined })}>{orderStatusLabels[params.status].label}</FilterChip> : null}
+          {stageFilter ? <FilterChip onRemove={() => change({ stage: undefined })}>{`Sankhya: ${stageText(stageFilter)}`}</FilterChip> : null}
           {params.customerCode !== undefined ? <CustomerChip code={params.customerCode} onRemove={() => change({ customerCode: undefined })} /> : null}
           {hasPeriod ? (
             <FilterChip onRemove={() => change({ from: undefined, to: undefined, dateField: undefined })}>{periodLabel(params)}</FilterChip>
@@ -345,7 +358,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
               <TableMessageRow colSpan={COLUMNS}>
                 <QueryError error={query.error} onRetry={() => void query.refetch()} retrying={query.isRefetching} compact />
               </TableMessageRow>
-            ) : query.data.items.length === 0 ? (
+            ) : shownItems.length === 0 ? (
               <TableMessageRow colSpan={COLUMNS}>
                 <EmptyState
                   compact
@@ -365,7 +378,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
                 />
               </TableMessageRow>
             ) : (
-              query.data.items.map((order) => {
+              shownItems.map((order) => {
                 return (
                   <TableRow key={order.id} interactive onActivate={() => onOpenOrder(order.id)}>
                     <TableCell label="Pedido">
@@ -379,8 +392,8 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
                       <DateText value={order.createdAt} />
                     </TableCell>
                     <TableCell label="Situação">
-                      <OrderStatusBadge order={order} variant="dot" />
-                      {order.erpStatus ? (
+                      {order.erpStage && order.status === "sent" ? <ErpStageChip stage={order.erpStage} variant="dot" /> : <OrderStatusBadge order={order} variant="dot" />}
+                      {order.erpStatus && !(order.erpStage && order.status === "sent") ? (
                         <span className="mt-0.5 block text-fg-muted">Sankhya: {erpStatusText(order.erpStatus).label}</span>
                       ) : null}
                       {order.erpBilling ? (

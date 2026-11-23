@@ -33,6 +33,8 @@ export interface OrdersSearch {
   search?: string;
   status?: ApiSchema<"OrderStatus">;
   customerCode?: number;
+  /** Stage in Sankhya (server-provided `erpStage.stage`); narrows the loaded page, the API has no such filter. */
+  stage?: (typeof ORDER_STAGE_FILTERS)[number];
   /** Period, inclusive, as `YYYY-MM-DD` calendar dates. */
   from?: string;
   to?: string;
@@ -50,6 +52,7 @@ export interface OrdersSearch {
 }
 
 export const ORDER_STATUSES = ["draft", "awaiting_approval", "approved", "approval_rejected", "queued", "sent", "rejected", "unknown"] as const;
+export const ORDER_STAGE_FILTERS = ["sent_to_force", "send_error", "quotation", "received", "in_review", "financial_check", "in_dispatch", "in_invoicing", "invoiced"] as const;
 export const MAX_ORDER_PRODUCTS = 20;
 export const ORDER_DATE_FIELDS = ["createdAt", "updatedAt"] as const;
 export const ORDER_PRODUCT_MATCHES = ["any", "all"] as const;
@@ -67,6 +70,7 @@ export function parseOrdersSearch(raw: Record<string, unknown>): OrdersSearch {
     search: asString(raw.search),
     status: asOneOf(raw.status, ORDER_STATUSES),
     customerCode: asInt(raw.customerCode, 0),
+    stage: asOneOf(raw.stage, ORDER_STAGE_FILTERS),
     from,
     // An inverted period would be rejected by the API: keep the start and drop the impossible end.
     to: from !== undefined && to !== undefined && to < from ? undefined : to,
