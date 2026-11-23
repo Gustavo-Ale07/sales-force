@@ -288,6 +288,13 @@
       "when": 1795440585036,
       "tag": "0040_order_erp_stage",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1795442028606,
+      "tag": "0041_release_queue_pending",
+      "breakpoints": true
     }
   ]
 }

@@ -2764,6 +2764,173 @@
         }
       }
     },
+    "/release-queue": {
+      "get": {
+        "operationId": "listReleaseQueue",
+        "tags": [
+          "orders"
+        ],
+        "summary": "Release queue (\"Aguardando liberação\"): orders waiting for a Sankhya release, by sector (read only)",
+        "description": "Orders sent to Sankhya that hold a pending release line (TSILIB) of Pedidos or Financeiro, oldest waiting first, one row per line and sector. The release is done in Sankhya; the Force never writes it. Admin and manager see every sector; a user listed in `erp.releaseQueue.sectorUsers` sees only the listed sector(s); everyone else (sellers included) is refused with 403. A `sector` filter the caller may not see is 403. Data is the worker's mirror of the Sankhya read (`checkedAt` per row); \"Atualizar agora\" is POST /sync/refresh. No cost or margin.",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "sector",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "sellerCode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "assignedUserCode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pedidos aguardando liberação",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseQueueResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/release-queue/count": {
+      "get": {
+        "operationId": "getReleaseQueueCount",
+        "tags": [
+          "orders"
+        ],
+        "summary": "Counter of the release queue for the menu (orders waiting, per sector the caller may see)",
+        "description": "Same visibility as listReleaseQueue (403 when the caller sees no sector). Counts orders, not lines: an order waiting in both sectors counts once in `total`.",
+        "parameters": [
+          {
+            "name": "sector",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contagem por setor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseQueueCountResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/customers/{code}/orders/repeat-last": {
       "post": {
         "operationId": "repeatLastOrder",
@@ -4371,6 +4538,36 @@
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 720
+                  },
+                  "bothSectorsEvents": {
+                    "maxItems": 50,
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "releaseQueue": {
+                "type": "object",
+                "properties": {
+                  "sectorUsers": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 60
+                    },
+                    "additionalProperties": {
+                      "maxItems": 200,
+                      "type": "array",
+                      "items": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    }
                   }
                 },
                 "additionalProperties": false
@@ -8331,6 +8528,218 @@
         ],
         "additionalProperties": false
       },
+      "ReleaseQueueCountResponse": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sectors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReleaseQueueSectorCount"
+            }
+          },
+          "lastCheckedAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IsoTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "total",
+          "sectors",
+          "lastCheckedAt"
+        ],
+        "additionalProperties": false
+      },
+      "ReleaseQueueItem": {
+        "type": "object",
+        "properties": {
+          "nunota": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "orderId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "draftNumber": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sector": {
+            "type": "string"
+          },
+          "event": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cascadeSequence": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "eventLabel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "customerCode": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "customerName": {
+            "type": "string"
+          },
+          "sellerCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sellerName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "estimatedTotal": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "topCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "orderedAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          },
+          "waitingSince": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          },
+          "waitingSinceSource": {
+            "$ref": "#/components/schemas/WaitingSinceSource"
+          },
+          "waitingMinutes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "firstSeenAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          },
+          "assignedUserCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "checkedAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          }
+        },
+        "required": [
+          "nunota",
+          "orderId",
+          "draftNumber",
+          "sector",
+          "event",
+          "cascadeSequence",
+          "eventLabel",
+          "customerCode",
+          "customerName",
+          "sellerCode",
+          "sellerName",
+          "estimatedTotal",
+          "topCode",
+          "orderedAt",
+          "waitingSince",
+          "waitingSinceSource",
+          "waitingMinutes",
+          "firstSeenAt",
+          "assignedUserCode",
+          "checkedAt"
+        ],
+        "additionalProperties": false
+      },
+      "ReleaseQueueResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReleaseQueueItem"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ],
+        "additionalProperties": false
+      },
+      "ReleaseQueueSectorCount": {
+        "type": "object",
+        "properties": {
+          "sector": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "sector",
+          "count"
+        ],
+        "additionalProperties": false
+      },
       "RepeatLastOrderRequest": {
         "type": "object",
         "properties": {
@@ -9110,6 +9519,13 @@
           "skippedLines"
         ],
         "additionalProperties": false
+      },
+      "WaitingSinceSource": {
+        "type": "string",
+        "enum": [
+          "sankhya_request",
+          "order_time"
+        ]
       }
     },
     "securitySchemes": {

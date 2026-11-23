@@ -105,6 +105,12 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   listApprovals: { roles: ['manager', 'admin'] },
   approveApproval: { roles: ['manager', 'admin'] },
   rejectApproval: { roles: ['manager', 'admin'] },
+  // Release queue (owner decision 2026-11-23, docs/implementation/release-queue.md): read only, Sankhya releases. The route grant lists
+  // the roles that CAN hold the new permission `release_queue.read:<sector>`; WHICH sector each sees is `visibleReleaseQueueSectors`
+  // (admin and manager: all; a seller only for the sectors the installation configuration lists their user under; nobody else).
+  // Denied by default: with no configuration a seller is refused (403) by the service, `technical` is refused here.
+  listReleaseQueue: { roles: ['admin', 'manager', 'seller'] },
+  getReleaseQueueCount: { roles: ['admin', 'manager', 'seller'] },
   // "Repetir último pedido" (Phase C): a draft-creation route from the customer's own order history in
   // Sales Force, so it follows the same grant as createOrder.
   repeatLastOrder: { roles: EVERY_ROLE },

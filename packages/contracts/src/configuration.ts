@@ -145,6 +145,17 @@ const ErpSchema = z.strictObject({
       reviewSector: z.string().min(1).max(60).optional(),
       financialSector: z.string().min(1).max(60).optional(),
       finalRereadWindowHours: z.number().int().min(0).max(720).optional(),
+      /** Release events the release queue shows in both sectors (proposal: event 13). */
+      bothSectorsEvents: z.array(codeInt()).max(50).optional(),
+    })
+    .optional(),
+  /**
+   * Release queue permissions by configuration: sector name -> Sankhya user codes (CODUSU). Manager and admin always see every
+   * sector; a listed user sees only the listed sector(s); absent = nobody else (deny by default).
+   */
+  releaseQueue: z
+    .strictObject({
+      sectorUsers: z.record(z.string().min(1).max(60), z.array(codeInt()).max(200)).optional(),
     })
     .optional(),
 });

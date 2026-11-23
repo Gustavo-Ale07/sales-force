@@ -631,6 +631,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/release-queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Release queue ("Aguardando liberação"): orders waiting for a Sankhya release, by sector (read only)
+         * @description Orders sent to Sankhya that hold a pending release line (TSILIB) of Pedidos or Financeiro, oldest waiting first, one row per line and sector. The release is done in Sankhya; the Force never writes it. Admin and manager see every sector; a user listed in `erp.releaseQueue.sectorUsers` sees only the listed sector(s); everyone else (sellers included) is refused with 403. A `sector` filter the caller may not see is 403. Data is the worker's mirror of the Sankhya read (`checkedAt` per row); "Atualizar agora" is POST /sync/refresh. No cost or margin.
+         */
+        get: operations["listReleaseQueue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/release-queue/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Counter of the release queue for the menu (orders waiting, per sector the caller may see)
+         * @description Same visibility as listReleaseQueue (403 when the caller sees no sector). Counts orders, not lines: an order waiting in both sectors counts once in `total`.
+         */
+        get: operations["getReleaseQueueCount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/customers/{code}/orders/repeat-last": {
         parameters: {
             query?: never;
@@ -937,6 +977,12 @@ export interface components {
                     reviewSector?: string;
                     financialSector?: string;
                     finalRereadWindowHours?: number;
+                    bothSectorsEvents?: number[];
+                };
+                releaseQueue?: {
+                    sectorUsers?: {
+                        [key: string]: number[];
+                    };
                 };
             };
             provenance?: {
@@ -1681,6 +1727,44 @@ export interface components {
         RejectApprovalRequest: {
             comment: string;
         };
+        ReleaseQueueCountResponse: {
+            total: number;
+            sectors: components["schemas"]["ReleaseQueueSectorCount"][];
+            lastCheckedAt: components["schemas"]["IsoTimestamp"] | null;
+        };
+        ReleaseQueueItem: {
+            nunota: number;
+            /** Format: uuid */
+            orderId: string;
+            draftNumber: number;
+            sector: string;
+            event: number;
+            cascadeSequence: number | null;
+            eventLabel: string | null;
+            customerCode: number;
+            customerName: string;
+            sellerCode: number | null;
+            sellerName: string | null;
+            estimatedTotal: components["schemas"]["DecimalString"];
+            topCode: number | null;
+            orderedAt: components["schemas"]["IsoTimestamp"];
+            waitingSince: components["schemas"]["IsoTimestamp"];
+            waitingSinceSource: components["schemas"]["WaitingSinceSource"];
+            waitingMinutes: number;
+            firstSeenAt: components["schemas"]["IsoTimestamp"];
+            assignedUserCode: number | null;
+            checkedAt: components["schemas"]["IsoTimestamp"];
+        };
+        ReleaseQueueResponse: {
+            items: components["schemas"]["ReleaseQueueItem"][];
+            page: number;
+            pageSize: number;
+            total: number;
+        };
+        ReleaseQueueSectorCount: {
+            sector: string;
+            count: number;
+        };
         RepeatLastOrderRequest: {
             /** Format: uuid */
             clientRequestId: string;
@@ -1820,6 +1904,8 @@ export interface components {
             order: components["schemas"]["OrderDetail"];
             skippedLines: components["schemas"]["SkippedTemplateLine"][];
         };
+        /** @enum {string} */
+        WaitingSinceSource: "sankhya_request" | "order_time";
     };
     responses: never;
     parameters: never;
@@ -3845,6 +3931,108 @@ export interface operations {
             };
             /** @description Conflito de estado */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    listReleaseQueue: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                sector?: string;
+                sellerCode?: number;
+                assignedUserCode?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pedidos aguardando liberação */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseQueueResponse"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    getReleaseQueueCount: {
+        parameters: {
+            query?: {
+                sector?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Contagem por setor */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseQueueCountResponse"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

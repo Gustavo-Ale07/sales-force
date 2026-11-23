@@ -11,6 +11,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
@@ -242,6 +243,45 @@ export const salesOrderErpStage = pgTable(
 );
 export type SalesOrderErpStageRow = typeof salesOrderErpStage.$inferSelect;
 export type NewSalesOrderErpStageRow = typeof salesOrderErpStage.$inferInsert;
+
+/**
+ * Release queue ("Aguardando liberação", docs/implementation/release-queue.md): one row per pending Sankhya release line (TSILIB with
+ * DHLIB null) and sector that must release it, mirrored by the worker from the same read as the order stage. The Force never
+ * releases: a row leaves the table when Sankhya no longer lists the line as pending. Written only by the worker.
+ * `requested_at` (TSILIB request time) stays null until its column is validated (spike 9.61); `first_seen_at` is when the Force first read the
+ * line as pending; `notified_at` is the hook for a later notification (set by the notifier, never by this read).
+ */
+export const salesOrderReleasePending = pgTable(
+  'sales_order_release_pending',
+  {
+    id: uuid('id').primaryKey(),
+    orderId: uuid('order_id')
+      .notNull()
+      .references(() => salesOrder.id, { onDelete: 'cascade' }),
+    nunota: bigint('nunota', { mode: 'number' }).notNull(),
+    /** TSILIB.EVENTO. */
+    event: integer('event').notNull(),
+    /** TSILIB.SEQCASCATA; null when the line has none. */
+    cascadeSequence: integer('cascade_sequence'),
+    /** Sector name from the installation configuration (`erp.orderStage`). */
+    sector: text('sector').notNull(),
+    /** TSILIB.CODUSULIB: the Sankhya user the line is assigned to; null = not assigned / not read. */
+    assignedUserCode: integer('assigned_user_code'),
+    requestedAt: timestamp('requested_at', { withTimezone: true }),
+    firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).notNull(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull(),
+    notifiedAt: timestamp('notified_at', { withTimezone: true }),
+  },
+  (t) => [
+    // One row per line and sector; NULL cascade sequences compare equal. Serves: the per-order replace of a read.
+    unique('sales_order_release_pending_line_uq').on(t.orderId, t.event, t.sector, t.cascadeSequence).nullsNotDistinct(),
+    // Serves: the queue of one sector, and the count per sector.
+    index('sales_order_release_pending_sector_idx').on(t.sector, t.firstSeenAt),
+    // Serves: "assigned to me" filter.
+    index('sales_order_release_pending_assignee_idx').on(t.assignedUserCode),
+  ],
+);
+export type SalesOrderReleasePendingRow = typeof salesOrderReleasePending.$inferSelect;
 
 /**
  * One discount approval request per submission of an order above its owner authority (DISC-2..6). Append-only history:

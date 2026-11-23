@@ -167,6 +167,16 @@ export interface InstallationConfiguration {
       readonly reviewSector?: string;
       readonly financialSector?: string;
       readonly finalRereadWindowHours?: number;
+      /** Release events shown in both sectors of the release queue (PROPOSAL); absent = `DEFAULT_ORDER_STAGE_RULES`. */
+      readonly bothSectorsEvents?: readonly number[];
+    };
+    /**
+     * Release queue ("Aguardando liberação", docs/implementation/release-queue.md): who besides manager/admin may see a sector's queue.
+     * Key = sector name (`orderStage.reviewSector` / `financialSector`); value = Sankhya user codes (CODUSU = `account.external_user_id`).
+     * Absent or empty = nobody but manager and admin sees any queue (deny by default).
+     */
+    readonly releaseQueue?: {
+      readonly sectorUsers?: Readonly<Record<string, readonly number[]>>;
     };
   };
   readonly general: {

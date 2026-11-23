@@ -13,6 +13,7 @@ export * from './customer-write.js';
 export * from './orders.js';
 export * from './discount-limits.js';
 export * from './approvals.js';
+export * from './release-queue.js';
 export * from './templates.js';
 export * from './dashboard.js';
 export * from './sync-refresh.js';

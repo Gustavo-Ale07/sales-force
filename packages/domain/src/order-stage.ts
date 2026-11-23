@@ -42,6 +42,11 @@ export interface OrderStageRules {
   readonly financialSector: string;
   /** Hours an invoiced order is still read after reaching its final stage; 0 = never read again. */
   readonly finalRereadWindowHours: number;
+  /**
+   * Release events that the release queue shows in BOTH sectors (PROPOSAL, owner survey: event 13 = "Pedidos e Financeiro").
+   * It does not change the stage the seller sees (`classifyOrderStage`): that stays "other pending = financial check".
+   */
+  readonly bothSectorsEvents: readonly number[];
 }
 
 /** Defaults of an installation that configures nothing: the PLAC survey values. Overridable through `erp.orderStage`. */
@@ -50,6 +55,7 @@ export const DEFAULT_ORDER_STAGE_RULES: OrderStageRules = {
   reviewSector: 'Pedidos',
   financialSector: 'Financeiro',
   finalRereadWindowHours: 24,
+  bothSectorsEvents: [13],
 };
 
 /** Rules of an installation: configured keys over `DEFAULT_ORDER_STAGE_RULES`. */
@@ -59,6 +65,7 @@ export function resolveOrderStageRules(configured?: Partial<OrderStageRules>): O
     reviewSector: configured?.reviewSector ?? DEFAULT_ORDER_STAGE_RULES.reviewSector,
     financialSector: configured?.financialSector ?? DEFAULT_ORDER_STAGE_RULES.financialSector,
     finalRereadWindowHours: configured?.finalRereadWindowHours ?? DEFAULT_ORDER_STAGE_RULES.finalRereadWindowHours,
+    bothSectorsEvents: configured?.bothSectorsEvents ?? DEFAULT_ORDER_STAGE_RULES.bothSectorsEvents,
   };
 }
 
@@ -138,6 +145,16 @@ export function classifyOrderStage(facts: OrderStageFacts, rules: OrderStageRule
   if (facts.pendingReleases.length > 0) return stage('financial_check', rules.financialSector);
   if (facts.statusnota === 'L') return stage('in_dispatch');
   return stage('received');
+}
+
+/**
+ * Sectors that must release one pending line (release queue; the Force never releases, Sankhya does). Same split as the stage:
+ * a review event (event 44 at cascade level 1, event 2 by default) -> review sector; every other event -> financial sector;
+ * an event listed in `bothSectorsEvents` -> both sectors (PROPOSAL, owner survey: event 13 is "Pedidos e Financeiro").
+ */
+export function sectorsOfPendingRelease(release: PendingRelease, rules: OrderStageRules): readonly string[] {
+  if (rules.bothSectorsEvents.includes(release.event)) return rules.reviewSector === rules.financialSector ? [rules.reviewSector] : [rules.reviewSector, rules.financialSector];
+  return [matchesReview(release, rules) ? rules.reviewSector : rules.financialSector];
 }
 
 /** Whether an order whose last stage was read at `updatedAt` must still be read at `now`. */

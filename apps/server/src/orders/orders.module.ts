@@ -8,6 +8,9 @@ import { ApprovalsRepository } from './approvals.repository.js';
 import { ApprovalsService } from './approvals.service.js';
 import { DraftBuilder } from './draft-builder.js';
 import { OrdersController } from './orders.controller.js';
+import { ReleaseQueueController } from './release-queue.controller.js';
+import { ReleaseQueueRepository } from './release-queue.repository.js';
+import { ReleaseQueueService } from './release-queue.service.js';
 import { OrdersRepository } from './orders.repository.js';
 import { OrdersService } from './orders.service.js';
 
@@ -17,8 +20,8 @@ import { OrdersService } from './orders.service.js';
  */
 @Module({
   imports: [MirrorModule, CustomersModule, CatalogModule, ConfigurationModule],
-  controllers: [OrdersController, ApprovalsController],
-  providers: [OrdersRepository, OrdersService, DraftBuilder, ApprovalsRepository, ApprovalsService],
+  controllers: [OrdersController, ApprovalsController, ReleaseQueueController],
+  providers: [OrdersRepository, OrdersService, DraftBuilder, ApprovalsRepository, ApprovalsService, ReleaseQueueRepository, ReleaseQueueService],
   exports: [OrdersService, DraftBuilder],
 })
 export class OrdersModule {}

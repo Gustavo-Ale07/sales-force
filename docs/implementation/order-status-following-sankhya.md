@@ -16,6 +16,10 @@ Enviado ao Force, Erro no envio (from the outbox, before a note exists), Orçame
 
 Cost or margin, other sellers' orders, event names (unvalidated), denied/"barrado" state, cancelled notes, a link from a converted quotation to its original, `AD_STATUS`/`AD_FAROL`/`AD_EXPEDICAO`.
 
+## Release queue
+
+The same read feeds the internal "Aguardando liberação" queue (pending TSILIB lines with event, cascade level and assigned releaser): `docs/implementation/release-queue.md`.
+
 ## Deploy order
 
 Apply migration 0040 and the `deploy/staging/db-roles.sql` grants, then server (API + worker), then OTA/mobile. The contract change is additive.

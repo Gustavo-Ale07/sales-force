@@ -1132,3 +1132,18 @@ NEEDS VALIDATION (not invented, nothing built on them):
 - (d) Names of events 2, 3, 13 and 44 (VGFLIBEVE). Labels shown are sector-based, not event names.
 - (e) Final sector label of a sale note passing through event 44 again after invoicing.
 - (f) A quotation converted to an order is not linked to its original quotation.
+
+### 9.61 Release queue "Aguardando liberação" (owner decision 2026-11-23) — TSILIB columns; Sandbox access NEEDS VALIDATION
+
+The Force only SHOWS who must release what; the release is done in Sankhya and the Force never writes it. Same SELECT-only read as 9.60 (`readOrderStageFacts`), nothing new about the customer.
+
+Columns used (TSILIB, `TABELA='TGFCAB'`, `NUCHAVE`=NUNOTA, `DHLIB` null):
+
+| Column | Use | Status |
+|---|---|---|
+| `EVENTO`, `DHLIB` | event and "pending" filter | VALIDATED (9.53) |
+| `SEQCASCATA` | cascade level of event 44 | survey / standard layout, NEEDS VALIDATION (9.60 c) |
+| `CODUSULIB` | releaser the line is assigned to | named by the owner, NOT validated: read in a SEPARATE soft query; if the ERP refuses it the stage still works, lines show no releaser and `assigneeReadErrorCode` is logged |
+| `DHSOLICIT` (request time) | "waiting since" | NOT read: not validated. The queue uses the order time (`order_time`) until validated; the table already has a nullable `requested_at` and the API field `waitingSinceSource` flips to `sankhya_request` |
+
+NEEDS VALIDATION (nothing built on a guess): (a) `CODUSULIB` and the request-time column exist and are readable by the worker user; (b) whether `CODUSULIB` is filled for cascade lines not yet assigned, and whether a null means "any user of the sector"; (c) the user name for a `CODUSULIB` (no TSIUSU name is mirrored; only the code is shown); (d) whether event 13 is truly "Pedidos e Financeiro" (proposal: shown in both sectors, `erp.orderStage.bothSectorsEvents`); (e) whether a Sankhya screen URL can open a note by NUNOTA (no deep link is documented anywhere in this repository: none is built, the row shows NUNOTA to search).

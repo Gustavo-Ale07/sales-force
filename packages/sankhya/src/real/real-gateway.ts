@@ -718,7 +718,8 @@ export class RealSankhyaGateway implements SankhyaGateway {
     }
     const signal = options?.signal;
     const headers = new Map<number, { codtipoper: number | null; statusNota: string | null; pending: string | null; orderCargo: number | null }>();
-    const releases = new Map<number, Array<{ event: number; cascadeSequence: number | null }>>();
+    const releases = new Map<number, Array<{ event: number; cascadeSequence: number | null; assignedUserCode?: number | null }>>();
+    const assigneeErrors = new Map<number, string>();
     const links = new Map<number, Set<number>>();
     const numbers = new Map<number, number | null>();
     for (let start = 0; start < erpOrderNumbers.length; start += RELEASE_READ_CHUNK) {
@@ -747,6 +748,26 @@ export class RealSankhyaGateway implements SankhyaGateway {
         bucket.push({ event: row.int('EVENTO'), cascadeSequence: row.nullableInt('SEQCASCATA') });
         releases.set(key, bucket);
       });
+      // Release queue: the assigned releaser (CODUSULIB) is read apart and SOFT. The column is NEEDS VALIDATION in the Sandbox
+      // (docs/sankhya-spike.md 9.61); if the ERP refuses this one query the stage above stays valid, only the assignee is unknown.
+      const assigneeColumns = ['NUCHAVE', 'EVENTO', 'SEQCASCATA', 'CODUSULIB'] as const;
+      try {
+        const assignees = await this.#query(
+          `SELECT NUCHAVE, EVENTO, SEQCASCATA, CODUSULIB FROM TSILIB WHERE TABELA = 'TGFCAB' AND DHLIB IS NULL AND NUCHAVE IN (${list})`,
+          assigneeColumns,
+          signal,
+        );
+        assignees.rows.forEach((cells, index) => {
+          const row = new RowReader('orders', assigneeColumns, cells, index);
+          const event = row.int('EVENTO');
+          const sequence = row.nullableInt('SEQCASCATA');
+          const line = releases.get(row.int('NUCHAVE'))?.find((candidate) => candidate.event === event && candidate.cascadeSequence === sequence && candidate.assignedUserCode === undefined);
+          if (line !== undefined) line.assignedUserCode = row.nullableInt('CODUSULIB');
+        });
+      } catch (error) {
+        if (!(error instanceof SankhyaGatewayError)) throw error;
+        for (const number of erpOrderNumbers.slice(start, start + RELEASE_READ_CHUNK)) assigneeErrors.set(number, error.code);
+      }
       const linkColumns = ['NUNOTAORIG', 'NUNOTA'] as const;
       const linked = await this.#query(`SELECT NUNOTAORIG, NUNOTA FROM TGFVAR WHERE NUNOTAORIG IN (${list})`, linkColumns, signal);
       linked.rows.forEach((cells, index) => {
@@ -779,6 +800,7 @@ export class RealSankhyaGateway implements SankhyaGateway {
         pending: header?.pending ?? null,
         orderCargo: header?.orderCargo ?? null,
         pendingReleases: releases.get(erpOrderNumber) ?? [],
+        ...(assigneeErrors.has(erpOrderNumber) ? { assigneeReadErrorCode: assigneeErrors.get(erpOrderNumber) as string } : {}),
         hasInvoiceLink: linkedNotes.length > 0,
         invoiceNumber,
       };

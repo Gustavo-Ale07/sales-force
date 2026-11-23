@@ -58,6 +58,7 @@
 --   sales_order_item                      S I U D     -              orders.repository (lines are replaced: DELETE + INSERT)
 --   sales_order_approval                  S I U       -              orders approvals (discount approval requests: INSERT on submit, UPDATE on decision or invalidation; never deleted)
 --   sales_order_erp_stage                 S           S I U       worker writes the last known Sankhya stage of a delivered order (cascades with the order); API reads it for the order DTO
+--   sales_order_release_pending           S           S I U D     worker mirrors the pending Sankhya release lines (release queue; DELETE when a line is released); API reads it for the queue
 --   customer_order_template               S I U       -              templates.repository
 --   customer_order_template_item          S I U D     -              templates.repository (items replaced)
 --   customer_registration                 S I         S D + U(cols)  api: INSERT of the registration request (hourly-limit count, idempotent replay and open-document lookup read it); worker: reads the status and closes it (confirmed/rejected/unknown) on delivery through a COLUMN grant UPDATE (status, erp_customer_code, rejection_code, updated_at) only; DELETE by the 30-day retention of rejected rows. The API never updates or deletes
@@ -251,7 +252,8 @@ BEGIN
       ('sales_order',                        'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
       ('sales_order_approval',               'force_api',    'SELECT, INSERT, UPDATE'),
       ('sales_order_erp_stage',              'force_api',    'SELECT'),
-      ('integration_outbox',                 'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
+      ('sales_order_release_pending',        'force_api',    'SELECT'),
+      ('integration_outbox',               'force_api',    'SELECT, INSERT, UPDATE, DELETE'),
       ('customer_order_template',            'force_api',    'SELECT, INSERT, UPDATE'),
       ('customer_registration',              'force_api',    'SELECT, INSERT'),
       ('customer_registration_refusal',      'force_api',    'SELECT, INSERT'),
@@ -280,6 +282,7 @@ BEGIN
       ('sales_order',                        'force_worker', 'SELECT, UPDATE'),
       ('sales_order_item',                   'force_worker', 'SELECT'),
       ('sales_order_erp_stage',              'force_worker', 'SELECT, INSERT, UPDATE'),
+      ('sales_order_release_pending',        'force_worker', 'SELECT, INSERT, UPDATE, DELETE'),
       ('audit_log',                          'force_worker', 'INSERT'),
       ('sync_state',                         'force_worker', 'SELECT, INSERT, UPDATE'),
       ('sync_refresh',                       'force_worker', 'SELECT, UPDATE'),

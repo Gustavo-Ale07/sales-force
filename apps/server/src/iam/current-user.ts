@@ -16,6 +16,8 @@ export interface CurrentUser {
   readonly role: AccountRole;
   /** Seller codes linked by configuration (CFG-2); never `TSIUSU.CODVEND` by rule. */
   readonly sellerCodes: readonly number[];
+  /** Sankhya user code (CODUSU) of a directory account, as text; absent/null for a local account. Only the release queue reads it. */
+  readonly externalUserId?: string | null;
   readonly sessionId: string;
   readonly sessionExpiresAt: Date;
   readonly channel: Channel;

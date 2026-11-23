@@ -197,8 +197,16 @@ export interface ErpOrderStageReading {
   readonly pending: string | null;
   /** TGFCAB.ORDEMCARGA; null when empty. */
   readonly orderCargo: number | null;
-  /** TSILIB lines of the note with DHLIB null. */
-  readonly pendingReleases: readonly { readonly event: number; readonly cascadeSequence: number | null }[];
+  /**
+   * TSILIB lines of the note with DHLIB null. `assignedUserCode` (TSILIB.CODUSULIB, the releaser the line is assigned to) is
+   * optional: absent = not read or not assigned (release queue, docs/implementation/release-queue.md).
+   */
+  readonly pendingReleases: readonly { readonly event: number; readonly cascadeSequence: number | null; readonly assignedUserCode?: number | null }[];
+  /**
+   * Set when the separate, soft read of the assigned releaser (CODUSULIB) failed: the stage itself is still valid and
+   * `pendingReleases` carry no `assignedUserCode`. A stable error code, never a message with data.
+   */
+  readonly assigneeReadErrorCode?: string;
   /** A TGFVAR link with NUNOTAORIG = this note exists. */
   readonly hasInvoiceLink: boolean;
   /** NUMNOTA of the (earliest) linked note; null when none or unreadable. */

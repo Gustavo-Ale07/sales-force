@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { installationConfigurationVersion, salesOrder, salesOrderErpStage, type DbHandle } from '@salesforce/db';
+import { installationConfigurationVersion, salesOrder, salesOrderErpStage, salesOrderReleasePending, type DbHandle } from '@salesforce/db';
 import {
   billingItemQuantities,
   billingStateOf,
@@ -7,6 +7,7 @@ import {
   isFinalBillingState,
   mapErpOrderStatus,
   resolveOrderStageRules,
+  sectorsOfPendingRelease,
   type ErpReleaseState,
   type OrderStageRules,
 } from '@salesforce/domain';
@@ -24,6 +25,7 @@ import {
   type StoredBilling,
   type StoredReleaseDetail,
 } from '../orders/release-events.js';
+import { uuidv7 } from '../platform/ids.js';
 import type { Clock } from '../platform/tokens.js';
 
 /** Orders older than this are no longer polled (P2). */
@@ -272,6 +274,10 @@ export async function runOrderStageOnce(deps: OrderErpStatusDeps, options: Order
     return { checked: 0, updated: 0, failed: true, failure };
   }
   const byNumber = new Map(readings.map((reading) => [reading.erpOrderNumber, reading]));
+  const withQueueRows = new Set(
+    (await db.db.select({ orderId: salesOrderReleasePending.orderId }).from(salesOrderReleasePending).where(inArray(salesOrderReleasePending.orderId, due.map((row) => row.id)))).map((r) => r.orderId),
+  );
+  const assigneeErrorCodes = new Set<string>();
   let updated = 0;
   for (const row of due) {
     const reading = byNumber.get(row.erpNumber);
@@ -291,6 +297,19 @@ export async function runOrderStageOnce(deps: OrderErpStatusDeps, options: Order
       },
       rules,
     );
+    // Release queue: the pending lines of an order held by Pedidos/Financeiro; any other stage (released, in invoicing, invoiced,
+    // quotation) has none, so a line released in Sankhya leaves the queue on this very read.
+    const holdsRelease = stage.code === 'in_review' || stage.code === 'financial_check';
+    await syncReleaseQueue(db, {
+      orderId: row.id,
+      nunota: row.erpNumber,
+      lines: holdsRelease ? reading.pendingReleases : [],
+      rules,
+      now,
+      hadRows: withQueueRows.has(row.id),
+    });
+    // A failed read of the assigned releaser is logged once per read with its stable code only (the queue still works, unassigned).
+    if (reading.assigneeReadErrorCode !== undefined) assigneeErrorCodes.add(reading.assigneeReadErrorCode);
     const invoiceNumber = stage.code === 'invoiced' ? reading.invoiceNumber : null;
     const contentHash = createHash('sha256')
       .update(JSON.stringify([row.erpNumber, stage.code, stage.label, stage.pendingSector, invoiceNumber]))
@@ -322,7 +341,64 @@ export async function runOrderStageOnce(deps: OrderErpStatusDeps, options: Order
       .onConflictDoUpdate({ target: salesOrderErpStage.orderId, set: values });
     updated += 1;
   }
+  if (assigneeErrorCodes.size > 0) {
+    logger.warn({ errorCodes: [...assigneeErrorCodes] }, 'ERP release assignee (CODUSULIB) read failed; the release queue shows lines without a releaser');
+  }
   return { checked: due.length, updated };
+}
+
+interface ReleaseQueueSync {
+  readonly orderId: string;
+  readonly nunota: number;
+  readonly lines: readonly { readonly event: number; readonly cascadeSequence: number | null; readonly assignedUserCode?: number | null }[];
+  readonly rules: OrderStageRules;
+  readonly now: Date;
+  /** The order already has queue rows (preloaded): with no lines and no rows there is nothing to write. */
+  readonly hadRows: boolean;
+}
+
+/**
+ * Replaces the queue rows of ONE order with the pending lines of this read (one row per line and sector). Existing rows keep
+ * `first_seen_at` and `notified_at`; rows no longer pending are deleted (released in Sankhya). Read-only toward the ERP.
+ */
+export async function syncReleaseQueue(db: DbHandle, input: ReleaseQueueSync): Promise<void> {
+  if (input.lines.length === 0 && !input.hadRows) return;
+  const wanted = new Map<string, { event: number; cascadeSequence: number | null; sector: string; assigned: number | null }>();
+  for (const line of input.lines) {
+    for (const sector of sectorsOfPendingRelease({ event: line.event, cascadeSequence: line.cascadeSequence }, input.rules)) {
+      const key = `${line.event}|${line.cascadeSequence ?? ''}|${sector}`;
+      if (!wanted.has(key)) wanted.set(key, { event: line.event, cascadeSequence: line.cascadeSequence, sector, assigned: line.assignedUserCode ?? null });
+    }
+  }
+  await db.db.transaction(async (tx) => {
+    const existing = await tx.select().from(salesOrderReleasePending).where(eq(salesOrderReleasePending.orderId, input.orderId));
+    const keyOf = (row: { event: number; cascadeSequence: number | null; sector: string }): string => `${row.event}|${row.cascadeSequence ?? ''}|${row.sector}`;
+    const known = new Map(existing.map((row) => [keyOf(row), row]));
+    const gone = existing.filter((row) => !wanted.has(keyOf(row))).map((row) => row.id);
+    if (gone.length > 0) await tx.delete(salesOrderReleasePending).where(inArray(salesOrderReleasePending.id, gone));
+    for (const [key, line] of wanted) {
+      const current = known.get(key);
+      if (current === undefined) {
+        await tx.insert(salesOrderReleasePending).values({
+          id: uuidv7(input.now.getTime()),
+          orderId: input.orderId,
+          nunota: input.nunota,
+          event: line.event,
+          cascadeSequence: line.cascadeSequence,
+          sector: line.sector,
+          assignedUserCode: line.assigned,
+          firstSeenAt: input.now,
+          lastSeenAt: input.now,
+        });
+      } else {
+        // The releaser keeps its last known value when the soft assignee read produced nothing for this read.
+        await tx
+          .update(salesOrderReleasePending)
+          .set({ lastSeenAt: input.now, assignedUserCode: line.assigned ?? current.assignedUserCode })
+          .where(eq(salesOrderReleasePending.id, current.id));
+      }
+    }
+  });
 }
 
 async function loadStageConfiguration(db: DbHandle): Promise<{ rules: OrderStageRules; quotationTopCode: number | null } | null> {

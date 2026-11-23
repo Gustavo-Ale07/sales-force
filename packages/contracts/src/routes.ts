@@ -31,6 +31,7 @@ import {
   ApproveApprovalRequestSchema,
   RejectApprovalRequestSchema,
 } from './approvals.js';
+import { ReleaseQueueCountQuerySchema, ReleaseQueueCountResponseSchema, ReleaseQueueQuerySchema, ReleaseQueueResponseSchema } from './release-queue.js';
 import { DashboardResponseSchema } from './dashboard.js';
 import { StartSyncRefreshResponseSchema, SyncRefreshPathSchema, SyncRefreshViewSchema, SyncStatusResponseSchema } from './sync-refresh.js';
 import { DiscountLimitsResponseSchema, UpdateDiscountLimitsRequestSchema } from './discount-limits.js';
@@ -608,6 +609,31 @@ export const routes = {
     request: { params: ApprovalPathSchema, body: RejectApprovalRequestSchema },
     responses: { 200: { description: 'Pedido reprovado', schema: OrderDetailSchema } },
     errors: [400, 401, 403, 404, 409],
+  }),
+  listReleaseQueue: defineRoute({
+    operationId: 'listReleaseQueue',
+    method: 'get',
+    path: '/release-queue',
+    tags: ['orders'],
+    summary: 'Release queue ("Aguardando liberação"): orders waiting for a Sankhya release, by sector (read only)',
+    description:
+      'Orders sent to Sankhya that hold a pending release line (TSILIB) of Pedidos or Financeiro, oldest waiting first, one row per line and sector. The release is done in Sankhya; the Force never writes it. Admin and manager see every sector; a user listed in `erp.releaseQueue.sectorUsers` sees only the listed sector(s); everyone else (sellers included) is refused with 403. A `sector` filter the caller may not see is 403. Data is the worker\'s mirror of the Sankhya read (`checkedAt` per row); "Atualizar agora" is POST /sync/refresh. No cost or margin.',
+    auth: 'session',
+    request: { query: ReleaseQueueQuerySchema },
+    responses: { 200: { description: 'Pedidos aguardando liberação', schema: ReleaseQueueResponseSchema } },
+    errors: [400, 401, 403],
+  }),
+  getReleaseQueueCount: defineRoute({
+    operationId: 'getReleaseQueueCount',
+    method: 'get',
+    path: '/release-queue/count',
+    tags: ['orders'],
+    summary: 'Counter of the release queue for the menu (orders waiting, per sector the caller may see)',
+    description: 'Same visibility as listReleaseQueue (403 when the caller sees no sector). Counts orders, not lines: an order waiting in both sectors counts once in `total`.',
+    auth: 'session',
+    request: { query: ReleaseQueueCountQuerySchema },
+    responses: { 200: { description: 'Contagem por setor', schema: ReleaseQueueCountResponseSchema } },
+    errors: [400, 401, 403],
   }),
   repeatLastOrder: defineRoute({
     operationId: 'repeatLastOrder',

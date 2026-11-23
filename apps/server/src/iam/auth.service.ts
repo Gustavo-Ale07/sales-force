@@ -501,6 +501,7 @@ export class AuthService implements OnModuleInit {
         displayName: row.displayName,
         role: row.role,
         sellerCodes: await this.accounts.sellerCodesOf(row.accountId),
+        externalUserId: row.externalUserId,
         sessionId: row.sessionId,
         sessionExpiresAt: expiresAt,
         channel,
