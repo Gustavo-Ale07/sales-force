@@ -21,11 +21,11 @@ function line(code: number, description: string, unitPrice: string | null, quant
   };
 }
 
-const ana = draftRecord({ localId: "a", customerCode: 1, customerName: "Ana Mercearia", status: "pending_sync", estimatedTotal: null });
+const ana = draftRecord({ localId: "a", customerCode: 1, customerName: "Ana Mercearia", status: "pending_sync", estimatedTotal: null, sendState: "requested" });
 const bia = draftRecord({ localId: "b", customerCode: 2, customerName: "Bia Padaria", status: "sync_error", lastError: "Cliente bloqueado." });
 const caio = draftRecord({ localId: "c", customerCode: 3, customerName: "Caio Atacado", status: "conflict" });
 const dora = draftRecord({ localId: "d", customerCode: 4, customerName: "Dora Bar", status: "needs_review", priceReview: [{ productCode: 9, description: "Copo", cachedUnitPrice: "1.5", serverUnitPrice: "2", serverPriceJson: "{}" }] });
-const eva = draftRecord({ localId: "e", customerCode: 5, customerName: "Eva Empório", status: "synced", remoteId: "r-e", remoteVersion: 1, remoteDraftNumber: 77, estimatedTotal: "300.00" });
+const eva = draftRecord({ localId: "e", customerCode: 5, customerName: "Eva Empório", status: "synced", remoteId: "r-e", remoteVersion: 1, remoteDraftNumber: 77, estimatedTotal: "300.00", sendState: "submitted", sendCode: "sent" });
 const rascunho = draftRecord({ localId: "f", customerCode: 6, customerName: "Fábio Loja", status: "local_only" });
 
 const noop = () => undefined;
@@ -81,22 +81,31 @@ describe("SalesScreen — groups", () => {
     expect(screen.getByText("Erro")).toBeTruthy();
     expect(screen.getByText("Conflito")).toBeTruthy();
     expect(screen.getByText("Revisar preço")).toBeTruthy();
-    expect(screen.getByText("Somente no aparelho")).toBeTruthy();
-    expect(screen.queryByText(/rascunho/i)).toBeNull();
+    // Never confirmed: "Em andamento" (not "rascunho", not "Somente no aparelho").
+    expect(screen.getByText("Em andamento")).toBeTruthy();
+    expect(screen.queryByText(/rascunho|somente no aparelho/i)).toBeNull();
     expect(screen.queryByText("Eva Empório")).toBeNull();
     await fireEvent.press(screen.getByRole("button", { name: "Nova venda" }));
     expect(props.onNewSale).toHaveBeenCalledTimes(1);
   });
 
-  it("'Enviados' lists only what the Force backend accepted, with its order number and value, and says nothing about the ERP", async () => {
+  it("'Enviados' lists only what the Force backend accepted, with its order number, value and the Sankhya send state, never the word ERP", async () => {
     await renderSales([ana, eva]);
     await fireEvent.press(await screen.findByRole("tab", { name: /Enviados/ }));
     expect(await screen.findByText("Eva Empório")).toBeTruthy();
     expect(screen.queryByText("Ana Mercearia")).toBeNull();
-    expect(screen.getByText("Enviado ao Force")).toBeTruthy();
+    expect(screen.getByText("Enviado ao Sankhya")).toBeTruthy();
     expect(screen.getByText(/Pedido nº 77/)).toBeTruthy();
     expect(screen.getByText("R$ 300,00")).toBeTruthy();
-    expect(screen.queryByText(/ERP|Sankhya/)).toBeNull();
+    expect(screen.queryByText(/ERP/)).toBeNull();
+  });
+
+  it("an accepted order the seller never confirmed stays 'Em andamento' (no send request, no Sankhya claim)", async () => {
+    const unconfirmed = draftRecord({ localId: "u", customerName: "Ugo Mercado", status: "synced", remoteId: "r-u", remoteDraftNumber: 5, estimatedTotal: "10.00" });
+    await renderSales([unconfirmed]);
+    await fireEvent.press(await screen.findByRole("tab", { name: /Enviados/ }));
+    expect(await screen.findByText("Em andamento")).toBeTruthy();
+    expect(screen.queryByText(/Enviado ao Sankhya/)).toBeNull();
   });
 
   it("explains an empty group", async () => {
@@ -161,12 +170,13 @@ describe("SalesScreen — detail and actions", () => {
   it("opens the detail with status explanation, items, discounts and totals from the domain", async () => {
     await renderSales([ana]);
     await openSale(/Ana Mercearia/);
-    expect(screen.getByText(/salvo neste aparelho e será enviado ao Force/)).toBeTruthy();
+    expect(screen.getByText(/Salvo neste aparelho\. Será enviado ao Sankhya assim que possível/)).toBeTruthy();
     expect(screen.getByText("Itens (2)")).toBeTruthy();
     expect(screen.getByText("Copo 200 ml")).toBeTruthy();
     expect(screen.getByText("Prato fundo")).toBeTruthy();
     expect(screen.getByText("Há itens sem preço: o valor é parcial.")).toBeTruthy();
-    expect(screen.getByText("Valor estimado")).toBeTruthy();
+    expect(screen.getByText("Total")).toBeTruthy();
+    expect(screen.queryByText(/estimado/i)).toBeNull();
   });
 
   it("closes an open detail when the shell signals a return to the list", async () => {
@@ -228,25 +238,32 @@ describe("SalesScreen — detail and actions", () => {
   it("a pending change on a synced order is an unsent edit and cannot be deleted", async () => {
     const edited = draftRecord({ localId: "g", customerName: "Gil Depósito", status: "pending_sync", remoteId: "r-g", remoteVersion: 2 });
     await renderSales([edited]);
-    expect(await screen.findByText("Alteração aguardando envio")).toBeTruthy();
+    expect(await screen.findByText("Em andamento")).toBeTruthy();
     await openSale(/Gil Depósito/);
     expect(screen.queryByRole("button", { name: "Excluir pedido" })).toBeNull();
   });
 
-  it("explains a sending error in plain words and retries only when online", async () => {
-    const { props } = await renderSales([bia]);
+  it("explains a sending error in plain words; 'Tentar de novo' asks for the send and delivers it now (not a bare sync)", async () => {
+    const requestSend = jest.fn(async (_id: string) => undefined);
+    const confirm = jest.fn(async (_id: string) => ({ kind: "sent" as const, erpNumber: 123 }));
+    const { props } = await renderSales([bia], {}, { requestSend, confirm });
     await openSale(/Bia Padaria/);
     expect(screen.getByText(/Não foi possível enviar este pedido\. Cliente bloqueado\./)).toBeTruthy();
-    await fireEvent.press(screen.getByRole("button", { name: "Tentar enviar novamente" }));
-    expect(props.onSyncNow).toHaveBeenCalledTimes(1);
+    await fireEvent.press(screen.getByRole("button", { name: "Tentar de novo" }));
+    await waitFor(() => expect(confirm).toHaveBeenCalledWith("b"));
+    expect(requestSend).toHaveBeenCalledWith("b");
+    expect(props.onSyncNow).not.toHaveBeenCalled();
   });
 
-  it("offline: the retry is disabled with an explanation, while continue, duplicate and delete still work", async () => {
-    const { props } = await renderSales([bia], { connectivity: "offline" as ConnectivityState });
+  it("offline: 'Tentar de novo' stays available, the answer is the 'não enviado' popup, and continue, duplicate and delete still work", async () => {
+    const confirm = jest.fn(async (_id: string) => ({ kind: "queued" as const }));
+    const { props } = await renderSales([bia], { connectivity: "offline" as ConnectivityState }, { confirm });
     expect(await screen.findByText(/dados salvos neste aparelho/)).toBeTruthy();
     await openSale(/Bia Padaria/);
-    expect(screen.getByRole("button", { name: "Tentar enviar novamente" }).props.accessibilityState.disabled).toBe(true);
-    expect(screen.getByText(/O envio acontece sozinho quando a internet voltar/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Tentar de novo" }).props.accessibilityState.disabled).toBe(false);
+    await fireEvent.press(screen.getByRole("button", { name: "Tentar de novo" }));
+    expect(await screen.findByText("Pedido não enviado ao Sankhya")).toBeTruthy();
+    await pressModal("Fechar");
     await fireEvent.press(screen.getByRole("button", { name: "Continuar pedido" }));
     expect(props.onContinue).toHaveBeenCalledWith("b");
     expect(screen.getByRole("button", { name: "Duplicar pedido" })).toBeTruthy();
@@ -294,7 +311,7 @@ describe("SalesScreen — reconnection", () => {
     expect(await screen.findByText("Aguardando envio")).toBeTruthy();
     // The sync manager delivered the order: it is now synced, and the status object changes.
     const index = localOrders.drafts.findIndex((d) => d.localId === "a");
-    localOrders.drafts[index] = { ...ana, status: "synced", remoteId: "r-a", remoteVersion: 1, remoteDraftNumber: 9, estimatedTotal: "50.00" };
+    localOrders.drafts[index] = { ...ana, status: "synced", remoteId: "r-a", remoteVersion: 1, remoteDraftNumber: 9, estimatedTotal: "50.00", sendState: "submitted", sendCode: "sent" };
     await view.rerender(<SalesScreen {...props} syncStatus={{ ...idle, lastSyncedAt: "2026-09-30T13:00:00.000Z" }} />);
     await waitFor(() => expect(screen.queryByText("Ana Mercearia")).toBeNull());
     expect(screen.getByText("Não enviados (0)")).toBeTruthy();
@@ -302,7 +319,7 @@ describe("SalesScreen — reconnection", () => {
     expect(screen.getByLabelText("Buscar venda").props.value).toBe("ana");
     await fireEvent.press(screen.getByRole("tab", { name: /Enviados/ }));
     const row = await screen.findByRole("button", { name: /Ana Mercearia/ });
-    expect(within(row).getByText("Enviado ao Force")).toBeTruthy();
+    expect(within(row).getByText("Enviado ao Sankhya")).toBeTruthy();
     expect(screen.getAllByText("Ana Mercearia")).toHaveLength(1);
   });
 });

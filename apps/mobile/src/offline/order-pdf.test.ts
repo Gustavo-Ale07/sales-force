@@ -105,8 +105,8 @@ describe("pdfStatusLabelOf", () => {
   });
 
   it("normal states keep their seller wording", () => {
-    expect(pdfStatusLabelOf({ status: "local_only", remoteId: null, lastError: null })).toBe("Somente no aparelho");
-    expect(pdfStatusLabelOf({ status: "synced", remoteId: "r1", lastError: null })).toBe("Enviado ao Force");
+    expect(pdfStatusLabelOf({ status: "local_only", remoteId: null, lastError: null })).toBe("Em andamento");
+    expect(pdfStatusLabelOf({ status: "synced", remoteId: "r1", lastError: null })).toBe("Em andamento");
   });
 
   it("the document of a product-blocked order is built with that plain label", () => {

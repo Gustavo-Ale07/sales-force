@@ -25,6 +25,13 @@ function draft(localId: string, status: DraftStatus, updatedAt: string): DraftRe
     itemCount: 1,
     dataset: { environment: "production", datasetId: "mirror-real-001" },
     eligibility: "eligible",
+    sendState: null,
+    sendCode: null,
+    sendError: null,
+    sendAttempts: 0,
+    sendNextAttemptAt: null,
+    sendRequestedAt: null,
+    erpStage: null,
   };
 }
 

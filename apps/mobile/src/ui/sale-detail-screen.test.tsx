@@ -26,7 +26,7 @@ describe("SaleDetailScreen loading", () => {
 });
 
 describe("SaleDetailScreen discount approval (M-14)", () => {
-  const sent = draftRecord({ localId: "x", status: "synced", remoteId: "r-x", remoteVersion: 2, remoteDraftNumber: 9 });
+  const sent = draftRecord({ localId: "x", status: "synced", remoteId: "r-x", remoteVersion: 2, remoteDraftNumber: 9, sendState: "submitted", sendCode: "sent" });
   const rejected = orderDetail({
     id: "r-x",
     status: "approval_rejected",
@@ -47,7 +47,7 @@ describe("SaleDetailScreen discount approval (M-14)", () => {
     let calls = 0;
     const orders = fakeOrders({ get: async () => { calls += 1; throw new Error("down"); } });
     await renderWithModal(<SaleDetailScreen localId="x" localOrders={fakeLocalOrders([sent], { open: async () => ({ draft: sent, lines: [] }) })} connectivity="offline" orders={orders} onBack={noop} onChanged={noop} onContinue={noop} onDuplicate={noop} onSyncNow={noop} />);
-    expect(await screen.findByText("Enviado ao Force")).toBeTruthy();
+    expect(await screen.findByText("Enviado ao Sankhya")).toBeTruthy();
     expect(calls).toBe(0);
     expect(screen.queryByText("Desconto reprovado")).toBeNull();
   });
@@ -84,7 +84,7 @@ describe("SaleDetailScreen Compartilhar PDF", () => {
 
 describe("SaleDetailScreen in erp discount mode (D-L)", () => {
   it("hides the approval card when the installation releases discounts in Sankhya", async () => {
-    const sent = draftRecord({ localId: "x", status: "synced", remoteId: "r-x", remoteVersion: 2, remoteDraftNumber: 9 });
+    const sent = draftRecord({ localId: "x", status: "synced", remoteId: "r-x", remoteVersion: 2, remoteDraftNumber: 9, sendState: "submitted", sendCode: "sent" });
     const awaiting = orderDetail({ id: "r-x", status: "awaiting_approval", approval: null });
     const base = orderEntryConfiguration();
     let reads = 0;
@@ -93,7 +93,7 @@ describe("SaleDetailScreen in erp discount mode (D-L)", () => {
       getEntryConfiguration: async () => orderEntryConfiguration({ sales: { ...base.sales, discountAuthorityMode: "erp" } }),
     });
     await renderWithModal(<SaleDetailScreen localId="x" localOrders={fakeLocalOrders([sent], { open: async () => ({ draft: sent, lines: [] }) })} connectivity="online" orders={orders} onBack={noop} onChanged={noop} onContinue={noop} onDuplicate={noop} onSyncNow={noop} />);
-    expect(await screen.findByText("Enviado ao Force")).toBeTruthy();
+    expect(await screen.findByText("Enviado ao Sankhya")).toBeTruthy();
     await waitFor(() => expect(reads).toBe(1));
     expect(screen.queryByText("Aguardando aprovação do desconto")).toBeNull();
   });

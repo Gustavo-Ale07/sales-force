@@ -11,13 +11,11 @@ async function pressAndSettle(element: unknown, delayMs = 100) {
   });
 }
 
-// The save button lives on the summary step: from the cart, "Próximo" gets there (already there when editing).
-async function saveFromSummary(name: string) {
+// The single "Confirmar" button lives on the summary step: from the cart, "Próximo" gets there (already there when editing).
+async function saveFromSummary() {
   const next = screen.queryByRole("button", { name: "Próximo" });
   if (next !== null) await pressAndSettle(next);
-  // Moving between steps auto-saves a local draft, after which the same button reads "Salvar alterações".
-  const button = screen.queryByRole("button", { name }) ?? screen.getByRole("button", { name: name === "Salvar pedido" ? "Salvar alterações" : "Salvar pedido" });
-  await pressAndSettle(button);
+  await pressAndSettle(screen.getByRole("button", { name: "Confirmar" }));
 }
 afterEach(async () => {
   await new Promise<void>((resolve) => setTimeout(() => resolve(), 400));
@@ -70,14 +68,14 @@ describe("NewOrderScreen order options (D-A, D-B)", () => {
       await pressAndSettle(screen.getByRole("radio", { name: "Operação Orçamento (TOP 1000)" }));
       await pressAndSettle(screen.getByRole("radio", { name: "Negociação 30 dias" }));
     });
-    await saveFromSummary("Salvar pedido");
+    await saveFromSummary();
     expect(save).toHaveBeenCalledWith(expect.objectContaining({ topCode: 1000, negotiationTypeCode: 3, carrierCode: 7 }));
   });
 
   it("saves the header chosen on the mandatory step (nothing is preselected)", async () => {
     const save = jest.fn(async () => draftRecord());
     await openCart(fakeLocalOrders([], { save: save as never }));
-    await saveFromSummary("Salvar pedido");
+    await saveFromSummary();
     expect(save).toHaveBeenCalledWith(expect.objectContaining({ negotiationTypeCode: 1, freightType: "CIF", carrierCode: 7 }));
   });
 
@@ -88,7 +86,7 @@ describe("NewOrderScreen order options (D-A, D-B)", () => {
       expect(screen.queryByText("Nenhuma")).toBeNull();
       await pressAndSettle(screen.getByRole("button", { name: "Transportadora Rápido" }));
     });
-    await saveFromSummary("Salvar pedido");
+    await saveFromSummary();
     expect(save).toHaveBeenCalledWith(expect.objectContaining({ carrierCode: 9 }));
   });
 
@@ -127,18 +125,20 @@ describe("NewOrderScreen order options (D-A, D-B)", () => {
     return create;
   }
 
-  it("labels the save button 'Salvar orçamento' and the success 'Orçamento salvo' when the TOP is the quotation TOP", async () => {
+  it("online path: one 'Confirmar' button, never a second save button, and the success follows the quotation TOP", async () => {
     const create = await toSummaryOnline("Operação Orçamento (TOP 1000)");
-    expect(screen.queryByRole("button", { name: "Salvar pedido" })).toBeNull();
-    await pressAndSettle(screen.getByRole("button", { name: "Salvar orçamento" }));
+    expect(screen.queryByRole("button", { name: /^Salvar/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Enviar" })).toBeNull();
+    await pressAndSettle(screen.getByRole("button", { name: "Confirmar" }));
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ topCode: 1000 }));
     expect(screen.getByText("Orçamento salvo")).toBeTruthy();
   });
 
-  it("labels the save button 'Salvar pedido' and the success 'Pedido salvo' for the default (order) TOP", async () => {
+  it("online path: the same single 'Confirmar' and an 'Pedido' success for the default (order) TOP", async () => {
     await toSummaryOnline(null);
-    expect(screen.queryByRole("button", { name: "Salvar orçamento" })).toBeNull();
-    await pressAndSettle(screen.getByRole("button", { name: "Salvar pedido" }));
+    expect(screen.queryByRole("button", { name: /^Salvar/ })).toBeNull();
+    expect(screen.getAllByRole("button", { name: "Confirmar" })).toHaveLength(1);
+    await pressAndSettle(screen.getByRole("button", { name: "Confirmar" }));
     expect(screen.getByText("Pedido salvo")).toBeTruthy();
   });
 });

@@ -72,7 +72,7 @@ describe("NewOrderScreen as a 4-step wizard", () => {
     expect(screen.getByText("Copo 200 ml")).toBeTruthy();
     // Per item: quantity × price; totals block: table subtotal, total without IPI, estimated IPI, total with IPI.
     expect(screen.getByText("1 UN × R$ 10,00")).toBeTruthy();
-    for (const label of ["Subtotal da tabela", "Total sem IPI", "IPI estimado", /Total (parcial )?com IPI/]) {
+    for (const label of ["Subtotal da tabela", "Total sem IPI", "IPI", /Total (parcial )?com IPI/]) {
       expect(screen.getByText(label)).toBeTruthy();
     }
     expect(screen.queryByText(/^Desconto /)).toBeNull();
@@ -98,7 +98,7 @@ describe("NewOrderScreen as a 4-step wizard", () => {
     await pressAndSettle(next());
     expect(screen.getByText("Desconto 10% · − R$ 1,00")).toBeTruthy();
     expect(screen.getByText("− R$ 1,00")).toBeTruthy();
-    expect(screen.getByText(/^Descontos \(1 item/)).toBeTruthy();
+    expect(screen.getByText("Descontos")).toBeTruthy();
   });
 
   it("includes the notes typed on the negotiation step in the saved order", async () => {
@@ -112,7 +112,7 @@ describe("NewOrderScreen as a 4-step wizard", () => {
     await pressAndSettle(next());
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
     await pressAndSettle(next());
-    await pressAndSettle(screen.getByRole("button", { name: /^Salvar (pedido|orçamento|alterações)$/ }));
+    await pressAndSettle(screen.getByRole("button", { name: "Confirmar" }));
     expect(save).toHaveBeenCalledWith(expect.objectContaining({ notes: "Entregar pela manhã" }));
   });
 

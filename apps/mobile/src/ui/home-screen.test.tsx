@@ -30,6 +30,13 @@ function draft(localId: string, customerName: string, status: DraftRecord["statu
     itemCount,
     dataset: { environment: "production", datasetId: "mirror-real-001" },
     eligibility: "eligible",
+    sendState: null,
+    sendCode: null,
+    sendError: null,
+    sendAttempts: 0,
+    sendNextAttemptAt: null,
+    sendRequestedAt: null,
+    erpStage: null,
   };
 }
 

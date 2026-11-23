@@ -82,7 +82,7 @@ function describeSummary(summary: SalesSummary | null, group: SalesGroup): strin
   const count = group === "unsent" ? summary.counts.unsent : summary.counts.sent;
   const parts = [`${count} ${count === 1 ? "venda" : "vendas"}`];
   if (summary.amount !== null) {
-    parts.push(`${group === "sent" ? "Total" : "Valor estimado"} ${formatBrl(summary.amount) ?? summary.amount}${summary.partial ? " (parcial)" : ""}`);
+    parts.push(`Total ${formatBrl(summary.amount) ?? summary.amount}${summary.partial ? " (parcial)" : ""}`);
   }
   if (summary.lastUpdatedAt !== null) parts.push(`Atualizado ${formatDateTime(summary.lastUpdatedAt)}`);
   return parts.join(" · ");

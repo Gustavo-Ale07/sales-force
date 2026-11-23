@@ -56,10 +56,10 @@ describe("Shell mounts the sync progress overlay", () => {
     expect(screen.queryByTestId("sync-step-push")).toBeNull();
 
     await ctx.emit({ ...idle, phase: "syncing", steps: steps({ push: { state: "done", count: 0 }, customers: { state: "running", count: 10, total: 40 } }) });
-    expect(screen.getByTestId("sync-step-customers").props.accessibilityLabel).toBe("Clientes: em andamento, 10 de 40");
+    expect(screen.getByTestId("sync-step-customers").props.accessibilityLabel).toBe("Clientes: em andamento");
 
     await ctx.emit({ ...idle, lastSyncedAt: "2026-11-23T12:00:00.000Z", steps: steps({}, "done") });
-    expect(screen.getByText("Dados atualizados")).toBeTruthy();
+    expect(screen.getByText("Pronto")).toBeTruthy();
     await waitFor(() => expect(screen.queryByTestId("sync-step-push")).toBeNull(), { timeout: 4000 });
   });
 

@@ -216,6 +216,13 @@ export function draftRecord(overrides: Partial<DraftRecord> = {}): DraftRecord {
     itemCount: 2,
     dataset: { environment: "production", datasetId: "mirror-real-001" },
     eligibility: "eligible",
+    sendState: null,
+    sendCode: null,
+    sendError: null,
+    sendAttempts: 0,
+    sendNextAttemptAt: null,
+    sendRequestedAt: null,
+    erpStage: null,
     ...overrides,
   };
 }
@@ -272,6 +279,7 @@ export function fakeLocalOrders(drafts: DraftRecord[] = [], overrides: Partial<L
     openQuarantined: async () => null,
     discardQuarantined: async () => undefined,
     acknowledgePriceReview: async () => undefined,
+    requestSend: async () => undefined,
     resolveConflict: async () => undefined,
     duplicateAsOrder: async () => {
       throw new Error("unused");

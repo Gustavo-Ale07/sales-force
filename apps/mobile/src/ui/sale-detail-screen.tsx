@@ -386,7 +386,7 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
             );
           })}
           <View style={styles.totalLine}>
-            <Text style={styles.totalLabel}>{draft.status === "synced" ? "Total" : "Valor estimado"}</Text>
+            <Text style={styles.totalLabel}>Total</Text>
             <Text style={styles.totalValue}>{describeSaleValue(value)}</Text>
           </View>
           {value.partial && value.amount !== null && <Text style={styles.partial}>Há itens sem preço: o valor é parcial.</Text>}

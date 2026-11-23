@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from "react-native";
 import type { ErpStageView } from "../offline/erp-stage";
 import { colors, spacing } from "../theme";
+import { Icon } from "./icons";
 import { formatDateTime } from "./sync-status";
 
 const TONE_COLOR = { neutral: colors.textMuted, info: colors.navy, ok: colors.ok, warning: colors.warning, danger: colors.red } as const;
@@ -23,14 +24,13 @@ export function ErpStageCard({ stage }: { stage: ErpStageView }) {
       {stage.kind === "timeline" && (
         <View accessibilityRole="list">
           {stage.steps.map((step, index) => {
-            const mark = step.state === "done" ? "✓" : String(index + 1);
             const state = step.state === "done" ? "concluída" : step.state === "current" ? "etapa atual" : "próxima etapa";
             const last = index === stage.steps.length - 1;
             return (
               <View key={step.code} style={styles.step} accessibilityLabel={`${step.label}, ${state}`}>
                 <View style={styles.rail}>
                   <View style={[styles.dot, step.state === "done" && styles.dotDone, step.state === "current" && { backgroundColor: color, borderColor: color }]}>
-                    <Text style={[styles.dotText, step.state !== "todo" && styles.dotTextOn]}>{mark}</Text>
+                    {step.state === "done" ? <Icon name="check" color={colors.onNavy} size={14} /> : <Text style={[styles.dotText, step.state !== "todo" && styles.dotTextOn]}>{String(index + 1)}</Text>}
                   </View>
                   {!last && <View style={[styles.stem, step.state === "done" && styles.stemDone]} />}
                 </View>

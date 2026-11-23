@@ -15,13 +15,11 @@ async function pressAndSettle(element: unknown, delayMs = 100) {
   });
 }
 
-// The save button lives on the summary step: from the cart, "Próximo" gets there (already there when editing).
-async function saveFromSummary(name: string) {
+// The single "Confirmar" button lives on the summary step: from the cart, "Próximo" gets there (already there when editing).
+async function saveFromSummary() {
   const next = screen.queryByRole("button", { name: "Próximo" });
   if (next !== null) await pressAndSettle(next);
-  // Moving between steps auto-saves a local draft, after which the same button reads "Salvar alterações".
-  const button = screen.queryByRole("button", { name }) ?? screen.getByRole("button", { name: name === "Salvar pedido" ? "Salvar alterações" : "Salvar pedido" });
-  await pressAndSettle(button);
+  await pressAndSettle(screen.getByRole("button", { name: "Confirmar" }));
 }
 
 afterEach(async () => {
@@ -52,7 +50,7 @@ async function reopenDraftAndOpenGroupSheet(codes: number[], products: ProductRe
     await pressAndSettle(await screen.findByRole("button", { name: `Adicionar Produto ${code} ao carrinho` }));
   }
   await pressAndSettle(screen.getByRole("tab", { name: `Carrinho (${codes.length})` }));
-  await saveFromSummary("Salvar pedido");
+  await saveFromSummary();
   await pressAndSettle(screen.getByRole("button", { name: "Editar pedido" }));
   await pressAndSettle(screen.getByRole("button", { name: "Editar produtos" }));
   await pressAndSettle(screen.getByRole("tab", { name: `Carrinho (${codes.length})` }));
