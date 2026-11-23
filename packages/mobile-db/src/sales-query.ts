@@ -13,6 +13,8 @@ import { escapeLike } from "./offline-env";
 export type SalesGroup = "unsent" | "sent";
 export const UNSENT_STATUSES: readonly DraftStatus[] = ["local_only", "pending_sync", "syncing", "sync_error", "conflict", "needs_review"];
 export const SENT_STATUSES: readonly DraftStatus[] = ["synced"];
+/** The one definition of "sent to Sankhya" (list group and counters). */
+const SENT_SQL = "(d.status = 'synced' AND (COALESCE(d.send_state, '') = 'submitted' OR d.erp_stage IS NOT NULL))";
 
 export interface DraftFilter {
   readonly ownerAccountId: string;
@@ -46,9 +48,9 @@ function whereOf(filter: DraftFilter): { sql: string; params: SqlValue[] } {
     params.push(...operational.params);
   }
   if (filter.group !== undefined) {
-    const statuses = filter.group === "unsent" ? UNSENT_STATUSES : SENT_STATUSES;
-    clauses.push(`d.status IN (${marks(statuses)})`);
-    params.push(...statuses);
+    // "Enviados" = taken by the server for Sankhya (or with a known Sankhya stage). A plain saved order, even one the Force backend already
+    // holds as a draft ("Salvo no aparelho"), is still "Não enviados": it never went to Sankhya.
+    clauses.push(filter.group === "unsent" ? `NOT ${SENT_SQL}` : SENT_SQL);
   }
   if (filter.statuses !== undefined && filter.statuses.length > 0) {
     clauses.push(`d.status IN (${marks(filter.statuses)})`);

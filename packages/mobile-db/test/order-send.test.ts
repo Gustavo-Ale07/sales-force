@@ -469,7 +469,9 @@ describe("submit failures", () => {
     const first = await pushOnly(mgr);
     expect(server.submitCalls).toHaveLength(1);
     expect(await getDraft(db, id)).toMatchObject({ sendState: "requested", sendAttempts: 1, sendNextAttemptAt: new Date(t + 5000).toISOString() });
-    expect(first.phase).toBe(kind === "network" ? "offline" : "error"); // same mapping as the create/replace queue
+    // 5xx/429: "Sankhya indisponível" (offline phase, never "Erro ao sincronizar"); the order stays queued
+    expect(first.phase).toBe("offline");
+    if (kind !== "network") expect(first.failure).toBe("sankhya_unavailable");
     expect(first.awaitingOrders).toBe(1);
     // the automatic timer respects the backoff window ...
     await pushOnly(mgr, "timer");
@@ -705,7 +707,8 @@ describe("SyncManager.confirmOrder", () => {
     const id = await send();
     arrange();
     const mgr = mk();
-    expect(await mgr.confirmOrder?.(id, { sleep: fakeSleep().sleep })).toEqual({ kind: "queued" });
+    const unavailable = /503|429/.test(_name);
+    expect(await mgr.confirmOrder?.(id, { sleep: fakeSleep().sleep })).toEqual(unavailable ? { kind: "queued", reason: "sankhya_unavailable" } : { kind: "queued" });
     expect((await getDraft(db, id))?.sendState).toBe("requested");
     server.createError = null;
     server.submitScript = [];
@@ -918,7 +921,7 @@ describe("sales query: stage filter and counts", () => {
   const sentWith = async (remoteId: string, stage: string | null, customerCode: number): Promise<string> => {
     const id = await saveOrderDraft(db, env, input({ customerCode, customerName: `Cliente ${customerCode}` }));
     await db.execute("DELETE FROM outbox WHERE draft_local_id = ?", [id]);
-    await db.execute("UPDATE local_order_draft SET remote_id = ?, status = 'synced', erp_stage = ?, erp_stage_json = ? WHERE local_id = ?", [
+    await db.execute("UPDATE local_order_draft SET remote_id = ?, status = 'synced', send_state = 'submitted', erp_stage = ?, erp_stage_json = ? WHERE local_id = ?", [
       remoteId,
       stage,
       stage === null ? null : JSON.stringify({ label: stage, pendingSector: null, nunota: null, invoiceNumber: null, updatedAt: "2026-11-20T10:00:00.000Z", checkedAt: null, readError: null }),

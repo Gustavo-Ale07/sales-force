@@ -139,6 +139,11 @@ export function isSubmittedReadOnly(draft: Pick<DraftRecord, "sendState" | "send
   return draft.sendState === "submitted" && !SUBMITTED_EDITABLE_STATUSES.includes(draft.sendCode ?? "");
 }
 
+/** True while a confirmed order waits for its delivery to Sankhya ("Aguardando envio"): blocked for editing, resent by itself. */
+export function isConfirmedLocked(draft: Pick<DraftRecord, "sendState" | "status">): boolean {
+  return draft.sendState === "requested" && (draft.status === "pending_sync" || draft.status === "syncing" || draft.status === "synced" || draft.status === "local_only");
+}
+
 function sendStateOf(value: unknown): SendState | null {
   return value === "requested" || value === "refused" || value === "submitted" ? value : null;
 }
@@ -695,6 +700,11 @@ export async function saveOrderDraft(db: SqlDatabase, env: OfflineEnv, input: Sa
     // invalidates the approval request exactly like the server (it goes back to draft and must be sent again).
     if (isSubmittedReadOnly(draft)) {
       throw new DraftNotEditableError("Este pedido já foi enviado ao Sankhya e não pode ser alterado.");
+    }
+    // A confirmed order waiting for its delivery is blocked for editing (owner 2026-11-23). Only repeating "Confirmar" passes. Held or
+    // conflicted orders (sync_error / conflict / needs_review) stay open for the seller to fix.
+    if (isConfirmedLocked(draft) && input.sendRequested === undefined) {
+      throw new DraftNotEditableError("Este pedido já foi confirmado e aguarda o envio ao Sankhya. Ele não pode mais ser alterado.");
     }
     const allOps = await listOutbox(tx, draft.localId);
     const create = allOps.filter((op) => op.type === "order.create").at(-1);

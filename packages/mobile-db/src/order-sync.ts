@@ -328,6 +328,8 @@ export interface PushOptions {
   readonly respectBackoff?: boolean;
   readonly maxOperations?: number;
   readonly onUnexpectedError?: (error: unknown) => void;
+  /** Called when a command failed transiently because the server answered 5xx or 429 (not a dead network): the run reports "Sankhya indisponível", never "Erro ao sincronizar". */
+  readonly onServerTrouble?: () => void;
 }
 
 const DEFAULT_MAX_OPERATIONS = 50;
@@ -627,6 +629,7 @@ export async function pushOutbox(
       if (failure === "transient") {
         await applyTransient(db, env, sent, error);
         failed += 1;
+        if (error.kind === "server" || error.kind === "rate_limit") options.onServerTrouble?.();
         if (error.kind === "network") return { attempted, accepted, failed, stoppedBy: "offline", quarantined };
         continue;
       }
@@ -740,6 +743,7 @@ export async function pushSendRequests(
           "UPDATE local_order_draft SET send_attempts = ?, send_next_attempt_at = ?, send_error = ? WHERE local_id = ? AND send_state = 'requested'",
           [attemptsNow, next, describeFailure(error), draft.localId],
         );
+        if (error.kind === "server" || error.kind === "rate_limit") options.onServerTrouble?.();
         if (failure === "auth") return { attempted, submitted, failed, refused, stoppedBy: "auth" };
         if (error.kind === "network") return { attempted, submitted, failed, refused, stoppedBy: "offline" };
         skipped.add(draft.localId);

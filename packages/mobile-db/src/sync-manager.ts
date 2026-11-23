@@ -311,7 +311,7 @@ export type ConfirmOutcome =
   | { readonly kind: "sent"; readonly erpNumber: number }
   | { readonly kind: "sending" }
   | { readonly kind: "awaiting_approval" }
-  | { readonly kind: "queued" }
+  | { readonly kind: "queued"; /** `sankhya_unavailable`: the server answered 5xx/429 (not a dead network); the order stays queued. */ readonly reason?: "sankhya_unavailable" }
   | { readonly kind: "refused"; readonly code: string | null; readonly message: string | null };
 
 interface Failure {
@@ -446,7 +446,11 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
           if (!(error instanceof TransportError)) deps.onUnexpectedError?.(error);
         }
       }
+      let serverTrouble = false;
       const pushOptions: PushOptions = {
+        onServerTrouble: () => {
+          serverTrouble = true;
+        },
         respectBackoff: reason === "timer",
         currentDataset: await readExpectedDataset(deps.db),
         ...(deps.onUnexpectedError === undefined ? {} : { onUnexpectedError: deps.onUnexpectedError }),
@@ -497,7 +501,8 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
       } else if (pushed.stoppedBy === "auth") {
         setFailure(failureOf("auth", "auth_required"));
       } else if (pushed.failed > 0) {
-        setFailure(failureOf("error", "error"));
+        // A 503/500/429 on the order push is transient: the order stays queued and is resent. It says "Sankhya indisponível" (popup with "Tentar de novo"), never "Erro ao sincronizar".
+        setFailure(serverTrouble ? failureOf("sankhya_unavailable", "offline") : failureOf("error", "error"));
       } else if (pull) {
         try {
           // The server refreshes from the ERP first; the download happens only after it is done. Failed steps do not stop the download.
@@ -650,7 +655,7 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
       const draft = await readDraft();
       const verdict = settled(draft, await rejectedOps());
       if (verdict !== null) return verdict;
-      if (draft?.sendState !== "submitted" || draft.remoteId === null) return { kind: "queued" };
+      if (draft?.sendState !== "submitted" || draft.remoteId === null) return status.failure === "sankhya_unavailable" ? { kind: "queued", reason: "sankhya_unavailable" } : { kind: "queued" };
       // 2. The server took it; the worker writes the note. Read the Sankhya number until it arrives or the wait ends.
       for (;;) {
         try {

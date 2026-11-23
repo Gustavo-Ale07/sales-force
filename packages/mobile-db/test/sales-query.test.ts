@@ -10,7 +10,7 @@ let clock: number;
 let seq: number;
 const env: OfflineEnv = { now: () => new Date(clock), newId: () => `id-${String(++seq).padStart(4, "0")}` };
 
-async function draft(customerCode: number, customerName: string, status: DraftStatus, extra: { at?: string; owner?: string; remoteNumber?: number } = {}): Promise<string> {
+async function draft(customerCode: number, customerName: string, status: DraftStatus, extra: { at?: string; owner?: string; remoteNumber?: number; sentToSankhya?: boolean } = {}): Promise<string> {
   clock = Date.parse(extra.at ?? "2026-09-30T12:00:00.000Z");
   const id = await saveOrderDraft(db, env, {
     ownerAccountId: extra.owner ?? OWNER,
@@ -21,10 +21,11 @@ async function draft(customerCode: number, customerName: string, status: DraftSt
     items: [{ productCode: 1, description: "P", unit: "UN", quantity: "1", discountPercent: "0", priceJson: "{}", groupCode: null, groupName: null }],
     loadedDataset: REAL,
   });
-  await db.execute("UPDATE local_order_draft SET status = ?, remote_draft_number = ?, remote_id = ? WHERE local_id = ?", [
+  await db.execute("UPDATE local_order_draft SET status = ?, remote_draft_number = ?, remote_id = ?, send_state = ? WHERE local_id = ?", [
     status,
     extra.remoteNumber ?? null,
     extra.remoteNumber === undefined ? null : `r-${id}`,
+    extra.sentToSankhya === true || (status === "synced" && extra.sentToSankhya !== false) ? "submitted" : null,
     id,
   ]);
   return id;
@@ -58,6 +59,14 @@ describe("queryDrafts — grouping", () => {
     expect(sent.rows.map((r) => r.customerName)).toEqual(["Dora"]);
     expect(await countDraftsByGroup(db, { ownerAccountId: OWNER })).toEqual({ unsent: 3, sent: 1 });
     expect(await countDraftsByGroup(db, { ownerAccountId: OWNER, customerCode: 4 })).toEqual({ unsent: 0, sent: 1 });
+  });
+
+  it("a saved order the Force backend already holds as a draft (synced, never submitted) stays unsent: it never went to Sankhya", async () => {
+    await draft(1, "Ana", "synced", { remoteNumber: 11, sentToSankhya: false });
+    await draft(2, "Bia", "synced", { remoteNumber: 12 });
+    expect((await queryDrafts(db, { ownerAccountId: OWNER, group: "unsent" }, page)).rows.map((r) => r.customerName)).toEqual(["Ana"]);
+    expect((await queryDrafts(db, { ownerAccountId: OWNER, group: "sent" }, page)).rows.map((r) => r.customerName)).toEqual(["Bia"]);
+    expect(await countDraftsByGroup(db, { ownerAccountId: OWNER })).toEqual({ unsent: 1, sent: 1 });
   });
 
   it("never returns another account's drafts", async () => {
