@@ -143,6 +143,32 @@ function sendStateOf(value: unknown): SendState | null {
   return value === "requested" || value === "refused" || value === "submitted" ? value : null;
 }
 
+/**
+ * Last known stage of the order following Sankhya, exactly as the server classified it (the device never derives it).
+ * `updatedAt` = when the stage last changed; `checkedAt` = last successful read; `readError` = the last read failed and the
+ * values above are the last known ones.
+ */
+export interface DraftErpStage {
+  readonly stage: string;
+  readonly label: string;
+  readonly pendingSector: string | null;
+  readonly nunota: number | null;
+  readonly invoiceNumber: number | null;
+  readonly updatedAt: string;
+  readonly checkedAt: string | null;
+  readonly readError: { readonly errorClass: string; readonly errorCode: string; readonly at: string } | null;
+}
+
+export function erpStageOf(stage: unknown, json: unknown): DraftErpStage | null {
+  if (typeof stage !== "string" || typeof json !== "string") return null;
+  try {
+    const rest = JSON.parse(json) as Omit<DraftErpStage, "stage">;
+    return { ...rest, stage };
+  } catch {
+    return null;
+  }
+}
+
 export interface DraftRecord {
   readonly localId: string;
   readonly ownerAccountId: string;
@@ -177,6 +203,8 @@ export interface DraftRecord {
   readonly sendAttempts: number;
   readonly sendNextAttemptAt: string | null;
   readonly sendRequestedAt: string | null;
+  /** Last known stage in Sankhya; `null` = never read (or an old server that does not send it). */
+  readonly erpStage: DraftErpStage | null;
 }
 
 export interface PriceReviewEntry {
@@ -235,6 +263,7 @@ export const DRAFT_COLUMNS = `d.local_id, d.owner_account_id, d.client_request_i
   d.negotiation_type_code, d.top_code, d.carrier_code, d.freight_type, d.notes, d.status, d.remote_id, d.remote_version, d.remote_draft_number, d.estimated_total,
   d.last_error, d.price_review, d.server_snapshot, d.created_at, d.updated_at, d.dataset_environment, d.dataset_id, d.eligibility,
   d.send_state, d.send_code, d.send_error, d.send_attempts, d.send_next_attempt_at, d.send_requested_at,
+  d.erp_stage, d.erp_stage_json,
   (SELECT count(*) FROM local_order_item i WHERE i.draft_local_id = d.local_id) AS item_count`;
 
 function nullableNumber(value: unknown): number | null {
@@ -281,6 +310,7 @@ export function toDraft(row: SqlRow): DraftRecord {
     sendAttempts: Number(row.send_attempts ?? 0),
     sendNextAttemptAt: nullableString(row.send_next_attempt_at),
     sendRequestedAt: nullableString(row.send_requested_at),
+    erpStage: erpStageOf(row.erp_stage, row.erp_stage_json),
   };
 }
 

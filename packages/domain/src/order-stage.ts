@@ -74,6 +74,9 @@ export const ORDER_STAGE_LABELS: Readonly<Record<OrderStageCode, string>> = {
   invoiced: 'Faturado',
 };
 
+/** The stages a seller follows on the timeline, in order (the quotation and the Force-side states have none). */
+export const ORDER_STAGE_TIMELINE: readonly OrderStageCode[] = ['received', 'in_review', 'financial_check', 'in_dispatch', 'in_invoicing', 'invoiced'];
+
 export interface PendingRelease {
   readonly event: number;
   readonly cascadeSequence: number | null;

@@ -223,4 +223,12 @@ export const migrations: readonly Migration[] = [
       `ALTER TABLE local_order_draft ADD COLUMN send_requested_at TEXT`,
     ],
   },
+  {
+    // Stage of the order following Sankhya (read-only on the device, written only from the server's `erpStage`): the LAST KNOWN
+    // stage is kept with the draft so it shows offline. erp_stage = the stage code (filterable); erp_stage_json = the rest
+    // (label, sector, numbers, times, read error). Expand-only, all nullable.
+    version: 11,
+    name: "order_erp_stage",
+    statements: [`ALTER TABLE local_order_draft ADD COLUMN erp_stage TEXT`, `ALTER TABLE local_order_draft ADD COLUMN erp_stage_json TEXT`],
+  },
 ];

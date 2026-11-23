@@ -44,7 +44,7 @@ const SaleRowView = memo(function SaleRowView({ row, onOpen }: { row: SalesRow; 
       </View>
       <Text style={styles.meta} numberOfLines={1}>{describeSaleMeta(draft)}</Text>
       <View style={styles.rowBottom}>
-        <SaleBadgeView status={draft.status} remoteId={draft.remoteId} lastError={draft.lastError} sendState={draft.sendState} sendCode={draft.sendCode} />
+        <SaleBadgeView status={draft.status} remoteId={draft.remoteId} lastError={draft.lastError} sendState={draft.sendState} sendCode={draft.sendCode} erpStage={draft.erpStage} />
         {value.partial && value.amount !== null && <Text style={styles.partial}>Valor parcial</Text>}
       </View>
       {attention !== null && <Text style={styles.attention}>{attention}</Text>}
@@ -125,7 +125,7 @@ export function SalesScreen({ localOrders, customers, orders, orderPdf, syncStat
   const extra = useMemo(() => ({ filters, tick }), [filters, tick]);
   const changed = useCallback(() => setChanges((n) => n + 1), []);
 
-  const selectGroup = (group: SalesGroup) => setFilters((current) => (current.group === group ? current : { ...current, group, statuses: [] }));
+  const selectGroup = (group: SalesGroup) => setFilters((current) => (current.group === group ? current : { ...current, group, statuses: [], stages: [] }));
 
   const header = (
     <View style={styles.toolbar}>

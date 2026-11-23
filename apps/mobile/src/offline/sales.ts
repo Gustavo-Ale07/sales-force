@@ -20,6 +20,8 @@ export type SalesPeriod = "all" | "today" | "7d" | "30d" | "custom";
 export interface SalesFilters {
   readonly group: SalesGroup;
   readonly statuses: readonly DraftStatus[];
+  /** Sankhya stage codes (last known, as the server classified them); only used in the "Enviados" group. */
+  readonly stages?: readonly string[];
   readonly customer: { readonly code: number; readonly name: string } | null;
   readonly period: SalesPeriod;
   /** Inclusive `YYYY-MM-DD` bounds, only read when `period` is `custom`. */
@@ -27,7 +29,7 @@ export interface SalesFilters {
   readonly customTo: string | null;
 }
 
-export const EMPTY_SALES_FILTERS: Omit<SalesFilters, "group"> = { statuses: [], customer: null, period: "all", customFrom: null, customTo: null };
+export const EMPTY_SALES_FILTERS: Omit<SalesFilters, "group"> = { statuses: [], stages: [], customer: null, period: "all", customFrom: null, customTo: null };
 
 function startOfLocalDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -107,6 +109,7 @@ function filterOf(ownerAccountId: string, filters: SalesFilters, text: string, n
     dataset,
     group: filters.group,
     ...(filters.statuses.length > 0 ? { statuses: filters.statuses } : {}),
+    ...(filters.group === "sent" && filters.stages !== undefined && filters.stages.length > 0 ? { erpStages: filters.stages } : {}),
     ...(filters.customer === null ? {} : { customerCode: filters.customer.code }),
     ...(from === undefined ? {} : { createdFrom: from }),
     ...(before === undefined ? {} : { createdBefore: before }),

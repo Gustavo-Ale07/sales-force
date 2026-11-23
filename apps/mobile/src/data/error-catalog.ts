@@ -99,6 +99,16 @@ export const ERROR_CATALOG = {
   dataset_unavailable: { title: "Dados não confirmados", message: "Conecte-se e sincronize para criar pedidos.", action: "go_sync" },
   dataset_changed: { title: "Dados mudaram", message: "Sincronize e abra o pedido de novo.", action: "go_sync" },
 
+  // Order stage following Sankhya (server `erpStage.readError.errorClass`, `erp_stage_<class>`; the last known stage stays on screen)
+  erp_stage_unavailable: { title: "Sankhya indisponível", message: "Não foi possível consultar a situação do pedido no Sankhya agora. Mostramos a última situação conhecida.", action: "retry" },
+  erp_stage_temporary: { title: "Consulta ao Sankhya falhou", message: "A consulta da situação do pedido falhou por instabilidade. Mostramos a última situação conhecida.", action: "retry" },
+  erp_stage_rate_limit: { title: "Muitas consultas", message: "O Sankhya pediu um intervalo. Aguarde um pouco e tente de novo. Mostramos a última situação conhecida.", action: "retry" },
+  erp_stage_auth: { title: "Acesso ao Sankhya recusado", message: "O servidor não conseguiu acesso ao Sankhya para consultar o pedido. Avise o suporte.", action: "none" },
+  erp_stage_validation: { title: "Consulta recusada", message: "O Sankhya recusou a consulta da situação do pedido. Avise o suporte.", action: "none" },
+  erp_stage_permanent: { title: "Situação indisponível", message: "Não foi possível consultar a situação do pedido no Sankhya. Avise o suporte.", action: "none" },
+  erp_stage_configuration_unavailable: { title: "Configuração incompleta", message: "A instalação ainda não tem a configuração para acompanhar o pedido no Sankhya. Avise o suporte.", action: "none" },
+  erp_stage_read_failed: { title: "Situação não atualizada", message: "Não foi possível atualizar a situação do pedido no Sankhya. Mostramos a última situação conhecida.", action: "retry" },
+
   // Misc
   pdf_failed: { title: "PDF não gerado", message: "Tente de novo. Não precisa de internet.", action: "retry" },
   unexpected: { title: "Algo deu errado", message: "Tente de novo. Se continuar, avise o suporte.", action: "retry" },

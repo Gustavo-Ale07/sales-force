@@ -24,6 +24,8 @@ export interface DraftFilter {
   readonly group?: SalesGroup;
   readonly statuses?: readonly DraftStatus[];
   readonly customerCode?: number;
+  /** Last known Sankhya stage codes (any of); only meaningful for sent orders. */
+  readonly erpStages?: readonly string[];
   /** ISO timestamps on the LOCAL creation date (`created_at`): inclusive start, exclusive end. */
   readonly createdFrom?: string;
   readonly createdBefore?: string;
@@ -51,6 +53,11 @@ function whereOf(filter: DraftFilter): { sql: string; params: SqlValue[] } {
   if (filter.statuses !== undefined && filter.statuses.length > 0) {
     clauses.push(`d.status IN (${marks(filter.statuses)})`);
     params.push(...filter.statuses);
+  }
+  // The stage only exists for sent orders; counting the other group under it would zero that tab.
+  if (filter.group !== "unsent" && filter.erpStages !== undefined && filter.erpStages.length > 0) {
+    clauses.push(`d.erp_stage IN (${marks(filter.erpStages)})`);
+    params.push(...filter.erpStages);
   }
   if (filter.customerCode !== undefined) {
     clauses.push("d.customer_code = ?");

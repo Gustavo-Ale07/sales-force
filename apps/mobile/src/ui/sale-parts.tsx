@@ -6,8 +6,8 @@ import { colors, spacing } from "../theme";
 
 const TONE_COLOR: Record<BadgeTone, string> = { neutral: colors.textMuted, info: colors.navy, ok: colors.ok, warning: colors.warning, danger: colors.red };
 
-export function SaleBadgeView({ status, remoteId, lastError, sendState, sendCode }: { status: SalesRow["draft"]["status"]; remoteId: string | null; lastError?: string | null; sendState?: SalesRow["draft"]["sendState"]; sendCode?: string | null }) {
-  const badge = saleBadge({ status, remoteId, lastError: lastError ?? null, sendState: sendState ?? null, sendCode: sendCode ?? null });
+export function SaleBadgeView({ status, remoteId, lastError, sendState, sendCode, erpStage }: { status: SalesRow["draft"]["status"]; remoteId: string | null; lastError?: string | null; sendState?: SalesRow["draft"]["sendState"]; sendCode?: string | null; erpStage?: SalesRow["draft"]["erpStage"] }) {
+  const badge = saleBadge({ status, remoteId, lastError: lastError ?? null, sendState: sendState ?? null, sendCode: sendCode ?? null, erpStage: erpStage ?? null });
   return (
     <View style={[styles.badge, { borderColor: TONE_COLOR[badge.tone] }]}>
       <Text style={[styles.badgeText, { color: TONE_COLOR[badge.tone] }]}>{badge.label}</Text>

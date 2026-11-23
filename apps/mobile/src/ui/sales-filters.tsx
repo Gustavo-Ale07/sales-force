@@ -3,6 +3,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import type { DraftStatus, SalesGroup } from "@salesforce/mobile-db";
 import type { CustomerListItem, CustomerRepository } from "../data/ports";
 import { brDateToIso, isoToBrDate, type SalesFilters, type SalesPeriod } from "../offline/sales";
+import { STAGE_FILTER_OPTIONS } from "../offline/erp-stage";
 import { saleBadge } from "../offline/sales-status";
 import { colors, spacing } from "../theme";
 import { ChipRow, Options, Sheet, type FilterChip } from "./customer-filters";
@@ -15,7 +16,7 @@ const PERIOD_OPTIONS = (Object.keys(PERIOD_LABEL) as SalesPeriod[]).map((value) 
 const UNSENT_FILTER_STATUSES: readonly DraftStatus[] = ["pending_sync", "syncing", "sync_error", "conflict", "needs_review"];
 
 export function countActiveSalesFilters(filters: SalesFilters): number {
-  return (filters.statuses.length > 0 ? 1 : 0) + (filters.customer !== null ? 1 : 0) + (filters.period !== "all" ? 1 : 0);
+  return (filters.statuses.length > 0 ? 1 : 0) + ((filters.stages?.length ?? 0) > 0 ? 1 : 0) + (filters.customer !== null ? 1 : 0) + (filters.period !== "all" ? 1 : 0);
 }
 
 function periodChipLabel(filters: SalesFilters): string {
@@ -25,13 +26,16 @@ function periodChipLabel(filters: SalesFilters): string {
   return from !== "" && to !== "" ? `${from} a ${to}` : from !== "" ? `A partir de ${from}` : to !== "" ? `Até ${to}` : "Personalizado";
 }
 
-const CLEARED = { statuses: [], customer: null, period: "all", customFrom: null, customTo: null } as const;
+const CLEARED = { statuses: [], stages: [], customer: null, period: "all", customFrom: null, customTo: null } as const;
 
 export function SalesFilterChips({ filters, onChange }: { filters: SalesFilters; onChange: (next: SalesFilters) => void }) {
   const chips: FilterChip[] = [];
   if (filters.customer !== null) chips.push({ key: "customer", label: filters.customer.name, remove: () => onChange({ ...filters, customer: null }) });
   if (filters.statuses.length > 0) {
     chips.push({ key: "status", label: filters.statuses.map((status) => saleBadge({ status, remoteId: null }).label).join(", "), remove: () => onChange({ ...filters, statuses: [] }) });
+  }
+  if ((filters.stages?.length ?? 0) > 0) {
+    chips.push({ key: "stage", label: (filters.stages ?? []).map((code) => STAGE_FILTER_OPTIONS.find((option) => option.value === code)?.label ?? code).join(", "), remove: () => onChange({ ...filters, stages: [] }) });
   }
   if (filters.period !== "all") chips.push({ key: "period", label: periodChipLabel(filters), remove: () => onChange({ ...filters, period: "all", customFrom: null, customTo: null }) });
   return <ChipRow chips={chips} onClear={() => onChange({ ...filters, ...CLEARED })} />;
@@ -87,6 +91,14 @@ function Body({ filters, customers, onUnauthenticated, onApply }: BodyProps) {
             options={statusOptions}
             value={draft.statuses.length === 0 ? "all" : (draft.statuses[0] as string)}
             onSelect={(value) => setDraft({ ...draft, statuses: value === "all" ? [] : [value as DraftStatus] })}
+          />
+        )}
+        {group === "sent" && (
+          <Options
+            label="Situação no Sankhya"
+            options={[{ value: "all", label: "Todas" }, ...STAGE_FILTER_OPTIONS.map((option) => ({ value: option.value as string, label: option.label }))]}
+            value={(draft.stages ?? []).length === 0 ? "all" : (draft.stages ?? [])[0] as string}
+            onSelect={(value) => setDraft({ ...draft, stages: value === "all" ? [] : [value] })}
           />
         )}
         <Options label="Período (data de criação neste aparelho)" options={PERIOD_OPTIONS} value={draft.period} onSelect={(period) => setDraft({ ...draft, period })} />

@@ -1,6 +1,7 @@
 import type { SqlDatabase, SqlExecutor, SqlRow } from "./connection";
 import type { OfflineEnv } from "./offline-env";
 import { isoNow } from "./offline-env";
+import type { DraftErpStage } from "./local-orders";
 import { deleteMeta, getMeta, setMeta } from "./reference-cache";
 
 /**
@@ -15,6 +16,8 @@ export interface OrderErpStatus {
   readonly label: string | null;
   readonly invoiceNumber: number | null;
   readonly checkedAt: string | null;
+  /** Stage following Sankhya as the server classified it. Absent/`null` = an old server, or not read yet: the last known one is kept. */
+  readonly stage?: DraftErpStage | null;
 }
 
 /** What the sync manager needs from the source to refresh the statuses. */
@@ -50,8 +53,19 @@ export async function refreshOrderErpStatuses(db: SqlDatabase, env: OfflineEnv, 
     await db.transaction(async (tx) => {
       for (const id of chunk) {
         const found = byId.get(id);
-        if (found === undefined) await deleteMeta(tx, keyOf(id));
-        else await setMeta(tx, keyOf(id), JSON.stringify(found), now);
+        if (found === undefined) {
+          // Out of scope now: the status and the stage go away with it.
+          await deleteMeta(tx, keyOf(id));
+          await tx.execute("UPDATE local_order_draft SET erp_stage = NULL, erp_stage_json = NULL WHERE owner_account_id = ? AND remote_id = ?", [ownerAccountId, id]);
+        } else {
+          const { stage, ...status } = found;
+          await setMeta(tx, keyOf(id), JSON.stringify(status), now);
+          // Only a stage the server sent replaces the stored one; without it the last known stage stays (offline-safe, old servers).
+          if (stage !== undefined && stage !== null) {
+            const { stage: code, ...rest } = stage;
+            await tx.execute("UPDATE local_order_draft SET erp_stage = ?, erp_stage_json = ? WHERE owner_account_id = ? AND remote_id = ?", [code, JSON.stringify(rest), ownerAccountId, id]);
+          }
+        }
       }
     });
     onProgress?.(Math.min(start + ORDER_STATUS_CHUNK, ids.length), ids.length);

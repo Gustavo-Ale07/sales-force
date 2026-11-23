@@ -1,3 +1,4 @@
+import { erpStageViewOf } from "./erp-stage";
 import { CUSTOMER_UNAVAILABLE_MESSAGE, LEGACY_CUSTOMER_UNAVAILABLE_MESSAGE, isCustomerUnavailableMessage, PRODUCT_BLOCK_MESSAGES, type DraftRecord, type DraftStatus, type SalesGroup } from "@salesforce/mobile-db";
 
 /**
@@ -16,7 +17,10 @@ export interface SaleBadge {
 }
 
 type SendView = Partial<Pick<DraftRecord, "sendState" | "sendCode">>;
-type StatusView = Pick<DraftRecord, "status" | "remoteId"> & Partial<Pick<DraftRecord, "lastError">> & SendView;
+type StatusView = Pick<DraftRecord, "status" | "remoteId"> & Partial<Pick<DraftRecord, "lastError" | "erpStage">> & SendView;
+
+/** The server's stage replaces the send-phase badge once the order is in Sankhya; waiting, refused and discount-approval states stay (they happen before Sankhya). */
+const STAGE_OVERRIDES_PHASE: readonly (SendPhase | null)[] = [null, "in_sankhya", "verifying", "approved"];
 
 /**
  * SEAM for the stage timeline (not built): the seller-facing state of the "send to Sankhya" request, derived only from the persisted
@@ -56,12 +60,20 @@ export function isProductBlocked(draft: Pick<DraftRecord, "status"> & Partial<Pi
   return draft.status === "sync_error" && Object.values(PRODUCT_BLOCK_MESSAGES).includes(draft.lastError ?? "");
 }
 
+/** The Sankhya stage to show for this order (badge and detail card), or `null` = keep the previous labels. */
+export function activeStageView(view: Pick<DraftRecord, "status"> & Partial<Pick<DraftRecord, "erpStage">> & SendView): ReturnType<typeof erpStageViewOf> {
+  if (view.status !== "synced" || !STAGE_OVERRIDES_PHASE.includes(sendPhaseOf(view)) || isCustomerUnavailable(view) || isProductBlocked(view)) return null;
+  return erpStageViewOf(view.erpStage);
+}
+
 /** Compact list badge; one per real state of the sync engine. */
 export function saleBadge(view: StatusView): SaleBadge {
   const { status, remoteId } = view;
   if (isCustomerUnavailable(view)) return { label: "Cliente indisponível", tone: "warning" };
   if (isProductBlocked(view)) return { label: "Produto indisponível", tone: "warning" };
   const phase = status === "synced" ? sendPhaseOf(view) : null;
+  const stage = status === "synced" && STAGE_OVERRIDES_PHASE.includes(phase) ? erpStageViewOf(view.erpStage) : null;
+  if (stage !== null) return { label: stage.label, tone: stage.tone };
   if (phase !== null) {
     switch (phase) {
       case "waiting":

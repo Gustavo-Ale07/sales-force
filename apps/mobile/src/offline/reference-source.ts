@@ -220,6 +220,21 @@ export function createReferenceSource(api: ApiClient, timing: RefreshTiming = {}
               label: order.erpStatus?.label ?? null,
               invoiceNumber: order.erpStatus?.invoiceNumber ?? null,
               checkedAt: order.erpStatus?.checkedAt ?? null,
+              // Old server: no `erpStage` at all, so the stored stage is left alone.
+              ...(order.erpStage === undefined || order.erpStage === null
+                ? {}
+                : {
+                    stage: {
+                      stage: order.erpStage.stage,
+                      label: order.erpStage.label,
+                      pendingSector: order.erpStage.pendingSector,
+                      nunota: order.erpStage.nunota,
+                      invoiceNumber: order.erpStage.invoiceNumber,
+                      updatedAt: order.erpStage.updatedAt,
+                      checkedAt: order.erpStage.checkedAt ?? null,
+                      readError: order.erpStage.readError ?? null,
+                    },
+                  }),
             });
           }
           if (view.items.length === 0 || page * pageSize >= view.total) break;

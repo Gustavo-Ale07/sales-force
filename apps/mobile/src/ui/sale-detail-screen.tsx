@@ -22,7 +22,8 @@ function releaseToneColor(tone: ReleaseTone): string {
 
 import { colors, spacing } from "../theme";
 import { codeOfHeldMessage } from "../data/error-catalog";
-import { isCustomerUnavailable, isProductBlocked, saleActions, saleExplanation } from "../offline/sales-status";
+import { activeStageView, isCustomerUnavailable, isProductBlocked, saleActions, saleExplanation } from "../offline/sales-status";
+import { ErpStageCard } from "./erp-stage-card";
 import { useAppModal } from "./app-modal";
 import { useErrorPopup } from "./use-error-popup";
 import { SaleBadgeView, describeSaleValue } from "./sale-parts";
@@ -160,6 +161,18 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refusedKey]);
 
+  // The last stage read from Sankhya failed to refresh: say so once per failure with a retry that runs a sync (the last stage stays on screen).
+  const stage = loaded === null ? null : activeStageView(loaded.draft);
+  const stageErrorKey = stage === null || stage.readErrorCode === null ? null : `${localId}:${stage.readErrorCode}:${stage.asOf}`;
+  const announcedStageError = useRef<string | null>(null);
+  useEffect(() => {
+    if (stage === null || stage.readErrorCode === null || stageErrorKey === announcedStageError.current) return;
+    announcedStageError.current = stageErrorKey;
+    errors.reportCode(stage.readErrorCode, { retry: onSyncNow });
+    // Announce once per order, cause and last confirmation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stageErrorKey]);
+
   if (missing) {
     return (
       <View style={styles.center}>
@@ -256,10 +269,10 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
           <Text style={styles.customer}>{draft.customerName}</Text>
           <Text style={styles.meta}>{`Cliente ${draft.customerCode}`}</Text>
           <View style={styles.statusLine}>
-            <SaleBadgeView status={draft.status} remoteId={draft.remoteId} lastError={draft.lastError} sendState={draft.sendState} sendCode={draft.sendCode} />
+            <SaleBadgeView status={draft.status} remoteId={draft.remoteId} lastError={draft.lastError} sendState={draft.sendState} sendCode={draft.sendCode} erpStage={draft.erpStage} />
             <Text style={styles.meta}>{draft.remoteDraftNumber !== null ? `${tops !== null && isQuotationTop(effectiveTop, tops) ? "Orçamento" : "Pedido"} nº ${draft.remoteDraftNumber}` : "Sem número ainda"}</Text>
           </View>
-          <Text style={styles.explanation}>{saleExplanation(draft)}</Text>
+          {stage !== null ? <ErpStageCard stage={stage} /> : <Text style={styles.explanation}>{saleExplanation(draft)}</Text>}
           {release !== null && (
             <View accessibilityLabel="Liberação no Sankhya">
               <Text style={[styles.releaseLabel, { color: releaseToneColor(release.tone) }]}>{release.label}</Text>
