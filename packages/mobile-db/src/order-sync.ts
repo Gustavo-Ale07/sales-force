@@ -857,11 +857,12 @@ export async function resolveConflict(
           groupCode: known?.groupCode ?? null,
           groupName: known?.groupName ?? null,
           ipiJson: ipiJsonOf(item),
+          maxDiscountPercent: known?.maxDiscountPercent ?? null,
         };
         await tx.execute(
-          `INSERT INTO local_order_item (draft_local_id, position, product_code, description, unit, quantity, discount_percent, price_json, group_code, group_name, ipi_json)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [draftLocalId, index + 1, input.productCode, input.description, input.unit, input.quantity, input.discountPercent, input.priceJson, input.groupCode, input.groupName, input.ipiJson ?? null],
+          `INSERT INTO local_order_item (draft_local_id, position, product_code, description, unit, quantity, discount_percent, price_json, group_code, group_name, ipi_json, max_discount_percent)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [draftLocalId, index + 1, input.productCode, input.description, input.unit, input.quantity, input.discountPercent, input.priceJson, input.groupCode, input.groupName, input.ipiJson ?? null, input.maxDiscountPercent ?? null],
         );
       }
       await tx.execute(

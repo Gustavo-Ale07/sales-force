@@ -33,6 +33,7 @@ function draft(localId: string, status: DraftStatus, updatedAt: string): DraftRe
     sendRequestedAt: null,
     erpStage: null,
     erpNumber: null,
+    discountOverLimitAccepted: false,
   };
 }
 

@@ -16,6 +16,10 @@ export const colors = {
   ok: "#17693d",
   warning: "#8a4b00",
   errorBackground: "#ffe6e6",
+  /** Amber: a discount above the product's registered limit (a warning, never an error). */
+  amber: "#b45309",
+  amberBackground: "#fff4dc",
+  amberBorder: "#f0b429",
 } as const;
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 } as const;

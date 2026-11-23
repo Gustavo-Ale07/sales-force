@@ -1,8 +1,10 @@
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import {
   decrementLineQuantity,
+  discountExceedsLimit,
   discountProblemMessages,
   incrementLineQuantity,
+  limitText,
   lineAmountsOf,
   quantityProblemMessages,
   type DraftPreview,
@@ -29,6 +31,8 @@ interface CartLineProps {
   readonly preview: LinePreview;
   readonly onQuantityChange: (key: string, text: string) => void;
   readonly onDiscountChange: (key: string, text: string) => void;
+  /** The discount field was left (blur or submit): the moment the typed percentage is checked against the product limit. */
+  readonly onDiscountCommit: (key: string) => void;
   readonly onRemove: (key: string) => void;
   /** Selection mode (mobile's phone-appropriate stand-in for the desktop's checkboxes + toolbar, DISC-1/MOB-4). */
   readonly selectionMode: boolean;
@@ -38,13 +42,14 @@ interface CartLineProps {
   readonly onLongPress: (key: string) => void;
 }
 
-function CartLine({ line, preview, onQuantityChange, onDiscountChange, onRemove, selectionMode, selected, onToggleSelect, onLongPress }: CartLineProps) {
+function CartLine({ line, preview, onQuantityChange, onDiscountChange, onDiscountCommit, onRemove, selectionMode, selected, onToggleSelect, onLongPress }: CartLineProps) {
   const amounts = lineAmountsOf(preview);
   const noPrice = line.price.state === "none";
   const decrement = decrementLineQuantity(line);
   // At the minimum step the "−" is inert: taking an item out of the cart is the explicit "Remover" button.
   const canDecrement = decrement?.kind === "set";
   const hasDiscount = amounts.discountAmount !== null && amounts.discountAmount !== "0" && amounts.discountAmount !== "0.00";
+  const overLimit = discountExceedsLimit(line);
   return (
     <View style={[styles.line, selected && styles.lineSelected]} accessible>
       <Pressable
@@ -113,12 +118,16 @@ function CartLine({ line, preview, onQuantityChange, onDiscountChange, onRemove,
           )}
         </View>
         <View style={styles.fieldNarrow}>
-          <Text style={styles.fieldLabel}>Desconto</Text>
+          <View style={styles.discountLabelRow}>
+            <Text style={styles.fieldLabel}>Desconto</Text>
+            {overLimit && <Icon name="alert" size={16} color={colors.amber} />}
+          </View>
           <View style={styles.percentRow}>
             <TextInput
-              style={[styles.input, styles.percentInput, noPrice && styles.inputDisabled]}
+              style={[styles.input, styles.percentInput, noPrice && styles.inputDisabled, overLimit && styles.inputOverLimit]}
               value={line.discountText}
               onChangeText={(text) => onDiscountChange(line.key, text)}
+              onEndEditing={() => onDiscountCommit(line.key)}
               keyboardType="decimal-pad"
               editable={!noPrice}
               placeholder={noPrice ? "—" : "0"}
@@ -129,6 +138,11 @@ function CartLine({ line, preview, onQuantityChange, onDiscountChange, onRemove,
           </View>
           {preview.discountProblem !== undefined && (
             <Text style={styles.error}>{discountProblemMessages[preview.discountProblem]}</Text>
+          )}
+          {line.maxDiscountPercent != null && !noPrice && (
+            <Text style={[styles.limitInfo, overLimit && styles.limitInfoOver]} accessibilityLabel={`Desconto máximo ${limitText(line.maxDiscountPercent)}%`}>
+              {`Máx. ${limitText(line.maxDiscountPercent)}%`}
+            </Text>
           )}
         </View>
       </View>
@@ -160,6 +174,7 @@ export interface CartViewProps {
   readonly preview: DraftPreview;
   readonly onQuantityChange: (key: string, text: string) => void;
   readonly onDiscountChange: (key: string, text: string) => void;
+  readonly onDiscountCommit: (key: string) => void;
   readonly onRemove: (key: string) => void;
   /** Selection mode: choosing a subset of lines for group discount (long-press or the "Selecionar itens" toggle). */
   readonly selectionMode: boolean;
@@ -173,7 +188,7 @@ export interface CartViewProps {
  * financial summary. Every number shown comes from `packages/domain` via `order-draft.ts` previews — this
  * component only renders text and forwards edits.
  */
-export function CartView({ lines, preview, onQuantityChange, onDiscountChange, onRemove, selectionMode, selected, onToggleSelect, onLongPressLine }: CartViewProps) {
+export function CartView({ lines, preview, onQuantityChange, onDiscountChange, onDiscountCommit, onRemove, selectionMode, selected, onToggleSelect, onLongPressLine }: CartViewProps) {
   if (lines.length === 0) {
     return (
       <View style={styles.empty}>
@@ -191,6 +206,7 @@ export function CartView({ lines, preview, onQuantityChange, onDiscountChange, o
           preview={preview.lines[index] ?? { key: line.key, item: null }}
           onQuantityChange={onQuantityChange}
           onDiscountChange={onDiscountChange}
+          onDiscountCommit={onDiscountCommit}
           onRemove={onRemove}
           selectionMode={selectionMode}
           selected={selected.has(line.key)}
@@ -313,6 +329,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   inputDisabled: { color: colors.textMuted, backgroundColor: colors.border },
+  inputOverLimit: { borderColor: colors.amberBorder, backgroundColor: colors.amberBackground, color: colors.amber, borderWidth: 2 },
+  discountLabelRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  limitInfo: { fontSize: 11, color: colors.textMuted, textAlign: "right" },
+  limitInfoOver: { color: colors.amber, fontWeight: "700" },
   error: { color: colors.red, fontSize: 11 },
   amounts: { gap: 2 },
   amountRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: spacing.md },

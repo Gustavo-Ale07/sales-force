@@ -54,6 +54,46 @@ export interface EditorLine {
   readonly group?: LineGroup;
   /** IPI reference for the display estimate (D-D); absent = "IPI não disponível". Never validated nor sent to the server. */
   readonly ipi?: IpiRef;
+  /** Discount ceiling of the product (percent, decimal text) from the catalog; absent/`null` = no limit registered = never a warning. */
+  readonly maxDiscountPercent?: string | null;
+}
+
+/**
+ * Whether the line's typed discount is above its product's registered ceiling. Indicative only (a warning, never a block): no
+ * limit registered, an unpriced line or an invalid text never exceeds. Compared as decimals, not as typed text.
+ */
+export function discountExceedsLimit(line: Pick<EditorLine, "discountText" | "maxDiscountPercent" | "price">, discountText: string = line.discountText): boolean {
+  const limit = line.maxDiscountPercent;
+  if (limit === null || limit === undefined || line.price.state === "none") return false;
+  const parsed = parseDiscountInput(discountText);
+  if (!parsed.ok) return false;
+  const max = Number(limit);
+  return Number.isFinite(max) && Number(parsed.value) > max;
+}
+
+/** Short pt-BR text of a limit for the field info: "12" -> "12", "12.50" -> "12,5". */
+export function limitText(limit: string): string {
+  const trimmed = limit.includes(".") ? limit.replace(/0+$/, "").replace(/\.$/, "") : limit;
+  return trimmed.replace(".", ",");
+}
+
+export interface OverLimitItem {
+  readonly key: string;
+  readonly description: string;
+  readonly limit: string;
+  readonly typed: string;
+}
+
+/** The lines changed by a bulk apply (`before` -> `after`) whose new discount is above their limit, and how many changed lines stay within it. */
+export function bulkOverLimit(before: readonly EditorLine[], after: readonly EditorLine[]): { over: OverLimitItem[]; within: number } {
+  const over: OverLimitItem[] = [];
+  let within = 0;
+  after.forEach((line, index) => {
+    if (line === before[index]) return;
+    if (discountExceedsLimit(line)) over.push({ key: line.key, description: line.description, limit: limitText(line.maxDiscountPercent as string), typed: line.discountText.trim().replace(/\s*%$/, "") });
+    else within += 1;
+  });
+  return { over, within };
 }
 
 export type QuantityProblem = "empty" | DecimalError;
@@ -181,6 +221,7 @@ export function lineFromProduct(product: ProductListItem, key: string): EditorLi
     price: product.listPrice,
     group: { code: product.groupCode, name: product.groupName },
     ipi: product.ipi ?? { status: "unavailable" },
+    maxDiscountPercent: product.maxDiscountPercent ?? null,
   };
 }
 

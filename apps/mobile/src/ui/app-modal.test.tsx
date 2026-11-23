@@ -169,7 +169,7 @@ describe("details", () => {
     await fireEvent.press(within(dialog()).getByText("Ver detalhes"));
     expect(screen.getByTestId("app-modal-details").props.selectable).toBe(true);
     expect(screen.getByText(/Status: 500/)).toBeTruthy();
-    await fireEvent.press(within(dialog()).getByText("Ocultar detalhes"));
+    await fireEvent.press(within(dialog()).getByText("Ocultar"));
     expect(screen.queryByTestId("app-modal-details")).toBeNull();
   });
 

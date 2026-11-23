@@ -25,6 +25,10 @@ export interface ModalOptions {
   readonly buttons?: readonly ModalButton[];
   /** Technical text behind "Ver detalhes" (code, message). Selectable, so a long press copies it. */
   readonly details?: string;
+  /** Text of the toggle that opens `details` (default "Ver detalhes"); the closed label is `detailsLabel`, the open one "Ocultar". */
+  readonly detailsLabel?: string;
+  /** `details` as a plain (not monospace) list, e.g. items of an order. */
+  readonly detailsPlain?: boolean;
 }
 
 export interface ConfirmOptions {
@@ -169,10 +173,10 @@ export function AppModalView({ options, onClose, copyText }: { options: ModalOpt
             {options.details !== undefined && options.details !== "" && (
               <View>
                 <Pressable onPress={() => setDetailsOpen((open) => !open)} accessibilityRole="button" accessibilityState={{ expanded: detailsOpen }} style={styles.detailsToggle}>
-                  <Text style={styles.detailsToggleText}>{detailsOpen ? "Ocultar detalhes" : "Ver detalhes"}</Text>
+                  <Text style={styles.detailsToggleText}>{detailsOpen ? "Ocultar" : (options.detailsLabel ?? "Ver detalhes")}</Text>
                 </Pressable>
                 {detailsOpen && (
-                  <Text style={styles.details} selectable testID="app-modal-details">
+                  <Text style={[styles.details, options.detailsPlain === true && styles.detailsPlain]} selectable testID="app-modal-details">
                     {options.details}
                   </Text>
                 )}
@@ -224,6 +228,7 @@ const styles = StyleSheet.create({
   detailsToggle: { minHeight: 36, alignItems: "center", justifyContent: "center" },
   detailsToggleText: { fontSize: 13, fontWeight: "700", color: colors.navy, textDecorationLine: "underline" },
   details: { fontSize: 12, color: colors.textMuted, backgroundColor: colors.background, borderRadius: 8, padding: spacing.md, fontFamily: "monospace" },
+  detailsPlain: { fontFamily: undefined, fontSize: 13, textAlign: "left" },
   buttons: { gap: spacing.sm },
   button: { minHeight: 48, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.lg },
   buttonOutline: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },

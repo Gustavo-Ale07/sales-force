@@ -54,7 +54,7 @@ async function reopenDraftAndOpenGroupSheet(codes: number[], products: ProductRe
   await pressAndSettle(screen.getByRole("button", { name: "Editar pedido" }));
   await pressAndSettle(screen.getByRole("button", { name: "Editar produtos" }));
   await pressAndSettle(screen.getByRole("tab", { name: `Carrinho (${codes.length})` }));
-  await pressAndSettle(screen.getByRole("button", { name: "Desconto por grupo" }));
+  await pressAndSettle(screen.getByRole("button", { name: "Desconto em lote" }));
 }
 
 describe("NewOrderScreen catalog-group discount edge cases (MOB-4a)", () => {
@@ -66,8 +66,9 @@ describe("NewOrderScreen catalog-group discount edge cases (MOB-4a)", () => {
     await reopenDraftAndOpenGroupSheet([5], products);
 
     expect(await screen.findByText("Copos")).toBeTruthy();
-    await fireEvent.changeText(screen.getByLabelText("Desconto do grupo Copos (%)"), "20");
-    await pressAndSettle(screen.getByRole("button", { name: "Aplicar descontos" }));
+    await pressAndSettle(screen.getByRole("radio", { name: "Copos" }));
+    await fireEvent.changeText(screen.getByLabelText("Desconto (%)"), "20");
+    await pressAndSettle(screen.getByRole("button", { name: "Aplicar desconto" }));
 
     expect((screen.getByLabelText("Desconto de Produto 5").props as { value: string }).value).toBe("20");
   });
@@ -86,12 +87,12 @@ describe("NewOrderScreen catalog-group discount edge cases (MOB-4a)", () => {
     });
     await reopenDraftAndOpenGroupSheet([5, 6], products);
 
-    expect(await screen.findByText("Não foi possível identificar o grupo de alguns itens; eles ficam de fora.")).toBeTruthy();
     expect(screen.getByText("Copos")).toBeTruthy();
     expect(screen.queryByText("Pratos")).toBeNull();
 
-    await fireEvent.changeText(screen.getByLabelText("Desconto do grupo Copos (%)"), "10");
-    await pressAndSettle(screen.getByRole("button", { name: "Aplicar descontos" }));
+    await pressAndSettle(screen.getByRole("radio", { name: "Copos" }));
+    await fireEvent.changeText(screen.getByLabelText("Desconto (%)"), "10");
+    await pressAndSettle(screen.getByRole("button", { name: "Aplicar desconto" }));
 
     expect((screen.getByLabelText("Desconto de Produto 5").props as { value: string }).value).toBe("10");
     expect((screen.getByLabelText("Desconto de Produto 6").props as { value: string }).value).toBe("");
@@ -108,11 +109,12 @@ describe("NewOrderScreen catalog-group discount edge cases (MOB-4a)", () => {
     await pressAndSettle(screen.getByRole("button", { name: "Próximo" }));
     await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Produto avulso ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
-    await pressAndSettle(screen.getByRole("button", { name: "Desconto por grupo" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Desconto em lote" }));
 
     expect(await screen.findByText("Sem grupo")).toBeTruthy();
-    await fireEvent.changeText(screen.getByLabelText("Desconto do grupo Sem grupo (%)"), "5");
-    await pressAndSettle(screen.getByRole("button", { name: "Aplicar descontos" }));
+    await pressAndSettle(screen.getByRole("radio", { name: "Sem grupo" }));
+    await fireEvent.changeText(screen.getByLabelText("Desconto (%)"), "5");
+    await pressAndSettle(screen.getByRole("button", { name: "Aplicar desconto" }));
 
     expect((screen.getByLabelText("Desconto de Produto avulso").props as { value: string }).value).toBe("5");
   });

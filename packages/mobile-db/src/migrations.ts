@@ -238,4 +238,15 @@ export const migrations: readonly Migration[] = [
     name: "order_erp_number",
     statements: [`ALTER TABLE local_order_draft ADD COLUMN erp_number INTEGER`],
   },
+  {
+    // Owner 2026-11-23: product discount ceiling (TGFPRO.DESCMAX, from the catalog pull) kept on each order line so a reopened draft
+    // knows it offline, and the one-time "discount above the accepted limit" mark of the order. Expand-only: a nullable column and
+    // a defaulted flag; old rows read as no limit / not marked. Display and warning only, never a block or a commercial rule.
+    version: 13,
+    name: "order_discount_limit",
+    statements: [
+      `ALTER TABLE local_order_item ADD COLUMN max_discount_percent TEXT`,
+      `ALTER TABLE local_order_draft ADD COLUMN discount_over_limit_accepted INTEGER NOT NULL DEFAULT 0 CHECK (discount_over_limit_accepted IN (0, 1))`,
+    ],
+  },
 ];

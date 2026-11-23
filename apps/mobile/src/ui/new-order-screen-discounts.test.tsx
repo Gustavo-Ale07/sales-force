@@ -57,8 +57,8 @@ async function setupCartWithTwoLines() {
 describe("NewOrderScreen discounts (mass and group apply, DISC-1/MOB-4)", () => {
   it("applies one discount percentage to every line in the cart (mass apply)", async () => {
     await setupCartWithTwoLines();
-    await pressAndSettle(screen.getByRole("button", { name: "Desconto no pedido todo" }));
-    await fireEvent.changeText(screen.getByLabelText("Desconto no pedido todo (%)"), "10");
+    await pressAndSettle(screen.getByRole("button", { name: "Desconto em lote" }));
+    await fireEvent.changeText(screen.getByLabelText("Desconto (%)"), "10");
     await pressAndSettle(screen.getByRole("button", { name: "Aplicar desconto" }));
 
     expect((screen.getByLabelText("Desconto de Copo 200 ml").props as { value: string }).value).toBe("10");
@@ -92,8 +92,8 @@ describe("NewOrderScreen discounts (mass and group apply, DISC-1/MOB-4)", () => 
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Sem preço ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (2)" }));
 
-    await pressAndSettle(screen.getByRole("button", { name: "Desconto no pedido todo" }));
-    await fireEvent.changeText(screen.getByLabelText("Desconto no pedido todo (%)"), "10");
+    await pressAndSettle(screen.getByRole("button", { name: "Desconto em lote" }));
+    await fireEvent.changeText(screen.getByLabelText("Desconto (%)"), "10");
     await pressAndSettle(screen.getByRole("button", { name: "Aplicar desconto" }));
 
     expect((screen.getByLabelText("Desconto de Copo 200 ml").props as { value: string }).value).toBe("10");
@@ -105,7 +105,7 @@ describe("NewOrderScreen discounts (mass and group apply, DISC-1/MOB-4)", () => 
     await pressAndSettle(screen.getByRole("button", { name: "Selecionar itens" }));
     await pressAndSettle(screen.getByRole("checkbox", { name: "Selecionar Copo 200 ml" }));
     await pressAndSettle(screen.getByRole("button", { name: "Aplicar desconto aos selecionados" }));
-    await fireEvent.changeText(screen.getByLabelText("Desconto nos itens selecionados (%)"), "20");
+    await fireEvent.changeText(screen.getByLabelText("Desconto (%)"), "20");
     await pressAndSettle(screen.getByRole("button", { name: "Aplicar desconto" }));
 
     expect((screen.getByLabelText("Desconto de Copo 200 ml").props as { value: string }).value).toBe("20");
@@ -169,15 +169,14 @@ describe("NewOrderScreen catalog-group discount (MOB-4a: automatic bucketing by 
 
   it("buckets the cart by catalog group and applies one percentage per group in a single action", async () => {
     await setupCartWithGroups();
-    await pressAndSettle(screen.getByRole("button", { name: "Desconto por grupo" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Desconto em lote" }));
 
     expect(await screen.findByText("Copos")).toBeTruthy();
-    expect(screen.getByText("2 itens no carrinho")).toBeTruthy();
-    expect(screen.getByText("Pratos")).toBeTruthy();
-    expect(screen.getByText("1 item no carrinho")).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "Pratos" })).toBeTruthy();
 
-    await fireEvent.changeText(screen.getByLabelText("Desconto do grupo Copos (%)"), "15");
-    await pressAndSettle(screen.getByRole("button", { name: "Aplicar descontos" }));
+    await pressAndSettle(screen.getByRole("radio", { name: "Copos" }));
+    await fireEvent.changeText(screen.getByLabelText("Desconto (%)"), "15");
+    await pressAndSettle(screen.getByRole("button", { name: "Aplicar desconto" }));
 
     expect((screen.getByLabelText("Desconto de Copo 200 ml").props as { value: string }).value).toBe("15");
     expect((screen.getByLabelText("Desconto de Copo 300 ml").props as { value: string }).value).toBe("15");
@@ -210,10 +209,11 @@ describe("NewOrderScreen catalog-group discount (MOB-4a: automatic bucketing by 
     await pressAndSettle(screen.getByRole("button", { name: "Adicionar Copo sem preço ao carrinho" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (2)" }));
 
-    await pressAndSettle(screen.getByRole("button", { name: "Desconto por grupo" }));
-    expect(await screen.findByText("2 itens no carrinho")).toBeTruthy();
-    await fireEvent.changeText(screen.getByLabelText("Desconto do grupo Copos (%)"), "10");
-    await pressAndSettle(screen.getByRole("button", { name: "Aplicar descontos" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Desconto em lote" }));
+    expect(await screen.findByRole("radio", { name: "Copos" })).toBeTruthy();
+    await pressAndSettle(screen.getByRole("radio", { name: "Copos" }));
+    await fireEvent.changeText(screen.getByLabelText("Desconto (%)"), "10");
+    await pressAndSettle(screen.getByRole("button", { name: "Aplicar desconto" }));
 
     expect((screen.getByLabelText("Desconto de Copo 200 ml").props as { value: string }).value).toBe("10");
     expect(screen.getByLabelText("Desconto de Copo sem preço").props.editable).toBe(false);
@@ -246,7 +246,7 @@ describe("NewOrderScreen catalog-group discount (MOB-4a: automatic bucketing by 
     await pressAndSettle(screen.getByRole("button", { name: "Editar produtos" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
 
-    await pressAndSettle(screen.getByRole("button", { name: "Desconto por grupo" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Desconto em lote" }));
 
     expect(await screen.findByText("Copos")).toBeTruthy();
   });
@@ -279,9 +279,7 @@ describe("NewOrderScreen catalog-group discount (MOB-4a: automatic bucketing by 
     await pressAndSettle(screen.getByRole("button", { name: "Editar produtos" }));
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
 
-    await pressAndSettle(screen.getByRole("button", { name: "Desconto por grupo" }));
+    await pressAndSettle(screen.getByRole("button", { name: "Desconto em lote" }));
 
-    expect(await screen.findByText("Não foi possível identificar o grupo de alguns itens; eles ficam de fora.")).toBeTruthy();
-    expect(screen.getByText("Nenhum grupo identificado nos itens do carrinho.")).toBeTruthy();
   });
 });

@@ -50,6 +50,8 @@ export interface SaveLocalDraftInput {
   readonly sendRequested?: boolean;
   /** The dataset the editor was loaded under (from the entry configuration it showed); `null` = unknown, the save is refused. */
   readonly loadedDataset: DatasetIdentity | null;
+  /** The seller accepted a discount above a product limit (local mark; `true` sets it, absent keeps it). Never blocks sending. */
+  readonly discountOverLimitAccepted?: boolean;
 }
 
 export type DuplicateOutcome =
@@ -113,6 +115,7 @@ export function toDraftItems(lines: readonly EditorLine[]): DraftItemInput[] {
       groupCode: line.group?.code ?? null,
       groupName: line.group?.name ?? null,
       ipiJson: JSON.stringify(line.ipi ?? { status: "unavailable" }),
+      maxDiscountPercent: line.maxDiscountPercent ?? null,
     };
   });
 }
@@ -150,6 +153,7 @@ export function linesFromDraftItems(items: readonly DraftItemRecord[]): EditorLi
     price: parsePrice(item.priceJson),
     group: { code: item.groupCode, name: item.groupName },
     ipi: parseIpi(item.ipiJson),
+    maxDiscountPercent: item.maxDiscountPercent ?? null,
   }));
 }
 
@@ -185,6 +189,7 @@ export function createLocalOrdersPort(deps: {
         items: toDraftItems(input.lines),
         ...(input.sendRequested === undefined ? {} : { sendRequested: input.sendRequested }),
         loadedDataset: input.loadedDataset,
+        ...(input.discountOverLimitAccepted === true ? { discountOverLimitAccepted: true } : {}),
       });
       const draft = await getDraft(db, id);
       onChanged();

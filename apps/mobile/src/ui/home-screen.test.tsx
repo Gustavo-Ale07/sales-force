@@ -38,6 +38,7 @@ function draft(localId: string, customerName: string, status: DraftRecord["statu
     sendRequestedAt: null,
     erpStage: null,
     erpNumber: null,
+    discountOverLimitAccepted: false,
   };
 }
 

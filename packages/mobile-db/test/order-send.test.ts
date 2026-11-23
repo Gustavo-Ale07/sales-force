@@ -213,7 +213,18 @@ describe("migrations v10 (order_send_request) and v11 (order_erp_stage)", () => 
     await runMigrations(old, migrations.filter((m) => m.version <= 9));
     expect(await readSchemaVersion(old)).toBe(9);
     await confirm(old);
-    const id = await saveOrderDraft(old, env, input());
+    // Seed the v9 database with rows saved by the current code on a current database, keeping only the columns v9 knew.
+    const seedSource = openNodeDatabase();
+    await runMigrations(seedSource, migrations);
+    await confirm(seedSource);
+    const id = await saveOrderDraft(seedSource, env, input());
+    for (const table of ["local_order_draft", "local_order_item", "outbox"]) {
+      const known = new Set(await columnsOf(old, table));
+      for (const row of (await seedSource.query(`SELECT * FROM ${table}`)) as Record<string, unknown>[]) {
+        const keys = Object.keys(row).filter((key) => known.has(key));
+        await old.execute(`INSERT INTO ${table} (${keys.join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`, keys.map((key) => row[key] as never));
+      }
+    }
     const tablesBefore = (await old.query<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")).map((r) => r.name).sort();
     const before = await old.query("SELECT * FROM local_order_draft");
     const columnsBefore = await columnsOf(old, "local_order_draft");
@@ -222,15 +233,15 @@ describe("migrations v10 (order_send_request) and v11 (order_erp_stage)", () => 
     expect(columnsBefore).not.toContain("send_state");
 
     const report = await runMigrations(old, migrations);
-    expect(report).toEqual({ from: 9, to: 12, applied: [10, 11, 12] });
+    expect(report).toEqual({ from: 9, to: 13, applied: [10, 11, 12, 13] });
 
     const columnsAfter = await columnsOf(old, "local_order_draft");
-    expect(columnsAfter).toEqual(expect.arrayContaining([...columnsBefore, "send_state", "send_code", "send_error", "send_attempts", "send_next_attempt_at", "send_requested_at", "erp_stage", "erp_stage_json", "erp_number"]));
-    expect(columnsAfter).toHaveLength(columnsBefore.length + 9);
+    expect(columnsAfter).toEqual(expect.arrayContaining([...columnsBefore, "send_state", "send_code", "send_error", "send_attempts", "send_next_attempt_at", "send_requested_at", "erp_stage", "erp_stage_json", "erp_number", "discount_over_limit_accepted"]));
+    expect(columnsAfter).toHaveLength(columnsBefore.length + 10);
     // old values untouched
     const [row] = (await old.query("SELECT * FROM local_order_draft")) as Record<string, unknown>[];
     for (const [key, value] of Object.entries((before as Record<string, unknown>[])[0] as Record<string, unknown>)) expect(row?.[key]).toEqual(value);
-    expect(await old.query("SELECT * FROM local_order_item")).toEqual(itemsBefore);
+    expect(await old.query("SELECT * FROM local_order_item")).toEqual((itemsBefore as Record<string, unknown>[]).map((r) => ({ ...r, max_discount_percent: null })));
     expect(await old.query("SELECT * FROM outbox")).toEqual(outboxBefore);
     expect((await old.query<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")).map((r) => r.name).sort()).toEqual(tablesBefore);
     // defaults for the pre-existing row
@@ -240,8 +251,8 @@ describe("migrations v10 (order_send_request) and v11 (order_erp_stage)", () => 
     expect((await getDraft(old, id))?.sendState).toBe("requested");
   });
 
-  it("is idempotent and the schema version ends at 12", async () => {
-    expect(await readSchemaVersion(db)).toBe(12);
+  it("is idempotent and the schema version ends at 13", async () => {
+    expect(await readSchemaVersion(db)).toBe(13);
     expect((await runMigrations(db, migrations)).applied).toEqual([]);
   });
 

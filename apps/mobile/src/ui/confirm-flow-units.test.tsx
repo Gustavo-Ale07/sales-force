@@ -140,7 +140,7 @@ describe("Thumb in the cart", () => {
     const store = createProductImageStore({ fs: memory.fs, fetchThumbnail: async () => ok(PNG), scope: async () => "owner|production|ds", now: () => Date.now(), timeoutMs: 30 });
     await render(
       <ProductImageProvider store={store} online>
-        <CartView lines={[line]} preview={previewDraft([line])} onQuantityChange={noop} onDiscountChange={noop} onRemove={noop} selectionMode={false} selected={new Set()} onToggleSelect={noop} onLongPressLine={noop} />
+        <CartView lines={[line]} preview={previewDraft([line])} onQuantityChange={noop} onDiscountChange={noop} onDiscountCommit={noop} onRemove={noop} selectionMode={false} selected={new Set()} onToggleSelect={noop} onLongPressLine={noop} />
       </ProductImageProvider>,
     );
     expect(await screen.findByTestId("product-thumb-1", { includeHiddenElements: true }, { timeout: 5000 })).toBeTruthy();

@@ -7,7 +7,9 @@ import { ApiRequestError } from "../data/api";
 import { codeOfHeldMessage } from "../data/error-catalog";
 import { describeDataError, type DataErrorInfo } from "../data/errors";
 import {
+  bulkOverLimit,
   decrementLineQuantity,
+  discountExceedsLimit,
   incrementLineQuantity,
   isLinePriceOrderable,
   lineAmountsOf,
@@ -34,8 +36,7 @@ import { Icon } from "./icons";
 import { CartView, OrderTotals } from "./cart-view";
 import { Thumb } from "./product-views";
 import { CustomerPicker } from "./customer-picker";
-import { DiscountSheet } from "./discount-sheet";
-import { GroupDiscountSheet } from "./group-discount-sheet";
+import { BulkDiscountSheet } from "./bulk-discount-sheet";
 import { ProductPicker } from "./product-picker";
 import type { ProductOrderActions } from "./product-views";
 
@@ -128,11 +129,14 @@ export function NewOrderScreen({
   /** Phone-appropriate stand-in for the desktop's checkboxes + toolbar (DISC-1/MOB-4): long-press or this toggle. */
   const [selectionMode, setSelectionMode] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
-  const [massDiscountOpen, setMassDiscountOpen] = useState(false);
-  /** Manual ad-hoc subset apply (not "group discount" — MOB-4a superseded that label; see `GroupDiscountSheet` below for the real catalog-group feature). */
+  /** The one bulk sheet: every item or one catalog group. */
+  const [bulkDiscountOpen, setBulkDiscountOpen] = useState(false);
+  /** The same sheet for the lines picked in selection mode. */
   const [selectedDiscountOpen, setSelectedDiscountOpen] = useState(false);
-  /** Automatic catalog-group discount (MOB-4a): buckets the cart by product `groupCode`/`groupName`. */
-  const [groupDiscountOpen, setGroupDiscountOpen] = useState(false);
+  /** The seller said "Sim" to a discount above a product limit in this session; the saved draft carries it too (`localDraft.discountOverLimitAccepted`). */
+  const [discountAccepted, setDiscountAccepted] = useState(false);
+  /** The discount field being edited and its value before the edit, so "Não" can put it back. */
+  const discountEditRef = useRef<{ key: string; before: string } | null>(null);
 
   const [config, setConfig] = useState<
     { status: "loading" } | { status: "error"; error: DataErrorInfo } | { status: "ready"; value: OrderEntryConfiguration }
@@ -399,6 +403,8 @@ export function NewOrderScreen({
     setEditingOrder(null);
     setSelectionMode(false);
     setSelected(new Set());
+    setDiscountAccepted(false);
+    discountEditRef.current = null;
     goToStep("customer");
   }
 
@@ -599,8 +605,64 @@ export function NewOrderScreen({
     setLines((current) => current.map((line) => (line.key === key ? { ...line, quantityText: text } : line)));
   }
 
+  /** Marked once the seller accepted a discount above a limit (this session or a saved draft): no further question in this order. */
+  const overLimitAccepted = discountAccepted || (localDraft?.discountOverLimitAccepted ?? false);
+  const latest = useRef({ lines, overLimitAccepted });
+  latest.current = { lines, overLimitAccepted };
+
   function setDiscountText(key: string, text: string) {
+    // The first change of an edit remembers the value before it, for "Não".
+    if (discountEditRef.current?.key !== key) {
+      discountEditRef.current = { key, before: latest.current.lines.find((line) => line.key === key)?.discountText ?? "" };
+    }
     setLines((current) => current.map((line) => (line.key === key ? { ...line, discountText: text } : line)));
+  }
+
+  const OVER_LIMIT_QUESTION = "Esse desconto é acima do liberado. Tem certeza que deseja utilizar essa %?";
+
+  /** One question, "Sim" / "Não", in the app's own dialog; resolves true on "Sim". */
+  function askOverLimit(details?: { message: string; list: string }): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      modal.show({
+        variant: "confirm",
+        title: OVER_LIMIT_QUESTION,
+        ...(details === undefined ? {} : { message: details.message, details: details.list, detailsLabel: "Ver itens acima do limite", detailsPlain: true }),
+        buttons: [
+          { label: "Sim", role: "primary", onPress: () => resolve(true) },
+          { label: "Não", role: "cancel", onPress: () => resolve(false) },
+        ],
+      });
+    });
+  }
+
+  /** The item discount field was left: asks once per order when the typed percentage is above the product limit. */
+  function commitDiscount(key: string) {
+    const edit = discountEditRef.current;
+    if (edit === null || edit.key !== key) return;
+    discountEditRef.current = null;
+    const line = latest.current.lines.find((candidate) => candidate.key === key);
+    if (line === undefined || latest.current.overLimitAccepted || !discountExceedsLimit(line)) return;
+    void askOverLimit().then((yes) => {
+      if (yes) setDiscountAccepted(true);
+      else setLines((current) => current.map((candidate) => (candidate.key === key ? { ...candidate, discountText: edit.before } : candidate)));
+    });
+  }
+
+  /** A bulk / group / selection apply: applies at once when nothing is above a limit (or the order is already marked); otherwise asks once. */
+  function applyBulk(before: readonly EditorLine[], after: EditorLine[], close: () => void) {
+    const { over, within } = bulkOverLimit(before, after);
+    if (over.length === 0 || latest.current.overLimitAccepted) {
+      setLines(after);
+      close();
+      return;
+    }
+    const list = over.map((item) => `${item.description}: máx. ${item.limit}%, digitado ${item.typed}%`).join("\n");
+    void askOverLimit({ message: `${within} ${within === 1 ? "item dentro do limite" : "itens dentro do limite"} · ${over.length} ${over.length === 1 ? "item acima" : "itens acima"}`, list }).then((yes) => {
+      if (!yes) return;
+      setDiscountAccepted(true);
+      setLines(after);
+      close();
+    });
   }
 
   /** Writes the order to this device (same path as "Salvar"); returns the stored draft. */
@@ -616,6 +678,7 @@ export function NewOrderScreen({
       notes: notesValue,
       lines,
       loadedDataset: config.status === "ready" ? datasetIdentityOf(config.value) : null,
+      ...(overLimitAccepted ? { discountOverLimitAccepted: true } : {}),
     });
     baselineRef.current = orderSignature(picked.code, lines);
     setChoice({});
@@ -1054,13 +1117,9 @@ export function NewOrderScreen({
                   </Pressable>
                 ) : (
                   <>
-                    <Pressable style={styles.toolbarButton} onPress={() => setMassDiscountOpen(true)} accessibilityRole="button" accessibilityLabel="Desconto no pedido todo">
+                    <Pressable style={styles.toolbarButton} onPress={() => setBulkDiscountOpen(true)} accessibilityRole="button" accessibilityLabel="Desconto em lote">
                       <Text style={styles.toolbarIcon}>%</Text>
-                      <Text style={styles.toolbarButtonText} numberOfLines={1}>Desc. geral</Text>
-                    </Pressable>
-                    <Pressable style={styles.toolbarButton} onPress={() => setGroupDiscountOpen(true)} accessibilityRole="button" accessibilityLabel="Desconto por grupo">
-                      <Icon name="catalog" size={18} color={colors.navy} />
-                      <Text style={styles.toolbarButtonText} numberOfLines={1}>Por grupo</Text>
+                      <Text style={styles.toolbarButtonText} numberOfLines={1}>Desc. em lote</Text>
                     </Pressable>
                   </>
                 )}
@@ -1071,6 +1130,7 @@ export function NewOrderScreen({
               preview={preview}
               onQuantityChange={setQuantityText}
               onDiscountChange={setDiscountText}
+              onDiscountCommit={commitDiscount}
               onRemove={removeLine}
               selectionMode={selectionMode}
               selected={selected}
@@ -1177,40 +1237,25 @@ export function NewOrderScreen({
         />
       )}
 
-      <DiscountSheet
-        visible={massDiscountOpen}
-        title="Desconto no pedido todo"
-        description="Aplica um desconto percentual a todos os itens do carrinho."
-        lines={lines}
-        match={() => true}
-        onApply={(nextLines) => {
-          setLines(nextLines);
-          setMassDiscountOpen(false);
-        }}
-        onClose={() => setMassDiscountOpen(false)}
-      />
-      <DiscountSheet
-        visible={selectedDiscountOpen}
-        title="Desconto nos itens selecionados"
-        description="Aplica um desconto percentual apenas aos itens marcados abaixo."
-        lines={lines}
-        match={(line) => selected.has(line.key)}
-        onApply={(nextLines) => {
-          setLines(nextLines);
-          setSelectedDiscountOpen(false);
-          cancelSelection();
-        }}
-        onClose={() => setSelectedDiscountOpen(false)}
-      />
-      <GroupDiscountSheet
-        visible={groupDiscountOpen}
+      <BulkDiscountSheet
+        visible={bulkDiscountOpen}
         lines={lines}
         products={repositories.products}
-        onApply={(nextLines) => {
-          setLines(nextLines);
-          setGroupDiscountOpen(false);
-        }}
-        onClose={() => setGroupDiscountOpen(false)}
+        onApply={(before, after) => applyBulk(before, after, () => setBulkDiscountOpen(false))}
+        onClose={() => setBulkDiscountOpen(false)}
+      />
+      <BulkDiscountSheet
+        visible={selectedDiscountOpen}
+        lines={lines}
+        products={repositories.products}
+        selectedKeys={selected}
+        onApply={(before, after) =>
+          applyBulk(before, after, () => {
+            setSelectedDiscountOpen(false);
+            cancelSelection();
+          })
+        }
+        onClose={() => setSelectedDiscountOpen(false)}
       />
       {sendingToErp && (
         <View style={styles.sendingOverlay} accessibilityViewIsModal accessibilityLiveRegion="polite" accessibilityLabel="Enviando ao Sankhya">

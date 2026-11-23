@@ -224,7 +224,7 @@ describe("migration v3", () => {
     await insertLegacy(old, A, "1");
     await insertLegacy(old, A, "2", "needs_review");
     const report = await runMigrations(old, migrations);
-    expect(report.applied).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    expect(report.applied).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
     expect((await listDrafts(old, A)).map((d) => [d.dataset, d.eligibility])).toEqual([
       [null, "unchecked"],
       [null, "unchecked"],
