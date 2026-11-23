@@ -75,7 +75,7 @@ runMain('account-cli', async () => {
   });
   const [command] = positionals;
   if (command !== 'create' && command !== 'set-password' && command !== 'unlock' && command !== 'create-external') {
-    fail('usage: account <create|set-password|unlock|create-external> --email <login name> [--name <display name>] [--role admin|manager|seller|technical] [--seller-code <n>] [--password-stdin]');
+    fail('usage: account <create|set-password|unlock|create-external> --email <login name> [--name <display name>] [--role admin|manager|seller|technical|operations] [--seller-code <n>] [--password-stdin]');
   }
   // The `--email` flag is the operator-facing name kept for compatibility; the value is the login identifier (user name).
   const loginName = values.email ?? fail('--email is required');
@@ -110,7 +110,7 @@ runMain('account-cli', async () => {
     const { accounts, repository } = createOperatorAccountService(db, passwordHashParamsOf(env), undefined, operatorIdentity(process.env), env.AUTH_MODE);
     try {
       if (command === 'create-external') {
-        const role = values.role ?? fail('--role is required (admin, manager, seller or technical)');
+        const role = values.role ?? fail('--role is required (admin, manager, seller, technical or operations)');
         const name = values.name ?? fail('--name is required');
         const rawSeller = values['seller-code'];
         if (rawSeller !== undefined && !/^[0-9]{1,9}$/.test(rawSeller)) fail('--seller-code must be a positive integer');
@@ -133,8 +133,8 @@ runMain('account-cli', async () => {
         password = '';
         process.stdout.write('external account created/linked successfully\n');
       } else if (command === 'create') {
-        const role = values.role ?? fail('--role is required (admin, manager, seller or technical)');
-        if (!(ACCOUNT_ROLES as readonly string[]).includes(role)) fail('--role must be admin, manager, seller or technical');
+        const role = values.role ?? fail('--role is required (admin, manager, seller, technical or operations)');
+        if (!(ACCOUNT_ROLES as readonly string[]).includes(role)) fail('--role must be admin, manager, seller, technical or operations');
         const refusal = sellerPasswordRefusal(role) ?? localPasswordRefusal(env.AUTH_MODE, role);
         if (refusal !== null) fail(refusal);
         const name = values.name ?? fail('--name is required');

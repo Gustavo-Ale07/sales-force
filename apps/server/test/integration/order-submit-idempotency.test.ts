@@ -56,6 +56,22 @@ async function draft(ctx: CommercialApp): Promise<string> {
 const outboxOf = (ctx: CommercialApp, id: string) => ctx.database.handle.db.select().from(integrationOutbox).where(eq(integrationOutbox.aggregateId, id));
 const submit = (ctx: CommercialApp, id: string) => ctx.call('seller1', 'POST', `/orders/${id}/submit`);
 
+describe('a saved order is never sent: only POST /orders/{id}/submit enqueues', () => {
+  it('after create and after replace the order is a draft with no outbox row and no ERP stage', async () => {
+    const created = await on.call('seller1', 'POST', '/orders', body());
+    expect(created.status).toBe(201);
+    const id: string = created.body.id;
+    expect(await outboxOf(on, id)).toHaveLength(0);
+    const replaced = await on.call('seller1', 'PUT', `/orders/${id}`, { customerCode: customer, negotiationTypeCode: 2, notes: 'revisado', expectedVersion: 1, items: [{ productCode, quantity: '3' }] });
+    expect(replaced.status).toBe(200);
+    expect(replaced.body.status).toBe('draft');
+    expect(await outboxOf(on, id)).toHaveLength(0);
+    const [stored] = await on.database.handle.db.select().from(salesOrder).where(eq(salesOrder.id, id));
+    expect(stored?.status).toBe('draft');
+    expect(stored?.erpNumber).toBeNull(); // enqueue happens only on POST /orders/{id}/submit (queued cases below)
+  });
+});
+
 describe('submit replay is idempotent (same state, exactly one outbox row)', () => {
   it('queued: the replay answers 200 queued with the same version and one row', async () => {
     const id = await draft(on);

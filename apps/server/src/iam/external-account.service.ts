@@ -29,7 +29,7 @@ export type ExternalAccountRefusal =
   | 'verifier_rate_limited';
 
 const MESSAGES: Record<ExternalAccountRefusal, string> = {
-  invalid_role: 'The role must be one of: admin, manager, seller, technical.',
+  invalid_role: 'The role must be one of: admin, manager, seller, technical, operations.',
   seller_code_required: 'A seller account needs an explicit --seller-code.',
   seller_code_not_allowed: '--seller-code applies only to a seller account.',
   username_taken: 'A Force account with this login already exists; nothing was changed (an existing account is never converted).',

@@ -26,6 +26,8 @@ export const ROLE_CHANNELS: Readonly<Record<AccountRole, readonly Channel[]>> = 
   seller: ['web', 'mobile'],
   // ROLE-1: platform operation only; no mobile use is granted (deny by default).
   technical: ['web'],
+  // Owner ruling 2026-11-23 (option A): internal staff of Pedidos/Financeiro; web only (never mobile), release queue only.
+  operations: ['web'],
 };
 
 export interface RoutePolicy {
@@ -34,8 +36,8 @@ export interface RoutePolicy {
 
 /** The commercial profiles (ROLE-1: never `technical`). */
 const EVERY_ROLE: readonly AccountRole[] = COMMERCIAL_ROLES;
-/** D-AC: every commercial profile may refresh; the technical profile too (it sees the detail). The response is cut by role in the service. */
-const SYNC_REFRESH_ROLES: readonly AccountRole[] = [...COMMERCIAL_ROLES, 'technical'];
+/** D-AC: every commercial profile may refresh; the technical profile too (it sees the detail) and `operations` (the queue's "Atualizar agora"; basic view). The response is cut by role in the service. */
+const SYNC_REFRESH_ROLES: readonly AccountRole[] = [...COMMERCIAL_ROLES, 'technical', 'operations'];
 
 /**
  * Explicit grants by `operationId`. Endpoints of later stages are added here together with their
@@ -106,11 +108,11 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   approveApproval: { roles: ['manager', 'admin'] },
   rejectApproval: { roles: ['manager', 'admin'] },
   // Release queue (owner decision 2026-11-23, docs/implementation/release-queue.md): read only, Sankhya releases. The route grant lists
-  // the roles that CAN hold the new permission `release_queue.read:<sector>`; WHICH sector each sees is `visibleReleaseQueueSectors`
-  // (admin and manager: all; a seller only for the sectors the installation configuration lists their user under; nobody else).
-  // Denied by default: with no configuration a seller is refused (403) by the service, `technical` is refused here.
-  listReleaseQueue: { roles: ['admin', 'manager', 'seller'] },
-  getReleaseQueueCount: { roles: ['admin', 'manager', 'seller'] },
+  // the roles that CAN hold the permission `release_queue.read:<sector>`; WHICH sector each sees is `visibleReleaseQueueSectors`
+  // (admin and manager: all; `operations`: only the sectors the installation configuration lists its user under). A seller NEVER
+  // sees it (owner ruling 2026-11-23, option A), even when listed; `technical` neither. Denied by default.
+  listReleaseQueue: { roles: ['admin', 'manager', 'operations'] },
+  getReleaseQueueCount: { roles: ['admin', 'manager', 'operations'] },
   // "Repetir último pedido" (Phase C): a draft-creation route from the customer's own order history in
   // Sales Force, so it follows the same grant as createOrder.
   repeatLastOrder: { roles: EVERY_ROLE },

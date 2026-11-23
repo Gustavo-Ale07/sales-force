@@ -97,7 +97,7 @@ describe('AUTH_MODE=external: resulting login policy', () => {
     expect(auth.externalLogin?.enabled).toBe(true);
     expect(auth.externalLogin?.linkMode).toBe('PRE_LINKED');
     expect(auth.allowedRoles).toEqual([...LOCAL_MODE_ROLES, 'seller']);
-    expect(auth.externalOnlyRoles).toEqual(['manager']);
+    expect(auth.externalOnlyRoles).toEqual(['manager', 'operations']);
   });
 
   it('uses VERIFIED_AUTO_PROVISION only when the flag and its proof are both set', () => {
@@ -118,6 +118,7 @@ describe('AUTH_MODE=external: resulting login policy', () => {
     const { allowedRoles: _roles, ...withoutRoles } = good;
     expect(() => assertSafeAuthConfig(withoutRoles as AuthConfig)).toThrow(/external/);
     expect(() => assertSafeAuthConfig({ ...good, allowedRoles: ['admin', 'technical', 'seller', 'manager'] })).toThrow(/external/);
+    expect(() => assertSafeAuthConfig({ ...good, allowedRoles: ['admin', 'technical', 'seller', 'operations'] })).toThrow(/operations must be an external-only role/);
     const { externalOnlyRoles: _only, ...withoutOnly } = good;
     expect(() => assertSafeAuthConfig({ ...withoutOnly, allowedRoles: ['admin', 'technical', 'seller'] })).not.toThrow();
   });

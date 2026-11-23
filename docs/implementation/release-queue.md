@@ -22,14 +22,19 @@ Orders covered: those the Force sent (`sales_order.status='sent'`, with `erp_num
 - "Atualizar agora" = existing `POST /sync/refresh` (any signed-in profile may call it).
 - No deep link: none is documented for Sankhya; the row shows NUNOTA only (spike 9.61 e).
 
-## Permissions (proposal, deny by default)
+## Permissions (owner ruling 2026-11-23, option A; deny by default)
 
-New permission `release_queue.read:<sector>` decided by `visibleReleaseQueueSectors` (domain) and enforced in the service, with the route grant `listReleaseQueue`/`getReleaseQueueCount` in `ROUTE_POLICY` for `admin`, `manager`, `seller` (technical refused).
-- `admin`, `manager`: every sector (owner decision). This does grant the new permission to these two existing profiles.
-- `seller`: refused (403) unless the installation configuration lists the account's Sankhya user code under a sector.
-- Configuration key `erp.releaseQueue.sectorUsers`: `{ "Pedidos": [CODUSU...], "Financeiro": [CODUSU...] }`. CODUSU is matched to `account.external_user_id` (the directory login stores the Sankhya user code there). Absent = nobody beyond admin/manager.
+New permission `release_queue.read:<sector>` decided by `visibleReleaseQueueSectors` (domain) and enforced in the service, with the route grant `listReleaseQueue`/`getReleaseQueueCount` in `ROUTE_POLICY` for `admin`, `manager` and `operations` (seller and technical refused).
+- `admin`, `manager`: every sector.
+- `operations` (new role, owner ruling 2026-11-23, option A): only the sectors under which the installation configuration lists its Sankhya user code (CODUSU = `account.external_user_id`). Not listed = 403.
+- `seller`: NEVER (403), even when its CODUSU is listed in configuration. The earlier seller exception is removed.
+- Configuration key `erp.releaseQueue.sectorUsers`: `{ "Pedidos": [CODUSU...], "Financeiro": [CODUSU...] }`. Absent = nobody beyond admin/manager.
 
-User link findings: the only Force-to-Sankhya user link is `account.external_user_id` = CODUSU (directory login, AUTH-6; `erp_directory_user` mirrors CODUSU -> CODVEND). The Force roles are `admin`, `manager`, `seller`, `technical`; there are NO Pedidos/Financeiro profiles. NEEDS VALIDATION/BLOCKER for staff access: directory auto-provisioning creates only `seller` accounts and refuses a user with no seller (`no_seller`), and local login is limited to admin/technical, so a pure Pedidos/Financeiro person cannot sign in today. Owner choice needed: (a) a new role (e.g. `operations`, widening `account_role_chk`, channels and the matrix) or (b) letting configured sector users sign in through the directory without a seller. Until then the queue works for admin/manager and for seller accounts listed in configuration.
+### The `operations` role (owner ruling 2026-11-23, option A; to be recorded in decisions.md by the owner)
+
+Internal staff of Pedidos/Financeiro. Web only (never mobile). Deny by default: the only routes granted are login/logout, the session refresh (`startSyncRefresh`, `getSyncRefresh`, "Atualizar agora"), `listReleaseQueue` and `getReleaseQueueCount`. No orders, customers, products, prices, cost/margin, dashboard, approvals, configuration, admin or export. It never carries a seller link (database trigger, migration 0042). It is an external-only role like manager: no local password, it signs in through the Sankhya directory login (AUTH_MODE external guards and `assertSafeAuthConfig` refuse it as a local-password role).
+
+Provisioning: `account create-external --role operations` (no seller code) with the person's CODUSU, then add that CODUSU to `erp.releaseQueue.sectorUsers` under "Pedidos" and/or "Financeiro" in `installation.json` and rerun `config-bootstrap` (deploy/README-staging.md). An operations account with no listed sector signs in but sees 403 on the queue.
 
 ## Notification (4.5, not built)
 
@@ -41,12 +46,12 @@ The Force discount approval (DISC-2, `awaiting_approval`, seller -> manager -> d
 
 ## NEEDS VALIDATION
 
-`CODUSULIB`, request-time column, `SEQCASCATA` readable by the worker user; meaning of null `CODUSULIB`; event 13 sectors; releaser name; staff sign-in path (above); deep link; stale-row retention beyond 90 days.
+`CODUSULIB`, request-time column, `SEQCASCATA` readable by the worker user; meaning of null `CODUSULIB`; event 13 sectors; releaser name; deep link; stale-row retention beyond 90 days.
 
 ## Deploy order
 
-Apply migration 0041 and the `deploy/staging/db-roles.sql` grants, then server (API + worker), then web. The contract and configuration changes are additive; without `erp.releaseQueue` only admin/manager see the queue.
+Apply migrations 0041 and 0042 (0042 only widens `account_role_chk` and the seller-link guard triggers; no new grant) and the `deploy/staging/db-roles.sql` grants, then server (API + worker), then web. The contract and configuration changes are additive; without `erp.releaseQueue` only admin/manager see the queue. Web must know the `operations` role before such accounts are created.
 
 ## Tests needed (final stage)
 
-Queue by sector and by profile (admin/manager all, configured seller only its sector, unlisted seller and technical 403, forbidden `sector` filter 403, authorization matrix rows for the two operationIds); mirror update from the fake gateway state machine (`stageFacts` with pending lines, event 13 in both sectors, assignee soft-failure via `assigneeReadErrorCode`); pending -> released leaves the queue; read failure keeps rows; counts (orders once in `total`); no cost/margin fields; migration 0041 + grants; domain `sectorsOfPendingRelease` and `visibleReleaseQueueSectors` unit tests.
+Queue by sector and by profile (admin/manager all, configured operations only its sector, unlisted operations, seller (even if listed) and technical 403, forbidden `sector` filter 403, authorization matrix rows for the two operationIds); mirror update from the fake gateway state machine (`stageFacts` with pending lines, event 13 in both sectors, assignee soft-failure via `assigneeReadErrorCode`); pending -> released leaves the queue; read failure keeps rows; counts (orders once in `total`); no cost/margin fields; migration 0041 + grants; domain `sectorsOfPendingRelease` and `visibleReleaseQueueSectors` unit tests.

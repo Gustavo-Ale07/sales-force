@@ -10,9 +10,9 @@ export type IsoTimestamp = string;
 /** ISO-8601 calendar date, e.g. `2026-01-31`. */
 export type IsoDate = string;
 
-/** `technical` (ROLE-1) is a platform-operation profile: not an `admin`, no commercial scope. */
-export type AccountRole = 'admin' | 'manager' | 'seller' | 'technical';
-export const ACCOUNT_ROLES: readonly AccountRole[] = ['admin', 'manager', 'seller', 'technical'];
+/** `technical` (ROLE-1) is a platform-operation profile: not an `admin`, no commercial scope. `operations` (owner ruling 2026-11-23, option A) is internal staff of Pedidos/Financeiro: web only, release queue only, no commercial scope. */
+export type AccountRole = 'admin' | 'manager' | 'seller' | 'technical' | 'operations';
+export const ACCOUNT_ROLES: readonly AccountRole[] = ['admin', 'manager', 'seller', 'technical', 'operations'];
 
 export interface Seller {
   readonly code: number;

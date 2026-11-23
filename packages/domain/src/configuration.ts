@@ -171,7 +171,7 @@ export interface InstallationConfiguration {
       readonly bothSectorsEvents?: readonly number[];
     };
     /**
-     * Release queue ("Aguardando liberação", docs/implementation/release-queue.md): who besides manager/admin may see a sector's queue.
+     * Release queue ("Aguardando liberação", docs/implementation/release-queue.md): which internal (`operations`) users see a sector's queue besides manager/admin (a seller never does, even when listed).
      * Key = sector name (`orderStage.reviewSector` / `financialSector`); value = Sankhya user codes (CODUSU = `account.external_user_id`).
      * Absent or empty = nobody but manager and admin sees any queue (deny by default).
      */

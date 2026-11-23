@@ -796,7 +796,7 @@ export interface components {
             sellerCodes: number[];
         };
         /** @enum {string} */
-        AccountRole: "admin" | "manager" | "seller" | "technical";
+        AccountRole: "admin" | "manager" | "seller" | "technical" | "operations";
         AlternativeTable: {
             tableCode: number;
             validation: components["schemas"]["AlternativeTableValidation"];

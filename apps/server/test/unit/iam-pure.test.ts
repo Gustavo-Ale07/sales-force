@@ -146,8 +146,24 @@ describe('central policy', () => {
     }
   });
 
+  it('operations (owner ruling 2026-11-23): web only, never mobile; only the release queue, refresh and logout; nothing else', () => {
+    expect(isChannelAllowed('operations', 'web')).toBe(true);
+    expect(isChannelAllowed('operations', 'mobile')).toBe(false);
+    expect(authorizeRoute({ role: 'operations', channel: 'mobile' }, 'listReleaseQueue')).toEqual({ allowed: false, reason: 'channel_not_permitted' });
+    const granted = Object.entries(ROUTE_POLICY)
+      .filter(([, policy]) => policy.roles.includes('operations'))
+      .map(([operationId]) => operationId)
+      .sort();
+    expect(granted).toEqual(['getReleaseQueueCount', 'getSyncRefresh', 'listReleaseQueue', 'logout', 'startSyncRefresh']);
+  });
+
+  it('a seller is never granted the release queue (owner ruling 2026-11-23)', () => {
+    expect(authorizeRoute({ role: 'seller', channel: 'web' }, 'listReleaseQueue')).toEqual({ allowed: false, reason: 'role_not_permitted' });
+    expect(authorizeRoute({ role: 'seller', channel: 'web' }, 'getReleaseQueueCount')).toEqual({ allowed: false, reason: 'role_not_permitted' });
+  });
+
   it('lets every known role end its own session', () => {
-    for (const role of ['admin', 'manager', 'seller']) {
+    for (const role of ['admin', 'manager', 'seller', 'technical', 'operations']) {
       expect(authorizeRoute({ role, channel: 'web' }, 'logout')).toEqual({ allowed: true });
     }
   });

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { IsoTimestampSchema, UuidSchema, codeInt, named } from './primitives.js';
 
-export const AccountRoleSchema = named('AccountRole', z.enum(['admin', 'manager', 'seller', 'technical']));
+export const AccountRoleSchema = named('AccountRole', z.enum(['admin', 'manager', 'seller', 'technical', 'operations']));
 export type AccountRole = z.infer<typeof AccountRoleSchema>;
 
 /**

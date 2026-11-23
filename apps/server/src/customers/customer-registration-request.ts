@@ -44,7 +44,7 @@ export type PrepareOutcome =
   | { readonly ok: false; readonly issues: AppErrorIssue[] };
 
 export interface RegistrationActor {
-  readonly role: 'seller' | 'manager' | 'admin' | 'technical';
+  readonly role: 'seller' | 'manager' | 'admin' | 'technical' | 'operations';
   readonly sellerCodes: readonly number[];
   /**
    * The seller codes the resolved data scope reaches (`PolicyService.customerScope`): `null` = every seller

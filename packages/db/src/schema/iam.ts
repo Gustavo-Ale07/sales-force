@@ -19,7 +19,7 @@ import { installationConfigurationVersion } from './platform.js';
  * commercial scope. Like `admin` it carries no seller link (enforced for `technical` by the
  * database, migration 0007; `admin` is still app-level only).
  */
-export const accountRoles = ['admin', 'manager', 'seller', 'technical'] as const;
+export const accountRoles = ['admin', 'manager', 'seller', 'technical', 'operations'] as const;
 export type AccountRole = (typeof accountRoles)[number];
 
 export const accountStatuses = ['active', 'disabled'] as const;

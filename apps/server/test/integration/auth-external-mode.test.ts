@@ -123,10 +123,11 @@ describe('AUTH_MODE=external login policy', () => {
 
   it('AccountService refuses to create a local seller or manager in external mode, and still allows admin/technical and other modes', async () => {
     const ctx = await setup();
-    const input = (username: string, role: 'seller' | 'manager' | 'admin' | 'technical') => ({ username, displayName: 'X', password: TEST_PASSWORD, role });
+    const input = (username: string, role: 'seller' | 'manager' | 'admin' | 'technical' | 'operations') => ({ username, displayName: 'X', password: TEST_PASSWORD, role });
     const strict = createOperatorAccountService(ctx.database.handle, TEST_HASH_PARAMS, ctx.clock.fn, undefined, 'external').accounts;
     await expect(strict.createAccount(input('s1', 'seller'))).rejects.toThrow(/create-external/);
     await expect(strict.createAccount(input('m1', 'manager'))).rejects.toThrow(/create-external/);
+    await expect(strict.createAccount(input('o1', 'operations'))).rejects.toThrow(/create-external/);
     await strict.createAccount(input('a1', 'admin'));
     await strict.createAccount(input('t1', 'technical'));
     for (const mode of [undefined, 'dev', 'local'] as const) {

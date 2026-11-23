@@ -311,14 +311,22 @@ describe('order stage worker (runOrderStageOnce) with the fake gateway state mac
 });
 
 describe('release queue over HTTP (profiles, sectors, counts, order, restricted data)', () => {
-  const configured: InstallationConfiguration = { ...DEMO_CONFIGURATION, erp: { ...(DEMO_CONFIGURATION.erp ?? {}), releaseQueue: { sectorUsers: { Pedidos: [120] } } } };
+  const configured: InstallationConfiguration = { ...DEMO_CONFIGURATION, erp: { ...(DEMO_CONFIGURATION.erp ?? {}), releaseQueue: { sectorUsers: { Pedidos: [120, 121] } } } };
   let w: Awaited<ReturnType<typeof world>>;
   let orderA: string;
   let orderC: string;
   let technicalCookie: string;
   const ids: Record<string, string> = {};
 
-  const callTechnical = (url: string) => w.app.app.inject({ method: 'GET', url: `/api/v1${url}`, headers: { origin: TEST_ORIGIN, cookie: technicalCookie } });
+  let opsListedCookie: string;
+  let opsOtherCookie: string;
+  const callWith = (cookie: string, url: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET') =>
+    w.app.app.inject({ method, url: `/api/v1${url}`, headers: { origin: TEST_ORIGIN, cookie } });
+  const callTechnical = (url: string) => callWith(technicalCookie, url);
+  const callOps = async (cookie: string, url: string): Promise<{ status: number; body: Json }> => {
+    const response = await callWith(cookie, url);
+    return { status: response.statusCode, body: response.body === '' ? null : JSON.parse(response.body) };
+  };
 
   beforeAll(async () => {
     w = await world(configured);
@@ -338,6 +346,15 @@ describe('release queue over HTTP (profiles, sectors, counts, order, restricted 
     await pool.query(`UPDATE account SET external_user_id = '999' WHERE id = $1`, [w.app.accounts.ids[SELLER2]]);
     await createTestAccount(w.app.database.handle, { username: 'technical@example.test', role: 'technical' }, w.app.clock.fn);
     technicalCookie = await loginCookie(w.app, 'technical@example.test', TEST_PASSWORD);
+    // `operations` accounts (owner ruling 2026-11-23, option A): the test harness logs in with a local password (dev mode), then the
+    // directory link (CODUSU) the production directory login would have stored is set: 121 is listed under Pedidos (120, seller1's code, is listed too: a seller never sees the queue), 998 is not (seller2 holds 999).
+    for (const [name, codusu] of [['ops-listed', '121'], ['ops-other', '998']] as const) {
+      await createTestAccount(w.app.database.handle, { username: `${name}@example.test`, role: 'operations' }, w.app.clock.fn);
+      const cookie = await loginCookie(w.app, `${name}@example.test`, TEST_PASSWORD);
+      await pool.query(`UPDATE account SET external_user_id = $1 WHERE lower(email) = $2`, [codusu, `${name}@example.test`]);
+      if (name === 'ops-listed') opsListedCookie = cookie;
+      else opsOtherCookie = cookie;
+    }
   });
 
   const rowsOf = (body: Json) => body.items.map((item: Json) => [item.nunota, item.sector]);
@@ -389,29 +406,46 @@ describe('release queue over HTTP (profiles, sectors, counts, order, restricted 
     expect((await w.app.call('manager', 'GET', '/release-queue?page=5&pageSize=1')).body.items).toEqual([]);
   });
 
-  it('a seller listed under Pedidos sees only Pedidos (never Financeiro), with matching counts', async () => {
-    const list = await w.app.call('seller1', 'GET', '/release-queue');
+  it('an operations account listed under Pedidos sees only Pedidos (never Financeiro), with matching counts', async () => {
+    const list = await callOps(opsListedCookie, '/release-queue');
     expect(list.status).toBe(200);
     expect(rowsOf(list.body)).toEqual([[8001, 'Pedidos'], [8003, 'Pedidos']]);
     expect(list.body.total).toBe(2);
-    expect((await w.app.call('seller1', 'GET', '/release-queue?sector=Pedidos')).status).toBe(200);
-    const count = await w.app.call('seller1', 'GET', '/release-queue/count');
+    expect((await callOps(opsListedCookie, '/release-queue?sector=Pedidos')).status).toBe(200);
+    const count = await callOps(opsListedCookie, '/release-queue/count');
     expect(count.body).toMatchObject({ total: 2, sectors: [{ sector: 'Pedidos', count: 2 }] });
     expect(JSON.stringify(count.body)).not.toMatch(/Financeiro/);
   });
 
   it('a forbidden sector filter is 403 (not an empty list), for the list and the count', async () => {
-    expect((await w.app.call('seller1', 'GET', '/release-queue?sector=Financeiro')).status).toBe(403);
-    expect((await w.app.call('seller1', 'GET', '/release-queue/count?sector=Financeiro')).status).toBe(403);
+    expect((await callOps(opsListedCookie, '/release-queue?sector=Financeiro')).status).toBe(403);
+    expect((await callOps(opsListedCookie, '/release-queue/count?sector=Financeiro')).status).toBe(403);
   });
 
-  it('a seller not listed gets 403 on both routes; so does a seller when the installation lists nobody', async () => {
-    expect((await w.app.call('seller2', 'GET', '/release-queue')).status).toBe(403);
-    expect((await w.app.call('seller2', 'GET', '/release-queue/count')).status).toBe(403);
+  it('an operations account not listed gets 403 on both routes; so does a listed one when the installation lists nobody', async () => {
+    expect((await callOps(opsOtherCookie, '/release-queue')).status).toBe(403);
+    expect((await callOps(opsOtherCookie, '/release-queue/count')).status).toBe(403);
     const bare = await world();
-    await bare.app.database.handle.pool.query(`UPDATE account SET external_user_id = '120' WHERE id = $1`, [bare.app.accounts.ids[SELLER1]]);
-    expect((await bare.app.call('seller1', 'GET', '/release-queue')).status).toBe(403);
+    await createTestAccount(bare.app.database.handle, { username: 'ops@example.test', role: 'operations' }, bare.app.clock.fn);
+    const cookie = await loginCookie(bare.app, 'ops@example.test', TEST_PASSWORD);
+    await bare.app.database.handle.pool.query(`UPDATE account SET external_user_id = '120' WHERE lower(email) = 'ops@example.test'`);
+    const response = await bare.app.app.inject({ method: 'GET', url: '/api/v1/release-queue', headers: { origin: TEST_ORIGIN, cookie } });
+    expect(response.statusCode).toBe(403);
     expect((await bare.app.call('manager', 'GET', '/release-queue')).status).toBe(200);
+  });
+
+  it('a seller is refused (403) on both routes, even when its Sankhya user is listed under a sector (owner ruling 2026-11-23)', async () => {
+    // seller1 carries external_user_id 120, the same CODUSU that is listed under Pedidos.
+    expect((await w.app.call('seller1', 'GET', '/release-queue')).status).toBe(403);
+    expect((await w.app.call('seller1', 'GET', '/release-queue/count')).status).toBe(403);
+    expect((await w.app.call('seller1', 'GET', '/release-queue?sector=Pedidos')).status).toBe(403);
+    expect((await w.app.call('seller2', 'GET', '/release-queue')).status).toBe(403);
+  });
+
+  it('operations has no other route: orders, customers, prices, dashboard, configuration and approvals are all 403 (deny by default)', async () => {
+    for (const url of ['/orders', '/customers', '/products', '/dashboard', '/configuration', '/approvals', '/sellers', '/discount-limits', '/sync/status']) {
+      expect((await callWith(opsListedCookie, url)).statusCode, url).toBe(403);
+    }
   });
 
   it('technical is refused by the route guard (403) on both routes', async () => {
@@ -420,10 +454,12 @@ describe('release queue over HTTP (profiles, sectors, counts, order, restricted 
   });
 
   it('carries no cost, margin or commission field, for any profile', async () => {
-    for (const who of ['manager', 'admin', 'seller1'] as const) {
+    for (const who of ['manager', 'admin'] as const) {
       expect(restrictedKeys((await w.app.call(who, 'GET', '/release-queue')).body), who).toEqual([]);
       expect(restrictedKeys((await w.app.call(who, 'GET', '/release-queue/count')).body), who).toEqual([]);
     }
+    expect(restrictedKeys((await callOps(opsListedCookie, '/release-queue')).body)).toEqual([]);
+    expect(restrictedKeys((await callOps(opsListedCookie, '/release-queue/count')).body)).toEqual([]);
   });
 
   it('is read-only: no write verb exists on the routes', async () => {
@@ -450,7 +486,7 @@ describe('release queue over HTTP (profiles, sectors, counts, order, restricted 
     const after = await w.app.call('manager', 'GET', '/release-queue');
     expect(rowsOf(after.body)).toEqual([[8002, 'Financeiro'], [8003, 'Financeiro'], [8003, 'Pedidos']]);
     expect((await w.app.call('manager', 'GET', '/release-queue/count')).body).toMatchObject({ total: 2, sectors: [{ sector: 'Pedidos', count: 1 }, { sector: 'Financeiro', count: 2 }] });
-    expect(rowsOf((await w.app.call('seller1', 'GET', '/release-queue')).body)).toEqual([[8003, 'Pedidos']]);
+    expect(rowsOf((await callOps(opsListedCookie, '/release-queue')).body)).toEqual([[8003, 'Pedidos']]);
     const cleared = await w.app.call('seller1', 'GET', `/orders/${orderA}`);
     expect(cleared.body.erpStage).toMatchObject({ stage: 'in_dispatch', readError: null });
     // Order C is invoiced: leaves as well; the empty queue has no lastCheckedAt.

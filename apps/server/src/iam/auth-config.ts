@@ -82,7 +82,7 @@ export interface ExternalLoginConfig {
 
 /**
  * Turns the directory login on for the `seller` profile (link mode `PRE_LINKED` unless `externalLogin.linkMode` says otherwise): `local` mode admits only admin/technical, so the seller role
- * is added explicitly and only here. `manager` is admitted only as an external-only role: an account explicitly linked to a
+ * is added explicitly and only here. `manager` and `operations` (internal Pedidos/Financeiro staff, owner ruling 2026-11-23) are admitted only as external-only roles: an account explicitly linked to a
  * directory user may hold a session after the external login, a local manager never signs in with a password (it stays refused).
  * Every other role stays refused until an owner decision (AUTH-5 extension, docs/implementation/auth-username-flow.md). Never called by `authConfigFromEnv`: off by default.
  */
@@ -92,7 +92,7 @@ export function withExternalSellerLogin(config: AuthConfig, externalLogin: Exter
     externalLogin: { ...externalLogin, linkMode: externalLogin.linkMode ?? 'PRE_LINKED' },
     ...(config.allowedRoles === undefined
       ? {}
-      : { allowedRoles: [...config.allowedRoles, 'seller' as const], externalOnlyRoles: [...(config.externalOnlyRoles ?? []), 'manager' as const] }),
+      : { allowedRoles: [...config.allowedRoles, 'seller' as const], externalOnlyRoles: [...(config.externalOnlyRoles ?? []), 'manager' as const, 'operations' as const] }),
   };
 }
 
@@ -169,6 +169,7 @@ export function assertSafeAuthConfig(config: AuthConfig): void {
     throw new Error('AUTH_MODE=external: auto-provision requires the idusu = CODUSU proof (EXTERNAL_IDUSU_IS_CODUSU_VALIDATED=1).');
   }
   if (allowed.includes('manager')) throw new Error('AUTH_MODE=external: manager must be an external-only role, never a local-password role.');
+  if (allowed.includes('operations')) throw new Error('AUTH_MODE=external: operations must be an external-only role, never a local-password role.');
 }
 
 function baseAuthConfig(env: ParsedApiEnv): AuthConfig {

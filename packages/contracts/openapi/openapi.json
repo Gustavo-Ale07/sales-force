@@ -3710,7 +3710,8 @@
           "admin",
           "manager",
           "seller",
-          "technical"
+          "technical",
+          "operations"
         ]
       },
       "AlternativeTable": {

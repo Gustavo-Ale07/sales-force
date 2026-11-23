@@ -224,28 +224,28 @@ describe('releaseQueueSectors / visibleReleaseQueueSectors (deny by default)', (
     expect(visibleReleaseQueueSectors({ role: 'manager', externalUserId: null }, sectors, {})).toEqual(sectors);
   });
 
-  it('a seller sees only the sectors whose list holds its Sankhya user code', () => {
-    expect(visibleReleaseQueueSectors({ role: 'seller', externalUserId: '120' }, sectors, sectorUsers)).toEqual(['Pedidos']);
-    expect(visibleReleaseQueueSectors({ role: 'seller', externalUserId: '130' }, sectors, sectorUsers)).toEqual(['Financeiro']);
-    expect(visibleReleaseQueueSectors({ role: 'seller', externalUserId: '130' }, sectors, { Pedidos: [130], Financeiro: [130] })).toEqual(sectors);
+  it('an operations account sees only the sectors whose list holds its Sankhya user code', () => {
+    expect(visibleReleaseQueueSectors({ role: 'operations', externalUserId: '120' }, sectors, sectorUsers)).toEqual(['Pedidos']);
+    expect(visibleReleaseQueueSectors({ role: 'operations', externalUserId: '130' }, sectors, sectorUsers)).toEqual(['Financeiro']);
+    expect(visibleReleaseQueueSectors({ role: 'operations', externalUserId: '130' }, sectors, { Pedidos: [130], Financeiro: [130] })).toEqual(sectors);
   });
 
-  it('a seller not listed, without a code, with a malformed code or with no configuration sees nothing', () => {
-    expect(visibleReleaseQueueSectors({ role: 'seller', externalUserId: '999' }, sectors, sectorUsers)).toEqual([]);
-    expect(visibleReleaseQueueSectors({ role: 'seller', externalUserId: null }, sectors, sectorUsers)).toEqual([]);
-    expect(visibleReleaseQueueSectors({ role: 'seller' }, sectors, sectorUsers)).toEqual([]);
-    expect(visibleReleaseQueueSectors({ role: 'seller', externalUserId: '12x' }, sectors, sectorUsers)).toEqual([]);
-    expect(visibleReleaseQueueSectors({ role: 'seller', externalUserId: '0120' }, sectors, sectorUsers)).toEqual([]);
-    expect(visibleReleaseQueueSectors({ role: 'seller', externalUserId: '120' }, sectors, undefined)).toEqual([]);
-    expect(visibleReleaseQueueSectors({ role: 'seller', externalUserId: '120' }, sectors, {})).toEqual([]);
+  it('an operations account not listed, without a code, with a malformed code or with no configuration sees nothing', () => {
+    expect(visibleReleaseQueueSectors({ role: 'operations', externalUserId: '999' }, sectors, sectorUsers)).toEqual([]);
+    expect(visibleReleaseQueueSectors({ role: 'operations', externalUserId: null }, sectors, sectorUsers)).toEqual([]);
+    expect(visibleReleaseQueueSectors({ role: 'operations' }, sectors, sectorUsers)).toEqual([]);
+    expect(visibleReleaseQueueSectors({ role: 'operations', externalUserId: '12x' }, sectors, sectorUsers)).toEqual([]);
+    expect(visibleReleaseQueueSectors({ role: 'operations', externalUserId: '0120' }, sectors, sectorUsers)).toEqual([]);
+    expect(visibleReleaseQueueSectors({ role: 'operations', externalUserId: '120' }, sectors, undefined)).toEqual([]);
+    expect(visibleReleaseQueueSectors({ role: 'operations', externalUserId: '120' }, sectors, {})).toEqual([]);
   });
 
   it('a sector name that is an Object.prototype key never grants access', () => {
-    expect(visibleReleaseQueueSectors({ role: 'seller', externalUserId: '120' }, ['constructor', 'toString'], sectorUsers)).toEqual([]);
+    expect(visibleReleaseQueueSectors({ role: 'operations', externalUserId: '120' }, ['constructor', 'toString'], sectorUsers)).toEqual([]);
   });
 
-  it('technical, representative and unknown roles never see the queue, even when listed', () => {
-    for (const role of ['technical', 'representative', 'external_representative', 'director', '']) {
+  it('a seller (even when listed), technical, representative and unknown roles never see the queue', () => {
+    for (const role of ['seller', 'technical', 'representative', 'external_representative', 'director', '']) {
       expect(visibleReleaseQueueSectors({ role, externalUserId: '120' }, sectors, sectorUsers)).toEqual([]);
     }
   });

@@ -295,6 +295,13 @@
       "when": 1795442028606,
       "tag": "0041_release_queue_pending",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1795451526911,
+      "tag": "0042_account_role_operations",
+      "breakpoints": true
     }
   ]
 }

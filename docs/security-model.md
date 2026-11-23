@@ -51,6 +51,8 @@ This model is therefore largely a **proposal**: most sections describe the contr
 
 ## 2. Profiles
 
+**Internal `operations` profile (owner ruling 2026-11-23, option A; record in decisions.md):** internal Pedidos/Financeiro staff. Web only, external-only login through the Sankhya directory (no local password, never a seller link), granted solely the release queue for its configured sectors (`erp.releaseQueue.sectorUsers`), the session refresh and logout; deny by default everywhere else. A seller never sees the release queue. Details: `docs/implementation/release-queue.md`.
+
 Defined in `project-spec.md` §2: Admin, Diretoria, Gerente, Vendedor interno, Representante externo (PJ), Cadastro/Financeiro. Default permissions follow the matrix in `project-spec.md` §8.2, applied through the model in §5.
 
 ---

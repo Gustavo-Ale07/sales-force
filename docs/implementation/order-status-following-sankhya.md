@@ -16,6 +16,10 @@ Enviado ao Force, Erro no envio (from the outbox, before a note exists), Orçame
 
 Cost or margin, other sellers' orders, event names (unvalidated), denied/"barrado" state, cancelled notes, a link from a converted quotation to its original, `AD_STATUS`/`AD_FAROL`/`AD_EXPEDICAO`.
 
+## Stage filter on the order list
+
+`GET /orders?stage=<code>` (additive, optional; codes = `ORDER_STAGE_CODES`). Stored mirror stages (`sales_order_erp_stage`: received, in_review, financial_check, in_dispatch, in_invoicing, invoiced, quotation) filter on the mirror; `sent_to_force` (queued) and `send_error` (rejected) are derived: no mirror row, no ERP number, matching status. Same caller scope as before; `total` follows the filter; an unknown code is 400.
+
 ## Release queue
 
 The same read feeds the internal "Aguardando liberação" queue (pending TSILIB lines with event, cascade level and assigned releaser): `docs/implementation/release-queue.md`.

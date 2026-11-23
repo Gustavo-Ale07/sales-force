@@ -19,70 +19,70 @@ import { startPostgres, type TestPostgres, closeAllThenStop } from '../helpers/p
  */
 type Expectation = 'allow' | 'deny';
 const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>>> = {
-  logout: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'allow' },
-  getConfiguration: { admin: 'allow', manager: 'deny', seller: 'deny', technical: 'allow' },
+  logout: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'allow', operations: 'allow' },
+  getConfiguration: { admin: 'allow', manager: 'deny', seller: 'deny', technical: 'allow', operations: 'deny' },
   // W-39 discount limits (DISC-3): admin only; manager, seller and technical are denied.
-  getDiscountLimits: { admin: 'allow', manager: 'deny', seller: 'deny', technical: 'deny' },
-  updateDiscountLimits: { admin: 'allow', manager: 'deny', seller: 'deny', technical: 'deny' },
+  getDiscountLimits: { admin: 'allow', manager: 'deny', seller: 'deny', technical: 'deny', operations: 'deny' },
+  updateDiscountLimits: { admin: 'allow', manager: 'deny', seller: 'deny', technical: 'deny', operations: 'deny' },
   // Minimal order-entry slice: every role that can create an order needs it (unlike getConfiguration above).
-  getOrderEntryConfiguration: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  getOrderEntryConfiguration: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   // D-AB B3: any operational profile may ask for fresh data; the technical role has no commercial screens.
-  startSyncRefresh: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'allow' },
-  getSyncRefresh: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'allow' },
-  getSyncStatus: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  startSyncRefresh: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'allow', operations: 'allow' },
+  getSyncRefresh: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'allow', operations: 'allow' },
+  getSyncStatus: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   // Commercial routes (Stage 3A). The three roles that exist may use them; the external
   // representative role does not exist yet (AUTH-3 PROPOSED) and gets no grant until the owner decides.
-  getDashboard: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  getDashboard: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   // Owner ruling 2026-11-13: the seller list is for manager and admin only (a seller never learns other sellers' names or codes).
-  listSellers: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny' },
-  listCustomers: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  getCustomer: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  getCustomerFinancial: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  getCustomerOrderHabits: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  listProductGroups: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  listCarriers: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  listProducts: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  getProduct: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  getProductImage: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  listSellers: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny', operations: 'deny' },
+  listCustomers: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  getCustomer: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  getCustomerFinancial: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  getCustomerOrderHabits: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  listProductGroups: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  listCarriers: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  listProducts: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  getProduct: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  getProductImage: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   // Owner ruling 2026-11-13: one price table's current list prices, same roles as the catalog it mirrors.
-  getPriceTablePrices: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  getPriceTablePrices: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   // ASSUMPTION (pending owner confirmation): a read of the same catalog as listProducts, open to every role.
-  resolveProducts: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  listOrders: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  createOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  getOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  replaceOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  deleteOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  submitOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  verifyOrderDelivery: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  convertQuote: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  resolveProducts: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  listOrders: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  createOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  getOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  replaceOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  deleteOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  submitOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  verifyOrderDelivery: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  convertQuote: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   // Release queue (560eb99): the ROUTE is open to admin, manager and seller (technical is refused here). The seller's real access is the
   // SECTOR permission (`visibleReleaseQueueSectors`, deny by default, 403 from the service): see release-queue.test.ts.
-  listReleaseQueue: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  getReleaseQueueCount: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  listApprovals: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny' },
-  approveApproval: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny' },
-  rejectApproval: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny' },
-  repeatLastOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  duplicateAsOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  listReleaseQueue: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny', operations: 'allow' },
+  getReleaseQueueCount: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny', operations: 'allow' },
+  listApprovals: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny', operations: 'deny' },
+  approveApproval: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny', operations: 'deny' },
+  rejectApproval: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny', operations: 'deny' },
+  repeatLastOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  duplicateAsOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   // Recurring order templates (Phase E). ASSUMPTION (owner ruling in the plan): every role reaches them; which
   // templates it sees is the customer's seller scope (IDOR tests: order-templates.test.ts).
-  listOrderTemplates: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  createCustomer: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  createOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  getOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  replaceOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  deleteOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
-  useOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  listOrderTemplates: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  createCustomer: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  createOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  getOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  replaceOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  deleteOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  useOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
 };
 
 /**
- * Route-allowed roles whose access is further decided by a per-resource permission in the service (release queue sectors: a seller
- * is refused 403 unless the installation configuration lists its Sankhya user). The "past the guard" assertion cannot tell the guard's
+ * Route-allowed roles whose access is further decided by a per-resource permission in the service (release queue sectors: an operations account
+ * is refused 403 unless the installation configuration lists its Sankhya user; a seller is refused at the guard). The "past the guard" assertion cannot tell the guard's
  * 403 from the service's, so these pairs only assert "not 401"; the real decision is proved in `release-queue.test.ts`
- * (configured seller 200, unlisted seller 403, technical 403 at the guard).
+ * (configured operations account 200, unlisted 403, seller and technical 403 at the guard).
  */
-const SECTOR_GATED = new Set(['listReleaseQueue/seller', 'getReleaseQueueCount/seller']);
+const SECTOR_GATED = new Set(['listReleaseQueue/operations', 'getReleaseQueueCount/operations']);
 
 const sessionRoutes =(Object.values(routes) as RouteDefinition[]).filter((route) => route.auth === 'session');
 

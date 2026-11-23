@@ -69,7 +69,7 @@ async function setup(linkMode?: 'VERIFIED_AUTO_PROVISION') {
 type Ctx = Awaited<ReturnType<typeof setup>>;
 
 /** An account linked to a directory user (as `create-external` leaves it) and that user in the fake directory. */
-async function externalAccount(ctx: Ctx, login: string, role: 'manager' | 'seller' | 'admin', externalUserId: string) {
+async function externalAccount(ctx: Ctx, login: string, role: 'manager' | 'seller' | 'admin' | 'operations', externalUserId: string) {
   const created = await createTestAccount(ctx.database.handle, { username: login, role }, ctx.clock.fn);
   await ctx.db.update(account).set({ externalUserId, passwordHash: UNUSABLE_PASSWORD_HASH }).where(eq(account.id, created.id));
   for (const key of [login, login.toUpperCase()]) ctx.verifier.users.set(key, {
@@ -160,6 +160,35 @@ describe('external manager session (external-only role gate)', () => {
     await createTestAccount(ctx.database.handle, { username: 'admin', role: 'admin' }, ctx.clock.fn);
     const result = await ctx.service.login({ username: 'admin', password: TEST_PASSWORD }, META);
     expect(result.user.role).toBe('admin');
+  });
+
+  it('an external operations account (Pedidos/Financeiro staff) linked to a directory user logs in with no seller link (owner ruling 2026-11-23)', async () => {
+    const ctx = await setup();
+    const ops = await externalAccount(ctx, 'pedidos1', 'operations', '120');
+    const opened = await ctx.service.login({ username: 'PEDIDOS1', password: SANKHYA_PASSWORD }, META);
+    expect(opened.user).toMatchObject({ accountId: ops.id, role: 'operations', sellerCodes: [] });
+    expect(await ctx.service.peekSession(opened.token)).toEqual({ role: 'operations' });
+    expect((await ctx.service.resolveSession(opened.token, 'web'))?.user).toMatchObject({ role: 'operations', externalUserId: '120' });
+  });
+
+  it('a local operations account with a local password never signs in (external-only role)', async () => {
+    const ctx = await setup();
+    await createTestAccount(ctx.database.handle, { username: 'pedidos2', role: 'operations' }, ctx.clock.fn);
+    const refused = await failure(ctx.service.login({ username: 'pedidos2', password: TEST_PASSWORD }, META));
+    expect(refused.code).toBe('invalid_credentials');
+    expect(await ctx.db.select().from(session)).toHaveLength(0);
+  });
+
+  it('an operations account can never carry a seller link (database guard, both directions)', async () => {
+    const ctx = await setup();
+    const ops = await externalAccount(ctx, 'pedidos3', 'operations', '121');
+    const pool = ctx.database.handle.pool;
+    const version = (await pool.query<{ id: string }>('select id from installation_configuration_version limit 1')).rows[0]!.id;
+    const link = (accountId: string) => pool.query('insert into account_seller_link (account_id, seller_code, config_version_id) values ($1, 103, $2)', [accountId, version]);
+    await expect(link(ops.id)).rejects.toThrow(/cannot carry a seller link/);
+    const seller = await createTestAccount(ctx.database.handle, { username: 'vend', role: 'seller' }, ctx.clock.fn);
+    await link(seller.id);
+    await expect(ctx.db.update(account).set({ role: 'operations' }).where(eq(account.id, seller.id))).rejects.toThrow();
   });
 
   it('a wrong Sankhya password for the external manager is invalid_credentials and opens no session', async () => {

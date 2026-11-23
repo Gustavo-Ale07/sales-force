@@ -1,10 +1,10 @@
 /**
- * `AUTH_MODE=external` (PB-1, refines AUTH-5/AUTH-6): operational users (seller, manager) authenticate only through the
+ * `AUTH_MODE=external` (PB-1, refines AUTH-5/AUTH-6): operational users (seller, manager, operations) authenticate only through the
  * Sankhya verifier (STACK-2a); a local Argon2id password exists for `admin` and `technical` only. Tools that create
  * accounts outside the API (operator CLI, development seed) use this guard so they never leave a dormant local-password
  * operational account behind in an installation that runs that mode.
  */
-export const OPERATIONAL_ROLES: readonly string[] = Object.freeze(['seller', 'manager']);
+export const OPERATIONAL_ROLES: readonly string[] = Object.freeze(['seller', 'manager', 'operations']);
 
 /** `null` = allowed; otherwise an actionable, value-free refusal. `authMode` is the installation's AUTH_MODE as seen by the tool. */
 export function localPasswordRefusal(authMode: string | undefined, role: string): string | null {
