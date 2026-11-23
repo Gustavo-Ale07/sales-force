@@ -148,6 +148,7 @@ export function runGatewayContract(label: string, subject: ContractSubject): voi
         'readWrittenOrder',
         'readOrderStatusFacts',
         'readOrderReleaseFacts',
+        'readOrderStageFacts',
         // D-AR: the customer upsert quartet (write guarded by SANKHYA_CUSTOMER_WRITE_ENABLED in the worker).
         'upsertPartner',
         'findPartnerByOrigin',
