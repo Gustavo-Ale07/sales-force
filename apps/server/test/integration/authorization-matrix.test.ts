@@ -56,6 +56,10 @@ const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>
   submitOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   verifyOrderDelivery: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   convertQuote: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  // Release queue (560eb99): the ROUTE is open to admin, manager and seller (technical is refused here). The seller's real access is the
+  // SECTOR permission (`visibleReleaseQueueSectors`, deny by default, 403 from the service): see release-queue.test.ts.
+  listReleaseQueue: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
+  getReleaseQueueCount: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
   listApprovals: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny' },
   approveApproval: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny' },
   rejectApproval: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny' },
@@ -72,7 +76,15 @@ const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>
   useOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny' },
 };
 
-const sessionRoutes = (Object.values(routes) as RouteDefinition[]).filter((route) => route.auth === 'session');
+/**
+ * Route-allowed roles whose access is further decided by a per-resource permission in the service (release queue sectors: a seller
+ * is refused 403 unless the installation configuration lists its Sankhya user). The "past the guard" assertion cannot tell the guard's
+ * 403 from the service's, so these pairs only assert "not 401"; the real decision is proved in `release-queue.test.ts`
+ * (configured seller 200, unlisted seller 403, technical 403 at the guard).
+ */
+const SECTOR_GATED = new Set(['listReleaseQueue/seller', 'getReleaseQueueCount/seller']);
+
+const sessionRoutes =(Object.values(routes) as RouteDefinition[]).filter((route) => route.auth === 'session');
 
 let postgres: TestPostgres;
 const opened: (() => Promise<unknown>)[] = [];
@@ -137,6 +149,9 @@ describe('authorization matrix', () => {
           const response = await callOf(route, cookie);
           if (expected === 'deny') {
             expect(response.statusCode).toBe(403);
+          } else if (SECTOR_GATED.has(`${route.operationId}/${role}`)) {
+            // The guard lets the role through; the SERVICE then refuses (deny by default, nothing configured in this installation).
+            expect(response.statusCode).not.toBe(401);
           } else {
             // Past the guard: whatever the handler answers, it is not an authentication or authorization failure.
             expect([401, 403]).not.toContain(response.statusCode);
