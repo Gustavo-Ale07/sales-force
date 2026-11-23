@@ -44,6 +44,10 @@ const EXPECTED: Record<string, { api: Priv[]; worker: Priv[] }> = {
   sales_order: { api: SIUD, worker: ['SELECT', 'UPDATE'] },
   sales_order_item: { api: SIUD, worker: S },
   sales_order_approval: { api: SIU, worker: [] },
+  // Order stage (0040): the worker writes the last known Sankhya stage; the API only reads it.
+  sales_order_erp_stage: { api: S, worker: SIU },
+  // Release queue (0041): the worker mirrors the pending lines and deletes the released ones; the API only reads.
+  sales_order_release_pending: { api: S, worker: SIUD },
   customer_order_template: { api: SIU, worker: [] },
   customer_order_template_item: { api: SIUD, worker: [] },
   // Worker: SELECT + DELETE (30-day retention of rejected rows) + column-level UPDATE (status, erp_customer_code,
