@@ -33,7 +33,7 @@ export interface OrdersSearch {
   search?: string;
   status?: ApiSchema<"OrderStatus">;
   customerCode?: number;
-  /** Stage in Sankhya (server-provided `erpStage.stage`); narrows the loaded page, the API has no such filter. */
+  /** Stage in Sankhya; applied by the API (`stage`), so total and pagination follow it. */
   stage?: (typeof ORDER_STAGE_FILTERS)[number];
   /** Period, inclusive, as `YYYY-MM-DD` calendar dates. */
   from?: string;

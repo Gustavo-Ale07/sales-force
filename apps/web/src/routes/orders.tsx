@@ -163,7 +163,8 @@ function ProductChip({ code, onRemove }: { code: number; onRemove: () => void })
 
 export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPageProps) {
   const api = useApi();
-  const { products, stage: stageFilter, ...rest } = params;
+  const { products, ...rest } = params;
+  const stageFilter = params.stage;
   const apiParams: OrdersParams = {
     ...rest,
     ...(products ? { productCodes: products.join(",") } : {}),
@@ -185,7 +186,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
     params.search !== undefined || params.status !== undefined || stageFilter !== undefined || params.customerCode !== undefined || hasPeriod || selectedProducts.length > 0 || params.productSearch !== undefined;
   const clearAll = () => onSearchChange(compact({ sort: params.sort, pageSize: params.pageSize }));
   const currentSort = params.sort ?? "-updatedAt";
-  const shownItems = (query.data?.items ?? []).filter((order) => stageFilter === undefined || order.erpStage?.stage === stageFilter);
+  const shownItems = query.data?.items ?? [];
   const setFrom = (from: string | undefined) => change({ from, to: from !== undefined && params.to !== undefined && params.to < from ? from : params.to });
   const setTo = (to: string | undefined) => change({ to, from: to !== undefined && params.from !== undefined && params.from > to ? to : params.from });
 

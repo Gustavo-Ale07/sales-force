@@ -200,14 +200,17 @@ describe("Situação no Sankhya: erro de leitura e nova tentativa", () => {
 describe("Situação no Sankhya: lista de pedidos", () => {
   const OTHER = "0190a000-0000-7000-8000-0000000000bb";
   const THIRD = "0190a000-0000-7000-8000-0000000000cc";
+  // Behaves like the API: `stage` filters the page and `total`.
   const list = (): Handlers => ({
-    "GET /orders": {
-      body: ordersPage([
+    "GET /orders": (request) => {
+      const all = [
         orderListItem({ draftNumber: 12, status: "sent", erpNumber: 5001, erpStage: stage("in_dispatch") }),
         orderListItem({ id: OTHER, draftNumber: 13, status: "sent", erpNumber: 5002, erpStage: stage("invoiced") }),
         orderListItem({ id: THIRD, draftNumber: 14, status: "sent", erpNumber: 5003, erpStage: null }),
         orderListItem({ id: "0190a000-0000-7000-8000-0000000000dd", draftNumber: 15, status: "draft" }),
-      ]),
+      ];
+      const wanted = request.search.get("stage");
+      return { body: ordersPage(wanted ? all.filter((order) => order.erpStage?.stage === wanted) : all) };
     },
     "GET /customers": { body: customersPage([customer()]) },
   });
@@ -236,8 +239,9 @@ describe("Situação no Sankhya: lista de pedidos", () => {
   });
 
   it("the 'Situação no Sankhya' filter offers every stage, narrows the list, keeps `stage` in the URL and shows a removable chip", async () => {
-    const { user, router } = renderApp("/pedidos", { handlers: list() });
+    const { user, router, calls } = renderApp("/pedidos", { handlers: list() });
     await screen.findByText("Pedido nº 5001");
+    expect(callsTo(calls, "GET", "/orders")[0]?.search.has("stage")).toBe(false);
     const select = screen.getByLabelText("Situação no Sankhya");
     const options = within(select).getAllByRole("option").map((o) => (o as HTMLOptionElement).value);
     expect(options).toEqual(["", ...ORDER_STAGE_FILTERS]);
@@ -246,6 +250,7 @@ describe("Situação no Sankhya: lista de pedidos", () => {
     expect(screen.getByText("Pedido nº 5002")).toBeInTheDocument();
     expect(screen.queryByText("Pedido nº 5003")).toBeNull();
     expect(router.state.location.search).toMatchObject({ stage: "invoiced" });
+    expect(callsTo(calls, "GET", "/orders").at(-1)?.search.get("stage")).toBe("invoiced");
     const chip = screen.getByRole("button", { name: "Remover filtro: Sankhya: Faturado" });
     await user.click(chip);
     expect(await screen.findByText("Pedido nº 5001")).toBeInTheDocument();
