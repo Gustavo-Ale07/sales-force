@@ -50,6 +50,17 @@ export function rejectApproval(api: ApiClient, id: string, comment: string) {
   return callApi(() => api.POST("/approvals/{id}/reject", { params: { path: { id } }, body: { comment } }));
 }
 
+export type PutProfilePhotoBody = ApiSchema<"PutProfilePhotoRequest">;
+
+/** Own profile photo: the server validates magic bytes, size and crop, and always stores a square WebP. */
+export function putProfilePhoto(api: ApiClient, body: PutProfilePhotoBody) {
+  return callApi(() => api.PUT("/me/photo", { body }));
+}
+
+export function deleteProfilePhoto(api: ApiClient) {
+  return callApi(() => api.DELETE("/me/photo"));
+}
+
 export const ERP_SUBMISSION_DISABLED = "erp_submission_disabled";
 
 export type ResolveProductsBody = ApiSchema<"ResolveProductsRequest">;

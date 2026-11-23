@@ -1,4 +1,4 @@
-import type { ComponentProps } from "react";
+import { useState, type ComponentProps } from "react";
 import { cn } from "../lib/cn";
 import { initials } from "../lib/format";
 
@@ -10,6 +10,8 @@ export interface AvatarProps extends Omit<ComponentProps<"span">, "children"> {
    * stable id when two different accounts can share a display name, so they don't collide on colour.
    */
   seed?: string;
+  /** Optional photo URL. When absent or when it fails to load, the initials are shown. */
+  src?: string | null;
 }
 
 const sizes = { sm: "size-6 text-[9px]", md: "size-8 text-xs", lg: "size-10 text-sm", xl: "size-[52px] text-lg" } as const;
@@ -30,8 +32,10 @@ function hashTone(seed: string): (typeof IDENTITY_TONES)[number] {
   return IDENTITY_TONES[Math.abs(hash) % IDENTITY_TONES.length]!;
 }
 
-/** Initials avatar (no remote images), coloured deterministically from `seed`/`name`. The name is the accessible label. */
-export function Avatar({ name, size = "md", seed, className, ...props }: AvatarProps) {
+/** Initials avatar with an optional same-origin photo (initials are the fallback when it is missing or fails), coloured deterministically from `seed`/`name`. The name is the accessible label. */
+export function Avatar({ name, size = "md", seed, src, className, ...props }: AvatarProps) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const showPhoto = typeof src === "string" && src !== "" && failedSrc !== src;
   return (
     <span
       role="img"
@@ -44,7 +48,11 @@ export function Avatar({ name, size = "md", seed, className, ...props }: AvatarP
       )}
       {...props}
     >
-      <span aria-hidden="true">{initials(name)}</span>
+      {showPhoto ? (
+        <img src={src} alt="" data-testid="avatar-photo" className="size-full rounded-full object-cover" onError={() => setFailedSrc(src)} />
+      ) : (
+        <span aria-hidden="true">{initials(name)}</span>
+      )}
     </span>
   );
 }

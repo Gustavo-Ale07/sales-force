@@ -15,6 +15,7 @@ import { syncStatusQueryOptions } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import type { AuthUser } from "../lib/auth-client";
 import { isOperationsRole } from "../lib/operations-role";
+import { userPhotoSrc } from "../lib/profile-photo";
 import { clockTime } from "../lib/sync-refresh";
 import { RefreshDataDialog } from "./refresh-data-dialog";
 
@@ -39,7 +40,7 @@ export function UserMenu({ user, onLogout }: UserMenuProps) {
         aria-label={`Menu do usuário ${user.name}`}
         className="flex size-11 items-center justify-center rounded-full transition-shadow duration-[var(--sf-dur-fast)] hover:shadow-[0_0_0_4px_var(--sf-sidebar-hover)] data-[state=open]:shadow-[0_0_0_4px_var(--sf-sidebar-hover)]"
       >
-        <Avatar name={user.name} size="lg" className="bg-white text-[var(--sf-navy)]" />
+        <Avatar name={user.name} size="lg" className="bg-white text-[var(--sf-navy)]" src={userPhotoSrc(user)} />
       </DropdownMenuTrigger>
       <DropdownMenuContent>
         <DropdownMenuLabel>

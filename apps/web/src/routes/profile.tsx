@@ -1,6 +1,7 @@
 import { hasWholePortfolioAccess } from "@salesforce/domain";
-import { Alert, Avatar, Card, CardBody, CardHeader, KeyValue, KeyValueList, PageHeader, SkeletonLines, titleCase } from "@salesforce/ui";
+import { Alert, Card, CardBody, CardHeader, KeyValue, KeyValueList, PageHeader, SkeletonLines } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
+import { ProfilePhotoControls } from "../components/profile-photo-controls";
 import { QueryError } from "../components/query-error";
 import { useAppServices } from "../lib/app-context";
 import { sessionQueryOptions } from "../lib/auth-client";
@@ -49,16 +50,15 @@ export function ProfilePage() {
   return (
     <>
       <PageHeader
-        title={
-          <span className="flex items-center gap-4">
-            <span aria-hidden="true">
-              <Avatar name={titleCase(user.name)} seed={user.id} size="xl" />
-            </span>
-            {user.name}
-          </span>
-        }
+        title={user.name}
         description={user.roleLabel ?? user.role}
       />
+      <Card>
+        <CardHeader title="Foto" description="Aparece no menu do usuário. Só você vê as opções de troca." />
+        <CardBody>
+          <ProfilePhotoControls user={user} />
+        </CardBody>
+      </Card>
       <div className="grid gap-3 lg:grid-cols-2">
         <Card>
           <CardHeader title="Conta" />
@@ -87,7 +87,7 @@ export function ProfilePage() {
         </Card>
       </div>
       <p className="m-0 text-xs text-fg-muted">
-        Alteração de dados da conta e de senha é feita pelo administrador da instalação; esta tela é somente de consulta.
+        Alteração de dados da conta e de senha é feita pelo administrador da instalação; aqui você só troca a sua foto.
       </p>
     </>
   );

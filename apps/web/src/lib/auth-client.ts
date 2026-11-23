@@ -19,6 +19,8 @@ export interface AuthUser {
   roleLabel?: string;
   /** Seller codes linked to the account by configuration. */
   sellerCodes: readonly number[];
+  /** Opaque version of the own profile photo (cache key of `/me/photo`), `null` when there is none. */
+  photoVersion?: string | null;
 }
 
 export interface LoginCredentials {

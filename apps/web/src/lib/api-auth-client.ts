@@ -18,6 +18,7 @@ export function toAuthUser(account: Account): AuthUser {
     role: account.role,
     roleLabel: roleLabels[account.role],
     sellerCodes: account.sellerCodes,
+    photoVersion: account.photoVersion ?? null,
   };
 }
 

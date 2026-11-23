@@ -19,6 +19,7 @@ describe("API-backed AuthClient", () => {
       role: "seller",
       roleLabel: "Vendedor",
       sellerCodes: [7],
+      photoVersion: null,
     });
   });
 
