@@ -32,7 +32,9 @@ import { useEffect, useRef, useState } from "react";
 import { useRefreshStage } from "../components/order-stage";
 import { QueryError } from "../components/query-error";
 import { releaseQueueCountQueryOptions, releaseQueueQueryOptions, sellersQueryOptions } from "../lib/api-queries";
-import { useApi } from "../lib/app-context";
+import { useApi, useAppServices } from "../lib/app-context";
+import { sessionQueryOptions } from "../lib/auth-client";
+import { isOperationsRole } from "../lib/operations-role";
 import { formatCount } from "../lib/labels";
 import { formatWaiting } from "../lib/release-queue";
 import type { ReleaseQueueSearch } from "../lib/route-search";
@@ -86,7 +88,9 @@ export function ReleaseQueuePage({ params, onSearchChange }: ReleaseQueuePagePro
   const pageSize = params.pageSize ?? 25;
   const query = useQuery(releaseQueueQueryOptions(api, { page, pageSize, sector: params.sector, sellerCode: params.sellerCode }));
   const counts = useQuery(releaseQueueCountQueryOptions(api));
-  const sellers = useQuery(sellersQueryOptions(api));
+  // The operations profile has no seller list (the server refuses it): not requested.
+  const role = useQuery(sessionQueryOptions(useAppServices().authClient)).data?.role;
+  const sellers = useQuery({ ...sellersQueryOptions(api), enabled: !isOperationsRole(role) });
   const { refresh, running, failed } = useRefreshStage();
 
   const change = (patch: Partial<ReleaseQueueSearch>) => onSearchChange(compact({ ...params, page: undefined, ...patch }));

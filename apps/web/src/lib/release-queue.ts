@@ -2,6 +2,7 @@ import { canUseCommercial } from "@salesforce/contracts";
 import { useQuery } from "@tanstack/react-query";
 import { releaseQueueCountQueryOptions } from "./api-queries";
 import { useApi } from "./app-context";
+import { isOperationsRole } from "./operations-role";
 
 /**
  * Whether the signed-in profile gets the "Aguardando liberação" menu item, and its counter. The answer is the API's own:
@@ -10,7 +11,7 @@ import { useApi } from "./app-context";
  */
 export function useReleaseQueueAccess(role: string | undefined) {
   const api = useApi();
-  const query = useQuery({ ...releaseQueueCountQueryOptions(api), enabled: role !== undefined && canUseCommercial(role) });
+  const query = useQuery({ ...releaseQueueCountQueryOptions(api), enabled: role !== undefined && (canUseCommercial(role) || isOperationsRole(role)) });
   return { visible: query.isSuccess, total: query.data?.total ?? 0, data: query.data };
 }
 

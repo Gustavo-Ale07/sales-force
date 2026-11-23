@@ -14,8 +14,10 @@ import { useState } from "react";
 import { syncStatusQueryOptions } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import type { AuthUser } from "../lib/auth-client";
+import { isOperationsRole } from "../lib/operations-role";
 import { clockTime } from "../lib/sync-refresh";
 import { RefreshDataDialog } from "./refresh-data-dialog";
+
 
 export interface UserMenuProps {
   user: AuthUser | null;
@@ -27,7 +29,7 @@ export function UserMenu({ user, onLogout }: UserMenuProps) {
   const navigate = useNavigate();
   const api = useApi();
   const [refreshOpen, setRefreshOpen] = useState(false);
-  const status = useQuery({ ...syncStatusQueryOptions(api), enabled: user !== null });
+  const status = useQuery({ ...syncStatusQueryOptions(api), enabled: user !== null && !isOperationsRole(user.role) });
   if (!user) return null;
   const dataAsOf = status.data?.dataAsOf ?? null;
   return (
@@ -45,10 +47,12 @@ export function UserMenu({ user, onLogout }: UserMenuProps) {
           <span className="block truncate">{user.username}</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => void navigate({ to: "/perfil" })}>
-          <UserRound size={16} strokeWidth={1.75} aria-hidden="true" />
-          Meu perfil
-        </DropdownMenuItem>
+        {isOperationsRole(user.role) ? null : (
+          <DropdownMenuItem onSelect={() => void navigate({ to: "/perfil" })}>
+            <UserRound size={16} strokeWidth={1.75} aria-hidden="true" />
+            Meu perfil
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem onSelect={() => setRefreshOpen(true)}>
           <RefreshCw size={16} strokeWidth={1.75} aria-hidden="true" />
           Atualizar dados

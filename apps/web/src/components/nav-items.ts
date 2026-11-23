@@ -1,4 +1,5 @@
 import { canAdministerDiscountLimits, canDecideApprovals, canSeeIntegration, canUseCommercial } from "@salesforce/contracts";
+import { isOperationsRole, OPERATIONS_HOME } from "../lib/operations-role";
 import { Hourglass, House, Package, Percent, Plug, Settings, ShieldCheck, ShoppingCart, Users, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
@@ -40,6 +41,7 @@ const allNavItems: NavItem[] = [
  */
 export function navItemsFor(role: string | undefined, approvals = false, releaseQueue = false): NavItem[] {
   return allNavItems.filter((item) => {
+    if (isOperationsRole(role)) return item.to === OPERATIONS_HOME;
     if (item.releaseQueueOnly) return releaseQueue && role !== undefined && canUseCommercial(role);
     // D-M: in `erp` mode the release belongs to Sankhya; the limits and approvals screens do not exist for the user.
     if ((item.approverOnly || item.adminOnly) && !approvals) return false;
