@@ -39,7 +39,7 @@ async function sentOrderIds(db: SqlExecutor, ownerAccountId: string): Promise<st
  * does not return (outside the scope now) loses its stored status. A failed read THROWS (the caller reports it) and keeps what was
  * stored: nothing is deleted for a chunk that was not answered. Nothing happens without the capability or without sent orders.
  */
-export async function refreshOrderErpStatuses(db: SqlDatabase, env: OfflineEnv, source: OrderStatusSource, ownerAccountId: string): Promise<void> {
+export async function refreshOrderErpStatuses(db: SqlDatabase, env: OfflineEnv, source: OrderStatusSource, ownerAccountId: string, onProgress?: (done: number, total: number) => void): Promise<void> {
   if (source.fetchOrderStatuses === undefined) return;
   const ids = await sentOrderIds(db, ownerAccountId);
   for (let start = 0; start < ids.length; start += ORDER_STATUS_CHUNK) {
@@ -54,6 +54,7 @@ export async function refreshOrderErpStatuses(db: SqlDatabase, env: OfflineEnv, 
         else await setMeta(tx, keyOf(id), JSON.stringify(found), now);
       }
     });
+    onProgress?.(Math.min(start + ORDER_STATUS_CHUNK, ids.length), ids.length);
   }
 }
 

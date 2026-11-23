@@ -1,4 +1,4 @@
-import { TransportError, type DatasetIdentity, type MobilityCount, type OrderErpStatus, type PriceTableSnapshot, type RefreshOutcome, type RefreshProgress, type ReferenceSource } from "@salesforce/mobile-db";
+import { TransportError, type DatasetIdentity, type MobilityCount, type PageProgress, type OrderErpStatus, type PriceTableSnapshot, type RefreshOutcome, type RefreshProgress, type ReferenceSource } from "@salesforce/mobile-db";
 import { ApiRequestError, callApi, type ApiClient } from "../data/api";
 import type { CustomerListItem, OrderEntryConfiguration, ProductListItem } from "../data/ports";
 import { toTransportError } from "./transport";
@@ -6,11 +6,12 @@ import { toTransportError } from "./transport";
 const PAGE_SIZE = 100; // MAX_PAGE_SIZE of the contract
 
 /** Pulls every page one request at a time (no bursts against the API). */
-async function fetchAllPages<T>(fetchPage: (page: number) => Promise<{ items: readonly T[]; total: number }>): Promise<T[]> {
+async function fetchAllPages<T>(fetchPage: (page: number) => Promise<{ items: readonly T[]; total: number }>, onPage?: PageProgress): Promise<T[]> {
   const all: T[] = [];
   for (let page = 1; ; page += 1) {
     const result = await fetchPage(page);
     all.push(...result.items);
+    onPage?.(all.length, result.total);
     if (result.items.length === 0 || all.length >= result.total) return all;
   }
 }
@@ -159,13 +160,14 @@ export function createReferenceSource(api: ApiClient, timing: RefreshTiming = {}
         );
       }
     },
-    fetchCustomers: () =>
+    fetchCustomers: (onPage) =>
       guard(() =>
-        fetchAllPages<CustomerListItem>((page) =>
-          callApi(() => api.GET("/customers", { params: { query: { page, pageSize: PAGE_SIZE, sort: "name" } } })),
+        fetchAllPages<CustomerListItem>(
+          (page) => callApi(() => api.GET("/customers", { params: { query: { page, pageSize: PAGE_SIZE, sort: "name" } } })),
+          onPage,
         ),
       ),
-    fetchProducts: () =>
+    fetchProducts: (onPage) =>
       guard(() =>
         fetchAllPages<ProductListItem>(
           (page) =>
@@ -173,17 +175,25 @@ export function createReferenceSource(api: ApiClient, timing: RefreshTiming = {}
               items: readonly ProductListItem[];
               total: number;
             }>,
+          onPage,
         ),
       ),
     // Bulk endpoint, one table at a time (owner 2026-11-13). 404 = the server does not serve this table (left out); 5xx and the
     // like = this table failed (previous prices may stay); no network, session or rate limit stop everything and are THROWN.
-    fetchPriceTables: async (tableCodes) => {
+    fetchPriceTables: async (tableCodes, onTable) => {
       const tables: PriceTableSnapshot[] = [];
       const failed: number[] = [];
+      let rows = 0;
+      let visited = 0;
       for (const code of tableCodes) {
         try {
-          tables.push(await fetchPriceTable(code));
+          const table = await fetchPriceTable(code);
+          tables.push(table);
+          rows += table.prices.length;
+          visited += 1;
+          onTable?.(visited, tableCodes.length, rows);
         } catch (error) {
+          visited += 1;
           const transport = toTransportError(error);
           if (transport.kind === "not_found") continue;
           if (transport.kind === "server") {
