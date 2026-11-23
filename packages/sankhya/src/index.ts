@@ -103,6 +103,21 @@ export type { SankhyaCredentials } from './real/token-provider.js';
 export * from './write/order-contract.js';
 export * from './write/partner-contract.js';
 export {
+  ICMS_CLASSIFICATIONS,
+  PARTNER_FORBIDDEN_COLUMNS,
+  PARTNER_LIMITS,
+  PartnerFieldError,
+  buildPartnerCreateRequestText,
+  buildPartnerEditRequestText,
+  buildPartnerLocalFields,
+  canonicalCompanyDocument,
+  classifyPartnerRefusal,
+  documentCandidates,
+  parsePartnerSaveResponse,
+  validatePartnerRequest,
+  type PartnerEditRequest,
+} from './write/partner-wire.js';
+export {
   FakePartnerBook,
   type FakePartnerCall,
   type FakePartnerOperation,

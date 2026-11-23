@@ -52,6 +52,13 @@ import {
   type PartnerWriteRequest,
   type PartnerWriteResult,
 } from '../write/partner-contract.js';
+import {
+  PARTNER_SAVE_RECORD_PATH,
+  buildPartnerCreateRequestText,
+  documentCandidates,
+  parsePartnerSaveResponse,
+}from '../write/partner-wire.js';
+import { CUSTOMER_WRITE_DISABLED, type CustomerWriteSettings } from '../write/customer-write-config.js';
 import { decimalFromCell } from '../decimal.js';
 import {
   validateSalesHistoryConfig,
@@ -146,6 +153,8 @@ export interface RealSankhyaGatewayOptions {
   readonly configurationSource?: ConfigurationSource;
   /** SNK-7 D-1; absent = writes disabled. Only `live` (Sandbox, validated by the factory) can write. */
   readonly orderWrite?: OrderWriteSettings;
+  /** D-AR customer write switch; absent = closed (every partner operation refuses without a network call). */
+  readonly customerWrite?: CustomerWriteSettings;
 }
 
 /**
@@ -175,6 +184,7 @@ export class RealSankhyaGateway implements SankhyaGateway {
   readonly #configurationSource: ConfigurationSource;
   readonly #now: () => number;
   readonly #orderWrite: OrderWriteSettings;
+  readonly #customerWrite: CustomerWriteSettings;
   #queue: Promise<unknown> = Promise.resolve();
 
   constructor(options: RealSankhyaGatewayOptions) {
@@ -194,6 +204,7 @@ export class RealSankhyaGateway implements SankhyaGateway {
     this.#configurationSource = options.configurationSource ?? new UnavailableConfigurationSource();
     this.#now = options.now ?? Date.now;
     this.#orderWrite = options.orderWrite ?? ORDER_WRITE_DISABLED;
+    this.#customerWrite = options.customerWrite ?? CUSTOMER_WRITE_DISABLED;
     this.#tokens = new TokenProvider({
       origin: this.#origin,
       credentials: options.credentials,
@@ -219,8 +230,11 @@ export class RealSankhyaGateway implements SankhyaGateway {
         reads,
         configurationSource: this.#configurationSource instanceof UnavailableConfigurationSource ? null : this.#configurationSource.kind,
         readMechanism: 'sql_ordered_paging',
-        // The real partner mapper arrives in F6 and stays refused until the Sandbox write test (T3) passes.
-        writes: { submitOrder: this.#orderWrite.mode === 'live' ? 'sandbox_only' : 'not_implemented', upsertPartner: 'not_implemented' },
+        // The partner mapper is NEEDS VALIDATION (Sandbox test T1-T9) and stays closed unless the worker opened the customer switch.
+        writes: {
+          submitOrder: this.#orderWrite.mode === 'live' ? 'sandbox_only' : 'not_implemented',
+          upsertPartner: this.#customerWrite.enabled ? 'sandbox_only' : 'not_implemented',
+        },
       },
     };
   }
@@ -597,22 +611,81 @@ export class RealSankhyaGateway implements SankhyaGateway {
     return parseConfirmarNotaResponse(response.status, response.body, parseRetryAfterMs(response.headers['retry-after']));
   }
 
-  // ---- customer (partner) write (D-AR): refused without any network call until F6 + the Sandbox test ----
+  // ---- customer (partner) write (D-AR) ----------------------------------------------------------
+  //
+  // Every partner operation (reads included, so a closed gateway cannot be probed by accident) refuses with
+  // `NotImplementedError` and NO network call unless the worker configuration is the customer-write switch of the Sandbox
+  // (`customerWrite.enabled`, validated at boot: staging + live + sandbox + Sandbox host + dedicated origin column).
+  // The wire format lives in `write/partner-wire.ts` and is NEEDS VALIDATION until the Sandbox test (plan T1-T9).
 
-  upsertPartner(_request: PartnerWriteRequest, _options?: PartnerCallOptions): Promise<PartnerWriteResult> {
-    return Promise.reject(new NotImplementedError(PARTNER_WRITE_NOT_ENABLED_MESSAGE));
+  #assertCustomerWrite(originField?: string): string {
+    const field = this.#customerWrite.originField;
+    if (!this.#customerWrite.enabled || field === null || (originField !== undefined && originField !== field)) {
+      throw new NotImplementedError(PARTNER_WRITE_NOT_ENABLED_MESSAGE);
+    }
+    return field;
   }
 
-  findPartnerByOrigin(_originField: string, _originKey: string, _options?: PartnerCallOptions): Promise<ErpPartnerRef | null> {
-    return Promise.reject(new NotImplementedError(PARTNER_WRITE_NOT_ENABLED_MESSAGE));
+  /** The caller has ALREADY proven by `findPartnerByOrigin` and `findPartnerByDocument` that the partner is absent (SNK-4). */
+  async upsertPartner(request: PartnerWriteRequest, options?: PartnerCallOptions): Promise<PartnerWriteResult> {
+    this.#assertCustomerWrite(request.originField);
+    const body = buildPartnerCreateRequestText(request); // validation errors leave here, before any call
+    const response = await this.#write(PARTNER_SAVE_RECORD_PATH, body, options?.signal);
+    return parsePartnerSaveResponse(response.status, response.body, parseRetryAfterMs(response.headers['retry-after']));
   }
 
-  findPartnerByDocument(_document: string, _options?: PartnerCallOptions): Promise<ErpPartnerRef | null> {
-    return Promise.reject(new NotImplementedError(PARTNER_WRITE_NOT_ENABLED_MESSAGE));
+  async findPartnerByOrigin(originField: string, originKey: string, options?: PartnerCallOptions): Promise<ErpPartnerRef | null> {
+    this.#assertCustomerWrite(originField);
+    if (!isValidOriginField(originField)) throw invalidPartnerQuery('the origin field name is not valid');
+    if (!PARTNER_ORIGIN_KEY_PATTERN.test(originKey)) throw invalidPartnerQuery("the origin key is not 'force:<uuid>'");
+    const columns = ['CODPARC', 'CGC_CPF'] as const;
+    // Both values are strictly validated above: nothing external reaches the SQL text unchecked.
+    const result = await this.#query(`SELECT CODPARC, CGC_CPF FROM TGFPAR WHERE ${originField} = '${originKey}'`, columns, options?.signal);
+    if (result.rows.length === 0) return null;
+    const rows = result.rows.map((cells, index) => new RowReader('customers', columns, cells, index));
+    const codes = [...new Set(rows.map((row) => row.int('CODPARC')))];
+    if (codes.length > 1) throw ambiguousPartner('ambiguous_origin', codes, 'origin key');
+    const row = rows[0] as RowReader;
+    return { code: row.int('CODPARC'), originKey, document: documentDigits(row.nullableText('CGC_CPF')) };
   }
 
-  readWrittenPartner(_code: number, _options?: PartnerCallOptions): Promise<Customer | null> {
-    return Promise.reject(new NotImplementedError(PARTNER_WRITE_NOT_ENABLED_MESSAGE));
+  async findPartnerByDocument(document: string, options?: PartnerCallOptions): Promise<ErpPartnerRef | null> {
+    const originField = this.#assertCustomerWrite();
+    if (!isValidOriginField(originField)) throw invalidPartnerQuery('the configured origin field name is not valid');
+    const digits = document.replace(/\D/g, '');
+    if (document !== digits || !/^(\d{11}|\d{13,14})$/.test(digits)) throw invalidPartnerQuery('the document must be 11 digits (CPF) or 13/14 digits (CNPJ, with or without the leading zero)');
+    const candidates = documentCandidates(digits);
+    const columns = ['CODPARC', 'CGC_CPF', 'ORIGEM'] as const;
+    const list = candidates.map((candidate) => `'${candidate}'`).join(', ');
+    const result = await this.#query(`SELECT CODPARC, CGC_CPF, ${originField} AS ORIGEM FROM TGFPAR WHERE CGC_CPF IN (${list})`, columns, options?.signal);
+    if (result.rows.length === 0) return null;
+    const rows = result.rows.map((cells, index) => new RowReader('customers', columns, cells, index));
+    const codes = [...new Set(rows.map((row) => row.int('CODPARC')))];
+    if (codes.length > 1) throw ambiguousPartner('ambiguous_document', codes, 'document');
+    const row = rows[0] as RowReader;
+    const stored = documentDigits(row.nullableText('CGC_CPF'));
+    // A stored 13-digit CNPJ is the same company as its 14-digit form (lost leading zero): report the form that was asked.
+    const same = stored !== null && candidates.includes(stored);
+    return { code: row.int('CODPARC'), originKey: row.nullableText('ORIGEM'), document: same ? digits : stored };
+  }
+
+  async readWrittenPartner(code: number, options?: PartnerCallOptions): Promise<Customer | null> {
+    this.#assertCustomerWrite();
+    if (!Number.isInteger(code) || code < 1) throw invalidPartnerQuery('the partner code is not a positive integer');
+    const result = await this.#query(
+      `SELECT ${CUSTOMER_SPEC.select.join(', ')} FROM TGFPAR WHERE CODPARC = ${code}`,
+      CUSTOMER_SPEC.columns,
+      options?.signal,
+    );
+    if (result.rows.length === 0) return null;
+    if (result.rows.length > 1) throw ambiguousPartner('ambiguous_origin', [code], 'code');
+    const mapped = CUSTOMER_SPEC.map(new RowReader(CUSTOMER_SPEC.entity, CUSTOMER_SPEC.columns, result.rows[0] ?? [], 0), {
+      dbUtcOffsetMinutes: this.#dbUtcOffsetMinutes,
+    });
+    if (isRowDiscard(mapped)) return null;
+    // Only a CNPJ can have 13 digits (lost leading zero): compared with the zero restored.
+    const document = mapped.document === null ? null : mapped.document.replace(/\D/g, '');
+    return document !== null && document.length === 13 ? { ...mapped, document: `0${document}` } : mapped;
   }
 
   async findOrderByOrigin(originField: string, originId: string, options?: OrderCallOptions): Promise<ErpOrderRef | null> {
@@ -1174,6 +1247,25 @@ function isoDateOfCell(cell: unknown): string | null {
   if (br !== null) return `${br[3]}-${br[2]}-${br[1]}`;
   const iso = /^(\d{4}-\d{2}-\d{2})/.exec(text);
   return iso === null ? null : (iso[1] ?? null);
+}
+
+const PARTNER_ORIGIN_KEY_PATTERN = /^force:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+function invalidPartnerQuery(detail: string): SankhyaGatewayError {
+  return new SankhyaGatewayError('validation', { code: 'invalid_partner_query', message: `Partner lookup refused: ${detail}.` });
+}
+
+function ambiguousPartner(code: 'ambiguous_origin' | 'ambiguous_document', codes: readonly number[], what: string): SankhyaGatewayError {
+  return new SankhyaGatewayError('permanent', {
+    code,
+    message: `More than one ERP partner carries the same ${what} (codes ${codes.join(', ')}); none adopted, nothing resent; manual reconciliation is required.`,
+  });
+}
+
+/** Digits of a stored `CGC_CPF`; null when absent or empty. */
+function documentDigits(cell: string | null): string | null {
+  const digits = cell === null ? '' : cell.replace(/\D/g, '');
+  return digits === '' ? null : digits;
 }
 
 function invalidOrderQuery(detail: string): SankhyaGatewayError {
