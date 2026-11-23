@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { AccessibilityInfo, Animated, Easing, StyleSheet, Text, View } from "react-native";
+import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from "react-native";
+import { Icon } from "./icons";
 import type { SyncTone } from "../offline/sync-status-text";
 
 /** Follows the system "reduce motion" setting (Android: animation scale off). Defaults to false until known. */
@@ -53,7 +54,7 @@ export function SyncIcon({ tone, syncing, color, size = 16 }: { tone: SyncTone; 
       />
     );
   }
-  const glyph = tone === "error" ? "!" : tone === "ok" ? "✓" : null;
+  const glyph = tone === "error" ? "alert" : tone === "ok" ? "check" : null;
   return (
     <View
       testID={`sync-icon-${tone}`}
@@ -61,7 +62,7 @@ export function SyncIcon({ tone, syncing, color, size = 16 }: { tone: SyncTone; 
       importantForAccessibility="no-hide-descendants"
       style={[box, styles.center, glyph === null ? { backgroundColor: color } : { borderColor: color, borderWidth: 1.5 }]}
     >
-      {glyph !== null && <Text style={[styles.glyph, { color, fontSize: size * 0.7, lineHeight: size * 0.95 }]}>{glyph}</Text>}
+      {glyph !== null && <Icon name={glyph} color={color} size={Math.round(size * 0.8)} />}
     </View>
   );
 }
@@ -69,5 +70,4 @@ export function SyncIcon({ tone, syncing, color, size = 16 }: { tone: SyncTone; 
 const styles = StyleSheet.create({
   ring: { borderWidth: 2 },
   center: { alignItems: "center", justifyContent: "center" },
-  glyph: { fontWeight: "800", textAlign: "center", includeFontPadding: false },
 });

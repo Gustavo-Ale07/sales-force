@@ -6,8 +6,8 @@ import { saleActions, saleBadge, saleExplanation, salesGroupOf, sendPhaseOf } fr
 const ALL: DraftStatus[] = ["local_only", "pending_sync", "syncing", "synced", "sync_error", "conflict", "needs_review"];
 
 describe("salesGroupOf", () => {
-  it("maps every status: only synced is 'Enviados' (accepted by the Force backend, not the ERP)", () => {
-    expect(ALL.map((status) => [status, salesGroupOf(status)])).toEqual([
+  it("only a synced order the server took for Sankhya (or with a Sankhya stage) is 'Enviados'; a saved draft copy is not", () => {
+    expect(ALL.map((status) => [status, salesGroupOf({ status, sendState: "submitted" })])).toEqual([
       ["local_only", "unsent"],
       ["pending_sync", "unsent"],
       ["syncing", "unsent"],
@@ -16,14 +16,16 @@ describe("salesGroupOf", () => {
       ["conflict", "unsent"],
       ["needs_review", "unsent"],
     ]);
+    expect(salesGroupOf({ status: "synced", sendState: null })).toBe("unsent");
+    expect(salesGroupOf({ status: "synced", sendState: "requested" })).toBe("unsent");
   });
 });
 
 describe("saleBadge", () => {
-  it("an unconfirmed order (no send request) is 'Em andamento' in every neutral state, never 'Salvo'/'Rascunho'", () => {
+  it("an unconfirmed order (no send request) is 'Salvo no aparelho' in every neutral state, even once its draft copy synced; never 'Rascunho'", () => {
     const labels = ALL.map((status) => saleBadge(draftRecord({ status })).label);
-    expect(labels).toEqual(["Em andamento", "Em andamento", "Em andamento", "Em andamento", "Erro", "Conflito", "Revisar preço"]);
-    expect(labels.join(" ")).not.toMatch(/rascunho|salvo|somente no aparelho/i);
+    expect(labels).toEqual(["Salvo no aparelho", "Salvo no aparelho", "Salvo no aparelho", "Salvo no aparelho", "Erro", "Conflito", "Revisar preço"]);
+    expect(labels.join(" ")).not.toMatch(/rascunho|em andamento|somente no aparelho/i);
     expect(saleBadge(draftRecord({ status: "synced" })).tone).toBe("neutral");
   });
 
@@ -32,8 +34,8 @@ describe("saleBadge", () => {
     expect(saleBadge(draftRecord({ status: "synced", remoteId: "r1", sendState: "requested" })).label).toBe("Aguardando envio");
   });
 
-  it("a refused send says so", () => {
-    expect(saleBadge(draftRecord({ status: "synced", remoteId: "r1", sendState: "refused" }))).toEqual({ label: "Envio recusado", tone: "danger" });
+  it("a definitively refused send is 'Precisa de correção' (no more 'Envio recusado')", () => {
+    expect(saleBadge(draftRecord({ status: "synced", remoteId: "r1", sendState: "refused" }))).toEqual({ label: "Precisa de correção", tone: "danger" });
   });
 
   it.each([
@@ -66,10 +68,10 @@ describe("sendPhaseOf", () => {
 
 describe("saleExplanation", () => {
   it("states where the order is, without technical jargon", () => {
-    expect(saleExplanation(draftRecord({ status: "local_only" }))).toMatch(/em andamento neste aparelho/i);
+    expect(saleExplanation(draftRecord({ status: "local_only" }))).toMatch(/salvo neste aparelho. ainda não foi enviado ao Sankhya/i);
     expect(saleExplanation(draftRecord({ status: "pending_sync", sendState: "requested" }))).toMatch(/será enviado ao Sankhya/i);
     expect(saleExplanation(draftRecord({ status: "synced", remoteId: "r1", sendState: "submitted", sendCode: "sent" }))).toMatch(/enviado ao Sankhya/i);
-    expect(saleExplanation(draftRecord({ status: "synced", remoteId: "r1", sendState: "refused", sendError: "Cliente sem vendedor." }))).toMatch(/Não enviado ao Sankhya\. Cliente sem vendedor\. Corrija/);
+    expect(saleExplanation(draftRecord({ status: "synced", remoteId: "r1", sendState: "refused", sendError: "Cliente sem vendedor." }))).toMatch(/Precisa de correção\. Cliente sem vendedor\. Corrija/);
     expect(saleExplanation(draftRecord({ status: "sync_error", lastError: "O servidor recusou este pedido." }))).toMatch(/recusou/);
     expect(saleExplanation(draftRecord({ status: "conflict" }))).toMatch(/nada foi sobrescrito/i);
     expect(saleExplanation(draftRecord({ status: "needs_review" }))).toMatch(/preços mudaram/i);
@@ -125,8 +127,8 @@ describe("saleActions", () => {
     expect(A({ status: "sync_error" })).toEqual({ continue: true, duplicate: true, delete: true, resend: true, send: false });
   });
 
-  it("a confirmed order waiting to leave offers resend, not a second Confirmar", () => {
-    expect(A({ status: "pending_sync", sendState: "requested" })).toMatchObject({ resend: true, send: false, continue: true });
+  it("a confirmed order waiting to leave is blocked for editing and offers resend, not a second Confirmar", () => {
+    expect(A({ status: "pending_sync", sendState: "requested" })).toMatchObject({ resend: true, send: false, continue: false });
   });
 
   it("a refused send offers Tentar de novo (send) and editing", () => {
@@ -141,8 +143,8 @@ describe("saleActions", () => {
     expect(A({ status: "synced", remoteId: "r1", sendState: "submitted", sendCode })).toMatchObject({ continue: true, send: false, delete: false });
   });
 
-  it("a synced order never confirmed is not editable or deletable, but can be confirmed and duplicated", () => {
-    expect(A({ status: "synced", remoteId: "r1" })).toEqual({ continue: false, duplicate: true, delete: false, resend: false, send: true });
+  it("a saved order whose draft copy synced stays editable ('Salvo no aparelho'), not deletable, and can be confirmed and duplicated", () => {
+    expect(A({ status: "synced", remoteId: "r1" })).toEqual({ continue: true, duplicate: true, delete: false, resend: false, send: true });
     const edited = A({ status: "pending_sync", remoteId: "r1" });
     expect(edited.delete).toBe(false);
     expect(edited.continue).toBe(true);

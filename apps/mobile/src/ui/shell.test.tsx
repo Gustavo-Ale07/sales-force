@@ -1,5 +1,6 @@
 import { fillMandatoryHeader } from "./fill-mandatory-header";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react-native";
+import { BackHandler } from "react-native";
 import type { CustomerRepository, ProductRepository, Repositories } from "../data/ports";
 import {
   account,
@@ -388,27 +389,36 @@ describe("Shell", () => {
     expect(screen.getByRole("tab", { name: "Início" }).props.accessibilityState.selected).toBe(true);
   });
 
-  it("keeps a visited tab mounted, so its state is not rebuilt when the seller comes back", async () => {
-    let calls = 0;
+  it("Clientes resets to its list when the seller leaves the tab: an open customer sheet is closed", async () => {
     const customers: CustomerRepository = {
-      list: async (request) => {
-        if (request.pageSize === 1) return pageOf([]); // the Home's counter read, not the screen under test
-        calls += 1;
-        return pageOf([customer(1, { name: "Mercado Sul" })]);
-      },
+      list: async (request) => (request.pageSize === 1 ? pageOf([]) : pageOf([customer(1, { name: "Mercado Sul" })])),
     };
     await render(
       <Shell dependencies={fakeDependencies({ auth: signedIn(), repositories: { customers, products: fakeProducts(), orders: fakeOrders() } })} />,
     );
     await fireEvent.press(await screen.findByRole("tab", { name: "Clientes" }));
-    await screen.findByText("Mercado Sul");
+    await fireEvent.press(await screen.findByRole("button", { name: /Mercado Sul/ }));
+    expect(await screen.findByRole("button", { name: "Voltar para Clientes" })).toBeTruthy();
     await fireEvent.press(screen.getByRole("tab", { name: "Perfil" }));
     await fireEvent.press(screen.getByRole("tab", { name: "Clientes" }));
-    expect(screen.getByText("Mercado Sul")).toBeTruthy();
-    expect(calls).toBe(1);
+    expect(screen.queryByRole("button", { name: "Voltar para Clientes" })).toBeNull();
+    expect(await screen.findByText("Mercado Sul")).toBeTruthy();
   });
 
-  it("keeps the catalog search and the Lista view when the seller leaves the tab and comes back", async () => {
+  it("Clientes resets its search when the seller leaves the tab", async () => {
+    const customers: CustomerRepository = { list: async (request) => (request.pageSize === 1 ? pageOf([]) : pageOf([customer(1, { name: "Mercado Sul" })])) };
+    await render(
+      <Shell dependencies={fakeDependencies({ auth: signedIn(), repositories: { customers, products: fakeProducts(), orders: fakeOrders() } })} />,
+    );
+    await fireEvent.press(await screen.findByRole("tab", { name: "Clientes" }));
+    await screen.findByText("Mercado Sul");
+    await fireEvent.changeText(screen.getByLabelText(/Buscar/), "sul");
+    await fireEvent.press(screen.getByRole("tab", { name: "Perfil" }));
+    await fireEvent.press(screen.getByRole("tab", { name: "Clientes" }));
+    expect(screen.queryByDisplayValue("sul")).toBeNull();
+  });
+
+  it("Catálogo resets its search and view when the seller leaves the tab", async () => {
     const products: ProductRepository = fakeProducts({ list: async () => pageOf([product(5, { description: "Copo 200 ml" })]) });
     await render(
       <Shell dependencies={fakeDependencies({ auth: signedIn(), repositories: { customers: { list: async () => pageOf([]) }, products, orders: fakeOrders() } })} />,
@@ -419,9 +429,9 @@ describe("Shell", () => {
     await fireEvent.press(screen.getByRole("radio", { name: "Lista" }));
     await fireEvent.press(screen.getByRole("tab", { name: "Perfil" }));
     await fireEvent.press(screen.getByRole("tab", { name: "Catálogo" }));
-    expect(screen.getByDisplayValue("copo")).toBeTruthy();
-    expect(screen.getByRole("radio", { name: "Lista" }).props.accessibilityState.checked).toBe(true);
-    expect(screen.getByText("Copo 200 ml")).toBeTruthy();
+    expect(screen.queryByDisplayValue("copo")).toBeNull();
+    expect(screen.getByRole("radio", { name: "Lista" }).props.accessibilityState.checked).toBe(false);
+    expect(await screen.findByText("Copo 200 ml")).toBeTruthy();
   });
 
   it("shows the account, version and a real manual sync in Perfil", async () => {
@@ -444,21 +454,49 @@ describe("Shell", () => {
     await fireEvent.press(await screen.findByRole("tab", { name: "Perfil" }));
     await fireEvent.press(screen.getByRole("button", { name: "Ver pedidos salvos neste aparelho" }));
     expect(await screen.findByText("Nenhuma venda pendente.")).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Minhas vendas" }).props.accessibilityState.selected).toBe(true);
+    expect(screen.getByRole("tab", { name: "Vendas" }).props.accessibilityState.selected).toBe(true);
+    // Minhas vendas is the initial screen of Vendas: the old "Minhas vendas / Novo pedido" strip is gone.
+    expect(screen.queryByRole("tab", { name: "Minhas vendas" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Novo pedido" })).toBeNull();
   });
 
-  it("hides the sales tabs inside the order wizard and returns to Minhas vendas with Sair do pedido", async () => {
+  it("Vendas opens on 'Minhas vendas' with ONE entry, the 'Nova venda' button", async () => {
+    const { offline } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() });
+    await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
+    await fireEvent.press(await screen.findByRole("tab", { name: "Vendas" }));
+    expect(await screen.findByText("Nenhuma venda pendente.")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Nova venda" })).toHaveLength(1);
+    expect(screen.queryByText("Novo pedido")).toBeNull();
+  });
+
+  it("an order in progress is saved as 'Salvo no aparelho' when the seller switches tab, and Vendas comes back on its list", async () => {
+    const localOrders = fakeLocalOrders();
+    const { offline } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() }, undefined, localOrders);
+    await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
+    await fireEvent.press(await screen.findByRole("tab", { name: "Vendas" }));
+    await fireEvent.press(await screen.findByRole("button", { name: "Nova venda" }));
+    expect(screen.getByLabelText("Etapa 1 de 4: Cliente")).toBeTruthy();
+    // An empty order is never written.
+    await fireEvent.press(screen.getByRole("tab", { name: "Perfil" }));
+    await waitFor(() => expect(screen.getByRole("tab", { name: "Perfil" }).props.accessibilityState.selected).toBe(true));
+    expect(localOrders.drafts).toHaveLength(0);
+    await fireEvent.press(screen.getByRole("tab", { name: "Vendas" }));
+    expect(await screen.findByRole("button", { name: "Nova venda" })).toBeTruthy();
+    expect(screen.queryByLabelText("Etapa 1 de 4: Cliente")).toBeNull();
+  });
+
+  it("inside the order wizard the header X leaves to Minhas vendas without a question (nothing to save yet)", async () => {
     const { offline } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() });
     await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
     await fireEvent.press(await screen.findByRole("tab", { name: "Perfil" }));
     await fireEvent.press(screen.getByRole("button", { name: "Ver pedidos salvos neste aparelho" }));
     await screen.findByText("Nenhuma venda pendente.");
     await fireEvent.press(screen.getByRole("button", { name: "Nova venda" }));
-    expect(screen.queryByRole("tab", { name: "Minhas vendas" })).toBeNull();
     expect(screen.getByLabelText("Etapa 1 de 4: Cliente")).toBeTruthy();
-    // Nothing to lose yet: leaves without a confirmation.
+    // Empty order: leaves without a question and writes nothing.
     await fireEvent.press(screen.getByRole("button", { name: "Sair do pedido" }));
-    expect(screen.getByRole("tab", { name: "Minhas vendas" }).props.accessibilityState.selected).toBe(true);
+    expect(await screen.findByRole("button", { name: "Nova venda" })).toBeTruthy();
+    expect(screen.queryByLabelText("Etapa 1 de 4: Cliente")).toBeNull();
   });
 
   it("says so when the seller enters offline with the saved session", async () => {
@@ -491,5 +529,69 @@ describe("Shell", () => {
     await fireEvent.press(await screen.findByRole("button", { name: "Próximo" }));
     expect(await screen.findByText("Copo 200 ml")).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Vendas" }).props.accessibilityState.selected).toBe(true);
+  });
+});
+
+describe("Shell: Android Back", () => {
+  const handlers: Array<() => boolean> = [];
+  let exitApp: jest.SpyInstance;
+  beforeEach(() => {
+    handlers.length = 0;
+    jest.spyOn(BackHandler, "addEventListener").mockImplementation((_event, handler) => {
+      handlers.push(handler as () => boolean);
+      return { remove: () => { const index = handlers.indexOf(handler as () => boolean); if (index >= 0) handlers.splice(index, 1); } };
+    });
+    exitApp = jest.spyOn(BackHandler, "exitApp").mockImplementation(() => undefined);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  /** Presses the hardware Back: the most recently registered handler answers first, like the real BackHandler. */
+  async function back() {
+    await act(async () => {
+      for (let i = handlers.length - 1; i >= 0; i -= 1) if (handlers[i]?.() === true) break;
+    });
+  }
+
+  it("on a tab other than Início, Back goes to Início", async () => {
+    await render(<Shell dependencies={fakeDependencies({ auth: signedIn() })} />);
+    await fireEvent.press(await screen.findByRole("tab", { name: "Catálogo" }));
+    await back();
+    expect(screen.getByRole("tab", { name: "Início" }).props.accessibilityState.selected).toBe(true);
+    expect(exitApp).not.toHaveBeenCalled();
+  });
+
+  it("on Início the first Back shows 'Toque de novo para sair' (not an alert) and the second within 2 s exits", async () => {
+    await render(<Shell dependencies={fakeDependencies({ auth: signedIn() })} />);
+    await screen.findByText("Olá, Ana Vendedora");
+    await back();
+    expect(await screen.findByText("Toque de novo para sair")).toBeTruthy();
+    expect(exitApp).not.toHaveBeenCalled();
+    await back();
+    expect(exitApp).toHaveBeenCalledTimes(1);
+  });
+
+  it("an open customer sheet closes with Back before leaving the tab", async () => {
+    const customers: CustomerRepository = { list: async (request) => (request.pageSize === 1 ? pageOf([]) : pageOf([customer(1, { name: "Mercado Sul" })])) };
+    await render(
+      <Shell dependencies={fakeDependencies({ auth: signedIn(), repositories: { customers, products: fakeProducts(), orders: fakeOrders() } })} />,
+    );
+    await fireEvent.press(await screen.findByRole("tab", { name: "Clientes" }));
+    await fireEvent.press(await screen.findByRole("button", { name: /Mercado Sul/ }));
+    await screen.findByRole("button", { name: "Voltar para Clientes" });
+    await back();
+    expect(screen.queryByRole("button", { name: "Voltar para Clientes" })).toBeNull();
+    expect(screen.getByRole("tab", { name: "Clientes" }).props.accessibilityState.selected).toBe(true);
+  });
+
+  it("inside the order wizard Back on step 1 does 'Salvar e sair' (an empty order writes nothing) and lands on Minhas vendas", async () => {
+    const localOrders = fakeLocalOrders();
+    const { offline } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() }, undefined, localOrders);
+    await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
+    await fireEvent.press(await screen.findByRole("tab", { name: "Vendas" }));
+    await fireEvent.press(await screen.findByRole("button", { name: "Nova venda" }));
+    expect(screen.getByLabelText("Etapa 1 de 4: Cliente")).toBeTruthy();
+    await back();
+    expect(await screen.findByRole("button", { name: "Nova venda" })).toBeTruthy();
+    expect(localOrders.drafts).toHaveLength(0);
   });
 });

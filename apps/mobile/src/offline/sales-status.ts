@@ -1,13 +1,14 @@
 import { erpStageViewOf } from "./erp-stage";
-import { CUSTOMER_UNAVAILABLE_MESSAGE, LEGACY_CUSTOMER_UNAVAILABLE_MESSAGE, isCustomerUnavailableMessage, PRODUCT_BLOCK_MESSAGES, type DraftRecord, type DraftStatus, type SalesGroup } from "@salesforce/mobile-db";
+import { CUSTOMER_UNAVAILABLE_MESSAGE, LEGACY_CUSTOMER_UNAVAILABLE_MESSAGE, isCustomerUnavailableMessage, PRODUCT_BLOCK_MESSAGES, type DraftRecord, isConfirmedLocked, type SalesGroup } from "@salesforce/mobile-db";
 
 /**
  * "Enviados" means accepted by the Force backend — NOT delivered to, confirmed by or invoiced in Sankhya. The device carries no
  * Sankhya stage, so no label here claims one (never "sincronizado com o ERP", "confirmado" or "faturado"). Everything else,
  * including a synced order with a change still queued, is "Não enviados".
  */
-export function salesGroupOf(status: DraftStatus): SalesGroup {
-  return status === "synced" ? "sent" : "unsent";
+export function salesGroupOf(view: Pick<DraftRecord, "status"> & Partial<Pick<DraftRecord, "sendState" | "erpStage">>): SalesGroup {
+  // A saved order the Force backend already holds as a draft is still "Não enviados": it never went to Sankhya.
+  return view.status === "synced" && (view.sendState === "submitted" || (view.erpStage ?? null) !== null) ? "sent" : "unsent";
 }
 
 export type BadgeTone = "neutral" | "info" | "ok" | "warning" | "danger";
@@ -80,7 +81,7 @@ export function saleBadge(view: StatusView): SaleBadge {
       case "waiting":
         return { label: "Aguardando envio", tone: "warning" };
       case "refused":
-        return { label: "Envio recusado", tone: "danger" };
+        return { label: "Precisa de correção", tone: "danger" };
       case "in_sankhya":
         return { label: "Enviado ao Sankhya", tone: "ok" };
       case "verifying":
@@ -94,12 +95,12 @@ export function saleBadge(view: StatusView): SaleBadge {
     }
   }
   switch (status) {
-    // No send request yet: the order is still being assembled; it becomes "Aguardando envio" only after "Confirmar".
+    // No send request: saved only on the device (even if the Force backend already holds its draft copy); it goes to Sankhya only after "Confirmar".
     case "local_only":
     case "pending_sync":
     case "syncing":
     case "synced":
-      return { label: "Em andamento", tone: "neutral" };
+      return { label: "Salvo no aparelho", tone: "neutral" };
     case "sync_error":
       return { label: "Erro", tone: "danger" };
     case "conflict":
@@ -125,7 +126,7 @@ export function saleExplanation(draft: Pick<DraftRecord, "status" | "remoteId" |
       case "waiting":
         return "Salvo neste aparelho. Será enviado ao Sankhya assim que possível.";
       case "refused":
-        return `Não enviado ao Sankhya. ${draft.sendError ?? ""} Corrija o que for preciso e confirme de novo.`.replace(/\s+/g, " ").trim();
+        return `Precisa de correção. ${draft.sendError ?? ""} Corrija o que for preciso e confirme de novo.`.replace(/\s+/g, " ").trim();
       case "in_sankhya":
         return "Este pedido foi enviado ao Sankhya.";
       case "verifying":
@@ -143,7 +144,7 @@ export function saleExplanation(draft: Pick<DraftRecord, "status" | "remoteId" |
     case "pending_sync":
     case "syncing":
     case "synced":
-      return "Pedido em andamento neste aparelho.";
+      return "Salvo neste aparelho. Ainda não foi enviado ao Sankhya.";
     case "sync_error":
       return `Não foi possível enviar este pedido. ${draft.lastError ?? ""} Corrija o que for preciso ou tente enviar novamente.`.replace(/\s+/g, " ").trim();
     case "conflict":
@@ -172,9 +173,10 @@ export function saleActions(draft: Pick<DraftRecord, "status" | "remoteId"> & Pa
   // A sent order (queued/sent/unknown on the server) is read-only: no edit, no delete, no second send. A refused send, or an order
   // waiting for / rejected in the discount approval, goes back to the seller for editing. A plain saved order can be sent from the detail.
   const sentToErp = draft.sendState === "submitted" && sendPhaseOf(draft) !== "awaiting_approval" && sendPhaseOf(draft) !== "approval_rejected";
-  const editableSynced = draft.sendState === "refused" || (draft.sendState === "submitted" && !sentToErp);
+  // Editable: "Salvo no aparelho" and "Precisa de correção" (and held orders). Blocked: "Aguardando envio" and "Enviado ao Sankhya".
+  const confirmedLocked = isConfirmedLocked({ sendState: draft.sendState ?? null, status: draft.status });
   return {
-    continue: draft.status !== "synced" ? !sentToErp : editableSynced,
+    continue: !sentToErp && !confirmedLocked,
     send: (draft.status === "synced" || draft.status === "pending_sync" || draft.status === "local_only") && !isCustomerUnavailable(draft) && !isProductBlocked(draft) && (draft.sendState === undefined || draft.sendState === null || draft.sendState === "refused"),
     duplicate: true,
     delete: !held && draft.status !== "syncing",

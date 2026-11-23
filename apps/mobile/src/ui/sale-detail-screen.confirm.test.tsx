@@ -30,13 +30,13 @@ async function show(initial: DraftRecord, confirm: (id: string) => Promise<Confi
 const unconfirmed = draftRecord({ localId: "u1", status: "local_only", remoteDraftNumber: 12 });
 
 describe("SaleDetailScreen Confirmar", () => {
-  it("an unconfirmed order has ONE primary 'Confirmar' next to 'Continuar pedido', and no 'Salvar'/'Enviar'", async () => {
+  it("an unconfirmed order has ONE primary 'Confirmar' next to 'Editar pedido', and no 'Salvar'/'Enviar'", async () => {
     await show(unconfirmed, async () => ({ kind: "queued" }));
     expect(await screen.findByRole("button", { name: "Confirmar" })).toBeTruthy();
     expect(screen.getAllByRole("button", { name: "Confirmar" })).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "Continuar pedido" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Editar pedido" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Salvar|Enviar/ })).toBeNull();
-    expect(screen.getByText("Em andamento")).toBeTruthy();
+    expect(screen.getByText("Salvo no aparelho")).toBeTruthy();
   });
 
   it("Confirmar asks for the send, delivers it and reports a queued order with the 'não enviado' popup", async () => {
@@ -78,7 +78,7 @@ describe("SaleDetailScreen Confirmar", () => {
       fireEvent.press(await screen.findByRole("button", { name: "Confirmar" }));
     });
     await waitFor(() => expect(screen.queryByRole("button", { name: "Confirmar" })).toBeNull());
-    expect(screen.queryByRole("button", { name: "Continuar pedido" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Editar pedido" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Excluir pedido" })).toBeNull();
     expect(screen.getByText("Enviado ao Sankhya")).toBeTruthy();
     expect(screen.queryByText("Pedido não enviado ao Sankhya")).toBeNull();

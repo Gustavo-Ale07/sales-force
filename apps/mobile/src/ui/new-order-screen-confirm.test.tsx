@@ -26,30 +26,55 @@ async function toSummary(outcome: ConfirmOutcome | (() => Promise<ConfirmOutcome
   const saved = draftRecord({ localId: "l1", status: "pending_sync", sendState: "requested", topCode: quotation ? 1000 : 1001 });
   const save = jest.fn(async () => saved);
   const confirm = jest.fn(typeof outcome === "function" ? outcome : async () => outcome);
-  const localOrders: LocalOrdersPort = fakeLocalOrders([saved], { save: save as never, confirm, get: async () => saved });
+  const requestSend = jest.fn(async (_id: string) => undefined);
+  const exit = jest.fn();
+  const localOrders: LocalOrdersPort = fakeLocalOrders([saved], { save: save as never, confirm, requestSend, get: async () => saved });
   const repositories = {
     customers: { list: async () => pageOf([customer(10, { name: "Padaria Central" })]) },
     products: fakeProducts({ list: async () => pageOf([copo]) }),
     orders: fakeOrders({ getEntryConfiguration: async () => config, listCarriers: async () => [{ code: 7, name: "Transportes Alfa" }] }),
   };
-  await render(withModal(<NewOrderScreen repositories={repositories} onUnauthenticated={() => undefined} localOrders={localOrders} />));
+  await render(withModal(<NewOrderScreen repositories={repositories} onUnauthenticated={() => undefined} localOrders={localOrders} onExit={exit} />));
   await pressAndSettle(await screen.findByText("Padaria Central"));
   if (quotation) await pressAndSettle(screen.getByRole("radio", { name: "Operação Orçamento (TOP 1000)" }));
   await fillMandatoryHeader();
   await pressAndSettle(screen.getByRole("button", { name: "Próximo" }));
   await pressAndSettle(await screen.findByRole("button", { name: "Adicionar Copo 200 ml ao carrinho" }));
   await pressAndSettle(screen.getByRole("button", { name: "Próximo" }));
-  return { save, confirm, savesBefore: () => save.mock.calls.length };
+  return { save, confirm, requestSend, exit, savesBefore: () => save.mock.calls.length };
 }
 
 const confirmButton = () => screen.getByRole("button", { name: "Confirmar" });
 
 describe("NewOrderScreen Confirmar (local path)", () => {
-  it("has ONE primary action and no 'Salvar' / 'Enviar' alternative", async () => {
+  it("ends with TWO buttons: 'Confirmar' (primary) and 'Salvar e sair'; no 'Salvar rascunho/pedido/orçamento' and no 'Enviar'", async () => {
     await toSummary({ kind: "sent", erpNumber: 1 });
     expect(screen.getAllByRole("button", { name: "Confirmar" })).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: /^Salvar/ })).toBeNull();
+    expect(screen.getAllByRole("button", { name: "Salvar e sair" })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /Salvar (rascunho|pedido|orçamento)/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Enviar/ })).toBeNull();
+  });
+
+  it("'Salvar e sair' keeps the order on the device and leaves: it never asks Sankhya and never writes a send request", async () => {
+    const { save, confirm, requestSend, exit } = await toSummary({ kind: "sent", erpNumber: 1 });
+    save.mockClear();
+    await pressAndSettle(screen.getByRole("button", { name: "Salvar e sair" }));
+    expect(exit).toHaveBeenCalledTimes(1);
+    expect(confirm).not.toHaveBeenCalled();
+    expect(requestSend).not.toHaveBeenCalled();
+    // Whatever is saved on the way out carries no send request.
+    for (const call of save.mock.calls as unknown as Array<[{ sendRequested?: boolean }]>) expect(call[0].sendRequested).not.toBe(true);
+    expect(screen.queryByText("Pedido enviado")).toBeNull();
+    expect(screen.queryByText(/não enviado ao Sankhya/)).toBeNull();
+  });
+
+  it("the header X does exactly 'Salvar e sair': no question, never Sankhya", async () => {
+    const { confirm, requestSend, exit } = await toSummary({ kind: "sent", erpNumber: 1 });
+    await pressAndSettle(screen.getByRole("button", { name: "Sair do pedido" }));
+    expect(screen.queryByText("Sair do pedido?")).toBeNull();
+    expect(exit).toHaveBeenCalledTimes(1);
+    expect(confirm).not.toHaveBeenCalled();
+    expect(requestSend).not.toHaveBeenCalled();
   });
 
   it("saves with the send request, delivers it, and an order that reached Sankhya shows 'Pedido enviado' and its number, read-only", async () => {
@@ -71,13 +96,22 @@ describe("NewOrderScreen Confirmar (local path)", () => {
     expect(screen.queryByText("Pedido enviado")).toBeNull();
   });
 
-  it("offline / queued: the popup says it was not sent to Sankhya, the order is 'aguardando envio' and still editable", async () => {
+  it("offline / queued: the popup says it was not sent to Sankhya, the order is 'aguardando envio' and BLOCKED for editing", async () => {
     await toSummary({ kind: "queued" });
     await pressAndSettle(confirmButton());
     expect(await screen.findByText("Pedido não enviado ao Sankhya")).toBeTruthy();
     expect(screen.getByText("O pedido ficou salvo neste aparelho e será enviado assim que possível.")).toBeTruthy();
     expect(screen.getByText("Pedido aguardando envio")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Editar pedido" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Editar pedido" })).toBeNull();
+  });
+
+  it("Sankhya down (503): the standard popup 'Sankhya indisponível' with 'Tentar de novo'; the order stays queued and blocked", async () => {
+    await toSummary({ kind: "queued", reason: "sankhya_unavailable" });
+    await pressAndSettle(confirmButton());
+    expect(await screen.findByText("Sankhya indisponível")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeTruthy();
+    expect(screen.queryByText("Erro ao sincronizar")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Editar pedido" })).toBeNull();
   });
 
   it("a quotation that is queued uses the quotation words", async () => {

@@ -45,8 +45,8 @@ describe("Situação (owner's exact wording, 2026-11-13)", () => {
     expect(view.tone).not.toBe("offline");
   });
   it("synced shows the time of the last successful sync", () => {
-    expect(describeSyncStatus({ ...idle, lastSyncedAt: at(14, 5) }, "online").text).toBe("✓ Sincronizado às 14:05");
-    expect(describeSyncStatus(idle, "online").text).toBe("✓ Sincronizado");
+    expect(describeSyncStatus({ ...idle, lastSyncedAt: at(14, 5) }, "online").text).toBe("Sincronizado às 14:05");
+    expect(describeSyncStatus(idle, "online").text).toBe("Sincronizado");
   });
   it("an order in attention is visible even when the sync itself went well", () => {
     expect(describeSyncStatus({ ...idle, needsAttention: 1, lastSyncedAt: at(14, 5) }, "online").text).toBe("1 pedido precisa de atenção");

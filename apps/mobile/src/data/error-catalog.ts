@@ -77,7 +77,7 @@ export const ERROR_CATALOG = {
   environment_mismatch: { title: "Outro ambiente", message: "Este pedido foi criado para outro ambiente do Sankhya e não pode ser enviado aqui. Refaça o pedido.", action: "none" },
   delivery_diverged: { title: "Nota com valores diferentes", message: "A nota deste pedido já existe no Sankhya com valores diferentes. Peça à TI para conferir; o aplicativo não reenvia.", action: "none" },
   ambiguous_origin: { title: "Mais de uma nota", message: "Há mais de uma nota com este pedido no Sankhya. Peça à TI para conferir.", action: "none" },
-  send_refused: { title: "Envio recusado", message: "O servidor recusou o envio deste pedido. Revise os dados e envie de novo.", action: "none" },
+  send_refused: { title: "Precisa de correção", message: "O servidor recusou o envio deste pedido. Revise os dados e envie de novo.", action: "none" },
   approval_not_pending: { title: "Aprovação já resolvida", message: "Este pedido não espera mais aprovação. Recarregue.", action: "reload" },
   conflict: { title: "Conflito", message: "O registro mudou. Sincronize e tente de novo.", action: "go_sync" },
 

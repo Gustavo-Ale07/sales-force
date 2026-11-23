@@ -1,6 +1,6 @@
 import { StyleSheet, View } from "react-native";
 
-export type IconName = "home" | "customers" | "sales" | "catalog" | "profile" | "products" | "cart" | "check" | "close" | "select";
+export type IconName = "home" | "customers" | "sales" | "catalog" | "profile" | "products" | "cart" | "check" | "close" | "select" | "plus" | "arrow" | "back" | "alert" | "filter" | "cloud";
 
 /** Small line icons drawn with plain views: no icon font or SVG dependency. All fit a 24 x 24 box. */
 export function Icon({ name, color, size = 24 }: { name: IconName; color: string; size?: number }) {
@@ -79,6 +79,48 @@ export function Icon({ name, color, size = 24 }: { name: IconName; color: string
           </View>
         </View>
       );
+    case "plus":
+      return (
+        <View style={[box, styles.center]}>
+          <View style={[styles.bar, { backgroundColor: color }]} />
+          <View style={[styles.bar, { backgroundColor: color, transform: [{ rotate: "90deg" }] }]} />
+        </View>
+      );
+    case "arrow":
+      return (
+        <View style={[box, styles.center]}>
+          <View style={[styles.arrowShaft, { backgroundColor: color }]} />
+          <View style={[styles.arrowHead, { borderColor: color }]} />
+        </View>
+      );
+    case "back":
+      return (
+        <View style={[box, styles.center]}>
+          <View style={[styles.chevron, { borderColor: color }]} />
+        </View>
+      );
+    case "alert":
+      return (
+        <View style={[box, styles.center]}>
+          <View style={[styles.alertBar, { backgroundColor: color }]} />
+          <View style={[styles.alertDot, { backgroundColor: color }]} />
+        </View>
+      );
+    case "filter":
+      return (
+        <View style={[box, styles.center]} accessibilityElementsHidden>
+          <View style={[styles.filterBar, { backgroundColor: color, width: 18 }]} />
+          <View style={[styles.filterBar, { backgroundColor: color, width: 12 }]} />
+          <View style={[styles.filterBar, { backgroundColor: color, width: 6 }]} />
+        </View>
+      );
+    case "cloud":
+      return (
+        <View style={[box, styles.center]} accessibilityElementsHidden>
+          <View style={[styles.cloudBody, stroke]} />
+          <View style={[styles.cloudPuff, stroke, { backgroundColor: "transparent" }]} />
+        </View>
+      );
     case "profile":
       return (
         <View style={[box, styles.center]}>
@@ -93,6 +135,9 @@ export function Icon({ name, color, size = 24 }: { name: IconName; color: string
 
 const styles = StyleSheet.create({
   center: { alignItems: "center", justifyContent: "center" },
+  filterBar: { height: 2, borderRadius: 1, marginVertical: 2 },
+  cloudBody: { width: 20, height: 11, borderRadius: 6, marginTop: 6 },
+  cloudPuff: { position: "absolute", top: 3, left: 6, width: 10, height: 10, borderRadius: 5, borderBottomColor: "transparent" },
   crate: { width: 18, height: 16, borderRadius: 3, justifyContent: "center" },
   crateLine: { height: 2 },
   cartHandle: { position: "absolute", top: 3, left: 1, width: 5, height: 2, borderRadius: 1 },
@@ -103,6 +148,11 @@ const styles = StyleSheet.create({
   tickSmall: { width: 4, height: 8, borderTopWidth: 0, borderLeftWidth: 0, borderRightWidth: 2, borderBottomWidth: 2, transform: [{ rotate: "45deg" }], marginTop: -2 },
   selectBox: { width: 18, height: 18, borderRadius: 3, alignItems: "center", justifyContent: "center" },
   bar: { position: "absolute", width: 18, height: 2, borderRadius: 1 },
+  arrowShaft: { position: "absolute", width: 16, height: 2, borderRadius: 1 },
+  arrowHead: { position: "absolute", right: 3, width: 9, height: 9, borderTopWidth: 2, borderRightWidth: 2, borderLeftWidth: 0, borderBottomWidth: 0, transform: [{ rotate: "45deg" }] },
+  chevron: { width: 10, height: 10, borderLeftWidth: 2, borderBottomWidth: 2, borderTopWidth: 0, borderRightWidth: 0, transform: [{ rotate: "45deg" }], marginLeft: 3 },
+  alertBar: { width: 3, height: 11, borderRadius: 2 },
+  alertDot: { width: 3, height: 3, borderRadius: 2, marginTop: 2 },
   barCross: {},
   roof: {
     width: 0,

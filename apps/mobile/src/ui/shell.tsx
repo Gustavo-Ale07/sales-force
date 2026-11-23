@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { BackHandler, KeyboardAvoidingView, Pressable, StatusBar, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { BackHandler, KeyboardAvoidingView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { useConnectivity } from "../connectivity/use-connectivity";
 import type { Account } from "../auth/auth-port";
 import type { AppDependencies } from "../dependencies";
@@ -18,7 +18,9 @@ import { CustomersScreen } from "./customers-screen";
 import { SalesScreen } from "./sales-screen";
 import { HomeScreen } from "./home-screen";
 import { LoginScreen } from "./login-screen";
-import { NewOrderScreen } from "./new-order-screen";
+import { NewOrderScreen, type NewOrderControl } from "./new-order-screen";
+import { ExitHint } from "./exit-hint";
+import { EXIT_WINDOW_MS, resolveBack, type BackState } from "./back-navigation";
 import { ProductsScreen } from "./products-screen";
 import { installUpdate, updateAvailable } from "../update/device-update";
 import { ProfileScreen } from "./profile-screen";
@@ -71,6 +73,13 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   const [visited, setVisited] = useState<ReadonlySet<MainTab>>(() => new Set<MainTab>(["home"]));
   const [salesView, setSalesView] = useState<SalesView>("orders");
   const [salesReset, setSalesReset] = useState(0);
+  /** Bumped when a tab is left: its screen remounts on its initial screen (nothing of it is kept). */
+  const [epochs, setEpochs] = useState<Readonly<Record<MainTab, number>>>({ home: 0, customers: 0, sales: 0, catalog: 0, profile: 0 });
+  const [saleDetailOpen, setSaleDetailOpen] = useState(false);
+  const [exitHint, setExitHint] = useState(false);
+  const exitArmedAt = useRef<number | null>(null);
+  const exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const orderControl = useRef<NewOrderControl | null>(null);
   const [resumeLocalId, setResumeLocalId] = useState<string | null>(null);
   const [quarantineOpen, setQuarantineOpen] = useState(false);
   const [quarantinedCount, setQuarantinedCount] = useState(0);
@@ -85,7 +94,6 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   const syncStatus = useSyncStatus(services?.sync ?? null, connectivityState, session.phase === "authenticated" && session.freshLogin === true);
   const clearResume = useCallback(() => setResumeLocalId(null), []);
   const clearStart = useCallback(() => setStartRequest(null), []);
-  const inDetail = customerDetail !== null && tab === "customers";
   // Retained (quarantined) orders: re-counted whenever the sync counters move or the seller changes them.
   const localOrdersForCount = services?.localOrders ?? null;
   useEffect(() => {
@@ -101,24 +109,6 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   }, [localOrdersForCount, syncStatus.needsAttention, syncStatus.pending, syncStatus.phase, quarantineTick]);
   const closeQuarantine = useCallback(() => setQuarantineOpen(false), []);
   const quarantineChanged = useCallback(() => setQuarantineTick((n) => n + 1), []);
-  // Hardware back closes the retained-orders screen first.
-  useEffect(() => {
-    if (!quarantineOpen) return undefined;
-    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      setQuarantineOpen(false);
-      return true;
-    });
-    return () => subscription.remove();
-  }, [quarantineOpen]);
-  // Hardware back closes the customer sheet before anything else.
-  useEffect(() => {
-    if (!inDetail) return undefined;
-    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      setCustomerDetail(null);
-      return true;
-    });
-    return () => subscription.remove();
-  }, [inDetail]);
   const syncNow = useCallback(() => {
     void services?.sync.sync("manual");
   }, [services]);
@@ -126,10 +116,104 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
     services?.sync.cancel?.();
   }, [services]);
 
-  const selectTab = useCallback((next: MainTab) => {
-    setTab(next);
-    setVisited((current) => (current.has(next) ? current : new Set(current).add(next)));
+  const tabRef = useRef<MainTab>(tab);
+  tabRef.current = tab;
+  /** Leaving a tab closes whatever was open in it: the next visit starts on its initial screen. */
+  const resetTab = useCallback((left: MainTab) => {
+    setEpochs((current) => ({ ...current, [left]: current[left] + 1 }));
+    if (left === "customers") setCustomerDetail(null);
+    if (left === "sales") {
+      setSalesView("orders");
+      setSaleDetailOpen(false);
+    }
+    if (left === "profile") setQuarantineOpen(false);
   }, []);
+  const selectTab = useCallback(
+    (next: MainTab) => {
+      const left = tabRef.current;
+      const show = () => {
+        setTab(next);
+        setVisited((current) => (current.has(next) ? current : new Set(current).add(next)));
+      };
+      if (next === left) {
+        show();
+        return;
+      }
+      const order = left === "sales" ? orderControl.current : null;
+      if (order === null) {
+        resetTab(left);
+        show();
+        return;
+      }
+      // An order in progress is saved on the device first (it stays "Salvo no aparelho"); if that fails the seller stays to see why.
+      void order.saveAndClose().then((closed) => {
+        if (!closed) return;
+        resetTab(left);
+        show();
+      });
+    },
+    [resetTab],
+  );
+
+  // Android Back: ONE resolver (back-navigation.ts) decides; this only carries out its answer.
+  const syncOverlayOn = syncStatus.phase === "syncing" && (syncStatus.steps ?? null) !== null;
+  const backState = useRef<Omit<BackState, "now">>({ overlay: "none", tab, wizardOpen: false, saleDetailOpen: false, customerDetailOpen: false, exitArmedAt: null });
+  backState.current = {
+    overlay: syncOverlayOn ? "sync" : quarantineOpen ? "quarantine" : "none",
+    tab,
+    wizardOpen: salesView === "newOrder",
+    saleDetailOpen,
+    customerDetailOpen: customerDetail !== null,
+    exitArmedAt: exitArmedAt.current,
+  };
+  const authenticated = session.phase === "authenticated";
+  useEffect(() => {
+    if (!authenticated) return undefined;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      const now = Date.now();
+      const action = resolveBack({ ...backState.current, exitArmedAt: exitArmedAt.current, now });
+      switch (action.type) {
+        case "ignore":
+          break;
+        case "close_quarantine":
+          setQuarantineOpen(false);
+          break;
+        case "wizard_back":
+          orderControl.current?.back();
+          break;
+        case "close_customer_detail":
+          setCustomerDetail(null);
+          break;
+        case "close_sale_detail":
+          setSalesReset((n) => n + 1);
+          setSaleDetailOpen(false);
+          break;
+        case "go_home":
+          selectTab("home");
+          break;
+        case "arm_exit":
+          exitArmedAt.current = now;
+          setExitHint(true);
+          if (exitTimer.current !== null) clearTimeout(exitTimer.current);
+          exitTimer.current = setTimeout(() => {
+            exitArmedAt.current = null;
+            setExitHint(false);
+          }, EXIT_WINDOW_MS);
+          break;
+        case "exit_app":
+          BackHandler.exitApp();
+          break;
+      }
+      return true;
+    });
+    return () => subscription.remove();
+  }, [authenticated, selectTab]);
+  useEffect(
+    () => () => {
+      if (exitTimer.current !== null) clearTimeout(exitTimer.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     let active = true;
@@ -301,7 +385,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
           </Pane>
           <Pane active={tab === "customers"} visited={visited.has("customers")}>
             <View style={customerDetail === null ? styles.paneActive : styles.paneHidden}>
-              <CustomersScreen customers={repositories.customers} onUnauthenticated={expire} connectivity={connectivityState} onOpen={setCustomerDetail} />
+              <CustomersScreen key={epochs.customers} customers={repositories.customers} onUnauthenticated={expire} connectivity={connectivityState} onOpen={setCustomerDetail} />
             </View>
             {customerDetail !== null && (
               <CustomerDetailScreen
@@ -314,26 +398,10 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
             )}
           </Pane>
           <Pane active={tab === "sales"} visited={visited.has("sales")}>
-            {services !== null && salesView === "orders" && (
-              <View style={styles.segments} accessibilityRole="tablist">
-                {(["orders", "newOrder"] as const).map((key) => (
-                  <Pressable
-                    key={key}
-                    style={[styles.segment, salesView === key && styles.segmentActive]}
-                    onPress={() => {
-                      setSalesView(key);
-                      if (key === "orders") setSalesReset((n) => n + 1);
-                    }}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected: salesView === key }}
-                  >
-                    <Text style={[styles.segmentText, salesView === key && styles.segmentTextActive]}>{key === "orders" ? "Minhas vendas" : "Novo pedido"}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            )}
-            <View style={salesView === "newOrder" || services === null ? styles.paneActive : styles.paneHidden}>
+            {(salesView === "newOrder" || services === null) && (
+            <View style={styles.paneActive}>
               <NewOrderScreen
+                controlRef={orderControl}
                 repositories={repositories}
                 onUnauthenticated={expire}
                 {...(services === null
@@ -351,9 +419,12 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
                 onStartConsumed={clearStart}
               />
             </View>
+            )}
             {services !== null && (
               <View style={salesView === "orders" ? styles.paneActive : styles.paneHidden}>
                 <SalesScreen
+                  key={epochs.sales}
+                  onDetailChange={setSaleDetailOpen}
                   localOrders={services.localOrders}
                   customers={repositories.customers}
                   orders={repositories.orders}
@@ -371,10 +442,11 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
             )}
           </Pane>
           <Pane active={tab === "catalog"} visited={visited.has("catalog")}>
-            <ProductsScreen products={repositories.products} onUnauthenticated={expire} connectivity={connectivityState} />
+            <ProductsScreen key={epochs.catalog} products={repositories.products} onUnauthenticated={expire} connectivity={connectivityState} />
           </Pane>
           <Pane active={tab === "profile"} visited={visited.has("profile")}>
             <ProfileScreen
+              key={epochs.profile}
               account={session.account}
               {...syncView}
               {...(services === null
@@ -396,6 +468,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
             </View>
           )}
         </View>
+        {exitHint && <ExitHint bottom={(keyboardVisible ? 0 : 56 + insets.bottom) + spacing.md} />}
         {!keyboardVisible && <BottomNav active={tab} onSelect={selectTab} badges={{ sales: syncStatus.awaitingOrders ?? 0 }} />}
       </KeyboardAvoidingView>
       </ProductImageProvider>
@@ -420,9 +493,4 @@ const styles = StyleSheet.create({
   headerSpacer: { flex: 1 },
   offlineNotice: { backgroundColor: colors.errorBackground, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   offlineText: { color: colors.text, fontSize: 13 },
-  segments: { flexDirection: "row", backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
-  segment: { flex: 1, alignItems: "center", paddingVertical: spacing.md, borderBottomWidth: 3, borderBottomColor: "transparent" },
-  segmentActive: { borderBottomColor: colors.red },
-  segmentText: { fontSize: 15, fontWeight: "600", color: colors.textMuted },
-  segmentTextActive: { color: colors.navy },
 });

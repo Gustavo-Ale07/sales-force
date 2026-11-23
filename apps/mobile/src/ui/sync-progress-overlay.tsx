@@ -3,6 +3,7 @@ import { AccessibilityInfo, Animated, Easing, Modal, Pressable, StatusBar, Style
 import type { SyncStatus, SyncStep } from "@salesforce/mobile-db";
 import { currentStepText, failureCode, overallFraction, sellerSteps, type SellerStep } from "../offline/sync-steps-text";
 import { colors, spacing } from "../theme";
+import { Icon } from "./icons";
 import { SyncIcon, useReduceMotion } from "./sync-icon";
 import { useErrorPopup } from "./use-error-popup";
 import { useInsets } from "./use-insets";
@@ -31,7 +32,7 @@ function StepMark({ state, reduceMotion }: { state: SellerStep["state"]; reduceM
   if (state === "pending") return <View style={[styles.mark, styles.markPending]} />;
   return (
     <Animated.View style={[styles.mark, styles.markDone, { transform: [{ scale }] }]} testID="sync-step-check">
-      <Text style={styles.markGlyph}>{"✓"}</Text>
+      <Icon name="check" color={colors.navy} size={16} />
     </Animated.View>
   );
 }
@@ -169,7 +170,6 @@ const styles = StyleSheet.create({
   mark: { width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center" },
   markPending: { borderWidth: 2, borderColor: "rgba(255,255,255,0.4)" },
   markDone: { backgroundColor: CHECK_GREEN },
-  markGlyph: { color: colors.navy, fontSize: 13, fontWeight: "900", includeFontPadding: false },
   cancel: { minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: 24, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.6)" },
   cancelText: { color: colors.onNavy, fontSize: 15, fontWeight: "700" },
 });

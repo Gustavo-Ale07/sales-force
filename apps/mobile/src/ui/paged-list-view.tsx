@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactElement, type ReactNode } from "react";
 import { ActivityIndicator, FlatList, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { Page, PageRequest } from "../data/ports";
 import { usePagedList } from "../data/use-paged-list";
-import { colors, spacing } from "../theme";
+import { colors, control, radius, spacing } from "../theme";
 
 const SEARCH_DEBOUNCE_MS = 400;
 
@@ -34,6 +34,8 @@ export interface PagedListViewProps<T, R extends PageRequest = PageRequest> {
   /** Count line under the title; `searching` is true while a search text is applied. */
   readonly describeCount?: (total: number, searching: boolean) => string;
   readonly loadingText?: string;
+  /** Drops the "N resultado(s)" line (the screen shows its own summary). */
+  readonly hideCount?: boolean;
   /** Number of columns (grid mode); the list is remounted when it changes, the loaded items are kept. */
   readonly columns?: number;
   readonly onUnauthenticated: () => void;
@@ -57,6 +59,7 @@ export function PagedListView<T, R extends PageRequest = PageRequest>({
   title,
   describeCount,
   loadingText,
+  hideCount = false,
   columns = 1,
   onUnauthenticated,
 }: PagedListViewProps<T, R>) {
@@ -83,6 +86,7 @@ export function PagedListView<T, R extends PageRequest = PageRequest>({
           {describeCount !== undefined && list.status === "ready" && <Text style={styles.subtitle}>{describeCount(list.total, searching)}</Text>}
         </View>
       )}
+      <View style={styles.topBlock}>
       <TextInput
         style={styles.search}
         value={text}
@@ -98,6 +102,7 @@ export function PagedListView<T, R extends PageRequest = PageRequest>({
       />
 
       {header}
+      </View>
 
       {list.status === "loading" && (
         <View style={styles.centered}>
@@ -137,7 +142,7 @@ export function PagedListView<T, R extends PageRequest = PageRequest>({
             </View>
           }
           ListHeaderComponent={
-            title === undefined && list.total > 0 ? <Text style={styles.count}>{`${list.total} resultado(s)`}</Text> : null
+            title === undefined && !hideCount && list.total > 0 ? <Text style={styles.count}>{`${list.total} resultado(s)`}</Text> : null
           }
           ListFooterComponent={
             <View>
@@ -153,19 +158,21 @@ export function PagedListView<T, R extends PageRequest = PageRequest>({
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.sm },
+  // Search and filters stay fixed over a solid background; the list scrolls under a subtle divider.
+  topBlock: { gap: spacing.sm, backgroundColor: colors.background, paddingBottom: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
   title: { fontSize: 22, fontWeight: "800", color: colors.navy },
   subtitle: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
   search: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
+    borderRadius: radius.md,
     backgroundColor: colors.surface,
     paddingHorizontal: spacing.md,
-    minHeight: 46,
+    minHeight: control.height,
     fontSize: 16,
     color: colors.text,
   },
-  listContent: { paddingBottom: spacing.lg },
+  listContent: { paddingTop: spacing.sm, paddingBottom: spacing.lg },
   spinner: { marginVertical: spacing.lg },
   centered: { alignItems: "center", gap: spacing.xs, marginTop: spacing.xl, paddingHorizontal: spacing.lg },
   centeredText: { textAlign: "center", color: colors.textMuted, fontSize: 14 },

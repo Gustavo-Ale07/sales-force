@@ -4,6 +4,7 @@ import type { QuarantinedDraftDetail, QuarantinedDraftRecord } from "@salesforce
 import type { LocalOrdersPort } from "../offline/local-orders";
 import { QUARANTINE_INTRO, QUARANTINE_TITLE, describeQuarantineReason } from "../offline/quarantine";
 import { colors, spacing } from "../theme";
+import { BackLink } from "./back-link";
 import { useAppModal } from "./app-modal";
 import { formatDateTime } from "./sync-status";
 
@@ -60,9 +61,7 @@ export function QuarantineScreen({ localOrders, onBack, onChanged }: QuarantineS
   return (
     <View style={styles.flex}>
       <View style={styles.bar}>
-        <Pressable onPress={onBack} style={styles.back} accessibilityRole="button" accessibilityLabel="Voltar">
-          <Text style={styles.backText}>‹ Voltar</Text>
-        </Pressable>
+        <BackLink label="Voltar" onPress={onBack} accessibilityLabel="Voltar" />
       </View>
       <View style={styles.header}>
         <Text style={styles.title} accessibilityRole="header">{QUARANTINE_TITLE}</Text>
@@ -156,9 +155,7 @@ function QuarantineDetail({
 
   const back = (
     <View style={styles.bar}>
-      <Pressable onPress={onBack} style={styles.back} accessibilityRole="button" accessibilityLabel="Voltar para pedidos retidos">
-        <Text style={styles.backText}>‹ Pedidos retidos</Text>
-      </Pressable>
+      <BackLink label="Pedidos retidos" onPress={onBack} accessibilityLabel="Voltar para pedidos retidos" />
     </View>
   );
 

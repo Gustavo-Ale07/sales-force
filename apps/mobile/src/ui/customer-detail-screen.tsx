@@ -4,6 +4,7 @@ import type { ConnectivityState } from "../connectivity/connectivity";
 import type { CustomerDetail, CustomerListItem, CustomerRepository } from "../data/ports";
 import { hasNoSeller, isUnconfirmedCustomer, NO_SELLER_ORDER_MESSAGE, PENDING_CREDIT_NOTE, PENDING_CUSTOMER_ORDER_MESSAGE } from "../data/pending-status";
 import { colors, spacing } from "../theme";
+import { BackLink } from "./back-link";
 import { describeCustomerStatus } from "./customers-screen";
 
 /** "1234.5" -> "R$ 1.234,50" without depending on Intl (not guaranteed on every Hermes build). */
@@ -84,9 +85,7 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
   return (
     <View style={styles.container}>
       <View style={styles.bar}>
-        <Pressable style={styles.back} onPress={onBack} accessibilityRole="button" accessibilityLabel="Voltar para Clientes">
-          <Text style={styles.backText}>‹ Clientes</Text>
-        </Pressable>
+        <BackLink label="Clientes" onPress={onBack} accessibilityLabel="Voltar para Clientes" />
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { DatasetChangedError, DatasetUnavailableError, type ConfirmOutcome, type DraftRecord } from "@salesforce/mobile-db";
 import { ORDER_HEADER_ISSUE_LABEL, orderHeaderIssues, type OrderHeaderIssueCode } from "@salesforce/domain";
 import { datasetIdentityOf } from "../offline/reference-source";
@@ -67,6 +67,16 @@ export interface NewOrderScreenProps {
   readonly onStartConsumed?: () => void;
   /** Leaves the wizard back to the sales list. The order in progress stays on this screen (it is only hidden), so nothing is lost. */
   readonly onExit?: () => void;
+  /** Filled with the wizard's handle (Back press, save-and-close on tab change); cleared on unmount. */
+  readonly controlRef?: MutableRefObject<NewOrderControl | null>;
+}
+
+/** What the shell can ask of the wizard. */
+export interface NewOrderControl {
+  /** Android Back: closes a selection, goes back one step, or on the first step saves the order on the device and leaves. */
+  back(): void;
+  /** Saves what is in progress on the device (nothing is written for an empty order) and closes the wizard to its initial state. */
+  saveAndClose(): Promise<boolean>;
 }
 
 /**
@@ -86,6 +96,7 @@ export function NewOrderScreen({
   startRequest = null,
   onStartConsumed,
   onExit,
+  controlRef,
 }: NewOrderScreenProps) {
   const [step, setStep] = useState<Step>("customer");
   /** Step 3 shows either the catalog or the cart as its own view (never both, never a permanent panel). */
@@ -97,22 +108,6 @@ export function NewOrderScreen({
   const [customer, setCustomer] = useState<PickedCustomer | null>(null);
   const [lines, setLines] = useState<readonly EditorLine[]>([]);
 
-  function requestExit() {
-    if (onExit === undefined) return;
-    if (customer === null && lines.length === 0) {
-      onExit();
-      return;
-    }
-    modal.show({
-      variant: "confirm",
-      title: "Sair do pedido?",
-      message: "O pedido em andamento fica guardado. Para continuar, toque em Novo pedido.",
-      buttons: [
-        { label: "Sair", role: "primary", onPress: onExit },
-        { label: "Continuar editando", role: "cancel" },
-      ],
-    });
-  }
   const lineCounter = useRef(0);
   const nextKey = () => `line-${(lineCounter.current += 1)}`;
   // One idempotency key per distinct payload: a retry after a lost response resends the same key, an edited payload gets a new one.
@@ -590,6 +585,57 @@ export function NewOrderScreen({
     return () => subscription.remove();
   }, []);
 
+  /**
+   * "Salvar e sair": keeps the order on this device (never asks Sankhya, never writes a send request) and leaves. Nothing is written
+   * for an empty order (no customer and no items). A failed save keeps the seller on the screen with the reason.
+   */
+  async function saveAndExit(): Promise<boolean> {
+    const empty = customer === null && lines.length === 0;
+    if (!finished && !empty && localOrders !== undefined && customer !== null && lines.length > 0 && dirty) {
+      try {
+        await persistLocal(localOrders, customer);
+      } catch (error) {
+        errors.report(error, { retry: () => void saveAndExit() }, { title: "Não foi possível salvar" });
+        return false;
+      }
+    }
+    resetOrder();
+    onExit?.();
+    return true;
+  }
+
+  /** Android Back inside the wizard: selection first, then one step back; on the first step (or the final screen) save and leave. */
+  function handleBack() {
+    if (selectionMode) {
+      cancelSelection();
+      return;
+    }
+    if (finished) {
+      void saveAndExit();
+      return;
+    }
+    if (step === "products" && productsView === "cart") {
+      setProductsView("catalog");
+      return;
+    }
+    if (WIZARD_STEPS.indexOf(step) <= 0) {
+      void saveAndExit();
+      return;
+    }
+    goBack();
+  }
+  const controlLatest = useRef({ back: handleBack, saveAndClose: saveAndExit });
+  useEffect(() => {
+    controlLatest.current = { back: handleBack, saveAndClose: saveAndExit };
+  });
+  useEffect(() => {
+    if (controlRef === undefined) return undefined;
+    controlRef.current = { back: () => controlLatest.current.back(), saveAndClose: () => controlLatest.current.saveAndClose() };
+    return () => {
+      controlRef.current = null;
+    };
+  }, [controlRef]);
+
   /** The popup action handlers of a definitive refusal: each takes the seller to the step that fixes it. */
   function refusalHandlers() {
     return {
@@ -605,6 +651,41 @@ export function NewOrderScreen({
       edit_header: () => goToStep("negotiation"),
       reload: () => void reload(),
     };
+  }
+
+  /** "Tentar de novo" on the Sankhya-unavailable popup: asks for the delivery again; the screen follows the new outcome. */
+  async function resendQueued(localId: string) {
+    if (localOrders === undefined || confirmingRef.current) return;
+    confirmingRef.current = true;
+    setSendingToErp(true);
+    try {
+      let outcome: ConfirmOutcome = { kind: "queued" };
+      try {
+        outcome = (await localOrders.confirm?.(localId)) ?? outcome;
+      } catch {
+        // still queued: it is resent by itself
+      }
+      const latest = await localOrders.get(localId);
+      if (latest !== null) {
+        setLocalDraft(latest);
+        setSavedLocal(latest);
+      }
+      if (outcome.kind === "refused") {
+        const code = outcome.code ?? codeOfHeldMessage(outcome.message) ?? "validation_failed";
+        errors.reportCode(code, refusalHandlers(), outcome.message ?? undefined);
+        return;
+      }
+      setConfirmResult(outcome);
+      if (outcome.kind === "queued") {
+        errors.reportCode(outcome.reason === "sankhya_unavailable" ? "sankhya_unavailable" : "order_queued", outcome.reason === "sankhya_unavailable" ? { retry: () => void resendQueued(localId) } : {}, undefined, {
+          ...(outcome.reason === "sankhya_unavailable" ? {} : { title: `${kindTitle} não enviado ao Sankhya` }),
+          message: `O ${kindWord} ficou salvo neste aparelho e será enviado assim que possível.`,
+        });
+      }
+    } finally {
+      confirmingRef.current = false;
+      setSendingToErp(false);
+    }
   }
 
   /**
@@ -628,7 +709,7 @@ export function NewOrderScreen({
             title: "Não foi possível confirmar",
             ...(error instanceof DatasetUnavailableError || error instanceof DatasetChangedError
               ? {}
-              : { message: "Este pedido não pode mais ser alterado aqui. Abra-o em Pedidos para ver a situação." }),
+              : { message: "Este pedido não pode mais ser alterado aqui. Abra-o em Vendas para ver a situação." }),
           },
         );
         return;
@@ -651,7 +732,14 @@ export function NewOrderScreen({
         return;
       }
       if (outcome.kind === "queued") {
-        errors.reportCode("order_queued", {}, undefined, { title: `${kindTitle} não enviado ao Sankhya`, message: `O ${kindWord} ficou salvo neste aparelho e será enviado assim que possível.` });
+        if (outcome.reason === "sankhya_unavailable") {
+          // 503/500/429: transient. The order stays queued and is resent; "Tentar de novo" asks again right away.
+          errors.reportCode("sankhya_unavailable", { retry: () => void resendQueued(saved.localId) }, undefined, {
+            message: `O ${kindWord} ficou salvo neste aparelho e será enviado assim que o Sankhya voltar.`,
+          });
+        } else {
+          errors.reportCode("order_queued", {}, undefined, { title: `${kindTitle} não enviado ao Sankhya`, message: `O ${kindWord} ficou salvo neste aparelho e será enviado assim que possível.` });
+        }
       }
       setConfirmResult(outcome);
       setSavedLocal(latest);
@@ -721,7 +809,8 @@ export function NewOrderScreen({
           : result?.kind === "awaiting_approval"
             ? "Aguardando aprovação"
             : `${kindTitle} aguardando envio`;
-    const readOnly = result?.kind === "sent" || result?.kind === "sending";
+    // Confirmed orders are blocked for editing (owner 2026-11-23); only a discount waiting for approval can go back to editing.
+    const readOnly = result?.kind !== "awaiting_approval";
     return (
       <View style={styles.center}>
         <Text style={styles.successTitle}>{title}</Text>
@@ -977,7 +1066,7 @@ export function NewOrderScreen({
 
   return (
     <View style={styles.flex}>
-      <WizardProgress step={step} customerName={step === "customer" ? undefined : customer?.name} onExit={onExit === undefined ? undefined : requestExit} />
+      <WizardProgress step={step} customerName={step === "customer" ? undefined : customer?.name} onExit={onExit === undefined ? undefined : () => void saveAndExit()} />
       {step === "customer" && renderCustomerStep()}
       {step === "negotiation" && renderNegotiationStep()}
       {step === "products" && renderProductsStep()}
@@ -985,7 +1074,14 @@ export function NewOrderScreen({
 
       {step === "summary" ? (
         localOrders !== undefined ? (
-          <WizardFooter onBack={goBack} onNext={() => void confirmOrder()} nextLabel={saveLabel} nextDisabled={!orderable || saving} busy={saving} />
+          <WizardFooter
+            onBack={goBack}
+            onNext={() => void confirmOrder()}
+            nextLabel={saveLabel}
+            nextDisabled={!orderable || saving}
+            busy={saving}
+            {...(onExit === undefined ? {} : { secondaryLabel: "Salvar e sair", onSecondary: () => void saveAndExit() })}
+          />
         ) : (
           <WizardFooter onBack={goBack} onNext={() => void save()} nextLabel={saveLabel} nextDisabled={!orderable || saving} busy={saving} />
         )

@@ -21,6 +21,8 @@ function releaseToneColor(tone: ReleaseTone): string {
 }
 
 import { colors, spacing } from "../theme";
+import { BackLink } from "./back-link";
+import { Icon } from "./icons";
 import { codeOfHeldMessage } from "../data/error-catalog";
 import { activeStageView, isCustomerUnavailable, isProductBlocked, saleActions, saleExplanation } from "../offline/sales-status";
 import { ErpStageCard } from "./erp-stage-card";
@@ -143,7 +145,11 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
       await localOrders.requestSend(localId);
       const outcome = (await localOrders.confirm?.(localId)) ?? { kind: "queued" as const };
       if (outcome.kind === "queued") {
-        errors.reportCode("order_queued", {}, undefined, { message: "O pedido ficou salvo neste aparelho e será enviado assim que possível." });
+        if (outcome.reason === "sankhya_unavailable") {
+          errors.reportCode("sankhya_unavailable", { retry: () => void tryConfirm() }, undefined, { message: "O pedido ficou salvo neste aparelho e será enviado assim que o Sankhya voltar." });
+        } else {
+          errors.reportCode("order_queued", {}, undefined, { message: "O pedido ficou salvo neste aparelho e será enviado assim que possível." });
+        }
       } else if (outcome.kind === "refused") {
         const code = outcome.code ?? codeOfHeldMessage(outcome.message) ?? "validation_failed";
         errors.reportCode(code, { change_customer: () => onContinue(localId), remove_item: () => onContinue(localId), edit_items: () => onContinue(localId), edit_header: () => onContinue(localId) }, outcome.message ?? undefined, ["validation_failed", "header_not_eligible", "send_refused"].includes(code) && outcome.message !== null ? { message: outcome.message } : undefined);
@@ -286,9 +292,7 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
   return (
     <View style={styles.flex}>
       <View style={styles.bar}>
-        <Pressable onPress={onBack} style={styles.back} accessibilityRole="button" accessibilityLabel="Voltar para Vendas">
-          <Text style={styles.backText}>‹ Vendas</Text>
-        </Pressable>
+        <BackLink label="Vendas" onPress={onBack} accessibilityLabel="Voltar para Vendas" />
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.card}>
@@ -334,7 +338,11 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
           <View style={styles.alert}>
             <Text style={styles.alertTitle}>Preços alterados desde a última atualização</Text>
             {draft.priceReview.map((entry) => (
-              <Text key={entry.productCode} style={styles.alertLine}>{`${entry.description}: ${priceText(entry.cachedUnitPrice)} → ${priceText(entry.serverUnitPrice)}`}</Text>
+              <View key={entry.productCode} style={styles.priceChange}>
+                <Text style={styles.alertLine}>{`${entry.description}: ${priceText(entry.cachedUnitPrice)}`}</Text>
+                <Icon name="arrow" color={colors.text} size={16} />
+                <Text style={styles.alertLine}>{priceText(entry.serverUnitPrice)}</Text>
+              </View>
             ))}
             <Pressable style={styles.primary} onPress={() => void act(() => localOrders.acknowledgePriceReview(draft.localId))} accessibilityRole="button" accessibilityLabel="Aceitar novos preços">
               <Text style={styles.primaryText}>Aceitar novos preços</Text>
@@ -394,8 +402,8 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
 
         <View style={styles.actions}>
           {actions.continue && (
-            <Pressable style={styles.primary} onPress={() => onContinue(draft.localId)} accessibilityRole="button" accessibilityLabel="Continuar pedido">
-              <Text style={styles.primaryText}>Continuar pedido</Text>
+            <Pressable style={styles.primary} onPress={() => onContinue(draft.localId)} accessibilityRole="button" accessibilityLabel="Editar pedido">
+              <Text style={styles.primaryText}>Editar pedido</Text>
             </Pressable>
           )}
           {actions.send && (
@@ -459,6 +467,7 @@ const styles = StyleSheet.create({
   bar: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   back: { minHeight: 44, justifyContent: "center", alignSelf: "flex-start" },
   backText: { fontSize: 16, fontWeight: "700", color: colors.navy },
+  priceChange: { flexDirection: "row", alignItems: "center", gap: spacing.xs, flexWrap: "wrap" },
   content: { padding: spacing.lg, gap: spacing.md },
   card: { backgroundColor: colors.surface, borderRadius: 8, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: spacing.sm },
   customer: { fontSize: 20, fontWeight: "800", color: colors.text },

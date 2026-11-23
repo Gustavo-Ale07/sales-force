@@ -54,12 +54,27 @@ describe("seller-visible text rules (static scan of non-test source)", () => {
     expect(hits).toEqual([]);
   });
 
+  // Text glyphs standing in for icons (check, arrows, chevrons): the app draws these as vector Icon views.
+  it("contains no text glyph used as an icon (check marks, arrows, chevrons)", () => {
+    const glyph = /[✓✔✗✘↑↓→←‹›]/u;
+    const hits = FILES.flatMap(({ file, code }) =>
+      code.split("\n").flatMap((line, index) => {
+        const literals = line.match(/"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`|>[^<>{}]+</g) ?? [];
+        return literals.some((text) => glyph.test(text)) ? [`${file}:${index + 1}: ${line.trim().slice(0, 120)}`] : [];
+      }),
+    );
+    expect(hits).toEqual([]);
+  });
+
   const RETIRED: ReadonlyArray<readonly [string, RegExp]> = [
     ["rascunho", /rascunho/i],
     ["estimado", /\bestimad[oa]s?\b/i],
     ["item(ns)", /item\(ns\)/i],
     ["Salvar pedido", /Salvar pedido/],
     ["Salvar orçamento", /Salvar orçamento/],
+    ["Envio recusado", /Envio recusado/],
+    ["Somente no aparelho", /Somente no aparelho/],
+    ["Em andamento (saved order label)", /Em andamento/],
   ];
 
   // Only string literals / JSX text are checked: identifiers (e.g. `estimatedTotal`) are English and never match these Portuguese words.

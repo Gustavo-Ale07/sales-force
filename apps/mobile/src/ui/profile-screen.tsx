@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { Account } from "../auth/auth-port";
 import { APP_BUILD_LABEL, APP_ENVIRONMENT_LABEL, PRODUCT_NAME } from "../app-info";
 import { colors, spacing } from "../theme";
+import { Icon } from "./icons";
 import { initialsOf, roleLabel } from "./account-labels";
 import { useAppModal } from "./app-modal";
 import { SyncPanel, type SyncViewProps } from "./sync-status";
@@ -95,7 +96,7 @@ export function ProfileScreen({ account, onOpenLocalOrders, onCheckUpdate, onSig
         <Section title="Pedidos neste aparelho">
           <Pressable style={styles.link} onPress={onOpenLocalOrders} accessibilityRole="button" accessibilityLabel="Ver pedidos salvos neste aparelho">
             <Text style={styles.linkText}>Ver pedidos salvos neste aparelho</Text>
-            <Text style={styles.linkHint}>{sync.status.pending > 0 ? `${sync.status.pending} pendente(s)` : "›"}</Text>
+            {sync.status.pending > 0 ? <Text style={styles.linkHint}>{`${sync.status.pending} pendente(s)`}</Text> : <Icon name="arrow" color={colors.textMuted} size={18} />}
           </Pressable>
         </Section>
       )}

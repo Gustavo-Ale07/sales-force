@@ -87,12 +87,12 @@ export function WizardFooter({ onBack, onNext, nextLabel, nextAccessibilityLabel
       )}
       {secondaryLabel !== undefined && onSecondary !== undefined && (
         <Pressable
-          style={[styles.secondary, (nextDisabled || busy) && styles.nextDisabled]}
+          style={[styles.secondary, busy && styles.nextDisabled]}
           onPress={onSecondary}
-          disabled={nextDisabled || busy}
+          disabled={busy}
           accessibilityRole="button"
           accessibilityLabel={secondaryLabel}
-          accessibilityState={{ disabled: nextDisabled || busy }}
+          accessibilityState={{ disabled: busy }}
         >
           <Text style={styles.backText}>{secondaryLabel}</Text>
         </Pressable>

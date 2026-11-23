@@ -91,7 +91,7 @@ export function describeSyncStatus(status: SyncStatus, connectivity: Connectivit
   if (status.needsAttention > 0) {
     return { text: `${status.needsAttention === 1 ? "1 pedido precisa" : `${status.needsAttention} pedidos precisam`} de atenção`, tone: "error" };
   }
-  if (status.pending > 0) return { text: `↑ Alterações pendentes (${status.pending})`, tone: "pending" };
+  if (status.pending > 0) return { text: `Alterações pendentes (${status.pending})`, tone: "pending" };
   const time = status.lastSyncedAt === null ? null : clock(status.lastSyncedAt);
-  return { text: time === null ? "✓ Sincronizado" : `✓ Sincronizado às ${time}`, tone: "ok" };
+  return { text: time === null ? "Sincronizado" : `Sincronizado às ${time}`, tone: "ok" };
 }

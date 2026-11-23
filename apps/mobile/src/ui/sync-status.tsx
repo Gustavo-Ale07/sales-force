@@ -5,6 +5,7 @@ import type { SyncStatus } from "@salesforce/mobile-db";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import { describeConnection, describeSyncAge, describeSyncChip, describeSyncStatus, type SyncTone } from "../offline/sync-status-text";
 import { colors, spacing } from "../theme";
+import { Icon } from "./icons";
 import { SyncIcon } from "./sync-icon";
 
 const TONE_COLOR: Record<SyncTone, string> = {
@@ -97,7 +98,7 @@ export function SyncPanel({ status, connectivity, onSyncNow, quarantinedCount = 
           <Text style={styles.quarantineText}>Pedidos antigos retidos não são enviados ao Force. Você pode consultá-los ou descartá-los.</Text>
           <Pressable style={styles.quarantineLink} onPress={onOpenQuarantine} accessibilityRole="button" accessibilityLabel="Ver pedidos antigos retidos">
             <Text style={styles.quarantineLinkText}>{`Pedidos antigos retidos (${quarantinedCount})`}</Text>
-            <Text style={styles.quarantineLinkText}>›</Text>
+            <Icon name="arrow" color={colors.text} size={18} />
           </Pressable>
         </View>
       )}

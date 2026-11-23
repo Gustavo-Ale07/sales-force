@@ -62,9 +62,11 @@ describe("pickResumableDraft", () => {
     ).toBe("recent");
   });
 
-  it("never offers a synced order: the Central has no Continuar for it", () => {
-    expect(pickResumableDraft([draft("only", "synced", "2026-09-30T12:00:00Z")])).toBeNull();
-    expect(pickResumableDraft([draft("sent", "synced", "2026-09-30T12:00:00Z"), draft("old", "local_only", "2026-09-01T12:00:00Z")])?.localId).toBe("old");
+  it("never offers a confirmed order (queued or sent): it is blocked for editing; a saved one stays resumable", () => {
+    const confirmed = (id: string) => ({ ...draft(id, "synced", "2026-09-30T12:00:00Z"), sendState: "requested" as const });
+    expect(pickResumableDraft([confirmed("only")])).toBeNull();
+    expect(pickResumableDraft([confirmed("sent"), draft("old", "local_only", "2026-09-01T12:00:00Z")])?.localId).toBe("old");
+    expect(pickResumableDraft([draft("saved", "synced", "2026-09-30T12:00:00Z")])?.localId).toBe("saved");
   });
 
   it("offers every state that can really be continued", () => {

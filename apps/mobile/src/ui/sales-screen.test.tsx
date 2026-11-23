@@ -54,8 +54,9 @@ async function renderSales(drafts: DraftRecord[], overrides: Partial<SalesScreen
   return { props, localOrders, view };
 }
 
+/** Opens the DETAIL of a sale (long press: a tap on an editable sale goes straight to the wizard instead). */
 async function openSale(name: RegExp) {
-  await fireEvent.press(await screen.findByRole("button", { name }));
+  await fireEvent(await screen.findByRole("button", { name }), "longPress");
   await screen.findByRole("button", { name: "Voltar para Vendas" });
 }
 
@@ -81,8 +82,8 @@ describe("SalesScreen — groups", () => {
     expect(screen.getByText("Erro")).toBeTruthy();
     expect(screen.getByText("Conflito")).toBeTruthy();
     expect(screen.getByText("Revisar preço")).toBeTruthy();
-    // Never confirmed: "Em andamento" (not "rascunho", not "Somente no aparelho").
-    expect(screen.getByText("Em andamento")).toBeTruthy();
+    // Never confirmed: "Salvo no aparelho" (not "rascunho", not "Somente no aparelho").
+    expect(screen.getByText("Salvo no aparelho")).toBeTruthy();
     expect(screen.queryByText(/rascunho|somente no aparelho/i)).toBeNull();
     expect(screen.queryByText("Eva Empório")).toBeNull();
     await fireEvent.press(screen.getByRole("button", { name: "Nova venda" }));
@@ -100,11 +101,11 @@ describe("SalesScreen — groups", () => {
     expect(screen.queryByText(/ERP/)).toBeNull();
   });
 
-  it("an accepted order the seller never confirmed stays 'Em andamento' (no send request, no Sankhya claim)", async () => {
+  it("an accepted order the seller never confirmed stays 'Salvo no aparelho' (no send request, no Sankhya claim)", async () => {
     const unconfirmed = draftRecord({ localId: "u", customerName: "Ugo Mercado", status: "synced", remoteId: "r-u", remoteDraftNumber: 5, estimatedTotal: "10.00" });
     await renderSales([unconfirmed]);
-    await fireEvent.press(await screen.findByRole("tab", { name: /Enviados/ }));
-    expect(await screen.findByText("Em andamento")).toBeTruthy();
+    expect(await screen.findByText("Salvo no aparelho")).toBeTruthy();
+    expect(screen.getByText("Não enviados (1)")).toBeTruthy();
     expect(screen.queryByText(/Enviado ao Sankhya/)).toBeNull();
   });
 
@@ -187,18 +188,55 @@ describe("SalesScreen — detail and actions", () => {
     expect(screen.getByRole("button", { name: /Ana Mercearia/ })).toBeTruthy();
   });
 
-  it("continues an unsent order", async () => {
+  it("a tap on a saved order ('Salvo no aparelho') opens the wizard at once; its card shows the action 'Editar'", async () => {
+    const { props } = await renderSales([rascunho]);
+    expect(await screen.findByText("Editar")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: /Fábio Loja/ }));
+    expect(props.onContinue).toHaveBeenCalledWith("f");
+    expect(screen.queryByRole("button", { name: "Voltar para Vendas" })).toBeNull();
+  });
+
+  it("a tap on an order refused with a definitive error ('Precisa de correção') also opens the wizard", async () => {
+    const refused = draftRecord({ localId: "r", customerName: "Rita Mercado", status: "synced", remoteId: "r-r", sendState: "refused", sendCode: "validation_failed", sendError: "Corrija o item." });
+    const { props } = await renderSales([refused]);
+    expect(await screen.findByText("Precisa de correção")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: /Rita Mercado/ }));
+    expect(props.onContinue).toHaveBeenCalledWith("r");
+  });
+
+  it("a tap on a confirmed order ('Aguardando envio') opens it READ-ONLY: no wizard, no edit action", async () => {
     const { props } = await renderSales([ana]);
-    await openSale(/Ana Mercearia/);
-    await fireEvent.press(screen.getByRole("button", { name: "Continuar pedido" }));
-    expect(props.onContinue).toHaveBeenCalledWith("a");
+    await screen.findByText("Ana Mercearia");
+    expect(screen.queryByText("Editar")).toBeNull();
+    await fireEvent.press(screen.getByRole("button", { name: /Ana Mercearia/ }));
+    await screen.findByRole("button", { name: "Voltar para Vendas" });
+    expect(props.onContinue).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Editar pedido" })).toBeNull();
+  });
+
+  it("a tap on a sent order opens it read-only", async () => {
+    const { props } = await renderSales([eva]);
+    await fireEvent.press(await screen.findByRole("tab", { name: /Enviados/ }));
+    await fireEvent.press(await screen.findByRole("button", { name: /Eva Empório/ }));
+    await screen.findByRole("button", { name: "Voltar para Vendas" });
+    expect(props.onContinue).not.toHaveBeenCalled();
+  });
+
+  it("the Vendas list shows no heading, no 'Atualizado' line and ONE entry: the 'Nova venda' button", async () => {
+    await renderSales([rascunho]);
+    await screen.findByText("Fábio Loja");
+    expect(screen.queryByText(/Atualizado/)).toBeNull();
+    expect(screen.queryByText("Vendas")).toBeNull();
+    expect(screen.queryByText(/Novo pedido/)).toBeNull();
+    expect(screen.getAllByRole("button", { name: "Nova venda" })).toHaveLength(1);
+    expect(screen.getByText(/^1 venda/)).toBeTruthy();
   });
 
   it("duplicates through the shell without carrying any identifier of the original", async () => {
     const { props } = await renderSales([eva]);
     await fireEvent.press(await screen.findByRole("tab", { name: /Enviados/ }));
     await openSale(/Eva Empório/);
-    expect(screen.queryByRole("button", { name: "Continuar pedido" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Editar pedido" })).toBeNull();
     await fireEvent.press(screen.getByRole("button", { name: "Duplicar pedido" }));
     expect(props.onDuplicate).toHaveBeenCalledWith("e");
     expect(props.onDuplicate).toHaveBeenCalledTimes(1);
@@ -238,7 +276,7 @@ describe("SalesScreen — detail and actions", () => {
   it("a pending change on a synced order is an unsent edit and cannot be deleted", async () => {
     const edited = draftRecord({ localId: "g", customerName: "Gil Depósito", status: "pending_sync", remoteId: "r-g", remoteVersion: 2 });
     await renderSales([edited]);
-    expect(await screen.findByText("Em andamento")).toBeTruthy();
+    expect(await screen.findByText("Salvo no aparelho")).toBeTruthy();
     await openSale(/Gil Depósito/);
     expect(screen.queryByRole("button", { name: "Excluir pedido" })).toBeNull();
   });
@@ -258,13 +296,12 @@ describe("SalesScreen — detail and actions", () => {
   it("offline: 'Tentar de novo' stays available, the answer is the 'não enviado' popup, and continue, duplicate and delete still work", async () => {
     const confirm = jest.fn(async (_id: string) => ({ kind: "queued" as const }));
     const { props } = await renderSales([bia], { connectivity: "offline" as ConnectivityState }, { confirm });
-    expect(await screen.findByText(/dados salvos neste aparelho/)).toBeTruthy();
     await openSale(/Bia Padaria/);
     expect(screen.getByRole("button", { name: "Tentar de novo" }).props.accessibilityState.disabled).toBe(false);
     await fireEvent.press(screen.getByRole("button", { name: "Tentar de novo" }));
     expect(await screen.findByText("Pedido não enviado ao Sankhya")).toBeTruthy();
     await pressModal("Fechar");
-    await fireEvent.press(screen.getByRole("button", { name: "Continuar pedido" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Editar pedido" }));
     expect(props.onContinue).toHaveBeenCalledWith("b");
     expect(screen.getByRole("button", { name: "Duplicar pedido" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Excluir pedido" })).toBeTruthy();
@@ -292,7 +329,8 @@ describe("SalesScreen — detail and actions", () => {
     const acknowledge = jest.fn(async (_id: string) => undefined);
     await renderSales([dora], {}, { acknowledgePriceReview: acknowledge });
     await openSale(/Dora Bar/);
-    expect(screen.getByText(/Copo: R\$ 1,50 → R\$ 2,00/)).toBeTruthy();
+    expect(screen.getByText("Copo: R$ 1,50")).toBeTruthy();
+    expect(screen.getByText("R$ 2,00")).toBeTruthy();
     await fireEvent.press(screen.getByRole("button", { name: "Aceitar novos preços" }));
     expect(acknowledge).toHaveBeenCalledWith("d");
   });

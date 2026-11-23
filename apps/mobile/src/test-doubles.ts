@@ -238,7 +238,8 @@ export function fakeLocalOrders(drafts: DraftRecord[] = [], overrides: Partial<L
   const matching = (filters: SalesFilters, search: string) => {
     const text = search.trim().toLowerCase();
     return state.drafts.filter((d) => {
-      const unsent = UNSENT.includes(d.status);
+      // Mirrors SENT_SQL: "Enviados" = accepted by the backend AND confirmed (submitted) or already seen in Sankhya; an unconfirmed saved order stays unsent.
+      const unsent = UNSENT.includes(d.status) || !(d.sendState === "submitted" || d.erpStage !== null);
       if ((filters.group === "unsent") !== unsent) return false;
       if (filters.statuses.length > 0 && !filters.statuses.includes(d.status)) return false;
       if (filters.customer !== null && d.customerCode !== filters.customer.code) return false;
