@@ -100,7 +100,7 @@ function assertCustomerEligible(customer: CustomerRow): void {
     sellerCode: customer.sellerCode,
   });
   if (block === null) return;
-  if (block === 'customer_without_seller') throw new AppError('customer_without_seller');
+  if (block === 'customer_without_seller') throw new AppError('customer_without_seller', { details: { reason: block } });
   throw new AppError('customer_ineligible', { details: { reason: block } });
 }
 

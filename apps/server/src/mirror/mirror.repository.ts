@@ -124,6 +124,24 @@ export interface CustomerCounts {
   readonly withoutPriceTable: number;
 }
 
+/**
+ * The customer eligibility predicate compiled to SQL: the SAME rule as the domain `customerOrderBlock(...) === null` that
+ * order creation and submission apply (live row, active, not blocked, valid seller CODVEND >= 1). Lists, search, the
+ * customer file, the device cache source and the send validation therefore agree on who can receive an order. The
+ * installation columns of `customers.eligibility` (flags, columnIn) are applied when the mirror is ingested: a partner
+ * outside them is never mirrored live (it is deactivated by the missing-row rule). Blocked, inactive and seller-less
+ * partners stay in the mirror on purpose (orders already created still read their state and reason) but are never listed.
+ */
+export function eligibleCustomerConditions(): SQL[] {
+  return [
+    isNull(erpCustomer.deletedAt),
+    eq(erpCustomer.isCustomer, true),
+    eq(erpCustomer.active, true),
+    not(blockedSql),
+    sql`${erpCustomer.sellerCode} >= 1`,
+  ];
+}
+
 function scopeCondition(scope: CustomerScope): SQL | undefined {
   return scope.kind === 'all' ? undefined : inSellerCodes(erpCustomer.sellerCode, scope.sellerCodes);
 }
@@ -187,7 +205,7 @@ export class MirrorRepository {
    * and drafts already created read names through `customerNames`/`customerStates`, which do not use this rule.
    */
   private liveCustomer(): SQL[] {
-    return [isNull(erpCustomer.deletedAt), eq(erpCustomer.isCustomer, true), eq(erpCustomer.active, true), not(blockedSql)];
+    return eligibleCustomerConditions();
   }
 
   async listCustomers(
