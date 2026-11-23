@@ -36,7 +36,7 @@ import {
 } from "@salesforce/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useBlocker } from "@tanstack/react-router";
-import { BookmarkPlus, MoreHorizontal, Percent, Save, Trash2, X } from "lucide-react";
+import { BookmarkPlus, MoreHorizontal, Percent, Save, Trash2, TriangleAlert, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { BulkEntryDialog, type BulkEntryItem } from "../components/bulk-entry-dialog";
 import { CustomerContextBar } from "../components/customer-context-bar";
@@ -48,6 +48,8 @@ import { SendProgressDialog } from "../components/send-progress-dialog";
 import { DuplicateAsOrderButton } from "../components/duplicate-as-order-button";
 import { DuplicateOrderButton } from "../components/duplicate-order-button";
 import { GroupDiscountDialog, MassDiscountDialog } from "../components/discount-dialogs";
+import { DiscountLimitDialog, type DiscountLimitPrompt } from "../components/discount-limit-dialog";
+import { classifyBulk, formatLimit, limitOf, lineExceedsLimit } from "../lib/discount-limit";
 import { NO_PRICE_TEXT, PriceCell } from "../components/price-cell";
 import { INITIAL_PRODUCT_FILTERS, ProductBrowser, type ProductFilters } from "../components/product-browser";
 import { PrintOrderButton } from "../components/print-order-button";
@@ -55,7 +57,7 @@ import { QueryError } from "../components/query-error";
 import { SaveTemplateDialog } from "../components/save-template-dialog";
 import { ApiRequestError } from "../lib/api";
 import { ERP_SUBMISSION_DISABLED, convertQuote, createOrder, replaceOrder, submitOrder, verifyOrderDelivery } from "../lib/api-mutations";
-import { carriersQueryOptions,orderEntryConfigurationQueryOptions, customerQueryOptions, orderQueryOptions, queryKeys } from "../lib/api-queries";
+import { carriersQueryOptions,orderEntryConfigurationQueryOptions, customerQueryOptions, orderQueryOptions, productQueryOptions, queryKeys } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { useLoadedDataset, requireDataset } from "../lib/dataset";
 import { approvalsEnabled } from "../lib/discount-authority";
@@ -634,6 +636,81 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
   const updateLine = (key: string, patch: Partial<EditorLine>) =>
     setLines((current) => current.map((line) => (line.key === key ? { ...line, ...patch } : line)));
 
+  /**
+   * Discount above the product's registered limit (informational, never blocks saving or sending). The first "Sim" marks the
+   * order and no other limit dialog appears for it. The mark lives in this editor's memory only: the order contract has no field for it.
+   */
+  const aboveLimitAccepted = useRef(false);
+  const limitPromptOpen = useRef(false);
+  const discountPrevious = useRef(new Map<string, string>());
+  const [limitPrompt, setLimitPrompt] = useState<{ prompt: DiscountLimitPrompt; yes: () => void; no: () => void } | null>(null);
+  const askAboveLimit = (prompt: DiscountLimitPrompt, onYes: () => void, onNo: () => void) => {
+    limitPromptOpen.current = true;
+    setLimitPrompt({
+      prompt,
+      yes: () => {
+        aboveLimitAccepted.current = true;
+        limitPromptOpen.current = false;
+        setLimitPrompt(null);
+        onYes();
+      },
+      no: () => {
+        limitPromptOpen.current = false;
+        setLimitPrompt(null);
+        onNo();
+      },
+    });
+  };
+  /** Lines loaded from a saved order do not carry the limit: it is looked up from the catalog (cached) when needed. */
+  const withLimits = async (list: EditorLine[]): Promise<EditorLine[]> => {
+    const unknown = list.filter((line) => line.maxDiscountPercent === undefined && line.price.state !== "none");
+    if (unknown.length === 0) return list;
+    const found = new Map<number, string | null>();
+    await Promise.all(
+      unknown.map(async (line) => {
+        try {
+          const detail = await queryClient.fetchQuery({ ...productQueryOptions(api, line.productCode), staleTime: 5 * 60_000, retry: false });
+          found.set(line.productCode, detail.maxDiscountPercent ?? null);
+        } catch {
+          // No limit known: no warning.
+        }
+      }),
+    );
+    if (found.size === 0) return list;
+    const apply = (line: EditorLine) => (line.maxDiscountPercent === undefined && found.has(line.productCode) ? { ...line, maxDiscountPercent: found.get(line.productCode) } : line);
+    setLines((current) => current.map(apply));
+    return list.map(apply);
+  };
+  /** Called when the seller leaves a line's discount field (blur or Enter). */
+  const commitDiscount = async (key: string) => {
+    const text = lines.find((line) => line.key === key)?.discountText;
+    if (text === undefined || limitPromptOpen.current) return;
+    const previous = discountPrevious.current.get(key) ?? "";
+    if (text === previous) return;
+    discountPrevious.current.set(key, text);
+    if (aboveLimitAccepted.current) return;
+    const [line] = await withLimits(lines.filter((candidate) => candidate.key === key));
+    if (!line || !lineExceedsLimit(line) || aboveLimitAccepted.current || limitPromptOpen.current) return;
+    askAboveLimit(
+      { kind: "item" },
+      () => undefined,
+      () => {
+        discountPrevious.current.set(key, previous);
+        updateLine(key, { discountText: previous });
+      },
+    );
+  };
+  const addLine = (line: EditorLine) => setLines((current) => [...current, line]);
+  const applyBulkDiscount = async (next: EditorLine[], applied: number, scope: string) => {
+    const enriched = await withLimits(next);
+    const { within, above } = classifyBulk(lines, enriched);
+    if (aboveLimitAccepted.current || above.length === 0) {
+      onDiscountApplied(enriched, applied, scope);
+      return;
+    }
+    askAboveLimit({ kind: "bulk", within, above }, () => onDiscountApplied(enriched, applied, scope), () => undefined);
+  };
+
   const removedBar =
     removed !== null && removed.length > 0 ? (
       <div className="flex items-center gap-2 border-b border-line px-3 py-2 text-xs" role="status">
@@ -951,7 +1028,12 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                       toast({ title: "Produto já está no pedido", description: product.description, tone: "warning" });
                       return;
                     }
-                    setLines((current) => [...current, { ...lineFromProduct(product, nextKey()), quantityText, discountText }]);
+                    const added = { ...lineFromProduct(product, nextKey()), quantityText, discountText };
+                    if (!aboveLimitAccepted.current && !limitPromptOpen.current && lineExceedsLimit(added)) {
+                      askAboveLimit({ kind: "item" }, () => addLine(added), () => undefined);
+                      return;
+                    }
+                    addLine(added);
                   }}
                 />
               ) : null}
@@ -1040,6 +1122,9 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                     const discountProblem = linePreview?.discountProblem;
                     const discountErrorId = `discount-error-${line.key}`;
                     const noPrice = line.price.state === "none";
+                    const discountLimit = limitOf(line.maxDiscountPercent);
+                    const overLimit = lineExceedsLimit(line);
+                    const limitHintId = `discount-limit-hint-${line.key}`;
                     const blocked = blockedLine(line);
                     return (
                       <TableRow key={line.key}>
@@ -1095,7 +1180,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                             size="sm"
                             inputMode="decimal"
                             autoComplete="off"
-                            wrapperClassName="w-[90px]"
+                            wrapperClassName={overLimit ? "w-[90px] ring-1 ring-warn" : "w-[90px]"}
                             placeholder={noPrice ? "—" : "0"}
                             value={noPrice ? "" : line.discountText}
                             readOnly={readOnly}
@@ -1103,15 +1188,30 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                             title={noPrice ? "Item sem preço não recebe desconto" : undefined}
                             aria-label={`Desconto de ${line.description} (%)`}
                             aria-invalid={discountProblem ? true : undefined}
-                            aria-describedby={discountProblem ? discountErrorId : undefined}
+                            aria-describedby={[discountProblem ? discountErrorId : null, discountLimit && !noPrice ? limitHintId : null].filter(Boolean).join(" ") || undefined}
                             onChange={(event) => updateLine(line.key, { discountText: event.target.value })}
-                            onKeyDown={(event) => onDiscountKeyDown(event, index)}
+                            onFocus={() => discountPrevious.current.set(line.key, line.discountText)}
+                            onBlur={() => void commitDiscount(line.key)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" && !event.nativeEvent.isComposing) void commitDiscount(line.key);
+                              onDiscountKeyDown(event, index);
+                            }}
                             ref={(element) => {
                               if (element) discountInputs.current.set(line.key, element);
                               else discountInputs.current.delete(line.key);
                             }}
                           />
                           {discountProblem ? <FieldError id={discountErrorId}>{discountProblemMessages[discountProblem]}</FieldError> : null}
+                          {discountLimit && !noPrice ? (
+                            <span
+                              id={limitHintId}
+                              data-testid={`discount-limit-${line.productCode}`}
+                              className={overLimit ? "mt-1 flex items-center gap-1 text-xs font-medium text-warn" : "mt-1 block text-xs text-fg-muted"}
+                            >
+                              {overLimit ? <TriangleAlert size={12} aria-hidden="true" /> : null}
+                              Máx. {formatLimit(discountLimit)}%
+                            </span>
+                          ) : null}
                         </TableCell>
                         <TableCell numeric label="Total estimado">
                           <Money
@@ -1368,14 +1468,15 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
         open={massDiscountOpen}
         onOpenChange={setMassDiscountOpen}
         lines={lines}
-        onApply={(next, applied, text) => onDiscountApplied(next, applied, text === "" ? "sem desconto" : `com ${text}% de desconto`)}
+        onApply={(next, applied, text) => void applyBulkDiscount(next, applied, text === "" ? "sem desconto" : `com ${text}% de desconto`)}
       />
       <GroupDiscountDialog
         open={groupDiscountOpen}
         onOpenChange={setGroupDiscountOpen}
         lines={lines}
-        onApply={(next, applied) => onDiscountApplied(next, applied, "com desconto por grupo")}
+        onApply={(next, applied) => void applyBulkDiscount(next, applied, "com desconto por grupo")}
       />
+      <DiscountLimitDialog prompt={limitPrompt?.prompt ?? null} onYes={() => limitPrompt?.yes()} onNo={() => limitPrompt?.no()} />
 
       {customer ? <CustomerFichaDialog customerCode={customer.code} open={fichaOpen} onOpenChange={setFichaOpen} /> : null}
 

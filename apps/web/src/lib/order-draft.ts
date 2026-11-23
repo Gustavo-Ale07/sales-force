@@ -53,6 +53,8 @@ export interface EditorLine {
   ipi?: IpiRef;
   /** Selling step of the product (multiples of it). `null` = hundredths; `undefined` = not known (a line loaded from a saved order): the server decides. */
   quantityStep?: string | null;
+  /** Registered discount ceiling of the product (percent). `null` = no limit registered; `undefined` = not known yet (a saved line), looked up on demand. */
+  maxDiscountPercent?: string | null;
 }
 
 export type QuantityProblem = "empty" | "quantity_step" | DecimalError;
@@ -137,6 +139,7 @@ export function lineFromProduct(product: ProductRow, key: string): EditorLine {
     image: product.image ?? null,
     ipi: product.ipi ?? { status: "unavailable" },
     quantityStep: product.quantityStep ?? null,
+    maxDiscountPercent: product.maxDiscountPercent ?? null,
   };
 }
 
