@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ActivityIndicator, KeyboardAvoidingView, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from "react-native";
 import type { Account, AuthPort, LoginResult } from "../auth/auth-port";
 import { validateLoginForm, type LoginFormErrors } from "../auth/login-form";
 import { APP_ENVIRONMENT_LABEL, APP_VERSION, PRODUCT_NAME } from "../app-info";
@@ -64,20 +64,30 @@ export function LoginScreen({ auth, onAuthenticated, connectivity }: LoginScreen
   }
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior="padding">
-      <StatusBar barStyle="dark-content" />
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <StatusBar barStyle="light-content" />
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.xl, paddingBottom: insets.bottom + spacing.xl }]}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
-        <View style={styles.brand}>
-          <BrandLogo height={52} />
-          <Text style={styles.product} accessibilityRole="header">
-            {PRODUCT_NAME}
-          </Text>
+        {/* Red curve under the navy hero: the red block is slightly taller than the navy one, both with rounded bottoms. */}
+        <View style={styles.curve}>
+          <View style={[styles.hero, { paddingTop: insets.top + spacing.xl }]}>
+            <View style={styles.decorLarge} pointerEvents="none" />
+            <View style={styles.decorSmall} pointerEvents="none" />
+            <BrandLogo height={72} />
+            <Text style={styles.product} accessibilityRole="header">
+              {PRODUCT_NAME}
+            </Text>
+            <Text style={styles.tagline}>Plataforma comercial</Text>
+            <View style={styles.accent} />
+          </View>
         </View>
 
         <View style={styles.form}>
+          <Text style={styles.welcome}>Bem-vindo(a)!</Text>
+          <Text style={styles.welcomeSub}>Acesse sua conta para continuar.</Text>
           <Text style={styles.label}>Usuário</Text>
           <TextInput
             style={[styles.input, errors.username !== undefined && styles.inputError]}
@@ -155,30 +165,46 @@ export function LoginScreen({ auth, onAuthenticated, connectivity }: LoginScreen
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
-  content: { flexGrow: 1, justifyContent: "center", paddingHorizontal: spacing.xl, gap: spacing.xl },
-  brand: { alignItems: "center", gap: spacing.md },
-  product: { fontSize: 24, fontWeight: "800", color: colors.navy, letterSpacing: 1 },
-  form: { gap: spacing.sm },
+  content: { flexGrow: 1, gap: spacing.xl },
+  curve: { backgroundColor: colors.red, borderBottomLeftRadius: 72, borderBottomRightRadius: 72, paddingBottom: 8 },
+  hero: {
+    backgroundColor: colors.navy,
+    borderBottomLeftRadius: 72,
+    borderBottomRightRadius: 72,
+    alignItems: "center",
+    paddingBottom: spacing.xl + spacing.md,
+    paddingHorizontal: spacing.xl,
+    overflow: "hidden",
+    gap: spacing.xs,
+  },
+  decorLarge: { position: "absolute", top: -60, right: -70, width: 190, height: 190, borderRadius: 95, backgroundColor: "rgba(255,255,255,0.06)" },
+  decorSmall: { position: "absolute", bottom: -30, left: -40, width: 120, height: 120, borderRadius: 60, backgroundColor: "rgba(255,255,255,0.05)" },
+  product: { fontSize: 28, fontWeight: "800", color: colors.onNavy, letterSpacing: 1, marginTop: spacing.sm },
+  tagline: { fontSize: 13, fontWeight: "500", color: colors.onNavy, letterSpacing: 3, textTransform: "uppercase", opacity: 0.85 },
+  accent: { marginTop: spacing.sm, width: 47, height: 3, backgroundColor: colors.red },
+  welcome: { fontSize: 24, fontWeight: "800", color: colors.text },
+  welcomeSub: { fontSize: 15, color: colors.textMuted, marginBottom: spacing.sm },
+  form: { gap: spacing.sm, paddingHorizontal: spacing.xl },
   label: { fontSize: 13, fontWeight: "600", color: colors.textMuted, marginTop: spacing.sm },
   input: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    paddingHorizontal: spacing.md,
-    minHeight: 48,
-    fontSize: 16,
+    borderColor: "transparent",
+    borderRadius: 12,
+    paddingHorizontal: spacing.lg,
+    minHeight: 54,
+    fontSize: 17,
     color: colors.text,
-    backgroundColor: colors.background,
+    backgroundColor: "#eef2f6",
   },
   passwordRow: {
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    backgroundColor: colors.background,
+    borderColor: "transparent",
+    borderRadius: 12,
+    backgroundColor: "#eef2f6",
   },
-  passwordInput: { flex: 1, paddingHorizontal: spacing.md, minHeight: 48, fontSize: 16, color: colors.text },
+  passwordInput: { flex: 1, paddingHorizontal: spacing.lg, minHeight: 54, fontSize: 17, color: colors.text },
   toggle: { paddingHorizontal: spacing.md, minHeight: 48, justifyContent: "center" },
   toggleText: { fontSize: 13, fontWeight: "700", color: colors.navy },
   inputError: { borderColor: colors.red },
@@ -194,13 +220,13 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: spacing.lg,
-    backgroundColor: colors.navy,
-    borderRadius: 8,
+    backgroundColor: colors.red,
+    borderRadius: 999,
     alignItems: "center",
-    minHeight: 50,
+    minHeight: 54,
     justifyContent: "center",
   },
   buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: colors.onNavy, fontSize: 16, fontWeight: "700" },
-  footer: { textAlign: "center", fontSize: 12, color: colors.textMuted },
+  buttonText: { color: colors.onNavy, fontSize: 18, fontWeight: "700" },
+  footer: { textAlign: "center", fontSize: 12, color: colors.textMuted, marginTop: "auto" },
 });
