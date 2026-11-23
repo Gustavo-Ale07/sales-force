@@ -13,14 +13,14 @@ import type { CurrentUser } from './current-user.js';
 
 /** A change is refused when the previous one is younger than this (the render is CPU work done in the request). */
 export const ACCOUNT_PHOTO_MIN_INTERVAL_MS = 5_000;
-/** Seconds a client may reuse the photo without revalidating (the URL is versioned, so a change is picked up through `photoVersion`). */
-export const ACCOUNT_PHOTO_MAX_AGE_SECONDS = 3600;
+/** Bound of the in-process last-attempt map (entries older than the interval are useless and dropped first). */
+export const ACCOUNT_PHOTO_ATTEMPT_MAP_MAX = 10_000;
 
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 
 export type ServedAccountPhoto =
   | { readonly kind: 'not_modified'; readonly etag: string }
-  | { readonly kind: 'image'; readonly etag: string; readonly contentType: string; readonly bytes: Uint8Array };
+  | { readonly kind: 'image'; readonly etag: string; readonly bytes: Uint8Array };
 
 /** The public cache key of a stored rendition (a prefix of its sha256). */
 export function photoVersionOf(record: Pick<AccountPhotoRecord, 'contentHash'>): string {
@@ -33,6 +33,8 @@ export function photoVersionOf(record: Pick<AccountPhotoRecord, 'contentHash'>):
  */
 @Injectable()
 export class AccountPhotoService {
+  private readonly lastAttempt = new Map<string, number>();
+
   constructor(
     @Inject(AccountPhotoRepository) private readonly photos: AccountPhotoRepository,
     @Inject(ACCOUNT_PHOTO_STORE) private readonly store: ObjectStore | null,
@@ -50,17 +52,19 @@ export class AccountPhotoService {
 
   async put(user: CurrentUser, body: PutProfilePhotoRequest): Promise<ProfilePhoto> {
     const store = this.requireStore();
+    // Before any decoding: every attempt (also a failed one) consumes the slot.
+    const now = await this.claimSlot(user.accountId);
     const upload = decodeUpload(body.dataBase64);
     const previous = await this.photos.find(user.accountId);
-    const now = this.clock();
-    if (previous !== null && now.getTime() - previous.updatedAt.getTime() < ACCOUNT_PHOTO_MIN_INTERVAL_MS) {
-      throw new AppError('rate_limited', { retryAfterSeconds: Math.ceil(ACCOUNT_PHOTO_MIN_INTERVAL_MS / 1000) });
-    }
     let rendered;
     try {
       rendered = await renderAccountPhoto(upload, body.contentType, body.crop);
     } catch (error) {
       if (isAccountPhotoError(error)) {
+        if (error.code === 'busy' || error.code === 'timeout') {
+          this.logger.warn({ accountId: user.accountId, reason: error.code }, 'account photo render refused');
+          throw new AppError('service_unavailable');
+        }
         throw new AppError('validation_failed', {
           details: { issues: [{ path: error.code === 'crop_invalid' ? 'crop' : 'dataBase64', code: `photo_${error.code}` }] },
         });
@@ -110,6 +114,7 @@ export class AccountPhotoService {
   /** Idempotent. */
   async remove(user: CurrentUser): Promise<void> {
     const store = this.requireStore();
+    await this.claimSlot(user.accountId);
     const removed = await this.photos.transaction(async (tx) => {
       const row = await this.photos.remove(user.accountId, tx);
       if (row !== null) {
@@ -140,7 +145,34 @@ export class AccountPhotoService {
       this.logger.error({ accountId: user.accountId }, 'account photo object is missing');
       throw new AppError('service_unavailable');
     }
-    return { kind: 'image', etag, contentType: record.contentType, bytes };
+    return { kind: 'image', etag, bytes };
+  }
+
+  /**
+   * One change slot per account per interval, shared by PUT and DELETE, consumed by every attempt. Two guards:
+   * the in-process map (synchronous check-and-set: parallel requests of one process cannot both pass, and it covers
+   * accounts without a row) and the database claim (serialized by an advisory lock; the guard that holds across API
+   * instances once a row exists). Answers the attempt time.
+   */
+  private async claimSlot(accountId: string): Promise<Date> {
+    const now = this.clock();
+    const limited = (): AppError =>
+      new AppError('rate_limited', { retryAfterSeconds: Math.ceil(ACCOUNT_PHOTO_MIN_INTERVAL_MS / 1000) });
+    const last = this.lastAttempt.get(accountId);
+    if (last !== undefined && now.getTime() - last < ACCOUNT_PHOTO_MIN_INTERVAL_MS) throw limited();
+    this.recordAttempt(accountId, now.getTime());
+    if (!(await this.photos.claimSlot(accountId, now, ACCOUNT_PHOTO_MIN_INTERVAL_MS))) throw limited();
+    return now;
+  }
+
+  private recordAttempt(accountId: string, at: number): void {
+    this.lastAttempt.delete(accountId); // re-insert: Map keeps insertion order = age order
+    this.lastAttempt.set(accountId, at);
+    if (this.lastAttempt.size <= ACCOUNT_PHOTO_ATTEMPT_MAP_MAX) return;
+    for (const [id, time] of this.lastAttempt) {
+      if (this.lastAttempt.size <= ACCOUNT_PHOTO_ATTEMPT_MAP_MAX && at - time < ACCOUNT_PHOTO_MIN_INTERVAL_MS) break;
+      this.lastAttempt.delete(id); // expired entries first (oldest first), then the oldest to respect the bound
+    }
   }
 
   private requireStore(): ObjectStore {

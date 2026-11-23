@@ -28,4 +28,29 @@ describe('renderAccountPhoto', () => {
     const tiny = await solid(20, 20).png().toBuffer();
     await expect(renderAccountPhoto(tiny, 'image/png')).rejects.toSatisfy((e) => isAccountPhotoError(e) && e.code === 'too_small');
   });
+
+  it('bounds the render queue: more than the allowed waiters are refused at once (busy), the others complete', async () => {
+    const jpeg = await solid(1200, 1200).jpeg().toBuffer();
+    const limits = { maxQueued: 1, timeoutMs: 30_000 };
+    // One running + one waiting are accepted; the third is refused.
+    const results = await Promise.allSettled([
+      renderAccountPhoto(jpeg, 'image/jpeg', undefined, limits),
+      renderAccountPhoto(jpeg, 'image/jpeg', undefined, limits),
+      renderAccountPhoto(jpeg, 'image/jpeg', undefined, limits),
+    ]);
+    expect(results.map((r) => r.status)).toEqual(['fulfilled', 'fulfilled', 'rejected']);
+    const refused = results[2] as PromiseRejectedResult;
+    expect(isAccountPhotoError(refused.reason) && refused.reason.code).toBe('busy');
+    // The slots are released afterwards.
+    await expect(renderAccountPhoto(jpeg, 'image/jpeg', undefined, limits)).resolves.toBeDefined();
+  });
+
+  it('gives up on a render that exceeds the timeout (timeout) and keeps serving afterwards', async () => {
+    const jpeg = await solid(3000, 3000).jpeg().toBuffer();
+    await expect(renderAccountPhoto(jpeg, 'image/jpeg', undefined, { maxQueued: 8, timeoutMs: 1 })).rejects.toSatisfy(
+      (e) => isAccountPhotoError(e) && e.code === 'timeout',
+    );
+    const small = await solid(200, 200).png().toBuffer();
+    await expect(renderAccountPhoto(small, 'image/png')).resolves.toBeDefined();
+  });
 });

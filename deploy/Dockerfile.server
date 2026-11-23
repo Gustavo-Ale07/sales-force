@@ -42,7 +42,10 @@ COPY --from=build --chown=node:node /out/node_modules ./node_modules
 # freshly created named volume mounted here inherits that ownership. Photos are NEVER baked into the image: the
 # worker fills the volume at run time (the API mounts it read-only). INTERIM store until the S3-compatible
 # provider is chosen (V-05, STACK-7).
-RUN mkdir -p /var/lib/sales-force/product-media && chown node:node /var/lib/sales-force/product-media
+RUN mkdir -p /var/lib/sales-force/product-media /var/lib/sales-force/account-photos \
+ && chown node:node /var/lib/sales-force/product-media /var/lib/sales-force/account-photos
+# /var/lib/sales-force/account-photos: the API's WRITABLE volume of own profile photos (ACCOUNT_PHOTO_DIR); same
+# ownership rule, otherwise a fresh named volume is root-owned and every upload fails with 503.
 USER node
 # No default command on purpose: the compose file chooses the role (api, worker or a one-shot job).
 CMD ["node", "dist/main-api.js"]

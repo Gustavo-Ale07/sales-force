@@ -8,6 +8,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { DEMO_ACCOUNT_EMAILS } from '@salesforce/sankhya';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { AccountPhotoRepository } from '../../src/iam/account-photo.repository.js';
 import { FilesystemObjectStore } from '../../src/media/object-store.js';
 import { TEST_ORIGIN, TEST_PASSWORD, createTestAccount } from '../helpers/auth.js';
 import { loginCookie } from '../helpers/auth-app.js';
@@ -73,8 +74,10 @@ describe('upload validation', () => {
     const text = await put('seller2', 'image/png', Buffer.from('hello, I am not an image'));
     expect(text.status).toBe(400);
     expect(issues(text)).toEqual(['photo_type_not_allowed']);
+    app.clock.advance(10_000);
     const gif = await put('seller2', 'image/png', Buffer.from('GIF89a\x01\x00\x01\x00\x00\x00\x00;', 'binary'));
     expect(issues(gif)).toEqual(['photo_type_not_allowed']);
+    app.clock.advance(10_000);
     const svg = await put('seller2', 'image/png', Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'));
     expect(issues(svg)).toEqual(['photo_type_not_allowed']);
   });
@@ -84,6 +87,7 @@ describe('upload validation', () => {
     const r = await put('seller2', 'image/jpeg', await png(200, 200));
     expect(r.status).toBe(400);
     expect(issues(r)).toEqual(['photo_content_mismatch']);
+    app.clock.advance(10_000);
     expect((await put('seller2', 'image/webp', await jpeg(200, 200))).status).toBe(400);
   });
 
@@ -92,8 +96,10 @@ describe('upload validation', () => {
     const whole = await png(200, 200);
     const corrupt = await put('seller2', 'image/png', whole.subarray(0, 40));
     expect(issues(corrupt)).toEqual(['photo_unreadable']);
+    app.clock.advance(10_000);
     const notBase64 = await put('seller2', 'image/png', '!!!not base64!!!');
     expect(issues(notBase64)).toEqual(['photo_unreadable']);
+    app.clock.advance(10_000);
     const tiny = await put('seller2', 'image/png', await png(32, 32));
     expect(issues(tiny)).toEqual(['photo_too_small']);
   });
@@ -106,6 +112,7 @@ describe('upload validation', () => {
     big[2] = 0xff;
     const r = await put('seller2', 'image/jpeg', big);
     expect([400, 413]).toContain(r.status);
+    app.clock.advance(10_000);
     const extra = await app.call('seller2', 'PUT', '/me/photo', { contentType: 'image/png', dataBase64: (await png(100, 100)).toString('base64'), accountId: '019a0000-0000-7000-8000-000000000000' });
     expect(extra.status).toBe(400);
   });
@@ -195,7 +202,9 @@ describe('own-only access, caching and removal', () => {
     const first = await rawGet('seller1');
     const etag = first.headers['etag'] as string;
     expect(etag).toMatch(/^"[0-9a-f]{32}"$/);
-    expect(first.headers['cache-control']).toMatch(/^private, max-age=\d+$/);
+    expect(first.headers['cache-control']).toBe('private, no-cache');
+    expect(first.headers['vary']).toMatch(/Cookie/i);
+    expect(first.headers['content-type']).toBe('image/webp');
     expect(first.headers['x-content-type-options']).toBe('nosniff');
     const again = await app.app.inject({
       method: 'GET',
@@ -203,6 +212,8 @@ describe('own-only access, caching and removal', () => {
       headers: { origin: TEST_ORIGIN, cookie: app.cookies.seller1, 'if-none-match': etag },
     });
     expect(again.statusCode).toBe(304);
+    expect(again.headers['cache-control']).toBe('private, no-cache');
+    expect(again.headers['vary']).toMatch(/Cookie/i);
     // The version published in the session is the same value.
     const session = await app.call('seller1', 'GET', '/auth/session');
     expect(`"${session.body.account.photoVersion}"`).toBe(etag);
@@ -234,8 +245,10 @@ describe('own-only access, caching and removal', () => {
 
   it('removes the photo (idempotent), deletes the object and the session no longer carries a version', async () => {
     const id = idOf('seller1');
+    app.clock.advance(10_000);
     expect((await app.call('seller1', 'DELETE', '/me/photo')).status).toBe(204);
     expect((await app.call('seller1', 'GET', '/me/photo')).status).toBe(404);
+    app.clock.advance(10_000);
     expect((await app.call('seller1', 'DELETE', '/me/photo')).status).toBe(204);
     expect(await app.database.handle.db.select().from(accountPhoto).where(eq(accountPhoto.accountId, id))).toHaveLength(0);
     expect(await readdir(join(dir, 'account-photos', id))).toEqual([]);
@@ -258,6 +271,43 @@ describe('audit', () => {
       expect(detail.length).toBeLessThan(300);
       expect(Object.keys(event.detail as object).every((k) => ['version', 'sizePx', 'byteLength', 'replaced'].includes(k))).toBe(true);
     }
+  });
+});
+
+describe('change limits (PUT and DELETE share one slot per account, failed attempts count)', () => {
+  it('lets only one of several parallel uploads of the same account proceed', async () => {
+    app.clock.advance(10_000);
+    const data = await png(200, 200);
+    const results = await Promise.all([1, 2, 3, 4].map(() => put('admin', 'image/png', data)));
+    const statuses = results.map((r) => r.status).sort();
+    expect(statuses).toEqual([200, 429, 429, 429]);
+  });
+
+  it('counts a failed upload as an attempt', async () => {
+    app.clock.advance(10_000);
+    expect((await put('seller2', 'image/png', Buffer.from('not an image'))).status).toBe(400);
+    expect((await put('seller2', 'image/png', await png(200, 200))).status).toBe(429);
+    app.clock.advance(10_000);
+    expect((await put('seller2', 'image/png', await png(200, 200))).status).toBe(200);
+  });
+
+  it('limits a DELETE followed by an upload, and an upload followed by a DELETE, within 5 seconds', async () => {
+    app.clock.advance(10_000);
+    expect((await app.call('manager', 'DELETE', '/me/photo')).status).toBe(204);
+    app.clock.advance(1_000);
+    expect((await put('manager', 'image/png', await png(200, 200))).status).toBe(429);
+    app.clock.advance(10_000);
+    expect((await put('manager', 'image/png', await png(200, 200))).status).toBe(200);
+    app.clock.advance(1_000);
+    expect((await app.call('manager', 'DELETE', '/me/photo')).status).toBe(429);
+  });
+
+  it('serializes concurrent claims in the database (the guard that holds across API instances)', async () => {
+    const repository = new AccountPhotoRepository(app.database.handle.db);
+    const id = idOf('admin');
+    const at = new Date(app.clock.fn().getTime() + 3_600_000);
+    const claims = await Promise.all([1, 2, 3, 4, 5].map(() => repository.claimSlot(id, at, 5_000)));
+    expect(claims.filter(Boolean)).toHaveLength(1);
   });
 });
 

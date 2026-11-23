@@ -3,7 +3,7 @@ import { API_BASE_PATH, routes, type ProfilePhoto } from '@salesforce/contracts'
 import type { FastifyReply } from 'fastify';
 import { AppError } from '../http/app-error.js';
 import { ApiRoute, Contract, type RequestContract } from '../http/route.js';
-import { ACCOUNT_PHOTO_MAX_AGE_SECONDS, AccountPhotoService } from './account-photo.service.js';
+import { AccountPhotoService } from './account-photo.service.js';
 import { CurrentUserParam, type CurrentUser } from './current-user.js';
 
 /**
@@ -33,20 +33,23 @@ export class AccountPhotoController {
   ): Promise<void> {
     const served = await this.photos.serve(user, ifNoneMatch);
     if (served === null) throw new AppError('not_found');
-    const cacheControl = `private, max-age=${ACCOUNT_PHOTO_MAX_AGE_SECONDS}`;
+    // Personal data behind a cookie: always revalidate by ETag (the `?v=` URL stays usable), never shared-cache.
+    const cacheControl = 'private, no-cache';
     if (served.kind === 'not_modified') {
-      void reply.status(304).header('etag', served.etag).header('cache-control', cacheControl).send();
+      void reply.status(304).header('etag', served.etag).header('cache-control', cacheControl).header('vary', 'Cookie').send();
       return;
     }
     void reply
       .status(200)
-      .header('content-type', served.contentType)
+      // Every stored rendition is WebP produced by the server; never echo a stored value.
+      .header('content-type', 'image/webp')
       .header('content-length', served.bytes.length)
       .header('content-disposition', 'inline')
       .header('content-security-policy', "default-src 'none'; sandbox")
       .header('cross-origin-resource-policy', 'same-site')
       .header('etag', served.etag)
       .header('cache-control', cacheControl)
+      .header('vary', 'Cookie')
       .send(Buffer.from(served.bytes.buffer, served.bytes.byteOffset, served.bytes.byteLength));
   }
 }

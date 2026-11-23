@@ -5,7 +5,7 @@ import sharp from 'sharp';
  * as WebP, so every byte that is stored and served was produced here (no EXIF, no GPS, no embedded profile/comment,
  * no polyglot payload). sharp stays behind this module, like the product thumbnails.
  */
-export type AccountPhotoErrorCode = 'type_not_allowed' | 'content_mismatch' | 'too_large' | 'unreadable' | 'crop_invalid' | 'too_small';
+export type AccountPhotoErrorCode = 'type_not_allowed' | 'content_mismatch' | 'too_large' | 'unreadable' | 'crop_invalid' | 'too_small' | 'busy' | 'timeout';
 
 export class AccountPhotoError extends Error {
   readonly code: AccountPhotoErrorCode;
@@ -74,23 +74,51 @@ function configureSharpOnce(): void {
   sharp.concurrency(1);
 }
 
+/** Renders allowed to WAIT behind the running one; more are refused at once (`busy`) instead of piling up memory. */
+export const ACCOUNT_PHOTO_MAX_QUEUED = 8;
+/** A render (queue wait included) that takes longer is abandoned for the caller (`timeout`). */
+export const ACCOUNT_PHOTO_RENDER_TIMEOUT_MS = 15_000;
+
 /** One render at a time in the process: memory is bounded by one decoded raster. */
 let tail: Promise<void> = Promise.resolve();
-function runExclusive<T>(task: () => Promise<T>): Promise<T> {
+let inFlight = 0;
+function runExclusive<T>(task: () => Promise<T>, limits: RenderLimits): Promise<T> {
+  // inFlight counts the running render plus the waiting ones.
+  if (inFlight > limits.maxQueued) throw new AccountPhotoError('busy', 'Too many photo renders are waiting.');
+  inFlight += 1;
   const run = tail.then(task);
+  // The chain always waits for the real end of the work (sharp cannot be cancelled), even when the caller gave up.
   tail = run.then(
     () => undefined,
     () => undefined,
   );
-  return run;
+  void tail.then(() => {
+    inFlight -= 1;
+  });
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new AccountPhotoError('timeout', 'The photo render took too long.')), limits.timeoutMs);
+  });
+  return Promise.race([run, timeout]).finally(() => clearTimeout(timer));
 }
 
-export async function renderAccountPhoto(upload: Uint8Array, declared: PhotoUploadType, crop?: PhotoCrop): Promise<RenderedAccountPhoto> {
+export interface RenderLimits {
+  readonly maxQueued: number;
+  readonly timeoutMs: number;
+}
+const DEFAULT_LIMITS: RenderLimits = { maxQueued: ACCOUNT_PHOTO_MAX_QUEUED, timeoutMs: ACCOUNT_PHOTO_RENDER_TIMEOUT_MS };
+
+export async function renderAccountPhoto(
+  upload: Uint8Array,
+  declared: PhotoUploadType,
+  crop?: PhotoCrop,
+  limits: RenderLimits = DEFAULT_LIMITS,
+): Promise<RenderedAccountPhoto> {
   configureSharpOnce();
   const sniffed = sniffPhotoType(upload);
   if (sniffed === null) throw new AccountPhotoError('type_not_allowed', 'The file is not a JPEG, PNG or WebP image.');
   if (sniffed !== declared) throw new AccountPhotoError('content_mismatch', 'The file content does not match the declared type.');
-  return await runExclusive(() => render(upload, sniffed, crop));
+  return await runExclusive(() => render(upload, sniffed, crop), limits);
 }
 
 async function render(upload: Uint8Array, type: PhotoUploadType, crop: PhotoCrop | undefined): Promise<RenderedAccountPhoto> {
