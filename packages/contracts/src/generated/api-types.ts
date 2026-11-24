@@ -1599,7 +1599,7 @@ export interface components {
             customerBlock: "customer_unavailable" | "customer_inactive" | "customer_blocked" | "customer_without_seller";
         };
         /** @enum {string} */
-        OrderSort: "updatedAt" | "-updatedAt" | "draftNumber" | "-draftNumber";
+        OrderSort: "updatedAt" | "-updatedAt" | "draftNumber" | "-draftNumber" | "nunota" | "-nunota";
         /** @enum {string} */
         OrderStatus: "draft" | "awaiting_approval" | "approved" | "approval_rejected" | "queued" | "sent" | "rejected" | "unknown";
         OrderStatusDisplay: {

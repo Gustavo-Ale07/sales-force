@@ -832,3 +832,91 @@ describe('line discounts (drafts only: authority approval is not decided, R35/R3
     ).rejects.toThrow(/sales_order_item_discount_percent_chk/);
   });
 });
+
+describe('Salvar e sair: a draft without TOP, negotiation, freight and carrier (all null)', () => {
+  it('POST /orders accepts null header fields on a draft; the full header is only required to send', async () => {
+    const created = await create('seller1', draftBody({ negotiationTypeCode: null, topCode: null, freightType: null, carrierCode: null }));
+    expect(created.status).toBe(201);
+    expect(created.body.status).toBe('draft');
+    expect(created.body.negotiationTypeCode).toBeNull();
+    expect(created.body.topCode).toBe(9000); // no TOP sent: the installation order TOP is the default
+    expect(created.body.freightType).toBeNull();
+    expect(created.body.carrierCode).toBeNull();
+    const replaced = await ctx.call('seller1', 'PUT', `/orders/${created.body.id}`, {
+      expectedVersion: 1,
+      customerCode: customer1,
+      negotiationTypeCode: null,
+      topCode: null,
+      freightType: null,
+      carrierCode: null,
+      notes: null,
+      items: [{ productCode: priced[0]?.code, quantity: '1' }],
+    });
+    expect(replaced.status).toBe(200);
+    expect(replaced.body.status).toBe('draft');
+  });
+});
+
+describe('"Precisa de correcao" (rejected delivery) is editable like a draft', () => {
+  // The demo installation has no ERP-bound orders, so the structural ERP gate (a trigger-free CHECK) is lifted for this block only
+  // and restored NOT VALID afterwards: the status and the edit rules under test do not depend on the binding.
+  beforeAll(async () => {
+    await ctx.database.handle.pool.query('alter table sales_order drop constraint sales_order_erp_eligibility_chk');
+  });
+  afterAll(async () => {
+    await ctx.database.handle.pool.query(
+      `alter table sales_order add constraint sales_order_erp_eligibility_chk check (status not in ('queued', 'sent', 'rejected', 'unknown') or (dataset_origin = 'sankhya' and erp_environment is not null)) not valid`,
+    );
+  });
+  const edit = (who: Who, id: string, expectedVersion: number) =>
+    ctx.call(who, 'PUT', `/orders/${id}`, { expectedVersion, customerCode: customer1, negotiationTypeCode: 2, notes: 'corrigido', items: [{ productCode: priced[0]?.code, quantity: '4' }] });
+
+  it('PUT on a rejected order edits it, bumps the version and keeps it rejected (resend goes through Reenviar); queued/sent/unknown stay closed', async () => {
+    const created = await create('seller1', draftBody());
+    const id = created.body.id;
+    await ctx.database.handle.pool.query(`update sales_order set status = 'rejected' where id = $1`, [id]);
+    const edited = await edit('seller1', id, 1);
+    expect(edited.status).toBe(200);
+    expect(edited.body.status).toBe('rejected');
+    expect(edited.body.version).toBe(2);
+    expect(edited.body.notes).toBe('corrigido');
+    expect(edited.body.items).toHaveLength(1);
+    for (const status of ['queued', 'sent', 'unknown']) {
+      await ctx.database.handle.pool.query(`update sales_order set status = $2 where id = $1`, [id, status]);
+      const refused = await edit('seller1', id, 2);
+      expect(refused.status).toBe(409);
+      expect(refused.body.code).toBe('order_not_editable');
+    }
+  });
+
+  it('authorization is the same as for a draft: a seller outside the scope gets 404 and the order is untouched', async () => {
+    const created = await create('seller1', draftBody());
+    const id = created.body.id;
+    await ctx.database.handle.pool.query(`update sales_order set status = 'rejected' where id = $1`, [id]);
+    const foreign = await edit('seller2', id, 1);
+    expect(foreign.status).toBe(404);
+    const row = await ctx.database.handle.pool.query(`select version, status from sales_order where id = $1`, [id]);
+    expect(row.rows[0]).toMatchObject({ version: 1, status: 'rejected' });
+  });
+});
+
+describe('order list sort by the Sankhya number (nunota)', () => {
+  it('sorts by erpNumber, orders without a number last in both directions, ties by draft number', async () => {
+    const a = await create('seller1', draftBody({ notes: 'nunota-a' }));
+    const b = await create('seller1', draftBody({ notes: 'nunota-b' }));
+    const c = await create('seller1', draftBody({ notes: 'nunota-c' }));
+    const none = await create('seller1', draftBody({ notes: 'nunota-none' }));
+    const set = (id: string, number: number) => ctx.database.handle.pool.query(`update sales_order set erp_number = $2 where id = $1`, [id, number]);
+    await set(a.body.id, 900200);
+    await set(b.body.id, 900100);
+    await set(c.body.id, 900300);
+    const mine = new Set([a.body.id, b.body.id, c.body.id, none.body.id]);
+    const ids = async (sort: string) =>
+      (await ctx.call('seller1', 'GET', `/orders?sort=${sort}&pageSize=100`)).body.items.map((order: Json) => order.id).filter((id: string) => mine.has(id));
+    expect(await ids('nunota')).toEqual([b.body.id, a.body.id, c.body.id, none.body.id]);
+    expect(await ids('-nunota')).toEqual([c.body.id, a.body.id, b.body.id, none.body.id]);
+    // draftNumber keeps working for installed clients.
+    const byDraft = await ids('draftNumber');
+    expect(byDraft).toEqual([a.body.id, b.body.id, c.body.id, none.body.id]);
+  });
+});

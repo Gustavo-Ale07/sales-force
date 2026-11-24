@@ -112,7 +112,8 @@ export type DraftIssueCode = z.infer<typeof DraftIssueCodeSchema>;
 
 export const OrderSortSchema = named(
   'OrderSort',
-  z.enum(['updatedAt', '-updatedAt', 'draftNumber', '-draftNumber']),
+  // `nunota` / `-nunota`: by the Sankhya number (`erpNumber`); orders without one come last in both directions, ties by draft number.
+  z.enum(['updatedAt', '-updatedAt', 'draftNumber', '-draftNumber', 'nunota', '-nunota']),
 );
 
 /**

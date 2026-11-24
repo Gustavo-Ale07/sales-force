@@ -7992,7 +7992,9 @@
           "updatedAt",
           "-updatedAt",
           "draftNumber",
-          "-draftNumber"
+          "-draftNumber",
+          "nunota",
+          "-nunota"
         ]
       },
       "OrderStatus": {

@@ -108,7 +108,7 @@ export function canTransitionOutbox(from: OutboxStatus, to: OutboxStatus): boole
  * ERP-side state. An edit of the last two returns the order to draft (`statusAfterEdit`).
  */
 export function isOrderEditable(status: OrderStatus): boolean {
-  return status === 'draft' || status === 'approval_rejected' || status === 'awaiting_approval';
+  return status === 'draft' || status === 'approval_rejected' || status === 'awaiting_approval' || status === 'rejected';
 }
 
 /**
@@ -120,10 +120,14 @@ export function isOrderDeletable(status: OrderStatus, erpNumber: number | null |
   return status !== 'queued' && status !== 'sent' && status !== 'unknown';
 }
 
-/** Status after a successful edit: always draft (the pending approval, if any, is invalidated by the caller). */
-export function statusAfterEdit(status: OrderStatus): 'draft' {
+/**
+ * Status after a successful edit: draft (the pending approval, if any, is invalidated by the caller). Exception: `rejected`
+ * (delivery refused DEFINITIVELY by the ERP, "Precisa de correcao"; a transient failure never reaches this status) stays
+ * `rejected`: the order keeps its outbox row and origin id (SNK-4) and is resent through "Reenviar" (D-AA) after the edit.
+ */
+export function statusAfterEdit(status: OrderStatus): 'draft' | 'rejected' {
   if (!isOrderEditable(status)) throw new Error(`order in status ${status} is not editable`);
-  return 'draft';
+  return status === 'rejected' ? 'rejected' : 'draft';
 }
 
 export function reachableOrderTargets(from: OrderStatus): readonly OrderStatus[] {

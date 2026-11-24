@@ -38,7 +38,7 @@ export interface OrderListFilter {
   readonly ids?: readonly string[] | undefined;
   /** Stage following Sankhya, same classification as the list chip (see `stageCondition`). */
   readonly stage?: OrderStageCode | undefined;
-  readonly sort: 'updatedAt' | '-updatedAt' | 'draftNumber' | '-draftNumber';
+  readonly sort: 'updatedAt' | '-updatedAt' | 'draftNumber' | '-draftNumber' | 'nunota' | '-nunota';
 }
 
 /** Time zone the period filter is read in (decisions.md: business calculations in America/Sao_Paulo). */
@@ -394,10 +394,13 @@ export class OrdersRepository {
     const previewFirst = matchingLinesFirst(filter.productCodes);
 
     const direction = filter.sort.startsWith('-') ? desc : asc;
+    // `nunota` / `-nunota`: by the Sankhya number; orders without one (never delivered) come LAST in both directions, ties by draft number.
     const order =
       filter.sort === 'updatedAt' || filter.sort === '-updatedAt'
         ? [direction(salesOrder.updatedAt), direction(salesOrder.draftNumber)]
-        : [direction(salesOrder.draftNumber)];
+        : filter.sort === 'nunota' || filter.sort === '-nunota'
+          ? [sql`${salesOrder.erpNumber} ${sql.raw(direction === desc ? 'desc' : 'asc')} nulls last`, direction(salesOrder.draftNumber)]
+          : [direction(salesOrder.draftNumber)];
 
     const [rows, totals] = await Promise.all([
       this.db

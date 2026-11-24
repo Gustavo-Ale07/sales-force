@@ -74,7 +74,7 @@ describe('order status transitions', () => {
   });
 
   it('only draft, rejected-by-approver and awaiting approval are editable', () => {
-    for (const s of ORDER_STATUSES) expect(isOrderEditable(s)).toBe(['draft', 'approval_rejected', 'awaiting_approval'].includes(s));
+    for (const s of ORDER_STATUSES) expect(isOrderEditable(s)).toBe(['draft', 'approval_rejected', 'awaiting_approval', 'rejected'].includes(s));
   });
 
   it('lists reachable targets', () => {
@@ -141,8 +141,8 @@ describe('order approval states (ORD-1, ORD-2, SM-2)', () => {
   });
 
   it('is editable as draft, rejected-by-approver and awaiting approval (which returns to draft); never approved or sent', () => {
-    for (const s of ['draft', 'approval_rejected', 'awaiting_approval'] as const) expect(isOrderEditable(s)).toBe(true);
-    for (const s of ['approved', 'queued', 'sent', 'rejected', 'unknown'] as const) expect(isOrderEditable(s)).toBe(false);
+    for (const s of ['draft', 'approval_rejected', 'awaiting_approval', 'rejected'] as const) expect(isOrderEditable(s)).toBe(true);
+    for (const s of ['approved', 'queued', 'sent', 'unknown'] as const) expect(isOrderEditable(s)).toBe(false);
   });
 
   it('D-Y: deletable only without an ERP number and with no queued, sent or in-flight delivery', () => {
@@ -154,10 +154,12 @@ describe('order approval states (ORD-1, ORD-2, SM-2)', () => {
     for (const s of ['queued', 'sent', 'unknown'] as const) expect(isOrderDeletable(s, null)).toBe(false);
   });
 
-  it('an edit always ends in draft', () => {
+  it('an edit ends in draft, except a refused delivery that stays rejected (resend path)', () => {
     expect(statusAfterEdit('draft')).toBe('draft');
     expect(statusAfterEdit('awaiting_approval')).toBe('draft');
     expect(statusAfterEdit('approval_rejected')).toBe('draft');
+    // A definitively refused delivery (Precisa de correcao) stays rejected: it keeps its outbox row and origin id (SNK-4); resend goes through the D-AA path.
+    expect(statusAfterEdit('rejected')).toBe('rejected');
     expect(() => statusAfterEdit('approved')).toThrow();
   });
 });
