@@ -4,7 +4,6 @@ import type { DraftRecord, SyncStatus } from "@salesforce/mobile-db";
 import type { Account } from "../auth/auth-port";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import type { Repositories } from "../data/ports";
-import { pickResumableDraft } from "../offline/home-summary";
 import type { LocalOrdersPort } from "../offline/local-orders";
 import { colors, fontSize, radius, spacing } from "../theme";
 import { roleLabel } from "./account-labels";
@@ -19,7 +18,6 @@ export interface HomeScreenProps {
   readonly syncStatus: SyncStatus;
   readonly connectivity: ConnectivityState;
   readonly onNewOrder: () => void;
-  readonly onResumeDraft: (localId: string) => void;
   /** Present only when a sync manager exists. */
   readonly onSyncNow?: () => void;
 }
@@ -29,10 +27,9 @@ interface Summary {
   readonly orders: number | null;
   readonly customers: number | null;
   readonly products: number | null;
-  readonly resumable: DraftRecord | null;
 }
 
-const EMPTY_SUMMARY: Summary = { orders: null, customers: null, products: null, resumable: null };
+const EMPTY_SUMMARY: Summary = { orders: null, customers: null, products: null };
 
 function settled<T>(result: PromiseSettledResult<T>): T | null {
   return result.status === "fulfilled" ? result.value : null;
@@ -87,7 +84,7 @@ function EmptySection({ title, text }: { title: string; text: string }) {
 }
 
 /** Home: real shortcuts and counters from the data already on this device. No sales metrics until there is a source for them. */
-export function HomeScreen({ account, active, repositories, localOrders, syncStatus, connectivity, onNewOrder, onResumeDraft, onSyncNow }: HomeScreenProps) {
+export function HomeScreen({ account, active, repositories, localOrders, syncStatus, connectivity, onNewOrder, onSyncNow }: HomeScreenProps) {
   const [summary, setSummary] = useState<Summary>(EMPTY_SUMMARY);
 
   useEffect(() => {
@@ -105,7 +102,6 @@ export function HomeScreen({ account, active, repositories, localOrders, syncSta
         orders: localOrders === null ? null : found === null ? null : found.length,
         customers: settled(customers)?.total ?? null,
         products: settled(products)?.total ?? null,
-        resumable: found === null ? null : pickResumableDraft(found),
       });
     });
     return () => {
@@ -127,13 +123,6 @@ export function HomeScreen({ account, active, repositories, localOrders, syncSta
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Ações rápidas</Text>
         <ActionRow primary title="Novo pedido" detail="Escolher cliente e produtos" onPress={onNewOrder} />
-        {summary.resumable !== null && (
-          <ActionRow
-            title="Retomar pedido"
-            detail={`${summary.resumable.customerName} · ${summary.resumable.itemCount} ${summary.resumable.itemCount === 1 ? "item" : "itens"}`}
-            onPress={() => onResumeDraft(summary.resumable?.localId ?? "")}
-          />
-        )}
         {onSyncNow !== undefined && (
           <ActionRow
             title={syncing ? "Sincronizando…" : "Sincronizar agora"}
@@ -150,7 +139,7 @@ export function HomeScreen({ account, active, repositories, localOrders, syncSta
           <StatTile label="Pedidos locais" value={summary.orders} />
           <StatTile label="Pendências de sincronização" value={localOrders === null ? null : pendingTotal} />
           <StatTile label="Clientes disponíveis" value={summary.customers} />
-          <StatTile label="Produtos disponíveis" value={summary.products} />
+          <StatTile label="Produtos no aparelho" value={summary.products} />
         </View>
       </View>
 

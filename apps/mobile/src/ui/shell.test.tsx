@@ -450,18 +450,6 @@ describe("Shell", () => {
     expect(syncNow).toHaveBeenCalledWith("manual");
   });
 
-  it("opens the existing local-orders list from Perfil", async () => {
-    const { offline } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() });
-    await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
-    await fireEvent.press(await screen.findByRole("tab", { name: "Perfil" }));
-    await fireEvent.press(screen.getByRole("button", { name: "Ver pedidos salvos neste aparelho" }));
-    expect(await screen.findByText("Nenhuma venda pendente.")).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Vendas" }).props.accessibilityState.selected).toBe(true);
-    // Minhas vendas is the initial screen of Vendas: the old "Minhas vendas / Novo pedido" strip is gone.
-    expect(screen.queryByRole("tab", { name: "Minhas vendas" })).toBeNull();
-    expect(screen.queryByRole("tab", { name: "Novo pedido" })).toBeNull();
-  });
-
   it("Vendas opens on 'Minhas vendas' with ONE entry, the 'Nova venda' button", async () => {
     const { offline } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() });
     await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
@@ -490,8 +478,7 @@ describe("Shell", () => {
   it("inside the order wizard the header X leaves to Minhas vendas without a question (nothing to save yet)", async () => {
     const { offline } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() });
     await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
-    await fireEvent.press(await screen.findByRole("tab", { name: "Perfil" }));
-    await fireEvent.press(screen.getByRole("button", { name: "Ver pedidos salvos neste aparelho" }));
+    await fireEvent.press(await screen.findByRole("tab", { name: "Vendas" }));
     await screen.findByText("Nenhuma venda pendente.");
     await fireEvent.press(screen.getByRole("button", { name: "Nova venda" }));
     expect(screen.getByLabelText("Etapa 1 de 4: Cliente")).toBeTruthy();

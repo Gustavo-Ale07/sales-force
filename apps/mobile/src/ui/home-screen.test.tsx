@@ -59,7 +59,6 @@ async function renderHome(overrides: Partial<HomeScreenProps> = {}) {
     syncStatus: idle,
     connectivity: "online",
     onNewOrder: jest.fn(),
-    onResumeDraft: jest.fn(),
     onSyncNow: jest.fn(),
     ...overrides,
   };
@@ -74,7 +73,7 @@ describe("HomeScreen", () => {
       syncStatus: { ...idle, pending: 2, needsAttention: 1 },
     });
     expect(await screen.findByLabelText("Clientes disponíveis: 250")).toBeTruthy();
-    expect(screen.getByLabelText("Produtos disponíveis: 373")).toBeTruthy();
+    expect(screen.getByLabelText("Produtos no aparelho: 373")).toBeTruthy();
     expect(screen.getByLabelText("Pedidos locais: 1")).toBeTruthy();
     expect(screen.getByLabelText("Pendências de sincronização: 3")).toBeTruthy();
 
@@ -84,19 +83,7 @@ describe("HomeScreen", () => {
     expect(props.onSyncNow).toHaveBeenCalled();
   });
 
-  it("resumes the most relevant draft and names its customer", async () => {
-    const { props } = await renderHome({
-      localOrders: localOrdersOf([
-        draft("new", "Mercado Sul", "local_only", "2026-09-30T12:00:00Z"),
-        draft("review", "Padaria Central", "needs_review", "2026-09-29T12:00:00Z", 1),
-      ]),
-    });
-    expect(await screen.findByText("Padaria Central · 1 item")).toBeTruthy();
-    await fireEvent.press(screen.getByRole("button", { name: "Retomar pedido" }));
-    expect(props.onResumeDraft).toHaveBeenCalledWith("review");
-  });
-
-  it("hides Retomar pedido when there is no draft, and never shows made-up performance numbers", async () => {
+  it("offers no Retomar pedido shortcut (Vendas lists the drafts), and never shows made-up performance numbers", async () => {
     await renderHome();
     await screen.findByLabelText("Clientes disponíveis: 250");
     expect(screen.queryByRole("button", { name: "Retomar pedido" })).toBeNull();
@@ -123,7 +110,7 @@ describe("HomeScreen", () => {
         products: { list: async () => pageOf([], 5) } as never,
       },
     });
-    await waitFor(() => expect(screen.getByLabelText("Produtos disponíveis: 5")).toBeTruthy());
+    await waitFor(() => expect(screen.getByLabelText("Produtos no aparelho: 5")).toBeTruthy());
     expect(screen.getByLabelText("Clientes disponíveis: indisponível")).toBeTruthy();
   });
 });

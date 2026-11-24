@@ -395,7 +395,6 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
                 setSalesView("newOrder");
                 selectTab("sales");
               }}
-              onResumeDraft={openDraft}
               {...(services === null ? {} : { onSyncNow: syncNow })}
             />
           </Pane>
@@ -476,14 +475,6 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
               account={session.account}
               {...syncView}
               {...(photoService === undefined ? {} : { photo: { service: photoService, uri: photoUri, onChanged: photoChanged } })}
-              {...(services === null
-                ? {}
-                : {
-                    onOpenLocalOrders: () => {
-                      setSalesView("orders");
-                      selectTab("sales");
-                    },
-                  })}
               {...(updateAvailable ? { onCheckUpdate: installUpdate } : {})}
               onSignOut={() => void signOut()}
               {...(account !== null && offline !== undefined ? { loadUnsent: () => offline.unsentWork(account.id) } : {})}
