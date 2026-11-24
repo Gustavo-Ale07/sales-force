@@ -24,7 +24,7 @@ describe("describeListPrice", () => {
   });
 
   it("shows an explicit zero row as zero", () => {
-    expect(describeListPrice({ state: "zero", unitPrice: "0", tableCode: 1, versionId: 2 })).toBe("R$ 0,00");
+    expect(describeListPrice({ state: "zero", unitPrice: "0", tableCode: 1, versionId: 2 })).toBe("Preço zero · R$ 0,00");
   });
 
   it("never turns a missing price into zero", () => {

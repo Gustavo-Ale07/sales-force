@@ -177,7 +177,7 @@ describe("ProductsScreen (Catálogo)", () => {
     const zero: ProductListItem["listPrice"] = { state: "zero", unitPrice: "0", tableCode: 1, versionId: 1 };
     await render(<ProductsScreen products={catalog([], [CATALOG[2]!, product(9, { description: "Brinde", listPrice: zero })])} onUnauthenticated={noop} />);
     expect(await screen.findByText("Sem preço")).toBeTruthy();
-    expect(screen.getByText("R$ 0,00")).toBeTruthy();
+    expect(screen.getByText("Preço zero · R$ 0,00")).toBeTruthy();
   });
 
   it("shows a neutral placeholder (initials) for every product without image metadata, and never calls the image store", async () => {

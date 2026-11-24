@@ -24,5 +24,6 @@ export function formatBrl(value: string): string | null {
  */
 export function describeListPrice(price: ListPriceContext): string {
   if (price.state === "none") return "Sem preço";
-  return formatBrl(price.unitPrice) ?? "Preço indisponível";
+  const text = formatBrl(price.unitPrice) ?? "Preço indisponível";
+  return price.state === "zero" ? `Preço zero · ${text}` : text;
 }
