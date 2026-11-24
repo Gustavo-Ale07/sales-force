@@ -48,7 +48,6 @@ describe("the internal Force number is never printed", () => {
 
   it("the PDF model is built without the internal number", () => {
     const pdf = readFileSync(join(SRC, "offline", "order-pdf.ts"), "utf8");
-    expect(pdf).toMatch(/draftNumber:\s*null/);
-    expect(pdf).not.toMatch(/draftNumber:\s*draft\./);
+    expect(pdf).not.toMatch(/draftNumber/);
   });
 });

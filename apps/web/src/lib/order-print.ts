@@ -36,7 +36,6 @@ export function buildOrderHtml(order: OrderDetail, origin: string, extras: Order
   const model = toOrderDocument({
     kind: documentKindOf(order.topCode, extras.topRules ?? {}),
     // The internal number is never shown (owner rule 2026-11-23): identity is the Sankhya number only.
-    draftNumber: null,
     erpNumber: order.erpNumber,
     customerCode: order.customerCode,
     customerName: order.customerName,

@@ -42,7 +42,6 @@ export function orderDocumentOf(draft: DraftRecord, lines: readonly EditorLine[]
   const value = saleValue(draft, lines);
   return toOrderDocument({
     // The internal Force number is never printed (owner 2026-11-23): the only number on the document is the Sankhya one.
-    draftNumber: null,
     erpNumber: erpNumberOfDraft(draft),
     customerCode: draft.customerCode,
     customerName: draft.customerName,

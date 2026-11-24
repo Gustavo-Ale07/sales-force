@@ -17,7 +17,6 @@ export interface OrderDocumentSource {
   readonly kind?: 'order' | 'quote';
   /** Commercial conditions already labelled by the caller (payment condition, negotiation type…); never financial/credit data. */
   readonly conditions?: readonly { readonly label: string; readonly value: string }[];
-  readonly draftNumber: number | null;
   /** Sankhya order number once the order exists there. */
   readonly erpNumber: number | null;
   readonly customerCode: number;
@@ -61,7 +60,6 @@ export function toOrderDocument(source: OrderDocumentSource): OrderDocumentModel
     ...(source.conditions === undefined
       ? {}
       : { conditions: source.conditions.map((c) => ({ label: c.label, value: c.value })) }),
-    draftNumber: source.draftNumber,
     erpNumber: source.erpNumber,
     customerCode: source.customerCode,
     customerName: source.customerName,
@@ -237,12 +235,9 @@ export function renderOrderHtml(model: OrderDocumentModel, options: OrderHtmlOpt
   const brand = logo === null ? `<div class="wordmark">${brandName}<span>.</span></div>` : `<img src="${escapeHtml(logo)}" alt="${brandName}">`;
   const isQuote = model.kind === 'quote';
   const noun = isQuote ? 'Orçamento' : 'Pedido';
-  const forceNumber =
-    model.draftNumber === null
-      ? noun
-      : `${noun}${isQuote ? '' : ' Force'} nº ${escapeHtml(model.draftNumber)}`;
-  const erpLine = model.erpNumber === null ? '' : `<div class="meta">${noun} nº ${escapeHtml(model.erpNumber)}</div>`;
-  const title = options.title ?? (model.draftNumber === null ? noun : `${noun} ${model.draftNumber}`);
+  // Identity is the Sankhya number only (owner rule 2026-11-23); the internal Force number is not part of the model.
+  const forceNumber = model.erpNumber === null ? noun : `${noun} nº ${escapeHtml(model.erpNumber)}`;
+  const title = options.title ?? (model.erpNumber === null ? noun : `${noun} ${model.erpNumber}`);
 
   const rows = model.items
     .map((item) => {
@@ -274,7 +269,7 @@ export function renderOrderHtml(model: OrderDocumentModel, options: OrderHtmlOpt
 <body>
 <header>
 <div>${brand}${companyBlock(options.company)}</div>
-<div><div class="kind">${isQuote ? 'ORÇAMENTO' : 'PEDIDO'}</div><h1>${forceNumber}</h1>${erpLine}<div class="meta">Data ${escapeHtml(formatDocumentDate(model.createdAt))}</div><div class="badge">${escapeHtml(model.statusLabel)}</div></div>
+<div><div class="kind">${isQuote ? 'ORÇAMENTO' : 'PEDIDO'}</div><h1>${forceNumber}</h1><div class="meta">Data ${escapeHtml(formatDocumentDate(model.createdAt))}</div><div class="badge">${escapeHtml(model.statusLabel)}</div></div>
 </header>
 <section class="cols">
 <div><h2>Cliente</h2><div><strong>${escapeHtml(model.customerName)}</strong></div><div>Cliente ${escapeHtml(model.customerCode)}</div></div>

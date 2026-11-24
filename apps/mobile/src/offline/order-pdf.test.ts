@@ -21,7 +21,7 @@ describe("orderDocumentOf", () => {
 
   it("maps the local order with decimal quantities, totals from the domain and a Sankhya-worded state", () => {
     const model = orderDocumentOf(draft, [line(), noPrice()]);
-    expect(model.draftNumber).toBeNull();
+    expect(model).not.toHaveProperty("draftNumber");
     expect(model.erpNumber).toBeNull();
     expect(model.items[0]).toMatchObject({ quantity: "1.2345", unitListPrice: "10", discountPercent: "10", productDescription: "Cabo <flexível> 2,5mm" });
     expect(model.items[1]).toMatchObject({ unitListPrice: null, estimatedLineTotal: null, quantity: "2" });

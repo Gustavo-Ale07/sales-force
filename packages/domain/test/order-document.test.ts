@@ -10,7 +10,6 @@ import {
 } from '../src/index.js';
 
 const source: OrderDocumentSource = {
-  draftNumber: 42,
   erpNumber: 987654,
   customerCode: 1500,
   customerName: 'CASA & CIA LTDA',
@@ -73,8 +72,8 @@ describe('renderOrderHtml', () => {
     expect(html).toContain('#FF0109');
     expect(html).toContain('@page');
     expect(html).toContain('A4');
-    expect(html).toContain('Pedido Force nº 42');
     expect(html).toContain('Pedido nº 987654');
+    expect(html).toContain('<title>Pedido 987654</title>');
     expect(html).toContain('Enviado ao Sankhya');
     expect(html).toContain('CASA &amp; CIA LTDA');
     expect(html).toContain('1.250,5');
@@ -137,7 +136,7 @@ describe('restricted data never reaches the document (P-20)', () => {
   it('the mapper copies only the allowed fields', () => {
     const model = toOrderDocument(tainted);
     expect(Object.keys(model).sort()).toEqual(
-      ['createdAt', 'customerCode', 'customerName', 'draftNumber', 'erpNumber', 'items', 'notes', 'statusLabel', 'totals'].sort(),
+      ['createdAt', 'customerCode', 'customerName', 'erpNumber', 'items', 'notes', 'statusLabel', 'totals'].sort(),
     );
     expect(Object.keys(model.totals).sort()).toEqual(['estimatedTotal', 'isPartial', 'unpricedLineCount']);
     for (const item of model.items) {
@@ -163,17 +162,28 @@ describe('restricted data never reaches the document (P-20)', () => {
 });
 
 describe('title without a number', () => {
-  it('quote and order without draft number print just the noun, never a placeholder', () => {
-    const quote = renderOrderHtml(toOrderDocument({ ...source, draftNumber: null, kind: 'quote' }));
-    const order = renderOrderHtml(toOrderDocument({ ...source, draftNumber: null, kind: 'order' }));
+  it('the internal Force number never appears, even if a caller passes one', () => {
+    const withDraft = { ...source, erpNumber: null, draftNumber: 4242 } as OrderDocumentSource;
+    for (const kind of ['order', 'quote'] as const) {
+      const out = renderOrderHtml(toOrderDocument({ ...withDraft, kind }));
+      expect(out).not.toContain('Force nº');
+      expect(out).not.toContain('4242');
+      expect(Object.keys(toOrderDocument(withDraft))).not.toContain('draftNumber');
+    }
+    expect(renderOrderHtml(toOrderDocument(source))).not.toContain('Force nº');
+  });
+
+  it('quote and order without Sankhya number print just the noun, never a placeholder', () => {
+    const quote = renderOrderHtml(toOrderDocument({ ...source, erpNumber: null, kind: 'quote' }));
+    const order = renderOrderHtml(toOrderDocument({ ...source, erpNumber: null, kind: 'order' }));
     expect(quote).not.toContain('sem número ainda');
     expect(order).not.toContain('sem número ainda');
     expect(quote).toContain('<title>Orçamento</title>');
     expect(order).toContain('<title>Pedido</title>');
   });
 
-  it('with a number the title still carries it', () => {
-    const quote = renderOrderHtml(toOrderDocument({ ...source, draftNumber: 42, kind: 'quote' }));
+  it('with a Sankhya number the title carries it', () => {
+    const quote = renderOrderHtml(toOrderDocument({ ...source, erpNumber: 42, kind: 'quote' }));
     expect(quote).toContain('<title>Orçamento 42</title>');
   });
 });
