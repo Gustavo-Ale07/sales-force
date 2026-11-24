@@ -29,6 +29,7 @@ import type { ProductRepository } from '../data/ports';
 import { colors, control, radius, spacing } from '../theme';
 
 export const ALL_ITEMS_KEY = '__all__';
+const NO_TARGET = '__none__';
 
 export interface BulkDiscountSheetProps {
   readonly visible: boolean;
@@ -38,6 +39,8 @@ export interface BulkDiscountSheetProps {
   readonly selectedKeys?: ReadonlySet<string>;
   /** The order already carries the seller's "Sim" to a discount above a limit: no further question. */
   readonly overLimitAccepted?: boolean;
+  /** "Desconto por grupo": no "Todos os itens" row; nothing is chosen until the seller picks a catalog group of the cart. */
+  readonly groupsOnly?: boolean;
   /** Receives the lines carrying the new discount. The caller closes the sheet (it may ask a question first and leave it open). */
   readonly onApply: (before: readonly EditorLine[], after: EditorLine[], applied: number) => void;
   readonly onClose: () => void;
@@ -84,12 +87,14 @@ export function BulkDiscountSheet({
   products,
   selectedKeys,
   overLimitAccepted = false,
+  groupsOnly = false,
   onApply,
   onClose,
 }: BulkDiscountSheetProps) {
   const window = useWindowDimensions();
   const [text, setText] = useState('');
-  const [target, setTarget] = useState(ALL_ITEMS_KEY);
+  const initialTarget = groupsOnly ? NO_TARGET : ALL_ITEMS_KEY;
+  const [target, setTarget] = useState(initialTarget);
   const [resolution, setResolution] = useState<Resolution | null>(null);
   /** The question about items above their limit, shown inside this same sheet (never a second dialog). */
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
@@ -99,7 +104,7 @@ export function BulkDiscountSheet({
     setWasVisible(visible);
     if (visible) {
       setText('');
-      setTarget(ALL_ITEMS_KEY);
+      setTarget(initialTarget);
       setResolution(null);
       setConfirmation(null);
     }
@@ -190,7 +195,7 @@ export function BulkDiscountSheet({
           accessibilityRole="none"
         >
           <Text style={styles.title} accessibilityRole="header">
-            {confirmation === null ? 'Desconto em lote' : OVER_LIMIT_QUESTION}
+            {confirmation === null ? (groupsOnly ? 'Desconto por grupo' : 'Desconto em lote') : OVER_LIMIT_QUESTION}
           </Text>
 
           {confirmation !== null ? (
@@ -267,12 +272,14 @@ export function BulkDiscountSheet({
                       accessibilityLabel="Aplicar em"
                       testID="bulk-discount-targets"
                     >
-                      <TargetRow
-                        label="Todos os itens"
-                        count={lines.length}
-                        checked={target === ALL_ITEMS_KEY}
-                        onPress={() => setTarget(ALL_ITEMS_KEY)}
-                      />
+                      {!groupsOnly && (
+                        <TargetRow
+                          label="Todos os itens"
+                          count={lines.length}
+                          checked={target === ALL_ITEMS_KEY}
+                          onPress={() => setTarget(ALL_ITEMS_KEY)}
+                        />
+                      )}
                       {rows.map((row) => (
                         <TargetRow
                           key={row.key}

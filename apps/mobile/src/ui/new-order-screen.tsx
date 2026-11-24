@@ -135,6 +135,8 @@ export function NewOrderScreen({
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   /** The one bulk sheet: every item or one catalog group. */
   const [bulkDiscountOpen, setBulkDiscountOpen] = useState(false);
+  /** The same sheet opened on the catalog groups of the cart only ("Desconto por grupo"). */
+  const [groupDiscountOpen, setGroupDiscountOpen] = useState(false);
   /** The same sheet for the lines picked in selection mode. */
   const [selectedDiscountOpen, setSelectedDiscountOpen] = useState(false);
   /** The seller said "Sim" to a discount above a product limit in this session; the saved draft carries it too (`localDraft.discountOverLimitAccepted`). */
@@ -1237,6 +1239,10 @@ export function NewOrderScreen({
                       <Text style={styles.toolbarIcon}>%</Text>
                       <Text style={styles.toolbarButtonText} numberOfLines={1}>Desc. em lote</Text>
                     </Pressable>
+                    <Pressable style={styles.toolbarButton} onPress={() => setGroupDiscountOpen(true)} accessibilityRole="button" accessibilityLabel="Desconto por grupo">
+                      <Text style={styles.toolbarIcon}>%</Text>
+                      <Text style={styles.toolbarButtonText} numberOfLines={1}>Por grupo</Text>
+                    </Pressable>
                   </>
                 )}
               </View>
@@ -1360,6 +1366,15 @@ export function NewOrderScreen({
         overLimitAccepted={overLimitAccepted}
         onApply={(before, after) => applyBulk(before, after, () => setBulkDiscountOpen(false))}
         onClose={() => setBulkDiscountOpen(false)}
+      />
+      <BulkDiscountSheet
+        visible={groupDiscountOpen}
+        groupsOnly
+        lines={lines}
+        products={repositories.products}
+        overLimitAccepted={overLimitAccepted}
+        onApply={(before, after) => applyBulk(before, after, () => setGroupDiscountOpen(false))}
+        onClose={() => setGroupDiscountOpen(false)}
       />
       <BulkDiscountSheet
         visible={selectedDiscountOpen}

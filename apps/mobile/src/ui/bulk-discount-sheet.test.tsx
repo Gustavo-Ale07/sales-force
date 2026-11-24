@@ -125,4 +125,43 @@ describe.each(CONDITIONS)("BulkDiscountSheet at %s", (_name, width, height, font
     });
     expect(onApply).toHaveBeenCalledTimes(1);
   });
+
+  it("Desconto por grupo: only the cart groups are listed, nothing is chosen at first, and the percentage applies only to the chosen group", async () => {
+    const onApply = jest.fn();
+    await render(<BulkDiscountSheet visible groupsOnly lines={lines} products={fakeProducts()} overLimitAccepted onApply={onApply} onClose={jest.fn()} />);
+    expect(screen.getByText("Desconto por grupo")).toBeTruthy();
+    expect(screen.queryByRole("radio", { name: "Todos os itens" })).toBeNull();
+    expect(screen.getByText("0 itens afetados")).toBeTruthy();
+    await act(async () => {
+      fireEvent.changeText(screen.getByLabelText("Desconto (%)"), "5");
+    });
+    expect(screen.getByRole("button", { name: "Aplicar desconto" }).props.accessibilityState).toMatchObject({ disabled: true });
+    await act(async () => {
+      fireEvent.press(screen.getByRole("radio", { name: "Pratos" }));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByRole("button", { name: "Aplicar desconto" }));
+    });
+    expect(onApply).toHaveBeenCalledTimes(1);
+    expect((onApply.mock.calls[0][1] as typeof lines).map((line) => line.discountText)).toEqual(["", "", "5"]);
+  });
+
+  it("Desconto por grupo keeps the single Sim/Não question above the limit and lists items above and within", async () => {
+    const onApply = jest.fn();
+    await render(<BulkDiscountSheet visible groupsOnly lines={lines} products={fakeProducts()} onApply={onApply} onClose={jest.fn()} />);
+    await act(async () => {
+      fireEvent.press(screen.getByRole("radio", { name: "Copos" }));
+      fireEvent.changeText(screen.getByLabelText("Desconto (%)"), "20");
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByRole("button", { name: "Aplicar desconto" }));
+    });
+    expect(onApply).not.toHaveBeenCalled();
+    expect(screen.getByText("Acima do limite (2)")).toBeTruthy();
+    expect(screen.getByText("Dentro do limite (0)")).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(screen.getByRole("button", { name: "Sim" }));
+    });
+    expect((onApply.mock.calls[0][1] as typeof lines).map((line) => line.discountText)).toEqual(["20", "20", ""]);
+  });
 });
