@@ -34,7 +34,8 @@ import { Link } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { MetricValueText, METRIC_VISUALS } from "../components/metric-value";
 import { QueryError } from "../components/query-error";
-import { customersQueryOptions, dashboardQueryOptions, sellersQueryOptions, type CustomersParams } from "../lib/api-queries";
+import { customerLettersQueryOptions,
+  customersQueryOptions, dashboardQueryOptions, sellersQueryOptions, type CustomersParams } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { type CustomersSearch } from "../lib/route-search";
 import { asInt, asOneOf, compact } from "../lib/search-params";
@@ -62,6 +63,14 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
   const api = useApi();
   const apiParams: CustomersParams = { ...params, page: params.page ?? 1, pageSize: params.pageSize ?? 25, sort: params.sort ?? "name" };
   const query = useQuery(customersQueryOptions(api, apiParams));
+  const lettersQuery = useQuery(
+    customerLettersQueryOptions(api, {
+      ...(params.search === undefined ? {} : { search: params.search }),
+      ...(params.sellerCode === undefined ? {} : { sellerCode: params.sellerCode }),
+      ...(params.hasPriceTable === undefined ? {} : { hasPriceTable: params.hasPriceTable }),
+    }),
+  );
+  const letters = lettersQuery.data?.letters ?? [];
   const sellers = useQuery(sellersQueryOptions(api));
   const dashboard = useQuery(dashboardQueryOptions(api));
   const portfolio = dashboard.data?.groups.find((group) => group.key === "portfolio");
@@ -73,7 +82,7 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
   const withSellers = sellerOptions.length > 1;
   const sellerName = sellerOptions.find((s) => s.code === params.sellerCode)?.name;
   const hasFilters =
-    params.search !== undefined || params.sellerCode !== undefined || params.hasPriceTable !== undefined;
+    params.search !== undefined || params.sellerCode !== undefined || params.hasPriceTable !== undefined || params.initial !== undefined;
   const clearAll = () => onSearchChange(compact({ sort: params.sort, pageSize: params.pageSize }));
 
   return (
@@ -139,12 +148,34 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
         </FilterField>
       </FilterBar>
 
+      {letters.length > 0 ? (
+        <nav aria-label="Índice alfabético" className="flex flex-wrap items-center gap-1">
+          <Button size="sm" variant={params.initial === undefined ? "primary" : "secondary"} aria-pressed={params.initial === undefined} onClick={() => change({ initial: undefined })}>
+            A–Z
+          </Button>
+          {letters.map((entry) => (
+            <Button
+              key={entry.letter}
+              size="sm"
+              variant={params.initial === entry.letter ? "primary" : "secondary"}
+              aria-pressed={params.initial === entry.letter}
+              aria-label={`Clientes com ${entry.letter}: ${entry.count}`}
+              title={`${entry.count}`}
+              onClick={() => change({ initial: params.initial === entry.letter ? undefined : entry.letter })}
+            >
+              {entry.letter}
+            </Button>
+          ))}
+        </nav>
+      ) : null}
+
       {hasFilters ? (
         <div className="flex flex-wrap items-center gap-1.5" aria-label="Filtros ativos">
           {params.search ? <FilterChip onRemove={() => change({ search: undefined })}>{`Busca: ${params.search}`}</FilterChip> : null}
           {params.sellerCode !== undefined ? (
             <FilterChip onRemove={() => change({ sellerCode: undefined })}>{`Vendedor: ${sellerName ?? params.sellerCode}`}</FilterChip>
           ) : null}
+          {params.initial ? <FilterChip onRemove={() => change({ initial: undefined })}>{`Letra: ${params.initial}`}</FilterChip> : null}
           {params.hasPriceTable ? (
             <FilterChip onRemove={() => change({ hasPriceTable: undefined })}>
               {params.hasPriceTable === "true" ? "Com tabela" : "Sem tabela"}

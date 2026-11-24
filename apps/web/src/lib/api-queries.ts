@@ -151,6 +151,17 @@ export function customersQueryOptions(api: ApiClient, params: CustomersParams) {
   });
 }
 
+export type CustomerLettersParams = Query<"/customers/letters">;
+
+/** A-Z index: count of visible customers per initial letter, under the same filters as the list. */
+export function customerLettersQueryOptions(api: ApiClient, params: CustomerLettersParams) {
+  return queryOptions({
+    queryKey: ["customers", "letters", params] as const,
+    queryFn: () => callApi(() => api.GET("/customers/letters", { params: { query: params } })),
+    placeholderData: keepPreviousData,
+  });
+}
+
 export function customerQueryOptions(api: ApiClient, code: number) {
   return queryOptions({
     queryKey: queryKeys.customer(code),

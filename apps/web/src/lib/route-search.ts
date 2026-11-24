@@ -9,6 +9,8 @@ export interface CustomersSearch {
   search?: string;
   sellerCode?: number;
   hasPriceTable?: "true" | "false";
+  /** A-Z index: initial letter of the name (`A`-`Z`, or `#` for any other start). */
+  initial?: string;
   sort?: ApiSchema<"CustomerSort">;
   page?: number;
   pageSize?: number;
@@ -23,6 +25,7 @@ export function parseCustomersSearch(raw: Record<string, unknown>): CustomersSea
     search: asString(raw.search),
     sellerCode: asInt(raw.sellerCode, 0),
     hasPriceTable: asOneOf(raw.hasPriceTable === true ? "true" : raw.hasPriceTable === false ? "false" : raw.hasPriceTable, ["true", "false"] as const),
+    initial: typeof raw.initial === "string" && /^[A-Z#]$/.test(raw.initial) ? raw.initial : undefined,
     sort: asOneOf(raw.sort, CUSTOMER_SORTS),
     page: page !== undefined && page > 1 ? page : undefined,
     pageSize: pageSize !== 25 ? pageSize : undefined,
