@@ -280,6 +280,8 @@ export interface OrderCommandPayload {
     /** Omitted on commands queued before the freight existed (the server keeps the current one on replace). */
     readonly freightType?: FreightType;
     readonly notes: string | null;
+    /** Informational mark (server field `discountAboveLimitAccepted`); sent only when `true`, absent on older commands (= false). */
+    readonly discountAboveLimitAccepted?: true;
     readonly items: readonly { productCode: number; quantity: string; discountPercent?: string }[];
   };
   readonly prices: readonly { productCode: number; description: string; unitPrice: string | null }[];
@@ -610,7 +612,7 @@ export async function listAttentionItems(db: SqlExecutor, ownerAccountId: string
 
 /* ---------- payload ---------- */
 
-export function buildPayload(input: Pick<SaveDraftInput, "customerCode" | "negotiationTypeCode" | "topCode" | "carrierCode" | "freightType" | "notes" | "items">): OrderCommandPayload {
+export function buildPayload(input: Pick<SaveDraftInput, "customerCode" | "negotiationTypeCode" | "topCode" | "carrierCode" | "freightType" | "notes" | "items" | "discountOverLimitAccepted">): OrderCommandPayload {
   return {
     request: {
       customerCode: input.customerCode,
@@ -619,6 +621,7 @@ export function buildPayload(input: Pick<SaveDraftInput, "customerCode" | "negot
       carrierCode: input.carrierCode ?? null,
       ...(input.freightType !== undefined && input.freightType !== null ? { freightType: input.freightType } : {}),
       notes: input.notes,
+      ...(input.discountOverLimitAccepted === true ? { discountAboveLimitAccepted: true as const } : {}),
       items: input.items.map((item) => ({
         productCode: item.productCode,
         quantity: item.quantity,
@@ -721,7 +724,7 @@ export async function saveOrderDraft(db: SqlDatabase, env: OfflineEnv, input: Sa
     // A customer the ERP has not confirmed yet cannot receive an order (customer-write plan A2): nothing is saved.
     if (pendingCustomerBlockOf(input.customerCode) !== null) throw new PendingCustomerOrderError();
     const now = isoNow(env);
-    const payload = buildPayload(input);
+    let payload = buildPayload(input);
 
     // The dataset the server last confirmed: a new draft is stamped with it (it was priced against that data). Without a
     // confirmed identity nothing is created: the order could not be tied to a dataset.
@@ -755,6 +758,8 @@ export async function saveOrderDraft(db: SqlDatabase, env: OfflineEnv, input: Sa
     const draft = await getDraft(tx, input.localId);
     if (draft !== null && draft.ownerAccountId === input.ownerAccountId && input.discountOverLimitAccepted === true) await markDiscountOverLimit(tx, draft.localId);
     if (draft === null || draft.ownerAccountId !== input.ownerAccountId) throw new DraftNotEditableError("Pedido não encontrado neste aparelho.");
+    // The mark is one-way: a later command of the same order keeps carrying it.
+    if (draft.discountOverLimitAccepted && input.discountOverLimitAccepted !== true) payload = buildPayload({ ...input, discountOverLimitAccepted: true });
     // A draft of another dataset (or a legacy one) is never edited: its commands would carry the old identity and be refused.
     if (!isOperationalEligibility(draft.eligibility) || !sameDataset(draft.dataset, confirmed)) {
       throw new DraftNotEditableError("Este pedido é de outro conjunto de dados e não pode ser alterado.");

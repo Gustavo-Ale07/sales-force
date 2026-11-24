@@ -139,6 +139,7 @@ export function toRemoteOrder(order: OrderDetail): RemoteOrder {
     carrierCode: order.carrierCode,
     freightType: order.freightType,
     notes: order.notes,
+    ...(order.discountAboveLimitAccepted === undefined ? {} : { discountAboveLimitAccepted: order.discountAboveLimitAccepted }),
     estimatedTotal: order.estimatedTotal,
     items: order.items.map((item) => ({
       productCode: item.productCode,

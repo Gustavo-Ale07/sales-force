@@ -65,6 +65,8 @@ export interface RemoteOrder {
   /** Absent on a server older than the freight field. */
   readonly freightType?: "CIF" | "FOB" | "SEM_FRETE" | null;
   readonly notes: string | null;
+  /** Informational mark; absent on an older server (= false). */
+  readonly discountAboveLimitAccepted?: boolean;
   readonly estimatedTotal: string;
   readonly items: readonly RemoteOrderItem[];
 }
@@ -401,6 +403,7 @@ async function applyAccepted(db: SqlDatabase, env: OfflineEnv, op: OutboxRecord,
       [remote.id, remote.version, remote.draftNumber, remote.estimatedTotal, draftId],
     );
     if (review.length > 0) await tx.execute("UPDATE local_order_draft SET price_review = ? WHERE local_id = ?", [JSON.stringify(review), draftId]);
+    if (remote.discountAboveLimitAccepted === true) await tx.execute("UPDATE local_order_draft SET discount_over_limit_accepted = 1 WHERE local_id = ?", [draftId]);
     if (review.length > 0) {
       await tx.execute("UPDATE outbox SET state = 'needs_review', last_error = NULL, next_attempt_at = NULL, updated_at = ? WHERE local_id = ?", [isoNow(env), op.localId]);
     } else {

@@ -682,7 +682,7 @@ export function NewOrderScreen({
   }
 
   /** Marked once the seller accepted a discount above a limit (this session or a saved draft): no further question in this order. */
-  const overLimitAccepted = discountAccepted || (localDraft?.discountOverLimitAccepted ?? false);
+  const overLimitAccepted = discountAccepted || (localDraft?.discountOverLimitAccepted ?? false) || editingOrder?.discountAboveLimitAccepted === true;
   const latest = useRef({ lines, overLimitAccepted });
   latest.current = { lines, overLimitAccepted };
 
@@ -1022,6 +1022,7 @@ export function NewOrderScreen({
         ...(carrierCode === null && (editingOrder?.carrierCode ?? null) === null ? {} : { carrierCode }),
         ...(freightType === null ? {} : { freightType }),
         notes: notesValue,
+        ...(overLimitAccepted ? { discountAboveLimitAccepted: true } : {}),
         items: toRequestItems(lines),
       };
       if (editingOrder !== null) {
