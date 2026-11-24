@@ -1,5 +1,5 @@
 import { erpStageViewOf } from "./erp-stage";
-import { CUSTOMER_UNAVAILABLE_MESSAGE, LEGACY_CUSTOMER_UNAVAILABLE_MESSAGE, isCustomerUnavailableMessage, PRODUCT_BLOCK_MESSAGES, type DraftRecord, isConfirmedLocked, type SalesGroup } from "@salesforce/mobile-db";
+import { CUSTOMER_UNAVAILABLE_MESSAGE, LEGACY_CUSTOMER_UNAVAILABLE_MESSAGE, isCustomerUnavailableMessage, PRODUCT_BLOCK_MESSAGES, type DraftRecord, isConfirmedLocked, draftErpNumber, type SalesGroup } from "@salesforce/mobile-db";
 
 /**
  * "Enviados" means accepted by the Force backend — NOT delivered to, confirmed by or invoiced in Sankhya. The device carries no
@@ -28,7 +28,7 @@ const STAGE_OVERRIDES_PHASE: readonly (SendPhase | null)[] = [null, "in_sankhya"
  * send flag and the server order status it stored. `null` = the seller never asked to send (the order is only saved).
  * "Enviado ao Sankhya" appears only when the SERVER said queued or sent; unknown/awaiting approval have their own wording.
  */
-export type SendPhase = "waiting" | "refused" | "in_sankhya" | "verifying" | "awaiting_approval" | "approval_rejected" | "approved";
+export type SendPhase = "waiting" | "refused" | "rejected" | "in_sankhya" | "verifying" | "awaiting_approval" | "approval_rejected" | "approved";
 
 export function sendPhaseOf(view: SendView): SendPhase | null {
   if (view.sendState === "requested") return "waiting";
@@ -42,6 +42,8 @@ export function sendPhaseOf(view: SendView): SendPhase | null {
       return "verifying";
     case "awaiting_approval":
       return "awaiting_approval";
+    case "rejected":
+      return "rejected";
     case "approval_rejected":
       return "approval_rejected";
     case "approved":
@@ -80,6 +82,7 @@ export function saleBadge(view: StatusView): SaleBadge {
     switch (phase) {
       case "waiting":
         return { label: "Aguardando envio", tone: "warning" };
+      case "rejected":
       case "refused":
         return { label: "Precisa de correção", tone: "danger" };
       case "in_sankhya":
@@ -125,6 +128,8 @@ export function saleExplanation(draft: Pick<DraftRecord, "status" | "remoteId" |
     switch (phase) {
       case "waiting":
         return "Salvo neste aparelho. Será enviado ao Sankhya assim que possível.";
+      case "rejected":
+        return "Precisa de correção. Edite o pedido e confirme de novo.";
       case "refused":
         return `Precisa de correção. ${draft.sendError ?? ""} Corrija o que for preciso e confirme de novo.`.replace(/\s+/g, " ").trim();
       case "in_sankhya":
@@ -164,6 +169,7 @@ export function saleActionableExplanation(draft: Parameters<typeof saleExplanati
     draft.status === "conflict" ||
     draft.status === "needs_review" ||
     phase === "refused" ||
+    phase === "rejected" ||
     phase === "approval_rejected";
   return actionable ? saleExplanation(draft) : null;
 }
@@ -182,11 +188,13 @@ export interface SaleActions {
  * What the seller may do with an order. A synced order is never edited or removed from here (no explicit rule for it
  * exists); a copy of it can be made. The database still refuses an unsafe delete on its own.
  */
-export function saleActions(draft: Pick<DraftRecord, "status" | "remoteId"> & Partial<Pick<DraftRecord, "lastError">> & SendView): SaleActions {
+export function saleActions(draft: Pick<DraftRecord, "status" | "remoteId"> & Partial<Pick<DraftRecord, "lastError" | "erpNumber" | "erpStage">> & SendView): SaleActions {
   const held = draft.remoteId !== null;
   // A sent order (queued/sent/unknown on the server) is read-only: no edit, no delete, no second send. A refused send, or an order
   // waiting for / rejected in the discount approval, goes back to the seller for editing. A plain saved order can be sent from the detail.
-  const sentToErp = draft.sendState === "submitted" && sendPhaseOf(draft) !== "awaiting_approval" && sendPhaseOf(draft) !== "approval_rejected";
+  const hasErpNumber = draftErpNumber({ erpNumber: draft.erpNumber ?? null, erpStage: draft.erpStage ?? null }) !== null;
+  // "rejected" (Precisa de correção) is editable only while it has no Sankhya number (SNK-4).
+  const sentToErp = draft.sendState === "submitted" && sendPhaseOf(draft) !== "awaiting_approval" && sendPhaseOf(draft) !== "approval_rejected" && !(sendPhaseOf(draft) === "rejected" && !hasErpNumber);
   // Editable: "Salvo no aparelho" and "Precisa de correção" (and held orders). Blocked: "Aguardando envio" and "Enviado ao Sankhya".
   const confirmedLocked = isConfirmedLocked({ sendState: draft.sendState ?? null, status: draft.status });
   return {

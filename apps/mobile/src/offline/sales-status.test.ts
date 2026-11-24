@@ -168,3 +168,15 @@ describe("saleActionableExplanation", () => {
     expect(saleActionableExplanation(draftRecord({ status: "conflict" }))).toMatch(/alterado em outro lugar/);
   });
 });
+
+describe("rejected (Precisa de correção)", () => {
+  const base = { status: "synced" as const, remoteId: "r1", sendState: "submitted" as const, sendCode: "rejected" };
+  it("is labelled Precisa de correção and editable only without a Sankhya number", () => {
+    const draft = draftRecord({ ...base, erpNumber: null });
+    expect(saleBadge(draft)).toEqual({ label: "Precisa de correção", tone: "danger" });
+    expect(saleActions(draft).continue).toBe(true);
+    const numbered = draftRecord({ ...base, erpNumber: 123 });
+    expect(saleBadge(numbered).label).toBe("Precisa de correção");
+    expect(saleActions(numbered).continue).toBe(false);
+  });
+});
