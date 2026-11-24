@@ -7,7 +7,7 @@ import { isDataStale, syncIndicatorView, type SyncDotColor } from "../lib/sync-i
 import { useRefreshStage } from "./order-stage";
 import { RefreshDataDialog } from "./refresh-data-dialog";
 
-const DOT_BG: Record<SyncDotColor, string> = {
+export const DOT_BG: Record<SyncDotColor, string> = {
   green: "bg-[#17693d]",
   yellow: "bg-[#E08A00]",
   red: "bg-[#d10108]",
@@ -65,8 +65,8 @@ function Arrows() {
   );
 }
 
-/** Header dot: colour = state (green ok, yellow instability, red error); click = sync now. White arrows spin while updating. */
-export function SyncIndicator({ role }: { role: string }) {
+/** State shared by the header dot and the profile block: the colour table, the last data time and the refresh overlay switch. */
+export function useSyncState(role: string) {
   const api = useApi();
   const online = useOnline();
   const fetching = useIsFetching();
@@ -88,6 +88,12 @@ export function SyncIndicator({ role }: { role: string }) {
     stale: isDataStale(status.data?.dataAsOf, now),
     retrying: signals.retrying,
   });
+  return { view, dataAsOf: status.data?.dataAsOf ?? null, dialogOpen, setDialogOpen };
+}
+
+/** Header dot: colour = state (green ok, yellow instability, red error); click = sync now. White arrows spin while updating. */
+export function SyncIndicator({ role }: { role: string }) {
+  const { view, dialogOpen, setDialogOpen } = useSyncState(role);
   return (
     <>
     <button

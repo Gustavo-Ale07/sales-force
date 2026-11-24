@@ -154,6 +154,15 @@ describe("Meu perfil e atualização de dados", () => {
     await waitFor(() => expect(document.title).toBe("Meu perfil — Force PLAC"));
   });
 
+  it("shows the Sincronização and Sobre blocks, and Sincronizar agora opens the refresh overlay", async () => {
+    const { user } = renderApp("/perfil", { handlers: { ...shell, "POST /sync/refresh": { body: { id: "0190a000-0000-7000-8000-0000000000f1", status: "pending", phase: "cadastros", progressPercent: 0, requestedAt: "2026-11-06T17:00:00.000Z", startedAt: null, finishedAt: null, hasWarnings: false, reused: false } } } });
+    expect(await screen.findByRole("heading", { name: "Sincronização" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Sobre" })).toBeInTheDocument();
+    expect(screen.getByText("Versão")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Sincronizar agora" }));
+    expect(await screen.findByRole("progressbar", { name: "Progresso da atualização" })).toBeInTheDocument();
+  });
+
   it("says plainly when the account has no seller link", async () => {
     const base = session(true);
     const body = base.body as { account: Record<string, unknown> };
