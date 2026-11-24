@@ -180,6 +180,7 @@ export class OrdersService {
         scope,
         search: query.search,
         status: query.status,
+        group: query.group,
         customerCode: query.customerCode,
         from: query.from,
         to: query.to,

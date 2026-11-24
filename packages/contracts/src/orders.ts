@@ -33,6 +33,13 @@ export const OrderStatusSchema = named(
 export type OrderStatus = z.infer<typeof OrderStatusSchema>;
 
 /**
+ * Group of statuses for the sales tabs (same split as the app): `unsent` = Salvo, Aguardando aprovação, Desconto aprovado,
+ * Desconto reprovado, Aguardando envio and Precisa de correção; `sent` = Enviado ao Sankhya and Conferindo envio (the order already left).
+ */
+export const OrderGroupSchema = named('OrderGroup', z.enum(['unsent', 'sent']));
+export type OrderGroup = z.infer<typeof OrderGroupSchema>;
+
+/**
  * What the customer's own orders RECORDED IN SALES FORCE say about how they buy (order-screen customer strip). Never Sankhya/ERP
  * history (not mirrored): a purchase made elsewhere is not counted, so no "never bought" is derived from this.
  */
@@ -137,6 +144,8 @@ export const OrderStageCodeSchema = z.enum(['sent_to_force', 'send_error', 'quot
 export const OrdersQuerySchema = z.object({
   search: querySearch().optional(),
   status: OrderStatusSchema.optional(),
+  /** Tab group (see {@link OrderGroupSchema}); combines with `status` (both must hold). */
+  group: OrderGroupSchema.optional(),
   customerCode: queryInt(0).optional(),
   /** Period, inclusive on both ends, as calendar dates in the business time zone (America/Sao_Paulo). */
   from: queryDate().optional(),

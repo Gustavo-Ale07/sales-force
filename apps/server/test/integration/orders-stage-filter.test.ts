@@ -123,3 +123,22 @@ describe('GET /orders?stage=', () => {
     expect((await ctx.call('seller1', 'GET', '/orders?stage=banana')).status).toBe(400);
   });
 });
+
+describe('GET /orders?group=', () => {
+  it('unsent and sent split the list with a correct total and paging, within scope', async () => {
+    expect(await list('seller1', 'group=unsent')).toEqual({ ids: sorted('draft', 'queued', 'rejected'), total: 3 });
+    expect(await list('seller1', 'group=sent')).toEqual({ ids: sorted('inReview', 'invoiced', 'sentUnread'), total: 3 });
+    const paged = (await ctx.call('seller1', 'GET', '/orders?group=unsent&pageSize=2&page=2')).body;
+    expect(paged.total).toBe(3);
+    expect((paged.items as Json[]).length).toBe(1);
+    expect(await list('seller2', 'group=sent')).toEqual({ ids: sorted('foreignInReview'), total: 1 });
+    expect(await list('manager', 'group=sent')).toEqual({ ids: sorted('inReview', 'invoiced', 'sentUnread', 'foreignInReview'), total: 4 });
+  });
+
+  it('combines with status and stage, and rejects an unknown group', async () => {
+    expect(await list('seller1', 'group=unsent&status=queued')).toEqual({ ids: sorted('queued'), total: 1 });
+    expect(await list('seller1', 'group=unsent&status=sent')).toEqual({ ids: [], total: 0 });
+    expect(await list('seller1', 'group=sent&stage=invoiced')).toEqual({ ids: sorted('invoiced'), total: 1 });
+    expect((await ctx.call('seller1', 'GET', '/orders?group=banana')).status).toBe(400);
+  });
+});

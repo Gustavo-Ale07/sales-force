@@ -24,6 +24,8 @@ export interface OrderListFilter {
   readonly scope: CustomerScope;
   readonly search?: string | undefined;
   readonly status?: string | undefined;
+  /** Tab group: `unsent` or `sent` (see `ORDER_GROUP_STATUSES`). */
+  readonly group?: 'unsent' | 'sent' | undefined;
   readonly customerCode?: number | undefined;
   /** Inclusive calendar dates (`YYYY-MM-DD`) in {@link BUSINESS_TIME_ZONE}, applied to `dateField`. */
   readonly from?: string | undefined;
@@ -40,6 +42,12 @@ export interface OrderListFilter {
   readonly stage?: OrderStageCode | undefined;
   readonly sort: 'updatedAt' | '-updatedAt' | 'draftNumber' | '-draftNumber' | 'nunota' | '-nunota';
 }
+
+/** Statuses of each sales tab: what has not left yet, and what already did (the delivery being verified counts as sent). */
+export const ORDER_GROUP_STATUSES = {
+  unsent: ['draft', 'awaiting_approval', 'approved', 'approval_rejected', 'queued', 'rejected'],
+  sent: ['sent', 'unknown'],
+} as const;
 
 /** Time zone the period filter is read in (decisions.md: business calculations in America/Sao_Paulo). */
 export const BUSINESS_TIME_ZONE = 'America/Sao_Paulo';
@@ -382,6 +390,7 @@ export class OrdersRepository {
       scopeCondition(filter.scope),
       filter.ids === undefined ? undefined : inArray(salesOrder.id, [...filter.ids]),
       filter.status === undefined ? undefined : eq(salesOrder.status, filter.status),
+      filter.group === undefined ? undefined : inArray(salesOrder.status, [...ORDER_GROUP_STATUSES[filter.group]]),
       filter.customerCode === undefined ? undefined : eqInt(salesOrder.customerCode, filter.customerCode),
       // The bounds are compared against the raw column so the date indexes stay usable.
       filter.from === undefined ? undefined : sql`${dateColumn} >= (${filter.from}::date)::timestamp at time zone ${zone}`,

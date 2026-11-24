@@ -1982,6 +1982,14 @@
             }
           },
           {
+            "name": "group",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/OrderGroup"
+            }
+          },
+          {
             "name": "customerCode",
             "in": "query",
             "required": false,
@@ -7276,6 +7284,13 @@
           "products"
         ],
         "additionalProperties": false
+      },
+      "OrderGroup": {
+        "type": "string",
+        "enum": [
+          "unsent",
+          "sent"
+        ]
       },
       "OrderIpi": {
         "type": "object",

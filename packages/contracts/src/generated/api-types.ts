@@ -1473,6 +1473,8 @@ export interface components {
                 };
             };
         };
+        /** @enum {string} */
+        OrderGroup: "unsent" | "sent";
         OrderIpi: {
             ipiEstimated: components["schemas"]["DecimalString"];
             grandTotalEstimated: components["schemas"]["DecimalString"];
@@ -3456,6 +3458,7 @@ export interface operations {
             query?: {
                 search?: string;
                 status?: components["schemas"]["OrderStatus"];
+                group?: components["schemas"]["OrderGroup"];
                 customerCode?: number;
                 from?: string;
                 to?: string;
