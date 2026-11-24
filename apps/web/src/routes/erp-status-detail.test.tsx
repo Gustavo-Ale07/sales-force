@@ -1,7 +1,7 @@
 import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { erpBillingItemText, erpBillingLabels, erpBillingText, erpReleaseEventText, erpReleaseLabels, erpStatusText } from "../lib/labels";
-import { ORDER_ID, customer, customerDetail, customersPage, orderDetail, orderListItem, ordersPage, orderEntryConfiguration, pricedList, product, productsPage } from "../test/fixtures";
+import { ORDER_ID, customer, customerDetail, customersPage, orderDetail, orderEntryConfiguration, pricedList, product, productsPage } from "../test/fixtures";
 import { renderApp, type Handlers } from "../test/harness";
 
 const sent = { code: 1, label: "Pendente", invoiceNumber: null, checkedAt: "2026-11-03T12:00:00.000Z" };
@@ -57,14 +57,6 @@ describe("billing (faturamento) labels", () => {
 
 describe("release (liberação) on the order screens", () => {
   const checkedAt = "2026-11-10T12:00:00.000Z";
-  it.each([
-    ["awaiting", "Aguardando liberação"],
-    ["released", "Liberado"],
-    ["denied", "Negado"],
-  ] as const)("list: shows %s", async (state, label) => {
-    renderApp("/pedidos", { handlers: { "GET /orders": { body: ordersPage([orderListItem({ erpRelease: { state, checkedAt } })]) } } });
-    expect(await screen.findByText(label)).toBeInTheDocument();
-  });
   it("detail: awaiting reads as a calm sentence with the reason of each event", async () => {
     const erpRelease = {
       state: "awaiting" as const,
@@ -90,10 +82,6 @@ describe("release (liberação) on the order screens", () => {
 });
 
 describe("Sankhya status on the order screens (E2)", () => {
-  it("list: shows the Sankhya label beside the Force status", async () => {
-    renderApp("/pedidos", { handlers: { "GET /orders": { body: ordersPage([orderListItem({ erpStatus: sent })]) } } });
-    expect(await screen.findByText("Sankhya: Pendente")).toBeInTheDocument();
-  });
   it("detail: shows the pending release event named by the configuration", async () => {
     const status = { ...sent, releaseEvents: [{ code: 44, label: "liberação exigida pela TOP" }] };
     renderApp(`/pedidos/${ORDER_ID}`, { handlers: editorHandlers(status) });

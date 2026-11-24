@@ -36,13 +36,13 @@ import { CustomerPicker } from "../components/customer-picker";
 import { DeleteOrderDialog } from "../components/delete-order-dialog";
 import { OrderProductFilter, PRODUCT_MATCH_OPTIONS, useProductLabel, type ProductMatch } from "../components/order-product-filter";
 import { ErpStageChip, stageText } from "../components/order-stage";
-import { ErpBillingBadge, ErpReleaseBadge, OrderStatusBadge } from "../components/order-status-badges";
+import { OrderStatusBadge } from "../components/order-status-badges";
 import { detectPreset, PERIOD_PRESET_OPTIONS, presetRange, todayInSaoPaulo, type PeriodPreset } from "../lib/period-presets";
 import { PrintOrderButton } from "../components/print-order-button";
 import { QueryError } from "../components/query-error";
 import { customerQueryOptions, orderEntryConfigurationQueryOptions, ordersQueryOptions, type OrdersParams } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
-import { deliveryErrorText, erpStatusText, formatCount, orderReference, orderReviewLabel, orderReviewReasons, orderStatusLabels } from "../lib/labels";
+import { deliveryErrorText, formatCount, orderReference, orderReviewLabel, orderReviewReasons, orderStatusLabels } from "../lib/labels";
 import { MAX_ORDER_PRODUCTS, ORDER_DATE_FIELDS, ORDER_STAGE_FILTERS, ORDER_STATUSES, SENT_ORDER_STAGES, UNSENT_ORDER_STATUSES, type OrdersSearch } from "../lib/route-search";
 import { asDate, asOneOf, compact } from "../lib/search-params";
 import { useSearchBox } from "../lib/use-search-box";
@@ -425,18 +425,6 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
                     </TableCell>
                     <TableCell label="Situação">
                       {order.erpStage && order.status === "sent" ? <ErpStageChip stage={order.erpStage} variant="dot" /> : <OrderStatusBadge order={order} variant="dot" />}
-                      {order.erpStatus && !(order.erpStage && order.status === "sent") ? (
-                        <span className="mt-0.5 block text-fg-muted">Sankhya: {erpStatusText(order.erpStatus).label}</span>
-                      ) : null}
-                      {order.erpBilling ? (
-                        <span className="mt-0.5 block">
-                          <ErpBillingBadge state={order.erpBilling.state} variant="dot" />
-                        </span>
-                      ) : order.erpRelease ? (
-                        <span className="mt-0.5 block">
-                          <ErpReleaseBadge state={order.erpRelease.state} variant="dot" />
-                        </span>
-                      ) : null}
                       {order.status === "rejected" && deliveryErrorText(order.erpDelivery) ? (
                         <span className="mt-0.5 block text-fg-muted">{deliveryErrorText(order.erpDelivery)}</span>
                       ) : null}

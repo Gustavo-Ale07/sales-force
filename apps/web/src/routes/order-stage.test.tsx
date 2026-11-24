@@ -4,7 +4,7 @@ import { join, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { ApiSchema } from "@salesforce/contracts/client";
 import { ORDER_STAGE_LABELS } from "@salesforce/domain";
-import { ORDER_STAGE_FILTERS, parseOrdersSearch } from "../lib/route-search";
+import { ORDER_STAGE_FILTERS, parseOrdersSearch, SENT_ORDER_STAGES } from "../lib/route-search";
 import { customer, customerDetail, customersPage, ORDER_ID, orderDetail, orderListItem, ordersPage, product, productsPage } from "../test/fixtures";
 import { apiError, callsTo, openUserMenu, renderApp, type Handlers } from "../test/harness";
 
@@ -247,12 +247,12 @@ describe("Situação no Sankhya: lista de pedidos", () => {
   });
 
   it("the 'Situação no Sankhya' filter offers every stage, narrows the list, keeps `stage` in the URL and shows a removable chip", async () => {
-    const { user, router, calls } = renderApp("/pedidos", { handlers: list() });
+    const { user, router, calls } = renderApp("/pedidos?group=sent", { handlers: list() });
     await screen.findByText("Pedido nº 5001");
     expect(callsTo(calls, "GET", "/orders")[0]?.search.has("stage")).toBe(false);
     const select = screen.getByLabelText("Situação no Sankhya");
     const options = within(select).getAllByRole("option").map((o) => (o as HTMLOptionElement).value);
-    expect(options).toEqual(["", ...ORDER_STAGE_FILTERS]);
+    expect(options).toEqual(["", ...SENT_ORDER_STAGES]);
     await user.selectOptions(select, "invoiced");
     await waitFor(() => expect(screen.queryByText("Pedido nº 5001")).toBeNull());
     expect(screen.getByText("Pedido nº 5002")).toBeInTheDocument();
@@ -320,7 +320,7 @@ describe("parseOrdersSearch: stage", () => {
   });
 
   it("keeps the other filters when the stage is invalid", () => {
-    expect(parseOrdersSearch({ stage: "x", status: "sent", search: "abc" })).toEqual({ status: "sent", search: "abc" });
+    expect(parseOrdersSearch({ stage: "x", status: "sent", search: "abc" })).toEqual({ group: "sent", status: "sent", search: "abc" });
   });
 });
 

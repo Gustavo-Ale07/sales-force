@@ -24,4 +24,12 @@ describe("Vendas: abas Não enviados / Enviados", () => {
     await screen.findAllByText("Comercial Alfa Ltda");
     expect(callsTo(calls, "GET", "/orders").at(-1)?.search.get("group")).toBe("sent");
   });
+
+  it("the list shows ONE situation label per order, with no second line of Sankhya jargon", async () => {
+    const order = orderListItem({ status: "sent", erpStatus: { code: 0, label: "Pendente", invoiceNumber: null, checkedAt: "2026-11-10T12:00:00.000Z" }, erpBilling: { state: "sent" } });
+    renderApp("/pedidos?group=sent", { handlers: { "GET /orders": { body: ordersPage([order]) } } });
+    await screen.findAllByText("Comercial Alfa Ltda");
+    expect(screen.queryByText("Enviado (sem confirmação)")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Sankhya: Pendente/)).not.toBeInTheDocument();
+  });
 });
