@@ -1,11 +1,13 @@
-import { useRef, useState } from "react";
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from "react-native";
 import type { Account, AuthPort, LoginResult } from "../auth/auth-port";
 import { validateLoginForm, type LoginFormErrors } from "../auth/login-form";
 import { APP_ENVIRONMENT_LABEL, APP_VERSION, PRODUCT_NAME } from "../app-info";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import { colors, spacing } from "../theme";
 import { BrandLogo } from "./brand";
+import { Icon } from "./icons";
+import { FieldIcon, LoginArt } from "./login-art";
 import { useInsets } from "./use-insets";
 
 type LoginFailure = Extract<LoginResult, { ok: false }>;
@@ -41,6 +43,16 @@ export function LoginScreen({ auth, onAuthenticated, connectivity }: LoginScreen
   const [errors, setErrors] = useState<LoginFormErrors>({});
   const [failure, setFailure] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+
+  useEffect(() => {
+    const show = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow", () => setKeyboardOpen(true));
+    const hide = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide", () => setKeyboardOpen(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   async function submit() {
     if (submitting) return;
@@ -88,31 +100,39 @@ export function LoginScreen({ auth, onAuthenticated, connectivity }: LoginScreen
         <View style={styles.form}>
           <Text style={styles.welcome}>Bem-vindo(a)!</Text>
           <Text style={styles.welcomeSub}>Acesse sua conta para continuar.</Text>
-          <Text style={styles.label}>Usuário</Text>
-          <TextInput
-            style={[styles.input, errors.username !== undefined && styles.inputError]}
-            value={username}
-            onChangeText={setUsername}
-            placeholder="Digite seu usuário"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            textContentType="username"
-            autoComplete="username"
-            returnKeyType="next"
-            editable={!submitting}
-            onSubmitEditing={() => passwordRef.current?.focus()}
-            accessibilityLabel="Usuário"
-          />
+          <View style={[styles.passwordRow, errors.username !== undefined && styles.inputError]}>
+            <View style={styles.leadIcon}>
+              <FieldIcon name="user" color={colors.textMuted} />
+            </View>
+            <TextInput
+              style={styles.passwordInput}
+              value={username}
+              onChangeText={setUsername}
+              placeholder="Digite seu usuário"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="username"
+              autoComplete="username"
+              returnKeyType="next"
+              editable={!submitting}
+              onSubmitEditing={() => passwordRef.current?.focus()}
+              accessibilityLabel="Usuário"
+            />
+          </View>
           {errors.username !== undefined && <Text style={styles.fieldError}>{errors.username}</Text>}
 
-          <Text style={styles.label}>Senha</Text>
           <View style={[styles.passwordRow, errors.password !== undefined && styles.inputError]}>
+            <View style={styles.leadIcon}>
+              <FieldIcon name="lock" color={colors.textMuted} />
+            </View>
             <TextInput
               ref={passwordRef}
               style={styles.passwordInput}
               value={password}
               onChangeText={setPassword}
+              placeholder="Digite sua senha"
+              placeholderTextColor={colors.textMuted}
               secureTextEntry={!showPassword}
               autoCapitalize="none"
               autoCorrect={false}
@@ -130,7 +150,7 @@ export function LoginScreen({ auth, onAuthenticated, connectivity }: LoginScreen
               accessibilityLabel={showPassword ? "Ocultar senha" : "Mostrar senha"}
               hitSlop={8}
             >
-              <Text style={styles.toggleText}>{showPassword ? "Ocultar" : "Mostrar"}</Text>
+              <FieldIcon name={showPassword ? "eye" : "eyeOff"} color={colors.navy} />
             </Pressable>
           </View>
           {errors.password !== undefined && <Text style={styles.fieldError}>{errors.password}</Text>}
@@ -153,9 +173,18 @@ export function LoginScreen({ auth, onAuthenticated, connectivity }: LoginScreen
             accessibilityRole="button"
             accessibilityLabel="Entrar"
           >
-            {submitting ? <ActivityIndicator color={colors.onNavy} /> : <Text style={styles.buttonText}>Entrar</Text>}
+            {submitting ? (
+              <ActivityIndicator color={colors.onNavy} />
+            ) : (
+              <View style={styles.buttonContent}>
+                <Text style={styles.buttonText}>Entrar</Text>
+                <Icon name="arrow" color={colors.onNavy} size={24} />
+              </View>
+            )}
           </Pressable>
         </View>
+
+        <LoginArt showArt={!keyboardOpen} />
 
         <Text style={styles.footer}>{`${PRODUCT_NAME} · v${APP_VERSION}${APP_ENVIRONMENT_LABEL !== null ? ` · ${APP_ENVIRONMENT_LABEL}` : ""}`}</Text>
       </ScrollView>
@@ -228,5 +257,7 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: colors.onNavy, fontSize: 18, fontWeight: "700" },
-  footer: { textAlign: "center", fontSize: 12, color: colors.textMuted, marginTop: "auto" },
+  buttonContent: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  leadIcon: { paddingLeft: spacing.lg, justifyContent: "center" },
+  footer: { textAlign: "center", fontSize: 10, color: "#9aa3b5", paddingBottom: spacing.xs },
 });

@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { Keyboard, Platform } from "react-native";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import type { LoginResult } from "../auth/auth-port";
 import { APP_ENVIRONMENT_LABEL, APP_VERSION, PRODUCT_NAME } from "../app-info";
 import { account, fakeAuth } from "../test-doubles";
@@ -86,6 +87,44 @@ describe("LoginScreen identity and password", () => {
     expect(screen.getByLabelText("Senha")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Entrar" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Mostrar senha" })).toBeTruthy();
+  });
+
+  it("uses field icons instead of visible labels, with accessible names and an eye toggle", async () => {
+    await render(<LoginScreen auth={fakeAuth()} onAuthenticated={jest.fn()} />);
+    expect(screen.queryByText("Usuário")).toBeNull();
+    expect(screen.queryByText("Senha")).toBeNull();
+    expect(screen.queryByText("Mostrar")).toBeNull();
+    expect(screen.getByLabelText("Usuário")).toBeTruthy();
+    expect(screen.getByLabelText("Senha")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Mostrar senha" })).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Mostrar senha" }));
+    expect(screen.getByRole("button", { name: "Ocultar senha" })).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Ocultar senha" }));
+    expect(screen.getByLabelText("Senha").props.secureTextEntry).toBe(true);
+  });
+
+  it("shows the artwork and the tagline, hides the artwork (not the tagline) while the keyboard is open", async () => {
+    const handlers = new Map<string, () => void>();
+    const spy = jest.spyOn(Keyboard, "addListener").mockImplementation(((event: string, handler: () => void) => {
+      handlers.set(event, handler);
+      return { remove: jest.fn() };
+    }) as unknown as typeof Keyboard.addListener);
+    await render(<LoginScreen auth={fakeAuth()} onAuthenticated={jest.fn()} />);
+    expect(screen.getByTestId("login-art", { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.getByText("ARTIGOS PARA FESTAS\n& CONFEITARIA")).toBeTruthy();
+    await act(() => {
+      handlers.get(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow")?.();
+    });
+    spy.mockRestore();
+    expect(screen.queryByTestId("login-art", { includeHiddenElements: true })).toBeNull();
+    expect(screen.getByText("ARTIGOS PARA FESTAS\n& CONFEITARIA")).toBeTruthy();
+  });
+
+  it("keeps the arrow after the Entrar label and the version line as the last item", async () => {
+    await render(<LoginScreen auth={fakeAuth()} onAuthenticated={jest.fn()} />);
+    expect(screen.getByRole("button", { name: "Entrar" })).toBeTruthy();
+    const texts = screen.getAllByText(/./).map((node) => String(node.props.children));
+    expect(texts[texts.length - 1]).toMatch(/^Force · v[0-9]/);
   });
 
   it("explains that signing in needs a connection when the device is offline", async () => {
