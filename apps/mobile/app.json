@@ -2,7 +2,7 @@
   "expo": {
     "name": "Force",
     "slug": "force",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "orientation": "portrait",
     "icon": "./assets/brand/icon-p.png",
     "userInterfaceStyle": "light",
@@ -13,7 +13,7 @@
     },
     "android": {
       "package": "br.com.plac.salesforce.dev",
-      "versionCode": 1
+      "versionCode": 2
     },
     "extra": {
       "notice": "Identificadores de pacote provisorios de desenvolvimento; o identificador definitivo depende da conta de loja (MOB-3) e nao foi decidido.",
@@ -29,6 +29,14 @@
         }
       ],
       "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permite escolher uma foto de perfil da galeria.",
+          "cameraPermission": "Permite tirar uma foto de perfil com a câmera.",
+          "microphonePermission": false
+        }
+      ],
       [
         "expo-splash-screen",
         {
