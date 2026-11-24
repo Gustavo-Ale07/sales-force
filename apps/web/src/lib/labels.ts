@@ -12,12 +12,12 @@ import type { Tone } from "@salesforce/ui";
 export const orderStatusLabels: Record<ApiSchema<"OrderStatus">, { label: string; tone: Tone }> = {
   draft: { label: "Salvo", tone: "neutral" },
   awaiting_approval: { label: "Aguardando aprovação", tone: "warning" },
-  approved: { label: "Aprovado", tone: "info" },
-  approval_rejected: { label: "Reprovado na aprovação", tone: "danger" },
-  queued: { label: "Aguardando envio", tone: "info" },
+  approved: { label: "Desconto aprovado", tone: "info" },
+  approval_rejected: { label: "Desconto reprovado", tone: "danger" },
+  queued: { label: "Aguardando envio", tone: "warning" },
   sent: { label: "Enviado ao Sankhya", tone: "success" },
   rejected: { label: "Precisa de correção", tone: "danger" },
-  unknown: { label: "Verificando envio…", tone: "info" },
+  unknown: { label: "Conferindo envio", tone: "info" },
 };
 
 /**

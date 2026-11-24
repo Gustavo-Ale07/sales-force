@@ -1,5 +1,4 @@
 import {
-  Badge,
   Button,
   EmptyState,
   FieldError,
@@ -17,7 +16,8 @@ import {
   titleCase,
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Minus, Plus } from "lucide-react";
+import { isRemovalText, stepQuantity } from "../lib/quantity-stepper";
 import { useState } from "react";
 import { productsQueryOptions } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
@@ -50,8 +50,83 @@ export interface ProductBrowserProps {
   cartQuantities: ReadonlyMap<number, string>;
   /** Adds the product with an already validated quantity text and discount text (comma decimal separator; empty discount = none). */
   onAdd: (product: ProductRow, quantityText: string, discountText: string) => void;
+  /** Sets the quantity of a product already in the cart (validated text, comma decimal). */
+  onSetQuantity: (product: ProductRow, quantityText: string) => void;
+  /** Takes the product out of the cart (quantity zero or cleared). */
+  onRemove: (product: ProductRow) => void;
   /** Id of the search field, so the editor can move the focus back to it. */
   searchId: string;
+}
+
+const stepButton =
+  "inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-line bg-surface text-fg hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1";
+
+/** "- field +" in the action cell of a product that is in the cart (same as the app); zero or cleared removes it. */
+function CartQuantityControl({
+  product,
+  quantityText,
+  onSetQuantity,
+  onRemove,
+}: {
+  product: ProductRow;
+  quantityText: string;
+  onSetQuantity: (product: ProductRow, quantityText: string) => void;
+  onRemove: (product: ProductRow) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const step = product.quantityStep ?? null;
+  const errorId = `product-cart-qty-error-${product.code}`;
+  const apply = (next: string | null) => (next === null ? onRemove(product) : onSetQuantity(product, next));
+  const commit = () => {
+    if (draft === null) return;
+    if (isRemovalText(draft)) {
+      setDraft(null);
+      onRemove(product);
+      return;
+    }
+    const parsed = parseQuantityInput(draft, step);
+    if (!parsed.ok) {
+      setProblem(quantityProblemText(parsed.problem, step));
+      return;
+    }
+    setProblem(null);
+    setDraft(null);
+    onSetQuantity(product, draft.trim());
+  };
+  return (
+    <div className="flex w-[148px] min-w-0 flex-col">
+      <div className="flex items-center gap-1">
+        <button type="button" className={stepButton} aria-label={`Diminuir quantidade de ${product.description}`} onClick={() => apply(stepQuantity(quantityText, -1, step))}>
+          <Minus size={14} aria-hidden="true" />
+        </button>
+        <Input
+          size="sm"
+          inputMode="decimal"
+          autoComplete="off"
+          className="min-w-0 flex-1 text-center"
+          value={draft ?? quantityText}
+          aria-label={`Quantidade de ${product.description} no carrinho`}
+          aria-invalid={problem ? true : undefined}
+          aria-describedby={problem ? errorId : undefined}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            setProblem(null);
+          }}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+            event.preventDefault();
+            commit();
+          }}
+        />
+        <button type="button" className={stepButton} aria-label={`Aumentar quantidade de ${product.description}`} onClick={() => apply(stepQuantity(quantityText, 1, step))}>
+          <Plus size={14} aria-hidden="true" />
+        </button>
+      </div>
+      {problem ? <FieldError id={errorId}>{problem}</FieldError> : null}
+    </div>
+  );
 }
 
 /**
@@ -59,7 +134,7 @@ export interface ProductBrowserProps {
  * quantity field per row. Filters that need data the installation does not have (promotion, purchase history, best
  * sellers, stock-outs) are deliberately absent, see VIDYA_GAPS.
  */
-export function ProductBrowser({ filters, onFiltersChange, customerCode, cartQuantities, onAdd, searchId }: ProductBrowserProps) {
+export function ProductBrowser({ filters, onFiltersChange, customerCode, cartQuantities, onAdd, onSetQuantity, onRemove, searchId }: ProductBrowserProps) {
   const api = useApi();
   const { search, group, page } = filters;
   const [quantities, setQuantities] = useState<Record<number, string>>({});
@@ -159,7 +234,7 @@ export function ProductBrowser({ filters, onFiltersChange, customerCode, cartQua
                       <span className="flex items-center gap-2">
                         <ProductImage image={product.image} description={product.description} name={titleCase(product.description)} />
                         <span className="min-w-0">
-                          <span className="font-medium">{titleCase(product.description)}</span>
+                          <span className="line-clamp-2 break-words font-medium">{titleCase(product.description)}</span>
                           {product.groupName ? <span className="block text-fg-muted">{product.groupName}</span> : null}
                         </span>
                       </span>
@@ -169,9 +244,7 @@ export function ProductBrowser({ filters, onFiltersChange, customerCode, cartQua
                       <PriceCell price={product.listPrice} />
                     </TableCell>
                     <TableCell>
-                      {inCart !== undefined ? (
-                        <Badge tone="success">No carrinho: {inCart}</Badge>
-                      ) : (
+                      {inCart !== undefined ? null : (
                         <>
                           <Input
                             size="sm"
@@ -229,7 +302,9 @@ export function ProductBrowser({ filters, onFiltersChange, customerCode, cartQua
                       )}
                     </TableCell>
                     <TableCell>
-                      {inCart !== undefined ? null : (
+                      {inCart !== undefined ? (
+                        <CartQuantityControl product={product} quantityText={inCart} onSetQuantity={onSetQuantity} onRemove={onRemove} />
+                      ) : (
                         <Button
                           type="button"
                           size="sm"

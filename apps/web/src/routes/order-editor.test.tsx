@@ -305,7 +305,7 @@ describe("Novo pedido", () => {
     expect(screen.getByRole("button", { name: "Carrinho (1)" })).toBeInTheDocument();
     expect(screen.getAllByLabelText("Quantidade de Balão látex 9 pol. vermelho")).toHaveLength(1);
     await user.click(screen.getByRole("button", { name: "Produtos" }));
-    expect(await screen.findByText("No carrinho: 1")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Quantidade de Balão látex 9 pol. vermelho no carrinho")).toHaveValue("1");
     expect(screen.queryByRole("button", { name: /^Adicionar Balão/ })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^Carrinho/ }));
 
@@ -358,7 +358,7 @@ describe("Novo pedido", () => {
       await user.type(search, "bal");
       const quantity = await screen.findByLabelText("Quantidade de Balão látex 9 pol. vermelho a adicionar");
       await user.type(quantity, "2,5{Enter}");
-      expect(await screen.findByText("No carrinho: 2,5")).toBeInTheDocument();
+      expect(await screen.findByLabelText("Quantidade de Balão látex 9 pol. vermelho no carrinho")).toHaveValue("2,5");
       expect(screen.getByRole("button", { name: "Carrinho (1)" })).toHaveAttribute("aria-pressed", "false");
 
       await user.click(screen.getByRole("button", { name: "Carrinho (1)" }));
@@ -969,7 +969,7 @@ describe("Rascunho existente", () => {
       approval: { requestedLevel: "manager", requestedAt: "2026-09-20T12:00:00.000Z", decision: "rejected", decidedAt: "2026-09-20T13:00:00.000Z", decidedByName: "Marina Gerente", comment: "Desconto alto demais" },
     });
     renderApp(`/pedidos/${ORDER_ID}`, { handlers: existing(rejected) });
-    expect(await screen.findByText("Desconto reprovado")).toBeInTheDocument();
+    expect(await screen.findAllByText("Desconto reprovado")).not.toHaveLength(0);
     expect(screen.getByText(/Marina Gerente/)).toBeInTheDocument();
     expect(screen.getByText(/Desconto alto demais/)).toBeInTheDocument();
     expect(screen.queryByText("Somente leitura")).not.toBeInTheDocument();

@@ -7,12 +7,12 @@ type OrderDetail = ApiSchema<"OrderDetail">;
 export const orderDocumentStatusLabels: Record<ApiSchema<"OrderStatus">, string> = {
   draft: "Não enviado",
   awaiting_approval: "Aguardando aprovação",
-  approved: "Aprovado",
-  approval_rejected: "Reprovado na aprovação",
+  approved: "Desconto aprovado",
+  approval_rejected: "Desconto reprovado",
   queued: "Aguardando envio",
   sent: "Enviado ao Sankhya",
   rejected: "Precisa de correção",
-  unknown: "Verificando envio…",
+  unknown: "Conferindo envio",
 };
 
 export const freightTypeLabels: Record<NonNullable<OrderDetail["freightType"]>, string> = {

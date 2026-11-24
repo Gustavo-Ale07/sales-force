@@ -823,7 +823,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
         </Alert>
       ) : null}
       {order?.status === "unknown" ? (
-        <Alert tone="info" title="Verificando envio…">
+        <Alert tone="info" title="Conferindo envio">
           {order.erpNumber == null
             ? "Estamos verificando o envio com o Sankhya. Isso se resolve sozinho em instantes."
             : "O pedido já está no Sankhya; falta só a leitura final. Isso se resolve sozinho em instantes."}
@@ -1051,6 +1051,10 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                   customerCode={customer?.code ?? null}
                   cartQuantities={cartQuantities}
                   searchId={PRODUCT_SEARCH_ID}
+                  onSetQuantity={(product, quantityText) =>
+                    setLines((current) => current.map((line) => (line.productCode === product.code ? { ...line, quantityText } : line)))
+                  }
+                  onRemove={(product) => setLines((current) => current.filter((line) => line.productCode !== product.code))}
                   onAdd={(product, quantityText, discountText) => {
                     if (lines.some((line) => line.productCode === product.code)) {
                       toast({ title: "Produto já está no pedido", description: product.description, tone: "warning" });

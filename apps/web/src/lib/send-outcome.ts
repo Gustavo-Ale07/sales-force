@@ -47,7 +47,7 @@ export function sendOutcomeOf(order: OrderDetail, kind: DocumentKind, timedOut: 
   if (order.status === "unknown") {
     return {
       phase: "verifying",
-      title: "Verificando envio…",
+      title: "Conferindo envio",
       detail: "O Sankhya ainda não respondeu. Nada será duplicado: o Force PLAC confere antes de reenviar.",
       final: true,
     };
