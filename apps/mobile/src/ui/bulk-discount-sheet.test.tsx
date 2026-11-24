@@ -76,9 +76,53 @@ describe.each(CONDITIONS)("BulkDiscountSheet at %s", (_name, width, height, font
     await act(async () => {
       fireEvent.press(screen.getByRole("button", { name: "Aplicar desconto" }));
     });
+    // above the 12% limit: the same sheet asks, nothing is applied yet
+    expect(onApply).not.toHaveBeenCalled();
+    expect(screen.getByText("Acima do limite (2)")).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(screen.getByRole("button", { name: "Sim" }));
+    });
     expect(onApply).toHaveBeenCalledTimes(1);
     const after = onApply.mock.calls[0][1] as typeof lines;
     expect(after.map((line) => line.discountText)).toEqual(["15", "15", ""]);
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("Não closes the sheet and applies nothing; a product without DESCMAX is never listed as above", async () => {
+    const mixed = [
+      lineFromProduct(product(1, { description: "Com limite", listPrice: priced, maxDiscountPercent: "12" }), "a"),
+      lineFromProduct(product(2, { description: "Sem limite", listPrice: priced, maxDiscountPercent: null }), "b"),
+    ];
+    const onApply = jest.fn();
+    const onClose = jest.fn();
+    await render(<BulkDiscountSheet visible lines={mixed} products={fakeProducts()} onApply={onApply} onClose={onClose} />);
+    await act(async () => {
+      fireEvent.changeText(screen.getByLabelText("Desconto (%)"), "30");
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByRole("button", { name: "Aplicar desconto" }));
+    });
+    expect(screen.getByText("Acima do limite (1)")).toBeTruthy();
+    expect(screen.getByText("Dentro do limite (1)")).toBeTruthy();
+    expect(screen.getByText("Com limite: máx. 12%, digitado 30%")).toBeTruthy();
+    expect(screen.getByText("Sem limite")).toBeTruthy();
+    expect(screen.queryByText(/Sem limite: máx/)).toBeNull();
+    await act(async () => {
+      fireEvent.press(screen.getByRole("button", { name: "Não" }));
+    });
+    expect(onApply).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("applies at once, without a question, when nothing is above a limit or the order is already accepted", async () => {
+    const onApply = jest.fn();
+    await render(<BulkDiscountSheet visible lines={lines} products={fakeProducts()} overLimitAccepted onApply={onApply} onClose={jest.fn()} />);
+    await act(async () => {
+      fireEvent.changeText(screen.getByLabelText("Desconto (%)"), "30");
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByRole("button", { name: "Aplicar desconto" }));
+    });
+    expect(onApply).toHaveBeenCalledTimes(1);
   });
 });

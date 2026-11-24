@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react-native";
 import { StyleSheet } from "react-native";
 import { colors } from "../theme";
 import type { CustomerRepository, ProductRepository } from "../data/ports";
@@ -137,9 +137,13 @@ describe("discount above the product limit: bulk and group", () => {
     await cartWith(CODES);
     await bulk("15");
     expect(await screen.findByText(QUESTION)).toBeTruthy();
-    expect(screen.getByText("0 itens dentro do limite · 5 itens acima")).toBeTruthy();
-    await pressAndSettle(screen.getByRole("button", { name: "Ver itens acima do limite" }));
-    expect(screen.getByTestId("app-modal-details").props.children).toContain("Produto 4158: máx. 12%, digitado 15%");
+    expect(screen.getByText("Acima do limite (5)")).toBeTruthy();
+    expect(screen.getByText("Dentro do limite (0)")).toBeTruthy();
+    expect(screen.getByText("Produto 4158: máx. 12%, digitado 15%")).toBeTruthy();
+    // one sheet only: the form is replaced by the question, no second dialog
+    expect(screen.queryByTestId("app-modal-details")).toBeNull();
+    expect(screen.queryByLabelText("Desconto (%)")).toBeNull();
+    for (const code of CODES) expect(valueOf(code)).toBe("");
     await pressAndSettle(screen.getByRole("button", { name: "Sim" }));
     for (const code of CODES) expect(valueOf(code)).toBe("15");
   });
@@ -154,7 +158,12 @@ describe("discount above the product limit: bulk and group", () => {
   it("counts the items within the limit when only some exceed it", async () => {
     await cartWith(CODES, "12", { 3590: "20" });
     await bulk("15");
-    expect(await screen.findByText("1 item dentro do limite · 4 itens acima")).toBeTruthy();
+    expect(await screen.findByText("Acima do limite (4)")).toBeTruthy();
+    expect(screen.getByText("Dentro do limite (1)")).toBeTruthy();
+    expect(within(screen.getByTestId("bulk-discount-confirm")).getByText("Produto 3590")).toBeTruthy();
+    expect(screen.queryByText(/Produto 3590: máx/)).toBeNull();
+    await pressAndSettle(screen.getByRole("button", { name: "Sim" }));
+    for (const code of CODES) expect(valueOf(code)).toBe("15");
   });
 
   it("applies without asking when every item stays within the limit", async () => {

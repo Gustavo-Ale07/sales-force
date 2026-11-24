@@ -85,15 +85,19 @@ export interface OverLimitItem {
 }
 
 /** The lines changed by a bulk apply (`before` -> `after`) whose new discount is above their limit, and how many changed lines stay within it. */
-export function bulkOverLimit(before: readonly EditorLine[], after: readonly EditorLine[]): { over: OverLimitItem[]; within: number } {
+export function bulkOverLimit(before: readonly EditorLine[], after: readonly EditorLine[]): { over: OverLimitItem[]; within: number; withinItems: { key: string; description: string }[] } {
   const over: OverLimitItem[] = [];
+  const withinItems: { key: string; description: string }[] = [];
   let within = 0;
   after.forEach((line, index) => {
     if (line === before[index]) return;
     if (discountExceedsLimit(line)) over.push({ key: line.key, description: line.description, limit: limitText(line.maxDiscountPercent as string), typed: line.discountText.trim().replace(/\s*%$/, "") });
-    else within += 1;
+    else {
+      within += 1;
+      withinItems.push({ key: line.key, description: line.description });
+    }
   });
-  return { over, within };
+  return { over, within, withinItems };
 }
 
 export type QuantityProblem = "empty" | DecimalError;

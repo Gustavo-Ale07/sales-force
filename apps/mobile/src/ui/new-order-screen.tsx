@@ -697,12 +697,11 @@ export function NewOrderScreen({
   const OVER_LIMIT_QUESTION = "Esse desconto é acima do liberado. Tem certeza que deseja utilizar essa %?";
 
   /** One question, "Sim" / "Não", in the app's own dialog; resolves true on "Sim". */
-  function askOverLimit(details?: { message: string; list: string }): Promise<boolean> {
+  function askOverLimit(): Promise<boolean> {
     return new Promise<boolean>((resolve) => {
       modal.show({
         variant: "confirm",
         title: OVER_LIMIT_QUESTION,
-        ...(details === undefined ? {} : { message: details.message, details: details.list, detailsLabel: "Ver itens acima do limite", detailsPlain: true }),
         buttons: [
           { label: "Sim", role: "primary", onPress: () => resolve(true) },
           { label: "Não", role: "cancel", onPress: () => resolve(false) },
@@ -726,19 +725,10 @@ export function NewOrderScreen({
 
   /** A bulk / group / selection apply: applies at once when nothing is above a limit (or the order is already marked); otherwise asks once. */
   function applyBulk(before: readonly EditorLine[], after: EditorLine[], close: () => void) {
-    const { over, within } = bulkOverLimit(before, after);
-    if (over.length === 0 || latest.current.overLimitAccepted) {
-      setLines(after);
-      close();
-      return;
-    }
-    const list = over.map((item) => `${item.description}: máx. ${item.limit}%, digitado ${item.typed}%`).join("\n");
-    void askOverLimit({ message: `${within} ${within === 1 ? "item dentro do limite" : "itens dentro do limite"} · ${over.length} ${over.length === 1 ? "item acima" : "itens acima"}`, list }).then((yes) => {
-      if (!yes) return;
-      setDiscountAccepted(true);
-      setLines(after);
-      close();
-    });
+    // The bulk sheet already asked (one bottom sheet) when something was above a limit; here only the mark is recorded.
+    if (bulkOverLimit(before, after).over.length > 0) setDiscountAccepted(true);
+    setLines(after);
+    close();
   }
 
   /** Writes the order to this device (same path as "Salvar"); returns the stored draft. */
@@ -1367,6 +1357,7 @@ export function NewOrderScreen({
         visible={bulkDiscountOpen}
         lines={lines}
         products={repositories.products}
+        overLimitAccepted={overLimitAccepted}
         onApply={(before, after) => applyBulk(before, after, () => setBulkDiscountOpen(false))}
         onClose={() => setBulkDiscountOpen(false)}
       />
@@ -1375,6 +1366,7 @@ export function NewOrderScreen({
         lines={lines}
         products={repositories.products}
         selectedKeys={selected}
+        overLimitAccepted={overLimitAccepted}
         onApply={(before, after) =>
           applyBulk(before, after, () => {
             setSelectedDiscountOpen(false);
