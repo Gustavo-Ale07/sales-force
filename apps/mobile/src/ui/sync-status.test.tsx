@@ -107,11 +107,25 @@ describe("header sync status", () => {
     expect(style.minWidth).toBeGreaterThanOrEqual(44);
   });
 
-  it("tap opens the standard popup 'Última sincronização às HH:MM' with 'Sincronizar agora'", async () => {
+  it("a short tap on a healthy dot syncs right away", async () => {
+    const onSyncNow = jest.fn();
+    await render(withModal(<HeaderSyncStatus status={idle} connectivity="online" onSyncNow={onSyncNow} />));
+    await fireEvent.press(screen.getByRole("button", { name: /Status de sincronização/ }));
+    expect(onSyncNow).toHaveBeenCalledTimes(1);
+  });
+
+  it("a short tap while syncing does nothing", async () => {
+    const onSyncNow = jest.fn();
+    await render(withModal(<HeaderSyncStatus status={{ ...idle, phase: "syncing" }} connectivity="online" onSyncNow={onSyncNow} />));
+    await fireEvent.press(screen.getByRole("button", { name: /Status de sincronização/ }));
+    expect(onSyncNow).not.toHaveBeenCalled();
+  });
+
+  it("long press opens the standard popup 'Última sincronização às HH:MM' with 'Sincronizar agora'", async () => {
     const onSyncNow = jest.fn();
     const at = new Date(2026, 10, 23, 10, 41).toISOString();
     await render(withModal(<HeaderSyncStatus status={{ ...idle, lastSyncedAt: at }} connectivity="online" onSyncNow={onSyncNow} />));
-    await fireEvent.press(screen.getByRole("button", { name: /Status de sincronização/ }));
+    await fireEvent(screen.getByRole("button", { name: /Status de sincronização/ }), "longPress");
     expect(await screen.findByText("Última sincronização às 10:41")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Ver detalhes" })).toBeNull();
     await fireEvent.press(screen.getByRole("button", { name: "Sincronizar agora" }));

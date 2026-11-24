@@ -1,16 +1,18 @@
-import { render, screen, within } from "@testing-library/react-native";
+import { render, screen } from "@testing-library/react-native";
 import { AccessibilityInfo, StyleSheet } from "react-native";
 import type { SyncStatus } from "@salesforce/mobile-db";
-import { describeSyncChip } from "../offline/sync-status-text";
+import { describeSyncChip, describeSyncIndicator, SYNC_INDICATOR_HEX } from "../offline/sync-status-text";
 import { SyncStatusChip } from "./sync-status";
 import { SyncIcon } from "./sync-icon";
 import { colors } from "../theme";
 
 const idle: SyncStatus = { phase: "idle", pending: 0, needsAttention: 0, lastSyncedAt: null, lastError: null };
 const noop = () => undefined;
+const now = Date.parse("2026-11-12T12:00:00.000Z");
+const fresh = "2026-11-12T11:00:00.000Z";
+const old = "2026-11-10T11:00:00.000Z";
 
 describe("describeSyncChip wording", () => {
-  const now = Date.parse("2026-11-12T12:00:00.000Z");
   it("says Sincronizando… while syncing", () => {
     expect(describeSyncChip({ ...idle, phase: "syncing" }, "online", now)).toEqual({ text: "Sincronizando…", tone: "busy" });
   });
@@ -20,6 +22,31 @@ describe("describeSyncChip wording", () => {
   });
   it("says Falhou. Tentar de novo when the sync failed", () => {
     expect(describeSyncChip({ ...idle, phase: "error", lastError: "x" }, "online", now)).toEqual({ text: "Falhou. Tentar de novo", tone: "error" });
+  });
+});
+
+describe("describeSyncIndicator (state -> color -> label, shared with the site)", () => {
+  const rows: Array<[string, SyncStatus, "online" | "offline", string, string]> = [
+    ["ok", { ...idle, lastSyncedAt: fresh }, "online", "green", "Sincronizado"],
+    ["never synced, nothing pending", idle, "online", "green", "Sincronizado"],
+    ["last sync failed", { ...idle, phase: "error", lastError: "x", lastSyncedAt: fresh }, "online", "red", "Erro na última sincronização"],
+    ["session expired", { ...idle, phase: "auth_required" }, "online", "red", "Erro na última sincronização"],
+    ["order needs correction", { ...idle, needsAttention: 1, lastSyncedAt: fresh }, "online", "red", "Pedido precisa de correção"],
+    ["correction beats offline", { ...idle, needsAttention: 1, pending: 2 }, "offline", "red", "Pedido precisa de correção"],
+    ["offline (device)", { ...idle, lastSyncedAt: fresh }, "offline", "yellow", "Sem conexão"],
+    ["server not answering", { ...idle, phase: "offline", failure: "server_unavailable", lastError: "x" }, "online", "yellow", "Sem conexão"],
+    ["Sankhya unavailable", { ...idle, failure: "sankhya_unavailable", lastSyncedAt: fresh }, "online", "yellow", "Servidor instável, tentando de novo"],
+    ["orders waiting", { ...idle, pending: 3, lastSyncedAt: fresh }, "online", "yellow", "Pedidos aguardando envio"],
+    ["stale data (24 h or more)", { ...idle, lastSyncedAt: old }, "online", "yellow", "Dados desatualizados"],
+  ];
+  it.each(rows)("%s", (_name, status, connectivity, color, label) => {
+    expect(describeSyncIndicator(status, connectivity, now)).toEqual({ color, label, spinning: false });
+  });
+
+  it("syncing: arrows spin and the dot keeps the color of the underlying state", () => {
+    expect(describeSyncIndicator({ ...idle, phase: "syncing", lastSyncedAt: fresh }, "online", now)).toEqual({ color: "green", label: "Sincronizando", spinning: true });
+    expect(describeSyncIndicator({ ...idle, phase: "syncing", pending: 2 }, "online", now)).toEqual({ color: "yellow", label: "Sincronizando. Pedidos aguardando envio", spinning: true });
+    expect(describeSyncIndicator({ ...idle, phase: "syncing", needsAttention: 1 }, "online", now).color).toBe("red");
   });
 });
 
@@ -41,67 +68,41 @@ describe("SyncIcon", () => {
     const style = screen.getByTestId("sync-icon-spinner", { includeHiddenElements: true }).props.style as unknown;
     expect(JSON.stringify(style)).toContain("0deg");
   });
+});
 
-  it("the header indicator shows the spinner while syncing and NO text", async () => {
-    await render(<SyncStatusChip status={{ ...idle, phase: "syncing" }} connectivity="online" onPress={noop} />);
-    expect(screen.getByTestId("sync-icon-spinner", { includeHiddenElements: true })).toBeTruthy();
-    expect(screen.queryByText("Sincronizando…")).toBeNull();
-    expect(screen.getByRole("button", { name: "Status de sincronização: Sincronizando…" })).toBeTruthy();
-  });
-
-  const shapes: Array<[string, SyncStatus, string]> = [
-      ["sync-mark-ok", { ...idle, lastSyncedAt: "2026-01-01T10:00:00.000Z" }, "Sincronizado"],
-      ["sync-mark-busy", { ...idle, phase: "syncing" }, "Sincronizando…"],
-      ["sync-mark-count", { ...idle, pending: 3 }, "Pendências (3)"],
-      ["sync-mark-error", { ...idle, phase: "error", lastError: "x" }, "Falhou. Tentar de novo"],
+describe("header indicator dot", () => {
+  const cases: Array<[string, SyncStatus, "online" | "offline", "green" | "yellow" | "red", string]> = [
+    ["green", { ...idle, lastSyncedAt: fresh }, "online", "green", "Sincronizado"],
+    ["yellow (waiting orders)", { ...idle, pending: 3, lastSyncedAt: fresh }, "online", "yellow", "Pedidos aguardando envio"],
+    ["yellow (offline)", { ...idle, lastSyncedAt: fresh }, "offline", "yellow", "Sem conexão"],
+    ["red (failure)", { ...idle, phase: "error", lastError: "x" }, "online", "red", "Erro na última sincronização"],
+    ["red (needs correction)", { ...idle, needsAttention: 2, lastSyncedAt: fresh }, "online", "red", "Pedido precisa de correção"],
   ];
-  it.each(shapes)("%s: own SHAPE, an accessibility label and no visible word (never color alone)", async (testID, status, label) => {
-    await render(<SyncStatusChip status={status} connectivity="online" onPress={noop} />);
-    expect(screen.getByTestId(testID)).toBeTruthy();
+  it.each(cases)("%s: colored dot, white arrows, label in words, no visible text, no mark", async (_n, status, connectivity, color, label) => {
+    await render(<SyncStatusChip status={status} connectivity={connectivity} now={now} onPress={noop} />);
+    const dot = StyleSheet.flatten(screen.getByTestId(`sync-dot-${color}`).props.style as never) as { backgroundColor: string; width: number; height: number };
+    expect(dot.backgroundColor).toBe(SYNC_INDICATOR_HEX[color]);
+    expect(dot.width).toBeGreaterThanOrEqual(28);
+    expect(dot.width).toBeLessThanOrEqual(32);
     expect(screen.getByRole("button", { name: `Status de sincronização: ${label}` })).toBeTruthy();
     expect(screen.queryByText(label)).toBeNull();
-  });
-
-  it("offline has its own hollow-ring mark, distinct from the others", async () => {
-    await render(<SyncStatusChip status={idle} connectivity="offline" onPress={noop} />);
-    expect(screen.getByTestId("sync-mark-offline")).toBeTruthy();
+    expect(screen.queryByTestId("sync-mark-anchor")).toBeNull();
     expect(screen.getByTestId("sync-arrows", { includeHiddenElements: true })).toBeTruthy();
-  });
-
-  it("is white arrows on the navy header (no white box) in a 44 px touch target", async () => {
-    await render(<SyncStatusChip status={idle} connectivity="online" onPress={noop} />);
-    const button = screen.getByRole("button", { name: /Status de sincronização/ });
-    const flat = StyleSheet.flatten(button.props.style as never) as { minWidth: number; minHeight: number; backgroundColor?: string };
-    expect(flat.minWidth).toBeGreaterThanOrEqual(44);
-    expect(flat.minHeight).toBeGreaterThanOrEqual(44);
-    expect(flat.backgroundColor).toBeUndefined();
     expect(JSON.stringify(screen.toJSON())).toContain(colors.onNavy);
   });
 
-  const centred: Array<[string, SyncStatus, "online" | "offline", string]> = [
-    ["ok", { ...idle, lastSyncedAt: "2026-01-01T10:00:00.000Z" }, "online", "sync-mark-ok"],
-    ["syncing", { ...idle, phase: "syncing" }, "online", "sync-mark-busy"],
-    ["attention", { ...idle, phase: "error", lastError: "x" }, "online", "sync-mark-error"],
-    ["pending", { ...idle, pending: 3 }, "online", "sync-mark-count"],
-    ["offline", idle, "offline", "sync-mark-offline"],
-  ];
-  it.each(centred)("%s: the mark is centred between the arrows, small, and not inside the spinning arrows", async (_name, status, connectivity, testID) => {
-    await render(<SyncStatusChip status={status} connectivity={connectivity} onPress={noop} />);
-    const anchor = StyleSheet.flatten(screen.getByTestId("sync-mark-anchor").props.style as never) as Record<string, unknown>;
-    expect(anchor).toMatchObject({ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" });
-    const mark = StyleSheet.flatten(screen.getByTestId(testID).props.style as never) as Record<string, unknown>;
-    expect(mark.position).toBeUndefined();
-    expect(mark.right).toBeUndefined();
-    expect(mark.bottom).toBeUndefined();
-    expect(Number(mark.height ?? 0)).toBeLessThanOrEqual(12);
-    // The spinner is a sibling, never an ancestor of the mark.
-    const spinner = screen.getByTestId(status.phase === "syncing" ? "sync-icon-spinner" : "sync-arrows", { includeHiddenElements: true });
-    expect(within(spinner).queryByTestId(testID, { includeHiddenElements: true })).toBeNull();
-    expect(within(spinner).queryByTestId("sync-mark-anchor", { includeHiddenElements: true })).toBeNull();
+  it("syncing: spinner inside the dot, which keeps its color", async () => {
+    await render(<SyncStatusChip status={{ ...idle, phase: "syncing", pending: 1 }} connectivity="online" now={now} onPress={noop} />);
+    expect(screen.getByTestId("sync-dot-yellow")).toBeTruthy();
+    expect(screen.getByTestId("sync-icon-spinner", { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Status de sincronização: Sincronizando. Pedidos aguardando envio" })).toBeTruthy();
   });
 
-  it("the amber mark carries the count of waiting changes (9+ when large)", async () => {
-    await render(<SyncStatusChip status={{ ...idle, pending: 12 }} connectivity="online" onPress={noop} />);
-    expect(screen.getByText("9+")).toBeTruthy();
+  it("is a 44 x 44 touch target without a white box", async () => {
+    await render(<SyncStatusChip status={idle} connectivity="online" onPress={noop} />);
+    const flat = StyleSheet.flatten(screen.getByRole("button", { name: /Status de sincronização/ }).props.style as never) as { minWidth: number; minHeight: number; backgroundColor?: string };
+    expect(flat.minWidth).toBeGreaterThanOrEqual(44);
+    expect(flat.minHeight).toBeGreaterThanOrEqual(44);
+    expect(flat.backgroundColor).toBeUndefined();
   });
 });

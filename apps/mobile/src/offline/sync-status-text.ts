@@ -95,3 +95,45 @@ export function describeSyncStatus(status: SyncStatus, connectivity: Connectivit
   const time = status.lastSyncedAt === null ? null : clock(status.lastSyncedAt);
   return { text: time === null ? "Sincronizado" : `Sincronizado às ${time}`, tone: "ok" };
 }
+
+export type SyncIndicatorColor = "green" | "yellow" | "red";
+
+export interface SyncIndicator {
+  readonly color: SyncIndicatorColor;
+  /** State in WORDS (accessibility label, never color alone). */
+  readonly label: string;
+  /** The white arrows spin; the dot keeps `color`. */
+  readonly spinning: boolean;
+}
+
+/** Dot fill per color (the site copies the same table). */
+export const SYNC_INDICATOR_HEX: Record<SyncIndicatorColor, string> = { green: "#17693d", yellow: "#E08A00", red: "#d10108" };
+
+/**
+ * Header sync dot (PAR-1: the site uses the SAME table). First matching row wins:
+ *   state (precedence)                                         -> color  -> label
+ *   1 last sync failed (phase error / session expired)         -> red    -> "Erro na última sincronização"
+ *   2 order(s) needing correction (needsAttention > 0)         -> red    -> "Pedido precisa de correção"
+ *   3 no internet / Force server not answering                 -> yellow -> "Sem conexão"
+ *   4 Sankhya unavailable (partial sync)                       -> yellow -> "Servidor instável, tentando de novo"
+ *   5 orders waiting to be sent (pending > 0)                  -> yellow -> "Pedidos aguardando envio"
+ *   6 last successful sync older than 24 h                     -> yellow -> "Dados desatualizados"
+ *   7 otherwise                                                -> green  -> "Sincronizado"
+ * While syncing the arrows spin and the color is the one of rows 2-7 (row 1 is the previous attempt, so ignored); the label starts with "Sincronizando".
+ */
+export function describeSyncIndicator(status: SyncStatus, connectivity: ConnectivityState, now: number = Date.now()): SyncIndicator {
+  const syncing = status.phase === "syncing";
+  const base = ((): { color: SyncIndicatorColor; label: string } => {
+    if (!syncing && (status.phase === "error" || status.phase === "auth_required")) return { color: "red", label: "Erro na última sincronização" };
+    if (status.needsAttention > 0) return { color: "red", label: "Pedido precisa de correção" };
+    const health = healthOf(status, connectivity);
+    if (health.internet === "down" || health.server === "down") return { color: "yellow", label: "Sem conexão" };
+    if (health.sankhyaDown) return { color: "yellow", label: "Servidor instável, tentando de novo" };
+    if (status.pending > 0) return { color: "yellow", label: "Pedidos aguardando envio" };
+    const at = status.lastSyncedAt === null ? Number.NaN : new Date(status.lastSyncedAt).getTime();
+    if (!Number.isNaN(at) && now - at >= STALE_AFTER_MS) return { color: "yellow", label: "Dados desatualizados" };
+    return { color: "green", label: "Sincronizado" };
+  })();
+  if (!syncing) return { ...base, spinning: false };
+  return { color: base.color, label: base.color === "green" ? "Sincronizando" : `Sincronizando. ${base.label}`, spinning: true };
+}

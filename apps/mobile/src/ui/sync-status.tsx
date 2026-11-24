@@ -3,7 +3,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useInsets } from "./use-insets";
 import type { SyncStatus } from "@salesforce/mobile-db";
 import type { ConnectivityState } from "../connectivity/connectivity";
-import { describeConnection, describeSyncAge, describeSyncChip, describeSyncStatus, type SyncTone } from "../offline/sync-status-text";
+import { describeConnection, describeSyncAge, describeSyncIndicator, describeSyncStatus, SYNC_INDICATOR_HEX, type SyncTone } from "../offline/sync-status-text";
 import { colors, control, spacing } from "../theme";
 import { useAppModal } from "./app-modal";
 import { Icon } from "./icons";
@@ -40,46 +40,29 @@ export interface SyncViewProps {
 }
 
 /**
- * Icon-only header indicator (no text): white circular refresh arrows on the navy header with a small corner dot whose SHAPE says the state
- * (never color alone): up to date = green circle with check, syncing = the arrows spin (still when the system reduces motion), waiting orders =
- * amber pill with the count, offline = hollow ring with a dash, failure = red rounded square with "!".
- * The spoken label carries the full wording. 44 x 44 touch target.
+ * Icon-only header indicator (no text): a colored dot (green / amber / red, see `describeSyncIndicator`) with white refresh arrows inside, no mark.
+ * The arrows spin while syncing (still when the system reduces motion) and the dot keeps its color. The spoken label carries the state in words.
+ * It is also the sync button. Visual dot 30 dp, touch target 44 x 44 plus hitSlop.
  */
-export function SyncStatusChip({ status, connectivity, onPress }: Pick<SyncViewProps, "status" | "connectivity"> & { onPress: () => void }) {
-  const { text, tone } = describeSyncChip(status, connectivity);
-  const syncing = status.phase === "syncing";
-  const color = TONE_COLOR[tone];
-  const waiting = status.pending > 0 && (tone === "pending" || tone === "offline");
-  const markKind = syncing ? "busy" : waiting ? "count" : tone;
+export function SyncStatusChip({
+  status,
+  connectivity,
+  onPress,
+  onLongPress,
+  now,
+}: Pick<SyncViewProps, "status" | "connectivity" | "now"> & { onPress: () => void; onLongPress?: () => void }) {
+  const { color, label, spinning } = describeSyncIndicator(status, connectivity, now);
   return (
-    <Pressable style={styles.chip} onPress={onPress} accessibilityRole="button" accessibilityLabel={`Status de sincronização: ${text}`}>
-      <View style={styles.glyph}>
-        <RefreshArrows testID={syncing ? "sync-icon-spinner" : "sync-arrows"} color={colors.onNavy} size={24} spinning={syncing} />
-        {/* The mark sits in the middle of the ring, between the two arrows, as a sibling of the arrows (so it never spins with them). */}
-        <View testID="sync-mark-anchor" pointerEvents="none" style={styles.markAnchor}>
-          {syncing ? (
-            <View testID="sync-mark-busy" style={styles.markBusy} />
-          ) : (
-            <View
-              testID={`sync-mark-${markKind}`}
-              style={[
-                styles.mark,
-                waiting ? styles.markPill : tone === "error" ? styles.markSquare : tone === "offline" ? styles.markHollow : null,
-                tone === "offline" && !waiting ? { borderColor: color } : { backgroundColor: color },
-              ]}
-            >
-              {waiting ? (
-                <Text style={styles.markCount}>{status.pending > 9 ? "9+" : String(status.pending)}</Text>
-              ) : tone === "ok" ? (
-                <Icon name="check" color={colors.onNavy} size={8} />
-              ) : tone === "offline" ? (
-                <View style={[styles.markDash, { backgroundColor: color }]} />
-              ) : (
-                <Icon name="alert" color={colors.onNavy} size={8} />
-              )}
-            </View>
-          )}
-        </View>
+    <Pressable
+      style={styles.chip}
+      onPress={onPress}
+      {...(onLongPress === undefined ? {} : { onLongPress })}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={`Status de sincronização: ${label}`}
+    >
+      <View testID={`sync-dot-${color}`} style={[styles.dot, { backgroundColor: SYNC_INDICATOR_HEX[color] }]}>
+        <RefreshArrows testID={spinning ? "sync-icon-spinner" : "sync-arrows"} color={colors.onNavy} size={18} spinning={spinning} />
       </View>
     </Pressable>
   );
@@ -185,6 +168,7 @@ export function HeaderSyncStatus(view: SyncViewProps) {
   const modal = useAppModal();
   /** The standard popup: last sync time + "Sincronizar agora"; on failure the reason in seller language, "Ver detalhes" and "Tentar de novo". */
   const showPopup = () => {
+    // (long press always; a short tap syncs right away unless the last attempt failed or orders need correction, then the reason is shown)
     const failed = view.status.phase === "error" || view.status.phase === "auth_required" || view.status.phase === "offline" || view.status.failure != null;
     const { text } = describeSyncStatus(view.status, view.connectivity);
     modal.show({
@@ -200,7 +184,17 @@ export function HeaderSyncStatus(view: SyncViewProps) {
   };
   return (
     <>
-      <SyncStatusChip status={view.status} connectivity={view.connectivity} onPress={showPopup} />
+      <SyncStatusChip
+        status={view.status}
+        connectivity={view.connectivity}
+        {...(view.now === undefined ? {} : { now: view.now })}
+        onPress={() => {
+          if (view.status.phase === "syncing") return;
+          if (describeSyncIndicator(view.status, view.connectivity, view.now).color === "red") showPopup();
+          else view.onSyncNow();
+        }}
+        onLongPress={showPopup}
+      />
       <SyncDetailsSheet
         visible={open}
         onClose={() => setOpen(false)}
@@ -221,16 +215,7 @@ export function HeaderSyncStatus(view: SyncViewProps) {
 
 const styles = StyleSheet.create({
   chip: { minWidth: control.height, minHeight: control.height, alignItems: "center", justifyContent: "center" },
-  glyph: { width: 28, height: 28, alignItems: "center", justifyContent: "center" },
-  // Small state dot on the corner of the white arrows; its SHAPE (circle / pill / rounded square / hollow ring) says the state, not only the color.
-  markAnchor: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" },
-  mark: { width: 12, height: 12, borderRadius: 6, borderWidth: 1, borderColor: colors.navy, alignItems: "center", justifyContent: "center" },
-  markPill: { width: undefined, minWidth: 14, paddingHorizontal: 1, borderRadius: 7 },
-  markSquare: { borderRadius: 3 },
-  markHollow: { backgroundColor: colors.navy, borderColor: colors.warning },
-  markBusy: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.onNavy },
-  markCount: { color: colors.onNavy, fontSize: 8, fontWeight: "800" },
-  markDash: { width: 5, height: 2, borderRadius: 1 },
+  dot: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, gap: spacing.md },
   grabber: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border },
