@@ -8,7 +8,7 @@ import { isAccountPhotoError, renderAccountPhoto, toErpJpeg } from '../media/acc
 import { errorLogFields, type Logger } from '../observability/logger.js';
 import { ACCOUNT_PHOTO_STORE, CLOCK, LOGGER, PROFILE_PHOTO_ERP_WRITE_ENABLED, type Clock } from '../platform/tokens.js';
 import { uuidv7 } from '../platform/ids.js';
-import { AccountPhotoRepository, type AccountPhotoRecord } from './account-photo.repository.js';
+import { AccountPhotoRepository, type AccountPhotoRecord, type PhotoErpUser } from './account-photo.repository.js';
 import { AUDIT_ACTIONS, AuditService } from './audit.service.js';
 import type { CurrentUser } from './current-user.js';
 
@@ -84,9 +84,11 @@ export class AccountPhotoService {
     const version = contentHash.slice(0, 32);
     // The ERP copy is prepared BEFORE the transaction (CPU work, no database held); nothing is queued while the flag is closed.
     let erpImageBase64: string | null = null;
+    let erpUser: PhotoErpUser = { kind: 'none' };
     if (this.erpWriteEnabled) {
       try {
         erpImageBase64 = Buffer.from(await toErpJpeg(rendered.bytes)).toString('base64');
+        erpUser = await this.photos.resolveErpUser(user.accountId);
       } catch (error) {
         await this.discardUnlessKept(store, storageKey, previous);
         if (isAccountPhotoError(error)) throw new AppError('validation_failed', { details: { issues: [{ path: 'dataBase64', code: `photo_${error.code}` }] } });
@@ -109,7 +111,7 @@ export class AccountPhotoService {
         );
         if (erpImageBase64 !== null) {
           // Same transaction as the change (STACK-6): either both exist or neither. Idempotent per account + version.
-          await this.photos.enqueueErpWrite({ id: uuidv7(now.getTime()), accountId: user.accountId, photoVersion: version, imageBase64: erpImageBase64, at: now }, tx);
+          await this.photos.enqueueErpWrite({ id: uuidv7(now.getTime()), accountId: user.accountId, photoVersion: version, imageBase64: erpImageBase64, erpUser, at: now }, tx);
         }
         // Identifiers and sizes only: never image content.
         await this.audit.record(

@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { accountPhoto, integrationOutbox, type Database } from '@salesforce/db';
-import { eq, sql } from 'drizzle-orm';
+import { account, accountPhoto, accountSellerLink, erpDirectoryUser, integrationOutbox, type Database } from '@salesforce/db';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { DATABASE } from '../platform/tokens.js';
 
 export interface AccountPhotoRecord {
@@ -24,6 +24,12 @@ export interface AccountPhotoWrite {
 }
 
 type Writer = Pick<Database, 'insert' | 'delete' | 'select'>;
+
+/** The ERP user (`TSIUSU.CODUSU`) that owns the photo of an account, resolved when the photo is queued (spike S1.8, CFG-2). */
+export type PhotoErpUser =
+  | { readonly kind: 'user'; readonly code: number }
+  | { readonly kind: 'none' }
+  | { readonly kind: 'ambiguous' };
 
 /** Outbox identity of the profile photo write to the ERP (spike S1.8). */
 export const ACCOUNT_PHOTO_AGGREGATE = 'account_photo';
@@ -67,10 +73,31 @@ export class AccountPhotoRepository {
   }
 
   /**
+   * The ERP user of the account: its own external user id (the ERP user code, set for directory logins), else the ONE directory
+   * user linked to its seller (CFG-2). None or more than one is reported, never guessed. Resolved here, in the API, because the
+   * worker's database role cannot read `account`.
+   */
+  async resolveErpUser(accountId: string): Promise<PhotoErpUser> {
+    const [owner] = await this.db.select({ externalUserId: account.externalUserId }).from(account).where(eq(account.id, accountId)).limit(1);
+    const own = owner?.externalUserId ?? null;
+    if (own !== null && /^[1-9][0-9]{0,9}$/.test(own) && Number(own) <= 2_147_483_647) return { kind: 'user', code: Number(own) };
+    const [link] = await this.db.select({ sellerCode: accountSellerLink.sellerCode }).from(accountSellerLink).where(eq(accountSellerLink.accountId, accountId)).limit(1);
+    if (link === undefined) return { kind: 'none' };
+    const users = await this.db
+      .select({ code: erpDirectoryUser.code })
+      .from(erpDirectoryUser)
+      .where(and(eq(erpDirectoryUser.sellerCode, link.sellerCode), isNull(erpDirectoryUser.deletedAt)))
+      .limit(2);
+    if (users.length === 0) return { kind: 'none' };
+    if (users.length > 1) return { kind: 'ambiguous' };
+    return { kind: 'user', code: users[0]!.code };
+  }
+
+  /**
    * Queues the ERP write of one photo version (spike S1.8) in the caller's transaction. Idempotent by the unique origin id
    * `photo:<accountId>:<version>`: the same version is queued once. Answers whether a new row was created.
    */
-  async enqueueErpWrite(input: { id: string; accountId: string; photoVersion: string; imageBase64: string; at: Date }, writer: Pick<Database, 'insert'> = this.db): Promise<boolean> {
+  async enqueueErpWrite(input: { id: string; accountId: string; photoVersion: string; imageBase64: string; erpUser: PhotoErpUser; at: Date }, writer: Pick<Database, 'insert'> = this.db): Promise<boolean> {
     const created = await writer
       .insert(integrationOutbox)
       .values({
@@ -78,7 +105,7 @@ export class AccountPhotoRepository {
         aggregateType: ACCOUNT_PHOTO_AGGREGATE,
         aggregateId: input.accountId,
         operation: ACCOUNT_PHOTO_OPERATION,
-        payload: { version: 1, accountId: input.accountId, photoVersion: input.photoVersion, imageBase64: input.imageBase64 },
+        payload: { version: 1, accountId: input.accountId, photoVersion: input.photoVersion, erpUser: input.erpUser, imageBase64: input.imageBase64 },
         originId: `photo:${input.accountId}:${input.photoVersion}`,
         status: 'pending',
         nextAttemptAt: input.at,

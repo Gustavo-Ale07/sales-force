@@ -1,5 +1,5 @@
-import { accountPhoto, accountSellerLink, erpDirectoryUser, integrationOutbox, account, type Database } from '@salesforce/db';
-import { and, asc, eq, inArray, isNotNull, isNull, lt, lte, sql } from 'drizzle-orm';
+import { integrationOutbox, type Database } from '@salesforce/db';
+import { and, asc, eq, gt, inArray, isNotNull, lt, lte, sql } from 'drizzle-orm';
 import { ACCOUNT_PHOTO_AGGREGATE, ACCOUNT_PHOTO_OPERATION } from '../iam/account-photo.repository.js';
 import { AUDIT_ACTIONS, type AuditService } from '../iam/audit.service.js';
 import { maskStoredError } from '../observability/mask-error-message.js';
@@ -13,14 +13,10 @@ export interface ClaimedPhotoCommand {
   /** `photo:<accountId>:<version>`, the stable idempotency key of the write. */
   readonly originKey: string;
   readonly payload: unknown;
+  readonly createdAt: Date;
   /** Attempts used including the current one. */
   readonly attemptCount: number;
 }
-
-export type ErpUserResolution =
-  | { readonly kind: 'user'; readonly code: number }
-  | { readonly kind: 'none' }
-  | { readonly kind: 'ambiguous' };
 
 export interface PhotoFailureRecord {
   readonly claimed: ClaimedPhotoCommand;
@@ -39,10 +35,11 @@ export interface PhotoFailureRecord {
 export interface ProfilePhotoDeliveryStore {
   recoverStale(now: Date, cutoff: Date): Promise<number>;
   claimNext(now: Date): Promise<ClaimedPhotoCommand | null>;
-  /** The version (prefix of the content hash) of the account's current photo; `null` = no photo any more. */
-  currentVersion(accountId: string): Promise<string | null>;
-  /** The ERP user of the account: its own external user id, else the one directory user of its linked seller (CFG-2). */
-  resolveErpUser(accountId: string): Promise<ErpUserResolution>;
+  /**
+   * A later photo of the same account is queued (any state): this version is no longer the current one and must not be sent, so a
+   * late retry never overwrites a newer photo. Read from the outbox alone (the worker role cannot read `account*`).
+   */
+  hasNewerVersion(claimed: ClaimedPhotoCommand): Promise<boolean>;
   markSending(outboxId: string, at: Date): Promise<void>;
   /** Outbox `confirmed` (image dropped from the payload) and audit: one transaction. */
   confirm(input: { readonly claimed: ClaimedPhotoCommand; readonly userCode: number; readonly at: Date }): Promise<void>;
@@ -110,33 +107,24 @@ export class DrizzleProfilePhotoDeliveryStore implements ProfilePhotoDeliverySto
         .where(eq(integrationOutbox.id, due.id))
         .returning();
       if (row === undefined) return null;
-      return { outboxId: row.id, accountId: row.aggregateId, originKey: row.originId ?? '', payload: row.payload, attemptCount: row.attemptCount };
+      return { outboxId: row.id, accountId: row.aggregateId, originKey: row.originId ?? '', payload: row.payload, createdAt: row.createdAt, attemptCount: row.attemptCount };
     });
   }
 
-  async currentVersion(accountId: string): Promise<string | null> {
-    const [row] = await this.database
-      .select({ version: sql<string>`substring(${accountPhoto.contentHash} from 1 for 32)` })
-      .from(accountPhoto)
-      .where(eq(accountPhoto.accountId, accountId))
+  async hasNewerVersion(claimed: ClaimedPhotoCommand): Promise<boolean> {
+    const [newer] = await this.database
+      .select({ id: integrationOutbox.id })
+      .from(integrationOutbox)
+      .where(
+        and(
+          eq(integrationOutbox.aggregateType, ACCOUNT_PHOTO_AGGREGATE),
+          eq(integrationOutbox.operation, ACCOUNT_PHOTO_OPERATION),
+          eq(integrationOutbox.aggregateId, claimed.accountId),
+          gt(integrationOutbox.createdAt, claimed.createdAt),
+        ),
+      )
       .limit(1);
-    return row?.version ?? null;
-  }
-
-  async resolveErpUser(accountId: string): Promise<ErpUserResolution> {
-    const [owner] = await this.database.select({ externalUserId: account.externalUserId }).from(account).where(eq(account.id, accountId)).limit(1);
-    const own = owner?.externalUserId ?? null;
-    if (own !== null && /^[1-9][0-9]{0,9}$/.test(own) && Number(own) <= 2_147_483_647) return { kind: 'user', code: Number(own) };
-    const [link] = await this.database.select({ sellerCode: accountSellerLink.sellerCode }).from(accountSellerLink).where(eq(accountSellerLink.accountId, accountId)).limit(1);
-    if (link === undefined) return { kind: 'none' };
-    const users = await this.database
-      .select({ code: erpDirectoryUser.code })
-      .from(erpDirectoryUser)
-      .where(and(eq(erpDirectoryUser.sellerCode, link.sellerCode), isNull(erpDirectoryUser.deletedAt)))
-      .limit(2);
-    if (users.length === 0) return { kind: 'none' };
-    if (users.length > 1) return { kind: 'ambiguous' };
-    return { kind: 'user', code: users[0]!.code };
+    return newer !== undefined;
   }
 
   async markSending(outboxId: string, at: Date): Promise<void> {

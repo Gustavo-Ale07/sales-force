@@ -70,17 +70,12 @@ async function world(options: WorldOptions = {}) {
   }
   const repo = new AccountPhotoRepository(db);
 
-  /** The current photo of the account is `hash` and its ERP write is queued (what PUT /me/photo does). */
+  /** The ERP write of photo version `hash` is queued, the ERP user resolved as the API does when `PUT /me/photo` runs. */
   async function queue(hash: string, image: Buffer = JPEG) {
-    await pool.query(
-      `INSERT INTO account_photo (account_id, content_type, byte_length, size_px, content_hash, storage_key)
-       VALUES ($1, 'image/webp', 10, 512, $2, $3)
-       ON CONFLICT (account_id) DO UPDATE SET content_hash = excluded.content_hash, storage_key = excluded.storage_key`,
-      [accountId, hash.padEnd(64, '0'), `k/${hash}`],
-    );
-    const version = hash.padEnd(64, '0').slice(0, 32);
+    clock.ms += 1000;
+    const version = hash.padEnd(32, '0');
     const id = randomUUID();
-    await repo.enqueueErpWrite({ id, accountId, photoVersion: version, imageBase64: image.toString('base64'), at: now() });
+    await repo.enqueueErpWrite({ id, accountId, photoVersion: version, imageBase64: image.toString('base64'), erpUser: await repo.resolveErpUser(accountId), at: now() });
     return { id, version };
   }
   const outbox = async (id: string) => (await db.select().from(integrationOutbox).where(eq(integrationOutbox.id, id)))[0]!;
@@ -100,6 +95,7 @@ describe('profile photo delivery to the ERP (fake gateway)', () => {
     expect(row.erpReference).toBe('77');
     expect(row.nextAttemptAt).toBeNull();
     expect(JSON.stringify(row.payload)).not.toContain('imageBase64');
+    expect((row.payload as { erpUser: unknown }).erpUser).toEqual({ kind: 'user', code: 77 });
     expect(await w.audits('account.photo_erp_written')).toHaveLength(1);
   });
 
@@ -131,7 +127,7 @@ describe('profile photo delivery to the ERP (fake gateway)', () => {
     expect((await w.outbox(id)).status).toBe('rejected');
   });
 
-  it('a version that is no longer the current photo is never sent (a late retry cannot overwrite a newer photo)', async () => {
+  it('a version with a newer one queued is never sent (a late retry cannot overwrite a newer photo)', async () => {
     const w = await world({ externalUserId: '77' });
     const old = await w.queue('e5');
     await w.queue('f6');
@@ -160,6 +156,7 @@ describe('profile photo delivery to the ERP (fake gateway)', () => {
     const { id } = await w.queue('a1');
     w.book.script({ kind: 'error', error: err('unavailable') });
     await w.service.runDue();
+    w.advance(0);
     let row = await w.outbox(id);
     expect(row.status).toBe('unknown');
     expect(row.attemptCount).toBe(1);

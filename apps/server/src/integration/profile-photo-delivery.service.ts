@@ -10,6 +10,12 @@ export const ProfilePhotoCommandSchema = z.object({
   version: z.literal(1),
   accountId: z.string().uuid(),
   photoVersion: z.string().regex(/^[0-9a-f]{32}$/),
+  /** Resolved by the API when the photo was queued (the worker's database role cannot read the account tables). */
+  erpUser: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('user'), code: z.number().int().min(1).max(2_147_483_647) }),
+    z.object({ kind: z.literal('none') }),
+    z.object({ kind: z.literal('ambiguous') }),
+  ]),
   imageBase64: z.string().min(1).max(Math.ceil((USER_PHOTO_MAX_BYTES * 4) / 3) + 4),
 });
 
@@ -60,10 +66,10 @@ export class ProfilePhotoDeliveryService {
     const parsed = ProfilePhotoCommandSchema.safeParse(claimed.payload);
     if (!parsed.success) return this.reject(claimed, 'validation', 'invalid_command', 'The stored command is not valid.');
     const command = parsed.data;
-    if ((await store.currentVersion(claimed.accountId)) !== command.photoVersion) {
-      return this.reject(claimed, 'superseded', 'photo_superseded', 'The photo was replaced or removed before this version was sent.');
+    if (await store.hasNewerVersion(claimed)) {
+      return this.reject(claimed, 'superseded', 'photo_superseded', 'A newer photo was queued before this version was sent.');
     }
-    const user = await store.resolveErpUser(claimed.accountId);
+    const user = command.erpUser;
     if (user.kind === 'none') return this.reject(claimed, 'validation', 'photo_no_erp_user', 'The account has no linked ERP user.');
     if (user.kind === 'ambiguous') return this.reject(claimed, 'validation', 'photo_ambiguous_erp_user', 'More than one ERP user is linked to the account.');
     try {
