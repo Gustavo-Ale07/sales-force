@@ -43,7 +43,7 @@ Lotes (definidos pelo dono): 1 e 2 em andamento hoje; 3 e 4 NÃO iniciar; FORA =
 
 | Item | Site | App | Igual? | Esforço | Servidor? | Lote | Situação | SHA |
 |---|---|---|---|---|---|---|---|---|
-| A–Z em Clientes | falta | existe | não (a igualar) | P | não | 1 | não iniciado | |
+| A–Z em Clientes | feito (servidor: GET /customers/letters) | existe | sim | P | sim | 1 | feito | d331698, 3c67f39 |
 | Ficha do cliente com títulos e pedidos do cliente | existe | falta | não (a igualar) | M | a conferir | 2 | não iniciado | |
 | Cadastro e edição de cliente | existe | divergente | não (a igualar) | G | a conferir | 4 | não iniciado (não iniciar) | |
 
