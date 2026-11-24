@@ -19,7 +19,7 @@ describe("orderStatusView (D-AA)", () => {
   it("colours by state: sent is green, in progress is blue, failures are red, long waits and approvals are amber", () => {
     const tone = (status: Parameters<typeof orderStatusView>[0]["status"], s = 0) => orderStatusView({ status, updatedAt }, at(s)).tone;
     expect(tone("sent")).toBe("success");
-    expect(tone("queued", 30)).toBe("info");
+    expect(tone("queued", 30)).toBe("warning");
     expect(tone("unknown")).toBe("info");
     expect(tone("rejected")).toBe("danger");
     expect(tone("approval_rejected")).toBe("danger");

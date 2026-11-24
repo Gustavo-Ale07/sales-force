@@ -100,7 +100,7 @@ export const SUBMIT_DISABLED_MESSAGE =
   "Envio ao Sankhya desligado nesta instalação. O documento ficou registrado e nada foi enviado.";
 
 /** ORD-1: editable as draft and as rejected-by-approver; editing an order awaiting approval returns it to draft. */
-const EDITABLE_STATUSES: ReadonlySet<OrderDetail["status"]> = new Set(["draft", "approval_rejected", "awaiting_approval"]);
+const EDITABLE_STATUSES: ReadonlySet<OrderDetail["status"]> = new Set(["draft", "approval_rejected", "awaiting_approval", "rejected"]);
 export const SUBMIT_BLOCKED_MESSAGE =
   "O desconto ultrapassa o limite máximo da diretoria. Ele continua salvo, mas não pode ser enviado até reduzir o desconto.";
 export const SUBMIT_AWAITING_MESSAGE = "Pedido enviado para aprovação do desconto. Você será avisado ao abrir o pedido quando houver decisão.";
@@ -393,7 +393,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
       toast({ title: "Reenviando ao Sankhya", description: order ? orderReference(order, docKind) : undefined, tone: "success" });
     },
     onError: (error) => {
-      toast({ title: "Não foi possível reenviar", description: describeApiError(error, "Tente novamente em instantes").description, tone: "danger" });
+      toast({ title: "Não foi possível reenviar", description: submitConflictText(error) ?? describeApiError(error, "Tente novamente em instantes").description, tone: "danger" });
     },
   });
 

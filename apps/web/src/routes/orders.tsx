@@ -48,13 +48,13 @@ import { useSearchBox } from "../lib/use-search-box";
 import { isOrderDeletable } from "@salesforce/domain";
 
 
-function sortDirection(sort: OrdersSearch["sort"], field: "updatedAt" | "draftNumber"): SortDirection | null {
+function sortDirection(sort: OrdersSearch["sort"], field: "updatedAt" | "nunota"): SortDirection | null {
   if (sort === field) return "asc";
   if (sort === `-${field}`) return "desc";
   return null;
 }
 
-function toggleSort(sort: OrdersSearch["sort"], field: "updatedAt" | "draftNumber"): ApiSchema<"OrderSort"> {
+function toggleSort(sort: OrdersSearch["sort"], field: "updatedAt" | "nunota"): ApiSchema<"OrderSort"> {
   return sort === field ? (`-${field}` as ApiSchema<"OrderSort">) : field;
 }
 
@@ -331,8 +331,8 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
           <TableHeader>
             <TableRow>
               <SortableHead
-                direction={sortDirection(currentSort, "draftNumber")}
-                onSort={() => change({ sort: toggleSort(currentSort, "draftNumber") })}
+                direction={sortDirection(currentSort, "nunota")}
+                onSort={() => change({ sort: toggleSort(currentSort, "nunota") })}
               >
                 Pedido
               </SortableHead>

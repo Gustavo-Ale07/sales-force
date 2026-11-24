@@ -1125,6 +1125,16 @@ describe("Rascunho existente", () => {
     expect(callsTo(calls, "POST", `/orders/${ORDER_ID}/submit`)).toHaveLength(1);
   });
 
+  it("a rejected delivery (Precisa de correção) stays editable and Reenviar shows the approval conflict text", async () => {
+    const failed = orderDetail({ status: "rejected", erpDelivery: { errorClass: "validation", errorCode: "environment_mismatch" } });
+    const { user } = renderApp(`/pedidos/${ORDER_ID}`, {
+      handlers: existing(failed, { "POST /orders/:id/submit": apiError(409, "conflict", "x", { details: { reason: "approval_required_before_resend" } }) }),
+    });
+    await user.click(await screen.findByRole("button", { name: "Reenviar" }));
+    expect(await screen.findByText("O pedido foi editado e o desconto precisa de aprovação antes de ser reenviado.")).toBeInTheDocument();
+    expect(screen.queryByText("Somente leitura")).not.toBeInTheDocument();
+  });
+
   it("an unknown delivery says it is being verified and offers Verificar agora, which asks the server once (same order, no resend)", async () => {
     const unknown = orderDetail({ status: "unknown" });
     const { user, calls } = renderApp(`/pedidos/${ORDER_ID}`, {

@@ -15,6 +15,7 @@ const submitConflictTexts: Record<string, string> = {
   dataset_not_erp: "Este pedido foi criado com dados de teste e não pode ser enviado ao Sankhya. Refaça o pedido com um cliente e produtos reais.",
   environment_unbound: "Este pedido não está ligado a um ambiente do Sankhya. Refaça o pedido.",
   environment_mismatch: "Este pedido foi criado para outro ambiente do Sankhya e não pode ser enviado aqui. Refaça o pedido.",
+  approval_required_before_resend: "O pedido foi editado e o desconto precisa de aprovação antes de ser reenviado.",
   edit_before_resubmitting: "O desconto foi reprovado. Edite o pedido antes de enviá-lo novamente.",
   needs_manager_approval: "O desconto deste pedido precisa da aprovação de um gestor antes do envio.",
   invalid_status: "A situação deste pedido não permite o envio.",

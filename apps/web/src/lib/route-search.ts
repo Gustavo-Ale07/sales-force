@@ -56,7 +56,7 @@ export const ORDER_STAGE_FILTERS = ["sent_to_force", "send_error", "quotation", 
 export const MAX_ORDER_PRODUCTS = 20;
 export const ORDER_DATE_FIELDS = ["createdAt", "updatedAt"] as const;
 export const ORDER_PRODUCT_MATCHES = ["any", "all"] as const;
-export const ORDER_SORTS = ["updatedAt", "-updatedAt", "draftNumber", "-draftNumber"] as const;
+export const ORDER_SORTS = ["updatedAt", "-updatedAt", "draftNumber", "-draftNumber", "nunota", "-nunota"] as const;
 
 export function parseOrdersSearch(raw: Record<string, unknown>): OrdersSearch {
   const page = asInt(raw.page, 1);
