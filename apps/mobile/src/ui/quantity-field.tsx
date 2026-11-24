@@ -56,6 +56,7 @@ export function QuantityField({ value, productName, zeroRemoves, onCommit, style
         keyboardType="decimal-pad"
         returnKeyType="done"
         selectTextOnFocus
+        maxFontSizeMultiplier={1.3}
         accessibilityLabel={`Quantidade de ${productName}`}
       />
       {problem !== null && <Text style={styles.error}>{quantityProblemMessages[problem]}</Text>}
@@ -64,8 +65,11 @@ export function QuantityField({ value, productName, zeroRemoves, onCommit, style
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, minWidth: 44 },
+  // minWidth 0 + flexShrink: a native TextInput has a wide intrinsic width and must never size its container.
+  wrap: { flex: 1, flexShrink: 1, minWidth: 0 },
   input: {
+    minWidth: 0,
+    width: "100%",
     minHeight: 44,
     borderWidth: 1,
     borderColor: colors.border,

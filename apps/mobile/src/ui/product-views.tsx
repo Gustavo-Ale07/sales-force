@@ -8,6 +8,9 @@ import { QuantityField } from "./quantity-field";
 
 export type ProductViewMode = "grid" | "list";
 
+/** Width reserved at the right of a list row for "Adicionar" or "- qty +" (40 + 40 for the buttons, the rest for the number). */
+export const ROW_ACTION_WIDTH = 136;
+
 /** Order-mode hooks. Without them the catalog is read-only (consultation). */
 export interface ProductOrderActions {
   /** Whole quantity already in the cart for a product, as typed in its line; absent when not in the cart. */
@@ -78,7 +81,7 @@ function AddControl({ product, quantity, actions }: { product: ProductListItem; 
         accessibilityRole="button"
         accessibilityLabel={`Adicionar ${product.description} ao carrinho`}
       >
-        <Text style={styles.addText}>Adicionar</Text>
+        <Text style={styles.addText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.2}>Adicionar</Text>
       </Pressable>
     );
   }
@@ -90,7 +93,7 @@ function AddControl({ product, quantity, actions }: { product: ProductListItem; 
         accessibilityRole="button"
         accessibilityLabel={quantity === "1" ? `Remover ${product.description} do carrinho` : `Diminuir quantidade de ${product.description}`}
       >
-        <Text style={styles.stepText}>−</Text>
+        <Text style={styles.stepText} maxFontSizeMultiplier={1.2}>−</Text>
       </Pressable>
       {actions.onSetQuantity !== undefined ? (
         <QuantityField
@@ -109,7 +112,7 @@ function AddControl({ product, quantity, actions }: { product: ProductListItem; 
         accessibilityRole="button"
         accessibilityLabel={`${product.description}, já no carrinho, adicionar outra unidade`}
       >
-        <Text style={styles.stepText}>+</Text>
+        <Text style={styles.stepText} maxFontSizeMultiplier={1.2}>+</Text>
       </Pressable>
     </View>
   );
@@ -155,8 +158,12 @@ function RowImpl({ product, quantity, actions }: ViewProps) {
         <Text style={styles.meta} numberOfLines={1}>{`Código ${product.code} · ${product.unit}${product.groupName !== null ? ` · ${product.groupName}` : ""}`}</Text>
         <Text style={[styles.price, noPrice && styles.noPrice]}>{priceLabel(product)}</Text>
       </View>
-      {actions !== undefined && <AddControl product={product} quantity={quantity} actions={actions} />}
-      {actions === undefined && !product.sellable && <Text style={styles.notSellable}>Indisponível</Text>}
+      {actions !== undefined && (
+        <View style={styles.rowAction}>
+          <AddControl product={product} quantity={quantity} actions={actions} />
+        </View>
+      )}
+      {actions === undefined && !product.sellable && <Text style={[styles.notSellable, styles.rowNotice]} numberOfLines={1}>Indisponível</Text>}
     </View>
   );
 }
@@ -176,18 +183,21 @@ const styles = StyleSheet.create({
   cardName: { fontSize: 14, fontWeight: "700", color: colors.text, marginTop: spacing.xs, minHeight: 36 },
   cardAction: { marginTop: spacing.xs, alignItems: "stretch" },
   row: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.sm, marginBottom: spacing.xs + 2, gap: spacing.sm },
-  rowInfo: { flex: 1, gap: 1 },
+  rowInfo: { flex: 1, flexShrink: 1, minWidth: 0, gap: 1 },
+  // Reserved action area: "Adicionar" and "- qty +" occupy the same width, so the quantity never pushes the text out.
+  rowAction: { width: ROW_ACTION_WIDTH, flexShrink: 0, alignItems: "stretch", justifyContent: "center" },
+  rowNotice: { flexShrink: 1, minWidth: 0 },
   rowName: { fontSize: 15, fontWeight: "700", color: colors.text },
   meta: { fontSize: 12, color: colors.textMuted },
   group: { minHeight: 14, fontSize: 11, color: colors.textMuted, opacity: 0.85 },
   price: { fontSize: 15, fontWeight: "800", color: colors.navy },
   noPrice: { color: colors.textMuted, fontStyle: "italic", fontWeight: "600" },
   notSellable: { fontSize: 12, fontWeight: "700", color: colors.warning },
-  add: { minHeight: control.height, minWidth: 88, paddingHorizontal: spacing.md, borderRadius: radius.md, backgroundColor: colors.navy, alignItems: "center", justifyContent: "center" },
+  add: { minHeight: control.height, minWidth: 0, paddingHorizontal: spacing.md, borderRadius: radius.md, backgroundColor: colors.navy, alignItems: "center", justifyContent: "center" },
   addPressed: { opacity: 0.8 },
   addText: { color: colors.onNavy, fontWeight: "700", fontSize: 13 },
-  stepper: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderRadius: radius.md, borderWidth: 1, borderColor: colors.navy, minHeight: 44 },
-  step: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  stepper: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", alignSelf: "stretch", maxWidth: "100%", borderRadius: radius.md, borderWidth: 1, borderColor: colors.navy, minHeight: 44, overflow: "hidden" },
+  step: { width: 40, height: 44, flexShrink: 0, alignItems: "center", justifyContent: "center" },
   stepText: { fontSize: fontSize.title, fontWeight: "700", color: colors.navy },
-  qty: { minWidth: 28, textAlign: "center", fontSize: 15, fontWeight: "800", color: colors.text },
+  qty: { flex: 1, minWidth: 0, textAlign: "center", fontSize: 15, fontWeight: "800", color: colors.text },
 });

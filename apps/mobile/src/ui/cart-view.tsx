@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
   },
   lineSelected: { borderColor: colors.navy, borderWidth: 2 },
   lineHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: spacing.sm },
-  lineHeaderText: { flex: 1, gap: 2 },
+  lineHeaderText: { flex: 1, minWidth: 0, gap: 2 },
   checkbox: {
     width: 22,
     height: 22,
@@ -297,8 +297,8 @@ const styles = StyleSheet.create({
   removeButton: { minHeight: 44, minWidth: 44, justifyContent: "center", alignItems: "flex-end" },
   remove: { color: colors.red, fontWeight: "700", fontSize: 13 },
   fields: { flexDirection: "row", gap: spacing.md, alignItems: "flex-start" },
-  fieldWide: { flex: 3, gap: 4 },
-  fieldNarrow: { flex: 2, gap: 4 },
+  fieldWide: { flex: 3, minWidth: 0, gap: 4 },
+  fieldNarrow: { flex: 2, minWidth: 0, gap: 4 },
   fieldLabel: { fontSize: 12, color: colors.textMuted, fontWeight: "600" },
   stepperRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   stepButton: {
@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
   stepButtonDisabled: { opacity: 0.35 },
   stepText: { fontSize: 22, fontWeight: "700", color: colors.navy, lineHeight: 26 },
   quantityInput: { flex: 1, minWidth: 44, textAlign: "center" },
-  unitBeside: { fontSize: 12, color: colors.textMuted, fontWeight: "600" },
+  unitBeside: { flexShrink: 1, fontSize: 12,color: colors.textMuted, fontWeight: "600" },
   percentRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   percentInput: { flex: 1, minWidth: 48, textAlign: "right" },
   percentSign: { fontSize: 16, fontWeight: "700", color: colors.textMuted },
