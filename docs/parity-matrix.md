@@ -17,6 +17,12 @@ Legenda. **Igual?**: sim / só site por natureza / só app por natureza / limita
 
 Lotes (definidos pelo dono): 1 e 2 em andamento hoje; 3 e 4 NÃO iniciar; FORA = fora de escopo.
 
+## Lote 0 (primeiro item de amanhã, prioridade do dono 24/11)
+
+| Item | Descrição | Servidor? | Situação |
+|---|---|---|---|
+| Pedidos do servidor no app | O sync traz para o aparelho TODOS os pedidos da mesma conta (feitos no site ou em outro aparelho) e mescla na lista local. Usa o nome do cliente que vem no pedido. "Precisa de correção" e "Verificando envio" caem em "Não enviados"; o restante em "Enviados". Mostrar o mesmo texto de erro de "Precisa de correção" nos dois lados. Inclui schema do mobile-db, sync e testes. Causa hoje: a lista do app lê só o banco local (pedidos criados no aparelho); o sync só atualiza o status dos ids já locais. | Sim (sync) | Não iniciado |
+
 ## Vendas e pedidos
 
 | Item | Site | App | Igual? | Esforço | Servidor? | Lote | Situação | SHA |
