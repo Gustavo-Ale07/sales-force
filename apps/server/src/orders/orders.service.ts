@@ -189,6 +189,7 @@ export class OrdersService {
         productMatch: query.productMatch,
         productSearch: query.productSearch,
         ids: query.ids,
+        createdByAccountId: query.mine === true ? user.accountId : undefined,
         stage: query.stage,
         sort: query.sort,
       },

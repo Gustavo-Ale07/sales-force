@@ -2083,6 +2083,18 @@
             }
           },
           {
+            "name": "mine",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
             "name": "customerCode",
             "in": "query",
             "required": false,

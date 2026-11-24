@@ -3534,6 +3534,7 @@ export interface operations {
                 search?: string;
                 status?: components["schemas"]["OrderStatus"];
                 group?: components["schemas"]["OrderGroup"];
+                mine?: "true" | "false";
                 customerCode?: number;
                 from?: string;
                 to?: string;

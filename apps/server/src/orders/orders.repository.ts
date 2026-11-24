@@ -38,6 +38,8 @@ export interface OrderListFilter {
   readonly productSearch?: string | undefined;
   /** Only these orders (still inside the scope). */
   readonly ids?: readonly string[] | undefined;
+  /** Only orders created by this account. */
+  readonly createdByAccountId?: string | undefined;
   /** Stage following Sankhya, same classification as the list chip (see `stageCondition`). */
   readonly stage?: OrderStageCode | undefined;
   readonly sort: 'updatedAt' | '-updatedAt' | 'draftNumber' | '-draftNumber' | 'nunota' | '-nunota';
@@ -389,6 +391,7 @@ export class OrdersRepository {
     const where = and(
       scopeCondition(filter.scope),
       filter.ids === undefined ? undefined : inArray(salesOrder.id, [...filter.ids]),
+      filter.createdByAccountId === undefined ? undefined : eq(salesOrder.createdByAccountId, filter.createdByAccountId),
       filter.status === undefined ? undefined : eq(salesOrder.status, filter.status),
       filter.group === undefined ? undefined : inArray(salesOrder.status, [...ORDER_GROUP_STATUSES[filter.group]]),
       filter.customerCode === undefined ? undefined : eqInt(salesOrder.customerCode, filter.customerCode),

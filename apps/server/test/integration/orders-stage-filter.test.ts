@@ -124,6 +124,16 @@ describe('GET /orders?stage=', () => {
   });
 });
 
+describe('GET /orders?mine=true', () => {
+  it('lists only the orders created by the signed-in account, even for a manager', async () => {
+    expect((await list('seller1', 'mine=true')).total).toBe(6);
+    expect(await list('seller2', 'mine=true')).toEqual({ ids: sorted('foreignInReview'), total: 1 });
+    expect(await list('manager', 'mine=true')).toEqual({ ids: [], total: 0 });
+    expect((await list('manager', 'status=draft')).ids).toContain(ids.draft);
+    expect(await list('manager', 'status=draft&mine=true')).toEqual({ ids: [], total: 0 });
+  });
+});
+
 describe('GET /orders?group=', () => {
   it('unsent and sent split the list with a correct total and paging, within scope', async () => {
     expect(await list('seller1', 'group=unsent')).toEqual({ ids: sorted('draft', 'queued', 'rejected'), total: 3 });

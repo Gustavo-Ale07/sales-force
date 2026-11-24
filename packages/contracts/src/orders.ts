@@ -9,6 +9,7 @@ import {
   named,
   paginated,
   paginationQueryShape,
+  queryBoolean,
   queryDate,
   queryInt,
   queryIntList,
@@ -146,6 +147,8 @@ export const OrdersQuerySchema = z.object({
   status: OrderStatusSchema.optional(),
   /** Tab group (see {@link OrderGroupSchema}); combines with `status` (both must hold). */
   group: OrderGroupSchema.optional(),
+  /** Only orders created by the signed-in account (the resume-draft prompt must never offer someone else's draft). */
+  mine: queryBoolean().optional(),
   customerCode: queryInt(0).optional(),
   /** Period, inclusive on both ends, as calendar dates in the business time zone (America/Sao_Paulo). */
   from: queryDate().optional(),

@@ -11,7 +11,7 @@ import { useApi } from "../lib/app-context";
 export function ResumeDraftDialog({ onContinue }: { onContinue: (id: string) => void }) {
   const api = useApi();
   const [dismissed, setDismissed] = useState(false);
-  const drafts = useQuery({ ...ordersQueryOptions(api, { status: "draft", sort: "-updatedAt", page: 1, pageSize: 1 }), retry: false });
+  const drafts = useQuery({ ...ordersQueryOptions(api, { status: "draft", mine: "true", sort: "-updatedAt", page: 1, pageSize: 1 }), retry: false });
   const draft = drafts.data?.items[0];
   if (!draft || dismissed) return null;
   return (

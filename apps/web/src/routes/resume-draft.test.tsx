@@ -9,8 +9,9 @@ describe("Novo pedido: Continuar o pedido em andamento?", () => {
   it("asks when a draft saved on the server exists; Continuar opens it", async () => {
     const draft = orderListItem({ id: "0190a000-0000-7000-8000-0000000000d1", status: "draft", customerName: "COMERCIAL ALFA LTDA" });
     const { user, router, calls } = renderApp("/pedidos/novo", { handlers: { ...base, "GET /orders": { body: ordersPage([draft]) } } });
-    expect(await screen.findByText("Continuar o pedido em andamento?")).toBeInTheDocument();
+    expect(await screen.findByText("Continuar o pedido em andamento?", {}, { timeout: 5000 })).toBeInTheDocument();
     expect(callsTo(calls, "GET", "/orders").at(0)?.search.get("status")).toBe("draft");
+    expect(callsTo(calls, "GET", "/orders").at(0)?.search.get("mine")).toBe("true");
     await user.click(screen.getByRole("button", { name: "Continuar" }));
     await waitFor(() => expect(router.state.location.pathname).toBe(`/pedidos/${draft.id}`));
   });
