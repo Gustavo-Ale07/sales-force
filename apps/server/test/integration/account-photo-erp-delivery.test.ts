@@ -48,8 +48,9 @@ async function world(options: WorldOptions = {}) {
   const book = new FakeUserPhotoBook();
   const gateway = new FakeGateway({ userPhotos: book });
   const audit = new AuditService(db, now);
+  const store = new DrizzleProfilePhotoDeliveryStore(db, audit);
   const service = new ProfilePhotoDeliveryService({
-    store: new DrizzleProfilePhotoDeliveryStore(db, audit),
+    store,
     gateway,
     logger: createLogger({ level: 'silent', service: 'test' }),
     now,
@@ -81,7 +82,7 @@ async function world(options: WorldOptions = {}) {
   }
   const outbox = async (id: string) => (await db.select().from(integrationOutbox).where(eq(integrationOutbox.id, id)))[0]!;
   const audits = async (action: string) => (await db.select().from(auditLog)).filter((r) => r.action === action);
-  return { database, accountId, book, service, queue, outbox, audits, advance: (ms: number) => void (clock.ms += ms), gateway };
+  return { database, store, accountId, book, service, queue, outbox, audits, advance: (ms: number) => void (clock.ms += ms), gateway };
 }
 
 describe('profile photo delivery to the ERP (fake gateway)', () => {
@@ -121,6 +122,19 @@ describe('profile photo delivery to the ERP (fake gateway)', () => {
     const row = await w.outbox(id);
     expect(row.status).toBe('rejected');
     expect(JSON.stringify(row.payload)).not.toContain('imageBase64');
+  });
+
+  it('confirm and fail never overwrite a row closed meanwhile (status guard)', async () => {
+    const w = await world({ externalUserId: '77' });
+    const { id } = await w.queue('g1');
+    const claimed = (await w.store.claimNext(new Date(Date.now() + 86_400_000)))!;
+    await rejectPendingPhotoErpWrites(w.database.handle.db, w.accountId, 'photo_removed', new Date());
+    await w.store.confirm({ claimed, userCode: 77, at: new Date() });
+    await w.store.fail({ claimed, kind: 'retry', status: 'pending', errorClass: 'temporary', errorCode: 'x', message: 'm', nextAttemptAt: new Date(), consumesAttempt: true, at: new Date() });
+    const row = await w.outbox(id);
+    expect(row.status).toBe('rejected');
+    expect(row.lastErrorMessage).toContain('photo_removed');
+    expect(row.erpReference).toBeNull();
   });
 
   it('falls back to the seller link: exactly one ERP user of the seller', async () => {

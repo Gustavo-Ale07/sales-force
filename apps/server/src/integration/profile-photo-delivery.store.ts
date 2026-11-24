@@ -157,7 +157,8 @@ export class DrizzleProfilePhotoDeliveryStore implements ProfilePhotoDeliverySto
           payload: sql`${integrationOutbox.payload} - 'imageBase64'`,
           updatedAt: at,
         })
-        .where(eq(integrationOutbox.id, claimed.outboxId));
+        // Status guard: a row closed meanwhile (photo removed, mapping changed) is never overwritten.
+        .where(and(eq(integrationOutbox.id, claimed.outboxId), eq(integrationOutbox.status, 'processing')));
       await this.audit.record(
         { action: AUDIT_ACTIONS.profilePhotoErpWritten, actorAccountId: null, detail: { accountId: claimed.accountId, outboxId: claimed.outboxId, erpUserCode: userCode, attempts: claimed.attemptCount } },
         tx,
@@ -168,7 +169,7 @@ export class DrizzleProfilePhotoDeliveryStore implements ProfilePhotoDeliverySto
   async fail(input: PhotoFailureRecord): Promise<void> {
     const { claimed, at } = input;
     await this.database.transaction(async (tx) => {
-      await tx
+      const changed = await tx
         .update(integrationOutbox)
         .set({
           status: input.status,
@@ -180,8 +181,9 @@ export class DrizzleProfilePhotoDeliveryStore implements ProfilePhotoDeliverySto
           ...(input.consumesAttempt ? {} : { attemptCount: sql`greatest(${integrationOutbox.attemptCount} - 1, 0)` }),
           updatedAt: at,
         })
-        .where(eq(integrationOutbox.id, claimed.outboxId));
-      if (input.kind === 'reject') {
+        .where(and(eq(integrationOutbox.id, claimed.outboxId), eq(integrationOutbox.status, 'processing')))
+        .returning({ id: integrationOutbox.id });
+      if (input.kind === 'reject' && changed.length > 0) {
         await this.audit.record(
           { action: AUDIT_ACTIONS.profilePhotoErpRejected, actorAccountId: null, detail: { accountId: claimed.accountId, outboxId: claimed.outboxId, errorClass: input.errorClass, errorCode: input.errorCode } },
           tx,
