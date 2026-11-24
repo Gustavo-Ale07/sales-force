@@ -302,6 +302,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/customers/letters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Count of visible customers per initial letter (A-Z index) */
+        get: operations["listCustomerLetters"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/customers/{code}": {
         parameters: {
             query?: never;
@@ -1121,6 +1138,12 @@ export interface components {
             amount: components["schemas"]["DecimalString"];
             balance: components["schemas"]["DecimalString"];
             overdue: boolean;
+        };
+        CustomerLettersResponse: {
+            letters: {
+                letter: string;
+                count: number;
+            }[];
         };
         CustomerListItem: {
             code: number;
@@ -2739,6 +2762,7 @@ export interface operations {
                 search?: string;
                 sellerCode?: number;
                 hasPriceTable?: "true" | "false";
+                initial?: string;
                 sort?: components["schemas"]["CustomerSort"];
                 page?: number;
                 pageSize?: number;
@@ -2865,6 +2889,57 @@ export interface operations {
             };
             /** @description Muitas tentativas */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    listCustomerLetters: {
+        parameters: {
+            query?: {
+                search?: string;
+                sellerCode?: number;
+                hasPriceTable?: "true" | "false";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Contagem por letra inicial */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerLettersResponse"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

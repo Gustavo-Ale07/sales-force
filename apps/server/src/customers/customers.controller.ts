@@ -5,6 +5,7 @@ import {
   type CreateCustomerResponse,
   type CustomerDetail,
   type CustomerFinancial,
+  type CustomerLettersResponse,
   type CustomersResponse,
 } from '@salesforce/contracts';
 import type { FastifyReply } from 'fastify';
@@ -26,6 +27,14 @@ export class CustomersController {
     @Contract() contract: RequestContract<typeof routes.listCustomers>,
   ): Promise<CustomersResponse> {
     return this.customers.list(user, contract.query);
+  }
+
+  @ApiRoute(routes.listCustomerLetters)
+  letters(
+    @CurrentUserParam() user: CurrentUser,
+    @Contract() contract: RequestContract<typeof routes.listCustomerLetters>,
+  ): Promise<CustomerLettersResponse> {
+    return this.customers.letters(user, contract.query);
   }
 
   @ApiRoute(routes.createCustomer)

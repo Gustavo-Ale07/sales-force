@@ -28,6 +28,8 @@ import {
   CustomerDetailSchema,
   CustomerFinancialSchema,
   CustomerPathSchema,
+  CustomerLettersQuerySchema,
+  CustomerLettersResponseSchema,
   CustomersQuerySchema,
   CustomersResponseSchema,
 } from './customers.js';
@@ -356,6 +358,17 @@ export const routes = {
     auth: 'session',
     request: { query: CustomersQuerySchema },
     responses: { 200: { description: 'Carteira de clientes', schema: CustomersResponseSchema } },
+    errors: [400, 401, 403],
+  }),
+  listCustomerLetters: defineRoute({
+    operationId: 'listCustomerLetters',
+    method: 'get',
+    path: '/customers/letters',
+    tags: ['customers'],
+    summary: 'Count of visible customers per initial letter (A-Z index)',
+    auth: 'session',
+    request: { query: CustomerLettersQuerySchema },
+    responses: { 200: { description: 'Contagem por letra inicial', schema: CustomerLettersResponseSchema } },
     errors: [400, 401, 403],
   }),
   createCustomer: defineRoute({

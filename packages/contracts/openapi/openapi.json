@@ -971,6 +971,15 @@
             }
           },
           {
+            "name": "initial",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z#]$"
+            }
+          },
+          {
             "name": "sort",
             "in": "query",
             "required": false,
@@ -1134,6 +1143,90 @@
           },
           "429": {
             "description": "Muitas tentativas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/customers/letters": {
+      "get": {
+        "operationId": "listCustomerLetters",
+        "tags": [
+          "customers"
+        ],
+        "summary": "Count of visible customers per initial letter (A-Z index)",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "sellerCode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "hasPriceTable",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contagem por letra inicial",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerLettersResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
             "content": {
               "application/json": {
                 "schema": {
@@ -5462,6 +5555,35 @@
           "amount",
           "balance",
           "overdue"
+        ],
+        "additionalProperties": false
+      },
+      "CustomerLettersResponse": {
+        "type": "object",
+        "properties": {
+          "letters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "letter": {
+                  "type": "string"
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "letter",
+                "count"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "letters"
         ],
         "additionalProperties": false
       },

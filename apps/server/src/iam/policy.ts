@@ -80,6 +80,7 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   // Owner ruling 2026-11-13: the seller directory is for manager and admin only; a seller never sees other sellers.
   listSellers: { roles: ['manager', 'admin'] },
   listCustomers: { roles: EVERY_ROLE },
+  listCustomerLetters: { roles: EVERY_ROLE },
   getCustomer: { roles: EVERY_ROLE },
   // Read-only financial area (D-I): same roles and the same customer scope as getCustomer; the installation
   // configuration decides whether it exists at all (404 when not shown).

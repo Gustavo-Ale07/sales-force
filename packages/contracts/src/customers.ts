@@ -17,10 +17,26 @@ export const CustomersQuerySchema = z.object({
   search: querySearch().optional(),
   sellerCode: queryInt(0).optional(),
   hasPriceTable: queryBoolean().optional(),
+  /** Initial of the name for the A-Z index: a letter A-Z (accents folded) or `#` for any other start. */
+  initial: z.string().regex(/^[A-Z#]$/).optional(),
   sort: CustomerSortSchema.default('name'),
   ...paginationQueryShape,
 });
 export type CustomersQuery = z.infer<typeof CustomersQuerySchema>;
+
+/** Same filters as the list (without paging, sort and initial): the count per initial letter, for the A-Z index. */
+export const CustomerLettersQuerySchema = z.object({
+  search: querySearch().optional(),
+  sellerCode: queryInt(0).optional(),
+  hasPriceTable: queryBoolean().optional(),
+});
+export type CustomerLettersQuery = z.infer<typeof CustomerLettersQuerySchema>;
+
+export const CustomerLettersResponseSchema = named(
+  'CustomerLettersResponse',
+  z.object({ letters: z.array(z.object({ letter: z.string(), count: z.number().int().min(1) })) }),
+);
+export type CustomerLettersResponse = z.infer<typeof CustomerLettersResponseSchema>;
 
 export const CustomerListItemSchema = named(
   'CustomerListItem',

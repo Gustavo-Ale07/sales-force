@@ -73,8 +73,15 @@ export interface CustomerListFilter {
   readonly search?: string | undefined;
   readonly sellerCode?: number | undefined;
   readonly hasPriceTable?: boolean | undefined;
+  /** Initial of the name (`A`-`Z`, accents folded; `#` = anything else). */
+  readonly initial?: string | undefined;
   readonly sort: 'name' | '-name' | 'code' | '-code';
 }
+
+export type CustomerLetterFilter = Omit<CustomerListFilter, 'sort' | 'initial'>;
+
+/** First letter of the name as the index shows it: accents folded, `#` for anything that is not A-Z. */
+const INITIAL_SQL = sql`(case when upper(translate(left(btrim(${erpCustomer.name}), 1), 'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇáàâãäéèêëíìîïóòôõöúùûüç', 'AAAAAEEEEIIIIOOOOOUUUUCaaaaaeeeeiiiiooooouuuuc')) between 'A' and 'Z' then upper(translate(left(btrim(${erpCustomer.name}), 1), 'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇáàâãäéèêëíìîïóòôõöúùûüç', 'AAAAAEEEEIIIIOOOOOUUUUCaaaaaeeeeiiiiooooouuuuc')) else '#' end)`;
 
 export interface SellerRow {
   readonly code: number;
@@ -237,6 +244,7 @@ export class MirrorRepository {
         : filter.hasPriceTable
           ? isNotNull(erpCustomer.priceTableCode)
           : isNull(erpCustomer.priceTableCode),
+      filter.initial === undefined ? undefined : sql`${INITIAL_SQL} = ${filter.initial}`,
     );
 
     const order =
@@ -257,6 +265,38 @@ export class MirrorRepository {
       this.db.select({ total: sql<number>`count(*)::int` }).from(erpCustomer).where(where),
     ]);
     return { rows, total: totals[0]?.total ?? 0 };
+  }
+
+  /** Count of visible customers per initial letter (same visibility and filters as the list; letters with no customer are absent). */
+  async customerLetters(filter: CustomerLetterFilter): Promise<{ letter: string; count: number }[]> {
+    const digits = filter.search === undefined ? null : digitsOf(filter.search);
+    const searchCondition =
+      filter.search === undefined
+        ? undefined
+        : or(
+            containsText(erpCustomer.name, filter.search),
+            containsText(erpCustomer.tradeName, filter.search),
+            digits === null ? undefined : sql`${erpCustomer.taxId} like ${`%${digits}%`}`,
+            digits === null ? undefined : eqInt(erpCustomer.code, Number(digits)),
+          );
+    const where = and(
+      ...this.liveCustomer(),
+      scopeCondition(filter.scope),
+      searchCondition,
+      filter.sellerCode === undefined ? undefined : eqInt(erpCustomer.sellerCode, filter.sellerCode),
+      filter.hasPriceTable === undefined
+        ? undefined
+        : filter.hasPriceTable
+          ? isNotNull(erpCustomer.priceTableCode)
+          : isNull(erpCustomer.priceTableCode),
+    );
+    const rows = await this.db
+      .select({ letter: sql<string>`${INITIAL_SQL}`, count: sql<number>`count(*)::int` })
+      .from(erpCustomer)
+      .where(where)
+      .groupBy(sql`${INITIAL_SQL}`);
+    // "#" sorts last, like the app's index.
+    return rows.sort((a, b) => (a.letter === '#' ? 1 : b.letter === '#' ? -1 : a.letter.localeCompare(b.letter)));
   }
 
   /**

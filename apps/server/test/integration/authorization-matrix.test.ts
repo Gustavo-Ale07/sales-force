@@ -40,6 +40,7 @@ const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>
   // Owner ruling 2026-11-13: the seller list is for manager and admin only (a seller never learns other sellers' names or codes).
   listSellers: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny', operations: 'deny' },
   listCustomers: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  listCustomerLetters: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   getCustomer: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   getCustomerFinancial: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   getCustomerOrderHabits: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },

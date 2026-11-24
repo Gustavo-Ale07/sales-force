@@ -4,6 +4,8 @@ import type {
   CustomerFinancial,
   CustomerListItem,
   CustomersQuery,
+  CustomerLettersQuery,
+  CustomerLettersResponse,
   CustomersResponse,
 } from '@salesforce/contracts';
 import { resolveCustomerPriceTable, summarizeOpenTitles, titleBalance, type CustomerScope } from '@salesforce/domain';
@@ -50,6 +52,7 @@ export class CustomersService {
         search: query.search,
         sellerCode: query.sellerCode,
         hasPriceTable: query.hasPriceTable,
+        initial: query.initial,
         sort: query.sort,
       },
       { page: query.page, pageSize: query.pageSize },
@@ -68,6 +71,13 @@ export class CustomersService {
       pageSize: query.pageSize,
       total,
     };
+  }
+
+  /** Count per initial letter inside the caller's scope (same visibility and filters as the list). */
+  async letters(user: CurrentUser, query: CustomerLettersQuery): Promise<CustomerLettersResponse> {
+    const { scope } = await this.policy.accessContext(user);
+    const letters = await this.mirror.customerLetters({ scope, search: query.search, sellerCode: query.sellerCode, hasPriceTable: query.hasPriceTable });
+    return { letters };
   }
 
   async get(user: CurrentUser, code: number): Promise<CustomerDetail> {
