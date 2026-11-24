@@ -206,6 +206,15 @@ describe('loopback database guard (seed and account CLI)', () => {
 describe('Worker environment', () => {
   const WORKER = { DATABASE_URL, NODE_ENV: 'development' } as const;
 
+  it('keeps the profile photo write closed by default and refuses to open it outside staging + Sandbox (spike S1.8)', () => {
+    expect(loadWorkerConfig({ ...WORKER }).profilePhotoWrite).toEqual({ enabled: false });
+    expect(loadWorkerConfig({ ...WORKER, SANKHYA_PROFILE_PHOTO_WRITE_ENABLED: 'false' }).profilePhotoWrite.enabled).toBe(false);
+    const refused = problemsOf(() => loadWorkerConfig({ ...WORKER, SANKHYA_PROFILE_PHOTO_WRITE_ENABLED: 'true' })).join('\n');
+    expect(refused).toMatch(/SANKHYA_PROFILE_PHOTO_WRITE_ENABLED=true requires an explicit SF_DEPLOY_ENVIRONMENT=staging/);
+    expect(refused).toMatch(/SANKHYA_MODE=live/);
+    expect(problemsOf(() => loadWorkerConfig({ ...WORKER, SANKHYA_PROFILE_PHOTO_WRITE_ENABLED: 'yes' })).join('\n')).toMatch(/must be 'true' or 'false'/);
+  });
+
   it('defaults to the synthetic fake gateway and never exposes credentials', () => {
     const config = loadWorkerConfig({ ...WORKER });
     expect(config.gatewayDescription.mode).toBe('fake');

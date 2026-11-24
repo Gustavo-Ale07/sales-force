@@ -49,6 +49,8 @@ export const ORDER_DELIVERY_TRIGGER_MS = 2000;
 export const CUSTOMER_DELIVERY_CRON = '* * * * *';
 /** The worker looks for a due customer creation this often (the API waits up to 15 s for the answer). */
 export const CUSTOMER_DELIVERY_TRIGGER_MS = 2000;
+/** The worker looks for a due profile photo write this often (spike S1.8; no pg-boss queue, the outbox row is the record). */
+export const PROFILE_PHOTO_DELIVERY_TRIGGER_MS = 5000;
 /** Daily, off-peak. */
 export const ORDER_DRY_RUN_PURGE_CRON = '17 3 * * *';
 /** Daily, off-peak, after the dry-run purge. */

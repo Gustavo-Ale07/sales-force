@@ -50,6 +50,10 @@ export const AUDIT_ACTIONS = {
   customerErpRejected: 'customer.erp_rejected',
   /** D-AR: the outcome is not known (or the reread did not match) and a person has to look. */
   customerErpUnknown: 'customer.erp_unknown',
+  /** Spike S1.8: the worker wrote the account's photo to its ERP user (ids and codes only, never the image). */
+  profilePhotoErpWritten: 'account.photo_erp_written',
+  /** Spike S1.8: the photo write was refused for good (class and stable code only). */
+  profilePhotoErpRejected: 'account.photo_erp_rejected',
   orderTemplateCreated: 'order_template.created',
   orderTemplateReplaced: 'order_template.replaced',
   orderTemplateDeleted: 'order_template.deleted',

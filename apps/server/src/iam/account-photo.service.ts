@@ -42,7 +42,7 @@ export class AccountPhotoService {
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(LOGGER) private readonly logger: Logger,
-    // Spike S1.8: closed unless the owner opens SANKHYA_PROFILE_PHOTO_WRITE_ENABLED (staging only). Absent = closed.
+    // Spike S1.8: closed unless the owner opens ERP_PROFILE_PHOTO_ENQUEUE_ENABLED (staging only). Absent = closed.
     @Optional() @Inject(PROFILE_PHOTO_ERP_WRITE_ENABLED) private readonly erpWriteEnabled: boolean = false,
   ) {}
 

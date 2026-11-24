@@ -28,6 +28,7 @@ import { SyncRefreshJob } from './jobs/sync-refresh.job.js';
 import { CustomerDeliveryJob, CustomerPayloadPurgeJob, CustomerRefusalPurgeJob } from './jobs/customer-delivery.job.js';
 import type { CustomerPayloadRetention, CustomerRefusalRetention } from '../integration/customer-payload-retention.js';
 import type { CustomerDeliveryService } from '../integration/customer-delivery.service.js';
+import type { ProfilePhotoDeliveryService } from '../integration/profile-photo-delivery.service.js';
 
 /** How often the worker looks for "Atualizar dados" requests recorded by the API. */
 export const SYNC_REFRESH_POLL_MS = 2_000;
@@ -35,6 +36,7 @@ import {
   CONFIGURATION_SYNC_CRON,
   CUSTOMER_DELIVERY_CRON,
   CUSTOMER_DELIVERY_TRIGGER_MS,
+  PROFILE_PHOTO_DELIVERY_TRIGGER_MS,
   ORDER_DELIVERY_CRON,
   ORDER_DRY_RUN_PURGE_CRON,
   CUSTOMER_PAYLOAD_PURGE_CRON,
@@ -111,6 +113,12 @@ export interface WorkerRuntimeDeps {
   readonly customerRefusalRetention?: { readonly service: CustomerRefusalRetention };
   readonly customerDelivery?: { readonly service: CustomerDeliveryService; readonly triggerMs?: number };
   /**
+   * ERP profile photo delivery (spike S1.8). Present only when the worker-side photo-write switch is on (Sandbox/staging). It runs from a
+   * short-interval sweep over `integration_outbox` only (the outbox row is the business record and carries retries/backoff; there is
+   * no pg-boss queue for it).
+   */
+  readonly profilePhotoDelivery?: { readonly service: ProfilePhotoDeliveryService; readonly triggerMs?: number };
+  /**
    * Configuration read from Sankhya (CFG-8). Present only when CONFIG_SYNC_FROM_SANKHYA=1: the handler is then
    * registered, `sync.configuration` scheduled every 15 minutes and enqueued once at start. Absent = no handler, and a
    * schedule stored by an earlier configuration is dropped.
@@ -137,6 +145,7 @@ export class WorkerRuntime {
   #started = false;
   #refreshTimer: ReturnType<typeof setInterval> | undefined;
   #customerTimer: ReturnType<typeof setInterval> | undefined;
+  #photoTimer: ReturnType<typeof setInterval> | undefined;
   #orderTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(private readonly deps: WorkerRuntimeDeps) {
@@ -293,6 +302,7 @@ export class WorkerRuntime {
         else await boss.schedule(QUEUE_NAMES.integrationCustomerRefusalPurge, CUSTOMER_REFUSAL_PURGE_CRON, {});
       }
       if (customerDelivery !== undefined && customerHandlers.length > 0) this.#startCustomerTrigger(customerDelivery);
+      if (this.deps.profilePhotoDelivery !== undefined) this.#startPhotoTrigger(this.deps.profilePhotoDelivery);
       if (orderDelivery !== undefined && queues.some((spec) => spec.name === QUEUE_NAMES.integrationOrderDeliver)) this.#startOrderTrigger(orderDelivery);
 
       if (queues.some((spec) => spec.name === QUEUE_NAMES.syncConfiguration)) {
@@ -359,6 +369,23 @@ export class WorkerRuntime {
     this.#refreshTimer = setInterval(() => void tick(), refresh.pollMs ?? SYNC_REFRESH_POLL_MS);
   }
 
+  /** Short-interval sweep of due profile photo writes (spike S1.8); never overlaps itself, and a failing run only logs. */
+  #startPhotoTrigger(delivery: { readonly service: ProfilePhotoDeliveryService; readonly triggerMs?: number }): void {
+    let busy = false;
+    const tick = async () => {
+      if (busy) return;
+      busy = true;
+      try {
+        await delivery.service.runDue();
+      } catch (error) {
+        this.deps.logger.warn({ err: error }, 'profile photo delivery trigger failed; the next tick retries');
+      } finally {
+        busy = false;
+      }
+    };
+    this.#photoTimer = setInterval(() => void tick(), delivery.triggerMs ?? PROFILE_PHOTO_DELIVERY_TRIGGER_MS);
+  }
+
   /** Short-interval sweep of due customer creations; never overlaps itself, and a failing run only logs. */
   #startCustomerTrigger(delivery: { readonly service: CustomerDeliveryService; readonly triggerMs?: number }): void {
     let busy = false;
@@ -406,6 +433,8 @@ export class WorkerRuntime {
     this.#refreshTimer = undefined;
     if (this.#customerTimer !== undefined) clearInterval(this.#customerTimer);
     this.#customerTimer = undefined;
+    if (this.#photoTimer !== undefined) clearInterval(this.#photoTimer);
+    this.#photoTimer = undefined;
     const boss = this.#boss;
     this.#boss = undefined;
     if (boss === undefined) return;

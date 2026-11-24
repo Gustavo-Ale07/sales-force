@@ -19,7 +19,7 @@ const DRY_RUN_ORIGIN_FIELD_PLACEHOLDER = 'AD_ORIGEM_NAO_CONFIGURADA';
  * installs queue tables (DATA-2) and performs no Sankhya write (SNK-4).
  */
 runMain('worker', async () => {
-  const { env, gateway, gatewayDescription, orderWrite, customerWrite, orderRequestBudget, salesHistory } = loadWorkerConfig(process.env);
+  const { env, gateway, gatewayDescription, orderWrite, customerWrite, profilePhotoWrite, orderRequestBudget, salesHistory } = loadWorkerConfig(process.env);
   const logger = createLogger({ level: env.LOG_LEVEL, service: 'worker' });
   const db = createDb(env.DATABASE_URL.reveal(), { max: env.DB_POOL_MAX, applicationName: 'salesforce-worker-app' });
   logPoolErrors(db, logger);
@@ -77,6 +77,8 @@ runMain('worker', async () => {
       customerWrite.enabled && customerWrite.originField !== null
         ? { gateway, settings: { originField: customerWrite.originField, priceTableCode: customerWrite.priceTableCode } }
         : undefined,
+      // Spike S1.8: the photo write exists only with its switch on, which loadWorkerConfig already limited to staging + Sandbox.
+      profilePhotoWrite.enabled ? { gateway } : undefined,
     ),
     { logger: new NestPinoLogger(logger), abortOnError: false },
   );

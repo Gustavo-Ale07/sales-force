@@ -4,6 +4,8 @@ import {
   GatewayConfigError,
   parseOrderWriteSettings,
   parseCustomerWriteSettings,
+  parseProfilePhotoWriteSettings,
+  type ProfilePhotoWriteSettings,
   type CustomerWriteSettings,
   RequestBudget,
   type GatewayDescription,
@@ -195,6 +197,8 @@ export interface WorkerConfig {
   readonly orderWrite: OrderWriteSettings;
   /** D-AR: customer upsert to Sankhya; closed by default, Sandbox-on-staging only. */
   readonly customerWrite: CustomerWriteSettings;
+  /** Spike S1.8: profile photo write to Sankhya (TSIUSU.FOTO); closed by default, Sandbox-on-staging only. */
+  readonly profilePhotoWrite: ProfilePhotoWriteSettings;
   /** M3: set only in order-write `live` mode. */
   readonly orderRequestBudget: RequestBudget | null;
   /** CFG-3: the sales-history TOP/status/window configuration; `null` = not configured (the mirror stays off). */
@@ -265,6 +269,9 @@ export function loadWorkerConfig(source: EnvSource): WorkerConfig {
   const customerWrite = parseCustomerWriteSettings({ ...withoutEmptyValues(source) });
   for (const problem of customerWrite.problems) if (!problems.includes(problem)) problems.push(problem);
 
+  const profilePhotoWrite = parseProfilePhotoWriteSettings({ ...withoutEmptyValues(source) });
+  for (const problem of profilePhotoWrite.problems) if (!problems.includes(problem)) problems.push(problem);
+
   const salesHistory = env === undefined ? { config: null, problems: [] } : salesHistorySyncConfigFromEnv(env);
   problems.push(...salesHistory.problems);
 
@@ -273,5 +280,5 @@ export function loadWorkerConfig(source: EnvSource): WorkerConfig {
   }
   setMaskTargets(sankhyaMaskTargets(source));
   const orderRequestBudget = orderWrite.settings.requestBudget === null ? null : new RequestBudget(orderWrite.settings.requestBudget);
-  return { env, gateway, gatewayDescription: gateway.describe(), orderWrite: orderWrite.settings, customerWrite: customerWrite.settings, orderRequestBudget, salesHistory: salesHistory.config };
+  return { env, gateway, gatewayDescription: gateway.describe(), orderWrite: orderWrite.settings, customerWrite: customerWrite.settings, profilePhotoWrite: profilePhotoWrite.settings, orderRequestBudget, salesHistory: salesHistory.config };
 }
