@@ -384,6 +384,22 @@ describe('API customer creation switch (D-AR)', () => {
   });
 });
 
+describe('API profile photo ERP switch (spike S1.8)', () => {
+  const STAGING_RUN = { DATABASE_URL, NODE_ENV: 'production', TRUST_PROXY: '1', ALLOWED_ORIGINS: 'https://app.example.com', AUTH_MODE: 'local', SF_ERP_ENVIRONMENT: 'sandbox', SF_DATASET_ID: 'acme-sandbox-1' } as const;
+
+  it('is closed by default and when empty', () => {
+    expect(parseApiEnv({ ...DEV }).ERP_PROFILE_PHOTO_ENQUEUE_ENABLED).toBe(false);
+    expect(parseApiEnv({ ...DEV, ERP_PROFILE_PHOTO_ENQUEUE_ENABLED: '' }).ERP_PROFILE_PHOTO_ENQUEUE_ENABLED).toBe(false);
+  });
+
+  it('is accepted on staging only and refused in production', () => {
+    expect(parseApiEnv({ ...STAGING_RUN, SF_DEPLOY_ENVIRONMENT: 'staging', ERP_PROFILE_PHOTO_ENQUEUE_ENABLED: 'true' }).ERP_PROFILE_PHOTO_ENQUEUE_ENABLED).toBe(true);
+    expect(problemsOf(() => parseApiEnv({ ...STAGING_RUN, SF_DEPLOY_ENVIRONMENT: 'production', ERP_PROFILE_PHOTO_ENQUEUE_ENABLED: 'true' }))).toEqual(
+      expect.arrayContaining([expect.stringMatching(/^ERP_PROFILE_PHOTO_ENQUEUE_ENABLED: is only accepted when SF_DEPLOY_ENVIRONMENT=staging/)]),
+    );
+  });
+});
+
 describe('API order enqueue switch (SNK-6, SNK-7)', () => {
   it('is off by default and when empty', () => {
     expect(parseApiEnv({ ...DEV }).ERP_ORDER_ENQUEUE_ENABLED).toBe(false);

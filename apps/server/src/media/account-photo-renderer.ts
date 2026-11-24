@@ -108,6 +108,23 @@ export interface RenderLimits {
 }
 const DEFAULT_LIMITS: RenderLimits = { maxQueued: ACCOUNT_PHOTO_MAX_QUEUED, timeoutMs: ACCOUNT_PHOTO_RENDER_TIMEOUT_MS };
 
+/** JPEG quality of the copy sent to the ERP (`TSIUSU.FOTO`, spike S1.8: the ERP holds PNG and JPEG, never WebP). */
+export const ERP_PHOTO_JPEG_QUALITY = 88;
+
+/**
+ * The ERP copy of a stored rendition: the SAME picture (already cropped, 512 px, metadata-free) re-encoded as JPEG, flattened on
+ * white because JPEG has no alpha. Input is always a rendition this module produced.
+ */
+export async function toErpJpeg(rendition: Uint8Array): Promise<Uint8Array> {
+  configureSharpOnce();
+  const out = await sharp(rendition, { limitInputPixels: ACCOUNT_PHOTO_MAX_INPUT_PIXELS })
+    .flatten({ background: '#ffffff' })
+    .jpeg({ quality: ERP_PHOTO_JPEG_QUALITY })
+    .toBuffer();
+  if (out.byteLength > ACCOUNT_PHOTO_MAX_OUTPUT_BYTES) throw new AccountPhotoError('unreadable', 'The ERP copy of the photo is too large.');
+  return new Uint8Array(out.buffer, out.byteOffset, out.byteLength);
+}
+
 export async function renderAccountPhoto(
   upload: Uint8Array,
   declared: PhotoUploadType,

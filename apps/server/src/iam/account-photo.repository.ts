@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { accountPhoto, type Database } from '@salesforce/db';
+import { accountPhoto, integrationOutbox, type Database } from '@salesforce/db';
 import { eq, sql } from 'drizzle-orm';
 import { DATABASE } from '../platform/tokens.js';
 
@@ -24,6 +24,10 @@ export interface AccountPhotoWrite {
 }
 
 type Writer = Pick<Database, 'insert' | 'delete' | 'select'>;
+
+/** Outbox identity of the profile photo write to the ERP (spike S1.8). */
+export const ACCOUNT_PHOTO_AGGREGATE = 'account_photo';
+export const ACCOUNT_PHOTO_OPERATION = 'profile_photo.write';
 
 /** Storage of `account_photo` (metadata only; the bytes are in the object store). Owned by the identity module. */
 @Injectable()
@@ -60,6 +64,30 @@ export class AccountPhotoRepository {
           updatedAt: input.at,
         },
       });
+  }
+
+  /**
+   * Queues the ERP write of one photo version (spike S1.8) in the caller's transaction. Idempotent by the unique origin id
+   * `photo:<accountId>:<version>`: the same version is queued once. Answers whether a new row was created.
+   */
+  async enqueueErpWrite(input: { id: string; accountId: string; photoVersion: string; imageBase64: string; at: Date }, writer: Pick<Database, 'insert'> = this.db): Promise<boolean> {
+    const created = await writer
+      .insert(integrationOutbox)
+      .values({
+        id: input.id,
+        aggregateType: ACCOUNT_PHOTO_AGGREGATE,
+        aggregateId: input.accountId,
+        operation: ACCOUNT_PHOTO_OPERATION,
+        payload: { version: 1, accountId: input.accountId, photoVersion: input.photoVersion, imageBase64: input.imageBase64 },
+        originId: `photo:${input.accountId}:${input.photoVersion}`,
+        status: 'pending',
+        nextAttemptAt: input.at,
+        createdAt: input.at,
+        updatedAt: input.at,
+      })
+      .onConflictDoNothing({ target: integrationOutbox.originId })
+      .returning({ id: integrationOutbox.id });
+    return created.length > 0;
   }
 
   /** Deletes the row; answers the removed record (to delete its object), or null when there was none. */

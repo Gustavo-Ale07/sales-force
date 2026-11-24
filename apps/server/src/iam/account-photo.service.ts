@@ -1,12 +1,13 @@
 import { createHash } from 'node:crypto';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { PHOTO_UPLOAD_MAX_BYTES, type ProfilePhoto, type PutProfilePhotoRequest } from '@salesforce/contracts';
 import { matchesIfNoneMatch } from '../catalog/product-image.js';
 import { AppError } from '../http/app-error.js';
 import { isObjectStoreError, type ObjectStore } from '../media/object-store.js';
-import { isAccountPhotoError, renderAccountPhoto } from '../media/account-photo-renderer.js';
+import { isAccountPhotoError, renderAccountPhoto, toErpJpeg } from '../media/account-photo-renderer.js';
 import { errorLogFields, type Logger } from '../observability/logger.js';
-import { ACCOUNT_PHOTO_STORE, CLOCK, LOGGER, type Clock } from '../platform/tokens.js';
+import { ACCOUNT_PHOTO_STORE, CLOCK, LOGGER, PROFILE_PHOTO_ERP_WRITE_ENABLED, type Clock } from '../platform/tokens.js';
+import { uuidv7 } from '../platform/ids.js';
 import { AccountPhotoRepository, type AccountPhotoRecord } from './account-photo.repository.js';
 import { AUDIT_ACTIONS, AuditService } from './audit.service.js';
 import type { CurrentUser } from './current-user.js';
@@ -41,6 +42,8 @@ export class AccountPhotoService {
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(LOGGER) private readonly logger: Logger,
+    // Spike S1.8: closed unless the owner opens SANKHYA_PROFILE_PHOTO_WRITE_ENABLED (staging only). Absent = closed.
+    @Optional() @Inject(PROFILE_PHOTO_ERP_WRITE_ENABLED) private readonly erpWriteEnabled: boolean = false,
   ) {}
 
   /** The version to publish in the session, or null (no photo, or photo storage not configured). */
@@ -79,6 +82,17 @@ export class AccountPhotoService {
       throw this.unavailable(error);
     }
     const version = contentHash.slice(0, 32);
+    // The ERP copy is prepared BEFORE the transaction (CPU work, no database held); nothing is queued while the flag is closed.
+    let erpImageBase64: string | null = null;
+    if (this.erpWriteEnabled) {
+      try {
+        erpImageBase64 = Buffer.from(await toErpJpeg(rendered.bytes)).toString('base64');
+      } catch (error) {
+        await this.discardUnlessKept(store, storageKey, previous);
+        if (isAccountPhotoError(error)) throw new AppError('validation_failed', { details: { issues: [{ path: 'dataBase64', code: `photo_${error.code}` }] } });
+        throw error;
+      }
+    }
     try {
       await this.photos.transaction(async (tx) => {
         await this.photos.upsert(
@@ -93,6 +107,10 @@ export class AccountPhotoService {
           },
           tx,
         );
+        if (erpImageBase64 !== null) {
+          // Same transaction as the change (STACK-6): either both exist or neither. Idempotent per account + version.
+          await this.photos.enqueueErpWrite({ id: uuidv7(now.getTime()), accountId: user.accountId, photoVersion: version, imageBase64: erpImageBase64, at: now }, tx);
+        }
         // Identifiers and sizes only: never image content.
         await this.audit.record(
           {
@@ -109,6 +127,10 @@ export class AccountPhotoService {
     }
     if (previous !== null && previous.storageKey !== storageKey) await this.discard(store, previous.storageKey);
     return { version, contentType: 'image/webp', sizePx: rendered.sizePx, updatedAt: now.toISOString() };
+  }
+
+  private async discardUnlessKept(store: ObjectStore, key: string, previous: AccountPhotoRecord | null): Promise<void> {
+    if (previous?.storageKey !== key) await this.discard(store, key);
   }
 
   /** Idempotent. */

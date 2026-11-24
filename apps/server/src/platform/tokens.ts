@@ -22,6 +22,11 @@ export const ORDER_ENQUEUE_ENABLED = Symbol('ORDER_ENQUEUE_ENABLED');
  * (customer-write switch, which only the worker reads): both must be on for a customer to reach the ERP.
  */
 export const CUSTOMER_ENQUEUE_ENABLED = Symbol('CUSTOMER_ENQUEUE_ENABLED');
+/**
+ * Profile-photo ERP switch of the API (`ERP_PROFILE_PHOTO_ENQUEUE_ENABLED`, default false; spike S1.8): while false, `PUT /me/photo`
+ * queues nothing for the ERP. The worker has its own `SANKHYA_PROFILE_PHOTO_WRITE_ENABLED` and refuses to start unless it targets the Sandbox.
+ */
+export const PROFILE_PHOTO_ERP_WRITE_ENABLED = Symbol('PROFILE_PHOTO_ERP_WRITE_ENABLED');
 /** How long `POST /customers` waits for the worker's confirmation (D-AR: up to 15 s). */
 export interface CustomerConfirmWait {
   readonly timeoutMs: number;

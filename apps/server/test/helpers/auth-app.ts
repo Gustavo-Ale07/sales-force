@@ -96,6 +96,8 @@ export interface AuthAppOptions {
   readonly accountPhotoStore?: ObjectStore;
   /** Opens the API-side enqueue of orders for the ERP (default off, as shipped). */
   readonly orderEnqueueEnabled?: boolean;
+  /** Opens the API-side queueing of the profile photo write to the ERP (default off, as shipped; spike S1.8). */
+  readonly profilePhotoErpWriteEnabled?: boolean;
 }
 
 /** The API with the real identity module over a fresh migrated database and a hand-driven clock. */
@@ -113,6 +115,7 @@ export async function startAuthApp(
 
   const imageDeps = {
     ...(options.accountPhotoStore === undefined ? {} : { accountPhotoStore: options.accountPhotoStore }),
+    ...(options.profilePhotoErpWriteEnabled === undefined ? {} : { profilePhotoErpWriteEnabled: options.profilePhotoErpWriteEnabled }),
     ...(options.productImageSource === undefined ? {} : { productImageSource: options.productImageSource }),
     ...(options.productImageSettings === undefined ? {} : { productImageSettings: options.productImageSettings }),
   };
