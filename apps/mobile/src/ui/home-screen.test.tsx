@@ -87,7 +87,6 @@ describe("HomeScreen", () => {
     await renderHome();
     await screen.findByLabelText("Clientes disponíveis: 250");
     expect(screen.queryByRole("button", { name: "Retomar pedido" })).toBeNull();
-    expect(screen.getByText(/Indicadores comerciais ficarão disponíveis/)).toBeTruthy();
     expect(screen.queryByText(/%/)).toBeNull();
   });
 

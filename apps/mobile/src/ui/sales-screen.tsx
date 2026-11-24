@@ -219,9 +219,9 @@ export function SalesScreen({ localOrders, customers, orders, orderPdf, syncStat
   return (
     <View style={styles.flex}>
       <View style={styles.cta}>
-        <Pressable style={styles.ctaButton} onPress={onNewSale} accessibilityRole="button" accessibilityLabel="Nova venda">
+        <Pressable style={styles.ctaButton} onPress={onNewSale} accessibilityRole="button" accessibilityLabel="Novo pedido">
           <Icon name="plus" color={colors.onNavy} size={20} />
-          <Text style={styles.ctaText}>Nova venda</Text>
+          <Text style={styles.ctaText}>Novo pedido</Text>
         </Pressable>
       </View>
       <View style={[styles.flex, openId !== null && styles.hidden]}>
@@ -236,7 +236,6 @@ export function SalesScreen({ localOrders, customers, orders, orderPdf, syncStat
           searchLabel="Buscar venda"
           searchPlaceholder="Buscar por cliente, código ou nº do pedido"
           emptyText={unsent ? "Nenhuma venda pendente." : "Nenhuma venda enviada ainda."}
-          emptyHint={unsent ? "Toque em “Nova venda” para começar." : "As vendas aceitas pelo Force aparecem aqui."}
           {...(active > 0 ? { filteredEmptyText: "Nenhuma venda encontrada com esses filtros." } : {})}
           noResultText={(text) => `Nenhuma venda encontrada para “${text}”.`}
           noResultHint="Confira o nome do cliente, o código ou o número do pedido."

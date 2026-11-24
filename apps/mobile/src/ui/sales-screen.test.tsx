@@ -86,7 +86,7 @@ describe("SalesScreen — groups", () => {
     expect(screen.getByText("Salvo no aparelho")).toBeTruthy();
     expect(screen.queryByText(/rascunho|somente no aparelho/i)).toBeNull();
     expect(screen.queryByText("Eva Empório")).toBeNull();
-    await fireEvent.press(screen.getByRole("button", { name: "Nova venda" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Novo pedido" }));
     expect(props.onNewSale).toHaveBeenCalledTimes(1);
   });
 
@@ -172,7 +172,6 @@ describe("SalesScreen — detail and actions", () => {
   it("opens the detail with status explanation, items, discounts and totals from the domain", async () => {
     await renderSales([ana]);
     await openSale(/Ana Mercearia/);
-    expect(screen.getByText(/Salvo neste aparelho\. Será enviado ao Sankhya assim que possível/)).toBeTruthy();
     expect(screen.getByText("Itens (2)")).toBeTruthy();
     expect(screen.getByText("Copo 200 ml")).toBeTruthy();
     expect(screen.getByText("Prato fundo")).toBeTruthy();
@@ -223,13 +222,12 @@ describe("SalesScreen — detail and actions", () => {
     expect(props.onContinue).not.toHaveBeenCalled();
   });
 
-  it("the Vendas list shows no heading, no 'Atualizado' line and ONE entry: the 'Nova venda' button", async () => {
+  it("the Vendas list shows no heading, no 'Atualizado' line and ONE entry: the 'Novo pedido' button", async () => {
     await renderSales([rascunho]);
     await screen.findByText("Fábio Loja");
     expect(screen.queryByText(/Atualizado/)).toBeNull();
     expect(screen.queryByText("Vendas")).toBeNull();
-    expect(screen.queryByText(/Novo pedido/)).toBeNull();
-    expect(screen.getAllByRole("button", { name: "Nova venda" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Novo pedido" })).toHaveLength(1);
     expect(screen.getByText(/^1 venda/)).toBeTruthy();
   });
 

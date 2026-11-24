@@ -118,7 +118,6 @@ export function ProductBrowser({ products, onUnauthenticated, connectivity, acti
       searchPlaceholder="Buscar por código ou descrição"
       loadingText="Carregando catálogo..."
       emptyText="Nenhum produto disponível"
-      emptyHint="Conecte-se e sincronize para carregar o catálogo neste aparelho."
       {...(active > 0 ? { filteredEmptyText: "Nenhum produto com estes filtros." } : {})}
       noResultText={(text) => (active > 0 ? `Nenhum produto encontrado para “${text}” com estes filtros.` : `Nenhum produto encontrado para “${text}”.`)}
       noResultHint="Confira a descrição ou o código."

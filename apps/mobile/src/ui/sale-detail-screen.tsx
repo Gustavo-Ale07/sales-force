@@ -25,7 +25,7 @@ import { colors, spacing } from "../theme";
 import { BackLink } from "./back-link";
 import { Icon } from "./icons";
 import { codeOfHeldMessage } from "../data/error-catalog";
-import { activeStageView, isCustomerUnavailable, isProductBlocked, saleActions, saleExplanation } from "../offline/sales-status";
+import { activeStageView, isCustomerUnavailable, isProductBlocked, saleActions, saleActionableExplanation } from "../offline/sales-status";
 import { ErpStageCard } from "./erp-stage-card";
 import { useAppModal } from "./app-modal";
 import { useErrorPopup } from "./use-error-popup";
@@ -303,7 +303,7 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
             <SaleBadgeView status={draft.status} remoteId={draft.remoteId} lastError={draft.lastError} sendState={draft.sendState} sendCode={draft.sendCode} erpStage={draft.erpStage} />
             <Text style={styles.meta}>{orderIdentity(erpNumberOfDraft(draft), (tops !== null && isQuotationTop(effectiveTop, tops)) || isQuotationDraft(draft))}</Text>
           </View>
-          {stage !== null ? <ErpStageCard stage={stage} /> : <Text style={styles.explanation}>{saleExplanation(draft)}</Text>}
+          {stage !== null ? <ErpStageCard stage={stage} /> : saleActionableExplanation(draft) !== null && <Text style={styles.explanation}>{saleActionableExplanation(draft)}</Text>}
           {release !== null && (
             <View accessibilityLabel="Liberação no Sankhya">
               <Text style={[styles.releaseLabel, { color: releaseToneColor(release.tone) }]}>{release.label}</Text>

@@ -162,7 +162,6 @@ export function CustomersScreen({ customers, onUnauthenticated, connectivity, on
       searchPlaceholder="Buscar por nome, código ou documento"
       loadingText="Carregando clientes..."
       emptyText="Nenhum cliente disponível"
-      emptyHint="Conecte-se e sincronize para carregar a sua carteira neste aparelho."
       {...(activeFilters > 0 ? { filteredEmptyText: "Nenhum cliente com estes filtros." } : {})}
       noResultText={(text) => (activeFilters > 0 ? `Nenhum cliente encontrado para “${text}” com estes filtros.` : `Nenhum cliente encontrado para “${text}”.`)}
       onUnauthenticated={onUnauthenticated}

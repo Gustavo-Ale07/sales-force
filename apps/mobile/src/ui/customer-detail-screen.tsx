@@ -119,7 +119,6 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
           </Section>
         )}
 
-        <Text style={styles.note}>Histórico comercial ainda não disponível neste dispositivo.</Text>
         {!online && <Text style={styles.note}>Sem conexão: dados salvos neste aparelho.</Text>}
       </ScrollView>
 

@@ -53,7 +53,7 @@ describe.each(CONDITIONS)("layout at %s", (_name, width, height, fontScale) => {
   it("the touch targets are at least 44 points (new sale, Filtros, Não enviados / Enviados, search)", async () => {
     await renderSales();
     const heightOf = (node: { props: { style?: unknown } }) => (StyleSheet.flatten(node.props.style as never) as { minHeight?: number; height?: number }).minHeight ?? 0;
-    expect(heightOf(screen.getByRole("button", { name: "Nova venda" }))).toBeGreaterThanOrEqual(44);
+    expect(heightOf(screen.getByRole("button", { name: "Novo pedido" }))).toBeGreaterThanOrEqual(44);
     expect(heightOf(screen.getByRole("button", { name: "Filtros" }))).toBeGreaterThanOrEqual(44);
     for (const tab of screen.getAllByRole("tab")) expect(heightOf(tab)).toBeGreaterThanOrEqual(44);
   });

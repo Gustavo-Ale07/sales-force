@@ -17,7 +17,6 @@ describe("CustomerDetailScreen", () => {
     expect(screen.queryByText("Comercial")).toBeNull();
     expect(screen.queryByText("Financeiro")).toBeNull();
     expect(screen.queryByText("Documento")).toBeNull();
-    expect(screen.getByText("Histórico comercial ainda não disponível neste dispositivo.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Ligar|E-mail|WhatsApp/ })).toBeNull();
   });
 

@@ -152,10 +152,6 @@ export function ProfileScreen({ account, onCheckUpdate, onSignOut, loadUnsent, p
         <SyncPanel {...sync} />
       </Section>
 
-      <Section title="Configurações">
-        <Text style={styles.muted}>Nenhuma configuração disponível nesta versão.</Text>
-      </Section>
-
       {onCheckUpdate !== undefined && (
         <Section title="Atualização">
           <Pressable style={styles.link} onPress={() => void checkUpdate()} disabled={updating} accessibilityRole="button" accessibilityLabel="Verificar atualização do aplicativo">

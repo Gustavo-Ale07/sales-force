@@ -209,7 +209,6 @@ describe("ProductsScreen (Catálogo)", () => {
   it("explains an empty catalog and a retryable error", async () => {
     await render(<ProductsScreen products={fakeProducts({ list: async () => pageOf([]) })} onUnauthenticated={noop} />);
     expect(await screen.findByText("Nenhum produto disponível")).toBeTruthy();
-    expect(screen.getByText(/Conecte-se e sincronize/)).toBeTruthy();
   });
 
   it("shows the loading text and then a retry button on error", async () => {

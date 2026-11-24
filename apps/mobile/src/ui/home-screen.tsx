@@ -72,16 +72,6 @@ function ActionRow({
   );
 }
 
-function EmptySection({ title, text }: { title: string; text: string }) {
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.card}>
-        <Text style={styles.empty}>{text}</Text>
-      </View>
-    </View>
-  );
-}
 
 /** Home: real shortcuts and counters from the data already on this device. No sales metrics until there is a source for them. */
 export function HomeScreen({ account, active, repositories, localOrders, syncStatus, connectivity, onNewOrder, onSyncNow }: HomeScreenProps) {
@@ -143,8 +133,6 @@ export function HomeScreen({ account, active, repositories, localOrders, syncSta
         </View>
       </View>
 
-      <EmptySection title="Performance" text="Indicadores comerciais ficarão disponíveis quando o histórico de vendas estiver sincronizado." />
-      <EmptySection title="Engajamento da carteira" text="A análise da carteira ficará disponível quando o histórico de vendas estiver sincronizado." />
     </ScrollView>
   );
 }
@@ -185,6 +173,4 @@ const styles = StyleSheet.create({
   },
   tileValue: { fontSize: fontSize.headline, fontWeight: "800", color: colors.navy },
   tileLabel: { fontSize: 13, color: colors.textMuted },
-  card: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.lg },
-  empty: { fontSize: 14, color: colors.textMuted },
 });

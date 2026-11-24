@@ -46,7 +46,6 @@ describe("CustomersScreen", () => {
     const customers: CustomerRepository = { list: async () => pageOf([]) };
     await render(<CustomersScreen customers={customers} onUnauthenticated={noop} />);
     expect(await screen.findByText("Nenhum cliente disponível")).toBeTruthy();
-    expect(screen.getByText(/Conecte-se e sincronize/)).toBeTruthy();
 
     await fireEvent.changeText(screen.getByPlaceholderText("Buscar por nome, código ou documento"), "zzz");
     expect(await screen.findByText("Nenhum cliente encontrado para “zzz”.")).toBeTruthy();

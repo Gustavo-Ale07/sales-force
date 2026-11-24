@@ -30,7 +30,6 @@ export function approvalViewOf(order: Pick<OrderDetail, "status" | "approval">, 
       tone: "warning",
       lines: [
         approval === null ? "Um aprovador precisa decidir sobre o desconto." : `Nível de aprovação: ${LEVEL_LABEL[approval.requestedLevel]}.`,
-        "Você não é avisado: abra o pedido de novo para ver a decisão. Editar o pedido cancela a solicitação.",
       ],
     };
   }

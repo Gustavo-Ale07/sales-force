@@ -154,6 +154,20 @@ export function saleExplanation(draft: Pick<DraftRecord, "status" | "remoteId" |
   }
 }
 
+/** The explanation only when the seller has something to fix or decide (blocked, refused, error, conflict, price review, rejected discount); `null` for plain progress states. */
+export function saleActionableExplanation(draft: Parameters<typeof saleExplanation>[0]): string | null {
+  const phase = draft.status === "synced" || draft.sendState === "requested" ? sendPhaseOf(draft) : null;
+  const actionable =
+    isCustomerUnavailable(draft) ||
+    isProductBlocked(draft) ||
+    draft.status === "sync_error" ||
+    draft.status === "conflict" ||
+    draft.status === "needs_review" ||
+    phase === "refused" ||
+    phase === "approval_rejected";
+  return actionable ? saleExplanation(draft) : null;
+}
+
 export interface SaleActions {
   readonly continue: boolean;
   readonly duplicate: boolean;

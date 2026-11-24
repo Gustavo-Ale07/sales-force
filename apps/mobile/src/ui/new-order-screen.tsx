@@ -327,7 +327,7 @@ export function NewOrderScreen({
       })
       .catch(() => fresh());
   }
-  // Entering the wizard with nothing pending (a plain "Nova venda"): offer the recovery record once.
+  // Entering the wizard with nothing pending (a plain "Novo pedido"): offer the recovery record once.
   const entryAsked = useRef(false);
   useEffect(() => {
     if (entryAsked.current) return;
@@ -1134,9 +1134,7 @@ export function NewOrderScreen({
             {customer.overdue === true && <Text style={styles.selectedWarn}>Possui títulos vencidos (informativo)</Text>}
           </View>
         )}
-        {editingOrder !== null ? (
-          <Text style={styles.lockedNote}>O cliente de um pedido já salvo não pode ser trocado. Para outro cliente, inicie um novo pedido.</Text>
-        ) : (
+        {editingOrder !== null ? null : (
           <>
             <Text style={styles.stepTitle}>{customer === null ? "Selecione o cliente" : "Trocar de cliente"}</Text>
             <CustomerPicker customers={repositories.customers} onSelect={selectCustomer} onUnauthenticated={onUnauthenticated} />
@@ -1241,7 +1239,7 @@ export function NewOrderScreen({
                     </Pressable>
                     <Pressable style={styles.toolbarButton} onPress={() => setGroupDiscountOpen(true)} accessibilityRole="button" accessibilityLabel="Desconto por grupo">
                       <Text style={styles.toolbarIcon}>%</Text>
-                      <Text style={styles.toolbarButtonText} numberOfLines={1}>Por grupo</Text>
+                      <Text style={styles.toolbarButtonText} numberOfLines={1}>Desconto por grupo</Text>
                     </Pressable>
                   </>
                 )}

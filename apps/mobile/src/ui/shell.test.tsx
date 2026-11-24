@@ -451,13 +451,12 @@ describe("Shell", () => {
     expect(syncNow).toHaveBeenCalledWith("manual");
   });
 
-  it("Vendas opens on 'Minhas vendas' with ONE entry, the 'Nova venda' button", async () => {
+  it("Vendas opens on 'Minhas vendas' with ONE entry, the 'Novo pedido' button", async () => {
     const { offline } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() });
     await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
     await fireEvent.press(await screen.findByRole("tab", { name: "Vendas" }));
     expect(await screen.findByText("Nenhuma venda pendente.")).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: "Nova venda" })).toHaveLength(1);
-    expect(screen.queryByText("Novo pedido")).toBeNull();
+    expect(screen.getAllByRole("button", { name: "Novo pedido" })).toHaveLength(1);
   });
 
   it("an order in progress is saved as 'Salvo no aparelho' when the seller switches tab, and Vendas comes back on its list", async () => {
@@ -465,14 +464,14 @@ describe("Shell", () => {
     const { offline } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() }, undefined, localOrders);
     await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
     await fireEvent.press(await screen.findByRole("tab", { name: "Vendas" }));
-    await fireEvent.press(await screen.findByRole("button", { name: "Nova venda" }));
+    await fireEvent.press(await screen.findByRole("button", { name: "Novo pedido" }));
     expect(screen.getByLabelText("Etapa 1 de 4: Cliente")).toBeTruthy();
     // An empty order is never written.
     await fireEvent.press(screen.getByRole("tab", { name: "Perfil" }));
     await waitFor(() => expect(screen.getByRole("tab", { name: "Perfil" }).props.accessibilityState.selected).toBe(true));
     expect(localOrders.drafts).toHaveLength(0);
     await fireEvent.press(screen.getByRole("tab", { name: "Vendas" }));
-    expect(await screen.findByRole("button", { name: "Nova venda" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Novo pedido" })).toBeTruthy();
     expect(screen.queryByLabelText("Etapa 1 de 4: Cliente")).toBeNull();
   });
 
@@ -481,11 +480,11 @@ describe("Shell", () => {
     await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
     await fireEvent.press(await screen.findByRole("tab", { name: "Vendas" }));
     await screen.findByText("Nenhuma venda pendente.");
-    await fireEvent.press(screen.getByRole("button", { name: "Nova venda" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Novo pedido" }));
     expect(screen.getByLabelText("Etapa 1 de 4: Cliente")).toBeTruthy();
     // Empty order: leaves without a question and writes nothing.
     await fireEvent.press(screen.getByRole("button", { name: "Sair do pedido" }));
-    expect(await screen.findByRole("button", { name: "Nova venda" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Novo pedido" })).toBeTruthy();
     expect(screen.queryByLabelText("Etapa 1 de 4: Cliente")).toBeNull();
   });
 
@@ -600,10 +599,10 @@ describe("Shell: Android Back", () => {
     const { offline } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() }, undefined, localOrders);
     await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
     await fireEvent.press(await screen.findByRole("tab", { name: "Vendas" }));
-    await fireEvent.press(await screen.findByRole("button", { name: "Nova venda" }));
+    await fireEvent.press(await screen.findByRole("button", { name: "Novo pedido" }));
     expect(screen.getByLabelText("Etapa 1 de 4: Cliente")).toBeTruthy();
     await back();
-    expect(await screen.findByRole("button", { name: "Nova venda" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Novo pedido" })).toBeTruthy();
     expect(localOrders.drafts).toHaveLength(0);
   });
 });

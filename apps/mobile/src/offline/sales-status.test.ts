@@ -1,7 +1,7 @@
 import type { DraftStatus } from "@salesforce/mobile-db";
 import { draftRecord } from "../test-doubles";
 import { CUSTOMER_BLOCK_MESSAGES, CUSTOMER_UNAVAILABLE_MESSAGE, PRODUCT_BLOCK_MESSAGES } from "@salesforce/mobile-db";
-import { saleActions, saleBadge, saleExplanation, salesGroupOf, sendPhaseOf } from "./sales-status";
+import { saleActionableExplanation, saleActions, saleBadge, saleExplanation, salesGroupOf, sendPhaseOf } from "./sales-status";
 
 const ALL: DraftStatus[] = ["local_only", "pending_sync", "syncing", "synced", "sync_error", "conflict", "needs_review"];
 
@@ -158,5 +158,13 @@ describe("saleActions", () => {
 
   it("does not allow deleting while the order is being sent", () => {
     expect(A({ status: "syncing" }).delete).toBe(false);
+  });
+});
+
+describe("saleActionableExplanation", () => {
+  it("is silent for plain progress and explains what the seller must fix", () => {
+    expect(saleActionableExplanation(draftRecord({ status: "local_only" }))).toBeNull();
+    expect(saleActionableExplanation(draftRecord({ status: "needs_review" }))).toMatch(/preços mudaram/);
+    expect(saleActionableExplanation(draftRecord({ status: "conflict" }))).toMatch(/alterado em outro lugar/);
   });
 });

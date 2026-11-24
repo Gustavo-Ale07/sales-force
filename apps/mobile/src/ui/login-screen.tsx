@@ -131,7 +131,7 @@ export function LoginScreen({ auth, onAuthenticated, connectivity }: LoginScreen
               style={styles.passwordInput}
               value={password}
               onChangeText={setPassword}
-              placeholder="Digite sua senha"
+              placeholder="Senha"
               placeholderTextColor={colors.textMuted}
               secureTextEntry={!showPassword}
               autoCapitalize="none"
