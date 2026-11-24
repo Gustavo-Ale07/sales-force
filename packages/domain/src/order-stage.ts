@@ -103,7 +103,7 @@ export interface OrderStageFacts {
   readonly ordemcarga: number | null;
   /** Release lines of the note that are not released yet. */
   readonly pendingReleases: readonly PendingRelease[];
-  /** Owner rule 2026-11-24: some release line of the note (TSILIB, released or not) has REPROVADO = 'S'. Absent = false. */
+  /** Owner rule 2026-11-24: some release line of the note (released or not) is marked as reproved. Absent = false. */
   readonly hasReprovedRelease?: boolean;
   /** The order note is linked to a sale note (invoicing link). */
   readonly hasInvoiceLink: boolean;
