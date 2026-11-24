@@ -6,7 +6,6 @@ import {
   DialogClose,
   DialogContent,
   FieldError,
-  FieldHint,
   Table,
   TableBody,
   TableCaption,
@@ -168,7 +167,6 @@ function BulkEntryContent({
   return (
     <DialogContent
       title="Lançamento múltiplo"
-      description="Escolha vários produtos de uma vez ou importe uma lista. Nada é adicionado antes de você conferir."
       className="max-w-3xl"
       onCloseAutoFocus={(event) => {
         if (!triggerRef?.current) return;
@@ -238,9 +236,6 @@ function BulkEntryContent({
               setReview(null);
             }}
           />
-          <FieldHint>
-            Separe código e quantidade por ; ou tabulação (colar do Excel). Sem quantidade, vale 1. Até {MAX_ORDER_ROWS} linhas por vez.
-          </FieldHint>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <label className="text-xs font-medium" htmlFor="bulk-entry-file">
@@ -255,9 +250,6 @@ function BulkEntryContent({
             onChange={(event) => void onFile(event)}
           />
         </div>
-        <FieldHint>
-          Excel: identificador na 1ª coluna e quantidade na 2ª. PDF: só com texto (não escaneado), uma linha "código quantidade" por produto.
-        </FieldHint>
         {fileNote ? (
           <Alert tone="warning" title="Nem todo o PDF foi lido">
             {fileNote}

@@ -54,7 +54,7 @@ export function ProfilePage() {
         description={user.roleLabel ?? user.role}
       />
       <Card>
-        <CardHeader title="Foto" description="Aparece no menu do usuário. Só você vê as opções de troca." />
+        <CardHeader title="Foto" />
         <CardBody>
           <ProfilePhotoControls user={user} />
         </CardBody>
@@ -71,24 +71,16 @@ export function ProfilePage() {
           </CardBody>
         </Card>
         <Card>
-          <CardHeader title="Carteira" description="Vendedores vinculados a esta conta na configuração da instalação." />
+          <CardHeader title="Carteira" />
           <CardBody>
             <KeyValueList>
               <KeyValue label="Vendedores vinculados">
                 {user.sellerCodes.length === 0 ? (hasWholePortfolioAccess(user.role) ? "Nenhum (acesso a toda a carteira)" : "Nenhum vendedor vinculado") : user.sellerCodes.join(", ")}
               </KeyValue>
             </KeyValueList>
-            {user.sellerCodes.length === 0 && !hasWholePortfolioAccess(user.role) ? (
-              <p className="m-0 mt-2 text-xs text-fg-muted">
-                Sem vendedor vinculado, a carteira de clientes e os pedidos ficam fora do seu alcance. Peça o vínculo ao administrador.
-              </p>
-            ) : null}
           </CardBody>
         </Card>
       </div>
-      <p className="m-0 text-xs text-fg-muted">
-        Alteração de dados da conta e de senha é feita pelo administrador da instalação; aqui você só troca a sua foto.
-      </p>
     </>
   );
 }

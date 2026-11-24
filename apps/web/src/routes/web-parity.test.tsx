@@ -166,15 +166,9 @@ describe("Meu perfil e atualização de dados", () => {
     renderApp("/perfil", { handlers: { ...shell, "GET /auth/session": { body: { ...body, account: { ...body.account, role, sellerCodes: [] } } } } });
   };
 
-  it("warns about the out-of-reach portfolio only for a seller without a link", async () => {
-    profileWith("seller");
-    expect(await screen.findByText(/ficam fora do seu alcance/)).toBeInTheDocument();
-  });
-
   it.each(["manager", "admin"])("does not warn a %s without a seller link (whole portfolio)", async (role) => {
     profileWith(role);
     expect(await screen.findByText("Nenhum (acesso a toda a carteira)")).toBeInTheDocument();
-    expect(screen.queryByText(/ficam fora do seu alcance/)).not.toBeInTheDocument();
   });
 
   const REFRESH_ID = "0190a000-0000-7000-8000-0000000000f1";
@@ -363,11 +357,6 @@ describe("Situação do pedido: textos distintos e honestos", () => {
       expect(await within(table).findAllByText(text)).not.toHaveLength(0);
     }
     expect(table).not.toHaveTextContent(/faturad|sincronizado|confirmado/i);
-  });
-
-  it("explains in the editor that sent is not billing", async () => {
-    renderApp(`/pedidos/${ORDER_ID}`, { handlers: editorHandlers(orderDetail({ status: "sent", erpNumber: 555 })) });
-    expect(await screen.findByText(/não indica faturamento/)).toBeInTheDocument();
   });
 
   it("marks a draft whose customer became ineligible and blocks sending, without changing its status", async () => {

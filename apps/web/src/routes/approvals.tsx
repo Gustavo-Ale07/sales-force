@@ -31,8 +31,7 @@ import { useState } from "react";
 import { QueryError } from "../components/query-error";
 import { approveApproval, rejectApproval } from "../lib/api-mutations";
 import { approvalsQueryOptions, queryKeys } from "../lib/api-queries";
-import { useApi, useAppServices } from "../lib/app-context";
-import { sessionQueryOptions } from "../lib/auth-client";
+import { useApi } from "../lib/app-context";
 import { describeApiError } from "../lib/error-message";
 import { formatCount } from "../lib/labels";
 
@@ -58,19 +57,11 @@ export function ApprovalsPage() {
   const [pageSize, setPageSize] = useState(25);
   const [decision, setDecision] = useState<Decision>(null);
   const query = useQuery(approvalsQueryOptions(api, page, pageSize));
-  const { authClient } = useAppServices();
-  const session = useQuery(sessionQueryOptions(authClient));
-  const isAdmin = session.data?.role === "admin";
 
   return (
     <>
       <PageHeader
         title="Aprovações de desconto"
-        description={
-          isAdmin
-            ? "Pedidos aguardando o nível Diretoria. Aprovar ou reprovar é uma ação explícita e fica registrada com o seu nome."
-            : "Pedidos aguardando o nível Gerente. Aprovar ou reprovar é uma ação explícita e fica registrada com o seu nome."
-        }
       />
       <Card>
         <Table label="Aprovações pendentes">

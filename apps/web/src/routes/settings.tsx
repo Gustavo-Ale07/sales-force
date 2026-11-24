@@ -150,7 +150,6 @@ export function SettingsPage() {
     <>
       <PageHeader
         title="Configurações"
-        description="Valores em uso nesta instalação e de onde cada um vem (somente leitura)."
         actions={
           <Button
             variant="secondary"

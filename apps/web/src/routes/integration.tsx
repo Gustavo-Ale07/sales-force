@@ -68,7 +68,6 @@ export function IntegrationPage() {
       <PageHeader
         title="Integração e configuração"
        
-        description="Estado da integração com o Sankhya e da configuração desta instalação (somente leitura)."
         actions={
           <Button
             variant="secondary"

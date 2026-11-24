@@ -107,7 +107,6 @@ function MassDiscountContent({ lines, onApply, onOpenChange }: Pick<MassDiscount
     <>
       <DialogContent
         title="Desconto no pedido todo"
-        description="O mesmo percentual em todos os itens do carrinho. Substitui os descontos já informados."
         className="max-w-md"
         footer={
           <>
@@ -125,7 +124,7 @@ function MassDiscountContent({ lines, onApply, onOpenChange }: Pick<MassDiscount
         }
       >
         <div className="flex flex-col gap-3">
-          <FormField label="Desconto (%)" hint="Até 99,99, com no máximo 2 casas decimais.">
+          <FormField label="Desconto (%)">
             {(controlProps) => (
               <div className="flex flex-col gap-1">
                 <PercentInput
@@ -261,7 +260,6 @@ function GroupDiscountContent({ open, lines, onApply, onOpenChange }: GroupDisco
     <>
       <DialogContent
         title="Desconto por grupo"
-        description="Um percentual por grupo de produtos, para os itens do carrinho que pertencem a ele. Deixe em branco o grupo que não deve mudar."
         className="max-w-lg"
         footer={
           <>

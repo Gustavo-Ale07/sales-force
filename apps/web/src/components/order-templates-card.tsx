@@ -164,7 +164,6 @@ export function OrderTemplatesCard({ customerCode }: OrderTemplatesCardProps) {
     <Card>
       <CardHeader
         title="Pedidos recorrentes"
-        description="Listas de produtos e quantidades para repetir. Os preços são os de hoje, aplicados ao criar o pedido."
       />
       {useFailure ? (
         <CardBody className="border-b border-line">
@@ -191,7 +190,6 @@ export function OrderTemplatesCard({ customerCode }: OrderTemplatesCardProps) {
         <EmptyState
           compact
           title="Nenhum pedido recorrente para este cliente"
-          description="Monte um pedido e use “Salvar como recorrente” no editor para repeti-lo depois com um clique."
         />
       ) : (
         <Table label="Pedidos recorrentes do cliente">

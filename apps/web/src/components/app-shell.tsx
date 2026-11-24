@@ -14,7 +14,6 @@ import { DevAuthBanner } from "./dev-auth-banner";
 import { GlobalActivity } from "./global-activity";
 import { ConnectedIntegrationPill } from "./integration-pill";
 import { navItemsFor } from "./nav-items";
-import { NotificationsBell } from "./notifications-bell";
 import { SyncIndicator } from "./sync-indicator";
 import { UserMenu } from "./user-menu";
 
@@ -185,7 +184,6 @@ export function AppShell({ user, onLogout, children }: AppShellProps) {
           {user && canSeeIntegration(user.role) ? <ConnectedIntegrationPill /> : null}
           {user ? <SyncIndicator role={user.role} /> : null}
           <CommandMenu role={user?.role} />
-          <NotificationsBell />
           <UserMenu user={user} onLogout={onLogout ?? (() => undefined)} />
         </div>
       </header>

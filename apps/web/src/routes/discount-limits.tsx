@@ -112,16 +112,15 @@ function LimitsEditor({ data }: { data: { limits: LimitsForm; provisional: boole
     <>
       <PageHeader
         title="Limites de desconto"
-        description="Desconto máximo, em percentual, que cada nível aprova. O limite é inclusivo: um pedido com desconto igual ao limite ainda é aprovado naquele nível."
       />
       <div className="flex max-w-2xl flex-col gap-3">
         {data.provisional ? (
           <Alert tone="warning" title="Valores provisórios">
-            Estes limites ainda não foram confirmados: ajustar pelo dono. Salve para confirmar os valores desta instalação.
+            Estes limites ainda não foram confirmados: ajustar pelo dono.
           </Alert>
         ) : null}
         <Card>
-          <CardHeader title="Níveis de aprovação" description="Gerente aprova até o limite do gerente; a Diretoria, até o teto." />
+          <CardHeader title="Níveis de aprovação" />
           <CardBody>
             <form onSubmit={submit} noValidate aria-label="Limites de desconto" className="flex flex-col gap-3">
               {conflict ? (
@@ -145,8 +144,8 @@ function LimitsEditor({ data }: { data: { limits: LimitsForm; provisional: boole
                   {failure.description}
                 </Alert>
               ) : null}
-              {FIELDS.map(({ key, label, hint }) => (
-                <FormField key={key} label={`${label} (%)`} required hint={hint} error={showProblems ? problems[key] : undefined}>
+              {FIELDS.map(({ key, label }) => (
+                <FormField key={key} label={`${label} (%)`} required error={showProblems ? problems[key] : undefined}>
                   <Input
                     size="md"
                     inputMode="decimal"

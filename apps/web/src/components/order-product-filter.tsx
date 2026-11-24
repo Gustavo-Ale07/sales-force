@@ -151,7 +151,6 @@ function ProductFilterContent({
   return (
     <DialogContent
       title="Filtrar por produtos"
-      description="Escolha os produtos que o pedido deve conter. A seleção vale para todas as páginas e buscas."
       className="max-w-3xl"
       footer={
         <>

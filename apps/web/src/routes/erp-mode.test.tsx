@@ -44,7 +44,6 @@ describe("modo erp (D-M)", () => {
     erp.unmount();
     renderApp("/pedidos/novo?customer=1001", { handlers: { ...handlers, ...forceHandlers } });
     await screen.findByRole("heading", { name: /^Novo pedido/ });
-    await screen.findByText(/condição de pagamento e a análise de crédito/);
     expect(screen.queryByText(/Descontos acima do permitido/)).not.toBeInTheDocument();
   });
 

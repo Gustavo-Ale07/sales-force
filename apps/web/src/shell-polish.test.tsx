@@ -65,16 +65,6 @@ describe("quick navigation (Ctrl K)", () => {
   });
 });
 
-describe("notifications bell", () => {
-  it("shows only the empty state, with no badge or counter", async () => {
-    const { user } = renderApp("/", { handlers: shellData });
-    const bell = await screen.findByRole("button", { name: "Notificações" });
-    expect(bell).toHaveTextContent("");
-    await user.click(bell);
-    expect(await screen.findByText("Você não possui novas notificações.")).toBeInTheDocument();
-  });
-});
-
 describe("top bar and navigation", () => {
   it("shows the user as an avatar only, keeping the accessible name", async () => {
     renderApp("/", { handlers: shellData });

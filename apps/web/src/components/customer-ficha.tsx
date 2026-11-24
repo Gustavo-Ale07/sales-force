@@ -176,9 +176,6 @@ function RegistrationTab({ customerCode }: { customerCode: number }) {
           </CardBody>
         </Card>
       </div>
-      <Alert tone="info" title="Dados de contato e endereços">
-        Telefone, e-mail, classificação ICMS e os endereços (principal, entrega e cobrança) ainda não são sincronizados do Sankhya e por isso não aparecem aqui.
-      </Alert>
     </div>
   );
 }

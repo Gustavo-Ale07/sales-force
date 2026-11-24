@@ -74,7 +74,7 @@ export function OrderStatusBadge({
   const view = orderStatusView(order);
   // An overdue queued delivery is shown as "waiting" (amber), so it gets the clock instead of the paper plane.
   const icon = order.status === "queued" && view.tone === "warning" ? Clock : orderStatusIcons[order.status];
-  return <Shown presentation={{ label: view.label, tone: view.tone, icon, title: view.hint }} variant={variant} className={className} />;
+  return <Shown presentation={{ label: view.label, tone: view.tone, icon }} variant={variant} className={className} />;
 }
 
 /** Release (liberação) in Sankhya: awaiting, released or denied. */

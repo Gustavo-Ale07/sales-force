@@ -117,7 +117,7 @@ function SaveTemplateContent({
         <FormField
           label="Nome do modelo"
           required
-          hint={`Até ${MAX_TEMPLATE_NAME_LENGTH} caracteres. Ex.: Reposição mensal.`}
+         
           error={
             nameTaken
               ? "Já existe um modelo com este nome para este cliente. Escolha outro nome."

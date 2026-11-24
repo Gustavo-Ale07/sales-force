@@ -14,7 +14,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   FieldError,
-  FieldHint,
   FormField,
   Input,
   Money,
@@ -863,7 +862,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
       ) : null}
       {readOnly ? (
         <Alert tone="info" title="Somente leitura">
-          Este pedido está como “{status?.label}” e não pode mais ser editado. {status?.hint ?? null}
+          Este pedido está como “{status?.label}” e não pode mais ser editado.
         </Alert>
       ) : null}
       {save.isError ? <FailureAlert failure={describeSaveFailure(save.error)} onReload={order ? reload : undefined} /> : null}
@@ -968,7 +967,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                 ))}
               </Select>
             </FormField>
-            <FormField label="Frete" required id="order-freight" error={headerError("missing_freight_type")} hint="CIF: o frete é por conta de quem vende. FOB: por conta do cliente.">
+            <FormField label="Frete" required id="order-freight" error={headerError("missing_freight_type")}>
               <Select
                 size="md"
                 disabled={readOnly}
@@ -988,7 +987,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
         </Card>
 
         <Card>
-          <CardHeader title="Itens" description="Preços de lista da tabela do cliente. O servidor confirma preços e totais ao salvar." />
+          <CardHeader title="Itens" />
           {!readOnly ? (
             <>
               <CardBody className="flex flex-wrap items-center gap-2 border-b border-line">
@@ -1352,12 +1351,6 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                   : `${preview.totals.unpricedLineCount} itens sem preço não entram na soma.`}
               </p>
             ) : null}
-            <FieldHint className="mt-1 text-right">
-              O IPI é uma estimativa só para conferência: o valor real é calculado pelo Sankhya.
-              {approvalsOn
-                ? " A condição de pagamento e a análise de crédito ainda não estão disponíveis nesta versão."
-                : null}
-            </FieldHint>
           </CardBody>
         </Card>
 
@@ -1557,7 +1550,6 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
             </>
           }
         >
-          <p className="m-0 text-sm text-fg-muted">Salve para não perder o trabalho. Um pedido só salvo não é enviado ao Sankhya.</p>
         </DialogContent>
       </Dialog>
     </>

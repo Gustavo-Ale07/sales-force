@@ -67,12 +67,11 @@ describe("Cliente: Pedidos recorrentes", () => {
     expect(row).toHaveTextContent("Usar");
   });
 
-  it("shows an empty state that explains how to create one", async () => {
+  it("shows an empty state", async () => {
     renderApp("/clientes/1001", {
       handlers: customerPageHandlers({ "GET /customers/:code/order-templates": { body: orderTemplatesPage([]) } }),
     });
     expect(await screen.findByText("Nenhum pedido recorrente para este cliente")).toBeInTheDocument();
-    expect(screen.getByText(/Salvar como recorrente/)).toBeInTheDocument();
   });
 
   it("shows a recoverable error when the list fails", async () => {

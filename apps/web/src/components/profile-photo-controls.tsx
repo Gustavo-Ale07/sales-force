@@ -135,14 +135,13 @@ export function ProfilePhotoControls({ user, prepare = prepareSquarePhoto }: Pro
             </Button>
           ) : null}
         </div>
-        <p className="m-0 text-xs text-fg-muted">JPEG, PNG ou WebP, até 5 MB.</p>
+        
         {fieldError ? <FieldError id={errorId}>{fieldError}</FieldError> : null}
       </div>
 
       <Dialog open={picked !== null} onOpenChange={(open) => !open && closePreview()}>
         <DialogContent
           title="Nova foto de perfil"
-          description="A foto é recortada em quadrado, pelo centro."
           footer={
             <>
               <DialogClose asChild>

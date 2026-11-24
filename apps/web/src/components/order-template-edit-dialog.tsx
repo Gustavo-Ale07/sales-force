@@ -6,7 +6,6 @@ import {
   DialogClose,
   DialogContent,
   FieldError,
-  FieldHint,
   FormField,
   Input,
   SkeletonLines,
@@ -141,7 +140,6 @@ function EditBody({
   return (
     <DialogContent
       title="Editar modelo recorrente"
-      description="Só produto e quantidade são guardados. Os preços são calculados quando o modelo é usado."
       className="max-w-2xl"
       footer={footer}
     >
@@ -392,7 +390,6 @@ function EditForm({ detail, customerCode, descriptions, onReload, reloading, onC
             </TableBody>
           </Table>
         )}
-        <FieldHint>Produtos indisponíveis hoje continuam no modelo e são deixados de fora, com aviso, ao criar o pedido.</FieldHint>
       </form>
     </>
   );
