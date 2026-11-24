@@ -32,6 +32,8 @@ export function parseCustomersSearch(raw: Record<string, unknown>): CustomersSea
 export interface OrdersSearch {
   search?: string;
   status?: ApiSchema<"OrderStatus">;
+  /** Sales tab: `sent` (Enviados) or, when absent, `unsent` (Não enviados), like the app. */
+  group?: "sent";
   customerCode?: number;
   /** Stage in Sankhya; applied by the API (`stage`), so total and pagination follow it. */
   stage?: (typeof ORDER_STAGE_FILTERS)[number];
@@ -53,6 +55,10 @@ export interface OrdersSearch {
 
 export const ORDER_STATUSES = ["draft", "awaiting_approval", "approved", "approval_rejected", "queued", "sent", "rejected", "unknown"] as const;
 export const ORDER_STAGE_FILTERS = ["sent_to_force", "send_error", "quotation", "received", "in_review", "financial_check", "in_dispatch", "in_invoicing", "invoiced", "barred"] as const;
+/** Statuses a not-yet-sent order can be in (tab "Não enviados"); the other two belong to "Enviados". */
+export const UNSENT_ORDER_STATUSES = ["draft", "awaiting_approval", "approved", "approval_rejected", "queued", "rejected"] as const;
+/** Stages that only exist for an order that already reached Sankhya ("Enviados"); the two delivery stages belong to "Não enviados". */
+export const SENT_ORDER_STAGES = ORDER_STAGE_FILTERS.filter((stage) => stage !== "sent_to_force" && stage !== "send_error");
 export const MAX_ORDER_PRODUCTS = 20;
 export const ORDER_DATE_FIELDS = ["createdAt", "updatedAt"] as const;
 export const ORDER_PRODUCT_MATCHES = ["any", "all"] as const;
@@ -66,11 +72,19 @@ export function parseOrdersSearch(raw: Record<string, unknown>): OrdersSearch {
   const products = asIntList(raw.products, MAX_ORDER_PRODUCTS);
   const dateField = asOneOf(raw.dateField, ORDER_DATE_FIELDS);
   const productMatch = asOneOf(raw.productMatch, ORDER_PRODUCT_MATCHES);
+  const status = asOneOf(raw.status, ORDER_STATUSES);
+  const stage = asOneOf(raw.stage, ORDER_STAGE_FILTERS);
+  // A link that names a sent status or a Sankhya stage lands on "Enviados"; otherwise the default tab is "Não enviados".
+  const sent =
+    raw.group === "sent" ||
+    (status !== undefined && !(UNSENT_ORDER_STATUSES as readonly string[]).includes(status)) ||
+    (stage !== undefined && stage !== "sent_to_force" && stage !== "send_error");
   return compact({
     search: asString(raw.search),
-    status: asOneOf(raw.status, ORDER_STATUSES),
+    group: sent ? ("sent" as const) : undefined,
+    status,
     customerCode: asInt(raw.customerCode, 0),
-    stage: asOneOf(raw.stage, ORDER_STAGE_FILTERS),
+    stage,
     from,
     // An inverted period would be rejected by the API: keep the start and drop the impossible end.
     to: from !== undefined && to !== undefined && to < from ? undefined : to,

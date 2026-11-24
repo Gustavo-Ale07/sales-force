@@ -43,7 +43,7 @@ import { QueryError } from "../components/query-error";
 import { customerQueryOptions, orderEntryConfigurationQueryOptions, ordersQueryOptions, type OrdersParams } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { deliveryErrorText, erpStatusText, formatCount, orderReference, orderReviewLabel, orderReviewReasons, orderStatusLabels } from "../lib/labels";
-import { MAX_ORDER_PRODUCTS, ORDER_DATE_FIELDS, ORDER_STAGE_FILTERS, ORDER_STATUSES, type OrdersSearch } from "../lib/route-search";
+import { MAX_ORDER_PRODUCTS, ORDER_DATE_FIELDS, ORDER_STAGE_FILTERS, ORDER_STATUSES, SENT_ORDER_STAGES, UNSENT_ORDER_STATUSES, type OrdersSearch } from "../lib/route-search";
 import { asDate, asOneOf, compact } from "../lib/search-params";
 import { useSearchBox } from "../lib/use-search-box";
 import { isOrderDeletable } from "@salesforce/domain";
@@ -66,6 +66,10 @@ export interface OrdersPageProps {
 }
 
 const COLUMNS = 8;
+const GROUP_OPTIONS = [
+  { value: "unsent", label: "Não enviados" },
+  { value: "sent", label: "Enviados" },
+] as const;
 
 /** The URL only carries the customer code; the name is read for display (the code alone until it loads). */
 function useCustomerName(code: number | undefined): string | undefined {
@@ -168,6 +172,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
   const stageFilter = params.stage;
   const apiParams: OrdersParams = {
     ...rest,
+    group: params.group ?? "unsent",
     ...(products ? { productCodes: products.join(",") } : {}),
     page: params.page ?? 1,
     pageSize: params.pageSize ?? 25,
@@ -182,6 +187,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
   const [searchText, setSearchText] = useSearchBox(params.search, (search) => change({ search }));
   const [productText, setProductText] = useSearchBox(params.productSearch, (productSearch) => change({ productSearch }));
   const selectedProducts = params.products ?? [];
+  const group = params.group ?? "unsent";
   const hasPeriod = params.from !== undefined || params.to !== undefined;
   const today = todayInSaoPaulo();
   const detected = detectPreset(params.from, params.to, today);
@@ -195,7 +201,8 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
   };
   const hasFilters =
     params.search !== undefined || params.status !== undefined || stageFilter !== undefined || params.customerCode !== undefined || hasPeriod || selectedProducts.length > 0 || params.productSearch !== undefined;
-  const clearAll = () => onSearchChange(compact({ sort: params.sort, pageSize: params.pageSize }));
+  const clearAll = () => onSearchChange(compact({ group: params.group, sort: params.sort, pageSize: params.pageSize }));
+  const pickGroup = (next: "unsent" | "sent") => onSearchChange(compact({ ...params, page: undefined, status: undefined, stage: undefined, group: next === "sent" ? next : undefined }));
   const currentSort = params.sort ?? "-updatedAt";
   const shownItems = query.data?.items ?? [];
   const setFrom = (from: string | undefined) => change({ from, to: from !== undefined && params.to !== undefined && params.to < from ? from : params.to });
@@ -223,6 +230,9 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
           (selectedProducts.length > 0 || params.productSearch !== undefined ? 1 : 0)
         }
       >
+        <FilterField label="Pedidos" keepVisible className="lg:col-span-4">
+          <SegmentedControl<"unsent" | "sent"> aria-label="Pedidos" value={group} onValueChange={pickGroup} options={GROUP_OPTIONS} className="h-10 items-center" />
+        </FilterField>
         <FilterField label="Nº do pedido ou cliente" keepVisible className="lg:col-span-4">
           <SearchInput
             size="md"
@@ -235,26 +245,29 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
         <FilterField label="Cliente" className="lg:col-span-8">
           <CustomerFilter code={params.customerCode} onChange={(customerCode) => change({ customerCode })} />
         </FilterField>
+        {group === "unsent" ? (
         <FilterField label="Situação" className="lg:col-span-3">
           <Select size="md" value={params.status ?? ""} onChange={(e) => change({ status: asOneOf(e.target.value, ORDER_STATUSES) })}>
             <option value="">Todas</option>
-            {ORDER_STATUSES.map((status) => (
+            {UNSENT_ORDER_STATUSES.map((status) => (
               <option key={status} value={status}>
                 {orderStatusLabels[status].label}
               </option>
             ))}
           </Select>
         </FilterField>
+        ) : (
         <FilterField label="Situação no Sankhya" className="lg:col-span-3">
           <Select size="md" value={stageFilter ?? ""} onChange={(e) => change({ stage: asOneOf(e.target.value, ORDER_STAGE_FILTERS) })}>
             <option value="">Todas</option>
-            {ORDER_STAGE_FILTERS.map((code) => (
+            {SENT_ORDER_STAGES.map((code) => (
               <option key={code} value={code}>
                 {stageText(code)}
               </option>
             ))}
           </Select>
         </FilterField>
+        )}
 
         <FilterField label="Período" className="lg:col-span-6">
           <SegmentedControl<PeriodPreset> aria-label="Período" value={preset} onValueChange={pickPreset} options={PERIOD_PRESET_OPTIONS} className="h-10 items-center" />
