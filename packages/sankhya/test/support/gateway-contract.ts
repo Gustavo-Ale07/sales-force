@@ -154,6 +154,8 @@ export function runGatewayContract(label: string, subject: ContractSubject): voi
         'findPartnerByOrigin',
         'findPartnerByDocument',
         'readWrittenPartner',
+        // Spike S1.8: the profile photo write (TSIUSU.FOTO), guarded by SANKHYA_PROFILE_PHOTO_WRITE_ENABLED in the worker.
+        'writeUserPhoto',
       ]);
       const names = new Set<string>();
       for (let proto: object | null = Object.getPrototypeOf(gateway); proto && proto !== Object.prototype; proto = Object.getPrototypeOf(proto)) {

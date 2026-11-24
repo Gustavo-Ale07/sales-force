@@ -59,6 +59,13 @@ import {
   parsePartnerSaveResponse,
 }from '../write/partner-wire.js';
 import { CUSTOMER_WRITE_DISABLED, type CustomerWriteSettings } from '../write/customer-write-config.js';
+import { PROFILE_PHOTO_WRITE_DISABLED, type ProfilePhotoWriteSettings } from '../write/profile-photo-config.js';
+import {
+  PROFILE_PHOTO_WRITE_NOT_ENABLED_MESSAGE,
+  type UserPhotoCallOptions,
+  type UserPhotoWriteRequest,
+} from '../write/profile-photo-contract.js';
+import { USER_SAVE_RECORD_PATH, buildUserPhotoRequestText, parseUserPhotoResponse } from '../write/profile-photo-wire.js';
 import { decimalFromCell } from '../decimal.js';
 import {
   validateSalesHistoryConfig,
@@ -155,6 +162,8 @@ export interface RealSankhyaGatewayOptions {
   readonly orderWrite?: OrderWriteSettings;
   /** D-AR customer write switch; absent = closed (every partner operation refuses without a network call). */
   readonly customerWrite?: CustomerWriteSettings;
+  /** Profile photo write switch (spike S1.8); absent = closed (the write refuses without a network call). */
+  readonly profilePhotoWrite?: ProfilePhotoWriteSettings;
 }
 
 /**
@@ -185,6 +194,7 @@ export class RealSankhyaGateway implements SankhyaGateway {
   readonly #now: () => number;
   readonly #orderWrite: OrderWriteSettings;
   readonly #customerWrite: CustomerWriteSettings;
+  readonly #profilePhotoWrite: ProfilePhotoWriteSettings;
   #queue: Promise<unknown> = Promise.resolve();
 
   constructor(options: RealSankhyaGatewayOptions) {
@@ -205,6 +215,7 @@ export class RealSankhyaGateway implements SankhyaGateway {
     this.#now = options.now ?? Date.now;
     this.#orderWrite = options.orderWrite ?? ORDER_WRITE_DISABLED;
     this.#customerWrite = options.customerWrite ?? CUSTOMER_WRITE_DISABLED;
+    this.#profilePhotoWrite = options.profilePhotoWrite ?? PROFILE_PHOTO_WRITE_DISABLED;
     this.#tokens = new TokenProvider({
       origin: this.#origin,
       credentials: options.credentials,
@@ -609,6 +620,18 @@ export class RealSankhyaGateway implements SankhyaGateway {
     if (this.#orderWrite.mode !== 'live') throw new NotImplementedError(ORDER_WRITE_NOT_ENABLED_MESSAGE);
     const response = await this.#write(CONFIRMAR_NOTA_PATH, buildConfirmarNotaRequestText(erpOrderNumber), options?.signal);
     return parseConfirmarNotaResponse(response.status, response.body, parseRetryAfterMs(response.headers['retry-after']));
+  }
+
+  // ---- profile photo write (spike S1.8) ----------------------------------------------------------
+  //
+  // Refuses with `NotImplementedError` and NO network call unless the worker configuration opened the switch (validated at boot:
+  // staging + live + sandbox + Sandbox host). The wire format lives in `write/profile-photo-wire.ts` (NEEDS VALIDATION).
+
+  async writeUserPhoto(request: UserPhotoWriteRequest, options?: UserPhotoCallOptions): Promise<void> {
+    if (!this.#profilePhotoWrite.enabled) throw new NotImplementedError(PROFILE_PHOTO_WRITE_NOT_ENABLED_MESSAGE);
+    const body = buildUserPhotoRequestText(request); // validation errors leave here, before any call
+    const response = await this.#write(USER_SAVE_RECORD_PATH, body, options?.signal);
+    parseUserPhotoResponse(response.status, response.body, parseRetryAfterMs(response.headers['retry-after']));
   }
 
   // ---- customer (partner) write (D-AR) ----------------------------------------------------------

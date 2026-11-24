@@ -102,6 +102,15 @@ export { createFetchTransport, type HttpRequest, type HttpResponse, type HttpTra
 export type { SankhyaCredentials } from './real/token-provider.js';
 export * from './write/order-contract.js';
 export * from './write/partner-contract.js';
+export * from './write/profile-photo-contract.js';
+export {
+  PROFILE_PHOTO_WRITE_DISABLED,
+  describeProfilePhotoWrite,
+  parseProfilePhotoWriteSettings,
+  type ProfilePhotoWriteSettings,
+} from './write/profile-photo-config.js';
+export { buildUserPhotoRequestText, parseUserPhotoResponse } from './write/profile-photo-wire.js';
+export { FakeUserPhotoBook, type FakeUserPhotoOutcome } from './fake/fake-user-photo-book.js';
 export {
   ICMS_CLASSIFICATIONS,
   PARTNER_FORBIDDEN_COLUMNS,

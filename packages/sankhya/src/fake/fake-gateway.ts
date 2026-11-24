@@ -8,6 +8,8 @@ import type {
   PartnerWriteResult,
 } from '../write/partner-contract.js';
 import { FakePartnerBook } from './fake-partner-book.js';
+import { FakeUserPhotoBook } from './fake-user-photo-book.js';
+import type { UserPhotoCallOptions, UserPhotoWriteRequest } from '../write/profile-photo-contract.js';
 import {
   assertBytesOptions,
   assertSignaturesOptions,
@@ -73,6 +75,8 @@ export interface FakeGatewayOptions {
   readonly orders?: FakeOrderBook;
   /** In-memory ERP partner table with scripted outcomes (D-AR); a private empty book by default. */
   readonly partners?: FakePartnerBook;
+  /** In-memory `TSIUSU.FOTO`; default a fresh book (tests keep a reference to inspect it). */
+  readonly userPhotos?: FakeUserPhotoBook;
   /** Synthetic sales/return notes behind the sales-history reads; defaults to `buildDemoSalesNotes(dataset)`. */
   readonly salesNotes?: readonly DemoSalesNote[];
 }
@@ -105,6 +109,7 @@ export class FakeGateway implements SankhyaGateway {
   readonly #media: FakeGatewayMediaOptions;
   readonly #orders: FakeOrderBook;
   readonly #partners: FakePartnerBook;
+  readonly #userPhotos: FakeUserPhotoBook;
   /** Built on first use: a small test dataset must still be able to construct the gateway when it never reads sales history. */
   #salesNotes: readonly DemoSalesNote[] | undefined;
 
@@ -121,6 +126,7 @@ export class FakeGateway implements SankhyaGateway {
     this.#media = options.media ?? {};
     this.#orders = options.orders ?? new FakeOrderBook();
     this.#partners = options.partners ?? new FakePartnerBook();
+    this.#userPhotos = options.userPhotos ?? new FakeUserPhotoBook();
     this.#salesNotes = options.salesNotes;
   }
 
@@ -324,6 +330,12 @@ export class FakeGateway implements SankhyaGateway {
 
   readWrittenOrder(erpOrderNumber: number, options?: OrderCallOptions): Promise<WrittenOrder | null> {
     return this.#order(options, () => this.#orders.read(erpOrderNumber));
+  }
+
+  // ---- profile photo write (spike S1.8): in-memory, no network ----
+
+  writeUserPhoto(request: UserPhotoWriteRequest, options?: UserPhotoCallOptions): Promise<void> {
+    return this.#order(options, () => this.#userPhotos.write(request));
   }
 
   // ---- customer (partner) write (D-AR): in-memory, no network, scripted outcomes ---------------

@@ -7,6 +7,7 @@ import { MAX_PAGE_SIZE, RealSankhyaGateway } from './real/real-gateway.js';
 import { Secret } from './secret.js';
 import { parseOrderWriteSettings } from './write/order-write-config.js';
 import { parseCustomerWriteSettings } from './write/customer-write-config.js';
+import { parseProfilePhotoWriteSettings } from './write/profile-photo-config.js';
 import { createFetchTransport, type HttpTransport } from './real/transport.js';
 import { budgetedTransport } from './request-budget.js';
 
@@ -106,6 +107,9 @@ export function createGateway(env: GatewayEnvironment, deps: CreateGatewayDepend
   const customerWrite = parseCustomerWriteSettings(env);
   for (const problem of customerWrite.problems) if (!problems.includes(problem)) problems.push(problem);
 
+  const profilePhotoWrite = parseProfilePhotoWriteSettings(env);
+  for (const problem of profilePhotoWrite.problems) if (!problems.includes(problem)) problems.push(problem);
+
   const clientId = env['SANKHYA_CLIENT_ID'];
   const clientSecret = env['SANKHYA_CLIENT_SECRET'];
   const xToken = env['SANKHYA_X_TOKEN'];
@@ -133,6 +137,7 @@ export function createGateway(env: GatewayEnvironment, deps: CreateGatewayDepend
   return new RealSankhyaGateway({
     orderWrite: orderWrite.settings,
     customerWrite: customerWrite.settings,
+    profilePhotoWrite: profilePhotoWrite.settings,
     baseUrl: origin,
     allowedHosts,
     environmentKind,

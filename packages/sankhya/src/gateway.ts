@@ -1,5 +1,6 @@
 import type { SankhyaOrderReadPort, SankhyaWritePort } from './write/order-contract.js';
 import type { SankhyaPartnerWritePort } from './write/partner-contract.js';
+import type { SankhyaProfilePhotoPort } from './write/profile-photo-contract.js';
 import type {
   ConfigurationSourceKind,
   InstallationConfiguration,
@@ -164,6 +165,7 @@ export interface SankhyaGateway
     SankhyaProductMediaPort,
     SankhyaWritePort,
     SankhyaPartnerWritePort,
+    SankhyaProfilePhotoPort,
     SankhyaOrderReadPort {
   describe(): GatewayDescription;
 }
