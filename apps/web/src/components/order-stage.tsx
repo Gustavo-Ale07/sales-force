@@ -40,6 +40,7 @@ const stageIcons: Record<OrderStageCode, LucideIcon> = {
   in_dispatch: Truck,
   in_invoicing: PackageCheck,
   invoiced: FileCheck2,
+  barred: Ban,
 };
 
 const stageTones: Record<OrderStageCode, Tone> = {
@@ -52,6 +53,7 @@ const stageTones: Record<OrderStageCode, Tone> = {
   in_dispatch: "info",
   in_invoicing: "info",
   invoiced: "success",
+  barred: "danger",
 };
 
 /** Label of a stage code as the server names it (filter options, chips). */
@@ -108,7 +110,7 @@ export function ErpStagePanel({ stage }: { stage: ErpStage }) {
   return (
     <section aria-label="Situação no Sankhya" className="mb-3 rounded-[12px] bg-surface-2 px-4 py-3 text-sm" data-testid="erp-stage">
       <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1">
-        <Icon size={15} strokeWidth={2} aria-hidden="true" className={code === "send_error" ? "text-danger" : "text-fg-muted"} />
+        <Icon size={15} strokeWidth={2} aria-hidden="true" className={code === "send_error" || code === "barred" ? "text-danger" : "text-fg-muted"} />
         <span className="font-semibold">
           {forceSide ? stage.label : `Situação no Sankhya: ${stage.label}`}
           {stage.pendingSector ? ` · ${stage.pendingSector}` : ""}

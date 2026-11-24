@@ -109,6 +109,13 @@ describe("Situação no Sankhya: linha do tempo no pedido", () => {
     expect(within(region).queryByRole("list")).toBeNull();
   });
 
+  it("barred: shows Barrado in the Sankhya situation without a current timeline step", async () => {
+    renderApp(`/pedidos/${ORDER_ID}`, { handlers: detailHandlers(sentOrder(stage("barred"))) });
+    const region = await panel();
+    expect(within(region).getByText("Situação no Sankhya: Barrado")).toBeInTheDocument();
+    expect(within(region).queryByText(/\(etapa atual\)/)).toBeNull();
+  });
+
   it("erpStage null or absent: no panel, and the old status label stays", async () => {
     const { unmount } = renderApp(`/pedidos/${ORDER_ID}`, { handlers: detailHandlers(sentOrder(null)) });
     expect(await screen.findByRole("heading", { name: /^Pedido nº 5001/ })).toBeInTheDocument();

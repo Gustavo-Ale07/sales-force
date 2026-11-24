@@ -52,7 +52,7 @@ export interface OrdersSearch {
 }
 
 export const ORDER_STATUSES = ["draft", "awaiting_approval", "approved", "approval_rejected", "queued", "sent", "rejected", "unknown"] as const;
-export const ORDER_STAGE_FILTERS = ["sent_to_force", "send_error", "quotation", "received", "in_review", "financial_check", "in_dispatch", "in_invoicing", "invoiced"] as const;
+export const ORDER_STAGE_FILTERS = ["sent_to_force", "send_error", "quotation", "received", "in_review", "financial_check", "in_dispatch", "in_invoicing", "invoiced", "barred"] as const;
 export const MAX_ORDER_PRODUCTS = 20;
 export const ORDER_DATE_FIELDS = ["createdAt", "updatedAt"] as const;
 export const ORDER_PRODUCT_MATCHES = ["any", "all"] as const;
