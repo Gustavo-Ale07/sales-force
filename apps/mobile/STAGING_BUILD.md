@@ -68,6 +68,18 @@ Validate locally without Expo servers: `APP_VARIANT=staging EXPO_PUBLIC_API_URL=
 
 `runtimeVersion` is `{ policy: "appVersion" }`, i.e. the app `version` in `app.json`. The `fingerprint` policy was dropped (2026-11-11): the EAS build failed with "Runtime version calculated on local machine not equal to runtime version calculated during build" because the fingerprint computed on Windows differs from the one computed on EAS (Linux) over the pnpm `node_modules`. Rule: whenever a native dependency changes (a new or upgraded package with native code, a config plugin, SDK upgrade), raise `version` in `app.json` (and `android.versionCode`). An OTA update is only delivered to builds with the same `version`; JS-only changes can ship as an update without a bump. `newArchEnabled` was removed from `app.json` (not accepted by the SDK 57 schema; the New Architecture is the only one in React Native 0.86, so behavior is unchanged).
 
+## OTA (`eas update`): always `--clear-cache` (owner rule, 2026-11-24)
+
+Every `eas update` MUST be run with `--clear-cache`, with `EXPO_PUBLIC_API_URL` set to the staging API (`https://force.sistemasplac.com.br`) in the same command:
+
+`EXPO_PUBLIC_API_URL=https://force.sistemasplac.com.br npx eas update --branch staging --clear-cache --message "<what changed>"`
+
+Why: Metro reuses cached bundles. A bundle produced without `EXPO_PUBLIC_API_URL` has the empty value inlined at build time, and the app then boots with "Servidor não configurado". Without `--clear-cache` an update can silently reuse that contaminated cache.
+
+Contamination: `pnpm --filter @salesforce/mobile run bundle:check` and any other local `expo export` or `expo start` run WITHOUT `EXPO_PUBLIC_API_URL` poison the same Metro cache. After any such run, the next `eas update` still needs `--clear-cache` (it always does). To check a bundle locally, set the variable in that command too.
+
+Before publishing, confirm the variable is set in the shell and that the update goes to the branch linked to the `staging` channel of the installed build (the `--branch staging` name above is the expected one; check it with `eas channel:view staging` before the first publish).
+
 ## Workspace packages on EAS (no `dist/`)
 
 `@salesforce/domain` and `@salesforce/contracts` export from `dist/` (gitignored, built by `tsc -p tsconfig.build.json`). EAS receives the repository without any build output, so Metro ("Bundle JavaScript") could not resolve them. Rule: **EAS has no `dist/`, so the hook compiles the workspace packages.** `apps/mobile/package.json` defines `eas-build-post-install`, which EAS runs after the install: `pnpm --filter @salesforce/domain run build && pnpm --filter @salesforce/contracts run build` (domain first, contracts depends on it). `--filter` resolves from any directory inside the workspace, so the hook works regardless of the working directory. `@salesforce/mobile-db` exports straight from `src` and needs no build; server, web, `sankhya` and `db` are not built. If the mobile app starts importing another dist-based workspace package, add it to the hook (in dependency order).
