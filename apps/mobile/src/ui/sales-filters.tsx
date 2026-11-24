@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import type { DraftStatus, SalesGroup } from "@salesforce/mobile-db";
-import type { CustomerListItem, CustomerRepository } from "../data/ports";
-import { brDateToIso, isoToBrDate, type SalesFilters, type SalesPeriod } from "../offline/sales";
+import type { CustomerListItem, CustomerRepository, ProductRepository } from "../data/ports";
+import { EMPTY_SALES_FILTERS, brDateToIso, isoToBrDate, type SalesFilters, type SalesPeriod } from "../offline/sales";
 import { STAGE_FILTER_OPTIONS } from "../offline/erp-stage";
 import { saleBadge } from "../offline/sales-status";
 import { colors, radius, spacing } from "../theme";
 import { ChipRow, Options, Sheet, type FilterChip } from "./customer-filters";
 import { CustomerPicker } from "./customer-picker";
+import { ProductMultiPicker } from "./product-multi-picker";
 
 const PERIOD_LABEL: Record<SalesPeriod, string> = { all: "Todo o período", today: "Hoje", "7d": "Últimos 7 dias", "30d": "Últimos 30 dias", custom: "Personalizado" };
 const PERIOD_OPTIONS = (Object.keys(PERIOD_LABEL) as SalesPeriod[]).map((value) => ({ value, label: PERIOD_LABEL[value] }));
@@ -16,17 +17,30 @@ const PERIOD_OPTIONS = (Object.keys(PERIOD_LABEL) as SalesPeriod[]).map((value) 
 const UNSENT_FILTER_STATUSES: readonly DraftStatus[] = ["pending_sync", "syncing", "sync_error", "conflict", "needs_review"];
 
 export function countActiveSalesFilters(filters: SalesFilters): number {
-  return (filters.statuses.length > 0 ? 1 : 0) + ((filters.stages?.length ?? 0) > 0 ? 1 : 0) + (filters.customer !== null ? 1 : 0) + (filters.period !== "all" ? 1 : 0);
+  return (filters.statuses.length > 0 ? 1 : 0) + ((filters.stages?.length ?? 0) > 0 ? 1 : 0) + (filters.customer !== null ? 1 : 0) + (filters.period !== "all" ? 1 : 0) + ((filters.products?.length ?? 0) > 0 ? 1 : 0);
 }
 
 function periodChipLabel(filters: SalesFilters): string {
-  if (filters.period !== "custom") return PERIOD_LABEL[filters.period];
+  const prefix = filters.dateField === "updatedAt" ? "Atualizado: " : "";
+  if (filters.period !== "custom") return `${prefix}${PERIOD_LABEL[filters.period]}`;
   const from = isoToBrDate(filters.customFrom);
   const to = isoToBrDate(filters.customTo);
-  return from !== "" && to !== "" ? `${from} a ${to}` : from !== "" ? `A partir de ${from}` : to !== "" ? `Até ${to}` : "Personalizado";
+  return prefix + (from !== "" && to !== "" ? `${from} a ${to}` : from !== "" ? `A partir de ${from}` : to !== "" ? `Até ${to}` : "Personalizado");
 }
 
-const CLEARED = { statuses: [], stages: [], customer: null, period: "all", customFrom: null, customTo: null } as const;
+const MAX_PRODUCTS = 20;
+const DATE_FIELD_OPTIONS = [
+  { value: "createdAt" as const, label: "Criação" },
+  { value: "updatedAt" as const, label: "Última atualização" },
+];
+const MATCH_OPTIONS = [
+  { value: "any" as const, label: "Qualquer selecionado" },
+  { value: "all" as const, label: "Todos selecionados" },
+];
+
+function cleared(filters: SalesFilters): SalesFilters {
+  return { group: filters.group, ...EMPTY_SALES_FILTERS };
+}
 
 export function SalesFilterChips({ filters, onChange }: { filters: SalesFilters; onChange: (next: SalesFilters) => void }) {
   const chips: FilterChip[] = [];
@@ -37,23 +51,29 @@ export function SalesFilterChips({ filters, onChange }: { filters: SalesFilters;
   if ((filters.stages?.length ?? 0) > 0) {
     chips.push({ key: "stage", label: (filters.stages ?? []).map((code) => STAGE_FILTER_OPTIONS.find((option) => option.value === code)?.label ?? code).join(", "), remove: () => onChange({ ...filters, stages: [] }) });
   }
+  if ((filters.products?.length ?? 0) > 0) {
+    const count = filters.products?.length ?? 0;
+    chips.push({ key: "products", label: count === 1 ? "1 produto" : `${count} produtos`, remove: () => onChange({ ...filters, products: [] }) });
+  }
   if (filters.period !== "all") chips.push({ key: "period", label: periodChipLabel(filters), remove: () => onChange({ ...filters, period: "all", customFrom: null, customTo: null }) });
-  return <ChipRow chips={chips} onClear={() => onChange({ ...filters, ...CLEARED })} />;
+  return <ChipRow chips={chips} onClear={() => onChange(cleared(filters))} />;
 }
 
 interface BodyProps {
   readonly filters: SalesFilters;
   readonly customers: CustomerRepository;
+  readonly products: ProductRepository;
   readonly onUnauthenticated: () => void;
   readonly onApply: (next: SalesFilters) => void;
 }
 
 /** Mounted only while the sheet is open, so the draft always starts from the applied filters. */
-function Body({ filters, customers, onUnauthenticated, onApply }: BodyProps) {
+function Body({ filters, customers, products, onUnauthenticated, onApply }: BodyProps) {
   const [draft, setDraft] = useState<SalesFilters>(filters);
   const [fromText, setFromText] = useState(isoToBrDate(filters.customFrom));
   const [toText, setToText] = useState(isoToBrDate(filters.customTo));
   const [picking, setPicking] = useState(false);
+  const [pickingProducts, setPickingProducts] = useState(false);
   const group: SalesGroup = draft.group;
   const statusOptions = [
     { value: "all", label: "Todos" },
@@ -101,7 +121,21 @@ function Body({ filters, customers, onUnauthenticated, onApply }: BodyProps) {
             onSelect={(value) => setDraft({ ...draft, stages: value === "all" ? [] : [value] })}
           />
         )}
+        <View style={styles.group}>
+          <Text style={styles.groupTitle}>Produtos</Text>
+          <Pressable style={styles.field} onPress={() => setPickingProducts(true)} accessibilityRole="button" accessibilityLabel="Escolher produtos">
+            <Text style={[styles.fieldText, (draft.products?.length ?? 0) === 0 && styles.fieldPlaceholder]}>
+              {(draft.products?.length ?? 0) === 0 ? "Todos os produtos" : draft.products?.length === 1 ? "1 produto selecionado" : `${draft.products?.length} produtos selecionados`}
+            </Text>
+          </Pressable>
+        </View>
+        {(draft.products?.length ?? 0) > 1 && (
+          <Options label="Correspondência dos produtos" options={MATCH_OPTIONS} value={draft.productMatch ?? "any"} onSelect={(productMatch) => setDraft({ ...draft, productMatch })} />
+        )}
         <Options label="Período (data de criação neste aparelho)" options={PERIOD_OPTIONS} value={draft.period} onSelect={(period) => setDraft({ ...draft, period })} />
+        {draft.period !== "all" && (
+          <Options label="Período por" options={DATE_FIELD_OPTIONS} value={draft.dateField ?? "createdAt"} onSelect={(dateField) => setDraft({ ...draft, dateField })} />
+        )}
         {draft.period === "custom" && (
           <View style={styles.dates}>
             <View style={styles.dateBox}>
@@ -119,7 +153,7 @@ function Body({ filters, customers, onUnauthenticated, onApply }: BodyProps) {
         <Pressable
           style={styles.secondary}
           onPress={() => {
-            setDraft({ ...draft, ...CLEARED });
+            setDraft(cleared(draft));
             setFromText("");
             setToText("");
           }}
@@ -132,6 +166,23 @@ function Body({ filters, customers, onUnauthenticated, onApply }: BodyProps) {
           <Text style={styles.primaryText}>Aplicar</Text>
         </Pressable>
       </View>
+      <Modal visible={pickingProducts} animationType="slide" onRequestClose={() => setPickingProducts(false)}>
+        <View style={styles.picker}>
+          <View style={styles.pickerHeader}>
+            <Text style={styles.pickerTitle} accessibilityRole="header">Filtrar por produtos</Text>
+            <Pressable onPress={() => setPickingProducts(false)} accessibilityRole="button" accessibilityLabel="Concluir seleção de produtos" style={styles.inline}>
+              <Text style={styles.clearText}>Concluir</Text>
+            </Pressable>
+          </View>
+          <ProductMultiPicker
+            products={products}
+            selected={draft.products ?? []}
+            max={MAX_PRODUCTS}
+            onChange={(next) => setDraft({ ...draft, products: next })}
+            onUnauthenticated={onUnauthenticated}
+          />
+        </View>
+      </Modal>
       <Modal visible={picking} animationType="slide" onRequestClose={() => setPicking(false)}>
         <View style={styles.picker}>
           <View style={styles.pickerHeader}>

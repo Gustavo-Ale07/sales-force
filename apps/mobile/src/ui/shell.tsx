@@ -450,6 +450,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
                   onDetailChange={setSaleDetailOpen}
                   localOrders={services.localOrders}
                   customers={repositories.customers}
+                  products={repositories.products}
                   orders={repositories.orders}
                   {...(dependencies.orderPdf !== undefined ? { orderPdf: dependencies.orderPdf } : {})}
                   syncStatus={syncStatus}

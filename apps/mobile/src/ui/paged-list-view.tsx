@@ -38,6 +38,8 @@ export interface PagedListViewProps<T, R extends PageRequest = PageRequest> {
   readonly hideCount?: boolean;
   /** Number of columns (grid mode); the list is remounted when it changes, the loaded items are kept. */
   readonly columns?: number;
+  /** Re-renders the rows when something outside `renderItem`s items changes (a selection). */
+  readonly extraData?: unknown;
   readonly onUnauthenticated: () => void;
 }
 
@@ -61,6 +63,7 @@ export function PagedListView<T, R extends PageRequest = PageRequest>({
   loadingText,
   hideCount = false,
   columns = 1,
+  extraData,
   onUnauthenticated,
 }: PagedListViewProps<T, R>) {
   const [text, setText] = useState("");
@@ -125,6 +128,7 @@ export function PagedListView<T, R extends PageRequest = PageRequest>({
           key={`columns-${columns}`}
           numColumns={columns}
           data={list.items}
+          extraData={extraData}
           keyExtractor={keyOf}
           renderItem={({ item }) => renderItem(item)}
           onEndReached={list.loadMore}

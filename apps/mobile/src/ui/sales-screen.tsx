@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { SalesGroup, SyncStatus } from "@salesforce/mobile-db";
 import type { ConnectivityState } from "../connectivity/connectivity";
-import type { CustomerRepository, OrderRepository, PageRequest } from "../data/ports";
+import type { CustomerRepository, OrderRepository, ProductRepository, PageRequest } from "../data/ports";
 import { formatBrl } from "../lib/money";
 import type { LocalOrdersPort } from "../offline/local-orders";
 import { EMPTY_SALES_FILTERS, type SalesFilters, type SalesRow, type SalesSummary } from "../offline/sales";
@@ -71,6 +71,7 @@ const SaleRowView = memo(function SaleRowView({ row, onOpen }: { row: SalesRow; 
 export interface SalesScreenProps {
   readonly localOrders: LocalOrdersPort;
   readonly customers: CustomerRepository;
+  readonly products: ProductRepository;
   readonly syncStatus: SyncStatus;
   /** Online read of a sent order, for the read-only discount approval card (M-14). */
   readonly orders?: Pick<OrderRepository, "get">;
@@ -114,7 +115,7 @@ function describeSummary(summary: SalesSummary | null, group: SalesGroup): strin
  * backend) and "Enviados" (accepted by the Force backend — NOT the ERP). Everything is read from the local database,
  * so the whole screen works offline.
  */
-export function SalesScreen({ localOrders, customers, orders, orderPdf, syncStatus, connectivity, onUnauthenticated, onNewSale, onContinue, onDuplicate, onSyncNow, resetSignal = 0, refreshSignal = 0, openRequest = null, onDetailChange }: SalesScreenProps) {
+export function SalesScreen({ localOrders, customers, products, orders, orderPdf, syncStatus, connectivity, onUnauthenticated, onNewSale, onContinue, onDuplicate, onSyncNow, resetSignal = 0, refreshSignal = 0, openRequest = null, onDetailChange }: SalesScreenProps) {
   const [filters, setFilters] = useState<SalesFilters>({ group: "unsent", ...EMPTY_SALES_FILTERS });
   const [search, setSearch] = useState("");
   const [summary, setSummary] = useState<SalesSummary | null>(null);
@@ -205,6 +206,7 @@ export function SalesScreen({ localOrders, customers, orders, orderPdf, syncStat
         visible={filtersOpen}
         filters={filters}
         customers={customers}
+        products={products}
         onUnauthenticated={onUnauthenticated}
         onApply={(next) => {
           setFilters(next);

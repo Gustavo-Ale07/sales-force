@@ -3,7 +3,7 @@ import type { DraftRecord, SyncStatus } from "@salesforce/mobile-db";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import type { EditorLine } from "../data/order-draft";
 import type { LocalOrdersPort } from "../offline/local-orders";
-import { customer, draftRecord, fakeLocalOrders, pageOf } from "../test-doubles";
+import { customer, draftRecord, fakeLocalOrders, fakeProducts, pageOf, product } from "../test-doubles";
 import { SalesScreen, type SalesScreenProps } from "./sales-screen";
 import { renderWithModal } from "./test-modal-wrapper";
 
@@ -41,6 +41,7 @@ async function renderSales(drafts: DraftRecord[], overrides: Partial<SalesScreen
   const props: SalesScreenProps = {
     localOrders,
     customers: { list: async () => pageOf([customer(1, { name: "Ana Mercearia" }), customer(2, { name: "Bia Padaria" })]) },
+    products: fakeProducts({}),
     syncStatus: idle,
     connectivity: "online",
     onUnauthenticated: noop,
@@ -145,6 +146,21 @@ describe("SalesScreen — search and filters", () => {
     await waitFor(() => expect(screen.queryByText("Ana Mercearia")).toBeNull());
     expect(screen.getByText("Não enviados (1)")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Filtros, 1 ativo(s)" })).toBeTruthy();
+  });
+
+  it("filters by product: picks products from the device, shows a removable chip and the 'Período por' choice", async () => {
+    const products = fakeProducts({ list: async () => pageOf([product(5, { description: "Copo 200 ml" })]) });
+    await renderSales([ana, bia], { products });
+    await screen.findByText("Ana Mercearia");
+    await fireEvent.press(screen.getByRole("button", { name: "Filtros" }));
+    await fireEvent.press(await screen.findByRole("button", { name: "Escolher produtos" }));
+    await fireEvent.press(await screen.findByRole("checkbox", { name: "Copo 200 ml, código 5" }));
+    expect(screen.getByText("1 de 20 selecionados")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Concluir seleção de produtos" }));
+    await fireEvent.press(await screen.findByRole("radio", { name: "Hoje" }));
+    expect(await screen.findByRole("radio", { name: "Última atualização" })).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Aplicar filtros" }));
+    expect(await screen.findByRole("button", { name: "Remover filtro 1 produto" })).toBeTruthy();
   });
 
   it("combines status and search, and says when the combination finds nothing", async () => {

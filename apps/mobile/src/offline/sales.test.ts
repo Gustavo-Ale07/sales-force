@@ -1,4 +1,4 @@
-import { parseLocalDate, periodRange } from "./sales";
+import { EMPTY_SALES_FILTERS, filterOf, parseLocalDate, periodRange } from "./sales";
 
 const now = new Date(2026, 8, 30, 15, 30); // 30/09/2026 15:30 local
 const iso = (y: number, m: number, d: number) => new Date(y, m - 1, d).toISOString();
@@ -26,5 +26,19 @@ describe("parseLocalDate", () => {
     expect(parseLocalDate("2026-02-28")).not.toBeNull();
     expect(parseLocalDate("2026-02-30")).toBeNull();
     expect(parseLocalDate("30/09/2026")).toBeNull();
+  });
+});
+
+describe("filterOf (product and date-field filters)", () => {
+  const base = { group: "unsent" as const, ...EMPTY_SALES_FILTERS };
+  it("maps the products (at most 20) and the match, and the date field only with a period", () => {
+    const products = Array.from({ length: 25 }, (_, index) => ({ code: index + 1, name: `P${index + 1}` }));
+    const filter = filterOf("owner", { ...base, products, productMatch: "all", period: "today", dateField: "updatedAt" }, "", now, null);
+    expect(filter.productCodes).toHaveLength(20);
+    expect(filter.productMatch).toBe("all");
+    expect(filter.dateField).toBe("updatedAt");
+    const noPeriod = filterOf("owner", { ...base, dateField: "updatedAt" }, "", now, null);
+    expect(noPeriod.dateField).toBeUndefined();
+    expect(noPeriod.productCodes).toBeUndefined();
   });
 });

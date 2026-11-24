@@ -27,6 +27,11 @@ export interface SalesFilters {
   /** Inclusive `YYYY-MM-DD` bounds, only read when `period` is `custom`. */
   readonly customFrom: string | null;
   readonly customTo: string | null;
+  /** Which date the period applies to; absent = creation (as on the site). */
+  readonly dateField?: "createdAt" | "updatedAt";
+  /** Orders with a line for these products (at most 20), matched `any` (default) or `all`. */
+  readonly products?: readonly { readonly code: number; readonly name: string }[];
+  readonly productMatch?: "any" | "all";
 }
 
 export const EMPTY_SALES_FILTERS: Omit<SalesFilters, "group"> = { statuses: [], stages: [], customer: null, period: "all", customFrom: null, customTo: null };
@@ -102,7 +107,7 @@ async function valueOf(db: SqlDatabase, draft: DraftRecord): Promise<SalesValue>
   return saleValue(draft, linesFromDraftItems(await getDraftItems(db, draft.localId)));
 }
 
-function filterOf(ownerAccountId: string, filters: SalesFilters, text: string, now: Date, dataset: DatasetIdentity | null): DraftFilter {
+export function filterOf(ownerAccountId: string, filters: SalesFilters, text: string, now: Date, dataset: DatasetIdentity | null): DraftFilter {
   const { from, before } = periodRange(filters, now);
   return {
     ownerAccountId,
@@ -113,6 +118,8 @@ function filterOf(ownerAccountId: string, filters: SalesFilters, text: string, n
     ...(filters.customer === null ? {} : { customerCode: filters.customer.code }),
     ...(from === undefined ? {} : { createdFrom: from }),
     ...(before === undefined ? {} : { createdBefore: before }),
+    ...(filters.dateField === undefined || (from === undefined && before === undefined) ? {} : { dateField: filters.dateField }),
+    ...((filters.products?.length ?? 0) > 0 ? { productCodes: (filters.products ?? []).slice(0, 20).map((product) => product.code), productMatch: filters.productMatch ?? "any" } : {}),
     ...(text.trim() === "" ? {} : { text }),
   };
 }

@@ -1,7 +1,7 @@
 import { screen } from "@testing-library/react-native";
 import { Dimensions, PixelRatio, StyleSheet } from "react-native";
 import type { SyncStatus } from "@salesforce/mobile-db";
-import { customer, draftRecord, fakeLocalOrders, pageOf } from "../test-doubles";
+import { customer, draftRecord, fakeLocalOrders, fakeProducts, pageOf } from "../test-doubles";
 import { control, HEADER_HEIGHT, radius } from "../theme";
 import { SalesScreen } from "./sales-screen";
 import { SyncStatusChip } from "./sync-status";
@@ -31,6 +31,7 @@ describe.each(CONDITIONS)("layout at %s", (_name, width, height, fontScale) => {
       <SalesScreen
         localOrders={localOrders}
         customers={{ list: async () => pageOf([customer(1, { name: "Ana" })]) }}
+        products={fakeProducts({})}
         syncStatus={idle}
         connectivity="online"
         onUnauthenticated={noop}
