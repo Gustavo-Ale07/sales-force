@@ -96,6 +96,39 @@ describe("queryDrafts — filters", () => {
   });
 });
 
+describe("queryDrafts — product filter and period field", () => {
+  async function withItems(id: string, items: [number, string][]): Promise<void> {
+    await db.execute("DELETE FROM local_order_item WHERE draft_local_id = ?", [id]);
+    let position = 0;
+    for (const [code, description] of items) {
+      await db.execute(
+        "INSERT INTO local_order_item (draft_local_id, position, product_code, description, unit, quantity, discount_percent, price_json) VALUES (?, ?, ?, ?, 'UN', '1', '0', '{}')",
+        [id, position++, code, description],
+      );
+    }
+  }
+
+  it("filters by product codes (any / all) and by product text", async () => {
+    const a = await draft(1, "Ana", "pending_sync");
+    const b = await draft(2, "Bia", "pending_sync");
+    await withItems(a, [[10, "Tinta Azul"], [20, "Rolo"]]);
+    await withItems(b, [[20, "Rolo"]]);
+    expect((await queryDrafts(db, { ownerAccountId: OWNER, productCodes: [10, 20] }, page)).total).toBe(2);
+    expect((await queryDrafts(db, { ownerAccountId: OWNER, productCodes: [10, 20], productMatch: "all" }, page)).rows.map((r) => r.customerName)).toEqual(["Ana"]);
+    expect((await queryDrafts(db, { ownerAccountId: OWNER, productSearch: "azul" }, page)).rows.map((r) => r.customerName)).toEqual(["Ana"]);
+    expect((await queryDrafts(db, { ownerAccountId: OWNER, productSearch: "20" }, page)).total).toBe(2);
+    expect((await countDraftsByGroup(db, { ownerAccountId: OWNER, productCodes: [10] })).unsent).toBe(1);
+  });
+
+  it("the period applies to the creation date by default and to the update date on request", async () => {
+    const id = await draft(1, "Ana", "pending_sync", { at: "2026-09-01T10:00:00.000Z" });
+    await db.execute("UPDATE local_order_draft SET updated_at = ? WHERE local_id = ?", ["2026-09-20T10:00:00.000Z", id]);
+    const range = { createdFrom: "2026-09-15T00:00:00.000Z", createdBefore: "2026-09-29T00:00:00.000Z" };
+    expect((await queryDrafts(db, { ownerAccountId: OWNER, ...range }, page)).total).toBe(0);
+    expect((await queryDrafts(db, { ownerAccountId: OWNER, ...range, dateField: "updatedAt" }, page)).total).toBe(1);
+  });
+});
+
 describe("queryDrafts — text search", () => {
   it("matches customer name (case-insensitive), customer code and Sankhya order number (never the internal Force number); never fuzzy", async () => {
     await draft(101, "Padaria Central", "synced", { remoteNumber: 7, sankhyaNumber: 42 });

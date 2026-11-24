@@ -31,6 +31,13 @@ export interface DraftFilter {
   /** ISO timestamps on the LOCAL creation date (`created_at`): inclusive start, exclusive end. */
   readonly createdFrom?: string;
   readonly createdBefore?: string;
+  /** Which date the period applies to; `createdAt` (default) or `updatedAt`. */
+  readonly dateField?: "createdAt" | "updatedAt";
+  /** Product codes (at most 20): orders with a line for those products; `productMatch` `any` (default) or `all`. */
+  readonly productCodes?: readonly number[];
+  readonly productMatch?: "any" | "all";
+  /** Text of a product description (or a product code): orders with a line that contains it. Combines with `productCodes`. */
+  readonly productSearch?: string;
   /** Customer name (contains), customer code or Force order number (exact), local id (prefix). */
   readonly text?: string;
 }
@@ -66,13 +73,38 @@ function whereOf(filter: DraftFilter): { sql: string; params: SqlValue[] } {
     clauses.push("d.customer_code = ?");
     params.push(filter.customerCode);
   }
+  const dateColumn = filter.dateField === "updatedAt" ? "d.updated_at" : "d.created_at";
   if (filter.createdFrom !== undefined) {
-    clauses.push("d.created_at >= ?");
+    clauses.push(`${dateColumn} >= ?`);
     params.push(filter.createdFrom);
   }
   if (filter.createdBefore !== undefined) {
-    clauses.push("d.created_at < ?");
+    clauses.push(`${dateColumn} < ?`);
     params.push(filter.createdBefore);
+  }
+  const codes = [...new Set(filter.productCodes ?? [])].slice(0, 20);
+  if (codes.length > 0) {
+    if (filter.productMatch === "all") {
+      for (const code of codes) {
+        clauses.push("EXISTS (SELECT 1 FROM local_order_item i WHERE i.draft_local_id = d.local_id AND i.product_code = ?)");
+        params.push(code);
+      }
+    } else {
+      clauses.push(`EXISTS (SELECT 1 FROM local_order_item i WHERE i.draft_local_id = d.local_id AND i.product_code IN (${marks(codes)}))`);
+      params.push(...codes);
+    }
+  }
+  const productText = filter.productSearch?.trim() ?? "";
+  if (productText !== "") {
+    const like = escapeLike(productText.toLowerCase());
+    const parts = ["lower(i.description) LIKE ? ESCAPE '\\'"];
+    const textParams: SqlValue[] = [`%${like}%`];
+    if (/^\d{1,9}$/.test(productText)) {
+      parts.push("i.product_code = ?");
+      textParams.push(Number(productText));
+    }
+    clauses.push(`EXISTS (SELECT 1 FROM local_order_item i WHERE i.draft_local_id = d.local_id AND (${parts.join(" OR ")}))`);
+    params.push(...textParams);
   }
   const text = filter.text?.trim() ?? "";
   if (text !== "") {
