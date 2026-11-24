@@ -899,6 +899,8 @@ export class OrdersService {
 
   private assertEditable(order: OrderRow, expectedVersion: number): void {
     if (!isOrderEditable(order.status as Parameters<typeof isOrderEditable>[0])) throw new AppError('order_not_editable');
+    // A refused delivery is only editable while no Sankhya document exists (SNK-4): once an ERP number is bound, the Force does not rewrite it.
+    if (order.status === 'rejected' && order.erpNumber !== null) throw new AppError('order_not_editable');
     if (order.version !== expectedVersion) {
       throw new AppError('version_conflict', { details: { currentVersion: order.version } });
     }

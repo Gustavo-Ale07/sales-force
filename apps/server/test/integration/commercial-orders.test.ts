@@ -889,6 +889,15 @@ describe('"Precisa de correcao" (rejected delivery) is editable like a draft', (
     }
   });
 
+  it('a rejected order that already carries a Sankhya number is not editable (SNK-4)', async () => {
+    const created = await create('seller1', draftBody());
+    const id = created.body.id;
+    await ctx.database.handle.pool.query(`update sales_order set status = 'rejected', erp_number = 987654 where id = $1`, [id]);
+    const refused = await edit('seller1', id, 1);
+    expect(refused.status).toBe(409);
+    expect(refused.body.code).toBe('order_not_editable');
+  });
+
   it('authorization is the same as for a draft: a seller outside the scope gets 404 and the order is untouched', async () => {
     const created = await create('seller1', draftBody());
     const id = created.body.id;
