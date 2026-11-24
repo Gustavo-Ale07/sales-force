@@ -156,9 +156,13 @@ describe("SyncPanel mobility detail (owner 2026-11-13)", () => {
     expect(screen.queryByText(/Configuração de mobilidade incompleta/)).toBeNull();
   });
 
-  it("warns when the server kept the previous base", async () => {
-    await render(<SyncPanel status={{ ...idle, mobility: [{ kind: "negotiationTypes", visible: 3, hidden: 0, keptPrevious: true }] }} connectivity="online" onSyncNow={noop} />);
-    expect(screen.getByText("Configuração de mobilidade incompleta — avise o TI; mantida a base anterior")).toBeTruthy();
+  it.each([
+    ["products", "Produtos"],
+    ["tops", "Tipos de operação"],
+    ["negotiationTypes", "Condições de pagamento"],
+  ] as const)("warns naming the kept kind (%s)", async (kind, label) => {
+    await render(<SyncPanel status={{ ...idle, mobility: [{ kind, visible: 3, hidden: 0, keptPrevious: true }] }} connectivity="online" onSyncNow={noop} />);
+    expect(screen.getByText(`Configuração de mobilidade incompleta (${label}) — avise o TI; mantida a base anterior`)).toBeTruthy();
   });
 
   it("the seller view (no mobility) shows nothing about mobility", async () => {

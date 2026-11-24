@@ -100,7 +100,7 @@ describe("Shell", () => {
     await render(<Shell dependencies={fakeDependencies({ auth: unreachable(), offline })} />);
     expect(await screen.findByText("Olá, Ana Vendedora")).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Vendas" })).toBeTruthy();
-    expect(screen.getByLabelText("Status de sincronização: Online")).toBeTruthy();
+    expect(screen.getByLabelText("Status de sincronização: Sincronizado")).toBeTruthy();
     expect(screen.queryByText("Online")).toBeNull();
   });
 
@@ -326,7 +326,8 @@ describe("Shell", () => {
     it("is reachable from the header sync sheet", async () => {
       const { offline } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() }, attention, withRetained());
       await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline })} />);
-      await fireEvent.press(await screen.findByRole("button", { name: /Status de sincronização/ }));
+      // a short tap only syncs; the popup opens on long press (or when the indicator is red)
+      await fireEvent(await screen.findByRole("button", { name: /Status de sincronização/ }), "longPress");
       await fireEvent.press(await screen.findByRole("button", { name: "Ver detalhes" }));
       await fireEvent.press(await screen.findByRole("button", { name: "Ver pedidos antigos retidos" }));
       expect(await screen.findByText("Padaria Antiga")).toBeTruthy();
@@ -353,11 +354,11 @@ describe("Shell", () => {
     const connectivity = fakeConnectivity("online");
     const { offline } = fakeOffline({ account, lastOnlineAt: new Date().toISOString() });
     await render(<Shell dependencies={fakeDependencies({ auth: signedIn(), offline, connectivity: connectivity.port })} />);
-    expect(await screen.findByLabelText("Status de sincronização: Online")).toBeTruthy();
+    expect(await screen.findByLabelText("Status de sincronização: Sincronizado")).toBeTruthy();
     expect(screen.queryByText(/Exibindo os dados salvos neste aparelho/)).toBeNull();
 
     await act(async () => connectivity.emit("offline"));
-    await waitFor(() => expect(screen.getByLabelText("Status de sincronização: Offline")).toBeTruthy());
+    await waitFor(() => expect(screen.getByLabelText("Status de sincronização: Sem conexão")).toBeTruthy());
     expect(screen.getByText(/Exibindo os dados salvos neste aparelho/)).toBeTruthy();
   });
 

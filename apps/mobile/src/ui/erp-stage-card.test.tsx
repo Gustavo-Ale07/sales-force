@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { ORDER_STAGE_LABELS, ORDER_STAGE_TIMELINE } from "@salesforce/domain";
 import type { DraftErpStage } from "@salesforce/mobile-db";
-import { erpStageViewOf } from "../offline/erp-stage";
+import { STAGE_FILTER_OPTIONS, erpStageViewOf } from "../offline/erp-stage";
 import { draftRecord, fakeLocalOrders } from "../test-doubles";
 import { ErpStageCard } from "./erp-stage-card";
 import { SaleDetailScreen } from "./sale-detail-screen";
@@ -52,6 +52,12 @@ describe("ErpStageCard per stage", () => {
   it("invoiced shows the invoice number", async () => {
     await render(<ErpStageCard stage={view(stage("invoiced", "Faturado", { nunota: 9, invoiceNumber: 321 }))} />);
     expect(screen.getByText("Nota fiscal nº 321")).toBeTruthy();
+  });
+
+  it("barred is a red (danger) stage with no timeline and is offered by the stage filter", () => {
+    const barred = view(stage("barred", ORDER_STAGE_LABELS.barred, { nunota: 5 }));
+    expect(barred).toMatchObject({ tone: "danger", kind: "force", steps: [] });
+    expect(STAGE_FILTER_OPTIONS).toContainEqual({ value: "barred", label: "Barrado" });
   });
 
   it("a quotation shows its number and no timeline", async () => {

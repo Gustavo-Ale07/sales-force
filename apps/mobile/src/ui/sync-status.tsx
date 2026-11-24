@@ -105,7 +105,7 @@ export function SyncPanel({ status, connectivity, onSyncNow, quarantinedCount = 
         <Text style={styles.hint}>{`Não atualizado: ${(status.failedSteps ?? []).join(", ")}`}</Text>
       )}
       {!syncing && (status.mobility ?? []).some((m) => m.keptPrevious) && (
-        <Text style={styles.errorNote}>Configuração de mobilidade incompleta — avise o TI; mantida a base anterior</Text>
+        <Text style={styles.errorNote}>{`Configuração de mobilidade incompleta (${(status.mobility ?? []).filter((m) => m.keptPrevious).map((m) => MOBILITY_LABEL[m.kind]).join(", ")}) — avise o TI; mantida a base anterior`}</Text>
       )}
       {!syncing && (status.mobility ?? []).filter((m) => !m.keptPrevious).map((m) => (
         <Text key={m.kind} style={styles.progress}>{`${MOBILITY_LABEL[m.kind]}: ${m.visible} ${m.visible === 1 ? "visível" : "visíveis"}, ${m.hidden} ${m.hidden === 1 ? "oculto" : "ocultos"}`}</Text>

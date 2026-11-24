@@ -17,6 +17,7 @@ const TONES: Readonly<Record<OrderStageCode, StageTone>> = {
   in_dispatch: "info",
   in_invoicing: "info",
   invoiced: "ok",
+  barred: "danger",
 };
 
 export interface StageStep {
@@ -88,5 +89,5 @@ export function erpStageViewOf(stage: DraftErpStage | null | undefined): ErpStag
 
 /** The stages offered by the list filter, in the order a seller follows them (the server's labels). */
 export const STAGE_FILTER_OPTIONS: ReadonlyArray<{ readonly value: OrderStageCode; readonly label: string }> = (
-  ["sent_to_force", "send_error", "quotation", ...ORDER_STAGE_TIMELINE] as const
+  ["sent_to_force", "send_error", "quotation", ...ORDER_STAGE_TIMELINE, "barred"] as const
 ).map((value) => ({ value, label: ORDER_STAGE_LABELS[value] }));
