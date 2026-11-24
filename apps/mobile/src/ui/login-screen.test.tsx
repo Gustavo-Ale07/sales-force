@@ -110,7 +110,10 @@ describe("LoginScreen identity and password", () => {
       return { remove: jest.fn() };
     }) as unknown as typeof Keyboard.addListener);
     await render(<LoginScreen auth={fakeAuth()} onAuthenticated={jest.fn()} />);
-    expect(screen.getByTestId("login-art", { includeHiddenElements: true })).toBeTruthy();
+    const art = screen.getByTestId("login-art", { includeHiddenElements: true });
+    expect(art.props.resizeMode).toBe("contain");
+    expect(art.props.source).toBeTruthy();
+    expect(art.props.importantForAccessibility).toBe("no");
     expect(screen.getByText("ARTIGOS PARA FESTAS\n& CONFEITARIA")).toBeTruthy();
     await act(() => {
       handlers.get(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow")?.();
