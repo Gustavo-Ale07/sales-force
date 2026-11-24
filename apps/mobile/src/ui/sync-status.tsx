@@ -55,27 +55,31 @@ export function SyncStatusChip({ status, connectivity, onPress }: Pick<SyncViewP
     <Pressable style={styles.chip} onPress={onPress} accessibilityRole="button" accessibilityLabel={`Status de sincronização: ${text}`}>
       <View style={styles.glyph}>
         <RefreshArrows testID={syncing ? "sync-icon-spinner" : "sync-arrows"} color={colors.onNavy} size={24} spinning={syncing} />
-        {!syncing && (
-          <View
-            testID={`sync-mark-${markKind}`}
-            style={[
-              styles.mark,
-              waiting ? styles.markPill : tone === "error" ? styles.markSquare : tone === "offline" ? styles.markHollow : null,
-              tone === "offline" && !waiting ? { borderColor: color } : { backgroundColor: color },
-            ]}
-          >
-            {waiting ? (
-              <Text style={styles.markCount}>{status.pending > 9 ? "9+" : String(status.pending)}</Text>
-            ) : tone === "ok" ? (
-              <Icon name="check" color={colors.onNavy} size={9} />
-            ) : tone === "offline" ? (
-              <View style={[styles.markDash, { backgroundColor: color }]} />
-            ) : (
-              <Icon name="alert" color={colors.onNavy} size={9} />
-            )}
-          </View>
-        )}
-        {syncing && <View testID="sync-mark-busy" style={styles.markBusy} />}
+        {/* The mark sits in the middle of the ring, between the two arrows, as a sibling of the arrows (so it never spins with them). */}
+        <View testID="sync-mark-anchor" pointerEvents="none" style={styles.markAnchor}>
+          {syncing ? (
+            <View testID="sync-mark-busy" style={styles.markBusy} />
+          ) : (
+            <View
+              testID={`sync-mark-${markKind}`}
+              style={[
+                styles.mark,
+                waiting ? styles.markPill : tone === "error" ? styles.markSquare : tone === "offline" ? styles.markHollow : null,
+                tone === "offline" && !waiting ? { borderColor: color } : { backgroundColor: color },
+              ]}
+            >
+              {waiting ? (
+                <Text style={styles.markCount}>{status.pending > 9 ? "9+" : String(status.pending)}</Text>
+              ) : tone === "ok" ? (
+                <Icon name="check" color={colors.onNavy} size={8} />
+              ) : tone === "offline" ? (
+                <View style={[styles.markDash, { backgroundColor: color }]} />
+              ) : (
+                <Icon name="alert" color={colors.onNavy} size={8} />
+              )}
+            </View>
+          )}
+        </View>
       </View>
     </Pressable>
   );
@@ -219,13 +223,14 @@ const styles = StyleSheet.create({
   chip: { minWidth: control.height, minHeight: control.height, alignItems: "center", justifyContent: "center" },
   glyph: { width: 28, height: 28, alignItems: "center", justifyContent: "center" },
   // Small state dot on the corner of the white arrows; its SHAPE (circle / pill / rounded square / hollow ring) says the state, not only the color.
-  mark: { position: "absolute", right: -3, bottom: -3, width: 14, height: 14, borderRadius: 7, borderWidth: 1.5, borderColor: colors.navy, alignItems: "center", justifyContent: "center" },
-  markPill: { width: undefined, minWidth: 16, paddingHorizontal: 2, borderRadius: 8 },
+  markAnchor: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" },
+  mark: { width: 12, height: 12, borderRadius: 6, borderWidth: 1, borderColor: colors.navy, alignItems: "center", justifyContent: "center" },
+  markPill: { width: undefined, minWidth: 14, paddingHorizontal: 1, borderRadius: 7 },
   markSquare: { borderRadius: 3 },
   markHollow: { backgroundColor: colors.navy, borderColor: colors.warning },
-  markBusy: { position: "absolute", width: 0, height: 0 },
-  markCount: { color: colors.onNavy, fontSize: 9, fontWeight: "800" },
-  markDash: { width: 6, height: 2, borderRadius: 1 },
+  markBusy: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.onNavy },
+  markCount: { color: colors.onNavy, fontSize: 8, fontWeight: "800" },
+  markDash: { width: 5, height: 2, borderRadius: 1 },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, gap: spacing.md },
   grabber: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border },
