@@ -12,6 +12,56 @@ function fakeSync() {
   return { manager, sync };
 }
 
+describe("work that stays pending after a run never re-triggers a run (blinking loop 2026-11-24)", () => {
+  beforeEach(() => {
+    jest.spyOn(AppState, "addEventListener").mockImplementation((() => ({ remove: () => undefined })) as never);
+  });
+  afterEach(() => {
+    jest.restoreAllMocks();
+    jest.useRealTimers();
+  });
+
+  /** A manager whose run publishes syncing then idle with the SAME pending count, like a refused or backed-off order. */
+  function stuckManager(pending: number) {
+    let status: SyncStatus = { ...idle, pending };
+    const listeners = new Set<(s: SyncStatus) => void>();
+    const publish = (next: SyncStatus) => {
+      status = next;
+      listeners.forEach((l) => l(next));
+    };
+    const sync = jest.fn(async () => {
+      publish({ ...status, phase: "syncing" });
+      publish({ ...status, phase: "idle" });
+      return status;
+    });
+    const manager: SyncManager = {
+      sync,
+      getStatus: () => status,
+      subscribe: (l) => {
+        listeners.add(l);
+        return () => listeners.delete(l);
+      },
+      refresh: async () => status,
+    };
+    return { manager, sync };
+  }
+
+  it("a run that leaves the same work pending does not start another run, however long the clock runs", async () => {
+    jest.useFakeTimers();
+    const { manager, sync } = stuckManager(1);
+    await renderHook(() => useSyncStatus(manager, "online"));
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    const afterStart = sync.mock.calls.filter((call: unknown[]) => call[0] === "after_save").length;
+    expect(afterStart).toBeLessThanOrEqual(1);
+    await act(async () => {
+      jest.advanceTimersByTime(30_000);
+    });
+    expect(sync.mock.calls.filter((call: unknown[]) => call[0] === "after_save").length).toBe(afterStart);
+  });
+});
+
 describe("reference data syncs only at login and when the seller asks", () => {
   beforeEach(() => {
     jest.spyOn(AppState, "addEventListener").mockImplementation((() => ({ remove: () => undefined })) as never);

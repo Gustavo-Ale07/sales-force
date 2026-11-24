@@ -640,6 +640,8 @@ export async function pushOutbox(
         failed += 1;
         if (error.kind === "server" || error.kind === "rate_limit") options.onServerTrouble?.();
         if (error.kind === "network") return { attempted, accepted, failed, stoppedBy: "offline", quarantined };
+        // One attempt per draft per run: without this a manual/foreground run (backoff ignored) would hammer the same command up to the run limit.
+        heldDrafts.add(draft.localId);
         continue;
       }
       if (failure === "auth") {
@@ -779,8 +781,12 @@ export async function countSendRequests(
 ): Promise<{ readonly waiting: number; readonly refused: number }> {
   // With a confirmed dataset only the requests of THAT dataset count (another dataset's drafts are never delivered from here).
   const scoped = dataset === undefined || dataset === null;
+  // A request whose create/replace command was definitively rejected waits for the seller's correction, not for the network: it is
+  // already counted once as "needs attention" through the rejected command, and it must never keep "pending" above zero (that
+  // re-triggered a sync after every run: the blinking of 2026-11-24).
   const rows = await db.query<SqlRow>(
     `SELECT send_state, count(*) AS n FROM local_order_draft WHERE owner_account_id = ? AND send_state IN ('requested', 'refused')
+       AND NOT (send_state = 'requested' AND EXISTS (SELECT 1 FROM outbox o WHERE o.draft_local_id = local_order_draft.local_id AND o.state IN ('rejected', 'conflict', 'needs_review')))
        ${scoped ? "" : "AND dataset_environment = ? AND dataset_id = ?"} GROUP BY send_state`,
     scoped ? [ownerAccountId] : [ownerAccountId, dataset.environment, dataset.datasetId],
   );

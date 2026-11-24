@@ -40,10 +40,20 @@ export function useSyncStatus(sync: SyncManager | null, connectivity: Connectivi
   }, [sync, online, loginSync]);
 
   // New local work while online: push it (no cache refresh).
-  const waiting = status.pending > 0 && status.phase === "idle";
+  // Only NEW work triggers it (the pending count rising above what was already handled). A run that ends with the same work still
+  // pending (backoff, refusal) must not trigger the next run: retries belong to the timer, which respects the backoff.
+  const idle = status.phase === "idle";
+  const pending = status.pending;
+  const handled = useRef(0);
   useEffect(() => {
-    if (sync !== null && online && waiting) void sync.sync("after_save", { pull: false });
-  }, [sync, online, waiting]);
+    if (sync === null || !idle) return;
+    if (pending <= handled.current) {
+      handled.current = pending;
+      return;
+    }
+    handled.current = pending;
+    if (online) void sync.sync("after_save", { pull: false });
+  }, [sync, online, idle, pending]);
 
   useEffect(() => {
     if (sync === null) return undefined;

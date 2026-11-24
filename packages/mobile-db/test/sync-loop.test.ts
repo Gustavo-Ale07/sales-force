@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createSyncManager,
   getDraft,
@@ -219,6 +219,55 @@ describe("what counts as 'aguardando envio'", () => {
     expect(JSON.stringify([manager.getStatus().pending, manager.getStatus().needsAttention, manager.getStatus().awaitingOrders])).toBe(first);
     expect(await getDraft(db, id)).toMatchObject({ status: "sync_error", sendState: "requested" });
     expect(manager.getStatus().needsAttention).toBeGreaterThan(0);
+  });
+
+  it("after a definitive refusal nothing is pending any more: the order shows once as needing attention and the app trigger stays quiet", async () => {
+    await saveOrderDraft(db, env, draftInput({ sendRequested: true }));
+    await manager.refresh();
+    await manager.sync("after_save", { pull: false });
+    expect(manager.getStatus()).toMatchObject({ pending: 0, needsAttention: 1, phase: "error" });
+    expect(await driveLikeTheApp(10)).toBe(0);
+    expect(server.posts).toBe(1);
+  });
+});
+
+describe("simulated clock (fake timers)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** The app's 60 s timer plus the "new work" trigger, on a fake clock; the OfflineEnv clock follows the fake one. */
+  async function runApp(ms: number, transport: OrderTransport): Promise<void> {
+    vi.useFakeTimers({ now: Date.parse("2026-11-24T10:00:00.000Z") });
+    const clockEnv: OfflineEnv = { now: () => new Date(), newId: env.newId };
+    manager = createSyncManager({ db, env: clockEnv, transport, source, ownerAccountId: OWNER, internetState: () => "online" });
+    await manager.refresh();
+    const timer = setInterval(() => void manager.sync("timer", { pull: false }), 60_000);
+    await manager.sync("after_save", { pull: false });
+    await vi.advanceTimersByTimeAsync(ms);
+    clearInterval(timer);
+  }
+
+  it("a definitive error: 24 hours later the transport was called exactly once", async () => {
+    await saveOrderDraft(db, env, draftInput({ sendRequested: true }));
+    await runApp(24 * 3_600_000, server);
+    expect(server.posts).toBe(1);
+    expect(manager.getStatus()).toMatchObject({ pending: 0, needsAttention: 1 });
+  });
+
+  it("a transient error retries with a growing backoff, bounded by the 15 minute cap", async () => {
+    class Flaky extends RefusingServer {
+      override async createOrder(): Promise<RemoteOrder> {
+        this.posts += 1;
+        throw new TransportError("server", "indisponivel", 503);
+      }
+    }
+    const flaky = new Flaky();
+    await saveOrderDraft(db, env, draftInput({ sendRequested: true }));
+    await runApp(10 * 60_000, flaky);
+    // attempts at 0, then timer ticks after 5 s, 10 s, 20 s... backoff: ticks at 60 s, 120 s, 240 s, 480 s (each tick finds the backoff elapsed or not)
+    expect(flaky.posts).toBeGreaterThan(1);
+    expect(flaky.posts).toBeLessThanOrEqual(8); // never more than one attempt per 60 s tick (10 ticks + the first)
   });
 });
 
