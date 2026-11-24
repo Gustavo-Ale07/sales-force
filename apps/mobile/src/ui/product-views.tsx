@@ -119,6 +119,8 @@ function AddControl({ product, quantity, actions }: { product: ProductListItem; 
 }
 
 interface ViewProps {
+  /** Opens the product detail (tap on the card or row, outside the add control). */
+  readonly onOpen?: ((product: ProductListItem) => void) | undefined;
   readonly product: ProductListItem;
   readonly quantity?: string | undefined;
   readonly actions?: ProductOrderActions | undefined;
@@ -130,10 +132,10 @@ function describe(product: ProductListItem, quantity: string | undefined): strin
   return parts.join(", ");
 }
 
-function CardImpl({ product, quantity, actions }: ViewProps) {
+function CardImpl({ product, quantity, actions, onOpen }: ViewProps) {
   const noPrice = product.listPrice.state === "none";
   return (
-    <View style={styles.card} accessible={actions === undefined} accessibilityLabel={actions === undefined ? describe(product, quantity) : undefined}>
+    <Pressable style={styles.card} onPress={onOpen === undefined ? undefined : () => onOpen(product)} accessible={actions === undefined} accessibilityLabel={actions === undefined ? describe(product, quantity) : undefined}>
       <ProductThumb product={product} size="card" />
       <Text style={styles.cardName} numberOfLines={2}>{product.description}</Text>
       <Text style={styles.meta} numberOfLines={1}>{`Cód. ${product.code} · ${product.unit}`}</Text>
@@ -144,14 +146,14 @@ function CardImpl({ product, quantity, actions }: ViewProps) {
           <AddControl product={product} quantity={quantity} actions={actions} />
         </View>
       )}
-    </View>
+    </Pressable>
   );
 }
 
-function RowImpl({ product, quantity, actions }: ViewProps) {
+function RowImpl({ product, quantity, actions, onOpen }: ViewProps) {
   const noPrice = product.listPrice.state === "none";
   return (
-    <View style={styles.row} accessible={actions === undefined} accessibilityLabel={actions === undefined ? describe(product, quantity) : undefined}>
+    <Pressable style={styles.row} onPress={onOpen === undefined ? undefined : () => onOpen(product)} accessible={actions === undefined} accessibilityLabel={actions === undefined ? describe(product, quantity) : undefined}>
       <ProductThumb product={product} size="row" />
       <View style={styles.rowInfo}>
         <Text style={styles.rowName} numberOfLines={2}>{product.description}</Text>
@@ -164,7 +166,7 @@ function RowImpl({ product, quantity, actions }: ViewProps) {
         </View>
       )}
       {actions === undefined && !product.sellable && <Text style={[styles.notSellable, styles.rowNotice]} numberOfLines={1}>Indisponível</Text>}
-    </View>
+    </Pressable>
   );
 }
 

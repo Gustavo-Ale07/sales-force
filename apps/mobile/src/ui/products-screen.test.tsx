@@ -173,6 +173,17 @@ describe("ProductsScreen (Catálogo)", () => {
     expect(await screen.findByText("Nenhum produto com estes filtros.")).toBeTruthy();
   });
 
+  it("tapping a card opens the product detail with brand, reference, group and price origin, and no cost or margin", async () => {
+    const items = [product(7, { description: "Tinta Azul 18L", brand: "Marca X", reference: "REF-9", groupCode: 10, groupName: "Tintas", listPrice: priced("120.5") })];
+    await render(<ProductsScreen products={catalog([], items)} onUnauthenticated={noop} />);
+    await pressAndSettle(await screen.findByText("Tinta Azul 18L"));
+    expect(await screen.findByLabelText("Marca: Marca X")).toBeTruthy();
+    expect(screen.getByLabelText("Referência: REF-9")).toBeTruthy();
+    expect(screen.getByLabelText("Grupo: Tintas")).toBeTruthy();
+    expect(screen.getByLabelText("Origem do preço: Tabela 1")).toBeTruthy();
+    expect(screen.queryByText(/custo|margem/i)).toBeNull();
+  });
+
   it("shows 'Sem preço' (never R$ 0,00) for a product without a price, and keeps a real zero as R$ 0,00", async () => {
     const zero: ProductListItem["listPrice"] = { state: "zero", unitPrice: "0", tableCode: 1, versionId: 1 };
     await render(<ProductsScreen products={catalog([], [CATALOG[2]!, product(9, { description: "Brinde", listPrice: zero })])} onUnauthenticated={noop} />);

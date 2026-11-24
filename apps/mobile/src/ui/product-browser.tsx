@@ -5,6 +5,7 @@ import type { ProductFilters, ProductGroupOption, ProductListItem, ProductPageRe
 import { colors, control, radius, spacing } from "../theme";
 import { PagedListView } from "./paged-list-view";
 import { ProductFilterChips, ProductFiltersSheet, countActiveProductFilters } from "./product-filters";
+import { ProductDetailSheet } from "./product-detail-sheet";
 import { ProductCard, ProductRow, type ProductOrderActions, type ProductViewMode } from "./product-views";
 
 export interface ProductBrowserProps {
@@ -27,6 +28,7 @@ export function ProductBrowser({ products, onUnauthenticated, connectivity, acti
   const offlineSuffix = connectivity === "offline" ? " · dados salvos neste aparelho" : "";
   const [mode, setMode] = useState<ProductViewMode>("grid");
   const [filters, setFilters] = useState<ProductFilters>({});
+  const [detail, setDetail] = useState<ProductListItem | null>(null);
   const [groups, setGroups] = useState<readonly ProductGroupOption[]>([]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const active = countActiveProductFilters(filters);
@@ -89,14 +91,15 @@ export function ProductBrowser({ products, onUnauthenticated, connectivity, acti
     const quantity = actions?.quantityOf(product.code);
     return mode === "grid" ? (
       <View style={styles.cell}>
-        <ProductCard product={product} quantity={quantity} actions={actions} />
+        <ProductCard product={product} quantity={quantity} actions={actions} onOpen={setDetail} />
       </View>
     ) : (
-      <ProductRow product={product} quantity={quantity} actions={actions} />
+      <ProductRow product={product} quantity={quantity} actions={actions} onOpen={setDetail} />
     );
   };
 
   return (
+    <>
     <PagedListView<ProductListItem, ProductPageRequest>
       load={(request) => products.list(request)}
       extra={extra}
@@ -123,6 +126,8 @@ export function ProductBrowser({ products, onUnauthenticated, connectivity, acti
       noResultHint="Confira a descrição ou o código."
       onUnauthenticated={onUnauthenticated}
     />
+    <ProductDetailSheet product={detail} onClose={() => setDetail(null)} />
+    </>
   );
 }
 
