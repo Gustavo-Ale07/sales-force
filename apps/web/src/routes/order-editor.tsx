@@ -239,7 +239,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
   const config = useQuery(orderEntryConfigurationQueryOptions(api));
   const loadedDataset = useLoadedDataset();
 
-  const readOnly = order !== null && !EDITABLE_STATUSES.has(order.status);
+  const readOnly = order !== null && (!EDITABLE_STATUSES.has(order.status) || (order.status === "rejected" && order.erpNumber !== null));
   const lineCounter = useRef(0);
   const nextKey = () => `line-${(lineCounter.current += 1)}`;
 
