@@ -37,6 +37,7 @@ import { DeleteOrderDialog } from "../components/delete-order-dialog";
 import { OrderProductFilter, PRODUCT_MATCH_OPTIONS, useProductLabel, type ProductMatch } from "../components/order-product-filter";
 import { ErpStageChip, stageText } from "../components/order-stage";
 import { ErpBillingBadge, ErpReleaseBadge, OrderStatusBadge } from "../components/order-status-badges";
+import { detectPreset, PERIOD_PRESET_OPTIONS, presetRange, todayInSaoPaulo, type PeriodPreset } from "../lib/period-presets";
 import { PrintOrderButton } from "../components/print-order-button";
 import { QueryError } from "../components/query-error";
 import { customerQueryOptions, orderEntryConfigurationQueryOptions, ordersQueryOptions, type OrdersParams } from "../lib/api-queries";
@@ -182,6 +183,16 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
   const [productText, setProductText] = useSearchBox(params.productSearch, (productSearch) => change({ productSearch }));
   const selectedProducts = params.products ?? [];
   const hasPeriod = params.from !== undefined || params.to !== undefined;
+  const today = todayInSaoPaulo();
+  const detected = detectPreset(params.from, params.to, today);
+  const [customMode, setCustomMode] = useState(false);
+  const preset: PeriodPreset = customMode ? "custom" : detected;
+  const pickPreset = (next: PeriodPreset) => {
+    setCustomMode(next === "custom");
+    if (next === "custom") return;
+    const range = presetRange(next, today);
+    change({ from: range.from, to: range.to, dateField: next === "all" ? undefined : params.dateField });
+  };
   const hasFilters =
     params.search !== undefined || params.status !== undefined || stageFilter !== undefined || params.customerCode !== undefined || hasPeriod || selectedProducts.length > 0 || params.productSearch !== undefined;
   const clearAll = () => onSearchChange(compact({ sort: params.sort, pageSize: params.pageSize }));
@@ -245,6 +256,9 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
           </Select>
         </FilterField>
 
+        <FilterField label="Período" className="lg:col-span-6">
+          <SegmentedControl<PeriodPreset> aria-label="Período" value={preset} onValueChange={pickPreset} options={PERIOD_PRESET_OPTIONS} className="h-10 items-center" />
+        </FilterField>
         <FilterField label="Período por" className="lg:col-span-3">
           <Select
             size="md"
@@ -259,12 +273,16 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
             ))}
           </Select>
         </FilterField>
+        {preset === "custom" ? (
+          <>
         <FilterField label="De" className="lg:col-span-3">
           <DateFilterInput label="Data inicial" value={params.from} max={params.to} onCommit={setFrom} />
         </FilterField>
         <FilterField label="Até" className="lg:col-span-3">
           <DateFilterInput label="Data final" value={params.to} min={params.from} onCommit={setTo} />
         </FilterField>
+          </>
+        ) : null}
         <FilterField label="Produtos" className="lg:col-span-4">
           <OrderProductFilter
             codes={selectedProducts}

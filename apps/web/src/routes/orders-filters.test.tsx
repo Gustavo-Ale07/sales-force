@@ -23,6 +23,7 @@ describe("Vendas: filtros comerciais", () => {
   it("period: sends the dates as typed, keeps them in the URL and shows a chip; the date field can be switched", async () => {
     const { calls, router, user } = renderApp("/pedidos", { handlers: handlers() });
     await screen.findAllByText("Comercial Alfa Ltda");
+    await user.click(screen.getByRole("radio", { name: "Personalizado" }));
     fireEvent.change(screen.getByLabelText("Data inicial"), { target: { value: "2026-03-01" } });
     await waitFor(() => expect(lastOrdersCall(calls)?.get("from")).toBe("2026-03-01"));
     fireEvent.change(screen.getByLabelText("Data final"), { target: { value: "2026-03-31" } });
@@ -177,6 +178,7 @@ describe("Vendas: filtros comerciais", () => {
     await waitFor(() => expect(lastOrdersCall(calls)?.get("status")).toBe("draft"));
     expect(lastOrdersCall(calls)?.get("page")).toBe("1");
 
+    await user.click(screen.getByRole("radio", { name: "Personalizado" }));
     fireEvent.change(screen.getByLabelText("Data inicial"), { target: { value: "2026-03-01" } });
     await waitFor(() => expect(lastOrdersCall(calls)?.get("from")).toBe("2026-03-01"));
     await user.click(screen.getByRole("button", { name: "Filtrar por produtos" }));
