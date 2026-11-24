@@ -1,5 +1,6 @@
 import { useLocation, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
+import { ResumeDraftDialog } from "../components/resume-draft-dialog";
 import { NotFound } from "../components/route-states";
 import { TemplateSkippedNotice } from "../components/template-skipped-notice";
 import { parseOrdersSearch } from "../lib/route-search";
@@ -24,12 +25,18 @@ export function OrdersRoute() {
 export function NewOrderRoute() {
   const navigate = useNavigate();
   const { customer } = useSearch({ strict: false }) as { customer?: unknown };
+  const initialCustomerCode = asInt(customer, 0);
   return (
-    <OrderEditorPage
-      initialCustomerCode={asInt(customer, 0)}
-      onCreated={(id) => void navigate({ to: "/pedidos/$id", params: { id }, replace: true })}
-      onClose={() => void navigate({ to: "/pedidos" })}
-    />
+    <>
+      <OrderEditorPage
+        initialCustomerCode={initialCustomerCode}
+        onCreated={(id) => void navigate({ to: "/pedidos/$id", params: { id }, replace: true })}
+        onClose={() => void navigate({ to: "/pedidos" })}
+      />
+      {initialCustomerCode === undefined ? (
+        <ResumeDraftDialog onContinue={(id) => void navigate({ to: "/pedidos/$id", params: { id }, replace: true })} />
+      ) : null}
+    </>
   );
 }
 
