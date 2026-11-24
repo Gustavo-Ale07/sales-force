@@ -10,13 +10,13 @@ import type { Tone } from "@salesforce/ui";
  * TODO(after Track B merges): the Sankhya-side status labels (D-E) come from `orderDeliveryLabel` in @salesforce/domain.
  */
 export const orderStatusLabels: Record<ApiSchema<"OrderStatus">, { label: string; tone: Tone }> = {
-  draft: { label: "não enviado", tone: "neutral" },
+  draft: { label: "Salvo", tone: "neutral" },
   awaiting_approval: { label: "Aguardando aprovação", tone: "warning" },
   approved: { label: "Aprovado", tone: "info" },
   approval_rejected: { label: "Reprovado na aprovação", tone: "danger" },
-  queued: { label: "Enviando ao Sankhya…", tone: "info" },
+  queued: { label: "Aguardando envio", tone: "info" },
   sent: { label: "Enviado ao Sankhya", tone: "success" },
-  rejected: { label: "Falha no envio", tone: "danger" },
+  rejected: { label: "Precisa de correção", tone: "danger" },
   unknown: { label: "Verificando envio…", tone: "info" },
 };
 
@@ -32,7 +32,7 @@ export function orderStatusView(
   const hint = orderStatusHints[order.status];
   if (order.status === "queued" && isDeliveryOverdue({ updatedAt: order.updatedAt, now })) {
     return {
-      label: "Aguardando envio — será reenviado automaticamente",
+      label: "Aguardando envio",
       tone: "warning",
       hint: "O envio ao Sankhya está demorando. O Sales Force tenta de novo sozinho; não é preciso enviar outra vez.",
     };

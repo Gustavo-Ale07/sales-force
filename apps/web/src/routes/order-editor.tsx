@@ -35,7 +35,7 @@ import {
   titleCase,
 } from "@salesforce/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useBlocker } from "@tanstack/react-router";
+import { useBlocker, useNavigate } from "@tanstack/react-router";
 import { BookmarkPlus, MoreHorizontal, Percent, Save, Trash2, TriangleAlert, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { BulkEntryDialog, type BulkEntryItem } from "../components/bulk-entry-dialog";
@@ -344,9 +344,9 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
       lines,
     }) !== baseline;
 
-  const dirtyRef = useRef(dirty);
+  const dirtyRef = useRef(false);
   useEffect(() => {
-    dirtyRef.current = dirty;
+    dirtyRef.current = dirty && (customer !== null || lines.length > 0);
   });
   const leavingRef = useRef(false);
   const blocker = useBlocker({
@@ -413,8 +413,10 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
     },
   });
 
+  /** The navigation that the discard dialog blocked; "Salvar e sair" resumes it once the draft is saved. */
+  const proceedRef = useRef<(() => void) | null>(null);
   const save = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (mode: "confirm" | "draft" = "confirm") => {
       // The dataset this editor loaded under; unknown identity blocks the write before any request.
       const expectedDataset = requireDataset(loadedDataset);
       let saved: OrderDetail;
@@ -425,17 +427,30 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
         if (requestIdRef.current?.payload !== payload) requestIdRef.current = { payload, id: newUuid() };
         saved = await createOrder(api, { clientRequestId: requestIdRef.current.id, expectedDataset, ...body });
       }
-      // D-AA: saving IS sending. The document stays saved whatever happens next; the idempotent submit makes a double click harmless.
-      if ((saved.status !== "draft" && saved.status !== "approved") || saved.review !== null) return { saved, sent: null, sendError: null };
+      // "Salvar e sair": saved on the server and still editable; nothing goes to Sankhya.
+      if (mode === "draft") return { saved, sent: null, sendError: null, mode };
+      // D-AA: confirming saves AND sends. The document stays saved whatever happens next; the idempotent submit makes a double click harmless.
+      if ((saved.status !== "draft" && saved.status !== "approved") || saved.review !== null) return { saved, sent: null, sendError: null, mode };
       try {
         const sent = await submitOrder(api, saved.id);
-        return { saved, sent: sent ?? saved, sendError: null };
+        return { saved, sent: sent ?? saved, sendError: null, mode };
       } catch (error) {
-        return { saved, sent: null, sendError: error };
+        return { saved, sent: null, sendError: error, mode };
       }
     },
-    onSuccess: async ({ saved, sent, sendError }) => {
+    onSuccess: async ({ saved, sent, sendError, mode }) => {
       const finalOrder = sent ?? saved;
+      if (mode === "draft") {
+        leavingRef.current = true;
+        queryClient.setQueryData(queryKeys.order(finalOrder.id), finalOrder);
+        await queryClient.invalidateQueries({ queryKey: queryKeys.ordersAll });
+        toast({ title: docKind === "quote" ? "Orçamento salvo" : "Pedido salvo", description: "Salvo no Sales Force. Ainda não foi enviado ao Sankhya.", tone: "success" });
+        const proceed = proceedRef.current;
+        proceedRef.current = null;
+        if (proceed) proceed();
+        else onClose();
+        return;
+      }
       queryClient.setQueryData(queryKeys.order(finalOrder.id), finalOrder);
       await queryClient.invalidateQueries({ queryKey: queryKeys.ordersAll });
       await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
@@ -522,7 +537,15 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
       element?.focus({ preventScroll: true });
       return;
     }
-    save.mutate();
+    save.mutate("confirm");
+  };
+
+  // "Salvar e sair": saves on the server without sending; needs a customer and valid lines, not the sending-only header fields.
+  const canSaveDraft = !readOnly && customer !== null && preview.valid && !hasBlockedLines && !sendBlocked && (order === null || dirty);
+  const saveAndLeave = (proceed: (() => void) | null) => {
+    if (!canSaveDraft || save.isPending) return;
+    proceedRef.current = proceed;
+    save.mutate("draft");
   };
 
   const requestCustomer = (picked: PickedCustomer | null) => {
@@ -1399,10 +1422,22 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
           </div>
           {!readOnly ? (
             <Button
+              type="button"
+              variant="secondary"
+              leftIcon={<Save size={14} aria-hidden="true" />}
+              loading={save.isPending && save.variables === "draft"}
+              disabled={!canSaveDraft || save.isPending}
+              onClick={() => saveAndLeave(null)}
+            >
+              Salvar e sair
+            </Button>
+          ) : null}
+          {!readOnly ? (
+            <Button
               type="submit"
               variant="primary"
               leftIcon={<Save size={14} aria-hidden="true" />}
-              loading={save.isPending}
+              loading={save.isPending && save.variables !== "draft"}
               disabled={!canSave}
             >
               {vocab.save}
@@ -1497,20 +1532,28 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
 
       <Dialog open={blocker.status === "blocked"} onOpenChange={(open) => !open && blocker.reset?.()}>
         <DialogContent
-          title="Sair sem salvar?"
-          description="As alterações deste pedido ainda não foram salvas e serão perdidas."
+          title={order ? "Descartar as alterações?" : docKind === "quote" ? "Descartar o orçamento?" : "Descartar o pedido?"}
+          description="O que você fez ainda não foi salvo."
           footer={
             <>
               <DialogClose asChild>
                 <Button variant="secondary">Continuar editando</Button>
               </DialogClose>
               <Button variant="danger" onClick={() => blocker.proceed?.()}>
-                Sair sem salvar
+                Descartar
+              </Button>
+              <Button
+                variant="primary"
+                loading={save.isPending && save.variables === "draft"}
+                disabled={!canSaveDraft || save.isPending}
+                onClick={() => saveAndLeave(() => blocker.proceed?.())}
+              >
+                Salvar e sair
               </Button>
             </>
           }
         >
-          <p className="m-0 text-sm text-fg-muted">Salve para não perder o trabalho.</p>
+          <p className="m-0 text-sm text-fg-muted">Salve para não perder o trabalho. Um pedido só salvo não é enviado ao Sankhya.</p>
         </DialogContent>
       </Dialog>
     </>
@@ -1632,6 +1675,7 @@ function NewOrder({ initialCustomerCode, onCreated, onClose, onSent }: Omit<Orde
 
 export function OrderEditorPage({ orderId, initialCustomerCode, onCreated, onClose, notice }: OrderEditorPageProps) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   // D-AB B2: held above the editor, which is re-keyed on every server version and would drop the dialog.
   const [sending, setSending] = useState<SentDocument | null>(null);
   const closeSending = (deleted: boolean) => {
@@ -1656,6 +1700,8 @@ export function OrderEditorPage({ orderId, initialCustomerCode, onCreated, onClo
         reference={sending?.reference ?? ""}
         onClose={() => closeSending(false)}
         onDeleted={() => closeSending(true)}
+        onNewOrder={() => { closeSending(false); void navigate({ to: "/pedidos/novo" }); }}
+        onHome={() => { closeSending(false); void navigate({ to: "/" }); }}
       />
     </>
   );

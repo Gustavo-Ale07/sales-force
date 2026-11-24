@@ -21,7 +21,7 @@ test.describe("Cenário 4 — novo pedido, rascunhos e exclusão", () => {
     await navLink(page, "Vendas").click();
     const row = bodyRows(tableRegion(page, "Pedidos")).filter({ hasText: reference });
     await expect(row).toHaveCount(1);
-    await expect(row).toContainText(/não enviado/i);
+    await expect(row).toContainText(/Salvo/i);
     await expect(row).toContainText(SELLER_CUSTOMER.name);
     await expect(row).toContainText(total);
     await expect(row.getByRole("cell", { name: "2", exact: true })).toBeVisible();
@@ -133,7 +133,7 @@ test.describe("Cenário 4 — novo pedido, rascunhos e exclusão", () => {
     await expect(dialog).toContainText("Isso não pode ser desfeito.");
     await dialog.getByRole("button", { name: "Manter" }).click();
     await expect(dialog).toBeHidden();
-    await expect(row).toContainText(/não enviado/i);
+    await expect(row).toContainText(/Salvo/i);
 
     await row.getByRole("button", { name: `Excluir ${reference}` }).click();
     await page.getByRole("dialog", { name: /^Excluir .*\?$/ }).getByRole("button", { name: "Excluir", exact: true }).click();

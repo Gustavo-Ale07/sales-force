@@ -736,14 +736,51 @@ describe("Novo pedido", () => {
     });
     await addProduct(user, "Balão");
     await user.click(screen.getByRole("button", { name: "Cancelar" }));
-    const dialog = await screen.findByRole("dialog", { name: "Sair sem salvar?" });
+    const dialog = await screen.findByRole("dialog", { name: "Descartar o pedido?" });
     await user.click(within(dialog).getByRole("button", { name: "Continuar editando" }));
     expect(router.state.location.pathname).toBe("/pedidos/novo");
     await user.click(screen.getByRole("button", { name: "Cancelar" }));
     await user.click(
-      within(await screen.findByRole("dialog", { name: "Sair sem salvar?" })).getByRole("button", { name: "Sair sem salvar" }),
+      within(await screen.findByRole("dialog", { name: "Descartar o pedido?" })).getByRole("button", { name: "Descartar" }),
     );
     await waitFor(() => expect(router.state.location.pathname).toBe("/pedidos"));
+  });
+
+  it("an empty order (no lines) leaves in silence, without the discard question", async () => {
+    const { user, router } = renderApp("/pedidos/novo", { handlers: newOrderHandlers({ "GET /orders": { body: { items: [], page: 1, pageSize: 25, total: 0 } } }) });
+    await user.click(await screen.findByRole("button", { name: "Cancelar" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/pedidos"));
+    expect(screen.queryByRole("dialog", { name: /Descartar/ })).not.toBeInTheDocument();
+  });
+
+  it("'Salvar e sair' saves the order on the server, never sends it to Sankhya, and leaves", async () => {
+    const { user, calls, router } = renderApp("/pedidos/novo?customer=1001", {
+      handlers: newOrderHandlers({
+        "POST /orders": { status: 201, body: orderDetail() },
+        "GET /orders": { body: { items: [], page: 1, pageSize: 25, total: 0 } },
+      }),
+    });
+    await addProduct(user, "Balão");
+    await user.click(screen.getByRole("button", { name: "Salvar e sair" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/pedidos"));
+    expect(callsTo(calls, "POST", "/orders")).toHaveLength(1);
+    expect(callsTo(calls, "POST", `/orders/${ORDER_ID}/submit`)).toHaveLength(0);
+  });
+
+  it("the discard dialog offers Salvar e sair: saves without sending and then leaves", async () => {
+    const { user, calls, router } = renderApp("/pedidos/novo?customer=1001", {
+      handlers: newOrderHandlers({
+        "POST /orders": { status: 201, body: orderDetail() },
+        "GET /orders": { body: { items: [], page: 1, pageSize: 25, total: 0 } },
+      }),
+    });
+    await addProduct(user, "Balão");
+    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+    const dialog = await screen.findByRole("dialog", { name: "Descartar o pedido?" });
+    await user.click(within(dialog).getByRole("button", { name: "Salvar e sair" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/pedidos"));
+    expect(callsTo(calls, "POST", "/orders")).toHaveLength(1);
+    expect(callsTo(calls, "POST", `/orders/${ORDER_ID}/submit`)).toHaveLength(0);
   });
 
   it("renders neither cost nor margin", async () => {
@@ -980,6 +1017,15 @@ describe("Rascunho existente", () => {
       expect(await screen.findByText("Enviado ao Sankhya — nº 77. A conferência é feita pela Plac.", {}, { timeout: 5000 })).toBeInTheDocument();
       expect(screen.queryByText(/fila/i)).not.toBeInTheDocument();
       expect(callsTo(calls, "POST", `/orders/${ORDER_ID}/submit`)).toHaveLength(1);
+    }, 15000);
+
+    it("ends with Ver pedido, Novo pedido and Voltar ao início", async () => {
+      const { user, router } = await confirm(afterSend(orderDetail({ version: 3, status: "sent", erpNumber: 77 })));
+      const dialog = await screen.findByRole("dialog", {}, { timeout: 5000 });
+      expect(await within(dialog).findByRole("button", { name: "Ver pedido" }, { timeout: 5000 })).toBeInTheDocument();
+      expect(within(dialog).getByRole("button", { name: "Voltar ao início" })).toBeInTheDocument();
+      await user.click(within(dialog).getByRole("button", { name: "Novo pedido" }));
+      await waitFor(() => expect(router.state.location.pathname).toBe("/pedidos/novo"));
     }, 15000);
 
     it("shows the failure reason with Reenviar and Excluir", async () => {

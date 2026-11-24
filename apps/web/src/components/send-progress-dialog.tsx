@@ -20,13 +20,16 @@ export interface SendProgressDialogProps {
   onClose: () => void;
   /** The order was deleted from the failure state. */
   onDeleted: () => void;
+  /** After the outcome: start another order / go to the start page (same exits as the app confirmation screen). */
+  onNewOrder?: () => void;
+  onHome?: () => void;
 }
 
 /**
  * D-AB B2: blocking dialog opened by "Confirmar pedido". It reads the order every SEND_POLL_MS for up to SEND_WAIT_MS and
  * shows what happened. It never shows the word "fila". Closing is blocked while the outcome is unknown.
  */
-export function SendProgressDialog({ orderId, kind, reference, onClose, onDeleted }: SendProgressDialogProps) {
+export function SendProgressDialog({ orderId, kind, reference, onClose, onDeleted, onNewOrder, onHome }: SendProgressDialogProps) {
   const api = useApi();
   const queryClient = useQueryClient();
   const [startedAt, setStartedAt] = useState(0);
@@ -101,8 +104,18 @@ export function SendProgressDialog({ orderId, kind, reference, onClose, onDelete
                   )}
                 </>
               ) : null}
+              {onHome ? (
+                <Button variant="secondary" className="border-white/50 bg-transparent text-white hover:bg-white/10" onClick={() => { resend.reset(); onHome(); }}>
+                  Voltar ao início
+                </Button>
+              ) : null}
+              {onNewOrder ? (
+                <Button variant="secondary" className="border-white/50 bg-transparent text-white hover:bg-white/10" onClick={() => { resend.reset(); onNewOrder(); }}>
+                  Novo pedido
+                </Button>
+              ) : null}
               <Button variant="primary" className="border-transparent bg-white text-[var(--sf-navy)] hover:bg-white/90" onClick={finish}>
-                Fechar
+                Ver pedido
               </Button>
             </>
           )

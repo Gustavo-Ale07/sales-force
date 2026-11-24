@@ -133,7 +133,7 @@ describe("Situação no Sankhya: linha do tempo no pedido", () => {
     renderApp(`/pedidos/${ORDER_ID}`, { handlers: detailHandlers(orderDetail()) });
     await screen.findByRole("button", { name: "Confirmar pedido" });
     const heading = screen.getByRole("heading", { level: 1, name: /^Pedido(?! nº)/ });
-    expect(within(heading).getByText(/^não enviado$/i)).toBeInTheDocument();
+    expect(within(heading).getByText(/^Salvo$/i)).toBeInTheDocument();
     expect(heading.textContent ?? "").not.toMatch(/rascunho|nº/i);
   });
 });
@@ -225,7 +225,7 @@ describe("Situação no Sankhya: lista de pedidos", () => {
     expect(within(stageRow).queryByText("Enviado ao Sankhya")).toBeNull();
     expect(within(rowOf("Pedido nº 5002")).getByText("Faturado")).toBeInTheDocument();
     expect(within(rowOf("Pedido nº 5003")).getByText("Enviado ao Sankhya")).toBeInTheDocument();
-    expect(within(rowOf("Cliente Rascunhado")).getByText(/^não enviado$/i)).toBeInTheDocument();
+    expect(within(rowOf("Cliente Rascunhado")).getByText(/^Salvo$/i)).toBeInTheDocument();
   });
 
   it("a stage on a non-sent order does not override the status badge", async () => {
@@ -348,6 +348,6 @@ describe("Texto visível: sem 'rascunho'", () => {
     renderApp("/pedidos", { handlers: { "GET /orders": { body: ordersPage([orderListItem()]) }, "GET /customers": { body: customersPage([customer()]) } } });
     await screen.findAllByText("Comercial Alfa Ltda");
     expect(document.body.textContent ?? "").not.toMatch(/rascunho/i);
-    expect(screen.getAllByText(/^não enviado$/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/^Salvo$/i).length).toBeGreaterThan(0);
   });
 });

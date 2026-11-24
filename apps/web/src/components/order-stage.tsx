@@ -47,7 +47,7 @@ const stageTones: Record<OrderStageCode, Tone> = {
   send_error: "danger",
   quotation: "neutral",
   received: "info",
-  in_review: "info",
+  in_review: "warning",
   financial_check: "warning",
   in_dispatch: "info",
   in_invoicing: "info",
