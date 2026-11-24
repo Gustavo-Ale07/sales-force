@@ -12,7 +12,7 @@ export const ProfilePhotoCommandSchema = z.object({
   photoVersion: z.string().regex(/^[0-9a-f]{32}$/),
   /** Resolved by the API when the photo was queued (the worker's database role cannot read the account tables). */
   erpUser: z.discriminatedUnion('kind', [
-    z.object({ kind: z.literal('user'), code: z.number().int().min(1).max(2_147_483_647) }),
+    z.object({ kind: z.literal('user'), code: z.number().int().min(1).max(2_147_483_647), sellerCode: z.number().int().optional() }),
     z.object({ kind: z.literal('none') }),
     z.object({ kind: z.literal('ambiguous') }),
   ]),
@@ -72,6 +72,10 @@ export class ProfilePhotoDeliveryService {
     const user = command.erpUser;
     if (user.kind === 'none') return this.reject(claimed, 'validation', 'photo_no_erp_user', 'The account has no linked ERP user.');
     if (user.kind === 'ambiguous') return this.reject(claimed, 'validation', 'photo_ambiguous_erp_user', 'More than one ERP user is linked to the account.');
+    // Resolved through the seller link: the directory mirror (worker-side) may have dropped or moved the user since.
+    if (user.sellerCode !== undefined && !(await store.directoryUserStillMapped(user.code, user.sellerCode))) {
+      return this.reject(claimed, 'validation', 'erp_user_changed', 'The ERP user no longer belongs to the account.');
+    }
     try {
       await store.markSending(claimed.outboxId, this.deps.now());
       await gateway.writeUserPhoto(

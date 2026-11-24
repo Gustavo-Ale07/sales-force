@@ -4,6 +4,7 @@ import { FakeGateway, FakeUserPhotoBook, SankhyaGatewayError } from '@salesforce
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AuditService } from '../../src/iam/audit.service.js';
+import { rejectPendingPhotoErpWrites } from '../../src/iam/photo-erp-invalidation.js';
 import { AccountPhotoRepository } from '../../src/iam/account-photo.repository.js';
 import { DrizzleProfilePhotoDeliveryStore } from '../../src/integration/profile-photo-delivery.store.js';
 import { ProfilePhotoDeliveryService } from '../../src/integration/profile-photo-delivery.service.js';
@@ -97,6 +98,29 @@ describe('profile photo delivery to the ERP (fake gateway)', () => {
     expect(JSON.stringify(row.payload)).not.toContain('imageBase64');
     expect((row.payload as { erpUser: unknown }).erpUser).toEqual({ kind: 'user', code: 77 });
     expect(await w.audits('account.photo_erp_written')).toHaveLength(1);
+  });
+
+  it('seller-link user removed from the directory after queuing: rejected erp_user_changed, nothing sent', async () => {
+    const w = await world({ sellerCode: 9, directoryUsers: [41] });
+    const { id } = await w.queue('d1');
+    await w.database.handle.pool.query('UPDATE erp_directory_user SET deleted_at = now() WHERE code = 41');
+    await w.service.runDue();
+    expect(w.book.writes).toHaveLength(0);
+    const row = await w.outbox(id);
+    expect(row.status).toBe('rejected');
+    expect(row.lastErrorMessage).toContain('erp_user_changed');
+  });
+
+  it('a changed account -> ERP user mapping closes the queued write (rejectPendingPhotoErpWrites), image dropped, nothing sent', async () => {
+    const w = await world({ sellerCode: 9, directoryUsers: [41] });
+    const { id } = await w.queue('d2');
+    const n = await rejectPendingPhotoErpWrites(w.database.handle.db, w.accountId, 'erp_user_changed', new Date());
+    expect(n).toBe(1);
+    await w.service.runDue();
+    expect(w.book.writes).toHaveLength(0);
+    const row = await w.outbox(id);
+    expect(row.status).toBe('rejected');
+    expect(JSON.stringify(row.payload)).not.toContain('imageBase64');
   });
 
   it('falls back to the seller link: exactly one ERP user of the seller', async () => {

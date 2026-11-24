@@ -8,6 +8,7 @@ import { isAccountPhotoError, renderAccountPhoto, toErpJpeg } from '../media/acc
 import { errorLogFields, type Logger } from '../observability/logger.js';
 import { ACCOUNT_PHOTO_STORE, CLOCK, LOGGER, PROFILE_PHOTO_ERP_WRITE_ENABLED, type Clock } from '../platform/tokens.js';
 import { uuidv7 } from '../platform/ids.js';
+import { rejectPendingPhotoErpWrites } from './photo-erp-invalidation.js';
 import { AccountPhotoRepository, type AccountPhotoRecord, type PhotoErpUser } from './account-photo.repository.js';
 import { AUDIT_ACTIONS, AuditService } from './audit.service.js';
 import type { CurrentUser } from './current-user.js';
@@ -141,6 +142,8 @@ export class AccountPhotoService {
     await this.claimSlot(user.accountId);
     const removed = await this.photos.transaction(async (tx) => {
       const row = await this.photos.remove(user.accountId, tx);
+      // A photo write still queued for the ERP must not export a photo the user just deleted (same transaction).
+      await rejectPendingPhotoErpWrites(tx, user.accountId, 'photo_removed', this.clock());
       if (row !== null) {
         await this.audit.record(
           { action: AUDIT_ACTIONS.accountPhotoRemoved, actorAccountId: user.accountId, detail: { version: photoVersionOf(row) } },

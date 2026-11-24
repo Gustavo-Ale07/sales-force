@@ -90,6 +90,21 @@ describe('profile photo to the ERP: API side', () => {
     expect((await rowsOf(open, 'seller1')).rows).toHaveLength(before.rows.length);
   });
 
+  it('removing the photo closes its still-queued ERP write: rejected photo_removed, image dropped (never exported)', async () => {
+    open.clock.advance(10_000);
+    const r = await put(open, 'seller1', await png(77));
+    expect(r.status).toBe(200);
+    open.clock.advance(10_000);
+    expect((await open.call('seller1', 'DELETE', '/me/photo')).status).toBe(204);
+    const { rows } = await rowsOf(open, 'seller1');
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row.status).not.toBe('pending');
+      expect(JSON.stringify(row.payload)).not.toContain('imageBase64');
+    }
+    expect(rows.some((row) => (row.lastErrorMessage ?? '').startsWith('photo_removed'))).toBe(true);
+  });
+
   it('a rejected upload queues nothing', async () => {
     const before = await rowsOf(open, 'seller2');
     const r = await put(open, 'seller2', Buffer.from('not an image'));

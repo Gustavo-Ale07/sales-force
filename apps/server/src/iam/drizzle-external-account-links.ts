@@ -13,6 +13,7 @@ import { decideDirectorySeller, parseDirectoryUserCode, type DirectoryRefusal } 
 import { and, count, eq, isNull, ne, sql } from 'drizzle-orm';
 import { uuidv7 } from '../platform/ids.js';
 import { DATABASE } from '../platform/tokens.js';
+import { rejectPendingPhotoErpWrites } from './photo-erp-invalidation.js';
 import { AUDIT_ACTIONS, AuditService } from './audit.service.js';
 import { UnvalidatedDirectoryBlockSource, type DirectoryBlockSource, type DirectorySyncOutcome, type ExternalAccountLinks } from './external-identity.js';
 import { DIRECTORY_BLOCK_SOURCE } from './iam-tokens.js';
@@ -171,6 +172,7 @@ export class DrizzleExternalAccountLinks implements ExternalAccountLinks {
         const accountId = existing?.id ?? null;
         let revoked = false;
         if (existing !== undefined && link !== undefined && DEFINITIVE.has(decision.refusal)) {
+          await rejectPendingPhotoErpWrites(tx, existing.id, 'erp_user_changed', input.now);
           await tx.delete(accountSellerLink).where(and(eq(accountSellerLink.accountId, existing.id), eq(accountSellerLink.source, 'sankhya_auto')));
           await tx.update(session).set({ revokedAt: input.now }).where(and(eq(session.accountId, existing.id), isNull(session.revokedAt)));
           revoked = true;
@@ -208,6 +210,7 @@ export class DrizzleExternalAccountLinks implements ExternalAccountLinks {
         }
         if (link.sellerCode === sellerCode) return { ok: true, accountId: existing.id, action: 'unchanged' } as const;
         // The ERP moved the user to another (valid, unclaimed) seller: follow it, never keep the old scope.
+        await rejectPendingPhotoErpWrites(tx, existing.id, 'erp_user_changed', input.now);
         await tx
           .update(accountSellerLink)
           .set({ sellerCode, configVersionId: version.id })

@@ -27,7 +27,7 @@ type Writer = Pick<Database, 'insert' | 'delete' | 'select'>;
 
 /** The ERP user (`TSIUSU.CODUSU`) that owns the photo of an account, resolved when the photo is queued (spike S1.8, CFG-2). */
 export type PhotoErpUser =
-  | { readonly kind: 'user'; readonly code: number }
+  | { readonly kind: 'user'; readonly code: number; readonly sellerCode?: number }
   | { readonly kind: 'none' }
   | { readonly kind: 'ambiguous' };
 
@@ -90,7 +90,7 @@ export class AccountPhotoRepository {
       .limit(2);
     if (users.length === 0) return { kind: 'none' };
     if (users.length > 1) return { kind: 'ambiguous' };
-    return { kind: 'user', code: users[0]!.code };
+    return { kind: 'user', code: users[0]!.code, sellerCode: link.sellerCode };
   }
 
   /**

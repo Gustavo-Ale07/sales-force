@@ -1,5 +1,5 @@
-import { integrationOutbox, type Database } from '@salesforce/db';
-import { and, asc, eq, gt, inArray, isNotNull, lt, lte, sql } from 'drizzle-orm';
+import { erpDirectoryUser, integrationOutbox, type Database } from '@salesforce/db';
+import { and, asc, eq, gt, inArray, isNotNull, isNull, lt, lte, sql } from 'drizzle-orm';
 import { ACCOUNT_PHOTO_AGGREGATE, ACCOUNT_PHOTO_OPERATION } from '../iam/account-photo.repository.js';
 import { AUDIT_ACTIONS, type AuditService } from '../iam/audit.service.js';
 import { maskStoredError } from '../observability/mask-error-message.js';
@@ -40,6 +40,8 @@ export interface ProfilePhotoDeliveryStore {
    * late retry never overwrites a newer photo. Read from the outbox alone (the worker role cannot read `account*`).
    */
   hasNewerVersion(claimed: ClaimedPhotoCommand): Promise<boolean>;
+  /** The directory mirror still holds this user, not deleted, under this seller (the mapping used when the write was queued). */
+  directoryUserStillMapped(userCode: number, sellerCode: number): Promise<boolean>;
   markSending(outboxId: string, at: Date): Promise<void>;
   /** Outbox `confirmed` (image dropped from the payload) and audit: one transaction. */
   confirm(input: { readonly claimed: ClaimedPhotoCommand; readonly userCode: number; readonly at: Date }): Promise<void>;
@@ -109,6 +111,15 @@ export class DrizzleProfilePhotoDeliveryStore implements ProfilePhotoDeliverySto
       if (row === undefined) return null;
       return { outboxId: row.id, accountId: row.aggregateId, originKey: row.originId ?? '', payload: row.payload, createdAt: row.createdAt, attemptCount: row.attemptCount };
     });
+  }
+
+  async directoryUserStillMapped(userCode: number, sellerCode: number): Promise<boolean> {
+    const [row] = await this.database
+      .select({ code: erpDirectoryUser.code })
+      .from(erpDirectoryUser)
+      .where(and(eq(erpDirectoryUser.code, userCode), eq(erpDirectoryUser.sellerCode, sellerCode), isNull(erpDirectoryUser.deletedAt)))
+      .limit(1);
+    return row !== undefined;
   }
 
   async hasNewerVersion(claimed: ClaimedPhotoCommand): Promise<boolean> {

@@ -3,6 +3,7 @@ import { account, accountSellerLink, type Database, type AccountRole, type Accou
 import { normalizeUsername } from '@salesforce/domain';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { DATABASE } from '../platform/tokens.js';
+import { rejectPendingPhotoErpWrites } from './photo-erp-invalidation.js';
 
 /**
  * NAMING DEBT: the physical column is still `account.email` (unique index on `lower(email)`) although it holds the
@@ -104,6 +105,8 @@ export class AccountRepository {
     link: { accountId: string; sellerCode: number; configVersionId: string },
     writer: Writer = this.db,
   ): Promise<void> {
+    // The seller -> ERP user mapping of the account changes: a queued photo write was resolved with the old one.
+    await rejectPendingPhotoErpWrites(writer, link.accountId, 'erp_user_changed', new Date());
     await writer
       .insert(accountSellerLink)
       .values({ ...link, source: 'manual' })
