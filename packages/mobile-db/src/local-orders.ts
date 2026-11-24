@@ -144,11 +144,18 @@ function freightTypeOf(value: unknown): FreightType | null {
 export type SendState = "requested" | "refused" | "submitted";
 
 /** Server order statuses of a submitted order that can still be edited (same set as the web editor and `isOrderEditable`); every other submitted status is read-only. */
-export const SUBMITTED_EDITABLE_STATUSES: readonly string[] = ["draft", "awaiting_approval", "approval_rejected"];
+export const SUBMITTED_EDITABLE_STATUSES: readonly string[] = ["draft", "awaiting_approval", "approval_rejected", "rejected"];
 
-/** True when the order was handed to the server and may no longer be edited or re-sent from the app. */
-export function isSubmittedReadOnly(draft: Pick<DraftRecord, "sendState" | "sendCode">): boolean {
-  return draft.sendState === "submitted" && !SUBMITTED_EDITABLE_STATUSES.includes(draft.sendCode ?? "");
+/**
+ * True when the order was handed to the server and may no longer be edited or re-sent from the app. A refused delivery
+ * ("Precisa de correção", `rejected`) stays editable only while no Sankhya number is bound (same rule as the server, SNK-4).
+ */
+export function isSubmittedReadOnly(
+  draft: Pick<DraftRecord, "sendState" | "sendCode"> & Partial<Pick<DraftRecord, "erpNumber" | "erpStage">>,
+): boolean {
+  if (draft.sendState !== "submitted") return false;
+  if (!SUBMITTED_EDITABLE_STATUSES.includes(draft.sendCode ?? "")) return true;
+  return draft.sendCode === "rejected" && draftErpNumber({ erpNumber: draft.erpNumber ?? null, erpStage: draft.erpStage ?? null }) !== null;
 }
 
 /** True while a confirmed order waits for its delivery to Sankhya ("Aguardando envio"): blocked for editing, resent by itself. */
