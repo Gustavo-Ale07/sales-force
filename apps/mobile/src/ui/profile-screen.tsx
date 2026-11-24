@@ -4,7 +4,9 @@ import type { Account } from "../auth/auth-port";
 import { APP_BUILD_LABEL, APP_ENVIRONMENT_LABEL, PRODUCT_NAME } from "../app-info";
 import { colors, radius, spacing } from "../theme";
 import { Icon } from "./icons";
-import { initialsOf, roleLabel } from "./account-labels";
+import { roleLabel } from "./account-labels";
+import { Avatar } from "./avatar";
+import { PHOTO_OFFLINE_MESSAGE, type PhotoSource, type ProfilePhotoService } from "../photo/profile-photo";
 import { useAppModal } from "./app-modal";
 import { SyncPanel, type SyncViewProps } from "./sync-status";
 
@@ -17,6 +19,8 @@ export interface ProfileScreenProps extends SyncViewProps {
   readonly onSignOut: () => void;
   /** Orders and customers of this account not yet sent (outbox + queue). Absent = falls back to the sync counters. */
   readonly loadUnsent?: () => Promise<number>;
+  /** Profile photo: the file to show and the service behind "Trocar foto" / "Remover foto". Absent = initials only. */
+  readonly photo?: { readonly service: ProfilePhotoService; readonly uri: string | null; readonly onChanged: (version: string | null) => void };
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -37,8 +41,49 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function ProfileScreen({ account, onOpenLocalOrders, onCheckUpdate, onSignOut, loadUnsent, ...sync }: ProfileScreenProps) {
+export function ProfileScreen({ account, onOpenLocalOrders, onCheckUpdate, onSignOut, loadUnsent, photo, ...sync }: ProfileScreenProps) {
   const modal = useAppModal();
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const offline = sync.connectivity === "offline";
+
+  function runPhoto(work: () => ReturnType<ProfilePhotoService["change"]>) {
+    if (photo === undefined || photoBusy) return;
+    setPhotoBusy(true);
+    void work()
+      .then((result) => {
+        if (result.ok) photo.onChanged(result.version);
+        else if (result.cancelled !== true) modal.show({ variant: "error", title: "Foto não alterada", message: result.message });
+      })
+      .finally(() => setPhotoBusy(false));
+  }
+
+  function changePhoto() {
+    if (photo === undefined || photoBusy) return;
+    if (offline) {
+      modal.show({ variant: "info", title: "Sem conexão", message: PHOTO_OFFLINE_MESSAGE });
+      return;
+    }
+    const choose = (source: PhotoSource) => runPhoto(() => photo.service.change(source));
+    modal.show({
+      variant: "confirm",
+      title: "Trocar foto",
+      buttons: [
+        { label: "Tirar foto", role: "primary", onPress: () => choose("camera") },
+        { label: "Escolher da galeria", role: "secondary", onPress: () => choose("gallery") },
+        { label: "Cancelar", role: "cancel" },
+      ],
+    });
+  }
+
+  async function removePhoto() {
+    if (photo === undefined || photoBusy) return;
+    if (offline) {
+      modal.show({ variant: "info", title: "Sem conexão", message: PHOTO_OFFLINE_MESSAGE });
+      return;
+    }
+    const confirmed = await modal.confirm({ title: "Remover foto", confirmLabel: "Remover", destructive: true });
+    if (confirmed) runPhoto(() => photo.service.remove());
+  }
   const [updateText, setUpdateText] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
   async function checkUpdate() {
@@ -75,9 +120,27 @@ export function ProfileScreen({ account, onOpenLocalOrders, onCheckUpdate, onSig
   return (
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.identity}>
-        <View style={styles.avatar} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-          <Text style={styles.avatarText}>{initialsOf(account.displayName)}</Text>
-        </View>
+        {photo !== undefined && photo.service.canChange ? (
+          <Pressable onPress={changePhoto} disabled={photoBusy} accessible={false} testID="profile-avatar" style={photoBusy ? styles.avatarBusy : undefined}>
+            <Avatar name={account.displayName} size={72} uri={photo.uri} />
+          </Pressable>
+        ) : (
+          <Avatar name={account.displayName} size={72} uri={photo?.uri ?? null} />
+        )}
+        {photo !== undefined && (
+          <View style={styles.photoActions}>
+            {photo.service.canChange && (
+              <Pressable style={styles.photoButton} onPress={changePhoto} disabled={photoBusy} accessibilityRole="button" accessibilityLabel="Trocar foto">
+                <Text style={styles.linkText}>Trocar foto</Text>
+              </Pressable>
+            )}
+            {account.photoVersion != null && (
+              <Pressable style={styles.photoButton} onPress={() => void removePhoto()} disabled={photoBusy} accessibilityRole="button" accessibilityLabel="Remover foto">
+                <Text style={styles.removeText}>Remover foto</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
         <Text style={styles.name}>{account.displayName}</Text>
         <Text style={styles.role}>{roleLabel(account)}</Text>
       </View>
@@ -130,8 +193,10 @@ export function ProfileScreen({ account, onOpenLocalOrders, onCheckUpdate, onSig
 const styles = StyleSheet.create({
   content: { padding: spacing.lg, gap: spacing.lg },
   identity: { alignItems: "center", gap: spacing.xs },
-  avatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.navy, alignItems: "center", justifyContent: "center", marginBottom: spacing.sm },
-  avatarText: { color: colors.onNavy, fontSize: 26, fontWeight: "800" },
+  avatarBusy: { opacity: 0.5 },
+  photoActions: { flexDirection: "row", gap: spacing.lg, marginBottom: spacing.xs },
+  photoButton: { minHeight: 44, justifyContent: "center", paddingHorizontal: spacing.sm },
+  removeText: { fontSize: 15, fontWeight: "600", color: colors.red },
   name: { fontSize: 20, fontWeight: "800", color: colors.text },
   role: { fontSize: 14, color: colors.textMuted },
   section: { gap: spacing.sm },

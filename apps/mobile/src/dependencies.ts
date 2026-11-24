@@ -8,6 +8,9 @@ import { createExpoImageFileSystem } from "./images/expo-image-fs";
 import { createExpoOrderPdf } from "./offline/order-pdf-expo";
 import type { OrderPdfPort } from "./offline/order-pdf";
 import { createOfflineServices, type OfflineServices } from "./offline/services";
+import { createProfilePhotoStore } from "./photo/profile-photo-store";
+import { createProfilePhotoApi, createProfilePhotoService, type ProfilePhotoService } from "./photo/profile-photo";
+import { detectPhotoPicker } from "./photo/photo-picker";
 import type { SqlDatabase } from "@salesforce/mobile-db";
 
 /** Everything the screens talk to. Each piece is a port, so tests and the future offline adapters plug in here. */
@@ -19,6 +22,8 @@ export interface AppDependencies {
   readonly offline?: OfflineServices;
   /** "Compartilhar PDF" of an order (share sheet). Absent in test setups: the action is then hidden. */
   readonly orderPdf?: OrderPdfPort;
+  /** Profile photo (view, upload, removal). "Trocar foto" is offered only when this build has a picker module. Absent in test setups. */
+  readonly profilePhoto?: ProfilePhotoService;
 }
 
 /** Production composition: online adapters over the API at `baseUrl` (already including the API base path). */
@@ -34,7 +39,14 @@ export function createAppDependencies(baseUrl: string, db: SqlDatabase): AppDepe
   connectivity.subscribe((state) => {
     internet = state;
   });
+  const photoApi = createProfilePhotoApi(api);
+  const profilePhoto = createProfilePhotoService({
+    api: photoApi,
+    store: createProfilePhotoStore({ fs: createExpoImageFileSystem("profile-photo"), fetchPhoto: (signal) => photoApi.fetch(signal) }),
+    picker: detectPhotoPicker(),
+  });
   return {
+    profilePhoto,
     auth: createHttpAuth(api),
     repositories: remote,
     connectivity,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { BackHandler, KeyboardAvoidingView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { BackHandler, KeyboardAvoidingView, Pressable, StatusBar, StyleSheet, Text, View } from "react-native";
 import { useConnectivity } from "../connectivity/use-connectivity";
 import type { Account } from "../auth/auth-port";
 import type { AppDependencies } from "../dependencies";
@@ -24,6 +24,7 @@ import { EXIT_WINDOW_MS, resolveBack, type BackState } from "./back-navigation";
 import { ProductsScreen } from "./products-screen";
 import { installUpdate, updateAvailable } from "../update/device-update";
 import { ProfileScreen } from "./profile-screen";
+import { Avatar, useProfilePhotoUri } from "./avatar";
 import { QuarantineScreen } from "./quarantine-screen";
 import { HeaderSyncStatus } from "./sync-status";
 import { SyncProgressOverlay } from "./sync-progress-overlay";
@@ -93,6 +94,8 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   const connectivityState = useConnectivity(connectivity);
   const account = session.phase === "authenticated" ? session.account : null;
   // One set of services per signed-in account: cache-backed reads, local drafts and the sync manager.
+  const photoService = dependencies.profilePhoto;
+  const photoUri = useProfilePhotoUri(photoService?.store, account?.id ?? "", account?.photoVersion, connectivityState !== "offline");
   const services = useMemo(() => (account !== null && offline !== undefined ? offline.forAccount(account) : null), [account, offline]);
   const repositories = services?.repositories ?? dependencies.repositories;
   const syncStatus = useSyncStatus(services?.sync ?? null, connectivityState, session.phase === "authenticated" && session.freshLogin === true);
@@ -249,6 +252,11 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
     };
   }, [auth, offline]);
 
+  /** The photo changed or was removed: the session account carries the new version (the remembered offline record is not touched). */
+  const photoChanged = useCallback((version: string | null) => {
+    setSession((current) => (current.phase === "authenticated" ? { ...current, account: { ...current.account, photoVersion: version } } : current));
+  }, []);
+
   const expire = useCallback(() => setSession({ phase: "anonymous" }), []);
   // Fixing actions every error popup can offer: the sync panel lives in Perfil; an expired session goes back to sign-in.
   const errorActions = useMemo(() => ({ go_sync: () => selectTab("profile"), sign_in: expire }), [selectTab, expire]);
@@ -284,6 +292,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
     if (account !== null) await offline?.endSession(account.id).catch(() => undefined);
     // Thumbnails are a cache of the signed-in account's catalog: gone with the sign-out (they are re-fetchable).
     await services?.productImages?.purge().catch(() => undefined);
+    await photoService?.store.purge().catch(() => undefined);
     setQuarantineOpen(false);
     setTab("home");
     setVisited(new Set<MainTab>(["home"]));
@@ -359,6 +368,9 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
         <BrandLogo height={24} />
         <View style={styles.headerSpacer} />
         {services !== null && <HeaderSyncStatus {...syncView} />}
+        <Pressable onPress={() => selectTab("profile")} accessibilityRole="button" accessibilityLabel="Abrir perfil" hitSlop={8} testID="header-avatar">
+          <Avatar name={session.account.displayName} size={32} uri={photoUri} onNavy />
+        </Pressable>
       </View>
       {connectivityState === "offline" && (
         <OfflineNotice
@@ -463,6 +475,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
               key={epochs.profile}
               account={session.account}
               {...syncView}
+              {...(photoService === undefined ? {} : { photo: { service: photoService, uri: photoUri, onChanged: photoChanged } })}
               {...(services === null
                 ? {}
                 : {
