@@ -1,0 +1,2 @@
+ALTER TABLE "sales_order_erp_stage" DROP CONSTRAINT "sales_order_erp_stage_stage_chk";--> statement-breakpoint
+ALTER TABLE "sales_order_erp_stage" ADD CONSTRAINT "sales_order_erp_stage_stage_chk" CHECK ("sales_order_erp_stage"."stage" in ('received', 'in_review', 'financial_check', 'in_dispatch', 'in_invoicing', 'invoiced', 'quotation', 'barred'));

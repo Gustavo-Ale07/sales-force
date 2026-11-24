@@ -2068,7 +2068,8 @@
                 "financial_check",
                 "in_dispatch",
                 "in_invoicing",
-                "invoiced"
+                "invoiced",
+                "barred"
               ]
             }
           },
@@ -6797,7 +6798,8 @@
                       "financial_check",
                       "in_dispatch",
                       "in_invoicing",
-                      "invoiced"
+                      "invoiced",
+                      "barred"
                     ]
                   },
                   "label": {
@@ -7779,7 +7781,8 @@
                       "financial_check",
                       "in_dispatch",
                       "in_invoicing",
-                      "invoiced"
+                      "invoiced",
+                      "barred"
                     ]
                   },
                   "label": {

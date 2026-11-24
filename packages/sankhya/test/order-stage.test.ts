@@ -36,6 +36,7 @@ describe('RealSankhyaGateway.readOrderStageFacts (SELECT only, batched)', () => 
     mock.forced.push(ok(RELEASE_COLUMNS, [[2506, 44, 1], [2506, 3, null]]));
     mock.forced.push(ok(ASSIGNEE_COLUMNS, [[2506, 44, 1, 120], [2506, 3, null, null]]));
     mock.forced.push(ok(LINK_COLUMNS, [[2507, 9100], [2507, 9101]]));
+    mock.forced.push(ok(['NUCHAVE'], [[2506]]));
     mock.forced.push(ok(NUMBER_COLUMNS, [[9100, null], [9101, 5001]]));
     const readings = await gateway.readOrderStageFacts([2506, 2507, 9999]);
     const sqls = mock.queries().map((query) => query.sql);
@@ -44,6 +45,7 @@ describe('RealSankhyaGateway.readOrderStageFacts (SELECT only, batched)', () => 
       "SELECT NUCHAVE, EVENTO, SEQCASCATA FROM TSILIB WHERE TABELA = 'TGFCAB' AND DHLIB IS NULL AND NUCHAVE IN (2506,2507,9999)",
       "SELECT NUCHAVE, EVENTO, SEQCASCATA, CODUSULIB FROM TSILIB WHERE TABELA = 'TGFCAB' AND DHLIB IS NULL AND NUCHAVE IN (2506,2507,9999)",
       'SELECT NUNOTAORIG, NUNOTA FROM TGFVAR WHERE NUNOTAORIG IN (2506,2507,9999)',
+      "SELECT DISTINCT NUCHAVE FROM TSILIB WHERE TABELA = 'TGFCAB' AND REPROVADO = 'S' AND NUCHAVE IN (2506,2507,9999)",
       'SELECT NUNOTA, NUMNOTA FROM TGFCAB WHERE NUNOTA IN (9100,9101)',
     ]);
     for (const sql of sqls) expect(sql).toMatch(/^SELECT /);
@@ -59,6 +61,7 @@ describe('RealSankhyaGateway.readOrderStageFacts (SELECT only, batched)', () => 
           { event: 44, cascadeSequence: 1, assignedUserCode: 120 },
           { event: 3, cascadeSequence: null, assignedUserCode: null },
         ],
+        hasReprovedRelease: true,
         hasInvoiceLink: false,
         invoiceNumber: null,
       },
@@ -70,11 +73,12 @@ describe('RealSankhyaGateway.readOrderStageFacts (SELECT only, batched)', () => 
         pending: 'N',
         orderCargo: 7,
         pendingReleases: [],
+        hasReprovedRelease: false,
         hasInvoiceLink: true,
         // The earliest linked note WITH a number gives the invoice number (9100 has none, 9101 does).
         invoiceNumber: 5001,
       },
-      { erpOrderNumber: 9999, found: false, codtipoper: null, statusNota: null, pending: null, orderCargo: null, pendingReleases: [], hasInvoiceLink: false, invoiceNumber: null },
+      { erpOrderNumber: 9999, found: false, codtipoper: null, statusNota: null, pending: null, orderCargo: null, pendingReleases: [], hasReprovedRelease: false, hasInvoiceLink: false, invoiceNumber: null },
     ]);
   });
 
@@ -86,13 +90,13 @@ describe('RealSankhyaGateway.readOrderStageFacts (SELECT only, batched)', () => 
     const { gateway, mock } = setup();
     const numbers = Array.from({ length: 250 }, (_, index) => 1000 + index);
     for (let chunk = 0; chunk < 3; chunk += 1) {
-      mock.forced.push(ok(HEADER_COLUMNS, []), ok(RELEASE_COLUMNS, []), ok(ASSIGNEE_COLUMNS, []), ok(LINK_COLUMNS, []));
+      mock.forced.push(ok(HEADER_COLUMNS, []), ok(RELEASE_COLUMNS, []), ok(ASSIGNEE_COLUMNS, []), ok(LINK_COLUMNS, []), ok(['NUCHAVE'], []));
     }
     const readings = await gateway.readOrderStageFacts(numbers);
     expect(readings).toHaveLength(250);
     const lists = mock.queries().map((query) => /IN \(([\d,]+)\)/.exec(query.sql ?? '')?.[1]?.split(',').length ?? 0);
     // Four SELECTs per chunk (header, releases, assignees, links), three chunks of 100/100/50; no link means no sale-note query.
-    expect(lists).toEqual([100, 100, 100, 100, 100, 100, 100, 100, 50, 50, 50, 50]);
+    expect(lists).toEqual([100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 50, 50, 50, 50, 50]);
     for (const query of mock.queries()) expect(query.sql).toMatch(/^SELECT /);
   });
 
@@ -108,10 +112,11 @@ describe('RealSankhyaGateway.readOrderStageFacts (SELECT only, batched)', () => 
     ['header query', 0],
     ['release query', 1],
     ['link query', 3],
+    ['reproved (REPROVADO) query', 4],
   ])('a failing %s fails the whole call (nothing is guessed from a partial read)', async (_name, failAt) => {
     const { gateway, mock } = setup();
-    const answers = [ok(HEADER_COLUMNS, [[2506, 1001, 'A', 'S', 0]]), ok(RELEASE_COLUMNS, []), ok(ASSIGNEE_COLUMNS, []), ok(LINK_COLUMNS, [])];
-    for (let index = 0; index < 4; index += 1) mock.forced.push(index === failAt ? httpStatus(503) : answers[index]!);
+    const answers = [ok(HEADER_COLUMNS, [[2506, 1001, 'A', 'S', 0]]), ok(RELEASE_COLUMNS, []), ok(ASSIGNEE_COLUMNS, []), ok(LINK_COLUMNS, []), ok(['NUCHAVE'], [])];
+    for (let index = 0; index < 5; index += 1) mock.forced.push(index === failAt ? httpStatus(503) : answers[index]!);
     await expect(gateway.readOrderStageFacts([2506])).rejects.toBeInstanceOf(SankhyaGatewayError);
   });
 
@@ -121,6 +126,7 @@ describe('RealSankhyaGateway.readOrderStageFacts (SELECT only, batched)', () => 
     mock.forced.push(ok(RELEASE_COLUMNS, [[2506, 44, 1]]));
     mock.forced.push(httpStatus(503));
     mock.forced.push(ok(LINK_COLUMNS, []));
+    mock.forced.push(ok(['NUCHAVE'], []));
     const [reading] = await gateway.readOrderStageFacts([2506]);
     expect(reading).toMatchObject({ found: true, statusNota: 'A', hasInvoiceLink: false });
     expect(reading?.pendingReleases).toEqual([{ event: 44, cascadeSequence: 1 }]);
@@ -134,6 +140,7 @@ describe('RealSankhyaGateway.readOrderStageFacts (SELECT only, batched)', () => 
     mock.forced.push(ok(RELEASE_COLUMNS, []));
     mock.forced.push(ok(ASSIGNEE_COLUMNS, []));
     mock.forced.push(ok(LINK_COLUMNS, [[2506, 9100]]));
+    mock.forced.push(ok(['NUCHAVE'], []));
     mock.forced.push(httpStatus(503));
     await expect(gateway.readOrderStageFacts([2506])).rejects.toMatchObject({ kind: expect.stringMatching(/unavailable|temporary/) });
   });
@@ -144,6 +151,7 @@ describe('RealSankhyaGateway.readOrderStageFacts (SELECT only, batched)', () => 
     mock.forced.push(ok(RELEASE_COLUMNS, []));
     mock.forced.push(ok(ASSIGNEE_COLUMNS, []));
     mock.forced.push(ok(LINK_COLUMNS, [[2506, 9100]]));
+    mock.forced.push(ok(['NUCHAVE'], []));
     mock.forced.push(ok(NUMBER_COLUMNS, [[9100, 0]]));
     const [reading] = await gateway.readOrderStageFacts([2506]);
     expect(reading).toMatchObject({ hasInvoiceLink: true, invoiceNumber: null });
@@ -157,6 +165,7 @@ describe('order-stage-facts fixture contract', () => {
     tsilib: Record<string, number | null>[];
     tgfvar: Record<string, number>[];
     saleNote?: { NUNOTA: number; NUMNOTA: number };
+    reproved?: boolean;
     expectedStage: string;
   }
   const fixture = JSON.parse(readFileSync(join(import.meta.dirname, 'fixtures', 'order-stage-facts.json'), 'utf8')) as { provenance: Record<string, string>; cases: Case[] };
@@ -173,6 +182,7 @@ describe('order-stage-facts fixture contract', () => {
     mock.forced.push(ok(RELEASE_COLUMNS, entry.tsilib.map((row) => RELEASE_COLUMNS.map((column) => row[column] ?? null))));
     mock.forced.push(ok(ASSIGNEE_COLUMNS, entry.tsilib.map((row) => ASSIGNEE_COLUMNS.map((column) => row[column] ?? null))));
     mock.forced.push(ok(LINK_COLUMNS, entry.tgfvar.map((row) => LINK_COLUMNS.map((column) => row[column] ?? null))));
+    mock.forced.push(ok(['NUCHAVE'], entry.reproved === true ? [[nunota]] : []));
     if (entry.saleNote !== undefined) mock.forced.push(ok(NUMBER_COLUMNS, [[entry.saleNote.NUNOTA, entry.saleNote.NUMNOTA]]));
     const [reading] = await gateway.readOrderStageFacts([nunota]);
     expect(reading?.found).toBe(true);
@@ -183,6 +193,7 @@ describe('order-stage-facts fixture contract', () => {
       pendente: reading!.pending,
       ordemcarga: reading!.orderCargo,
       pendingReleases: reading!.pendingReleases,
+      hasReprovedRelease: reading!.hasReprovedRelease === true,
       hasInvoiceLink: reading!.hasInvoiceLink,
       invoiceNumber: reading!.invoiceNumber,
       isQuotation: false,
@@ -197,7 +208,7 @@ describe('FakeGateway.readOrderStageFacts (contract of the fake)', () => {
     const book = new FakeOrderBook();
     const gateway = new FakeGateway({ orders: book });
     const [unknown] = await gateway.readOrderStageFacts([123456]);
-    expect(unknown).toEqual({ erpOrderNumber: 123456, found: false, codtipoper: null, statusNota: null, pending: null, orderCargo: null, pendingReleases: [], hasInvoiceLink: false, invoiceNumber: null });
+    expect(unknown).toMatchObject({ erpOrderNumber: 123456, found: false, codtipoper: null, statusNota: null, pending: null, orderCargo: null, pendingReleases: [], hasInvoiceLink: false, invoiceNumber: null });
   });
 
   it('returns what a test set (the state machine), one entry per requested number, in order', async () => {
@@ -221,6 +232,7 @@ describe('owner Sandbox facts of 2026-11-23 (SELECT-only values, replayed throug
       ok(RELEASE_COLUMNS, []),
       ok(ASSIGNEE_COLUMNS, []),
       ok(LINK_COLUMNS, [[2449, 2450], [2450, 2451], [2454, 2455]]),
+      ok(['NUCHAVE'], []),
       ok(NUMBER_COLUMNS, [[2450, null], [2451, null], [2455, null]]),
     );
     const readings = await gateway.readOrderStageFacts([2508, 2509, 2510, 2511, 2449, 2450, 2454]);

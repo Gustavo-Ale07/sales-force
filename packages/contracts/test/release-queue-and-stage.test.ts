@@ -108,7 +108,7 @@ describe('erpStage on the order list DTO', () => {
     expect(OrdersQuerySchema.safeParse({ stage: 'draft' }).success).toBe(false);
   });
 
-  it.each(['sent_to_force', 'send_error', 'quotation', 'received', 'in_review', 'financial_check', 'in_dispatch', 'in_invoicing', 'invoiced'])('accepts stage %s', (code) => {
+  it.each(['sent_to_force', 'send_error', 'quotation', 'received', 'in_review', 'financial_check', 'in_dispatch', 'in_invoicing', 'invoiced', 'barred'])('accepts stage %s', (code) => {
     expect(stageSchema.safeParse({ ...stage, stage: code }).success).toBe(true);
   });
 

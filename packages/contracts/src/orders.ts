@@ -131,7 +131,7 @@ export const MAX_ORDER_PRODUCT_FILTER = 20;
 export const MAX_ORDER_IDS_FILTER = 100;
 
 /** Stage codes of the order following Sankhya (same list as the domain `ORDER_STAGE_CODES`; a test keeps them aligned). */
-export const OrderStageCodeSchema = z.enum(['sent_to_force', 'send_error', 'quotation', 'received', 'in_review', 'financial_check', 'in_dispatch', 'in_invoicing', 'invoiced']);
+export const OrderStageCodeSchema = z.enum(['sent_to_force', 'send_error', 'quotation', 'received', 'in_review', 'financial_check', 'in_dispatch', 'in_invoicing', 'invoiced', 'barred']);
 
 export const OrdersQuerySchema = z.object({
   search: querySearch().optional(),

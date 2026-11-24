@@ -291,6 +291,7 @@ export async function runOrderStageOnce(deps: OrderErpStatusDeps, options: Order
         pendente: reading.pending,
         ordemcarga: reading.orderCargo,
         pendingReleases: reading.pendingReleases,
+        hasReprovedRelease: reading.hasReprovedRelease === true,
         hasInvoiceLink: reading.hasInvoiceLink,
         invoiceNumber: reading.invoiceNumber,
         isQuotation: quotationTopCode !== null && reading.codtipoper === quotationTopCode,

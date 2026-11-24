@@ -1397,7 +1397,7 @@ export interface components {
             } | null;
             erpStage?: {
                 /** @enum {string} */
-                stage: "sent_to_force" | "send_error" | "quotation" | "received" | "in_review" | "financial_check" | "in_dispatch" | "in_invoicing" | "invoiced";
+                stage: "sent_to_force" | "send_error" | "quotation" | "received" | "in_review" | "financial_check" | "in_dispatch" | "in_invoicing" | "invoiced" | "barred";
                 label: string;
                 pendingSector: string | null;
                 nunota: number | null;
@@ -1565,7 +1565,7 @@ export interface components {
             } | null;
             erpStage?: {
                 /** @enum {string} */
-                stage: "sent_to_force" | "send_error" | "quotation" | "received" | "in_review" | "financial_check" | "in_dispatch" | "in_invoicing" | "invoiced";
+                stage: "sent_to_force" | "send_error" | "quotation" | "received" | "in_review" | "financial_check" | "in_dispatch" | "in_invoicing" | "invoiced" | "barred";
                 label: string;
                 pendingSector: string | null;
                 nunota: number | null;
@@ -3464,7 +3464,7 @@ export interface operations {
                 productMatch?: components["schemas"]["OrderProductMatch"];
                 productSearch?: string;
                 ids?: string;
-                stage?: "sent_to_force" | "send_error" | "quotation" | "received" | "in_review" | "financial_check" | "in_dispatch" | "in_invoicing" | "invoiced";
+                stage?: "sent_to_force" | "send_error" | "quotation" | "received" | "in_review" | "financial_check" | "in_dispatch" | "in_invoicing" | "invoiced" | "barred";
                 sort?: components["schemas"]["OrderSort"];
                 page?: number;
                 pageSize?: number;

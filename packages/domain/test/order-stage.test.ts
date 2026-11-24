@@ -52,6 +52,24 @@ describe('classifyOrderStage (owner survey 2026-11-23)', () => {
     expect(stage.final).toBe(true);
   });
 
+  it.each<[string, Partial<OrderStageFacts>, string]>([
+    ['reproved line, nothing else', { hasReprovedRelease: true }, 'barred'],
+    ['reproved beats review', { hasReprovedRelease: true, pendingReleases: [{ event: 44, cascadeSequence: 1 }] }, 'barred'],
+    ['reproved beats financial check', { hasReprovedRelease: true, pendingReleases: [{ event: 3, cascadeSequence: null }] }, 'barred'],
+    ['reproved beats dispatch', { hasReprovedRelease: true, statusnota: 'L' }, 'barred'],
+    ['load order beats reproved', { hasReprovedRelease: true, ordemcarga: 2 }, 'in_invoicing'],
+    ['invoiced beats reproved', { hasReprovedRelease: true, hasInvoiceLink: true }, 'invoiced'],
+    ['quotation beats reproved', { hasReprovedRelease: true, isQuotation: true }, 'quotation'],
+    ['hasReprovedRelease false is ignored', { hasReprovedRelease: false, statusnota: 'L' }, 'in_dispatch'],
+  ])('barred precedence: %s -> %s', (_name, patch, expected) => {
+    expect(classifyOrderStage(facts(patch)).code).toBe(expected);
+  });
+
+  it('barred carries the label Barrado and no pending sector', () => {
+    expect(classifyOrderStage(facts({ hasReprovedRelease: true }))).toMatchObject({ code: 'barred', label: 'Barrado', pendingSector: null, final: false });
+    expect(ORDER_STAGE_CODES).toContain('barred');
+  });
+
   it('precedence: load order beats pending releases', () => {
     expect(classifyOrderStage(facts({ ordemcarga: 1, pendingReleases: [{ event: 44, cascadeSequence: 1 }] })).code).toBe('in_invoicing');
   });

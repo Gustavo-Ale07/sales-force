@@ -42,6 +42,7 @@ interface Facts {
   orderCargo?: number | null;
   pendingReleases?: { event: number; cascadeSequence: number | null; assignedUserCode?: number | null }[];
   hasInvoiceLink?: boolean;
+  hasReprovedRelease?: boolean;
   invoiceNumber?: number | null;
   codtipoper?: number | null;
   assigneeReadErrorCode?: string;
@@ -262,6 +263,19 @@ describe('order stage worker (runOrderStageOnce) with the fake gateway state mac
     await w.service.runStageOnce();
     expect(await w.stageRow(id)).toMatchObject({ stage: 'quotation' });
     expect(await w.pendingRows(id)).toEqual([]);
+  });
+
+  it('a reproved release line (REPROVADO = S) makes the order "Barrado": persisted, no sector, no queue rows; invoiced still wins', async () => {
+    const w = await world();
+    const id = await w.seed({ erpNumber: 9130, sellerCode: 103, accountEmail: SELLER1 });
+    w.book.stageFacts.set(9130, facts({ statusNota: 'A', hasReprovedRelease: true, pendingReleases: [{ event: 44, cascadeSequence: 1 }] }));
+    await w.service.runStageOnce();
+    expect(await w.stageRow(id)).toMatchObject({ stage: 'barred', label: 'Barrado', pendingSector: null });
+    expect(await w.pendingRows(id)).toEqual([]);
+    w.book.stageFacts.set(9130, facts({ hasReprovedRelease: true, hasInvoiceLink: true, invoiceNumber: 88 }));
+    w.state.now += 10 * MIN;
+    await w.service.runStageOnce();
+    expect(await w.stageRow(id)).toMatchObject({ stage: 'invoiced' });
   });
 
   it('mirrors the pending release lines per sector: 44@1 -> Pedidos, 3 -> Financeiro, 13 -> both; released lines leave; first_seen_at is kept', async () => {

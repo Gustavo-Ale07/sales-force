@@ -209,6 +209,7 @@ export const orderErpStageCodes = [
   'in_invoicing',
   'invoiced',
   'quotation',
+  'barred',
 ] as const;
 
 /**

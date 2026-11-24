@@ -207,6 +207,8 @@ export interface ErpOrderStageReading {
    * `pendingReleases` carry no `assignedUserCode`. A stable error code, never a message with data.
    */
   readonly assigneeReadErrorCode?: string;
+  /** Some TSILIB line of the note (TABELA = 'TGFCAB', released or not) has REPROVADO = 'S' ("Barrado", owner rule 2026-11-24). Absent = false. */
+  readonly hasReprovedRelease?: boolean;
   /** A TGFVAR link with NUNOTAORIG = this note exists. */
   readonly hasInvoiceLink: boolean;
   /** NUMNOTA of the (earliest) linked note; null when none or unreadable. */

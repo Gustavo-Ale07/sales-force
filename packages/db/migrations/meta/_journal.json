@@ -323,6 +323,13 @@
       "when": 1795459514214,
       "tag": "0045_account_photo",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1795541539192,
+      "tag": "0046_order_stage_barred",
+      "breakpoints": true
     }
   ]
 }

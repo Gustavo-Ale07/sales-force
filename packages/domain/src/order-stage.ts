@@ -15,7 +15,8 @@ export type OrderStageCode =
   | 'financial_check'
   | 'in_dispatch'
   | 'in_invoicing'
-  | 'invoiced';
+  | 'invoiced'
+  | 'barred';
 
 export const ORDER_STAGE_CODES: readonly OrderStageCode[] = [
   'sent_to_force',
@@ -27,6 +28,7 @@ export const ORDER_STAGE_CODES: readonly OrderStageCode[] = [
   'in_dispatch',
   'in_invoicing',
   'invoiced',
+  'barred',
 ];
 
 /** A release event that counts as "order review"; `cascadeSequence` absent = any sequence of that event. */
@@ -79,6 +81,7 @@ export const ORDER_STAGE_LABELS: Readonly<Record<OrderStageCode, string>> = {
   in_dispatch: 'Na expedição',
   in_invoicing: 'No faturamento',
   invoiced: 'Faturado',
+  barred: 'Barrado',
 };
 
 /** The stages a seller follows on the timeline, in order (the quotation and the Force-side states have none). */
@@ -100,6 +103,8 @@ export interface OrderStageFacts {
   readonly ordemcarga: number | null;
   /** Release lines of the note that are not released yet. */
   readonly pendingReleases: readonly PendingRelease[];
+  /** Owner rule 2026-11-24: some release line of the note (TSILIB, released or not) has REPROVADO = 'S'. Absent = false. */
+  readonly hasReprovedRelease?: boolean;
   /** The order note is linked to a sale note (invoicing link). */
   readonly hasInvoiceLink: boolean;
   /** Number of the sale note, when known. */
@@ -132,7 +137,7 @@ function stage(code: OrderStageCode, pendingSector: string | null = null): Order
 }
 
 /**
- * Precedence, first match wins: invoiced (invoicing link) > in invoicing (load order > 0) > in review (pending review event) >
+ * Precedence, first match wins: invoiced (invoicing link) > in invoicing (load order > 0) > barred (a release line with REPROVADO = 'S', owner rule 2026-11-24: beats review, financial check and dispatch) > in review (pending review event) >
  * financial check (any other pending release) > in dispatch (confirmed note) > received. Before any note: send error, else sent to
  * the Force. A quotation note skips the cascade.
  */
@@ -141,6 +146,7 @@ export function classifyOrderStage(facts: OrderStageFacts, rules: OrderStageRule
   if (facts.isQuotation) return stage('quotation');
   if (facts.hasInvoiceLink) return stage('invoiced');
   if ((facts.ordemcarga ?? 0) > 0) return stage('in_invoicing');
+  if (facts.hasReprovedRelease === true) return stage('barred');
   if (facts.pendingReleases.some((release) => matchesReview(release, rules))) return stage('in_review', rules.reviewSector);
   if (facts.pendingReleases.length > 0) return stage('financial_check', rules.financialSector);
   if (facts.statusnota === 'L') return stage('in_dispatch');

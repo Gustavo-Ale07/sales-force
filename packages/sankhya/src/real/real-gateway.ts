@@ -793,6 +793,7 @@ export class RealSankhyaGateway implements SankhyaGateway {
     const headers = new Map<number, { codtipoper: number | null; statusNota: string | null; pending: string | null; orderCargo: number | null }>();
     const releases = new Map<number, Array<{ event: number; cascadeSequence: number | null; assignedUserCode?: number | null }>>();
     const assigneeErrors = new Map<number, string>();
+    const reprovedNotes = new Set<number>();
     const links = new Map<number, Set<number>>();
     const numbers = new Map<number, number | null>();
     for (let start = 0; start < erpOrderNumbers.length; start += RELEASE_READ_CHUNK) {
@@ -849,6 +850,17 @@ export class RealSankhyaGateway implements SankhyaGateway {
         bucket.add(row.int('NUNOTA'));
         links.set(row.int('NUNOTAORIG'), bucket);
       });
+      // "Barrado" (owner rule 2026-11-24): any TSILIB line of the note with REPROVADO = 'S', released (dated) or not. Hard read:
+      // a failure fails the call, nothing is guessed (REPROVADO already read by readOrderReleaseFacts).
+      const reprovedColumns = ['NUCHAVE'] as const;
+      const reproved = await this.#query(
+        `SELECT DISTINCT NUCHAVE FROM TSILIB WHERE TABELA = 'TGFCAB' AND REPROVADO = 'S' AND NUCHAVE IN (${list})`,
+        reprovedColumns,
+        signal,
+      );
+      reproved.rows.forEach((cells, index) => {
+        reprovedNotes.add(new RowReader('orders', reprovedColumns, cells, index).int('NUCHAVE'));
+      });
     }
     const saleNotes = [...new Set([...links.values()].flatMap((set) => [...set]))];
     for (let start = 0; start < saleNotes.length; start += RELEASE_READ_CHUNK) {
@@ -873,6 +885,7 @@ export class RealSankhyaGateway implements SankhyaGateway {
         pending: header?.pending ?? null,
         orderCargo: header?.orderCargo ?? null,
         pendingReleases: releases.get(erpOrderNumber) ?? [],
+        hasReprovedRelease: reprovedNotes.has(erpOrderNumber),
         ...(assigneeErrors.has(erpOrderNumber) ? { assigneeReadErrorCode: assigneeErrors.get(erpOrderNumber) as string } : {}),
         hasInvoiceLink: linkedNotes.length > 0,
         invoiceNumber,
