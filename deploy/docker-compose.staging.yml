@@ -198,6 +198,8 @@ services:
       # SNK-7 D-1: ERP order submission is hard-coded OFF in shipped config (and the order switches are refused unless
       # SF_DEPLOY_ENVIRONMENT=staging, I1). Turning it on is an owner decision, never a variable default.
       SANKHYA_ORDER_WRITE_ENABLED: "false"
+      # Spike S1.8: the profile photo write to Sankhya (TSIUSU.FOTO) is hard-coded OFF in shipped config; opening it is an owner decision.
+      SANKHYA_PROFILE_PHOTO_WRITE_ENABLED: "false"
       # Mandatory and explicit in live mode (scheduled mirror never starts against a real Sankhya by default).
       SYNC_MIRROR_ENABLED: ${SYNC_MIRROR_ENABLED:-}
       # Login directory only: keeps `sellers` + `directoryUsers` fresh (read-only, enqueued once at startup, then on the cron) for the
