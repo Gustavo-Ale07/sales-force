@@ -15,6 +15,7 @@ import { GlobalActivity } from "./global-activity";
 import { ConnectedIntegrationPill } from "./integration-pill";
 import { navItemsFor } from "./nav-items";
 import { NotificationsBell } from "./notifications-bell";
+import { SyncIndicator } from "./sync-indicator";
 import { UserMenu } from "./user-menu";
 
 // Horizontal navigation (structure from Vidya Force, skin from the PLAC reference kit): sentence-case white
@@ -182,6 +183,7 @@ export function AppShell({ user, onLogout, children }: AppShellProps) {
         </div>
         <div className="flex shrink-0 items-center gap-0.5 md:gap-2">
           {user && canSeeIntegration(user.role) ? <ConnectedIntegrationPill /> : null}
+          {user ? <SyncIndicator role={user.role} /> : null}
           <CommandMenu role={user?.role} />
           <NotificationsBell />
           <UserMenu user={user} onLogout={onLogout ?? (() => undefined)} />
