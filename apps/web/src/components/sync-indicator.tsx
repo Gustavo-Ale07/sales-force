@@ -81,7 +81,7 @@ export function SyncIndicator({ role }: { role: string }) {
   }, []);
   const view = syncIndicatorView({
     online,
-    syncing: refresh.running || fetching > 0,
+    syncing: refresh.running || fetching > 0 || dialogOpen,
     failed: refresh.failed || signals.failed,
     needsCorrection: signals.needsCorrection,
     awaitingSend: signals.awaitingSend,
@@ -99,8 +99,7 @@ export function SyncIndicator({ role }: { role: string }) {
       data-color={view.color}
       onClick={() => {
         if (view.spinning) return;
-        if (view.color === "red") setDialogOpen(true);
-        else refresh.refresh();
+        setDialogOpen(true);
       }}
       className="flex size-11 shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white"
     >
