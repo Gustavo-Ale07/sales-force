@@ -126,6 +126,15 @@ export function duplicateAsOrder(api: ApiClient, id: string, body: DuplicateAsOr
 export const NOT_A_QUOTATION = "not_a_quotation";
 export const ORDER_TOP_NOT_CONFIGURED = "order_top_not_configured";
 
+/** D-AP / D-AR: customer writes. The server decides whether they are released (`general.clientEditEnabled` / `clientCreationEnabled`). */
+export function updateCustomer(api: ApiClient, code: number, body: ApiSchema<"UpdateCustomerRequest">) {
+  return callApi(() => api.PATCH("/customers/{code}", { params: { path: { code } }, body }));
+}
+
+export function createCustomer(api: ApiClient, body: ApiSchema<"CreateCustomerRequest">) {
+  return callApi(() => api.POST("/customers", { body }));
+}
+
 /** D-AB B3: asks the worker to read Sankhya now. The API only records the request. */
 export function startSyncRefresh(api: ApiClient) {
   return callApi(() => api.POST("/sync/refresh"));

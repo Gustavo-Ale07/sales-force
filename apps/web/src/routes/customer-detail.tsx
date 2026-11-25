@@ -1,8 +1,10 @@
 import { Alert, Avatar, Button, Card, PageHeader, SkeletonLines, toast, titleCase } from "@salesforce/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Plus, RotateCcw } from "lucide-react";
-import { useRef } from "react";
+import { Pencil, Plus, RotateCcw } from "lucide-react";
+import { useRef, useState } from "react";
+import { CustomerEditDialog } from "../components/customer-edit-dialog";
+import { useCustomerWriteFlags } from "../lib/use-customer-write";
 import { CustomerFichaTabs } from "../components/customer-ficha";
 import { OrderTemplatesCard } from "../components/order-templates-card";
 import { QueryError } from "../components/query-error";
@@ -107,6 +109,8 @@ export function CustomerDetailPage({ code }: { code: number }) {
   // Declared unconditionally (before the loading/error early returns) so the hook order never changes; the
   // button and its notice are only rendered once the customer has loaded.
   const repeatLast = useRepeatLastOrder(code);
+  const { canEdit } = useCustomerWriteFlags();
+  const [editing, setEditing] = useState(false);
 
   if (query.isPending) {
     return (
@@ -151,10 +155,16 @@ export function CustomerDetailPage({ code }: { code: number }) {
               </Link>
             </Button>
             <RepeatLastOrderButton mutation={repeatLast} />
+            {canEdit ? (
+              <Button variant="secondary" leftIcon={<Pencil size={14} aria-hidden="true" />} onClick={() => setEditing(true)}>
+                Editar cliente
+              </Button>
+            ) : null}
           </>
         }
       />
       <RepeatLastOrderNotice mutation={repeatLast} />
+      {canEdit ? <CustomerEditDialog customerCode={customer.code} open={editing} onOpenChange={setEditing} /> : null}
       <CustomerFichaTabs customerCode={customer.code} />
       <OrderTemplatesCard customerCode={customer.code} />
     </>

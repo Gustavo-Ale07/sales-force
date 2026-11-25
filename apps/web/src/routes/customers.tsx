@@ -32,6 +32,9 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
+import { useState } from "react";
+import { CustomerCreateDialog } from "../components/customer-create-dialog";
+import { useCustomerWriteFlags } from "../lib/use-customer-write";
 import { MetricValueText, METRIC_VISUALS } from "../components/metric-value";
 import { QueryError } from "../components/query-error";
 import { customerLettersQueryOptions,
@@ -61,6 +64,8 @@ function toggleSort(sort: CustomersSearch["sort"], field: "name" | "code"): ApiS
 
 export function CustomersPage({ params, onSearchChange, onOpenCustomer }: CustomersPageProps) {
   const api = useApi();
+  const { canCreate } = useCustomerWriteFlags();
+  const [creating, setCreating] = useState(false);
   const apiParams: CustomersParams = { ...params, page: params.page ?? 1, pageSize: params.pageSize ?? 25, sort: params.sort ?? "name" };
   const query = useQuery(customersQueryOptions(api, apiParams));
   const lettersQuery = useQuery(
@@ -87,7 +92,18 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
 
   return (
     <>
-      <PageHeader title="Clientes" count={query.data ? query.data.total.toLocaleString("pt-BR") : undefined} />
+      <PageHeader
+        title="Clientes"
+        count={query.data ? query.data.total.toLocaleString("pt-BR") : undefined}
+        actions={
+          canCreate ? (
+            <Button variant="primary" leftIcon={<Plus size={14} aria-hidden="true" />} onClick={() => setCreating(true)}>
+              Novo cliente
+            </Button>
+          ) : undefined
+        }
+      />
+      {canCreate ? <CustomerCreateDialog open={creating} onOpenChange={setCreating} /> : null}
 
       {portfolio && portfolio.metrics.length > 0 ? (
         <section aria-label={portfolio.label} className="max-sm:hidden">
