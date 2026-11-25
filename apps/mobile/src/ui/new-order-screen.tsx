@@ -37,6 +37,8 @@ import { CartView, OrderTotals } from "./cart-view";
 import { Thumb } from "./product-views";
 import { CustomerPicker } from "./customer-picker";
 import { BulkDiscountSheet } from "./bulk-discount-sheet";
+import { mergeNewLines } from "../data/template-form";
+import { BulkEntryScreen } from "./bulk-entry-screen";
 import { ProductPicker } from "./product-picker";
 import type { ProductOrderActions } from "./product-views";
 
@@ -122,6 +124,7 @@ export function NewOrderScreen({
   const errors = useErrorPopup();
   const [customer, setCustomer] = useState<PickedCustomer | null>(null);
   const [lines, setLines] = useState<readonly EditorLine[]>([]);
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   const lineCounter = useRef(0);
   const nextKey = () => `line-${(lineCounter.current += 1)}`;
@@ -1174,8 +1177,33 @@ export function NewOrderScreen({
   }
 
   function renderProductsStep() {
+    if (bulkOpen && customer !== null && config.status === "ready") {
+      const orderConfig = config.value;
+      return (
+        <BulkEntryScreen
+          products={repositories.products}
+          customerCode={customer.code}
+          existingCodes={new Set(lines.map((line) => line.productCode))}
+          isPriceOrderable={(state) => isLinePriceOrderable(state, orderConfig)}
+          newKey={nextKey}
+          onClose={() => setBulkOpen(false)}
+          onAdd={(added) => {
+            setLines((current) => mergeNewLines(current, added));
+            setBulkOpen(false);
+            setProductsView("cart");
+          }}
+        />
+      );
+    }
     return (
       <View style={styles.flex}>
+        {customer !== null && config.status === "ready" && (
+          <View style={styles.cartToolbar}>
+            <Pressable style={styles.toolbarButton} onPress={() => setBulkOpen(true)} accessibilityRole="button" accessibilityLabel="Lançamento múltiplo">
+              <Text style={styles.toolbarButtonText}>Lançamento múltiplo</Text>
+            </Pressable>
+          </View>
+        )}
         <View style={styles.pills} accessibilityRole="tablist">
           <Pressable
             style={[styles.pill, productsView === "catalog" && styles.pillActive]}
