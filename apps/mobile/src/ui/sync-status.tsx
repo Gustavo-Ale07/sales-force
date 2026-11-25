@@ -40,9 +40,9 @@ export interface SyncViewProps {
 }
 
 /**
- * Icon-only header indicator (no text): a colored dot (green / amber / red, see `describeSyncIndicator`) with white refresh arrows inside, no mark.
- * The arrows spin while syncing (still when the system reduces motion) and the dot keeps its color. The spoken label carries the state in words.
- * It is also the sync button. Visual dot 30 dp, touch target 44 x 44 plus hitSlop.
+ * Icon-only header indicator (no text, no circle, no background): just the two refresh arrows, whose line color is the state
+ * (green / yellow / red, see `describeSyncIndicator`). The arrows spin while syncing (static when the system reduces motion) and keep
+ * their color. The spoken label carries the state in words. It is also the sync button. Touch target 44 x 44 plus hitSlop.
  */
 export function SyncStatusChip({
   status,
@@ -61,8 +61,8 @@ export function SyncStatusChip({
       accessibilityRole="button"
       accessibilityLabel={`Status de sincronização: ${label}`}
     >
-      <View testID={`sync-dot-${color}`} style={[styles.dot, { backgroundColor: SYNC_INDICATOR_HEX[color] }]}>
-        <RefreshArrows testID={spinning ? "sync-icon-spinner" : "sync-arrows"} color={colors.onNavy} size={18} spinning={spinning} />
+      <View testID={`sync-dot-${color}`}>
+        <RefreshArrows testID={spinning ? "sync-icon-spinner" : "sync-arrows"} color={SYNC_INDICATOR_HEX[color]} size={26} spinning={spinning} />
       </View>
     </Pressable>
   );
@@ -215,7 +215,6 @@ export function HeaderSyncStatus(view: SyncViewProps) {
 
 const styles = StyleSheet.create({
   chip: { minWidth: control.height, minHeight: control.height, alignItems: "center", justifyContent: "center" },
-  dot: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)" },
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, gap: spacing.md },
   grabber: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border },

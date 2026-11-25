@@ -102,12 +102,15 @@ export interface SyncIndicator {
   readonly color: SyncIndicatorColor;
   /** State in WORDS (accessibility label, never color alone). */
   readonly label: string;
-  /** The white arrows spin; the dot keeps `color`. */
+  /** The arrows spin; they keep `color`. */
   readonly spinning: boolean;
 }
 
-/** Dot fill per color (the site copies the same table). */
-export const SYNC_INDICATOR_HEX: Record<SyncIndicatorColor, string> = { green: "#17693d", yellow: "#E08A00", red: "#d10108" };
+/**
+ * Line color of the two arrows per state (the site copies the same table). Drawn straight on the navy header
+ * (#001369), so each one clears 3:1 for graphics there: green 9.3, yellow 9.5, red 6.0 (covered in a test).
+ */
+export const SYNC_INDICATOR_HEX: Record<SyncIndicatorColor, string> = { green: "#4ADE80", yellow: "#FBBF24", red: "#F87171" };
 
 /**
  * Header sync dot (PAR-1: the site uses the SAME table). First matching row wins:

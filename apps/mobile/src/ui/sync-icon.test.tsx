@@ -78,23 +78,37 @@ describe("header indicator dot", () => {
     ["red (failure)", { ...idle, phase: "error", lastError: "x" }, "online", "red", "Erro na última sincronização"],
     ["red (needs correction)", { ...idle, needsAttention: 2, lastSyncedAt: fresh }, "online", "red", "Pedido precisa de correção"],
   ];
-  it.each(cases)("%s: colored dot, white arrows, label in words, no visible text, no mark", async (_n, status, connectivity, color, label) => {
+  it.each(cases)("%s: only the arrows, their line color is the state, label in words, no circle or background", async (_n, status, connectivity, color, label) => {
     await render(<SyncStatusChip status={status} connectivity={connectivity} now={now} onPress={noop} />);
-    const dot = StyleSheet.flatten(screen.getByTestId(`sync-dot-${color}`).props.style as never) as { backgroundColor: string; width: number; height: number };
-    expect(dot.backgroundColor).toBe(SYNC_INDICATOR_HEX[color]);
-    expect(dot.width).toBeGreaterThanOrEqual(28);
-    expect(dot.width).toBeLessThanOrEqual(32);
     expect(screen.getByRole("button", { name: `Status de sincronização: ${label}` })).toBeTruthy();
     expect(screen.queryByText(label)).toBeNull();
     expect(screen.queryByTestId("sync-mark-anchor")).toBeNull();
     expect(screen.getByTestId("sync-arrows", { includeHiddenElements: true })).toBeTruthy();
-    expect(JSON.stringify(screen.toJSON())).toContain(colors.onNavy);
+    const json = JSON.stringify(screen.toJSON());
+    expect(json).toContain(`"borderTopColor":"${SYNC_INDICATOR_HEX[color]}"`);
+    expect(json).not.toContain("backgroundColor");
+    expect(json).not.toContain(colors.onNavy);
   });
 
-  it("syncing: spinner inside the dot, which keeps its color", async () => {
+  it("every state color reads on the navy header (contrast >= 3:1 for graphics)", () => {
+    const channel = (v: number) => {
+      const s = v / 255;
+      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    };
+    const luminance = (hex: string) => {
+      const n = parseInt(hex.slice(1), 16);
+      return 0.2126 * channel((n >> 16) & 255) + 0.7152 * channel((n >> 8) & 255) + 0.0722 * channel(n & 255);
+    };
+    const header = luminance(colors.navy);
+    for (const hex of Object.values(SYNC_INDICATOR_HEX)) {
+      expect((luminance(hex) + 0.05) / (header + 0.05)).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("syncing: spinner keeps the state color", async () => {
     await render(<SyncStatusChip status={{ ...idle, phase: "syncing", pending: 1 }} connectivity="online" now={now} onPress={noop} />);
-    expect(screen.getByTestId("sync-dot-yellow")).toBeTruthy();
     expect(screen.getByTestId("sync-icon-spinner", { includeHiddenElements: true })).toBeTruthy();
+    expect(JSON.stringify(screen.toJSON())).toContain(`"borderTopColor":"${SYNC_INDICATOR_HEX.yellow}"`);
     expect(screen.getByRole("button", { name: "Status de sincronização: Sincronizando. Pedidos aguardando envio" })).toBeTruthy();
   });
 
