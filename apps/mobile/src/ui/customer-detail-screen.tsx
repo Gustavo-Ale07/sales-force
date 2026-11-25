@@ -41,6 +41,8 @@ export interface CustomerDetailScreenProps {
   readonly onNewOrder: (customer: CustomerListItem) => void;
   /** "Refazer" on a refused customer: opens the creation form pre-filled (the form is F8). Absent = no button. */
   readonly onRedo?: (customer: CustomerListItem) => void;
+  /** "Editar": offered only when the installation released customer edit and the customer is a confirmed one. Absent = no button. */
+  readonly onEdit?: (customer: CustomerListItem) => void;
 }
 
 /**
@@ -50,7 +52,7 @@ export interface CustomerDetailScreenProps {
  * BUSINESS_RULE_UNDEFINED: whether a blocked/inactive customer may start an order is not decided anywhere (domain
  * `blocked` is "not decided here"; BLOQUEAR semantics NEEDS VALIDATION), so the ficha shows the real status only and never blocks.
  */
-export function CustomerDetailScreen({ customer, customers, connectivity, onBack, onNewOrder, onRedo }: CustomerDetailScreenProps) {
+export function CustomerDetailScreen({ customer, customers, connectivity, onBack, onNewOrder, onRedo, onEdit }: CustomerDetailScreenProps) {
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
   const online = connectivity !== "offline";
   const status = describeCustomerStatus(customer);
@@ -130,6 +132,11 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
             <Text style={styles.ctaText}>Refazer</Text>
           </Pressable>
         )}
+        {onEdit !== undefined && !isPending && (
+          <Pressable style={styles.ctaSecondary} onPress={() => onEdit(customer)} accessibilityRole="button" accessibilityLabel="Editar cliente">
+            <Text style={styles.ctaSecondaryText}>Editar cliente</Text>
+          </Pressable>
+        )}
         <Pressable
           style={[styles.cta, cannotOrder && styles.ctaDisabled]}
           onPress={() => !cannotOrder && onNewOrder(customer)}
@@ -164,6 +171,8 @@ const styles = StyleSheet.create({
   note: { fontSize: 12, color: colors.textMuted },
   footer: { padding: spacing.lg, gap: spacing.sm, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
   cta: { minHeight: 50, borderRadius: radius.md, backgroundColor: colors.red, alignItems: "center", justifyContent: "center" },
+  ctaSecondary: { minHeight: 50, borderRadius: radius.md, borderWidth: 1, borderColor: colors.navy, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
+  ctaSecondaryText: { color: colors.navy, fontSize: 16, fontWeight: "800" },
   ctaDisabled: { opacity: 0.4 },
   ctaText: { color: colors.onNavy, fontSize: 16, fontWeight: "800" },
 });

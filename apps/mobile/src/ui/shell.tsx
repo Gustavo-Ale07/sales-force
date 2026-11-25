@@ -14,6 +14,8 @@ import { ErrorActionsContext, useErrorPopup } from "./use-error-popup";
 import { BottomNav, type MainTab } from "./bottom-nav";
 import { BrandLogo, SplashView } from "./brand";
 import { CustomerDetailScreen } from "./customer-detail-screen";
+import { CustomerCreateScreen } from "./customer-create-screen";
+import { CustomerEditScreen } from "./customer-edit-screen";
 import { CustomersScreen } from "./customers-screen";
 import { SalesScreen } from "./sales-screen";
 import { HomeScreen } from "./home-screen";
@@ -90,6 +92,9 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   const [quarantinedCount, setQuarantinedCount] = useState(0);
   const [quarantineTick, setQuarantineTick] = useState(0);
   const [customerDetail, setCustomerDetail] = useState<CustomerListItem | null>(null);
+  /** The customer form open over the Clientes tab; one at a time. */
+  const [customerForm, setCustomerForm] = useState<{ kind: "create" } | { kind: "edit"; customer: CustomerListItem } | null>(null);
+  const [customerFlags, setCustomerFlags] = useState({ create: false, edit: false });
   const [startRequest, setStartRequest] = useState<{ nonce: number; customer: Pick<CustomerListItem, "code" | "name">; lines?: readonly EditorLine[] } | null>(null);
   const connectivityState = useConnectivity(connectivity);
   const account = session.phase === "authenticated" ? session.account : null;
@@ -114,6 +119,18 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
       current = false;
     };
   }, [localOrdersForCount, syncStatus.needsAttention, syncStatus.pending, syncStatus.phase, quarantineTick]);
+  // Entry points of the customer forms follow the flags of the last sync (re-read whenever a sync moves).
+  const pendingCustomers = services?.pendingCustomers ?? null;
+  useEffect(() => {
+    if (pendingCustomers === null) return undefined;
+    let current = true;
+    void Promise.all([pendingCustomers.creationAvailable(), pendingCustomers.editAvailable?.() ?? Promise.resolve(false)])
+      .then(([create, edit]) => current && setCustomerFlags({ create, edit }))
+      .catch(() => undefined);
+    return () => {
+      current = false;
+    };
+  }, [pendingCustomers, syncStatus.phase, syncStatus.pending, syncStatus.needsAttention]);
   const closeQuarantine = useCallback(() => setQuarantineOpen(false), []);
   const quarantineChanged = useCallback(() => setQuarantineTick((n) => n + 1), []);
   const syncNow = useCallback(() => {
@@ -128,7 +145,10 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   /** Leaving a tab closes whatever was open in it: the next visit starts on its initial screen. */
   const resetTab = useCallback((left: MainTab) => {
     setEpochs((current) => ({ ...current, [left]: current[left] + 1 }));
-    if (left === "customers") setCustomerDetail(null);
+    if (left === "customers") {
+      setCustomerDetail(null);
+      setCustomerForm(null);
+    }
     if (left === "sales") {
       setSalesView("orders");
       setSaleDetailOpen(false);
@@ -298,6 +318,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
     setVisited(new Set<MainTab>(["home"]));
     setSalesView("orders");
     setCustomerDetail(null);
+    setCustomerForm(null);
     setStartRequest(null);
     setSession({ phase: "anonymous" });
   }
@@ -399,16 +420,44 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
             />
           </Pane>
           <Pane active={tab === "customers"} visited={visited.has("customers")}>
-            <View style={customerDetail === null ? styles.paneActive : styles.paneHidden}>
-              <CustomersScreen key={epochs.customers} customers={repositories.customers} onUnauthenticated={expire} connectivity={connectivityState} onOpen={setCustomerDetail} />
+            <View style={customerDetail === null && customerForm === null ? styles.paneActive : styles.paneHidden}>
+              <CustomersScreen
+                key={epochs.customers}
+                customers={repositories.customers}
+                onUnauthenticated={expire}
+                connectivity={connectivityState}
+                onOpen={setCustomerDetail}
+                {...(customerFlags.create && pendingCustomers !== null ? { onCreate: () => setCustomerForm({ kind: "create" }) } : {})}
+              />
             </View>
-            {customerDetail !== null && (
+            {customerDetail !== null && customerForm === null && (
               <CustomerDetailScreen
                 customer={customerDetail}
                 customers={repositories.customers}
                 connectivity={connectivityState}
                 onBack={() => setCustomerDetail(null)}
                 onNewOrder={startOrderFor}
+                {...(customerFlags.edit && dependencies.customerWrite !== undefined ? { onEdit: (picked: CustomerListItem) => setCustomerForm({ kind: "edit", customer: picked }) } : {})}
+              />
+            )}
+            {customerForm?.kind === "create" && pendingCustomers !== null && (
+              <CustomerCreateScreen
+                onSave={async (request) => {
+                  await pendingCustomers.create(request);
+                }}
+                onClose={() => {
+                  setCustomerForm(null);
+                  setEpochs((current) => ({ ...current, customers: current.customers + 1 }));
+                }}
+              />
+            )}
+            {customerForm?.kind === "edit" && dependencies.customerWrite !== undefined && (
+              <CustomerEditScreen
+                customerName={customerForm.customer.name}
+                code={customerForm.customer.code}
+                writer={dependencies.customerWrite}
+                connectivity={connectivityState}
+                onClose={() => setCustomerForm(null)}
               />
             )}
           </Pane>

@@ -43,6 +43,8 @@ export interface CustomersScreenProps {
   readonly connectivity?: ConnectivityState;
   /** Opens the customer sheet (ficha). */
   readonly onOpen?: (customer: CustomerListItem) => void;
+  /** "Novo cliente": offered only while customer creation is released on this installation. Absent = no button. */
+  readonly onCreate?: () => void;
 }
 
 const noopOpen = () => undefined;
@@ -52,7 +54,7 @@ const noopOpen = () => undefined;
  * alphabetical index when the repository can compute it locally. Whether this is "the seller's own portfolio" depends
  * on the installation configuration the app does not know, so the title never claims it.
  */
-export function CustomersScreen({ customers, onUnauthenticated, connectivity, onOpen = noopOpen }: CustomersScreenProps) {
+export function CustomersScreen({ customers, onUnauthenticated, connectivity, onOpen = noopOpen, onCreate }: CustomersScreenProps) {
   const offlineSuffix = connectivity === "offline" ? " · dados salvos neste aparelho" : "";
   const [filters, setFilters] = useState<CustomerFilters>({});
   const [startAt, setStartAt] = useState(0);
@@ -109,6 +111,11 @@ export function CustomersScreen({ customers, onUnauthenticated, connectivity, on
         >
           <Text style={[styles.toolText, activeFilters > 0 && styles.toolTextOn]}>{activeFilters > 0 ? `Filtros (${activeFilters})` : "Filtros"}</Text>
         </Pressable>
+        {onCreate !== undefined && (
+          <Pressable style={styles.tool} onPress={onCreate} accessibilityRole="button" accessibilityLabel="Novo cliente">
+            <Text style={styles.toolText}>Novo cliente</Text>
+          </Pressable>
+        )}
         {canIndex && (
           <Pressable style={styles.tool} onPress={() => setIndexOpen(true)} accessibilityRole="button" accessibilityLabel="Índice alfabético">
             <Text style={styles.toolText}>A–Z</Text>

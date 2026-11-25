@@ -3,6 +3,7 @@ import {
   CUSTOMER_CREATION_NOT_RELEASED,
   discardPendingCustomer,
   isCustomerCreationAvailable,
+  isCustomerEditAvailable,
   listPendingCustomers,
   readExpectedDataset,
   redoPendingCustomer,
@@ -34,6 +35,8 @@ export interface PendingCustomersPort {
    * until the next sync. The next sync saying "on" turns it back. Absent in the configuration = not hidden, not inferred.
    */
   creationAvailable(): Promise<boolean>;
+  /** Whether "Editar cliente" is offered: only while the last sync's `general.clientEditEnabled` was true (unknown = hidden). */
+  editAvailable?(): Promise<boolean>;
   list(search?: string): Promise<PendingCustomerRecord[]>;
   /** Makes a waiting customer due now (a refused one cannot be resent as is). */
   resend(clientRequestId: string): Promise<void>;
@@ -61,6 +64,7 @@ export function createPendingCustomersPort(deps: {
     },
     redo: (clientRequestId) => redoPendingCustomer(db, ownerAccountId, clientRequestId),
     creationAvailable: () => isCustomerCreationAvailable(db, env),
+    editAvailable: () => isCustomerEditAvailable(db),
     async list(search = "") {
       return listPendingCustomers(db, ownerAccountId, await readExpectedDataset(db), search);
     },
