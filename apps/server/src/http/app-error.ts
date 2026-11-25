@@ -1,4 +1,4 @@
-import { ERROR_HTTP_STATUS, type ErrorCode } from '@salesforce/contracts';
+import { APP_NOT_PERMITTED_MESSAGE, ERROR_HTTP_STATUS, type ErrorCode } from '@salesforce/contracts';
 import type { z } from 'zod';
 
 /** pt-BR user-facing message per code. Technical detail never goes here: it stays in the logs. */
@@ -7,6 +7,7 @@ export const DEFAULT_ERROR_MESSAGES: Readonly<Record<ErrorCode, string>> = {
   unauthenticated: 'Sessão ausente ou expirada. Entre novamente para continuar.',
   invalid_credentials: 'Usuário ou senha inválidos.',
   access_not_configured: 'Usuário autenticado, mas o acesso ao Force ainda não está configurado.',
+  app_not_permitted: APP_NOT_PERMITTED_MESSAGE,
   forbidden: 'Você não tem permissão para acessar este recurso.',
   not_found: 'Recurso não encontrado.',
   conflict: 'A operação conflita com o estado atual do recurso.',

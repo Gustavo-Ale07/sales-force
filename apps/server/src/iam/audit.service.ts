@@ -24,6 +24,8 @@ export const AUDIT_ACTIONS = {
   noSellerScope: 'authz.no_seller_scope',
   /** External login refused: the directory seller does not agree with the account link (no codes, no PII). */
   loginLinkMismatch: 'auth.login.link_mismatch',
+  /** The app login of a profile with no mobile use was refused AFTER valid credentials (ids and role only). */
+  loginAppNotPermitted: 'auth.login.app_not_permitted',
   /** A verified directory user could not get/keep an automatic seller link (reason code, ids only; the client sees a uniform error). */
   directoryLinkRefused: 'auth.directory.link_refused',
   /** An automatic seller link was removed because the official ERP relation no longer supports it; the account's sessions were revoked. */

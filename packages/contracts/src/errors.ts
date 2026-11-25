@@ -10,6 +10,7 @@ export const ERROR_CODES = [
   'unauthenticated',
   'invalid_credentials',
   'access_not_configured',
+  'app_not_permitted',
   'forbidden',
   'not_found',
   'conflict',
@@ -39,6 +40,7 @@ export const ERROR_HTTP_STATUS = {
   unauthenticated: 401,
   invalid_credentials: 401,
   access_not_configured: 403,
+  app_not_permitted: 403,
   forbidden: 403,
   not_found: 404,
   conflict: 409,
@@ -85,6 +87,13 @@ export const ApiErrorSchema = named(
   }),
 );
 export type ApiError = z.infer<typeof ApiErrorSchema>;
+
+/**
+ * Text the mobile app shows when `POST /auth/login` (with `client: 'app'`) answers `app_not_permitted` (403): the
+ * profile (technical, operations) has no use of the app. The server sends this same text as the error `message`.
+ */
+export const APP_NOT_PERMITTED_MESSAGE =
+  'Seu perfil não tem acesso ao aplicativo. Use o site para entrar. Se precisar de acesso ao aplicativo, fale com o administrador.';
 
 /** `POST /orders/{id}/submit` always fails with this until ERP submission gates close (SNK-4/5). */
 export const ErpSubmissionDisabledErrorSchema = named(

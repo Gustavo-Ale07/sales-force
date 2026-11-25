@@ -41,6 +41,8 @@ export interface RequestMeta {
   readonly ip: string;
   readonly userAgent: string | undefined;
   readonly requestId: string;
+  /** Declared by the login body: `app` = the mobile app. Omitted = the site. Never trusted to GRANT anything, only to refuse. */
+  readonly client?: 'web' | 'app';
 }
 
 export interface LoginResult {
@@ -230,6 +232,8 @@ export class AuthService implements OnModuleInit {
     }
     // Defense in depth: nothing below may ever run for an account linked to a directory user.
     if (found.externalUserId !== null) throw new AppError('invalid_credentials');
+    // Credentials proven and account usable: a profile with no mobile use never gets an app session (P-21, server-side).
+    await this.refuseAppIfNotPermitted(found.id, found.role, meta, auditMeta, 'local');
 
     // 3. Success: upgrade the hash if the cost parameters moved, open the session, then forget the failures
     // of this e-mail (the address counter is not reset by a success).
@@ -401,6 +405,7 @@ export class AuthService implements OnModuleInit {
     if (!isChannelAllowed(found.role, 'web')) return this.failExternal('external_channel_not_permitted', found.id, failCtx);
     // Same mode restriction as the password login and the session reads: a role the mode does not admit never gets a session.
     if (!this.roleMayHoldSession(found.role, true)) return this.failExternal('external_mode_role_not_permitted', found.id, failCtx);
+    await this.refuseAppIfNotPermitted(found.id, found.role, meta, auditMeta, 'external');
 
     // 4. Link reconciliation, fail closed. The login proves ONLY the directory identity; scope comes only from the
     // account's own seller link (never from the directory, a name or the login). A seller account must have a link.
@@ -464,6 +469,27 @@ export class AuthService implements OnModuleInit {
         channel: 'web',
       },
     };
+  }
+
+  /** `app` login of a role without the mobile channel: audited, then the actionable `app_not_permitted`. No session is opened. */
+  private async refuseAppIfNotPermitted(
+    accountId: string,
+    role: string,
+    meta: RequestMeta,
+    auditMeta: { readonly ip: string; readonly userAgent: string | null; readonly requestId: string },
+    method: 'local' | 'external',
+  ): Promise<void> {
+    if (meta.client !== 'app' || isChannelAllowed(role, 'mobile')) return;
+    try {
+      await this.audit.record({
+        action: AUDIT_ACTIONS.loginAppNotPermitted,
+        actorAccountId: accountId,
+        detail: { ...auditMeta, role, method },
+      });
+    } catch (error) {
+      this.logger.warn({ ...errorLogFields(error) }, 'could not record an app login refusal');
+    }
+    throw new AppError('app_not_permitted');
   }
 
   /**

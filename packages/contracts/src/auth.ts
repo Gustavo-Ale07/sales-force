@@ -22,6 +22,12 @@ export const LoginRequestSchema = named(
     /** Login name (Sankhya user or a local admin/technical identifier). Trimmed only: no e-mail format, no case change. */
     username: z.string().trim().min(1).max(254),
     password: z.string().min(1).max(256),
+    /**
+     * Which client is signing in. The mobile app sends `app`; omitted means the site. Profiles without mobile use
+     * (`technical`, `operations`) are refused on `app` with `app_not_permitted` AFTER the credentials were proven
+     * (so the refusal reveals nothing to someone without the password). The site is never affected.
+     */
+    client: z.enum(['web', 'app']).optional(),
   }),
 );
 export type LoginRequest = z.infer<typeof LoginRequestSchema>;

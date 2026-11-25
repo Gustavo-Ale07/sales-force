@@ -41,7 +41,8 @@ export class AuthController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<LoginResponse> {
-    const { token, user } = await this.auth.login(contract.body, metaOf(request));
+    const client = contract.body.client;
+    const { token, user } = await this.auth.login(contract.body, { ...metaOf(request), ...(client === undefined ? {} : { client }) });
     void reply.header(
       'set-cookie',
       serializeSessionCookie(token, user.sessionExpiresAt, this.clock(), { secure: this.config.secureCookies }),

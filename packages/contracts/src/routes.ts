@@ -159,7 +159,7 @@ export const routes = {
     auth: 'public',
     request: { body: LoginRequestSchema },
     responses: { 200: { description: 'Sessão criada', schema: LoginResponseSchema } },
-    errors: [400, 401, 429, 503],
+    errors: [400, 401, 403, 429, 503],
   }),
   logout: defineRoute({
     operationId: 'logout',

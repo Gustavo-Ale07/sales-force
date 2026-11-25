@@ -1218,7 +1218,7 @@ export interface components {
             details?: components["schemas"]["ErrorDetails"];
         };
         /** @enum {string} */
-        ErrorCode: "validation_failed" | "unauthenticated" | "invalid_credentials" | "access_not_configured" | "forbidden" | "not_found" | "conflict" | "version_conflict" | "idempotency_conflict" | "order_not_editable" | "installation_not_enabled" | "erp_submission_disabled" | "discount_blocked" | "approval_not_pending" | "dataset_mismatch" | "no_seller_scope" | "customer_without_seller" | "customer_ineligible" | "link_reconciliation_required" | "rate_limited" | "service_unavailable" | "internal_error";
+        ErrorCode: "validation_failed" | "unauthenticated" | "invalid_credentials" | "access_not_configured" | "app_not_permitted" | "forbidden" | "not_found" | "conflict" | "version_conflict" | "idempotency_conflict" | "order_not_editable" | "installation_not_enabled" | "erp_submission_disabled" | "discount_blocked" | "approval_not_pending" | "dataset_mismatch" | "no_seller_scope" | "customer_without_seller" | "customer_ineligible" | "link_reconciliation_required" | "rate_limited" | "service_unavailable" | "internal_error";
         ErrorDetails: {
             issues?: components["schemas"]["ErrorIssue"][];
         } & {
@@ -1313,6 +1313,8 @@ export interface components {
         LoginRequest: {
             username: string;
             password: string;
+            /** @enum {string} */
+            client?: "web" | "app";
         };
         Metric: {
             key: string;
@@ -1728,6 +1730,7 @@ export interface components {
             parentCode: number | null;
             degree: number;
             hasChildren: boolean;
+            subtreeCodes: number[];
         };
         ProductGroupsResponse: {
             items: components["schemas"]["ProductGroup"][];
@@ -2076,6 +2079,15 @@ export interface operations {
             };
             /** @description Não autenticado */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

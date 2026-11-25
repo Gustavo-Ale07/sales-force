@@ -156,13 +156,13 @@ export function login(
   { app }: Pick<AuthApp, 'app'>,
   username: string,
   password: string,
-  extra: { headers?: Record<string, string>; remoteAddress?: string } = {},
+  extra: { headers?: Record<string, string>; remoteAddress?: string; client?: 'web' | 'app' } = {},
 ): Promise<LightMyRequestResponse> {
   return app.inject({
     method: 'POST',
     url: '/api/v1/auth/login',
     headers: { ...JSON_HEADERS, ...extra.headers },
-    payload: JSON.stringify({ username, password }),
+    payload: JSON.stringify({ username, password, ...(extra.client === undefined ? {} : { client: extra.client }) }),
     ...(extra.remoteAddress === undefined ? {} : { remoteAddress: extra.remoteAddress }),
   });
 }

@@ -60,7 +60,7 @@ Lotes (definidos pelo dono): 1 e 2 em andamento hoje; 3 e 4 NÃO iniciar; FORA =
 | Detalhe do produto | existe | feito | sim | M | não | 2 | feito | bc5e5e8 |
 | "Máx. X%" na lista de produtos | conferir | existe | a conferir | P | não | 2 | não iniciado | |
 | "Preço zero" (marcador) | existe | feito | sim | P | não | 2 | feito | 55d0662 |
-| Agrupamento grupo > subgrupo > linha | existe | falta; o espelho só tem grupos planos | não (a igualar) | M | sim | 2 | não entregue | |
+| Agrupamento grupo > subgrupo > linha | existe | falta no app; servidor já tem hierarquia (D-AM) e agora entrega `subtreeCodes` em `/product-groups`; contrato em `docs/implementation/catalog-hierarchy.md` | não (a igualar no app) | M | feito (servidor) | 2 | servidor feito; app (mobile-db + UI) pendente | ver commit do lote |
 
 ## Início, Perfil e Cabeçalho
 
@@ -82,7 +82,7 @@ Lotes (definidos pelo dono): 1 e 2 em andamento hoje; 3 e 4 NÃO iniciar; FORA =
 | Item | Site | App | Igual? | Esforço | Servidor? | Lote | Situação | SHA |
 |---|---|---|---|---|---|---|---|---|
 | Aprovações, limites de desconto, integração, configurações | existe | n/a | só site por natureza | | | | feito | |
-| Bloqueio de login operations/technical no app | | | FORA | | | FORA | fora de escopo | |
+| Bloqueio de login operations/technical no app | servidor: `POST /auth/login` com `client: 'app'` recusa technical/operations com `app_not_permitted` (403), auditado; site inalterado | app envia `client: 'app'` e exibe `APP_NOT_PERMITTED_MESSAGE` (contracts) | servidor sim | S | n/a | servidor feito; app pendente (agente do app) | servidor feito | ver commit E |
 
 ## Estados, rótulos e cores
 
