@@ -49,7 +49,7 @@ import {
 import { useApi } from "../lib/app-context";
 import { priceContextSourceLabels } from "../lib/labels";
 import type { ProductsSearch } from "../lib/route-search";
-import { asInt, asOneOf, compact } from "../lib/search-params";
+import { asInt, compact } from "../lib/search-params";
 import { useSearchBox } from "../lib/use-search-box";
 
 
