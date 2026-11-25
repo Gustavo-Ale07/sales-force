@@ -52,7 +52,7 @@ describe("Perfil Operações", () => {
     expect(await screen.findByRole("menuitem", { name: "Sair" })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Atualizar dados" })).toBeNull();
     expect(screen.getByRole("menuitem", { name: "Sair" })).toBeInTheDocument();
-    expect(screen.queryByRole("menuitem", { name: "Meu perfil" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Perfil" })).toBeNull();
     expect(calls.map((call) => call.path).filter((path) => !ALLOWED.includes(path))).toEqual([]);
   });
 });

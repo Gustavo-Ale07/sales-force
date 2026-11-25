@@ -137,7 +137,7 @@ const customerDetailRoute = createRoute({
 const productsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/produtos",
-  staticData: { crumb: "Produtos" },
+  staticData: { crumb: "Catálogo" },
   validateSearch: (search: Record<string, unknown>) => parseProductsSearch(search),
   component: lazyRouteComponent(() => import("./routes/products-route"), "ProductsRoute"),
 });
@@ -145,7 +145,7 @@ const productsRoute = createRoute({
 const ordersRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/pedidos",
-  staticData: { crumb: "Pedidos" },
+  staticData: { crumb: "Vendas" },
   component: Outlet,
 });
 const ordersIndexRoute = createRoute({
@@ -183,7 +183,7 @@ const releaseQueueRoute = createRoute({
 const profileRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/perfil",
-  staticData: { crumb: "Meu perfil" },
+  staticData: { crumb: "Perfil" },
   component: lazyRouteComponent(() => import("./routes/profile"), "ProfilePage"),
 });
 

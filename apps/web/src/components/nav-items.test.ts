@@ -34,16 +34,16 @@ describe("navItemsFor", () => {
   });
 
   it("keeps the flag default off and the other items per role unchanged", () => {
-    expect(navItemsFor("seller").map((item) => item.label)).toEqual(["Início", "Catálogo", "Clientes", "Vendas"]);
-    expect(navItemsFor("seller", false, true).map((item) => item.label)).toEqual(["Início", "Catálogo", "Clientes", "Vendas", "Aguardando liberação"]);
-    expect(navItemsFor("manager", true, true).map((item) => item.label)).toEqual(["Início", "Catálogo", "Clientes", "Vendas", "Aguardando liberação", "Aprovações"]);
+    expect(navItemsFor("seller").map((item) => item.label)).toEqual(["Início", "Clientes", "Vendas", "Catálogo", "Perfil"]);
+    expect(navItemsFor("seller", false, true).map((item) => item.label)).toEqual(["Início", "Clientes", "Vendas", "Catálogo", "Perfil", "Aguardando liberação"]);
+    expect(navItemsFor("manager", true, true).map((item) => item.label)).toEqual(["Início", "Clientes", "Vendas", "Catálogo", "Perfil", "Aguardando liberação", "Aprovações"]);
     expect(navItemsFor("admin", true, true).map((item) => item.label)).toEqual([
-      "Início", "Catálogo", "Clientes", "Vendas", "Aguardando liberação", "Aprovações", "Limites de desconto", "Integração", "Configurações",
+      "Início", "Clientes", "Vendas", "Catálogo", "Perfil", "Aguardando liberação", "Aprovações", "Limites de desconto", "Integração", "Configurações",
     ]);
     expect(navItemsFor("technical", true, true).map((item) => item.label)).toEqual(["Integração", "Configurações"]);
   });
 
-  it("keeps the Vidya order Início, Catálogo, Clientes, Vendas", () => {
-    expect(navItemsFor(undefined).map((item) => item.label).slice(0, 4)).toEqual(["Início", "Catálogo", "Clientes", "Vendas"]);
+  it("keeps the app order Início, Clientes, Vendas, Catálogo, Perfil", () => {
+    expect(navItemsFor(undefined).map((item) => item.label).slice(0, 5)).toEqual(["Início", "Clientes", "Vendas", "Catálogo", "Perfil"]);
   });
 });

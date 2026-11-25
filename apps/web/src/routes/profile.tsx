@@ -1,4 +1,3 @@
-import { hasWholePortfolioAccess } from "@salesforce/domain";
 import { Alert, Button, Card, CardBody, CardHeader, KeyValue, KeyValueList, PageHeader, SkeletonLines } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { ProfilePhotoControls } from "../components/profile-photo-controls";
@@ -9,7 +8,7 @@ import { useAppServices } from "../lib/app-context";
 import { sessionQueryOptions } from "../lib/auth-client";
 
 /**
- * "Meu perfil": read-only view of the signed-in account, from the session the server already returns
+ * "Perfil": read-only view of the signed-in account, from the session the server already returns
  * (`GET /auth/session`). Nothing here is editable: there is no endpoint to change the account, the password or the
  * seller link, and those are administered outside this screen (CFG-2 for the seller link).
  */
@@ -24,7 +23,7 @@ function SyncBlock({ role }: { role: string }) {
       <CardHeader title="Sincronização" />
       <CardBody>
         <KeyValueList>
-          <KeyValue label="Estado">
+          <KeyValue label="Situação">
             <span className="inline-flex items-center gap-2">
               <span aria-hidden="true" className={`inline-block size-3 rounded-full ${DOT_BG[view.color]}`} />
               {view.label.replace("Status de sincronização: ", "")}
@@ -50,7 +49,7 @@ export function ProfilePage() {
   if (query.isPending) {
     return (
       <>
-        <PageHeader title="Meu perfil" />
+        <PageHeader title="Perfil" />
         <div aria-busy="true">
           <SkeletonLines lines={5} label="Carregando perfil…" />
         </div>
@@ -60,7 +59,7 @@ export function ProfilePage() {
   if (query.isError) {
     return (
       <>
-        <PageHeader title="Meu perfil" />
+        <PageHeader title="Perfil" />
         <Card>
           <QueryError error={query.error} onRetry={() => void query.refetch()} retrying={query.isRefetching} title="Não foi possível carregar o perfil" />
         </Card>
@@ -72,7 +71,7 @@ export function ProfilePage() {
     // The route guard sends anonymous visitors to the login; this only covers a session that ended while the page was open.
     return (
       <>
-        <PageHeader title="Meu perfil" />
+        <PageHeader title="Perfil" />
         <Alert tone="warning" title="Sessão encerrada">
           Entre novamente para ver o seu perfil.
         </Alert>
@@ -86,33 +85,21 @@ export function ProfilePage() {
         description={user.roleLabel ?? user.role}
       />
       <Card>
-        <CardHeader title="Foto" />
         <CardBody>
           <ProfilePhotoControls user={user} />
         </CardBody>
       </Card>
-      <div className="grid gap-3 lg:grid-cols-2">
-        <Card>
-          <CardHeader title="Conta" />
-          <CardBody>
-            <KeyValueList>
-              <KeyValue label="Nome">{user.name}</KeyValue>
-              <KeyValue label="Usuário">{user.username}</KeyValue>
-              <KeyValue label="Perfil de acesso">{user.roleLabel ?? user.role}</KeyValue>
-            </KeyValueList>
-          </CardBody>
-        </Card>
-        <Card>
-          <CardHeader title="Carteira" />
-          <CardBody>
-            <KeyValueList>
-              <KeyValue label="Vendedores vinculados">
-                {user.sellerCodes.length === 0 ? (hasWholePortfolioAccess(user.role) ? "Nenhum (acesso a toda a carteira)" : "Nenhum vendedor vinculado") : user.sellerCodes.join(", ")}
-              </KeyValue>
-            </KeyValueList>
-          </CardBody>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader title="Minha conta" />
+        <CardBody>
+          <KeyValueList>
+            <KeyValue label="Nome">{user.name}</KeyValue>
+            <KeyValue label="Usuário">{user.username}</KeyValue>
+            <KeyValue label="Perfil">{user.roleLabel ?? user.role}</KeyValue>
+          </KeyValueList>
+        </CardBody>
+      </Card>
+
       <SyncBlock role={user.role} />
       <Card>
         <CardHeader title="Sobre" />

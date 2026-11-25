@@ -1,9 +1,9 @@
 import { canAdministerDiscountLimits, canDecideApprovals, canSeeIntegration, canUseCommercial } from "@salesforce/contracts";
 import { isOperationsRole, OPERATIONS_HOME } from "../lib/operations-role";
-import { Hourglass, House, Package, Percent, Plug, Settings, ShieldCheck, ShoppingCart, Users, type LucideIcon } from "lucide-react";
+import { Hourglass, House, Package, Percent, Plug, Settings, ShieldCheck, ShoppingCart, UserRound, Users, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
-  to: "/" | "/clientes" | "/produtos" | "/pedidos" | "/integracao" | "/configuracoes" | "/limites-desconto" | "/aprovacoes" | "/aguardando-liberacao";
+  to: "/" | "/perfil" | "/clientes" | "/produtos" | "/pedidos" | "/integracao" | "/configuracoes" | "/limites-desconto" | "/aprovacoes" | "/aguardando-liberacao";
   label: string;
   icon: LucideIcon;
   /** Only for the roles that may see the integration (INTEGRATION_ROLES). */
@@ -17,16 +17,17 @@ export interface NavItem {
 }
 
 /**
- * Main navigation, in the Vidya Force order (Início, Catálogo, Clientes, Vendas). Labels follow the legacy
+ * Main navigation, in the app order (Início, Clientes, Vendas, Catálogo, Perfil); the site adds the management items after it. Labels follow the legacy
  * system's vocabulary so a seller used to it finds each area without relearning (the PLAC reference kit names
  * the first one "Início"); the routes are unchanged.
  * Integração is not part of Vidya: it stays as a trailing item that only the integration roles see.
  */
 const allNavItems: NavItem[] = [
   { to: "/", label: "Início", icon: House },
-  { to: "/produtos", label: "Catálogo", icon: Package },
   { to: "/clientes", label: "Clientes", icon: Users },
   { to: "/pedidos", label: "Vendas", icon: ShoppingCart },
+  { to: "/produtos", label: "Catálogo", icon: Package },
+  { to: "/perfil", label: "Perfil", icon: UserRound },
   { to: "/aguardando-liberacao", label: "Aguardando liberação", icon: Hourglass, releaseQueueOnly: true },
   { to: "/aprovacoes", label: "Aprovações", icon: ShieldCheck, approverOnly: true },
   { to: "/limites-desconto", label: "Limites de desconto", icon: Percent, adminOnly: true },

@@ -145,32 +145,31 @@ describe("Meu perfil e atualização de dados", () => {
   it("opening the avatar menu or the Perfil never opens the full-screen refresh, and the page stays clickable after the menu closes", async () => {
     const { user, router } = renderApp("/", { handlers: shell });
     await openUserMenu(user);
-    expect(await screen.findByRole("menuitem", { name: "Meu perfil" })).toBeInTheDocument();
+    expect(await screen.findByRole("menuitem", { name: "Perfil" })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Atualizar dados" })).toBeNull();
     expect(document.querySelector("[data-full-screen-loading]")).toBeNull();
     // Non-modal menu: no scroll lock and no pointer-events block on the page behind it.
     expect(document.body.style.pointerEvents).not.toBe("none");
     expect(document.body).not.toHaveAttribute("data-scroll-locked");
     await user.keyboard("{Escape}");
-    await waitFor(() => expect(screen.queryByRole("menuitem", { name: "Meu perfil" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("menuitem", { name: "Perfil" })).toBeNull());
     expect(document.body.style.pointerEvents).not.toBe("none");
     await user.click(await screen.findByRole("link", { name: "Clientes" }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/clientes"));
     await router.navigate({ to: "/perfil" });
-    await screen.findByText("Perfil de acesso");
+    await screen.findByText("Minha conta");
     expect(document.querySelector("[data-full-screen-loading]")).toBeNull();
   });
 
   it("opens the profile from the user menu and shows the account from the session, read-only", async () => {
     const { user, router } = renderApp("/", { handlers: shell });
     await openUserMenu(user);
-    await user.click(await screen.findByRole("menuitem", { name: "Meu perfil" }));
-    expect(await screen.findByText("Perfil de acesso")).toBeInTheDocument();
+    await user.click(await screen.findByRole("menuitem", { name: "Perfil" }));
+    expect(await screen.findByText("Minha conta")).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/perfil");
-    expect(screen.getByText("Vendedores vinculados")).toBeInTheDocument();
-    expect(screen.getByText("7")).toBeInTheDocument();
+    expect(screen.queryByText("Vendedores vinculados")).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-    await waitFor(() => expect(document.title).toBe("Meu perfil — Force PLAC"));
+    await waitFor(() => expect(document.title).toBe("Perfil — Force PLAC"));
   });
 
   it("shows the Sincronização and Sobre blocks, and Sincronizar agora opens the refresh overlay", async () => {
@@ -186,7 +185,8 @@ describe("Meu perfil e atualização de dados", () => {
     const base = session(true);
     const body = base.body as { account: Record<string, unknown> };
     renderApp("/perfil", { handlers: { ...shell, "GET /auth/session": { body: { ...body, account: { ...body.account, sellerCodes: [] } } } } });
-    expect(await screen.findByText("Nenhum vendedor vinculado")).toBeInTheDocument();
+    expect(await screen.findByText("Minha conta")).toBeInTheDocument();
+    expect(screen.queryByText("Nenhum vendedor vinculado")).not.toBeInTheDocument();
   });
 
   const profileWith = (role: string) => {
@@ -196,7 +196,8 @@ describe("Meu perfil e atualização de dados", () => {
 
   it.each(["manager", "admin"])("does not warn a %s without a seller link (whole portfolio)", async (role) => {
     profileWith(role);
-    expect(await screen.findByText("Nenhum (acesso a toda a carteira)")).toBeInTheDocument();
+    expect(await screen.findByText("Minha conta")).toBeInTheDocument();
+    expect(screen.queryByText("Nenhum vendedor vinculado")).not.toBeInTheDocument();
   });
 
   const REFRESH_ID = "0190a000-0000-7000-8000-0000000000f1";

@@ -7,15 +7,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@salesforce/ui";
-import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { LogOut, UserRound } from "lucide-react";
-import { syncStatusQueryOptions } from "../lib/api-queries";
-import { useApi } from "../lib/app-context";
 import type { AuthUser } from "../lib/auth-client";
 import { isOperationsRole } from "../lib/operations-role";
 import { userPhotoSrc } from "../lib/profile-photo";
-import { clockTime } from "../lib/sync-refresh";
 
 
 export interface UserMenuProps {
@@ -26,10 +22,7 @@ export interface UserMenuProps {
 /** User menu slot. Without a session (design route) it renders nothing. */
 export function UserMenu({ user, onLogout }: UserMenuProps) {
   const navigate = useNavigate();
-  const api = useApi();
-  const status = useQuery({ ...syncStatusQueryOptions(api), enabled: user !== null && !isOperationsRole(user.role) });
   if (!user) return null;
-  const dataAsOf = status.data?.dataAsOf ?? null;
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger
@@ -47,10 +40,9 @@ export function UserMenu({ user, onLogout }: UserMenuProps) {
         {isOperationsRole(user.role) ? null : (
           <DropdownMenuItem onSelect={() => void navigate({ to: "/perfil" })}>
             <UserRound size={16} strokeWidth={1.75} aria-hidden="true" />
-            Meu perfil
+            Perfil
           </DropdownMenuItem>
         )}
-        {dataAsOf ? <DropdownMenuLabel className="pt-0 text-xs font-normal">Dados do Sankhya de {clockTime(dataAsOf)}</DropdownMenuLabel> : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onLogout}>
           <LogOut size={16} strokeWidth={1.75} aria-hidden="true" />
