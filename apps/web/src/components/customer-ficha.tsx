@@ -42,7 +42,7 @@ import { QueryError } from "./query-error";
 export type FichaTab = "cadastro" | "financeiro" | "analise" | "engajamento" | "vendas";
 
 const tabs = [
-  { value: "cadastro", label: "Dados cadastrais" },
+  { value: "cadastro", label: "Dados principais" },
   { value: "financeiro", label: "Financeiro" },
   { value: "analise", label: "Análise do cliente" },
   { value: "engajamento", label: "Engajamento" },
@@ -90,7 +90,7 @@ function CustomerOrders({ customerCode }: { customerCode: number }) {
               <TableRow>
                 <TableHead>Pedido</TableHead>
                 <TableHead>Situação</TableHead>
-                <TableHead numeric>Total estimado</TableHead>
+                <TableHead numeric>Total</TableHead>
                 <TableHead>Atualizado em</TableHead>
               </TableRow>
             </TableHeader>
@@ -144,7 +144,7 @@ function RegistrationTab({ customerCode }: { customerCode: number }) {
     <div className="flex flex-col gap-3">
       <div className="grid gap-3 lg:grid-cols-2">
         <Card>
-          <CardHeader title="Dados cadastrais" />
+          <CardHeader title="Dados principais" />
           <CardBody>
             <KeyValueList>
               <KeyValue label="Código">{customer.code}</KeyValue>
@@ -209,7 +209,7 @@ function FinanceTab({ customerCode }: { customerCode: number }) {
   return (
     <div className="flex flex-col gap-3">
       <Card>
-        <CardHeader title="Situação financeira" />
+        <CardHeader title="Financeiro" />
         <CardBody>
           <KeyValueList>
             {/* The server sends the limits only when the installation allows it. */}

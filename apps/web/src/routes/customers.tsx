@@ -119,8 +119,8 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
             size="md"
             value={searchText}
             onValueChange={setSearchText}
-            placeholder="Código, nome ou documento"
-            aria-label="Buscar cliente por código, nome ou documento"
+            placeholder="Buscar por nome, código ou documento"
+            aria-label="Buscar cliente"
           />
         </FilterField>
         {withSellers ? (
@@ -142,8 +142,8 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
             onChange={(e) => change({ hasPriceTable: asOneOf(e.target.value, ["true", "false"] as const) })}
           >
             <option value="">Todas</option>
-            <option value="true">Com tabela</option>
-            <option value="false">Sem tabela</option>
+            <option value="true">Com tabela de preço</option>
+            <option value="false">Sem tabela de preço</option>
           </Select>
         </FilterField>
       </FilterBar>
@@ -178,7 +178,7 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
           {params.initial ? <FilterChip onRemove={() => change({ initial: undefined })}>{`Letra: ${params.initial}`}</FilterChip> : null}
           {params.hasPriceTable ? (
             <FilterChip onRemove={() => change({ hasPriceTable: undefined })}>
-              {params.hasPriceTable === "true" ? "Com tabela" : "Sem tabela"}
+              {params.hasPriceTable === "true" ? "Com tabela de preço" : "Sem tabela de preço"}
             </FilterChip>
           ) : null}
           <button type="button" onClick={clearAll} className="text-xs text-accent hover:underline">
@@ -189,7 +189,7 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
 
       <Card aria-busy={query.isFetching}>
         <Table label="Clientes" cards>
-          <TableCaption>Carteira de clientes</TableCaption>
+          <TableCaption>Clientes</TableCaption>
           <TableHeader>
             <TableRow>
               <SortableHead
@@ -224,12 +224,7 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
               <TableMessageRow colSpan={COLUMNS}>
                 <EmptyState
                   compact
-                  title={hasFilters ? "Nenhum cliente encontrado" : "Nenhum cliente na carteira"}
-                  description={
-                    hasFilters
-                      ? "Ajuste ou limpe os filtros para ver mais resultados."
-                      : "Quando houver clientes no seu escopo, eles aparecem aqui."
-                  }
+                  title={hasFilters ? "Nenhum cliente com estes filtros." : "Nenhum cliente disponível"}
                 />
               </TableMessageRow>
             ) : (

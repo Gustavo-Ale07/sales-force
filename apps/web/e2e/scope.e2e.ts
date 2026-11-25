@@ -78,7 +78,7 @@ test.describe("Cenário 6 — escopo de carteira (vendedor x gerente)", () => {
   test("filtrar por outro vendedor na URL mostra o estado vazio, não a carteira dele", async ({ page }) => {
     await loginAsSeller(page);
     await page.goto(`/clientes?sellerCode=${OTHER_SELLER.code}`);
-    await expect(page.getByText("Nenhum cliente encontrado")).toBeVisible();
+    await expect(page.getByText("Nenhum cliente com estes filtros.")).toBeVisible();
     await expect(page.locator("body")).not.toContainText(OTHER_SELLER.name);
   });
 

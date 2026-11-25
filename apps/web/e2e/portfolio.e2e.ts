@@ -34,7 +34,7 @@ test.describe("Cenário 2 — carteira do vendedor", () => {
     await loginAsSeller(page);
     await navLink(page, "Clientes").click();
 
-    const search = page.getByRole("searchbox", { name: "Buscar cliente por código, nome ou documento" });
+    const search = page.getByRole("searchbox", { name: "Buscar cliente" });
     await search.fill("Alvaro");
     await expect(page).toHaveURL(/search=Alvaro/);
     const clientes = tableRegion(page, "Clientes");
@@ -42,7 +42,7 @@ test.describe("Cenário 2 — carteira do vendedor", () => {
     await expect(bodyRows(clientes).first()).toContainText(SELLER_CUSTOMER.name);
 
     await search.fill("zzz-nenhum-cliente");
-    await expect(page.getByText("Nenhum cliente encontrado")).toBeVisible();
+    await expect(page.getByText("Nenhum cliente com estes filtros.")).toBeVisible();
 
     await page.getByRole("button", { name: "Limpar filtros" }).click();
     await expect(page.getByText(`Mostrando 1–25 de ${SELLER_103_CUSTOMERS}`)).toBeVisible();
@@ -51,7 +51,7 @@ test.describe("Cenário 2 — carteira do vendedor", () => {
   test("abre o detalhe de um cliente pela linha, pelo teclado, e volta pela navegação", async ({ page }) => {
     await loginAsSeller(page);
     await navLink(page, "Clientes").click();
-    await page.getByRole("searchbox", { name: "Buscar cliente por código, nome ou documento" }).fill("Alvaro");
+    await page.getByRole("searchbox", { name: "Buscar cliente" }).fill("Alvaro");
 
     const row = bodyRows(tableRegion(page, "Clientes")).first();
     await expect(row).toContainText(SELLER_CUSTOMER.name);

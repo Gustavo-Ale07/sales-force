@@ -41,11 +41,11 @@ describe("Início (dashboard)", () => {
     release();
     // The KPI grid shows the compact tile labels (per the Início redesign), not each metric's own long label.
     expect(await screen.findByText("1.250")).toBeInTheDocument();
-    // A metric the server could not provide is "not available", never a made-up zero.
-    // It is not shown as a row of "Não disponível": one quiet note names it instead.
-    expect(screen.getByTestId("indicators-without-data")).toHaveTextContent(/Sem dados nesta instalação:.*Indicadores de crédito/);
+    expect(screen.queryByText("Pedidos recentes")).toBeNull();
+    expect(screen.queryByText("Atenção necessária")).toBeNull();
+    expect(screen.queryByText("Outros indicadores")).toBeNull();
     expect(screen.getByText(/Escopo: Vendedor 7/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Pedido" })).toBeInTheDocument();
+    expect(await screen.findByText("Olá, Ana Souza")).toBeInTheDocument();
   });
 
   it("marks demonstration data", async () => {
@@ -123,12 +123,12 @@ describe("Carteira (customers)", () => {
 
   it("shows the empty state for an empty portfolio", async () => {
     renderApp("/clientes", { handlers: { "GET /customers": { body: customersPage([]) } } });
-    expect(await screen.findByText("Nenhum cliente na carteira")).toBeInTheDocument();
+    expect(await screen.findByText("Nenhum cliente disponível")).toBeInTheDocument();
   });
 
   it("shows the filtered-empty state with a way to clear the filters", async () => {
     const { user, router } = renderApp("/clientes?search=zzz", { handlers: { "GET /customers": { body: customersPage([]) } } });
-    expect(await screen.findByText("Nenhum cliente encontrado")).toBeInTheDocument();
+    expect(await screen.findByText("Nenhum cliente com estes filtros.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Limpar filtros" }));
     await waitFor(() => expect(router.state.location.search).toEqual({}));
   });
@@ -292,7 +292,7 @@ describe("Catálogo (products)", () => {
 
   it("shows the empty and error states", async () => {
     renderApp("/produtos", { handlers: { ...groups, "GET /products": { body: productsPage([]) } } });
-    expect(await screen.findByText("Catálogo vazio")).toBeInTheDocument();
+    expect(await screen.findByText("Nenhum produto disponível")).toBeInTheDocument();
   });
 
   it("shows the error state with the correlation id", async () => {
@@ -324,7 +324,7 @@ describe("Rascunhos (orders)", () => {
       handlers: { "GET /orders": { body: ordersPage([orderListItem(), orderListItem({ id: "0190a000-0000-7000-8000-0000000000bb", draftNumber: 13, isPartial: true, status: "draft" })]) } },
     });
     await screen.findAllByText("Comercial Alfa Ltda");
-    expect(screen.getByText("(parcial)")).toBeInTheDocument();
+    expect(screen.getByText("Valor parcial")).toBeInTheDocument();
     await user.click((await screen.findAllByText("Comercial Alfa Ltda"))[0]!);
     await waitFor(() => expect(router.state.location.pathname).toBe(`/pedidos/${ORDER_ID}`));
   });
@@ -350,7 +350,7 @@ describe("Rascunhos (orders)", () => {
     await user.click(await screen.findByRole("button", { name: "Excluir Pedido" }));
     const dialog = await screen.findByRole("dialog", { name: "Excluir pedido?" });
     await user.click(within(dialog).getByRole("button", { name: "Excluir" }));
-    expect(await screen.findByText("Nenhum pedido ainda")).toBeInTheDocument();
+    expect(await screen.findByText("Nenhuma venda pendente.")).toBeInTheDocument();
     expect(callsTo(calls, "DELETE", `/orders/${ORDER_ID}`)).toHaveLength(1);
   });
 
@@ -385,7 +385,7 @@ describe("Rascunhos (orders)", () => {
 
   it("shows the empty and error states", async () => {
     const empty = renderApp("/pedidos", { handlers: { "GET /orders": { body: ordersPage([]) } } });
-    expect(await screen.findByText("Nenhum pedido ainda")).toBeInTheDocument();
+    expect(await screen.findByText("Nenhuma venda pendente.")).toBeInTheDocument();
     empty.unmount();
     renderApp("/pedidos", { handlers: { "GET /orders": apiError(500, "internal_error", "x", { requestId: "req-o-1" }) } });
     expect(await screen.findByText("req-o-1")).toBeInTheDocument();
