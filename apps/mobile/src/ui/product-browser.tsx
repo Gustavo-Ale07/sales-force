@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { ConnectivityState } from "../connectivity/connectivity";
-import type { ProductFilters, ProductGroupOption, ProductListItem, ProductPageRequest, ProductRepository } from "../data/ports";
+import type { ProductFilters, ProductListItem, ProductPageRequest, ProductRepository } from "../data/ports";
 import { colors, control, radius, spacing } from "../theme";
 import { PagedListView } from "./paged-list-view";
-import { ProductFilterChips, ProductFiltersSheet, countActiveProductFilters } from "./product-filters";
+import type { ProductGroupTree } from "../data/group-cascade";
+import { EMPTY_GROUP_TREE, ProductFilterChips, ProductFiltersSheet, countActiveProductFilters } from "./product-filters";
 import { ProductDetailSheet } from "./product-detail-sheet";
 import { ProductCard, ProductRow, type ProductOrderActions, type ProductViewMode } from "./product-views";
 
@@ -29,14 +30,14 @@ export function ProductBrowser({ products, onUnauthenticated, connectivity, acti
   const [mode, setMode] = useState<ProductViewMode>("grid");
   const [filters, setFilters] = useState<ProductFilters>({});
   const [detail, setDetail] = useState<ProductListItem | null>(null);
-  const [groups, setGroups] = useState<readonly ProductGroupOption[]>([]);
+  const [groups, setGroups] = useState<ProductGroupTree>(EMPTY_GROUP_TREE);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const active = countActiveProductFilters(filters);
-  const canFilter = products.groups !== undefined;
+  const canFilter = products.groupTree !== undefined;
 
   useEffect(() => {
     let current = true;
-    void products.groups?.().then((found) => current && setGroups(found)).catch(() => undefined);
+    void products.groupTree?.().then((found) => current && setGroups(found)).catch(() => undefined);
     return () => {
       current = false;
     };
@@ -73,11 +74,11 @@ export function ProductBrowser({ products, onUnauthenticated, connectivity, acti
           ))}
         </View>
       </View>
-      <ProductFilterChips filters={filters} groups={groups} onChange={setFilters} />
+      <ProductFilterChips filters={filters} tree={groups} onChange={setFilters} />
       <ProductFiltersSheet
         visible={filtersOpen}
         filters={filters}
-        groups={groups}
+        tree={groups}
         onApply={(next) => {
           setFilters(next);
           setFiltersOpen(false);

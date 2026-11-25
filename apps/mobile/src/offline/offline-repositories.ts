@@ -12,6 +12,7 @@ import {
   customerSellers,
   searchCustomers,
   productGroups,
+  listProductGroupTree,
   customerPriceTableOf,
   cachedPriceTableCodes,
   searchProducts,
@@ -84,9 +85,17 @@ export function createOfflineFirstRepositories(deps: {
         const page = await searchProducts<ProductListItem>(db, table !== null ? { ...local, priceTableCode: table } : local);
         return { items: page.items, page: page.page, pageSize: page.pageSize, total: page.total };
       },
-      async groups() {
-        if (!(await cacheReady())) return [];
-        return productGroups(db);
+      async groupTree() {
+        if (!(await cacheReady())) return { items: [], hierarchical: false, hasUngrouped: false };
+        const tree = await listProductGroupTree(db);
+        if (tree !== null) return tree;
+        // No hierarchy on the device yet (older pull): the flat list derived from the cached products, as before.
+        const flat = await productGroups(db);
+        return {
+          items: flat.map((group) => ({ code: group.code, name: group.name ?? `Grupo ${group.code}`, parentCode: null, degree: 1, hasChildren: false, subtreeCodes: [group.code] })),
+          hierarchical: false,
+          hasUngrouped: false,
+        };
       },
       async get(code) {
         if (await cacheReady()) {

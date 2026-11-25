@@ -1,4 +1,5 @@
 import type { ApiSchema } from "@salesforce/contracts/client";
+import type { ProductGroupTree } from "./group-cascade";
 
 /** Wire shapes: the generated OpenAPI types are the source of truth for what the API returns (STACK-4). */
 export type CustomerListItem = ApiSchema<"CustomerListItem"> & {
@@ -86,7 +87,10 @@ export interface CustomerRepository {
 
 /** Catalog filters, available only where they can run in the local database (`groups` present). */
 export interface ProductFilters {
+  /** Codes the list matches: the subtree of the deepest cascade level chosen (`[0]` = Sem grupo). Empty/absent = Todos. */
   readonly groupCodes?: readonly number[];
+  /** The cascade selection (Grupo, Subgrupo, Linha) the codes came from; UI state, not sent to the repository's query. */
+  readonly groupPath?: readonly number[];
 }
 
 export interface ProductPageRequest extends PageRequest {
@@ -98,17 +102,13 @@ export interface ProductPageRequest extends PageRequest {
   readonly customerCode?: number;
 }
 
-/** A catalog group present on this device. The ERP mirror has no group hierarchy, so the list is flat. */
-export interface ProductGroupOption {
-  readonly code: number;
-  readonly name: string | null;
-  readonly count: number;
-}
-
 export interface ProductRepository {
   list(request: ProductPageRequest): Promise<Page<ProductListItem>>;
-  /** Groups of the catalog available on this device (for the group filter). Only where the local cache can compute it. */
-  groups?(): Promise<readonly ProductGroupOption[]>;
+  /**
+   * Group tree of the catalog on this device (Grupo > Subgrupo > Linha; flat when `hierarchical` is false). Only where the local
+   * cache can compute it: its presence turns the group filter on.
+   */
+  groupTree?(): Promise<ProductGroupTree>;
   /**
    * A single product by code, detail fields included. Used to resolve the catalog group (`groupCode`/`groupName`)
    * of a cart line reopened from a saved draft (`lineFromOrderItem`), which does not carry it — mirrors

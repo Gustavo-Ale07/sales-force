@@ -23,6 +23,7 @@ export async function clearReferenceCache(db: SqlDatabase): Promise<void> {
   await db.transaction(async (tx) => {
     await tx.execute("DELETE FROM cache_customer");
     await tx.execute("DELETE FROM cache_product");
+    await tx.execute("DELETE FROM cache_product_group");
     await tx.execute("DELETE FROM cache_table_price");
     await tx.execute("DELETE FROM sync_metadata WHERE key LIKE 'cache.%'");
   });
@@ -35,7 +36,7 @@ export async function clearReferenceCache(db: SqlDatabase): Promise<void> {
  */
 export async function wipeLocalDatabase(db: SqlDatabase): Promise<void> {
   await db.transaction(async (tx) => {
-    for (const table of ["outbox", "local_order_item", "local_order_draft", "pending_customer", "cache_customer", "cache_product", "cache_table_price", "sync_metadata"]) {
+    for (const table of ["outbox", "local_order_item", "local_order_draft", "pending_customer", "cache_customer", "cache_product", "cache_product_group", "cache_table_price", "sync_metadata"]) {
       await tx.execute(`DELETE FROM ${table}`);
     }
   });

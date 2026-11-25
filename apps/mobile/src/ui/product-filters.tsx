@@ -1,100 +1,110 @@
 import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import type { ProductFilters, ProductGroupOption } from "../data/ports";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { cascadeLevels, groupCodesOf, groupPathLabel, type GroupPath, type ProductGroupTree } from "../data/group-cascade";
+import type { ProductFilters } from "../data/ports";
 import { colors, radius, spacing } from "../theme";
 import { Icon } from "./icons";
 import { ChipRow, Sheet, type FilterChip } from "./customer-filters";
 
+export const EMPTY_GROUP_TREE: ProductGroupTree = { items: [], hierarchical: false, hasUngrouped: false };
+
 export function countActiveProductFilters(filters: ProductFilters): number {
-  return filters.groupCodes?.length ?? 0;
+  return (filters.groupCodes?.length ?? 0) > 0 ? 1 : 0;
 }
 
-export function groupLabel(groups: readonly ProductGroupOption[], code: number): string {
-  return groups.find((group) => group.code === code)?.name ?? `Grupo ${code}`;
+/** The filters for a cascade selection: the codes the local list matches (the server's subtree) and the selection itself. */
+export function filtersOfPath(tree: ProductGroupTree, path: GroupPath): ProductFilters {
+  const groupCodes = groupCodesOf(tree, path);
+  return groupCodes.length === 0 ? {} : { groupPath: [...path], groupCodes };
 }
 
-function withoutEmptyGroups(filters: ProductFilters): ProductFilters {
-  const { groupCodes, ...rest } = filters;
-  return groupCodes !== undefined && groupCodes.length > 0 ? { ...rest, groupCodes } : rest;
-}
-
-/** One removable chip per selected group and per price filter, plus "Limpar filtros". */
-export function ProductFilterChips({ filters, groups, onChange }: { filters: ProductFilters; groups: readonly ProductGroupOption[]; onChange: (next: ProductFilters) => void }) {
-  const chips: FilterChip[] = (filters.groupCodes ?? []).map((code) => ({
-    key: `group-${code}`,
-    label: `Grupo: ${groupLabel(groups, code)}`,
-    remove: () => onChange(withoutEmptyGroups({ ...filters, groupCodes: (filters.groupCodes ?? []).filter((candidate) => candidate !== code) })),
-  }));
+/** One removable chip for the chosen group (deepest level), plus "Limpar filtros". */
+export function ProductFilterChips({ filters, tree, onChange }: { filters: ProductFilters; tree: ProductGroupTree; onChange: (next: ProductFilters) => void }) {
+  const path = filters.groupPath ?? [];
+  const chips: FilterChip[] =
+    countActiveProductFilters(filters) === 0
+      ? []
+      : [{ key: "group", label: groupPathLabel(tree, path), remove: () => onChange(filtersOfPath(tree, path.slice(0, -1))) }];
   return <ChipRow chips={chips} onClear={() => onChange({})} />;
 }
 
-type BodyProps = { filters: ProductFilters; groups: readonly ProductGroupOption[]; onApply: (next: ProductFilters) => void; onCancel: () => void };
+type BodyProps = { filters: ProductFilters; tree: ProductGroupTree; onApply: (next: ProductFilters) => void; onCancel: () => void };
 
-function normalize(text: string): string {
-  return text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-}
+const ALL_LABEL = { Grupo: "Todos os grupos", Subgrupo: "Todos os subgrupos", Linha: "Todas as linhas" } as const;
 
 /** Mounted only while the sheet is open, so the draft always starts from the applied filters. */
-function ProductFiltersBody({ filters, groups, onApply, onCancel }: BodyProps) {
-  const [draft, setDraft] = useState<ProductFilters>(filters);
-  const [query, setQuery] = useState("");
-  const selected = new Set(draft.groupCodes ?? []);
-  const needle = normalize(query.trim());
-  const visible = needle === "" ? groups : groups.filter((group) => normalize(`${group.name ?? ""} ${group.code}`).includes(needle));
+function ProductFiltersBody({ filters, tree, onApply, onCancel }: BodyProps) {
+  const [path, setPath] = useState<GroupPath>(filters.groupPath ?? []);
+  const [openLevel, setOpenLevel] = useState<number | null>(null);
+  const { levels, path: valid } = cascadeLevels(tree, path);
 
-  const toggle = (code: number) => {
-    const next = new Set(selected);
-    if (next.has(code)) next.delete(code);
-    else next.add(code);
-    setDraft(withoutEmptyGroups({ ...draft, groupCodes: [...next] }));
+  // Choosing a level clears the ones below it; "Todos" cuts the path at that level.
+  const choose = (depth: number, value: number | null) => {
+    setPath(value === null ? valid.slice(0, depth) : [...valid.slice(0, depth), value]);
+    setOpenLevel(null);
   };
 
   return (
     <>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        {groups.length > 0 && (
-          <View style={styles.groupBlock}>
-            <Text style={styles.groupTitle}>Grupo</Text>
-            <TextInput
-              style={styles.search}
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Buscar grupo"
-              placeholderTextColor={colors.textMuted}
-              accessibilityLabel="Buscar grupo"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            {visible.length === 0 && <Text style={styles.empty}>Nenhum grupo encontrado.</Text>}
-            {visible.map((group) => {
-              const on = selected.has(group.code);
-              const name = group.name ?? `Grupo ${group.code}`;
-              return (
-                <Pressable
-                  key={group.code}
-                  style={styles.groupRow}
-                  onPress={() => toggle(group.code)}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: on }}
-                  accessibilityLabel={`${name}, ${group.count} ${group.count === 1 ? "produto" : "produtos"}`}
-                >
-                  <View style={[styles.box, on && styles.boxOn]}>{on && <Icon name="check" size={16} color={colors.onNavy} />}</View>
-                  <Text style={styles.groupName} numberOfLines={2}>{name}</Text>
-                  <Text style={styles.groupCount}>{group.count}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        )}
+        {levels.map((level, depth) => {
+          const chosen = level.options.find((option) => option.value === level.value)?.label ?? ALL_LABEL[level.label];
+          const expanded = openLevel === depth && !level.disabled;
+          return (
+            <View key={level.label} style={styles.groupBlock}>
+              <Text style={styles.groupTitle}>{level.label}</Text>
+              <Pressable
+                style={[styles.field, level.disabled && styles.fieldOff]}
+                disabled={level.disabled}
+                onPress={() => setOpenLevel(expanded ? null : depth)}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: level.disabled, expanded }}
+                accessibilityLabel={`${level.label}: ${chosen}`}
+              >
+                <Text style={[styles.fieldText, level.disabled && styles.fieldTextOff]} numberOfLines={1}>{chosen}</Text>
+              </Pressable>
+              {expanded && (
+                <View accessibilityRole="radiogroup" accessibilityLabel={level.label}>
+                  <Pressable
+                    style={styles.groupRow}
+                    onPress={() => choose(depth, null)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: level.value === null }}
+                    accessibilityLabel={ALL_LABEL[level.label]}
+                  >
+                    <View style={[styles.box, level.value === null && styles.boxOn]}>{level.value === null && <Icon name="check" size={16} color={colors.onNavy} />}</View>
+                    <Text style={styles.groupName}>{ALL_LABEL[level.label]}</Text>
+                  </Pressable>
+                  {level.options.map((option) => {
+                    const on = level.value === option.value;
+                    return (
+                      <Pressable
+                        key={option.value}
+                        style={styles.groupRow}
+                        onPress={() => choose(depth, option.value)}
+                        accessibilityRole="radio"
+                        accessibilityState={{ checked: on }}
+                        accessibilityLabel={option.label}
+                      >
+                        <View style={[styles.box, on && styles.boxOn]}>{on && <Icon name="check" size={16} color={colors.onNavy} />}</View>
+                        <Text style={styles.groupName} numberOfLines={2}>{option.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          );
+        })}
       </ScrollView>
       <View style={styles.actions}>
-        <Pressable style={styles.secondary} onPress={() => setDraft({})} accessibilityRole="button" accessibilityLabel="Limpar seleção">
+        <Pressable style={styles.secondary} onPress={() => setPath([])} accessibilityRole="button" accessibilityLabel="Limpar seleção">
           <Text style={styles.secondaryText}>Limpar</Text>
         </Pressable>
         <Pressable style={styles.secondary} onPress={onCancel} accessibilityRole="button" accessibilityLabel="Cancelar">
           <Text style={styles.secondaryText}>Cancelar</Text>
         </Pressable>
-        <Pressable style={styles.primary} onPress={() => onApply(draft)} accessibilityRole="button" accessibilityLabel="Aplicar filtros">
+        <Pressable style={styles.primary} onPress={() => onApply(filtersOfPath(tree, valid))} accessibilityRole="button" accessibilityLabel="Aplicar filtros">
           <Text style={styles.primaryText}>Aplicar</Text>
         </Pressable>
       </View>
@@ -103,8 +113,8 @@ function ProductFiltersBody({ filters, groups, onApply, onCancel }: BodyProps) {
 }
 
 /**
- * Bottom sheet with the one filter the product data supports: group (multi-select). No price filter: the catalog only holds priced products. The ERP
- * mirror delivers a flat group code only (no subgroup/hierarchy), so the group list is flat by design.
+ * Bottom sheet with the catalog's one filter: the Grupo > Subgrupo > Linha cascade (same levels and names as the site). No price
+ * filter: the catalog only holds priced products. Without a hierarchy on the device it is the flat Grupo list.
  */
 export function ProductFiltersSheet({ visible, onClose, ...body }: Omit<BodyProps, "onCancel"> & { visible: boolean; onClose: () => void }) {
   return (
@@ -119,14 +129,14 @@ const styles = StyleSheet.create({
   scrollContent: { gap: spacing.lg },
   groupBlock: { gap: spacing.sm },
   groupTitle: { fontSize: 14, fontWeight: "700", color: colors.textMuted },
-  search: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.md, minHeight: 44, fontSize: 15, color: colors.text, backgroundColor: colors.surface },
-  empty: { fontSize: 13, color: colors.textMuted },
+  field: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.md, minHeight: 48, justifyContent: "center", backgroundColor: colors.surface },
+  fieldOff: { backgroundColor: colors.background, opacity: 0.6 },
+  fieldText: { fontSize: 15, color: colors.text },
+  fieldTextOff: { color: colors.textMuted },
   groupRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, minHeight: 48 },
-  box: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: colors.navy, alignItems: "center", justifyContent: "center" },
+  box: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: colors.navy, alignItems: "center", justifyContent: "center" },
   boxOn: { backgroundColor: colors.navy },
-  tick: { color: colors.onNavy, fontSize: 14, fontWeight: "800" },
   groupName: { flex: 1, fontSize: 15, color: colors.text },
-  groupCount: { fontSize: 13, color: colors.textMuted },
   actions: { flexDirection: "row", gap: spacing.sm },
   secondary: { flex: 1, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: radius.md, borderWidth: 1, borderColor: colors.navy },
   secondaryText: { color: colors.navy, fontWeight: "700", fontSize: 14 },

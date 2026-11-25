@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import { useState } from "react";
+import type { ProductGroupTree } from "../data/group-cascade";
 import type { ProductListItem, ProductPageRequest, ProductRepository } from "../data/ports";
 import { fakeProducts, networkError, pageOf, product } from "../test-doubles";
 import { ProductBrowser } from "./product-browser";
@@ -32,14 +33,16 @@ const CATALOG: readonly ProductListItem[] = [
   product(4, { description: "Pincel 2in", groupCode: 30, groupName: "Acessórios", listPrice: priced("9") }),
 ];
 
-const GROUPS = [
-  { code: 10, name: "Tintas", count: 2 },
-  { code: 20, name: "Solventes", count: 1 },
-  { code: 30, name: "Acessórios", count: 1 },
-];
+const node = (code: number, name: string, parentCode: number | null, hasChildren: boolean, subtreeCodes: number[]) => ({ code, name, parentCode, degree: 1, hasChildren, subtreeCodes });
+/** Tintas > Esmaltes (no product of its own in the fixture); Solventes and Acessórios are final groups. */
+const TREE: ProductGroupTree = {
+  hierarchical: true,
+  hasUngrouped: false,
+  items: [node(30, "Acessórios", null, false, [30]), node(20, "Solventes", null, false, [20]), node(10, "Tintas", null, true, [10, 11]), node(11, "Esmaltes", 10, false, [11])],
+};
 
 /** A repository that filters like the offline cache does: search on description/code, groups, price state. */
-function catalog(requests: ProductPageRequest[] = [], items: readonly ProductListItem[] = CATALOG): ProductRepository {
+function catalog(requests: ProductPageRequest[] = [], items: readonly ProductListItem[] = CATALOG, tree: ProductGroupTree = TREE): ProductRepository {
   return fakeProducts({
     list: async (request) => {
       requests.push(request);
@@ -52,7 +55,7 @@ function catalog(requests: ProductPageRequest[] = [], items: readonly ProductLis
       );
       return pageOf(rows, rows.length);
     },
-    groups: async () => GROUPS,
+    groupTree: async () => tree,
   });
 }
 const last = (requests: ProductPageRequest[]) => requests[requests.length - 1]!;
@@ -105,50 +108,105 @@ describe("ProductsScreen (Catálogo)", () => {
     expect(await screen.findByText("Nenhum produto encontrado para “zzz”.")).toBeTruthy();
   });
 
-  it("filters by group, shows a chip and the filtered count, and sends the filter to the repository", async () => {
+  /** Opens the level's list in the filter sheet and chooses an option by name. */
+  async function pick(level: string, option: string) {
+    await fireEvent.press(screen.getByRole("button", { name: new RegExp(`^${level}:`) }));
+    await fireEvent.press(screen.getByRole("radio", { name: option }));
+  }
+
+  it("filters by group (cascade), shows a chip and the filtered count, and sends the subtree to the repository", async () => {
     const requests: ProductPageRequest[] = [];
     await render(<ProductsScreen products={catalog(requests)} onUnauthenticated={noop} />);
     await screen.findByText("Tinta Azul 18L");
     await fireEvent.press(screen.getByRole("button", { name: "Filtros" }));
-    await fireEvent.press(screen.getByRole("checkbox", { name: "Tintas, 2 produtos" }));
+    await pick("Grupo", "Tintas");
     await fireEvent.press(screen.getByRole("button", { name: "Aplicar filtros" }));
     expect(await screen.findByText("2 resultados")).toBeTruthy();
     expect(screen.queryByText("Solvente 5L")).toBeNull();
     expect(screen.getByRole("button", { name: "Remover filtro Grupo: Tintas" })).toBeTruthy();
-    expect(last(requests).filters).toEqual({ groupCodes: [10] });
+    expect(last(requests).filters).toEqual({ groupPath: [10], groupCodes: [10, 11] });
   });
 
-  it("selects several groups, cancels without applying, and searches inside the group list", async () => {
+  it("Subgrupo is off until a group with children is chosen, and choosing a level clears the ones below", async () => {
     const requests: ProductPageRequest[] = [];
     await render(<ProductsScreen products={catalog(requests)} onUnauthenticated={noop} />);
     await screen.findByText("Tinta Azul 18L");
     await fireEvent.press(screen.getByRole("button", { name: "Filtros" }));
-    await fireEvent.press(screen.getByRole("checkbox", { name: "Solventes, 1 produto" }));
+    expect(screen.getByRole("button", { name: "Subgrupo: Todos os subgrupos" }).props.accessibilityState.disabled).toBe(true);
+    await pick("Grupo", "Solventes");
+    expect(screen.getByRole("button", { name: "Subgrupo: Todos os subgrupos" }).props.accessibilityState.disabled).toBe(true);
+    await pick("Grupo", "Tintas");
+    expect(screen.getByRole("button", { name: "Subgrupo: Todos os subgrupos" }).props.accessibilityState.disabled).toBe(false);
+    await pick("Subgrupo", "Esmaltes");
+    await fireEvent.press(screen.getByRole("button", { name: "Aplicar filtros" }));
+    expect(await screen.findByText("Nenhum produto com estes filtros.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Remover filtro Subgrupo: Esmaltes" })).toBeTruthy();
+    expect(last(requests).filters).toEqual({ groupPath: [10, 11], groupCodes: [11] });
+
+    // Back to the Grupo level: the subgrupo is cleared.
+    await fireEvent.press(screen.getByRole("button", { name: "Filtros, 1 ativo(s)" }));
+    await pick("Grupo", "Solventes");
+    expect(screen.getByRole("button", { name: "Subgrupo: Todos os subgrupos" })).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Aplicar filtros" }));
+    expect(last(requests).filters).toEqual({ groupPath: [20], groupCodes: [20] });
+  });
+
+  it("removing the chip of a subgrupo falls back to its group", async () => {
+    const requests: ProductPageRequest[] = [];
+    await render(<ProductsScreen products={catalog(requests)} onUnauthenticated={noop} />);
+    await screen.findByText("Tinta Azul 18L");
+    await fireEvent.press(screen.getByRole("button", { name: "Filtros" }));
+    await pick("Grupo", "Tintas");
+    await pick("Subgrupo", "Esmaltes");
+    await fireEvent.press(screen.getByRole("button", { name: "Aplicar filtros" }));
+    await fireEvent.press(await screen.findByRole("button", { name: "Remover filtro Subgrupo: Esmaltes" }));
+    expect(await screen.findByRole("button", { name: "Remover filtro Grupo: Tintas" })).toBeTruthy();
+    expect(last(requests).filters).toEqual({ groupPath: [10], groupCodes: [10, 11] });
+  });
+
+  it("offers 'Sem grupo' only when some product has no group, and filters by code 0", async () => {
+    const requests: ProductPageRequest[] = [];
+    await render(<ProductsScreen products={catalog(requests, CATALOG, { ...TREE, hasUngrouped: true })} onUnauthenticated={noop} />);
+    await screen.findByText("Tinta Azul 18L");
+    await fireEvent.press(screen.getByRole("button", { name: "Filtros" }));
+    await pick("Grupo", "Sem grupo");
+    await fireEvent.press(screen.getByRole("button", { name: "Aplicar filtros" }));
+    expect(await screen.findByRole("button", { name: "Remover filtro Grupo: Sem grupo" })).toBeTruthy();
+    expect(last(requests).filters).toEqual({ groupPath: [0], groupCodes: [0] });
+  });
+
+  it("without a hierarchy it is the flat Grupo list (no Subgrupo)", async () => {
+    const flat: ProductGroupTree = { hierarchical: false, hasUngrouped: false, items: [node(20, "Solventes", null, false, [20]), node(10, "Tintas", null, false, [10])] };
+    await render(<ProductsScreen products={catalog([], CATALOG, flat)} onUnauthenticated={noop} />);
+    await screen.findByText("Tinta Azul 18L");
+    await fireEvent.press(screen.getByRole("button", { name: "Filtros" }));
+    expect(screen.queryByRole("button", { name: /^Subgrupo:/ })).toBeNull();
+    await pick("Grupo", "Tintas");
+    await fireEvent.press(screen.getByRole("button", { name: "Aplicar filtros" }));
+    expect(await screen.findByText("2 resultados")).toBeTruthy();
+  });
+
+  it("cancels without applying", async () => {
+    const requests: ProductPageRequest[] = [];
+    await render(<ProductsScreen products={catalog(requests)} onUnauthenticated={noop} />);
+    await screen.findByText("Tinta Azul 18L");
+    await fireEvent.press(screen.getByRole("button", { name: "Filtros" }));
+    await pick("Grupo", "Solventes");
     await fireEvent.press(screen.getByRole("button", { name: "Cancelar" }));
     expect(screen.queryByRole("button", { name: "Remover filtro Grupo: Solventes" })).toBeNull();
     expect(last(requests).filters).toBeUndefined();
-
-    await fireEvent.press(screen.getByRole("button", { name: "Filtros" }));
-    await fireEvent.changeText(screen.getByLabelText("Buscar grupo"), "acess");
-    expect(screen.queryByRole("checkbox", { name: /Tintas/ })).toBeNull();
-    await fireEvent.changeText(screen.getByLabelText("Buscar grupo"), "");
-    await fireEvent.press(screen.getByRole("checkbox", { name: "Solventes, 1 produto" }));
-    await fireEvent.press(screen.getByRole("checkbox", { name: "Acessórios, 1 produto" }));
-    await fireEvent.press(screen.getByRole("button", { name: "Aplicar filtros" }));
-    expect(await screen.findByText("2 resultados")).toBeTruthy();
-    expect(last(requests).filters).toEqual({ groupCodes: [20, 30] });
   });
 
-  it("combines search + group, removes one chip and clears everything", async () => {
+  it("combines search + group, and clears everything", async () => {
     const requests: ProductPageRequest[] = [];
     await render(<ProductsScreen products={catalog(requests)} onUnauthenticated={noop} />);
     await screen.findByText("Tinta Azul 18L");
     await fireEvent.press(screen.getByRole("button", { name: "Filtros" }));
-    await fireEvent.press(screen.getByRole("checkbox", { name: "Tintas, 2 produtos" }));
+    await pick("Grupo", "Tintas");
     await fireEvent.press(screen.getByRole("button", { name: "Aplicar filtros" }));
     await fireEvent.changeText(screen.getByPlaceholderText("Buscar por código ou descrição"), "verde");
     expect(await screen.findByText("1 resultado")).toBeTruthy();
-    expect(last(requests)).toMatchObject({ search: "verde", filters: { groupCodes: [10] } });
+    expect(last(requests)).toMatchObject({ search: "verde", filters: { groupCodes: [10, 11] } });
 
     await fireEvent.press(screen.getByRole("button", { name: "Limpar filtros" }));
     expect(screen.queryByRole("button", { name: "Remover filtro Grupo: Tintas" })).toBeNull();
@@ -168,7 +226,7 @@ describe("ProductsScreen (Catálogo)", () => {
     await render(<ProductsScreen products={onlyTintas} onUnauthenticated={noop} />);
     await screen.findByText("Tinta Azul 18L");
     await fireEvent.press(screen.getByRole("button", { name: "Filtros" }));
-    await fireEvent.press(screen.getByRole("checkbox", { name: "Solventes, 1 produto" }));
+    await pick("Grupo", "Solventes");
     await fireEvent.press(screen.getByRole("button", { name: "Aplicar filtros" }));
     expect(await screen.findByText("Nenhum produto com estes filtros.")).toBeTruthy();
   });

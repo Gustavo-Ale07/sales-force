@@ -260,7 +260,9 @@ export async function customerSellers(tx: SqlExecutor): Promise<CustomerSellerOp
 function productClause(search: string, filters: ProductCacheFilters | undefined): { where: string; params: (string | number)[] } {
   const { conditions, params } = searchConditions(search);
   if (filters?.groupCodes !== undefined && filters.groupCodes.length > 0) {
-    conditions.push(`group_code IN (${filters.groupCodes.map(() => "?").join(", ")})`);
+    // 0 = "Sem grupo": a product without a group is stored as null (or 0 by the ERP); both match, as on the server.
+    const withNone = filters.groupCodes.includes(0);
+    conditions.push(`(group_code IN (${filters.groupCodes.map(() => "?").join(", ")})${withNone ? " OR group_code IS NULL" : ""})`);
     params.push(...filters.groupCodes);
   }
   return { where: whereOf(conditions), params };
@@ -334,6 +336,56 @@ export async function countPriceRows(tx: SqlExecutor): Promise<number> {
   return Number((await tx.query<SqlRow>("SELECT count(*) AS n FROM cache_table_price"))[0]?.n ?? 0);
 }
 
+/** One group as `GET /product-groups` delivers it. `subtreeCodes` = itself + every descendant: the offline filter set. */
+export interface ProductGroupNode {
+  readonly code: number;
+  readonly name: string;
+  readonly parentCode: number | null;
+  readonly degree: number;
+  readonly hasChildren: boolean;
+  readonly subtreeCodes: readonly number[];
+}
+
+/** The whole group answer: `hierarchical` false = flat list; `hasUngrouped` = offer "Sem grupo". */
+export interface ProductGroupsFetch {
+  readonly items: readonly ProductGroupNode[];
+  readonly hierarchical: boolean;
+  readonly hasUngrouped: boolean;
+}
+
+/** Atomically replaces the group cache (and the two flags) with the server's answer. */
+export async function replaceProductGroups(tx: SqlExecutor, groups: ProductGroupsFetch, now: string): Promise<void> {
+  await tx.execute("DELETE FROM cache_product_group");
+  await insertBatches(
+    tx,
+    groups.items,
+    "code, sort_text, data",
+    "(?, ?, ?)",
+    (node) => [node.code, normalizeSearchText(node.name), JSON.stringify(node)],
+    "cache_product_group",
+  );
+  await setMeta(tx, META_KEYS.productGroupsHierarchical, groups.hierarchical ? "1" : "0", now);
+  await setMeta(tx, META_KEYS.productGroupsHasUngrouped, groups.hasUngrouped ? "1" : "0", now);
+}
+
+export async function clearProductGroups(tx: SqlExecutor): Promise<void> {
+  await tx.execute("DELETE FROM cache_product_group");
+  await deleteMeta(tx, META_KEYS.productGroupsHierarchical);
+  await deleteMeta(tx, META_KEYS.productGroupsHasUngrouped);
+}
+
+/** The cached group tree, or `null` when the device never received one (callers fall back to the flat list). */
+export async function listProductGroupTree(tx: SqlExecutor): Promise<ProductGroupsFetch | null> {
+  const flag = await getMeta(tx, META_KEYS.productGroupsHierarchical);
+  if (flag === null) return null;
+  const rows = await tx.query<SqlRow>("SELECT data FROM cache_product_group ORDER BY sort_text, code");
+  return {
+    items: rows.map((row) => JSON.parse(String(row.data)) as ProductGroupNode),
+    hierarchical: flag === "1",
+    hasUngrouped: (await getMeta(tx, META_KEYS.productGroupsHasUngrouped)) === "1",
+  };
+}
+
 /** Groups present in the cached catalog (flat: the ERP mirror has no group hierarchy), for the group filter. */
 export async function productGroups(tx: SqlExecutor): Promise<ProductGroupEntry[]> {
   const rows = await tx.query<SqlRow>(
@@ -389,6 +441,8 @@ export const META_KEYS = {
   entryConfiguration: "cache.entry_configuration",
   /** JSON array of `{code, name}` carriers (D-C), refreshed with every pull; never required for ordering. */
   carriers: "cache.carriers",
+  productGroupsHierarchical: "cache.product_groups.hierarchical",
+  productGroupsHasUngrouped: "cache.product_groups.has_ungrouped",
   cacheOwner: "cache.owner_account_id",
   cacheDatasetEnvironment: "cache.dataset_environment",
   cacheDatasetId: "cache.dataset_id",

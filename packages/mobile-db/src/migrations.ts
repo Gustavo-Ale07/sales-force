@@ -265,4 +265,18 @@ export const migrations: readonly Migration[] = [
       `DELETE FROM outbox WHERE draft_local_id IN (SELECT local_id FROM local_order_draft WHERE kind = 'recovery') AND state IN ('rejected', 'pending')`,
     ],
   },
+  {
+    // Product group hierarchy (Grupo > Subgrupo > Linha, PAR-1): one row per group as GET /product-groups delivers it (`data` is the JSON,
+    // incl. subtreeCodes, the offline filter set). A cache the pull replaces, never edited locally; holds no cost or margin (P-20).
+    // Expand-only: a new table, nothing else touched. Whether the tree is hierarchical / has ungrouped products lives in sync_metadata.
+    version: 15,
+    name: "cache_product_group",
+    statements: [
+      `CREATE TABLE cache_product_group (
+        code      INTEGER PRIMARY KEY,
+        sort_text TEXT NOT NULL,
+        data      TEXT NOT NULL
+      ) STRICT`,
+    ],
+  },
 ];

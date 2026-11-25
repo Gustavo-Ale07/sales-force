@@ -14,7 +14,7 @@ import {
   settleConfirmedCustomers,
   type CustomerRegistrationTransport,
 } from "./pending-customers";
-import { META_KEYS, cachedPriceTableCodes, countPriceRows, deleteMeta, getMeta, replaceCustomers, replacePriceTables, replaceProducts, setMeta, type CustomerLike, type PriceTableSnapshot, type ProductLike } from "./reference-cache";
+import { META_KEYS, cachedPriceTableCodes, clearProductGroups, countPriceRows, deleteMeta, getMeta, replaceCustomers, replacePriceTables, replaceProductGroups, replaceProducts, setMeta, type CustomerLike, type PriceTableSnapshot, type ProductGroupsFetch, type ProductLike } from "./reference-cache";
 
 /**
  * Where the reference data comes from. The server stays authoritative and delivers only what the actor's scope
@@ -37,6 +37,8 @@ export interface ReferenceSource extends OrderStatusSource, ServerOrdersSource {
   fetchDatasetIdentity(): Promise<DatasetIdentity | null>;
   /** Active carriers (D-C). Optional and best-effort: a failure here never fails the pull. */
   fetchCarriers?(): Promise<readonly unknown[]>;
+  /** Group hierarchy (Grupo > Subgrupo > Linha). Optional and best-effort like carriers: a failure keeps the previous tree. */
+  fetchProductGroups?(): Promise<ProductGroupsFetch>;
   /**
    * On-demand refresh (POST /sync/refresh, then follow it until done). The manager calls it BEFORE any download and downloads only
    * after it returns. Optional so a source without it just downloads. Throws `TransportError` when the server cannot be reached.
@@ -177,6 +179,15 @@ export async function pullReferenceData(
   } else {
     onStep({ id: "carriers", state: "done", count: 0 });
   }
+  // Same for the group hierarchy: on failure the previous tree stays, unless it belongs to another dataset.
+  let productGroups: ProductGroupsFetch | null = null;
+  if (source.fetchProductGroups !== undefined) {
+    try {
+      productGroups = await source.fetchProductGroups();
+    } catch {
+      productGroups = null;
+    }
+  }
   onStep({ id: "save", state: "running", count: null });
   const now = isoNow(env);
   await db.transaction(async (tx) => {
@@ -186,6 +197,8 @@ export async function pullReferenceData(
     // A customer confirmed by the ERP is replaced by its real mirror record (no duplicate in the list).
     await settleConfirmedCustomers(tx);
     await replaceProducts(tx, products);
+    if (productGroups !== null) await replaceProductGroups(tx, productGroups, now);
+    else if (!sameDataset(previousDataset, before)) await clearProductGroups(tx);
     // Tables whose read FAILED keep their previous prices (same account and dataset only); the rest not read are dropped.
     const keepTables = sameOwnerAndDataset ? (await cachedPriceTableCodes(tx)).filter((code) => failedTables.includes(code) && !priceTables.some((t) => t.tableCode === code)) : [];
     await replacePriceTables(tx, priceTables.filter((t) => used.has(t.tableCode)), { keepTables });

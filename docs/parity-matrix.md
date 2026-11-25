@@ -62,7 +62,7 @@ Lotes (definidos pelo dono): 1 e 2 em andamento hoje; 3 e 4 NÃO iniciar; FORA =
 | Detalhe do produto | existe | feito | sim | M | não | 2 | feito | bc5e5e8 |
 | "Máx. X%" na lista de produtos | conferir | existe | a conferir | P | não | 2 | não iniciado | |
 | "Preço zero" (marcador) | existe | feito | sim | P | não | 2 | feito | 55d0662 |
-| Agrupamento grupo > subgrupo > linha | existe | falta no app; servidor já tem hierarquia (D-AM) e agora entrega `subtreeCodes` em `/product-groups`; contrato em `docs/implementation/catalog-hierarchy.md` | não (a igualar no app) | M | feito (servidor) | 2 | servidor feito; app (mobile-db + UI) pendente | ver commit do lote |
+| Agrupamento grupo > subgrupo > linha | existe | feito no app (25/11): cascata Grupo > Subgrupo > Linha no filtro do Catálogo (mesmos níveis e nomes do site; Subgrupo desabilitado até haver filho; trocar um nível limpa os de baixo; "Sem grupo" só no 1º nível e só com `hasUngrouped`); o sync baixa `/product-groups` junto do catálogo (mobile-db migração 15 `cache_product_group`, só adição; falha mantém a árvore anterior); filtro offline por `subtreeCodes` (igual ao servidor); sem hierarquia no aparelho cai no filtro plano. Antes o filtro era multisseleção de grupos planos; agora é seleção única como no site | sim | M | feito (servidor e app) | 2 | feito; não verificado em aparelho | ver commit do lote |
 
 ## Início, Perfil e Cabeçalho
 

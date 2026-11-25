@@ -265,6 +265,8 @@ export function createReferenceSource(api: ApiClient, timing: RefreshTiming = {}
         }
         return found;
       }),
+    // Same endpoint the site's cascade filter reads; the pull treats a failure here as non-fatal (the previous tree stays).
+    fetchProductGroups: () => guard(() => callApi(() => api.GET("/product-groups"))),
     fetchEntryConfiguration: () => guard(() => callApi(() => api.GET("/order-entry/configuration"))),
     // Same endpoint the online carrier picker uses; the pull treats a failure here as non-fatal.
     fetchCarriers: () => guard(async () => (await callApi(() => api.GET("/carriers"))).items),
