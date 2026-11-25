@@ -9,7 +9,7 @@ const line = (cascadeSequence: number | null, over: Partial<{ event: number; rel
   ...over,
 });
 
-describe('awaitedReleaseLevel (owner 2026-11-25: level = TSILIB.SEQCASCATA of the pending EVENTO 44 line)', () => {
+describe('awaitedReleaseLevel (owner 2026-11-25: level = SEQCASCATA of the pending EVENTO 44 line)', () => {
   it('no line at all is "not confirmed in Sankhya", never an error', () => {
     expect(awaitedReleaseLevel([])).toEqual({ state: 'not_confirmed', level: null });
   });
