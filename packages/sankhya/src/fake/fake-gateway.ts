@@ -4,9 +4,12 @@ import { isValidOriginField } from '../write/order-write-config.js';
 import type {
   ErpPartnerRef,
   PartnerCallOptions,
+  PartnerEditableFields,
+  PartnerUpdateRequest,
   PartnerWriteRequest,
   PartnerWriteResult,
 } from '../write/partner-contract.js';
+import { buildPartnerEditRequestText } from '../write/partner-wire.js';
 import { FakePartnerBook } from './fake-partner-book.js';
 import { FakeUserPhotoBook } from './fake-user-photo-book.js';
 import type { UserPhotoCallOptions, UserPhotoWriteRequest } from '../write/profile-photo-contract.js';
@@ -359,6 +362,23 @@ export class FakeGateway implements SankhyaGateway {
       if (written !== null) return written;
       const demo = this.#dataset.customers.find((c) => c.document !== null && normalizeTaxDocument(c.document) === digits);
       return demo === undefined ? null : { code: demo.code, originKey: null, document: digits };
+    });
+  }
+
+  updatePartner(request: PartnerUpdateRequest, options?: PartnerCallOptions): Promise<void> {
+    return this.#order(options, () => {
+      // Same pre-send validation as the real adapter: contacts/addresses and unknown keys are refused here too.
+      buildPartnerEditRequestText({ code: request.code, changes: { ...request.changes } });
+      if (!this.#partners.update(request.code, request.changes)) {
+        throw new SankhyaGatewayError('validation', { code: 'partner_not_editable', message: 'The fake ERP only edits partners written through the Force.' });
+      }
+    });
+  }
+
+  readPartnerEditableFields(code: number, options?: PartnerCallOptions): Promise<PartnerEditableFields | null> {
+    return this.#order(options, () => {
+      const stored = this.#partners.read(code);
+      return stored === null ? null : { phone: stored.request.phone, email: stored.request.email, notes: stored.request.notes };
     });
   }
 

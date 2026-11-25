@@ -154,6 +154,9 @@ export function runGatewayContract(label: string, subject: ContractSubject): voi
         'findPartnerByOrigin',
         'findPartnerByDocument',
         'readWrittenPartner',
+        // D-AP: edit of an existing customer (phone, e-mail, notes) behind the same switch, Sandbox only.
+        'updatePartner',
+        'readPartnerEditableFields',
         // Spike S1.8: the profile photo write (TSIUSU.FOTO), guarded by SANKHYA_PROFILE_PHOTO_WRITE_ENABLED in the worker.
         'writeUserPhoto',
       ]);

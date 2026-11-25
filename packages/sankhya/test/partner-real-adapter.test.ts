@@ -113,9 +113,11 @@ async function failureOf(promise: Promise<unknown>): Promise<SankhyaGatewayError
 }
 
 describe('real partner adapter: closed by default (flags stay closed)', () => {
-  it('refuses all four operations without any HTTP call when no customer switch was given', async () => {
+  it('refuses every operation without any HTTP call when no customer switch was given', async () => {
     const { gateway, mock, saves } = harness('closed');
     const attempts = [
+      () => gateway.updatePartner({ code: 5, changes: { phone: '11999990000' } }),
+      () => gateway.readPartnerEditableFields(5),
       () => gateway.upsertPartner(request()),
       () => gateway.findPartnerByOrigin(FIELD, KEY),
       () => gateway.findPartnerByDocument(CNPJ),

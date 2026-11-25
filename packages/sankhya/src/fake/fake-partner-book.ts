@@ -1,14 +1,14 @@
 import { SankhyaGatewayError } from '../errors.js';
-import type { ErpPartnerRef, PartnerWriteRequest } from '../write/partner-contract.js';
+import type { ErpPartnerRef, PartnerEditableChanges, PartnerWriteRequest } from '../write/partner-contract.js';
 
 /** Scripted outcome of one fake ERP partner call (consumed in order, default `ok`). */
 export type FakePartnerOutcome =
   | { readonly kind: 'ok' }
   | { readonly kind: 'error'; readonly error: SankhyaGatewayError }
-  /** `upsert` only: the ERP did create the partner but the caller sees a failure (timeout after commit). */
+  /** `upsert`/`update` only: the ERP did apply the write but the caller sees a failure (timeout after commit). */
   | { readonly kind: 'created_then_error'; readonly error: SankhyaGatewayError };
 
-export type FakePartnerOperation = 'upsert' | 'find' | 'read';
+export type FakePartnerOperation = 'upsert' | 'find' | 'read' | 'update';
 
 export interface FakeStoredPartner {
   readonly code: number;
@@ -29,7 +29,7 @@ export interface FakePartnerCall {
 export class FakePartnerBook {
   readonly partners: FakeStoredPartner[] = [];
   readonly calls: FakePartnerCall[] = [];
-  readonly #scripts: Record<FakePartnerOperation, FakePartnerOutcome[]> = { upsert: [], find: [], read: [] };
+  readonly #scripts: Record<FakePartnerOperation, FakePartnerOutcome[]> = { upsert: [], find: [], read: [], update: [] };
   #next: number;
 
   constructor(firstCode = 900_001) {
@@ -69,6 +69,31 @@ export class FakePartnerBook {
     const code = this.seed(request);
     if (outcome.kind === 'created_then_error') throw outcome.error;
     return { code };
+  }
+
+  /**
+   * Edit of a stored partner: phone, e-mail and notes only (a key present replaces, `null` clears). A partner of the demo dataset
+   * (not written by the Force) is not in this book: `false` tells the caller to treat it as absent from the book.
+   */
+  update(code: number, changes: PartnerEditableChanges): boolean {
+    this.calls.push({ operation: 'update', code });
+    const outcome = this.#take('update');
+    if (outcome.kind === 'error') throw outcome.error;
+    const index = this.partners.findIndex((p) => p.code === code);
+    const current = this.partners[index];
+    if (current === undefined) {
+      if (outcome.kind === 'created_then_error') throw outcome.error;
+      return false;
+    }
+    const request: PartnerWriteRequest = {
+      ...current.request,
+      ...(changes.phone === undefined ? {} : { phone: changes.phone }),
+      ...(changes.email === undefined ? {} : { email: changes.email }),
+      ...(changes.notes === undefined ? {} : { notes: changes.notes }),
+    };
+    this.partners[index] = { code, request };
+    if (outcome.kind === 'created_then_error') throw outcome.error;
+    return true;
   }
 
   findByOrigin(originKey: string): ErpPartnerRef | null {

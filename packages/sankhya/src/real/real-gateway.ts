@@ -49,12 +49,15 @@ import {
   PARTNER_WRITE_NOT_ENABLED_MESSAGE,
   type ErpPartnerRef,
   type PartnerCallOptions,
+  type PartnerEditableFields,
+  type PartnerUpdateRequest,
   type PartnerWriteRequest,
   type PartnerWriteResult,
 } from '../write/partner-contract.js';
 import {
   PARTNER_SAVE_RECORD_PATH,
   buildPartnerCreateRequestText,
+  buildPartnerEditRequestText,
   documentCandidates,
   parsePartnerSaveResponse,
 }from '../write/partner-wire.js';
@@ -709,6 +712,29 @@ export class RealSankhyaGateway implements SankhyaGateway {
     // Only a CNPJ can have 13 digits (lost leading zero): compared with the zero restored.
     const document = mapped.document === null ? null : mapped.document.replace(/\D/g, '');
     return document !== null && document.length === 13 ? { ...mapped, document: `0${document}` } : mapped;
+  }
+
+  /**
+   * Edit of an existing customer (D-AP, Sandbox only): the same closed switch as the create. The wire is NEEDS VALIDATION (T5): the
+   * edit builder allows phone, e-mail and notes only and refuses contacts/addresses before any call.
+   */
+  async updatePartner(request: PartnerUpdateRequest, options?: PartnerCallOptions): Promise<void> {
+    this.#assertCustomerWrite();
+    const body = buildPartnerEditRequestText({ code: request.code, changes: { ...request.changes } }); // validation errors leave here
+    const response = await this.#write(PARTNER_SAVE_RECORD_PATH, body, options?.signal);
+    parsePartnerSaveResponse(response.status, response.body, parseRetryAfterMs(response.headers['retry-after']), false);
+  }
+
+  /** The reread of an edit. `OBSERVACOES` is NEEDS VALIDATION (not in the spike): a missing column surfaces as an ERP error, never a guess. */
+  async readPartnerEditableFields(code: number, options?: PartnerCallOptions): Promise<PartnerEditableFields | null> {
+    this.#assertCustomerWrite();
+    if (!Number.isInteger(code) || code < 1) throw invalidPartnerQuery('the partner code is not a positive integer');
+    const columns = ['CODPARC', 'TELEFONE', 'EMAIL', 'OBSERVACOES'] as const;
+    const result = await this.#query(`SELECT CODPARC, TELEFONE, EMAIL, OBSERVACOES FROM TGFPAR WHERE CODPARC = ${code}`, columns, options?.signal);
+    if (result.rows.length === 0) return null;
+    if (result.rows.length > 1) throw ambiguousPartner('ambiguous_origin', [code], 'code');
+    const row = new RowReader('customers', columns, result.rows[0] ?? [], 0);
+    return { phone: row.nullableText('TELEFONE'), email: row.nullableText('EMAIL'), notes: row.nullableText('OBSERVACOES') };
   }
 
   async findOrderByOrigin(originField: string, originId: string, options?: OrderCallOptions): Promise<ErpOrderRef | null> {
