@@ -113,6 +113,11 @@ export class MirrorSyncService {
   }
 
   /** Runs several entities one after the other; a failure of one does not stop the others. */
+  /** Runs read-only work serialized with the mirror's own gateway reads (the consistency verifier uses it). */
+  exclusive<T>(work: () => Promise<T>): Promise<T> {
+    return this.#mutex.run(work);
+  }
+
   async runAll(
     entities: readonly MirrorEntity[] = MIRROR_ENTITIES,
     options: { signal?: AbortSignal } = {},
@@ -256,7 +261,7 @@ export class MirrorSyncService {
       }
     }
     await session.transaction(async (tx) => {
-      stats.deactivated = mobility?.keptPrevious === true ? 0 : await deactivateMissing(tx, spec, stats.read, finishedAt);
+      stats.deactivated = mobility?.keptPrevious === true ? 0 : await deactivateMissing(tx, spec, stats.read, finishedAt, startedAt);
       const rowCount = await countLive(tx, spec);
       await markSucceeded(tx, entity, {
         startedAt,

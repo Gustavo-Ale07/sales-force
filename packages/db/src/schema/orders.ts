@@ -9,6 +9,7 @@ import {
   bigint,
   numeric,
   pgTable,
+  smallint,
   text,
   timestamp,
   unique,
@@ -95,6 +96,10 @@ export const salesOrder = pgTable(
     externalOriginId: text('external_origin_id'),
     /** ERP order number (NUNOTA) once known; null until sent, immutable afterwards (SNK-7 S9). */
     erpNumber: bigint('erp_number', { mode: 'number' }),
+    /** Set when the ERP order (erp_number) was confirmed missing in Sankhya: the row leaves client lists but is kept for audit. Null = present. */
+    erpRemovedAt: timestamp('erp_removed_at', { withTimezone: true }),
+    /** Consecutive confirmed-absent ERP readings; reset to 0 when the order is seen again. */
+    erpMissingChecks: smallint('erp_missing_checks').notNull().default(0),
     configVersionId: uuid('config_version_id')
       .notNull()
       .references(() => installationConfigurationVersion.id),

@@ -182,6 +182,11 @@ export async function deactivateMissing(
   spec: MirrorEntitySpec,
   readCount: number,
   at: Date,
+  /**
+   * Start of the snapshot read. A row another writer put into the mirror AFTER it (e.g. the customer delivery inserting a
+   * partner the ERP just confirmed) was never part of this snapshot, so this run must not judge it: the next run reads it.
+   */
+  snapshotStartedAt?: Date,
 ): Promise<number> {
   if (readCount === 0 && (await countLive(db, spec)) > 0) {
     throw new SankhyaGatewayError('validation', {
@@ -196,6 +201,7 @@ export async function deactivateMissing(
     sql`update ${spec.table}
         set ${sql.identifier(column(spec, 'deletedAt').name)} = ${at}, ${sql.identifier(column(spec, 'syncedAt').name)} = ${at}
         where ${column(spec, 'deletedAt')} is null
+          ${snapshotStartedAt === undefined ? sql`` : sql`and ${column(spec, 'syncedAt')} <= ${snapshotStartedAt}`}
           and not exists (select 1 from ${sql.raw(SEEN_TABLE)} s where s.k0 = ${k0} and ${k1Match})`,
   );
   return result.rowCount ?? 0;

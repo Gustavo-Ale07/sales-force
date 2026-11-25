@@ -4,7 +4,9 @@ import type { Logger } from '../observability/logger.js';
 import { InfrastructureModule, type InfrastructureDeps } from '../platform/infrastructure.module.js';
 import { CLOCK, DATABASE_HANDLE, LOGGER, type Clock } from '../platform/tokens.js';
 import { loadCurrentReadScope } from '../sync/mirror-scope.js';
-import { MirrorSyncService } from '../sync/mirror-sync.service.js';
+import { ConsistencyAwareMirrorSyncService } from '../consistency/consistency-aware-mirror.js';
+import { ConsistencyCycle, isConsistencyCheckEnabled } from '../consistency/consistency-cycle.js';
+import { ConsistencyVerifier, type ConsistencyVerifierDeps } from '../consistency/consistency-verifier.js';
 import type { MirrorGateway } from '../sync/mirror-entities.js';
 import type { MirrorEntity } from '../sync/mirror-entities.js';
 import type { MirrorSchedules } from '../sync/schedules.js';
@@ -98,7 +100,7 @@ export class WorkerModule {
             const mirrorService =
               mirror === undefined
                 ? undefined
-                : new MirrorSyncService({
+                : new ConsistencyAwareMirrorSyncService({
                     db,
                     gateway: mirror.gateway,
                     logger,
@@ -106,6 +108,28 @@ export class WorkerModule {
                     readScope: () => loadCurrentReadScope(db.db),
                     ...(mirror.salesHistory === undefined ? {} : { salesHistory: mirror.salesHistory }),
                   });
+            // Automatic consistency pass (owner 2026-11-25): OFF unless CONSISTENCY_CHECK_ENABLED is set; read-only, never affects the sync.
+            if (mirrorService !== undefined && mirror !== undefined && isConsistencyCheckEnabled(process.env)) {
+              const verifier = new ConsistencyVerifier({
+                db,
+                gateway: mirror.gateway as ConsistencyVerifierDeps['gateway'],
+                ...(orderDelivery === undefined
+                  ? {}
+                  : {
+                      orders: {
+                        gateway: orderDelivery.gateway,
+                        ...(orderDelivery.settings.mode === 'live' ? { originField: orderDelivery.settings.originField } : {}),
+                      },
+                    }),
+                logger,
+                now: () => now(),
+                readScope: () => loadCurrentReadScope(db.db),
+                exclusive: (work) => mirrorService.exclusive(work),
+              });
+              mirrorService.attachConsistencyCycle(
+                new ConsistencyCycle({ verifier, logger, ...(orderDelivery?.budget ? { budget: orderDelivery.budget } : {}) }),
+              );
+            }
             const configurationService =
               configurationSync === undefined
                 ? undefined
