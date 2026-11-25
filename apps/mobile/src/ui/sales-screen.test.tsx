@@ -216,8 +216,18 @@ describe("SalesScreen — detail and actions", () => {
     const refused = draftRecord({ localId: "r", customerName: "Rita Mercado", status: "synced", remoteId: "r-r", sendState: "refused", sendCode: "validation_failed", sendError: "Corrija o item." });
     const { props } = await renderSales([refused]);
     expect(await screen.findByText("Precisa de correção")).toBeTruthy();
+    // The reason shows under the badge, as on the site.
+    expect(screen.getByText("Corrija o item.")).toBeTruthy();
     await fireEvent.press(screen.getByRole("button", { name: /Rita Mercado/ }));
     expect(props.onContinue).toHaveBeenCalledWith("r");
+  });
+
+  it("a rejected order delivered by the server shows its reason under the badge; an order without a reason shows none", async () => {
+    const rejected = draftRecord({ localId: "j", customerName: "Joana Armazém", status: "synced", remoteId: "r-j", sendState: "submitted", sendCode: "rejected", sendError: "Produto sem preço na tabela." });
+    const bare = draftRecord({ localId: "k", customerName: "Katia Depósito", status: "synced", remoteId: "r-k", sendState: "submitted", sendCode: "rejected" });
+    await renderSales([rejected, bare]);
+    expect(await screen.findByText("Produto sem preço na tabela.")).toBeTruthy();
+    expect(screen.getAllByText("Precisa de correção").length).toBe(2);
   });
 
   it("a tap on a confirmed order ('Aguardando envio') opens it READ-ONLY: no wizard, no edit action", async () => {

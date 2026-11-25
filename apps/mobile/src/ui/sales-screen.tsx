@@ -7,7 +7,7 @@ import { formatBrl } from "../lib/money";
 import type { LocalOrdersPort } from "../offline/local-orders";
 import { EMPTY_SALES_FILTERS, type SalesFilters, type SalesRow, type SalesSummary } from "../offline/sales";
 import { erpNumberOfDraft, isQuotationDraft, orderIdentity } from "../offline/order-number";
-import { saleActions, saleBadge } from "../offline/sales-status";
+import { saleActions, saleBadge, sendPhaseOf } from "../offline/sales-status";
 import { colors, control, radius, spacing } from "../theme";
 import { Icon } from "./icons";
 import type { OrderPdfPort } from "../offline/order-pdf";
@@ -36,6 +36,11 @@ function attentionText(draft: SalesRow["draft"]): string | null {
   if (draft.status === "sync_error") return "Não foi possível enviar. Toque para ver o que fazer.";
   if (draft.status === "conflict") return "Alterado em outro lugar. Toque para escolher a versão.";
   if (draft.status === "needs_review") return "Preços mudaram. Toque para revisar.";
+  // "Precisa de correção": the reason under the badge, the same words as the site (server delivery error, `deliveryErrorText`).
+  if (draft.status === "synced" && (draft.sendState === "refused" || draft.sendState === "submitted")) {
+    const phase = sendPhaseOf(draft);
+    if ((phase === "rejected" || phase === "refused") && draft.sendError) return draft.sendError;
+  }
   return null;
 }
 
