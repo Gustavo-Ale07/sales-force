@@ -162,7 +162,11 @@ export class FakeOrderBook {
   stageOf(erpOrderNumbers: readonly number[]): ErpOrderStageReading[] {
     return erpOrderNumbers.map((erpOrderNumber) => {
       const set = this.stageFacts.get(erpOrderNumber);
-      if (set !== undefined) return { erpOrderNumber, ...set };
+      if (set !== undefined) {
+        // Without explicit `releaseLines` the pending lines of the scenario are the only lines (an order with none = not confirmed yet).
+        const releaseLines = set.releaseLines ?? set.pendingReleases.map((line) => ({ event: line.event, cascadeSequence: line.cascadeSequence, released: false, reproved: set.hasReprovedRelease === true }));
+        return { erpOrderNumber, ...set, releaseLines };
+      }
       const stored = this.orders.find((order) => order.erpOrderNumber === erpOrderNumber);
       return {
         erpOrderNumber,
@@ -172,6 +176,7 @@ export class FakeOrderBook {
         pending: null,
         orderCargo: null,
         pendingReleases: [],
+        releaseLines: [],
         hasInvoiceLink: false,
         invoiceNumber: null,
       };

@@ -209,6 +209,12 @@ export interface ErpOrderStageReading {
   readonly assigneeReadErrorCode?: string;
   /** Some TSILIB line of the note (TABELA = 'TGFCAB', released or not) has REPROVADO = 'S' ("Barrado", owner rule 2026-11-24). Absent = false. */
   readonly hasReprovedRelease?: boolean;
+  /**
+   * EVERY TSILIB line of the note (TABELA = 'TGFCAB'), released or not (owner decision 2026-11-25): `released` = DHLIB filled,
+   * `reproved` = REPROVADO = 'S'. Source of the awaited release level (`awaitedReleaseLevel`, domain); an empty list = the ERP has
+   * no release line yet ("not confirmed in Sankhya"). Absent = not read: the stored level is kept.
+   */
+  readonly releaseLines?: readonly { readonly event: number; readonly cascadeSequence: number | null; readonly released: boolean; readonly reproved: boolean }[];
   /** A TGFVAR link with NUNOTAORIG = this note exists. */
   readonly hasInvoiceLink: boolean;
   /** NUMNOTA of the (earliest) linked note; null when none or unreadable. */

@@ -817,6 +817,7 @@ export class RealSankhyaGateway implements SankhyaGateway {
     const releases = new Map<number, Array<{ event: number; cascadeSequence: number | null; assignedUserCode?: number | null }>>();
     const assigneeErrors = new Map<number, string>();
     const reprovedNotes = new Set<number>();
+    const releaseLines = new Map<number, Array<{ event: number; cascadeSequence: number | null; released: boolean; reproved: boolean }>>();
     const links = new Map<number, Set<number>>();
     const numbers = new Map<number, number | null>();
     for (let start = 0; start < erpOrderNumbers.length; start += RELEASE_READ_CHUNK) {
@@ -873,16 +874,23 @@ export class RealSankhyaGateway implements SankhyaGateway {
         bucket.add(row.int('NUNOTA'));
         links.set(row.int('NUNOTAORIG'), bucket);
       });
-      // "Barrado" (owner rule 2026-11-24): any TSILIB line of the note with REPROVADO = 'S', released (dated) or not. Hard read:
-      // a failure fails the call, nothing is guessed (REPROVADO already read by readOrderReleaseFacts).
-      const reprovedColumns = ['NUCHAVE'] as const;
-      const reproved = await this.#query(
-        `SELECT DISTINCT NUCHAVE FROM TSILIB WHERE TABELA = 'TGFCAB' AND REPROVADO = 'S' AND NUCHAVE IN (${list})`,
-        reprovedColumns,
+      // Every TSILIB line of the note, released or not, in one hard read: "Barrado" (owner rule 2026-11-24: any line with REPROVADO = 'S')
+      // and the awaited release level (owner decision 2026-11-25: lowest SEQCASCATA of a pending EVENTO 44 line; no line at all = not
+      // confirmed in Sankhya yet). A failure fails the call, nothing is guessed (DHLIB and REPROVADO already read by readOrderReleaseFacts).
+      const allLineColumns = ['NUCHAVE', 'EVENTO', 'SEQCASCATA', 'DHLIB', 'REPROVADO'] as const;
+      const allLines = await this.#query(
+        `SELECT NUCHAVE, EVENTO, SEQCASCATA, DHLIB, REPROVADO FROM TSILIB WHERE TABELA = 'TGFCAB' AND NUCHAVE IN (${list})`,
+        allLineColumns,
         signal,
       );
-      reproved.rows.forEach((cells, index) => {
-        reprovedNotes.add(new RowReader('orders', reprovedColumns, cells, index).int('NUCHAVE'));
+      allLines.rows.forEach((cells, index) => {
+        const row = new RowReader('orders', allLineColumns, cells, index);
+        const key = row.int('NUCHAVE');
+        const reprovedLine = textCell(cells[4]) === 'S';
+        if (reprovedLine) reprovedNotes.add(key);
+        const bucket = releaseLines.get(key) ?? [];
+        bucket.push({ event: row.int('EVENTO'), cascadeSequence: row.nullableInt('SEQCASCATA'), released: textCell(cells[3]) !== null, reproved: reprovedLine });
+        releaseLines.set(key, bucket);
       });
     }
     const saleNotes = [...new Set([...links.values()].flatMap((set) => [...set]))];
@@ -909,6 +917,7 @@ export class RealSankhyaGateway implements SankhyaGateway {
         orderCargo: header?.orderCargo ?? null,
         pendingReleases: releases.get(erpOrderNumber) ?? [],
         hasReprovedRelease: reprovedNotes.has(erpOrderNumber),
+        releaseLines: releaseLines.get(erpOrderNumber) ?? [],
         ...(assigneeErrors.has(erpOrderNumber) ? { assigneeReadErrorCode: assigneeErrors.get(erpOrderNumber) as string } : {}),
         hasInvoiceLink: linkedNotes.length > 0,
         invoiceNumber,
