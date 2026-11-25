@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { BackHandler, Pressable, ScrollView, Text, View } from "react-native";
 import { customerStateLabel } from "@salesforce/domain";
+import type { CustomerRegistration } from "../data/customer-write";
 import { buildCreateRequest, createProblems, emptyCreateForm, hasCreateProblems, ICMS_OPTIONS, type CreateForm, type CreateCustomerRequest } from "../data/customer-form";
 import { Banner, CheckRow, FormButton, FormField, FormFrame, formStyles } from "./customer-form-parts";
 
@@ -8,6 +9,8 @@ export interface CustomerCreateScreenProps {
   /** Saves the customer on the device (the sync engine delivers it, with its own idempotency key). Throws with a seller-facing message. */
   readonly onSave: (request: CreateCustomerRequest) => Promise<void>;
   readonly onClose: () => void;
+  /** A refused registration being corrected: the form opens with its document and name and the request carries its id. */
+  readonly correction?: CustomerRegistration;
 }
 
 /** Local failures of the save, already in the seller's words (`PendingCustomerError`) or generic. */
@@ -20,8 +23,8 @@ function saveMessage(error: unknown): string {
  * "Novo cliente". The customer is saved on the device first ("Salvo") and delivered by the sync engine; the list then shows its state
  * (Aguardando envio, Enviado ao Sankhya, Precisa de correção with the server's reason). Works offline.
  */
-export function CustomerCreateScreen({ onSave, onClose }: CustomerCreateScreenProps) {
-  const [form, setForm] = useState<CreateForm>(emptyCreateForm);
+export function CustomerCreateScreen({ onSave, onClose, correction }: CustomerCreateScreenProps) {
+  const [form, setForm] = useState<CreateForm>(() => (correction === undefined ? emptyCreateForm() : { ...emptyCreateForm(), document: correction.document, name: correction.name }));
   const [showProblems, setShowProblems] = useState(false);
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -48,7 +51,7 @@ export function CustomerCreateScreen({ onSave, onClose }: CustomerCreateScreenPr
     busy.current = true;
     setSaving(true);
     try {
-      await onSave(buildCreateRequest(form));
+      await onSave(buildCreateRequest(form, correction?.registrationId));
       setSaved(true);
     } catch (error) {
       setFailure(saveMessage(error));
@@ -60,7 +63,7 @@ export function CustomerCreateScreen({ onSave, onClose }: CustomerCreateScreenPr
 
   if (saved) {
     return (
-      <FormFrame title="Novo cliente" backLabel="Clientes" onCancel={onClose} footer={<FormButton label="Fechar" primary onPress={onClose} />}>
+      <FormFrame title={correction === undefined ? "Novo cliente" : "Corrigir cadastro"} backLabel="Clientes" onCancel={onClose} footer={<FormButton label="Fechar" primary onPress={onClose} />}>
         <View style={formStyles.content}>
           <View style={formStyles.group}>
             <Text style={formStyles.resultTitle}>{customerStateLabel("draft")}</Text>
@@ -72,7 +75,7 @@ export function CustomerCreateScreen({ onSave, onClose }: CustomerCreateScreenPr
 
   return (
     <FormFrame
-      title="Novo cliente"
+      title={correction === undefined ? "Novo cliente" : "Corrigir cadastro"}
       backLabel="Clientes"
       onCancel={onClose}
       footer={
@@ -83,6 +86,7 @@ export function CustomerCreateScreen({ onSave, onClose }: CustomerCreateScreenPr
       }
     >
       <ScrollView contentContainerStyle={formStyles.content} keyboardShouldPersistTaps="handled">
+        {correction?.reasonMessage != null && <Banner tone="warning" text={correction.reasonMessage} />}
         {failure !== null && <Banner text={failure} />}
         <FormField label="CPF/CNPJ" required value={form.document} onChangeText={(document) => change({ document })} error={shown(problems.document)} keyboardType="number-pad" />
         <View style={{ gap: 2 }}>

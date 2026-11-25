@@ -14,6 +14,7 @@ import { ErrorActionsContext, useErrorPopup } from "./use-error-popup";
 import { BottomNav, type MainTab } from "./bottom-nav";
 import { BrandLogo, SplashView } from "./brand";
 import { CustomerDetailScreen } from "./customer-detail-screen";
+import type { CustomerRegistration } from "../data/customer-write";
 import { CustomerCreateScreen } from "./customer-create-screen";
 import { CustomerEditScreen } from "./customer-edit-screen";
 import { OrderTemplateFormScreen } from "./order-template-form-screen";
@@ -95,7 +96,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   const [quarantineTick, setQuarantineTick] = useState(0);
   const [customerDetail, setCustomerDetail] = useState<CustomerListItem | null>(null);
   /** The customer form open over the Clientes tab; one at a time. */
-  const [customerForm, setCustomerForm] = useState<{ kind: "create" } | { kind: "edit"; customer: CustomerListItem } | { kind: "template"; customer: CustomerListItem } | null>(null);
+  const [customerForm, setCustomerForm] = useState<{ kind: "create"; correction?: CustomerRegistration } | { kind: "edit"; customer: CustomerListItem } | { kind: "template"; customer: CustomerListItem } | null>(null);
   const [customerFlags, setCustomerFlags] = useState({ create: false, edit: false });
   const [startRequest, setStartRequest] = useState<{ nonce: number; customer: Pick<CustomerListItem, "code" | "name">; lines?: readonly EditorLine[] } | null>(null);
   const connectivityState = useConnectivity(connectivity);
@@ -432,6 +433,9 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
                 onOpen={setCustomerDetail}
                 {...(dependencies.dashboard !== undefined ? { dashboard: dependencies.dashboard } : {})}
                 {...(customerFlags.create && pendingCustomers !== null ? { onCreate: () => setCustomerForm({ kind: "create" }) } : {})}
+                {...(customerFlags.create && pendingCustomers !== null && dependencies.customerWrite !== undefined
+                  ? { registrations: { writer: dependencies.customerWrite, onCorrect: (correction: CustomerRegistration) => setCustomerForm({ kind: "create", correction }), refreshKey: epochs.customers } }
+                  : {})}
               />
             </View>
             {customerDetail !== null && customerForm === null && (
@@ -466,6 +470,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
             )}
             {customerForm?.kind === "create" && pendingCustomers !== null && (
               <CustomerCreateScreen
+                {...(customerForm.correction === undefined ? {} : { correction: customerForm.correction })}
                 onSave={async (request) => {
                   await pendingCustomers.create(request);
                 }}

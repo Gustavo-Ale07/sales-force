@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import type { CustomerDetail, CustomerFinancial, CustomerListItem, CustomerRepository } from "../data/ports";
-import { hasNoSeller, isUnconfirmedCustomer, NO_SELLER_ORDER_MESSAGE, PENDING_CREDIT_NOTE, PENDING_CUSTOMER_ORDER_MESSAGE } from "../data/pending-status";
+import { describePendingReason, hasNoSeller, isUnconfirmedCustomer, NO_SELLER_ORDER_MESSAGE, PENDING_CREDIT_NOTE, PENDING_CUSTOMER_ORDER_MESSAGE } from "../data/pending-status";
 import { colors, fontSize, radius, spacing } from "../theme";
 import type { LocalOrdersPort } from "../offline/local-orders";
 import { EMPTY_SALES_FILTERS, type SalesRow } from "../offline/sales";
@@ -148,6 +148,7 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
           {hasTradeName && <Text style={styles.trade}>{customer.tradeName}</Text>}
           <Text style={styles.meta}>{isPending ? (customer.document ?? "") : `Código ${customer.code}${customer.document !== null ? ` · ${customer.document}` : ""}`}</Text>
           {status !== null && <Text style={styles.status}>{status}</Text>}
+          {describePendingReason(customer.pending) !== null && <Text style={styles.status}>{describePendingReason(customer.pending)}</Text>}
         </View>
 
         <Section title="Dados principais">

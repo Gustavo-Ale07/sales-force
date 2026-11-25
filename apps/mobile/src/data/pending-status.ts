@@ -1,3 +1,4 @@
+import { customerStateLabel } from "@salesforce/domain";
 import type { CustomerListItem } from "./ports";
 
 /** Shown wherever an order is attempted for a customer the ERP has not confirmed (rule lives in mobile-db; text is the same). */
@@ -29,12 +30,17 @@ export function describePendingBadge(pending: CustomerListItem["pending"]): stri
   switch (pending.state) {
     case "queued":
     case "sending":
-      return "Aguardando envio ao Sankhya";
     case "awaiting_erp":
-      return "Aguardando confirmação";
+      return customerStateLabel("awaiting_send");
     case "confirmed":
-      return "Confirmado no Sankhya — carregando dados";
+      return customerStateLabel("sent");
     case "rejected":
-      return `Não aceito: ${pending.rejectionReason ?? "o Sankhya recusou o cadastro."}`;
+      return customerStateLabel("needs_correction");
   }
+}
+
+/** The server's reason of a refused registration ("Precisa de correção"); null for any other state. */
+export function describePendingReason(pending: CustomerListItem["pending"]): string | null {
+  if (pending === undefined || pending.state !== "rejected") return null;
+  return pending.rejectionReason ?? "O Sankhya recusou o cadastro.";
 }

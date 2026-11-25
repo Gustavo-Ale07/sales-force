@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { BackHandler, ScrollView, Text, View } from "react-native";
-import { customerStateLabel } from "@salesforce/domain";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import {
   buildUpdateBody,
@@ -10,7 +9,6 @@ import {
   hasEditProblems,
   isUnknownOutcome,
   LIMITS,
-  type ContactForm,
   type EditForm,
 } from "../data/customer-form";
 import type { CustomerWritePort, UpdateCustomerResult } from "../data/customer-write";
@@ -28,7 +26,7 @@ export interface CustomerEditScreenProps {
 }
 
 /**
- * Edit of phone, e-mail, notes and contacts (D-AP). Online only: the app has no local edit queue yet, so offline says so and sends nothing.
+ * Edit of phone, e-mail and notes (D-AP). Online only: the app has no local edit queue yet, so offline says so and sends nothing.
  * Only the filled fields are sent. The request id is kept after a lost answer and replaced once the answer is final or the form changes.
  */
 export function CustomerEditScreen({ customerName, code, writer, connectivity, onClose, newId = newClientRequestId }: CustomerEditScreenProps) {
@@ -38,7 +36,6 @@ export function CustomerEditScreen({ customerName, code, writer, connectivity, o
   const [failure, setFailure] = useState<{ message: string; fields: Record<string, string> } | null>(null);
   const [result, setResult] = useState<UpdateCustomerResult | null>(null);
   const requestId = useRef<string | null>(null);
-  const contactCounter = useRef(0);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -52,7 +49,6 @@ export function CustomerEditScreen({ customerName, code, writer, connectivity, o
     requestId.current = null; // The form changed: a new request.
     setForm((current) => ({ ...current, ...next }));
   };
-  const changeContact = (key: string, next: Partial<ContactForm>) => change({ contacts: form.contacts.map((contact) => (contact.key === key ? { ...contact, ...next } : contact)) });
 
   const problems = editProblems(form);
   const fieldError = (own: string | null, name: string) => (showProblems ? (own ?? failure?.fields[name] ?? null) : (failure?.fields[name] ?? null));
@@ -85,7 +81,7 @@ export function CustomerEditScreen({ customerName, code, writer, connectivity, o
       <FormFrame title="Editar cliente" backLabel="Ficha" onCancel={onClose} footer={<FormButton label="Fechar" primary onPress={onClose} />}>
         <View style={formStyles.content}>
           <View style={formStyles.group}>
-            <Text style={formStyles.resultTitle}>{customerStateLabel(result.state)}</Text>
+            <Text style={formStyles.resultTitle}>{result.stateLabel}</Text>
             {result.state === "needs_correction" && result.reasonMessage !== null && <Text style={formStyles.resultText}>{result.reasonMessage}</Text>}
           </View>
         </View>
@@ -112,28 +108,6 @@ export function CustomerEditScreen({ customerName, code, writer, connectivity, o
         <FormField label="Telefone" value={form.phone} onChangeText={(phone) => change({ phone })} error={fieldError(problems.phone, "phone")} keyboardType="phone-pad" />
         <FormField label="E-mail" value={form.email} onChangeText={(email) => change({ email })} error={fieldError(problems.email, "email")} keyboardType="email-address" autoCapitalize="none" maxLength={LIMITS.email + 20} />
         <FormField label="Observações" value={form.notes} onChangeText={(notes) => change({ notes })} error={fieldError(problems.notes, "notes")} multiline />
-        {form.contacts.map((contact, index) => {
-          const own = problems.contacts[index];
-          const shown = (problem: string | null | undefined) => (showProblems ? (problem ?? null) : null);
-          return (
-            <View key={contact.key} style={formStyles.group} accessibilityLabel={`Contato ${index + 1}`}>
-              <FormField label="Nome do contato" required value={contact.name} onChangeText={(name) => changeContact(contact.key, { name })} error={shown(own?.name)} />
-              <FormField label="Cargo" value={contact.role} onChangeText={(role) => changeContact(contact.key, { role })} error={shown(own?.role)} />
-              <FormField label="Telefone do contato" value={contact.phone} onChangeText={(phone) => changeContact(contact.key, { phone })} error={shown(own?.phone)} keyboardType="phone-pad" />
-              <FormField label="E-mail do contato" value={contact.email} onChangeText={(email) => changeContact(contact.key, { email })} error={shown(own?.email)} keyboardType="email-address" autoCapitalize="none" />
-              <FormButton label={`Remover contato ${index + 1}`} onPress={() => change({ contacts: form.contacts.filter((other) => other.key !== contact.key) })} />
-            </View>
-          );
-        })}
-        {form.contacts.length < LIMITS.contacts && (
-          <FormButton
-            label="Adicionar contato"
-            onPress={() => {
-              contactCounter.current += 1;
-              change({ contacts: [...form.contacts, { key: `contact-${contactCounter.current}`, name: "", role: "", phone: "", email: "" }] });
-            }}
-          />
-        )}
       </ScrollView>
     </FormFrame>
   );

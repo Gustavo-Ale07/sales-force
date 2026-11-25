@@ -52,10 +52,10 @@ function record(over: Partial<PendingCustomerRecord> = {}): PendingCustomerRecor
 
 describe("badge text", () => {
   it.each([
-    ["queued", null, "Aguardando envio ao Sankhya"],
-    ["sending", null, "Aguardando envio ao Sankhya"],
-    ["awaiting_erp", null, "Aguardando confirmação"],
-    ["rejected", "Já existe um cliente com este CPF/CNPJ.", "Não aceito: Já existe um cliente com este CPF/CNPJ."],
+    ["queued", null, "Aguardando envio"],
+    ["sending", null, "Aguardando envio"],
+    ["awaiting_erp", null, "Aguardando envio"],
+    ["rejected", "Já existe um cliente com este CPF/CNPJ.", "Precisa de correção"],
   ] as const)("%s", (state, rejectionReason, text) => {
     expect(describePendingBadge({ clientRequestId: "r", state, rejectionReason })).toBe(text);
   });
@@ -109,7 +109,7 @@ describe("screens", () => {
   it("lists the pending customer with the badge, name and masked document", async () => {
     await render(<CustomersScreen customers={repo} onUnauthenticated={noop} />);
     expect(await screen.findByText("Padaria Nova")).toBeTruthy();
-    expect(screen.getByText("Aguardando envio ao Sankhya")).toBeTruthy();
+    expect(screen.getByText("Aguardando envio")).toBeTruthy();
     expect(screen.getByText("***.456.789-**")).toBeTruthy();
   });
 
@@ -117,7 +117,7 @@ describe("screens", () => {
     const onNewOrder = jest.fn();
     const get = jest.fn();
     await render(<CustomerDetailScreen customer={pendingItem} customers={{ ...repo, get }} connectivity="online" onBack={noop} onNewOrder={onNewOrder} />);
-    expect(screen.getByText("Aguardando envio ao Sankhya")).toBeTruthy();
+    expect(screen.getByText("Aguardando envio")).toBeTruthy();
     expect(screen.getByText(PENDING_CREDIT_NOTE)).toBeTruthy();
     expect(screen.queryByText(/Tabela de preço|Limite de crédito:/)).toBeNull();
     expect(screen.getByText(PENDING_CUSTOMER_ORDER_MESSAGE)).toBeTruthy();
@@ -129,7 +129,8 @@ describe("screens", () => {
   it("a rejected customer shows the reason", async () => {
     const rejected = toPendingListItem(record({ state: "rejected", rejectionReason: "O Sankhya recusou o cadastro do cliente. Confira os dados." }));
     await render(<CustomersScreen customers={{ list: async () => pageOf([rejected], 1) }} onUnauthenticated={noop} />);
-    expect(await screen.findByText("Não aceito: O Sankhya recusou o cadastro do cliente. Confira os dados.")).toBeTruthy();
+    expect(await screen.findByText("Precisa de correção")).toBeTruthy();
+    expect(screen.getByText("O Sankhya recusou o cadastro do cliente. Confira os dados.")).toBeTruthy();
   });
 
   it("the order picker cannot choose it, even where blocked customers are allowed", async () => {
@@ -218,7 +219,7 @@ describe("a customer the ERP confirmed but whose data is still being read", () =
     const onSelect = jest.fn();
     const repo: CustomerRepository = { list: async () => pageOf([item], 1) };
     await render(<CustomerDetailScreen customer={item} customers={repo} onBack={noop} onNewOrder={onNewOrder} />);
-    expect(screen.getByText("Confirmado no Sankhya — carregando dados")).toBeTruthy();
+    expect(screen.getByText("Enviado ao Sankhya")).toBeTruthy();
     expect(screen.queryByText(PENDING_CUSTOMER_ORDER_MESSAGE)).toBeNull();
     await fireEvent.press(screen.getByRole("button", { name: "Novo pedido" }));
     expect(onNewOrder).toHaveBeenCalledWith(item);

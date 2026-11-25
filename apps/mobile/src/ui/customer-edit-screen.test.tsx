@@ -5,13 +5,13 @@ import { CustomerEditScreen } from "./customer-edit-screen";
 
 async function setup(update: CustomerWritePort["update"], extra: { connectivity?: "online" | "offline" } = {}) {
   let n = 0;
-  const writer: CustomerWritePort = { update: jest.fn(update) };
+  const writer: CustomerWritePort = { update: jest.fn(update), registrations: jest.fn(async () => []) };
   const onClose = jest.fn();
   const view = await render(<CustomerEditScreen customerName="Padaria Central" code={10} writer={writer} onClose={onClose} newId={() => `id-${++n}`} {...extra} />);
   return { writer, onClose, view };
 }
 
-const sent = async () => ({ state: "sent" as const, reasonMessage: null });
+const sent = async () => ({ state: "sent" as const, stateLabel: "Enviado ao Sankhya", reasonMessage: null });
 
 describe("CustomerEditScreen", () => {
   it("an empty form shows the shared text and sends nothing", async () => {
@@ -29,15 +29,19 @@ describe("CustomerEditScreen", () => {
     expect(writer.update).toHaveBeenCalledWith(10, { clientRequestId: "id-1", phone: "11988887777" });
   });
 
-  it("adds and removes contacts with numbered labels and requires the contact name", async () => {
-    const { writer } = await setup(sent);
-    await fireEvent.press(await screen.findByLabelText("Adicionar contato"));
-    expect(screen.getByLabelText("Remover contato 1")).toBeTruthy();
+  it("has no contacts section", async () => {
+    await setup(sent);
+    await screen.findByLabelText("Telefone");
+    expect(screen.queryByLabelText("Adicionar contato")).toBeNull();
+  });
+
+  it("409 customer_edit_field_not_supported shows the shared actionable text", async () => {
+    await setup(async () => {
+      throw new ApiRequestError({ status: 409, message: "x", reason: "customer_edit_field_not_supported" });
+    });
+    await fireEvent.changeText(await screen.findByLabelText("Observações"), "ligar");
     await fireEvent.press(screen.getByLabelText("Salvar"));
-    expect(await screen.findByText("Informe o nome do contato.")).toBeTruthy();
-    expect(writer.update).not.toHaveBeenCalled();
-    await fireEvent.press(screen.getByLabelText("Remover contato 1"));
-    expect(screen.queryByLabelText("Remover contato 1")).toBeNull();
+    expect(await screen.findByText("Só telefone, e-mail e observações podem ser alterados. Nada foi alterado.")).toBeTruthy();
   });
 
   it("409 customer_edit_disabled shows the contract text and a new request id on the next try", async () => {
@@ -79,7 +83,7 @@ describe("CustomerEditScreen", () => {
   });
 
   it("Precisa de correção shows the server's reason", async () => {
-    await setup(async () => ({ state: "needs_correction" as const, reasonMessage: "O Sankhya recusou o telefone." }));
+    await setup(async () => ({ state: "needs_correction" as const, stateLabel: "Precisa de correção", reasonMessage: "O Sankhya recusou o telefone." }));
     await fireEvent.changeText(await screen.findByLabelText("Observações"), "ligar");
     await fireEvent.press(screen.getByLabelText("Salvar"));
     expect(await screen.findByText("Precisa de correção")).toBeTruthy();
@@ -87,7 +91,7 @@ describe("CustomerEditScreen", () => {
   });
 
   it("Aguardando envio is shown with its label", async () => {
-    await setup(async () => ({ state: "awaiting_send" as const, reasonMessage: null }));
+    await setup(async () => ({ state: "awaiting_send" as const, stateLabel: "Aguardando envio", reasonMessage: null }));
     await fireEvent.changeText(await screen.findByLabelText("Observações"), "ligar");
     await fireEvent.press(screen.getByLabelText("Salvar"));
     expect(await screen.findByText("Aguardando envio")).toBeTruthy();

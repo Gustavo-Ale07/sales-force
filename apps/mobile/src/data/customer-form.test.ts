@@ -28,14 +28,6 @@ describe("edit body", () => {
     expect(body).toStrictEqual({ clientRequestId: ID, phone: "11988887777", notes: "ligar depois" });
   });
 
-  it("contacts need a name and carry null for empty optional fields", () => {
-    const form = { ...emptyEditForm(), contacts: [{ key: "a", name: " ", role: "", phone: "", email: "" }] };
-    expect(editProblems(form).contacts[0]?.name).toBe("Informe o nome do contato.");
-    const ok = { ...emptyEditForm(), contacts: [{ key: "a", name: "Ana", role: "", phone: "(11) 5555-4444", email: "" }] };
-    expect(hasEditProblems(editProblems(ok))).toBe(false);
-    expect(buildUpdateBody(ID, ok).contacts).toStrictEqual([{ name: "Ana", role: null, phone: "1155554444", email: null }]);
-  });
-
   it("limits: phone digits, e-mail, notes", () => {
     expect(editProblems({ ...emptyEditForm(), phone: "12345678901234" }).phone).toBe("Informe o telefone com até 13 dígitos.");
     expect(editProblems({ ...emptyEditForm(), email: "sem-arroba" }).email).toBe("Informe um e-mail válido.");

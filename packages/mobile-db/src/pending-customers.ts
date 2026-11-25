@@ -51,6 +51,8 @@ export interface PendingCustomerRequest {
   }[];
   /** Manager/admin only. */
   readonly sellerCode?: number;
+  /** The refused server registration this one corrects ("Precisa de correção"); travels in the same POST body. */
+  readonly correctsRegistrationId?: string;
 }
 
 export interface PendingCustomerRecord {

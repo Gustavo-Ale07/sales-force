@@ -3,9 +3,11 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import type { DashboardIndicators, DashboardPort } from "../data/dashboard";
 import type { CustomerFilters, CustomerLetter, CustomerListItem, CustomerPageRequest, CustomerRepository, CustomerSellerOption } from "../data/ports";
-import { describePendingBadge, hasNoSeller, isUnconfirmedCustomer } from "../data/pending-status";
+import { describePendingBadge, describePendingReason, hasNoSeller, isUnconfirmedCustomer } from "../data/pending-status";
 import { colors, control, radius, spacing } from "../theme";
 import { CustomerFiltersSheet, CustomerIndexSheet, FilterChips, countActiveFilters } from "./customer-filters";
+import type { CustomerRegistration, CustomerWritePort } from "../data/customer-write";
+import { CustomerRegistrationsSection } from "./customer-registrations-section";
 import { PagedListView } from "./paged-list-view";
 
 export function describeCustomerStatus(customer: Pick<CustomerListItem, "active" | "blocked"> & Pick<Partial<CustomerListItem>, "pending">): string | null {
@@ -19,6 +21,7 @@ export function describeCustomerStatus(customer: Pick<CustomerListItem, "active"
 function CustomerRow({ customer, onOpen }: { customer: CustomerListItem; onOpen: (customer: CustomerListItem) => void }) {
   const status = describeCustomerStatus(customer);
   const noSeller = hasNoSeller(customer);
+  const reason = describePendingReason(customer.pending);
   return (
     <Pressable
       style={styles.row}
@@ -30,6 +33,7 @@ function CustomerRow({ customer, onOpen }: { customer: CustomerListItem; onOpen:
         <Text style={styles.name} numberOfLines={2}>{customer.name}</Text>
         {status !== null && <Text style={styles.status}>{status}</Text>}
       </View>
+      {reason !== null && <Text style={styles.meta}>{reason}</Text>}
       {customer.tradeName !== null && customer.tradeName !== customer.name && <Text style={styles.meta} numberOfLines={1}>{customer.tradeName}</Text>}
       <Text style={styles.meta} numberOfLines={1}>{isUnconfirmedCustomer(customer) ? (customer.document ?? "") : `Código ${customer.code}${customer.document !== null ? ` · ${customer.document}` : ""}`}</Text>
       {noSeller && <Text style={styles.noSeller}>Sem vendedor</Text>}
@@ -48,6 +52,8 @@ export interface CustomersScreenProps {
   readonly onCreate?: () => void;
   /** The site's "Carteira de clientes" counters above the list, read online. Absent = no counters. */
   readonly dashboard?: DashboardPort;
+  /** "Cadastros de clientes" section (online): the registrations with the server state and "Corrigir cadastro". Absent = no section. */
+  readonly registrations?: { readonly writer: Pick<CustomerWritePort, "registrations">; readonly onCorrect: (registration: CustomerRegistration) => void; readonly refreshKey?: number };
 }
 
 const noopOpen = () => undefined;
@@ -57,7 +63,7 @@ const noopOpen = () => undefined;
  * alphabetical index when the repository can compute it locally. Whether this is "the seller's own portfolio" depends
  * on the installation configuration the app does not know, so the title never claims it.
  */
-export function CustomersScreen({ customers, onUnauthenticated, connectivity, onOpen = noopOpen, onCreate, dashboard }: CustomersScreenProps) {
+export function CustomersScreen({ customers, onUnauthenticated, connectivity, onOpen = noopOpen, onCreate, dashboard, registrations }: CustomersScreenProps) {
   const [portfolio, setPortfolio] = useState<DashboardIndicators["portfolio"]>([]);
   const online = connectivity !== "offline";
   useEffect(() => {
@@ -144,6 +150,9 @@ export function CustomersScreen({ customers, onUnauthenticated, connectivity, on
             <Text key={item.key} style={styles.indicator} accessibilityLabel={`${item.label}: ${item.value ?? "indisponível"}`}>{`${item.label}: ${item.value ?? "—"}`}</Text>
           ))}
         </View>
+      )}
+      {registrations !== undefined && online && (
+        <CustomerRegistrationsSection writer={registrations.writer} onCorrect={registrations.onCorrect} {...(registrations.refreshKey === undefined ? {} : { refreshKey: registrations.refreshKey })} />
       )}
       <FilterChips filters={filters} sellers={sellers} onChange={changeFilters} />
       {startAt > 0 && (
