@@ -172,7 +172,7 @@ export const CustomerRegistrationPathSchema = z.object({ registrationId: UuidSch
 
 /* ---------- Edit (D-AP): only phone, e-mail, contacts, addresses and notes ---------- */
 
-/** NEEDS VALIDATION: the ERP column sizes of a contact were not read; these limits are provisional (edit delivery is not approved yet). */
+/** NEEDS VALIDATION: the ERP column sizes of a contact were not read; these limits are provisional (contacts and addresses are not deliverable until the ERP mapping is validated, S5.2). */
 export const CustomerContactInputSchema = named(
   'CustomerContactInput',
   z.strictObject({

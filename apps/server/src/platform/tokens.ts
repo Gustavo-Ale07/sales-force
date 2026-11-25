@@ -24,8 +24,8 @@ export const ORDER_ENQUEUE_ENABLED = Symbol('ORDER_ENQUEUE_ENABLED');
 export const CUSTOMER_ENQUEUE_ENABLED = Symbol('CUSTOMER_ENQUEUE_ENABLED');
 /**
  * Customer-edit switch of the API (`ERP_CUSTOMER_EDIT_ENABLED`, default false). While false, `PATCH /customers/{code}` answers 409
- * `customer_edit_disabled`. Even when true it answers 409 `customer_edit_delivery_not_approved` (the partner write port has no update
- * operation; the owner has not approved one): nothing is stored and the ERP is never called.
+ * `customer_edit_disabled` and nothing is stored. Open: the edit is recorded as a `customer_update` outbox command and the worker (with its own
+ * customer-write switch) writes it to the Sandbox ERP (D-AP; owner approval of `updatePartner` 2026-11-25).
  */
 export const CUSTOMER_EDIT_ENABLED = Symbol('CUSTOMER_EDIT_ENABLED');
 /**

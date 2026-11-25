@@ -1,34 +1,52 @@
+import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
+import { integrationOutbox, type Database } from '@salesforce/db';
 import type { UpdateCustomerRequest, UpdateCustomerResponse } from '@salesforce/contracts';
+import { and, eq, sql } from 'drizzle-orm';
 import { AppError } from '../http/app-error.js';
 import { AUDIT_ACTIONS, AuditService } from '../iam/audit.service.js';
 import type { CurrentUser } from '../iam/current-user.js';
 import { PolicyService } from '../iam/policy.service.js';
-import { CUSTOMER_EDIT_ENABLED } from '../platform/tokens.js';
-import { EDITABLE_CUSTOMER_FIELDS, RefusingCustomerEditDelivery, type CustomerEditDelivery } from './customer-edit-delivery.js';
+import type { Executor } from '../orders/orders.repository.js';
+import { uuidv7 } from '../platform/ids.js';
+import { CLOCK, CUSTOMER_EDIT_ENABLED, DATABASE, type Clock } from '../platform/tokens.js';
+import {
+  CUSTOMER_UPDATE_AGGREGATE,
+  CUSTOMER_UPDATE_OPERATION,
+  DELIVERABLE_CUSTOMER_FIELDS,
+  EDITABLE_CUSTOMER_FIELDS,
+  toUpdateResponse,
+  type UpdateOutboxFacts,
+} from './customer-update-state.js';
 import { CustomersService } from './customers.service.js';
+
+/** Third advisory-lock namespace (`SFCU`): one lock per customer being edited. */
+const UPDATE_LOCK_NAMESPACE = 0x53464355;
 
 export interface CustomerUpdateResult {
   readonly response: UpdateCustomerResponse;
-  readonly httpStatus: 202;
+  /** 202 recorded, 200 replay of an earlier request. */
+  readonly httpStatus: 200 | 202;
 }
 
 /**
- * Edit of an existing customer (D-AP): phone, e-mail, contacts, addresses and notes only (the request schema is strict, so any other
- * field is a 400 that names it). Same rule for the site and the app.
+ * Edit of an existing customer (D-AP): phone, e-mail and notes (contacts and addresses are accepted by the schema but refused with a
+ * 409 until the ERP mapping is validated, S5.2). The request schema is strict, so any other field is a 400 that names it. Same rule
+ * for the site and the app.
  *
- * Today the edit is never accepted: delivery to the ERP is not approved (`updatePartner` stays refused), so the request is validated,
- * checked against the actor's customer scope, audited as a refusal (field names only) and answered 409. Nothing is stored (no personal
- * data kept without a delivery to consume it) and neither the outbox nor the gateway is touched.
+ * Orchestration only: scope (a customer outside it is a 404), idempotency, one open edit per customer, and one transaction that
+ * records the `customer_update` outbox command with its audit row. It never calls the ERP: only the worker holds the Sankhya
+ * credential (STACK-2) and delivers the command with the SNK-4 reread-before-resend. While `ERP_CUSTOMER_EDIT_ENABLED` is closed
+ * (default) nothing is stored and the answer is a 409.
  */
 @Injectable()
 export class CustomerUpdateService {
-  private readonly delivery: CustomerEditDelivery = new RefusingCustomerEditDelivery();
-
   constructor(
     @Inject(PolicyService) private readonly policy: PolicyService,
     @Inject(CustomersService) private readonly customers: CustomersService,
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(DATABASE) private readonly db: Database,
+    @Inject(CLOCK) private readonly clock: Clock,
     @Inject(CUSTOMER_EDIT_ENABLED) private readonly enabled: boolean,
   ) {}
 
@@ -43,17 +61,129 @@ export class CustomerUpdateService {
     // Outside the scope the customer does not exist (404), whatever the body says.
     await this.customers.requireVisible(scope, code);
 
-    const fields = EDITABLE_CUSTOMER_FIELDS.filter((field) => body[field] !== undefined);
-    const outcome = await this.delivery.deliver(code, fields);
-    // Identifiers and the NAMES of the changed fields only: never a value.
-    await this.audit.record({
-      action: AUDIT_ACTIONS.customerUpdateRefused,
-      actorAccountId: user.accountId,
-      detail: { customerCode: code, fields: fields.join(','), reason: outcome.reason },
-    });
-    throw new AppError('conflict', {
-      message: 'A alteração de clientes ainda não pode ser enviada ao Sankhya. Nada foi alterado.',
-      details: { reason: 'customer_edit_delivery_not_approved' },
-    });
+    const { clientRequestId, ...changes } = body;
+    const changed = EDITABLE_CUSTOMER_FIELDS.filter((field) => changes[field] !== undefined);
+    const unsupported = changed.filter((field) => !(DELIVERABLE_CUSTOMER_FIELDS as readonly string[]).includes(field));
+    if (unsupported.length > 0) {
+      // Field names only: never a value.
+      await this.audit.record({
+        action: AUDIT_ACTIONS.customerUpdateRefused,
+        actorAccountId: user.accountId,
+        detail: { customerCode: code, fields: unsupported.join(','), reason: 'field_not_supported' },
+      });
+      throw new AppError('conflict', {
+        message: 'Contatos e endereços ainda não podem ser alterados pelo Force. Altere telefone, e-mail ou observações.',
+        details: { reason: 'customer_edit_field_not_supported', fields: unsupported },
+      });
+    }
+
+    const fingerprint = createHash('sha256').update(JSON.stringify(['v1', code, canonical(changes)])).digest('hex');
+    const originId = `force-edit:${clientRequestId}`;
+
+    const existing = await this.findByOrigin(originId);
+    if (existing !== null) return this.replay(existing, user, fingerprint);
+
+    const at = this.clock();
+    const updateId = uuidv7(at.getTime());
+    try {
+      return await this.db.transaction(async (tx) => {
+        await tx.execute(sql`select pg_advisory_xact_lock(${UPDATE_LOCK_NAMESPACE}::int, ${code}::int)`);
+        const winner = await this.findByOrigin(originId, tx);
+        if (winner !== null) return this.replay(winner, user, fingerprint);
+        if (await this.hasOpenUpdate(code, tx)) {
+          throw new AppError('conflict', {
+            message: 'Já existe uma alteração deste cliente em andamento. Aguarde a conclusão antes de enviar outra.',
+            details: { reason: 'customer_update_in_progress' },
+          });
+        }
+        await tx.insert(integrationOutbox).values({
+          id: uuidv7(at.getTime()),
+          aggregateType: CUSTOMER_UPDATE_AGGREGATE,
+          aggregateId: updateId,
+          operation: CUSTOMER_UPDATE_OPERATION,
+          payload: { customerCode: code, accountId: user.accountId, requestHash: fingerprint, changes },
+          originId,
+          status: 'pending',
+          nextAttemptAt: at,
+          createdAt: at,
+          updatedAt: at,
+        });
+        // Identifiers and the NAMES of the changed fields only: never a value.
+        await this.audit.record(
+          { action: AUDIT_ACTIONS.customerUpdateRequested, actorAccountId: user.accountId, detail: { updateId, customerCode: code, fields: changed.join(',') } },
+          tx,
+        );
+        const facts: UpdateOutboxFacts = { aggregateId: updateId, payload: null, status: 'pending', nextAttemptAt: at, lastErrorMessage: null, createdAt: at, updatedAt: at };
+        return { response: toUpdateResponse(facts, code), httpStatus: 202 as const };
+      });
+    } catch (error) {
+      // The origin id is unique across the installation: another account that used the same request id never learns of it.
+      if (isOriginCollision(error)) throw new AppError('idempotency_conflict', { cause: error });
+      throw error;
+    }
   }
+
+  private replay(row: UpdateOutboxFacts, user: CurrentUser, fingerprint: string): CustomerUpdateResult {
+    const payload = row.payload as { accountId?: unknown; requestHash?: unknown; customerCode?: unknown };
+    // Same id from another account, or same id with other content: unusable, and it says nothing about the original.
+    if (payload.accountId !== user.accountId || payload.requestHash !== fingerprint || typeof payload.customerCode !== 'number') {
+      throw new AppError('idempotency_conflict');
+    }
+    return { response: toUpdateResponse(row, payload.customerCode), httpStatus: 200 };
+  }
+
+  private async findByOrigin(originId: string, db: Executor = this.db): Promise<UpdateOutboxFacts | null> {
+    const [row] = await db
+      .select({
+        aggregateId: integrationOutbox.aggregateId,
+        payload: integrationOutbox.payload,
+        status: integrationOutbox.status,
+        nextAttemptAt: integrationOutbox.nextAttemptAt,
+        lastErrorMessage: integrationOutbox.lastErrorMessage,
+        createdAt: integrationOutbox.createdAt,
+        updatedAt: integrationOutbox.updatedAt,
+      })
+      .from(integrationOutbox)
+      .where(and(eq(integrationOutbox.originId, originId), eq(integrationOutbox.aggregateType, CUSTOMER_UPDATE_AGGREGATE)))
+      .limit(1);
+    return row ?? null;
+  }
+
+  private async hasOpenUpdate(code: number, tx: Executor): Promise<boolean> {
+    const [row] = await tx
+      .select({ id: integrationOutbox.id })
+      .from(integrationOutbox)
+      .where(
+        and(
+          eq(integrationOutbox.aggregateType, CUSTOMER_UPDATE_AGGREGATE),
+          sql`${integrationOutbox.status} in ('pending', 'processing', 'unknown')`,
+          sql`(${integrationOutbox.payload} ->> 'customerCode')::int = ${code}`,
+        ),
+      )
+      .limit(1);
+    return row !== undefined;
+  }
+}
+
+/** Key order must not change the fingerprint of the same content. */
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (typeof value === 'object' && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, v]) => v !== undefined)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => [k, canonical(v)]),
+    );
+  }
+  return value;
+}
+
+function isOriginCollision(error: unknown): boolean {
+  for (let current: unknown = error, depth = 0; typeof current === 'object' && current !== null && depth < 4; depth += 1) {
+    const { code, constraint, cause } = current as { code?: unknown; constraint?: unknown; cause?: unknown };
+    if (code === '23505' && constraint === 'integration_outbox_origin_id_uq') return true;
+    current = cause;
+  }
+  return false;
 }

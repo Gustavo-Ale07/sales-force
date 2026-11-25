@@ -4,7 +4,7 @@ import { isSankhyaGatewayError, type SankhyaPartnerWritePort } from '@salesforce
 import { z } from 'zod';
 import type { Logger } from '../observability/logger.js';
 import type { Clock } from '../platform/tokens.js';
-import { decideFailure, STALE_PROCESSING_MS, type DeliveryOutcome, type DeliveryPhase } from './order-delivery.policy.js';
+import { backoffMs, decideFailure, STALE_PROCESSING_MS, type DeliveryOutcome, type DeliveryPhase } from './order-delivery.policy.js';
 import type { CustomerDeliveryStore, ClaimedCustomerCommand, CustomerFailureRecord } from './customer-delivery.store.js';
 
 /**
@@ -60,6 +60,8 @@ export interface CustomerRunSummary {
 }
 
 const DEFAULT_SWEEP_LIMIT = 10;
+/** An attempt number large enough for `backoffMs` to return its ceiling (15 minutes). */
+const MAX_BACKOFF_ATTEMPT = 32;
 
 /** The reread partner must be the one that was asked for: same document, same seller; a mismatch is parked, never confirmed. */
 export function rereadMatches(command: CustomerUpsertCommand, partner: Customer): boolean {
@@ -168,7 +170,7 @@ export class CustomerDeliveryService {
         mayExist: mayExist || phase === 'include' || phase === 'reread',
         hasErpNumber: erpCode !== null,
       });
-      await this.applyOutcome(claimed, erpCode, outcome, errorMessage(error));
+      await this.applyOutcome(claimed, erpCode, outcome, outcome.kind === 'reject' ? refusalReason(error) : errorMessage(error), phase);
     }
   }
 
@@ -193,8 +195,27 @@ export class CustomerDeliveryService {
     this.deps.logger.warn({ outboxId: claimed.outboxId, errorCode }, 'customer delivery parked for a person');
   }
 
-  private async applyOutcome(claimed: ClaimedCustomerCommand, erpCode: number | null, outcome: DeliveryOutcome, message: string): Promise<void> {
+  private async applyOutcome(claimed: ClaimedCustomerCommand, erpCode: number | null, outcome: DeliveryOutcome, message: string, phase: DeliveryPhase): Promise<void> {
     const at = this.deps.now();
+    // A customer that only met temporary trouble must never become 'Precisa de correção' (the seller could not fix it, and the ERP may
+    // already hold it): after the attempt budget the retries go on at the slowest cadence (SNK-4 re-verifies by origin every time).
+    if (outcome.kind === 'reject' && outcome.errorClass === 'exhausted') {
+      const status = phase === 'verify' && erpCode === null && claimed.previousStatus !== 'unknown' ? 'pending' : 'unknown';
+      await this.deps.store.fail({
+        claimed,
+        errorClass: 'exhausted',
+        errorCode: outcome.errorCode,
+        message,
+        at,
+        ...(erpCode === null ? {} : { erpCode }),
+        kind: 'retry',
+        status,
+        nextAttemptAt: new Date(at.getTime() + backoffMs(MAX_BACKOFF_ATTEMPT)),
+        consumesAttempt: true,
+      });
+      this.deps.logger.warn({ outboxId: claimed.outboxId, errorCode: outcome.errorCode, attempt: claimed.attemptCount }, 'customer delivery keeps retrying after the attempt budget');
+      return;
+    }
     const base = { claimed, errorClass: outcome.errorClass, errorCode: outcome.errorCode, message, at, ...(erpCode === null ? {} : { erpCode }) };
     let record: CustomerFailureRecord;
     if (outcome.kind === 'reject') record = { ...base, kind: 'reject', status: 'rejected', nextAttemptAt: null, consumesAttempt: true };
@@ -203,6 +224,14 @@ export class CustomerDeliveryService {
     await this.deps.store.fail(record);
     this.deps.logger.warn({ outboxId: claimed.outboxId, outcome: outcome.kind, errorClass: outcome.errorClass, errorCode: outcome.errorCode, attempt: claimed.attemptCount }, 'customer delivery attempt did not complete');
   }
+}
+
+/**
+ * The reason stored with a DEFINITIVE refusal, shown to the seller (pt-BR wrapper in the API). For a gateway error it is the adapter's
+ * own sanitized message (documents masked, 300 characters at most); anything else is the generic text. Never the request.
+ */
+export function refusalReason(error: unknown): string {
+  return isSankhyaGatewayError(error) ? error.message : errorMessage(error);
 }
 
 /** Short, secret-free text: the class of the error and, for gateway errors, its stable code. Never the request. */

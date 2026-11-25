@@ -8,6 +8,7 @@ import { PolicyService } from '../iam/policy.service.js';
 import { uuidv7 } from '../platform/ids.js';
 import { CLOCK, CUSTOMER_ENQUEUE_ENABLED, CUSTOMER_CONFIRM_WAIT, type Clock, type CustomerConfirmWait } from '../platform/tokens.js';
 import { prepareCustomerRegistration } from './customer-registration-request.js';
+import { reasonOfRegistration, stateOfRegistration, type RegistrationOutboxFacts } from './customer-registration-view.js';
 import { CustomerRegistrationRepository, type CustomerRegistrationRow, type DocumentHolder } from './customer-registration.repository.js';
 
 /** Creations one account may start per hour (abuse and duplicate-flood guard). */
@@ -20,10 +21,6 @@ export interface CreateCustomerResult {
   readonly httpStatus: 200 | 201 | 202;
 }
 
-/** Stable rejection codes the worker may record, mapped to the reason the client sees. Anything else is a generic failure. */
-const REJECTION_REASONS: Readonly<Record<string, string>> = {
-  partner_document_duplicate: 'document_already_registered',
-};
 
 /**
  * Customer creation (D-AR). Orchestration only: who may create (route policy plus the seller rules of the
@@ -68,7 +65,8 @@ export class CustomerRegistrationService {
     }
 
     const existing = await this.registrations.findByRequest(user.accountId, body.clientRequestId);
-    if (existing !== null) return { response: this.replayOf(existing, fingerprint), httpStatus: 200 };
+    if (existing !== null) return { response: await this.replayOf(existing, fingerprint), httpStatus: 200 };
+    if (body.correctsRegistrationId !== undefined) await this.assertCorrectable(user, body.correctsRegistrationId);
 
     const at = this.clock();
     if ((await this.registrations.countSince(user.accountId, new Date(at.getTime() - HOUR_MS))) >= MAX_CUSTOMER_CREATIONS_PER_HOUR) {
@@ -83,6 +81,10 @@ export class CustomerRegistrationService {
         throw new AppError('rate_limited', { retryAfterSeconds: 600 });
       }
       await this.registrations.lockDocument(payload.document, tx);
+      // Under the lock: two corrections of one refusal cannot both pass (a unique index backs it).
+      if (body.correctsRegistrationId !== undefined && (await this.registrations.hasCorrection(body.correctsRegistrationId, tx))) {
+        throw correctionRefused('registration_already_corrected');
+      }
       // A retry that raced the original request is the same request, not a duplicate.
       const winner = await this.registrations.findByRequest(user.accountId, body.clientRequestId, tx);
       if (winner !== null) return { kind: 'replay' as const, row: winner };
@@ -109,6 +111,7 @@ export class CustomerRegistrationService {
           taxId: payload.document,
           name: payload.name,
           sellerCode: payload.sellerCode,
+          correctsRegistrationId: body.correctsRegistrationId ?? null,
           createdAt: at,
           updatedAt: at,
         },
@@ -131,9 +134,9 @@ export class CustomerRegistrationService {
     });
 
     if (created.kind === 'refused') throw this.documentTaken(created.holder, scope);
-    if (created.kind === 'replay') return { response: this.replayOf(created.row, fingerprint), httpStatus: 200 };
+    if (created.kind === 'replay') return { response: await this.replayOf(created.row, fingerprint), httpStatus: 200 };
     const settled = await this.awaitSettled(created.row.id);
-    return { response: this.toResponse(settled), httpStatus: settled.status === 'confirmed' ? 201 : 202 };
+    return { response: await this.respond(settled), httpStatus: settled.status === 'confirmed' ? 201 : 202 };
   }
 
   /**
@@ -150,9 +153,24 @@ export class CustomerRegistrationService {
   }
 
   /** Same id and same content: the recorded state. Same id, other content: the id is unusable. */
-  private replayOf(existing: CustomerRegistrationRow, fingerprint: string): CreateCustomerResponse {
+  private async replayOf(existing: CustomerRegistrationRow, fingerprint: string): Promise<CreateCustomerResponse> {
     if (existing.requestHash !== fingerprint) throw new AppError('idempotency_conflict');
-    return this.toResponse(existing);
+    return this.respond(existing);
+  }
+
+  /** The refusal text comes from the outbox command, so it is read only for a rejected registration. */
+  private async respond(row: CustomerRegistrationRow): Promise<CreateCustomerResponse> {
+    const outbox = row.status === 'rejected' ? ((await this.registrations.findViewById(row.id))?.outbox ?? null) : null;
+    return this.toResponse(row, outbox);
+  }
+
+  /** Only the author's own rejected registration, not yet corrected, can be corrected: the correction is a new request that points at it. */
+  private async assertCorrectable(user: CurrentUser, registrationId: string): Promise<void> {
+    const original = await this.registrations.findById(registrationId);
+    // Someone else's registration is indistinguishable from a missing one.
+    if (original === null || original.createdByAccountId !== user.accountId) throw correctionRefused('registration_not_found');
+    if (original.status !== 'rejected') throw correctionRefused('registration_not_rejected');
+    if (await this.registrations.hasCorrection(registrationId)) throw correctionRefused('registration_already_corrected');
   }
 
   /** Polls the registration until the worker settles it or the wait is over; the last seen state is returned either way. */
@@ -167,18 +185,22 @@ export class CustomerRegistrationService {
     return row;
   }
 
-  /** A rejected request answers 409 with its reason, on the first call and on every replay. */
-  private toResponse(row: CustomerRegistrationRow): CreateCustomerResponse {
+  /** A rejected request answers 409 with its state and reason, on the first call and on every replay (the reason code is also the `details.reason` source). */
+  private toResponse(row: CustomerRegistrationRow, outbox: RegistrationOutboxFacts | null = null): CreateCustomerResponse {
     if (row.status === 'rejected') {
-      const reason = REJECTION_REASONS[row.rejectionCode ?? ''];
-      // The ERP found the document; whose it is was never looked up against this asker's portfolio: generic text.
-      if (reason === 'document_already_registered') throw this.documentTaken(null, null);
-      throw new AppError('conflict', {
-        message: 'O Sankhya recusou o cadastro do cliente. Confira os dados e tente novamente.',
-        details: { reason: 'customer_rejected' },
-      });
+      const reason = reasonOfRegistration(row.status, row.rejectionCode, outbox);
+      // I-1: a duplicate keeps the exact shape of every other duplicate refusal (the register shows its state and id).
+      if (reason?.code === 'document_already_registered') throw this.documentTaken(null, null);
+      const details = { reason: 'customer_rejected', state: 'needs_correction', registrationId: row.id, reasonCode: reason?.code ?? 'erp_refused' };
+      throw new AppError('conflict', { message: reason?.message ?? 'O Sankhya recusou o cadastro do cliente. Confira os dados e tente novamente.', details });
     }
-    return { registrationId: row.id, status: row.status as CreateCustomerResponse['status'], customerCode: row.erpCustomerCode, originKey: row.originKey };
+    return {
+      registrationId: row.id,
+      state: stateOfRegistration(row.status),
+      status: row.status as CreateCustomerResponse['status'],
+      customerCode: row.erpCustomerCode,
+      originKey: row.originKey,
+    };
   }
 
   /**
@@ -192,6 +214,10 @@ export class CustomerRegistrationService {
       details: { reason: 'document_already_registered' },
     });
   }
+}
+
+function correctionRefused(reason: string): AppError {
+  return new AppError('conflict', { message: 'Este cadastro não pode ser corrigido.', details: { reason } });
 }
 
 /**

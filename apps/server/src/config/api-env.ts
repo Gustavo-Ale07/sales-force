@@ -57,9 +57,10 @@ export const ApiEnvSchema = z.object({
     .default('false')
     .transform((value) => value === 'true'),
   /**
-   * D-AP: open `PATCH /customers/{code}`. `false` by default; staging only; needs customer creation open. Even when open the server
-   * still refuses the edit (409 `customer_edit_delivery_not_approved`): the partner write port has no update operation (`updatePartner`
-   * stays refused until the owner approves it), so nothing is stored and the ERP is never called.
+   * D-AP: open `PATCH /customers/{code}`. `false` by default; staging only; needs customer creation open. Open = the API records the
+   * edit (phone, e-mail, notes) as a `customer_update` outbox command; the worker writes it to the ERP only with its own customer-write
+   * switch on (`SANKHYA_CUSTOMER_WRITE_ENABLED`: staging + live + allow-listed Sandbox host, SNK-3/SNK-6). Closed = 409 `customer_edit_disabled`,
+   * nothing stored. Owner approval of `updatePartner`: 2026-11-25, Sandbox only.
    */
   ERP_CUSTOMER_EDIT_ENABLED: z
     .enum(['true', 'false'], { error: "must be 'true' or 'false'." })

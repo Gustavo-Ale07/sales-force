@@ -10,7 +10,6 @@ import {
 import { syncState, type Database } from '@salesforce/db';
 import { ApiRoute, Contract, type RequestContract } from '../http/route.js';
 import { CurrentUserParam, type CurrentUser } from '../iam/current-user.js';
-import { CUSTOMER_EDIT_DELIVERY_APPROVED } from '../customers/customer-edit-delivery.js';
 import { CLOCK, CUSTOMER_EDIT_ENABLED, CUSTOMER_ENQUEUE_ENABLED, DATABASE, DATASET_IDENTITY, ORDER_ENQUEUE_ENABLED, type Clock } from '../platform/tokens.js';
 import { buildConfigurationResponse, toOrderEntryConfiguration } from './configuration-summary.js';
 import { InstallationConfigurationService } from './configuration.service.js';
@@ -61,6 +60,6 @@ export class ConfigurationController {
   @ApiRoute(routes.getOrderEntryConfiguration)
   async getOrderEntry(): Promise<OrderEntryConfiguration> {
     const current = await this.configuration.current();
-    return toOrderEntryConfiguration(current.configuration, this.dataset, this.enqueueEnabled, this.customerEnqueueEnabled, this.customerEnqueueEnabled && this.customerEditEnabled && CUSTOMER_EDIT_DELIVERY_APPROVED);
+    return toOrderEntryConfiguration(current.configuration, this.dataset, this.enqueueEnabled, this.customerEnqueueEnabled, this.customerEnqueueEnabled && this.customerEditEnabled);
   }
 }

@@ -54,6 +54,14 @@ export const AUDIT_ACTIONS = {
   customerErpUnknown: 'customer.erp_unknown',
   /** D-AP: an edit of an existing customer was refused because edit delivery to the ERP is not approved (ids and field names only; no values). */
   customerUpdateRefused: 'customer.update_refused',
+  /** D-AP: an edit was recorded for delivery (ids and the names of the changed fields only; no values). */
+  customerUpdateRequested: 'customer.update_requested',
+  /** D-AP: the worker wrote the edit to the ERP and the reread matched (ids and field names only). */
+  customerUpdateDelivered: 'customer.update_delivered',
+  /** D-AP: the ERP definitively refused the edit (error class and code only). */
+  customerUpdateRejected: 'customer.update_rejected',
+  /** D-AP: the outcome of an edit is not known (or the reread did not match) and a person has to look. */
+  customerUpdateUnknown: 'customer.update_unknown',
   /** Spike S1.8: the worker wrote the account's photo to its ERP user (ids and codes only, never the image). */
   profilePhotoErpWritten: 'account.photo_erp_written',
   /** Spike S1.8: the photo write was refused for good (class and stable code only). */

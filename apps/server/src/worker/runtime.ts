@@ -28,6 +28,7 @@ import { SyncRefreshJob } from './jobs/sync-refresh.job.js';
 import { CustomerDeliveryJob, CustomerPayloadPurgeJob, CustomerRefusalPurgeJob } from './jobs/customer-delivery.job.js';
 import type { CustomerPayloadRetention, CustomerRefusalRetention } from '../integration/customer-payload-retention.js';
 import type { CustomerDeliveryService } from '../integration/customer-delivery.service.js';
+import type { CustomerUpdateDeliveryService } from '../integration/customer-update-delivery.service.js';
 import type { ProfilePhotoDeliveryService } from '../integration/profile-photo-delivery.service.js';
 
 /** How often the worker looks for "Atualizar dados" requests recorded by the API. */
@@ -111,7 +112,7 @@ export interface WorkerRuntimeDeps {
   readonly customerPayloadRetention?: { readonly service: CustomerPayloadRetention };
   /** Daily purge of refused-duplicate records older than 24 hours. Independent of the customer-write switch. */
   readonly customerRefusalRetention?: { readonly service: CustomerRefusalRetention };
-  readonly customerDelivery?: { readonly service: CustomerDeliveryService; readonly triggerMs?: number };
+  readonly customerDelivery?: { readonly service: CustomerDeliveryService; readonly updates?: CustomerUpdateDeliveryService; readonly triggerMs?: number };
   /**
    * ERP profile photo delivery (spike S1.8). Present only when the worker-side photo-write switch is on (Sandbox/staging). It runs from a
    * short-interval sweep over `integration_outbox` only (the outbox row is the business record and carries retries/backoff; there is
@@ -387,13 +388,14 @@ export class WorkerRuntime {
   }
 
   /** Short-interval sweep of due customer creations; never overlaps itself, and a failing run only logs. */
-  #startCustomerTrigger(delivery: { readonly service: CustomerDeliveryService; readonly triggerMs?: number }): void {
+  #startCustomerTrigger(delivery: { readonly service: CustomerDeliveryService; readonly updates?: CustomerUpdateDeliveryService; readonly triggerMs?: number }): void {
     let busy = false;
     const tick = async () => {
       if (busy) return;
       busy = true;
       try {
         await delivery.service.runDue();
+        await delivery.updates?.runDue();
       } catch (error) {
         this.deps.logger.warn({ err: error }, 'customer delivery trigger failed; the next tick retries');
       } finally {

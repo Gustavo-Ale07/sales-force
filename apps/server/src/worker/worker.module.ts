@@ -22,6 +22,8 @@ import type { RequestBudget, SankhyaPartnerWritePort, SankhyaProfilePhotoPort, S
 import { CustomerDeliveryService, type CustomerDeliverySettings } from '../integration/customer-delivery.service.js';
 import { CustomerPayloadRetention, CustomerRefusalRetention } from '../integration/customer-payload-retention.js';
 import { DrizzleCustomerDeliveryStore } from '../integration/customer-delivery.store.js';
+import { CustomerUpdateDeliveryService } from '../integration/customer-update-delivery.service.js';
+import { DrizzleCustomerUpdateDeliveryStore } from '../integration/customer-update-delivery.store.js';
 import { ProfilePhotoDeliveryService } from '../integration/profile-photo-delivery.service.js';
 import { DrizzleProfilePhotoDeliveryStore } from '../integration/profile-photo-delivery.store.js';
 import type { SalesHistorySyncConfig } from '../sync/sales-history-config.js';
@@ -146,6 +148,12 @@ export class WorkerModule {
                         store: new DrizzleCustomerDeliveryStore(db.db, new AuditService(db.db, now)),
                         gateway: customerDelivery.gateway,
                         settings: customerDelivery.settings,
+                        logger,
+                        now,
+                      }),
+                      updates: new CustomerUpdateDeliveryService({
+                        store: new DrizzleCustomerUpdateDeliveryStore(db.db, new AuditService(db.db, now)),
+                        gateway: customerDelivery.gateway,
                         logger,
                         now,
                       }),

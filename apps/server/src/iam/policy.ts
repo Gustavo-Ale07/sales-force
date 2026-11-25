@@ -62,7 +62,9 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   // D-AR: creating a customer in the Force: seller, manager and admin (never `technical`). Which seller owns the
   // customer is decided per request (prepareCustomerRegistration), not by this table.
   createCustomer: { roles: EVERY_ROLE },
-  // D-AP: edit of an existing customer (refused today: delivery not approved). Row scope is decided by the service (customer scope).
+  // D-AP/D-AQ: the register's own list and detail, and the edit of an existing customer. Row scope (own/portfolio) is decided by the services.
+  listCustomerRegistrations: { roles: EVERY_ROLE },
+  getCustomerRegistration: { roles: EVERY_ROLE },
   updateCustomer: { roles: EVERY_ROLE },
   // Minimal order-entry slice (never syncStates/gateway/integration/customers/pricing/financial):
   // open to every role that can create an order (seller/manager/admin), unlike getConfiguration above.

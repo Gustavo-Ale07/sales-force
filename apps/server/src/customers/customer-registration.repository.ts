@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { customerRegistration, customerRegistrationRefusal, erpCustomer, erpSeller, integrationOutbox, type Database } from '@salesforce/db';
-import { and, eq, gte, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
+import type { RegistrationOutboxFacts } from './customer-registration-view.js';
 import { isBlockedRaw } from '../mirror/mirror.repository.js';
 import type { Executor } from '../orders/orders.repository.js';
 import { DATABASE } from '../platform/tokens.js';
@@ -23,6 +24,16 @@ export type DocumentHolder =
     }
   | { readonly source: 'registration'; readonly code: number | null; readonly name: string; readonly sellerCode: number | null };
 export type NewCustomerRegistration = typeof customerRegistration.$inferInsert;
+export interface RegistrationWithOutbox {
+  readonly registration: CustomerRegistrationRow;
+  readonly outbox: RegistrationOutboxFacts | null;
+}
+
+function visibleTo(accountId: string, sellerCodes: readonly number[] | null): SQL | undefined {
+  if (sellerCodes === null) return undefined;
+  return or(eq(customerRegistration.createdByAccountId, accountId), sellerCodes.length === 0 ? undefined : inArray(customerRegistration.sellerCode, [...sellerCodes]));
+}
+
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
 export const CUSTOMER_UPSERT_AGGREGATE = 'customer_registration';
@@ -141,6 +152,49 @@ export class CustomerRegistrationRepository {
       .where(and(eq(customerRegistration.taxId, taxId), sql`${customerRegistration.status} in ('pending', 'unknown', 'confirmed')`))
       .limit(1);
     return open === undefined ? null : { source: 'registration', code: open.erpCustomerCode, name: open.name, sellerCode: open.sellerCode };
+  }
+
+  /** A registration plus the facts of its outbox command that explain its state (error text, parked or retrying). */
+  async findViewById(id: string, db: Executor = this.db): Promise<RegistrationWithOutbox | null> {
+    const rows = await this.selectWithOutbox(db, eq(customerRegistration.id, id), 1);
+    return rows[0] ?? null;
+  }
+
+  /** Registrations the reader may see: every one for a scope that reaches all sellers, otherwise the reader's own or those of the scope's sellers. */
+  async listVisible(
+    input: { readonly accountId: string; readonly sellerCodes: readonly number[] | null; readonly statuses: readonly string[] | null; readonly limit: number },
+    db: Executor = this.db,
+  ): Promise<RegistrationWithOutbox[]> {
+    return this.selectWithOutbox(
+      db,
+      and(visibleTo(input.accountId, input.sellerCodes), input.statuses === null ? undefined : inArray(customerRegistration.status, [...input.statuses])),
+      input.limit,
+    );
+  }
+
+  /** A rejected registration the seller already replaced by a correction no longer needs attention. */
+  async hasCorrection(registrationId: string, db: Executor = this.db): Promise<boolean> {
+    const [row] = await db.select({ id: customerRegistration.id }).from(customerRegistration).where(eq(customerRegistration.correctsRegistrationId, registrationId)).limit(1);
+    return row !== undefined;
+  }
+
+  private async selectWithOutbox(db: Executor, where: SQL | undefined, limit: number): Promise<RegistrationWithOutbox[]> {
+    const rows = await db
+      .select({
+        registration: customerRegistration,
+        outboxStatus: integrationOutbox.status,
+        nextAttemptAt: integrationOutbox.nextAttemptAt,
+        lastErrorMessage: integrationOutbox.lastErrorMessage,
+      })
+      .from(customerRegistration)
+      .leftJoin(integrationOutbox, and(eq(integrationOutbox.aggregateType, CUSTOMER_UPSERT_AGGREGATE), eq(integrationOutbox.aggregateId, customerRegistration.id)))
+      .where(where)
+      .orderBy(desc(customerRegistration.createdAt), desc(customerRegistration.id))
+      .limit(limit);
+    return rows.map((row) => ({
+      registration: row.registration,
+      outbox: row.outboxStatus === null ? null : { status: row.outboxStatus, nextAttemptAt: row.nextAttemptAt, lastErrorMessage: row.lastErrorMessage },
+    }));
   }
 
   async insert(row: NewCustomerRegistration, tx: Executor): Promise<CustomerRegistrationRow> {

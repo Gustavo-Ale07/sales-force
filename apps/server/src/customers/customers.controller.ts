@@ -6,12 +6,15 @@ import {
   type CustomerDetail,
   type CustomerFinancial,
   type CustomerLettersResponse,
+  type CustomerRegistrationsResponse,
+  type CustomerRegistrationView,
   type CustomersResponse,
   type UpdateCustomerResponse,
 } from '@salesforce/contracts';
 import type { FastifyReply } from 'fastify';
 import { ApiRoute, Contract, type RequestContract } from '../http/route.js';
 import { CurrentUserParam, type CurrentUser } from '../iam/current-user.js';
+import { CustomerRegistrationQueryService } from './customer-registration-query.service.js';
 import { CustomerRegistrationService } from './customer-registration.service.js';
 import { CustomerUpdateService } from './customer-update.service.js';
 import { CustomersService } from './customers.service.js';
@@ -21,6 +24,7 @@ export class CustomersController {
   constructor(
     @Inject(CustomersService) private readonly customers: CustomersService,
     @Inject(CustomerRegistrationService) private readonly registrations: CustomerRegistrationService,
+    @Inject(CustomerRegistrationQueryService) private readonly registrationQueries: CustomerRegistrationQueryService,
     @Inject(CustomerUpdateService) private readonly updates: CustomerUpdateService,
   ) {}
 
@@ -56,10 +60,28 @@ export class CustomersController {
   async update(
     @CurrentUserParam() user: CurrentUser,
     @Contract() contract: RequestContract<typeof routes.updateCustomer>,
+    @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<UpdateCustomerResponse> {
-    // Refuses with a 409 today (edit delivery not approved); the success path (202) exists for the day the owner approves it.
-    const { response } = await this.updates.update(user, contract.params.code, contract.body);
+    const { response, httpStatus } = await this.updates.update(user, contract.params.code, contract.body);
+    // 202 recorded for delivery; 200 replay of an earlier request.
+    void reply.status(httpStatus);
     return response;
+  }
+
+  @ApiRoute(routes.listCustomerRegistrations)
+  listRegistrations(
+    @CurrentUserParam() user: CurrentUser,
+    @Contract() contract: RequestContract<typeof routes.listCustomerRegistrations>,
+  ): Promise<CustomerRegistrationsResponse> {
+    return this.registrationQueries.list(user, contract.query);
+  }
+
+  @ApiRoute(routes.getCustomerRegistration)
+  getRegistration(
+    @CurrentUserParam() user: CurrentUser,
+    @Contract() contract: RequestContract<typeof routes.getCustomerRegistration>,
+  ): Promise<CustomerRegistrationView> {
+    return this.registrationQueries.get(user, contract.params.registrationId);
   }
 
   @ApiRoute(routes.getCustomer)
