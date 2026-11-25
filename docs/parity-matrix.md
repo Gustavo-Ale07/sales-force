@@ -31,7 +31,7 @@ Lotes (definidos pelo dono): 1 e 2 em andamento hoje; 3 e 4 NÃO iniciar; FORA =
 | Presets de data em Vendas | feito | existe | sim | P | não | 1 | feito | dc9e370 |
 | Abas Não enviados / Enviados em Vendas | feito (group no servidor) | existe | sim | M | sim | 1 | feito | 22506c0, 3bcfe71 |
 | "Continuar o pedido em andamento?" | feito | existe | sim | P | não | 1 | feito | f0cd036 |
-| Filtro de Venda | existe | inócuo: o servidor só entrega produtos vendáveis ao aparelho | limitação técnica | M | não | 2 | não entregue (não se aplica) | |
+| Filtro de Venda | removido do site (decisão do dono 25/11); a listagem do site pede sempre `sellable=true` | não existe; o servidor só entrega produtos vendáveis ao aparelho | sim (só vendáveis nos dois lados) | P | não | 2ª rodada | feito | ver commit |
 | Aviso de origem do preço na lista | existe | só no detalhe do produto; a lista local não carrega o `priceContext` | não (a igualar) | M | não | 2 | não entregue | bc5e5e8 (detalhe) |
 | Filtro de pedidos por produto | existe | feito | sim | M | não | 2 | feito | 3a44ff1, 4595ffc |
 | Datas por atualização ("Período por") | existe | feito | sim | P | não | 2 | feito | 3a44ff1, 4595ffc |

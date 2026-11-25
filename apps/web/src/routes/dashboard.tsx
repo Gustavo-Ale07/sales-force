@@ -80,7 +80,7 @@ export function DashboardPage() {
           <KpiLink to="/produtos">
             <StatTile label="Produtos" icon={<Package size={16} aria-hidden="true" />} tone="info" value={<MetricValueOrUnavailable metric={productsVisible} />} />
           </KpiLink>
-          <KpiLink to="/produtos" search={{ sellable: "true" }}>
+          <KpiLink to="/produtos">
             <StatTile label="Vendáveis" icon={<BadgeCheck size={16} aria-hidden="true" />} tone="success" value={<MetricValueOrUnavailable metric={productsSellable} />} />
           </KpiLink>
           <KpiLink to="/pedidos" search={{ status: "draft" }}>

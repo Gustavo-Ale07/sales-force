@@ -48,7 +48,7 @@ import {
 } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { priceContextSourceLabels } from "../lib/labels";
-import { BOOLEAN_TEXT, type ProductsSearch } from "../lib/route-search";
+import type { ProductsSearch } from "../lib/route-search";
 import { asInt, asOneOf, compact } from "../lib/search-params";
 import { useSearchBox } from "../lib/use-search-box";
 
@@ -119,7 +119,8 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
   // Display mode only (not a filter): plain component state, no persistence.
   const [view, setView] = useState<ProductsView>("list");
   const { product: openProduct, ...filters } = params;
-  const apiParams: ProductsParams = { ...filters, page: params.page ?? 1, pageSize: params.pageSize ?? 25, sort: params.sort ?? "description" };
+  // The catalog lists only sellable products, like the app (decision of the owner 25/11); no filter for it.
+  const apiParams: ProductsParams = { ...filters, sellable: "true", page: params.page ?? 1, pageSize: params.pageSize ?? 25, sort: params.sort ?? "description" };
   const query = useQuery(productsQueryOptions(api, apiParams));
   const groups = useQuery(productGroupsQueryOptions(api));
   const pricingCustomer = useQuery({
@@ -134,7 +135,6 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
   const hasFilters =
     params.search !== undefined ||
     params.group !== undefined ||
-    params.sellable !== undefined ||
     params.customerCode !== undefined;
   const clearAll = () => onSearchChange(compact({ sort: params.sort, pageSize: params.pageSize }));
   const context = query.data?.priceContext;
@@ -146,7 +146,7 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
       <FilterBar
         aria-label="Filtros do catálogo"
         grid
-        activeCount={[params.search, params.group, params.sellable, params.customerCode].filter((value) => value !== undefined).length}
+        activeCount={[params.search, params.group, params.customerCode].filter((value) => value !== undefined).length}
       >
         <FilterField label="Busca" keepVisible className="lg:col-span-6">
           <SearchInput
@@ -181,22 +181,12 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
             ))}
           </Select>
         </FilterField>
-        <FilterField label="Venda" className="lg:col-span-4">
-          <Select size="md" value={params.sellable ?? ""} onChange={(e) => change({ sellable: asOneOf(e.target.value, BOOLEAN_TEXT) })}>
-            <option value="">Todos</option>
-            <option value="true">Vendáveis</option>
-            <option value="false">Não vendáveis</option>
-          </Select>
-        </FilterField>
       </FilterBar>
 
       {hasFilters ? (
         <div className="flex flex-wrap items-center gap-1.5" aria-label="Filtros ativos">
           {params.search ? <FilterChip onRemove={() => change({ search: undefined })}>{`Busca: ${params.search}`}</FilterChip> : null}
           {params.group !== undefined ? <FilterChip onRemove={() => change({ group: undefined })}>{`Grupo: ${groupName ?? params.group}`}</FilterChip> : null}
-          {params.sellable ? (
-            <FilterChip onRemove={() => change({ sellable: undefined })}>{params.sellable === "true" ? "Vendáveis" : "Não vendáveis"}</FilterChip>
-          ) : null}
           {params.customerCode !== undefined ? (
             <FilterChip onRemove={() => change({ customerCode: undefined })}>{`Cliente: ${pricingCustomer.data?.name ?? params.customerCode}`}</FilterChip>
           ) : null}
@@ -238,7 +228,7 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
           ) : query.data.items.length === 0 ? (
             <EmptyState
               compact
-              title={hasFilters ? "Nenhum produto com estes filtros." : "Nenhum produto disponível"}
+              title={hasFilters ? "Nenhum produto com estes filtros." : "Nenhum produto disponível"}
             />
           ) : (
             <ProductGrid items={query.data.items} onOpen={(code) => onSearchChange(compact({ ...params, product: code }))} />
@@ -274,7 +264,7 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
               <TableMessageRow colSpan={COLUMNS}>
                 <EmptyState
                   compact
-                  title={hasFilters ? "Nenhum produto com estes filtros." : "Nenhum produto disponível"}
+                  title={hasFilters ? "Nenhum produto com estes filtros." : "Nenhum produto disponível"}
                 />
               </TableMessageRow>
             ) : (

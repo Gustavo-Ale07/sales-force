@@ -105,7 +105,6 @@ export function parseOrdersSearch(raw: Record<string, unknown>): OrdersSearch {
 export interface ProductsSearch {
   search?: string;
   group?: number;
-  sellable?: "true" | "false";
   customerCode?: number;
   sort?: ApiSchema<"ProductSort">;
   page?: number;
@@ -133,16 +132,13 @@ export function parseReleaseQueueSearch(raw: Record<string, unknown>): ReleaseQu
 }
 
 export const PRODUCT_SORTS =["description", "-description", "code", "-code"] as const;
-export const BOOLEAN_TEXT = ["true", "false"] as const;
 
 export function parseProductsSearch(raw: Record<string, unknown>): ProductsSearch {
   const page = asInt(raw.page, 1);
   const pageSize = asPageSize(raw.pageSize);
-  const sellable = raw.sellable === true ? "true" : raw.sellable === false ? "false" : raw.sellable;
   return compact({
     search: asString(raw.search),
     group: asInt(raw.group, 0),
-    sellable: asOneOf(sellable, BOOLEAN_TEXT),
     customerCode: asInt(raw.customerCode, 0),
     sort: asOneOf(raw.sort, PRODUCT_SORTS),
     page: page !== undefined && page > 1 ? page : undefined,

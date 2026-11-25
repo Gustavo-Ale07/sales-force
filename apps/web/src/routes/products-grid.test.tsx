@@ -1,7 +1,7 @@
 import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { noPriceList, product, productsPage } from "../test/fixtures";
-import { renderApp } from "../test/harness";
+import { callsTo, renderApp } from "../test/harness";
 
 const groups = { "GET /product-groups": { body: { items: [{ code: 30, name: "Balões", parentCode: null, degree: 1, hasChildren: false }], hierarchical: true, hasUngrouped: false } } };
 
@@ -27,6 +27,14 @@ describe("Catálogo: modo grade de fotos", () => {
 
     await user.click(screen.getByRole("radio", { name: /Lista/ }));
     expect(screen.getByRole("table")).toBeInTheDocument();
+  });
+
+  it("lists only sellable products and offers no Venda filter", async () => {
+    const { calls } = renderApp("/produtos", { handlers: { ...groups, "GET /products": { body: productsPage([product()]) } } });
+    await screen.findByText("Balão látex 9 pol. vermelho");
+    expect(callsTo(calls, "GET", "/products").every((call) => call.search.get("sellable") === "true")).toBe(true);
+    expect(screen.queryByRole("combobox", { name: "Venda" })).toBeNull();
+    expect(screen.queryByText("Não vendáveis")).toBeNull();
   });
 
   it("opens the detail panel from a grid card", async () => {
