@@ -78,9 +78,11 @@ export const ProductGroupSchema = named(
     degree: z.number().int().min(1),
     /** The next level (Subgrupo / Linha) has options under this group. */
     hasChildren: z.boolean(),
+    /** This group plus all descendants (hidden ones too), ascending: the codes `GET /products?group=` matches. Offline filter set. */
+    subtreeCodes: z.array(codeInt()),
   }),
 );
-export type ProductGroup = z.infer<typeof ProductGroupSchema>;
+export type ProductGroup= z.infer<typeof ProductGroupSchema>;
 
 export const ProductGroupsResponseSchema = named(
   'ProductGroupsResponse',

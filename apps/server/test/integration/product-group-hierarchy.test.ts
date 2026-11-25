@@ -83,7 +83,9 @@ describe('product group hierarchy', () => {
     expect(byCode.get(9001)).toMatchObject({ parentCode: null, hasChildren: true });
     expect(byCode.get(A as number)).toMatchObject({ parentCode: 9001, hasChildren: true });
     expect(byCode.get(B as number)).toMatchObject({ parentCode: A, hasChildren: false });
-    expect(byCode.get(C as number)).toMatchObject({ parentCode: null, hasChildren: false });
+    expect(byCode.get(C as number)).toMatchObject({ parentCode: null, hasChildren: false, subtreeCodes: [C] });
+    expect(byCode.get(B as number)?.subtreeCodes).toEqual([B]);
+    expect(byCode.get(9001)?.subtreeCodes).toContain(B);
     expect(byCode.has(9002)).toBe(false);
     expect(byCode.has(9003)).toBe(false);
   });

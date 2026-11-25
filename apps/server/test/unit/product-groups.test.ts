@@ -54,6 +54,21 @@ describe('visibleGroups', () => {
     expect(nodes.get(2)?.parentCode).toBeNull();
   });
 
+  it('subtreeCodes = the group plus every descendant, hidden ones included (what GET /products?group=N matches)', () => {
+    const rows = [...tree.filter((r) => r.code !== 112), g(112, 'INATIVO - Aço 2"', 11, 3, false)];
+    const nodes = byCode(visibleGroups(rows, new Set([111, 112, 12, 20])));
+    expect([...(nodes.get(10)?.subtreeCodes ?? [])].sort((a, b) => a - b)).toEqual([10, 11, 12, 111, 112]);
+    expect([...(nodes.get(11)?.subtreeCodes ?? [])].sort((a, b) => a - b)).toEqual([11, 111, 112]);
+    expect(nodes.get(111)?.subtreeCodes).toEqual([111]);
+    expect(nodes.get(20)?.subtreeCodes).toEqual([20]);
+    expect(nodes.has(112)).toBe(false);
+  });
+
+  it('subtreeCodes ends on a cycle', () => {
+    const nodes = byCode(visibleGroups([g(1, 'A', 2, 1), g(2, 'B', 1, 2)], new Set([1, 2])));
+    expect([...(nodes.get(1)?.subtreeCodes ?? [])].sort()).toEqual([1, 2]);
+  });
+
   it('orders by name', () => {
     expect(visibleGroups(tree, new Set([111, 12, 20])).map((n) => n.name)).toEqual(['Aço', 'Aço 1"', 'PVC', 'Serviços', 'Tubos']);
   });

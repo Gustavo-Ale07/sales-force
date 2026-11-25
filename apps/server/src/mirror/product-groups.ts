@@ -19,6 +19,11 @@ export interface GroupNode {
   readonly degree: number;
   /** At least one visible group has this one as its parent: the next level of the cascade opens. */
   readonly hasChildren: boolean;
+  /**
+   * The group plus every descendant of any depth in the full mirrored hierarchy (hidden/inactive ones included): exactly the set
+   * `GET /products?group=N` matches, so an offline client filters the same products as the server.
+   */
+  readonly subtreeCodes: number[];
 }
 
 /** The deepest hierarchy walked (the real one has 3 levels); beyond it the chain is an anomaly. */
@@ -65,6 +70,7 @@ export function visibleGroups(groups: readonly GroupRow[], productGroupCodes: Re
       parentCode: parents.get(group.code) ?? null,
       degree: group.degree,
       hasChildren: withChildren.has(group.code),
+      subtreeCodes: subtreeOf(groups, group.code).sort((a, b) => a - b),
     }))
     .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR') || a.code - b.code);
 }

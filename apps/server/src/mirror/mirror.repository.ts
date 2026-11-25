@@ -724,7 +724,7 @@ export class MirrorRepository {
       const flat = rows.flatMap((row) =>
         row.code === null
           ? []
-          : [{ code: row.code, name: row.name ?? `Grupo ${row.code}`, parentCode: null, degree: 1, hasChildren: false }],
+          : [{ code: row.code, name: row.name ?? `Grupo ${row.code}`, parentCode: null, degree: 1, hasChildren: false, subtreeCodes: [row.code] }],
       );
       flat.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR') || a.code - b.code);
       return { items: flat, hierarchical: false, hasUngrouped };
