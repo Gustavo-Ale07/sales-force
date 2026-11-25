@@ -25,11 +25,16 @@ describe("createHttpAuth", () => {
     expect(requests[0]).toMatchObject({
       method: "POST",
       url: `${BASE}/auth/login`,
-      body: { username: "usuario.teste", password: "segredo" },
+      body: { username: "usuario.teste", password: "segredo", client: "app" },
     });
     expect(requests[0]?.body).not.toHaveProperty("email");
     // A native client sends no Origin header; the server's CSRF layer accepts that case (see the mobile plan).
     expect(requests[0]?.headers.get("origin")).toBeNull();
+  });
+
+  it("maps 403 app_not_permitted (profile without use of the app) to its own reason", async () => {
+    const { auth } = authWith(() => ({ status: 403, body: { code: "app_not_permitted", message: "y" } }));
+    await expect(auth.login({ username: "ana", password: "p" })).resolves.toEqual({ ok: false, reason: "app_not_permitted" });
   });
 
   it.each([

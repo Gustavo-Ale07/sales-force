@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from "react-native";
+import { APP_NOT_PERMITTED_MESSAGE } from "@salesforce/contracts";
 import type { Account, AuthPort, LoginResult } from "../auth/auth-port";
 import { validateLoginForm, type LoginFormErrors } from "../auth/login-form";
 import { APP_ENVIRONMENT_LABEL, APP_VERSION, PRODUCT_NAME } from "../app-info";
@@ -18,6 +19,8 @@ export function describeLoginFailure(failure: LoginFailure): string {
       return "Usuário ou senha inválidos.";
     case "access_not_configured":
       return "Usuário autenticado, mas o acesso ao Force ainda não está configurado.";
+    case "app_not_permitted":
+      return APP_NOT_PERMITTED_MESSAGE;
     case "rate_limited":
       return failure.retryAfterSeconds !== undefined
         ? `Muitas tentativas. Tente novamente em ${failure.retryAfterSeconds} segundos.`

@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-
 import type { LoginResult } from "../auth/auth-port";
 import { APP_ENVIRONMENT_LABEL, APP_VERSION, PRODUCT_NAME } from "../app-info";
 import { account, fakeAuth } from "../test-doubles";
+import { APP_NOT_PERMITTED_MESSAGE } from "@salesforce/contracts";
 import { LoginScreen, describeLoginFailure } from "./login-screen";
 
 async function fillAndSubmit(username: string, password: string) {
@@ -137,6 +138,10 @@ describe("LoginScreen identity and password", () => {
 });
 
 describe("describeLoginFailure", () => {
+  it("a profile without use of the app gets the contract text, in the form (no native alert)", () => {
+    expect(describeLoginFailure({ ok: false, reason: "app_not_permitted" })).toBe(APP_NOT_PERMITTED_MESSAGE);
+  });
+
   it("uses the generic credential and unavailable copy, revealing nothing about the account", () => {
     expect(describeLoginFailure({ ok: false, reason: "invalid_credentials" })).toBe("Usuário ou senha inválidos.");
     expect(describeLoginFailure({ ok: false, reason: "unavailable" })).toBe(

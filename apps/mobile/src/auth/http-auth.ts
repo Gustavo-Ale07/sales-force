@@ -9,6 +9,8 @@ import type { AuthPort, LoginResult } from "./auth-port";
  */
 export function mapLoginFailure(error: ApiRequestError): Extract<LoginResult, { ok: false }> {
   if (error.status === 403 && error.code === "access_not_configured") return { ok: false, reason: "access_not_configured" };
+  // The credentials were right but the profile (technical, operations) has no use of the app: the server says so only after proving them.
+  if (error.status === 403 && error.code === "app_not_permitted") return { ok: false, reason: "app_not_permitted" };
   switch (error.status) {
     case 400:
     case 401:
@@ -35,7 +37,7 @@ export function createHttpAuth(api: ApiClient): AuthPort {
 
     async login(credentials) {
       try {
-        const session = await callApi(() => api.POST("/auth/login", { body: credentials }));
+        const session = await callApi(() => api.POST("/auth/login", { body: { ...credentials, client: "app" } }));
         return { ok: true, account: session.account };
       } catch (error) {
         if (error instanceof ApiRequestError) return mapLoginFailure(error);
