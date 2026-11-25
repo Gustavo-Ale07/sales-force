@@ -58,6 +58,8 @@ export const customerRegistration = pgTable(
     erpCustomerCode: integer('erp_customer_code'),
     /** Stable reason code of a rejection (e.g. duplicate_document), never free text from the ERP. */
     rejectionCode: text('rejection_code'),
+    /** A rejected registration this one corrects (D-AR); at most one correction per rejected registration. */
+    correctsRegistrationId: uuid('corrects_registration_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -72,6 +74,10 @@ export const customerRegistration = pgTable(
     uniqueIndex('customer_registration_account_request_uq').on(t.createdByAccountId, t.clientRequestId),
     // One origin key is delivered at most once.
     uniqueIndex('customer_registration_origin_key_uq').on(t.originKey),
+    // One correction per rejected registration. Serves: the correction guard (is this registration already corrected).
+    uniqueIndex('customer_registration_corrects_uq')
+      .on(t.correctsRegistrationId)
+      .where(sql`${t.correctsRegistrationId} is not null`),
     // Serves: live duplicate check against registrations still in flight (pending or unknown).
     index('customer_registration_tax_id_open_idx')
       .on(t.taxId)

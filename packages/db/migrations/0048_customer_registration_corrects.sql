@@ -1,0 +1,2 @@
+ALTER TABLE "customer_registration" ADD COLUMN "corrects_registration_id" uuid;--> statement-breakpoint
+CREATE UNIQUE INDEX "customer_registration_corrects_uq" ON "customer_registration" USING btree ("corrects_registration_id") WHERE "customer_registration"."corrects_registration_id" is not null;

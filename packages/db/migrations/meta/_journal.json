@@ -337,6 +337,13 @@
       "when": 1795607405282,
       "tag": "0047_order_release_level",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1795607738169,
+      "tag": "0048_customer_registration_corrects",
+      "breakpoints": true
     }
   ]
 }
