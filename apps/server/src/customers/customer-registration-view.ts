@@ -57,7 +57,8 @@ export function reasonOfRegistration(
       case 'invalid_command':
         return { code: 'invalid_command', message: 'Os dados deste cadastro não são válidos. Refaça o cadastro.' };
       default:
-        return { code: 'erp_refused', message: refusalText(outbox?.lastErrorMessage ?? null) };
+        // Any other refusal may name a third party (a partner that holds the document): the ERP text is shown only for the known-safe required-field code.
+        return { code: 'erp_refused', message: GENERIC_REFUSAL };
     }
   }
   // Parked for a person (the ERP answer did not match, or the outcome is unknown): not a refusal, the seller waits.
