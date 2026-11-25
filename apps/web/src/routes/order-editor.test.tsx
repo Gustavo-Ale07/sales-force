@@ -988,7 +988,7 @@ describe("Rascunho existente", () => {
     await user.type(quantity, "3");
     expect(screen.queryByRole("button", { name: "Enviar ao Sankhya" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Confirmar pedido" }));
-    expect(await screen.findByText("Pedido confirmado e enviando ao Sankhya")).toBeInTheDocument();
+    expect(await screen.findByText("Enviado ao Sankhya")).toBeInTheDocument();
     expect(callsTo(calls, "PUT", `/orders/${ORDER_ID}`)).toHaveLength(1);
     expect(callsTo(calls, "POST", `/orders/${ORDER_ID}/submit`)).toHaveLength(1);
   });
@@ -1058,7 +1058,7 @@ describe("Rascunho existente", () => {
     await user.clear(quantity);
     await user.type(quantity, "3");
     await user.click(screen.getByRole("button", { name: "Confirmar pedido" }));
-    expect(await screen.findByText("Pedido confirmado e enviando ao Sankhya")).toBeInTheDocument();
+    expect(await screen.findByText("Enviado ao Sankhya")).toBeInTheDocument();
     const [put] = callsTo(calls, "PUT", `/orders/${ORDER_ID}`);
     expect(put?.body).toMatchObject({ expectedVersion: 1, customerCode: 1001, items: [{ productCode: 2001, quantity: "3" }] });
     expect(put?.body).toHaveProperty("expectedDataset", testDataset);

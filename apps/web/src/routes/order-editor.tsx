@@ -461,7 +461,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
         const awaiting = sent.status === "awaiting_approval";
         if (awaiting) setSubmitNotice(SUBMIT_AWAITING_MESSAGE);
         toast({
-          title: awaiting ? "Enviado para aprovação do desconto" : docKind === "quote" ? "Orçamento confirmado e enviando ao Sankhya" : "Pedido confirmado e enviando ao Sankhya",
+          title: awaiting ? "Enviado para aprovação do desconto" : "Enviado ao Sankhya",
           description: reference,
           tone: "success",
         });
