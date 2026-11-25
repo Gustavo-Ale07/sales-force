@@ -1051,7 +1051,7 @@ export function NewOrderScreen({
     const waiting = result?.kind === "sending" && !followExpired;
     const title =
       result?.kind === "sent"
-        ? `${kindTitle} enviado`
+        ? "Enviado ao Sankhya"
         : waiting
           ? "Enviando ao Sankhya"
           : result?.kind === "awaiting_approval"

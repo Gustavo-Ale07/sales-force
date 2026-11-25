@@ -86,7 +86,7 @@ describe("NewOrderScreen Confirmar (local path)", () => {
     expect(requestSend).not.toHaveBeenCalled();
     // Whatever is saved on the way out carries no send request.
     for (const call of save.mock.calls as unknown as Array<[{ sendRequested?: boolean }]>) expect(call[0].sendRequested).not.toBe(true);
-    expect(screen.queryByText("Pedido enviado")).toBeNull();
+    expect(screen.queryByText("Enviado ao Sankhya")).toBeNull();
     expect(screen.queryByText(/não enviado ao Sankhya/)).toBeNull();
   });
 
@@ -99,13 +99,13 @@ describe("NewOrderScreen Confirmar (local path)", () => {
     expect(requestSend).not.toHaveBeenCalled();
   });
 
-  it("saves with the send request, delivers it, and an order that reached Sankhya shows 'Pedido enviado' and its number, read-only", async () => {
+  it("saves with the send request, delivers it, and an order that reached Sankhya shows 'Enviado ao Sankhya' and its number, read-only", async () => {
     const { save, confirm } = await toSummary({ kind: "sent", erpNumber: 4321 });
     const before = save.mock.calls.length; // the wizard auto-saves while moving between steps
     await pressAndSettle(confirmButton());
     expect(save.mock.calls.length - before).toBe(1);
     expect(confirm).toHaveBeenCalledWith("l1");
-    expect(await screen.findByText("Pedido enviado")).toBeTruthy();
+    expect(await screen.findByText("Enviado ao Sankhya")).toBeTruthy();
     expect(screen.getByText("Pedido nº 4321")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Editar pedido" })).toBeNull();
     expect(screen.getByRole("button", { name: "Novo pedido" })).toBeTruthy();
@@ -136,7 +136,7 @@ describe("NewOrderScreen Confirmar (local path)", () => {
       return ctx;
     }
 
-    it("asks again with growing intervals and shows 'Pedido enviado' and the number as soon as it arrives", async () => {
+    it("asks again with growing intervals and shows 'Enviado ao Sankhya' and the number as soon as it arrives", async () => {
       const read = jest.fn<Promise<number | null>, [string]>(async () => null);
       await confirmWithFakeTimers(read);
       expect(screen.getByText("Enviando ao Sankhya")).toBeTruthy();
@@ -144,12 +144,12 @@ describe("NewOrderScreen Confirmar (local path)", () => {
         await jest.advanceTimersByTimeAsync(1_600);
       });
       expect(read).toHaveBeenCalledTimes(1);
-      expect(screen.queryByText("Pedido enviado")).toBeNull();
+      expect(screen.queryByText("Enviado ao Sankhya")).toBeNull();
       read.mockResolvedValue(2511);
       await act(async () => {
         await jest.advanceTimersByTimeAsync(2_200);
       });
-      expect(screen.getByText("Pedido enviado")).toBeTruthy();
+      expect(screen.getByText("Enviado ao Sankhya")).toBeTruthy();
       expect(screen.getByText("Pedido nº 2511")).toBeTruthy();
       const calls = read.mock.calls.length;
       await act(async () => {
@@ -184,10 +184,10 @@ describe("NewOrderScreen Confirmar (local path)", () => {
     });
   });
 
-  it("a quotation says 'Orçamento enviado', following the configured quotation TOP", async () => {
+  it("a quotation says 'Enviado ao Sankhya' too, following the configured quotation TOP", async () => {
     await toSummary({ kind: "sent", erpNumber: 7 }, true);
     await pressAndSettle(confirmButton());
-    expect(await screen.findByText("Orçamento enviado")).toBeTruthy();
+    expect(await screen.findByText("Enviado ao Sankhya")).toBeTruthy();
     expect(screen.queryByText("Pedido enviado")).toBeNull();
   });
 
@@ -227,7 +227,7 @@ describe("NewOrderScreen Confirmar (local path)", () => {
     await toSummary({ kind: "awaiting_approval" });
     await pressAndSettle(confirmButton());
     expect(await screen.findByText("Aguardando aprovação")).toBeTruthy();
-    expect(screen.queryByText("Pedido enviado")).toBeNull();
+    expect(screen.queryByText("Enviado ao Sankhya")).toBeNull();
   });
 
   it("a confirm that throws is treated as queued: the order is saved and nothing is lost", async () => {
@@ -279,7 +279,7 @@ describe("NewOrderScreen Confirmar: definitive refusals (popup with the fix, no 
     await pressAndSettle(confirmButton());
     expect(await screen.findByText("Envio ao Sankhya desligado")).toBeTruthy();
     expect(screen.getByText(/nada foi enviado/)).toBeTruthy();
-    expect(screen.queryByText("Pedido enviado")).toBeNull();
+    expect(screen.queryByText("Enviado ao Sankhya")).toBeNull();
   });
 
   it("header_not_eligible: popup with the server's text and a way back to the negotiation step", async () => {
