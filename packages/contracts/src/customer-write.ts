@@ -11,6 +11,15 @@ import { IsoTimestampSchema, UuidSchema, codeInt, named, sellerCodeInt } from '.
 
 /** CLASSIFICMS values the seller may pick (docs/implementation/customer-write-plan.md). `R` is the default. */
 export const ICMS_CLASSIFICATIONS = ['C', 'I', 'P', 'R', 'T', 'X'] as const;
+/** Names shown to the user (list read from the ERP dictionary, owner 2026-11-25); the value sent is always the letter. */
+export const ICMS_CLASSIFICATION_LABELS: readonly { readonly code: (typeof ICMS_CLASSIFICATIONS)[number]; readonly label: string }[] = [
+  { code: 'C', label: 'Consumidor Final Não Contribuinte' },
+  { code: 'I', label: 'Isento de ICMS' },
+  { code: 'P', label: 'Produtor Rural' },
+  { code: 'R', label: 'Revendedor' },
+  { code: 'T', label: 'Usar a da TOP' },
+  { code: 'X', label: 'Consumidor Final Contribuinte' },
+];
 export const IcmsClassificationSchema = named('IcmsClassification', z.enum(ICMS_CLASSIFICATIONS));
 export type IcmsClassification = z.infer<typeof IcmsClassificationSchema>;
 

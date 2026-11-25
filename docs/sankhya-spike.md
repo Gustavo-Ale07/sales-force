@@ -1183,6 +1183,8 @@ Source: owner approval of the port and of the T1-T9 script, Sandbox (`placfestas
 
 Roteiro and the SQL to prove each step: `docs/implementation/customer-sandbox-runbook.md`. Parity and consumption contract: `docs/implementation/customer-create-edit.md`.
 
-### 9.65 Names of the CLASSIFICMS options (NEEDS VALIDATION, 2026-11-25)
+### 9.65 Names of the CLASSIFICMS options (VALIDATED by the owner in the Sandbox, 2026-11-25)
 
 The customer form needs the label of each ICMS classification (C, I, P, R, T, X; R default, owner B6). No validated source of the NAMES exists in this document or in `packages/sankhya`. Proposed read-only check, to run by the integration engineer in the Sandbox only: the Sankhya field dictionary, `SELECT O.VALOR, O.OPCAO FROM TDDOPC O JOIN TDDCAM C ON C.NUCAMPO = O.NUCAMPO WHERE C.NOMETAB = 'TGFPAR' AND C.NOMECAMPO = 'CLASSIFICMS' ORDER BY O.ORDEM` (table and column names of the dictionary NOT validated here). Until validated, the server exposes no label list and clients show the code as typed by the owner (B6).
+
+**Validated (owner read of the Sandbox field dictionary, 2026-11-25):** C = Consumidor Final Não Contribuinte; I = Isento de ICMS; P = Produtor Rural; R = Revendedor; T = Usar a da TOP; X = Consumidor Final Contribuinte. The list lives in `ICMS_CLASSIFICATION_LABELS` (`packages/contracts`), used by site and app; the value sent stays the letter, R is the default.

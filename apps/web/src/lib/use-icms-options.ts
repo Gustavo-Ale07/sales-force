@@ -1,10 +1,7 @@
+import { ICMS_CLASSIFICATION_LABELS } from "@salesforce/contracts";
 import type { IcmsOption } from "./customer-form";
 
-/**
- * Names of the ICMS classifications come from the server (the backend exposes a list of `{ code, label }`; names are never invented
- * in the client). Until that endpoint is in `packages/contracts`, the list is empty: the select is not shown and the request carries
- * the default classification `R` ("Revendedor"), which the server also applies.
- */
+/** Classification names shown to the user; the value sent stays the letter. */
 export function useIcmsOptions(): readonly IcmsOption[] {
-  return [];
+  return ICMS_CLASSIFICATION_LABELS;
 }
