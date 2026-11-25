@@ -251,7 +251,7 @@ describe('CustomerDeliveryService', () => {
     expect(store.failures[0]).toMatchObject({ kind: 'park', errorCode: 'reread_mismatch' });
   });
 
-  it('gives up after the maximum attempts of a temporary failure', async () => {
+  it('keeps retrying at the slowest cadence after the attempt budget: exhausted retries never become a rejection', async () => {
     const { service, store, partners, advance } = build();
     for (let i = 0; i < MAX_DELIVERY_ATTEMPTS + 1; i += 1) partners.script('find', { kind: 'error', error: unavailable() });
     store.add();
@@ -259,7 +259,8 @@ describe('CustomerDeliveryService', () => {
       await service.runDue();
       advance(20 * 60_000);
     }
-    expect(store.rows[0]).toMatchObject({ status: 'rejected', registration: 'rejected', rejectionCode: 'timeout' });
+    expect(store.rows[0]).toMatchObject({ status: 'pending', registration: 'pending', rejectionCode: null });
+    expect(store.rows[0]?.nextAttemptAt).not.toBeNull();
     expect(partners.partners).toHaveLength(0);
   });
 

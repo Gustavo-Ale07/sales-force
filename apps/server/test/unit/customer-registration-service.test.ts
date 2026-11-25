@@ -68,6 +68,9 @@ class FakeRepo {
     if (row !== null) this.onPoll(row);
     return Promise.resolve(row);
   }
+  findViewById(id: string): Promise<{ outbox: null } | null> {
+    return Promise.resolve(this.rows.some((r) => r.id === id) ? { outbox: null } : null);
+  }
   /** Creations and refused attempts both count (I-1). */
   countSince(): Promise<number> {
     return Promise.resolve(this.recentCount + this.refusals.length);

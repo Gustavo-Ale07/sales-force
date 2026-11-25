@@ -96,8 +96,12 @@ export interface AuthAppOptions {
   readonly accountPhotoStore?: ObjectStore;
   /** Opens the API-side enqueue of orders for the ERP (default off, as shipped). */
   readonly orderEnqueueEnabled?: boolean;
-  /** Opens the customer edit route (default off, as shipped; it still refuses: edit delivery is not approved). */
+  /** Opens the customer edit route (default off, as shipped). */
   readonly customerEditEnabled?: boolean;
+  /** Opens the customer creation route (default off, as shipped). */
+  readonly customerEnqueueEnabled?: boolean;
+  /** How long a creation waits for the worker before answering 202 (tests use no wait). */
+  readonly customerConfirmWait?: { readonly timeoutMs?: number; readonly pollMs?: number; readonly sleep?: (ms: number) => Promise<void> };
   /** Opens the API-side queueing of the profile photo write to the ERP (default off, as shipped; spike S1.8). */
   readonly profilePhotoErpWriteEnabled?: boolean;
 }
@@ -128,7 +132,7 @@ export async function startAuthApp(
   ];
   if (extraControllers.length > 0) {
     @Module({
-      imports: [ApiModule.register({ logger, db: database.handle, clock: clock.fn, dataset: options.dataset ?? null, orderEnqueueEnabled: options.orderEnqueueEnabled ?? false, customerEditEnabled: options.customerEditEnabled ?? false, ...imageDeps }, auth)],
+      imports: [ApiModule.register({ logger, db: database.handle, clock: clock.fn, dataset: options.dataset ?? null, orderEnqueueEnabled: options.orderEnqueueEnabled ?? false, customerEditEnabled: options.customerEditEnabled ?? false, customerEnqueueEnabled: options.customerEnqueueEnabled ?? false, ...(options.customerConfirmWait === undefined ? {} : { customerConfirmWait: options.customerConfirmWait }), ...imageDeps }, auth)],
       controllers: extraControllers,
     })
     class ProbedApiModule {}
@@ -144,6 +148,8 @@ export async function startAuthApp(
     ...imageDeps,
     orderEnqueueEnabled: options.orderEnqueueEnabled ?? false,
     customerEditEnabled: options.customerEditEnabled ?? false,
+    customerEnqueueEnabled: options.customerEnqueueEnabled ?? false,
+    ...(options.customerConfirmWait === undefined ? {} : { customerConfirmWait: options.customerConfirmWait }),
     ...(options.trustProxy === undefined ? {} : { trustProxy: options.trustProxy }),
     ...(rootModule === undefined ? {} : { rootModule }),
   });

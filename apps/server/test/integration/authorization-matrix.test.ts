@@ -75,6 +75,7 @@ const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>
   listOrderTemplates: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   createCustomer: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   updateCustomer: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+listCustomerRegistrations: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },  getCustomerRegistration: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   createOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   getOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   replaceOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
@@ -88,7 +89,8 @@ const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>
  * 403 from the service's, so these pairs only assert "not 401"; the real decision is proved in `release-queue.test.ts`
  * (configured operations account 200, unlisted 403, seller and technical 403 at the guard).
  */
-const SECTOR_GATED = new Set(['listReleaseQueue/operations', 'getReleaseQueueCount/operations']);
+// The guard lets the role through; the SERVICE then refuses: a sector-less operations user, and a seller without a seller link (no_seller_scope, 403: this harness seller has none).
+const SECTOR_GATED = new Set(['listReleaseQueue/operations', 'getReleaseQueueCount/operations', 'listCustomerRegistrations/seller', 'getCustomerRegistration/seller']);
 
 const sessionRoutes =(Object.values(routes) as RouteDefinition[]).filter((route) => route.auth === 'session');
 

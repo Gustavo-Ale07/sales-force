@@ -6,8 +6,8 @@ import { startCommercialApp, type CommercialApp } from '../helpers/commercial-ap
 import { startPostgres, type TestPostgres, closeAllThenStop } from '../helpers/postgres.js';
 
 /**
- * D-AP: PATCH /customers/{code}. Edit delivery to the ERP is NOT approved (`updatePartner` stays refused), so the route validates,
- * scopes, audits and refuses with 409: nothing is stored, nothing is queued, the ERP is never called.
+ * D-AP: PATCH /customers/{code}. Owner-approved 2026-11-25 (Sandbox only): with the flag open the route validates, scopes, records one
+ * `customer_update` outbox command plus audit and answers 202; the worker (never this route) writes to the ERP.
  */
 
 const dataset = getDemoDataset();
@@ -42,18 +42,35 @@ describe('PATCH /customers/{code}', () => {
     expect(body.details.reason).toBe('customer_edit_disabled');
   });
 
-  it('answers 409 customer_edit_delivery_not_approved with the flag open, stores nothing and audits the field names only', async () => {
+  it('records the edit for delivery (202 awaiting_send), audits only the field names, then replays it (200)', async () => {
     const { status, body } = await patch(open, 'seller1', mine, { clientRequestId: REQUEST_ID, phone: '11999990000', notes: 'segredo-nao-auditar' });
-    expect(status).toBe(409);
-    expect(body.details.reason).toBe('customer_edit_delivery_not_approved');
-
+    expect(status).toBe(202);
+    expect(body).toMatchObject({ customerCode: mine, state: 'awaiting_send', reasonCode: null });
     const db = open.database.handle.db;
-    expect(await db.select().from(integrationOutbox)).toHaveLength(0);
-    const audits = await db.select().from(auditLog).where(eq(auditLog.action, 'customer.update_refused'));
+    const rows = await db.select().from(integrationOutbox).where(eq(integrationOutbox.aggregateType, 'customer_update'));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ operation: 'customer.update', status: 'pending', originId: `force-edit:${REQUEST_ID}` });
+    expect(rows[0]?.nextAttemptAt).not.toBeNull();
+    const audits = await db.select().from(auditLog).where(eq(auditLog.action, 'customer.update_requested'));
     expect(audits).toHaveLength(1);
     expect(audits[0]?.detail).toMatchObject({ customerCode: mine, fields: 'phone,notes' });
     expect(JSON.stringify(audits[0]?.detail)).not.toContain('11999990000');
     expect(JSON.stringify(audits[0]?.detail)).not.toContain('segredo');
+    const replay = await patch(open, 'seller1', mine, { clientRequestId: REQUEST_ID, notes: 'segredo-nao-auditar', phone: '11999990000' });
+    expect(replay.status).toBe(200);
+    expect(replay.body.updateId).toBe(body.updateId);
+    expect(await db.select().from(integrationOutbox).where(eq(integrationOutbox.aggregateType, 'customer_update'))).toHaveLength(1);
+  });
+
+  it('answers 409 for the same request id with other content', async () => {
+    const { status } = await patch(open, 'seller1', mine, { clientRequestId: REQUEST_ID, phone: '11888880000' });
+    expect(status).toBe(409);
+  });
+
+  it('answers customer_update_in_progress while another edit of the customer is open', async () => {
+    const { status, body } = await patch(open, 'seller1', mine, { clientRequestId: '019a0000-0000-7000-8000-0000000000ab', email: 'novo@example.com' });
+    expect(status).toBe(409);
+    expect(body.details.reason).toBe('customer_update_in_progress');
   });
 
   it('is 404 for a customer outside the seller scope, whatever the body says', async () => {
