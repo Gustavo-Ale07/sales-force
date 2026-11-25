@@ -31,7 +31,7 @@ const DELIVERY_CODE_LABELS: Readonly<Record<string, string>> = {
   ipi_divergence: 'O Sankhya calculou um IPI diferente da estimativa do Force',
   total_divergence: 'O total da nota no Sankhya difere do total do Force (itens líquidos + IPI)',
   order_not_deliverable: 'O pedido não estava em situação de envio',
-  include_timeout_unconfirmed: 'O Sankhya não confirmou o recebimento a tempo. Reenvie: o Force PLAC confere antes de criar o pedido',
+  include_timeout_unconfirmed: 'O Sankhya não confirmou o recebimento a tempo. Reenvie: o Force confere antes de criar o pedido',
   ambiguous_origin: 'Há mais de uma nota com este pedido no Sankhya. Peça à TI para conferir.',
 };
 
