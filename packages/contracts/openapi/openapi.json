@@ -7136,6 +7136,16 @@
                       "null"
                     ]
                   },
+                  "releaseLevel": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/ReleaseLevel"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "nunota": {
                     "anyOf": [
                       {
@@ -8127,6 +8137,16 @@
                     "type": [
                       "string",
                       "null"
+                    ]
+                  },
+                  "releaseLevel": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/ReleaseLevel"
+                      },
+                      {
+                        "type": "null"
+                      }
                     ]
                   },
                   "nunota": {
@@ -9220,6 +9240,42 @@
         ],
         "additionalProperties": false
       },
+      "ReleaseLevel": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "awaiting",
+              "none",
+              "not_confirmed"
+            ]
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "state",
+          "level",
+          "text"
+        ],
+        "additionalProperties": false
+      },
       "ReleaseQueueCountResponse": {
         "type": "object",
         "properties": {
@@ -9289,6 +9345,16 @@
             "type": [
               "string",
               "null"
+            ]
+          },
+          "releaseLevel": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReleaseLevel"
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "customerCode": {

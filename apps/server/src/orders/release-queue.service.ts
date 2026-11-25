@@ -5,7 +5,7 @@ import { InstallationConfigurationService } from '../configuration/configuration
 import { AppError } from '../http/app-error.js';
 import type { CurrentUser } from '../iam/current-user.js';
 import { CLOCK, type Clock } from '../platform/tokens.js';
-import { customerNameOrFallback } from './order.mapper.js';
+import { customerNameOrFallback, releaseLevelOf } from './order.mapper.js';
 import { ReleaseQueueRepository } from './release-queue.repository.js';
 
 /**
@@ -54,6 +54,7 @@ export class ReleaseQueueService {
           event: row.event,
           cascadeSequence: row.cascadeSequence,
           eventLabel: labels !== undefined && Object.hasOwn(labels, String(row.event)) ? (labels[String(row.event)] ?? null) : null,
+          releaseLevel: releaseLevelOf(row.releaseState, row.awaitedLevel),
           customerCode: row.customerCode,
           customerName: customerNameOrFallback(row.customerName, row.customerCode),
           sellerCode: row.sellerCode,

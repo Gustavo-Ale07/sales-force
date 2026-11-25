@@ -232,6 +232,13 @@ export const salesOrderErpStage = pgTable(
     /** NUMNOTA of the invoice, once invoiced. */
     invoiceNumber: bigint('invoice_number', { mode: 'number' }),
     contentHash: text('content_hash').notNull(),
+    /**
+     * Release level read from TSILIB (owner decision 2026-11-25): 'awaiting' (`awaitedLevel` = lowest SEQCASCATA of a pending EVENTO 44
+     * line), 'none' (lines exist, none pending with a level) or 'not_confirmed' (no TSILIB line yet). Null = never read with this
+     * version. Not part of `contentHash`: a level change never moves `updatedAt`.
+     */
+    releaseState: text('release_state'),
+    awaitedLevel: integer('awaited_level'),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
     checkedAt: timestamp('checked_at', { withTimezone: true }).notNull(),
     lastErrorClass: text('last_error_class'),
@@ -240,6 +247,7 @@ export const salesOrderErpStage = pgTable(
   },
   (t) => [
     check('sales_order_erp_stage_stage_chk', sql`${t.stage} in (${inList(orderErpStageCodes)})`),
+    check('sales_order_erp_stage_release_chk', sql`(${t.releaseState} is null or ${t.releaseState} in ('awaiting', 'none', 'not_confirmed')) and ((${t.releaseState} = 'awaiting') = (${t.awaitedLevel} is not null)) and (${t.awaitedLevel} is null or ${t.awaitedLevel} >= 0)`),
     check('sales_order_erp_stage_error_chk', sql`(${t.lastErrorCode} is null) = (${t.lastErrorAt} is null)`),
     index('sales_order_erp_stage_due_idx').on(t.stage, t.checkedAt),
   ],

@@ -1,7 +1,7 @@
 import { FreightTypeSchema, type FreightType } from '@salesforce/contracts';
-import type { DiscountAuthorityStatus, OrderApproval, OrderDetail, OrderItemDetail as OrderItemDto, OrderListItem, OrderReview, OrderStatus, ProductImage } from '@salesforce/contracts';
+import type { ReleaseLevel, DiscountAuthorityStatus, OrderApproval, OrderDetail, OrderItemDetail as OrderItemDto, OrderListItem, OrderReview, OrderStatus, ProductImage } from '@salesforce/contracts';
 import type { SalesOrderErpStageRow } from '@salesforce/db';
-import { classifyOrderStage, computeOrderIpi, computeOrderTotals, customerOrderBlock, normalizeDecimalString, type IpiRate } from '@salesforce/domain';
+import { classifyOrderStage, computeOrderIpi, computeOrderTotals, customerOrderBlock, normalizeDecimalString, releaseLevelText, type IpiRate, type ReleaseLevelState } from '@salesforce/domain';
 import { isBlockedRaw } from '../mirror/mirror.repository.js';
 import { decodeReleaseDetail, decodeReleaseEventCodes, storedReleaseState } from './release-events.js';
 import type { ApprovalWithDecider, OrderCustomerState, OrderItemRow, OrderListRow, OrderRow } from './orders.repository.js';
@@ -73,6 +73,18 @@ export function erpStatusOf(order: OrderRow, liberationEventLabels?: Readonly<Re
 }
 
 /**
+ * Awaited release level for the contract (owner 2026-11-25): the state and level stored by the worker plus the ONE text both clients
+ * show, built by the domain. `null` = never read with the level (an unknown stored state is treated the same, never guessed).
+ */
+export function releaseLevelOf(state: string | null, level: number | null): ReleaseLevel | null {
+  let value: ReleaseLevelState;
+  if (state === 'awaiting' && level !== null) value = { state, level };
+  else if (state === 'none' || state === 'not_confirmed') value = { state, level: null };
+  else return null;
+  return { state: value.state, level: value.level, text: releaseLevelText(value) };
+}
+
+/**
  * Stage following Sankhya. Before a note exists (queued / rejected) the stage comes from the Force's own delivery state through the
  * same domain classification; afterwards from the worker mirror (`sales_order_erp_stage`). `null` = nothing known (never read, a draft,
  * or an order whose delivery outcome is unknown). The stored stage is kept when the last read failed (`readError`).
@@ -83,6 +95,7 @@ export function erpStageOf(order: OrderRow, stored: SalesOrderErpStageRow | null
       stage: stored.stage as NonNullable<OrderListItem['erpStage']>['stage'],
       label: stored.label,
       pendingSector: stored.pendingSector,
+      releaseLevel: releaseLevelOf(stored.releaseState, stored.awaitedLevel),
       nunota: stored.nunota,
       invoiceNumber: stored.invoiceNumber,
       updatedAt: stored.updatedAt.toISOString(),

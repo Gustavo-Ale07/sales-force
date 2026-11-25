@@ -1,0 +1,3 @@
+ALTER TABLE "sales_order_erp_stage" ADD COLUMN "release_state" text;--> statement-breakpoint
+ALTER TABLE "sales_order_erp_stage" ADD COLUMN "awaited_level" integer;--> statement-breakpoint
+ALTER TABLE "sales_order_erp_stage" ADD CONSTRAINT "sales_order_erp_stage_release_chk" CHECK (("sales_order_erp_stage"."release_state" is null or "sales_order_erp_stage"."release_state" in ('awaiting', 'none', 'not_confirmed')) and (("sales_order_erp_stage"."release_state" = 'awaiting') = ("sales_order_erp_stage"."awaited_level" is not null)) and ("sales_order_erp_stage"."awaited_level" is null or "sales_order_erp_stage"."awaited_level" >= 0));

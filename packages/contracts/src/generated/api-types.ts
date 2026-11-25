@@ -1442,6 +1442,7 @@ export interface components {
                 stage: "sent_to_force" | "send_error" | "quotation" | "received" | "in_review" | "financial_check" | "in_dispatch" | "in_invoicing" | "invoiced" | "barred";
                 label: string;
                 pendingSector: string | null;
+                releaseLevel?: components["schemas"]["ReleaseLevel"] | null;
                 nunota: number | null;
                 invoiceNumber: number | null;
                 updatedAt: components["schemas"]["IsoTimestamp"];
@@ -1613,6 +1614,7 @@ export interface components {
                 stage: "sent_to_force" | "send_error" | "quotation" | "received" | "in_review" | "financial_check" | "in_dispatch" | "in_invoicing" | "invoiced" | "barred";
                 label: string;
                 pendingSector: string | null;
+                releaseLevel?: components["schemas"]["ReleaseLevel"] | null;
                 nunota: number | null;
                 invoiceNumber: number | null;
                 updatedAt: components["schemas"]["IsoTimestamp"];
@@ -1826,6 +1828,12 @@ export interface components {
         RejectApprovalRequest: {
             comment: string;
         };
+        ReleaseLevel: {
+            /** @enum {string} */
+            state: "awaiting" | "none" | "not_confirmed";
+            level: number | null;
+            text: string | null;
+        };
         ReleaseQueueCountResponse: {
             total: number;
             sectors: components["schemas"]["ReleaseQueueSectorCount"][];
@@ -1840,6 +1848,7 @@ export interface components {
             event: number;
             cascadeSequence: number | null;
             eventLabel: string | null;
+            releaseLevel?: components["schemas"]["ReleaseLevel"] | null;
             customerCode: number;
             customerName: string;
             sellerCode: number | null;

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { installationConfigurationVersion, salesOrder, salesOrderErpStage, salesOrderReleasePending, type DbHandle } from '@salesforce/db';
 import {
+  awaitedReleaseLevel,
   billingItemQuantities,
   billingStateOf,
   classifyOrderStage,
@@ -315,11 +316,15 @@ export async function runOrderStageOnce(deps: OrderErpStatusDeps, options: Order
     const contentHash = createHash('sha256')
       .update(JSON.stringify([row.erpNumber, stage.code, stage.label, stage.pendingSector, invoiceNumber]))
       .digest('hex');
+    // Awaited release level (owner decision 2026-11-25): lowest SEQCASCATA of a pending EVENTO 44 line; no TSILIB line = not confirmed
+    // yet. Kept out of the content hash so a level change never moves `updatedAt`; absent lines (not read) keep the stored level.
+    const level = reading.releaseLines === undefined ? null : awaitedReleaseLevel(reading.releaseLines);
+    const levelValues = level === null ? {} : { releaseState: level.state, awaitedLevel: level.level };
     if (row.stored !== null && row.stored.contentHash === contentHash) {
-      // Same content: only the reading time moves, and a previous read error is cleared.
+      // Same content: only the reading time (and the level) moves, and a previous read error is cleared.
       await db.db
         .update(salesOrderErpStage)
-        .set({ checkedAt: now, lastErrorClass: null, lastErrorCode: null, lastErrorAt: null })
+        .set({ checkedAt: now, lastErrorClass: null, lastErrorCode: null, lastErrorAt: null, ...levelValues })
         .where(eq(salesOrderErpStage.orderId, row.id));
       continue;
     }
@@ -330,6 +335,7 @@ export async function runOrderStageOnce(deps: OrderErpStatusDeps, options: Order
       pendingSector: stage.pendingSector,
       invoiceNumber,
       contentHash,
+      ...levelValues,
       updatedAt: now,
       checkedAt: now,
       lastErrorClass: null,

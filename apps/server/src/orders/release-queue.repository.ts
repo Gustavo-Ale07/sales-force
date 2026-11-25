@@ -22,6 +22,9 @@ export interface ReleaseQueueRow {
   readonly firstSeenAt: Date;
   readonly assignedUserCode: number | null;
   readonly checkedAt: Date;
+  /** Release level of the order as last read (null = not read with this version yet). */
+  readonly releaseState: string | null;
+  readonly awaitedLevel: number | null;
 }
 
 export interface ReleaseQueueFilter {
@@ -68,6 +71,8 @@ export class ReleaseQueueRepository {
           firstSeenAt: salesOrderReleasePending.firstSeenAt,
           assignedUserCode: salesOrderReleasePending.assignedUserCode,
           checkedAt: salesOrderErpStage.checkedAt,
+          releaseState: salesOrderErpStage.releaseState,
+          awaitedLevel: salesOrderErpStage.awaitedLevel,
         })
         .from(salesOrderReleasePending)
         .innerJoin(salesOrder, eq(salesOrder.id, salesOrderReleasePending.orderId))

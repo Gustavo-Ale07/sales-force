@@ -23,6 +23,22 @@ export type ReleaseQueueCountQuery = z.infer<typeof ReleaseQueueCountQuerySchema
 export const WaitingSinceSourceSchema = named('WaitingSinceSource', z.enum(['sankhya_request', 'order_time']));
 export type WaitingSinceSource = z.infer<typeof WaitingSinceSourceSchema>;
 
+/**
+ * Release level the order awaits (owner decision 2026-11-25): `level` = TSILIB.SEQCASCATA of the lowest pending EVENTO 44 line,
+ * never from TSILIM nor from configured sector users. `text` is the ONE string the site and the app show ("Nível 2" /
+ * "Ainda não confirmado no Sankhya"); `null` when there is nothing to show (`state` 'none'). 'not_confirmed' = the ERP has no
+ * release line for the order yet: a normal state, not an error. The Force releases nothing.
+ */
+export const ReleaseLevelSchema = named(
+  'ReleaseLevel',
+  z.object({
+    state: z.enum(['awaiting', 'none', 'not_confirmed']),
+    level: z.number().int().min(0).nullable(),
+    text: z.string().nullable(),
+  }),
+);
+export type ReleaseLevel = z.infer<typeof ReleaseLevelSchema>;
+
 export const ReleaseQueueItemSchema = named(
   'ReleaseQueueItem',
   z.object({
@@ -36,6 +52,8 @@ export const ReleaseQueueItemSchema = named(
     event: codeInt(),
     cascadeSequence: codeInt().nullable(),
     eventLabel: z.string().nullable(),
+    /** Level the ORDER awaits (same text as in the order detail); null = the order was not read with the level yet. Additive. */
+    releaseLevel: ReleaseLevelSchema.nullable().optional(),
     customerCode: codeInt(),
     customerName: z.string(),
     sellerCode: codeInt().nullable(),

@@ -5,6 +5,7 @@ import type { InstallationConfiguration } from '@salesforce/domain';
 import { asc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { OrderErpStatusService, ORDER_STAGE_ON_DEMAND_REUSE_MS } from '../../src/integration/order-erp-status.service.js';
+import { releaseLevelOf } from '../../src/orders/order.mapper.js';
 import { createLogger } from '../../src/observability/logger.js';
 import { createTestAccount, TEST_PASSWORD, TEST_ORIGIN } from '../helpers/auth.js';
 import { loginCookie } from '../helpers/auth-app.js';
@@ -43,6 +44,7 @@ interface Facts {
   pendingReleases?: { event: number; cascadeSequence: number | null; assignedUserCode?: number | null }[];
   hasInvoiceLink?: boolean;
   hasReprovedRelease?: boolean;
+  releaseLines?: { event: number; cascadeSequence: number | null; released: boolean; reproved: boolean }[];
   invoiceNumber?: number | null;
   codtipoper?: number | null;
   assigneeReadErrorCode?: string;
@@ -119,6 +121,37 @@ describe('order stage worker (runOrderStageOnce) with the fake gateway state mac
     }
     expect((await w.stageRow(id))?.invoiceNumber).toBe(5001);
     expect((await w.stageRow(id))?.label).toBe('Faturado');
+  });
+
+  it('release level (owner 2026-11-25): lowest pending EVENTO 44 SEQCASCATA, "not confirmed" with no TSILIB line, no change of the stage or of updated_at', async () => {
+    const w = await world();
+    const id = await w.seed({ erpNumber: 9140, sellerCode: 103, accountEmail: SELLER1 });
+    const line = (cascadeSequence: number | null, released: boolean, event = 44) => ({ event, cascadeSequence, released, reproved: false });
+    const steps: [Facts & { releaseLines?: ReturnType<typeof line>[] }, string, number | null, string | null][] = [
+      [{ releaseLines: [] }, 'not_confirmed', null, 'Ainda não confirmado no Sankhya'],
+      [{ pendingReleases: [{ event: 44, cascadeSequence: 1 }, { event: 44, cascadeSequence: 2 }], releaseLines: [line(1, false), line(2, false)] }, 'awaiting', 1, 'Nível 1'],
+      [{ pendingReleases: [{ event: 44, cascadeSequence: 2 }], releaseLines: [line(1, true), line(2, false)] }, 'awaiting', 2, 'Nível 2'],
+      [{ statusNota: 'L', releaseLines: [line(1, true), line(2, true)] }, 'none', null, null],
+    ];
+    for (const [step, state, level, text] of steps) {
+      w.state.now += 5 * MIN;
+      w.book.stageFacts.set(9140, facts(step));
+      await w.service.runStageOnce();
+      const row = await w.stageRow(id);
+      expect(row?.releaseState).toBe(state);
+      expect(row?.awaitedLevel).toBe(level);
+      expect(releaseLevelOf(row!.releaseState, row!.awaitedLevel)?.text).toBe(text);
+    }
+    // Level 2 -> all released moved the stage (review -> dispatch) but the level change alone (hash equal) must not move updated_at:
+    const before = (await w.stageRow(id))!.updatedAt.getTime();
+    w.state.now += 5 * MIN;
+    w.book.stageFacts.set(9140, facts({ statusNota: 'L', releaseLines: [line(1, true), line(2, true), line(3, false)], pendingReleases: [] }));
+    await w.service.runStageOnce();
+    const after = await w.stageRow(id);
+    expect(after?.releaseState).toBe('awaiting');
+    expect(after?.awaitedLevel).toBe(3);
+    expect(after?.updatedAt.getTime()).toBe(before);
+    expect(releaseLevelOf(null, null)).toBeNull();
   });
 
   it('owner Sandbox facts 2026-11-23: notes in A/S with no release and no link are "received" with no queue row; linked notes are "invoiced"; a released line (DHLIB filled) is not pending', async () => {
@@ -403,6 +436,9 @@ describe('release queue over HTTP (profiles, sectors, counts, order, restricted 
     expect(response.body).toMatchObject({ total: 4, page: 1 });
     const first = response.body.items[0];
     expect(first).toMatchObject({ orderId: orderA, event: 44, cascadeSequence: 1, assignedUserCode: 120, sellerCode: 103, waitingSinceSource: 'order_time', estimatedTotal: '10' });
+    expect(first.releaseLevel).toEqual({ state: 'awaiting', level: 1, text: 'Nível 1' });
+    // B waits for event 3 only: there is a TSILIB line but no event 44 level to show.
+    expect(response.body.items[1].releaseLevel).toEqual({ state: 'none', level: null, text: null });
     expect(first.waitingMinutes).toBe(Math.floor((w.app.clock.fn().getTime() - (T0 - 300 * MIN)) / MIN));
     expect(typeof first.customerName).toBe('string');
     expect(first.customerName.length).toBeGreaterThan(0);
