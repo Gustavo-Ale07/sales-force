@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { cascadeLevels, groupFilterValue, type GroupPath } from "./group-cascade-filter";
 
-const node = (code: number, name: string, parentCode: number | null, degree: number, hasChildren: boolean) => ({ code, name, parentCode, degree, hasChildren });
+const node = (code: number, name: string, parentCode: number | null, degree: number, hasChildren: boolean) => ({ code, name, parentCode, degree, hasChildren, subtreeCodes: [code] });
 
 // Tubos(10) > Aço(11) > Aço 1"(111); Tubos > PVC(12, final at level 2); Serviços(20, final at level 1).
 const items = [
