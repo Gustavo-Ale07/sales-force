@@ -237,7 +237,7 @@ describe('POST /product-resolutions', () => {
       const detail = await ctx.call('seller1', 'GET', `/products/${sample.code}`);
       const { body } = await resolve('seller1', [String(sample.code)]);
       expect(body.items[0].status).toBe('found');
-      const { usageCode: _usageCode, priceContext: _priceContext, ...listItem } = detail.body;
+      const { priceContext: _priceContext, ...listItem } = detail.body;
       expect(body.items[0].product).toEqual(listItem);
       expect(body.priceContext).toEqual(detail.body.priceContext);
     });
