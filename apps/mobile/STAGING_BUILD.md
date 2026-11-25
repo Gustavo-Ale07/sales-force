@@ -70,6 +70,8 @@ Validate locally without Expo servers: `APP_VARIANT=staging EXPO_PUBLIC_API_URL=
 
 ## OTA (`eas update`): always `--clear-cache` (owner rule, 2026-11-24)
 
+**Único caminho (owner rule, 2026-11-25): `node apps/mobile/scripts/publish-ota-staging.mjs "<o que mudou>"`. Nunca rode `eas update` solto.** O script define `APP_VARIANT`, `SF_BUILD_PROFILE`, `EXPO_PUBLIC_BUILD_PROFILE`, `EXPO_PUBLIC_API_URL` e `EXPO_UPDATES_URL`, exporta o bundle android com `--clear`, aborta sem publicar se o bundle não contiver `force.sistemasplac.com.br` e só então roda `eas update --branch staging --clear-cache --environment preview`. Motivo: o OTA de `edaed6e` saiu sem a variável e o app abriu com "Servidor não configurado".
+
 Every `eas update` MUST be run with `--clear-cache`, with `EXPO_PUBLIC_API_URL` set to the staging API (`https://force.sistemasplac.com.br`) in the same command:
 
 `EXPO_PUBLIC_API_URL=https://force.sistemasplac.com.br npx eas update --branch staging --clear-cache --message "<what changed>"`
