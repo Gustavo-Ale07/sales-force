@@ -42,7 +42,7 @@ import { asInt, compact } from "../lib/search-params";
 
 type Item = ApiSchema<"ReleaseQueueItem">;
 
-const COLUMNS = 9;
+const COLUMNS = 10;
 const ALL = "__all";
 const TZ = "America/Sao_Paulo";
 
@@ -166,6 +166,7 @@ export function ReleaseQueuePage({ params, onSearchChange }: ReleaseQueuePagePro
             <TableRow>
               <TableHead>Nº do pedido</TableHead>
               <TableHead>Setor</TableHead>
+              <TableHead>Nível</TableHead>
               <TableHead>Cliente</TableHead>
               <TableHead>Vendedor</TableHead>
               <TableHead numeric>Valor</TableHead>
@@ -196,6 +197,7 @@ export function ReleaseQueuePage({ params, onSearchChange }: ReleaseQueuePagePro
                     </span>
                   </TableCell>
                   <TableCell label="Setor">{item.sector}</TableCell>
+                  <TableCell label="Nível">{item.releaseLevel?.text || "—"}</TableCell>
                   <TableCell wrap label="Cliente" className="min-w-[10rem]">
                     {titleCase(item.customerName)}
                   </TableCell>

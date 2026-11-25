@@ -47,6 +47,7 @@ Lotes (definidos pelo dono): 1 e 2 em andamento hoje; 3 e 4 NÃO iniciar; FORA =
 | Ordenação da lista por NUNOTA (Pedido) | feito | feito | sim | P | sim | 2ª rodada | feito | 41206cc |
 | Lançamento múltiplo / importação | existe | falta | não (a igualar) | G | a conferir | 3 | não iniciado (não iniciar hoje) | |
 | Pedidos recorrentes | existe | falta | não (a igualar) | G | a conferir | 3 | não iniciado (não iniciar hoje) | |
+| Nível aguardado (decisão do dono 25/11; texto do servidor exato: "Nível N" / "Ainda não confirmado no Sankhya"; nada se null/ausente; nunca de setores/TSILIM) | feito: coluna "Nível" na fila (`items[].releaseLevel.text`, "—" se ausente) e, junto à etapa do pedido, " · Nível N" depois da etapa/setor no chip da lista e na linha "Situação no Sankhya" do detalhe (`erpStage.releaseLevel.text`) | em andamento com o agente do app | sim (mesmo texto, mesma posição) | P | não (contrato aditivo, docs/implementation/release-queue.md) | 2ª rodada | site feito; app em andamento | ver commit |
 | Fila "Aguardando liberação" no app | existe | falta | não (a igualar) | G | a conferir | 3 | não iniciado (não iniciar hoje) | |
 
 ## Clientes

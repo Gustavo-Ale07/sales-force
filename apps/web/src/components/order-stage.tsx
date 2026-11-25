@@ -59,11 +59,16 @@ const stageTones: Record<OrderStageCode, Tone> = {
 /** Label of a stage code as the server names it (filter options, chips). */
 export const stageText = (code: OrderStageCode): string => ORDER_STAGE_LABELS[code];
 
+/** Awaited release level exactly as the server words it ("Nível N" / "Ainda não confirmado no Sankhya"); null when absent. */
+export const releaseLevelText = (stage: Pick<ErpStage, "releaseLevel">): string | null => stage.releaseLevel?.text || null;
+
 /** Chip with the server's stage; icon plus text, never colour alone. */
 export function ErpStageChip({ stage, variant = "badge" }: { stage: ErpStage; variant?: "badge" | "dot" }) {
   const Icon = stageIcons[stage.stage];
   const icon = <Icon size={variant === "badge" ? 13 : 15} strokeWidth={2} aria-hidden="true" />;
-  const label = stage.pendingSector ? `${stage.label} · ${stage.pendingSector}` : stage.label;
+  const level = releaseLevelText(stage);
+  const base = stage.pendingSector ? `${stage.label} · ${stage.pendingSector}` : stage.label;
+  const label = level ? `${base} · ${level}` : base;
   return variant === "badge" ? (
     <StatusBadge tone={stageTones[stage.stage]} icon={icon}>
       {label}
@@ -115,6 +120,11 @@ export function ErpStagePanel({ stage }: { stage: ErpStage }) {
           {forceSide ? stage.label : `Situação no Sankhya: ${stage.label}`}
           {stage.pendingSector ? ` · ${stage.pendingSector}` : ""}
         </span>
+        {releaseLevelText(stage) ? (
+          <span className="text-fg-muted" data-testid="erp-release-level">
+            · {releaseLevelText(stage)}
+          </span>
+        ) : null}
         <span className="text-fg-muted">· atualizado em {clockTime(when)}</span>
       </p>
       {code === "quotation" ? (

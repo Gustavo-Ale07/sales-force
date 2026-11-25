@@ -110,6 +110,23 @@ describe("Aguardando liberação: states", () => {
   });
 });
 
+describe("Aguardando liberação: coluna Nível", () => {
+  it("shows the server text as it comes, and a dash when null or absent", async () => {
+    const items = [
+      item({ nunota: 7001, releaseLevel: { state: "awaiting", level: 2, text: "Nível 2" } }),
+      item({ nunota: 7002, releaseLevel: { state: "not_confirmed", level: null, text: "Ainda não confirmado no Sankhya" } }),
+      item({ nunota: 7003, releaseLevel: null }),
+      item({ nunota: 7004 }),
+    ];
+    renderApp("/aguardando-liberacao", { handlers: base({ "GET /release-queue": { body: queue(items) } }) });
+    await screen.findByText("7001");
+    expect(screen.getByRole("columnheader", { name: "Nível" })).toBeInTheDocument();
+    expect(screen.getByText("Nível 2")).toBeInTheDocument();
+    expect(screen.getByText("Ainda não confirmado no Sankhya")).toBeInTheDocument();
+    expect(screen.queryByText(/Nível (0|1|3)/)).toBeNull();
+  });
+});
+
 describe("Aguardando liberação: order and content", () => {
   it("keeps the rows in the order the server sent (oldest first), without re-sorting", async () => {
     const items = [

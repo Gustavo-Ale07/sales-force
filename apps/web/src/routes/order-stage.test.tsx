@@ -67,6 +67,29 @@ describe("Situação no Sankhya: linha do tempo no pedido", () => {
     expect(within(region).getByText(/atualizado em 12:30/)).toBeInTheDocument();
   });
 
+  it("shows the awaited release level with the server text next to the stage", async () => {
+    renderApp(`/pedidos/${ORDER_ID}`, {
+      handlers: detailHandlers(sentOrder(stage("financial_check", { releaseLevel: { state: "awaiting", level: 2, text: "Nível 2" } }))),
+    });
+    expect(await within(await panel()).findByTestId("erp-release-level")).toHaveTextContent("Nível 2");
+  });
+
+  it("shows 'Ainda não confirmado no Sankhya' as sent", async () => {
+    renderApp(`/pedidos/${ORDER_ID}`, {
+      handlers: detailHandlers(sentOrder(stage("received", { releaseLevel: { state: "not_confirmed", level: null, text: "Ainda não confirmado no Sankhya" } }))),
+    });
+    expect(await within(await panel()).findByTestId("erp-release-level")).toHaveTextContent("Ainda não confirmado no Sankhya");
+  });
+
+  it("shows nothing about the level when it is null or absent", async () => {
+    const { unmount } = renderApp(`/pedidos/${ORDER_ID}`, { handlers: detailHandlers(sentOrder(stage("received", { releaseLevel: null }))) });
+    const region = await panel();
+    expect(within(region).queryByTestId("erp-release-level")).toBeNull();
+    unmount();
+    renderApp(`/pedidos/${ORDER_ID}`, { handlers: detailHandlers(sentOrder(stage("received"))) });
+    expect(within(await panel()).queryByTestId("erp-release-level")).toBeNull();
+  });
+
   it("falls back to updatedAt when checkedAt is absent", async () => {
     renderApp(`/pedidos/${ORDER_ID}`, { handlers: detailHandlers(sentOrder(stage("received", { checkedAt: undefined }))) });
     expect(await within(await panel()).findByText(/atualizado em 11:00/)).toBeInTheDocument();
@@ -223,6 +246,23 @@ describe("Situação no Sankhya: lista de pedidos", () => {
     "GET /customers": { body: customersPage([customer()]) },
   });
   const rowOf = (text: string) => screen.getByText(text).closest("tr") as HTMLElement;
+
+  it("the list shows the level text next to the stage only for the order that has it", async () => {
+    renderApp("/pedidos", {
+      handlers: {
+        "GET /orders": {
+          body: ordersPage([
+            orderListItem({ draftNumber: 12, status: "sent", erpNumber: 5001, erpStage: stage("in_review", { releaseLevel: { state: "awaiting", level: 1, text: "Nível 1" } }) }),
+            orderListItem({ id: "0190a000-0000-7000-8000-0000000000bb", draftNumber: 13, status: "sent", erpNumber: 5002, erpStage: stage("in_dispatch", { releaseLevel: null }) }),
+          ]),
+        },
+        "GET /customers": { body: customersPage([customer()]) },
+      },
+    });
+    await screen.findByText("Pedido nº 5001");
+    expect(within(rowOf("Pedido nº 5001")).getByText(/Em revisão · Nível 1/)).toBeInTheDocument();
+    expect(within(rowOf("Pedido nº 5002")).queryByText(/Nível/)).toBeNull();
+  });
 
   it("a sent order shows the stage chip instead of 'Enviado ao Sankhya'; without stage the old badge stays; a draft says 'Não enviado'", async () => {
     renderApp("/pedidos", { handlers: list() });
