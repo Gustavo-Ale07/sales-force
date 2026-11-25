@@ -416,6 +416,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
                 setSalesView("newOrder");
                 selectTab("sales");
               }}
+              {...(dependencies.dashboard !== undefined ? { dashboard: dependencies.dashboard } : {})}
               {...(services === null ? {} : { onSyncNow: syncNow })}
             />
           </Pane>
@@ -427,6 +428,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
                 onUnauthenticated={expire}
                 connectivity={connectivityState}
                 onOpen={setCustomerDetail}
+                {...(dependencies.dashboard !== undefined ? { dashboard: dependencies.dashboard } : {})}
                 {...(customerFlags.create && pendingCustomers !== null ? { onCreate: () => setCustomerForm({ kind: "create" }) } : {})}
               />
             </View>

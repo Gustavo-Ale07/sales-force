@@ -3,6 +3,7 @@ import type { AuthPort } from "./auth/auth-port";
 import { createDeviceConnectivity, type ConnectivityPort, type ConnectivityState } from "./connectivity/connectivity";
 import { createMobileApiClient } from "./data/api";
 import { createCustomerWritePort, type CustomerWritePort } from "./data/customer-write";
+import { createDashboardPort, type DashboardPort } from "./data/dashboard";
 import type { Repositories } from "./data/ports";
 import { createRemoteRepositories } from "./data/remote-repositories";
 import { createExpoImageFileSystem } from "./images/expo-image-fs";
@@ -27,6 +28,8 @@ export interface AppDependencies {
   readonly profilePhoto?: ProfilePhotoService;
   /** Online edit of a customer (`PATCH /customers/{code}`). Absent in test setups: the edit entry point is then hidden. */
   readonly customerWrite?: CustomerWritePort;
+  /** The site's Início counters, online. Absent in test setups: the section is then hidden. */
+  readonly dashboard?: DashboardPort;
 }
 
 /** Production composition: online adapters over the API at `baseUrl` (already including the API base path). */
@@ -51,6 +54,7 @@ export function createAppDependencies(baseUrl: string, db: SqlDatabase): AppDepe
   return {
     profilePhoto,
     customerWrite: createCustomerWritePort(api),
+    dashboard: createDashboardPort(api),
     auth: createHttpAuth(api),
     repositories: remote,
     connectivity,

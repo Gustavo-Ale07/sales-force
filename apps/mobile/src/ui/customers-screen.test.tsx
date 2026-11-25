@@ -184,4 +184,19 @@ describe("CustomersScreen", () => {
       expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ code: 1 }));
     });
   });
+
+  it("shows the site's Carteira counters above the list when online, and none offline", async () => {
+    const customers: CustomerRepository = { list: async () => pageOf([customer(10, { name: "Padaria Central" })], 1) };
+    const load = jest.fn(async () => ({ customers: "1", products: null, sellable: null, openOrders: null, unsentAmount: null, portfolio: [{ key: "customers_total", label: "Clientes na carteira", value: "1.250" }, { key: "x", label: "Clientes sem tabela de preço", value: null }] }));
+    await render(<CustomersScreen customers={customers} onUnauthenticated={noop} dashboard={{ load }} />);
+    expect(await screen.findByLabelText("Clientes na carteira: 1.250")).toBeTruthy();
+    expect(screen.getByLabelText("Clientes sem tabela de preço: indisponível")).toBeTruthy();
+  });
+
+  it("offline does not ask for the counters", async () => {
+    const customers: CustomerRepository = { list: async () => pageOf([], 0) };
+    const load = jest.fn();
+    await render(<CustomersScreen customers={customers} onUnauthenticated={noop} connectivity="offline" dashboard={{ load }} />);
+    expect(load).not.toHaveBeenCalled();
+  });
 });

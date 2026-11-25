@@ -112,4 +112,21 @@ describe("HomeScreen", () => {
     await waitFor(() => expect(screen.getByLabelText("Produtos no aparelho: 5")).toBeTruthy());
     expect(screen.getByLabelText("Clientes disponíveis: indisponível")).toBeTruthy();
   });
+
+  it("shows the site's five counters from the server, with \"—\" for what it did not deliver", async () => {
+    const dashboard = { load: async () => ({ customers: "1.250", products: "373", sellable: "300", openOrders: "4", unsentAmount: null, portfolio: [] }) };
+    await renderHome({ dashboard });
+    expect(await screen.findByLabelText("Clientes: 1.250")).toBeTruthy();
+    expect(screen.getByLabelText("Produtos: 373")).toBeTruthy();
+    expect(screen.getByLabelText("Vendáveis: 300")).toBeTruthy();
+    expect(screen.getByLabelText("Pedidos em aberto: 4")).toBeTruthy();
+    expect(screen.getByLabelText("R$ não enviados: indisponível")).toBeTruthy();
+  });
+
+  it("offline asks nothing and says the counters come back with the internet", async () => {
+    const load = jest.fn(async () => ({ customers: "1", products: "1", sellable: "1", openOrders: "1", unsentAmount: "1", portfolio: [] }));
+    await renderHome({ dashboard: { load }, connectivity: "offline" });
+    expect(load).not.toHaveBeenCalled();
+    expect(screen.getByText(/Sem conexão: os indicadores voltam/)).toBeTruthy();
+  });
 });

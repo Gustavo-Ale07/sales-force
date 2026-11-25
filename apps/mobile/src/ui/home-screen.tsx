@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { DraftRecord, SyncStatus } from "@salesforce/mobile-db";
 import type { Account } from "../auth/auth-port";
 import type { ConnectivityState } from "../connectivity/connectivity";
+import type { DashboardIndicators, DashboardPort } from "../data/dashboard";
 import type { Repositories } from "../data/ports";
 import type { LocalOrdersPort } from "../offline/local-orders";
 import { colors, fontSize, radius, spacing } from "../theme";
@@ -20,6 +21,8 @@ export interface HomeScreenProps {
   readonly onNewOrder: () => void;
   /** Present only when a sync manager exists. */
   readonly onSyncNow?: () => void;
+  /** The site's Início counters (`GET /dashboard`), read online. Absent = the section is not shown. */
+  readonly dashboard?: DashboardPort;
 }
 
 interface Summary {
@@ -33,6 +36,15 @@ const EMPTY_SUMMARY: Summary = { orders: null, customers: null, products: null }
 
 function settled<T>(result: PromiseSettledResult<T>): T | null {
   return result.status === "fulfilled" ? result.value : null;
+}
+
+function TextTile({ label, value }: { label: string; value: string | null }) {
+  return (
+    <View style={styles.tile} accessible accessibilityLabel={`${label}: ${value === null ? "indisponível" : value}`}>
+      <Text style={styles.tileValue}>{value === null ? "—" : value}</Text>
+      <Text style={styles.tileLabel}>{label}</Text>
+    </View>
+  );
 }
 
 function StatTile({ label, value }: { label: string; value: number | null }) {
@@ -74,8 +86,24 @@ function ActionRow({
 
 
 /** Home: real shortcuts and counters from the data already on this device. No sales metrics until there is a source for them. */
-export function HomeScreen({ account, active, repositories, localOrders, syncStatus, connectivity, onNewOrder, onSyncNow }: HomeScreenProps) {
+export function HomeScreen({ account, active, repositories, localOrders, syncStatus, connectivity, onNewOrder, onSyncNow, dashboard }: HomeScreenProps) {
   const [summary, setSummary] = useState<Summary>(EMPTY_SUMMARY);
+  const [indicators, setIndicators] = useState<DashboardIndicators | null>(null);
+  const online = connectivity !== "offline";
+
+  useEffect(() => {
+    if (!active || !online || dashboard === undefined) return;
+    let current = true;
+    dashboard
+      .load()
+      .then((found) => {
+        if (current) setIndicators(found);
+      })
+      .catch(() => undefined); // Informational: the tiles keep the last values read, or show "—".
+    return () => {
+      current = false;
+    };
+  }, [active, online, dashboard, syncStatus.lastSyncedAt]);
 
   useEffect(() => {
     if (!active) return;
@@ -122,6 +150,20 @@ export function HomeScreen({ account, active, repositories, localOrders, syncSta
           />
         )}
       </View>
+
+      {dashboard !== undefined && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Indicadores</Text>
+          <View style={styles.grid}>
+            <TextTile label="Clientes" value={indicators?.customers ?? null} />
+            <TextTile label="Produtos" value={indicators?.products ?? null} />
+            <TextTile label="Vendáveis" value={indicators?.sellable ?? null} />
+            <TextTile label="Pedidos em aberto" value={indicators?.openOrders ?? null} />
+            <TextTile label="R$ não enviados" value={indicators?.unsentAmount ?? null} />
+          </View>
+          {!online && <Text style={styles.tileLabel}>Sem conexão: os indicadores voltam quando houver internet.</Text>}
+        </View>
+      )}
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Neste aparelho</Text>

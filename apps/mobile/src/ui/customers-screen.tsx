@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { ConnectivityState } from "../connectivity/connectivity";
+import type { DashboardIndicators, DashboardPort } from "../data/dashboard";
 import type { CustomerFilters, CustomerLetter, CustomerListItem, CustomerPageRequest, CustomerRepository, CustomerSellerOption } from "../data/ports";
 import { describePendingBadge, hasNoSeller, isUnconfirmedCustomer } from "../data/pending-status";
 import { colors, control, radius, spacing } from "../theme";
@@ -45,6 +46,8 @@ export interface CustomersScreenProps {
   readonly onOpen?: (customer: CustomerListItem) => void;
   /** "Novo cliente": offered only while customer creation is released on this installation. Absent = no button. */
   readonly onCreate?: () => void;
+  /** The site's "Carteira de clientes" counters above the list, read online. Absent = no counters. */
+  readonly dashboard?: DashboardPort;
 }
 
 const noopOpen = () => undefined;
@@ -54,7 +57,20 @@ const noopOpen = () => undefined;
  * alphabetical index when the repository can compute it locally. Whether this is "the seller's own portfolio" depends
  * on the installation configuration the app does not know, so the title never claims it.
  */
-export function CustomersScreen({ customers, onUnauthenticated, connectivity, onOpen = noopOpen, onCreate }: CustomersScreenProps) {
+export function CustomersScreen({ customers, onUnauthenticated, connectivity, onOpen = noopOpen, onCreate, dashboard }: CustomersScreenProps) {
+  const [portfolio, setPortfolio] = useState<DashboardIndicators["portfolio"]>([]);
+  const online = connectivity !== "offline";
+  useEffect(() => {
+    if (!online || dashboard === undefined) return;
+    let current = true;
+    dashboard
+      .load()
+      .then((found) => current && setPortfolio(found.portfolio))
+      .catch(() => undefined); // Informational: the list works without the counters.
+    return () => {
+      current = false;
+    };
+  }, [dashboard, online]);
   const offlineSuffix = connectivity === "offline" ? " · dados salvos neste aparelho" : "";
   const [filters, setFilters] = useState<CustomerFilters>({});
   const [startAt, setStartAt] = useState(0);
@@ -122,6 +138,13 @@ export function CustomersScreen({ customers, onUnauthenticated, connectivity, on
           </Pressable>
         )}
       </View>
+      {portfolio.length > 0 && (
+        <View style={styles.indicators} accessibilityRole="summary">
+          {portfolio.map((item) => (
+            <Text key={item.key} style={styles.indicator} accessibilityLabel={`${item.label}: ${item.value ?? "indisponível"}`}>{`${item.label}: ${item.value ?? "—"}`}</Text>
+          ))}
+        </View>
+      )}
       <FilterChips filters={filters} sellers={sellers} onChange={changeFilters} />
       {startAt > 0 && (
         <Pressable style={styles.jump} onPress={() => setStartAt(0)} accessibilityRole="button" accessibilityLabel="Voltar ao início da lista">
@@ -195,6 +218,8 @@ const styles = StyleSheet.create({
   seller: { fontSize: 12, color: colors.textMuted, opacity: 0.85 },
   status: { fontSize: 12, fontWeight: "700", color: colors.warning },
   toolbar: { gap: spacing.sm },
+  indicators: { gap: 2 },
+  indicator: { fontSize: 13, color: colors.textMuted, fontWeight: "600" },
   toolbarRow: { flexDirection: "row", gap: spacing.sm },
   tool: { minHeight: control.height, minWidth: 72, paddingHorizontal: spacing.lg, borderRadius: radius.md, borderWidth: 1, borderColor: colors.navy, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
   jump: { minHeight: 44, justifyContent: "center" },
