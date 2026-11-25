@@ -20,6 +20,7 @@ export * from "./product-guard";
 export * from "./pending-customers";
 export * from "./local-cleanup";
 export * from "./order-erp-status";
+export * from "./server-orders";
 
 export type LocalStorageStatus = { readonly available: true };
 

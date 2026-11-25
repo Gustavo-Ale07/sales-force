@@ -6,7 +6,9 @@ import { CUSTOMER_UNAVAILABLE_MESSAGE, LEGACY_CUSTOMER_UNAVAILABLE_MESSAGE, isCu
  * Sankhya stage, so no label here claims one (never "sincronizado com o ERP", "confirmado" or "faturado"). Everything else,
  * including a synced order with a change still queued, is "Não enviados".
  */
-export function salesGroupOf(view: Pick<DraftRecord, "status"> & Partial<Pick<DraftRecord, "sendState" | "erpStage">>): SalesGroup {
+export function salesGroupOf(view: Pick<DraftRecord, "status"> & Partial<Pick<DraftRecord, "sendState" | "erpStage" | "sendCode">>): SalesGroup {
+  // "Precisa de correção" (rejected) and "Conferindo envio" (unknown) are still "Não enviados" (same rule as the SQL list).
+  if (view.sendCode === "rejected" || view.sendCode === "unknown") return "unsent";
   // A saved order the Force backend already holds as a draft is still "Não enviados": it never went to Sankhya.
   return view.status === "synced" && (view.sendState === "submitted" || (view.erpStage ?? null) !== null) ? "sent" : "unsent";
 }
@@ -129,7 +131,8 @@ export function saleExplanation(draft: Pick<DraftRecord, "status" | "remoteId" |
       case "waiting":
         return "Salvo neste aparelho. Será enviado ao Sankhya assim que possível.";
       case "rejected":
-        return "Precisa de correção. Edite o pedido e confirme de novo.";
+        // The reason is the server's delivery error, in the same words as the site (`deliveryErrorText`).
+        return draft.sendError ? `Precisa de correção. ${draft.sendError}. Edite o pedido e confirme de novo.` : "Precisa de correção. Edite o pedido e confirme de novo.";
       case "refused":
         return `Precisa de correção. ${draft.sendError ?? ""} Corrija o que for preciso e confirme de novo.`.replace(/\s+/g, " ").trim();
       case "in_sankhya":

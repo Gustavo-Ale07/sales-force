@@ -14,7 +14,10 @@ export type SalesGroup = "unsent" | "sent";
 export const UNSENT_STATUSES: readonly DraftStatus[] = ["local_only", "pending_sync", "syncing", "sync_error", "conflict", "needs_review"];
 export const SENT_STATUSES: readonly DraftStatus[] = ["synced"];
 /** The one definition of "sent to Sankhya" (list group and counters). */
-const SENT_SQL = "(d.status = 'synced' AND (COALESCE(d.send_state, '') = 'submitted' OR d.erp_stage IS NOT NULL))";
+/** An order that needs correction ("Precisa de correção", `rejected`) or whose delivery is being checked (`unknown`) is still "Não enviados". */
+export const UNSENT_SEND_CODES: readonly string[] = ["rejected", "unknown"];
+const SENT_SQL =
+  "(d.status = 'synced' AND COALESCE(d.send_code, '') NOT IN ('rejected', 'unknown') AND (COALESCE(d.send_state, '') = 'submitted' OR d.erp_stage IS NOT NULL))";
 
 export interface DraftFilter {
   readonly ownerAccountId: string;

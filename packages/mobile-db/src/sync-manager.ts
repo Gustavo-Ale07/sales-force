@@ -2,6 +2,7 @@ import type { SqlDatabase } from "./connection";
 import { DatasetIdentityError, confirmDataset, readCacheDataset, readExpectedDataset, sameDataset, writeCacheDataset, type DatasetIdentity } from "./dataset-identity";
 import { countOutbox, draftErpNumber, getDraft, listAttentionItems, listOutbox, type AttentionItem, type DraftRecord } from "./local-orders";
 import { isoNow, type OfflineEnv } from "./offline-env";
+import { mergeServerOrders, type ServerOrdersSource } from "./server-orders";
 import { refreshOneOrderErpStatus, refreshOrderErpStatuses, type OrderStatusSource } from "./order-erp-status";
 import { countSendRequests, pushOutbox, pushSendRequests, recoverInterrupted, reevaluateHeldOrders, TransportError, type OrderTransport, type PushOptions, type PushStop } from "./order-sync";
 import {
@@ -19,7 +20,7 @@ import { META_KEYS, cachedPriceTableCodes, countPriceRows, deleteMeta, getMeta, 
  * Where the reference data comes from. The server stays authoritative and delivers only what the actor's scope
  * allows (P-21); the client never widens it. Implementations page through the API and return the full snapshot.
  */
-export interface ReferenceSource extends OrderStatusSource {
+export interface ReferenceSource extends OrderStatusSource, ServerOrdersSource {
   /** `onPage` reports the rows read so far and the server's total after each page (real progress; optional). */
   fetchCustomers(onPage?: PageProgress): Promise<readonly CustomerLike[]>;
   fetchProducts(onPage?: PageProgress): Promise<readonly ProductLike[]>;
@@ -541,6 +542,13 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
           // so a failed read keeps the last known status and never fails the run (only a dead session does: it needs a new login).
           onStep({ id: "orders", state: "running", count: 0, total: null });
           try {
+            // The account's orders made elsewhere (site, another device) join the local list first, so their ERP status is read below too.
+            try {
+              await mergeServerOrders(deps.db, deps.env, deps.source, deps.transport, deps.ownerAccountId);
+            } catch (error) {
+              if (error instanceof TransportError && error.kind === "auth") throw error;
+              if (!(error instanceof TransportError)) deps.onUnexpectedError?.(error);
+            }
             await refreshOrderErpStatuses(deps.db, deps.env, deps.source, deps.ownerAccountId, (done, total) => onStep({ id: "orders", state: "running", count: done, total }));
             onStep({ id: "orders", state: "done" });
           } catch (error) {

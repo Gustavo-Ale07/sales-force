@@ -17,6 +17,7 @@ export * from './order-top.js';
 export * from './document-kind.js';
 export * from './order-document.js';
 export * from './order-delivery.js';
+export * from './delivery-error-text.js';
 export * from './ipi.js';
 export * from './financial.js';
 export * from './sales-history.js';

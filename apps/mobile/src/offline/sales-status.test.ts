@@ -19,6 +19,14 @@ describe("salesGroupOf", () => {
     expect(salesGroupOf({ status: "synced", sendState: null })).toBe("unsent");
     expect(salesGroupOf({ status: "synced", sendState: "requested" })).toBe("unsent");
   });
+
+  it("'Precisa de correção' and 'Conferindo envio' stay in 'Não enviados' even with a Sankhya stage; the other submitted ones are 'Enviados'", () => {
+    const group = (sendCode: string) => salesGroupOf({ status: "synced", sendState: "submitted", sendCode });
+    expect(group("rejected")).toBe("unsent");
+    expect(group("unknown")).toBe("unsent");
+    expect(["queued", "sent", "awaiting_approval", "approved", "approval_rejected"].map(group)).toEqual(["sent", "sent", "sent", "sent", "sent"]);
+    expect(salesGroupOf({ status: "synced", sendState: "submitted", sendCode: "rejected", erpStage: { stage: "send_error" } as never })).toBe("unsent");
+  });
 });
 
 describe("saleBadge", () => {
@@ -178,5 +186,11 @@ describe("rejected (Precisa de correção)", () => {
     const numbered = draftRecord({ ...base, erpNumber: 123 });
     expect(saleBadge(numbered).label).toBe("Precisa de correção");
     expect(saleActions(numbered).continue).toBe(false);
+  });
+
+  it("shows the same reason the site shows under 'Precisa de correção' when the server sent one", () => {
+    const withReason = draftRecord({ ...base, sendError: "Frete não informado" });
+    expect(saleExplanation(withReason)).toBe("Precisa de correção. Frete não informado. Edite o pedido e confirme de novo.");
+    expect(saleExplanation(draftRecord({ ...base, sendError: null }))).toBe("Precisa de correção. Edite o pedido e confirme de novo.");
   });
 });

@@ -1,4 +1,5 @@
-import { TransportError, type DatasetIdentity, type MobilityCount, type PageProgress, type OrderErpStatus, type PriceTableSnapshot, type RefreshOutcome, type RefreshProgress, type ReferenceSource } from "@salesforce/mobile-db";
+import { TransportError, type DatasetIdentity, type MobilityCount, type PageProgress, type OrderErpStatus, type ServerOrderSummary, type PriceTableSnapshot, type RefreshOutcome, type RefreshProgress, type ReferenceSource } from "@salesforce/mobile-db";
+import { deliveryErrorText } from "@salesforce/domain";
 import { ApiRequestError, callApi, type ApiClient } from "../data/api";
 import type { CustomerListItem, OrderEntryConfiguration, ProductListItem } from "../data/ports";
 import { toTransportError } from "./transport";
@@ -235,6 +236,29 @@ export function createReferenceSource(api: ApiClient, timing: RefreshTiming = {}
                       readError: order.erpStage.readError ?? null,
                     },
                   }),
+            });
+          }
+          if (view.items.length === 0 || page * pageSize >= view.total) break;
+        }
+        return found;
+      }),
+    // Every order of the signed-in account, wherever it was made (site, another device): the same endpoint the site lists from.
+    fetchServerOrders: () =>
+      guard(async () => {
+        const found: ServerOrderSummary[] = [];
+        const pageSize = timing.orderStatusPageSize ?? ORDER_STATUS_PAGE_SIZE;
+        for (let page = 1; ; page += 1) {
+          const view = await callApi(() => api.GET("/orders", { params: { query: { mine: "true", page, pageSize } } }));
+          for (const order of view.items) {
+            found.push({
+              id: order.id,
+              version: order.version,
+              status: order.status,
+              erpNumber: order.erpNumber,
+              // The same text the site shows under "Precisa de correção" (one function, in the domain).
+              deliveryError: order.status === "rejected" ? deliveryErrorText(order.erpDelivery) : null,
+              createdAt: order.createdAt,
+              updatedAt: order.updatedAt,
             });
           }
           if (view.items.length === 0 || page * pageSize >= view.total) break;
