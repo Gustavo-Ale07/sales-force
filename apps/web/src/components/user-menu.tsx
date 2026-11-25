@@ -9,15 +9,13 @@ import {
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { LogOut, RefreshCw, UserRound } from "lucide-react";
-import { useState } from "react";
+import { LogOut, UserRound } from "lucide-react";
 import { syncStatusQueryOptions } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import type { AuthUser } from "../lib/auth-client";
 import { isOperationsRole } from "../lib/operations-role";
 import { userPhotoSrc } from "../lib/profile-photo";
 import { clockTime } from "../lib/sync-refresh";
-import { RefreshDataDialog } from "./refresh-data-dialog";
 
 
 export interface UserMenuProps {
@@ -29,13 +27,11 @@ export interface UserMenuProps {
 export function UserMenu({ user, onLogout }: UserMenuProps) {
   const navigate = useNavigate();
   const api = useApi();
-  const [refreshOpen, setRefreshOpen] = useState(false);
   const status = useQuery({ ...syncStatusQueryOptions(api), enabled: user !== null && !isOperationsRole(user.role) });
   if (!user) return null;
   const dataAsOf = status.data?.dataAsOf ?? null;
   return (
-    <>
-    <DropdownMenu>
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger
         aria-label={`Menu do usuário ${user.name}`}
         className="flex size-11 items-center justify-center rounded-full transition-shadow duration-[var(--sf-dur-fast)] hover:shadow-[0_0_0_4px_var(--sf-sidebar-hover)] data-[state=open]:shadow-[0_0_0_4px_var(--sf-sidebar-hover)]"
@@ -54,10 +50,6 @@ export function UserMenu({ user, onLogout }: UserMenuProps) {
             Meu perfil
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem onSelect={() => setRefreshOpen(true)}>
-          <RefreshCw size={16} strokeWidth={1.75} aria-hidden="true" />
-          Atualizar dados
-        </DropdownMenuItem>
         {dataAsOf ? <DropdownMenuLabel className="pt-0 text-xs font-normal">Dados do Sankhya de {clockTime(dataAsOf)}</DropdownMenuLabel> : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onLogout}>
@@ -66,7 +58,5 @@ export function UserMenu({ user, onLogout }: UserMenuProps) {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-    <RefreshDataDialog open={refreshOpen} role={user.role} onClose={() => setRefreshOpen(false)} />
-    </>
   );
 }

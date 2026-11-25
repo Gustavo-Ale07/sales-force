@@ -6,7 +6,7 @@ import type { ApiSchema } from "@salesforce/contracts/client";
 import { ORDER_STAGE_LABELS } from "@salesforce/domain";
 import { ORDER_STAGE_FILTERS, parseOrdersSearch, SENT_ORDER_STAGES } from "../lib/route-search";
 import { customer, customerDetail, customersPage, ORDER_ID, orderDetail, orderListItem, ordersPage, product, productsPage } from "../test/fixtures";
-import { apiError, callsTo, openUserMenu, renderApp, type Handlers } from "../test/harness";
+import { apiError, callsTo, openRefresh, renderApp, type Handlers } from "../test/harness";
 
 type Stage = NonNullable<ApiSchema<"OrderDetail">["erpStage"]>;
 
@@ -299,8 +299,7 @@ describe("Situação no Sankhya: lista de pedidos", () => {
     });
     await screen.findByText("Pedido nº 5001");
     const before = callsTo(calls, "GET", "/orders").length;
-    await openUserMenu(user);
-    await user.click(await screen.findByRole("menuitem", { name: "Atualizar dados" }));
+    await openRefresh(user);
     await waitFor(() => expect(callsTo(calls, "POST", "/sync/refresh")).toHaveLength(1));
     await waitFor(() => expect(callsTo(calls, "GET", "/orders").length).toBeGreaterThan(before), { timeout: 5000 });
   });

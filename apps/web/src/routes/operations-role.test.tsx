@@ -45,11 +45,12 @@ describe("Perfil Operações", () => {
     },
   );
 
-  it("calls only the session and the queue, and the user menu offers refresh and logout without profile", async () => {
+  it("calls only the session and the queue, and the user menu offers only logout (no profile, no refresh)", async () => {
     const { calls, user } = renderApp("/aguardando-liberacao", { handlers: handlers(), role: "operations" });
     await screen.findByRole("heading", { name: /Aguardando liberação/ });
     await openUserMenu(user);
-    expect(await screen.findByRole("menuitem", { name: "Atualizar dados" })).toBeInTheDocument();
+    expect(await screen.findByRole("menuitem", { name: "Sair" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Atualizar dados" })).toBeNull();
     expect(screen.getByRole("menuitem", { name: "Sair" })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Meu perfil" })).toBeNull();
     expect(calls.map((call) => call.path).filter((path) => !ALLOWED.includes(path))).toEqual([]);

@@ -3,6 +3,7 @@ import { Toaster, TooltipProvider } from "@salesforce/ui";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { render, screen, waitFor, within } from "@testing-library/react";
+import { expect } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { createWebApiClient } from "../lib/api";
 import { createApiAuthClient } from "../lib/api-auth-client";
@@ -154,6 +155,13 @@ export async function fillOrderHeader(user: ReturnType<typeof userEvent.setup>) 
     if (within(carrier).queryAllByRole("option").length < 2) throw new Error("carriers not loaded");
   });
   if ((carrier as HTMLSelectElement).value === "") await user.selectOptions(carrier, "7");
+}
+
+/** Starts the data refresh the way a user can: a click on the header sync indicator (once it is idle). */
+export async function openRefresh(user: ReturnType<typeof userEvent.setup>) {
+  const indicator = await screen.findByTestId("sync-indicator");
+  await waitFor(() => expect(indicator).toHaveAttribute("aria-busy", "false"));
+  await user.click(indicator);
 }
 
 /** Opens the user menu from the keyboard (Enter on the trigger): also proves the menu is keyboard reachable. */

@@ -67,6 +67,7 @@ Lotes (definidos pelo dono): 1 e 2 em andamento hoje; 3 e 4 NÃO iniciar; FORA =
 | Item | Site | App | Igual? | Esforço | Servidor? | Lote | Situação | SHA |
 |---|---|---|---|---|---|---|---|---|
 | Indicador de sincronização | feito | feito | sim | M | não | 2ª rodada | feito | app 09de23e; site 3f15eac; 2026-11-25: só as duas setas, sem círculo/fundo, cor da linha = estado (verde #4ADE80, amarelo #FBBF24, vermelho #F87171; contraste >= 3:1 sobre o cabeçalho #001369), site: setas 24 px, alvo 44x44, mesmos hex (cabeçalho #01136a, contraste 6,1 a 10 : 1); app 514a460 |
+| Gatilhos da tela cheia de atualização | só login real (não existe no site), indicador e "Sincronizar agora" no Perfil; menu do avatar sem "Atualizar dados" e não modal | login, indicador, Sincronizar agora | sim | P | não | 2ª rodada | feito | ver SHA do commit "avatar menu" |
 | Bloco de sincronização no Perfil | feito | existe | sim | M | não | 1 | feito | 60609ff |
 | "Sobre" com versão e ambiente | feito | existe | sim | P | não | 1 | feito | 60609ff |
 | Início com indicadores | existe | falta | não (a igualar) | M | a conferir | 2 | não iniciado | |

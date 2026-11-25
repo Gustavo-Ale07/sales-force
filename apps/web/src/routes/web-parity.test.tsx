@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ORDER_ID, customer, customerDetail, customersPage, dashboard, ordersPage, orderDetail, orderItem, orderListItem, productsPage, testDataset } from "../test/fixtures";
-import { apiError, callsTo, openUserMenu, renderApp, session, type Handlers } from "../test/harness";
+import { apiError, callsTo, openRefresh, openUserMenu, renderApp, session, type Handlers } from "../test/harness";
 
 /** Web parity with the operational flow: duplicate order, profile page, explicit data reload, honest status wording. */
 
@@ -142,6 +142,25 @@ describe("Pedido: Duplicar pedido", () => {
 describe("Meu perfil e atualização de dados", () => {
   const shell = { "GET /dashboard": { body: dashboard() }, "GET /orders": { body: ordersPage([]) } };
 
+  it("opening the avatar menu or the Perfil never opens the full-screen refresh, and the page stays clickable after the menu closes", async () => {
+    const { user, router } = renderApp("/", { handlers: shell });
+    await openUserMenu(user);
+    expect(await screen.findByRole("menuitem", { name: "Meu perfil" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Atualizar dados" })).toBeNull();
+    expect(document.querySelector("[data-full-screen-loading]")).toBeNull();
+    // Non-modal menu: no scroll lock and no pointer-events block on the page behind it.
+    expect(document.body.style.pointerEvents).not.toBe("none");
+    expect(document.body).not.toHaveAttribute("data-scroll-locked");
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("menuitem", { name: "Meu perfil" })).toBeNull());
+    expect(document.body.style.pointerEvents).not.toBe("none");
+    await user.click(await screen.findByRole("link", { name: "Clientes" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/clientes"));
+    await router.navigate({ to: "/perfil" });
+    await screen.findByText("Perfil de acesso");
+    expect(document.querySelector("[data-full-screen-loading]")).toBeNull();
+  });
+
   it("opens the profile from the user menu and shows the account from the session, read-only", async () => {
     const { user, router } = renderApp("/", { handlers: shell });
     await openUserMenu(user);
@@ -207,8 +226,7 @@ describe("Meu perfil e atualização de dados", () => {
       },
     });
     await waitFor(() => expect(callsTo(calls, "GET", "/dashboard")).toHaveLength(1));
-    await openUserMenu(user);
-    await user.click(await screen.findByRole("menuitem", { name: "Atualizar dados" }));
+    await openRefresh(user);
     expect(await screen.findByText("Atualizando dados do Sankhya")).toBeInTheDocument();
     expect(await screen.findByText(/Dados atualizados às/)).toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "Andamento por informação" })).toBeNull();
@@ -235,8 +253,7 @@ describe("Meu perfil e atualização de dados", () => {
       role: "manager",
       handlers: { ...shell, "POST /sync/refresh": { body: { ...running(0), reused: false } }, ["GET /sync/refresh/" + REFRESH_ID]: { body: running(2) } },
     });
-    await openUserMenu(user);
-    await user.click(await screen.findByRole("menuitem", { name: "Atualizar dados" }));
+    await openRefresh(user);
     expect(await screen.findByText("Lendo clientes…")).toBeInTheDocument();
     expect(screen.getByText(/^2 de 11 · \d+ s$/)).toBeInTheDocument();
     expect(screen.getByTestId("hero-percent")).toHaveTextContent("18%");
@@ -251,8 +268,7 @@ describe("Meu perfil e atualização de dados", () => {
         role,
         handlers: { ...shell, 'POST /sync/refresh': { body: { ...pending, reused: false } }, ['GET /sync/refresh/' + REFRESH_ID]: { body: pending } },
       });
-      await openUserMenu(user);
-      await user.click(await screen.findByRole('menuitem', { name: 'Atualizar dados' }));
+      await openRefresh(user);
       await screen.findByRole('progressbar');
       return user;
     };
@@ -300,8 +316,7 @@ describe("Meu perfil e atualização de dados", () => {
         ["GET /sync/refresh/" + REFRESH_ID]: { body: basic() },
       },
     });
-    await openUserMenu(user);
-    await user.click(await screen.findByRole("menuitem", { name: "Atualizar dados" }));
+    await openRefresh(user);
     expect(await screen.findByText("Atualizando seus dados")).toBeInTheDocument();
     expect(await screen.findByText("Atualizando preços…")).toBeInTheDocument();
     expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "40");
@@ -317,8 +332,7 @@ describe("Meu perfil e atualização de dados", () => {
     const { user } = renderApp("/", {
       handlers: { ...shell, "POST /sync/refresh": { body: { ...basic, reused: false } }, ["GET /sync/refresh/" + REFRESH_ID]: { body: basic } },
     });
-    await openUserMenu(user);
-    await user.click(await screen.findByRole("menuitem", { name: "Atualizar dados" }));
+    await openRefresh(user);
     expect(await screen.findByText("Não foi possível atualizar tudo agora.")).toBeInTheDocument();
     expect(screen.getByText(/dados anteriores continuam disponíveis/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeInTheDocument();
@@ -333,8 +347,7 @@ describe("Meu perfil e atualização de dados", () => {
         ["GET /sync/refresh/" + REFRESH_ID]: { body: refreshBody({}, "customers") },
       },
     });
-    await openUserMenu(user);
-    await user.click(await screen.findByRole("menuitem", { name: "Atualizar dados" }));
+    await openRefresh(user);
     expect(await screen.findByText("Atualização concluída com avisos")).toBeInTheDocument();
     expect(screen.getByText(/Sankhya indisponível\. Mantidos os dados de/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeInTheDocument();
@@ -343,8 +356,7 @@ describe("Meu perfil e atualização de dados", () => {
 
   it("offers 'Tentar de novo' when the refresh cannot even be started", async () => {
     const { user } = renderApp("/", { handlers: { ...shell, "POST /sync/refresh": apiError(503, "service_unavailable", "x") } });
-    await openUserMenu(user);
-    await user.click(await screen.findByRole("menuitem", { name: "Atualizar dados" }));
+    await openRefresh(user);
     expect(await screen.findByRole("button", { name: "Tentar de novo" })).toBeInTheDocument();
   });
 });
