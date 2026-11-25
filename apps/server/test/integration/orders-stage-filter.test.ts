@@ -39,6 +39,7 @@ beforeAll(async () => {
   await make('draft', 'seller1', customer1);
   await make('queued', 'seller1', customer1);
   await make('rejected', 'seller1', customer1);
+  await make('verifying', 'seller1', customer1);
   await make('inReview', 'seller1', customer1);
   await make('invoiced', 'seller1', customer1);
   await make('sentUnread', 'seller1', customer1);
@@ -51,6 +52,7 @@ beforeAll(async () => {
   const sankhya = { datasetOrigin: 'sankhya' as const, erpEnvironment: 'fake' };
   await db.update(salesOrder).set({ status: 'queued', ...sankhya }).where(eq(salesOrder.id, ids.queued!));
   await db.update(salesOrder).set({ status: 'rejected', ...sankhya }).where(eq(salesOrder.id, ids.rejected!));
+  await db.update(salesOrder).set({ status: 'unknown', ...sankhya }).where(eq(salesOrder.id, ids.verifying!));
   await db.update(salesOrder).set({ status: 'sent', erpNumber: 7000, ...sankhya }).where(eq(salesOrder.id, ids.sentUnread!));
   let nunota = 7100;
   const mirror = async (key: string, stage: string, label: string): Promise<void> => {
@@ -102,7 +104,7 @@ describe('GET /orders?stage=', () => {
 
   it('total follows the filter across pages and combines with other filters', async () => {
     const unfiltered = await list('seller1', 'pageSize=100');
-    expect(unfiltered.total).toBe(6);
+    expect(unfiltered.total).toBe(7);
     const paged = (await ctx.call('seller1', 'GET', '/orders?stage=in_review&pageSize=1&page=1')).body;
     expect(paged.total).toBe(1);
     expect((paged.items as Json[]).length).toBe(1);
@@ -126,7 +128,7 @@ describe('GET /orders?stage=', () => {
 
 describe('GET /orders?mine=true', () => {
   it('lists only the orders created by the signed-in account, even for a manager', async () => {
-    expect((await list('seller1', 'mine=true')).total).toBe(6);
+    expect((await list('seller1', 'mine=true')).total).toBe(7);
     expect(await list('seller2', 'mine=true')).toEqual({ ids: sorted('foreignInReview'), total: 1 });
     expect(await list('manager', 'mine=true')).toEqual({ ids: [], total: 0 });
     expect((await list('manager', 'status=draft')).ids).toContain(ids.draft);
@@ -136,13 +138,18 @@ describe('GET /orders?mine=true', () => {
 
 describe('GET /orders?group=', () => {
   it('unsent and sent split the list with a correct total and paging, within scope', async () => {
-    expect(await list('seller1', 'group=unsent')).toEqual({ ids: sorted('draft', 'queued', 'rejected'), total: 3 });
+    expect(await list('seller1', 'group=unsent')).toEqual({ ids: sorted('draft', 'queued', 'rejected', 'verifying'), total: 4 });
     expect(await list('seller1', 'group=sent')).toEqual({ ids: sorted('inReview', 'invoiced', 'sentUnread'), total: 3 });
     const paged = (await ctx.call('seller1', 'GET', '/orders?group=unsent&pageSize=2&page=2')).body;
-    expect(paged.total).toBe(3);
-    expect((paged.items as Json[]).length).toBe(1);
+    expect(paged.total).toBe(4);
+    expect((paged.items as Json[]).length).toBe(2);
     expect(await list('seller2', 'group=sent')).toEqual({ ids: sorted('foreignInReview'), total: 1 });
     expect(await list('manager', 'group=sent')).toEqual({ ids: sorted('inReview', 'invoiced', 'sentUnread', 'foreignInReview'), total: 4 });
+  });
+
+  it('an order being verified (unknown, "Conferindo envio") is in "Nao enviados" like the app; only sent is "Enviados"', async () => {
+    expect(await list('seller1', 'group=unsent&status=unknown')).toEqual({ ids: sorted('verifying'), total: 1 });
+    expect(await list('seller1', 'group=sent&status=unknown')).toEqual({ ids: [], total: 0 });
   });
 
   it('combines with status and stage, and rejects an unknown group', async () => {

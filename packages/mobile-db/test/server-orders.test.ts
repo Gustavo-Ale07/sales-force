@@ -95,18 +95,21 @@ describe("mergeServerOrders", () => {
     expect(getOrder).not.toHaveBeenCalled();
   });
 
-  it("maps the server status to the groups: Precisa de correção and Conferindo envio are 'Não enviados', the rest of the sent ones 'Enviados'", async () => {
+  it("maps the server status to the groups like the server and the site: only `sent` is 'Enviados' (owner 2026-11-25)", async () => {
     await run([
       summary("a", { status: "draft" }),
       summary("b", { status: "rejected", deliveryError: "Frete não informado" }),
       summary("c", { status: "unknown" }),
       summary("d", { status: "sent", erpNumber: 900 }),
       summary("e", { status: "queued" }),
+      summary("f", { status: "awaiting_approval" }),
+      summary("g", { status: "approved" }),
+      summary("h", { status: "approval_rejected" }),
     ]);
     const counts = await countDraftsByGroup(db, { ownerAccountId: OWNER, dataset: REAL });
-    expect(counts).toEqual({ unsent: 3, sent: 2 });
+    expect(counts).toEqual({ unsent: 7, sent: 1 });
     const unsent = await queryDrafts(db, { ownerAccountId: OWNER, dataset: REAL, group: "unsent" }, { limit: 10, offset: 0 });
-    expect(unsent.rows.map((r) => r.remoteId).sort()).toEqual(["a", "b", "c"]);
+    expect(unsent.rows.map((r) => r.remoteId).sort()).toEqual(["a", "b", "c", "e", "f", "g", "h"]);
   });
 
   it("a rejected order keeps the delivery error text; read-only only with a Sankhya number (same rule as before)", async () => {

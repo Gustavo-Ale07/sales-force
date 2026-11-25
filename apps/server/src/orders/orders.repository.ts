@@ -45,10 +45,10 @@ export interface OrderListFilter {
   readonly sort: 'updatedAt' | '-updatedAt' | 'draftNumber' | '-draftNumber' | 'nunota' | '-nunota';
 }
 
-/** Statuses of each sales tab: what has not left yet, and what already did (the delivery being verified counts as sent). */
+/** Statuses of each sales tab: what has not left yet, and what already did (owner 2026-11-25: the delivery being verified, "Conferindo envio", is still not sent). */
 export const ORDER_GROUP_STATUSES = {
-  unsent: ['draft', 'awaiting_approval', 'approved', 'approval_rejected', 'queued', 'rejected'],
-  sent: ['sent', 'unknown'],
+  unsent: ['draft', 'awaiting_approval', 'approved', 'approval_rejected', 'queued', 'rejected', 'unknown'],
+  sent: ['sent'],
 } as const;
 
 /** Time zone the period filter is read in (decisions.md: business calculations in America/Sao_Paulo). */

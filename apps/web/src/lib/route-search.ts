@@ -59,7 +59,7 @@ export interface OrdersSearch {
 export const ORDER_STATUSES = ["draft", "awaiting_approval", "approved", "approval_rejected", "queued", "sent", "rejected", "unknown"] as const;
 export const ORDER_STAGE_FILTERS = ["sent_to_force", "send_error", "quotation", "received", "in_review", "financial_check", "in_dispatch", "in_invoicing", "invoiced", "barred"] as const;
 /** Statuses a not-yet-sent order can be in (tab "Não enviados"); the other two belong to "Enviados". */
-export const UNSENT_ORDER_STATUSES = ["draft", "awaiting_approval", "approved", "approval_rejected", "queued", "rejected"] as const;
+export const UNSENT_ORDER_STATUSES = ["draft", "awaiting_approval", "approved", "approval_rejected", "queued", "rejected", "unknown"] as const;
 /** Stages that only exist for an order that already reached Sankhya ("Enviados"); the two delivery stages belong to "Não enviados". */
 export const SENT_ORDER_STAGES = ORDER_STAGE_FILTERS.filter((stage) => stage !== "sent_to_force" && stage !== "send_error");
 export const MAX_ORDER_PRODUCTS = 20;

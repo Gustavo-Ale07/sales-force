@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ListPriceStateSchema, ProductImageSchema } from './catalog.js';
 import { DatasetIdentitySchema } from './configuration.js';
+import { ReleaseLevelSchema } from './release-queue.js';
 import {
   DecimalStringSchema,
   IsoTimestampSchema,
@@ -35,7 +36,7 @@ export type OrderStatus = z.infer<typeof OrderStatusSchema>;
 
 /**
  * Group of statuses for the sales tabs (same split as the app): `unsent` = Salvo, Aguardando aprovação, Desconto aprovado,
- * Desconto reprovado, Aguardando envio and Precisa de correção; `sent` = Enviado ao Sankhya and Conferindo envio (the order already left).
+ * Desconto reprovado, Aguardando envio and Precisa de correção; `unsent` also holds Conferindo envio (owner 2026-11-25); `sent` = Enviado ao Sankhya only.
  */
 export const OrderGroupSchema = named('OrderGroup', z.enum(['unsent', 'sent']));
 export type OrderGroup = z.infer<typeof OrderGroupSchema>;
@@ -276,6 +277,8 @@ export const OrderListItemSchema = named(
         stage: OrderStageCodeSchema,
         label: z.string(),
         pendingSector: z.string().nullable(),
+        /** Release level awaited (owner 2026-11-25): same object and text as the release queue item. Absent/null = not read yet. */
+        releaseLevel: ReleaseLevelSchema.nullable().optional(),
         nunota: z.number().int().nullable(),
         invoiceNumber: z.number().int().nullable(),
         updatedAt: IsoTimestampSchema,

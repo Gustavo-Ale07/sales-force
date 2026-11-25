@@ -20,12 +20,13 @@ describe("salesGroupOf", () => {
     expect(salesGroupOf({ status: "synced", sendState: "requested" })).toBe("unsent");
   });
 
-  it("'Precisa de correção' and 'Conferindo envio' stay in 'Não enviados' even with a Sankhya stage; the other submitted ones are 'Enviados'", () => {
+  it("same split as the server and the site: only `sent` is 'Enviados'; rejected, unknown, queued and the approval states are 'Não enviados', even with a Sankhya stage", () => {
     const group = (sendCode: string) => salesGroupOf({ status: "synced", sendState: "submitted", sendCode });
-    expect(group("rejected")).toBe("unsent");
-    expect(group("unknown")).toBe("unsent");
-    expect(["queued", "sent", "awaiting_approval", "approved", "approval_rejected"].map(group)).toEqual(["sent", "sent", "sent", "sent", "sent"]);
+    expect(["rejected", "unknown", "queued", "awaiting_approval", "approved", "approval_rejected"].map(group)).toEqual(Array(6).fill("unsent"));
+    expect(group("sent")).toBe("sent");
     expect(salesGroupOf({ status: "synced", sendState: "submitted", sendCode: "rejected", erpStage: { stage: "send_error" } as never })).toBe("unsent");
+    expect(salesGroupOf({ status: "synced", sendState: "submitted", sendCode: "queued", erpStage: { stage: "sent_to_force" } as never })).toBe("unsent");
+    expect(salesGroupOf({ status: "synced", sendState: "submitted", sendCode: "sent", erpStage: { stage: "in_review" } as never })).toBe("sent");
   });
 });
 

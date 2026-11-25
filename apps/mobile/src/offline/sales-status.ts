@@ -7,8 +7,8 @@ import { CUSTOMER_UNAVAILABLE_MESSAGE, LEGACY_CUSTOMER_UNAVAILABLE_MESSAGE, isCu
  * including a synced order with a change still queued, is "Não enviados".
  */
 export function salesGroupOf(view: Pick<DraftRecord, "status"> & Partial<Pick<DraftRecord, "sendState" | "erpStage" | "sendCode">>): SalesGroup {
-  // "Precisa de correção" (rejected) and "Conferindo envio" (unknown) are still "Não enviados" (same rule as the SQL list).
-  if (view.sendCode === "rejected" || view.sendCode === "unknown") return "unsent";
+  // Same split as the server (`ORDER_GROUP_STATUSES`, owner 2026-11-25): once the server told its status, only `sent` is "Enviados".
+  if (view.status === "synced" && view.sendState === "submitted" && view.sendCode !== undefined && view.sendCode !== null) return view.sendCode === "sent" ? "sent" : "unsent";
   // A saved order the Force backend already holds as a draft is still "Não enviados": it never went to Sankhya.
   return view.status === "synced" && (view.sendState === "submitted" || (view.erpStage ?? null) !== null) ? "sent" : "unsent";
 }
