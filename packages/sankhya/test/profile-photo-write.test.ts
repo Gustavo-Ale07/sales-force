@@ -67,14 +67,17 @@ describe('profile photo write settings (flag closed by default)', () => {
 });
 
 describe('profile photo wire (NEEDS VALIDATION shape, VALIDATED column TSIUSU.FOTO)', () => {
-  it('builds a deterministic save of FOTO for the user key, base64 of the JPEG, nothing else', () => {
+  it('builds a deterministic save of FOTO for the user key, the JPEG bytes as hex (never base64 text), nothing else', () => {
     const text = buildUserPhotoRequestText(request());
     expect(buildUserPhotoRequestText(request())).toBe(text);
     const body = JSON.parse(text) as { requestBody: { dataSet: { dataRow: { key: unknown; localFields: Record<string, unknown> } } } };
     const row = body.requestBody.dataSet.dataRow;
     expect(row.key).toEqual({ CODUSU: { $: '42' } });
     expect(Object.keys(row.localFields)).toEqual(['FOTO']);
-    expect(row.localFields['FOTO']).toEqual({ $: Buffer.from(JPEG).toString('base64') });
+    const sent = (row.localFields['FOTO'] as { $: string }).$;
+    expect(sent).toBe(Buffer.from(JPEG).toString('hex').toUpperCase());
+    expect(sent.startsWith('FFD8FF')).toBe(true); // image bytes, never base64 text (which would start with "/9j/")
+    expect(Buffer.from(sent, 'hex').equals(Buffer.from(JPEG))).toBe(true);
     expect(text).not.toContain(KEY);
   });
 

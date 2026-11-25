@@ -8,7 +8,9 @@ import { USER_PHOTO_MAX_BYTES, type UserPhotoWriteRequest } from './profile-phot
  * NEEDS VALIDATION (to be corrected HERE, in one place, by the Sandbox write test; nothing below was observed):
  *   - the SERVICE (`CRUDServiceProvider.saveRecord`, entity `Usuario`) and the request/response SHAPE: same assumption as the
  *     partner write, from the public developer documentation; an alternative is `DatasetSP.save` on `TSIUSU`;
- *   - how a BLOB travels in the JSON (assumed: base64 text in `localFields.FOTO.$`);
+ *   - how a BLOB travels in the JSON. OBSERVED 2026-11-25 (owner SELECT): base64 text in `localFields.FOTO.$` was stored AS TEXT
+ *     (the column held the base64 characters, not the image bytes). Variant now sent: the image bytes as an uppercase HEX string
+ *     (NEEDS VALIDATION by SELECT: the column must start FFD8FF). Next variants if it fails: `$file.session.key` upload, DatasetSP.save;
  *   - whether the API user may update `TSIUSU` at all, and any size limit of the column;
  *   - the text and code of a refusal.
  */
@@ -46,7 +48,8 @@ export function buildUserPhotoRequestText(request: UserPhotoWriteRequest): strin
         includePresentationFields: 'N',
         dataRow: {
           key: { CODUSU: { $: String(request.userCode) } },
-          localFields: { FOTO: { $: Buffer.from(request.image).toString('base64') } },
+          // Image BYTES as an uppercase hex string. Base64 text was stored as text by the ERP (observed 2026-11-25).
+          localFields: { FOTO: { $: Buffer.from(request.image).toString('hex').toUpperCase() } },
         },
         entity: { fieldset: { list: 'CODUSU' } },
       },

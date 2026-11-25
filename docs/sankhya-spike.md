@@ -1183,6 +1183,10 @@ Source: owner approval of the port and of the T1-T9 script, Sandbox (`placfestas
 
 Roteiro and the SQL to prove each step: `docs/implementation/customer-sandbox-runbook.md`. Parity and consumption contract: `docs/implementation/customer-create-edit.md`.
 
+### 9.66 BLOB transport of `TSIUSU.FOTO` (observed 2026-11-25, Sandbox, user 0; NEEDS VALIDATION of the fix)
+
+Owner SELECT after the first write: `TSIUSU.FOTO` of CODUSU 0 held 35,040 bytes that were the base64 TEXT of the JPEG (starts `/9j/2wBDAAQDAwMD`), not the image bytes; Sankhya showed the silhouette. Cause: `profile-photo-wire.ts` sent `localFields.FOTO.$` as base64 and the ERP stored the string as is. Variant 1 (2026-11-25): the same call with the image bytes as an uppercase HEX string. Acceptance by owner SELECT: the column starts `FFD8FF` (JPEG) and its length equals the JPEG size. If it fails: variant 2 `$file.session.key` upload, variant 3 `DatasetSP.save` on `TSIUSU`. Automated guard: `packages/sankhya/test/profile-photo-write.test.ts` asserts the sent value is the image bytes in hex (header `FFD8FF`), never base64 text. Sandbox, user 0 only.
+
 ### 9.65 Names of the CLASSIFICMS options (VALIDATED by the owner in the Sandbox, 2026-11-25)
 
 The customer form needs the label of each ICMS classification (C, I, P, R, T, X; R default, owner B6). No validated source of the NAMES exists in this document or in `packages/sankhya`. Proposed read-only check, to run by the integration engineer in the Sandbox only: the Sankhya field dictionary, `SELECT O.VALOR, O.OPCAO FROM TDDOPC O JOIN TDDCAM C ON C.NUCAMPO = O.NUCAMPO WHERE C.NOMETAB = 'TGFPAR' AND C.NOMECAMPO = 'CLASSIFICMS' ORDER BY O.ORDEM` (table and column names of the dictionary NOT validated here). Until validated, the server exposes no label list and clients show the code as typed by the owner (B6).

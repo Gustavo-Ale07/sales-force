@@ -1,6 +1,6 @@
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
-import { isAccountPhotoError, renderAccountPhoto, sniffPhotoType } from '../../src/media/account-photo-renderer.js';
+import { isAccountPhotoError, renderAccountPhoto, sniffPhotoType, toErpJpeg } from '../../src/media/account-photo-renderer.js';
 
 const solid = (width: number, height: number) => sharp({ create: { width, height, channels: 3, background: { r: 10, g: 120, b: 200 } } });
 
@@ -27,6 +27,16 @@ describe('renderAccountPhoto', () => {
     const out = await renderAccountPhoto(clear, 'image/png');
     const stats = await sharp(out.bytes).stats();
     expect(stats.channels.slice(0, 3).every((c) => c.mean > 250)).toBe(true);
+  });
+
+  it('the ERP copy is real JPEG bytes (FFD8FF header, never base64 text), white where the picture was transparent, colors kept', async () => {
+    const clear = await sharp({ create: { width: 300, height: 300, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).png().toBuffer();
+    const blank = await toErpJpeg((await renderAccountPhoto(clear, 'image/png')).bytes);
+    expect([blank[0], blank[1], blank[2]]).toEqual([0xff, 0xd8, 0xff]);
+    expect((await sharp(blank).stats()).channels.slice(0, 3).every((c) => c.mean > 250)).toBe(true);
+    const photo = await toErpJpeg((await renderAccountPhoto(await solid(300, 300).png().toBuffer(), 'image/png')).bytes);
+    const mean = (await sharp(photo).stats()).channels.map((c) => c.mean);
+    expect(mean[2]! > mean[0]! + 100).toBe(true); // still blue, not darkened
   });
 
   it('reports typed errors for a mismatched declaration and a too small image', async () => {
