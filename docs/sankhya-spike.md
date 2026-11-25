@@ -1062,7 +1062,7 @@ Catalogue and configuration comparison only (no order data, no write, no probe b
 - **TOP 1001:** equal in both environments.
 - **Negotiation types (`TGFTPV`) differ in mobility:** 1, 17, 59 and 62 only in the Sandbox; 30, 45, 48, 105 and 145 only in production. Test with types present in both: 2 to 6 and 11 to 26.
 - **Price tables (`TGFNTA`):** in production only 5 and 6 have mobility S (0, 3, 9 and 13 are N); in the Sandbox 0, 3, 5, 6 and 9 are S and table 13 does not exist. The current `NUTAB` of table 5 is 13 in the Sandbox and 11 in production; prices for products 1453 and 315 are the same in both.
-- **Releasers (`TSILIM`):** the releasers of events 2, 3, 13 and 44 exist in both environments (users 9 and 11 only in production).
+- **Releasers (`TSILIM`):** (obsolete as a source of the release level since 2026-11-25, 9.63) the releasers of events 2, 3, 13 and 44 exist in both environments (users 9 and 11 only in production).
 - **`DESCMAX`:** 2.108 active production products have `DESCMAX` null. The behaviour of event 2 (discount limit) with a null `DESCMAX` is NEEDS VALIDATION in the Sandbox.
 - **`AGRUPMIN` (block 5, quantity step):** laminates PT 1453 and 1440 have `AGRUPMIN` 0,2 in production and null in the Sandbox; napkins CX 315, 314 and 316 and product 4158 have null. In the Sandbox a laminate therefore tests the unit step (0,01), not 0,2.
 
@@ -1156,3 +1156,11 @@ Owner facts (Sandbox, SELECT): the discount limit lives in `TGFPRO.DESCMAX` (per
 - Read by the product mirror (`PRODUCT_SPEC`, SELECT only, worker) as `maxDiscountPercent`; null/blank = no limit registered (field absent). A value outside 0..100 is treated as "no limit registered" (the product is kept). The meaning of 0 is NOT validated: carried as "0".
 - `TGFPRO.DESCMAXFLEX` exists; its meaning is UNKNOWN. NEEDS VALIDATION: it is NOT selected, mirrored or used anywhere (a test asserts it is absent from the query).
 - NEEDS VALIDATION (owner): whether a null `DESCMAX` means "no discount allowed" or "no limit" (Force treats it as no limit, no warning); whether the limit applies to the list-price base the Force uses; whether `DESCMAX` is the only ceiling the TOP release (TSILIB) checks. Nothing in Force blocks or changes order state because of it: the field is informational for the clients (docs/implementation/product-discount-ceiling.md).
+
+### 9.63 Release level = `TSILIB.SEQCASCATA` (owner decision 2026-11-25) — INFORMED BY THE OWNER from a production read, not validated by us
+
+Source: the owner, 2026-11-25, stating a read-only look at production: every order has `TSILIB` lines with `EVENTO = 44` at `SEQCASCATA` 1 and then 2 (sometimes 3; 0 only on old orders). Recorded as informed, never as our own validation; no Sankhya contact was made for this entry (fixtures and the fake gateway only).
+
+Rule adopted (domain `awaitedReleaseLevel`, `packages/domain/src/release-level.ts`): pending line = `EVENTO = 44` and `DHLIB` null; the order awaits the LOWEST `SEQCASCATA` still without `DHLIB`; clients show "Nível N". `REPROVADO = 'S'` is "Barrado" (stage, unchanged, 2026-11-24). An order with NO `TSILIB` line is "Ainda não confirmado no Sankhya" (normal state, not an error). It holds for any TOP, not only 1001. `TSILIM` and `erp.releaseQueue.sectorUsers` do NOT define the level. The Force writes no release.
+
+Read: the stage read (`readOrderStageFacts`) replaced its `SELECT DISTINCT NUCHAVE ... REPROVADO = 'S'` by one SELECT of every line of the note (`NUCHAVE, EVENTO, SEQCASCATA, DHLIB, REPROVADO`), all columns already named in 9.53/9.60/9.61; one query per batch as before. Access of the integration user to `SEQCASCATA` in the Sandbox remains NEEDS VALIDATION (9.61). Open for the owner: the meaning of level 0 on old orders (shown as "Nível 0"), and which sector holds level 3.

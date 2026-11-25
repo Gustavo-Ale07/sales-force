@@ -22,13 +22,39 @@ Orders covered: those the Force sent (`sales_order.status='sent'`, with `erp_num
 - "Atualizar agora" = existing `POST /sync/refresh` (any signed-in profile may call it).
 - No deep link: none is documented for Sankhya; the row shows NUNOTA only (spike 9.61 e).
 
+## Release level "Nível N" (owner decision 2026-11-25; fact in `sankhya-spike.md` 9.63, informed by the owner)
+
+The level an order awaits is `TSILIB.SEQCASCATA` of its EVENTO 44 lines: the order waits for the LOWEST level still pending (`DHLIB` null). `TSILIM` and `erp.releaseQueue.sectorUsers` NEVER define the level (TSILIM is not read at all). Any TOP. An order with no TSILIB line is "Ainda não confirmado no Sankhya", a normal state. The Force releases nothing.
+
+- Domain: `awaitedReleaseLevel(lines)` -> `{ state: 'awaiting'|'none'|'not_confirmed', level }`, and `releaseLevelText(state)` ("Nível N" / "Ainda não confirmado no Sankhya" / `null`), `packages/domain/src/release-level.ts`. Reproved lines do not alter the level (Barrado stays a stage).
+- Worker: `readOrderStageFacts` returns `releaseLines` (every TSILIB line: event, cascadeSequence, released, reproved); the worker stores `release_state` and `awaited_level` on `sales_order_erp_stage` (migration 0047, expand-only, nullable; outside the content hash, so a level change never moves `updatedAt`). Absent `releaseLines` keeps the stored level. Null state in the contract = not read with the level yet.
+- Stage and sectors are UNCHANGED (event 44 cascade 1 -> Pedidos, other pending -> Financeiro, Barrado beats review): see "Contradictions" below.
+
+### Contract for the site and the app (additive; old clients ignore it)
+
+`ReleaseLevel` = `{ state: 'awaiting' | 'none' | 'not_confirmed', level: number | null, text: string | null }`.
+
+| Where | Field |
+|---|---|
+| Release queue item (`GET /release-queue`) | `releaseLevel` (nullable, optional): the level the ORDER awaits, repeated on each row of the order |
+| Order list/detail (`GET /orders`, `GET /orders/{id}`) | `erpStage.releaseLevel` (nullable, optional) |
+
+Show `releaseLevel.text` AS IS, in both site and app (never rebuild the text): "Nível 1", "Nível 2", ... when `awaiting`; "Ainda não confirmado no Sankhya" when `not_confirmed`; nothing when `text` is null (`none`, or `releaseLevel` null/absent). Show it only while the order is in the queue or in review/financial check; on a barred, dispatched or invoiced order the clients may hide it. No cost, margin or Sankhya identifier is involved. Offline app: the field comes with the order the server returns; cache `text` like the rest of `erpStage`.
+
+### Contradictions with earlier approved material (kept as approved, for the owner to rule)
+
+1. `erp.releaseQueue.sectorUsers` is APPROVED access control for the `operations` profile (D-AS), not a level source; ignoring it would lock `operations` out of the queue. Kept for access only; it plays no part in the level. The owner can remove it by a new decision that also says who sees which sector.
+2. `erp.orderStage.reviewEvents` default `{ event: 44, cascadeSequence: 1 }` and `sectorsOfPendingRelease` map level 1 -> Pedidos and levels 2/3 -> Financeiro, and `in_review`/`financial_check` follow that. The 2026-11-25 decision only defines the level, not who owns level 3 or the stage name; stage and sector logic untouched.
+3. The queue lists one row per line AND sector; the level is per ORDER (lowest pending), so a row for level 2 of an order awaiting level 1 shows "Nível 1".
+4. Old orders with `SEQCASCATA` 0 show "Nível 0".
+
 ## Permissions (owner ruling 2026-11-23, option A; deny by default)
 
 New permission `release_queue.read:<sector>` decided by `visibleReleaseQueueSectors` (domain) and enforced in the service, with the route grant `listReleaseQueue`/`getReleaseQueueCount` in `ROUTE_POLICY` for `admin`, `manager` and `operations` (seller and technical refused).
 - `admin`, `manager`: every sector.
 - `operations` (new role, owner ruling 2026-11-23, option A): only the sectors under which the installation configuration lists its Sankhya user code (CODUSU = `account.external_user_id`). Not listed = 403.
 - `seller`: NEVER (403), even when its CODUSU is listed in configuration. The earlier seller exception is removed.
-- Configuration key `erp.releaseQueue.sectorUsers`: `{ "Pedidos": [CODUSU...], "Financeiro": [CODUSU...] }`. Absent = nobody beyond admin/manager.
+- Configuration key `erp.releaseQueue.sectorUsers` (access of `operations` to a sector only; NOT the release level, 2026-11-25): `{ "Pedidos": [CODUSU...], "Financeiro": [CODUSU...] }`. Absent = nobody beyond admin/manager.
 
 ### The `operations` role (owner ruling 2026-11-23, option A; to be recorded in decisions.md by the owner)
 

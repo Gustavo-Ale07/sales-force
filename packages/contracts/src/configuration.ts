@@ -152,7 +152,8 @@ const ErpSchema = z.strictObject({
   /**
    * Release queue permissions by configuration: sector name -> Sankhya user codes (CODUSU). Manager and admin always see every
    * sector; an account with the `operations` profile whose Sankhya user is listed sees only the listed sector(s); a seller never sees the
-   * queue, listed or not; absent = nobody else (deny by default).
+   * queue, listed or not; absent = nobody else (deny by default). Access only: it never defines the release level (owner 2026-11-25:
+   * level = TSILIB.SEQCASCATA).
    */
   releaseQueue: z
     .strictObject({
