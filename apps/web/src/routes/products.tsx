@@ -141,7 +141,7 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
 
   return (
     <>
-      <PageHeader title="Catálogo de produtos" count={query.data ? query.data.total.toLocaleString("pt-BR") : undefined} />
+      <PageHeader title="Catálogo" count={query.data ? query.data.total.toLocaleString("pt-BR") : undefined} />
 
       <FilterBar
         aria-label="Filtros do catálogo"
@@ -153,8 +153,8 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
             size="md"
             value={searchText}
             onValueChange={setSearchText}
-            placeholder="Código, descrição ou referência"
-            aria-label="Buscar produto por código, descrição ou referência"
+            placeholder="Buscar por código ou descrição"
+            aria-label="Buscar produto por descrição ou código"
           />
         </FilterField>
         <div className="flex min-w-0 flex-col gap-1 lg:col-span-6">
@@ -216,13 +216,13 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
 
       <div className="flex justify-end">
         <SegmentedControl<ProductsView>
-          aria-label="Modo de exibição do catálogo"
+          aria-label="Visualização"
           value={view}
           onValueChange={setView}
           className="w-auto"
           options={[
-            { value: "list", label: <span className="inline-flex items-center gap-1.5"><List size={14} aria-hidden="true" />Lista</span>, description: "Ver como tabela" },
-            { value: "grid", label: <span className="inline-flex items-center gap-1.5"><LayoutGrid size={14} aria-hidden="true" />Fotos</span>, description: "Ver como grade de fotos" },
+            { value: "list", label: <span className="inline-flex items-center gap-1.5"><List size={14} aria-hidden="true" />Lista</span>},
+            { value: "grid", label: <span className="inline-flex items-center gap-1.5"><LayoutGrid size={14} aria-hidden="true" />Grade</span>},
           ]}
         />
       </div>
@@ -238,15 +238,14 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
           ) : query.data.items.length === 0 ? (
             <EmptyState
               compact
-              title={hasFilters ? "Nenhum produto encontrado" : "Catálogo vazio"}
-              description={hasFilters ? "Ajuste ou limpe os filtros para ver mais resultados." : "Os produtos aparecem aqui após a sincronização com o Sankhya."}
+              title={hasFilters ? "Nenhum produto com estes filtros." : "Nenhum produto disponível"}
             />
           ) : (
             <ProductGrid items={query.data.items} onOpen={(code) => onSearchChange(compact({ ...params, product: code }))} />
           )
         ) : (
         <Table label="Produtos" cards>
-          <TableCaption>Catálogo de produtos</TableCaption>
+          <TableCaption>Catálogo</TableCaption>
           <TableHeader>
             <TableRow>
               <SortableHead direction={sortDirection(params.sort, "code")} onSort={() => change({ sort: toggleSort(params.sort, "code") })}>
@@ -275,8 +274,7 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
               <TableMessageRow colSpan={COLUMNS}>
                 <EmptyState
                   compact
-                  title={hasFilters ? "Nenhum produto encontrado" : "Catálogo vazio"}
-                  description={hasFilters ? "Ajuste ou limpe os filtros para ver mais resultados." : "Os produtos aparecem aqui após a sincronização com o Sankhya."}
+                  title={hasFilters ? "Nenhum produto com estes filtros." : "Nenhum produto disponível"}
                 />
               </TableMessageRow>
             ) : (

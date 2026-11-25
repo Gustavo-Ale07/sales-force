@@ -12,8 +12,8 @@ import { loginAsSeller, navLink } from "./support/app";
 const APP_PAGES = [
   { link: "Início", heading: "Início", title: "Início" },
   { link: "Clientes", heading: "Clientes", title: "Clientes" },
-  { link: "Catálogo", heading: "Catálogo de produtos", title: "Produtos" },
-  { link: "Vendas", heading: "Vendas", title: "Pedidos" },
+  { link: "Catálogo", heading: "Catálogo", title: "Catálogo" },
+  { link: "Vendas", heading: "Vendas", title: "Vendas" },
 ] as const;
 
 /** Visible interactive controls that expose no accessible name (approximation of the accessible-name algorithm). */

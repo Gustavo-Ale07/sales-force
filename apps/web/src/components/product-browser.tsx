@@ -202,7 +202,7 @@ export function ProductBrowser({ filters, onFiltersChange, customerCode, cartQua
         ) : query.isError ? (
           <QueryError error={query.error} onRetry={() => void query.refetch()} retrying={query.isRefetching} title="Não foi possível carregar os produtos" compact />
         ) : items.length === 0 ? (
-          <EmptyState compact title="Nenhum produto encontrado" description="Ajuste a busca ou o grupo." />
+          <EmptyState compact title="Nenhum produto encontrado" />
         ) : (
           <Table label="Produtos">
             <TableCaption>Produtos disponíveis para venda</TableCaption>

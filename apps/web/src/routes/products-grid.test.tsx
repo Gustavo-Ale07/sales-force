@@ -15,7 +15,7 @@ describe("Catálogo: modo grade de fotos", () => {
     expect(screen.getByRole("table")).toBeInTheDocument();
     expect(screen.queryByRole("list", { name: "Produtos em grade" })).toBeNull();
 
-    await user.click(screen.getByRole("radio", { name: /Fotos/ }));
+    await user.click(screen.getByRole("radio", { name: /Grade/ }));
 
     const grid = screen.getByRole("list", { name: "Produtos em grade" });
     expect(screen.queryByRole("table")).toBeNull();
@@ -32,15 +32,15 @@ describe("Catálogo: modo grade de fotos", () => {
   it("opens the detail panel from a grid card", async () => {
     const { user } = renderApp("/produtos", { handlers: { ...groups, "GET /products": { body: productsPage([product()]) } } });
     await screen.findByText("Balão látex 9 pol. vermelho");
-    await user.click(screen.getByRole("radio", { name: /Fotos/ }));
+    await user.click(screen.getByRole("radio", { name: /Grade/ }));
     await user.click(within(screen.getByRole("list", { name: "Produtos em grade" })).getByRole("button", { name: /Balão látex/ }));
     expect(await screen.findByText("Detalhes do produto e origem do preço")).toBeInTheDocument();
   });
 
   it("keeps the empty state in grid mode", async () => {
     const { user } = renderApp("/produtos", { handlers: { ...groups, "GET /products": { body: productsPage([]) } } });
-    await screen.findByText("Catálogo vazio");
-    await user.click(screen.getByRole("radio", { name: /Fotos/ }));
-    expect(screen.getByText("Catálogo vazio")).toBeInTheDocument();
+    await screen.findByText("Nenhum produto disponível");
+    await user.click(screen.getByRole("radio", { name: /Grade/ }));
+    expect(screen.getByText("Nenhum produto disponível")).toBeInTheDocument();
   });
 });

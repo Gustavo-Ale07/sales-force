@@ -19,9 +19,9 @@ test.describe("Cenário 3 — catálogo, preços e dados restritos", () => {
   test("produto sem linha de preço mostra 'Sem preço', nunca R$ 0,00, e nenhum custo/margem aparece", async ({ page }) => {
     await loginAsSeller(page);
     await navLink(page, "Catálogo").click();
-    await expect(page.getByRole("heading", { level: 1, name: "Catálogo de produtos" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Catálogo" })).toBeVisible();
 
-    await page.getByRole("searchbox", { name: "Buscar produto por código, descrição ou referência" }).fill("Aguarrás");
+    await page.getByRole("searchbox", { name: "Buscar produto por descrição ou código" }).fill("Aguarrás");
     const produtos = tableRegion(page, "Produtos");
     const unpriced = bodyRows(produtos).filter({ hasText: UNPRICED_PRODUCT });
     await expect(unpriced).toHaveCount(1);
@@ -57,7 +57,7 @@ test.describe("Cenário 3 — catálogo, preços e dados restritos", () => {
     await expect(page.getByText(`Cliente: ${SELLER_CUSTOMER.name}`)).toBeVisible();
     await expect(page.getByRole("status").filter({ hasText: /Origem dos preços.*Preços da tabela 21/ })).toBeVisible();
 
-    await page.getByRole("searchbox", { name: "Buscar produto por código, descrição ou referência" }).fill(PRICED_PRODUCTS[0]);
+    await page.getByRole("searchbox", { name: "Buscar produto por descrição ou código" }).fill(PRICED_PRODUCTS[0]);
     const priced = bodyRows(tableRegion(page, "Produtos")).filter({ hasText: PRICED_PRODUCTS[0] }).first();
     await expect(priced).toContainText(/R\$\s?\d{1,3}(\.\d{3})*,\d{2}/);
     await expect(priced).not.toContainText("Sem preço");
@@ -66,10 +66,10 @@ test.describe("Cenário 3 — catálogo, preços e dados restritos", () => {
   test("o painel do produto mostra a origem do preço e o estado vazio da busca é claro", async ({ page }) => {
     await loginAsSeller(page);
     await navLink(page, "Catálogo").click();
-    const search = page.getByRole("searchbox", { name: "Buscar produto por código, descrição ou referência" });
+    const search = page.getByRole("searchbox", { name: "Buscar produto por descrição ou código" });
 
     await search.fill("zzz-nenhum-produto");
-    await expect(page.getByText("Nenhum produto encontrado")).toBeVisible();
+    await expect(page.getByText("Nenhum produto com estes filtros.")).toBeVisible();
 
     await search.fill(UNPRICED_PRODUCT);
     const row = bodyRows(tableRegion(page, "Produtos")).filter({ hasText: UNPRICED_PRODUCT }).first();

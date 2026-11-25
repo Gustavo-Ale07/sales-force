@@ -202,7 +202,7 @@ function ProductFilterContent({
           ) : query.isError ? (
             <QueryError error={query.error} onRetry={() => void query.refetch()} retrying={query.isRefetching} title="Não foi possível carregar os produtos" compact />
           ) : items.length === 0 ? (
-            <EmptyState compact title="Nenhum produto encontrado" description="Tente outro nome, código, referência ou grupo." />
+            <EmptyState compact title="Nenhum produto encontrado" />
           ) : (
             <Table label="Produtos do filtro">
               <TableCaption>Marque os produtos que o pedido deve conter</TableCaption>
