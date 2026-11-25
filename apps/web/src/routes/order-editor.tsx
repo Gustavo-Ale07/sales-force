@@ -55,6 +55,8 @@ import { QueryError } from "../components/query-error";
 import { SaveTemplateDialog } from "../components/save-template-dialog";
 import { ApiRequestError } from "../lib/api";
 import { ERP_SUBMISSION_DISABLED, convertQuote, createOrder, replaceOrder, submitOrder, verifyOrderDelivery } from "../lib/api-mutations";
+import { errorStatus } from "../lib/http-error";
+import { useRefreshOrdersInView } from "../lib/realtime";
 import { carriersQueryOptions,orderEntryConfigurationQueryOptions, customerQueryOptions, orderQueryOptions, productQueryOptions, queryKeys } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { useLoadedDataset, requireDataset } from "../lib/dataset";
@@ -1616,15 +1618,19 @@ function LoadingHeader({ title }: { title: string }) {
 function ExistingOrder({ orderId, onCreated, onClose, onSent, notice }: { orderId: string; onCreated: (id: string) => void; onClose: () => void; onSent: (sent: SentDocument) => void; notice?: ReactNode }) {
   const api = useApi();
   const query = useQuery(orderQueryOptions(api, orderId));
+  // RT-1: opening the detail (and returning to the tab) re-reads this order in Sankhya.
+  useRefreshOrdersInView(query.data ? [query.data.id] : []);
   if (query.isPending) return <LoadingHeader title="Pedido" />;
   if (query.isError) {
+    // RT-1: an order deleted in Sankhya answers 404; that is the plain "not found" state, not an alarm to retry.
+    const gone = errorStatus(query.error) === 404;
     return (
       <>
         <PageHeader title="Pedido" />
         <Card>
           <QueryError
             error={query.error}
-            onRetry={() => void query.refetch()}
+            onRetry={gone ? undefined : () => void query.refetch()}
             retrying={query.isRefetching}
             title="Não foi possível carregar o pedido"
           />
@@ -1632,10 +1638,12 @@ function ExistingOrder({ orderId, onCreated, onClose, onSent, notice }: { orderI
       </>
     );
   }
-  // Re-keyed on every server version so a saved or reloaded order always starts from the authoritative data.
+  // RT-1: an editable order is keyed by id only, so an automatic refetch never re-seeds what the user is typing (the save
+  // reads the current version from the prop). A read-only order has nothing to type and is re-keyed per server version.
+  const editable = EDITABLE_STATUSES.has(query.data.status) && !(query.data.status === "rejected" && query.data.erpNumber !== null);
   return (
     <OrderEditor
-      key={`${query.data.id}:${query.data.version}`}
+      key={editable ? `${query.data.id}:edit:${query.data.status}` : `${query.data.id}:${query.data.version}`}
       order={query.data}
       initialCustomer={null}
       onCreated={onCreated}

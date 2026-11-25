@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { CustomerRejectedError } from "../offline/pending-customers";
 import { CustomerCreateScreen } from "./customer-create-screen";
 
 const CNPJ = "11.222.333/0001-81";
@@ -38,7 +39,7 @@ describe("CustomerCreateScreen", () => {
     expect(screen.queryByLabelText("Inscrição estadual")).toBeNull();
     expect(screen.queryByLabelText("Isento")).toBeNull();
     await fireEvent.press(screen.getByLabelText("Cadastrar"));
-    expect(await screen.findByText("Salvo")).toBeTruthy();
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
     expect(screen.queryByText(/Pessoa física não tem/)).toBeNull();
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ stateRegistration: null }));
   });
@@ -52,13 +53,13 @@ describe("CustomerCreateScreen", () => {
     expect(screen.queryByText(/Pessoa física não tem/)).toBeNull();
   });
 
-  it("saves a strict request (ICMS R by default, Isento as ISENTO, no addresses) and shows Salvo", async () => {
+  it("saves a strict request (ICMS R by default, Isento as ISENTO, no addresses)", async () => {
     const { onSave } = await setup();
     await fireEvent.changeText(await screen.findByLabelText("CPF/CNPJ"), CNPJ);
     await fireEvent.changeText(screen.getByLabelText("Razão social ou nome"), "Padaria");
     await fireEvent.press(screen.getByLabelText("Isento"));
     await fireEvent.press(screen.getByLabelText("Cadastrar"));
-    expect(await screen.findByText("Salvo")).toBeTruthy();
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
     expect(onSave).toHaveBeenCalledWith({
       document: "11222333000181",
       name: "Padaria",
@@ -86,7 +87,7 @@ describe("CustomerCreateScreen", () => {
     await fireEvent.changeText(await screen.findByLabelText("CPF/CNPJ"), "529.982.247-25");
     await fireEvent.changeText(screen.getByLabelText("Razão social ou nome"), "Maria");
     await fireEvent.press(screen.getByLabelText("Cadastrar"));
-    await screen.findByText("Salvo");
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ icmsClassification: "C", stateRegistration: null }));
   });
 
@@ -96,7 +97,7 @@ describe("CustomerCreateScreen", () => {
     await fireEvent.changeText(await screen.findByLabelText("CPF/CNPJ"), "529.982.247-25");
     await fireEvent.changeText(screen.getByLabelText("Razão social ou nome"), "Maria");
     await fireEvent.press(screen.getByLabelText("Cadastrar"));
-    await screen.findByText("Salvo");
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ icmsClassification: "R" }));
   });
 
@@ -110,7 +111,7 @@ describe("CustomerCreateScreen", () => {
     expect(onSave).not.toHaveBeenCalled();
     await fireEvent.press(screen.getByLabelText("Vendedor Beto"));
     await fireEvent.press(screen.getByLabelText("Cadastrar"));
-    await screen.findByText("Salvo");
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ sellerCode: 9 }));
   });
 
@@ -128,6 +129,44 @@ describe("CustomerCreateScreen", () => {
     await fireEvent.press(screen.getByLabelText("Cadastrar"));
     expect(await screen.findByText(error.message)).toBeTruthy();
     expect(screen.getByLabelText("Cadastrar")).toBeTruthy();
+  });
+
+  it("the button loads while the server creates the customer, and a second press does nothing", async () => {
+    let release: () => void = () => undefined;
+    const onSave = jest.fn(() => new Promise<undefined>((resolve) => { release = () => resolve(undefined); }));
+    await setup(onSave);
+    await fireEvent.changeText(await screen.findByLabelText("CPF/CNPJ"), "529.982.247-25");
+    await fireEvent.changeText(screen.getByLabelText("Razão social ou nome"), "Maria");
+    await fireEvent.press(screen.getByLabelText("Cadastrar"));
+    expect(await screen.findByText("Cadastrando...")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Cadastrando..."));
+    expect(onSave).toHaveBeenCalledTimes(1);
+    release();
+    expect(await screen.findByText("Cadastrar")).toBeTruthy();
+  });
+
+  it("a 422 shows the server's text on the field, saves nothing and keeps the form", async () => {
+    const refusal = new CustomerRejectedError("Recusado", { document: "Este CPF/CNPJ já está cadastrado." });
+    await setup(jest.fn(async () => Promise.reject(refusal)));
+    await fireEvent.changeText(await screen.findByLabelText("CPF/CNPJ"), "529.982.247-25");
+    await fireEvent.changeText(screen.getByLabelText("Razão social ou nome"), "Maria");
+    await fireEvent.press(screen.getByLabelText("Cadastrar"));
+    expect(await screen.findByText("Este CPF/CNPJ já está cadastrado.")).toBeTruthy();
+    expect(screen.getByLabelText("CPF/CNPJ").props.value).toBe("529.982.247-25");
+    // Editing the field clears the server's text for it.
+    await fireEvent.changeText(screen.getByLabelText("CPF/CNPJ"), "111.444.777-35");
+    expect(screen.queryByText("Este CPF/CNPJ já está cadastrado.")).toBeNull();
+  });
+
+  it("a 422 on the seller shows on the seller field", async () => {
+    const refusal = new CustomerRejectedError("Recusado", { sellerCode: "Escolha o vendedor." });
+    const onSave = jest.fn(async () => Promise.reject(refusal));
+    await render(<CustomerCreateScreen onSave={onSave} onClose={jest.fn()} sellers={[{ code: 7, name: "Ana" }]} />);
+    await fireEvent.changeText(await screen.findByLabelText("CPF/CNPJ"), "529.982.247-25");
+    await fireEvent.changeText(screen.getByLabelText("Razão social ou nome"), "Maria");
+    await fireEvent.press(screen.getByLabelText("Vendedor Ana"));
+    await fireEvent.press(screen.getByLabelText("Cadastrar"));
+    expect(await screen.findByText("Escolha o vendedor.")).toBeTruthy();
   });
 
   it("Cancelar closes without saving", async () => {

@@ -866,6 +866,83 @@
         }
       }
     },
+    "/sync/events": {
+      "get": {
+        "operationId": "getSyncEvents",
+        "tags": [
+          "sync"
+        ],
+        "summary": "Server-sent events: content-free change pings (RT-1)",
+        "description": "text/event-stream. Frames are \"event: ping\" with data {\"topic\":\"orders\"} or {\"topic\":\"reference\"}; a comment heartbeat every 25 s. No business data: the client re-reads through the normal authorized endpoints. At most 5 streams per account (429 beyond that). The stream ends when the session is revoked or expires.",
+        "responses": {
+          "200": {
+            "description": "Fluxo de eventos",
+            "headers": {
+              "Cache-Control": {
+                "description": "no-cache",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Accel-Buffering": {
+                "description": "no",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Muitas tentativas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Serviço indisponível",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/sellers": {
       "get": {
         "operationId": "listSellers",
@@ -1069,7 +1146,7 @@
           "customers"
         ],
         "summary": "Create a customer in the Force (written to the ERP by the worker)",
-        "description": "Records the creation and waits up to 15 s for the ERP confirmation (D-AR). 201 with `status` `confirmed` and the real `customerCode` when confirmed in time; 202 with `status` `pending` when the ERP did not answer in time (the customer stays \"aguardando envio ao Sankhya\" and is confirmed later; no order can use it meanwhile); 200 with the recorded state on a replay of the same `clientRequestId` and payload. Idempotent per account: 409 idempotency_conflict when the id was used with a different payload. 409 conflict (details.reason `document_already_registered`) when the CPF/CNPJ already exists in the mirror or in another request in flight; `customer_write_disabled` while the installation has not enabled customer writes. Created with the ERP defaults of the installation (active, not blocked, installation price table, the creator as seller); the credit limit is never sent. 400 validation_failed (details.issues) for an invalid document or field. 429 rate_limited beyond the hourly creation limit. Every response carries the client `state`. A definitive ERP refusal (other than a duplicate document) found later is `needs_correction` (Precisa de correção), listed by GET /customers/registrations: correct the data and POST again with a new `clientRequestId` and `correctsRegistrationId` (own, rejected, not yet corrected; otherwise 409 with `details.reason` registration_not_found, registration_not_rejected or registration_already_corrected). A timeout, an offline ERP or exhausted retries never produce `needs_correction`.",
+        "description": "Records the creation and waits up to ~8 s (configurable) for the worker to deliver it to the ERP (CUST-RT). 201 with `sendState` `sent` and the real `customerCode`; 202 with `sendState` `pending` when the ERP did not answer in time (delivery continues in the worker; the client shows a pending-send indicator and follows GET /customers/registrations/{id}); 200 with the recorded state on a replay of the same `clientRequestId` and payload. 422 `customer_refused` with `details.fields` (field -> pt-BR text: `sellerCode`, `document`, `stateRegistration`, ...) when validation or the ERP refuses (missing seller, repeated CPF/CNPJ, required field): nothing is left half saved and no correction queue exists; fix the data and POST again with a NEW `clientRequestId`. Seller: automatic for a seller (own ERP code); required for manager/admin (422 on `sellerCode` without any ERP call). 409 idempotency_conflict when the id was used with a different payload; 409 `customer_write_disabled` while the installation has not enabled customer writes. The credit limit is never sent. 400 validation_failed (details.issues) for a malformed body. 429 rate_limited beyond the hourly creation limit. `correctsRegistrationId` is still accepted by old builds and ignored.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1143,6 +1220,16 @@
           },
           "409": {
             "description": "Conflito de estado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Cadastro de cliente recusado (customer_refused; details.fields mapeia campo -> texto)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1255,7 +1342,7 @@
           "customers"
         ],
         "summary": "Customers created in the Force that are not yet in the ERP mirror, or were refused (scoped)",
-        "description": "Each item carries the client `state` and its `stateLabel`: `awaiting_send` (Aguardando envio; the server keeps retrying), `sent` (Enviado ao Sankhya: confirmed, `customerCode` set) or `needs_correction` (Precisa de correção: a definitive refusal with `reasonCode` and `reasonMessage`; fix the data and POST /customers again with a new `clientRequestId` and `correctsRegistrationId`). A registration already corrected leaves the default list. A timeout, an offline ERP or exhausted retries never become `needs_correction`. Scope: the creator; a manager/admin sees those of the sellers they reach.",
+        "description": "Each item carries `sendState` (`sent` with `customerCode`, or `pending`) and the legacy `state`/`stateLabel`. A refused customer is not listed (the refusal is answered by POST /customers as 422). Scope: the creator; a manager/admin sees those of the sellers they reach.",
         "parameters": [
           {
             "name": "state",
@@ -1395,6 +1482,110 @@
         }
       }
     },
+    "/customers/registrations/{registrationId}/seller": {
+      "put": {
+        "operationId": "setCustomerRegistrationSeller",
+        "tags": [
+          "customers"
+        ],
+        "summary": "Set the seller of a pending customer that has none and send it again (manager/admin)",
+        "description": "Manager/admin only (a seller answers 403; outside the actor scope 404). Only a customer not yet delivered (no ERP code). The seller must be an active seller of the ERP mirror (422 customer_refused on sellerCode otherwise). Re-enqueues delivery through the outbox; the API never calls the ERP. Answers the registration view.",
+        "parameters": [
+          {
+            "name": "registrationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetCustomerRegistrationSellerRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cadastro reenviado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerRegistrationView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflito de estado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Cadastro de cliente recusado (customer_refused; details.fields mapeia campo -> texto)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/customers/{code}": {
       "patch": {
         "operationId": "updateCustomer",
@@ -1402,7 +1593,7 @@
           "customers"
         ],
         "summary": "Edit phone, e-mail and notes of a customer (D-AP); written to the ERP by the worker",
-        "description": "Same rule for the site and the app. Allow-list: any other key is refused with 400 validation_failed whose `details.issues[].path` names the field (unrecognized_keys). Seller: only customers of their own portfolio; manager/admin: the portfolio they reach; outside it 404. 409 conflict with `details.reason` `customer_edit_disabled` while `ERP_CUSTOMER_EDIT_ENABLED` is closed (default; nothing is stored and the ERP is never called). With the flag open the change is recorded as a command in the outbox and the worker writes it to the ERP (Sandbox only until the owner releases it): 202 with `state` `awaiting_send` (\"Aguardando envio\"). Replaying the same `clientRequestId` and payload answers 200 with the recorded `state` (`awaiting_send`, `sent` \"Enviado ao Sankhya\" or `needs_correction` \"Precisa de correção\" with `reasonCode`/`reasonMessage`): this is how a client follows the edit. 409 `idempotency_conflict` for the same id with another payload; 409 `customer_update_in_progress` while another edit of the same customer is not yet delivered. `contacts` and `addresses` are accepted by the schema but refused with 409 `details.reason` `customer_edit_field_not_supported` (the ERP mapping is not validated, S5.2); phone, e-mail and notes are the deliverable fields. Never changes name, document, seller, price table, status or limits.",
+        "description": "Same rule for the site and the app. Allow-list: any other key is refused with 400 validation_failed whose `details.issues[].path` names the field (unrecognized_keys). Seller: only customers of their own portfolio; manager/admin: the portfolio they reach; outside it 404. 409 conflict with `details.reason` `customer_edit_disabled` while `ERP_CUSTOMER_EDIT_ENABLED` is closed (default; nothing is stored and the ERP is never called). With the flag open the change is recorded as a command in the outbox and the API waits up to ~8 s (configurable) for the worker to deliver it (CUST-RT): 200 with `sendState` `sent`; 202 with `sendState` `pending` when the ERP did not answer in time (delivery continues; replay the same `clientRequestId` and payload to follow it: 200); 422 `customer_refused` with `details.fields` (field -> pt-BR text) when the ERP refuses (nothing changes locally; send a new `clientRequestId`). 409 `idempotency_conflict` for the same id with another payload; 409 `customer_update_in_progress` while another edit of the same customer is not yet delivered. `contacts` and `addresses` are accepted by the schema but refused with 409 `details.reason` `customer_edit_field_not_supported` (the ERP mapping is not validated, S5.2); phone, e-mail and notes are the deliverable fields. Never changes name, document, seller, price table, status or limits.",
         "parameters": [
           {
             "name": "code",
@@ -1487,6 +1678,16 @@
           },
           "409": {
             "description": "Conflito de estado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Cadastro de cliente recusado (customer_refused; details.fields mapeia campo -> texto)",
             "content": {
               "application/json": {
                 "schema": {
@@ -3090,6 +3291,80 @@
           },
           "429": {
             "description": "Muitas tentativas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{id}/refresh": {
+      "post": {
+        "operationId": "refreshOrder",
+        "tags": [
+          "orders"
+        ],
+        "summary": "Asks the worker to re-read this order in Sankhya now (RT-1)",
+        "description": "Records the request only (the API never calls Sankhya); the worker serves it within seconds and the clients learn the result from the next orders ping. 202 even inside the 10 s per-order cooldown (accepted=false). 404 when the order is outside the caller scope, removed or unknown.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Pedido de atualização registrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderRefreshAccepted"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
             "content": {
               "application/json": {
                 "schema": {
@@ -5351,6 +5626,9 @@
           "state": {
             "$ref": "#/components/schemas/CustomerState"
           },
+          "sendState": {
+            "$ref": "#/components/schemas/CustomerSendState"
+          },
           "customerCode": {
             "anyOf": [
               {
@@ -5370,6 +5648,7 @@
           "registrationId",
           "status",
           "state",
+          "sendState",
           "customerCode",
           "originKey"
         ],
@@ -6068,6 +6347,9 @@
           "stateLabel": {
             "type": "string"
           },
+          "sendState": {
+            "$ref": "#/components/schemas/CustomerSendState"
+          },
           "status": {
             "$ref": "#/components/schemas/CustomerRegistrationStatus"
           },
@@ -6141,6 +6423,7 @@
           "registrationId",
           "state",
           "stateLabel",
+          "sendState",
           "status",
           "customerCode",
           "originKey",
@@ -6169,6 +6452,13 @@
           "items"
         ],
         "additionalProperties": false
+      },
+      "CustomerSendState": {
+        "type": "string",
+        "enum": [
+          "sent",
+          "pending"
+        ]
       },
       "CustomerSort": {
         "type": "string",
@@ -6410,6 +6700,7 @@
         "type": "string",
         "enum": [
           "validation_failed",
+          "customer_refused",
           "unauthenticated",
           "invalid_credentials",
           "access_not_configured",
@@ -8595,6 +8886,18 @@
           "all"
         ]
       },
+      "OrderRefreshAccepted": {
+        "type": "object",
+        "properties": {
+          "accepted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "accepted"
+        ],
+        "additionalProperties": false
+      },
       "OrderReview": {
         "type": "object",
         "properties": {
@@ -8851,6 +9154,15 @@
           "total": {
             "type": "integer",
             "minimum": 0
+          },
+          "removedIds": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
           }
         },
         "required": [
@@ -10035,6 +10347,19 @@
           }
         ]
       },
+      "SetCustomerRegistrationSellerRequest": {
+        "type": "object",
+        "properties": {
+          "sellerCode": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "sellerCode"
+        ],
+        "additionalProperties": false
+      },
       "SkippedTemplateLine": {
         "type": "object",
         "properties": {
@@ -10497,10 +10822,17 @@
                 "type": "null"
               }
             ]
+          },
+          "referenceVersion": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
-          "dataAsOf"
+          "dataAsOf",
+          "referenceVersion"
         ],
         "additionalProperties": false
       },
@@ -10595,6 +10927,9 @@
           "state": {
             "$ref": "#/components/schemas/CustomerState"
           },
+          "sendState": {
+            "$ref": "#/components/schemas/CustomerSendState"
+          },
           "stateLabel": {
             "type": "string"
           },
@@ -10622,6 +10957,7 @@
           "updateId",
           "customerCode",
           "state",
+          "sendState",
           "stateLabel",
           "reasonCode",
           "reasonMessage",

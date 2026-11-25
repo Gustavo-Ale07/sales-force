@@ -134,7 +134,14 @@ function stageCondition(stage: OrderStageCode | undefined): SQL | undefined {
   return sql`${salesOrderErpStage.stage} = ${stage}`;
 }
 
+/** RT-1: an order whose Sankhya note is confirmed gone is invisible to every read (it is not "deleted" in Sales Force: the row stays for audit). */
+const NOT_REMOVED = sql`${salesOrder.erpRemovedAt} is null`;
+
 function scopeCondition(scope: CustomerScope): SQL | undefined {
+  return scope.kind === 'all' ? NOT_REMOVED : and(NOT_REMOVED, inSellerCodes(salesOrder.sellerCode, scope.sellerCodes));
+}
+
+function sellerScopeOnly(scope: CustomerScope): SQL | undefined {
   return scope.kind === 'all' ? undefined : inSellerCodes(salesOrder.sellerCode, scope.sellerCodes);
 }
 
@@ -445,6 +452,16 @@ export class OrdersRepository {
         .where(where),
     ]);
     return { rows, total: totals[0]?.total ?? 0 };
+  }
+
+  /** RT-1: of the asked ids, those that are in the caller's scope and were removed (the client drops them). Out-of-scope ids are never revealed (P-21). */
+  async removedIdsOf(scope: CustomerScope, ids: readonly string[]): Promise<string[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.db
+      .select({ id: salesOrder.id })
+      .from(salesOrder)
+      .where(and(sellerScopeOnly(scope), inArray(salesOrder.id, [...ids]), sql`${salesOrder.erpRemovedAt} is not null`));
+    return rows.map((row) => row.id);
   }
 
   async countByStatus(scope: CustomerScope): Promise<OrderCounts> {

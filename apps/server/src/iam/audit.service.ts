@@ -99,6 +99,10 @@ export const AUDIT_ACTIONS = {
   /** SNK-7 M1: an operator re-queued an already delivered order with the same idempotency key (ids and ERP number only). */
   orderErpResendRequested: 'order.erp_resend_requested',
   orderDeliveryVerifyRequested: 'order.delivery_verify_requested',
+  /** RT-1: the ERP note is confirmed gone from Sankhya (two consecutive confirmed-absent reads): the order leaves the lists (ids and ERP number only). */
+  orderErpRemoved: 'order.erp_removed',
+  /** RT-1: a removed order's note came back in Sankhya: the order is visible again (ids and ERP number only). */
+  orderErpRestored: 'order.erp_restored',
 } as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
 

@@ -1,4 +1,3 @@
-import type { ApiSchema } from "@salesforce/contracts/client";
 import { Alert, Button, Checkbox, Dialog, DialogClose, DialogContent, FormField, Input, Select, Textarea, toast } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -15,7 +14,7 @@ import {
   LIMITS,
   type CreateForm,
 } from "../lib/customer-form";
-import { createStateLabel, useCreateCustomer } from "../lib/use-customer-write";
+import { useCreateCustomer } from "../lib/use-customer-write";
 import { useIcmsOptions } from "../lib/use-icms-options";
 
 /** Profiles that may choose the owner seller of a new customer; everyone else is linked by the server. */
@@ -26,21 +25,19 @@ const FORM_ID = "customer-create-form";
 export interface CustomerCreateDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** A refused registration being corrected: the form opens with its document and name and the request carries its id. */
-  correction?: ApiSchema<"CustomerRegistrationView"> | null;
 }
 
 /** New customer written to the ERP by the worker (D-AR). Shown only when the installation released creation. Same fields and order as the app. */
-export function CustomerCreateDialog({ open, onOpenChange, correction = null }: CustomerCreateDialogProps) {
+export function CustomerCreateDialog({ open, onOpenChange }: CustomerCreateDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {open ? <CreateBody key={correction?.registrationId ?? "new"} correction={correction} onClose={() => onOpenChange(false)} /> : null}
+      {open ? <CreateBody onClose={() => onOpenChange(false)} /> : null}
     </Dialog>
   );
 }
 
-function CreateBody({ onClose, correction }: { onClose: () => void; correction: ApiSchema<"CustomerRegistrationView"> | null }) {
-  const create = useCreateCustomer(correction?.registrationId);
+function CreateBody({ onClose }: { onClose: () => void }) {
+  const create = useCreateCustomer();
   const navigate = useNavigate();
   const { authClient } = useAppServices();
   const api = useApi();
@@ -51,15 +48,14 @@ function CreateBody({ onClose, correction }: { onClose: () => void; correction: 
   const sellers = useQuery({ ...sellersQueryOptions(api), enabled: needsSeller });
   const activeSellers = (sellers.data?.items ?? []).filter((seller) => seller.active);
   const icmsOptions = useIcmsOptions();
-  const [form, setForm] = useState<CreateForm>(() =>
-    correction
-      ? { ...emptyCreateForm(), document: correction.document, name: correction.name, sellerCode: correction.sellerCode === null ? "" : String(correction.sellerCode) }
-      : emptyCreateForm(),
-  );
+  const [form, setForm] = useState<CreateForm>(emptyCreateForm);
   const [showProblems, setShowProblems] = useState(false);
   const problems = createProblems(form, needsSeller);
   const naturalPerson = isNaturalPerson(form.document);
   const failure = create.isError ? describeCustomerWriteError(create.error, "Não foi possível cadastrar o cliente") : null;
+  const visibleFields = ["document", "name", "tradeName", "phone", "email", "notes", ...(naturalPerson ? [] : ["stateRegistration"]), ...(needsSeller ? ["sellerCode"] : [])];
+  // A refusal that named a field shows on that field only; anything else (or a field this form does not show) stays in the alert.
+  const showAlert = failure !== null && (Object.keys(failure.fieldProblems).length === 0 || Object.keys(failure.fieldProblems).some((field) => !visibleFields.includes(field)));
   const set = (patch: Partial<CreateForm>) => setForm((current) => ({ ...current, ...patch }));
   const fieldError = (own: string | null, serverField: string) => failure?.fieldProblems[serverField] ?? (showProblems ? (own ?? undefined) : undefined);
 
@@ -69,7 +65,7 @@ function CreateBody({ onClose, correction }: { onClose: () => void; correction: 
     if (hasCreateProblems(problems) || create.isPending) return;
     create.mutate(form, {
       onSuccess: (saved) => {
-        toast({ title: createStateLabel(saved.state), description: saved.customerCode === null ? undefined : `Cliente ${saved.customerCode}`, tone: saved.state === "needs_correction" ? "danger" : "success" });
+        toast({ title: saved.customerCode === null ? "Envio pendente" : "Cliente cadastrado", description: saved.customerCode === null ? undefined : `Cliente ${saved.customerCode}`, tone: "success" });
         onClose();
         if (saved.customerCode !== null) void navigate({ to: "/clientes/$code", params: { code: String(saved.customerCode) } });
       },
@@ -78,7 +74,7 @@ function CreateBody({ onClose, correction }: { onClose: () => void; correction: 
 
   return (
     <DialogContent
-      title={correction ? "Corrigir cadastro" : "Novo cliente"}
+      title="Novo cliente"
       className="max-w-2xl"
       footer={
         <>
@@ -86,18 +82,13 @@ function CreateBody({ onClose, correction }: { onClose: () => void; correction: 
             <Button variant="secondary">Cancelar</Button>
           </DialogClose>
           <Button type="submit" form={FORM_ID} variant="primary" loading={create.isPending} disabled={create.isPending}>
-            {create.isPending ? "Salvando..." : "Cadastrar"}
+            {create.isPending ? "Cadastrando..." : "Cadastrar"}
           </Button>
         </>
       }
     >
       <form id={FORM_ID} onSubmit={submit} noValidate aria-label="Novo cliente" className="flex flex-col gap-3">
-        {correction?.reasonMessage ? (
-          <Alert tone="warning" title={correction.stateLabel}>
-            {correction.reasonMessage}
-          </Alert>
-        ) : null}
-        {failure ? (
+        {failure && showAlert ? (
           <Alert tone="danger" title={failure.title}>
             {failure.description}
             {failure.correlationId ? (

@@ -30,7 +30,7 @@ const EDIT_ON_META = "customers.edit_enabled";
  * - No credit limit, price table or status is ever stored here: the seller does not send them (P-20 / plan A1).
  */
 
-export type PendingCustomerState = "queued" | "sending" | "awaiting_erp" | "confirmed" | "rejected";
+export type PendingCustomerState = "queued" | "sending" | "awaiting_erp" | "confirmed";
 
 /** The body of `POST /customers` minus the idempotency key (kept in its own column). Same field names as the contract. */
 export interface PendingCustomerRequest {
@@ -51,8 +51,6 @@ export interface PendingCustomerRequest {
   }[];
   /** Manager/admin only. */
   readonly sellerCode?: number;
-  /** The refused server registration this one corrects ("Precisa de correção"); travels in the same POST body. */
-  readonly correctsRegistrationId?: string;
 }
 
 export interface PendingCustomerRecord {
@@ -74,8 +72,8 @@ export interface PendingCustomerRecord {
   readonly registrationId: string | null;
   /** The ERP code once confirmed. */
   readonly customerCode: number | null;
-  /** Seller-facing refusal reason when `rejected`. */
-  readonly rejectionReason: string | null;
+  /** Held until a seller is chosen (a manager/admin customer saved without one); never sent while true. */
+  readonly needsSeller: boolean;
   /** Seller-facing text of the last transient problem; never a technical error. */
   readonly lastError: string | null;
   readonly attempts: number;
@@ -88,11 +86,10 @@ export interface PendingCustomerRecord {
 export interface CreatePendingCustomerInput {
   readonly ownerAccountId: string;
   readonly request: PendingCustomerRequest;
-  /**
-   * "Refazer": the id of a REFUSED customer of the same account that this new one replaces. It is closed in the same
-   * transaction as the insert, so a failed creation never loses what the seller typed.
-   */
-  readonly replacesRejected?: string;
+  /** The idempotency key when the creation was already attempted online under it (the same key is reused on every retry). */
+  readonly clientRequestId?: string;
+  /** The server already holds the registration (answered pending): the row waits for the ERP instead of being created again. */
+  readonly registrationId?: string;
 }
 
 export class PendingCustomerError extends Error {
@@ -114,22 +111,6 @@ export function maskDocument(document: string): string {
   if (d.length === 11) return `***.${d.slice(3, 6)}.${d.slice(6, 9)}-**`;
   if (d.length === 14) return `**.***.${d.slice(5, 8)}/${d.slice(8, 12)}-**`;
   return "*".repeat(Math.max(d.length, 1));
-}
-
-/** The badge text of a pending customer (list and sheet). */
-export function describePendingCustomer(record: Pick<PendingCustomerRecord, "state" | "rejectionReason" | "lastError">): string {
-  if (record.state !== "confirmed" && record.state !== "rejected" && record.lastError === CUSTOMER_CREATION_NOT_RELEASED) return CUSTOMER_CREATION_NOT_RELEASED;
-  switch (record.state) {
-    case "queued":
-    case "sending":
-      return "Aguardando envio ao Sankhya";
-    case "awaiting_erp":
-      return "Aguardando confirmação do Sankhya";
-    case "confirmed":
-      return "Confirmado no Sankhya — carregando dados";
-    case "rejected":
-      return `Não aceito: ${record.rejectionReason ?? "o Sankhya recusou o cadastro."}`;
-  }
 }
 
 /** Text of a failed attempt, in the seller's words. Permanent refusals are the stored `rejectionReason`. */
@@ -178,7 +159,7 @@ export function toPendingCustomer(row: SqlRow): PendingCustomerRecord {
     state: String(row.state) as PendingCustomerState,
     registrationId: nullableString(row.registration_id),
     customerCode: row.customer_code === null || row.customer_code === undefined ? null : Number(row.customer_code),
-    rejectionReason: nullableString(row.rejection_reason),
+    needsSeller: Number(row.needs_seller ?? 0) === 1,
     lastError: nullableString(row.last_error),
     attempts: Number(row.attempts),
     nextAttemptAt: nullableString(row.next_attempt_at),
@@ -200,20 +181,16 @@ export async function createPendingCustomer(db: SqlDatabase, env: OfflineEnv, in
     if (confirmed === null) throw new DatasetUnavailableError();
     const document = digitsOf(input.request.document);
     const open = await tx.query<SqlRow>(
-      "SELECT 1 AS hit FROM pending_customer WHERE owner_account_id = ? AND document = ? AND state <> 'rejected' LIMIT 1",
+      "SELECT 1 AS hit FROM pending_customer WHERE owner_account_id = ? AND document = ? LIMIT 1",
       [input.ownerAccountId, document],
     );
-    if (open.length > 0) throw new PendingCustomerError("Já existe um cadastro com este CPF/CNPJ aguardando o Sankhya neste aparelho.");
-    if (input.replacesRejected !== undefined) {
-      const old = await getPendingCustomer(tx, input.ownerAccountId, input.replacesRejected);
-      if (old === null || old.state !== "rejected") throw new PendingCustomerError("Só um cadastro não aceito pode ser refeito.");
-    }
+    if (open.length > 0) throw new PendingCustomerError("Já existe um cadastro com este CPF/CNPJ neste aparelho.");
     const now = isoNow(env);
-    const key = env.newId();
+    const key = input.clientRequestId ?? env.newId();
     const request: PendingCustomerRequest = { ...input.request, document };
     await tx.execute(
-      `INSERT INTO pending_customer (client_request_id, owner_account_id, name, search_text, document, masked_document, payload, state, attempts, dataset_environment, dataset_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', 0, ?, ?, ?, ?)`,
+      `INSERT INTO pending_customer (client_request_id, owner_account_id, name, search_text, document, masked_document, payload, state, registration_id, attempts, dataset_environment, dataset_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
       [
         key,
         input.ownerAccountId,
@@ -222,69 +199,17 @@ export async function createPendingCustomer(db: SqlDatabase, env: OfflineEnv, in
         document,
         maskDocument(document),
         JSON.stringify(request),
+        input.registrationId === undefined ? "queued" : "awaiting_erp",
+        input.registrationId ?? null,
         confirmed.environment,
         confirmed.datasetId,
         now,
         now,
       ],
     );
-    if (input.replacesRejected !== undefined) {
-      await tx.execute("DELETE FROM pending_customer WHERE client_request_id = ? AND owner_account_id = ? AND state = 'rejected'", [input.replacesRejected, input.ownerAccountId]);
-    }
     const created = await getPendingCustomer(tx, input.ownerAccountId, key);
     if (created === null) throw new Error("pending_customer vanished after its own insert");
     return created;
-  });
-}
-
-/**
- * "Refazer" a refused customer: returns what the seller typed, to pre-fill (`null` once the retention window erased it; the seller
- * retypes). It checks the row is a refused one of this account. The refused row stays, with its reason, until the new customer is
- * created with `replacesRejected` (nothing is lost if the new attempt is abandoned), which removes it at once.
- */
-export async function redoPendingCustomer(db: SqlExecutor, ownerAccountId: string, clientRequestId: string): Promise<PendingCustomerRequest | null> {
-  const row = await getPendingCustomer(db, ownerAccountId, clientRequestId);
-  if (row === null || row.state !== "rejected") throw new PendingCustomerError("Só um cadastro não aceito pode ser refeito.");
-  return row.request;
-}
-
-/**
- * I-2 (owner 2026-11-13). CONFIRMED: the document, e-mail, phone and every other typed field go at once; only the name and the ERP
- * code stay. REFUSED: the typed data stays for `REFUSED_RETENTION_MS` (to redo it), then `purgeRefusedCustomers` erases it;
- * "Refazer" and discarding remove it at once.
- */
-const ERASE_ALL_SQL = "document = '', name = '', search_text = '', payload = 'null'";
-
-/** How long the typed data of a REFUSED customer may stay on the device (owner 2026-11-13). */
-export const REFUSED_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
-
-/**
- * Erases the typed data of every refused customer older than the retention window (any account on this device; the injected clock
- * decides). A row some draft or outbox command still points at keeps its row (erased, with masked document and reason); any other is
- * removed. Run on app start, sync and foreground. Returns how many rows it erased or removed.
- */
-export async function purgeRefusedCustomers(db: SqlDatabase, env: OfflineEnv): Promise<number> {
-  const limit = new Date(env.now().getTime() - REFUSED_RETENTION_MS).toISOString();
-  return db.transaction(async (tx) => {
-    const due = await tx.query<SqlRow>(
-      "SELECT client_request_id, seq, (document <> '' OR payload <> 'null' OR name <> '' OR search_text <> '') AS has_data FROM pending_customer WHERE state = 'rejected' AND updated_at <= ?",
-      [limit],
-    );
-    let touched = 0;
-    for (const row of due) {
-      const localCode = -Number(row.seq);
-      const referenced =
-        (await tx.query<SqlRow>("SELECT 1 AS hit FROM local_order_draft WHERE customer_code = ? LIMIT 1", [localCode])).length > 0 ||
-        (await tx.query<SqlRow>("SELECT 1 AS hit FROM outbox WHERE json_extract(payload, '$.request.customerCode') = ? LIMIT 1", [localCode])).length > 0;
-      if (!referenced) {
-        await tx.execute("DELETE FROM pending_customer WHERE client_request_id = ?", [String(row.client_request_id)]);
-        touched += 1;
-      } else if (Number(row.has_data) === 1) {
-        await tx.execute(`UPDATE pending_customer SET ${ERASE_ALL_SQL} WHERE client_request_id = ?`, [String(row.client_request_id)]);
-        touched += 1;
-      }
-    }
-    return touched;
   });
 }
 
@@ -356,24 +281,23 @@ export async function listPendingCustomers(
 }
 
 export interface PendingCustomerCounts {
-  /** Waiting to be delivered or confirmed (queued, sending, awaiting_erp). */
+  /** Waiting to be delivered or confirmed (queued, sending, awaiting_erp, waiting for a seller). */
   readonly pending: number;
-  /** Refused by the server: the seller must look at them. */
+  /** Rows of another dataset: never sent, but never silently forgotten. */
   readonly needsAttention: number;
 }
 
 export async function countPendingCustomers(db: SqlExecutor, ownerAccountId: string, dataset: DatasetIdentity | null): Promise<PendingCustomerCounts> {
   const rows = await db.query<SqlRow>(
-    "SELECT state, dataset_environment, dataset_id, count(*) AS n FROM pending_customer WHERE owner_account_id = ? AND state <> 'confirmed' GROUP BY state, dataset_environment, dataset_id",
+    "SELECT dataset_environment, dataset_id, count(*) AS n FROM pending_customer WHERE owner_account_id = ? AND state <> 'confirmed' GROUP BY dataset_environment, dataset_id",
     [ownerAccountId],
   );
   const counts = { pending: 0, needsAttention: 0 };
   for (const row of rows) {
     const n = Number(row.n);
     const own = { environment: String(row.dataset_environment), datasetId: String(row.dataset_id) };
-    if (String(row.state) === "rejected") counts.needsAttention += n;
-    else if (dataset === null || sameDataset(own, dataset)) counts.pending += n;
-    else counts.needsAttention += n; // another dataset: never sent, but never silently forgotten
+    if (dataset === null || sameDataset(own, dataset)) counts.pending += n;
+    else counts.needsAttention += n;
   }
   return counts;
 }
@@ -425,7 +349,7 @@ export async function recoverInterruptedCustomers(db: SqlDatabase, env: OfflineE
 
 async function dueRows(db: SqlExecutor, env: OfflineEnv, ownerAccountId: string, dataset: DatasetIdentity, respectBackoff: boolean): Promise<PendingCustomerRecord[]> {
   const rows = await db.query<SqlRow>(
-    `SELECT * FROM pending_customer WHERE owner_account_id = ? AND dataset_environment = ? AND dataset_id = ? AND state IN ('queued', 'awaiting_erp', 'confirmed') ORDER BY created_at, seq`,
+    `SELECT * FROM pending_customer WHERE owner_account_id = ? AND dataset_environment = ? AND dataset_id = ? AND needs_seller = 0 AND state IN ('queued', 'awaiting_erp', 'confirmed') ORDER BY created_at, seq`,
     [ownerAccountId, dataset.environment, dataset.datasetId],
   );
   const now = isoNow(env);
@@ -557,11 +481,8 @@ export async function pushPendingCustomers(
         if (failure === "auth") return { attempted, confirmed, rejected, stoppedBy: "auth" };
         continue;
       }
-      // Permanent: the typed data stays for the retention window (REFUSED_RETENTION_MS), the reason is stated, nothing is resent on its own.
-      await db.execute(
-        `UPDATE pending_customer SET state = 'rejected', rejection_reason = ?, last_error = NULL, next_attempt_at = NULL, updated_at = ? WHERE client_request_id = ?`,
-        [text, isoNow(env), row.clientRequestId],
-      );
+      // Permanent (the server refused it, e.g. a repeated document): nothing is kept halfway, the row is dropped and counted.
+      await db.execute("DELETE FROM pending_customer WHERE client_request_id = ?", [row.clientRequestId]);
       rejected += 1;
     }
   }
@@ -570,27 +491,107 @@ export async function pushPendingCustomers(
 
 /* ---------- seller actions ---------- */
 
-/** Makes a queued / waiting customer due now (the next sync run sends it with the same key). A refused one cannot be resent. */
+/** Makes a queued / waiting customer due now (the next sync run sends it with the same key). */
 export async function retryPendingCustomer(db: SqlDatabase, env: OfflineEnv, ownerAccountId: string, clientRequestId: string): Promise<void> {
   const row = await getPendingCustomer(db, ownerAccountId, clientRequestId);
   if (row === null) throw new PendingCustomerError("Cliente não encontrado neste aparelho.");
-  if (row.state === "rejected") throw new PendingCustomerError("O Sankhya não aceitou este cadastro; ele não pode ser reenviado.");
   if (row.state === "confirmed") return;
   await db.execute("UPDATE pending_customer SET next_attempt_at = NULL, updated_at = ? WHERE client_request_id = ?", [isoNow(env), clientRequestId]);
 }
 
 /**
- * Local-only removal. Allowed for a refused customer (the server holds nothing for it) and for one never sent (no attempt yet).
- * Anything else may exist in the ERP and cannot be dropped here without leaving an orphan.
+ * Local-only removal, allowed only for a customer never sent (no attempt yet). Anything else may exist in the ERP and cannot be
+ * dropped here without leaving an orphan.
  */
 export async function discardPendingCustomer(db: SqlDatabase, ownerAccountId: string, clientRequestId: string): Promise<void> {
   const row = await getPendingCustomer(db, ownerAccountId, clientRequestId);
   if (row === null) return;
   const neverSent = row.state === "queued" && row.attempts === 0 && row.registrationId === null;
-  if (row.state !== "rejected" && !neverSent) {
-    throw new PendingCustomerError("Este cadastro já foi enviado ao servidor e não pode ser descartado aqui.");
-  }
+  if (!neverSent) throw new PendingCustomerError("Este cadastro já foi enviado ao servidor e não pode ser descartado aqui.");
   await db.execute("DELETE FROM pending_customer WHERE client_request_id = ? AND owner_account_id = ?", [clientRequestId, ownerAccountId]);
+}
+
+/** A manager/admin picks the seller of a customer held without one: the row is complete again and goes out with the next sync. */
+export async function assignPendingCustomerSeller(db: SqlDatabase, env: OfflineEnv, ownerAccountId: string, clientRequestId: string, sellerCode: number): Promise<void> {
+  const row = await getPendingCustomer(db, ownerAccountId, clientRequestId);
+  if (row === null || row.request === null || !row.needsSeller) throw new PendingCustomerError("Cliente não encontrado neste aparelho.");
+  await db.execute("UPDATE pending_customer SET payload = ?, needs_seller = 0, next_attempt_at = NULL, updated_at = ? WHERE client_request_id = ?", [
+    JSON.stringify({ ...row.request, sellerCode }),
+    isoNow(env),
+    clientRequestId,
+  ]);
+}
+
+/** The server refused the creation at once: the seller's form shows it on the field (`fields`, field -> the server's text). Nothing was saved. */
+export class CustomerRejectedError extends Error {
+  constructor(
+    message: string,
+    readonly fields: Readonly<Record<string, string>>,
+  ) {
+    super(message);
+    this.name = "CustomerRejectedError";
+  }
+}
+
+export type SubmitCustomerResult =
+  | { readonly kind: "sent"; readonly customerCode: number; readonly customer: CustomerLike | null }
+  | { readonly kind: "pending" };
+
+const SUBMIT_TIMEOUT_MS = 15_000;
+
+/**
+ * "Cadastrar": with a connection the server creates the customer in the ERP at once (201: it is in the list with its code and takes
+ * orders; a refusal throws `CustomerRejectedError` and nothing is saved). Without a connection, on a timeout, a transient failure or a
+ * 202 `pending` the customer is saved on the device under the SAME key and goes out by itself (`pushPendingCustomers`), so no second
+ * customer can exist. `online: false` skips the call.
+ */
+export async function submitCustomer(
+  db: SqlDatabase,
+  env: OfflineEnv,
+  transport: CustomerRegistrationTransport,
+  ownerAccountId: string,
+  request: PendingCustomerRequest,
+  options: { readonly online: boolean; readonly timeoutMs?: number },
+): Promise<SubmitCustomerResult> {
+  const key = env.newId();
+  const document = digitsOf(request.document);
+  const payload: PendingCustomerRequest = { ...request, document };
+  if (!options.online) {
+    await createPendingCustomer(db, env, { ownerAccountId, request: payload, clientRequestId: key });
+    return { kind: "pending" };
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new TransportError("network", "Tempo esgotado.")), options.timeoutMs ?? SUBMIT_TIMEOUT_MS);
+    });
+    const remote = await Promise.race([transport.createCustomer(key, payload), timeout]);
+    if (remote.status === "confirmed" && remote.customerCode !== null) {
+      let customer: CustomerLike | null = null;
+      try {
+        customer = { ...(await transport.getCustomer(remote.customerCode)), code: remote.customerCode };
+        await upsertCustomer(db, customer);
+      } catch {
+        customer = null; // the real record arrives with the next pull; the customer exists in the ERP already
+      }
+      return { kind: "sent", customerCode: remote.customerCode, customer };
+    }
+    await createPendingCustomer(db, env, { ownerAccountId, request: payload, clientRequestId: key, registrationId: remote.registrationId });
+    return { kind: "pending" };
+  } catch (caught) {
+    if (caught instanceof PendingCustomerError) throw caught;
+    const error = caught instanceof TransportError ? caught : new TransportError("server", "Falha inesperada.");
+    const failure = classifyFailure(error.kind);
+    if (failure === "transient" || failure === "auth") {
+      await createPendingCustomer(db, env, { ownerAccountId, request: payload, clientRequestId: key });
+      return { kind: "pending" };
+    }
+    const text = describeCustomerFailure(error);
+    const fields = error.fields ?? { [error.reason === "document_already_registered" ? "document" : "_"]: text };
+    throw new CustomerRejectedError(text, fields);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 }
 
 /**

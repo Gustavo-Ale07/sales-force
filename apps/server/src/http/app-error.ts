@@ -4,6 +4,7 @@ import type { z } from 'zod';
 /** pt-BR user-facing message per code. Technical detail never goes here: it stays in the logs. */
 export const DEFAULT_ERROR_MESSAGES: Readonly<Record<ErrorCode, string>> = {
   validation_failed: 'Os dados enviados são inválidos. Verifique os campos e tente novamente.',
+  customer_refused: 'O cadastro do cliente não foi aceito. Corrija os campos indicados e tente novamente.',
   unauthenticated: 'Sessão ausente ou expirada. Entre novamente para continuar.',
   invalid_credentials: 'Usuário ou senha inválidos.',
   access_not_configured: 'Usuário autenticado, mas o acesso ao Force ainda não está configurado.',

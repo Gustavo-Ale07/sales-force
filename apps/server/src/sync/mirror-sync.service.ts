@@ -22,7 +22,8 @@ import {
 import type { SalesHistorySyncConfig } from './sales-history-config.js';
 import { applyBatch, countLive, deactivateMissing, hashRows, prepareSeenTable } from './mirror-writer.js';
 import { evaluateMobilityGuard } from '@salesforce/domain';
-import { markFailed, markRunning, markSucceeded, type MobilityRun, type Queryable, type RunStats } from './sync-state.js';
+import { notifyTopic } from '../platform/pg-listener.js';
+import { markFailed, markRunning, markSucceeded, runChangedRows, type MobilityRun, type Queryable, type RunStats } from './sync-state.js';
 
 export type MirrorRunOutcome =
   /** The whole snapshot was read and applied. */
@@ -112,12 +113,12 @@ export class MirrorSyncService {
     return this.#mutex.run(() => this.#runLocked(entity, options.signal));
   }
 
-  /** Runs several entities one after the other; a failure of one does not stop the others. */
   /** Runs read-only work serialized with the mirror's own gateway reads (the consistency verifier uses it). */
   exclusive<T>(work: () => Promise<T>): Promise<T> {
     return this.#mutex.run(work);
   }
 
+  /** Runs several entities one after the other; a failure of one does not stop the others. */
   async runAll(
     entities: readonly MirrorEntity[] = MIRROR_ENTITIES,
     options: { signal?: AbortSignal } = {},
@@ -166,7 +167,14 @@ export class MirrorSyncService {
       logger.info({ entity }, 'mirror sync skipped: another run of this entity is in progress');
       return { entity, outcome: 'skipped_locked', stats: null };
     }
-    return locked.value;
+    // RT-1: a completed run that changed rows tells the open clients (content-free ping); a failed notify only logs.
+    const result = locked.value;
+    if (result.outcome === 'completed' && result.stats !== null && runChangedRows(result.stats)) {
+      await notifyTopic(db.pool, 'reference').catch((error: unknown) =>
+        logger.warn({ ...errorLogFields(error), entity }, 'could not notify the reference event'),
+      );
+    }
+    return result;
   }
 
   async #execute(

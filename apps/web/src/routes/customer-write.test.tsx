@@ -46,7 +46,7 @@ describe("Ficha do cliente: edição (D-AP)", () => {
     expect(body.phone).toBe("11988887777");
     expect(body.email).toBe("compras@alfa.com.br");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(await screen.findByText("Aguardando envio")).toBeInTheDocument();
+    expect(await screen.findByText("Cliente alterado")).toBeInTheDocument();
   });
 
   it("has no contacts section in the edit form", async () => {
@@ -108,26 +108,10 @@ describe("Ficha do cliente: edição (D-AP)", () => {
     await user.click(within(dialog).getByRole("button", { name: "Salvar" }));
     expect(await within(dialog).findByText("Estes campos não podem ser alterados: CPF/CNPJ.")).toBeInTheDocument();
   });
-
-  it("shows the ERP refusal text when the state is Precisa de correção", async () => {
-    const { user } = renderApp("/clientes/1001", {
-      handlers: detailHandlers(
-        { clientEditEnabled: true },
-        { "PATCH /customers/:code": { status: 202, body: { ...updated, state: "needs_correction", stateLabel: "Precisa de correção", reasonCode: "erp_refused", reasonMessage: "O Sankhya recusou o telefone informado." } } },
-      ),
-    });
-    await user.click(await screen.findByRole("button", { name: "Editar cliente" }));
-    const dialog = await screen.findByRole("dialog");
-    await user.type(within(dialog).getByLabelText("Telefone"), "1133334444");
-    await user.click(within(dialog).getByRole("button", { name: "Salvar" }));
-    expect(await within(dialog).findByText("O Sankhya recusou o telefone informado.")).toBeInTheDocument();
-    expect(within(dialog).getByText("Precisa de correção")).toBeInTheDocument();
-  });
 });
 
 describe("Clientes: cadastro (D-AR)", () => {
-  const noRegistrations = { "GET /customers/registrations": { body: { items: [] } } };
-  const list: Handlers = { ...noRegistrations, "GET /customers": { body: customersPage([customer()]) }, "GET /customers/letters": { body: { letters: [] } } };
+  const list: Handlers = { "GET /customers/registrations": { body: { items: [] } }, "GET /customers": { body: customersPage([customer()]) }, "GET /customers/letters": { body: { letters: [] } } };
 
   it("has no new-customer button unless creation is released", async () => {
     renderApp("/clientes", { handlers: { ...list, "GET /order-entry/configuration": configWith({ clientCreationEnabled: false }) } });
@@ -151,7 +135,8 @@ describe("Clientes: cadastro (D-AR)", () => {
       handlers: {
         ...list,
         "GET /order-entry/configuration": configWith({ clientCreationEnabled: true }),
-        "POST /customers": { status: 202, body: { registrationId: "0190a000-0000-7000-8000-000000000002", status: "pending", state: "awaiting_send", customerCode: null, originKey: "force:x" } },
+        "POST /customers": { status: 201, body: { registrationId: "0190a000-0000-7000-8000-000000000002", status: "confirmed", state: "sent", sendState: "sent", customerCode: 2002, originKey: "force:x" } },
+        "GET /customers/:code": { body: customerDetail({ code: 2002, name: "Alfa Ltda" }) },
       },
     });
     await user.click(await screen.findByRole("button", { name: "Novo cliente" }));
@@ -164,7 +149,9 @@ describe("Clientes: cadastro (D-AR)", () => {
     const body = callsTo(calls, "POST", "/customers")[0]?.body as Record<string, unknown>;
     expect(body).toMatchObject({ document: "11222333000181", name: "Alfa Ltda", tradeName: null, icmsClassification: "R", stateRegistration: "ISENTO", phone: null, email: null, notes: null, addresses: [] });
     expect(body.clientRequestId).toMatch(UUID);
-    expect(await screen.findByText("Aguardando envio")).toBeInTheDocument();
+    expect(await screen.findByText("Cliente 2002")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(await screen.findByRole("link", { name: /Novo pedido/ })).toBeEnabled();
   });
 
   it("a CPF hides the state registration and Isento", async () => {
@@ -186,7 +173,8 @@ describe("Clientes: cadastro (D-AR)", () => {
         "GET /auth/session": { body: { ...body, account: { ...body.account, sellerCodes: [] } } },
         "GET /order-entry/configuration": configWith({ clientCreationEnabled: true }),
         "GET /sellers": { body: { items: [{ code: 7, name: "Ana", active: true }, { code: 8, name: "Beto", active: false }] } },
-        "POST /customers": { status: 202, body: { registrationId: "0190a000-0000-7000-8000-000000000002", status: "pending", state: "awaiting_send", customerCode: null, originKey: "force:x" } },
+        "POST /customers": { status: 201, body: { registrationId: "0190a000-0000-7000-8000-000000000002", status: "confirmed", state: "sent", sendState: "sent", customerCode: 2002, originKey: "force:x" } },
+        "GET /customers/:code": { body: customerDetail({ code: 2002, name: "Alfa Ltda" }) },
       },
     });
     await user.click(await screen.findByRole("button", { name: "Novo cliente" }));
@@ -221,43 +209,78 @@ describe("Clientes: cadastro (D-AR)", () => {
     expect(await within(dialog).findByText("Já existe um cliente com este CPF/CNPJ.")).toBeInTheDocument();
   });
 
+  const fillCnpj = async (user: ReturnType<typeof renderApp>["user"], dialog: HTMLElement) => {
+    await user.type(within(dialog).getByLabelText(/CPF[/]CNPJ/), "11222333000181");
+    await user.type(within(dialog).getByLabelText(/Razão social/), "Alfa Ltda");
+    await user.click(within(dialog).getByRole("checkbox", { name: "Isento" }));
+  };
+
+  it("shows the server refusal on the field it names and keeps the form", async () => {
+    const { user } = renderApp("/clientes", {
+      handlers: {
+        ...list,
+        "GET /order-entry/configuration": configWith({ clientCreationEnabled: true }),
+        "POST /customers": apiError(422, "customer_refused", "Cadastro recusado", { details: { fields: { document: "Já existe um cliente com este CPF/CNPJ no Sankhya." } } }),
+      },
+    });
+    await user.click(await screen.findByRole("button", { name: "Novo cliente" }));
+    const dialog = await screen.findByRole("dialog");
+    await fillCnpj(user, dialog);
+    await user.click(within(dialog).getByRole("button", { name: "Cadastrar" }));
+    const text = await within(dialog).findByText("Já existe um cliente com este CPF/CNPJ no Sankhya.");
+    expect(within(dialog).getByLabelText(/CPF[/]CNPJ/)).toHaveAccessibleDescription(text.textContent ?? "");
+    expect(within(dialog).getByRole("button", { name: "Cadastrar" })).toBeEnabled();
+    expect(within(dialog).getByLabelText(/Razão social/)).toHaveValue("Alfa Ltda");
+  });
+
+  it("a pending answer closes the form and shows no Sankhya code", async () => {
+    const { user } = renderApp("/clientes", {
+      handlers: {
+        ...list,
+        "GET /order-entry/configuration": configWith({ clientCreationEnabled: true }),
+        "POST /customers": { status: 202, body: { registrationId: "0190a000-0000-7000-8000-000000000002", status: "pending", state: "awaiting_send", sendState: "pending", customerCode: null, originKey: "force:x" } },
+      },
+    });
+    await user.click(await screen.findByRole("button", { name: "Novo cliente" }));
+    const dialog = await screen.findByRole("dialog");
+    await fillCnpj(user, dialog);
+    await user.click(within(dialog).getByRole("button", { name: "Cadastrar" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.queryByText(/Cliente 2002/)).not.toBeInTheDocument();
+  });
+
   const registration = (over: Record<string, unknown>) => ({
-    registrationId: "0190a000-0000-7000-8000-0000000000aa", state: "awaiting_send", stateLabel: "Aguardando envio", status: "pending", customerCode: null,
-    originKey: "force:x", document: "11222333000181", name: "ALFA LTDA", sellerCode: 7, reasonCode: null, reasonMessage: null, correctsRegistrationId: null,
+    registrationId: "0190a000-0000-7000-8000-0000000000aa", state: "awaiting_send", stateLabel: "Aguardando envio", sendState: "pending", status: "pending", customerCode: null,
+    originKey: "force:x", document: "11222333000181", name: "BETA SA", sellerCode: 7, reasonCode: null, reasonMessage: null, correctsRegistrationId: null,
     createdAt: "2026-11-25T12:00:00.000Z", updatedAt: "2026-11-25T12:00:00.000Z", ...over,
   });
 
-  it("lists the registrations with the server state text", async () => {
+  it("a pending customer shows the pending indicator and Novo pedido is off", async () => {
     renderApp("/clientes", {
-      handlers: {
-        ...list,
-        "GET /order-entry/configuration": configWith({ clientCreationEnabled: true }),
-        "GET /customers/registrations": { body: { items: [registration({}), registration({ registrationId: "0190a000-0000-7000-8000-0000000000ab", state: "sent", stateLabel: "Enviado ao Sankhya", customerCode: 2002, name: "BETA SA" })] } },
-      },
+      handlers: { ...list, "GET /order-entry/configuration": configWith({ clientCreationEnabled: true }), "GET /customers/registrations": { body: { items: [registration({}), registration({ registrationId: "0190a000-0000-7000-8000-0000000000ab", sendState: "sent", customerCode: 2002, name: "GAMA SA" })] } } },
     });
-    const card = await screen.findByLabelText("Cadastros de clientes");
-    expect(await within(card).findByText("Aguardando envio")).toBeInTheDocument();
-    expect(within(card).getByText("Enviado ao Sankhya")).toBeInTheDocument();
+    const row = await screen.findByTestId("pending-customer");
+    expect(within(row).getByText("Envio pendente")).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: /Novo pedido para Beta Sa/i })).toBeDisabled();
+    expect(screen.queryByText("Gama Sa")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Novo pedido para Comercial Alfa/ })).toBeInTheDocument();
   });
 
-  it("opens the refused registration filled in and sends correctsRegistrationId", async () => {
+  it("a manager picks the seller of a pending customer without one and it is saved", async () => {
+    const body = session(true, "manager").body as { account: Record<string, unknown> };
     const { user, calls } = renderApp("/clientes", {
       handlers: {
         ...list,
+        "GET /auth/session": { body: { ...body, account: { ...body.account, sellerCodes: [] } } },
         "GET /order-entry/configuration": configWith({ clientCreationEnabled: true }),
-        "GET /customers/registrations": { body: { items: [registration({ state: "needs_correction", stateLabel: "Precisa de correção", status: "rejected", reasonCode: "erp_refused", reasonMessage: "O Sankhya recusou o cadastro." })] } },
-        "POST /customers": { status: 202, body: { registrationId: "0190a000-0000-7000-8000-0000000000ac", status: "pending", state: "awaiting_send", customerCode: null, originKey: "force:y" } },
+        "GET /sellers": { body: { items: [{ code: 7, name: "Ana", active: true }] } },
+        "GET /customers/registrations": { body: { items: [registration({ sellerCode: null })] } },
+        "PUT /customers/registrations/:id/seller": { body: registration({ sellerCode: 7 }) },
       },
     });
-    await user.click(await screen.findByRole("button", { name: /Corrigir cadastro de/ }));
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText("O Sankhya recusou o cadastro.")).toBeInTheDocument();
-    expect(within(dialog).getByLabelText(/Razão social/)).toHaveValue("ALFA LTDA");
-    await user.click(within(dialog).getByRole("checkbox", { name: "Isento" }));
-    await user.click(within(dialog).getByRole("button", { name: "Cadastrar" }));
-    await waitFor(() => expect(callsTo(calls, "POST", "/customers")).toHaveLength(1));
-    const body = callsTo(calls, "POST", "/customers")[0]?.body as Record<string, unknown>;
-    expect(body.correctsRegistrationId).toBe("0190a000-0000-7000-8000-0000000000aa");
-    expect(body.document).toBe("11222333000181");
+    const row = await screen.findByTestId("pending-customer");
+    await user.selectOptions(await within(row).findByRole("combobox", { name: /Vendedor de/ }), "Ana");
+    await waitFor(() => expect(callsTo(calls, "PUT", "/customers/registrations/0190a000-0000-7000-8000-0000000000aa/seller")).toHaveLength(1));
+    expect(callsTo(calls, "PUT", "/customers/registrations/0190a000-0000-7000-8000-0000000000aa/seller")[0]?.body).toEqual({ sellerCode: 7 });
   });
 });

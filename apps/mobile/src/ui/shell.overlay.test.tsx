@@ -35,7 +35,7 @@ function controllable() {
     forAccount: () => ({
       repositories: fakeDependencies().repositories,
       localOrders: fakeLocalOrders(),
-      pendingCustomers: { create: jest.fn(), redo: jest.fn(), creationAvailable: async () => true, list: async () => [], resend: async () => undefined, discard: async () => undefined },
+      pendingCustomers: { create: jest.fn(), submit: jest.fn(), assignSeller: jest.fn(), creationAvailable: async () => true, list: async () => [], resend: async () => undefined, discard: async () => undefined },
       sync,
     }),
   };

@@ -7,8 +7,9 @@ import type { CurrentUser } from '../iam/current-user.js';
 import { PolicyService } from '../iam/policy.service.js';
 import { uuidv7 } from '../platform/ids.js';
 import { CLOCK, CUSTOMER_ENQUEUE_ENABLED, CUSTOMER_CONFIRM_WAIT, type Clock, type CustomerConfirmWait } from '../platform/tokens.js';
+import { customerRefused } from './customer-refusal.js';
 import { prepareCustomerRegistration } from './customer-registration-request.js';
-import { reasonOfRegistration, stateOfRegistration, type RegistrationOutboxFacts } from './customer-registration-view.js';
+import { reasonOfRegistration, refusalFields, sendStateOf, stateOfRegistration, type RegistrationOutboxFacts } from './customer-registration-view.js';
 import { CustomerRegistrationRepository, type CustomerRegistrationRow, type DocumentHolder } from './customer-registration.repository.js';
 
 /** Creations one account may start per hour (abuse and duplicate-flood guard). */
@@ -54,19 +55,23 @@ export class CustomerRegistrationService {
       sellerCodes: user.sellerCodes,
       allowedSellerCodes: scope.kind === 'sellers' ? scope.sellerCodes : null,
     });
-    if (!prepared.ok) throw new AppError('validation_failed', { details: { issues: prepared.issues } });
+    // CUST-RT: validation refusals answer 422 with a field -> text map; no ERP call has happened and nothing is stored.
+    if (!prepared.ok) {
+      throw customerRefused(
+        Object.fromEntries(prepared.issues.map((issue) => [issue.path, issue.message ?? 'Valor inválido.'])),
+        prepared.issues,
+      );
+    }
     const { payload, fingerprint } = prepared.value;
 
     // The owner must be a real, active seller of the ERP mirror: a typo or a made-up code never reaches the ERP.
     if (!(await this.registrations.activeSellerExists(payload.sellerCode))) {
-      throw new AppError('validation_failed', {
-        details: { issues: [{ path: 'sellerCode', code: 'seller_not_found', message: 'Vendedor não encontrado ou inativo.' }] },
-      });
+      const issue = { path: 'sellerCode', code: 'seller_not_found', message: 'Vendedor não encontrado ou inativo.' };
+      throw customerRefused({ sellerCode: issue.message }, [issue]);
     }
 
     const existing = await this.registrations.findByRequest(user.accountId, body.clientRequestId);
     if (existing !== null) return { response: await this.replayOf(existing, fingerprint), httpStatus: 200 };
-    if (body.correctsRegistrationId !== undefined) await this.assertCorrectable(user, body.correctsRegistrationId);
 
     const at = this.clock();
     if ((await this.registrations.countSince(user.accountId, new Date(at.getTime() - HOUR_MS))) >= MAX_CUSTOMER_CREATIONS_PER_HOUR) {
@@ -81,10 +86,6 @@ export class CustomerRegistrationService {
         throw new AppError('rate_limited', { retryAfterSeconds: 600 });
       }
       await this.registrations.lockDocument(payload.document, tx);
-      // Under the lock: two corrections of one refusal cannot both pass (a unique index backs it).
-      if (body.correctsRegistrationId !== undefined && (await this.registrations.hasCorrection(body.correctsRegistrationId, tx))) {
-        throw correctionRefused('registration_already_corrected');
-      }
       // A retry that raced the original request is the same request, not a duplicate.
       const winner = await this.registrations.findByRequest(user.accountId, body.clientRequestId, tx);
       if (winner !== null) return { kind: 'replay' as const, row: winner };
@@ -111,7 +112,8 @@ export class CustomerRegistrationService {
           taxId: payload.document,
           name: payload.name,
           sellerCode: payload.sellerCode,
-          correctsRegistrationId: body.correctsRegistrationId ?? null,
+          // CUST-RT: no correction queue any more; `correctsRegistrationId` from an old build is accepted and ignored.
+          correctsRegistrationId: null,
           createdAt: at,
           updatedAt: at,
         },
@@ -164,15 +166,6 @@ export class CustomerRegistrationService {
     return this.toResponse(row, outbox);
   }
 
-  /** Only the author's own rejected registration, not yet corrected, can be corrected: the correction is a new request that points at it. */
-  private async assertCorrectable(user: CurrentUser, registrationId: string): Promise<void> {
-    const original = await this.registrations.findById(registrationId);
-    // Someone else's registration is indistinguishable from a missing one.
-    if (original === null || original.createdByAccountId !== user.accountId) throw correctionRefused('registration_not_found');
-    if (original.status !== 'rejected') throw correctionRefused('registration_not_rejected');
-    if (await this.registrations.hasCorrection(registrationId)) throw correctionRefused('registration_already_corrected');
-  }
-
   /** Polls the registration until the worker settles it or the wait is over; the last seen state is returned either way. */
   private async awaitSettled(id: string): Promise<CustomerRegistrationRow> {
     const deadline = this.clock().getTime() + this.wait.timeoutMs;
@@ -185,17 +178,21 @@ export class CustomerRegistrationService {
     return row;
   }
 
-  /** A rejected request answers 409 with its state and reason, on the first call and on every replay (the reason code is also the `details.reason` source). */
+  /**
+   * A rejected request answers 422 `customer_refused` with the field -> text map, on the first call and on every replay (CUST-RT).
+   * The refused row stays only as audit data: it is in no list and holds no document.
+   */
   private toResponse(row: CustomerRegistrationRow, outbox: RegistrationOutboxFacts | null = null): CreateCustomerResponse {
     if (row.status === 'rejected') {
       const reason = reasonOfRegistration(row.status, row.rejectionCode, outbox);
-      // I-1: a duplicate keeps the exact shape of every other duplicate refusal (the register shows its state and id).
+      // I-1: a duplicate keeps the exact shape of every other duplicate refusal.
       if (reason?.code === 'document_already_registered') throw this.documentTaken(null, null);
-      const details = { reason: 'customer_rejected', state: 'needs_correction', registrationId: row.id, reasonCode: reason?.code ?? 'erp_refused' };
-      throw new AppError('conflict', { message: reason?.message ?? 'O Sankhya recusou o cadastro do cliente. Confira os dados e tente novamente.', details });
+      const fields = refusalFields(reason);
+      throw customerRefused(fields, [], { reason: 'customer_rejected', reasonCode: reason?.code ?? 'erp_refused' }, reason?.message);
     }
     return {
       registrationId: row.id,
+      sendState: sendStateOf(row.status),
       state: stateOfRegistration(row.status),
       status: row.status as CreateCustomerResponse['status'],
       customerCode: row.erpCustomerCode,
@@ -209,16 +206,11 @@ export class CustomerRegistrationService {
    * else the answer is the generic one, with no name and no seller, so a refusal never reveals data outside the scope.
    */
   private documentTaken(holder: DocumentHolder | null, scope: CustomerScope | null): AppError {
-    return new AppError('conflict', {
-      message: holder !== null && scope !== null ? messageFor(holder, scope) : GENERIC_DUPLICATE_MESSAGE,
-      details: { reason: 'document_already_registered' },
-    });
+    const message = holder !== null && scope !== null ? messageFor(holder, scope) : GENERIC_DUPLICATE_MESSAGE;
+    return customerRefused({ document: message }, [], { reason: 'document_already_registered' }, message);
   }
 }
 
-function correctionRefused(reason: string): AppError {
-  return new AppError('conflict', { message: 'Este cadastro não pode ser corrigido.', details: { reason } });
-}
 
 /**
  * What the asker may be told about the holder. Inside the portfolio: name and code. A scope that reaches every seller

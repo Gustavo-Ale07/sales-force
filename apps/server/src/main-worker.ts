@@ -33,6 +33,7 @@ runMain('worker', async () => {
         shutdownTimeoutMs: env.WORKER_SHUTDOWN_TIMEOUT_MS,
         health: { host: env.WORKER_HEALTH_HOST, port: env.WORKER_HEALTH_PORT },
         gatewayMode: gatewayDescription.mode,
+        orderStatusCycleMs: env.ORDER_STATUS_CYCLE_MS,
       },
       {
         gateway,

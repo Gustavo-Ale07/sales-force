@@ -180,6 +180,8 @@ export const WorkerEnvSchema = z.object({
    * must stay unconfirmed). Comma-separated; read only when order writing is enabled. NEEDS VALIDATION against
    * the installation's TOP list; empty = confirm every order.
    */
+  /** RT-1: period of the order status cycle in milliseconds (default 30000, minimum 10000). */
+  ORDER_STATUS_CYCLE_MS: z.coerce.number().int().min(10_000).default(30_000),
   ORDER_DELIVERY_UNCONFIRMED_TOPS: z
     .string()
     .regex(/^(\d+(\s*,\s*\d+)*)?$/, { error: 'must be a comma-separated list of TOP codes, e.g. "1000".' })

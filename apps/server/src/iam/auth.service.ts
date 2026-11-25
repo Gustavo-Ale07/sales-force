@@ -493,6 +493,18 @@ export class AuthService implements OnModuleInit {
   }
 
   /**
+   * RT-1: read-only liveness of a session (token known, not revoked, not expired, account active). Unlike `resolveSession` it
+   * never slides the expiry, so a long-lived event stream cannot keep an idle session alive.
+   */
+  async isSessionLive(token: string | undefined): Promise<boolean> {
+    if (token === undefined || !looksLikeSessionToken(token)) return false;
+    const tokenHash = hashSessionToken(token);
+    const row = await this.sessions.findByTokenHash(tokenHash);
+    if (row === null || !constantTimeEqualHex(row.tokenHash, tokenHash)) return false;
+    return row.revokedAt === null && row.expiresAt.getTime() > this.clock().getTime() && row.status === 'active' && this.roleMayHoldSession(row.role, row.external);
+  }
+
+  /**
    * Resolves the session behind a cookie value, or `null`. Checked on every request: token known,
    * not revoked, not expired (idle or absolute), account active. Slides the expiry (rewritten at
    * most once per `sessionTouchIntervalMs`). The channel rule is the policy's job (`authorizeRoute`).

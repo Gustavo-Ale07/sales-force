@@ -182,7 +182,7 @@ export class CustomerRegistrationRepository {
     return row !== undefined;
   }
 
-  /** A rejected registration the seller already replaced by a correction no longer needs attention. */
+  /** Legacy: a rejected registration that an old build already replaced by a correction no longer needs attention. */
   async hasCorrection(registrationId: string, db: Executor = this.db): Promise<boolean> {
     const [row] = await db.select({ id: customerRegistration.id }).from(customerRegistration).where(eq(customerRegistration.correctsRegistrationId, registrationId)).limit(1);
     return row !== undefined;
@@ -205,6 +205,41 @@ export class CustomerRegistrationRepository {
       registration: row.registration,
       outbox: row.outboxStatus === null ? null : { status: row.outboxStatus, nextAttemptAt: row.nextAttemptAt, lastErrorMessage: row.lastErrorMessage },
     }));
+  }
+
+  /**
+   * CUST-RT: puts the seller on a registration that is not delivered yet and queues its outbox command again (never an ERP call).
+   * `false` = nothing changed (already confirmed, or the worker has it right now).
+   */
+  async requeueWithSeller(input: { readonly id: string; readonly sellerCode: number; readonly at: Date }, tx: Executor): Promise<boolean> {
+    const [outbox] = await tx
+      .update(integrationOutbox)
+      .set({
+        status: 'pending',
+        nextAttemptAt: input.at,
+        attemptCount: 0,
+        lastStep: null,
+        lastErrorClass: null,
+        lastErrorMessage: null,
+        payload: sql`${integrationOutbox.payload} || jsonb_build_object('sellerCode', ${input.sellerCode}::int)`,
+        updatedAt: input.at,
+      })
+      .where(
+        and(
+          eq(integrationOutbox.aggregateType, CUSTOMER_UPSERT_AGGREGATE),
+          eq(integrationOutbox.aggregateId, input.id),
+          inArray(integrationOutbox.status, ['pending', 'rejected', 'unknown']),
+          // a final refusal (repeated document) is never re-sent by choosing a seller
+          sql`not exists (select 1 from ${customerRegistration} cr where cr.id = ${input.id} and cr.rejection_code = 'partner_document_duplicate')`,
+        ),
+      )
+      .returning({ id: integrationOutbox.id });
+    if (outbox === undefined) return false;
+    await tx
+      .update(customerRegistration)
+      .set({ status: 'pending', rejectionCode: null, sellerCode: input.sellerCode, updatedAt: input.at })
+      .where(eq(customerRegistration.id, input.id));
+    return true;
   }
 
   async insert(row: NewCustomerRegistration, tx: Executor): Promise<CustomerRegistrationRow> {

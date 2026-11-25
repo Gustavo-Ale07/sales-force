@@ -167,12 +167,11 @@ export function hasCreateProblems(problems: CreateProblems): boolean {
   return Object.values(problems).some((problem) => problem !== null);
 }
 
-export function buildCreateBody(clientRequestId: string, form: CreateForm, correctsRegistrationId?: string): CreateCustomerBody {
+export function buildCreateBody(clientRequestId: string, form: CreateForm): CreateCustomerBody {
   // A natural person never carries a state registration, whatever was typed before the document changed.
   const ie = isNaturalPerson(form.document) ? "" : form.exempt ? "ISENTO" : form.stateRegistration.trim();
   return {
     clientRequestId,
-    ...(correctsRegistrationId === undefined ? {} : { correctsRegistrationId }),
     ...(form.sellerCode === "" ? {} : { sellerCode: Number(form.sellerCode) }),
     document: normalizeTaxDocument(form.document),
     name: form.name.trim(),
@@ -210,6 +209,23 @@ const REASON_TEXT: Record<string, string> = {
   customer_update_in_progress: "Já existe uma alteração deste cliente em andamento. Aguarde o envio e tente de novo.",
 };
 
+/** Server field names that differ from the form's. */
+const SERVER_FIELD_TO_FORM: Record<string, string> = { seller: "sellerCode" };
+
+/** Field -> text map of a 422: `details.fields` (object) or, equivalently, the issue list. */
+function serverFieldProblems(error: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  const put = (field: string, text: unknown) => {
+    if (typeof text !== "string" || text === "") return;
+    const head = field.split(".")[0] ?? field;
+    out[SERVER_FIELD_TO_FORM[head] ?? head] = text;
+  };
+  const fields = (error as { details?: { fields?: unknown } }).details?.fields;
+  if (fields && typeof fields === "object") for (const [field, text] of Object.entries(fields)) put(field, text);
+  for (const issue of (error as { issues?: readonly { path: string; message?: string }[] }).issues ?? []) put(issue.path, issue.message);
+  return out;
+}
+
 export interface CustomerWriteFailure extends ErrorDescription {
   /** Problems the server attached to a field, keyed by the form field name. */
   fieldProblems: Record<string, string>;
@@ -224,6 +240,13 @@ export function describeCustomerWriteError(error: unknown, fallbackTitle: string
     const reason = (error as { reason?: string }).reason;
     const text = reason ? REASON_TEXT[reason] : undefined;
     if (text) return { ...base, title: fallbackTitle, description: text, fieldProblems: {} };
+  }
+  if (isHttpError(error) && status === 422) {
+    // The server's own text, on the field it names; nothing was saved.
+    const fieldProblems = serverFieldProblems(error);
+    // `_` carries a text that belongs to no field: it stays in the alert.
+    const description = fieldProblems._ ?? Object.values(fieldProblems)[0] ?? base.description;
+    return { ...base, title: fallbackTitle, description, fieldProblems };
   }
   if (isHttpError(error) && status === 400) {
     const issues = (error as { issues?: readonly { path: string; message?: string; code: string }[] }).issues ?? [];

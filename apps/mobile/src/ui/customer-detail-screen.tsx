@@ -1,8 +1,9 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { ConnectivityState } from "../connectivity/connectivity";
+import type { SellerChoice } from "../data/customer-form";
 import type { CustomerDetail, CustomerFinancial, CustomerListItem, CustomerRepository } from "../data/ports";
-import { describePendingReason, hasNoSeller, isUnconfirmedCustomer, NO_SELLER_ORDER_MESSAGE, PENDING_CREDIT_NOTE, PENDING_CUSTOMER_ORDER_MESSAGE } from "../data/pending-status";
+import { hasNoSeller, isUnconfirmedCustomer, NO_SELLER_ORDER_MESSAGE, PENDING_CREDIT_NOTE, PENDING_CUSTOMER_ORDER_MESSAGE } from "../data/pending-status";
 import { colors, fontSize, radius, spacing } from "../theme";
 import type { LocalOrdersPort } from "../offline/local-orders";
 import { EMPTY_SALES_FILTERS, type SalesRow } from "../offline/sales";
@@ -51,8 +52,9 @@ export interface CustomerDetailScreenProps {
   readonly connectivity?: ConnectivityState;
   readonly onBack: () => void;
   readonly onNewOrder: (customer: CustomerListItem) => void;
-  /** "Refazer" on a refused customer: opens the creation form pre-filled (the form is F8). Absent = no button. */
-  readonly onRedo?: (customer: CustomerListItem) => void;
+  /** Sellers to choose from (manager/admin) and the save of the choice, for a customer held without a seller. Absent = no selector. */
+  readonly sellers?: readonly SellerChoice[];
+  readonly onAssignSeller?: (sellerCode: number) => Promise<void>;
   /** "Editar": offered only when the installation released customer edit and the customer is a confirmed one. Absent = no button. */
   readonly onEdit?: (customer: CustomerListItem) => void;
   /** The device's own orders (the sync brings the account's orders from the site too): "Pedidos do cliente" and "Repetir último pedido". Absent = neither. */
@@ -70,7 +72,7 @@ export interface CustomerDetailScreenProps {
  * BUSINESS_RULE_UNDEFINED: whether a blocked/inactive customer may start an order is not decided anywhere (domain
  * `blocked` is "not decided here"; BLOQUEAR semantics NEEDS VALIDATION), so the ficha shows the real status only and never blocks.
  */
-export function CustomerDetailScreen({ customer, customers, connectivity, onBack, onNewOrder, onRedo, onEdit, localOrders, onRepeatLast, templatesSection }: CustomerDetailScreenProps) {
+export function CustomerDetailScreen({ customer, customers, connectivity, onBack, onNewOrder, sellers, onAssignSeller, onEdit, localOrders, onRepeatLast, templatesSection }: CustomerDetailScreenProps) {
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
   const [financial, setFinancial] = useState<CustomerFinancial | null>(null);
   const [orders, setOrders] = useState<readonly SalesRow[]>([]);
@@ -148,7 +150,6 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
           {hasTradeName && <Text style={styles.trade}>{customer.tradeName}</Text>}
           <Text style={styles.meta}>{isPending ? (customer.document ?? "") : `Código ${customer.code}${customer.document !== null ? ` · ${customer.document}` : ""}`}</Text>
           {status !== null && <Text style={styles.status}>{status}</Text>}
-          {describePendingReason(customer.pending) !== null && <Text style={styles.status}>{describePendingReason(customer.pending)}</Text>}
         </View>
 
         <Section title="Dados principais">
@@ -222,10 +223,17 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
       <View style={styles.footer}>
         {isPending && <Text style={styles.status}>{PENDING_CUSTOMER_ORDER_MESSAGE}</Text>}
         {noSeller && <Text style={styles.status}>{NO_SELLER_ORDER_MESSAGE}</Text>}
-        {customer.pending?.state === "rejected" && onRedo !== undefined && (
-          <Pressable style={styles.cta} onPress={() => onRedo(customer)} accessibilityRole="button" accessibilityLabel="Refazer">
-            <Text style={styles.ctaText}>Refazer</Text>
-          </Pressable>
+        {customer.pending?.needsSeller === true && sellers !== undefined && onAssignSeller !== undefined && (
+          <View style={styles.sellerPick}>
+            <Text style={styles.status}>Vendedor</Text>
+            <View style={styles.sellerChips}>
+              {sellers.map((seller) => (
+                <Pressable key={seller.code} style={styles.sellerChip} onPress={() => void onAssignSeller(seller.code).catch(() => undefined)} accessibilityRole="button" accessibilityLabel={`Vendedor ${seller.name}`}>
+                  <Text style={styles.sellerChipText}>{seller.name}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
         )}
         {onRepeatLast !== undefined && lastRecorded !== undefined && !cannotOrder && (
           <Pressable style={styles.ctaSecondary} onPress={() => onRepeatLast(lastRecorded.draft.localId)} accessibilityRole="button" accessibilityLabel="Repetir último pedido">
@@ -254,6 +262,10 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  sellerPick: { gap: spacing.sm },
+  sellerChips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  sellerChip: { minHeight: 44, justifyContent: "center", paddingHorizontal: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  sellerChipText: { fontSize: 14, fontWeight: "600", color: colors.navy },
   bar: { backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border, paddingHorizontal: spacing.sm },
   back: { minHeight: 48, justifyContent: "center", paddingHorizontal: spacing.md, alignSelf: "flex-start" },
   backText: { fontSize: 16, fontWeight: "700", color: colors.navy },

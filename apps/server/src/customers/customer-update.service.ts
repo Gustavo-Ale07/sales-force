@@ -9,13 +9,16 @@ import type { CurrentUser } from '../iam/current-user.js';
 import { PolicyService } from '../iam/policy.service.js';
 import type { Executor } from '../orders/orders.repository.js';
 import { uuidv7 } from '../platform/ids.js';
-import { CLOCK, CUSTOMER_EDIT_ENABLED, DATABASE, type Clock } from '../platform/tokens.js';
+import { CLOCK, CUSTOMER_CONFIRM_WAIT, CUSTOMER_EDIT_ENABLED, DATABASE, type Clock, type CustomerConfirmWait } from '../platform/tokens.js';
+import { customerRefused } from './customer-refusal.js';
 import {
   CUSTOMER_UPDATE_AGGREGATE,
   CUSTOMER_UPDATE_OPERATION,
   DELIVERABLE_CUSTOMER_FIELDS,
   EDITABLE_CUSTOMER_FIELDS,
   toUpdateResponse,
+  updateRefusalFields,
+  updateRefusalText,
   type UpdateOutboxFacts,
 } from './customer-update-state.js';
 import { CustomersService } from './customers.service.js';
@@ -48,6 +51,7 @@ export class CustomerUpdateService {
     @Inject(DATABASE) private readonly db: Database,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(CUSTOMER_EDIT_ENABLED) private readonly enabled: boolean,
+    @Inject(CUSTOMER_CONFIRM_WAIT) private readonly wait: CustomerConfirmWait,
   ) {}
 
   async update(user: CurrentUser, code: number, body: UpdateCustomerRequest): Promise<CustomerUpdateResult> {
@@ -85,8 +89,10 @@ export class CustomerUpdateService {
 
     const at = this.clock();
     const updateId = uuidv7(at.getTime());
+    let fresh = false;
+    let result: CustomerUpdateResult;
     try {
-      return await this.db.transaction(async (tx) => {
+      result = await this.db.transaction(async (tx) => {
         await tx.execute(sql`select pg_advisory_xact_lock(${UPDATE_LOCK_NAMESPACE}::int, ${code}::int)`);
         const winner = await this.findByOrigin(originId, tx);
         if (winner !== null) return this.replay(winner, user, fingerprint);
@@ -114,6 +120,7 @@ export class CustomerUpdateService {
           tx,
         );
         const facts: UpdateOutboxFacts = { aggregateId: updateId, payload: null, status: 'pending', nextAttemptAt: at, lastErrorMessage: null, createdAt: at, updatedAt: at };
+        fresh = true;
         return { response: toUpdateResponse(facts, code), httpStatus: 202 as const };
       });
     } catch (error) {
@@ -121,15 +128,35 @@ export class CustomerUpdateService {
       if (isOriginCollision(error)) throw new AppError('idempotency_conflict', { cause: error });
       throw error;
     }
+    if (!fresh) return result;
+    // CUST-RT: wait a bounded time for the worker's delivery (the API never calls the ERP): 200 sent, 422 refused, 202 still pending.
+    const settled = await this.awaitDelivery(originId);
+    return settled === null ? result : this.replay(settled, user, fingerprint, true);
   }
 
-  private replay(row: UpdateOutboxFacts, user: CurrentUser, fingerprint: string): CustomerUpdateResult {
+  private async awaitDelivery(originId: string): Promise<UpdateOutboxFacts | null> {
+    const deadline = this.clock().getTime() + this.wait.timeoutMs;
+    let row = await this.findByOrigin(originId);
+    while (row !== null && (row.status === 'pending' || row.status === 'processing' || (row.status === 'unknown' && row.nextAttemptAt !== null)) && this.clock().getTime() < deadline) {
+      await this.wait.sleep(this.wait.pollMs);
+      row = await this.findByOrigin(originId);
+    }
+    return row;
+  }
+
+  private replay(row: UpdateOutboxFacts, user: CurrentUser, fingerprint: string, afterWait = false): CustomerUpdateResult {
     const payload = row.payload as { accountId?: unknown; requestHash?: unknown; customerCode?: unknown };
     // Same id from another account, or same id with other content: unusable, and it says nothing about the original.
     if (payload.accountId !== user.accountId || payload.requestHash !== fingerprint || typeof payload.customerCode !== 'number') {
       throw new AppError('idempotency_conflict');
     }
-    return { response: toUpdateResponse(row, payload.customerCode), httpStatus: 200 };
+    if (row.status === 'rejected') {
+      const message = updateRefusalText(row.lastErrorMessage);
+      throw customerRefused(updateRefusalFields(message), [], { reason: 'customer_update_rejected' }, message);
+    }
+    const response = toUpdateResponse(row, payload.customerCode);
+    // Right after the wait: delivered 200, still pending 202. A plain replay of an earlier request is always 200.
+    return { response, httpStatus: afterWait && response.sendState === 'pending' ? 202 : 200 };
   }
 
   private async findByOrigin(originId: string, db: Executor = this.db): Promise<UpdateOutboxFacts | null> {

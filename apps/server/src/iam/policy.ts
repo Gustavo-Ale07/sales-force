@@ -66,6 +66,8 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   listCustomerRegistrations: { roles: EVERY_ROLE },
   getCustomerRegistration: { roles: EVERY_ROLE },
   updateCustomer: { roles: EVERY_ROLE },
+  // CUST-RT: only a manager/admin completes the seller of a pending customer that lacks one.
+  setCustomerRegistrationSeller: { roles: ['manager', 'admin'] },
   // Minimal order-entry slice (never syncStates/gateway/integration/customers/pricing/financial):
   // open to every role that can create an order (seller/manager/admin), unlike getConfiguration above.
   getOrderEntryConfiguration: { roles: EVERY_ROLE },
@@ -73,6 +75,8 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   startSyncRefresh: { roles: SYNC_REFRESH_ROLES },
   getSyncRefresh: { roles: SYNC_REFRESH_ROLES },
   getSyncStatus: { roles: EVERY_ROLE },
+  // RT-1: content-free change pings; the same commercial profiles as the other sync reads.
+  getSyncEvents: { roles: EVERY_ROLE },
   // Commercial routes (Stage 3A). Each is open to the three roles the schema has; WHICH rows a
   // caller sees is the data scope (`resolveCustomerScope`), never this table. An external
   // representative role does not exist yet (AUTH-3 PROPOSED): when it does it gets no line here
@@ -110,6 +114,8 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   deleteOrder: { roles: EVERY_ROLE },
   submitOrder: { roles: EVERY_ROLE },
   verifyOrderDelivery: { roles: EVERY_ROLE },
+  // RT-1: asks the worker to re-read one order now; the order must be visible to the caller.
+  refreshOrder: { roles: EVERY_ROLE },
   convertQuote: { roles: EVERY_ROLE },
   // W-20 discount approvals (DISC-4/6): only manager and admin; WHICH level each may decide is enforced in the
   // approvals service (manager: manager level, admin: director level). Technical and seller are denied here.

@@ -7,6 +7,7 @@ import { named } from './primitives.js';
  */
 export const ERROR_CODES = [
   'validation_failed',
+  'customer_refused',
   'unauthenticated',
   'invalid_credentials',
   'access_not_configured',
@@ -37,6 +38,7 @@ export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
 /** HTTP status each error code is served with. */
 export const ERROR_HTTP_STATUS = {
   validation_failed: 400,
+  customer_refused: 422,
   unauthenticated: 401,
   invalid_credentials: 401,
   access_not_configured: 403,
@@ -113,6 +115,7 @@ export const ERROR_STATUS_DESCRIPTIONS = {
   403: 'Sem permissão para este recurso',
   404: 'Recurso não encontrado (ou fora do escopo do usuário)',
   409: 'Conflito de estado',
+  422: 'Cadastro de cliente recusado (customer_refused; details.fields mapeia campo -> texto)',
   429: 'Muitas tentativas',
   500: 'Erro interno',
   503: 'Serviço indisponível',

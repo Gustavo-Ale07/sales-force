@@ -8,6 +8,7 @@ import {
   type ProductImageSource,
 } from '../catalog/product-image.js';
 import type { Logger } from '../observability/logger.js';
+import { EVENT_STREAM_ENABLED, EVENT_STREAM_LIMITS, type EventStreamLimits } from '../events/events.tokens.js';
 import type { ObjectStore } from '../media/object-store.js';
 import {
   ACCOUNT_PHOTO_STORE,
@@ -50,6 +51,9 @@ export interface InfrastructureDeps {
   readonly customerEditEnabled?: boolean;
   /** API only: queue the profile photo write to the ERP (default false; the worker has its own validation of the same flag). */
   readonly profilePhotoErpWriteEnabled?: boolean;
+  /** API only (RT-1): open the dedicated LISTEN connection and serve GET /sync/events (default false: the route answers 503). */
+  readonly eventStreamEnabled?: boolean;
+  readonly eventStreamLimits?: Partial<EventStreamLimits>;
   /** API only: how long a creation waits for the worker (default 15 s; tests shorten it). */
   readonly customerConfirmWait?: Partial<CustomerConfirmWait>;
 }
@@ -77,12 +81,14 @@ export class InfrastructureModule {
       {
         provide: CUSTOMER_CONFIRM_WAIT,
         useValue: {
-          timeoutMs: 15_000,
+          timeoutMs: 8_000,
           pollMs: 500,
           sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
           ...deps.customerConfirmWait,
         } satisfies CustomerConfirmWait,
       },
+      { provide: EVENT_STREAM_ENABLED, useValue: deps.eventStreamEnabled ?? false },
+      { provide: EVENT_STREAM_LIMITS, useValue: { perAccount: 5, total: 200, ...deps.eventStreamLimits } satisfies EventStreamLimits },
       { provide: ACCOUNT_PHOTO_STORE, useValue: deps.accountPhotoStore ?? null },
       { provide: PRODUCT_IMAGE_SOURCE, useValue: deps.productImageSource ?? new NoImageSource() },
       { provide: PRODUCT_IMAGE_SETTINGS, useValue: { ...DEFAULT_PRODUCT_IMAGE_SETTINGS, ...deps.productImageSettings } },

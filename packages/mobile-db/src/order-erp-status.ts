@@ -3,6 +3,7 @@ import type { OfflineEnv } from "./offline-env";
 import { isoNow } from "./offline-env";
 import type { DraftErpStage } from "./local-orders";
 import { deleteMeta, getMeta, setMeta } from "./reference-cache";
+import { dropRemovedServerOrders } from "./server-orders";
 
 /**
  * ERP status of one order the device holds, as the server last read it from the ERP (`GET /orders?ids=`, owner ruling
@@ -20,10 +21,16 @@ export interface OrderErpStatus {
   readonly stage?: DraftErpStage | null;
 }
 
+/**
+ * Answer of one status read. `removedIds` (RT-1): requested orders whose ERP note no longer exists in Sankhya; the device drops its
+ * copy of them unless it holds unsent work. Absent on an old server.
+ */
+export type OrderStatusAnswer = readonly OrderErpStatus[] & { readonly removedIds?: readonly string[] };
+
 /** What the sync manager needs from the source to refresh the statuses. */
 export interface OrderStatusSource {
   /** At most `ORDER_STATUS_CHUNK` ids per call. Returns only the orders inside the account's scope; an id not returned is out of scope. */
-  fetchOrderStatuses?(orderIds: readonly string[]): Promise<readonly OrderErpStatus[]>;
+  fetchOrderStatuses?(orderIds: readonly string[]): Promise<OrderStatusAnswer>;
 }
 
 /** The server accepts at most this many ids per request (`MAX_ORDER_IDS_FILTER`). */
@@ -31,6 +38,11 @@ export const ORDER_STATUS_CHUNK = 100;
 
 /** Stored in the key/value metadata (no schema change, interim rule); the `cache.` prefix makes the sign-out cache clear remove it. */
 const keyOf = (orderId: string) => `cache.order_erp_status.${orderId}`;
+
+/** Removes the cached ERP status of an order (it left the device). */
+export async function forgetOrderErpStatus(tx: SqlExecutor, orderId: string): Promise<void> {
+  await deleteMeta(tx, keyOf(orderId));
+}
 
 async function sentOrderIds(db: SqlExecutor, ownerAccountId: string): Promise<string[]> {
   const rows = await db.query<SqlRow>("SELECT DISTINCT remote_id FROM local_order_draft WHERE owner_account_id = ? AND remote_id IS NOT NULL ORDER BY remote_id", [ownerAccountId]);
@@ -56,10 +68,14 @@ export async function refreshOrderErpStatuses(db: SqlDatabase, env: OfflineEnv, 
     const answered = await source.fetchOrderStatuses(chunk);
     const now = isoNow(env);
     const byId = new Map(answered.filter((s) => chunk.includes(s.orderId)).map((s) => [s.orderId, s]));
+    const removed = new Set((answered.removedIds ?? []).filter((id) => chunk.includes(id)));
     await db.transaction(async (tx) => {
       for (const id of chunk) {
         const found = byId.get(id);
-        if (found === undefined) {
+        if (removed.has(id)) {
+          // Deleted in the ERP: the copy goes (kept when it holds unsent work, see `dropRemovedServerOrders`).
+          await dropRemovedServerOrders(tx, ownerAccountId, [id]);
+        } else if (found === undefined) {
           // Out of scope now: the status and the stage go away with it.
           await deleteMeta(tx, keyOf(id));
           await tx.execute("UPDATE local_order_draft SET erp_stage = NULL, erp_stage_json = NULL WHERE owner_account_id = ? AND remote_id = ?", [ownerAccountId, id]);
@@ -82,7 +98,12 @@ export async function refreshOrderErpStatuses(db: SqlDatabase, env: OfflineEnv, 
 /** Reads and stores the ERP status of ONE order (the confirm wait polls this for the Sankhya number). A failed read throws. */
 export async function refreshOneOrderErpStatus(db: SqlDatabase, env: OfflineEnv, source: OrderStatusSource, ownerAccountId: string, remoteId: string): Promise<OrderErpStatus | null> {
   if (source.fetchOrderStatuses === undefined) return null;
-  const answered = (await source.fetchOrderStatuses([remoteId])).find((status) => status.orderId === remoteId);
+  const answer = await source.fetchOrderStatuses([remoteId]);
+  if (answer.removedIds?.includes(remoteId) === true) {
+    await db.transaction((tx) => dropRemovedServerOrders(tx, ownerAccountId, [remoteId]));
+    return null;
+  }
+  const answered = answer.find((status) => status.orderId === remoteId);
   if (answered === undefined) return null;
   const now = isoNow(env);
   const { stage, ...status } = answered;

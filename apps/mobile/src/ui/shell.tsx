@@ -14,7 +14,6 @@ import { ErrorActionsContext, useErrorPopup } from "./use-error-popup";
 import { BottomNav, type MainTab } from "./bottom-nav";
 import { BrandLogo, SplashView } from "./brand";
 import { CustomerDetailScreen } from "./customer-detail-screen";
-import type { CustomerRegistration } from "../data/customer-write";
 import { CustomerCreateScreen } from "./customer-create-screen";
 import { useIcmsOptions } from "../data/icms-options";
 import { useSellerChoices } from "./use-seller-choices";
@@ -98,7 +97,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   const [quarantineTick, setQuarantineTick] = useState(0);
   const [customerDetail, setCustomerDetail] = useState<CustomerListItem | null>(null);
   /** The customer form open over the Clientes tab; one at a time. */
-  const [customerForm, setCustomerForm] = useState<{ kind: "create"; correction?: CustomerRegistration } | { kind: "edit"; customer: CustomerListItem } | { kind: "template"; customer: CustomerListItem } | null>(null);
+  const [customerForm, setCustomerForm] = useState<{ kind: "create" } | { kind: "edit"; customer: CustomerListItem } | { kind: "template"; customer: CustomerListItem } | null>(null);
   const [customerFlags, setCustomerFlags] = useState({ create: false, edit: false });
   const [startRequest, setStartRequest] = useState<{ nonce: number; customer: Pick<CustomerListItem, "code" | "name">; lines?: readonly EditorLine[] } | null>(null);
   const connectivityState = useConnectivity(connectivity);
@@ -115,11 +114,13 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   const loadLocalSellers = useMemo(() => (customerRepository.sellers === undefined ? undefined : () => customerRepository.sellers!()), [customerRepository]);
   const sellerChoices = useSellerChoices({
     isSeller: (account?.sellerCodes.length ?? 0) > 0,
-    enabled: customerForm?.kind === "create",
+    enabled: customerForm?.kind === "create" || customerDetail?.pending?.needsSeller === true,
     ...(loadActiveSellers === undefined ? {} : { loadActive: loadActiveSellers }),
     ...(loadLocalSellers === undefined ? {} : { loadLocal: loadLocalSellers }),
   });
-  const syncStatus = useSyncStatus(services?.sync ?? null, connectivityState, session.phase === "authenticated" && session.freshLogin === true);
+  // RT-1: opening the orders list or one order's detail asks the server to re-read the open orders (cap and cooldown in the engine).
+  const ordersAreaKey = tab === "sales" && salesView === "orders" ? `orders:${saleDetailOpen}` : undefined;
+  const syncStatus = useSyncStatus(services?.sync ?? null, connectivityState, session.phase === "authenticated" && session.freshLogin === true, services?.openEvents, ordersAreaKey);
   const clearResume = useCallback(() => setResumeLocalId(null), []);
   const clearStart = useCallback(() => setStartRequest(null), []);
   // Retained (quarantined) orders: re-counted whenever the sync counters move or the seller changes them.
@@ -446,9 +447,6 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
                 onOpen={setCustomerDetail}
                 {...(dependencies.dashboard !== undefined ? { dashboard: dependencies.dashboard } : {})}
                 {...(customerFlags.create && pendingCustomers !== null ? { onCreate: () => setCustomerForm({ kind: "create" }) } : {})}
-                {...(customerFlags.create && pendingCustomers !== null && dependencies.customerWrite !== undefined
-                  ? { registrations: { writer: dependencies.customerWrite, onCorrect: (correction: CustomerRegistration) => setCustomerForm({ kind: "create", correction }), refreshKey: epochs.customers } }
-                  : {})}
               />
             </View>
             {customerDetail !== null && customerForm === null && (
@@ -458,6 +456,15 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
                 connectivity={connectivityState}
                 onBack={() => setCustomerDetail(null)}
                 onNewOrder={startOrderFor}
+                {...(pendingCustomers !== null && sellerChoices !== null && customerDetail.pending?.needsSeller === true
+                  ? {
+                      sellers: sellerChoices,
+                      onAssignSeller: async (sellerCode: number) => {
+                        await pendingCustomers.assignSeller(customerDetail.pending!.clientRequestId, sellerCode);
+                        setCustomerDetail((current) => (current === null || current.pending === undefined ? current : { ...current, sellerCode, pending: { ...current.pending, needsSeller: false } }));
+                      },
+                    }
+                  : {})}
                 {...(services?.localOrders !== undefined ? { localOrders: services.localOrders, onRepeatLast: (localId: string) => { setCustomerDetail(null); duplicateSale(localId); } } : {})}
                 {...(customerFlags.edit && dependencies.customerWrite !== undefined ? { onEdit: (picked: CustomerListItem) => setCustomerForm({ kind: "edit", customer: picked }) } : {})}
                 {...(dependencies.orderTemplates !== undefined
@@ -485,9 +492,24 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
               <CustomerCreateScreen
                 icmsOptions={icmsOptions}
                 sellers={sellerChoices}
-                {...(customerForm.correction === undefined ? {} : { correction: customerForm.correction })}
                 onSave={async (request) => {
-                  await pendingCustomers.create(request);
+                  const result = await pendingCustomers.submit(request, { online: connectivityState !== "offline" });
+                  setCustomerForm(null);
+                  setEpochs((current) => ({ ...current, customers: current.customers + 1 }));
+                  // Created at once: its ficha opens with the Sankhya code. Pending: back to the list, which shows the discreet indicator.
+                  if (result.kind === "sent") {
+                    setCustomerDetail({
+                      code: result.customerCode,
+                      name: request.name,
+                      tradeName: request.tradeName,
+                      document: null,
+                      active: true,
+                      blocked: false,
+                      sellerCode: request.sellerCode ?? account?.sellerCodes[0] ?? null,
+                      sellerName: null,
+                      priceTableCode: null,
+                    });
+                  }
                 }}
                 onClose={() => {
                   setCustomerForm(null);

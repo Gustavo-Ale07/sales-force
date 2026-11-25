@@ -68,12 +68,43 @@ export function reasonOfRegistration(
   return null;
 }
 
+/** CUST-RT: the only thing a client shows about delivery. A refused row is never shown (the refusal is a 422 at request time). */
+export function sendStateOf(status: string): 'sent' | 'pending' {
+  return status === 'confirmed' ? 'sent' : 'pending';
+}
+
+/** Words of an ERP refusal text -> the request field it is about (conservative; anything else is general, key `_`). */
+const FIELD_HINTS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/vendedor/i, 'sellerCode'],
+  [/cpf|cnpj|documento/i, 'document'],
+  [/inscri[cç][aã]o estadual|\bIE\b/i, 'stateRegistration'],
+  [/e-?mail/i, 'email'],
+  [/telefone|fone/i, 'phone'],
+  [/\bcep\b|endere[cç]o|logradouro|bairro/i, 'addresses'],
+  [/raz[aã]o social|\bnome\b/i, 'name'],
+];
+
+/**
+ * The field -> pt-BR text map of a definitive refusal (422 `customer_refused`). Reasons come from `reasonOfRegistration`, so a duplicate
+ * keeps the generic text and no third-party data. The field is a hint from the words of the ERP text; unknown = `_`.
+ */
+export function refusalFields(reason: { readonly code: ReasonCode; readonly message: string } | null): Record<string, string> {
+  const message = reason?.message ?? GENERIC_REFUSAL;
+  if (reason?.code === 'document_already_registered') return { document: message };
+  if (reason?.code === 'required_field') {
+    const hint = FIELD_HINTS.find(([pattern]) => pattern.test(message));
+    return { [hint?.[1] ?? '_']: message };
+  }
+  return { _: message };
+}
+
 export function toRegistrationView(row: RegistrationFacts, outbox: RegistrationOutboxFacts | null): CustomerRegistrationView {
   const reason = reasonOfRegistration(row.status, row.rejectionCode, outbox);
   return {
     registrationId: row.id,
     state: stateOfRegistration(row.status),
     stateLabel: customerStateLabel(stateOfRegistration(row.status)),
+    sendState: sendStateOf(row.status),
     status: row.status as CustomerRegistrationView['status'],
     customerCode: row.erpCustomerCode,
     originKey: row.originKey,

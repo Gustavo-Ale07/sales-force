@@ -5,7 +5,7 @@ import { CustomerEditScreen } from "./customer-edit-screen";
 
 async function setup(update: CustomerWritePort["update"], extra: { connectivity?: "online" | "offline" } = {}) {
   let n = 0;
-  const writer: CustomerWritePort = { update: jest.fn(update), registrations: jest.fn(async () => []) };
+  const writer: CustomerWritePort = { update: jest.fn(update) };
   const onClose = jest.fn();
   const view = await render(<CustomerEditScreen customerName="Padaria Central" code={10} writer={writer} onClose={onClose} newId={() => `id-${++n}`} {...extra} />);
   return { writer, onClose, view };

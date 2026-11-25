@@ -101,13 +101,16 @@ describe('POST /sync/refresh (API side, D-AB B3)', () => {
 
   it('the status is the oldest last success among the mirrored entities (null while nothing was read)', async () => {
     const w = await world();
-    expect(await w.api.status()).toEqual({ dataAsOf: null });
+    expect(await w.api.status()).toEqual({ dataAsOf: null, referenceVersion: null });
     const pool = w.database.handle.pool;
     await pool.query(`INSERT INTO sync_state (entity, status, last_success_at) VALUES ('customers', 'succeeded', $1), ('products', 'succeeded', $2)`, [
       new Date(T0 - 60_000),
       new Date(T0 - 600_000),
     ]);
-    expect(await w.api.status()).toEqual({ dataAsOf: new Date(T0 - 600_000).toISOString() });
+    expect(await w.api.status()).toEqual({ dataAsOf: new Date(T0 - 600_000).toISOString(), referenceVersion: null });
+    // RT-1: referenceVersion is the latest time a run changed reference rows (opaque to clients: any change means re-read).
+    await pool.query(`UPDATE sync_state SET cursor = '{"strategy":"full_snapshot","lastChangedAt":"2026-11-06T11:00:00.000Z","lastRun":{"startedAt":"2026-11-06T11:00:00.000Z","finishedAt":"2026-11-06T11:00:01.000Z","durationMs":1000,"stats":{"read":1,"created":1,"updated":0,"reactivated":0,"unchanged":0,"deactivated":0}}}'::jsonb WHERE entity = 'customers'`);
+    expect((await w.api.status()).referenceVersion).toBe('2026-11-06T11:00:00.000Z');
   });
 
   it('GET carries the last success of each entity so a failed step can say how old its data is', async () => {

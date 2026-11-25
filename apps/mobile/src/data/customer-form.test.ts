@@ -77,7 +77,7 @@ describe("create request", () => {
     expect(createProblems(base, { sellerRequired: true }).sellerCode).toBe("Escolha o vendedor.");
     const chosen = { ...base, sellerCode: 12 };
     expect(createProblems(chosen, { sellerRequired: true }).sellerCode).toBeNull();
-    expect(buildCreateRequest(chosen, undefined, { sellerRequired: true }).sellerCode).toBe(12);
+    expect(buildCreateRequest(chosen, { sellerRequired: true }).sellerCode).toBe(12);
     expect(buildCreateRequest(chosen)).not.toHaveProperty("sellerCode");
   });
 });

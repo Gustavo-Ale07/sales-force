@@ -188,11 +188,9 @@ export interface CreateCustomerRequest {
   addresses: [];
   /** Manager and equivalent only: the seller that owns the customer. Absent for a seller (linked automatically). */
   sellerCode?: number;
-  /** The refused registration this one corrects ("Precisa de correção"); sent with the creation. */
-  correctsRegistrationId?: string;
 }
 
-export function buildCreateRequest(form: CreateForm, correctsRegistrationId?: string, options: { readonly sellerRequired?: boolean } = {}): CreateCustomerRequest {
+export function buildCreateRequest(form: CreateForm, options: { readonly sellerRequired?: boolean } = {}): CreateCustomerRequest {
   const individual = taxDocumentKind(normalizeTaxDocument(form.document)) === "individual";
   const ie = individual ? "" : form.exempt ? "ISENTO" : form.stateRegistration.trim();
   return {
@@ -206,7 +204,6 @@ export function buildCreateRequest(form: CreateForm, correctsRegistrationId?: st
     notes: form.notes.trim() === "" ? null : form.notes.trim(),
     addresses: [],
     ...(options.sellerRequired === true && form.sellerCode !== null ? { sellerCode: form.sellerCode } : {}),
-    ...(correctsRegistrationId === undefined ? {} : { correctsRegistrationId }),
   };
 }
 

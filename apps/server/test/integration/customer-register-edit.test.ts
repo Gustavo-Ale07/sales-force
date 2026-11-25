@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { auditLog, customerRegistration, erpCustomer, integrationOutbox } from '@salesforce/db';
-import { and, eq, like } from 'drizzle-orm';
+import { and, eq, like, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { requeueStuckCustomers } from '../../src/customers/customer-requeue.js';
 import { startCommercialApp, type CommercialApp, type Json } from '../helpers/commercial-app.js';
 import { closeAllThenStop, startPostgres, type TestPostgres } from '../helpers/postgres.js';
 
@@ -94,52 +95,71 @@ describe('create: state machine seen by the client', () => {
     expect(sent.body).toMatchObject({ state: 'sent', customerCode: 880_001, reasonCode: null });
   });
 
-  it('a definitive ERP refusal is needs_correction with the ERP reason; a duplicate keeps the generic text', async () => {
-    const refused = await open.call('seller1', 'POST', '/customers', createBody());
+  it('CUST-RT: a definitive ERP refusal is a 422 with a field map on a replay, is never listed and never needs correction', async () => {
+    const body = createBody();
+    const refused = await open.call('seller1', 'POST', '/customers', body);
     await settle(refused.body.registrationId, { status: 'rejected', rejectionCode: 'partner_required_field' }, 'partner_required_field: The ERP refused the partner: Informe o campo CEP.');
-    const view = await open.call('seller1', 'GET', `/customers/registrations/${refused.body.registrationId}`);
-    expect(view.body).toMatchObject({ state: 'needs_correction', reasonCode: 'required_field', reasonMessage: 'O Sankhya recusou o cadastro: Informe o campo CEP' });
+    const replay = await open.call('seller1', 'POST', '/customers', body);
+    expect(replay.status).toBe(422);
+    expect(replay.body).toMatchObject({ code: 'customer_refused', details: { fields: { addresses: expect.any(String) } } });
+    // Nothing half saved: the refused row is neither readable nor listed.
+    expect((await open.call('seller1', 'GET', `/customers/registrations/${refused.body.registrationId}`)).status).toBe(404);
+    const list = await open.call('seller1', 'GET', '/customers/registrations?limit=100');
+    expect(list.body.items.map((item: Json) => item.registrationId)).not.toContain(refused.body.registrationId);
 
-    const duplicate = await open.call('seller1', 'POST', '/customers', createBody());
-    await settle(duplicate.body.registrationId, { status: 'rejected', rejectionCode: 'partner_document_duplicate' }, 'partner_document_duplicate: The ERP refused the partner: documento de Fulano 123.');
-    const dup = await open.call('seller1', 'GET', `/customers/registrations/${duplicate.body.registrationId}`);
-    expect(dup.body).toMatchObject({ state: 'needs_correction', reasonCode: 'document_already_registered' });
-    // The ERP's own sentence (it may name someone else) never reaches the seller for a duplicate.
-    expect(JSON.stringify(dup.body)).not.toContain('Fulano');
+    const duplicate = createBody();
+    const dup = await open.call('seller1', 'POST', '/customers', duplicate);
+    await settle(dup.body.registrationId, { status: 'rejected', rejectionCode: 'partner_document_duplicate' }, 'partner_document_duplicate: The ERP refused the partner: documento de Fulano 123.');
+    const dupReplay = await open.call('seller1', 'POST', '/customers', duplicate);
+    expect(dupReplay.status).toBe(422);
+    expect(dupReplay.body.details.fields.document).toEqual(expect.any(String));
+    expect(JSON.stringify(dupReplay.body)).not.toContain('Fulano');
+  });
+
+  it('CUST-RT: the worker answering inside the wait gives 201 with the code and sendState sent; a timeout gives 202 pending', async () => {
+    const pending = await open.call('seller1', 'POST', '/customers', createBody());
+    expect(pending.status).toBe(202);
+    expect(pending.body).toMatchObject({ sendState: 'pending', customerCode: null });
+    await settle(pending.body.registrationId, { status: 'confirmed', erpCustomerCode: 880_100 });
+    const view = await open.call('seller1', 'GET', `/customers/registrations/${pending.body.registrationId}`);
+    expect(view.body).toMatchObject({ sendState: 'sent', customerCode: 880_100 });
+  });
+
+  it('CUST-RT: a manager naming an unknown seller is refused on sellerCode and nothing is recorded; a seller needs none', async () => {
+    const body = createBody({ sellerCode: 999_999 });
+    const refused = await open.call('manager', 'POST', '/customers', body);
+    expect(refused.status).toBe(422);
+    expect(refused.body.details.fields.sellerCode).toEqual(expect.any(String));
+    const rows = await db().select().from(customerRegistration).where(eq(customerRegistration.clientRequestId, body.clientRequestId));
+    expect(rows).toHaveLength(0);
+    expect((await open.call('seller1', 'POST', '/customers', createBody({ sellerCode: undefined }))).status).toBe(202);
   });
 });
 
-describe('correction of a refused registration', () => {
-  it('creates a new request that points at the refused one, once, and only for its author', async () => {
-    const refused = await open.call('seller1', 'POST', '/customers', createBody());
-    const id = refused.body.registrationId as string;
+describe('CUST-RT: legacy correction is ignored; the seller of a pending customer is set by a manager', () => {
+  it('correctsRegistrationId from an old build is accepted and ignored', async () => {
+    const first = await open.call('seller1', 'POST', '/customers', createBody());
+    const second = await open.call('seller1', 'POST', '/customers', createBody({ correctsRegistrationId: first.body.registrationId }));
+    expect(second.status).toBe(202);
+    const view = await open.call('seller1', 'GET', `/customers/registrations/${second.body.registrationId}`);
+    expect(view.body.correctsRegistrationId).toBeNull();
+  });
 
-    // Not refused yet.
-    const early = await open.call('seller1', 'POST', '/customers', createBody({ correctsRegistrationId: id }));
-    expect(early.status).toBe(409);
-    expect(early.body.details.reason).toBe('registration_not_rejected');
-
-    await settle(id, { status: 'rejected', rejectionCode: 'partner_required_field' }, 'x: The ERP refused the partner: faltou algo.');
-
-    // Someone else's refusal does not exist for the caller.
-    const foreign = await open.call('seller2', 'POST', '/customers', createBody({ sellerCode: 107, correctsRegistrationId: id }));
-    expect(foreign.status).toBe(409);
-    expect(foreign.body.details.reason).toBe('registration_not_found');
-
-    const fixed = await open.call('seller1', 'POST', '/customers', createBody({ correctsRegistrationId: id }));
-    expect(fixed.status).toBe(202);
-    const view = await open.call('seller1', 'GET', `/customers/registrations/${fixed.body.registrationId}`);
-    expect(view.body.correctsRegistrationId).toBe(id);
-
-    const twice = await open.call('seller1', 'POST', '/customers', createBody({ correctsRegistrationId: id }));
-    expect(twice.status).toBe(409);
-    expect(twice.body.details.reason).toBe('registration_already_corrected');
-
-    // The corrected refusal leaves the "needs correction" list.
-    const list = await open.call('seller1', 'GET', '/customers/registrations?state=needs_correction&limit=100');
-    expect(list.body.items.map((item: Json) => item.registrationId)).not.toContain(id);
+  it('PUT /customers/registrations/{id}/seller: manager only, re-queues the delivery with the seller', async () => {
+    const created = await open.call('seller1', 'POST', '/customers', createBody());
+    const id = created.body.registrationId as string;
+    expect((await open.call('seller1', 'PUT', `/customers/registrations/${id}/seller`, { sellerCode: 103 })).status).toBe(403);
+    await db().update(integrationOutbox).set({ status: 'rejected', nextAttemptAt: null }).where(eq(integrationOutbox.aggregateId, id));
+    await db().update(customerRegistration).set({ status: 'rejected' }).where(eq(customerRegistration.id, id));
+    const done = await open.call('manager', 'PUT', `/customers/registrations/${id}/seller`, { sellerCode: 103 });
+    expect(done.status).toBe(200);
+    expect(done.body).toMatchObject({ sendState: 'pending' });
+    const [outbox] = await db().select().from(integrationOutbox).where(eq(integrationOutbox.aggregateId, id));
+    expect(outbox?.status).toBe('pending');
+    expect(outbox?.attemptCount).toBe(0);
   });
 });
+
 
 describe('scope of the register', () => {
   it('a seller reads only their own registrations (404 for another seller), manager and admin read all', async () => {
@@ -263,5 +283,26 @@ describe('edit of an existing customer', () => {
     expect(denied.status).toBe(404);
     const allowed = await open.call('manager', 'PATCH', `/customers/${code}`, { clientRequestId: randomUUID(), phone: '11999990000' });
     expect(allowed.status).toBe(202);
+  });
+});
+
+describe('CUST-RT: customer-requeue script', () => {
+  it('re-queues complete stuck customers, lists the ones without a seller, never writes the ERP and is idempotent', async () => {
+    const ok = await open.call('seller1', 'POST', '/customers', createBody());
+    const okId = ok.body.registrationId as string;
+    await settle(okId, { status: 'rejected', rejectionCode: 'partner_required_field' }, 'x: The ERP refused the partner: faltou algo.');
+    const noSeller = await open.call('seller1', 'POST', '/customers', createBody());
+    const noSellerId = noSeller.body.registrationId as string;
+    await settle(noSellerId, { status: 'rejected', rejectionCode: 'partner_required_field', sellerCode: null }, 'x: faltou vendedor.');
+    await db().update(integrationOutbox).set({ payload: sql`payload - 'sellerCode'` }).where(eq(integrationOutbox.aggregateId, noSellerId));
+    const report = await requeueStuckCustomers(db(), new Date());
+    expect(report.requeued).toContain(okId);
+    expect(report.missingSeller).toContain(noSellerId);
+    const [row] = await db().select().from(integrationOutbox).where(eq(integrationOutbox.aggregateId, okId));
+    expect(row).toMatchObject({ status: 'pending', attemptCount: 0 });
+    const [left] = await db().select().from(integrationOutbox).where(eq(integrationOutbox.aggregateId, noSellerId));
+    expect(left?.status).toBe('rejected');
+    const again = await requeueStuckCustomers(db(), new Date());
+    expect(again.requeued).not.toContain(okId);
   });
 });

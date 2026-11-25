@@ -135,6 +135,11 @@ export function createCustomer(api: ApiClient, body: ApiSchema<"CreateCustomerRe
   return callApi(() => api.POST("/customers", { body }));
 }
 
+/** Manager/admin: seller of a customer still pending delivery that has none; the server sends it again. */
+export function setRegistrationSeller(api: ApiClient, registrationId: string, sellerCode: number) {
+  return callApi(() => api.PUT("/customers/registrations/{registrationId}/seller", { params: { path: { registrationId } }, body: { sellerCode } }));
+}
+
 /** D-AB B3: asks the worker to read Sankhya now. The API only records the request. */
 export function startSyncRefresh(api: ApiClient) {
   return callApi(() => api.POST("/sync/refresh"));

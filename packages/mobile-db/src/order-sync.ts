@@ -96,6 +96,8 @@ export class TransportError extends Error {
     readonly status = 0,
     /** Machine cause of a `customer_ineligible` refusal (`customer_inactive`, `customer_blocked`, `customer_without_seller`…). */
     readonly reason?: string,
+    /** A 422 of a customer creation: field -> the server's text, shown on the form. */
+    readonly fields?: Readonly<Record<string, string>>,
   ) {
     super(message);
     this.name = "TransportError";

@@ -43,7 +43,9 @@ import { PolicyService, type AccessContext } from '../iam/policy.service.js';
 import { isBlockedRaw, MirrorRepository, type CustomerRow, type CustomerStateRow } from '../mirror/mirror.repository.js';
 import { assertDatasetMatches } from '../platform/dataset-guard.js';
 import { uuidv7 } from '../platform/ids.js';
-import { CLOCK, DATASET_IDENTITY, ORDER_ENQUEUE_ENABLED, type Clock } from '../platform/tokens.js';
+import { CLOCK, DATABASE_HANDLE, DATASET_IDENTITY, ORDER_ENQUEUE_ENABLED, type Clock } from '../platform/tokens.js';
+import { notifyOrderRefresh } from '../platform/pg-listener.js';
+import type { DbHandle } from '@salesforce/db';
 import { DraftBuilder, PRODUCT_WITHOUT_MOBILITY_MESSAGE, PRODUCT_WITHOUT_PRICE_MESSAGE, type DraftOutcome, type SendBlock } from './draft-builder.js';
 import { assertEligibleForErpSubmission } from './erp-eligibility.guard.js';
 import { deleteOrderDeliveries, enqueueOrderDelivery, requestDeliveryVerification, requeueRejectedDelivery } from './order-erp-delivery.js';
@@ -150,6 +152,9 @@ function headerNotEligibleError(issues: { path: string; code: string }[]): AppEr
   });
 }
 
+/** RT-1: minimum time between two refresh requests of the same order. */
+export const ORDER_REFRESH_COOLDOWN_MS = 10_000;
+
 @Injectable()
 export class OrdersService {
   constructor(
@@ -161,6 +166,7 @@ export class OrdersService {
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(ProductImageService) private readonly images: ProductImageService,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(DATABASE_HANDLE) private readonly handle: DbHandle,
     @Inject(DATASET_IDENTITY) private readonly dataset: DatasetIdentity | null,
     @Inject(ORDER_ENQUEUE_ENABLED) private readonly enqueueEnabled: boolean,
     @Inject(InstallationConfigurationService) private readonly installation: InstallationConfigurationService,
@@ -195,13 +201,34 @@ export class OrdersService {
       },
       { page: query.page, pageSize: query.pageSize },
     );
-    return { items: rows.map(toOrderListItem), page: query.page, pageSize: query.pageSize, total };
+    const removedIds = query.ids === undefined ? [] : await this.orders.removedIdsOf(scope, query.ids);
+    return { items: rows.map(toOrderListItem), page: query.page, pageSize: query.pageSize, total, removedIds };
   }
 
   async get(user: CurrentUser, id: string): Promise<OrderDetail> {
     const { scope } = await this.policy.accessContext(user);
     return this.detailOf(await this.loadVisible(scope, id), user.role === 'admin' || user.role === 'technical');
   }
+
+  /**
+   * RT-1 "refresh this order now": the caller must see the order; the API never calls Sankhya. It only sends a content-free
+   * request (the order id) to the worker over PostgreSQL NOTIFY. A request inside the per-order cooldown is dropped (still 202).
+   */
+  async requestRefresh(user: CurrentUser, id: string): Promise<{ accepted: boolean }> {
+    const { scope } = await this.policy.accessContext(user);
+    await this.loadVisible(scope, id);
+    const now = this.clock().getTime();
+    const last = this.refreshRequests.get(id);
+    if (last !== undefined && now - last < ORDER_REFRESH_COOLDOWN_MS) return { accepted: false };
+    this.refreshRequests.set(id, now);
+    if (this.refreshRequests.size > 5000) {
+      for (const [key, at] of this.refreshRequests) if (now - at >= ORDER_REFRESH_COOLDOWN_MS) this.refreshRequests.delete(key);
+    }
+    await notifyOrderRefresh(this.handle.pool, id);
+    return { accepted: true };
+  }
+
+  private readonly refreshRequests = new Map<string, number>();
 
   /** Figures and latest orders for the dashboard, within the caller's scope. */
   async dashboardFigures(scope: CustomerScope): Promise<{ counts: OrderCounts; recent: ReturnType<typeof toOrderListItem>[] }> {
@@ -896,7 +923,7 @@ export class OrdersService {
 
   /** Out of scope (or gone) looks exactly like missing (P-21); used on the row locked for update. */
   private assertInScope(scope: CustomerScope, row: OrderRow | null): asserts row is OrderRow {
-    if (row === null || !isCustomerInScope({ sellerCode: row.sellerCode }, scope)) throw new AppError('not_found');
+    if (row === null || row.erpRemovedAt !== null || !isCustomerInScope({ sellerCode: row.sellerCode }, scope)) throw new AppError('not_found');
   }
 
   private assertEditable(order: OrderRow, expectedVersion: number): void {

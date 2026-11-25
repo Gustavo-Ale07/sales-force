@@ -21,6 +21,7 @@ export * from "./pending-customers";
 export * from "./local-cleanup";
 export * from "./order-erp-status";
 export * from "./server-orders";
+export * from "./mirror-check";
 
 export type LocalStorageStatus = { readonly available: true };
 

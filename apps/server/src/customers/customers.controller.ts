@@ -84,6 +84,14 @@ export class CustomersController {
     return this.registrationQueries.get(user, contract.params.registrationId);
   }
 
+  @ApiRoute(routes.setCustomerRegistrationSeller)
+  setRegistrationSeller(
+    @CurrentUserParam() user: CurrentUser,
+    @Contract() contract: RequestContract<typeof routes.setCustomerRegistrationSeller>,
+  ): Promise<CustomerRegistrationView> {
+    return this.registrationQueries.setSeller(user, contract.params.registrationId, contract.body.sellerCode);
+  }
+
   @ApiRoute(routes.getCustomer)
   get(
     @CurrentUserParam() user: CurrentUser,

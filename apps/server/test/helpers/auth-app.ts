@@ -104,6 +104,9 @@ export interface AuthAppOptions {
   readonly customerConfirmWait?: { readonly timeoutMs?: number; readonly pollMs?: number; readonly sleep?: (ms: number) => Promise<void> };
   /** Opens the API-side queueing of the profile photo write to the ERP (default off, as shipped; spike S1.8). */
   readonly profilePhotoErpWriteEnabled?: boolean;
+  /** RT-1: open the dedicated LISTEN connection and the SSE route (default off: the route answers 503). */
+  readonly eventStreamEnabled?: boolean;
+  readonly eventStreamLimits?: { readonly perAccount?: number; readonly total?: number };
 }
 
 /** The API with the real identity module over a fresh migrated database and a hand-driven clock. */
@@ -146,6 +149,8 @@ export async function startAuthApp(
     auth,
     dataset: options.dataset ?? null,
     ...imageDeps,
+    ...(options.eventStreamEnabled === undefined ? {} : { eventStreamEnabled: options.eventStreamEnabled }),
+    ...(options.eventStreamLimits === undefined ? {} : { eventStreamLimits: options.eventStreamLimits }),
     orderEnqueueEnabled: options.orderEnqueueEnabled ?? false,
     customerEditEnabled: options.customerEditEnabled ?? false,
     customerEnqueueEnabled: options.customerEnqueueEnabled ?? false,

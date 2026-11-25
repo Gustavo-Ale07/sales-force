@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { installationConfigurationVersion, salesOrder, salesOrderErpStage, salesOrderReleasePending, type DbHandle } from '@salesforce/db';
+import { installationConfigurationVersion, integrationOutbox, salesOrder, salesOrderErpStage, salesOrderReleasePending, type DbHandle } from '@salesforce/db';
 import {
   awaitedReleaseLevel,
   billingItemQuantities,
@@ -27,6 +27,8 @@ import {
   type StoredReleaseDetail,
 } from '../orders/release-events.js';
 import { uuidv7 } from '../platform/ids.js';
+import { AUDIT_ACTIONS, AuditService } from '../iam/audit.service.js';
+import { decideRemoval, isSuspectBatch, type OrderPresence } from './order-removal.js';
 import type { Clock } from '../platform/tokens.js';
 
 /** Orders older than this are no longer polled (P2). */
@@ -41,6 +43,14 @@ export interface OrderErpStatusDeps {
   readonly gateway: SankhyaOrderReadPort;
   readonly logger: Logger;
   readonly now: Clock;
+  /** Dedicated origin field (SNK-5); with it, `reconcileByOriginOnce` can link orders the ERP already holds. */
+  readonly originField?: string;
+}
+
+/** Restricts a run to these orders (the on-demand refresh of RT-1); the batch limit still applies. */
+export interface OrderErpScopeOptions {
+  readonly signal?: AbortSignal;
+  readonly orderIds?: readonly string[];
 }
 
 export interface OrderErpStatusRun {
@@ -66,7 +76,7 @@ export class OrderErpStatusService {
 
   constructor(private readonly deps: OrderErpStatusDeps) {}
 
-  async runOnce(options: { signal?: AbortSignal } = {}): Promise<OrderErpStatusRun> {
+  async runOnce(options: OrderErpScopeOptions = {}): Promise<OrderErpStatusRun> {
     const { db, gateway, logger } = this.deps;
     const now = this.deps.now();
     const since = new Date(now.getTime() - ERP_STATUS_MAX_AGE_DAYS * 24 * 3600_000);
@@ -79,6 +89,7 @@ export class OrderErpStatusService {
           isNotNull(salesOrder.erpNumber),
           gte(salesOrder.createdAt, since),
           sql`(${salesOrder.erpStatusCode} is null or ${salesOrder.erpStatusCode} not in (0, 4, 7))`,
+          options.orderIds === undefined ? undefined : inArray(salesOrder.id, [...options.orderIds]),
         ),
       )
       .orderBy(sql`${salesOrder.erpStatusCheckedAt} asc nulls first`, asc(salesOrder.createdAt))
@@ -142,18 +153,86 @@ export class OrderErpStatusService {
     return runOrderStageOnce(this.deps, options);
   }
 
-  async runReleaseOnce(options: { signal?: AbortSignal } = {}): Promise<OrderErpStatusRun> {
+  /**
+   * "Sincronizar agora" (owner 2026-11-25): orders sent while the Force did not record the answer (status `unknown` or `rejected`
+   * with no ERP number) may already exist in Sankhya carrying OUR origin id. The ERP is asked by the dedicated origin field only
+   * (SNK-4, never a heuristic); an exact match is linked and the order becomes `sent`. Read-only toward the ERP. A failed or
+   * ambiguous lookup changes nothing for that order.
+   */
+  async reconcileByOriginOnce(options: OrderErpScopeOptions = {}): Promise<OrderErpStatusRun> {
+    const { db, gateway, logger, originField } = this.deps;
+    if (originField === undefined || originField === '') return { checked: 0, updated: 0 };
+    const now = this.deps.now();
+    const since = new Date(now.getTime() - ERP_STATUS_MAX_AGE_DAYS * 24 * 3600_000);
+    const candidates = await db.db
+      .select({ id: salesOrder.id })
+      .from(salesOrder)
+      .where(
+        and(
+          inArray(salesOrder.status, ['unknown', 'rejected']),
+          isNull(salesOrder.erpNumber),
+          gte(salesOrder.createdAt, since),
+          options.orderIds === undefined ? undefined : inArray(salesOrder.id, [...options.orderIds]),
+          sql`not exists (select 1 from ${integrationOutbox} where ${integrationOutbox.aggregateType} = 'sales_order' and ${integrationOutbox.operation} = 'send_order' and ${integrationOutbox.aggregateId} = ${salesOrder.id} and ${integrationOutbox.status} = 'processing')`,
+        ),
+      )
+      .orderBy(sql`${salesOrder.updatedAt} desc`)
+      .limit(50);
+    const audit = new AuditService(db.db, () => now);
+    let updated = 0;
+    for (const candidate of candidates) {
+      if (options.signal?.aborted === true) break;
+      let found;
+      try {
+        found = await gateway.findOrderByOrigin(originField, candidate.id, options.signal === undefined ? {} : { signal: options.signal });
+      } catch (error) {
+        const failure = describeSyncFailure(error);
+        logger.warn({ errorClass: failure.errorClass, errorCode: failure.errorCode }, 'ERP origin lookup failed; the order was left as it is');
+        continue;
+      }
+      if (found === null) continue;
+      const linked = await db.db.transaction(async (tx) => {
+        const rows = await tx
+          .update(salesOrder)
+          .set({ status: 'sent', erpNumber: found.erpOrderNumber, version: sql`${salesOrder.version} + 1`, updatedAt: now })
+          .where(and(eq(salesOrder.id, candidate.id), inArray(salesOrder.status, ['unknown', 'rejected']), isNull(salesOrder.erpNumber)))
+          .returning({ id: salesOrder.id });
+        if (rows.length === 0) return false;
+        await tx
+          .update(integrationOutbox)
+          .set({ status: 'confirmed', nextAttemptAt: null, lastStep: 'confirmed', lastErrorClass: null, lastErrorMessage: null, erpReference: String(found.erpOrderNumber), updatedAt: now })
+          .where(and(eq(integrationOutbox.aggregateType, 'sales_order'), eq(integrationOutbox.operation, 'send_order'), eq(integrationOutbox.aggregateId, candidate.id)));
+        await audit.record(
+          { action: AUDIT_ACTIONS.orderErpSent, actorAccountId: null, detail: { orderId: candidate.id, erpOrderNumber: found.erpOrderNumber, via: 'origin_reconciliation' } },
+          tx,
+        );
+        return true;
+      });
+      if (linked) updated += 1;
+    }
+    return { checked: candidates.length, updated };
+  }
+
+  async runReleaseOnce(options: OrderErpScopeOptions & { readonly countAbsence?: boolean; readonly confirmNow?: boolean } = {}): Promise<OrderErpStatusRun> {
     const { db, gateway, logger } = this.deps;
     const now = this.deps.now();
     const since = new Date(now.getTime() - BILLING_MAX_AGE_DAYS * 24 * 3600_000);
     const candidates = await db.db
-      .select({ id: salesOrder.id, erpNumber: salesOrder.erpNumber, detail: salesOrder.erpStatusDetail })
+      .select({ id: salesOrder.id, erpNumber: salesOrder.erpNumber, detail: salesOrder.erpStatusDetail, removedAt: salesOrder.erpRemovedAt, missingChecks: salesOrder.erpMissingChecks })
       .from(salesOrder)
-      .where(and(eq(salesOrder.status, 'sent'), isNotNull(salesOrder.erpNumber), gte(salesOrder.createdAt, since)))
+      .where(
+        and(
+          eq(salesOrder.status, 'sent'),
+          isNotNull(salesOrder.erpNumber),
+          gte(salesOrder.createdAt, since),
+          options.orderIds === undefined ? undefined : inArray(salesOrder.id, [...options.orderIds]),
+        ),
+      )
       .orderBy(asc(salesOrder.updatedAt))
       .limit(ERP_STATUS_BATCH);
     // An order is followed until it is invoiced or cancelled, for at most 60 days (the query above).
-    const due = candidates.filter((row) => !isFinalBillingState(storedBillingState(decodeReleaseDetail(row.detail))));
+    // A removed order stays in the set: reading it again is how it is restored if its note comes back.
+    const due = candidates.filter((row) => row.removedAt !== null || !isFinalBillingState(storedBillingState(decodeReleaseDetail(row.detail))));
     if (due.length === 0) return { checked: 0, updated: 0 };
     const numbers = due.flatMap((row) => (row.erpNumber === null ? [] : [row.erpNumber]));
     let readings;
@@ -180,9 +259,49 @@ export class OrderErpStatusService {
       );
     }
     let updated = 0;
+    // RT-1 deleted-order detection (order-removal.ts): the read succeeded, so each order is found, confirmed absent (no header, not in
+    // the cancellation tables, billing read healthy) or unknown. A suspect batch (partial / mostly absent) counts nothing.
+    const presenceOf = (reading: ErpOrderReleaseReading): OrderPresence =>
+      reading.found ? 'found' : reading.billing?.cancelled === true || reading.billingErrorCode !== undefined ? 'unknown' : 'absent';
+    const presences = due.flatMap((row) => {
+      const reading = row.erpNumber === null ? undefined : byNumber.get(row.erpNumber);
+      return reading === undefined ? [] : [presenceOf(reading)];
+    });
+    const suspect = isSuspectBatch(presences, due.length);
+    if (suspect && presences.some((p) => p === 'absent')) {
+      logger.warn(
+        { orders: due.length, readings: presences.length, absent: presences.filter((p) => p === 'absent').length },
+        'ERP order absence ignored: the batch looks partial or mostly absent (anti-mass-delete guard)',
+      );
+    }
+    const audit = new AuditService(db.db, () => now);
     for (const row of due) {
       const reading = row.erpNumber === null ? undefined : byNumber.get(row.erpNumber);
       if (reading === undefined) continue;
+      const decision = decideRemoval(
+        { presence: presenceOf(reading), missingChecks: row.missingChecks, removed: row.removedAt !== null },
+        suspect,
+        options.countAbsence !== false,
+        options.confirmNow === true,
+      );
+      if (decision.action === 'count') {
+        await db.db.update(salesOrder).set({ erpMissingChecks: decision.missingChecks }).where(eq(salesOrder.id, row.id));
+      } else if (decision.action === 'reset') {
+        await db.db.update(salesOrder).set({ erpMissingChecks: 0 }).where(eq(salesOrder.id, row.id));
+      } else if (decision.action === 'remove' || decision.action === 'restore') {
+        const removing = decision.action === 'remove';
+        await db.db.transaction(async (tx) => {
+          await tx
+            .update(salesOrder)
+            .set(removing ? { erpRemovedAt: now, erpMissingChecks: decision.missingChecks } : { erpRemovedAt: null, erpMissingChecks: 0 })
+            .where(eq(salesOrder.id, row.id));
+          await audit.record(
+            { action: removing ? AUDIT_ACTIONS.orderErpRemoved : AUDIT_ACTIONS.orderErpRestored, actorAccountId: null, detail: { orderId: row.id, erpNumber: row.erpNumber } },
+            tx,
+          );
+        });
+        updated += 1;
+      }
       const stored = decodeReleaseDetail(row.detail);
       // A note the ERP cannot find keeps what was stored (a missing note is not "no release" and not a cancellation),
       // unless the cancellation tables hold it: then the stored release lines stay and the billing state is "cancelled".
@@ -207,6 +326,8 @@ export const ORDER_STAGE_ON_DEMAND_REUSE_MS = 60_000;
 
 export interface OrderStageRunOptions {
   readonly signal?: AbortSignal;
+  /** Only these orders (RT-1 on-demand refresh). */
+  readonly orderIds?: readonly string[];
   /** Orders whose stage was read less than this long ago are not read again (0 = the scheduled run reads every due order). */
   readonly reuseMs?: number;
 }
@@ -243,6 +364,7 @@ export async function runOrderStageOnce(deps: OrderErpStatusDeps, options: Order
         eq(salesOrder.status, 'sent'),
         isNotNull(salesOrder.erpNumber),
         gte(salesOrder.createdAt, since),
+        options.orderIds === undefined ? undefined : inArray(salesOrder.id, [...options.orderIds]),
         // Invoiced: only inside the window after the stage was reached; every other stage keeps being read.
         or(isNull(salesOrderErpStage.orderId), ne(salesOrderErpStage.stage, 'invoiced'), gt(salesOrderErpStage.updatedAt, windowStart)),
         // On-demand reuse: a read younger than `reuseMs` is not repeated.

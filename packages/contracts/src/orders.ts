@@ -8,7 +8,7 @@ import {
   UuidSchema,
   codeInt,
   named,
-  paginated,
+  MAX_PAGE_SIZE,
   paginationQueryShape,
   queryBoolean,
   queryDate,
@@ -302,7 +302,21 @@ export const OrderListItemSchema = named(
 );
 export type OrderListItem = z.infer<typeof OrderListItemSchema>;
 
-export const OrdersResponseSchema = paginated('OrdersResponse', OrderListItemSchema);
+/**
+ * RT-1: `removedIds` answers a list asked with `ids`: the requested orders (inside the caller's scope) whose ERP note no longer exists in
+ * Sankhya. They are absent from `items`; a device drops its local copy of them (never one with unsent local work). Always present on
+ * the server's answer (empty when none or when `ids` was not sent); optional in the type so older fixtures stay valid.
+ */
+export const OrdersResponseSchema = named(
+  'OrdersResponse',
+  z.object({
+    items: z.array(OrderListItemSchema),
+    page: z.number().int().min(1),
+    pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE),
+    total: z.number().int().min(0),
+    removedIds: z.array(UuidSchema).max(MAX_ORDER_IDS_FILTER).optional(),
+  }),
+);
 export type OrdersResponse = z.infer<typeof OrdersResponseSchema>;
 
 /* ---------- detail ---------- */

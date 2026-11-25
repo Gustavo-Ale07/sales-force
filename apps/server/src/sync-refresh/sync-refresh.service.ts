@@ -14,6 +14,7 @@ import { desc, eq, inArray } from 'drizzle-orm';
 import { AppError } from '../http/app-error.js';
 import type { CurrentUser } from '../iam/current-user.js';
 import { uuidv7 } from '../platform/ids.js';
+import { MirrorCursorSchema } from '../sync/sync-state.js';
 import { expireStuckRefreshes, type StoredSyncRefreshStep } from '../sync/sync-refresh-expiry.js';
 import { CLOCK, DATABASE, type Clock } from '../platform/tokens.js';
 
@@ -82,12 +83,21 @@ export class SyncRefreshService {
 
   async status(): Promise<SyncStatusResponse> {
     const rows = await this.db
-      .select({ at: syncState.lastSuccessAt })
+      .select({ at: syncState.lastSuccessAt, cursor: syncState.cursor })
       .from(syncState)
       .where(inArray(syncState.entity, MIRRORED_ENTITIES));
     // What the screens show is as old as the stalest entity read so far.
     const known = rows.flatMap((row) => (row.at === null ? [] : [row.at.getTime()]));
-    return { dataAsOf: known.length === 0 ? null : new Date(Math.min(...known)).toISOString() };
+    // RT-1: the newest moment ANY mirrored entity changed rows (clients re-read the reference data when it moves).
+    const changed = rows.flatMap((row) => {
+      const parsed = MirrorCursorSchema.safeParse(row.cursor);
+      const at = parsed.success ? parsed.data.lastChangedAt : undefined;
+      return at === undefined ? [] : [at];
+    });
+    return {
+      dataAsOf: known.length === 0 ? null : new Date(Math.min(...known)).toISOString(),
+      referenceVersion: changed.length === 0 ? null : changed.reduce((a, b) => (a > b ? a : b)),
+    };
   }
 
   async #present(row: Row): Promise<SyncRefresh> {

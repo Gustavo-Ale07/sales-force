@@ -125,7 +125,7 @@ export function HomeScreen({ account, active, repositories, localOrders, syncSta
     return () => {
       current = false;
     };
-  }, [active, localOrders, repositories, syncStatus.phase, syncStatus.pending, syncStatus.needsAttention, syncStatus.lastSyncedAt]);
+  }, [active, localOrders, repositories, syncStatus.phase, syncStatus.pending, syncStatus.needsAttention, syncStatus.lastSyncedAt, syncStatus.dataRevision]);
 
   const offline = connectivity === "offline";
   const syncing = syncStatus.phase === "syncing";

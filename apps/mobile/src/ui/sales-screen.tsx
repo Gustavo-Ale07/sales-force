@@ -141,7 +141,7 @@ export function SalesScreen({ localOrders, customers, products, orders, orderPdf
   const [changes, setChanges] = useState(0);
   const filtersKey = JSON.stringify(filters);
   // Any sync movement or local action refreshes the list and the counters without polling.
-  const tick = `${changes}:${refreshSignal}:${syncStatus.phase}:${syncStatus.pending}:${syncStatus.needsAttention}:${syncStatus.lastSyncedAt ?? ""}`;
+  const tick = `${changes}:${refreshSignal}:${syncStatus.phase}:${syncStatus.pending}:${syncStatus.needsAttention}:${syncStatus.lastSyncedAt ?? ""}:${syncStatus.dataRevision ?? 0}`;
   const active = countActiveSalesFilters(filters);
 
   useEffect(() => {

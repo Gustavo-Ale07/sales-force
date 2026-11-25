@@ -113,7 +113,7 @@ describe('I-1 refused duplicates count toward the hourly limit (real database)',
     const svc = service({ kind: 'all' });
     for (let i = 0; i < MAX_CUSTOMER_CREATIONS_PER_HOUR; i += 1) {
       const error = await failure(svc.create(sellerUser(seller2, 107), request(document)));
-      expect(error.code).toBe('conflict');
+      expect(error.code).toBe('customer_refused');
     }
     const refusals = await db().select().from(customerRegistrationRefusal).where(eq(customerRegistrationRefusal.accountId, seller2));
     expect(refusals).toHaveLength(MAX_CUSTOMER_CREATIONS_PER_HOUR);
@@ -124,7 +124,7 @@ describe('I-1 refused duplicates count toward the hourly limit (real database)',
     // The window slides: an hour later the account may try again.
     now = new Date(NOW.getTime() + 3600_000 + 1000);
     try {
-      expect((await failure(svc.create(sellerUser(seller2, 107), request(document)))).code).toBe('conflict');
+      expect((await failure(svc.create(sellerUser(seller2, 107), request(document)))).code).toBe('customer_refused');
     } finally {
       now = NOW;
     }
@@ -148,7 +148,7 @@ describe('I-1 refused duplicates count toward the hourly limit (real database)',
     expect(first.httpStatus).toBe(202);
     const before = (await db().select().from(customerRegistrationRefusal).where(eq(customerRegistrationRefusal.accountId, manager))).length;
     const error = await failure(svc.create(user(manager, 'manager', []), request(document, { sellerCode: 103 })));
-    expect(error.details).toEqual({ reason: 'document_already_registered' });
+    expect(error.details).toMatchObject({ reason: 'document_already_registered' });
     expect((await db().select().from(customerRegistrationRefusal).where(eq(customerRegistrationRefusal.accountId, manager))).length).toBe(before + 1);
   });
 });
@@ -178,7 +178,7 @@ describe('I-1 the message depends on the portfolio; status, code and details nev
       expect(outside.message).toBe(GENERIC_DUPLICATE_MESSAGE);
       expect(outside.status).toBe(inside.status);
       expect(outside.code).toBe(inside.code);
-      expect(outside.details).toEqual(inside.details);
+      expect(outside.details?.reason).toBe(inside.details?.reason);
       expect(JSON.stringify([outside.message, outside.details])).not.toContain('Metalúrgica');
     }
   });
@@ -207,7 +207,7 @@ describe('I-1 a manager is told code and situation of an inactive, blocked or de
       expect(asManager.message).not.toContain('Metalúrgica');
       const asSeller = await failure(service({ kind: 'sellers', sellerCodes: [103] }).create(sellerUser(seller1, 103), request(document)));
       expect(asSeller.message).toBe(GENERIC_DUPLICATE_MESSAGE);
-      expect(asSeller.details).toEqual(asManager.details);
+      expect(asSeller.details?.reason).toBe(asManager.details?.reason);
     }
   });
 });

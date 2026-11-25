@@ -135,7 +135,7 @@ export class WorkerModule {
                 ? undefined
                 : new ConfigurationSyncService({ db, gateway: configurationSync.gateway, audit: new AuditService(db.db, now), logger, now });
             const orderStatusService =
-              orderDelivery === undefined ? undefined : new OrderErpStatusService({ db, gateway: orderDelivery.gateway, logger, now });
+              orderDelivery === undefined ? undefined : new OrderErpStatusService({ db, gateway: orderDelivery.gateway, logger, now, originField: orderDelivery.settings.originField });
             return new WorkerRuntime({
               logger,
               db,

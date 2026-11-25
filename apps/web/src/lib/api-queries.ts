@@ -34,8 +34,8 @@ export const queryKeys = {
   syncRefresh: (id: string) => ["sync-refresh", id] as const,
   syncStatus: ["sync-status"] as const,
   customers: (params: CustomersParams) => ["customers", "list", params] as const,
-  customer: (code: number) => ["customers", "detail", code] as const,
   customerRegistrations: ["customers", "registrations"] as const,
+  customer: (code: number) => ["customers", "detail", code] as const,
   customerFinancial: (code: number) => ["customers", "financial", code] as const,
   customerOrderHabits: (code: number) => ["customers", "order-habits", code] as const,
   productGroups: ["product-groups"] as const,
@@ -163,7 +163,7 @@ export function customerLettersQueryOptions(api: ApiClient, params: CustomerLett
   });
 }
 
-/** D-AR: the registrations made through Sales Force, with their state (`stateLabel` from the server). Refused ones are the "Precisa de correção" list. */
+/** Customers created in the Force and not yet in the ERP mirror (pending send), scoped by the server. The `customers` prefix is refreshed by the realtime hook. */
 export function customerRegistrationsQueryOptions(api: ApiClient) {
   return queryOptions({
     queryKey: queryKeys.customerRegistrations,

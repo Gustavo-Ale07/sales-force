@@ -5,15 +5,14 @@ import type { PricesOrigin } from "./prices-origin";
 /** Wire shapes: the generated OpenAPI types are the source of truth for what the API returns (STACK-4). */
 export type CustomerListItem = ApiSchema<"CustomerListItem"> & {
   /**
-   * Present only on a customer created on this device that the ERP has not mirrored yet (F7). Its `code` is a negative
-   * local one; it has no seller, price table or credit data. Never delivered by the API.
+   * Present only on a customer registered on this device that the ERP has not mirrored yet. Its `code` is a negative local one until
+   * the Sankhya code arrives (then the real one); it has no price table or credit data. Never delivered by the API.
    */
   readonly pending?: {
     readonly clientRequestId: string;
-    readonly state: "queued" | "sending" | "awaiting_erp" | "confirmed" | "rejected";
-    readonly rejectionReason: string | null;
-    /** The server says customer creation is not released yet; the customer stays queued. */
-    readonly waitingForRelease?: boolean;
+    readonly state: "queued" | "sending" | "awaiting_erp" | "confirmed";
+    /** Saved without a seller (manager/admin): the ficha asks for one, then it is sent. */
+    readonly needsSeller: boolean;
   };
 };
 /**

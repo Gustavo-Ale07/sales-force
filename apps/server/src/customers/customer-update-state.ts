@@ -24,8 +24,10 @@ const GENERIC_REFUSAL = 'O Sankhya recusou a alteração do cliente. Confira os 
 
 /** Unwraps the adapter's own sentence ("The ERP refused the partner: <reason>."); anything else is the generic text. */
 export function updateRefusalText(stored: string | null): string {
+  // Only the required-field refusal carries text that is safe to show; any other ERP text may name a third party.
+  if (!(stored ?? '').startsWith('partner_required_field')) return GENERIC_REFUSAL;
   const match = /The ERP refused the partner(?:: (.+?)\.?\s*$| \(no message\)\.?\s*$)/s.exec(stored ?? '');
-  const reason = match?.[1]?.trim();
+  const reason = match?.[1]?.trim()?.slice(0, 300);
   return reason === undefined || reason === '' ? GENERIC_REFUSAL : `O Sankhya recusou a alteração: ${reason}`;
 }
 
@@ -49,11 +51,23 @@ export function toUpdateResponse(facts: UpdateOutboxFacts, customerCode: number)
     updateId: facts.aggregateId,
     customerCode,
     state,
+    sendState: facts.status === 'confirmed' ? 'sent' : 'pending',
     stateLabel: customerStateLabel(state),
     reasonCode: reason?.code ?? null,
     reasonMessage: reason?.message ?? null,
     updatedAt: facts.updatedAt.toISOString(),
   };
+}
+
+/** 422 field map of a refused edit: the field is a hint from the words of the ERP text; unknown = `_`. */
+export function updateRefusalFields(message: string): Record<string, string> {
+  const hints: ReadonlyArray<readonly [RegExp, string]> = [
+    [/e-?mail/i, 'email'],
+    [/telefone|fone/i, 'phone'],
+    [/observa/i, 'notes'],
+  ];
+  const hint = hints.find(([pattern]) => pattern.test(message));
+  return { [hint?.[1] ?? '_']: message };
 }
 
 export const EDITABLE_CUSTOMER_FIELDS = ['phone', 'email', 'notes', 'contacts', 'addresses'] as const;

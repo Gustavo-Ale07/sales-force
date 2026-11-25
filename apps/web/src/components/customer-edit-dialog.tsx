@@ -43,7 +43,6 @@ function EditBody({ customerCode, onClose }: { customerCode: number; onClose: ()
   const [showProblems, setShowProblems] = useState(false);
   const problems = editProblems(form);
   const failure = save.isError ? describeCustomerWriteError(save.error, "Não foi possível salvar o cliente") : null;
-  const refused = save.data?.state === "needs_correction" ? save.data : null;
 
   const set = (patch: Partial<EditForm>) => setForm((current) => ({ ...current, ...patch }));
 
@@ -53,8 +52,7 @@ function EditBody({ customerCode, onClose }: { customerCode: number; onClose: ()
     if (hasEditProblems(problems) || save.isPending) return;
     save.mutate(form, {
       onSuccess: (saved) => {
-        if (saved.state === "needs_correction") return;
-        toast({ title: saved.stateLabel, description: `Cliente ${saved.customerCode}`, tone: "success" });
+        toast({ title: "Cliente alterado", description: `Cliente ${saved.customerCode}`, tone: "success" });
         onClose();
       },
     });
@@ -87,11 +85,6 @@ function EditBody({ customerCode, onClose }: { customerCode: number; onClose: ()
                 Código de correlação: <span className="font-mono">{failure.correlationId}</span>
               </span>
             ) : null}
-          </Alert>
-        ) : null}
-        {refused ? (
-          <Alert tone="danger" title={refused.stateLabel}>
-            {refused.reasonMessage ?? "O Sankhya recusou a alteração. Revise os dados e tente de novo."}
           </Alert>
         ) : null}
         {showProblems && problems.empty ? <Alert tone="warning" title={problems.empty} /> : null}

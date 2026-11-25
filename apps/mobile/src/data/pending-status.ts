@@ -1,8 +1,8 @@
 import { customerStateLabel } from "@salesforce/domain";
 import type { CustomerListItem } from "./ports";
 
-/** Shown wherever an order is attempted for a customer the ERP has not confirmed (rule lives in mobile-db; text is the same). */
-export const PENDING_CUSTOMER_ORDER_MESSAGE = "Este cliente ainda não foi confirmado pelo Sankhya.";
+/** Shown wherever an order is attempted for a customer that has no Sankhya code yet (rule lives in mobile-db; text is the same). */
+export const PENDING_CUSTOMER_ORDER_MESSAGE = "Este cliente ainda não tem código do Sankhya.";
 
 /** Shown in the customer picker (order step 1) for a customer without a seller, who cannot be selected. */
 export const NO_SELLER_ORDER_MESSAGE = "Cliente sem vendedor. Peça ao backoffice para atribuir.";
@@ -10,37 +10,20 @@ export const NO_SELLER_ORDER_MESSAGE = "Cliente sem vendedor. Peça ao backoffic
 /** Shown on the customer sheet instead of a credit limit: nothing is invented for a customer that does not exist in the ERP yet. */
 export const PENDING_CREDIT_NOTE = "Limite de crédito a definir pelo financeiro";
 
-/** A customer created here that cannot take orders yet (waiting, queued or refused). One the ERP confirmed already can. */
 /**
- * "Sem vendedor" seal: a confirmed customer with no seller. A customer created on this device has no seller until the ERP
+ * "Sem vendedor" seal: a confirmed customer with no seller. A customer registered on this device has no seller until the ERP
  * answers, so it never carries the seal. Such a customer cannot be picked for an order (owner 2026-11-13).
  */
 export function hasNoSeller(customer: { readonly sellerCode: number | null; readonly pending?: unknown }): boolean {
   return customer.sellerCode === null && customer.pending === undefined;
 }
 
+/** A customer registered here that has no Sankhya code yet: it cannot take orders. One that already has its code can. */
 export function isUnconfirmedCustomer(customer: Pick<CustomerListItem, "pending">): boolean {
   return customer.pending !== undefined && customer.pending.state !== "confirmed";
 }
 
-/** Seller-facing badge of a customer created on this device; `null` for a normal (mirrored) customer. */
+/** The discreet pending-send indicator of a customer registered on this device; `null` for a customer that has its Sankhya code. */
 export function describePendingBadge(pending: CustomerListItem["pending"]): string | null {
-  if (pending === undefined) return null;
-  if (pending.waitingForRelease === true) return "Cadastro de cliente ainda não liberado, vamos tentar de novo";
-  switch (pending.state) {
-    case "queued":
-    case "sending":
-    case "awaiting_erp":
-      return customerStateLabel("awaiting_send");
-    case "confirmed":
-      return customerStateLabel("sent");
-    case "rejected":
-      return customerStateLabel("needs_correction");
-  }
-}
-
-/** The server's reason of a refused registration ("Precisa de correção"); null for any other state. */
-export function describePendingReason(pending: CustomerListItem["pending"]): string | null {
-  if (pending === undefined || pending.state !== "rejected") return null;
-  return pending.rejectionReason ?? "O Sankhya recusou o cadastro.";
+  return pending === undefined || pending.state === "confirmed" ? null : customerStateLabel("awaiting_send");
 }

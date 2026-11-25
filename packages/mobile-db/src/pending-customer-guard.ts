@@ -1,5 +1,5 @@
 /** Why an order cannot use a customer the ERP has not confirmed yet; also the stored `last_error` of a held draft. */
-export const PENDING_CUSTOMER_MESSAGE = "Este cliente ainda não foi confirmado pelo Sankhya.";
+export const PENDING_CUSTOMER_MESSAGE = "Este cliente ainda não tem código do Sankhya.";
 
 /** Thrown when an order draft is saved for a pending customer. */
 export class PendingCustomerOrderError extends Error {

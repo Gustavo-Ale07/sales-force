@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
-import { CUSTOMER_CREATION_NOT_RELEASED, TransportError, createPendingCustomer, isCustomerCreationAvailable, listPendingCustomers, readExpectedDataset, redoPendingCustomer, type OfflineEnv, type PendingCustomerRecord, type SqlDatabase } from "@salesforce/mobile-db";
+import { TransportError, assignPendingCustomerSeller, submitCustomer, isCustomerCreationAvailable, listPendingCustomers, readExpectedDataset, type OfflineEnv, type PendingCustomerRecord, type SqlDatabase } from "@salesforce/mobile-db";
 import { ApiRequestError } from "../data/api";
 import { describePendingBadge, PENDING_CREDIT_NOTE, PENDING_CUSTOMER_ORDER_MESSAGE } from "../data/pending-status";
 import type { CustomerRepository, Repositories } from "../data/ports";
@@ -9,7 +9,7 @@ import { CustomerPicker } from "../ui/customer-picker";
 import { CustomersScreen } from "../ui/customers-screen";
 import { toCustomerTransportError } from "./customer-transport";
 import { createOfflineFirstRepositories } from "./offline-repositories";
-import { createPendingCustomersPort, toPendingListItem } from "./pending-customers";
+import { CustomerRejectedError, createPendingCustomersPort, toPendingListItem } from "./pending-customers";
 import { toCustomerLike } from "./customer-transport";
 import { createOrderTransport } from "./transport";
 
@@ -18,8 +18,8 @@ jest.mock("@salesforce/mobile-db", () => ({
   isCacheReady: jest.fn(async () => true),
   searchCustomers: jest.fn(async () => ({ items: [{ code: 5, name: "Real", tradeName: null, document: null, active: true, blocked: false, sellerCode: 7, sellerName: null, priceTableCode: null }], page: 1, pageSize: 20, total: 1 })),
   listPendingCustomers: jest.fn(),
-  createPendingCustomer: jest.fn(),
-  redoPendingCustomer: jest.fn(),
+  assignPendingCustomerSeller: jest.fn(),
+  submitCustomer: jest.fn(),
   isCustomerCreationAvailable: jest.fn(),
   readExpectedDataset: jest.fn(async () => ({ environment: "production", datasetId: "d1" })),
 }));
@@ -39,7 +39,7 @@ function record(over: Partial<PendingCustomerRecord> = {}): PendingCustomerRecor
     state: "queued",
     registrationId: null,
     customerCode: null,
-    rejectionReason: null,
+    needsSeller: false,
     lastError: null,
     attempts: 0,
     nextAttemptAt: null,
@@ -55,10 +55,10 @@ describe("badge text", () => {
     ["queued", null, "Aguardando envio"],
     ["sending", null, "Aguardando envio"],
     ["awaiting_erp", null, "Aguardando envio"],
-    ["rejected", "Já existe um cliente com este CPF/CNPJ.", "Precisa de correção"],
-  ] as const)("%s", (state, rejectionReason, text) => {
-    expect(describePendingBadge({ clientRequestId: "r", state, rejectionReason })).toBe(text);
+  ] as const)("%s", (state, _unused, text) => {
+    expect(describePendingBadge({ clientRequestId: "r", state, needsSeller: false })).toBe(text);
   });
+  it("is absent once the Sankhya code arrived", () => expect(describePendingBadge({ clientRequestId: "r", state: "confirmed", needsSeller: false })).toBeNull());
   it("is absent for a normal customer", () => expect(describePendingBadge(undefined)).toBeNull());
 });
 
@@ -97,7 +97,7 @@ describe("offline-first customer list with pending customers", () => {
   });
 
   it("maps a record to a list item without cost, credit or table", () => {
-    const item = toPendingListItem(record({ state: "rejected", rejectionReason: "x" }));
+    const item = toPendingListItem(record({ state: "queued" }));
     expect(Object.keys(item).sort()).toEqual(["active", "blocked", "code", "document", "name", "pending", "priceTableCode", "sellerCode", "sellerName", "tradeName"]);
   });
 });
@@ -124,13 +124,6 @@ describe("screens", () => {
     await fireEvent.press(screen.getByRole("button", { name: "Novo pedido" }));
     expect(onNewOrder).not.toHaveBeenCalled();
     expect(get).not.toHaveBeenCalled();
-  });
-
-  it("a rejected customer shows the reason", async () => {
-    const rejected = toPendingListItem(record({ state: "rejected", rejectionReason: "O Sankhya recusou o cadastro do cliente. Confira os dados." }));
-    await render(<CustomersScreen customers={{ list: async () => pageOf([rejected], 1) }} onUnauthenticated={noop} />);
-    expect(await screen.findByText("Precisa de correção")).toBeTruthy();
-    expect(screen.getByText("O Sankhya recusou o cadastro do cliente. Confira os dados.")).toBeTruthy();
   });
 
   it("the order picker cannot choose it, even where blocked customers are allowed", async () => {
@@ -194,15 +187,6 @@ describe("the negative local code is never shown as a real code", () => {
 });
 
 describe("list identity under the I-2 rulings (owner 2026-11-13)", () => {
-  it("a refused row is identified by name, masked CPF/CNPJ and reason", () => {
-    const item = toPendingListItem(record({ state: "rejected", rejectionReason: "Já existe um cliente com este CPF/CNPJ." }));
-    expect(item).toMatchObject({ name: "Padaria Nova", document: "***.456.789-**", pending: { state: "rejected", rejectionReason: "Já existe um cliente com este CPF/CNPJ." } });
-  });
-
-  it("a refused row whose data was purged still reads 'Cadastro não aceito' with the masked document", () => {
-    expect(toPendingListItem(record({ state: "rejected", name: "", document: "", request: null, rejectionReason: "x" }))).toMatchObject({ name: "Cadastro não aceito", document: "***.456.789-**" });
-  });
-
   it("a confirmed row keeps its name and shows no document; without a name it reads 'Cliente {código}'", () => {
     const named = toPendingListItem(record({ state: "confirmed", customerCode: 4321, document: "", maskedDocument: "", request: null }));
     expect(named).toMatchObject({ code: 4321, name: "Padaria Nova", document: null });
@@ -219,7 +203,6 @@ describe("a customer the ERP confirmed but whose data is still being read", () =
     const onSelect = jest.fn();
     const repo: CustomerRepository = { list: async () => pageOf([item], 1) };
     await render(<CustomerDetailScreen customer={item} customers={repo} onBack={noop} onNewOrder={onNewOrder} />);
-    expect(screen.getByText("Enviado ao Sankhya")).toBeTruthy();
     expect(screen.queryByText(PENDING_CUSTOMER_ORDER_MESSAGE)).toBeNull();
     await fireEvent.press(screen.getByRole("button", { name: "Novo pedido" }));
     expect(onNewOrder).toHaveBeenCalledWith(item);
@@ -229,32 +212,9 @@ describe("a customer the ERP confirmed but whose data is still being read", () =
   });
 });
 
-describe("not released (customer_write_disabled)", () => {
-  it("the badge says so, in the seller's words", () => {
-    const item = toPendingListItem(record({ lastError: CUSTOMER_CREATION_NOT_RELEASED }));
-    expect(describePendingBadge(item.pending)).toBe("Cadastro de cliente ainda não liberado, vamos tentar de novo");
-  });
-});
-
-describe("Refazer on a refused customer's sheet", () => {
-  const rejected = toPendingListItem(record({ state: "rejected", rejectionReason: "Já existe um cliente com este CPF/CNPJ." }));
-  const repo: CustomerRepository = { list: async () => pageOf([rejected], 1) };
-
-  it("shows the button and hands the customer to the form", async () => {
-    const onRedo = jest.fn();
-    await render(<CustomerDetailScreen customer={rejected} customers={repo} onBack={noop} onNewOrder={noop} onRedo={onRedo} />);
-    await fireEvent.press(screen.getByRole("button", { name: "Refazer" }));
-    expect(onRedo).toHaveBeenCalledWith(rejected);
-  });
-
-  it("is not offered for a customer that was not refused", async () => {
-    await render(<CustomerDetailScreen customer={toPendingListItem(record())} customers={repo} onBack={noop} onNewOrder={noop} onRedo={jest.fn()} />);
-    expect(screen.queryByRole("button", { name: "Refazer" })).toBeNull();
-  });
-});
-
 describe("PendingCustomersPort", () => {
-  const port = (onChanged = jest.fn()) => createPendingCustomersPort({ db: {} as SqlDatabase, env, ownerAccountId: "acct-1", onChanged });
+  const transport = { createCustomer: jest.fn() } as never;
+  const port = (onChanged = jest.fn()) => createPendingCustomersPort({ db: {} as SqlDatabase, env, ownerAccountId: "acct-1", transport, onChanged });
 
   it("exposes whether creating customers is available, from the last server answer", async () => {
     (isCustomerCreationAvailable as jest.Mock).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
@@ -262,17 +222,53 @@ describe("PendingCustomersPort", () => {
     expect(await port().creationAvailable()).toBe(true);
   });
 
-  it("redo returns what was typed and creating the new one closes the refused row", async () => {
-    const typed = { document: "12345678909", name: "X" };
-    (redoPendingCustomer as jest.Mock).mockResolvedValue(typed);
-    (createPendingCustomer as jest.Mock).mockResolvedValue(record());
+  it("submit goes through the direct call online and refreshes the list", async () => {
+    (submitCustomer as jest.Mock).mockResolvedValue({ kind: "sent", customerCode: 4321, customer: null });
     const onChanged = jest.fn();
-    const p = port(onChanged);
-    expect(await p.redo("req-1")).toBe(typed);
-    expect(onChanged).not.toHaveBeenCalled();
-    await p.create({ document: "1" } as never, { redoOf: "req-1" });
-    expect(createPendingCustomer).toHaveBeenCalledWith(expect.anything(), env, { ownerAccountId: "acct-1", request: { document: "1" }, replacesRejected: "req-1" });
+    const result = await port(onChanged).submit({ document: "1" } as never, { online: true });
+    expect(result).toMatchObject({ kind: "sent", customerCode: 4321 });
+    expect(submitCustomer).toHaveBeenCalledWith(expect.anything(), env, transport, "acct-1", { document: "1" }, { online: true });
     expect(onChanged).toHaveBeenCalled();
+  });
+
+  it("a refusal reaches the form with the field map and still refreshes the list", async () => {
+    (submitCustomer as jest.Mock).mockRejectedValue(new CustomerRejectedError("Recusado", { document: "Este CPF/CNPJ já está cadastrado." }));
+    const onChanged = jest.fn();
+    await expect(port(onChanged).submit({ document: "1" } as never, { online: true })).rejects.toMatchObject({ fields: { document: "Este CPF/CNPJ já está cadastrado." } });
+    expect(onChanged).toHaveBeenCalled();
+  });
+
+  it("assignSeller saves the choice and refreshes", async () => {
+    const onChanged = jest.fn();
+    await port(onChanged).assignSeller("req-1", 12);
+    expect(assignPendingCustomerSeller).toHaveBeenCalledWith(expect.anything(), env, "acct-1", "req-1", 12);
+    expect(onChanged).toHaveBeenCalled();
+  });
+});
+
+describe("pending customer blocks Novo pedido", () => {
+  it("a customer without a Sankhya code cannot take an order, with the plain message", async () => {
+    const onNewOrder = jest.fn();
+    const item = toPendingListItem(record({ state: "awaiting_erp" }));
+    await render(<CustomerDetailScreen customer={item} customers={{ list: async () => pageOf([item], 1) }} onBack={noop} onNewOrder={onNewOrder} />);
+    expect(screen.getByText(PENDING_CUSTOMER_ORDER_MESSAGE)).toBeTruthy();
+    expect(PENDING_CUSTOMER_ORDER_MESSAGE).not.toMatch(/confirmad|aguardando confirma/i);
+    await fireEvent.press(screen.getByRole("button", { name: "Novo pedido" }));
+    expect(onNewOrder).not.toHaveBeenCalled();
+  });
+
+  it("a manager picks the seller of a held customer on the ficha", async () => {
+    const onAssignSeller = jest.fn(async () => undefined);
+    const item = toPendingListItem(record({ needsSeller: true }));
+    await render(<CustomerDetailScreen customer={item} customers={{ list: async () => pageOf([item], 1) }} onBack={noop} onNewOrder={noop} sellers={[{ code: 12, name: "Ana" }]} onAssignSeller={onAssignSeller} />);
+    await fireEvent.press(screen.getByRole("button", { name: "Vendedor Ana" }));
+    expect(onAssignSeller).toHaveBeenCalledWith(12);
+  });
+
+  it("a seller is never offered the selector", async () => {
+    const item = toPendingListItem(record({ needsSeller: true }));
+    await render(<CustomerDetailScreen customer={item} customers={{ list: async () => pageOf([item], 1) }} onBack={noop} onNewOrder={noop} />);
+    expect(screen.queryByRole("button", { name: /^Vendedor / })).toBeNull();
   });
 });
 
@@ -299,6 +295,10 @@ describe("customer transport error mapping", () => {
   it("customer_write_disabled is transient (server), not a refusal", () => {
     expect(toCustomerTransportError(api(409, { reason: "customer_write_disabled" }))).toMatchObject({ kind: "server", reason: "customer_write_disabled" });
   });
+  it("a 422 carries the server's field map to the form", () => {
+    const error = new ApiRequestError({ status: 422, message: "Recusado", code: "customer_refused", fields: { sellerCode: "Escolha o vendedor." } });
+    expect(toCustomerTransportError(error)).toMatchObject({ kind: "validation", fields: { sellerCode: "Escolha o vendedor." } });
+  });
   it("idempotency conflict keeps its class", () => {
     expect(toCustomerTransportError(api(409, { code: "idempotency_conflict" }))).toMatchObject({ kind: "idempotency_conflict" });
   });
@@ -308,6 +308,7 @@ describe("customer transport error mapping", () => {
     [429, "rate_limit"],
     [503, "server"],
     [400, "validation"],
+    [422, "validation"],
     [403, "validation"],
   ] as const)("status %s -> %s", (status, kind) => {
     expect(toCustomerTransportError(api(status))).toMatchObject({ kind });

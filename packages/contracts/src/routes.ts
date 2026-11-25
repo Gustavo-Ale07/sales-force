@@ -30,6 +30,7 @@ import {
   CustomerRegistrationsQuerySchema,
   CustomerRegistrationsResponseSchema,
   CustomerRegistrationViewSchema,
+  SetCustomerRegistrationSellerRequestSchema,
   UpdateCustomerRequestSchema,
   UpdateCustomerResponseSchema,
 } from './customer-write.js';
@@ -51,7 +52,7 @@ import {
 } from './approvals.js';
 import { ReleaseQueueCountQuerySchema, ReleaseQueueCountResponseSchema, ReleaseQueueQuerySchema, ReleaseQueueResponseSchema } from './release-queue.js';
 import { DashboardResponseSchema } from './dashboard.js';
-import { StartSyncRefreshResponseSchema, SyncRefreshPathSchema, SyncRefreshViewSchema, SyncStatusResponseSchema } from './sync-refresh.js';
+import { OrderRefreshAcceptedSchema, StartSyncRefreshResponseSchema, SyncRefreshPathSchema, SyncRefreshViewSchema, SyncStatusResponseSchema } from './sync-refresh.js';
 import { DiscountLimitsResponseSchema, UpdateDiscountLimitsRequestSchema } from './discount-limits.js';
 import { ErpSubmissionDisabledErrorSchema, type ErrorStatus } from './errors.js';
 import { HealthResponseSchema, ReadyResponseSchema } from './health.js';
@@ -346,6 +347,19 @@ export const routes = {
     errors: [401, 403],
   }),
 
+  getSyncEvents: defineRoute({
+    operationId: 'getSyncEvents',
+    method: 'get',
+    path: '/sync/events',
+    tags: ['sync'],
+    summary: 'Server-sent events: content-free change pings (RT-1)',
+    description:
+      'text/event-stream. Frames are "event: ping" with data {"topic":"orders"} or {"topic":"reference"}; a comment heartbeat every 25 s. No business data: the client re-reads through the normal authorized endpoints. At most 5 streams per account (429 beyond that). The stream ends when the session is revoked or expires.',
+    auth: 'session',
+    request: {},
+    responses: { 200: { description: 'Fluxo de eventos', binary: { contentTypes: ['text/event-stream'] }, headers: { 'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no' } } },
+    errors: [401, 403, 429, 503],
+  }),
   listSellers: defineRoute({
     operationId: 'listSellers',
     method: 'get',
@@ -387,7 +401,7 @@ export const routes = {
     tags: ['customers'],
     summary: 'Create a customer in the Force (written to the ERP by the worker)',
     description:
-      'Records the creation and waits up to 15 s for the ERP confirmation (D-AR). 201 with `status` `confirmed` and the real `customerCode` when confirmed in time; 202 with `status` `pending` when the ERP did not answer in time (the customer stays "aguardando envio ao Sankhya" and is confirmed later; no order can use it meanwhile); 200 with the recorded state on a replay of the same `clientRequestId` and payload. Idempotent per account: 409 idempotency_conflict when the id was used with a different payload. 409 conflict (details.reason `document_already_registered`) when the CPF/CNPJ already exists in the mirror or in another request in flight; `customer_write_disabled` while the installation has not enabled customer writes. Created with the ERP defaults of the installation (active, not blocked, installation price table, the creator as seller); the credit limit is never sent. 400 validation_failed (details.issues) for an invalid document or field. 429 rate_limited beyond the hourly creation limit. Every response carries the client `state`. A definitive ERP refusal (other than a duplicate document) found later is `needs_correction` (Precisa de correção), listed by GET /customers/registrations: correct the data and POST again with a new `clientRequestId` and `correctsRegistrationId` (own, rejected, not yet corrected; otherwise 409 with `details.reason` registration_not_found, registration_not_rejected or registration_already_corrected). A timeout, an offline ERP or exhausted retries never produce `needs_correction`.',
+      'Records the creation and waits up to ~8 s (configurable) for the worker to deliver it to the ERP (CUST-RT). 201 with `sendState` `sent` and the real `customerCode`; 202 with `sendState` `pending` when the ERP did not answer in time (delivery continues in the worker; the client shows a pending-send indicator and follows GET /customers/registrations/{id}); 200 with the recorded state on a replay of the same `clientRequestId` and payload. 422 `customer_refused` with `details.fields` (field -> pt-BR text: `sellerCode`, `document`, `stateRegistration`, ...) when validation or the ERP refuses (missing seller, repeated CPF/CNPJ, required field): nothing is left half saved and no correction queue exists; fix the data and POST again with a NEW `clientRequestId`. Seller: automatic for a seller (own ERP code); required for manager/admin (422 on `sellerCode` without any ERP call). 409 idempotency_conflict when the id was used with a different payload; 409 `customer_write_disabled` while the installation has not enabled customer writes. The credit limit is never sent. 400 validation_failed (details.issues) for a malformed body. 429 rate_limited beyond the hourly creation limit. `correctsRegistrationId` is still accepted by old builds and ignored.',
     auth: 'session',
     request: { body: CreateCustomerRequestSchema },
     maxBodyBytes: 8 * 1024,
@@ -396,7 +410,7 @@ export const routes = {
       200: { description: 'Reenvio idempotente: estado registrado', schema: CreateCustomerResponseSchema },
       202: { description: 'Aguardando envio ao Sankhya', schema: CreateCustomerResponseSchema },
     },
-    errors: [400, 401, 403, 409, 429],
+    errors: [400, 401, 403, 409, 422, 429],
   }),
   listCustomerRegistrations: defineRoute({
     operationId: 'listCustomerRegistrations',
@@ -405,7 +419,7 @@ export const routes = {
     tags: ['customers'],
     summary: 'Customers created in the Force that are not yet in the ERP mirror, or were refused (scoped)',
     description:
-      'Each item carries the client `state` and its `stateLabel`: `awaiting_send` (Aguardando envio; the server keeps retrying), `sent` (Enviado ao Sankhya: confirmed, `customerCode` set) or `needs_correction` (Precisa de correção: a definitive refusal with `reasonCode` and `reasonMessage`; fix the data and POST /customers again with a new `clientRequestId` and `correctsRegistrationId`). A registration already corrected leaves the default list. A timeout, an offline ERP or exhausted retries never become `needs_correction`. Scope: the creator; a manager/admin sees those of the sellers they reach.',
+      'Each item carries `sendState` (`sent` with `customerCode`, or `pending`) and the legacy `state`/`stateLabel`. A refused customer is not listed (the refusal is answered by POST /customers as 422). Scope: the creator; a manager/admin sees those of the sellers they reach.',
     auth: 'session',
     request: { query: CustomerRegistrationsQuerySchema },
     responses: { 200: { description: 'Cadastros de clientes feitos pelo Force', schema: CustomerRegistrationsResponseSchema } },
@@ -423,6 +437,20 @@ export const routes = {
     responses: { 200: { description: 'Cadastro', schema: CustomerRegistrationViewSchema } },
     errors: [400, 401, 403, 404],
   }),
+  setCustomerRegistrationSeller: defineRoute({
+    operationId: 'setCustomerRegistrationSeller',
+    method: 'put',
+    path: '/customers/registrations/{registrationId}/seller',
+    tags: ['customers'],
+    summary: 'Set the seller of a pending customer that has none and send it again (manager/admin)',
+    description:
+      'Manager/admin only (a seller answers 403; outside the actor scope 404). Only a customer not yet delivered (no ERP code). The seller must be an active seller of the ERP mirror (422 customer_refused on sellerCode otherwise). Re-enqueues delivery through the outbox; the API never calls the ERP. Answers the registration view.',
+    auth: 'session',
+    request: { params: CustomerRegistrationPathSchema, body: SetCustomerRegistrationSellerRequestSchema },
+    maxBodyBytes: 1024,
+    responses: { 200: { description: 'Cadastro reenviado', schema: CustomerRegistrationViewSchema } },
+    errors: [400, 401, 403, 404, 409, 422],
+  }),
   updateCustomer: defineRoute({
     operationId: 'updateCustomer',
     method: 'patch',
@@ -430,7 +458,7 @@ export const routes = {
     tags: ['customers'],
     summary: 'Edit phone, e-mail and notes of a customer (D-AP); written to the ERP by the worker',
     description:
-      'Same rule for the site and the app. Allow-list: any other key is refused with 400 validation_failed whose `details.issues[].path` names the field (unrecognized_keys). Seller: only customers of their own portfolio; manager/admin: the portfolio they reach; outside it 404. 409 conflict with `details.reason` `customer_edit_disabled` while `ERP_CUSTOMER_EDIT_ENABLED` is closed (default; nothing is stored and the ERP is never called). With the flag open the change is recorded as a command in the outbox and the worker writes it to the ERP (Sandbox only until the owner releases it): 202 with `state` `awaiting_send` ("Aguardando envio"). Replaying the same `clientRequestId` and payload answers 200 with the recorded `state` (`awaiting_send`, `sent` "Enviado ao Sankhya" or `needs_correction` "Precisa de correção" with `reasonCode`/`reasonMessage`): this is how a client follows the edit. 409 `idempotency_conflict` for the same id with another payload; 409 `customer_update_in_progress` while another edit of the same customer is not yet delivered. `contacts` and `addresses` are accepted by the schema but refused with 409 `details.reason` `customer_edit_field_not_supported` (the ERP mapping is not validated, S5.2); phone, e-mail and notes are the deliverable fields. Never changes name, document, seller, price table, status or limits.',
+      'Same rule for the site and the app. Allow-list: any other key is refused with 400 validation_failed whose `details.issues[].path` names the field (unrecognized_keys). Seller: only customers of their own portfolio; manager/admin: the portfolio they reach; outside it 404. 409 conflict with `details.reason` `customer_edit_disabled` while `ERP_CUSTOMER_EDIT_ENABLED` is closed (default; nothing is stored and the ERP is never called). With the flag open the change is recorded as a command in the outbox and the API waits up to ~8 s (configurable) for the worker to deliver it (CUST-RT): 200 with `sendState` `sent`; 202 with `sendState` `pending` when the ERP did not answer in time (delivery continues; replay the same `clientRequestId` and payload to follow it: 200); 422 `customer_refused` with `details.fields` (field -> pt-BR text) when the ERP refuses (nothing changes locally; send a new `clientRequestId`). 409 `idempotency_conflict` for the same id with another payload; 409 `customer_update_in_progress` while another edit of the same customer is not yet delivered. `contacts` and `addresses` are accepted by the schema but refused with 409 `details.reason` `customer_edit_field_not_supported` (the ERP mapping is not validated, S5.2); phone, e-mail and notes are the deliverable fields. Never changes name, document, seller, price table, status or limits.',
     auth: 'session',
     request: { params: CustomerPathSchema, body: UpdateCustomerRequestSchema },
     maxBodyBytes: 16 * 1024,
@@ -438,7 +466,7 @@ export const routes = {
       202: { description: 'Alteração registrada, aguardando envio ao Sankhya', schema: UpdateCustomerResponseSchema },
       200: { description: 'Reenvio idempotente: estado registrado', schema: UpdateCustomerResponseSchema },
     },
-    errors: [400, 401, 403, 404, 409],
+    errors: [400, 401, 403, 404, 409, 422],
   }),
   getCustomer: defineRoute({
     operationId: 'getCustomer',
@@ -688,6 +716,19 @@ export const routes = {
       200: { description: 'Pedido com a verificação solicitada', schema: OrderDetailSchema },
     },
     errors: [400, 401, 403, 404, 429],
+  }),
+  refreshOrder: defineRoute({
+    operationId: 'refreshOrder',
+    method: 'post',
+    path: '/orders/{id}/refresh',
+    tags: ['orders'],
+    summary: 'Asks the worker to re-read this order in Sankhya now (RT-1)',
+    description:
+      'Records the request only (the API never calls Sankhya); the worker serves it within seconds and the clients learn the result from the next orders ping. 202 even inside the 10 s per-order cooldown (accepted=false). 404 when the order is outside the caller scope, removed or unknown.',
+    auth: 'session',
+    request: { params: OrderPathSchema },
+    responses: { 202: { description: 'Pedido de atualização registrado', schema: OrderRefreshAcceptedSchema } },
+    errors: [400, 401, 403, 404],
   }),
   listApprovals: defineRoute({
     operationId: 'listApprovals',

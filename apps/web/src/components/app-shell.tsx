@@ -7,6 +7,7 @@ import { useAppServices } from "../lib/app-context";
 import { documentTitleBase } from "../lib/brand";
 import { approvalsEnabled, useDiscountAuthorityMode } from "../lib/discount-authority";
 import type { AuthUser } from "../lib/auth-client";
+import { useRealtimeSync } from "../lib/realtime";
 import { useReleaseQueueAccess } from "../lib/release-queue";
 import { Brand } from "./brand";
 import { CommandMenu } from "./command-menu";
@@ -128,6 +129,9 @@ export function AppShell({ user, onLogout, children }: AppShellProps) {
   const matches = useMatches();
   const mainRef = useRef<HTMLElement>(null);
   const previousPath = useRef(pathname);
+
+  // RT-1: one event stream for the whole signed-in session.
+  useRealtimeSync(Boolean(user));
 
   const lastCrumb = [...matches].reverse().find((m) => m.staticData?.crumb);
   const crumb = lastCrumb?.staticData?.crumb;

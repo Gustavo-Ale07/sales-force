@@ -1,34 +1,37 @@
 import {
+  assignPendingCustomerSeller,
   createPendingCustomer,
-  CUSTOMER_CREATION_NOT_RELEASED,
   discardPendingCustomer,
   isCustomerCreationAvailable,
   isCustomerEditAvailable,
   listPendingCustomers,
   readExpectedDataset,
-  redoPendingCustomer,
   retryPendingCustomer,
+  submitCustomer,
   type CreatePendingCustomerInput,
+  type CustomerRegistrationTransport,
   type OfflineEnv,
   type PendingCustomerRecord,
   type SqlDatabase,
+  type SubmitCustomerResult,
 } from "@salesforce/mobile-db";
 import type { CustomerListItem } from "../data/ports";
 
-export { PENDING_CUSTOMER_MESSAGE } from "@salesforce/mobile-db";
+export { PENDING_CUSTOMER_MESSAGE, CustomerRejectedError } from "@salesforce/mobile-db";
+export type { SubmitCustomerResult } from "@salesforce/mobile-db";
 
 /**
- * Customers created on this device that the ERP has not confirmed yet (F7). Creation is always local and durable; the
- * sync manager delivers them with the same idempotency key. The form is F8: this port is only the data surface.
+ * Customers registered from this device. With a connection the server creates the customer in the ERP at once; without one (or on a
+ * timeout / 202) it is saved on the device and the sync manager delivers it with the same idempotency key.
  */
 export interface PendingCustomersPort {
-  /** `redoOf` = the refused customer this one replaces ("Refazer"); the refused row is closed only when the new one is saved. */
-  create(request: CreatePendingCustomerInput["request"], options?: { readonly redoOf?: string }): Promise<PendingCustomerRecord>;
   /**
-   * "Refazer": checks the refused customer and returns what to pre-fill. Since I-2 the refused row holds no typed data, so the
-   * result is `null` (the seller retypes); the refused row stays, with its reason, until the new one is saved. Changes nothing.
+   * "Cadastrar". `online: true` calls the server directly (201: the customer is in the list with its code; a refusal throws
+   * `CustomerRejectedError` with the field -> text map and saves nothing). Otherwise it is saved and sent by itself later.
    */
-  redo(clientRequestId: string): Promise<CreatePendingCustomerInput["request"] | null>;
+  submit(request: CreatePendingCustomerInput["request"], options: { readonly online: boolean }): Promise<SubmitCustomerResult>;
+  /** Offline-only save (no call). */
+  create(request: CreatePendingCustomerInput["request"]): Promise<PendingCustomerRecord>;
   /**
    * Whether the "Novo cliente" entry point should be offered: `false` when the last sync's configuration said
    * `general.clientCreationEnabled === false` (re-read at every sync, no expiry), or after a 409 customer_write_disabled
@@ -38,31 +41,36 @@ export interface PendingCustomersPort {
   /** Whether "Editar cliente" is offered: only while the last sync's `general.clientEditEnabled` was true (unknown = hidden). */
   editAvailable?(): Promise<boolean>;
   list(search?: string): Promise<PendingCustomerRecord[]>;
-  /** Makes a waiting customer due now (a refused one cannot be resent as is). */
+  /** Makes a waiting customer due now. */
   resend(clientRequestId: string): Promise<void>;
-  /** Local delete of a refused (or never sent) customer; a customer the server may already hold is never discarded. */
+  /** Local delete of a customer never sent. */
   discard(clientRequestId: string): Promise<void>;
+  /** A manager/admin picks the seller of a customer held without one; it is sent again right away. */
+  assignSeller(clientRequestId: string, sellerCode: number): Promise<void>;
 }
 
 export function createPendingCustomersPort(deps: {
   readonly db: SqlDatabase;
   readonly env: OfflineEnv;
   readonly ownerAccountId: string;
+  readonly transport: CustomerRegistrationTransport;
   /** Counters and listing refresh after a change; a sync can start when online. */
   readonly onChanged: () => void;
 }): PendingCustomersPort {
-  const { db, env, ownerAccountId, onChanged } = deps;
+  const { db, env, ownerAccountId, transport, onChanged } = deps;
   return {
-    async create(request, options) {
-      const record = await createPendingCustomer(db, env, {
-        ownerAccountId,
-        request,
-        ...(options?.redoOf === undefined ? {} : { replacesRejected: options.redoOf }),
-      });
+    async submit(request, options) {
+      try {
+        return await submitCustomer(db, env, transport, ownerAccountId, request, options);
+      } finally {
+        onChanged();
+      }
+    },
+    async create(request) {
+      const record = await createPendingCustomer(db, env, { ownerAccountId, request });
       onChanged();
       return record;
     },
-    redo: (clientRequestId) => redoPendingCustomer(db, ownerAccountId, clientRequestId),
     creationAvailable: () => isCustomerCreationAvailable(db, env),
     editAvailable: () => isCustomerEditAvailable(db),
     async list(search = "") {
@@ -76,33 +84,34 @@ export function createPendingCustomersPort(deps: {
       await discardPendingCustomer(db, ownerAccountId, clientRequestId);
       onChanged();
     },
+    async assignSeller(clientRequestId, sellerCode) {
+      await assignPendingCustomerSeller(db, env, ownerAccountId, clientRequestId, sellerCode);
+      onChanged();
+    },
   };
 }
 
 /**
  * A pending customer as a list row. The code is the negative local one; document is masked; nothing about credit or
- * price table exists for it ("Limite de crédito a definir pelo financeiro" is shown on the sheet).
+ * price table exists for it. Once the ERP answered, the REAL code replaces the local one (orders allowed).
  */
 export function toPendingListItem(record: PendingCustomerRecord): CustomerListItem {
   const confirmed = record.state === "confirmed" && record.customerCode !== null;
+  const seller = record.request?.sellerCode ?? null;
   return {
-    // Confirmed by the ERP: the REAL code (orders allowed). Otherwise the local negative code, which no screen prints.
     code: confirmed ? (record.customerCode as number) : record.localCode,
-    // A refused row is identified by name + masked document + reason (typed data kept 7 days, then erased); a confirmed one by its name, or
-    // by "Cliente {código}" while it has none.
-    name: record.name !== "" ? record.name : confirmed ? `Cliente ${record.customerCode}` : "Cadastro não aceito",
+    name: record.name !== "" ? record.name : `Cliente ${record.customerCode ?? ""}`.trim(),
     tradeName: record.request?.tradeName ?? null,
     document: record.maskedDocument === "" ? null : record.maskedDocument,
     active: true,
     blocked: false,
-    sellerCode: null,
+    sellerCode: seller,
     sellerName: null,
     priceTableCode: null,
     pending: {
       clientRequestId: record.clientRequestId,
       state: record.state,
-      rejectionReason: record.rejectionReason,
-      waitingForRelease: record.lastError === CUSTOMER_CREATION_NOT_RELEASED && record.state !== "confirmed" && record.state !== "rejected",
+      needsSeller: record.needsSeller,
     },
   };
 }

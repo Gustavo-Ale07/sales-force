@@ -26,6 +26,17 @@
 
 	# /api/* goes straight to the API: one trusted hop (TRUST_PROXY=1). Caddy replaces any client-sent
 	# X-Forwarded-For (no trusted_proxies configured) with the real remote address.
+	# RT-1 event stream (Server-Sent Events): never buffered (flush every write); the API also sends
+	# `Cache-Control: no-transform` so `encode` leaves it uncompressed. No response timeout is set, so the
+	# 25 s heartbeat keeps the stream open.
+	@events path /api/v1/sync/events
+	handle @events {
+		reverse_proxy api:3000 {
+			header_up X-Forwarded-For {remote_host}
+			flush_interval -1
+		}
+	}
+
 	@api path /api/*
 	handle @api {
 		reverse_proxy api:3000 {

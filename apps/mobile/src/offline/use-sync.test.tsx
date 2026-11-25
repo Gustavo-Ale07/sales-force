@@ -139,3 +139,64 @@ describe("reference data syncs only at login and when the seller asks", () => {
     jest.useRealTimers();
   });
 });
+
+describe("automatic updates while online (RT-1)", () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+    jest.useRealTimers();
+  });
+
+  function liveManager() {
+    const backgroundRefresh = jest.fn(async (_what: unknown) => undefined);
+    const manager: SyncManager = { sync: jest.fn(async () => idle), getStatus: () => idle, subscribe: () => () => undefined, refresh: async () => idle, backgroundRefresh };
+    return { manager, backgroundRefresh };
+  }
+
+  it("a ping refreshes orders or the reference data; without a stream the foreground timers do it (30 s / 5 min)", async () => {
+    jest.useFakeTimers();
+    jest.spyOn(AppState, "addEventListener").mockImplementation((() => ({ remove: () => undefined })) as never);
+    const { manager, backgroundRefresh } = liveManager();
+    let onTopic: ((topic: "orders" | "reference") => void) | undefined;
+    let onConnection: ((connected: boolean) => void) | undefined;
+    const events = jest.fn((topicHandler: (topic: "orders" | "reference") => void, connectionHandler: (connected: boolean) => void) => {
+      onTopic = topicHandler;
+      onConnection = connectionHandler;
+      return () => undefined;
+    });
+    await renderHook(() => useSyncStatus(manager, "online", false, events));
+    backgroundRefresh.mockClear();
+    await act(async () => onTopic?.("orders"));
+    expect(backgroundRefresh).toHaveBeenLastCalledWith({ orders: true });
+    await act(async () => onTopic?.("reference"));
+    expect(backgroundRefresh).toHaveBeenLastCalledWith({ reference: true });
+
+    // Stream connected: the timers stay quiet.
+    await act(async () => onConnection?.(true));
+    backgroundRefresh.mockClear();
+    await act(async () => {
+      jest.advanceTimersByTime(60_000);
+    });
+    expect(backgroundRefresh).not.toHaveBeenCalled();
+
+    // Stream lost: the fallback timers take over.
+    await act(async () => onConnection?.(false));
+    backgroundRefresh.mockClear();
+    await act(async () => {
+      jest.advanceTimersByTime(30_000);
+    });
+    expect(backgroundRefresh).toHaveBeenCalledWith({ orders: true });
+    await act(async () => {
+      jest.advanceTimersByTime(270_000);
+    });
+    expect(backgroundRefresh).toHaveBeenCalledWith({ reference: true });
+  });
+
+  it("offline nothing runs, and the stream is not opened", async () => {
+    jest.spyOn(AppState, "addEventListener").mockImplementation((() => ({ remove: () => undefined })) as never);
+    const { manager, backgroundRefresh } = liveManager();
+    const events = jest.fn(() => () => undefined);
+    await renderHook(() => useSyncStatus(manager, "offline", false, events));
+    expect(backgroundRefresh).not.toHaveBeenCalled();
+    expect(events).not.toHaveBeenCalled();
+  });
+});

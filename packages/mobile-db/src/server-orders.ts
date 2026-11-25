@@ -1,6 +1,7 @@
 import type { SqlDatabase, SqlExecutor, SqlRow } from "./connection";
 import { readExpectedDataset } from "./dataset-identity";
 import type { OfflineEnv } from "./offline-env";
+import { forgetOrderErpStatus } from "./order-erp-status";
 import { ipiJsonOf, priceContextOf, TransportError, type OrderTransport, type RemoteOrder } from "./order-sync";
 
 /**
@@ -36,6 +37,8 @@ export interface MergeResult {
   readonly updated: number;
   /** Orders whose detail could not be read now; retried by the next sync. */
   readonly skipped: number;
+  /** Local copies dropped because the server no longer reports the order (RT-1). */
+  readonly removed: number;
 }
 
 async function hasOpenWork(tx: SqlExecutor, localId: string): Promise<boolean> {
@@ -44,6 +47,48 @@ async function hasOpenWork(tx: SqlExecutor, localId: string): Promise<boolean> {
     [localId],
   );
   return rows.length > 0;
+}
+
+/**
+ * Drops the local copy (lines, cached ERP status) of server orders that no longer exist (RT-1). A row with open work is KEPT:
+ * an outbox command (pending, sending, rejected, needs_review, conflict), a send request or a status other than `synced`.
+ * Meant to run inside a transaction. Returns how many copies were removed.
+ */
+export async function dropRemovedServerOrders(db: SqlExecutor, ownerAccountId: string, remoteIds: readonly string[]): Promise<number> {
+  let removed = 0;
+  for (const remoteId of remoteIds) {
+    const rows = await db.query<SqlRow>("SELECT local_id, status, send_state FROM local_order_draft WHERE remote_id = ? AND owner_account_id = ? AND kind = 'saved'", [remoteId, ownerAccountId]);
+    for (const row of rows) {
+      const localId = String(row.local_id);
+      const settled = String(row.status) === "synced" && (row.send_state === null || row.send_state === undefined || String(row.send_state) === "submitted");
+      if (!settled || (await hasOpenWork(db, localId))) continue;
+      await db.execute("DELETE FROM outbox WHERE draft_local_id = ?", [localId]);
+      await db.execute("DELETE FROM local_order_item WHERE draft_local_id = ?", [localId]);
+      await db.execute("DELETE FROM local_order_draft WHERE local_id = ?", [localId]);
+      removed += 1;
+    }
+    const left = await db.query<SqlRow>("SELECT 1 AS hit FROM local_order_draft WHERE remote_id = ? AND owner_account_id = ? LIMIT 1", [remoteId, ownerAccountId]);
+    if (left.length === 0) await forgetOrderErpStatus(db, remoteId);
+  }
+  return removed;
+}
+
+/** At or above this many settled local copies an EMPTY server list is treated as a glitch, not as "everything was removed" (mass-delete guard). */
+const MASS_GUARD = 5;
+
+/**
+ * A settled local copy of a server order that the complete list of the account no longer holds was removed on the server: it goes
+ * (RT-1). The list is complete here (a failed page throws before this runs).
+ */
+async function dropAbsentServerOrders(db: SqlDatabase, ownerAccountId: string, present: ReadonlySet<string>): Promise<number> {
+  const rows = await db.query<SqlRow>(
+    "SELECT DISTINCT remote_id FROM local_order_draft WHERE owner_account_id = ? AND kind = 'saved' AND remote_id IS NOT NULL AND status = 'synced' AND (send_state IS NULL OR send_state = 'submitted')",
+    [ownerAccountId],
+  );
+  const absent = rows.map((row) => String(row.remote_id)).filter((id) => !present.has(id));
+  if (absent.length === 0) return 0;
+  if (present.size === 0 && rows.length >= MASS_GUARD) return 0;
+  return db.transaction((tx) => dropRemovedServerOrders(tx, ownerAccountId, absent));
 }
 
 /** `draft` = nothing was sent (no send state); any other server status means the order was handed to the server for Sankhya. */
@@ -81,11 +126,12 @@ export async function mergeServerOrders(
   ownerAccountId: string,
   onProgress?: (done: number, total: number) => void,
 ): Promise<MergeResult> {
-  const result = { added: 0, updated: 0, skipped: 0 };
+  const result = { added: 0, updated: 0, skipped: 0, removed: 0 };
   if (source.fetchServerOrders === undefined) return result;
   const confirmed = await readExpectedDataset(db);
   if (confirmed === null) return result;
   const list = await source.fetchServerOrders();
+  result.removed = await dropAbsentServerOrders(db, ownerAccountId, new Set(list.map((o) => o.id)));
   let done = 0;
   for (const summary of list) {
     onProgress?.(done, list.length);

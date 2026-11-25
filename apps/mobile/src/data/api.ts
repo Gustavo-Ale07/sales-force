@@ -37,6 +37,8 @@ export class ApiRequestError extends Error {
   readonly reason?: string;
   /** Lines a 409 `no_usable_lines` reports as left out (`details.skippedLines`). */
   readonly skippedLines: readonly { lineNo: number; productCode: number; reason: string }[];
+  /** A 422 `customer_refused`: request field -> the server's text (`details.fields`; `_` belongs to no field). */
+  readonly fields: Readonly<Record<string, string>>;
 
   constructor(init: {
     status: number;
@@ -47,6 +49,7 @@ export class ApiRequestError extends Error {
     issues?: readonly { path: string; code: string; message?: string }[];
     reason?: string;
     skippedLines?: readonly { lineNo: number; productCode: number; reason: string }[];
+    fields?: Readonly<Record<string, string>>;
   }) {
     super(init.message);
     this.name = "ApiRequestError";
@@ -57,6 +60,7 @@ export class ApiRequestError extends Error {
     this.issues = init.issues ?? [];
     this.reason = init.reason;
     this.skippedLines = init.skippedLines ?? [];
+    this.fields = init.fields ?? {};
   }
 
   /** Network failure, timeout or a proxy answering without the API envelope. */
@@ -107,8 +111,11 @@ export async function callApi<T>(call: () => Promise<ClientResult<T>>): Promise<
         ? [{ lineNo: item.lineNo, productCode: item.productCode, reason: item.reason }]
         : [];
     });
+    const rawFields = record(details?.fields);
+    const fields = Object.fromEntries(Object.entries(rawFields ?? {}).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
     throw new ApiRequestError({
       status: result.response.status,
+      fields,
       reason: typeof details?.reason === "string" ? details.reason : undefined,
       skippedLines,
       code: typeof envelope?.code === "string" ? envelope.code : undefined,

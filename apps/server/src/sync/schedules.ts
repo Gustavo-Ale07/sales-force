@@ -7,9 +7,10 @@ import type { MirrorEntity } from './mirror-entities.js';
  */
 export const DEFAULT_MIRROR_CRONS = {
   sellers: '*/15 * * * *',
-  customers: '*/10 * * * *',
-  products: '*/15 * * * *',
-  prices: '*/10 * * * *',
+  /** RT-1 (owner ruling 2026-11-25): short reference cycles so the clients stop depending on a manual refresh. */
+  customers: '*/5 * * * *',
+  products: '*/10 * * * *',
+  prices: '*/5 * * * *',
   /** Open receivable titles (read-only financial information, D-I): every 30 minutes. */
   openTitles: '*/30 * * * *',
   /** Sales history (read-only aggregates over a 12-month window, heavy ERP read): once a day, off-hours (PROPOSED). */

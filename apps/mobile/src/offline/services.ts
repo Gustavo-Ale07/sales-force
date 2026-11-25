@@ -11,6 +11,7 @@ import { createCustomerTransport } from "./customer-transport";
 import { createOfflineFirstRepositories } from "./offline-repositories";
 import { createPendingCustomersPort, type PendingCustomersPort } from "./pending-customers";
 import { createReferenceSource } from "./reference-source";
+import { startSyncEvents, type StreamFetch, type SyncEventTopic } from "./sync-events";
 import { createOfflineSessionStore, type OfflineSessionStore } from "./session";
 import { createOrderTransport } from "./transport";
 
@@ -21,6 +22,8 @@ export interface AccountServices {
   /** Customers created on this device and waiting for the ERP (F7). */
   readonly pendingCustomers: PendingCustomersPort;
   readonly sync: SyncManager;
+  /** RT-1: opens the server's change-ping stream; returns the function that closes it. Absent when the build has no streaming fetch. */
+  readonly openEvents?: (onTopic: (topic: SyncEventTopic) => void, onConnection: (connected: boolean) => void) => () => void;
   /** Authenticated, bounded thumbnail files of this account (absent when the build has no image file system). */
   readonly productImages?: ProductImageStore;
 }
@@ -48,6 +51,11 @@ export function createOfflineServices(deps: {
   readonly onUnexpectedError?: (error: unknown) => void;
   /** Device internet state (OS check), so a failed sync says "no internet" or "server unavailable" correctly. */
   readonly internetState?: () => InternetState;
+  /** API base URL and streaming fetch of the change-ping stream (RT-1). Both absent = no stream: the timers keep the data fresh. */
+  readonly baseUrl?: string;
+  readonly fetchStream?: StreamFetch;
+  /** Log-safe line about a repaired device mirror (counts and hashes only). */
+  readonly onMirrorMismatch?: (message: string) => void;
 }): OfflineServices {
   const env: OfflineEnv = deps.env ?? { now: () => new Date(), newId: newClientRequestId };
   const transport = createOrderTransport(deps.api);
@@ -86,8 +94,13 @@ export function createOfflineServices(deps: {
         ownerAccountId: account.id,
         ...(deps.onUnexpectedError === undefined ? {} : { onUnexpectedError: deps.onUnexpectedError }),
         ...(deps.internetState === undefined ? {} : { internetState: deps.internetState }),
+        ...(deps.onMirrorMismatch === undefined ? {} : { onMirrorMismatch: deps.onMirrorMismatch }),
       });
+      const { baseUrl, fetchStream } = deps;
       const services: AccountServices = {
+        ...(baseUrl === undefined || fetchStream === undefined
+          ? {}
+          : { openEvents: (onTopic: (topic: SyncEventTopic) => void, onConnection: (connected: boolean) => void) => startSyncEvents({ baseUrl, fetchStream, onTopic, onConnection }) }),
         repositories: createOfflineFirstRepositories({ db: deps.db, env, ownerAccountId: account.id, remote: deps.remote }),
         localOrders: createLocalOrdersPort({
           db: deps.db,
@@ -107,6 +120,7 @@ export function createOfflineServices(deps: {
           db: deps.db,
           env,
           ownerAccountId: account.id,
+          transport: customerTransport,
           onChanged: () => {
             void sync.refresh();
           },

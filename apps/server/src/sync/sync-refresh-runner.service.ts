@@ -16,7 +16,7 @@ export interface SyncRefreshRunnerDeps {
   /** Present only with CONFIG_SYNC_FROM_SANKHYA=1. */
   readonly configuration?: Pick<ConfigurationSyncService, 'run'>;
   /** Present only while the order-write switch is on. */
-  readonly orderStatus?: Pick<OrderErpStatusService, 'runOnce'> & Partial<Pick<OrderErpStatusService, 'runReleaseOnce' | 'runStageOnce'>>;
+  readonly orderStatus?: Pick<OrderErpStatusService, 'runOnce'> & Partial<Pick<OrderErpStatusService, 'runReleaseOnce' | 'runStageOnce' | 'reconcileByOriginOnce'>>;
   readonly logger: Logger;
   readonly now: Clock;
 }
@@ -120,9 +120,17 @@ export class SyncRefreshRunner {
     if (entity === 'orderStatus') {
       const { orderStatus } = this.deps;
       if (orderStatus === undefined) return skipped('Envio de pedidos ao Sankhya desativado nesta instalação.');
+      // RT-1 / owner 2026-11-25: first link the notes Sankhya already holds under our origin id (SNK-4, exact field match), so the
+      // reads below follow them. A failed lookup never stops the step.
+      if (orderStatus.reconcileByOriginOnce !== undefined) {
+        await orderStatus.reconcileByOriginOnce(withSignal).catch((error: unknown) => {
+          this.deps.logger.warn({ errorCode: describeSyncFailure(error).errorCode }, 'origin reconciliation failed during the manual refresh');
+        });
+      }
       const result = await orderStatus.runOnce(withSignal);
       // Release (liberação) has its own read: a status read that is not available yet must not hide a working release read.
-      const release = orderStatus.runReleaseOnce === undefined ? undefined : await orderStatus.runReleaseOnce(withSignal);
+      // `confirmNow`: in a manual refresh ONE confirmed-absent reading removes the order (the background loop keeps the 2-reading rule).
+      const release = orderStatus.runReleaseOnce === undefined ? undefined : await orderStatus.runReleaseOnce({ ...withSignal, confirmNow: true });
       // Stage following Sankhya: reads up to one minute old are reused (login / "Sincronizar agora" burst).
       const stage = orderStatus.runStageOnce === undefined ? undefined : await orderStatus.runStageOnce({ ...withSignal, reuseMs: ORDER_STAGE_ON_DEMAND_REUSE_MS });
       if (stage?.failed === true) {

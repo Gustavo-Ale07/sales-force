@@ -34,7 +34,7 @@ import { Link } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 import { CustomerCreateDialog } from "../components/customer-create-dialog";
-import { CustomerRegistrationsCard } from "../components/customer-registrations-card";
+import { PendingCustomerRows, usePendingRegistrations } from "../components/customer-pending-rows";
 import { useCustomerWriteFlags } from "../lib/use-customer-write";
 import { MetricValueText, METRIC_VISUALS } from "../components/metric-value";
 import { QueryError } from "../components/query-error";
@@ -90,6 +90,9 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
   const hasFilters =
     params.search !== undefined || params.sellerCode !== undefined || params.hasPriceTable !== undefined || params.initial !== undefined;
   const filtersBeyondSearch = params.sellerCode !== undefined || params.hasPriceTable !== undefined || params.initial !== undefined;
+  // Customers saved and still being delivered to Sankhya head the unfiltered first page.
+  const pendingAll = usePendingRegistrations(canCreate);
+  const pending = !hasFilters && (params.page ?? 1) === 1 ? pendingAll : [];
   const clearAll = () => onSearchChange(compact({ sort: params.sort, pageSize: params.pageSize }));
 
   return (
@@ -106,7 +109,6 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
         }
       />
       {canCreate ? <CustomerCreateDialog open={creating} onOpenChange={setCreating} /> : null}
-      {canCreate ? <CustomerRegistrationsCard /> : null}
 
       {portfolio && portfolio.metrics.length > 0 ? (
         <section aria-label={portfolio.label} className="max-sm:hidden">
@@ -233,13 +235,14 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
             </TableRow>
           </TableHeader>
           <TableBody>
+            <PendingCustomerRows items={pending} />
             {query.isPending ? (
               <TableLoadingRows columns={COLUMNS} />
             ) : query.isError ? (
               <TableMessageRow colSpan={COLUMNS}>
                 <QueryError error={query.error} onRetry={() => void query.refetch()} retrying={query.isRefetching} compact />
               </TableMessageRow>
-            ) : query.data.items.length === 0 ? (
+            ) : query.data.items.length === 0 && pending.length === 0 ? (
               <TableMessageRow colSpan={COLUMNS}>
                 <EmptyState
                   compact

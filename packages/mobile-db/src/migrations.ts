@@ -279,4 +279,20 @@ export const migrations: readonly Migration[] = [
       ) STRICT`,
     ],
   },
+  {
+    // Owner 2026-11-25: the "Precisa de correção" state of a customer registration is gone (a refusal shows on the form, nothing is kept
+    // halfway). Rows left in the old refused state are migrated here: nothing typed (erased) -> removed; typed data complete -> queued
+    // again under a NEW key (the refused one is history on the server); typed data missing the seller -> held (`needs_seller`) until the
+    // manager picks one on the customer sheet. Expand-only: one column with a default; only the old refused rows are rewritten.
+    version: 16,
+    name: "pending_customer_needs_seller",
+    statements: [
+      `ALTER TABLE pending_customer ADD COLUMN needs_seller INTEGER NOT NULL DEFAULT 0`,
+      `DELETE FROM pending_customer WHERE state = 'rejected' AND payload = 'null'`,
+      `UPDATE pending_customer SET needs_seller = 1 WHERE state = 'rejected' AND json_extract(payload, '$.sellerCode') IS NULL AND lower(coalesce(rejection_reason, '')) LIKE '%vendedor%'`,
+      `UPDATE pending_customer SET state = 'queued', registration_id = NULL, attempts = 0, rejection_reason = NULL, last_error = NULL, next_attempt_at = NULL,
+         client_request_id = lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-a' || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6)))
+         WHERE state = 'rejected'`,
+    ],
+  },
 ];

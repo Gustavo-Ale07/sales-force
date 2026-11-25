@@ -1,3 +1,4 @@
+import { OrderStatusCycle } from './order-status-cycle.js';
 import { GatewayModeSchema } from '@salesforce/contracts';
 import type { DbHandle } from '@salesforce/db';
 import type { Secret } from '@salesforce/sankhya';
@@ -43,7 +44,6 @@ import {
   CUSTOMER_PAYLOAD_PURGE_CRON,
   CUSTOMER_REFUSAL_PURGE_CRON,
   ORDER_DELIVERY_TRIGGER_MS,
-  ORDER_ERP_STATUS_CRON,
   QUEUE_NAMES,
   QUEUE_REGISTRY,
   type QueueSpec,
@@ -71,6 +71,8 @@ export interface WorkerRuntimeOptions {
   readonly poolMax?: number;
   /** Idle poll interval of every queue worker, in seconds (>= 0.5, default 2). */
   readonly pollingIntervalSeconds?: number;
+  /** RT-1: period of the in-process order status cycle (default 30 s, minimum 10 s). */
+  readonly orderStatusCycleMs?: number;
 }
 
 export interface WorkerRuntimeDeps {
@@ -148,6 +150,7 @@ export class WorkerRuntime {
   #customerTimer: ReturnType<typeof setInterval> | undefined;
   #photoTimer: ReturnType<typeof setInterval> | undefined;
   #orderTimer: ReturnType<typeof setInterval> | undefined;
+  #statusCycle: OrderStatusCycle | undefined;
 
   constructor(private readonly deps: WorkerRuntimeDeps) {
     this.health = new WorkerHealth(deps.now);
@@ -281,12 +284,23 @@ export class WorkerRuntime {
       for (const [queue, cron] of [
         [QUEUE_NAMES.integrationOrderDeliver, ORDER_DELIVERY_CRON],
         [QUEUE_NAMES.integrationOrderDryRunPurge, ORDER_DRY_RUN_PURGE_CRON],
-        [QUEUE_NAMES.syncErpOrderStatus, ORDER_ERP_STATUS_CRON],
       ] as const) {
         if (!queues.some((spec) => spec.name === queue)) continue;
         // Disabled: drop a schedule stored by an earlier configuration (the switch is off by default).
-        if (orderDelivery === undefined || (queue === QUEUE_NAMES.syncErpOrderStatus && orderDelivery.status === undefined)) await boss.unschedule(queue);
+        if (orderDelivery === undefined) await boss.unschedule(queue);
         else await boss.schedule(queue, cron, {});
+      }
+      // RT-1: the 15-minute status cron is replaced by the in-process cycle (below); drop a schedule stored by an earlier version.
+      if (queues.some((spec) => spec.name === QUEUE_NAMES.syncErpOrderStatus)) await boss.unschedule(QUEUE_NAMES.syncErpOrderStatus);
+      if (orderDelivery?.status !== undefined) {
+        this.#statusCycle = new OrderStatusCycle({
+          db: this.deps.db,
+          status: orderDelivery.status,
+          logger,
+          now: this.deps.now,
+          ...(options.orderStatusCycleMs === undefined ? {} : { cycleMs: options.orderStatusCycleMs }),
+        });
+        this.#statusCycle.start();
       }
 
       if (queues.some((spec) => spec.name === QUEUE_NAMES.integrationCustomerDeliver)) {
@@ -431,6 +445,8 @@ export class WorkerRuntime {
   async #stopBoss(graceful: boolean): Promise<void> {
     if (this.#orderTimer !== undefined) clearInterval(this.#orderTimer);
     this.#orderTimer = undefined;
+    await this.#statusCycle?.stop();
+    this.#statusCycle = undefined;
     if (this.#refreshTimer !== undefined) clearInterval(this.#refreshTimer);
     this.#refreshTimer = undefined;
     if (this.#customerTimer !== undefined) clearInterval(this.#customerTimer);

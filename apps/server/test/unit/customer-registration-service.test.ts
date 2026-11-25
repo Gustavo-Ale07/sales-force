@@ -163,7 +163,7 @@ describe('CustomerRegistrationService.create', () => {
   it('a rejected duplicate document answers 409 document_already_registered', async () => {
     const { service, repo } = build();
     repo.onPoll = (row) => Object.assign(row, { status: 'rejected', rejectionCode: 'partner_document_duplicate' });
-    await expect(service.create(user(), request())).rejects.toMatchObject({ code: 'conflict', details: { reason: 'document_already_registered' } });
+    await expect(service.create(user(), request())).rejects.toMatchObject({ code: 'customer_refused', details: { reason: 'document_already_registered' } });
   });
 
   it('refuses a document already in the ERP mirror, before recording anything', async () => {
@@ -191,6 +191,51 @@ describe('CustomerRegistrationService.create', () => {
     expect(repo.outbox).toHaveLength(1);
   });
 
+  describe('CUST-RT: register and that is it', () => {
+    it('201 carries sendState sent and the Sankhya code; 202 carries sendState pending', async () => {
+      const done = build();
+      done.repo.onPoll = (row) => Object.assign(row, { status: 'confirmed', erpCustomerCode: 9001 });
+      expect((await done.service.create(user(), request())).response).toMatchObject({ sendState: 'sent', customerCode: 9001 });
+      const slow = build();
+      const out = await slow.service.create(user(), request());
+      expect(out).toMatchObject({ httpStatus: 202, response: { sendState: 'pending', customerCode: null } });
+    });
+
+    it('a Sankhya required-field refusal is a 422 with a field map, the same on a replay, and is listed nowhere', async () => {
+      const { service, repo } = build();
+      repo.onPoll = (row) => Object.assign(row, { status: 'rejected', rejectionCode: 'partner_required_field' });
+      const first = await service.create(user(), request()).catch((e: unknown) => e as AppError);
+      expect(first).toBeInstanceOf(AppError);
+      expect(first).toMatchObject({ code: 'customer_refused', status: 422, details: { fields: { _: expect.any(String) } } });
+      // The refused row stays only as audit data; the replay answers the same refusal.
+      const replay = await service.create(user(), request()).catch((e: unknown) => e as AppError);
+      expect(replay).toMatchObject({ code: 'customer_refused', details: { fields: { _: expect.any(String) } } });
+      expect(repo.outbox).toHaveLength(1);
+    });
+
+    it('a manager without a seller is a 422 on sellerCode, with nothing recorded', async () => {
+      const { service, repo } = build();
+      const error = await service.create(user({ role: 'manager', sellerCodes: [] }), request()).catch((e: unknown) => e as AppError);
+      expect(error).toMatchObject({ code: 'customer_refused', status: 422, details: { fields: { sellerCode: expect.any(String) } } });
+      expect(repo.rows).toHaveLength(0);
+      expect(repo.outbox).toHaveLength(0);
+    });
+
+    it('an unknown seller chosen by a manager is a 422 on sellerCode', async () => {
+      const { service, repo } = build();
+      const error = await service.create(user({ role: 'manager', sellerCodes: [] }), request({ sellerCode: 99 })).catch((e: unknown) => e as AppError);
+      expect(error).toMatchObject({ code: 'customer_refused', details: { fields: { sellerCode: 'Vendedor não encontrado ou inativo.' } } });
+      expect(repo.rows).toHaveLength(0);
+    });
+
+    it('correctsRegistrationId from an old build is accepted and ignored', async () => {
+      const { service, repo } = build();
+      const out = await service.create(user(), request({ correctsRegistrationId: '0198f0a2-7b1c-7c3e-9a55-0123456789ad' }));
+      expect(out.httpStatus).toBe(202);
+      expect(repo.rows[0]?.correctsRegistrationId).toBeNull();
+    });
+  });
+
   it('the same request id with another content is an idempotency conflict', async () => {
     const { service } = build();
     await service.create(user(), request());
@@ -201,14 +246,14 @@ describe('CustomerRegistrationService.create', () => {
     const { service, repo } = build();
     const error = await service.create(user(), request({ document: '11.222.333/0001-82' })).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(AppError);
-    expect(error).toMatchObject({ code: 'validation_failed', details: { issues: [{ path: 'document' }] } });
+    expect(error).toMatchObject({ code: 'customer_refused', details: { issues: [{ path: 'document' }] } });
     expect(repo.rows).toHaveLength(0);
   });
 
   it('a manager naming a seller that is not in the mirror (or inactive) is refused, recording nothing', async () => {
     const { service, repo } = build();
     await expect(service.create(user({ role: 'manager', sellerCodes: [] }), request({ sellerCode: 999 }))).rejects.toMatchObject({
-      code: 'validation_failed',
+      code: 'customer_refused',
       details: { issues: [{ path: 'sellerCode', code: 'seller_not_found' }] },
     });
     expect(repo.rows).toHaveLength(0);
@@ -224,7 +269,7 @@ describe('CustomerRegistrationService.create', () => {
   it('a scope narrower than the role refuses an owner outside it', async () => {
     const { service, repo } = build({ scope: { kind: 'sellers', sellerCodes: [7] } });
     await expect(service.create(user({ role: 'manager', sellerCodes: [7] }), request({ sellerCode: 8 }))).rejects.toMatchObject({
-      code: 'validation_failed',
+      code: 'customer_refused',
       details: { issues: [{ path: 'sellerCode' }] },
     });
     expect(repo.rows).toHaveLength(0);
@@ -264,7 +309,7 @@ describe('CustomerRegistrationService duplicate refusal (I-1)', () => {
       const { service, repo } = build();
       repo.mirror.set(DOC, mirrorHolder());
       for (let i = 0; i < MAX_CUSTOMER_CREATIONS_PER_HOUR; i += 1) {
-        expect((await refusal(service, user())).code).toBe('conflict');
+        expect((await refusal(service, user())).code).toBe('customer_refused');
       }
       expect(repo.refusals).toHaveLength(MAX_CUSTOMER_CREATIONS_PER_HOUR);
       expect((await refusal(service, user())).code).toBe('rate_limited');
@@ -295,10 +340,10 @@ describe('CustomerRegistrationService duplicate refusal (I-1)', () => {
       const { service, repo } = build({ scope: sellerScope });
       repo.mirror.set(DOC, mirrorHolder({ sellerCode: 7 }));
       const error = await refusal(service, user());
-      expect(error.code).toBe('conflict');
+      expect(error.code).toBe('customer_refused');
       expect(error.message).toContain('Metalúrgica Alfa Ltda');
       expect(error.message).toContain('555');
-      expect(error.details).toEqual({ reason: 'document_already_registered' });
+      expect(error.details).toMatchObject({ reason: 'document_already_registered', fields: { document: error.message } });
     });
 
     it.each(cases)('outside the portfolio (%s): the exact generic message, no name, no seller, same code and details', async (_label, change) => {
@@ -310,7 +355,7 @@ describe('CustomerRegistrationService duplicate refusal (I-1)', () => {
       expect(outside.message).toBe(GENERIC);
       expect(outside.code).toBe(inside.code);
       expect(outside.status).toBe(inside.status);
-      expect(outside.details).toEqual(inside.details);
+      expect(outside.details).toMatchObject({ reason: 'document_already_registered', fields: { document: GENERIC } });
       const body = JSON.stringify({ message: outside.message, details: outside.details });
       expect(body).not.toContain('Metalúrgica');
       expect(body).not.toContain('555');
@@ -327,7 +372,7 @@ describe('CustomerRegistrationService duplicate refusal (I-1)', () => {
       const outside = await refusal(service, user({ accountId: 'acc-2' }));
       expect(outside.message).toBe(GENERIC);
       expect(outside.code).toBe(inside.code);
-      expect(outside.details).toEqual(inside.details);
+      expect(outside.details?.reason).toBe(inside.details?.reason);
     });
 
     it('a manager or admin (scope: everyone) is told who holds an active customer, whoever the seller is', async () => {
@@ -335,7 +380,7 @@ describe('CustomerRegistrationService duplicate refusal (I-1)', () => {
         const { service, repo } = build({ scope: { kind: 'all' } });
         repo.mirror.set(DOC, mirrorHolder({ sellerCode: 8 }));
         const error = (await service.create(user({ role, sellerCodes: [] }), request({ sellerCode: 8 })).catch((e: unknown) => e)) as AppError;
-        expect(error.code).toBe('conflict');
+        expect(error.code).toBe('customer_refused');
         expect(error.message).toContain('Metalúrgica Alfa Ltda');
         expect(error.message).toContain('555');
       }
@@ -352,8 +397,8 @@ describe('CustomerRegistrationService duplicate refusal (I-1)', () => {
         repo.mirror.set(DOC, mirrorHolder({ sellerCode: 8, usable: false, ...flags }));
         const error = (await service.create(user({ role, sellerCodes: [] }), request({ sellerCode: 8 })).catch((e: unknown) => e)) as AppError;
         expect(error.message).toBe(expected);
-        expect(error.code).toBe('conflict');
-        expect(error.details).toEqual({ reason: 'document_already_registered' });
+        expect(error.code).toBe('customer_refused');
+        expect(error.details).toMatchObject({ reason: 'document_already_registered', fields: { document: error.message } });
         expect(error.message).not.toContain('Metalúrgica');
       }
     });
@@ -382,8 +427,8 @@ describe('CustomerRegistrationService duplicate refusal (I-1)', () => {
       const replay = await refusal(service, user());
       for (const error of [first, replay]) {
         expect(error.message).toBe(GENERIC);
-        expect(error.code).toBe('conflict');
-        expect(error.details).toEqual({ reason: 'document_already_registered' });
+        expect(error.code).toBe('customer_refused');
+        expect(error.details).toMatchObject({ reason: 'document_already_registered', fields: { document: error.message } });
       }
     });
   });

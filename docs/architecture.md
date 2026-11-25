@@ -177,6 +177,13 @@ Rules:
 - Cross-module reporting (Phase 2 dashboards) reads through read-only SQL views owned by a reporting module.
 - Seller scope (design note, not implemented): global scope comes only from the admin/manager role, never from a seller link; an operational seller always acts with their own link(s). A manager acting for a seller would be an explicit, audited choice by an authorized manager or admin; a seller never chooses another seller. No impersonation exists in Phase 0.
 
+### 5.2.1 Event channel and order status loop — RT-1 (owner ruling 2026-11-25)
+
+- **Worker loop.** pg-boss cron has minute resolution, so the order status read is an in-process loop (`ORDER_STATUS_CYCLE_MS`, default 30 s, minimum 10 s) that runs the status, release and stage passes over the open orders (200 per pass, least recently checked first) under a PostgreSQL advisory lock (no double run across replicas or restarts). It replaces the 15-minute `sync.erp.orderStatus` cron. Only the worker reads Sankhya.
+- **Deleted notes.** A `sent` order whose note is absent (read succeeded, no row, not cancelled) twice in a row gets `erp_removed_at` (audited `order.erp_removed`); a later reading restores it (`order.erp_restored`). A failed or partial read, or a batch of 3 or more where almost all are absent, counts nothing. Removed orders disappear from list and detail; `GET /orders?ids=` names them in `removedIds`.
+- **Event channel.** After a change the worker (or the mirror run) sends a content-free `NOTIFY sf_events` with `{"topic":"orders"}` or `{"topic":"reference"}`. The API holds ONE dedicated connection doing `LISTEN sf_events` (reconnect with backoff) and fans the topic out over `GET /sync/events` (SSE; same session guards and policy; heartbeat comment every 25 s; per-account and total caps; closed on session revocation or expiry). Pings carry no business data: clients re-read through the normal authorized endpoints. A lost ping is covered by the clients' timed fallback.
+- **On-demand refresh.** `POST /orders/{id}/refresh` (202) only sends `NOTIFY sf_order_refresh` with the order id; the worker re-reads that order within seconds. The API never calls Sankhya. Per-order cooldown 10 s on both sides.
+
 ### 5.3 Jobs — APPROVED (STACK-6); connection details NEEDS VALIDATION (V-16)
 
 - Engine: pg-boss in PostgreSQL. No Redis/BullMQ; rate limiting and caches do not assume Redis.

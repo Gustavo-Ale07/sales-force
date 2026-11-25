@@ -212,9 +212,12 @@ export function createReferenceSource(api: ApiClient, timing: RefreshTiming = {}
     fetchOrderStatuses: (orderIds) =>
       guard(async () => {
         const found: OrderErpStatus[] = [];
+        const removedIds = new Set<string>();
         const pageSize = timing.orderStatusPageSize ?? ORDER_STATUS_PAGE_SIZE;
         for (let page = 1; ; page += 1) {
           const view = await callApi(() => api.GET("/orders", { params: { query: { ids: orderIds.join(","), page, pageSize } } }));
+          // RT-1: orders whose ERP note no longer exists; the device drops its copy (never one with unsent work).
+          for (const id of view.removedIds ?? []) removedIds.add(id);
           for (const order of view.items) {
             found.push({
               orderId: order.id,
@@ -243,7 +246,14 @@ export function createReferenceSource(api: ApiClient, timing: RefreshTiming = {}
           }
           if (view.items.length === 0 || page * pageSize >= view.total) break;
         }
-        return found;
+        return removedIds.size === 0 ? found : Object.assign(found, { removedIds: [...removedIds] });
+      }),
+    // RT-1: the server's change marker of the reference data; the device downloads only when it differs from the one it holds.
+    fetchReferenceVersion: () => guard(async () => (await callApi(() => api.GET("/sync/status"))).referenceVersion ?? null),
+    // RT-1: asks the server to re-read one order from the ERP (202; the server applies its own 10 s cooldown).
+    requestOrderRefresh: (orderId) =>
+      guard(async () => {
+        await callApi(() => api.POST("/orders/{id}/refresh", { params: { path: { id: orderId } } }));
       }),
     // Every order of the signed-in account, wherever it was made (site, another device): the same endpoint the site lists from.
     fetchServerOrders: () =>

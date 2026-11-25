@@ -1,5 +1,6 @@
 import type { schema } from '@salesforce/db';
 import { syncState } from '@salesforce/db';
+import { eq } from 'drizzle-orm';
 import type { NodePgQueryResultHKT } from 'drizzle-orm/node-postgres';
 import type { PgDatabase } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
@@ -36,6 +37,8 @@ export type MobilityRun = z.infer<typeof MobilityRunSchema>;
  */
 export const MirrorCursorSchema = z.object({
   strategy: z.literal('full_snapshot'),
+  /** RT-1: when a run last CHANGED rows (created/updated/reactivated/deactivated); unchanged runs keep it. Feeds `referenceVersion`. */
+  lastChangedAt: z.string().optional(),
   lastRun: z.object({
     startedAt: z.string(),
     finishedAt: z.string(),
@@ -48,6 +51,11 @@ export const MirrorCursorSchema = z.object({
   }),
 });
 export type MirrorCursor = z.infer<typeof MirrorCursorSchema>;
+
+/** True when a run created, updated, reactivated or deactivated at least one row. */
+export function runChangedRows(stats: RunStats): boolean {
+  return stats.created + stats.updated + stats.reactivated + stats.deactivated > 0;
+}
 
 /** Marks the start of a run. `last_success_at`, `cursor` and the previous error stay as they were. */
 export async function markRunning(db: Queryable, entity: MirrorEntity, at: Date): Promise<void> {
@@ -62,8 +70,16 @@ export async function markSucceeded(
   entity: MirrorEntity,
   input: { startedAt: Date; finishedAt: Date; stats: RunStats; rowCount: number; excluded?: Readonly<Record<string, number>>; mobility?: MobilityRun },
 ): Promise<void> {
+  const changed = runChangedRows(input.stats);
+  let lastChangedAt: string | undefined = changed ? input.finishedAt.toISOString() : undefined;
+  if (lastChangedAt === undefined) {
+    const [previous] = await db.select({ cursor: syncState.cursor }).from(syncState).where(eq(syncState.entity, entity));
+    const parsed = MirrorCursorSchema.safeParse(previous?.cursor);
+    lastChangedAt = parsed.success ? parsed.data.lastChangedAt : undefined;
+  }
   const cursor: MirrorCursor = {
     strategy: 'full_snapshot',
+    ...(lastChangedAt === undefined ? {} : { lastChangedAt }),
     lastRun: {
       startedAt: input.startedAt.toISOString(),
       finishedAt: input.finishedAt.toISOString(),

@@ -56,6 +56,8 @@ export const ApiEnvSchema = z.object({
     .enum(['true', 'false'], { error: "must be 'true' or 'false'." })
     .default('false')
     .transform((value) => value === 'true'),
+  /** CUST-RT: how long `POST /customers` waits for the worker's delivery result before answering 202 (milliseconds, default 8000). */
+  ERP_CUSTOMER_CONFIRM_WAIT_MS: z.coerce.number().int().min(0).max(30_000).default(8_000),
   /**
    * D-AP: open `PATCH /customers/{code}`. `false` by default; staging only; needs customer creation open. Open = the API records the
    * edit (phone, e-mail, notes) as a `customer_update` outbox command; the worker writes it to the ERP only with its own customer-write

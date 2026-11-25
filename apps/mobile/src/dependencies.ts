@@ -10,7 +10,9 @@ import { createRemoteRepositories } from "./data/remote-repositories";
 import { createExpoImageFileSystem } from "./images/expo-image-fs";
 import { createExpoOrderPdf } from "./offline/order-pdf-expo";
 import type { OrderPdfPort } from "./offline/order-pdf";
+import { fetch as expoFetch } from "expo/fetch";
 import { createOfflineServices, type OfflineServices } from "./offline/services";
+import type { StreamFetch } from "./offline/sync-events";
 import { createProfilePhotoStore } from "./photo/profile-photo-store";
 import { createProfilePhotoApi, createProfilePhotoService, type ProfilePhotoService } from "./photo/profile-photo";
 import { detectPhotoPicker } from "./photo/photo-picker";
@@ -63,6 +65,17 @@ export function createAppDependencies(baseUrl: string, db: SqlDatabase): AppDepe
     repositories: remote,
     connectivity,
     orderPdf: createExpoOrderPdf(),
-    offline: createOfflineServices({ db, api, remote, imageFileSystem: createExpoImageFileSystem(), internetState: () => internet }),
+    offline: createOfflineServices({
+      db,
+      api,
+      remote,
+      imageFileSystem: createExpoImageFileSystem(),
+      internetState: () => internet,
+      baseUrl,
+      // No logger exists in the app yet: the line carries counts and hashes only, never records.
+      onMirrorMismatch: (message) => console.warn(message),
+      // `expo/fetch` streams the response body (the global fetch of React Native does not).
+      fetchStream: (url, init) => expoFetch(url, init) as unknown as ReturnType<StreamFetch>,
+    }),
   };
 }

@@ -127,7 +127,22 @@ export const SyncRefreshPathSchema = z.object({ id: UuidSchema });
 /** `GET /sync/status`: the age of the data the screens show. `dataAsOf` is the OLDEST last success among the mirrored entities. */
 export const SyncStatusResponseSchema = named(
   'SyncStatusResponse',
-  z.object({ dataAsOf: IsoTimestampSchema.nullable() }),
+  z.object({
+    dataAsOf: IsoTimestampSchema.nullable(),
+    /**
+     * RT-1: opaque marker of the reference data (customers, catalog, prices, conditions). It changes only when a mirror run changed
+     * rows, so a client compares it with the one it holds and downloads nothing when it is equal. `null` until a first change is known.
+     */
+    referenceVersion: z.string().nullable(),
+  }),
 );
 
 export type SyncStatusResponse = z.infer<typeof SyncStatusResponseSchema>;
+
+/** `POST /orders/{id}/refresh` (RT-1): `accepted` is false when the order was refreshed less than 10 s ago (cooldown); the status is 202 either way. */
+export const OrderRefreshAcceptedSchema = named('OrderRefreshAccepted', z.object({ accepted: z.boolean() }));
+export type OrderRefreshAccepted = z.infer<typeof OrderRefreshAcceptedSchema>;
+
+/** Topics of the content-free pings of `GET /sync/events` (RT-1). */
+export const SYNC_EVENT_TOPICS = ['orders', 'reference'] as const;
+export type SyncEventTopic = (typeof SYNC_EVENT_TOPICS)[number];

@@ -34,6 +34,7 @@ const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>
   startSyncRefresh: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'allow', operations: 'allow' },
   getSyncRefresh: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'allow', operations: 'allow' },
   getSyncStatus: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  getSyncEvents: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   // Commercial routes (Stage 3A). The three roles that exist may use them; the external
   // representative role does not exist yet (AUTH-3 PROPOSED) and gets no grant until the owner decides.
   getDashboard: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
@@ -60,6 +61,7 @@ const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>
   deleteOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   submitOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   verifyOrderDelivery: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  refreshOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   convertQuote: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   // Release queue (560eb99): the ROUTE is open to admin, manager and seller (technical is refused here). The seller's real access is the
   // SECTOR permission (`visibleReleaseQueueSectors`, deny by default, 403 from the service): see release-queue.test.ts.
@@ -75,6 +77,7 @@ const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>
   listOrderTemplates: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   createCustomer: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   updateCustomer: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  setCustomerRegistrationSeller: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny', operations: 'deny' },
 listCustomerRegistrations: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },  getCustomerRegistration: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   createOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   getOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },

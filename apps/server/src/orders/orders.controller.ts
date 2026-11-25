@@ -4,6 +4,7 @@ import {
   routes,
   type CustomerOrderHabits,
   type OrderDetail,
+  type OrderRefreshAccepted,
   type OrdersResponse,
   type RepeatLastOrderResponse,
 } from '@salesforce/contracts';
@@ -42,6 +43,15 @@ export class OrdersController {
     @Contract() contract: RequestContract<typeof routes.getOrder>,
   ): Promise<OrderDetail> {
     return this.orders.get(user, contract.params.id);
+  }
+
+  /** RT-1: asks the worker to re-read this order from the ERP now; 202, never waits for Sankhya. */
+  @ApiRoute(routes.refreshOrder)
+  refresh(
+    @CurrentUserParam() user: CurrentUser,
+    @Contract() contract: RequestContract<typeof routes.refreshOrder>,
+  ): Promise<OrderRefreshAccepted> {
+    return this.orders.requestRefresh(user, contract.params.id);
   }
 
   @ApiRoute(routes.replaceOrder)

@@ -1,6 +1,7 @@
-import type { SqlDatabase } from "./connection";
+import type { SqlDatabase, SqlRow } from "./connection";
 import { DatasetIdentityError, confirmDataset, readCacheDataset, readExpectedDataset, sameDataset, writeCacheDataset, type DatasetIdentity } from "./dataset-identity";
 import { countOutbox, draftErpNumber, getDraft, listAttentionItems, listOutbox, type AttentionItem, type DraftRecord } from "./local-orders";
+import { verifyAndRepairMirror, type ExpectedMirror } from "./mirror-check";
 import { isoNow, type OfflineEnv } from "./offline-env";
 import { mergeServerOrders, type ServerOrdersSource } from "./server-orders";
 import { refreshOneOrderErpStatus, refreshOrderErpStatuses, type OrderStatusSource } from "./order-erp-status";
@@ -8,7 +9,6 @@ import { countSendRequests, pushOutbox, pushSendRequests, recoverInterrupted, re
 import {
   applyCustomerCreationSignal,
   countPendingCustomers,
-  purgeRefusedCustomers,
   pushPendingCustomers,
   recoverInterruptedCustomers,
   settleConfirmedCustomers,
@@ -35,6 +35,10 @@ export interface ReferenceSource extends OrderStatusSource, ServerOrdersSource {
   fetchEntryConfiguration(): Promise<unknown>;
   /** Dataset the server serves (`null` = the server cannot tell: fail closed, nothing is cached or sent). */
   fetchDatasetIdentity(): Promise<DatasetIdentity | null>;
+  /** Opaque change marker of the reference data (`GET /sync/status` `referenceVersion`); `null` = the server cannot tell yet. */
+  fetchReferenceVersion?(): Promise<string | null>;
+  /** Asks the server to re-read these orders from the ERP (`POST /orders/{id}/refresh`, 202). Best-effort. */
+  requestOrderRefresh?(orderId: string): Promise<void>;
   /** Active carriers (D-C). Optional and best-effort: a failure here never fails the pull. */
   fetchCarriers?(): Promise<readonly unknown[]>;
   /** Group hierarchy (Grupo > Subgrupo > Linha). Optional and best-effort like carriers: a failure keeps the previous tree. */
@@ -111,6 +115,11 @@ export interface PullResult {
   readonly priceTablesFailed: readonly number[];
 }
 
+export interface PullOptions {
+  /** Called with a log-safe line (entity, counts, hashes: never records) when the device mirror differed from the server's data. */
+  readonly onMirrorMismatch?: (message: string) => void;
+}
+
 /**
  * Full-snapshot pull with an atomic replace: everything is fetched first and only then swapped in one transaction,
  * so a failure midway (network drop, kill) leaves the previous cache untouched. Incremental/watermark sync is not
@@ -122,6 +131,7 @@ export async function pullReferenceData(
   source: ReferenceSource,
   ownerAccountId: string,
   onStep: (event: SyncStepEvent) => void = () => undefined,
+  options: PullOptions = {},
 ): Promise<PullResult> {
   // The identity is read before AND after the data: the snapshot is only trusted when the server declared the same
   // dataset on both sides (a dataset switch in the middle of a pull would otherwise mix two datasets in one cache).
@@ -224,6 +234,49 @@ export async function pullReferenceData(
     else if (!sameDataset(previousDataset, before)) await deleteMeta(tx, META_KEYS.carriers);
     await setMeta(tx, META_KEYS.cacheOwner, ownerAccountId, now);
   });
+  // Mirror check (RT-1): what the device now holds must equal what the server returned; a difference is repaired by re-downloading
+  // that entity (atomic replace) and reported. Never fails the pull (the base is already saved); only a dead session propagates.
+  const expectedMirror: ExpectedMirror = {
+    customers: customers.map((customer) => customer.code),
+    products: products.map((product) => product.code),
+    priceTables: new Map(priceTables.filter((t) => used.has(t.tableCode)).map((t) => [t.tableCode, t.prices.map((price) => price.productCode)] as const)),
+  };
+  const report = options.onMirrorMismatch ?? (() => undefined);
+  try {
+    await verifyAndRepairMirror(
+      db,
+      expectedMirror,
+      async (entity): Promise<Partial<ExpectedMirror> | void> => {
+        if (entity === "customers") {
+          const rows = await source.fetchCustomers();
+          await db.transaction(async (tx) => {
+            await replaceCustomers(tx, rows);
+            await settleConfirmedCustomers(tx);
+          });
+          return { customers: rows.map((row) => row.code) };
+        }
+        if (entity === "products") {
+          const rows = await source.fetchProducts();
+          await db.transaction((tx) => replaceProducts(tx, rows));
+          return { products: rows.map((row) => row.code) };
+        }
+        if (source.fetchPriceTables === undefined) return undefined;
+        const codes = [...expectedMirror.priceTables.keys()];
+        const fetched = await source.fetchPriceTables(codes);
+        await db.transaction(async (tx) => {
+          const others = (await cachedPriceTableCodes(tx)).filter((code) => !codes.includes(code));
+          const replaced = fetched.tables.filter((t) => codes.includes(t.tableCode));
+          const unread = codes.filter((code) => !replaced.some((t) => t.tableCode === code));
+          await replacePriceTables(tx, replaced, { keepTables: [...others, ...unread] });
+        });
+        return { priceTables: new Map(fetched.tables.filter((t) => codes.includes(t.tableCode)).map((t) => [t.tableCode, t.prices.map((price) => price.productCode)] as const)) };
+      },
+      report,
+    );
+  } catch (error) {
+    if (error instanceof TransportError && error.kind === "auth") throw error;
+    report(`mirror repair failed: ${error instanceof Error ? error.name : "error"}`);
+  }
   onStep({ id: "save", state: "done", count: customers.length + products.length });
   const kept = await db.transaction(async (tx) => ({ tables: (await cachedPriceTableCodes(tx)).length, rows: await countPriceRows(tx) }));
   return { customers: customers.length, products: products.length, priceTables: kept.tables, priceRows: kept.rows, priceTablesFailed: failedTables };
@@ -274,7 +327,24 @@ export interface SyncStatus {
   readonly progress?: RefreshProgress | null;
   /** Steps of the current/last FULL sync (login or "Sincronizar"); `null` for a push-only run. Kept after the run so the overlay can show the final state. */
   readonly steps?: readonly SyncStep[] | null;
+  /** RT-1: counts the automatic (background) updates that changed local data, so screens re-read; no meaning on its own. */
+  readonly dataRevision?: number;
 }
+
+/** What an automatic update (RT-1) refreshes. Never shows progress and never changes the sync phase. */
+export interface BackgroundRefresh {
+  /** Re-read the account's orders and their ERP status (merge, removal, status). */
+  readonly orders?: boolean;
+  /** Re-download the reference data, only when the server's change marker differs from the one the device holds. */
+  readonly reference?: boolean;
+  /** Ask the server to re-read these orders from the ERP first (cap 20, 10 s cooldown per order). `"open"` = the newest ones the device holds. */
+  readonly askServerFor?: "open" | { readonly localId: string };
+}
+
+/** At most this many orders are re-read from the ERP per request round, and no order twice within the cooldown. */
+export const ORDER_REFRESH_CAP = 20;
+export const ORDER_REFRESH_COOLDOWN_MS = 10_000;
+const REFERENCE_VERSION_KEY = "cache.reference_version";
 
 export type SyncReason = "login" | "manual" | "reconnected" | "foreground" | "timer" | "after_save";
 
@@ -288,6 +358,8 @@ export interface SyncManagerDeps {
   readonly ownerAccountId: string;
   /** Called with unexpected (non-transport) errors, for logging. */
   readonly onUnexpectedError?: (error: unknown) => void;
+  /** Called with a log-safe line when the device mirror differed from the server's data and was repaired (counts and hashes only). */
+  readonly onMirrorMismatch?: (message: string) => void;
   /** Device internet state, to tell "no internet" from "server not answering". Absent = unknown (reported as the server). */
   readonly internetState?: () => InternetState;
 }
@@ -307,6 +379,11 @@ export interface SyncManager {
   subscribe(listener: (status: SyncStatus) => void): () => void;
   /** Recomputes counters from the database (after a local save). */
   refresh(): Promise<SyncStatus>;
+  /**
+   * Automatic update while online (RT-1): no overlay, no phase change, never throws, nothing when offline or while the full sync runs.
+   * Local drafts and open forms are never touched (the reference cache is separate from drafts and replaced atomically).
+   */
+  backgroundRefresh?(what: BackgroundRefresh): Promise<void>;
   /**
    * "Confirmar": tries to deliver the confirmed order now (create/replace, then submit) and waits at most `CONFIRM_WAIT_MS` for the
    * Sankhya number. Never throws for a failed delivery: the outcome says what happened; whatever is not concluded stays queued.
@@ -384,8 +461,10 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
   let queuedPull: Promise<SyncStatus> | null = null;
   const internet = (): InternetState => deps.internetState?.() ?? "unknown";
 
+  /** Bumped when a background refresh changed what the screens show (they re-read their lists); never shown. */
+  let revision = 0;
   const publish = (next: SyncStatus): SyncStatus => {
-    status = next;
+    status = { ...next, dataRevision: revision };
     for (const listener of listeners) listener(status);
     return status;
   };
@@ -410,19 +489,85 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
     return counts.pending + counts.sending;
   };
 
-  const offlineFailure =(): Failure => (internet() === "offline" ? failureOf("no_internet", "offline") : failureOf("server_unavailable", "offline"));
+  const mirrorOptions: PullOptions = deps.onMirrorMismatch === undefined ? {} : { onMirrorMismatch: deps.onMirrorMismatch };
 
-  /** Privacy window of refused customers (I-2): runs at app start (refresh), on every sync and on foreground; never fails a run. */
-  const purgePrivacyWindow = async (): Promise<void> => {
+  /** The server's change marker of the reference data; `null` when unknown or unreadable (never throws). */
+  const readReferenceVersion = async (): Promise<string | null> => {
+    if (deps.source.fetchReferenceVersion === undefined) return null;
     try {
-      await purgeRefusedCustomers(deps.db, deps.env);
-    } catch (error) {
-      deps.onUnexpectedError?.(error);
+      return await deps.source.fetchReferenceVersion();
+    } catch {
+      return null;
     }
   };
 
+  const lastOrderRefresh = new Map<string, number>();
+  let ordersFlight: Promise<void> | null = null;
+  let referenceFlight: Promise<void> | null = null;
+
+  /** Tells the screens that local data changed without touching the phase (the sync icon stays as it is). */
+  const announceChange = async (): Promise<void> => {
+    revision += 1;
+    publish({ ...status, ...(await counters()) });
+  };
+
+  const fullSyncRunning = (): boolean => inFlight !== null && inFlightPulls;
+
+  const orderIdsToAsk = async (target: BackgroundRefresh["askServerFor"]): Promise<string[]> => {
+    if (target === undefined) return [];
+    if (target !== "open") {
+      const draft = await getDraft(deps.db, target.localId);
+      return draft?.remoteId == null ? [] : [draft.remoteId];
+    }
+    const rows = await deps.db.query<SqlRow>(
+      "SELECT remote_id FROM local_order_draft WHERE owner_account_id = ? AND kind = 'saved' AND remote_id IS NOT NULL AND status = 'synced' ORDER BY updated_at DESC LIMIT ?",
+      [deps.ownerAccountId, ORDER_REFRESH_CAP],
+    );
+    return rows.map((row) => String(row.remote_id));
+  };
+
+  const refreshOrdersInBackground = async (askServerFor: BackgroundRefresh["askServerFor"]): Promise<void> => {
+    const nowMs = deps.env.now().getTime();
+    const ask = (await orderIdsToAsk(askServerFor)).filter((id) => nowMs - (lastOrderRefresh.get(id) ?? Number.NEGATIVE_INFINITY) >= ORDER_REFRESH_COOLDOWN_MS).slice(0, ORDER_REFRESH_CAP);
+    if (deps.source.requestOrderRefresh !== undefined) {
+      for (const id of ask) {
+        lastOrderRefresh.set(id, nowMs);
+        try {
+          await deps.source.requestOrderRefresh(id);
+        } catch {
+          // Best-effort: the read below still shows what the server already has.
+        }
+      }
+    }
+    await mergeServerOrders(deps.db, deps.env, deps.source, deps.transport, deps.ownerAccountId);
+    await refreshOrderErpStatuses(deps.db, deps.env, deps.source, deps.ownerAccountId);
+    await announceChange();
+  };
+
+  const refreshReferenceInBackground = async (): Promise<void> => {
+    const version = await readReferenceVersion();
+    if (version === null) return;
+    if ((await getMeta(deps.db, REFERENCE_VERSION_KEY)) === version) return;
+    await pullReferenceData(deps.db, deps.env, deps.source, deps.ownerAccountId, () => undefined, mirrorOptions);
+    await setMeta(deps.db, REFERENCE_VERSION_KEY, version, isoNow(deps.env));
+    await announceChange();
+  };
+
+  /** Runs one automatic job single-flight; every failure is swallowed (a dead session shows at the next normal call). */
+  const guarded = (flight: Promise<void> | null, job: () => Promise<void>, set: (p: Promise<void> | null) => void): Promise<void> => {
+    if (flight !== null) return flight;
+    const promise = job()
+      .catch((error: unknown) => {
+        if (!(error instanceof TransportError) && !(error instanceof DatasetIdentityError)) deps.onUnexpectedError?.(error);
+      })
+      .finally(() => set(null));
+    set(promise);
+    return promise;
+  };
+
+  const offlineFailure =(): Failure => (internet() === "offline" ? failureOf("no_internet", "offline") : failureOf("server_unavailable", "offline"));
+
   const run = async (reason: SyncReason, pull: boolean): Promise<SyncStatus> => {
-    await purgePrivacyWindow();
     let steps: SyncStep[] | null = pull ? INITIAL_STEPS.map((step) => ({ ...step })) : null;
     /** Applies one real event of the pipeline to the step list and publishes it. */
     const onStep = (event: SyncStepEvent): void => {
@@ -560,8 +705,11 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
             }
           }
           if (deps.source.refreshOnDemand === undefined) onStep({ id: "server", state: "done" });
-          const pulledData = await pullReferenceData(deps.db, deps.env, deps.source, deps.ownerAccountId, onPullStep);
+          // The change marker is read BEFORE the download: a change during it makes the next automatic check download again.
+          const versionBefore = await readReferenceVersion();
+          const pulledData = await pullReferenceData(deps.db, deps.env, deps.source, deps.ownerAccountId, onPullStep, mirrorOptions);
           pulled = true;
+          if (versionBefore !== null) await setMeta(deps.db, REFERENCE_VERSION_KEY, versionBefore, isoNow(deps.env)).catch(() => undefined);
           // A price table that could not be read is never reported as a clean sync (its customers may be left without prices).
           if (pulledData.priceTablesFailed.length > 0) setFailure(failureOf("error", "error", PRICE_TABLES_FAILED_TEXT));
           // ERP status of the orders the device holds (GET /orders?ids=, in scope only). Secondary data: the base is already saved,
@@ -664,9 +812,17 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
       return () => listeners.delete(listener);
     },
     async refresh() {
-      await purgePrivacyWindow();
       const lastSyncedAt = status.lastSyncedAt ?? (await getMeta(deps.db, "sync.last_success_at"));
       return publish({ ...status, ...(await counters()), lastSyncedAt });
+    },
+    async backgroundRefresh(what) {
+      if (internet() === "offline" || fullSyncRunning()) return;
+      const jobs: Promise<void>[] = [];
+      if (what.orders === true || what.askServerFor !== undefined) {
+        jobs.push(guarded(ordersFlight, () => refreshOrdersInBackground(what.askServerFor), (p) => (ordersFlight = p)));
+      }
+      if (what.reference === true) jobs.push(guarded(referenceFlight, refreshReferenceInBackground, (p) => (referenceFlight = p)));
+      await Promise.all(jobs);
     },
     async readOrderNumber(localId) {
       const draft = await getDraft(deps.db, localId);

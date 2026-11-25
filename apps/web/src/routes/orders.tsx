@@ -40,6 +40,7 @@ import { OrderStatusBadge } from "../components/order-status-badges";
 import { detectPreset, PERIOD_PRESET_OPTIONS, presetRange, todayInSaoPaulo, type PeriodPreset } from "../lib/period-presets";
 import { PrintOrderButton } from "../components/print-order-button";
 import { QueryError } from "../components/query-error";
+import { useRefreshOrdersInView } from "../lib/realtime";
 import { customerQueryOptions, orderEntryConfigurationQueryOptions, ordersQueryOptions, type OrdersParams } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { deliveryErrorText, formatCount, orderReference, orderReviewLabel, orderReviewReasons, orderStatusLabels } from "../lib/labels";
@@ -179,6 +180,8 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
     sort: params.sort ?? "-updatedAt",
   };
   const query = useQuery(ordersQueryOptions(api, apiParams));
+  // RT-1: the orders in view are re-read in Sankhya when the list opens and when the tab returns.
+  useRefreshOrdersInView((query.data?.items ?? []).map((item) => item.id));
   const [deleting, setDeleting] = useState<{ id: string; label: string } | null>(null);
   // K8: what the API applies now, not a cache until F5 — always revalidated on open and on tab focus.
   const submissionEnabled = useQuery({ ...orderEntryConfigurationQueryOptions(api), staleTime: 0, refetchOnWindowFocus: true }).data?.general.erpSubmissionEnabled;

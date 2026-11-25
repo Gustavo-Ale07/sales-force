@@ -4,6 +4,7 @@ import { ConfigurationModule } from '../configuration/configuration.module.js';
 import { CustomersModule } from '../customers/customers.module.js';
 import { DashboardModule } from '../dashboard/dashboard.module.js';
 import { SalesHistoryModule } from '../sales-history/sales-history.module.js';
+import { EventsModule } from '../events/events.module.js';
 import { SyncRefreshModule } from '../sync-refresh/sync-refresh.module.js';
 import { OrdersModule } from '../orders/orders.module.js';
 import { SellersModule } from '../sellers/sellers.module.js';
@@ -35,6 +36,7 @@ export class ApiModule {
         TemplatesModule,
         DashboardModule,
         SyncRefreshModule,
+        EventsModule,
       ],
     };
   }

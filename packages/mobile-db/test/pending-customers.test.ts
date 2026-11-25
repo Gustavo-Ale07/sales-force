@@ -6,7 +6,9 @@ import {
   countPendingCustomers,
   createPendingCustomer,
   createSyncManager,
-  describePendingCustomer,
+  CustomerRejectedError,
+  assignPendingCustomerSeller,
+  submitCustomer,
   discardPendingCustomer,
   getDraft,
   getPendingCustomer,
@@ -17,7 +19,6 @@ import {
   migrations,
   pendingCustomerBlockOf,
   pushOutbox,
-  purgeRefusedCustomers,
   pushPendingCustomers,
   recoverInterruptedCustomers,
   replaceCustomers,
@@ -32,7 +33,6 @@ import {
   isCustomerCreationAvailable,
   isCustomerEditAvailable,
   applyCustomerCreationSignal,
-  redoPendingCustomer,
   searchCustomers,
   type OfflineEnv,
   type OrderTransport,
@@ -129,7 +129,6 @@ describe("creating a customer without signal", () => {
     expect(record.localCode).toBeLessThan(0);
     expect(record.request).toMatchObject({ name: "Padaria Ação Ltda", tradeName: "Padaria Ação", notes: "obs", icmsClassification: "R" });
     expect(record.maskedDocument).toBe("***.456.789-**");
-    expect(describePendingCustomer(record)).toBe("Aguardando envio ao Sankhya");
     expect(erp.calls).toEqual([]);
   });
 
@@ -143,12 +142,12 @@ describe("creating a customer without signal", () => {
     expect(maskDocument("12.345.678/0001-95")).toBe("**.***.678/0001-**");
   });
 
-  it("refuses a second open registration of the same document, but allows a new one after a refusal", async () => {
+  it("refuses a second registration of the same document on the device; after a server refusal nothing is kept and a new one is allowed", async () => {
     const first = await create();
     await expect(create(request({ document: "12345678909" }))).rejects.toBeInstanceOf(PendingCustomerError);
     erp.script = [fail("registration_refused", "document_already_registered")];
     await push();
-    expect((await getPendingCustomer(db, OWNER, first.clientRequestId))?.state).toBe("rejected");
+    expect(await getPendingCustomer(db, OWNER, first.clientRequestId)).toBeNull();
     await expect(create()).resolves.toMatchObject({ state: "queued" });
   });
 
@@ -196,7 +195,6 @@ describe("delivery with the same key", () => {
     await push();
     const waiting = await getPendingCustomer(db, OWNER, record.clientRequestId);
     expect(waiting).toMatchObject({ state: "awaiting_erp", registrationId: "reg-1", customerCode: null });
-    expect(describePendingCustomer(waiting as NonNullable<typeof waiting>)).toBe("Aguardando confirmação do Sankhya");
     await push();
     expect(erp.calls.map((c) => c.key)).toEqual([record.clientRequestId, record.clientRequestId]);
   });
@@ -237,27 +235,21 @@ describe("delivery with the same key", () => {
 });
 
 describe("refusals", () => {
-  it.each([
-    ["document_already_registered", "Já existe um cliente com este CPF/CNPJ."],
-    ["customer_rejected", "O Sankhya recusou o cadastro do cliente. Confira os dados."],
-  ])("409 %s -> rejected with a readable reason, typed data kept for the 7-day window (owner 2026-11-13), never resent", async (reason, text) => {
+  it.each(["document_already_registered", "customer_rejected"])("409 %s on a queued customer -> dropped (nothing kept halfway), counted, never resent", async (reason) => {
     const record = await create();
     erp.script = [fail("registration_refused", reason)];
     expect(await push()).toMatchObject({ rejected: 1 });
-    const after = await getPendingCustomer(db, OWNER, record.clientRequestId);
-    expect(after).toMatchObject({ state: "rejected", rejectionReason: text, name: "Padaria Ação Ltda", document: "12345678909", maskedDocument: "***.456.789-**" });
-    expect(after?.request).not.toBeNull();
-    expect(describePendingCustomer(after as NonNullable<typeof after>)).toBe(`Não aceito: ${text}`);
+    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toBeNull();
     await push();
     expect(erp.calls).toHaveLength(1);
-    await expect(retryPendingCustomer(db, env, OWNER, record.clientRequestId)).rejects.toBeInstanceOf(PendingCustomerError);
+    expect(await countPendingCustomers(db, OWNER, REAL)).toEqual({ pending: 0, needsAttention: 0 });
   });
 
-  it("400 validation -> rejected with the server's words, data kept", async () => {
+  it("422 validation on a queued customer -> dropped", async () => {
     const record = await create();
     erp.script = [fail("validation", undefined, "CPF/CNPJ inválido.")];
     await push();
-    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toMatchObject({ state: "rejected", rejectionReason: "CPF/CNPJ inválido." });
+    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toBeNull();
   });
 
   it("customer_write_disabled (409) stays queued with the 'not released' text, is not a refusal and does not hammer the other rows", async () => {
@@ -266,21 +258,14 @@ describe("refusals", () => {
     erp.script = [fail("server", "customer_write_disabled")];
     await push();
     const after = await getPendingCustomer(db, OWNER, record.clientRequestId);
-    expect(after).toMatchObject({ state: "queued", rejectionReason: null, lastError: CUSTOMER_CREATION_NOT_RELEASED });
+    expect(after).toMatchObject({ state: "queued", lastError: CUSTOMER_CREATION_NOT_RELEASED });
     expect(CUSTOMER_CREATION_NOT_RELEASED).toBe("Cadastro de cliente ainda não liberado, vamos tentar de novo");
-    expect(describePendingCustomer(after as NonNullable<typeof after>)).toBe(CUSTOMER_CREATION_NOT_RELEASED);
     expect((await getPendingCustomer(db, OWNER, second.clientRequestId))?.attempts).toBe(0);
     expect(erp.calls).toHaveLength(1);
     expect(await countPendingCustomers(db, OWNER, REAL)).toEqual({ pending: 2, needsAttention: 0 });
   });
 
-  it("a refused customer can be discarded locally; an in-flight one cannot", async () => {
-    const refused = await create();
-    erp.script = [fail("registration_refused", "customer_rejected")];
-    await push();
-    await discardPendingCustomer(db, OWNER, refused.clientRequestId);
-    expect(await getPendingCustomer(db, OWNER, refused.clientRequestId)).toBeNull();
-
+  it("an in-flight (waiting for the ERP) customer cannot be discarded", async () => {
     const waiting = await create(request({ document: "98765432100" }));
     erp.script = [waitingReg()];
     await push();
@@ -291,6 +276,85 @@ describe("refusals", () => {
     const record = await create();
     await discardPendingCustomer(db, OWNER, record.clientRequestId);
     expect(await listPendingCustomers(db, OWNER, REAL)).toEqual([]);
+  });
+});
+
+describe("Cadastrar: online it is created at once, offline it is saved and sent by itself (owner 2026-11-25)", () => {
+  const submit = (online: boolean, req = request()) => submitCustomer(db, env, erp, OWNER, req, { online });
+
+  it("online 201: in the mirror with its code at once, no pending row, one call", async () => {
+    erp.script = [confirmedReg(4321)];
+    const result = await submit(true);
+    expect(result).toMatchObject({ kind: "sent", customerCode: 4321 });
+    expect(await listPendingCustomers(db, OWNER, REAL)).toEqual([]);
+    expect(await searchCustomers(db, { search: "padaria", page: 1, pageSize: 10 })).toMatchObject({ items: [expect.objectContaining({ code: 4321 })] });
+    expect(erp.calls).toHaveLength(1);
+  });
+
+  it("online 422: throws the server's field map and saves NOTHING", async () => {
+    erp.script = [new TransportError("validation", "Revise.", 422, undefined, { sellerCode: "Informe o vendedor." })];
+    const error = await submit(true).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(CustomerRejectedError);
+    expect((error as CustomerRejectedError).fields).toEqual({ sellerCode: "Informe o vendedor." });
+    expect(await listPendingCustomers(db, OWNER, REAL)).toEqual([]);
+  });
+
+  it("online repeated document (409): shown on the document field, nothing saved", async () => {
+    erp.script = [fail("registration_refused", "document_already_registered")];
+    const error = (await submit(true).catch((caught: unknown) => caught)) as CustomerRejectedError;
+    expect(error.fields).toEqual({ document: "Já existe um cliente com este CPF/CNPJ." });
+    expect(await listPendingCustomers(db, OWNER, REAL)).toEqual([]);
+  });
+
+  it("offline: saved, no call; on reconnect it is sent exactly once with the same key and the list gets the real customer", async () => {
+    const result = await submit(false);
+    expect(result).toEqual({ kind: "pending" });
+    expect(erp.calls).toHaveLength(0);
+    const [row] = await listPendingCustomers(db, OWNER, REAL);
+    expect(row).toMatchObject({ state: "queued", needsSeller: false });
+    erp.script = [confirmedReg(555)];
+    await push();
+    await push();
+    expect(erp.calls).toHaveLength(1);
+    expect(erp.calls[0]?.key).toBe(row?.clientRequestId);
+    expect(await listPendingCustomers(db, OWNER, REAL)).toEqual([]);
+    expect(await searchCustomers(db, { search: "padaria", page: 1, pageSize: 10 })).toMatchObject({ items: [expect.objectContaining({ code: 555 })] });
+  });
+
+  it("a network failure online falls back to the device under the SAME key: the reconnect send cannot duplicate it", async () => {
+    erp.script = [fail("network"), confirmedReg(777)];
+    expect(await submit(true)).toEqual({ kind: "pending" });
+    const [row] = await listPendingCustomers(db, OWNER, REAL);
+    await push();
+    expect(erp.calls.map((call) => call.key)).toEqual([row?.clientRequestId, row?.clientRequestId]);
+  });
+
+  it("a 202 pending answer keeps it waiting for the ERP under the same key until the code arrives", async () => {
+    erp.script = [waitingReg(), confirmedReg(888)];
+    expect(await submit(true)).toEqual({ kind: "pending" });
+    const [row] = await listPendingCustomers(db, OWNER, REAL);
+    expect(row).toMatchObject({ state: "awaiting_erp", registrationId: "reg-1" });
+    await push();
+    expect(erp.calls.map((call) => call.key)).toEqual([row?.clientRequestId, row?.clientRequestId]);
+    expect(await listPendingCustomers(db, OWNER, REAL)).toEqual([]);
+  });
+
+  it("a request that hangs times out and is saved under the same key", async () => {
+    const slow: CustomerRegistrationTransport = { createCustomer: () => new Promise(() => undefined), getCustomer: (code) => erp.getCustomer(code) };
+    expect(await submitCustomer(db, env, slow, OWNER, request(), { online: true, timeoutMs: 5 })).toEqual({ kind: "pending" });
+    expect(await listPendingCustomers(db, OWNER, REAL)).toHaveLength(1);
+  });
+
+  it("a customer held without a seller is not sent until a seller is chosen, then it is re-sent with that seller", async () => {
+    const record = await create();
+    await db.execute("UPDATE pending_customer SET needs_seller = 1 WHERE client_request_id = ?", [record.clientRequestId]);
+    erp.script = [confirmedReg(321)];
+    expect(await push()).toMatchObject({ attempted: 0 });
+    expect(erp.calls).toHaveLength(0);
+    await assignPendingCustomerSeller(db, env, OWNER, record.clientRequestId, 9);
+    await push();
+    expect(erp.calls).toHaveLength(1);
+    expect(erp.calls[0]?.request.sellerCode).toBe(9);
   });
 });
 
@@ -366,7 +430,6 @@ describe("confirmation replaces the pending customer", () => {
     await push();
     const waiting = await getPendingCustomer(db, OWNER, record.clientRequestId);
     expect(waiting).toMatchObject({ state: "confirmed", customerCode: 4321 });
-    expect(describePendingCustomer(waiting as NonNullable<typeof waiting>)).toBe("Confirmado no Sankhya — carregando dados");
     expect(pendingCustomerBlockOf(4321)).toBeNull();
     await expect(saveOrderDraft(db, env, { ownerAccountId: OWNER, customerCode: 4321, customerName: "Padaria", negotiationTypeCode: null, notes: null, loadedDataset: REAL, items: [] })).resolves.toBeTypeOf("string");
     erp.customer = null;
@@ -435,15 +498,8 @@ describe("orders are blocked for a customer the ERP has not confirmed", () => {
   it("refuses to save a draft for a pending (negative-code) customer, with the exact text", async () => {
     const record = await create();
     await expect(saveOrderDraft(db, env, draftInput(record.localCode))).rejects.toBeInstanceOf(PendingCustomerOrderError);
-    await expect(saveOrderDraft(db, env, draftInput(record.localCode))).rejects.toThrow("Este cliente ainda não foi confirmado pelo Sankhya.");
-    expect(PENDING_CUSTOMER_MESSAGE).toBe("Este cliente ainda não foi confirmado pelo Sankhya.");
-  });
-
-  it("a rejected customer's local code is blocked too", async () => {
-    const record = await create();
-    erp.script = [fail("registration_refused", "customer_rejected")];
-    await push();
-    await expect(saveOrderDraft(db, env, draftInput(record.localCode))).rejects.toBeInstanceOf(PendingCustomerOrderError);
+    await expect(saveOrderDraft(db, env, draftInput(record.localCode))).rejects.toThrow("Este cliente ainda não tem código do Sankhya.");
+    expect(PENDING_CUSTOMER_MESSAGE).toBe("Este cliente ainda não tem código do Sankhya.");
   });
 
   it("the negative local code never reaches an order command: a command carrying it is held, never handed to the transport", async () => {
@@ -584,101 +640,6 @@ describe("I-2 (owner rulings 2026-11-13): personal data does not outlive the ser
     expect(dump).toContain("dono@padaria.example");
   });
 
-  const DAY = 24 * 60 * 60 * 1000;
-  const refusedRow = async (over: Partial<PendingCustomerRequest> = {}) => {
-    const record = await create(request({ email: "dono@padaria.example", ...over }));
-    erp.script = [fail("registration_refused", "customer_rejected")];
-    await push();
-    return record;
-  };
-
-  it("a refusal keeps what the seller typed for up to 7 days (to redo); the list identifies it by name, masked document and reason", async () => {
-    const record = await refusedRow();
-    const row = await getPendingCustomer(db, OWNER, record.clientRequestId);
-    expect(row).toMatchObject({ state: "rejected", name: "Padaria Ação Ltda", document: "12345678909", maskedDocument: "***.456.789-**", rejectionReason: "O Sankhya recusou o cadastro do cliente. Confira os dados." });
-    expect(row?.request).toMatchObject({ email: "dono@padaria.example", phone: "11 99999-0000" });
-    expect(await listPendingCustomers(db, OWNER, REAL, "padaria")).toHaveLength(1);
-  });
-
-  it("after 7 days a purge erases every typed field of the refused row (an unreferenced one is removed); before that nothing changes", async () => {
-    const record = await refusedRow();
-    clock = new Date(clock.getTime() + 7 * DAY - 1000);
-    expect(await purgeRefusedCustomers(db, env)).toBe(0);
-    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toMatchObject({ document: "12345678909" });
-    clock = new Date(clock.getTime() + 1000);
-    expect(await purgeRefusedCustomers(db, env)).toBe(1);
-    expect(await rowDump()).toBe("[]");
-    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toBeNull();
-  });
-
-  it("a refused row still referenced by a draft is erased but never deleted", async () => {
-    const record = await refusedRow();
-    await db.execute(
-      `INSERT INTO local_order_draft (local_id, owner_account_id, client_request_id, customer_code, customer_name, status, created_at, updated_at, dataset_environment, dataset_id, eligibility)
-       VALUES ('d1', ?, 'k1', ?, 'P', 'pending_sync', '2026-11-13T00:00:00.000Z', '2026-11-13T00:00:00.000Z', ?, ?, 'eligible')`,
-      [OWNER, record.localCode, REAL.environment, REAL.datasetId],
-    );
-    clock = new Date(clock.getTime() + 8 * DAY);
-    expect(await purgeRefusedCustomers(db, env)).toBe(1);
-    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toMatchObject({ state: "rejected", name: "", document: "", request: null, maskedDocument: "***.456.789-**" });
-    const dump = JSON.stringify(await db.query("SELECT * FROM pending_customer"));
-    for (const value of [...PERSONAL, "dono@padaria.example", "Padaria Ação Ltda"]) expect(dump).not.toContain(value);
-    // a second purge has nothing left to do
-    expect(await purgeRefusedCustomers(db, env)).toBe(0);
-  });
-
-  it("a refused row referenced only by an outbox command is kept too", async () => {
-    const record = await refusedRow();
-    await db.execute(
-      `INSERT INTO outbox (local_id, operation_id, idempotency_key, type, payload, state, attempts, created_at, updated_at, dataset_environment, dataset_id, eligibility)
-       VALUES ('o1', 'oid1', 'k1', 'order.create', '{"request":{"customerCode":${record.localCode},"items":[]},"prices":[]}', 'pending', 0, 'a', 'a', ?, ?, 'eligible')`,
-      [REAL.environment, REAL.datasetId],
-    );
-    clock = new Date(clock.getTime() + 8 * DAY);
-    await purgeRefusedCustomers(db, env);
-    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toMatchObject({ state: "rejected", document: "", request: null });
-  });
-
-  it("redo within the window hands the typed data back to pre-fill; after the purge it needs retyping", async () => {
-    const record = await refusedRow();
-    expect(await redoPendingCustomer(db, OWNER, record.clientRequestId)).toMatchObject({ name: "Padaria Ação Ltda", email: "dono@padaria.example" });
-    clock = new Date(clock.getTime() + 8 * DAY);
-    await purgeRefusedCustomers(db, env);
-    await expect(redoPendingCustomer(db, OWNER, record.clientRequestId)).rejects.toBeInstanceOf(PendingCustomerError);
-  });
-
-  it("redoing (replacesRejected) or discarding removes the typed data at once, before the 7 days", async () => {
-    const first = await refusedRow();
-    await createPendingCustomer(db, env, { ownerAccountId: OWNER, request: request({ name: "Outra Padaria", document: "98765432100" }), replacesRejected: first.clientRequestId });
-    expect(await rowDump()).not.toContain("12345678909");
-    erp.script = [fail("registration_refused", "customer_rejected")];
-    await push();
-    const second = (await listPendingCustomers(db, OWNER, REAL))[0];
-    await discardPendingCustomer(db, OWNER, (second as NonNullable<typeof second>).clientRequestId);
-    expect(await rowDump()).toBe("[]");
-  });
-
-  it("the purge covers every account's rows on the device and never touches a customer still waiting", async () => {
-    await refusedRow();
-    const waiting = await create(request({ document: "98765432100" }), "acct-2");
-    clock = new Date(clock.getTime() + 30 * DAY);
-    expect(await purgeRefusedCustomers(db, env)).toBe(1);
-    expect(await getPendingCustomer(db, "acct-2", waiting.clientRequestId)).toMatchObject({ state: "queued", document: "98765432100" });
-  });
-
-  it("the sync manager purges on every run and on refresh (app start / foreground), by the injected clock", async () => {
-    const record = await refusedRow();
-    const source: ReferenceSource = { fetchCustomers: async () => [], fetchProducts: async () => [], fetchEntryConfiguration: async () => null, fetchDatasetIdentity: async () => REAL };
-    const manager = createSyncManager({ db, env, transport: new Orders(), customerTransport: erp, source, ownerAccountId: OWNER });
-    clock = new Date(clock.getTime() + 8 * DAY);
-    await manager.refresh();
-    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toBeNull();
-    const second = await refusedRow({ document: "11122233396" });
-    clock = new Date(clock.getTime() + 8 * DAY);
-    await manager.sync("foreground", { pull: false });
-    expect(await getPendingCustomer(db, OWNER, second.clientRequestId)).toBeNull();
-  });
-
   it("a confirmation erases document, e-mail and phone (and everything else typed) at once; only the name and the ERP code stay", async () => {
     const record = await create(request({ email: "dono@padaria.example" }));
     erp.script = [confirmedReg(4321)];
@@ -706,23 +667,6 @@ describe("I-2 (owner rulings 2026-11-13): personal data does not outlive the ser
     expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toBeNull();
   });
 
-  it("the document of a refused row no longer blocks a new registration of that document, as before", async () => {
-    await create();
-    erp.script = [fail("registration_refused", "customer_rejected")];
-    await push();
-    await expect(create()).resolves.toMatchObject({ state: "queued" });
-  });
-
-  it("a purged row is never found by name or document search", async () => {
-    await create();
-    erp.script = [fail("registration_refused", "customer_rejected")];
-    await push();
-    clock = new Date(clock.getTime() + 8 * DAY);
-    await purgeRefusedCustomers(db, env);
-    expect(await listPendingCustomers(db, OWNER, REAL, "padaria")).toEqual([]);
-    expect(await listPendingCustomers(db, OWNER, REAL, "123456")).toEqual([]);
-  });
-
   it("migration v8 erases rows already refused or confirmed under v7 and keeps the masked document", async () => {
     const old = openNodeDatabase();
     await runMigrations(old, migrations.filter((m) => m.version <= 7));
@@ -738,14 +682,42 @@ describe("I-2 (owner rulings 2026-11-13): personal data does not outlive the ser
         [id, OWNER, doc, state, state === "confirmed" ? 77 : null, state === "rejected" ? "motivo" : null, REAL.environment, REAL.datasetId],
       );
     }
-    await runMigrations(old, migrations);
+    await runMigrations(old, migrations.filter((m) => m.version <= 8));
     const dump = JSON.stringify(await old.query("SELECT * FROM pending_customer WHERE client_request_id IN ('r1', 'c1')"));
     expect(dump).not.toContain("Nome Pessoal");
     expect(dump).not.toContain("12345678909");
     expect(dump).not.toContain("12345678000195");
-    expect(await getPendingCustomer(old, OWNER, "r1")).toMatchObject({ rejectionReason: "motivo", maskedDocument: "***.456.789-**", request: null });
+    expect(await getPendingCustomer(old, OWNER, "r1")).toMatchObject({ state: "rejected", maskedDocument: "***.456.789-**", request: null });
+    await runMigrations(old, migrations);
+    // v16: the refused row with nothing typed left is removed
+    expect(await getPendingCustomer(old, OWNER, "r1")).toBeNull();
     expect(await getPendingCustomer(old, OWNER, "c1")).toMatchObject({ customerCode: 77, maskedDocument: "**.***.678/0001-**" });
     expect(await getPendingCustomer(old, OWNER, "q1")).toMatchObject({ name: "Nome Pessoal", document: "98765432100", maskedDocument: "***.654.321-**" });
+  });
+
+  it("migration v16 moves the old refused rows to the new model: complete -> queued again under a NEW key; missing seller -> held; erased -> removed", async () => {
+    const old = openNodeDatabase();
+    await runMigrations(old, migrations.filter((m) => m.version <= 15));
+    await confirm(old);
+    const rows: readonly (readonly [string, string, string | null])[] = [
+      ["complete", JSON.stringify(request()), "O Sankhya recusou o cadastro do cliente. Confira os dados."],
+      ["noseller", JSON.stringify(request({ document: "98765432100" })), "Informe o vendedor do cliente."],
+      ["erased", "null", "motivo"],
+    ];
+    for (const [id, payload, reason] of rows) {
+      await old.execute(
+        `INSERT INTO pending_customer (client_request_id, owner_account_id, name, search_text, document, payload, state, registration_id, attempts, rejection_reason, dataset_environment, dataset_id, created_at, updated_at)
+         VALUES (?, ?, 'N', 'n', ?, ?, 'rejected', 'reg-old', 3, ?, ?, ?, 'a', 'a')`,
+        [id, OWNER, id === "erased" ? "" : id === "complete" ? "12345678909" : "98765432100", payload, reason, REAL.environment, REAL.datasetId],
+      );
+    }
+    await runMigrations(old, migrations);
+    const left = await old.query<{ client_request_id: string; state: string; needs_seller: number; registration_id: string | null; attempts: number; rejection_reason: string | null; document: string }>("SELECT * FROM pending_customer ORDER BY seq");
+    expect(left).toHaveLength(2);
+    expect(left.map((row) => row.client_request_id)).not.toContain("complete");
+    for (const row of left) expect(row).toMatchObject({ state: "queued", registration_id: null, attempts: 0, rejection_reason: null });
+    expect(left.map((row) => [row.document, row.needs_seller])).toEqual([["12345678909", 0], ["98765432100", 1]]);
+    expect(left[0]?.client_request_id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-a[0-9a-f]{3}-[0-9a-f]{12}$/);
   });
 });
 
@@ -757,44 +729,6 @@ describe("lifecycle: same treatment as pending orders (not wiped on sign-out or 
     await createSyncManager({ db, env, transport: new Orders(), customerTransport: erp, source, ownerAccountId: "acct-2" }).sync("manual");
     expect(await listPendingCustomers(db, "acct-2", REAL)).toEqual([]);
     expect(await getPendingCustomer(db, OWNER, mine.clientRequestId)).toMatchObject({ state: "queued", request: expect.objectContaining({ document: "12345678909" }) });
-  });
-});
-
-describe("redo a refused customer", () => {
-  async function refused(): Promise<string> {
-    const record = await create();
-    erp.script = [fail("registration_refused", "document_already_registered")];
-    await push();
-    return record.clientRequestId;
-  }
-
-  it("redo hands back what was typed (within the 7 days) and the refused row stays, with its reason, until the new one exists", async () => {
-    const id = await refused();
-    expect(await redoPendingCustomer(db, OWNER, id)).toMatchObject({ name: "Padaria Ação Ltda", document: "12345678909" });
-    expect(await getPendingCustomer(db, OWNER, id)).toMatchObject({ state: "rejected", rejectionReason: "Já existe um cliente com este CPF/CNPJ." });
-  });
-
-  it("creating the new one with `replacesRejected` closes the refused row in the same transaction", async () => {
-    const id = await refused();
-    const fresh = await createPendingCustomer(db, env, { ownerAccountId: OWNER, request: request({ name: "Padaria Corrigida" }), replacesRejected: id });
-    expect(fresh.state).toBe("queued");
-    expect(await getPendingCustomer(db, OWNER, id)).toBeNull();
-    expect((await listPendingCustomers(db, OWNER, REAL)).map((r) => r.name)).toEqual(["Padaria Corrigida"]);
-  });
-
-  it("a failed creation leaves the refused row (and its data) untouched", async () => {
-    const id = await refused();
-    await create(request({ document: "98765432100" }));
-    await expect(createPendingCustomer(db, env, { ownerAccountId: OWNER, request: request({ document: "98765432100" }), replacesRejected: id })).rejects.toBeInstanceOf(PendingCustomerError);
-    expect(await getPendingCustomer(db, OWNER, id)).toMatchObject({ state: "rejected" });
-  });
-
-  it("only a refused row of the same account can be redone or replaced", async () => {
-    const id = await refused();
-    const open = await create(request({ document: "11122233396" }));
-    await expect(redoPendingCustomer(db, OWNER, open.clientRequestId)).rejects.toBeInstanceOf(PendingCustomerError);
-    await expect(redoPendingCustomer(db, "acct-2", id)).rejects.toBeInstanceOf(PendingCustomerError);
-    await expect(createPendingCustomer(db, env, { ownerAccountId: OWNER, request: request({ document: "55544433322" }), replacesRejected: open.clientRequestId })).rejects.toBeInstanceOf(PendingCustomerError);
   });
 });
 

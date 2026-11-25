@@ -124,6 +124,18 @@ export type CustomerState = z.infer<typeof CustomerStateSchema>;
 export const CUSTOMER_REASON_CODES = ['document_already_registered', 'required_field', 'erp_refused', 'invalid_command', 'review_needed'] as const;
 export const CustomerReasonCodeSchema = named('CustomerReasonCode', z.enum(CUSTOMER_REASON_CODES));
 
+/**
+ * What a client shows (CUST-RT, owner 2026-11-25): `sent` = the customer is in Sankhya; `pending` = saved and still being delivered
+ * (only shown as a pending-send indicator, never as a "not confirmed" step; 'Novo pedido' needs a Sankhya code). The old `state`
+ * and `status` fields stay for builds that still read them; `needs_correction` is no longer produced.
+ */
+export const CUSTOMER_SEND_STATES = ['sent', 'pending'] as const;
+export const CustomerSendStateSchema = named('CustomerSendState', z.enum(CUSTOMER_SEND_STATES));
+export type CustomerSendState = z.infer<typeof CustomerSendStateSchema>;
+
+/** Field -> pt-BR text of a refused customer (`customer_refused`, HTTP 422). Keys are request field names (`sellerCode`, `document`, `name`, `stateRegistration`...); `_` carries a text that belongs to no field. */
+export const CustomerRefusalFieldsSchema = named('CustomerRefusalFields', z.record(z.string(), z.string()));
+
 export const CreateCustomerResponseSchema = named(
   'CreateCustomerResponse',
   z.object({
@@ -131,6 +143,7 @@ export const CreateCustomerResponseSchema = named(
     status: CustomerRegistrationStatusSchema,
     /** Client state (additive): awaiting_send while the ERP has not confirmed, sent once it did. */
     state: CustomerStateSchema,
+    sendState: CustomerSendStateSchema,
     /** The real ERP code once confirmed; null while the customer waits for delivery. */
     customerCode: codeInt().nullable(),
     originKey: z.string(),
@@ -146,6 +159,7 @@ export const CustomerRegistrationViewSchema = named(
     state: CustomerStateSchema,
     /** The text to print for `state`, from packages/domain (one wording for site and app). */
     stateLabel: z.string(),
+    sendState: CustomerSendStateSchema,
     status: CustomerRegistrationStatusSchema,
     customerCode: codeInt().nullable(),
     originKey: z.string(),
@@ -178,6 +192,13 @@ export const CustomerRegistrationsResponseSchema = named(
 export type CustomerRegistrationsResponse = z.infer<typeof CustomerRegistrationsResponseSchema>;
 
 export const CustomerRegistrationPathSchema = z.object({ registrationId: UuidSchema });
+
+/** Manager/admin: sets the seller of a customer still pending delivery that has none, and sends it again (CUST-RT). */
+export const SetCustomerRegistrationSellerRequestSchema = named(
+  'SetCustomerRegistrationSellerRequest',
+  z.strictObject({ sellerCode: sellerCodeInt() }),
+);
+export type SetCustomerRegistrationSellerRequest = z.infer<typeof SetCustomerRegistrationSellerRequestSchema>;
 
 /* ---------- Edit (D-AP): only phone, e-mail, contacts, addresses and notes ---------- */
 
@@ -223,6 +244,8 @@ export const UpdateCustomerResponseSchema = named(
     updateId: UuidSchema,
     customerCode: codeInt(),
     state: CustomerStateSchema,
+    /** `sent` once the ERP took the edit (200), `pending` while the worker still delivers it (202). A refusal is a 422 `customer_refused`. */
+    sendState: CustomerSendStateSchema,
     /** The text to print for `state` (packages/domain). */
     stateLabel: z.string(),
     reasonCode: CustomerReasonCodeSchema.nullable(),

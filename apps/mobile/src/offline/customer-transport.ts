@@ -9,6 +9,10 @@ import { toTransportError } from "./transport";
  * installation not being ready yet, so the customer stays queued.
  */
 export function toCustomerTransportError(error: unknown): TransportError {
+  // 422 customer_refused: the server's text per field (missing seller, repeated document, required field); shown on the form.
+  if (error instanceof ApiRequestError && error.status === 422) {
+    return new TransportError("validation", error.message, 422, error.code, Object.keys(error.fields).length > 0 ? error.fields : { _: error.message });
+  }
   if (error instanceof ApiRequestError && error.status === 409) {
     if (error.code === "idempotency_conflict") return new TransportError("idempotency_conflict", error.message, 409);
     if (error.reason === "document_already_registered" || error.reason === "customer_rejected") {
@@ -45,7 +49,9 @@ export function createCustomerTransport(api: ApiClient): CustomerRegistrationTra
             body: { clientRequestId, ...request, addresses: request.addresses.map((address) => ({ ...address })) },
           }),
         );
-        return { registrationId: response.registrationId, status: response.status, customerCode: response.customerCode };
+        // 201 sent (real code) / 202 pending (still being delivered): the server's sendState decides.
+        const confirmed = response.sendState === "sent" && response.customerCode !== null;
+        return { registrationId: response.registrationId, status: confirmed ? "confirmed" : "pending", customerCode: response.customerCode };
       } catch (error) {
         throw toCustomerTransportError(error);
       }

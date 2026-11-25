@@ -21,7 +21,7 @@ let foreign: number;
 beforeAll(async () => {
   postgres = await startPostgres();
   closed = await startCommercialApp(postgres, opened);
-  open = await startCommercialApp(postgres, opened, { customerEditEnabled: true });
+  open = await startCommercialApp(postgres, opened, { customerEditEnabled: true, customerConfirmWait: { timeoutMs: 0, pollMs: 1, sleep: () => Promise.resolve() } });
   const own = dataset.customers.find((c) => c.sellerCode === 103 && c.active);
   const other = dataset.customers.find((c) => c.sellerCode !== 103 && c.sellerCode !== null && c.active);
   if (own === undefined || other === undefined) throw new Error('fixture lacks customers');

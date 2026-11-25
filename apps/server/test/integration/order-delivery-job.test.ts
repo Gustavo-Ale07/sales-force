@@ -8,7 +8,6 @@ import { installQueues } from '../../src/worker/queue-installer.js';
 import {
   ORDER_DELIVERY_CRON,
   ORDER_DRY_RUN_PURGE_CRON,
-  ORDER_ERP_STATUS_CRON,
   QUEUE_NAMES,
   QUEUE_REGISTRY,
 } from '../../src/worker/queues.js';
@@ -126,7 +125,8 @@ describe('order delivery queues (SNK-7)', () => {
       const schedules = await on.boss.getSchedules();
       expect(schedules.find((s) => s.name === QUEUE_NAMES.integrationOrderDeliver)?.cron).toBe(ORDER_DELIVERY_CRON);
       expect(schedules.find((s) => s.name === QUEUE_NAMES.integrationOrderDryRunPurge)?.cron).toBe(ORDER_DRY_RUN_PURGE_CRON);
-      expect(schedules.find((s) => s.name === QUEUE_NAMES.syncErpOrderStatus)?.cron).toBe(ORDER_ERP_STATUS_CRON);
+      // RT-1: the status runs in the in-process cycle, no longer as a cron.
+      expect(schedules.find((s) => s.name === QUEUE_NAMES.syncErpOrderStatus)).toBeUndefined();
     } finally {
       await on.stop();
     }

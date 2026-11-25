@@ -13,9 +13,9 @@ function detailOf(overrides: Partial<CustomerDetail> = {}): CustomerDetail {
 
 describe("CustomerDetailScreen recurring orders section", () => {
   const section = <Text>Pedidos recorrentes</Text>;
-  const pendingOf = (state: "queued" | "awaiting_erp" | "rejected" | "confirmed") => ({ clientRequestId: "x", state, rejectionReason: null });
+  const pendingOf = (state: "queued" | "awaiting_erp" | "confirmed") => ({ clientRequestId: "x", state, needsSeller: false });
 
-  it.each(["queued", "awaiting_erp", "rejected"] as const)("is hidden while the new customer is %s", async (state) => {
+  it.each(["queued", "awaiting_erp"] as const)("is hidden while the new customer is %s", async (state) => {
     await render(<CustomerDetailScreen customer={customer(-3, { pending: pendingOf(state) })} customers={listOnly} onBack={jest.fn()} onNewOrder={jest.fn()} templatesSection={section} />);
     expect(screen.queryByText("Pedidos recorrentes")).toBeNull();
   });

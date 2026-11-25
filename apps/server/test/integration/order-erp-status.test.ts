@@ -363,3 +363,78 @@ describe('sync.erp.orderStatus - release (liberação), included notes only', ()
     expect(await stateOf(w, id)).toBe('awaiting');
   });
 });
+
+describe('RT-1 deleted-order detection (runReleaseOnce)', () => {
+  const header = { statusNota: 'L', pending: 'N' } as const;
+  const auditActions = async (w: Awaited<ReturnType<typeof world>>) =>
+    (await w.database.handle.pool.query<{ action: string }>(`SELECT action FROM audit_log WHERE action LIKE 'order.erp_%' ORDER BY at`)).rows.map((r) => r.action);
+
+  it('removes after two consecutive confirmed absences, audits it, and restores when the note comes back', async () => {
+    const w = await world();
+    const id = await w.seed(8001);
+    w.book.noteHeaders.set(8001, header);
+    await w.service.runReleaseOnce();
+    expect(await w.row(id)).toMatchObject({ erpRemovedAt: null, erpMissingChecks: 0 });
+
+    w.book.noteHeaders.delete(8001);
+    expect(await w.service.runReleaseOnce()).toEqual({ checked: 1, updated: 0 });
+    expect(await w.row(id)).toMatchObject({ erpRemovedAt: null, erpMissingChecks: 1 });
+    expect(await w.service.runReleaseOnce()).toEqual({ checked: 1, updated: 1 });
+    expect((await w.row(id))?.erpRemovedAt?.getTime()).toBe(NOW);
+    expect(await auditActions(w)).toEqual(['order.erp_removed']);
+
+    w.book.noteHeaders.set(8001, header);
+    expect(await w.service.runReleaseOnce()).toEqual({ checked: 1, updated: 1 });
+    expect(await w.row(id)).toMatchObject({ erpRemovedAt: null, erpMissingChecks: 0 });
+    expect(await auditActions(w)).toEqual(['order.erp_removed', 'order.erp_restored']);
+  });
+
+  it('a found reading between two absences resets the counter', async () => {
+    const w = await world();
+    const id = await w.seed(8002);
+    await w.service.runReleaseOnce();
+    expect((await w.row(id))?.erpMissingChecks).toBe(1);
+    w.book.noteHeaders.set(8002, header);
+    await w.service.runReleaseOnce();
+    expect((await w.row(id))?.erpMissingChecks).toBe(0);
+    w.book.noteHeaders.delete(8002);
+    await w.service.runReleaseOnce();
+    expect(await w.row(id)).toMatchObject({ erpRemovedAt: null, erpMissingChecks: 1 });
+  });
+
+  it('counts nothing when (almost) the whole batch is absent, when the read fails, or for a cancelled note', async () => {
+    const w = await world();
+    const ids = [await w.seed(8010), await w.seed(8011), await w.seed(8012)];
+    for (let i = 0; i < 3; i += 1) await w.service.runReleaseOnce();
+    for (const id of ids) expect(await w.row(id)).toMatchObject({ erpRemovedAt: null, erpMissingChecks: 0 });
+
+    const w2 = await world();
+    const cancelled = await w2.seed(8020);
+    const live = await w2.seed(8021);
+    w2.book.noteHeaders.set(8021, header);
+    w2.book.billing.set(8020, { cancelled: true, invoiced: false, invoicedAt: null, nfeAuthorized: false, items: [] });
+    for (let i = 0; i < 3; i += 1) await w2.service.runReleaseOnce();
+    expect(await w2.row(cancelled)).toMatchObject({ erpRemovedAt: null, erpMissingChecks: 0 });
+    expect((await w2.row(live))?.erpRemovedAt).toBeNull();
+
+    const w3 = await world();
+    const kept = await w3.seed(8030);
+    const failing = new OrderErpStatusService({
+      db: w3.database.handle,
+      gateway: { readOrderReleaseFacts: () => Promise.reject(new SankhyaGatewayError('unavailable', { code: 'down', message: 'down' })) } as never,
+      logger: createLogger({ level: 'silent', service: 'test' }),
+      now: () => new Date(NOW),
+    });
+    await failing.runReleaseOnce();
+    await failing.runReleaseOnce();
+    expect(await w3.row(kept)).toMatchObject({ erpRemovedAt: null, erpMissingChecks: 0 });
+  });
+
+  it('an on-demand refresh restricted to one order does not count absences', async () => {
+    const w = await world();
+    const id = await w.seed(8040);
+    await w.service.runReleaseOnce({ orderIds: [id], countAbsence: false });
+    await w.service.runReleaseOnce({ orderIds: [id], countAbsence: false });
+    expect(await w.row(id)).toMatchObject({ erpRemovedAt: null, erpMissingChecks: 0 });
+  });
+});
