@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import type { CustomerDetail, CustomerRepository } from "../data/ports";
-import { customer, networkError, pageOf } from "../test-doubles";
+import { customer, draftRecord, fakeLocalOrders, networkError, pageOf } from "../test-doubles";
+import type { CustomerFinancial } from "../data/ports";
 import { CustomerDetailScreen } from "./customer-detail-screen";
 
 const listOnly: CustomerRepository = { list: async () => pageOf([]) };
@@ -83,5 +84,57 @@ describe("CustomerDetailScreen", () => {
     expect(screen.queryByText(/não é possível iniciar um pedido/)).toBeNull();
     await fireEvent.press(screen.getByRole("button", { name: "Novo pedido" }));
     expect(onNewOrder).toHaveBeenCalledWith(target);
+  });
+});
+
+describe("CustomerDetailScreen: financeiro, pedidos do cliente e repetir último pedido", () => {
+  const financial: CustomerFinancial = {
+    customerCode: 10,
+    creditLimit: "5000",
+    monthlyCreditLimit: null,
+    blocked: false,
+    blockReason: null,
+    situation: null,
+    summary: { openCount: 2, openAmount: "300.5", overdueCount: 1, overdueAmount: "100", oldestOverdueDueDate: "2026-10-01" },
+    titles: [{ nufin: 1, documentNumber: 77, dueDate: "2026-10-01", amount: "100", balance: "100", overdue: true }, { nufin: 2, documentNumber: null, dueDate: "2026-12-01", amount: "200.5", balance: "200.5", overdue: false }],
+    checkedAt: "2026-11-25T10:00:00.000Z",
+  };
+
+  it("shows the open titles and the summary exactly as the server delivered them, only online", async () => {
+    const customers: CustomerRepository = { ...listOnly, financial: async () => financial };
+    await render(<CustomerDetailScreen customer={customer(10)} customers={customers} connectivity="online" onBack={jest.fn()} onNewOrder={jest.fn()} />);
+    expect(await screen.findByLabelText("Em aberto: 2 títulos · R$ 300,50")).toBeTruthy();
+    expect(screen.getByLabelText("Vencido: 1 título · R$ 100,00")).toBeTruthy();
+    expect(screen.getByLabelText("Limite de crédito: R$ 5.000,00")).toBeTruthy();
+    expect(screen.getByLabelText("Bloqueio: Sem bloqueio")).toBeTruthy();
+    expect(screen.getByLabelText("Título com vencimento em 01/10/2026, vencido, saldo R$ 100,00")).toBeTruthy();
+    expect(screen.getByLabelText("Título com vencimento em 01/12/2026, saldo R$ 200,50")).toBeTruthy();
+  });
+
+  it("offline or without the financial area (404 = null) there is no Financeiro section and no request", async () => {
+    const financialRead = jest.fn(async () => financial);
+    await render(<CustomerDetailScreen customer={customer(10)} customers={{ ...listOnly, financial: financialRead }} connectivity="offline" onBack={jest.fn()} onNewOrder={jest.fn()} />);
+    expect(financialRead).not.toHaveBeenCalled();
+    expect(screen.queryByText("Financeiro")).toBeNull();
+  });
+
+  it("lists the customer's orders from the device and repeats the last recorded one", async () => {
+    const recorded = draftRecord({ localId: "s1", customerCode: 10, customerName: "Cliente 10", status: "synced", remoteId: "r-1", sendState: "submitted", sendCode: "sent", updatedAt: "2026-11-20T10:00:00.000Z" });
+    const saved = draftRecord({ localId: "s2", customerCode: 10, customerName: "Cliente 10", status: "local_only", updatedAt: "2026-11-24T10:00:00.000Z" });
+    const other = draftRecord({ localId: "s3", customerCode: 99, customerName: "Outro", status: "synced", remoteId: "r-3", sendState: "submitted", sendCode: "sent" });
+    const onRepeatLast = jest.fn();
+    await render(<CustomerDetailScreen customer={customer(10)} customers={listOnly} localOrders={fakeLocalOrders([recorded, saved, other])} onRepeatLast={onRepeatLast} onBack={jest.fn()} onNewOrder={jest.fn()} />);
+    expect(await screen.findByText("Pedidos do cliente")).toBeTruthy();
+    expect(screen.getAllByLabelText(/^Pedido de /).length).toBe(2);
+    await fireEvent.press(screen.getByRole("button", { name: "Repetir último pedido" }));
+    // The order only saved on the device was never recorded in the Force: the repeat uses the recorded one.
+    expect(onRepeatLast).toHaveBeenCalledWith("s1");
+  });
+
+  it("without any recorded order there is no Repetir último pedido", async () => {
+    const saved = draftRecord({ localId: "s2", customerCode: 10, customerName: "Cliente 10", status: "local_only" });
+    await render(<CustomerDetailScreen customer={customer(10)} customers={listOnly} localOrders={fakeLocalOrders([saved])} onRepeatLast={jest.fn()} onBack={jest.fn()} onNewOrder={jest.fn()} />);
+    expect(await screen.findByText("Pedidos do cliente")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Repetir último pedido" })).toBeNull();
   });
 });

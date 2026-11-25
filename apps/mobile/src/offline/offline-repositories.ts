@@ -66,6 +66,10 @@ export function createOfflineFirstRepositories(deps: {
         if (remote.customers.get === undefined) throw new Error("Customer detail is not available");
         return remote.customers.get(code);
       },
+      async financial(code) {
+        if (code < 0 || remote.customers.financial === undefined) return null;
+        return remote.customers.financial(code);
+      },
       async letters(request) {
         if (!(await cacheReady())) return [];
         return customerLetters(db, request);

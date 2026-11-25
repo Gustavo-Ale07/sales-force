@@ -50,6 +50,7 @@ export interface Page<T> {
 }
 
 export type CustomerDetail = ApiSchema<"CustomerDetail">;
+export type CustomerFinancial = ApiSchema<"CustomerFinancial">;
 
 /** Same meaning as the API query. There is no status filter: the Force lists only active, unblocked customers (D-AQ). */
 export interface CustomerFilters {
@@ -80,6 +81,8 @@ export interface CustomerRepository {
   list(request: CustomerPageRequest): Promise<Page<CustomerListItem>>;
   /** Detail fields that are not in the list item (price table name, credit limit when configured). Online only. */
   get?(code: number): Promise<CustomerDetail>;
+  /** Open titles and credit information as the server delivers them (read-only, informational). `null` = the installation does not show the financial area (404). Online only. */
+  financial?(code: number): Promise<CustomerFinancial | null>;
   /** Alphabetical index of the searched/filtered list. Only where it can run in the local database. */
   letters?(request: Pick<CustomerPageRequest, "search" | "filters">): Promise<readonly CustomerLetter[]>;
   /** Sellers present in the portfolio available on this device (for the seller filter). */

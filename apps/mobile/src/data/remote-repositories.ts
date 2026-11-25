@@ -1,4 +1,4 @@
-import { callApi, type ApiClient } from "./api";
+import { ApiRequestError, callApi, type ApiClient } from "./api";
 import type { CustomerRepository, OrderRepository, ProductRepository, Repositories } from "./ports";
 
 /**
@@ -26,6 +26,14 @@ export function createRemoteCustomerRepository(api: ApiClient): CustomerReposito
     },
     async get(code) {
       return callApi(() => api.GET("/customers/{code}", { params: { path: { code } } }));
+    },
+    async financial(code) {
+      try {
+        return await callApi(() => api.GET("/customers/{code}/financial", { params: { path: { code } } }));
+      } catch (error) {
+        if (error instanceof ApiRequestError && error.status === 404) return null;
+        throw error;
+      }
     },
   };
 }

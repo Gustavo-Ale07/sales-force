@@ -437,6 +437,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
                 connectivity={connectivityState}
                 onBack={() => setCustomerDetail(null)}
                 onNewOrder={startOrderFor}
+                {...(services?.localOrders !== undefined ? { localOrders: services.localOrders, onRepeatLast: (localId: string) => { setCustomerDetail(null); duplicateSale(localId); } } : {})}
                 {...(customerFlags.edit && dependencies.customerWrite !== undefined ? { onEdit: (picked: CustomerListItem) => setCustomerForm({ kind: "edit", customer: picked }) } : {})}
               />
             )}
