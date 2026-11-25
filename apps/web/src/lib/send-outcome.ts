@@ -48,7 +48,7 @@ export function sendOutcomeOf(order: OrderDetail, kind: DocumentKind, timedOut: 
     return {
       phase: "verifying",
       title: "Conferindo envio",
-      detail: "O Sankhya ainda não respondeu. Nada será duplicado: o Force PLAC confere antes de reenviar.",
+      detail: "O Sankhya ainda não respondeu. Nada será duplicado: o Force confere antes de reenviar.",
       final: true,
     };
   }
