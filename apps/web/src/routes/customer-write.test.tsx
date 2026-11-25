@@ -15,7 +15,7 @@ const detailHandlers = (general: Record<string, boolean>, extra: Handlers = {}):
   ...extra,
 });
 
-const updated = { updateId: "0190a000-0000-7000-8000-000000000001", customerCode: 1001, state: "awaiting_send", reasonCode: null, reasonMessage: null, updatedAt: "2026-11-25T12:00:00.000Z" };
+const updated = { updateId: "0190a000-0000-7000-8000-000000000001", customerCode: 1001, state: "awaiting_send", stateLabel: "Aguardando envio", reasonCode: null, reasonMessage: null, updatedAt: "2026-11-25T12:00:00.000Z" };
 
 describe("Ficha do cliente: edição (D-AP)", () => {
   it("has no edit button while the installation has not released the edit", async () => {
@@ -46,21 +46,29 @@ describe("Ficha do cliente: edição (D-AP)", () => {
     expect(body.phone).toBe("11988887777");
     expect(body.email).toBe("compras@alfa.com.br");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(await screen.findByText("Aguardando envio ao Sankhya")).toBeInTheDocument();
+    expect(await screen.findByText("Aguardando envio")).toBeInTheDocument();
   });
 
-  it("sends contacts as a list with name, role, phone and e-mail", async () => {
-    const { user, calls } = renderApp("/clientes/1001", {
-      handlers: detailHandlers({ clientEditEnabled: true }, { "PATCH /customers/:code": { status: 202, body: updated } }),
+  it("has no contacts section in the edit form", async () => {
+    const { user } = renderApp("/clientes/1001", { handlers: detailHandlers({ clientEditEnabled: true }) });
+    await user.click(await screen.findByRole("button", { name: "Editar cliente" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).queryByText("Contatos")).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "Adicionar contato" })).not.toBeInTheDocument();
+  });
+
+  it("shows the unsupported-field 409 as actionable text", async () => {
+    const { user } = renderApp("/clientes/1001", {
+      handlers: detailHandlers(
+        { clientEditEnabled: true },
+        { "PATCH /customers/:code": apiError(409, "conflict", "x", { details: { reason: "customer_edit_field_not_supported" } }) },
+      ),
     });
     await user.click(await screen.findByRole("button", { name: "Editar cliente" }));
     const dialog = await screen.findByRole("dialog");
-    await user.click(within(dialog).getByRole("button", { name: "Adicionar contato" }));
-    await user.type(within(dialog).getByLabelText(/Nome do contato/), "Ana Souza");
-    await user.type(within(dialog).getByLabelText("Cargo"), "Compras");
+    await user.type(within(dialog).getByLabelText("Telefone"), "1133334444");
     await user.click(within(dialog).getByRole("button", { name: "Salvar" }));
-    await waitFor(() => expect(callsTo(calls, "PATCH", "/customers/1001")).toHaveLength(1));
-    expect(callsTo(calls, "PATCH", "/customers/1001")[0]?.body).toMatchObject({ contacts: [{ name: "Ana Souza", role: "Compras", phone: null, email: null }] });
+    expect(await within(dialog).findByText("Só telefone, e-mail e observações podem ser alterados. Nada foi alterado.")).toBeInTheDocument();
   });
 
   it("does not send an empty form and shows what is missing", async () => {
@@ -105,7 +113,7 @@ describe("Ficha do cliente: edição (D-AP)", () => {
     const { user } = renderApp("/clientes/1001", {
       handlers: detailHandlers(
         { clientEditEnabled: true },
-        { "PATCH /customers/:code": { status: 202, body: { ...updated, state: "needs_correction", reasonCode: "erp_refused", reasonMessage: "O Sankhya recusou o telefone informado." } } },
+        { "PATCH /customers/:code": { status: 202, body: { ...updated, state: "needs_correction", stateLabel: "Precisa de correção", reasonCode: "erp_refused", reasonMessage: "O Sankhya recusou o telefone informado." } } },
       ),
     });
     await user.click(await screen.findByRole("button", { name: "Editar cliente" }));
@@ -118,7 +126,8 @@ describe("Ficha do cliente: edição (D-AP)", () => {
 });
 
 describe("Clientes: cadastro (D-AR)", () => {
-  const list: Handlers = { "GET /customers": { body: customersPage([customer()]) }, "GET /customers/letters": { body: { letters: [] } } };
+  const noRegistrations = { "GET /customers/registrations": { body: { items: [] } } };
+  const list: Handlers = { ...noRegistrations, "GET /customers": { body: customersPage([customer()]) }, "GET /customers/letters": { body: { letters: [] } } };
 
   it("has no new-customer button unless creation is released", async () => {
     renderApp("/clientes", { handlers: { ...list, "GET /order-entry/configuration": configWith({ clientCreationEnabled: false }) } });
@@ -142,7 +151,7 @@ describe("Clientes: cadastro (D-AR)", () => {
       handlers: {
         ...list,
         "GET /order-entry/configuration": configWith({ clientCreationEnabled: true }),
-        "POST /customers": { status: 202, body: { registrationId: "0190a000-0000-7000-8000-000000000002", status: "pending", customerCode: null, originKey: "force:x" } },
+        "POST /customers": { status: 202, body: { registrationId: "0190a000-0000-7000-8000-000000000002", status: "pending", state: "awaiting_send", customerCode: null, originKey: "force:x" } },
       },
     });
     await user.click(await screen.findByRole("button", { name: "Novo cliente" }));
@@ -155,7 +164,7 @@ describe("Clientes: cadastro (D-AR)", () => {
     const body = callsTo(calls, "POST", "/customers")[0]?.body as Record<string, unknown>;
     expect(body).toMatchObject({ document: "11222333000181", name: "Alfa Ltda", tradeName: null, icmsClassification: "R", stateRegistration: "ISENTO", phone: null, email: null, notes: null, addresses: [] });
     expect(body.clientRequestId).toMatch(UUID);
-    expect(await screen.findByText("Aguardando envio ao Sankhya")).toBeInTheDocument();
+    expect(await screen.findByText("Aguardando envio")).toBeInTheDocument();
   });
 
   it("shows the duplicate document refusal", async () => {
@@ -173,5 +182,45 @@ describe("Clientes: cadastro (D-AR)", () => {
     await user.click(within(dialog).getByRole("checkbox", { name: "Isento" }));
     await user.click(within(dialog).getByRole("button", { name: "Cadastrar" }));
     expect(await within(dialog).findByText("Já existe um cliente com este CPF/CNPJ.")).toBeInTheDocument();
+  });
+
+  const registration = (over: Record<string, unknown>) => ({
+    registrationId: "0190a000-0000-7000-8000-0000000000aa", state: "awaiting_send", stateLabel: "Aguardando envio", status: "pending", customerCode: null,
+    originKey: "force:x", document: "11222333000181", name: "ALFA LTDA", sellerCode: 7, reasonCode: null, reasonMessage: null, correctsRegistrationId: null,
+    createdAt: "2026-11-25T12:00:00.000Z", updatedAt: "2026-11-25T12:00:00.000Z", ...over,
+  });
+
+  it("lists the registrations with the server state text", async () => {
+    renderApp("/clientes", {
+      handlers: {
+        ...list,
+        "GET /order-entry/configuration": configWith({ clientCreationEnabled: true }),
+        "GET /customers/registrations": { body: { items: [registration({}), registration({ registrationId: "0190a000-0000-7000-8000-0000000000ab", state: "sent", stateLabel: "Enviado ao Sankhya", customerCode: 2002, name: "BETA SA" })] } },
+      },
+    });
+    const card = await screen.findByLabelText("Cadastros de clientes");
+    expect(await within(card).findByText("Aguardando envio")).toBeInTheDocument();
+    expect(within(card).getByText("Enviado ao Sankhya")).toBeInTheDocument();
+  });
+
+  it("opens the refused registration filled in and sends correctsRegistrationId", async () => {
+    const { user, calls } = renderApp("/clientes", {
+      handlers: {
+        ...list,
+        "GET /order-entry/configuration": configWith({ clientCreationEnabled: true }),
+        "GET /customers/registrations": { body: { items: [registration({ state: "needs_correction", stateLabel: "Precisa de correção", status: "rejected", reasonCode: "erp_refused", reasonMessage: "O Sankhya recusou o cadastro." })] } },
+        "POST /customers": { status: 202, body: { registrationId: "0190a000-0000-7000-8000-0000000000ac", status: "pending", state: "awaiting_send", customerCode: null, originKey: "force:y" } },
+      },
+    });
+    await user.click(await screen.findByRole("button", { name: /Corrigir cadastro de/ }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("O Sankhya recusou o cadastro.")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/Razão social/)).toHaveValue("ALFA LTDA");
+    await user.click(within(dialog).getByRole("checkbox", { name: "Isento" }));
+    await user.click(within(dialog).getByRole("button", { name: "Cadastrar" }));
+    await waitFor(() => expect(callsTo(calls, "POST", "/customers")).toHaveLength(1));
+    const body = callsTo(calls, "POST", "/customers")[0]?.body as Record<string, unknown>;
+    expect(body.correctsRegistrationId).toBe("0190a000-0000-7000-8000-0000000000aa");
+    expect(body.document).toBe("11222333000181");
   });
 });

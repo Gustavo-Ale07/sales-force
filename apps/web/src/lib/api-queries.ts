@@ -35,6 +35,7 @@ export const queryKeys = {
   syncStatus: ["sync-status"] as const,
   customers: (params: CustomersParams) => ["customers", "list", params] as const,
   customer: (code: number) => ["customers", "detail", code] as const,
+  customerRegistrations: ["customers", "registrations"] as const,
   customerFinancial: (code: number) => ["customers", "financial", code] as const,
   customerOrderHabits: (code: number) => ["customers", "order-habits", code] as const,
   productGroups: ["product-groups"] as const,
@@ -159,6 +160,15 @@ export function customerLettersQueryOptions(api: ApiClient, params: CustomerLett
     queryKey: ["customers", "letters", params] as const,
     queryFn: () => callApi(() => api.GET("/customers/letters", { params: { query: params } })),
     placeholderData: keepPreviousData,
+  });
+}
+
+/** D-AR: the registrations made through Sales Force, with their state (`stateLabel` from the server). Refused ones are the "Precisa de correção" list. */
+export function customerRegistrationsQueryOptions(api: ApiClient) {
+  return queryOptions({
+    queryKey: queryKeys.customerRegistrations,
+    queryFn: () => callApi(() => api.GET("/customers/registrations", { params: { query: { limit: 50 } } })),
+    retry: false,
   });
 }
 

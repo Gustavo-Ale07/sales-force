@@ -11,7 +11,6 @@ import { errorStatus, isHttpError } from "./http-error";
 
 export type UpdateCustomerBody = ApiSchema<"UpdateCustomerRequest">;
 export type CreateCustomerBody = ApiSchema<"CreateCustomerRequest">;
-export type CustomerContactBody = ApiSchema<"CustomerContactInput">;
 
 export const LIMITS = {
   name: 100,
@@ -20,8 +19,6 @@ export const LIMITS = {
   phoneDigits: 13,
   email: 80,
   notes: 4000,
-  contactRole: 50,
-  contacts: 10,
 } as const;
 
 export const ICMS_OPTIONS = ["C", "I", "P", "R", "T", "X"] as const;
@@ -52,64 +49,34 @@ export function notesProblem(value: string): string | null {
 
 /* ---------- Edit ---------- */
 
-export interface ContactForm {
-  key: string;
-  name: string;
-  role: string;
-  phone: string;
-  email: string;
-}
-
 export interface EditForm {
   phone: string;
   email: string;
   notes: string;
-  contacts: ContactForm[];
-}
-
-export interface ContactProblems {
-  name: string | null;
-  role: string | null;
-  phone: string | null;
-  email: string | null;
 }
 
 export interface EditProblems {
   phone: string | null;
   email: string | null;
   notes: string | null;
-  contacts: ContactProblems[];
   /** Nothing filled in: the server refuses an empty change. */
   empty: string | null;
 }
 
-export const emptyEditForm = (): EditForm => ({ phone: "", email: "", notes: "", contacts: [] });
+export const emptyEditForm = (): EditForm => ({ phone: "", email: "", notes: "" });
 
 export function editProblems(form: EditForm): EditProblems {
-  const contacts = form.contacts.map((contact) => ({
-    name: contact.name.trim() === "" ? "Informe o nome do contato." : contact.name.trim().length > LIMITS.name ? `O nome deve ter até ${LIMITS.name} caracteres.` : null,
-    role: contact.role.trim().length > LIMITS.contactRole ? `O cargo deve ter até ${LIMITS.contactRole} caracteres.` : null,
-    phone: phoneProblem(contact.phone),
-    email: emailProblem(contact.email),
-  }));
-  const touched = form.phone.trim() !== "" || form.email.trim() !== "" || form.notes.trim() !== "" || form.contacts.length > 0;
+  const touched = form.phone.trim() !== "" || form.email.trim() !== "" || form.notes.trim() !== "";
   return {
     phone: phoneProblem(form.phone),
     email: emailProblem(form.email),
     notes: notesProblem(form.notes),
-    contacts,
     empty: touched ? null : "Preencha ao menos um campo para alterar.",
   };
 }
 
 export function hasEditProblems(problems: EditProblems): boolean {
-  return (
-    problems.empty !== null ||
-    problems.phone !== null ||
-    problems.email !== null ||
-    problems.notes !== null ||
-    problems.contacts.some((contact) => Object.values(contact).some((problem) => problem !== null))
-  );
+  return problems.empty !== null || problems.phone !== null || problems.email !== null || problems.notes !== null;
 }
 
 /**
@@ -117,18 +84,11 @@ export function hasEditProblems(problems: EditProblems): boolean {
  * clear stored values). Document, name, seller, type and credit are never part of it.
  */
 export function buildUpdateBody(clientRequestId: string, form: EditForm): UpdateCustomerBody {
-  const contacts: CustomerContactBody[] = form.contacts.map((contact) => ({
-    name: contact.name.trim(),
-    role: contact.role.trim() === "" ? null : contact.role.trim(),
-    phone: contact.phone.trim() === "" ? null : digitsOf(contact.phone),
-    email: contact.email.trim() === "" ? null : contact.email.trim(),
-  }));
   return {
     clientRequestId,
     ...(form.phone.trim() === "" ? {} : { phone: digitsOf(form.phone) }),
     ...(form.email.trim() === "" ? {} : { email: form.email.trim() }),
     ...(form.notes.trim() === "" ? {} : { notes: form.notes.trim() }),
-    ...(contacts.length === 0 ? {} : { contacts }),
   };
 }
 
@@ -194,10 +154,11 @@ export function hasCreateProblems(problems: CreateProblems): boolean {
   return Object.values(problems).some((problem) => problem !== null);
 }
 
-export function buildCreateBody(clientRequestId: string, form: CreateForm): CreateCustomerBody {
+export function buildCreateBody(clientRequestId: string, form: CreateForm, correctsRegistrationId?: string): CreateCustomerBody {
   const ie = form.exempt ? "ISENTO" : form.stateRegistration.trim();
   return {
     clientRequestId,
+    ...(correctsRegistrationId === undefined ? {} : { correctsRegistrationId }),
     document: normalizeTaxDocument(form.document),
     name: form.name.trim(),
     tradeName: form.tradeName.trim() === "" ? null : form.tradeName.trim(),
@@ -230,6 +191,8 @@ const REASON_TEXT: Record<string, string> = {
   customer_edit_delivery_not_approved: "A edição de cliente ainda não pode ser enviada ao Sankhya. Nada foi alterado.",
   customer_write_disabled: "O cadastro de cliente não está liberado nesta instalação. Nada foi gravado.",
   document_already_registered: "Já existe um cliente com este CPF/CNPJ.",
+  customer_edit_field_not_supported: "Só telefone, e-mail e observações podem ser alterados. Nada foi alterado.",
+  customer_update_in_progress: "Já existe uma alteração deste cliente em andamento. Aguarde o envio e tente de novo.",
 };
 
 export interface CustomerWriteFailure extends ErrorDescription {

@@ -1,3 +1,4 @@
+import type { ApiSchema } from "@salesforce/contracts/client";
 import { Alert, Button, Checkbox, Dialog, DialogClose, DialogContent, FormField, Input, Select, Textarea, toast } from "@salesforce/ui";
 import { useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
@@ -11,28 +12,30 @@ import {
   type CreateForm,
   type IcmsOption,
 } from "../lib/customer-form";
-import { CREATE_STATUS_LABELS, useCreateCustomer } from "../lib/use-customer-write";
+import { createStateLabel, useCreateCustomer } from "../lib/use-customer-write";
 
 const FORM_ID = "customer-create-form";
 
 export interface CustomerCreateDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** A refused registration being corrected: the form opens with its document and name and the request carries its id. */
+  correction?: ApiSchema<"CustomerRegistrationView"> | null;
 }
 
 /** New customer written to the ERP by the worker (D-AR). Shown only when the installation released creation. Same fields and order as the app. */
-export function CustomerCreateDialog({ open, onOpenChange }: CustomerCreateDialogProps) {
+export function CustomerCreateDialog({ open, onOpenChange, correction = null }: CustomerCreateDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {open ? <CreateBody onClose={() => onOpenChange(false)} /> : null}
+      {open ? <CreateBody key={correction?.registrationId ?? "new"} correction={correction} onClose={() => onOpenChange(false)} /> : null}
     </Dialog>
   );
 }
 
-function CreateBody({ onClose }: { onClose: () => void }) {
-  const create = useCreateCustomer();
+function CreateBody({ onClose, correction }: { onClose: () => void; correction: ApiSchema<"CustomerRegistrationView"> | null }) {
+  const create = useCreateCustomer(correction?.registrationId);
   const navigate = useNavigate();
-  const [form, setForm] = useState<CreateForm>(emptyCreateForm);
+  const [form, setForm] = useState<CreateForm>(() => (correction ? { ...emptyCreateForm(), document: correction.document, name: correction.name } : emptyCreateForm()));
   const [showProblems, setShowProblems] = useState(false);
   const problems = createProblems(form);
   const failure = create.isError ? describeCustomerWriteError(create.error, "Não foi possível cadastrar o cliente") : null;
@@ -45,7 +48,7 @@ function CreateBody({ onClose }: { onClose: () => void }) {
     if (hasCreateProblems(problems) || create.isPending) return;
     create.mutate(form, {
       onSuccess: (saved) => {
-        toast({ title: CREATE_STATUS_LABELS[saved.status], description: saved.customerCode === null ? undefined : `Cliente ${saved.customerCode}`, tone: saved.status === "rejected" ? "danger" : "success" });
+        toast({ title: createStateLabel(saved.state), description: saved.customerCode === null ? undefined : `Cliente ${saved.customerCode}`, tone: saved.state === "needs_correction" ? "danger" : "success" });
         onClose();
         if (saved.customerCode !== null) void navigate({ to: "/clientes/$code", params: { code: String(saved.customerCode) } });
       },
@@ -54,7 +57,7 @@ function CreateBody({ onClose }: { onClose: () => void }) {
 
   return (
     <DialogContent
-      title="Novo cliente"
+      title={correction ? "Corrigir cadastro" : "Novo cliente"}
       className="max-w-2xl"
       footer={
         <>
@@ -68,6 +71,11 @@ function CreateBody({ onClose }: { onClose: () => void }) {
       }
     >
       <form id={FORM_ID} onSubmit={submit} noValidate aria-label="Novo cliente" className="flex flex-col gap-3">
+        {correction?.reasonMessage ? (
+          <Alert tone="warning" title={correction.stateLabel}>
+            {correction.reasonMessage}
+          </Alert>
+        ) : null}
         {failure ? (
           <Alert tone="danger" title={failure.title}>
             {failure.description}

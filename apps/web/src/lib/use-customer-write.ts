@@ -1,4 +1,5 @@
 import type { ApiSchema } from "@salesforce/contracts/client";
+import { customerStateLabel } from "@salesforce/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createCustomer, updateCustomer } from "./api-mutations";
 import { orderEntryConfigurationQueryOptions, queryKeys } from "./api-queries";
@@ -7,20 +8,11 @@ import { buildCreateBody, buildUpdateBody, isUnknownOutcome, type CreateForm, ty
 import { errorStatus } from "./http-error";
 import { useRef } from "react";
 
-/** Same words as the order and the app (PAR-1). `draft` ("Salvo") lives only on the device. */
-export const CUSTOMER_STATE_LABELS: Record<ApiSchema<"CustomerState">, string> = {
-  draft: "Salvo",
-  awaiting_send: "Aguardando envio ao Sankhya",
-  sent: "Enviado ao Sankhya",
-  needs_correction: "Precisa de correção",
-};
-
-export const CREATE_STATUS_LABELS: Record<ApiSchema<"CreateCustomerResponse">["status"], string> = {
-  confirmed: "Enviado ao Sankhya",
-  pending: "Aguardando envio ao Sankhya",
-  rejected: "Precisa de correção",
-  unknown: "Aguardando envio ao Sankhya",
-};
+/**
+ * The state text comes from the server (`stateLabel`, one wording in packages/domain for site and app); the create answer carries only
+ * the state, so the same domain function names it. Never composed here.
+ */
+export const createStateLabel = (state: ApiSchema<"CreateCustomerResponse">["state"]): string => customerStateLabel(state);
 
 /** What the installation released for customers; absent or false is "not released". Re-read when the screen opens. */
 export function useCustomerWriteFlags() {
@@ -64,21 +56,23 @@ export function useUpdateCustomer(customerCode: number) {
   });
 }
 
-export function useCreateCustomer() {
+/** `correctsRegistrationId`: the refused registration this one corrects (always a new request id). */
+export function useCreateCustomer(correctsRegistrationId?: string) {
   const api = useApi();
   const queryClient = useQueryClient();
   const requestId = useRef<string | null>(null);
   const signature = useRef<string>("");
   return useMutation({
     mutationFn: (form: CreateForm) => {
-      const current = JSON.stringify(buildCreateBody("", form));
+      const current = JSON.stringify(buildCreateBody("", form, correctsRegistrationId));
       if (!requestId.current || signature.current !== current) requestId.current = newUuid();
       signature.current = current;
-      return createCustomer(api, buildCreateBody(requestId.current, form));
+      return createCustomer(api, buildCreateBody(requestId.current, form, correctsRegistrationId));
     },
     onSuccess: () => {
       requestId.current = null;
       void queryClient.invalidateQueries({ queryKey: ["customers"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.customerRegistrations });
     },
     onError: (error) => {
       if (!isUnknownOutcome(error)) requestId.current = null;

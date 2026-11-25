@@ -34,6 +34,7 @@ import { Link } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 import { CustomerCreateDialog } from "../components/customer-create-dialog";
+import { CustomerRegistrationsCard } from "../components/customer-registrations-card";
 import { useCustomerWriteFlags } from "../lib/use-customer-write";
 import { MetricValueText, METRIC_VISUALS } from "../components/metric-value";
 import { QueryError } from "../components/query-error";
@@ -104,6 +105,7 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
         }
       />
       {canCreate ? <CustomerCreateDialog open={creating} onOpenChange={setCreating} /> : null}
+      {canCreate ? <CustomerRegistrationsCard /> : null}
 
       {portfolio && portfolio.metrics.length > 0 ? (
         <section aria-label={portfolio.label} className="max-sm:hidden">
