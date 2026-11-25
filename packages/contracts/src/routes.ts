@@ -23,7 +23,12 @@ import {
   ResolveProductsResponseSchema,
 } from './catalog.js';
 import { ConfigurationResponseSchema, OrderEntryConfigurationSchema } from './configuration.js';
-import { CreateCustomerRequestSchema, CreateCustomerResponseSchema } from './customer-write.js';
+import {
+  CreateCustomerRequestSchema,
+  CreateCustomerResponseSchema,
+  UpdateCustomerRequestSchema,
+  UpdateCustomerResponseSchema,
+} from './customer-write.js';
 import {
   CustomerDetailSchema,
   CustomerFinancialSchema,
@@ -79,7 +84,7 @@ import {
 export const API_BASE_PATH = '/api/v1';
 export const SESSION_COOKIE_NAME = 'sf_session';
 
-export type HttpMethod = 'get' | 'post' | 'put' | 'delete';
+export type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
 export type RouteAuth = 'public' | 'session';
 
 export interface RouteResponse {
@@ -388,6 +393,22 @@ export const routes = {
       202: { description: 'Aguardando envio ao Sankhya', schema: CreateCustomerResponseSchema },
     },
     errors: [400, 401, 403, 409, 429],
+  }),
+  updateCustomer: defineRoute({
+    operationId: 'updateCustomer',
+    method: 'patch',
+    path: '/customers/{code}',
+    tags: ['customers'],
+    summary: 'Edit phone, e-mail, contacts, addresses and notes of a customer (D-AP) - delivery to the ERP NOT approved',
+    description:
+      'Same rule for the site and the app. Allow-list: any other key is refused with 400 validation_failed whose `details.issues[].path` names the field (unrecognized_keys). Seller: only customers of their own portfolio; manager/admin: the portfolio they reach; outside it 404. TODAY the server never accepts an edit: 409 conflict with `details.reason` `customer_edit_disabled` while `ERP_CUSTOMER_EDIT_ENABLED` is closed (default) and `customer_edit_delivery_not_approved` when it is open, because the partner write port has no update operation (`updatePartner` stays refused until the owner approves it). Nothing is stored and the ERP is never called. The 202 response is the future success (state `awaiting_send`) and is not produced yet. Never changes name, document, seller, price table, status or limits.',
+    auth: 'session',
+    request: { params: CustomerPathSchema, body: UpdateCustomerRequestSchema },
+    maxBodyBytes: 16 * 1024,
+    responses: {
+      202: { description: 'Alteração registrada, aguardando envio ao Sankhya (ainda não produzida: a entrega não foi aprovada)', schema: UpdateCustomerResponseSchema },
+    },
+    errors: [400, 401, 403, 404, 409],
   }),
   getCustomer: defineRoute({
     operationId: 'getCustomer',

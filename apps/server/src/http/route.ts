@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   HttpCode,
+  Patch,
   Post,
   Put,
   createParamDecorator,
@@ -44,7 +45,7 @@ export interface RequestContract<R extends RouteDefinition> {
   readonly body: RouteBody<R>;
 }
 
-const methodDecorators = { get: Get, post: Post, put: Put, delete: Delete } as const;
+const methodDecorators = { get: Get, post: Post, put: Put, patch: Patch, delete: Delete } as const;
 
 /** Success status of a route: 201 for a POST that documents it, otherwise the lowest documented 2xx. */
 export function successStatusOf(route: RouteDefinition): number {

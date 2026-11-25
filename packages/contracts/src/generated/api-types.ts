@@ -336,7 +336,11 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Edit phone, e-mail, contacts, addresses and notes of a customer (D-AP) - delivery to the ERP NOT approved
+         * @description Same rule for the site and the app. Allow-list: any other key is refused with 400 validation_failed whose `details.issues[].path` names the field (unrecognized_keys). Seller: only customers of their own portfolio; manager/admin: the portfolio they reach; outside it 404. TODAY the server never accepts an edit: 409 conflict with `details.reason` `customer_edit_disabled` while `ERP_CUSTOMER_EDIT_ENABLED` is closed (default) and `customer_edit_delivery_not_approved` when it is open, because the partner write port has no update operation (`updatePartner` stays refused until the owner approves it). Nothing is stored and the ERP is never called. The 202 response is the future success (state `awaiting_send`) and is not produced yet. Never changes name, document, seller, price table, status or limits.
+         */
+        patch: operations["updateCustomer"];
         trace?: never;
     };
     "/customers/{code}/financial": {
@@ -1093,6 +1097,15 @@ export interface components {
             complement: string | null;
             postalCode: string;
         };
+        CustomerContactInput: {
+            name: string;
+            /** @default null */
+            role: string | null;
+            /** @default null */
+            phone: string | null;
+            /** @default null */
+            email: string | null;
+        };
         CustomerDetail: {
             code: number;
             name: string;
@@ -1164,9 +1177,13 @@ export interface components {
             lastFreightType: components["schemas"]["FreightType"] | null;
         };
         /** @enum {string} */
+        CustomerReasonCode: "document_already_registered" | "required_field" | "erp_refused" | "invalid_command" | "review_needed";
+        /** @enum {string} */
         CustomerRegistrationStatus: "pending" | "confirmed" | "rejected" | "unknown";
         /** @enum {string} */
         CustomerSort: "name" | "-name" | "code" | "-code";
+        /** @enum {string} */
+        CustomerState: "draft" | "awaiting_send" | "sent" | "needs_correction";
         /** @enum {string} */
         CustomerWithoutPriceTablePolicy: "no_resolved_table" | "use_fallback_table";
         CustomersResponse: {
@@ -1477,6 +1494,7 @@ export interface components {
                 enabled: boolean;
                 erpSubmissionEnabled?: boolean;
                 clientCreationEnabled?: boolean;
+                clientEditEnabled?: boolean;
             };
             sales: {
                 defaultNegotiationTypeCode: number | null;
@@ -1973,6 +1991,24 @@ export interface components {
         };
         /** @enum {string} */
         TemplateLineSkipReason: "product_removed" | "product_inactive" | "no_price" | "zero_price" | "product_hidden" | "product_not_sellable";
+        UpdateCustomerRequest: {
+            /** Format: uuid */
+            clientRequestId: string;
+            phone?: string | null;
+            email?: string | null;
+            notes?: string | null;
+            contacts?: components["schemas"]["CustomerContactInput"][];
+            addresses?: components["schemas"]["CustomerAddressInput"][];
+        };
+        UpdateCustomerResponse: {
+            /** Format: uuid */
+            updateId: string;
+            customerCode: number;
+            state: components["schemas"]["CustomerState"];
+            reasonCode: components["schemas"]["CustomerReasonCode"] | null;
+            reasonMessage: string | null;
+            updatedAt: components["schemas"]["IsoTimestamp"];
+        };
         UpdateDiscountLimitsRequest: {
             expectedRevision: string;
             limits: components["schemas"]["DiscountLimits"];
@@ -3010,6 +3046,77 @@ export interface operations {
             };
             /** @description Recurso não encontrado (ou fora do escopo do usuário) */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    updateCustomer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCustomerRequest"];
+            };
+        };
+        responses: {
+            /** @description Alteração registrada, aguardando envio ao Sankhya (ainda não produzida: a entrega não foi aprovada) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateCustomerResponse"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflito de estado */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

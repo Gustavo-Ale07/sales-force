@@ -17,6 +17,7 @@ import {
   DATABASE_HANDLE,
   LOGGER,
   CUSTOMER_CONFIRM_WAIT,
+  CUSTOMER_EDIT_ENABLED,
   CUSTOMER_ENQUEUE_ENABLED,
   PROFILE_PHOTO_ERP_WRITE_ENABLED,
   ORDER_ENQUEUE_ENABLED,
@@ -45,6 +46,8 @@ export interface InfrastructureDeps {
   readonly orderEnqueueEnabled?: boolean;
   /** API only: accept customer creations (default false). The worker has its own flag. */
   readonly customerEnqueueEnabled?: boolean;
+  /** API only: open the customer edit route (default false; the edit delivery is not approved, so it still refuses). */
+  readonly customerEditEnabled?: boolean;
   /** API only: queue the profile photo write to the ERP (default false; the worker has its own validation of the same flag). */
   readonly profilePhotoErpWriteEnabled?: boolean;
   /** API only: how long a creation waits for the worker (default 15 s; tests shorten it). */
@@ -69,6 +72,7 @@ export class InfrastructureModule {
       { provide: DATASET_IDENTITY, useValue: deps.dataset ?? null },
       { provide: ORDER_ENQUEUE_ENABLED, useValue: deps.orderEnqueueEnabled ?? false },
       { provide: CUSTOMER_ENQUEUE_ENABLED, useValue: deps.customerEnqueueEnabled ?? false },
+      { provide: CUSTOMER_EDIT_ENABLED, useValue: deps.customerEditEnabled ?? false },
       { provide: PROFILE_PHOTO_ERP_WRITE_ENABLED, useValue: deps.profilePhotoErpWriteEnabled ?? false },
       {
         provide: CUSTOMER_CONFIRM_WAIT,

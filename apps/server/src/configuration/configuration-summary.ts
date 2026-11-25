@@ -88,6 +88,7 @@ export function toOrderEntryConfiguration(
   dataset: DatasetIdentity | null,
   erpSubmissionEnabled?: boolean,
   clientCreationEnabled?: boolean,
+  clientEditEnabled?: boolean,
 ): OrderEntryConfiguration {
   return {
     dataset: dataset === null ? null : { environment: dataset.environment, datasetId: dataset.datasetId },
@@ -95,6 +96,7 @@ export function toOrderEntryConfiguration(
       enabled: configuration.general.enabled,
       ...(erpSubmissionEnabled === undefined ? {} : { erpSubmissionEnabled }),
       ...(clientCreationEnabled === undefined ? {} : { clientCreationEnabled }),
+      ...(clientEditEnabled === undefined ? {} : { clientEditEnabled }),
     },
     sales: {
       defaultNegotiationTypeCode: configuration.sales.defaultNegotiationTypeCode,

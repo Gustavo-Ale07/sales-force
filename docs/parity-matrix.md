@@ -84,6 +84,7 @@ Lotes (definidos pelo dono): 1 e 2 em andamento hoje; 3 e 4 NÃO iniciar; FORA =
 |---|---|---|---|---|---|---|---|---|
 | Aprovações, limites de desconto, integração, configurações | existe | n/a | só site por natureza | | | | feito | |
 | Bloqueio de login operations/technical no app | servidor: `POST /auth/login` com `client: 'app'` recusa technical/operations com `app_not_permitted` (403), auditado; site inalterado | app envia `client: 'app'` e exibe `APP_NOT_PERMITTED_MESSAGE` (contracts) | servidor sim | S | n/a | servidor feito; app pendente (agente do app) | servidor feito | ver commit E |
+| Edição de cliente (D-AP) | servidor: `PATCH /customers/{code}` no contrato; sempre 409 (`customer_edit_disabled` / `customer_edit_delivery_not_approved`), escopo por carteira, sem gravação; `general.clientEditEnabled` na configuração (hoje sempre `false`) | mesma regra no site; app idem; não exibir enquanto `clientEditEnabled=false` | servidor sim | S | n/a | pendente (aguarda aprovação de `updatePartner`) | servidor feito (recusa) | `docs/implementation/customer-create-edit.md` |
 
 ## Estados, rótulos e cores
 

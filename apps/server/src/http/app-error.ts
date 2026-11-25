@@ -111,11 +111,14 @@ export function formatIssuePath(path: readonly PropertyKey[]): string {
  * submitted value); the message is a fixed pt-BR sentence chosen by the issue code.
  */
 export function issuesFromZod(error: z.ZodError): AppErrorIssue[] {
-  return error.issues.map((issue) => ({
-    path: formatIssuePath(issue.path),
-    code: issue.code,
-    message: ISSUE_MESSAGES[issue.code] ?? 'Valor inválido.',
-  }));
+  return error.issues.flatMap((issue): AppErrorIssue[] => {
+    const message = ISSUE_MESSAGES[issue.code] ?? 'Valor inválido.';
+    // A strict object reports its unknown keys on the parent path: one issue per key, so the client learns WHICH field was refused.
+    if (issue.code === 'unrecognized_keys') {
+      return issue.keys.map((key) => ({ path: formatIssuePath([...issue.path, key]), code: issue.code, message }));
+    }
+    return [{ path: formatIssuePath(issue.path), code: issue.code, message }];
+  });
 }
 
 export function validationError(error: z.ZodError): AppError {

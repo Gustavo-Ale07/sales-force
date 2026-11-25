@@ -429,6 +429,8 @@ export const OrderEntryConfigurationSchema = named(
       erpSubmissionEnabled: z.boolean().optional(),
       /** Customer creation released on this installation; absent = unknown (older server). Re-read at every sync. */
       clientCreationEnabled: z.boolean().optional(),
+      /** Customer edit accepted on this installation (D-AP). False while the edit delivery to the ERP is not approved; absent = unknown (older server). */
+      clientEditEnabled: z.boolean().optional(),
     }),
     sales: z.strictObject({
       defaultNegotiationTypeCode: codeInt().nullable(),

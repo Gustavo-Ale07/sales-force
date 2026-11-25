@@ -74,6 +74,7 @@ const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>
   // templates it sees is the customer's seller scope (IDOR tests: order-templates.test.ts).
   listOrderTemplates: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   createCustomer: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  updateCustomer: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   createOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   getOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   replaceOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
@@ -118,7 +119,7 @@ function urlOf(route: RouteDefinition): string {
 
 function callOf(route: RouteDefinition, cookie: string | undefined) {
   return ctx.app.inject({
-    method: route.method.toUpperCase() as 'GET' | 'POST' | 'PUT' | 'DELETE',
+    method: route.method.toUpperCase() as 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
     url: urlOf(route),
     headers: { origin: TEST_ORIGIN, 'content-type': 'application/json', ...(cookie === undefined ? {} : { cookie }) },
     payload: route.method === 'get' ? undefined : '{}',

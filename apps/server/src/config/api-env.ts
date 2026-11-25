@@ -57,6 +57,15 @@ export const ApiEnvSchema = z.object({
     .default('false')
     .transform((value) => value === 'true'),
   /**
+   * D-AP: open `PATCH /customers/{code}`. `false` by default; staging only; needs customer creation open. Even when open the server
+   * still refuses the edit (409 `customer_edit_delivery_not_approved`): the partner write port has no update operation (`updatePartner`
+   * stays refused until the owner approves it), so nothing is stored and the ERP is never called.
+   */
+  ERP_CUSTOMER_EDIT_ENABLED: z
+    .enum(['true', 'false'], { error: "must be 'true' or 'false'." })
+    .default('false')
+    .transform((value) => value === 'true'),
+  /**
    * Spike S1.8: queue the profile photo write to the ERP (`PUT /me/photo`). `false` by default and accepted only on staging; the
    * worker validates the SAME variable (staging + Sandbox only) before it ever calls Sankhya. The API never calls Sankhya.
    */
@@ -213,6 +222,12 @@ export function parseApiEnv(source: EnvSource): ParsedApiEnv {
     }
     if (parsed.ERP_PROFILE_PHOTO_ENQUEUE_ENABLED && parsed.SF_DEPLOY_ENVIRONMENT !== 'staging' && !(parsed.SF_DEPLOY_ENVIRONMENT === undefined && parsed.NODE_ENV !== 'production')) {
       problems.push('ERP_PROFILE_PHOTO_ENQUEUE_ENABLED: is only accepted when SF_DEPLOY_ENVIRONMENT=staging (the photo write to the ERP stays disabled elsewhere, SNK-6).');
+    }
+    if (parsed.ERP_CUSTOMER_EDIT_ENABLED && !parsed.ERP_CUSTOMER_ENQUEUE_ENABLED) {
+      problems.push('ERP_CUSTOMER_EDIT_ENABLED: requires ERP_CUSTOMER_ENQUEUE_ENABLED=true (customer edit builds on the customer write path).');
+    }
+    if (parsed.ERP_CUSTOMER_EDIT_ENABLED && parsed.SF_DEPLOY_ENVIRONMENT !== 'staging' && !(parsed.SF_DEPLOY_ENVIRONMENT === undefined && parsed.NODE_ENV !== 'production')) {
+      problems.push('ERP_CUSTOMER_EDIT_ENABLED: is only accepted when SF_DEPLOY_ENVIRONMENT=staging (customer edit stays disabled elsewhere).');
     }
     if (parsed.SF_ERP_ENVIRONMENT !== undefined && parsed.SF_DATASET_ID === undefined) {
       problems.push('SF_DATASET_ID: is required when SF_ERP_ENVIRONMENT is set (set both or neither).');

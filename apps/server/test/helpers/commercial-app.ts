@@ -46,7 +46,7 @@ export interface CommercialApp extends AuthApp {
   /** JSON request as a demo user; returns status, parsed body and the raw response. */
   call(
     who: Who,
-    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+    method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
     url: string,
     body?: unknown,
   ): Promise<{ status: number; body: Json; response: LightMyRequestResponse }>;

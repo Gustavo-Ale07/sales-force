@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { UuidSchema, codeInt, named, sellerCodeInt } from './primitives.js';
+import { IsoTimestampSchema, UuidSchema, codeInt, named, sellerCodeInt } from './primitives.js';
 
 /**
  * Customer creation in the Force (D-AR). The customer is written to the ERP by the worker through
@@ -108,3 +108,66 @@ export const CreateCustomerResponseSchema = named(
   }),
 );
 export type CreateCustomerResponse = z.infer<typeof CreateCustomerResponseSchema>;
+
+/**
+ * The state a client shows. `draft` lives only on the device ("Salvar e sair": no server call); the server answers the other three.
+ * awaiting_send = "Aguardando envio" (retried by the server); sent = confirmed by the ERP; needs_correction = "Precisa de correção".
+ */
+export const CUSTOMER_STATES = ['draft', 'awaiting_send', 'sent', 'needs_correction'] as const;
+export const CustomerStateSchema = named('CustomerState', z.enum(CUSTOMER_STATES));
+export type CustomerState = z.infer<typeof CustomerStateSchema>;
+
+/** Stable reason codes of a refusal; `reasonMessage` carries the readable text. */
+export const CUSTOMER_REASON_CODES = ['document_already_registered', 'required_field', 'erp_refused', 'invalid_command', 'review_needed'] as const;
+export const CustomerReasonCodeSchema = named('CustomerReasonCode', z.enum(CUSTOMER_REASON_CODES));
+
+/* ---------- Edit (D-AP): only phone, e-mail, contacts, addresses and notes ---------- */
+
+/** NEEDS VALIDATION: the ERP column sizes of a contact were not read; these limits are provisional (edit delivery is not approved yet). */
+export const CustomerContactInputSchema = named(
+  'CustomerContactInput',
+  z.strictObject({
+    name: text(100),
+    role: text(50).nullable().default(null),
+    phone: CustomerFieldSchemas.phone.nullable().default(null),
+    email: CustomerFieldSchemas.email.nullable().default(null),
+  }),
+);
+export type CustomerContactInput = z.infer<typeof CustomerContactInputSchema>;
+
+export const MAX_CUSTOMER_CONTACTS = 10;
+
+/**
+ * The allow-list of the edit: any other key is refused with a 400 that names it (never ignored). A present field REPLACES the
+ * stored value (`null` clears phone, e-mail and notes; `contacts` and `addresses` are whole lists); an absent field is untouched.
+ */
+export const UpdateCustomerRequestSchema = named(
+  'UpdateCustomerRequest',
+  z
+    .strictObject({
+      /** Idempotency key, unique per account. */
+      clientRequestId: UuidSchema,
+      phone: CustomerFieldSchemas.phone.nullable().optional(),
+      email: CustomerFieldSchemas.email.nullable().optional(),
+      notes: CustomerFieldSchemas.notes.nullable().optional(),
+      contacts: z.array(CustomerContactInputSchema).max(MAX_CUSTOMER_CONTACTS).optional(),
+      addresses: z.array(CustomerAddressInputSchema).max(MAX_CUSTOMER_ADDRESSES).optional(),
+    })
+    .refine((value) => ['phone', 'email', 'notes', 'contacts', 'addresses'].some((key) => (value as Record<string, unknown>)[key] !== undefined), {
+      message: 'Informe ao menos um campo para alterar.',
+    }),
+);
+export type UpdateCustomerRequest = z.infer<typeof UpdateCustomerRequestSchema>;
+
+export const UpdateCustomerResponseSchema = named(
+  'UpdateCustomerResponse',
+  z.object({
+    updateId: UuidSchema,
+    customerCode: codeInt(),
+    state: CustomerStateSchema,
+    reasonCode: CustomerReasonCodeSchema.nullable(),
+    reasonMessage: z.string().nullable(),
+    updatedAt: IsoTimestampSchema,
+  }),
+);
+export type UpdateCustomerResponse = z.infer<typeof UpdateCustomerResponseSchema>;

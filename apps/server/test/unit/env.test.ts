@@ -393,6 +393,28 @@ describe('API customer creation switch (D-AR)', () => {
   });
 });
 
+describe('API customer edit switch (D-AP)', () => {
+  const STAGING_RUN = { DATABASE_URL, NODE_ENV: 'production', TRUST_PROXY: '1', ALLOWED_ORIGINS: 'https://app.example.com', AUTH_MODE: 'local', SF_ERP_ENVIRONMENT: 'sandbox', SF_DATASET_ID: 'acme-sandbox-1' } as const;
+
+  it('is off by default and when empty', () => {
+    expect(parseApiEnv({ ...DEV }).ERP_CUSTOMER_EDIT_ENABLED).toBe(false);
+    expect(parseApiEnv({ ...DEV, ERP_CUSTOMER_EDIT_ENABLED: '' }).ERP_CUSTOMER_EDIT_ENABLED).toBe(false);
+  });
+
+  it('needs the customer creation switch open too', () => {
+    expect(problemsOf(() => parseApiEnv({ ...DEV, ERP_CUSTOMER_EDIT_ENABLED: 'true' }))).toEqual(
+      expect.arrayContaining([expect.stringMatching(/^ERP_CUSTOMER_EDIT_ENABLED:/)]),
+    );
+    expect(parseApiEnv({ ...DEV, ERP_CUSTOMER_ENQUEUE_ENABLED: 'true', ERP_CUSTOMER_EDIT_ENABLED: 'true' }).ERP_CUSTOMER_EDIT_ENABLED).toBe(true);
+  });
+
+  it('is refused in production, whatever NODE_ENV says', () => {
+    expect(
+      problemsOf(() => parseApiEnv({ ...STAGING_RUN, SF_DEPLOY_ENVIRONMENT: 'production', ERP_CUSTOMER_ENQUEUE_ENABLED: 'true', ERP_CUSTOMER_EDIT_ENABLED: 'true' })),
+    ).toEqual(expect.arrayContaining([expect.stringMatching(/^ERP_CUSTOMER_EDIT_ENABLED: is only accepted when SF_DEPLOY_ENVIRONMENT=staging/)]));
+  });
+});
+
 describe('API profile photo ERP switch (spike S1.8)', () => {
   const STAGING_RUN = { DATABASE_URL, NODE_ENV: 'production', TRUST_PROXY: '1', ALLOWED_ORIGINS: 'https://app.example.com', AUTH_MODE: 'local', SF_ERP_ENVIRONMENT: 'sandbox', SF_DATASET_ID: 'acme-sandbox-1' } as const;
 

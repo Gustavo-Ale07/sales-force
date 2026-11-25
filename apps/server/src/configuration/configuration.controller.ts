@@ -10,7 +10,8 @@ import {
 import { syncState, type Database } from '@salesforce/db';
 import { ApiRoute, Contract, type RequestContract } from '../http/route.js';
 import { CurrentUserParam, type CurrentUser } from '../iam/current-user.js';
-import { CLOCK, CUSTOMER_ENQUEUE_ENABLED, DATABASE, DATASET_IDENTITY, ORDER_ENQUEUE_ENABLED, type Clock } from '../platform/tokens.js';
+import { CUSTOMER_EDIT_DELIVERY_APPROVED } from '../customers/customer-edit-delivery.js';
+import { CLOCK, CUSTOMER_EDIT_ENABLED, CUSTOMER_ENQUEUE_ENABLED, DATABASE, DATASET_IDENTITY, ORDER_ENQUEUE_ENABLED, type Clock } from '../platform/tokens.js';
 import { buildConfigurationResponse, toOrderEntryConfiguration } from './configuration-summary.js';
 import { InstallationConfigurationService } from './configuration.service.js';
 import { DiscountLimitsService } from './discount-limits.service.js';
@@ -34,6 +35,7 @@ export class ConfigurationController {
     @Inject(DiscountLimitsService) private readonly discountLimits: DiscountLimitsService,
     @Inject(ORDER_ENQUEUE_ENABLED) private readonly enqueueEnabled: boolean,
     @Inject(CUSTOMER_ENQUEUE_ENABLED) private readonly customerEnqueueEnabled: boolean,
+    @Inject(CUSTOMER_EDIT_ENABLED) private readonly customerEditEnabled: boolean,
   ) {}
 
   @ApiRoute(routes.getConfiguration)
@@ -59,6 +61,6 @@ export class ConfigurationController {
   @ApiRoute(routes.getOrderEntryConfiguration)
   async getOrderEntry(): Promise<OrderEntryConfiguration> {
     const current = await this.configuration.current();
-    return toOrderEntryConfiguration(current.configuration, this.dataset, this.enqueueEnabled, this.customerEnqueueEnabled);
+    return toOrderEntryConfiguration(current.configuration, this.dataset, this.enqueueEnabled, this.customerEnqueueEnabled, this.customerEnqueueEnabled && this.customerEditEnabled && CUSTOMER_EDIT_DELIVERY_APPROVED);
   }
 }

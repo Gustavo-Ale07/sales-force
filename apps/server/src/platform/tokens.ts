@@ -23,6 +23,12 @@ export const ORDER_ENQUEUE_ENABLED = Symbol('ORDER_ENQUEUE_ENABLED');
  */
 export const CUSTOMER_ENQUEUE_ENABLED = Symbol('CUSTOMER_ENQUEUE_ENABLED');
 /**
+ * Customer-edit switch of the API (`ERP_CUSTOMER_EDIT_ENABLED`, default false). While false, `PATCH /customers/{code}` answers 409
+ * `customer_edit_disabled`. Even when true it answers 409 `customer_edit_delivery_not_approved` (the partner write port has no update
+ * operation; the owner has not approved one): nothing is stored and the ERP is never called.
+ */
+export const CUSTOMER_EDIT_ENABLED = Symbol('CUSTOMER_EDIT_ENABLED');
+/**
  * Profile-photo ERP switch of the API (`ERP_PROFILE_PHOTO_ENQUEUE_ENABLED`, default false; spike S1.8): while false, `PUT /me/photo`
  * queues nothing for the ERP. The worker has its own switch and refuses to start unless it targets the Sandbox.
  */

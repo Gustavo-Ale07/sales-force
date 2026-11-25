@@ -43,6 +43,7 @@ runMain('api', async () => {
     readinessCacheTtlMs: env.READINESS_CACHE_TTL_MS,
     orderEnqueueEnabled: env.ERP_ORDER_ENQUEUE_ENABLED,
     customerEnqueueEnabled: env.ERP_CUSTOMER_ENQUEUE_ENABLED,
+    customerEditEnabled: env.ERP_CUSTOMER_EDIT_ENABLED,
     profilePhotoErpWriteEnabled: env.ERP_PROFILE_PHOTO_ENQUEUE_ENABLED,
     trustProxy: env.TRUST_PROXY,
     // Profile photos: the API writes its own store (never the ERP). Unset = the photo routes answer 503.
