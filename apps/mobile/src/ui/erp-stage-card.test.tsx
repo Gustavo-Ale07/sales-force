@@ -27,6 +27,18 @@ const view = (s: DraftErpStage) => {
 
 const TIMELINE = ORDER_STAGE_TIMELINE.map((code) => [code, ORDER_STAGE_LABELS[code]] as const);
 
+describe("ErpStageCard release level", () => {
+  it("shows the server text as is", async () => {
+    await render(<ErpStageCard stage={view(stage("in_review", "Em análise", { releaseLevel: { state: "awaiting", level: 2, text: "Nível 2" } }))} />);
+    expect(screen.getByText("Nível 2")).toBeTruthy();
+  });
+
+  it("shows nothing when the server sent no text", async () => {
+    await render(<ErpStageCard stage={view(stage("in_review", "Em análise", { releaseLevel: { state: "none", level: null, text: null } }))} />);
+    expect(screen.queryByText(/Nível|Ainda não confirmado/)).toBeNull();
+  });
+});
+
 describe("ErpStageCard per stage", () => {
   it.each(TIMELINE.map((entry, index) => ({ code: entry[0], label: entry[1], index })))("$code: earlier steps concluded, this one current, later ones next", async ({ code, label, index }) => {
     await render(<ErpStageCard stage={view(stage(code, label, { nunota: 555 }))} />);

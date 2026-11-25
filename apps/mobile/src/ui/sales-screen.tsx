@@ -69,6 +69,7 @@ const SaleRowView = memo(function SaleRowView({ row, onOpen }: { row: SalesRow; 
         {editable && <Text style={styles.edit}>Editar</Text>}
       </View>
       {attention !== null && <Text style={styles.attention}>{attention}</Text>}
+      {draft.erpStage?.releaseLevel?.text ? <Text style={styles.meta}>{draft.erpStage.releaseLevel.text}</Text> : null}
     </Pressable>
   );
 });

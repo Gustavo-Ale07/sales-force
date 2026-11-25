@@ -181,6 +181,8 @@ export interface DraftErpStage {
   readonly updatedAt: string;
   readonly checkedAt: string | null;
   readonly readError: { readonly errorClass: string; readonly errorCode: string; readonly at: string } | null;
+  /** Release queue level as the server wrote it (`text` is shown as is). Kept inside `erp_stage_json`: no column, no migration. */
+  readonly releaseLevel?: { readonly state: string; readonly level: number | null; readonly text: string | null } | null;
 }
 
 export function erpStageOf(stage: unknown, json: unknown): DraftErpStage | null {

@@ -236,6 +236,7 @@ export function createReferenceSource(api: ApiClient, timing: RefreshTiming = {}
                       updatedAt: order.erpStage.updatedAt,
                       checkedAt: order.erpStage.checkedAt ?? null,
                       readError: order.erpStage.readError ?? null,
+                      releaseLevel: order.erpStage.releaseLevel ?? null,
                     },
                   }),
             });

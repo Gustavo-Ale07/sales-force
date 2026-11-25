@@ -31,6 +31,13 @@ describe("fetchOrderStatuses (GET /orders?ids=, only what the server returns)", 
     ]);
   });
 
+  it("carries the release queue level of the stage as the server wrote it", async () => {
+    const erpStage = { stage: "in_review", label: "Em análise", pendingSector: null, nunota: 5, invoiceNumber: null, updatedAt: "2026-11-25T10:00:00.000Z", checkedAt: null, readError: null, releaseLevel: { state: "awaiting", level: 2, text: "Nível 2" } };
+    const api = { GET: async () => ({ data: { items: [item("a", { erpStage })], page: 1, pageSize: 100, total: 1 }, response: ok }) } as unknown as ApiClient;
+    const result = await createReferenceSource(api).fetchOrderStatuses!(["a"]);
+    expect(result[0]?.stage?.releaseLevel).toEqual({ state: "awaiting", level: 2, text: "Nível 2" });
+  });
+
   it("follows the pages until the total is read", async () => {
     const pages: number[] = [];
     const api = {

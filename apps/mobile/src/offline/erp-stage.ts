@@ -40,6 +40,8 @@ export interface ErpStageView {
   readonly asOf: string;
   /** Catalog code of the last read failure; `null` = the last read worked. */
   readonly readErrorCode: string | null;
+  /** The server text of the release queue level, shown as is; `null` = nothing to show. */
+  readonly releaseLevelText: string | null;
 }
 
 function isStageCode(code: string): code is OrderStageCode {
@@ -84,6 +86,7 @@ export function erpStageViewOf(stage: DraftErpStage | null | undefined): ErpStag
     invoiceNumber: stage.invoiceNumber,
     asOf: stage.checkedAt ?? stage.updatedAt,
     readErrorCode: stage.readError === null ? null : stageReadErrorCode(stage.readError),
+    releaseLevelText: stage.releaseLevel?.text ?? null,
   };
 }
 

@@ -222,6 +222,12 @@ describe("SalesScreen — detail and actions", () => {
     expect(props.onContinue).toHaveBeenCalledWith("r");
   });
 
+  it("a sent order shows the release level text of the server under the badge", async () => {
+    const waiting = draftRecord({ localId: "n", customerName: "Nina Mercado", status: "synced", remoteId: "r-n", sendState: "submitted", sendCode: "queued", erpStage: { stage: "in_review", label: "Em análise", pendingSector: null, nunota: 9, invoiceNumber: null, updatedAt: "2026-11-25T10:00:00.000Z", checkedAt: null, readError: null, releaseLevel: { state: "awaiting", level: 1, text: "Nível 1" } } });
+    await renderSales([waiting]);
+    expect(await screen.findByText("Nível 1")).toBeTruthy();
+  });
+
   it("a rejected order delivered by the server shows its reason under the badge; an order without a reason shows none", async () => {
     const rejected = draftRecord({ localId: "j", customerName: "Joana Armazém", status: "synced", remoteId: "r-j", sendState: "submitted", sendCode: "rejected", sendError: "Produto sem preço na tabela." });
     const bare = draftRecord({ localId: "k", customerName: "Katia Depósito", status: "synced", remoteId: "r-k", sendState: "submitted", sendCode: "rejected" });
