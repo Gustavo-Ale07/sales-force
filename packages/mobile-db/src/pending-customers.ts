@@ -13,6 +13,8 @@ export const CUSTOMER_CREATION_NOT_RELEASED = "Cadastro de cliente ainda não li
  * No expiry: only a sync (or an accepted answer) turns it back on.
  */
 const CREATION_OFF_META = "customers.creation_enabled";
+/** "1" while `general.clientEditEnabled` was true at the last sync (D-AP). Absent = the edit entry point is hidden. */
+const EDIT_ON_META = "customers.edit_enabled";
 
 /**
  * Customers the seller created in the app that the ERP has not confirmed yet (customer-write plan A2, F7).
@@ -284,6 +286,11 @@ export async function purgeRefusedCustomers(db: SqlDatabase, env: OfflineEnv): P
   });
 }
 
+/** `true` only while the last synced configuration said `general.clientEditEnabled === true` (re-read at every sync; unknown = false). */
+export async function isCustomerEditAvailable(db: SqlExecutor): Promise<boolean> {
+  return (await getMeta(db, EDIT_ON_META)) === "1";
+}
+
 /** `false` while the last configuration (or a 409) said "customer creation is off"; `true` otherwise, also when unknown. */
 export async function isCustomerCreationAvailable(db: SqlExecutor, _env?: OfflineEnv): Promise<boolean> {
   return (await getMeta(db, CREATION_OFF_META)) !== "0";
@@ -297,6 +304,10 @@ export async function isCustomerCreationAvailable(db: SqlExecutor, _env?: Offlin
 export async function applyCustomerCreationSignal(tx: SqlExecutor, configuration: unknown, now: string): Promise<void> {
   const general = typeof configuration === "object" && configuration !== null ? (configuration as { general?: unknown }).general : undefined;
   const flag = typeof general === "object" && general !== null ? (general as { clientCreationEnabled?: unknown }).clientCreationEnabled : undefined;
+  // The edit entry point is the opposite default: shown only while the last configuration said `true` (absent = hidden).
+  const editFlag = typeof general === "object" && general !== null ? (general as { clientEditEnabled?: unknown }).clientEditEnabled : undefined;
+  if (editFlag === true) await setMeta(tx, EDIT_ON_META, "1", now);
+  else if ((await getMeta(tx, EDIT_ON_META)) !== null) await deleteMeta(tx, EDIT_ON_META);
   if (flag === false) {
     await setMeta(tx, CREATION_OFF_META, "0", now);
     return;

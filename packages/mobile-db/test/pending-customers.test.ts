@@ -30,6 +30,8 @@ import {
   type CustomerRegistrationTransport,
   CUSTOMER_CREATION_NOT_RELEASED,
   isCustomerCreationAvailable,
+  isCustomerEditAvailable,
+  applyCustomerCreationSignal,
   redoPendingCustomer,
   searchCustomers,
   type OfflineEnv,
@@ -510,6 +512,27 @@ describe("isolation by account and dataset", () => {
     expect(erp.calls).toEqual([]);
     expect(await countPendingCustomers(db, OWNER, FAKE)).toEqual({ pending: 0, needsAttention: 1 });
     expect(await countPendingCustomers(db, OWNER, REAL)).toEqual({ pending: 1, needsAttention: 0 });
+  });
+});
+
+describe("is customer edit available? (only while the last configuration said true)", () => {
+  const signal = (general: Record<string, unknown>) => db.transaction((tx) => applyCustomerCreationSignal(tx, { general }, "2026-11-25T12:00:00.000Z"));
+
+  it("is hidden when unknown, shown on true, hidden again on false or absent", async () => {
+    expect(await isCustomerEditAvailable(db)).toBe(false);
+    await signal({ clientEditEnabled: true });
+    expect(await isCustomerEditAvailable(db)).toBe(true);
+    await signal({ clientEditEnabled: false });
+    expect(await isCustomerEditAvailable(db)).toBe(false);
+    await signal({ clientEditEnabled: true });
+    await signal({});
+    expect(await isCustomerEditAvailable(db)).toBe(false);
+  });
+
+  it("does not touch the creation signal", async () => {
+    await signal({ clientCreationEnabled: false, clientEditEnabled: true });
+    expect(await isCustomerCreationAvailable(db, env)).toBe(false);
+    expect(await isCustomerEditAvailable(db)).toBe(true);
   });
 });
 
