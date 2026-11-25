@@ -274,7 +274,7 @@ describe("Novo pedido", () => {
       const dialog = await screen.findByRole("dialog");
       expect(within(dialog).getByRole("heading", { name: /1001 – Comercial Alfa Ltda/ })).toBeInTheDocument();
       expect(within(dialog).getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
-        "Dados cadastrais",
+        "Dados principais",
         "Financeiro",
         "Análise do cliente",
         "Engajamento",

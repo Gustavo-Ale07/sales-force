@@ -73,7 +73,7 @@ export function ApprovalsPage() {
               <TableHead>Vendedor</TableHead>
               <TableHead>Nível</TableHead>
               <TableHead numeric>Maior desconto</TableHead>
-              <TableHead numeric>Total estimado</TableHead>
+              <TableHead numeric>Total</TableHead>
               <TableHead>Solicitado em</TableHead>
               <TableHead>
                 <span className="sr-only">Ações</span>

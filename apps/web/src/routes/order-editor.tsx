@@ -1139,7 +1139,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                     <TableHead>Quantidade</TableHead>
                     <TableHead numeric>Preço unitário</TableHead>
                     <TableHead>Desc. (%)</TableHead>
-                    <TableHead numeric>Total estimado</TableHead>
+                    <TableHead numeric>Total</TableHead>
                     <TableHead>
                       <span className="sr-only">Ações</span>
                     </TableHead>
@@ -1244,7 +1244,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                             </span>
                           ) : null}
                         </TableCell>
-                        <TableCell numeric label="Total estimado">
+                        <TableCell numeric label="Total">
                           <Money
                             value={linePreview?.item?.estimatedLineTotal ?? null}
                             fallback={line.price.state === "none" ? NO_PRICE_TEXT : "—"}

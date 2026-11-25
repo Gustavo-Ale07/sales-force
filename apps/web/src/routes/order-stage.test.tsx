@@ -267,7 +267,7 @@ describe("Situação no Sankhya: lista de pedidos", () => {
 
   it("a stage with no orders shows the empty state with 'Limpar filtros'", async () => {
     const { user, router } = renderApp("/pedidos?stage=send_error", { handlers: list() });
-    expect(await screen.findByText("Nenhum pedido encontrado")).toBeInTheDocument();
+    expect(await screen.findByText("Nenhuma venda encontrada com esses filtros.")).toBeInTheDocument();
     await user.click(within(screen.getByRole("table")).getByRole("button", { name: "Limpar filtros" }));
     expect(await screen.findByText("Pedido nº 5001")).toBeInTheDocument();
     expect(router.state.location.search).not.toHaveProperty("stage");

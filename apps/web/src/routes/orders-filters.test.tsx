@@ -254,9 +254,9 @@ describe("Vendas: filtros comerciais", () => {
 
   it("empty result with filters: says nothing was found and offers to clear them", async () => {
     const { user, calls } = renderApp("/pedidos?from=2026-03-01&products=%5B12%5D", { handlers: handlers({ "GET /orders": { body: ordersPage([]) } }) });
-    expect(await screen.findByText("Nenhum pedido encontrado")).toBeInTheDocument();
-    expect(screen.queryByText("Nenhum pedido ainda")).not.toBeInTheDocument();
-    const empty = screen.getByText("Nenhum pedido encontrado").closest("td")!;
+    expect(await screen.findByText("Nenhuma venda encontrada com esses filtros.")).toBeInTheDocument();
+    expect(screen.queryByText("Nenhuma venda enviada ainda.")).not.toBeInTheDocument();
+    const empty = screen.getByText("Nenhuma venda encontrada com esses filtros.").closest("td")!;
     await user.click(within(empty).getByRole("button", { name: "Limpar filtros" }));
     await waitFor(() => expect(lastOrdersCall(calls)?.get("productCodes")).toBeNull());
     expect(lastOrdersCall(calls)?.get("from")).toBeNull();

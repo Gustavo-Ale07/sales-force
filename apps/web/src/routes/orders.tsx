@@ -213,7 +213,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
       <PageHeader
         title="Vendas"
         count={query.data ? query.data.total.toLocaleString("pt-BR") : undefined}
-        description={submissionEnabled === false ? "Pedidos. O envio ao Sankhya ainda não está habilitado nesta instalação." : "Pedidos."}
+        description={submissionEnabled === false ? "O envio ao Sankhya ainda não está habilitado nesta instalação." : undefined}
         actions={
           <Button asChild variant="primary" leftIcon={<Plus size={16} strokeWidth={1.75} aria-hidden="true" />}>
             <Link to="/pedidos/novo">Novo pedido</Link>
@@ -233,13 +233,13 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
         <FilterField label="Pedidos" keepVisible className="lg:col-span-4">
           <SegmentedControl<"unsent" | "sent"> aria-label="Pedidos" value={group} onValueChange={pickGroup} options={GROUP_OPTIONS} className="h-10 items-center" />
         </FilterField>
-        <FilterField label="Nº do pedido ou cliente" keepVisible className="lg:col-span-4">
+        <FilterField label="Buscar venda" keepVisible className="lg:col-span-4">
           <SearchInput
             size="md"
             value={searchText}
             onValueChange={setSearchText}
-            placeholder="Número ou cliente"
-            aria-label="Buscar pedido por número ou cliente"
+            placeholder="Buscar por cliente, código ou nº do pedido"
+            aria-label="Buscar venda"
           />
         </FilterField>
         <FilterField label="Cliente" className="lg:col-span-8">
@@ -371,7 +371,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
               <TableHead>Data</TableHead>
               <TableHead>Situação</TableHead>
               <TableHead numeric>Itens</TableHead>
-              <TableHead numeric>Total estimado</TableHead>
+              <TableHead numeric>Total</TableHead>
               <SortableHead
                 direction={sortDirection(currentSort, "updatedAt")}
                 onSort={() => change({ sort: toggleSort(currentSort, "updatedAt") })}
@@ -394,8 +394,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
               <TableMessageRow colSpan={COLUMNS}>
                 <EmptyState
                   compact
-                  title={hasFilters ? "Nenhum pedido encontrado" : "Nenhum pedido ainda"}
-                  description={hasFilters ? "Ajuste ou limpe os filtros para ver mais resultados." : "Crie um novo pedido; ele fica salvo no Sales Force."}
+                  title={hasFilters ? "Nenhuma venda encontrada com esses filtros." : group === "unsent" ? "Nenhuma venda pendente." : "Nenhuma venda enviada ainda."}
                   action={
                     hasFilters ? (
                       <Button size="sm" variant="secondary" onClick={clearAll}>
@@ -435,9 +434,9 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
                       ) : null}
                     </TableCell>
                     <TableCell numeric card="hide">{formatCount(order.itemCount)}</TableCell>
-                    <TableCell numeric label="Total estimado">
+                    <TableCell numeric label="Total">
                       <Money value={order.estimatedTotal} />
-                      {order.isPartial ? <span className="ml-1 text-fg-muted">(parcial)</span> : null}
+                      {order.isPartial ? <span className="ml-1 text-fg-muted">Valor parcial</span> : null}
                     </TableCell>
                     <TableCell card="hide">
                       <DateText value={order.updatedAt} withTime />
