@@ -288,6 +288,27 @@ describe("ProductsScreen (Catálogo)", () => {
     expect(asked.at(-1)).toBe(9);
   });
 
+  it("product detail shows Ativo/Inativo, Uso and the origin with the table name, like the site", async () => {
+    const item = product(7, { description: "Tinta Azul 18L", active: false, usageCode: "V", listPrice: priced("120.5") });
+    const products = fakeProducts({
+      list: async () => pageOf([item]),
+      pricesOrigin: async () => ({ source: "customer", tableCode: 1, tableName: "Atacado" }),
+    });
+    await render(<ProductsScreen products={products} onUnauthenticated={noop} />);
+    await pressAndSettle(await screen.findByText("Tinta Azul 18L"));
+    expect(await screen.findByLabelText("Situação: Inativo")).toBeTruthy();
+    expect(screen.getByLabelText("Uso: V")).toBeTruthy();
+    expect(screen.getByLabelText("Origem do preço: Tabela 1 — Atacado (tabela do cliente)")).toBeTruthy();
+  });
+
+  it("product detail shows a dash for a product without usage and falls back to the table code when the origin is unknown", async () => {
+    await render(<ProductsScreen products={catalog([], [product(7, { description: "Tinta Azul 18L", listPrice: priced("120.5") })])} onUnauthenticated={noop} />);
+    await pressAndSettle(await screen.findByText("Tinta Azul 18L"));
+    expect(await screen.findByLabelText("Situação: Ativo")).toBeTruthy();
+    expect(screen.getByLabelText("Uso: —")).toBeTruthy();
+    expect(screen.getByLabelText("Origem do preço: Tabela 1")).toBeTruthy();
+  });
+
   it("shows no origin line when the device does not know the origin of the prices", async () => {
     await render(<ProductsScreen products={fakeProducts({ list: async () => pageOf([CATALOG[0]!]), pricesOrigin: async () => null })} onUnauthenticated={noop} />);
     await screen.findByText("Tinta Azul 18L");

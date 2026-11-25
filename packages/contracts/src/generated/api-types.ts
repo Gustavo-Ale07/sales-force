@@ -1801,10 +1801,10 @@ export interface components {
             groupName: string | null;
             quantityStep?: string | null;
             maxDiscountPercent?: string | null;
+            usageCode: string | null;
             listPrice: components["schemas"]["ListPriceContext"];
             image?: components["schemas"]["ProductImage"] | null;
             ipi?: components["schemas"]["IpiRef"];
-            usageCode: string | null;
             priceContext: components["schemas"]["PriceContext"];
         };
         ProductGroup: {
@@ -1839,6 +1839,7 @@ export interface components {
             groupName: string | null;
             quantityStep?: string | null;
             maxDiscountPercent?: string | null;
+            usageCode?: string | null;
             listPrice: components["schemas"]["ListPriceContext"];
             image?: components["schemas"]["ProductImage"] | null;
             ipi?: components["schemas"]["IpiRef"];

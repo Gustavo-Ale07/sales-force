@@ -181,6 +181,8 @@ export const ProductListItemSchema = named(
      * limit registered (clients show no warning). Sankhya is the only source. A product attribute, not cost or margin.
      */
     maxDiscountPercent: z.string().nullable().optional(),
+    /** Additive: ERP usage of the product (as mirrored), shown in the detail; `null` or absent = not informed. */
+    usageCode: z.string().nullable().optional(),
     listPrice: ListPriceContextSchema,
     /** `null` (or absent) = the product has no image; the catalog works without one. */
     image: ProductImageSchema.nullable().optional(),

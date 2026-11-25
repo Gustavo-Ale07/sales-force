@@ -120,6 +120,7 @@ export class CatalogService {
       groupName: row.groupName,
       quantityStep: product.quantityStep ?? null,
       maxDiscountPercent: product.maxDiscountPercent ?? null,
+      usageCode: row.usageCode,
       listPrice: toListPriceContext(this.pricing.priceOf(book, row.code, row.unitPrice)),
       image,
       ipi,

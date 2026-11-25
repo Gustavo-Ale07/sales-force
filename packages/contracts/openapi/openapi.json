@@ -9074,6 +9074,12 @@
               "null"
             ]
           },
+          "usageCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "listPrice": {
             "$ref": "#/components/schemas/ListPriceContext"
           },
@@ -9090,12 +9096,6 @@
           "ipi": {
             "$ref": "#/components/schemas/IpiRef"
           },
-          "usageCode": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "priceContext": {
             "$ref": "#/components/schemas/PriceContext"
           }
@@ -9110,8 +9110,8 @@
           "reference",
           "groupCode",
           "groupName",
-          "listPrice",
           "usageCode",
+          "listPrice",
           "priceContext"
         ],
         "additionalProperties": false
@@ -9269,6 +9269,12 @@
             ]
           },
           "maxDiscountPercent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "usageCode": {
             "type": [
               "string",
               "null"

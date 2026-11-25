@@ -139,7 +139,7 @@ export function ProductBrowser({ products, onUnauthenticated, connectivity, acti
       noResultHint="Confira a descrição ou o código."
       onUnauthenticated={onUnauthenticated}
     />
-    <ProductDetailSheet product={detail} onClose={() => setDetail(null)} />
+    <ProductDetailSheet product={detail} origin={origin} onClose={() => setDetail(null)} />
     </>
   );
 }
