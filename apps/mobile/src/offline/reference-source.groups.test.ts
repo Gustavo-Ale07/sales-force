@@ -3,6 +3,28 @@ import { createReferenceSource } from "./reference-source";
 
 const ok = { ok: true, status: 200 } as Response;
 
+describe("fetchPricesOrigin and the table name (origin of the prices in the catalog list)", () => {
+  it("reads the price context the server resolved the catalog against, one tiny page", async () => {
+    const asked: unknown[] = [];
+    const api = {
+      GET: async (path: string, init: unknown) => {
+        asked.push([path, init]);
+        return { data: { items: [], page: 1, pageSize: 1, total: 0, priceContext: { customerCode: null, tableCode: 5, tableName: "Tabela Base", source: "catalog_reference" } }, response: ok };
+      },
+    } as unknown as ApiClient;
+    expect(await createReferenceSource(api).fetchPricesOrigin!()).toEqual({ source: "catalog_reference", tableCode: 5, tableName: "Tabela Base" });
+    expect(asked).toEqual([["/products", { params: { query: { page: 1, pageSize: 1 } } }]]);
+  });
+
+  it("keeps the name the server gives each price table", async () => {
+    const api = {
+      GET: async () => ({ data: { tableCode: 7, tableName: "Atacado", versionId: 70, effectiveFrom: "2026-11-01", items: [{ productCode: 1, unitPrice: "8.00" }], page: 1, pageSize: 1000, total: 1 }, response: ok }),
+    } as unknown as ApiClient;
+    const result = await createReferenceSource(api).fetchPriceTables!([7]);
+    expect(result.tables[0]).toMatchObject({ tableCode: 7, tableName: "Atacado" });
+  });
+});
+
 describe("fetchProductGroups (hierarchy for the offline Grupo > Subgrupo > Linha filter)", () => {
   it("reads GET /product-groups and returns the answer as the server delivers it, subtreeCodes included", async () => {
     const answer = {

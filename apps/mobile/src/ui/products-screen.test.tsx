@@ -268,6 +268,32 @@ describe("ProductsScreen (Catálogo)", () => {
     expect(await screen.findByText("4 produtos · dados salvos neste aparelho")).toBeTruthy();
   });
 
+  it("says where the list prices come from (table, name, kind) like the site, and asks for the order customer's table", async () => {
+    const asked: (number | undefined)[] = [];
+    const products = fakeProducts({
+      list: async () => pageOf([CATALOG[0]!]),
+      pricesOrigin: async (customerCode) => {
+        asked.push(customerCode);
+        return customerCode === undefined
+          ? { source: "catalog_reference", tableCode: 5, tableName: "Tabela Base" }
+          : { source: "customer", tableCode: 7, tableName: "Atacado" };
+      },
+    });
+    const { unmount } = await render(<ProductsScreen products={products} onUnauthenticated={noop} />);
+    expect(await screen.findByText("Preços da tabela 5 — Tabela Base (tabela de referência do catálogo).")).toBeTruthy();
+    expect(asked).toEqual([undefined]);
+    await unmount();
+    await render(<ProductBrowser products={products} onUnauthenticated={noop} customerCode={9} />);
+    expect(await screen.findByText("Preços da tabela 7 — Atacado (tabela do cliente).")).toBeTruthy();
+    expect(asked.at(-1)).toBe(9);
+  });
+
+  it("shows no origin line when the device does not know the origin of the prices", async () => {
+    await render(<ProductsScreen products={fakeProducts({ list: async () => pageOf([CATALOG[0]!]), pricesOrigin: async () => null })} onUnauthenticated={noop} />);
+    await screen.findByText("Tinta Azul 18L");
+    expect(screen.queryByText(/^Preços da tabela/)).toBeNull();
+  });
+
   it("hides the filter button when the repository cannot filter", async () => {
     await render(<ProductsScreen products={fakeProducts({ list: async () => pageOf([CATALOG[0]!]) })} onUnauthenticated={noop} />);
     await screen.findByText("Tinta Azul 18L");

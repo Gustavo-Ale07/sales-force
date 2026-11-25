@@ -13,6 +13,7 @@ import {
   searchCustomers,
   productGroups,
   listProductGroupTree,
+  pricesOriginOf,
   customerPriceTableOf,
   cachedPriceTableCodes,
   searchProducts,
@@ -84,6 +85,11 @@ export function createOfflineFirstRepositories(deps: {
         if (table !== null && !(await cachedPriceTableCodes(db)).includes(table)) throw new PriceTableNotDownloadedError();
         const page = await searchProducts<ProductListItem>(db, table !== null ? { ...local, priceTableCode: table } : local);
         return { items: page.items, page: page.page, pageSize: page.pageSize, total: page.total };
+      },
+      async pricesOrigin(customerCode) {
+        if (!(await cacheReady())) return null;
+        const table = customerCode === undefined ? null : ((await customerPriceTableOf(db, customerCode)) ?? null);
+        return pricesOriginOf(db, table);
       },
       async groupTree() {
         if (!(await cacheReady())) return { items: [], hierarchical: false, hasUngrouped: false };

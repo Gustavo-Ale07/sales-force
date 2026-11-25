@@ -294,6 +294,8 @@ const PRICED_SQL = "json_extract(t.price_json, '$.state') = 'priced'";
 /** One price table as delivered: the list-price context of every product that has a row in it. */
 export interface PriceTableSnapshot {
   readonly tableCode: number;
+  /** Name the server gives the table (shown with its code where the list says where the prices come from). */
+  readonly tableName?: string | null;
   readonly prices: readonly { readonly productCode: number; readonly listPrice: unknown }[];
 }
 
@@ -315,6 +317,50 @@ export async function replacePriceTables(tx: SqlExecutor, tables: readonly Price
       (row) => [table.tableCode, row.productCode, JSON.stringify(row.listPrice)],
       "cache_table_price",
     );
+  }
+}
+
+/** Where the prices of a list come from: the table, its name and why that table (customer's, fallback, catalog reference, none). */
+export interface PriceOrigin {
+  readonly source: "customer" | "fallback" | "catalog_reference" | "none";
+  readonly tableCode: number | null;
+  readonly tableName: string | null;
+}
+
+async function readPriceTableNames(tx: SqlExecutor): Promise<Record<string, string>> {
+  const raw = await getMeta(tx, META_KEYS.priceTableNames);
+  if (raw === null) return {};
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return parsed !== null && typeof parsed === "object" ? (parsed as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Remembers the names of the tables given and forgets those of tables no longer on the device (call after `replacePriceTables`). */
+export async function replacePriceTableNames(tx: SqlExecutor, tables: readonly PriceTableSnapshot[], now: string): Promise<void> {
+  const present = new Set(await cachedPriceTableCodes(tx));
+  const names: Record<string, string> = {};
+  for (const [code, name] of Object.entries(await readPriceTableNames(tx))) if (present.has(Number(code))) names[code] = name;
+  for (const table of tables) {
+    if (typeof table.tableName === "string" && table.tableName !== "") names[String(table.tableCode)] = table.tableName;
+  }
+  await setMeta(tx, META_KEYS.priceTableNames, JSON.stringify(names), now);
+}
+
+/**
+ * Origin of the prices a catalog list shows on this device: a customer table (`tableCode`) is the customer kind with its stored name; no
+ * table is the reference the server resolved at the last pull, or `null` when the device does not know it (nothing is guessed).
+ */
+export async function pricesOriginOf(tx: SqlExecutor, tableCode: number | null): Promise<PriceOrigin | null> {
+  if (tableCode !== null) return { source: "customer", tableCode, tableName: (await readPriceTableNames(tx))[String(tableCode)] ?? null };
+  const raw = await getMeta(tx, META_KEYS.pricesOriginReference);
+  if (raw === null) return null;
+  try {
+    return JSON.parse(raw) as PriceOrigin;
+  } catch {
+    return null;
   }
 }
 
@@ -441,6 +487,10 @@ export const META_KEYS = {
   entryConfiguration: "cache.entry_configuration",
   /** JSON array of `{code, name}` carriers (D-C), refreshed with every pull; never required for ordering. */
   carriers: "cache.carriers",
+  /** JSON `PriceOrigin` the server resolved the catalog (no customer) against. */
+  pricesOriginReference: "cache.prices_origin.reference",
+  /** JSON map `{tableCode: name}` of the price tables on the device. */
+  priceTableNames: "cache.prices_origin.table_names",
   productGroupsHierarchical: "cache.product_groups.hierarchical",
   productGroupsHasUngrouped: "cache.product_groups.has_ungrouped",
   cacheOwner: "cache.owner_account_id",

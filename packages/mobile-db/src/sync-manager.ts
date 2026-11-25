@@ -14,7 +14,7 @@ import {
   settleConfirmedCustomers,
   type CustomerRegistrationTransport,
 } from "./pending-customers";
-import { META_KEYS, cachedPriceTableCodes, clearProductGroups, countPriceRows, deleteMeta, getMeta, replaceCustomers, replacePriceTables, replaceProductGroups, replaceProducts, setMeta, type CustomerLike, type PriceTableSnapshot, type ProductGroupsFetch, type ProductLike } from "./reference-cache";
+import { META_KEYS, cachedPriceTableCodes, clearProductGroups, countPriceRows, deleteMeta, getMeta, replaceCustomers, replacePriceTableNames, replacePriceTables, replaceProductGroups, replaceProducts, setMeta, type CustomerLike, type PriceOrigin, type PriceTableSnapshot, type ProductGroupsFetch, type ProductLike } from "./reference-cache";
 
 /**
  * Where the reference data comes from. The server stays authoritative and delivers only what the actor's scope
@@ -39,6 +39,8 @@ export interface ReferenceSource extends OrderStatusSource, ServerOrdersSource {
   fetchCarriers?(): Promise<readonly unknown[]>;
   /** Group hierarchy (Grupo > Subgrupo > Linha). Optional and best-effort like carriers: a failure keeps the previous tree. */
   fetchProductGroups?(): Promise<ProductGroupsFetch>;
+  /** Table the server resolves the catalog (no customer) against, for the list's "origin of the prices". Best-effort like carriers. */
+  fetchPricesOrigin?(): Promise<PriceOrigin>;
   /**
    * On-demand refresh (POST /sync/refresh, then follow it until done). The manager calls it BEFORE any download and downloads only
    * after it returns. Optional so a source without it just downloads. Throws `TransportError` when the server cannot be reached.
@@ -188,6 +190,14 @@ export async function pullReferenceData(
       productGroups = null;
     }
   }
+  let pricesOrigin: PriceOrigin | null = null;
+  if (source.fetchPricesOrigin !== undefined) {
+    try {
+      pricesOrigin = await source.fetchPricesOrigin();
+    } catch {
+      pricesOrigin = null;
+    }
+  }
   onStep({ id: "save", state: "running", count: null });
   const now = isoNow(env);
   await db.transaction(async (tx) => {
@@ -202,6 +212,9 @@ export async function pullReferenceData(
     // Tables whose read FAILED keep their previous prices (same account and dataset only); the rest not read are dropped.
     const keepTables = sameOwnerAndDataset ? (await cachedPriceTableCodes(tx)).filter((code) => failedTables.includes(code) && !priceTables.some((t) => t.tableCode === code)) : [];
     await replacePriceTables(tx, priceTables.filter((t) => used.has(t.tableCode)), { keepTables });
+    await replacePriceTableNames(tx, priceTables.filter((t) => used.has(t.tableCode)), now);
+    if (pricesOrigin !== null) await setMeta(tx, META_KEYS.pricesOriginReference, JSON.stringify(pricesOrigin), now);
+    else if (!sameDataset(previousDataset, before)) await deleteMeta(tx, META_KEYS.pricesOriginReference);
     await setMeta(tx, META_KEYS.customersSyncedAt, now, now);
     await setMeta(tx, META_KEYS.productsSyncedAt, now, now);
     await setMeta(tx, META_KEYS.entryConfiguration, JSON.stringify(configuration ?? null), now);

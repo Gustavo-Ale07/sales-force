@@ -4,6 +4,7 @@ import type { ConnectivityState } from "../connectivity/connectivity";
 import type { ProductFilters, ProductListItem, ProductPageRequest, ProductRepository } from "../data/ports";
 import { colors, control, radius, spacing } from "../theme";
 import { PagedListView } from "./paged-list-view";
+import { pricesOriginText, type PricesOrigin } from "../data/prices-origin";
 import type { ProductGroupTree } from "../data/group-cascade";
 import { EMPTY_GROUP_TREE, ProductFilterChips, ProductFiltersSheet, countActiveProductFilters } from "./product-filters";
 import { ProductDetailSheet } from "./product-detail-sheet";
@@ -32,6 +33,7 @@ export function ProductBrowser({ products, onUnauthenticated, connectivity, acti
   const [detail, setDetail] = useState<ProductListItem | null>(null);
   const [groups, setGroups] = useState<ProductGroupTree>(EMPTY_GROUP_TREE);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [origin, setOrigin] = useState<PricesOrigin | null>(null);
   const active = countActiveProductFilters(filters);
   const canFilter = products.groupTree !== undefined;
 
@@ -42,6 +44,15 @@ export function ProductBrowser({ products, onUnauthenticated, connectivity, acti
       current = false;
     };
   }, [products]);
+
+  // Where the list prices come from; follows the order customer (his table).
+  useEffect(() => {
+    let current = true;
+    void products.pricesOrigin?.(customerCode).then((found) => current && setOrigin(found)).catch(() => current && setOrigin(null));
+    return () => {
+      current = false;
+    };
+  }, [products, customerCode]);
 
   const extra = useMemo(() => ({ ...(active > 0 ? { filters } : {}), ...(customerCode === undefined ? {} : { customerCode }) }), [active, filters, customerCode]);
   const onSearchChange = useCallback(() => undefined, []);
@@ -74,6 +85,7 @@ export function ProductBrowser({ products, onUnauthenticated, connectivity, acti
           ))}
         </View>
       </View>
+      {origin !== null && <Text style={styles.origin} accessibilityLabel={pricesOriginText(origin)}>{pricesOriginText(origin)}</Text>}
       <ProductFilterChips filters={filters} tree={groups} onChange={setFilters} />
       <ProductFiltersSheet
         visible={filtersOpen}
@@ -133,6 +145,7 @@ export function ProductBrowser({ products, onUnauthenticated, connectivity, acti
 }
 
 const styles = StyleSheet.create({
+  origin: { fontSize: 13, color: colors.textMuted },
   toolbar: { gap: spacing.sm },
   toolbarRow: { flexDirection: "row", gap: spacing.sm, alignItems: "center", justifyContent: "space-between" },
   tool: { minHeight: control.height, minWidth: 72, paddingHorizontal: spacing.lg, borderRadius: radius.md, borderWidth: 1, borderColor: colors.navy, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },

@@ -122,14 +122,16 @@ export function createReferenceSource(api: ApiClient, timing: RefreshTiming = {}
    */
   const fetchPriceTable = async (code: number): Promise<PriceTableSnapshot> => {
     const prices: { productCode: number; listPrice: unknown }[] = [];
+    let tableName: string | null = null;
     for (let page = 1; ; page += 1) {
       const view = await callApi(() => api.GET("/price-tables/{code}/prices", { params: { path: { code }, query: { page, pageSize: priceTablePageSize } } }));
+      tableName = view.tableName ?? tableName;
       for (const item of view.items) {
         prices.push({ productCode: item.productCode, listPrice: { state: "priced", unitPrice: item.unitPrice, tableCode: view.tableCode, versionId: view.versionId } });
       }
       if (view.items.length === 0 || page * priceTablePageSize >= view.total) break;
     }
-    return { tableCode: code, prices };
+    return { tableCode: code, tableName, prices };
   };
   const guard = async <T>(work: () => Promise<T>): Promise<T> => {
     try {
@@ -266,6 +268,12 @@ export function createReferenceSource(api: ApiClient, timing: RefreshTiming = {}
         return found;
       }),
     // Same endpoint the site's cascade filter reads; the pull treats a failure here as non-fatal (the previous tree stays).
+    // The table the server resolves the catalog against (the `priceContext` of a one-row page), kept for the list's price origin.
+    fetchPricesOrigin: () =>
+      guard(async () => {
+        const { priceContext } = await callApi(() => api.GET("/products", { params: { query: { page: 1, pageSize: 1 } } }));
+        return { source: priceContext.source, tableCode: priceContext.tableCode, tableName: priceContext.tableName };
+      }),
     fetchProductGroups: () => guard(() => callApi(() => api.GET("/product-groups"))),
     fetchEntryConfiguration: () => guard(() => callApi(() => api.GET("/order-entry/configuration"))),
     // Same endpoint the online carrier picker uses; the pull treats a failure here as non-fatal.

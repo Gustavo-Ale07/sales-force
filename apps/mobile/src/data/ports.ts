@@ -1,5 +1,6 @@
 import type { ApiSchema } from "@salesforce/contracts/client";
 import type { ProductGroupTree } from "./group-cascade";
+import type { PricesOrigin } from "./prices-origin";
 
 /** Wire shapes: the generated OpenAPI types are the source of truth for what the API returns (STACK-4). */
 export type CustomerListItem = ApiSchema<"CustomerListItem"> & {
@@ -109,6 +110,8 @@ export interface ProductRepository {
    * cache can compute it: its presence turns the group filter on.
    */
   groupTree?(): Promise<ProductGroupTree>;
+  /** Where the prices of the list come from (table, name, kind) for this order customer; `null` when the device does not know it. */
+  pricesOrigin?(customerCode?: number): Promise<PricesOrigin | null>;
   /**
    * A single product by code, detail fields included. Used to resolve the catalog group (`groupCode`/`groupName`)
    * of a cart line reopened from a saved draft (`lineFromOrderItem`), which does not carry it — mirrors

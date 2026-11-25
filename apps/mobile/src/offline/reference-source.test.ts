@@ -31,7 +31,7 @@ describe("fetchPriceTables (bulk endpoint, one request chain per table code)", (
     const result = await createReferenceSource(api).fetchPriceTables!([3, 9]);
     expect(asked).toEqual(["/price-tables/{code}/prices:3:p1:s1000", "/price-tables/{code}/prices:9:p1:s1000"]);
     expect(result.failed).toEqual([]);
-    expect(result.tables[0]).toEqual({ tableCode: 3, prices: [{ productCode: 1, listPrice: { state: "priced", unitPrice: "8.00", tableCode: 3, versionId: 30 } }] });
+    expect(result.tables[0]).toEqual({ tableCode: 3, tableName: "T3", prices: [{ productCode: 1, listPrice: { state: "priced", unitPrice: "8.00", tableCode: 3, versionId: 30 } }] });
     expect(result.tables.map((t) => t.tableCode)).toEqual([3, 9]);
   });
 
