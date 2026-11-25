@@ -1,5 +1,5 @@
 import type { ApiSchema } from "@salesforce/contracts/client";
-import { Badge, Button, Card, DateText, EmptyState, PageHeader, LoadingPanel, StatGrid, StatTile } from "@salesforce/ui";
+import { Badge, Button, Card, EmptyState, PageHeader, LoadingPanel, StatGrid, StatTile } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { BadgeCheck, FilePen, Package, Plus, Users, Wallet } from "lucide-react";
@@ -11,12 +11,6 @@ import { useApi, useAppServices } from "../lib/app-context";
 import { sessionQueryOptions } from "../lib/auth-client";
 
 type MetricGroup = ApiSchema<"MetricGroup">;
-type DashboardResponse = ApiSchema<"DashboardResponse">;
-
-function scopeText(scope: DashboardResponse["scope"]): string {
-  if (scope.kind === "all") return "Todos os vendedores";
-  return scope.sellerCodes.length === 1 ? `Vendedor ${scope.sellerCodes[0]}` : `Vendedores ${scope.sellerCodes.join(", ")}`;
-}
 
 /** One clickable KPI tile: the whole card is the link, focus-visible ring stands in for hover on keyboard nav. */
 function KpiLink({ to, search, children }: { to: string; search?: Record<string, unknown>; children: ReactNode }) {
@@ -58,12 +52,7 @@ export function DashboardPage() {
         description={
           <span className="flex flex-col gap-0.5">
             {session.data ? <span>{`Olá, ${session.data.name}`}</span> : null}
-            {query.data ? (
-              <span className="text-2xs text-fg-faint">
-                Escopo: {scopeText(query.data.scope)} · Atualizado em <DateText value={query.data.generatedAt} withTime />{" "}
-                <DemoBadge groups={groups} keys={["portfolio", "catalog", "orders", "credit", "positivation"]} />
-              </span>
-            ) : null}
+            <DemoBadge groups={groups} keys={["portfolio", "catalog", "orders", "credit", "positivation"]} />
           </span>
         }
         actions={
@@ -74,14 +63,14 @@ export function DashboardPage() {
       />
 
       {query.isPending ? (
-        <LoadingPanel title="Carregando indicadores…" description="Reunindo clientes, produtos e pedidos da sua carteira." lines={6} />
+        <LoadingPanel title="Carregando indicadores…" lines={6} />
       ) : query.isError ? (
         <Card>
           <QueryError error={query.error} onRetry={() => void query.refetch()} retrying={query.isRefetching} />
         </Card>
       ) : query.data.groups.length === 0 ? (
         <Card>
-          <EmptyState title="Sem indicadores ainda" description="Quando houver dados na sua carteira e pedidos, o resumo aparece aqui." />
+          <EmptyState title="Sem indicadores ainda" />
         </Card>
       ) : (
         <StatGrid variant="tiles" className="sm:grid-cols-3">

@@ -44,7 +44,7 @@ describe("Início (dashboard)", () => {
     expect(screen.queryByText("Pedidos recentes")).toBeNull();
     expect(screen.queryByText("Atenção necessária")).toBeNull();
     expect(screen.queryByText("Outros indicadores")).toBeNull();
-    expect(screen.getByText(/Escopo: Vendedor 7/)).toBeInTheDocument();
+    expect(screen.queryByText(/Escopo:/)).toBeNull();
     expect(await screen.findByText("Olá, Ana Souza")).toBeInTheDocument();
   });
 
