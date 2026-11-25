@@ -3,10 +3,11 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { syncStatusQueryOptions } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { isOperationsRole } from "../lib/operations-role";
-import { isDataStale, syncIndicatorView, type SyncDotColor } from "../lib/sync-indicator";
+import { SYNC_INDICATOR_HEX, isDataStale, syncIndicatorView, type SyncDotColor } from "../lib/sync-indicator";
 import { useRefreshStage } from "./order-stage";
 import { RefreshDataDialog } from "./refresh-data-dialog";
 
+/** Darker tones for the state chip in the Perfil block, which sits on a white card (the header arrows use SYNC_INDICATOR_HEX). */
 export const DOT_BG: Record<SyncDotColor, string> = {
   green: "bg-[#17693d]",
   yellow: "bg-[#E08A00]",
@@ -54,9 +55,9 @@ function useCacheSignals() {
   return { needsCorrection: key[0] === "1", awaitingSend: key[1] === "1", failed: key[2] === "1", retrying: key[3] === "1" };
 }
 
-function Arrows() {
+function Arrows({ color }: { color: string }) {
   return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke={color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
       <path d="M20 11a8 8 0 0 0-14.3-4.5L4 8.5" />
       <path d="M4 4v4.5h4.5" />
       <path d="M4 13a8 8 0 0 0 14.3 4.5l1.7-2" />
@@ -109,10 +110,8 @@ export function SyncIndicator({ role }: { role: string }) {
       }}
       className="flex size-11 shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white"
     >
-      <span className={`flex size-[30px] items-center justify-center rounded-full ${DOT_BG[view.color]} transition-colors`}>
-        <span className={view.spinning ? "flex animate-spin motion-reduce:animate-none" : "flex"}>
-          <Arrows />
-        </span>
+      <span className={view.spinning ? "flex animate-spin motion-reduce:animate-none" : "flex"}>
+        <Arrows color={SYNC_INDICATOR_HEX[view.color]} />
       </span>
     </button>
     <RefreshDataDialog open={dialogOpen} role={role} onClose={() => setDialogOpen(false)} />

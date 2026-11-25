@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isDataStale, syncIndicatorView, type SyncIndicatorInput } from "./sync-indicator";
+import { SYNC_INDICATOR_HEX, isDataStale, syncIndicatorView, type SyncIndicatorInput } from "./sync-indicator";
 
 const ok: SyncIndicatorInput = { online: true, syncing: false, failed: false, needsCorrection: false, awaitingSend: false, stale: false, retrying: false };
 
@@ -23,6 +23,29 @@ describe("syncIndicatorView", () => {
   it("is red for a failed refresh or an order that needs correction, over yellow", () => {
     expect(syncIndicatorView({ ...ok, failed: true, online: false })).toMatchObject({ color: "red", label: "Status de sincronização: Erro na última sincronização" });
     expect(syncIndicatorView({ ...ok, needsCorrection: true, awaitingSend: true }).color).toBe("red");
+  });
+});
+
+const luminance = (hex: string): number => {
+  const [r, g, b] = [1, 3, 5].map((i) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  }) as [number, number, number];
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+const contrast = (a: string, b: string): number => {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
+  return (hi + 0.05) / (lo + 0.05);
+};
+
+describe("SYNC_INDICATOR_HEX", () => {
+  // Header background = --sf-navy (packages/ui/src/styles/index.css), the colour behind the arrows.
+  const HEADER = "#01136a";
+  it.each(["green", "yellow", "red"] as const)("%s arrows read on the header navy (>= 3:1 for graphics)", (color) => {
+    expect(contrast(SYNC_INDICATOR_HEX[color], HEADER)).toBeGreaterThanOrEqual(3);
+  });
+  it("uses the same hex as the app", () => {
+    expect(SYNC_INDICATOR_HEX).toEqual({ green: "#4ADE80", yellow: "#FBBF24", red: "#F87171" });
   });
 });
 

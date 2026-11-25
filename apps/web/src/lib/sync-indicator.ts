@@ -25,6 +25,9 @@ export interface SyncIndicatorView {
   spinning: boolean;
 }
 
+/** Stroke colour of the header arrows per state; same hex as the app. Checked against the header navy in the unit test. */
+export const SYNC_INDICATOR_HEX: Record<SyncDotColor, string> = { green: "#4ADE80", yellow: "#FBBF24", red: "#F87171" };
+
 /** Data older than this is "Dados desatualizados" (yellow). */
 export const SYNC_STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 
