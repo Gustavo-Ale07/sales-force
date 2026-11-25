@@ -6,7 +6,7 @@ import {
   RealSankhyaGateway,
   SankhyaGatewayError,
   Secret,
-  buildUserPhotoRequestText,
+  buildUserPhotoRequestText, buildUserPhotoUpload,
   parseProfilePhotoWriteSettings,
   parseUserPhotoResponse,
   type SankhyaProfilePhotoPort,
@@ -67,7 +67,7 @@ describe('profile photo write settings (flag closed by default)', () => {
 });
 
 describe('profile photo wire (NEEDS VALIDATION shape, VALIDATED column TSIUSU.FOTO)', () => {
-  it('builds a deterministic save of FOTO for the user key, the JPEG bytes as hex (never base64 text), nothing else', () => {
+  it('builds a deterministic save of FOTO for the user key, a reference to the uploaded file, never the image as text, nothing else', () => {
     const text = buildUserPhotoRequestText(request());
     expect(buildUserPhotoRequestText(request())).toBe(text);
     const body = JSON.parse(text) as { requestBody: { dataSet: { dataRow: { key: unknown; localFields: Record<string, unknown> } } } };
@@ -75,10 +75,23 @@ describe('profile photo wire (NEEDS VALIDATION shape, VALIDATED column TSIUSU.FO
     expect(row.key).toEqual({ CODUSU: { $: '42' } });
     expect(Object.keys(row.localFields)).toEqual(['FOTO']);
     const sent = (row.localFields['FOTO'] as { $: string }).$;
-    expect(sent).toBe(Buffer.from(JPEG).toString('hex').toUpperCase());
-    expect(sent.startsWith('FFD8FF')).toBe(true); // image bytes, never base64 text (which would start with "/9j/")
-    expect(Buffer.from(sent, 'hex').equals(Buffer.from(JPEG))).toBe(true);
+    expect(sent).toBe('$file.session.key{Usuario_FOTO}'); // a reference, never the image as text (base64 and hex were stored as text)
+    expect(text).not.toContain(Buffer.from(JPEG).toString('base64'));
+    expect(text.toUpperCase()).not.toContain(Buffer.from(JPEG).toString('hex').toUpperCase());
     expect(text).not.toContain(KEY);
+  });
+
+  it('uploads the image as RAW BYTES in a multipart file part (header FFD8FF), never base64 or hex text', () => {
+    const upload = buildUserPhotoUpload(request());
+    expect(upload.contentType.startsWith('multipart/form-data; boundary=')).toBe(true);
+    const body = Buffer.from(upload.body);
+    const start = body.indexOf(Buffer.from('\r\n\r\n')) + 4;
+    const image = body.subarray(start, start + JPEG.byteLength);
+    expect(image.subarray(0, 3).toString('hex')).toBe('ffd8ff');
+    expect(image.equals(Buffer.from(JPEG))).toBe(true);
+    expect(body.toString('latin1')).toContain('name="arquivo"');
+    expect(body.toString('latin1')).not.toContain(Buffer.from(JPEG).toString('base64'));
+    expect(body.toString('latin1').toLowerCase()).not.toContain(Buffer.from(JPEG).toString('hex'));
   });
 
   it('accepts user code 0 (the ERP supervisor user)', () => {
@@ -135,8 +148,13 @@ function realHarness(open: boolean) {
   const clock: ClockRef = { now: 1_800_000_000_000 };
   const mock = new MockSankhya({ tables: {}, clock });
   const saves: string[] = [];
+  const uploads: Uint8Array[] = [];
   const responses: HttpResponse[] = [];
   const transport: HttpTransport = (req) => {
+    if (req.url.includes('sessionUpload.mge')) {
+      uploads.push(req.binaryBody ?? new Uint8Array());
+      return Promise.resolve({ status: 200, headers: {}, body: '{}' });
+    }
     if (req.url.includes('CRUDServiceProvider.saveRecord')) {
       saves.push(req.body ?? '');
       return Promise.resolve(responses.shift() ?? { status: 503, headers: {}, body: '' });
@@ -156,7 +174,7 @@ function realHarness(open: boolean) {
     now: () => clock.now,
     ...(open ? { profilePhotoWrite: { enabled: true } } : {}),
   });
-  return { gateway, saves, responses };
+  return { gateway, saves, uploads, responses };
 }
 
 describe('real adapter: profile photo write', () => {
@@ -168,12 +186,14 @@ describe('real adapter: profile photo write', () => {
     expect(saves).toHaveLength(0);
   });
 
-  it('flag open: sends one save and resolves on status 1', async () => {
-    const { gateway, saves, responses } = realHarness(true);
+  it('flag open: uploads the file (raw bytes), then sends one save and resolves on status 1', async () => {
+    const { gateway, saves, uploads, responses } = realHarness(true);
     responses.push({ status: 200, headers: {}, body: JSON.stringify({ status: '1' }) });
     await gateway.writeUserPhoto(request());
     expect(saves).toHaveLength(1);
     expect(saves[0]).toBe(buildUserPhotoRequestText(request()));
+    expect(uploads).toHaveLength(1);
+    expect(Buffer.from(uploads[0]!).includes(Buffer.from(JPEG))).toBe(true); // the bytes, never text
   });
 
   it('flag open: an invalid image never reaches the transport', async () => {

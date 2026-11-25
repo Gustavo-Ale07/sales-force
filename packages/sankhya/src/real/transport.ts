@@ -10,6 +10,8 @@ export interface HttpRequest {
   readonly url: string;
   readonly headers: Readonly<Record<string, string>>;
   readonly body: string;
+  /** When set it is sent INSTEAD of `body` (multipart upload of the user photo); `body` is then the empty string. */
+  readonly binaryBody?: Uint8Array | undefined;
   readonly timeoutMs: number;
   readonly signal?: AbortSignal | undefined;
 }
@@ -34,7 +36,7 @@ export function createFetchTransport(fetchImpl: typeof fetch = fetch): HttpTrans
       response = await fetchImpl(request.url, {
         method: request.method,
         headers: { ...request.headers },
-        body: request.body,
+        body: request.binaryBody ?? request.body,
         redirect: 'manual',
         signal,
       });

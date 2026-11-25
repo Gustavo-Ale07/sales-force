@@ -109,7 +109,7 @@ export {
   parseProfilePhotoWriteSettings,
   type ProfilePhotoWriteSettings,
 } from './write/profile-photo-config.js';
-export { buildUserPhotoRequestText, parseUserPhotoResponse } from './write/profile-photo-wire.js';
+export { buildUserPhotoRequestText, buildUserPhotoUpload, parseUserPhotoResponse, parseUserPhotoUploadResponse } from './write/profile-photo-wire.js';
 export { FakeUserPhotoBook, type FakeUserPhotoOutcome } from './fake/fake-user-photo-book.js';
 export {
   ICMS_CLASSIFICATIONS,

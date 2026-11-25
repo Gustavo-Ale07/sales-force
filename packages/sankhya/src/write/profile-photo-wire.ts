@@ -9,17 +9,26 @@ import { USER_PHOTO_MAX_BYTES, type UserPhotoWriteRequest } from './profile-phot
  *   - the SERVICE (`CRUDServiceProvider.saveRecord`, entity `Usuario`) and the request/response SHAPE: same assumption as the
  *     partner write, from the public developer documentation; an alternative is `DatasetSP.save` on `TSIUSU`;
  *   - how a BLOB travels in the JSON. OBSERVED 2026-11-25 (owner SELECT): base64 text in `localFields.FOTO.$` was stored AS TEXT
- *     (the column held the base64 characters, not the image bytes). Variant now sent: the image bytes as an uppercase HEX string
- *     (NEEDS VALIDATION by SELECT: the column must start FFD8FF). Next variants if it fails: `$file.session.key` upload, DatasetSP.save;
+ *     (the column held the base64 characters) and an uppercase HEX string was stored as text too. Variant 2 (now): binary path of the
+ *     Sankhya community (sessionUpload.mge multipart upload, then saveRecord with `$file.session.key{...}`); NEEDS VALIDATION by SELECT
+ *     (the column must start FFD8FF). Next: DatasetSP.save on TSIUSU;
  *   - whether the API user may update `TSIUSU` at all, and any size limit of the column;
  *   - the text and code of a refusal.
  */
 export const USER_SAVE_RECORD_PATH = '/gateway/v1/mge/service.sbr?serviceName=CRUDServiceProvider.saveRecord&outputType=json';
 export const USER_SAVE_SERVICE = 'CRUDServiceProvider.saveRecord';
 export const USER_ROOT_ENTITY = 'Usuario';
+/** Name of the session slot that links the upload to the save (technique of the Sankhya community, NEEDS VALIDATION on the gateway). */
+export const USER_PHOTO_SESSION_KEY = 'Usuario_FOTO';
+export const USER_PHOTO_UPLOAD_PATH = `/gateway/v1/mge/sessionUpload.mge?sessionkey=${USER_PHOTO_SESSION_KEY}&fitem=S&salvar=S&useCache=N`;
 
 function permanent(code: string, message: string): SankhyaGatewayError {
   return new SankhyaGatewayError('permanent', { code, message });
+}
+
+/** The ERP text is never in the message (it may echo data); a short copy rides in `cause` only for the operator probe. */
+function refusal(code: string, message: string, parsed: Record<string, unknown>): SankhyaGatewayError {
+  return new SankhyaGatewayError('permanent', { code, message, cause: new Error(String(parsed['statusMessage'] ?? '').slice(0, 200)) });
 }
 
 function isJpeg(bytes: Uint8Array): boolean {
@@ -48,8 +57,9 @@ export function buildUserPhotoRequestText(request: UserPhotoWriteRequest): strin
         includePresentationFields: 'N',
         dataRow: {
           key: { CODUSU: { $: String(request.userCode) } },
-          // Image BYTES as an uppercase hex string. Base64 text was stored as text by the ERP (observed 2026-11-25).
-          localFields: { FOTO: { $: Buffer.from(request.image).toString('hex').toUpperCase() } },
+          // A REFERENCE to the file uploaded to the session (see `buildUserPhotoUpload`), never the image inside the JSON: base64 and hex
+          // text were both stored AS TEXT by the ERP (observed 2026-11-25).
+          localFields: { FOTO: { $: '$file.session.key{' + USER_PHOTO_SESSION_KEY + '}' } },
         },
         entity: { fieldset: { list: 'CODUSU' } },
       },
@@ -74,6 +84,35 @@ export function parseUserPhotoResponse(status: number, body: string, retryAfterM
     throw new SankhyaGatewayError('temporary', { code: 'invalid_gateway_response', message: 'saveRecord: unexpected response shape.' });
   }
   if (String(parsed['status']) !== '1') {
-    throw permanent('erp_refused_user_photo', 'The ERP refused the user photo (NEEDS VALIDATION: the refusal text was never observed).');
+    throw refusal('erp_refused_user_photo', 'The ERP refused the user photo.', parsed);
+  }
+}
+
+const MULTIPART_BOUNDARY = '----SalesForceUserPhoto7d3f1a';
+
+/** Step 1 of the binary path: the JPEG as the file part `arquivo` of a multipart body (the BYTES travel, not text). Deterministic. */
+export function buildUserPhotoUpload(request: UserPhotoWriteRequest): { readonly contentType: string; readonly body: Uint8Array } {
+  assertUserPhotoRequest(request);
+  const head = Buffer.from(
+    `--${MULTIPART_BOUNDARY}\r\nContent-Disposition: form-data; name="arquivo"; filename="foto.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`,
+    'latin1',
+  );
+  const tail = Buffer.from(`\r\n--${MULTIPART_BOUNDARY}--\r\n`, 'latin1');
+  const image = Buffer.from(request.image);
+  if (image.includes(Buffer.from(MULTIPART_BOUNDARY, 'latin1'))) throw permanent('user_photo_invalid_image', 'The photo cannot be wrapped for upload. Nothing was sent.');
+  return { contentType: `multipart/form-data; boundary=${MULTIPART_BOUNDARY}`, body: new Uint8Array(Buffer.concat([head, image, tail])) };
+}
+
+/** The upload answered: HTTP 200 and not an explicit error envelope. The response body is not documented (NEEDS VALIDATION). */
+export function parseUserPhotoUploadResponse(status: number, body: string, retryAfterMs?: number): void {
+  if (status !== 200) throw classifyHttpFailure(status, 'ERP user photo upload', retryAfterMs);
+  try {
+    const parsed: unknown = JSON.parse(body);
+    if (isRecord(parsed) && String(parsed['status']) === '0') {
+      throw refusal('erp_refused_user_photo_upload', 'The ERP refused the user photo upload.', parsed);
+    }
+  } catch (error) {
+    if (error instanceof SankhyaGatewayError) throw error;
+    // a non-JSON 200 body is accepted: the save step proves the file arrived
   }
 }

@@ -68,7 +68,7 @@ import {
   type UserPhotoCallOptions,
   type UserPhotoWriteRequest,
 } from '../write/profile-photo-contract.js';
-import { USER_SAVE_RECORD_PATH, buildUserPhotoRequestText, parseUserPhotoResponse } from '../write/profile-photo-wire.js';
+import { USER_PHOTO_UPLOAD_PATH, USER_SAVE_RECORD_PATH, buildUserPhotoRequestText, buildUserPhotoUpload, parseUserPhotoResponse, parseUserPhotoUploadResponse } from '../write/profile-photo-wire.js';
 import { decimalFromCell } from '../decimal.js';
 import {
   validateSalesHistoryConfig,
@@ -632,7 +632,11 @@ export class RealSankhyaGateway implements SankhyaGateway {
 
   async writeUserPhoto(request: UserPhotoWriteRequest, options?: UserPhotoCallOptions): Promise<void> {
     if (!this.#profilePhotoWrite.enabled) throw new NotImplementedError(PROFILE_PHOTO_WRITE_NOT_ENABLED_MESSAGE);
-    const body = buildUserPhotoRequestText(request); // validation errors leave here, before any call
+    const upload = buildUserPhotoUpload(request); // validation errors leave here, before any call
+    const body = buildUserPhotoRequestText(request);
+    // Binary path: the file goes to the session first, then the save references it (the ERP stored base64 and hex JSON text as text).
+    const uploaded = await this.#write(USER_PHOTO_UPLOAD_PATH, '', options?.signal, { contentType: upload.contentType, binary: upload.body });
+    parseUserPhotoUploadResponse(uploaded.status, uploaded.body, parseRetryAfterMs(uploaded.headers['retry-after']));
     const response = await this.#write(USER_SAVE_RECORD_PATH, body, options?.signal);
     parseUserPhotoResponse(response.status, response.body, parseRetryAfterMs(response.headers['retry-after']));
   }
@@ -1141,7 +1145,7 @@ export class RealSankhyaGateway implements SankhyaGateway {
    * allow-list, serialized with every other request, one token renewal on 403 (the gateway rejected
    * the token before running the service, so nothing was written).
    */
-  #write(path: string, body: string, signal?: AbortSignal): Promise<HttpResponse> {
+  #write(path: string, body: string, signal?: AbortSignal, raw?: { readonly contentType: string; readonly binary: Uint8Array }): Promise<HttpResponse> {
     const run = this.#queue.then(async () => {
       signal?.throwIfAborted();
       const send = async (): Promise<HttpResponse> => {
@@ -1153,11 +1157,12 @@ export class RealSankhyaGateway implements SankhyaGateway {
           method: 'POST',
           url,
           headers: {
-            'content-type': 'application/json',
+            'content-type': raw?.contentType ?? 'application/json',
             accept: 'application/json',
             authorization: `Bearer ${token.reveal()}`,
           },
           body,
+          ...(raw === undefined ? {} : { binaryBody: raw.binary }),
           timeoutMs: this.#includeTimeoutMs,
           signal,
         });
