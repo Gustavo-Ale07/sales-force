@@ -270,6 +270,7 @@ Claude Code and agents never perform or prepare such an inspection without the r
 | No 2FA (P-11) | Owner decision; user friction | Strong passwords, breached-password check, lockout, rate limits, device approval, audit |
 | Remote wipe is best effort | A device that never reconnects cannot be wiped | Encryption at rest, max offline period, immediate session revocation |
 | Screen photos and manual copying | Not technically preventable | Scope limits exposure; audit; contractual controls outside the system |
+| App login block for technical/operations accounts (`POST /auth/login` with `client: 'app'` answers 403 `app_not_permitted`) is bypassable by omitting `client` | It is a product rule, not a security boundary; those profiles hold no more data than their web access | Authorization stays server-side per request; a real guarantee needs the channel bound to the session and device approval (a new decision); audit `auth.login.app_not_permitted` |
 
 The no-2FA decision is revisited after any unauthorized-access incident or a change in user profile (spec §12.1).
 
