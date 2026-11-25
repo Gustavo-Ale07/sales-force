@@ -4,6 +4,7 @@ import { createDeviceConnectivity, type ConnectivityPort, type ConnectivityState
 import { createMobileApiClient } from "./data/api";
 import { createCustomerWritePort, type CustomerWritePort } from "./data/customer-write";
 import { createDashboardPort, type DashboardPort } from "./data/dashboard";
+import { createOrderTemplatesPort, type OrderTemplatesPort } from "./data/order-templates";
 import type { Repositories } from "./data/ports";
 import { createRemoteRepositories } from "./data/remote-repositories";
 import { createExpoImageFileSystem } from "./images/expo-image-fs";
@@ -30,6 +31,8 @@ export interface AppDependencies {
   readonly customerWrite?: CustomerWritePort;
   /** The site's Início counters, online. Absent in test setups: the section is then hidden. */
   readonly dashboard?: DashboardPort;
+  /** The site's pedidos recorrentes (templates), online. Absent in test setups: the section is then hidden. */
+  readonly orderTemplates?: OrderTemplatesPort;
 }
 
 /** Production composition: online adapters over the API at `baseUrl` (already including the API base path). */
@@ -55,6 +58,7 @@ export function createAppDependencies(baseUrl: string, db: SqlDatabase): AppDepe
     profilePhoto,
     customerWrite: createCustomerWritePort(api),
     dashboard: createDashboardPort(api),
+    orderTemplates: createOrderTemplatesPort(api),
     auth: createHttpAuth(api),
     repositories: remote,
     connectivity,

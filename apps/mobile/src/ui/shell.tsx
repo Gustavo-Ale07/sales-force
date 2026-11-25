@@ -16,6 +16,8 @@ import { BrandLogo, SplashView } from "./brand";
 import { CustomerDetailScreen } from "./customer-detail-screen";
 import { CustomerCreateScreen } from "./customer-create-screen";
 import { CustomerEditScreen } from "./customer-edit-screen";
+import { OrderTemplateFormScreen } from "./order-template-form-screen";
+import { OrderTemplatesSection } from "./order-templates-section";
 import { CustomersScreen } from "./customers-screen";
 import { SalesScreen } from "./sales-screen";
 import { HomeScreen } from "./home-screen";
@@ -93,7 +95,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   const [quarantineTick, setQuarantineTick] = useState(0);
   const [customerDetail, setCustomerDetail] = useState<CustomerListItem | null>(null);
   /** The customer form open over the Clientes tab; one at a time. */
-  const [customerForm, setCustomerForm] = useState<{ kind: "create" } | { kind: "edit"; customer: CustomerListItem } | null>(null);
+  const [customerForm, setCustomerForm] = useState<{ kind: "create" } | { kind: "edit"; customer: CustomerListItem } | { kind: "template"; customer: CustomerListItem } | null>(null);
   const [customerFlags, setCustomerFlags] = useState({ create: false, edit: false });
   const [startRequest, setStartRequest] = useState<{ nonce: number; customer: Pick<CustomerListItem, "code" | "name">; lines?: readonly EditorLine[] } | null>(null);
   const connectivityState = useConnectivity(connectivity);
@@ -441,6 +443,25 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
                 onNewOrder={startOrderFor}
                 {...(services?.localOrders !== undefined ? { localOrders: services.localOrders, onRepeatLast: (localId: string) => { setCustomerDetail(null); duplicateSale(localId); } } : {})}
                 {...(customerFlags.edit && dependencies.customerWrite !== undefined ? { onEdit: (picked: CustomerListItem) => setCustomerForm({ kind: "edit", customer: picked }) } : {})}
+                {...(dependencies.orderTemplates !== undefined
+                  ? {
+                      templatesSection: (
+                        <OrderTemplatesSection
+                          customerCode={customerDetail.code}
+                          templates={dependencies.orderTemplates}
+                          products={repositories.products}
+                          orders={repositories.orders}
+                          onCreate={() => setCustomerForm({ kind: "template", customer: customerDetail })}
+                          onUse={(lines) => {
+                            setStartRequest({ nonce: Date.now(), customer: { code: customerDetail.code, name: customerDetail.name }, lines });
+                            setCustomerDetail(null);
+                            setSalesView("newOrder");
+                            selectTab("sales");
+                          }}
+                        />
+                      ),
+                    }
+                  : {})}
               />
             )}
             {customerForm?.kind === "create" && pendingCustomers !== null && (
@@ -452,6 +473,18 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
                   setCustomerForm(null);
                   setEpochs((current) => ({ ...current, customers: current.customers + 1 }));
                 }}
+              />
+            )}
+            {customerForm?.kind === "template" && dependencies.orderTemplates !== undefined && (
+              <OrderTemplateFormScreen
+                customerCode={customerForm.customer.code}
+                customerName={customerForm.customer.name}
+                templates={dependencies.orderTemplates}
+                products={repositories.products}
+                orders={repositories.orders}
+                onUnauthenticated={expire}
+                onSaved={() => setCustomerForm(null)}
+                onClose={() => setCustomerForm(null)}
               />
             )}
             {customerForm?.kind === "edit" && dependencies.customerWrite !== undefined && (

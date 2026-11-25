@@ -170,16 +170,28 @@ function matches(identifier: string, product: ProductListItem): boolean {
   return (CODE_IDENTIFIER.test(identifier) && String(product.code) === identifier) || product.reference === identifier;
 }
 
-async function lookup(products: ProductRepository, identifier: string, customerCode: number | undefined): Promise<ProductListItem[]> {
+/**
+ * The products of the device catalog that the search text finds and `accept` keeps (an exact test, never a part of a text),
+ * ordered by code. At most the first 500 products the search finds are looked at.
+ */
+export async function searchExact(
+  products: ProductRepository,
+  search: string,
+  customerCode: number | undefined,
+  accept: (product: ProductListItem) => boolean,
+): Promise<ProductListItem[]> {
   const found = new Map<number, ProductListItem>();
   for (let page = 1; page <= MAX_PAGES; page += 1) {
-    const request: ProductPageRequest = { search: identifier, page, pageSize: PAGE_SIZE, ...(customerCode === undefined ? {} : { customerCode }) };
+    const request: ProductPageRequest = { search, page, pageSize: PAGE_SIZE, ...(customerCode === undefined ? {} : { customerCode }) };
     const result: Page<ProductListItem> = await products.list(request);
-    for (const product of result.items) if (matches(identifier, product)) found.set(product.code, product);
+    for (const product of result.items) if (accept(product)) found.set(product.code, product);
     if (result.items.length < PAGE_SIZE || page * PAGE_SIZE >= result.total) break;
   }
   return [...found.values()].sort((a, b) => a.code - b.code);
 }
+
+const lookup = (products: ProductRepository, identifier: string, customerCode: number | undefined) =>
+  searchExact(products, identifier, customerCode, (product) => matches(identifier, product));
 
 /**
  * Resolves identifiers on the catalog of the device (the catalog list of the order customer shows only products priced in the

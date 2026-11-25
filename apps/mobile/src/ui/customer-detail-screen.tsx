@@ -59,6 +59,8 @@ export interface CustomerDetailScreenProps {
   readonly localOrders?: Pick<LocalOrdersPort, "listSales">;
   /** "Repetir último pedido": opens a new order with the same customer and the products and quantities of that order, at today's price. */
   readonly onRepeatLast?: (localId: string) => void;
+  /** "Pedidos recorrentes" of the customer (the section is built by the shell). Absent = none. */
+  readonly templatesSection?: ReactNode;
 }
 
 /**
@@ -68,7 +70,7 @@ export interface CustomerDetailScreenProps {
  * BUSINESS_RULE_UNDEFINED: whether a blocked/inactive customer may start an order is not decided anywhere (domain
  * `blocked` is "not decided here"; BLOQUEAR semantics NEEDS VALIDATION), so the ficha shows the real status only and never blocks.
  */
-export function CustomerDetailScreen({ customer, customers, connectivity, onBack, onNewOrder, onRedo, onEdit, localOrders, onRepeatLast }: CustomerDetailScreenProps) {
+export function CustomerDetailScreen({ customer, customers, connectivity, onBack, onNewOrder, onRedo, onEdit, localOrders, onRepeatLast, templatesSection }: CustomerDetailScreenProps) {
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
   const [financial, setFinancial] = useState<CustomerFinancial | null>(null);
   const [orders, setOrders] = useState<readonly SalesRow[]>([]);
@@ -210,6 +212,8 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
             <Field label="Limite de crédito" value={formatMoney(detail.creditLimit)} />
           </Section>
         )}
+
+        {templatesSection}
 
         {!online && <Text style={styles.note}>Sem conexão: dados salvos neste aparelho.</Text>}
       </ScrollView>
