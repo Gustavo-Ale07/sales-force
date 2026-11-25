@@ -87,6 +87,11 @@ export const CreateCustomerRequestSchema = named(
     addresses: z.array(CustomerAddressInputSchema).max(MAX_CUSTOMER_ADDRESSES).default([]),
     /** Manager/admin only: the seller that owns the customer. A seller always owns what they create. */
     sellerCode: sellerCodeInt().optional(),
+    /**
+     * Correction of a refused request ("Precisa de correção"): the registration being corrected. The corrected data is a NEW
+     * request (new `clientRequestId`, hence a new ERP origin key); the refused one stays as history and leaves the open list.
+     */
+    correctsRegistrationId: UuidSchema.optional(),
   }),
 );
 export type CreateCustomerRequest = z.infer<typeof CreateCustomerRequestSchema>;
@@ -97,11 +102,26 @@ export const CustomerRegistrationStatusSchema = named(
   z.enum(CUSTOMER_REGISTRATION_STATUSES),
 );
 
+/**
+ * The state a client shows (names and wording live in packages/domain, `customer-state.ts`). `draft` lives only on the device
+ * ("Salvar e sair": no server call); the server answers the other three. awaiting_send = "Aguardando envio" (retried by the
+ * server, never unlocked for a transient error); sent = confirmed by the ERP; needs_correction = "Precisa de correção".
+ */
+export const CUSTOMER_STATES = ['draft', 'awaiting_send', 'sent', 'needs_correction'] as const;
+export const CustomerStateSchema = named('CustomerState', z.enum(CUSTOMER_STATES));
+export type CustomerState = z.infer<typeof CustomerStateSchema>;
+
+/** Stable reason codes of a refusal; `reasonMessage` carries the readable text (sanitized ERP reason when there is one). */
+export const CUSTOMER_REASON_CODES = ['document_already_registered', 'required_field', 'erp_refused', 'invalid_command', 'review_needed'] as const;
+export const CustomerReasonCodeSchema = named('CustomerReasonCode', z.enum(CUSTOMER_REASON_CODES));
+
 export const CreateCustomerResponseSchema = named(
   'CreateCustomerResponse',
   z.object({
     registrationId: UuidSchema,
     status: CustomerRegistrationStatusSchema,
+    /** Client state (additive): awaiting_send while the ERP has not confirmed, sent once it did. */
+    state: CustomerStateSchema,
     /** The real ERP code once confirmed; null while the customer waits for delivery. */
     customerCode: codeInt().nullable(),
     originKey: z.string(),
@@ -109,17 +129,46 @@ export const CreateCustomerResponseSchema = named(
 );
 export type CreateCustomerResponse = z.infer<typeof CreateCustomerResponseSchema>;
 
-/**
- * The state a client shows. `draft` lives only on the device ("Salvar e sair": no server call); the server answers the other three.
- * awaiting_send = "Aguardando envio" (retried by the server); sent = confirmed by the ERP; needs_correction = "Precisa de correção".
- */
-export const CUSTOMER_STATES = ['draft', 'awaiting_send', 'sent', 'needs_correction'] as const;
-export const CustomerStateSchema = named('CustomerState', z.enum(CUSTOMER_STATES));
-export type CustomerState = z.infer<typeof CustomerStateSchema>;
+/** One registration as its creator (or the manager/admin who reaches its seller) sees it. */
+export const CustomerRegistrationViewSchema = named(
+  'CustomerRegistrationView',
+  z.object({
+    registrationId: UuidSchema,
+    state: CustomerStateSchema,
+    /** The text to print for `state`, from packages/domain (one wording for site and app). */
+    stateLabel: z.string(),
+    status: CustomerRegistrationStatusSchema,
+    customerCode: codeInt().nullable(),
+    originKey: z.string(),
+    /** Digits only; shown to the creator's scope, never in logs. */
+    document: z.string(),
+    name: z.string(),
+    sellerCode: codeInt().nullable(),
+    /** Set only for `needs_correction` (and `review_needed` while awaiting a person). */
+    reasonCode: CustomerReasonCodeSchema.nullable(),
+    reasonMessage: z.string().nullable(),
+    /** The refused registration this one corrects, if any. */
+    correctsRegistrationId: UuidSchema.nullable(),
+    createdAt: IsoTimestampSchema,
+    updatedAt: IsoTimestampSchema,
+  }),
+);
+export type CustomerRegistrationView = z.infer<typeof CustomerRegistrationViewSchema>;
 
-/** Stable reason codes of a refusal; `reasonMessage` carries the readable text. */
-export const CUSTOMER_REASON_CODES = ['document_already_registered', 'required_field', 'erp_refused', 'invalid_command', 'review_needed'] as const;
-export const CustomerReasonCodeSchema = named('CustomerReasonCode', z.enum(CUSTOMER_REASON_CODES));
+export const CustomerRegistrationsQuerySchema = z.object({
+  /** Filter by client state; absent = every registration that is not superseded by a correction. */
+  state: CustomerStateSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+export type CustomerRegistrationsQuery = z.infer<typeof CustomerRegistrationsQuerySchema>;
+
+export const CustomerRegistrationsResponseSchema = named(
+  'CustomerRegistrationsResponse',
+  z.object({ items: z.array(CustomerRegistrationViewSchema) }),
+);
+export type CustomerRegistrationsResponse = z.infer<typeof CustomerRegistrationsResponseSchema>;
+
+export const CustomerRegistrationPathSchema = z.object({ registrationId: UuidSchema });
 
 /* ---------- Edit (D-AP): only phone, e-mail, contacts, addresses and notes ---------- */
 
@@ -165,6 +214,8 @@ export const UpdateCustomerResponseSchema = named(
     updateId: UuidSchema,
     customerCode: codeInt(),
     state: CustomerStateSchema,
+    /** The text to print for `state` (packages/domain). */
+    stateLabel: z.string(),
     reasonCode: CustomerReasonCodeSchema.nullable(),
     reasonMessage: z.string().nullable(),
     updatedAt: IsoTimestampSchema,

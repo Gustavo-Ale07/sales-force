@@ -293,7 +293,7 @@ export interface paths {
         put?: never;
         /**
          * Create a customer in the Force (written to the ERP by the worker)
-         * @description Records the creation and waits up to 15 s for the ERP confirmation (D-AR). 201 with `status` `confirmed` and the real `customerCode` when confirmed in time; 202 with `status` `pending` when the ERP did not answer in time (the customer stays "aguardando envio ao Sankhya" and is confirmed later; no order can use it meanwhile); 200 with the recorded state on a replay of the same `clientRequestId` and payload. Idempotent per account: 409 idempotency_conflict when the id was used with a different payload. 409 conflict (details.reason `document_already_registered`) when the CPF/CNPJ already exists in the mirror or in another request in flight; `customer_write_disabled` while the installation has not enabled customer writes. Created with the ERP defaults of the installation (active, not blocked, installation price table, the creator as seller); the credit limit is never sent. 400 validation_failed (details.issues) for an invalid document or field. 429 rate_limited beyond the hourly creation limit.
+         * @description Records the creation and waits up to 15 s for the ERP confirmation (D-AR). 201 with `status` `confirmed` and the real `customerCode` when confirmed in time; 202 with `status` `pending` when the ERP did not answer in time (the customer stays "aguardando envio ao Sankhya" and is confirmed later; no order can use it meanwhile); 200 with the recorded state on a replay of the same `clientRequestId` and payload. Idempotent per account: 409 idempotency_conflict when the id was used with a different payload. 409 conflict (details.reason `document_already_registered`) when the CPF/CNPJ already exists in the mirror or in another request in flight; `customer_write_disabled` while the installation has not enabled customer writes. Created with the ERP defaults of the installation (active, not blocked, installation price table, the creator as seller); the credit limit is never sent. 400 validation_failed (details.issues) for an invalid document or field. 429 rate_limited beyond the hourly creation limit. Every response carries the client `state`. A definitive ERP refusal (other than a duplicate document) found later is `needs_correction` (Precisa de correção), listed by GET /customers/registrations: correct the data and POST again with a new `clientRequestId` and `correctsRegistrationId` (own, rejected, not yet corrected; otherwise 409 with `details.reason` registration_not_found, registration_not_rejected or registration_already_corrected). A timeout, an offline ERP or exhausted retries never produce `needs_correction`.
          */
         post: operations["createCustomer"];
         delete?: never;
@@ -311,6 +311,46 @@ export interface paths {
         };
         /** Count of visible customers per initial letter (A-Z index) */
         get: operations["listCustomerLetters"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/customers/registrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Customers created in the Force that are not yet in the ERP mirror, or were refused (scoped)
+         * @description Each item carries the client `state` and its `stateLabel`: `awaiting_send` (Aguardando envio; the server keeps retrying), `sent` (Enviado ao Sankhya: confirmed, `customerCode` set) or `needs_correction` (Precisa de correção: a definitive refusal with `reasonCode` and `reasonMessage`; fix the data and POST /customers again with a new `clientRequestId` and `correctsRegistrationId`). A registration already corrected leaves the default list. A timeout, an offline ERP or exhausted retries never become `needs_correction`. Scope: the creator; a manager/admin sees those of the sellers they reach.
+         */
+        get: operations["listCustomerRegistrations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/customers/registrations/{registrationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One customer registration with its state (scoped)
+         * @description A registration outside the actor scope answers 404, like a missing one. Use it to follow an `awaiting_send` customer after the 202 of POST /customers.
+         */
+        get: operations["getCustomerRegistration"];
         put?: never;
         post?: never;
         delete?: never;
@@ -337,8 +377,8 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Edit phone, e-mail, contacts, addresses and notes of a customer (D-AP) - delivery to the ERP NOT approved
-         * @description Same rule for the site and the app. Allow-list: any other key is refused with 400 validation_failed whose `details.issues[].path` names the field (unrecognized_keys). Seller: only customers of their own portfolio; manager/admin: the portfolio they reach; outside it 404. TODAY the server never accepts an edit: 409 conflict with `details.reason` `customer_edit_disabled` while `ERP_CUSTOMER_EDIT_ENABLED` is closed (default) and `customer_edit_delivery_not_approved` when it is open, because the partner write port has no update operation (`updatePartner` stays refused until the owner approves it). Nothing is stored and the ERP is never called. The 202 response is the future success (state `awaiting_send`) and is not produced yet. Never changes name, document, seller, price table, status or limits.
+         * Edit phone, e-mail and notes of a customer (D-AP); written to the ERP by the worker
+         * @description Same rule for the site and the app. Allow-list: any other key is refused with 400 validation_failed whose `details.issues[].path` names the field (unrecognized_keys). Seller: only customers of their own portfolio; manager/admin: the portfolio they reach; outside it 404. 409 conflict with `details.reason` `customer_edit_disabled` while `ERP_CUSTOMER_EDIT_ENABLED` is closed (default; nothing is stored and the ERP is never called). With the flag open the change is recorded as a command in the outbox and the worker writes it to the ERP (Sandbox only until the owner releases it): 202 with `state` `awaiting_send` ("Aguardando envio"). Replaying the same `clientRequestId` and payload answers 200 with the recorded `state` (`awaiting_send`, `sent` "Enviado ao Sankhya" or `needs_correction` "Precisa de correção" with `reasonCode`/`reasonMessage`): this is how a client follows the edit. 409 `idempotency_conflict` for the same id with another payload; 409 `customer_update_in_progress` while another edit of the same customer is not yet delivered. `contacts` and `addresses` are accepted by the schema but refused with 409 `details.reason` `customer_edit_field_not_supported` (the ERP mapping is not validated, S5.2); phone, e-mail and notes are the deliverable fields. Never changes name, document, seller, price table, status or limits.
          */
         patch: operations["updateCustomer"];
         trace?: never;
@@ -1061,11 +1101,14 @@ export interface components {
             /** @default [] */
             addresses: components["schemas"]["CustomerAddressInput"][];
             sellerCode?: number;
+            /** Format: uuid */
+            correctsRegistrationId?: string;
         };
         CreateCustomerResponse: {
             /** Format: uuid */
             registrationId: string;
             status: components["schemas"]["CustomerRegistrationStatus"];
+            state: components["schemas"]["CustomerState"];
             customerCode: number | null;
             originKey: string;
         };
@@ -1180,6 +1223,26 @@ export interface components {
         CustomerReasonCode: "document_already_registered" | "required_field" | "erp_refused" | "invalid_command" | "review_needed";
         /** @enum {string} */
         CustomerRegistrationStatus: "pending" | "confirmed" | "rejected" | "unknown";
+        CustomerRegistrationView: {
+            /** Format: uuid */
+            registrationId: string;
+            state: components["schemas"]["CustomerState"];
+            stateLabel: string;
+            status: components["schemas"]["CustomerRegistrationStatus"];
+            customerCode: number | null;
+            originKey: string;
+            document: string;
+            name: string;
+            sellerCode: number | null;
+            reasonCode: components["schemas"]["CustomerReasonCode"] | null;
+            reasonMessage: string | null;
+            correctsRegistrationId: string | null;
+            createdAt: components["schemas"]["IsoTimestamp"];
+            updatedAt: components["schemas"]["IsoTimestamp"];
+        };
+        CustomerRegistrationsResponse: {
+            items: components["schemas"]["CustomerRegistrationView"][];
+        };
         /** @enum {string} */
         CustomerSort: "name" | "-name" | "code" | "-code";
         /** @enum {string} */
@@ -2014,6 +2077,7 @@ export interface components {
             updateId: string;
             customerCode: number;
             state: components["schemas"]["CustomerState"];
+            stateLabel: string;
             reasonCode: components["schemas"]["CustomerReasonCode"] | null;
             reasonMessage: string | null;
             updatedAt: components["schemas"]["IsoTimestamp"];
@@ -3006,6 +3070,114 @@ export interface operations {
             };
         };
     };
+    listCustomerRegistrations: {
+        parameters: {
+            query?: {
+                state?: components["schemas"]["CustomerState"];
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cadastros de clientes feitos pelo Force */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerRegistrationsResponse"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    getCustomerRegistration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                registrationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cadastro */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerRegistrationView"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     getCustomer: {
         parameters: {
             query?: never;
@@ -3079,7 +3251,16 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Alteração registrada, aguardando envio ao Sankhya (ainda não produzida: a entrega não foi aprovada) */
+            /** @description Reenvio idempotente: estado registrado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateCustomerResponse"];
+                };
+            };
+            /** @description Alteração registrada, aguardando envio ao Sankhya */
             202: {
                 headers: {
                     [name: string]: unknown;
