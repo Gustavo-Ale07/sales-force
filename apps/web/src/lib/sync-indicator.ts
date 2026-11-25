@@ -37,6 +37,39 @@ export function isDataStale(dataAsOf: string | null | undefined, now: number): b
   return Number.isFinite(at) && now - at > SYNC_STALE_AFTER_MS;
 }
 
+export interface SyncSituationInput {
+  online: boolean;
+  syncing: boolean;
+  failed: boolean;
+  needsCorrection: boolean;
+  /** Orders waiting to be sent. */
+  pending: number;
+  /** Time of the last data read (ISO), when known. */
+  dataAsOf: string | null;
+}
+
+/** The one-sentence "Situação" of the Perfil block: same wording and precedence as the app's `describeSyncStatus`. */
+export function syncSituation(input: SyncSituationInput): { text: string; color: SyncDotColor } {
+  if (input.syncing) return { text: "Sincronizando…", color: "yellow" };
+  if (input.failed) return { text: "Erro ao sincronizar", color: "red" };
+  if (!input.online) return { text: "Sem internet — alterações salvas neste aparelho", color: "yellow" };
+  if (input.needsCorrection) return { text: "Há pedido que precisa de atenção", color: "red" };
+  if (input.pending > 0) return { text: `Alterações pendentes (${input.pending})`, color: "yellow" };
+  const at = input.dataAsOf ? new Date(input.dataAsOf) : null;
+  if (at === null || Number.isNaN(at.getTime())) return { text: "Sincronizado", color: "green" };
+  const two = (value: number) => String(value).padStart(2, "0");
+  return { text: `Sincronizado às ${two(at.getHours())}:${two(at.getMinutes())}`, color: "green" };
+}
+
+/** dd/mm/aaaa HH:mm, as the app's "Última sincronização". */
+export function formatLastSync(iso: string | null): string {
+  if (iso === null) return "Ainda não sincronizado";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "Ainda não sincronizado";
+  const two = (value: number) => String(value).padStart(2, "0");
+  return `${two(date.getDate())}/${two(date.getMonth() + 1)}/${date.getFullYear()} ${two(date.getHours())}:${two(date.getMinutes())}`;
+}
+
 /** First matching row wins (same table as the app). While syncing, the "last sync failed" row is ignored and the colour is kept. */
 export function syncIndicatorView(input: SyncIndicatorInput): SyncIndicatorView {
   const spinning = input.syncing;

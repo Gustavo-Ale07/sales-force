@@ -29,13 +29,27 @@ describe("CustomerCreateScreen", () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
-  it("an individual cannot have a state registration", async () => {
-    await setup();
-    await fireEvent.changeText(await screen.findByLabelText("CPF/CNPJ"), "529.982.247-25");
+  it("an individual has no state registration field nor Isento, and no error about it", async () => {
+    const { onSave } = await setup();
+    await fireEvent.changeText(await screen.findByLabelText("CPF/CNPJ"), CNPJ);
+    await fireEvent.press(screen.getByLabelText("Isento"));
+    await fireEvent.changeText(screen.getByLabelText("CPF/CNPJ"), "529.982.247-25");
     await fireEvent.changeText(screen.getByLabelText("Razão social ou nome"), "Maria");
-    await fireEvent.changeText(screen.getByLabelText("Inscrição estadual"), "123");
+    expect(screen.queryByLabelText("Inscrição estadual")).toBeNull();
+    expect(screen.queryByLabelText("Isento")).toBeNull();
     await fireEvent.press(screen.getByLabelText("Cadastrar"));
-    expect(await screen.findByText("Pessoa física não tem inscrição estadual.")).toBeTruthy();
+    expect(await screen.findByText("Salvo")).toBeTruthy();
+    expect(screen.queryByText(/Pessoa física não tem/)).toBeNull();
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ stateRegistration: null }));
+  });
+
+  it("with Isento checked on a company there is no state registration error", async () => {
+    await setup();
+    await fireEvent.changeText(await screen.findByLabelText("CPF/CNPJ"), CNPJ);
+    await fireEvent.changeText(screen.getByLabelText("Razão social ou nome"), "Padaria");
+    await fireEvent.press(screen.getByLabelText("Isento"));
+    await fireEvent.press(screen.getByLabelText("Cadastrar"));
+    expect(screen.queryByText(/Pessoa física não tem/)).toBeNull();
   });
 
   it("saves a strict request (ICMS R by default, Isento as ISENTO, no addresses) and shows Salvo", async () => {
@@ -58,14 +72,51 @@ describe("CustomerCreateScreen", () => {
     });
   });
 
-  it("the chosen ICMS class is sent", async () => {
-    const { onSave } = await setup();
+  const ICMS = [
+    { code: "C" as const, label: "Consumidor final" },
+    { code: "R" as const, label: "Revendedor" },
+  ];
+
+  it("lists the ICMS classifications by NAME, Revendedor selected by default, and sends the chosen one", async () => {
+    const onSave = jest.fn(async () => undefined);
+    await render(<CustomerCreateScreen onSave={onSave} onClose={jest.fn()} icmsOptions={ICMS} />);
+    expect(screen.getByLabelText("Classificação Revendedor").props.accessibilityState.selected).toBe(true);
+    expect(screen.queryByText("C")).toBeNull();
+    await fireEvent.press(screen.getByLabelText("Classificação Consumidor final"));
     await fireEvent.changeText(await screen.findByLabelText("CPF/CNPJ"), "529.982.247-25");
     await fireEvent.changeText(screen.getByLabelText("Razão social ou nome"), "Maria");
-    await fireEvent.press(screen.getByLabelText("ICMS C"));
     await fireEvent.press(screen.getByLabelText("Cadastrar"));
     await screen.findByText("Salvo");
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ icmsClassification: "C", stateRegistration: null }));
+  });
+
+  it("without the server's list the selector is not shown and the default R is sent", async () => {
+    const { onSave } = await setup();
+    expect(screen.queryByText("Classificação ICMS *")).toBeNull();
+    await fireEvent.changeText(await screen.findByLabelText("CPF/CNPJ"), "529.982.247-25");
+    await fireEvent.changeText(screen.getByLabelText("Razão social ou nome"), "Maria");
+    await fireEvent.press(screen.getByLabelText("Cadastrar"));
+    await screen.findByText("Salvo");
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ icmsClassification: "R" }));
+  });
+
+  it("a seller has no seller field; a non-seller must pick one and it is sent", async () => {
+    const onSave = jest.fn(async () => undefined);
+    await render(<CustomerCreateScreen onSave={onSave} onClose={jest.fn()} sellers={[{ code: 7, name: "Ana" }, { code: 9, name: "Beto" }]} />);
+    await fireEvent.changeText(await screen.findByLabelText("CPF/CNPJ"), "529.982.247-25");
+    await fireEvent.changeText(screen.getByLabelText("Razão social ou nome"), "Maria");
+    await fireEvent.press(screen.getByLabelText("Cadastrar"));
+    expect(await screen.findByText("Escolha o vendedor.")).toBeTruthy();
+    expect(onSave).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByLabelText("Vendedor Beto"));
+    await fireEvent.press(screen.getByLabelText("Cadastrar"));
+    await screen.findByText("Salvo");
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ sellerCode: 9 }));
+  });
+
+  it("no seller field for a seller", async () => {
+    await setup();
+    expect(screen.queryByText("Vendedor *")).toBeNull();
   });
 
   it("a local refusal (duplicate waiting on the device) is shown and the form stays", async () => {

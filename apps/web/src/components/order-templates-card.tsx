@@ -25,7 +25,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Pencil, Play, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { createOrderFromTemplate, deleteOrderTemplate } from "../lib/api-mutations";
-import { orderTemplatesQueryOptions, queryKeys } from "../lib/api-queries";
+import { customerRegistrationsQueryOptions, orderTemplatesQueryOptions, queryKeys } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { requireDataset, useLoadedDataset } from "../lib/dataset";
 import { errorStatus } from "../lib/http-error";
@@ -111,7 +111,9 @@ export function OrderTemplatesCard({ customerCode }: OrderTemplatesCardProps) {
   const api = useApi();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const query = useQuery(orderTemplatesQueryOptions(api, customerCode));
+  const registrations = useQuery({ ...customerRegistrationsQueryOptions(api), retry: false });
+  const unconfirmed = (registrations.data?.items ?? []).some((item) => item.customerCode === customerCode && item.state !== "sent");
+  const query = useQuery({ ...orderTemplatesQueryOptions(api, customerCode), enabled: !unconfirmed });
   const loadedDataset = useLoadedDataset();
   const [editing, setEditing] = useState<OrderTemplate | null>(null);
   const [deleting, setDeleting] = useState<OrderTemplate | null>(null);
@@ -159,6 +161,9 @@ export function OrderTemplatesCard({ customerCode }: OrderTemplatesCardProps) {
 
   const useFailure = use.isError ? describeTemplateError(use.error, "Não foi possível criar o pedido", "use") : undefined;
   const templates = query.data?.items ?? [];
+  // A customer the ERP has not confirmed yet has no recurring orders to show; a "not found" answer is simply an empty list.
+  const noTemplatesYet = query.isError && errorStatus(query.error) === 404;
+  if (unconfirmed) return null;
 
   return (
     <Card>
@@ -178,7 +183,7 @@ export function OrderTemplatesCard({ customerCode }: OrderTemplatesCardProps) {
         <CardBody aria-busy="true">
           <SkeletonLines lines={3} label="Carregando pedidos recorrentes…" />
         </CardBody>
-      ) : query.isError ? (
+      ) : query.isError && !noTemplatesYet ? (
         <QueryError
           error={query.error}
           onRetry={() => void query.refetch()}

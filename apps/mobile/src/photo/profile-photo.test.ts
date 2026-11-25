@@ -133,6 +133,14 @@ describe("picker adapter and runtime detection", () => {
     },
   });
 
+  it("sends a PNG when the encoder supports it and it is small (the JPEG encoder turns transparency black)", async () => {
+    const launch = jest.fn(async () => ({ canceled: false, assets: [{ uri: "file:///p.png", width: 600, height: 600 }] }));
+    const manipulator = manipulatorOf(() => "A".repeat(1000));
+    (manipulator.SaveFormat as { JPEG: string; PNG?: string }).PNG = "png";
+    const photo = await createImagePickerAdapter(pickerModule(launch), manipulator).pick("camera");
+    expect(photo?.contentType).toBe("image/png");
+  });
+
   it("without the native modules there is no picker", () => {
     expect(detectPhotoPicker(() => {
       throw new Error("Cannot find module");

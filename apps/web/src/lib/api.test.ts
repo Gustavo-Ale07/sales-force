@@ -60,8 +60,8 @@ describe("describeApiError", () => {
     [401, "Sessão expirada"],
     [403, "Sem permissão"],
     [404, "Não encontrado"],
-    [429, "Muitas requisições"],
-    [503, "Serviço indisponível"],
+    [429, "Muitas tentativas"],
+    [503, "Servidor indisponível"],
   ])("maps %s to %s and keeps the correlation id", async (status, title) => {
     const description = describeApiError(await request(status));
     expect(description.title).toBe(title);
@@ -77,6 +77,6 @@ describe("describeApiError", () => {
   });
 
   it("describes a network failure", () => {
-    expect(describeApiError(new ApiRequestError({ status: 0, message: "x" })).title).toBe("Sem conexão com o servidor");
+    expect(describeApiError(new ApiRequestError({ status: 0, message: "x" })).title).toBe("Sem conexão");
   });
 });

@@ -68,11 +68,11 @@ export function prepareCustomerRegistration(body: CreateCustomerRequest, actor: 
   // IE (owner ruling 2026-11-13): mandatory for a company (the IE or "Isento", stored as ISENTO, case-insensitive);
   // an individual has no such field. No per-state format validation.
   const typedIe = body.stateRegistration?.trim() ?? '';
-  const stateRegistration = typedIe.toUpperCase() === 'ISENTO' ? 'ISENTO' : typedIe === '' ? null : typedIe;
+  // Owner 2026-11-25: IE does not apply to an individual; whatever the client sends ("Isento" included) is ignored, never an error.
+  const typed = typedIe.toUpperCase() === 'ISENTO' ? 'ISENTO' : typedIe === '' ? null : typedIe;
+  const stateRegistration = kind === 'individual' ? null : typed;
   if (kind === 'company' && stateRegistration === null) {
     issues.push({ path: 'stateRegistration', code: 'state_registration_required', message: 'Informe a inscrição estadual ou marque "Isento".' });
-  } else if (kind === 'individual' && stateRegistration !== null) {
-    issues.push({ path: 'stateRegistration', code: 'state_registration_not_applicable', message: 'Pessoa física não tem inscrição estadual.' });
   }
 
   const chosen = chooseSeller(body.sellerCode, actor);
@@ -115,8 +115,11 @@ export function prepareCustomerRegistration(body: CreateCustomerRequest, actor: 
 
 function chooseSeller(requested: number | undefined, actor: RegistrationActor): number | null {
   if (actor.role === 'seller') {
+    // Owner 2026-11-25: a seller's customer is linked to them by the server; the client value is ignored. Only a seller
+    // with several links still names one of them.
+    if (actor.sellerCodes.length === 1) return actor.sellerCodes[0] ?? null;
     if (requested !== undefined) return actor.sellerCodes.includes(requested) ? requested : null;
-    return actor.sellerCodes.length === 1 ? (actor.sellerCodes[0] ?? null) : null;
+    return null;
   }
   if (requested !== undefined) return requested;
   return actor.sellerCodes.length === 1 ? (actor.sellerCodes[0] ?? null) : null;

@@ -2,7 +2,8 @@ import { Alert, Button, Card, CardBody, CardHeader, KeyValue, KeyValueList, Page
 import { useQuery } from "@tanstack/react-query";
 import { ProfilePhotoControls } from "../components/profile-photo-controls";
 import { QueryError } from "../components/query-error";
-import { DOT_BG, useSyncState } from "../components/sync-indicator";
+import { useSyncState } from "../components/sync-indicator";
+import { formatLastSync, type SyncDotColor } from "../lib/sync-indicator";
 import { RefreshDataDialog } from "../components/refresh-data-dialog";
 import { useAppServices } from "../lib/app-context";
 import { sessionQueryOptions } from "../lib/auth-client";
@@ -13,28 +14,24 @@ import { isOperationsRole } from "../lib/operations-role";
  * (`GET /auth/session`). Nothing here is editable: there is no endpoint to change the account, the password or the
  * seller link, and those are administered outside this screen (CFG-2 for the seller link).
  */
+/** Text colour of the situation sentence (same states as the header arrows; darker tones for the white card). */
+const SITUATION_TEXT: Record<SyncDotColor, string> = { green: "text-[#17693d]", yellow: "text-[#9a5b00]", red: "text-[#d10108]" };
+
 /** "Sincronização" block (same colour table as the header dot) with the "sync now" button. */
 function SyncBlock({ role }: { role: string }) {
-  const { view, dataAsOf, dialogOpen, setDialogOpen } = useSyncState(role);
-  const last = dataAsOf
-    ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" }).format(new Date(dataAsOf))
-    : "Ainda não sincronizado";
+  const { view, situation, online, dataAsOf, pendingCount, dialogOpen, setDialogOpen } = useSyncState(role);
   return (
     <Card>
       <CardHeader title="Sincronização" />
       <CardBody>
+        <p className={`m-0 mb-2 text-sm font-semibold ${SITUATION_TEXT[situation.color]}`}>{situation.text}</p>
         <KeyValueList>
-          <KeyValue label="Situação">
-            <span className="inline-flex items-center gap-2">
-              <span aria-hidden="true" className={`inline-block size-3 rounded-full ${DOT_BG[view.color]}`} />
-              {view.label.replace("Status de sincronização: ", "")}
-            </span>
-          </KeyValue>
-          <KeyValue label="Última sincronização">{last}</KeyValue>
+          <KeyValue label="Última sincronização">{formatLastSync(dataAsOf)}</KeyValue>
+          {pendingCount > 0 ? <KeyValue label="Alterações pendentes">{pendingCount}</KeyValue> : null}
         </KeyValueList>
         <div className="mt-3">
-          <Button type="button" variant="secondary" disabled={view.spinning} onClick={() => setDialogOpen(true)}>
-            Sincronizar agora
+          <Button type="button" variant="secondary" disabled={view.spinning || !online} onClick={() => setDialogOpen(true)}>
+            {view.spinning ? "Sincronizando…" : "Sincronizar agora"}
           </Button>
         </div>
         <RefreshDataDialog open={dialogOpen} role={role} onClose={() => setDialogOpen(false)} />
@@ -106,7 +103,7 @@ export function ProfilePage() {
         <CardHeader title="Sobre" />
         <CardBody>
           <KeyValueList>
-            <KeyValue label="Aplicativo">{config.installationName}</KeyValue>
+            <KeyValue label="Aplicativo">Force</KeyValue>
             <KeyValue label="Versão">{__APP_VERSION__}</KeyValue>
             {config.authMode === "dev" ? <KeyValue label="Ambiente">DEV</KeyValue> : null}
           </KeyValueList>

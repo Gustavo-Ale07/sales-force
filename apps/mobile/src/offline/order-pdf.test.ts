@@ -30,6 +30,26 @@ describe("orderDocumentOf", () => {
     expect(model.statusLabel).not.toMatch(/ERP/);
   });
 
+  it("prints the IPI percent per item and the Condições box (negotiation type, freight)", () => {
+    const withIpi = draftRecord({ negotiationTypeCode: 4, freightType: "FOB" });
+    const lines = [line({ ipi: { status: "rate", percentual: "5.5" } }), noPrice()];
+    const model = orderDocumentOf(withIpi, lines, { negotiationTypes: [{ code: 4, label: "30 dias" }] });
+    expect(model.items[0]?.ipiPercent).toBe("5.5");
+    expect(model.items[1]?.ipiPercent).toBeNull();
+    expect(model.conditions).toEqual([
+      { label: "Tipo de negociação", value: "30 dias" },
+      { label: "Frete", value: "FOB (frete por conta do cliente)" },
+    ]);
+    const html = buildOrderPdfHtml(withIpi, lines, null, { negotiationTypes: [{ code: 4, label: "30 dias" }] });
+    expect(html).toContain("IPI %");
+    expect(html).toContain("5,5%");
+    expect(html).toContain("Tipo de negociação: <strong>30 dias</strong>");
+  });
+
+  it("falls back to the negotiation code when the configuration is not at hand", () => {
+    expect(orderDocumentOf(draftRecord({ negotiationTypeCode: 4, freightType: null }), [line()]).conditions).toEqual([{ label: "Tipo de negociação", value: "Código 4" }]);
+  });
+
   it("takes the Sankhya number from the server snapshot only when it is a number", () => {
     expect(orderDocumentOf(draftRecord({ serverSnapshot: { erpNumber: 987 } }), [line()]).erpNumber).toBe(987);
     expect(orderDocumentOf(draftRecord({ serverSnapshot: { erpNumber: "x" } }), [line()]).erpNumber).toBeNull();

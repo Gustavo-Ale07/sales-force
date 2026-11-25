@@ -2,7 +2,6 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 import { withModal } from "../test-render";
 import { StyleSheet } from "react-native";
 import type { SyncStatus } from "@salesforce/mobile-db";
-import { colors } from "../theme";
 import { HeaderSyncStatus, SyncPanel, SyncStatusChip } from "./sync-status";
 
 const idle: SyncStatus = { phase: "idle", pending: 0, needsAttention: 0, lastSyncedAt: null, lastError: null };
@@ -27,21 +26,19 @@ describe("SyncPanel quarantine entry", () => {
 });
 
 describe("SyncPanel on-demand sync", () => {
-  it("Conexão line equals the Situação verification", async () => {
+  it("says the situation in one sentence", async () => {
     const status: SyncStatus = { ...idle, phase: "offline", failure: "server_unavailable", lastError: "x" };
     await render(<SyncPanel status={status} connectivity="online" onSyncNow={noop} />);
     expect(screen.getByText("Servidor do Force indisponível — alterações salvas neste aparelho, tentaremos de novo")).toBeTruthy();
-    expect(screen.getByText("Internet: ok · Servidor: sem resposta")).toBeTruthy();
   });
 
-  it("shows the step being run while syncing, and keeps a single 'Sincronizar agora' button", async () => {
-    const onSyncNow = jest.fn();
-    await render(<SyncPanel status={{ ...idle, phase: "syncing", progress: { label: "Atualizando preços", percent: 40 } }} connectivity="online" onSyncNow={onSyncNow} />);
-    expect(screen.getByText("Atualizando preços (40%)")).toBeTruthy();
+  it("while syncing shows a single (disabled) 'Sincronizando…' button and no step detail", async () => {
+    await render(<SyncPanel status={{ ...idle, phase: "syncing", progress: { label: "Atualizando preços", percent: 40 } }} connectivity="online" onSyncNow={noop} />);
+    expect(screen.queryByText(/Atualizando preços/)).toBeNull();
     expect(screen.getAllByRole("button")).toHaveLength(1);
   });
 
-  it("lists the orders in attention with the reason, and names the failed steps when Sankhya is down", async () => {
+  it("lists the orders in attention with the reason", async () => {
     const status: SyncStatus = {
       ...idle,
       needsAttention: 1,
@@ -52,7 +49,6 @@ describe("SyncPanel on-demand sync", () => {
     await render(<SyncPanel status={status} connectivity="online" onSyncNow={noop} />);
     expect(screen.getByText("Cliente X")).toBeTruthy();
     expect(screen.getByText("O cliente está bloqueado.")).toBeTruthy();
-    expect(screen.getByText("Não atualizado: Preços")).toBeTruthy();
   });
 
   it("pressing the button runs the sync", async () => {
@@ -60,32 +56,6 @@ describe("SyncPanel on-demand sync", () => {
     await render(<SyncPanel status={idle} connectivity="online" onSyncNow={onSyncNow} />);
     await fireEvent.press(screen.getByRole("button", { name: "Sincronizar agora" }));
     expect(onSyncNow).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("SyncPanel age of the data", () => {
-  const now = new Date("2026-11-13T18:00:00.000Z").getTime();
-  const ago = (hours: number) => new Date(now - hours * 3_600_000).toISOString();
-  const colorOf = (text: string) => (StyleSheet.flatten(screen.getByText(text).props.style) as { color?: string }).color;
-
-  it("shows how old the last successful sync is, in the normal colour within 24 h", async () => {
-    await render(<SyncPanel status={{ ...idle, lastSyncedAt: ago(3) }} connectivity="online" onSyncNow={noop} now={now} />);
-    expect(screen.getByText("Dados atualizados")).toBeTruthy();
-    expect(screen.getByText("há 3 h")).toBeTruthy();
-    expect(colorOf("há 3 h")).not.toBe(colors.warning);
-  });
-
-  it("turns amber after 24 h and does not sync by itself", async () => {
-    const onSyncNow = jest.fn();
-    await render(<SyncPanel status={{ ...idle, lastSyncedAt: ago(50) }} connectivity="online" onSyncNow={onSyncNow} now={now} />);
-    expect(screen.getByText("há 2 dias")).toBeTruthy();
-    expect(colorOf("há 2 dias")).toBe(colors.warning);
-    expect(onSyncNow).not.toHaveBeenCalled();
-  });
-
-  it("shows no age line when the device never synced", async () => {
-    await render(<SyncPanel status={idle} connectivity="online" onSyncNow={noop} now={now} />);
-    expect(screen.queryByText("Dados atualizados")).toBeNull();
   });
 });
 
@@ -143,30 +113,28 @@ describe("header sync status", () => {
   });
 });
 
-describe("SyncPanel mobility detail (owner 2026-11-13)", () => {
-  const mobility = [
-    { kind: "products" as const, visible: 90, hidden: 10, keptPrevious: false },
-    { kind: "tops" as const, visible: 2, hidden: 1, keptPrevious: false },
-  ];
-
-  it("shows visible/hidden counts per kind when the server sent them (staff detail view)", async () => {
+describe("SyncPanel hides technical diagnostics from the seller (owner 2026-11-25)", () => {
+  it("shows no mobility tallies and no incomplete-configuration banner", async () => {
+    const mobility = [
+      { kind: "products" as const, visible: 90, hidden: 10, keptPrevious: false },
+      { kind: "tops" as const, visible: 2, hidden: 1, keptPrevious: true },
+    ];
     await render(<SyncPanel status={{ ...idle, mobility }} connectivity="online" onSyncNow={noop} />);
-    expect(screen.getByText("Produtos: 90 visíveis, 10 ocultos")).toBeTruthy();
-    expect(screen.getByText("Tipos de operação: 2 visíveis, 1 oculto")).toBeTruthy();
-    expect(screen.queryByText(/Configuração de mobilidade incompleta/)).toBeNull();
+    expect(screen.queryByText(/visíveis|ocultos?|Produtos|Tipos de operação|Condições de pagamento/)).toBeNull();
+    expect(screen.queryByText(/Configuração|avise o TI/)).toBeNull();
   });
 
-  it.each([
-    ["products", "Produtos"],
-    ["tops", "Tipos de operação"],
-    ["negotiationTypes", "Condições de pagamento"],
-  ] as const)("warns naming the kept kind (%s)", async (kind, label) => {
-    await render(<SyncPanel status={{ ...idle, mobility: [{ kind, visible: 3, hidden: 0, keptPrevious: true }] }} connectivity="online" onSyncNow={noop} />);
-    expect(screen.getByText(`Configuração de mobilidade incompleta (${label}) — avise o TI; mantida a base anterior`)).toBeTruthy();
+  it("shows no connection row, no age row and no failed-steps line", async () => {
+    const status: SyncStatus = { ...idle, failure: "sankhya_unavailable", failedSteps: ["Preços"], lastSyncedAt: new Date().toISOString() };
+    await render(<SyncPanel status={status} connectivity="online" onSyncNow={noop} />);
+    expect(screen.queryByText(/Conexão|Internet:|Servidor:|Dados atualizados|Não atualizado/)).toBeNull();
   });
 
-  it("the seller view (no mobility) shows nothing about mobility", async () => {
+  it("shows the pending row only when there is something pending", async () => {
     await render(<SyncPanel status={idle} connectivity="online" onSyncNow={noop} />);
-    expect(screen.queryByText(/visíveis|mobilidade/)).toBeNull();
+    expect(screen.queryByText("Alterações pendentes")).toBeNull();
+    await render(<SyncPanel status={{ ...idle, pending: 3 }} connectivity="online" onSyncNow={noop} />);
+    expect(screen.getByText("Alterações pendentes")).toBeTruthy();
+    expect(screen.getByText("3")).toBeTruthy();
   });
 });

@@ -12,7 +12,7 @@ export const ProfilePhotoCommandSchema = z.object({
   photoVersion: z.string().regex(/^[0-9a-f]{32}$/),
   /** Resolved by the API when the photo was queued (the worker's database role cannot read the account tables). */
   erpUser: z.discriminatedUnion('kind', [
-    z.object({ kind: z.literal('user'), code: z.number().int().min(1).max(2_147_483_647), sellerCode: z.number().int().optional() }),
+    z.object({ kind: z.literal('user'), code: z.number().int().min(0).max(2_147_483_647), sellerCode: z.number().int().optional() }),
     z.object({ kind: z.literal('none') }),
     z.object({ kind: z.literal('ambiguous') }),
   ]),

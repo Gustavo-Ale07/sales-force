@@ -21,11 +21,11 @@ export function userPhotoSrc(user: Pick<AuthUser, "photoVersion"> | null): strin
 export type PhotoProblem = "photo_type_not_allowed" | "photo_too_large" | "photo_too_small" | "photo_unreadable";
 
 export const photoMessages: Record<string, string> = {
-  photo_type_not_allowed: "Use uma imagem JPEG, PNG ou WebP.",
-  photo_content_mismatch: "O arquivo não é uma imagem válida do tipo informado.",
-  photo_too_large: "A foto passa de 5 MB. Escolha uma imagem menor.",
-  photo_unreadable: "Não foi possível ler esta imagem. Tente outro arquivo.",
-  photo_too_small: "A foto é pequena demais: use pelo menos 64 x 64 pixels.",
+  photo_type_not_allowed: "Formato de imagem não aceito. Use JPEG, PNG ou WebP.",
+  photo_content_mismatch: "O arquivo não corresponde ao formato informado. Escolha outra imagem.",
+  photo_too_large: "A imagem é maior que 5 MB. Escolha uma menor.",
+  photo_unreadable: "Não foi possível ler a imagem. Escolha outra.",
+  photo_too_small: "A imagem é pequena demais. Use ao menos 64 × 64 pixels.",
   photo_crop_invalid: "O recorte escolhido é inválido. Tente de novo.",
 };
 
@@ -42,15 +42,15 @@ export function photoUploadMessage(error: unknown): string {
   if (error instanceof ApiRequestError) {
     if (error.status === 400) {
       const code = error.issues[0]?.code;
-      return (code ? photoMessages[code] : undefined) ?? "A foto não foi aceita. Tente outra imagem.";
+      return (code ? photoMessages[code] : undefined) ?? "A imagem não foi aceita. Escolha outra.";
     }
-    if (error.status === 429) return "Aguarde alguns segundos antes de trocar a foto de novo.";
-    if (error.status === 503) return "O armazenamento de fotos não está disponível nesta instalação.";
-    if (error.status === 0) return "Sem conexão com o servidor. Verifique sua conexão e tente novamente.";
-    if (error.status === 401) return "Sessão expirada. Entre novamente para continuar.";
+    if (error.status === 429) return "Aguarde alguns segundos para tentar de novo.";
+    if (error.status === 503) return "O armazenamento de fotos está indisponível agora. Tente mais tarde.";
+    if (error.status === 0) return "Sem internet. Tente de novo conectado.";
+    if (error.status === 401) return "Sua sessão expirou. Entre de novo.";
     if (error.status === 403) return "Seu perfil não pode alterar a foto.";
   }
-  return "Não foi possível salvar a foto. Tente novamente em instantes.";
+  return "Não foi possível salvar a foto. Tente de novo.";
 }
 
 export interface PreparedPhoto {

@@ -21,9 +21,12 @@ export const LIMITS = {
   notes: 4000,
 } as const;
 
-export const ICMS_OPTIONS = ["C", "I", "P", "R", "T", "X"] as const;
-export type IcmsOption = (typeof ICMS_OPTIONS)[number];
-export const DEFAULT_ICMS: IcmsOption = "R";
+/** One ICMS classification as the server names it: the select shows `label`, never only the code. */
+export interface IcmsOption {
+  code: CreateCustomerBody["icmsClassification"];
+  label: string;
+}
+export const DEFAULT_ICMS: IcmsOption["code"] = "R";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -98,9 +101,11 @@ export interface CreateForm {
   document: string;
   name: string;
   tradeName: string;
-  icmsClassification: IcmsOption;
+  icmsClassification: IcmsOption["code"];
   stateRegistration: string;
   exempt: boolean;
+  /** Management profiles without an ERP seller code choose the owner seller; "" = not chosen. */
+  sellerCode: string;
   phone: string;
   email: string;
   notes: string;
@@ -113,6 +118,7 @@ export const emptyCreateForm = (): CreateForm => ({
   icmsClassification: DEFAULT_ICMS,
   stateRegistration: "",
   exempt: false,
+  sellerCode: "",
   phone: "",
   email: "",
   notes: "",
@@ -123,12 +129,19 @@ export interface CreateProblems {
   name: string | null;
   tradeName: string | null;
   stateRegistration: string | null;
+  sellerCode: string | null;
   phone: string | null;
   email: string | null;
   notes: string | null;
 }
 
-export function createProblems(form: CreateForm): CreateProblems {
+/** True when the typed document is a CPF (natural person): no state registration, no "Isento". */
+export function isNaturalPerson(document: string): boolean {
+  return taxDocumentKind(normalizeTaxDocument(document)) === "individual";
+}
+
+/** `sellerRequired`: the signed-in user has no ERP seller code (manager and equivalent) and must pick the owner seller. */
+export function createProblems(form: CreateForm, sellerRequired = false): CreateProblems {
   const digits = normalizeTaxDocument(form.document);
   const kind = taxDocumentKind(digits);
   let document: string | null = null;
@@ -137,13 +150,13 @@ export function createProblems(form: CreateForm): CreateProblems {
   const ie = form.stateRegistration.trim();
   let stateRegistration: string | null = null;
   if (kind === "company" && !form.exempt && ie === "") stateRegistration = 'Informe a inscrição estadual ou marque "Isento".';
-  else if (kind === "individual" && (ie !== "" || form.exempt)) stateRegistration = "Pessoa física não tem inscrição estadual.";
-  else if (ie.length > LIMITS.stateRegistration) stateRegistration = `A inscrição estadual deve ter até ${LIMITS.stateRegistration} caracteres.`;
+  else if (kind !== "individual" && !form.exempt && ie.length > LIMITS.stateRegistration) stateRegistration = `A inscrição estadual deve ter até ${LIMITS.stateRegistration} caracteres.`;
   return {
     document,
     name: form.name.trim() === "" ? "Informe a razão social ou o nome." : form.name.trim().length > LIMITS.name ? `O nome deve ter até ${LIMITS.name} caracteres.` : null,
     tradeName: form.tradeName.trim().length > LIMITS.tradeName ? `O nome fantasia deve ter até ${LIMITS.tradeName} caracteres.` : null,
     stateRegistration,
+    sellerCode: sellerRequired && form.sellerCode === "" ? "Escolha o vendedor." : null,
     phone: phoneProblem(form.phone),
     email: emailProblem(form.email),
     notes: notesProblem(form.notes),
@@ -155,10 +168,12 @@ export function hasCreateProblems(problems: CreateProblems): boolean {
 }
 
 export function buildCreateBody(clientRequestId: string, form: CreateForm, correctsRegistrationId?: string): CreateCustomerBody {
-  const ie = form.exempt ? "ISENTO" : form.stateRegistration.trim();
+  // A natural person never carries a state registration, whatever was typed before the document changed.
+  const ie = isNaturalPerson(form.document) ? "" : form.exempt ? "ISENTO" : form.stateRegistration.trim();
   return {
     clientRequestId,
     ...(correctsRegistrationId === undefined ? {} : { correctsRegistrationId }),
+    ...(form.sellerCode === "" ? {} : { sellerCode: Number(form.sellerCode) }),
     document: normalizeTaxDocument(form.document),
     name: form.name.trim(),
     tradeName: form.tradeName.trim() === "" ? null : form.tradeName.trim(),
@@ -204,6 +219,7 @@ export interface CustomerWriteFailure extends ErrorDescription {
 export function describeCustomerWriteError(error: unknown, fallbackTitle: string): CustomerWriteFailure {
   const status = errorStatus(error);
   const base = describeApiError(error, fallbackTitle);
+  if (status === 0) return { ...base, title: fallbackTitle, description: "Sem conexão com o servidor. Nada foi alterado.", fieldProblems: {} };
   if (isHttpError(error) && status === 409) {
     const reason = (error as { reason?: string }).reason;
     const text = reason ? REASON_TEXT[reason] : undefined;

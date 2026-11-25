@@ -43,7 +43,13 @@ export interface OrderTemplatesPort {
 export function createOrderTemplatesPort(api: ApiClient): OrderTemplatesPort {
   return {
     async list(customerCode) {
-      return (await callApi(() => api.GET("/customers/{code}/order-templates", { params: { path: { code: customerCode } } }))).items;
+      try {
+        return (await callApi(() => api.GET("/customers/{code}/order-templates", { params: { path: { code: customerCode } } }))).items;
+      } catch (error) {
+        // A customer without recurring orders (or not known to the server yet) is an empty list, never an error on screen.
+        if (error instanceof ApiRequestError && error.status === 404) return [];
+        throw error;
+      }
     },
     async get(id) {
       return callApi(() => api.GET("/order-templates/{id}", { params: { path: { id } } }));

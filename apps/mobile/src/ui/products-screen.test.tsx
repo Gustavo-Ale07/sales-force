@@ -280,12 +280,14 @@ describe("ProductsScreen (Catálogo)", () => {
       },
     });
     const { unmount } = await render(<ProductsScreen products={products} onUnauthenticated={noop} />);
-    expect(await screen.findByText("Preços da tabela 5 — Tabela Base (tabela de referência do catálogo).")).toBeTruthy();
-    expect(asked).toEqual([undefined]);
+    await screen.findByText("Tinta Azul 18L");
+    expect(screen.queryByText(/^Preços da tabela/)).toBeNull();
+    await waitFor(() => expect(asked).toEqual([undefined]));
     await unmount();
     await render(<ProductBrowser products={products} onUnauthenticated={noop} customerCode={9} />);
-    expect(await screen.findByText("Preços da tabela 7 — Atacado (tabela do cliente).")).toBeTruthy();
-    expect(asked.at(-1)).toBe(9);
+    await screen.findByText("Tinta Azul 18L");
+    expect(screen.queryByText(/^Preços da tabela/)).toBeNull();
+    await waitFor(() => expect(asked.at(-1)).toBe(9));
   });
 
   it("product detail shows Ativo/Inativo, Uso and the origin with the table name, like the site", async () => {

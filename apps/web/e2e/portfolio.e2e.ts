@@ -42,7 +42,7 @@ test.describe("Cenário 2 — carteira do vendedor", () => {
     await expect(bodyRows(clientes).first()).toContainText(SELLER_CUSTOMER.name);
 
     await search.fill("zzz-nenhum-cliente");
-    await expect(page.getByText("Nenhum cliente com estes filtros.")).toBeVisible();
+    await expect(page.getByText("Nenhum cliente encontrado para “zzz-nenhum-cliente”.")).toBeVisible();
 
     await page.getByRole("button", { name: "Limpar filtros" }).click();
     await expect(page.getByText(`Mostrando 1–25 de ${SELLER_103_CUSTOMERS}`)).toBeVisible();

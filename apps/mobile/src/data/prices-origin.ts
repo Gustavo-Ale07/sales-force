@@ -15,9 +15,3 @@ export function priceOriginLabel(origin: PricesOrigin): string {
   if (origin.tableCode === null) return SOURCE_LABEL[origin.source];
   return `Tabela ${origin.tableCode}${origin.tableName !== null && origin.tableName !== "" ? ` — ${origin.tableName}` : ""} (${SOURCE_LABEL[origin.source]})`;
 }
-
-/** The line above the product list (the site's "Origem dos preços" notice). */
-export function pricesOriginText(origin: PricesOrigin): string {
-  if (origin.source === "none") return "Nenhuma tabela de preço se aplica a esta consulta; os produtos aparecem como “Sem preço”.";
-  return `Preços da tabela ${origin.tableCode ?? ""}${origin.tableName !== null && origin.tableName !== "" ? ` — ${origin.tableName}` : ""} (${SOURCE_LABEL[origin.source]}).`;
-}

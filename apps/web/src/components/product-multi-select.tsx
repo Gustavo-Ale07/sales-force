@@ -14,7 +14,6 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  titleCase,
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -189,9 +188,9 @@ export function ProductMultiSelect({
                     <TableCell numeric>{product.code}</TableCell>
                     <TableCell wrap>
                       <span className="flex items-center gap-2">
-                        <ProductImage image={product.image} description={product.description} name={titleCase(product.description)} />
+                        <ProductImage image={product.image} description={product.description} decorative />
                         <span className="min-w-0">
-                          <span className="font-medium">{titleCase(product.description)}</span>
+                          <span className="font-medium">{product.description}</span>
                           {product.groupName ? <span className="block text-fg-muted">{product.groupName}</span> : null}
                         </span>
                       </span>

@@ -214,7 +214,7 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
           </Section>
         )}
 
-        {templatesSection}
+        {!isUnconfirmedCustomer(customer) && templatesSection}
 
         {!online && <Text style={styles.note}>Sem conexão: dados salvos neste aparelho.</Text>}
       </ScrollView>

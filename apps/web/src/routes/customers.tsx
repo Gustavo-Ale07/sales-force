@@ -89,6 +89,7 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
   const sellerName = sellerOptions.find((s) => s.code === params.sellerCode)?.name;
   const hasFilters =
     params.search !== undefined || params.sellerCode !== undefined || params.hasPriceTable !== undefined || params.initial !== undefined;
+  const filtersBeyondSearch = params.sellerCode !== undefined || params.hasPriceTable !== undefined || params.initial !== undefined;
   const clearAll = () => onSearchChange(compact({ sort: params.sort, pageSize: params.pageSize }));
 
   return (
@@ -98,7 +99,7 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
         count={query.data ? query.data.total.toLocaleString("pt-BR") : undefined}
         actions={
           canCreate ? (
-            <Button variant="primary" leftIcon={<Plus size={14} aria-hidden="true" />} onClick={() => setCreating(true)}>
+            <Button variant="primary" size="lg" leftIcon={<Plus size={16} aria-hidden="true" />} onClick={() => setCreating(true)}>
               Novo cliente
             </Button>
           ) : undefined
@@ -159,7 +160,7 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
             value={params.hasPriceTable ?? ""}
             onChange={(e) => change({ hasPriceTable: asOneOf(e.target.value, ["true", "false"] as const) })}
           >
-            <option value="">Todas</option>
+            <option value="">Todos</option>
             <option value="true">Com tabela de preço</option>
             <option value="false">Sem tabela de preço</option>
           </Select>
@@ -242,7 +243,13 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
               <TableMessageRow colSpan={COLUMNS}>
                 <EmptyState
                   compact
-                  title={hasFilters ? "Nenhum cliente com estes filtros." : "Nenhum cliente disponível"}
+                  title={
+                    params.search
+                      ? `Nenhum cliente encontrado para “${params.search}”${filtersBeyondSearch ? " com estes filtros" : ""}.`
+                      : hasFilters
+                        ? "Nenhum cliente com estes filtros."
+                        : "Nenhum cliente disponível"
+                  }
                 />
               </TableMessageRow>
             ) : (

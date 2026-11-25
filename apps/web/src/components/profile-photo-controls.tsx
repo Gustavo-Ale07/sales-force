@@ -1,4 +1,4 @@
-import { Alert, Avatar, Button, Dialog, DialogClose, DialogContent, FieldError, titleCase, toast } from "@salesforce/ui";
+import { Alert, Avatar, Button, Dialog, DialogClose, DialogContent, FieldError, titleCase } from "@salesforce/ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Camera, Trash2 } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ChangeEvent } from "react";
@@ -58,7 +58,6 @@ export function ProfilePhotoControls({ user, prepare = prepareSquarePhoto }: Pro
       setVersion(result.version);
       setPicked(null);
       setUploadError(null);
-      toast({ title: "Foto atualizada", tone: "success" });
     },
     onError: (error) => setUploadError(error instanceof PreparationError ? error.message : photoUploadMessage(error)),
   });
@@ -69,7 +68,6 @@ export function ProfilePhotoControls({ user, prepare = prepareSquarePhoto }: Pro
       setVersion(null);
       setRemoveOpen(false);
       setRemoveError(null);
-      toast({ title: "Foto removida", tone: "success" });
     },
     onError: (error) => setRemoveError(photoUploadMessage(error)),
   });
@@ -166,7 +164,7 @@ export function ProfilePhotoControls({ user, prepare = prepareSquarePhoto }: Pro
             </p>
           ) : null}
           {uploadError ? (
-            <Alert tone="danger" title="Não foi possível salvar a foto" className="mt-3">
+            <Alert tone="danger" title="Foto não alterada" className="mt-3">
               {uploadError}
             </Alert>
           ) : null}
@@ -180,23 +178,22 @@ export function ProfilePhotoControls({ user, prepare = prepareSquarePhoto }: Pro
         }}
       >
         <DialogContent
-          title="Remover a foto de perfil?"
-          description="O seu avatar volta a mostrar as iniciais."
+          title="Remover foto"
           footer={
             <>
               <DialogClose asChild>
                 <Button variant="secondary" disabled={remove.isPending}>
-                  Manter foto
+                  Cancelar
                 </Button>
               </DialogClose>
               <Button variant="danger" loading={remove.isPending} onClick={() => remove.mutate()}>
-                Remover foto
+                Remover
               </Button>
             </>
           }
         >
           {removeError ? (
-            <Alert tone="danger" title="Não foi possível remover a foto">
+            <Alert tone="danger" title="Foto não alterada">
               {removeError}
             </Alert>
           ) : null}

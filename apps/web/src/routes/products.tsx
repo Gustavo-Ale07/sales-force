@@ -29,7 +29,6 @@ import {
   TableMessageRow,
   TableRow,
   type SortDirection,
-  titleCase,
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { LayoutGrid, List } from "lucide-react";
@@ -80,10 +79,9 @@ function ProductDetailPanel({ code, customerCode }: { code: number; customerCode
   const context = product.priceContext;
   return (
     <div className="flex flex-col gap-3">
-      <ProductImage image={product.image} description={product.description} name={titleCase(product.description)} variant="full" className="self-center" />
+      <ProductImage image={product.image} description={product.description} variant="full" className="self-center" />
       <div className="flex flex-wrap items-center gap-1.5">
         <Badge tone={product.active ? "success" : "neutral"}>{product.active ? "Ativo" : "Inativo"}</Badge>
-        <Badge tone={product.sellable ? "info" : "neutral"}>{product.sellable ? "Disponível para venda" : "Não vendável"}</Badge>
       </div>
       <KeyValueList>
         <KeyValue label="Código">{product.code}</KeyValue>
@@ -196,11 +194,9 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
         </div>
       ) : null}
 
-      {context ? (
-        <Alert tone={context.source === "none" ? "warning" : "info"} title="Origem dos preços">
-          {context.source === "none"
-            ? "Nenhuma tabela de preço se aplica a esta consulta; os produtos aparecem como “Sem preço”."
-            : `Preços da tabela ${context.tableCode ?? ""}${context.tableName ? ` — ${context.tableName}` : ""} (${priceContextSourceLabels[context.source]}).`}
+      {context?.source === "none" ? (
+        <Alert tone="warning" title="Origem dos preços">
+          Nenhuma tabela de preço se aplica a esta consulta; os produtos aparecem como “Sem preço”.
         </Alert>
       ) : null}
 
@@ -249,7 +245,7 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
               </SortableHead>
               <TableHead>Grupo</TableHead>
               <TableHead>Un.</TableHead>
-              <TableHead>Venda</TableHead>
+              <TableHead>Situação</TableHead>
               <TableHead numeric>Preço de lista</TableHead>
             </TableRow>
           </TableHeader>
@@ -273,21 +269,16 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
                   <TableCell label="Código" className="tabular-nums text-fg-muted">{product.code}</TableCell>
                   <TableCell wrap card="title" className="min-w-[12rem] max-sm:order-first">
                     <span className="flex items-center gap-2">
-                      <ProductImage image={product.image} description={product.description} name={titleCase(product.description)} />
+                      <ProductImage image={product.image} description={product.description} decorative />
                       <span className="min-w-0">
-                        <span className="font-medium">{titleCase(product.description)}</span>
+                        <span className="font-medium">{product.description}</span>
                         {product.reference ? <span className="block text-fg-muted">Ref. {product.reference}</span> : null}
                       </span>
                     </span>
                   </TableCell>
                   <TableCell card="hide">{product.groupName ?? "—"}</TableCell>
                   <TableCell label="Unidade">{product.unit}</TableCell>
-                  <TableCell label="Venda">
-                    <span className="inline-flex flex-wrap items-center gap-x-4 gap-y-1">
-                      <StatusDot tone={product.sellable ? "success" : "neutral"}>{product.sellable ? "Vendável" : "Não vendável"}</StatusDot>
-                      {product.active ? null : <StatusDot tone="neutral">Inativo</StatusDot>}
-                    </span>
-                  </TableCell>
+                  <TableCell label="Situação">{product.active ? "Ativo" : <StatusDot tone="neutral">Inativo</StatusDot>}</TableCell>
                   <TableCell numeric label="Preço de lista">
                     <PriceCell price={product.listPrice} />
                   </TableCell>

@@ -76,7 +76,17 @@ export class TemplatesService {
 
   async list(user: CurrentUser, customerCode: number): Promise<OrderTemplatesResponse> {
     const { scope } = await this.policy.accessContext(user);
-    const customer = await this.customers.requireVisible(scope, customerCode);
+    let customer;
+    try {
+      customer = await this.customers.requireVisible(scope, customerCode);
+    } catch (error) {
+      // A customer just registered through the Force that the mirror has not read back yet has no recurring orders:
+      // empty list, not an error. Anything else outside the scope stays the identical 404 (P-21).
+      if (error instanceof AppError && error.code === 'not_found' && (await this.customers.isRegisteredNotYetMirrored(user, scope, customerCode))) {
+        return { items: [] };
+      }
+      throw error;
+    }
     const rows = await this.templates.listForCustomer(customer.code);
     return { items: rows.map((row) => toTemplate(row.template, row.itemCount)) };
   }

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { syncStatusQueryOptions } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { isOperationsRole } from "../lib/operations-role";
-import { SYNC_INDICATOR_HEX, isDataStale, syncIndicatorView, type SyncDotColor } from "../lib/sync-indicator";
+import { SYNC_INDICATOR_HEX, isDataStale, syncIndicatorView, syncSituation, type SyncDotColor } from "../lib/sync-indicator";
 import { useRefreshStage } from "./order-stage";
 import { RefreshDataDialog } from "./refresh-data-dialog";
 
@@ -38,6 +38,7 @@ function useCacheSignals() {
     let awaitingSend = false;
     let failed = false;
     let retrying = false;
+    let pending = 0;
     for (const query of cache.getAll()) {
       if (query.state.status === "error" && query.state.data === undefined) failed = true;
       if (query.state.fetchStatus === "fetching" && query.state.fetchFailureCount > 0) retrying = true;
@@ -45,14 +46,17 @@ function useCacheSignals() {
         const items = (query.state.data as { items?: Array<{ status?: string }> } | undefined)?.items ?? [];
         for (const item of items) {
           if (item.status === "rejected") needsCorrection = true;
-          if (item.status === "queued") awaitingSend = true;
+          if (item.status === "queued") {
+            awaitingSend = true;
+            pending += 1;
+          }
         }
       }
     }
-    return `${needsCorrection ? 1 : 0}${awaitingSend ? 1 : 0}${failed ? 1 : 0}${retrying ? 1 : 0}`;
+    return `${needsCorrection ? 1 : 0}${awaitingSend ? 1 : 0}${failed ? 1 : 0}${retrying ? 1 : 0}:${pending}`;
   }, [cache]);
   const key = useSyncExternalStore((notify) => cache.subscribe(notify), snapshot, snapshot);
-  return { needsCorrection: key[0] === "1", awaitingSend: key[1] === "1", failed: key[2] === "1", retrying: key[3] === "1" };
+  return { needsCorrection: key[0] === "1", awaitingSend: key[1] === "1", failed: key[2] === "1", retrying: key[3] === "1", pending: Number(key.slice(5)) };
 }
 
 function Arrows({ color }: { color: string }) {
@@ -89,7 +93,16 @@ export function useSyncState(role: string) {
     stale: isDataStale(status.data?.dataAsOf, now),
     retrying: signals.retrying,
   });
-  return { view, dataAsOf: status.data?.dataAsOf ?? null, dialogOpen, setDialogOpen };
+  const dataAsOf = status.data?.dataAsOf ?? null;
+  const situation = syncSituation({
+    online,
+    syncing: view.spinning,
+    failed: refresh.failed || signals.failed,
+    needsCorrection: signals.needsCorrection,
+    pending: signals.pending,
+    dataAsOf,
+  });
+  return { view, situation, online, dataAsOf, pendingCount: signals.pending, dialogOpen, setDialogOpen };
 }
 
 /** Header dot: colour = state (green ok, yellow instability, red error); click = sync now. White arrows spin while updating. */

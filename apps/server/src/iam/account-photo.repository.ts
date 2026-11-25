@@ -80,7 +80,7 @@ export class AccountPhotoRepository {
   async resolveErpUser(accountId: string): Promise<PhotoErpUser> {
     const [owner] = await this.db.select({ externalUserId: account.externalUserId }).from(account).where(eq(account.id, accountId)).limit(1);
     const own = owner?.externalUserId ?? null;
-    if (own !== null && /^[1-9][0-9]{0,9}$/.test(own) && Number(own) <= 2_147_483_647) return { kind: 'user', code: Number(own) };
+    if (own !== null && /^(0|[1-9][0-9]{0,9})$/.test(own) && Number(own) <= 2_147_483_647) return { kind: 'user', code: Number(own) };
     const [link] = await this.db.select({ sellerCode: accountSellerLink.sellerCode }).from(accountSellerLink).where(eq(accountSellerLink.accountId, accountId)).limit(1);
     if (link === undefined) return { kind: 'none' };
     const users = await this.db

@@ -36,7 +36,7 @@ export interface ImageManipulatorModule {
       renderAsync(): Promise<{ saveAsync(options: { format: string; compress: number; base64: boolean }): Promise<{ base64?: string | null }> }>;
     };
   };
-  SaveFormat: { JPEG: string };
+  SaveFormat: { JPEG: string; PNG?: string };
 }
 
 /** Decoded size of a standard base64 string. */
@@ -87,6 +87,21 @@ export function createImagePickerAdapter(picker: ImagePickerModule, manipulator:
         const saved = await image.saveAsync({ format: SaveFormat.JPEG, compress: quality, base64: true });
         return saved.base64 ?? null;
       };
+      // PNG first: the Android JPEG encoder paints transparent pixels black; the server flattens on white and re-encodes.
+      const encodePng = async (): Promise<string | null> => {
+        const context = ImageManipulator.manipulate(uri);
+        if (width > 0 && height > 0 && width !== height) context.crop(centreSquare(width, height));
+        if (Math.min(width, height) === 0 || Math.min(width, height) > PHOTO_TARGET_SIDE) context.resize({ width: PHOTO_TARGET_SIDE });
+        const image = await context.renderAsync();
+        const saved = await image.saveAsync({ format: SaveFormat.PNG as string, compress: 1, base64: true });
+        return saved.base64 ?? null;
+      };
+      try {
+        const png = SaveFormat.PNG === undefined ? null : await encodePng();
+        if (png !== null && png.length > 0 && base64Bytes(png) < PHOTO_TARGET_MAX_BYTES) return { contentType: "image/png", dataBase64: png } satisfies PickedPhoto;
+      } catch {
+        // falls back to JPEG below
+      }
       const dataBase64 = await encodeUnderLimit(encode);
       if (dataBase64 === null) throw new Error("photo_unreadable");
       return { contentType: "image/jpeg", dataBase64 } satisfies PickedPhoto;

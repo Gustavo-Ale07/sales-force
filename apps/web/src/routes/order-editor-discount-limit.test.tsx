@@ -175,11 +175,11 @@ describe("Marca discountAboveLimitAccepted", () => {
   });
 });
 
-describe("Desconto acima do limite do produto: pedido todo", () => {
+describe("Desconto acima do limite do produto: em lote", () => {
   async function openMass(user: User) {
-    await user.click(screen.getByRole("button", { name: "Desconto no pedido todo" }));
-    const dialog = await screen.findByRole("dialog", { name: "Desconto no pedido todo" });
-    await user.type(within(dialog).getByLabelText("Desconto no pedido todo (%)"), "15");
+    await user.click(screen.getByRole("button", { name: "Desconto em lote" }));
+    const dialog = await screen.findByRole("dialog", { name: "Desconto em lote" });
+    await user.type(within(dialog).getByLabelText("Desconto (%)"), "15");
     await user.click(within(dialog).getByRole("button", { name: "Aplicar desconto" }));
   }
 
@@ -187,14 +187,14 @@ describe("Desconto acima do limite do produto: pedido todo", () => {
     const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: handlers() });
     await cartWith(user, ["Item A", "Item B", "Item sem limite"]);
     await openMass(user);
-    const dialog = await screen.findByRole("dialog", { name: "Desconto acima do liberado" });
+    const dialog = await screen.findByRole("dialog", { name: QUESTION });
     expect(dialog).toHaveTextContent(QUESTION);
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
     const list = within(dialog).getByTestId("discount-limit-list");
-    expect(list).toHaveTextContent("1 item dentro do limite");
-    expect(list).toHaveTextContent("2 itens acima");
+    expect(list).toHaveTextContent("Dentro do limite (1)");
+    expect(list).toHaveTextContent("Acima do limite (2)");
     expect(list).toHaveTextContent("Item A");
-    expect(list).toHaveTextContent("limite 12% · digitado 15%");
+    expect(list).toHaveTextContent("Item A: máx. 12%, digitado 15%");
     await user.click(within(dialog).getByRole("button", { name: "Sim" }));
     await waitFor(noDialog);
     expect(field("Item A")).toHaveValue("15");
@@ -206,7 +206,7 @@ describe("Desconto acima do limite do produto: pedido todo", () => {
     const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: handlers() });
     await cartWith(user, ["Item A", "Item sem limite"]);
     await openMass(user);
-    const dialog = await screen.findByRole("dialog", { name: "Desconto acima do liberado" });
+    const dialog = await screen.findByRole("dialog", { name: QUESTION });
     await user.click(within(dialog).getByRole("button", { name: "Não" }));
     await waitFor(noDialog);
     expect(field("Item A")).toHaveValue("");

@@ -89,7 +89,7 @@ describe("Desconto por item", () => {
     await showCart(user);
     await user.type(discountField("Balão látex vermelho"), "12.5");
     expect(await screen.findByText("Use vírgula como separador decimal.")).toBeInTheDocument();
-    expect(screen.getByText("1 item com quantidade ou desconto inválido não entra na soma.")).toBeInTheDocument();
+    expect(screen.getByText("Há quantidade ou desconto inválido no carrinho. Corrija em Produtos.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Confirmar pedido" })).toBeDisabled();
   });
 
@@ -133,18 +133,23 @@ describe("Desconto por item", () => {
   });
 });
 
-describe("Desconto no pedido todo", () => {
+describe("Desconto em lote", () => {
+  const open = async (user: User) => {
+    await user.click(screen.getByRole("button", { name: "Desconto em lote" }));
+    return screen.findByRole("dialog", { name: "Desconto em lote" });
+  };
+
   it("applies the same percentage to every priced item, skipping the one without price", async () => {
     const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: handlers() });
     await fillCart(user);
-    await user.click(screen.getByRole("button", { name: "Desconto no pedido todo" }));
-    const dialog = await screen.findByRole("dialog", { name: "Desconto no pedido todo" });
-    expect(dialog).toHaveTextContent("3 itens recebem o desconto.");
-    expect(dialog).toHaveTextContent("1 item sem preço fica de fora.");
-    await user.type(within(dialog).getByLabelText("Desconto no pedido todo (%)"), "10");
-    expect(dialog).toHaveTextContent("31,50");
-    await user.click(within(dialog).getByRole("button", { name: "Aplicar desconto" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Desconto no pedido todo" })).not.toBeInTheDocument());
+    const dialog = await open(user);
+    expect(within(dialog).getByRole("radio", { name: /Todos os itens/ })).toBeChecked();
+    const apply = within(dialog).getByRole("button", { name: "Aplicar desconto" });
+    expect(apply).toBeDisabled();
+    await user.type(within(dialog).getByLabelText("Desconto (%)"), "10");
+    expect(apply).toHaveTextContent("3 itens afetados");
+    await user.click(apply);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Desconto em lote" })).not.toBeInTheDocument());
     expect(discountField("Balão látex vermelho")).toHaveValue("10");
     expect(discountField("Balão látex azul")).toHaveValue("10");
     expect(discountField("Vela aniversário")).toHaveValue("10");
@@ -154,37 +159,19 @@ describe("Desconto no pedido todo", () => {
     expect(screen.getByTestId("order-total")).toHaveTextContent("31,50");
   });
 
-  it("previews 'de X por Y', warns about items that already have a discount, and the preview equals the order total after applying", async () => {
+  it("replaces discounts typed before, and 0 clears them all", async () => {
     const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: handlers() });
     await fillCart(user);
     await user.type(discountField("Balão látex azul"), "50");
-    await user.click(screen.getByRole("button", { name: "Desconto no pedido todo" }));
-    const dialog = await screen.findByRole("dialog", { name: "Desconto no pedido todo" });
-    expect(within(dialog).getByTestId("mass-discount-replaces")).toHaveTextContent("1 item já tem desconto e será substituído.");
-    await user.type(within(dialog).getByLabelText("Desconto no pedido todo (%)"), "10");
-    const preview = within(dialog).getByTestId("mass-discount-preview");
-    expect(preview).toHaveTextContent("de");
-    expect(preview).toHaveTextContent("por");
-    expect(preview).toHaveTextContent("31,50");
-    await user.click(within(dialog).getByRole("button", { name: "Aplicar desconto" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Desconto no pedido todo" })).not.toBeInTheDocument());
-    expect(screen.getByTestId("order-total")).toHaveTextContent("31,50");
-  });
-
-  it("replaces discounts typed before and can remove them all", async () => {
-    const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: handlers() });
-    await fillCart(user);
-    await user.type(discountField("Balão látex azul"), "50");
-    await user.click(screen.getByRole("button", { name: "Desconto no pedido todo" }));
-    let dialog = await screen.findByRole("dialog", { name: "Desconto no pedido todo" });
-    await user.type(within(dialog).getByLabelText("Desconto no pedido todo (%)"), "20{Enter}");
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Desconto no pedido todo" })).not.toBeInTheDocument());
+    let dialog = await open(user);
+    await user.type(within(dialog).getByLabelText("Desconto (%)"), "20{Enter}");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Desconto em lote" })).not.toBeInTheDocument());
     expect(discountField("Balão látex azul")).toHaveValue("20");
 
-    await user.click(screen.getByRole("button", { name: "Desconto no pedido todo" }));
-    dialog = await screen.findByRole("dialog", { name: "Desconto no pedido todo" });
-    await user.click(within(dialog).getByRole("button", { name: "Remover descontos" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Desconto no pedido todo" })).not.toBeInTheDocument());
+    dialog = await open(user);
+    await user.type(within(dialog).getByLabelText("Desconto (%)"), "0");
+    await user.click(within(dialog).getByRole("button", { name: "Aplicar desconto" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Desconto em lote" })).not.toBeInTheDocument());
     expect(discountField("Balão látex azul")).toHaveValue("");
     expect(screen.queryByTestId("order-discount-total")).not.toBeInTheDocument();
   });
@@ -192,33 +179,38 @@ describe("Desconto no pedido todo", () => {
   it("does not apply an invalid percentage", async () => {
     const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: handlers() });
     await fillCart(user);
-    await user.click(screen.getByRole("button", { name: "Desconto no pedido todo" }));
-    const dialog = await screen.findByRole("dialog", { name: "Desconto no pedido todo" });
-    await user.type(within(dialog).getByLabelText("Desconto no pedido todo (%)"), "150");
-    await user.click(within(dialog).getByRole("button", { name: "Aplicar desconto" }));
+    const dialog = await open(user);
+    await user.type(within(dialog).getByLabelText("Desconto (%)"), "150");
     expect(await within(dialog).findByText("O desconto deve ser menor que 100%.")).toBeInTheDocument();
-    expect(screen.getByRole("dialog", { name: "Desconto no pedido todo" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Aplicar desconto" })).toBeDisabled();
     expect(discountField("Balão látex vermelho")).toHaveValue("");
   });
 
   it("is unavailable while the cart is empty", async () => {
     renderApp("/pedidos/novo?customer=1001", { handlers: handlers() });
-    expect(await screen.findByRole("button", { name: "Desconto no pedido todo" })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "Desconto em lote" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Desconto por grupo" })).toBeDisabled();
   });
 });
 
 describe("Desconto por grupo", () => {
-  it("applies a percentage per group, leaving the empty groups and the item without price alone", async () => {
+  const open = async (user: User) => {
+    await user.click(screen.getByRole("button", { name: "Desconto por grupo" }));
+    return screen.findByRole("dialog", { name: "Desconto por grupo" });
+  };
+
+  it("applies a percentage to the chosen group, leaving the other groups and the item without price alone", async () => {
     const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: handlers() });
     await fillCart(user);
-    await user.click(screen.getByRole("button", { name: "Desconto por grupo" }));
-    const dialog = await screen.findByRole("dialog", { name: "Desconto por grupo" });
-    expect(await within(dialog).findByText("Balões")).toBeInTheDocument();
-    expect(dialog).toHaveTextContent("2 itens no carrinho");
-    expect(within(dialog).getByRole("button", { name: "Aplicar descontos" })).toBeDisabled();
-    await user.type(within(dialog).getByLabelText("Desconto do grupo Balões (%)"), "10");
-    await user.click(within(dialog).getByRole("button", { name: "Aplicar descontos" }));
+    const dialog = await open(user);
+    const balloons = await within(dialog).findByRole("radio", { name: /Balões/ });
+    expect(within(dialog).queryByRole("radio", { name: /Todos os itens/ })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Aplicar desconto" })).toBeDisabled();
+    await user.click(balloons);
+    await user.type(within(dialog).getByLabelText("Desconto (%)"), "10");
+    const apply = within(dialog).getByRole("button", { name: "Aplicar desconto" });
+    expect(apply).toHaveTextContent("2 itens afetados");
+    await user.click(apply);
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Desconto por grupo" })).not.toBeInTheDocument());
     expect(discountField("Balão látex vermelho")).toHaveValue("10");
     expect(discountField("Balão látex azul")).toHaveValue("10");
@@ -229,14 +221,18 @@ describe("Desconto por grupo", () => {
     expect(screen.getByTestId("order-discount-total")).toHaveTextContent("3,00");
   });
 
-  it("applies different percentages to several groups at once", async () => {
+  it("applies another group in a second pass", async () => {
     const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: handlers() });
     await fillCart(user);
-    await user.click(screen.getByRole("button", { name: "Desconto por grupo" }));
-    const dialog = await screen.findByRole("dialog", { name: "Desconto por grupo" });
-    await user.type(await within(dialog).findByLabelText("Desconto do grupo Balões (%)"), "10");
-    await user.type(within(dialog).getByLabelText("Desconto do grupo Velas (%)"), "20,5");
-    await user.click(within(dialog).getByRole("button", { name: "Aplicar descontos" }));
+    let dialog = await open(user);
+    await user.click(await within(dialog).findByRole("radio", { name: /Balões/ }));
+    await user.type(within(dialog).getByLabelText("Desconto (%)"), "10");
+    await user.click(within(dialog).getByRole("button", { name: "Aplicar desconto" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Desconto por grupo" })).not.toBeInTheDocument());
+    dialog = await open(user);
+    await user.click(await within(dialog).findByRole("radio", { name: /Velas/ }));
+    await user.type(within(dialog).getByLabelText("Desconto (%)"), "20,5");
+    await user.click(within(dialog).getByRole("button", { name: "Aplicar desconto" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Desconto por grupo" })).not.toBeInTheDocument());
     expect(discountField("Balão látex azul")).toHaveValue("10");
     expect(discountField("Vela aniversário")).toHaveValue("20,5");
@@ -245,11 +241,11 @@ describe("Desconto por grupo", () => {
   it("keeps Aplicar disabled and shows the problem for an invalid percentage", async () => {
     const { user } = renderApp("/pedidos/novo?customer=1001", { handlers: handlers() });
     await fillCart(user);
-    await user.click(screen.getByRole("button", { name: "Desconto por grupo" }));
-    const dialog = await screen.findByRole("dialog", { name: "Desconto por grupo" });
-    await user.type(await within(dialog).findByLabelText("Desconto do grupo Balões (%)"), "abc");
+    const dialog = await open(user);
+    await user.click(await within(dialog).findByRole("radio", { name: /Balões/ }));
+    await user.type(within(dialog).getByLabelText("Desconto (%)"), "abc");
     expect(within(dialog).getByText("Desconto inválido.")).toBeInTheDocument();
-    expect(within(dialog).getByRole("button", { name: "Aplicar descontos" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Aplicar desconto" })).toBeDisabled();
   });
 
   it("finds the group of the items of a saved draft through the catalog", async () => {
@@ -263,10 +259,10 @@ describe("Desconto por grupo", () => {
       }),
     });
     await screen.findByLabelText("Desconto de Balão látex vermelho (%)");
-    await user.click(screen.getByRole("button", { name: "Desconto por grupo" }));
-    const dialog = await screen.findByRole("dialog", { name: "Desconto por grupo" });
-    await user.type(await within(dialog).findByLabelText("Desconto do grupo Balões (%)"), "10");
-    await user.click(within(dialog).getByRole("button", { name: "Aplicar descontos" }));
+    const dialog = await open(user);
+    await user.click(await within(dialog).findByRole("radio", { name: /Balões/ }));
+    await user.type(within(dialog).getByLabelText("Desconto (%)"), "10");
+    await user.click(within(dialog).getByRole("button", { name: "Aplicar desconto" }));
     await waitFor(() => expect(screen.getByLabelText("Desconto de Balão látex vermelho (%)")).toHaveValue("10"));
   });
 });

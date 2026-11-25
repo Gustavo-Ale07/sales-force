@@ -73,7 +73,7 @@ function EditBody({ customerCode, onClose }: { customerCode: number; onClose: ()
             <Button variant="secondary">Cancelar</Button>
           </DialogClose>
           <Button type="submit" form={FORM_ID} variant="primary" loading={save.isPending} disabled={save.isPending}>
-            Salvar
+            {save.isPending ? "Enviando..." : "Salvar"}
           </Button>
         </>
       }

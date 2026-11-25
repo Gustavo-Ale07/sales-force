@@ -160,11 +160,11 @@ describe("Cliente: Pedidos recorrentes", () => {
       });
       const click = async () => user.click(await screen.findByRole("button", { name: "Usar modelo Reposição mensal" }));
       await click();
-      expect(await screen.findByText("Sem conexão com o servidor")).toBeInTheDocument();
+      expect(await screen.findByText("Sem conexão")).toBeInTheDocument();
       await click();
-      expect(await screen.findByText("Serviço indisponível")).toBeInTheDocument();
+      expect(await screen.findByText("Servidor indisponível")).toBeInTheDocument();
       await click();
-      expect(await screen.findByText("Muitas requisições")).toBeInTheDocument();
+      expect(await screen.findByText("Muitas tentativas")).toBeInTheDocument();
       await click();
       await waitFor(() => expect(router.state.location.pathname).toBe(`/pedidos/${ORDER_ID}`));
 
@@ -549,7 +549,7 @@ describe("Editor de pedido: Salvar como recorrente", () => {
     const dialog = await openSave(user);
     await user.type(within(dialog).getByRole("textbox", { name: /Nome do modelo/ }), "Reposição mensal");
     await user.click(within(dialog).getByRole("button", { name: "Salvar modelo" }));
-    expect(await within(dialog).findByText("Serviço indisponível")).toBeInTheDocument();
+    expect(await within(dialog).findByText("Servidor indisponível")).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "Salvar modelo" }));
     await waitFor(() => expect(callsTo(calls, "POST", "/customers/1001/order-templates")).toHaveLength(2));
     const [first, second] = callsTo(calls, "POST", "/customers/1001/order-templates");

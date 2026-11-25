@@ -68,7 +68,7 @@ describe("Pedido: Duplicar pedido", () => {
     });
     const click = async () => user.click(await screen.findByRole("button", { name: "Duplicar pedido" }));
     await click();
-    expect(await screen.findByText("Serviço indisponível")).toBeInTheDocument();
+    expect(await screen.findByText("Servidor indisponível")).toBeInTheDocument();
     await click();
     await waitFor(() => expect(callsTo(calls, "POST", "/orders")).toHaveLength(2));
     await click();
@@ -229,13 +229,12 @@ describe("Meu perfil e atualização de dados", () => {
     await waitFor(() => expect(callsTo(calls, "GET", "/dashboard")).toHaveLength(1));
     await openRefresh(user);
     expect(await screen.findByText("Atualizando dados do Sankhya")).toBeInTheDocument();
-    expect(await screen.findByText(/Dados atualizados às/)).toBeInTheDocument();
+    expect(await screen.findByText("Pronto")).toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "Andamento por informação" })).toBeNull();
     expect(screen.getByRole("progressbar", { name: "Progresso da atualização" })).toHaveAttribute("aria-valuenow", "100");
-    await user.click(screen.getByRole("button", { name: "Ver detalhes" }));
-    const detail = screen.getByRole("group", { name: "Andamento por informação" });
-    expect(within(detail).getByText("Clientes")).toBeInTheDocument();
-    for (const title of ["Cadastros", "Preços", "Financeiro e pedidos"]) expect(within(detail).getByRole("heading", { name: title })).toBeInTheDocument();
+    expect(screen.getByText("Dados de 14:00")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ver detalhes" })).toBeNull();
+    expect(within(screen.getByRole("dialog")).queryByText("Clientes")).toBeNull();
     expect(screen.queryByRole("button", { name: "Fechar" })).toBeNull();
     expect(screen.queryByText(/Não feche/)).toBeNull();
     expect(screen.getByRole("button", { name: "Concluir" })).toBeInTheDocument();
@@ -243,7 +242,7 @@ describe("Meu perfil e atualização de dados", () => {
     await waitFor(() => expect(callsTo(calls, "GET", "/dashboard").length).toBeGreaterThanOrEqual(2));
   });
 
-  it("manager: indeterminate ring at 0%, then the current step and 'n de N · s'", async () => {
+  it("manager: progress ring and a plain action line, no step or count text", async () => {
     const stepsAt = (finished: number) =>
       refreshBody().steps.map((step: Record<string, unknown>, index: number) => ({
         ...step,
@@ -255,9 +254,9 @@ describe("Meu perfil e atualização de dados", () => {
       handlers: { ...shell, "POST /sync/refresh": { body: { ...running(0), reused: false } }, ["GET /sync/refresh/" + REFRESH_ID]: { body: running(2) } },
     });
     await openRefresh(user);
-    expect(await screen.findByText("Lendo clientes…")).toBeInTheDocument();
-    expect(screen.getByText(/^2 de 11 · \d+ s$/)).toBeInTheDocument();
-    expect(screen.getByTestId("hero-percent")).toHaveTextContent("18%");
+    expect(await screen.findByText("Sincronizando…")).toBeInTheDocument();
+    expect(await screen.findByTestId("hero-percent")).toHaveTextContent("18%");
+    expect(screen.queryByText(/Lendo|^\d+ de \d+/)).toBeNull();
   });
 
   describe('a refresh that does not advance (D-AD)', () => {
@@ -318,8 +317,8 @@ describe("Meu perfil e atualização de dados", () => {
       },
     });
     await openRefresh(user);
-    expect(await screen.findByText("Atualizando seus dados")).toBeInTheDocument();
-    expect(await screen.findByText("Atualizando preços…")).toBeInTheDocument();
+    expect(await screen.findByText("Sincronizando")).toBeInTheDocument();
+    expect(await screen.findByText("Sincronizando…")).toBeInTheDocument();
     expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "40");
     expect(screen.getByTestId("hero-percent")).toHaveTextContent("40%");
     expect(screen.queryByRole("button", { name: "Ver detalhes" })).toBeNull();
@@ -350,7 +349,8 @@ describe("Meu perfil e atualização de dados", () => {
     });
     await openRefresh(user);
     expect(await screen.findByText("Atualização concluída com avisos")).toBeInTheDocument();
-    expect(screen.getByText(/Sankhya indisponível\. Mantidos os dados de/)).toBeInTheDocument();
+    expect(screen.queryByText(/Sankhya indisponível/)).toBeNull();
+    expect(screen.getByText(/dados anteriores continuam disponíveis/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Fechar" })).toBeInTheDocument();
   });

@@ -32,7 +32,7 @@ const base = (extra: Handlers = {}): Handlers => ({
 describe("TOP do pedido e transportadora (D-A, D-C)", () => {
   it("offers only the eligible TOPs with the default selected, and sellable negotiation types", async () => {
     renderApp("/pedidos/novo?customer=1001", { handlers: base() });
-    const top = await screen.findByLabelText(/Tipo de operação \(TOP\)/);
+    const top = await screen.findByLabelText(/Tipo de operação/, undefined, { timeout: 5000 });
     await waitFor(() => expect(top).toHaveValue("1001"));
     expect(within(top).getAllByRole("option").map((o) => o.textContent)).toEqual(["Pedido (TOP 1001)", "Orçamento (TOP 1000)"]);
     const negotiation = screen.getByLabelText(/Tipo de negociação/);
@@ -48,7 +48,7 @@ describe("TOP do pedido e transportadora (D-A, D-C)", () => {
     const carrier = await screen.findByLabelText(/^Transportadora/);
     await waitFor(() => expect(within(carrier).getAllByRole("option")).toHaveLength(3));
     expect(carrier).toHaveValue("");
-    await user.selectOptions(screen.getByLabelText(/Tipo de operação \(TOP\)/), "1000");
+    await user.selectOptions(screen.getByLabelText(/Tipo de operação/), "1000");
     await user.selectOptions(carrier, "9");
     await fillOrderHeader(user);
     await user.click(await screen.findByRole("button", { name: "Produtos" }));

@@ -35,9 +35,11 @@ export interface ProductImageProps {
   /** Rendered box in px (defaults to the variant size). The image source still follows `variant`. */
   size?: number;
   className?: string;
+  /** The product name is written next to the image: no alt text, so the name is not read (or shown on a failed load) twice. */
+  decorative?: boolean;
 }
 
-export function ProductImage({ image, description, name, variant = "thumb", size: sizeOverride, className }: ProductImageProps) {
+export function ProductImage({ image, description, name, variant = "thumb", size: sizeOverride, className, decorative = false }: ProductImageProps) {
   // The failure is remembered for the exact src: a new version (new src) is tried again.
   // No fallback to the full original: the server generates a thumbnail for every photo, and the
   // original must never be shipped into list boxes. A failed request shows the initials placeholder.
@@ -51,7 +53,7 @@ export function ProductImage({ image, description, name, variant = "thumb", size
     return (
       <img
         src={src}
-        alt={description}
+        alt={decorative ? "" : description}
         width={size}
         height={size}
         loading="lazy"

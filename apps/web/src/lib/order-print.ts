@@ -1,5 +1,5 @@
 import type { ApiSchema } from "@salesforce/contracts/client";
-import { documentKindOf, renderOrderHtml, toOrderDocument, type DocumentTopRules, type OrderDocumentCompany } from "@salesforce/domain";
+import { documentFreightLabels, documentIpiPercent, documentKindOf, orderDocumentConditions, renderOrderHtml, toOrderDocument, type DocumentTopRules, type OrderDocumentCompany } from "@salesforce/domain";
 
 type OrderDetail = ApiSchema<"OrderDetail">;
 
@@ -15,16 +15,14 @@ export const orderDocumentStatusLabels: Record<ApiSchema<"OrderStatus">, string>
   unknown: "Conferindo envio",
 };
 
-export const freightTypeLabels: Record<NonNullable<OrderDetail["freightType"]>, string> = {
-  CIF: "CIF (frete por conta de quem vende)",
-  FOB: "FOB (frete por conta do cliente)",
-  SEM_FRETE: "Sem frete",
-};
+export const freightTypeLabels: Record<NonNullable<OrderDetail["freightType"]>, string> = documentFreightLabels;
 
 /** The order screen's data, restricted by the domain allow-list (never cost/margin: P-20), rendered with the shared PLAC template. */
 export interface OrderPrintExtras {
   /** Quote/order TOP rules from the installation configuration (J3); absent = printed as an order. */
   topRules?: DocumentTopRules;
+  /** Negotiation types of the order-entry configuration, to print the label instead of the code; absent = the code. */
+  negotiationTypes?: readonly { code: number; label: string }[];
   /** Moment of issue (the caller's clock). */
   issuedAt?: string;
   sellerName?: string;
@@ -39,11 +37,15 @@ export function buildOrderHtml(order: OrderDetail, origin: string, extras: Order
     erpNumber: order.erpNumber,
     customerCode: order.customerCode,
     customerName: order.customerName,
-    ...(order.freightType === null ? {} : { conditions: [{ label: "Frete", value: freightTypeLabels[order.freightType] }] }),
+    conditions: orderDocumentConditions({
+      negotiationTypeCode: order.negotiationTypeCode,
+      ...(extras.negotiationTypes === undefined ? {} : { negotiationTypes: extras.negotiationTypes }),
+      freightLabel: order.freightType === null ? null : freightTypeLabels[order.freightType],
+    }),
     statusLabel: orderDocumentStatusLabels[order.status],
     createdAt: order.createdAt,
     notes: order.notes,
-    items: order.items,
+    items: order.items.map((item) => ({ ...item, ipiPercent: documentIpiPercent(item.ipi) })),
     totals: order.totals,
     ...(order.ipi === undefined ? {} : { ipi: order.ipi }),
   });

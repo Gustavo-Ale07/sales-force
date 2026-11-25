@@ -172,6 +172,16 @@ export class CustomerRegistrationRepository {
     );
   }
 
+  /** A registration the reader may see whose ERP customer code is `code` (a customer not yet in the mirror). */
+  async existsVisibleWithCode(input: { readonly code: number; readonly accountId: string; readonly sellerCodes: readonly number[] | null }, db: Executor = this.db): Promise<boolean> {
+    const [row] = await db
+      .select({ id: customerRegistration.id })
+      .from(customerRegistration)
+      .where(and(eq(customerRegistration.erpCustomerCode, input.code), visibleTo(input.accountId, input.sellerCodes)))
+      .limit(1);
+    return row !== undefined;
+  }
+
   /** A rejected registration the seller already replaced by a correction no longer needs attention. */
   async hasCorrection(registrationId: string, db: Executor = this.db): Promise<boolean> {
     const [row] = await db.select({ id: customerRegistration.id }).from(customerRegistration).where(eq(customerRegistration.correctsRegistrationId, registrationId)).limit(1);

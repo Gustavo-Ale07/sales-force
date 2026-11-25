@@ -43,13 +43,13 @@ export function orderStatusView(
 /** One sentence per situation: what it says, and what it does not say about Sankhya. */
 export const orderStatusHints: Record<ApiSchema<"OrderStatus">, string> = {
   draft: "Salvo no Sales Force. Ainda não foi enviado ao Sankhya.",
-  awaiting_approval: "O desconto do pedido aguarda a decisão de um aprovador. Editar o pedido cancela a solicitação e o devolve ao estado Não enviado.",
-  approved: "Desconto aprovado. Isso não significa que o pedido foi enviado ao Sankhya.",
-  approval_rejected: "O aprovador reprovou o desconto. Edite o pedido para ajustar e enviar de novo.",
+  awaiting_approval: "O desconto deste pedido espera a aprovação de um gestor.",
+  approved: "O desconto foi aprovado. O pedido segue para o Sankhya.",
+  approval_rejected: "O desconto foi reprovado. Edite o pedido antes de enviá-lo de novo.",
   queued: "O envio ao Sankhya está em andamento. O pedido ainda não existe no Sankhya.",
-  sent: "A nota já existe no Sankhya. A liberação e a conferência são feitas pela Plac dentro do Sankhya; este status não indica faturamento.",
-  rejected: "O envio ao Sankhya falhou. Veja o motivo no pedido: se a nota já existe no Sankhya, ela não é reenviada.",
-  unknown: "Estamos verificando o envio com o Sankhya. Isso se resolve sozinho em instantes.",
+  sent: "Este pedido foi enviado ao Sankhya.",
+  rejected: "Precisa de correção. Edite o pedido e confirme de novo.",
+  unknown: "O envio ao Sankhya está sendo conferido. Não envie de novo.",
 };
 
 export const noPriceReasonLabels: Record<ApiSchema<"NoPriceReason">, string> = {

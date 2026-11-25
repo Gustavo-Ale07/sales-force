@@ -65,9 +65,20 @@ describe("create request", () => {
     expect(buildCreateRequest(exempt).stateRegistration).toBe("ISENTO");
   });
 
-  it("individual has no state registration", () => {
-    expect(createProblems({ ...base, document: CPF, stateRegistration: "1" }).stateRegistration).toBe("Pessoa física não tem inscrição estadual.");
-    expect(createProblems({ ...base, document: CPF, stateRegistration: "" }).stateRegistration).toBeNull();
+  it("individual has no state registration: never an error, never sent", () => {
+    expect(createProblems({ ...base, document: CPF, stateRegistration: "1" }).stateRegistration).toBeNull();
+    expect(createProblems({ ...base, document: CPF, stateRegistration: "", exempt: true }).stateRegistration).toBeNull();
+    expect(buildCreateRequest({ ...base, document: CPF, stateRegistration: "1", exempt: true }).stateRegistration).toBeNull();
+  });
+
+  it("a seller's customer carries no seller; a non-seller must choose one and it is sent", () => {
+    expect(createProblems(base).sellerCode).toBeNull();
+    expect(buildCreateRequest(base)).not.toHaveProperty("sellerCode");
+    expect(createProblems(base, { sellerRequired: true }).sellerCode).toBe("Escolha o vendedor.");
+    const chosen = { ...base, sellerCode: 12 };
+    expect(createProblems(chosen, { sellerRequired: true }).sellerCode).toBeNull();
+    expect(buildCreateRequest(chosen, undefined, { sellerRequired: true }).sellerCode).toBe(12);
+    expect(buildCreateRequest(chosen)).not.toHaveProperty("sellerCode");
   });
 });
 

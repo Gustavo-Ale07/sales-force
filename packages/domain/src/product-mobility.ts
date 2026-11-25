@@ -7,15 +7,12 @@ import type { MobilityFilter } from './configuration.js';
  * `validated` (configuration consistency also rejects enforced + unvalidated); otherwise it never
  * blocks. When it applies, a blank or unread code is NOT allowed: visibility is never guessed.
  */
-/** More than this share of hidden items (percent, exclusive) makes a refresh suspicious (owner ruling 2026-11-13). */
-export const MOBILITY_HIDDEN_LIMIT_PERCENT = 90;
-
 export interface MobilityTally {
   readonly visible: number;
   readonly hidden: number;
 }
 
-export type MobilityGuardReason = 'all_hidden' | 'over_limit';
+export type MobilityGuardReason = 'all_hidden';
 
 export interface MobilityGuardVerdict {
   readonly keepPrevious: boolean;
@@ -34,15 +31,15 @@ export function mobilityTally(flags: Iterable<boolean | null | undefined>): Mobi
 }
 
 /**
- * Anti-empty-catalog guard: a refresh that would hide everything, or more than 90 % of what exists, is far more likely
- * a broken or unfilled `AD_MOBILIDADE` than a real decision: the caller KEEPS the previous data and warns. Nothing read
- * at all (0 + 0) is not a guard case.
+ * Anti-empty-catalog guard: a refresh that would hide EVERYTHING is far more likely a broken or unfilled
+ * `AD_MOBILIDADE` than a real decision: the caller KEEPS the previous data and warns. A small enabled set is legitimate
+ * (owner 2026-11-25: Sankhya may enable only a handful of TOPs), so no percentage limit applies. Nothing read at all
+ * (0 + 0) is not a guard case.
  */
 export function evaluateMobilityGuard(tally: MobilityTally): MobilityGuardVerdict {
   const total = tally.visible + tally.hidden;
   if (total === 0) return { keepPrevious: false, reason: null };
   if (tally.visible === 0) return { keepPrevious: true, reason: 'all_hidden' };
-  if (tally.hidden * 100 > total * MOBILITY_HIDDEN_LIMIT_PERCENT) return { keepPrevious: true, reason: 'over_limit' };
   return { keepPrevious: false, reason: null };
 }
 

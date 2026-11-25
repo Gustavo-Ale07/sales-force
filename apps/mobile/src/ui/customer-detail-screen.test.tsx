@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
+import { Text } from "react-native";
 import type { CustomerDetail, CustomerRepository } from "../data/ports";
 import { customer, draftRecord, fakeLocalOrders, networkError, pageOf } from "../test-doubles";
 import type { CustomerFinancial } from "../data/ports";
@@ -9,6 +10,21 @@ const listOnly: CustomerRepository = { list: async () => pageOf([]) };
 function detailOf(overrides: Partial<CustomerDetail> = {}): CustomerDetail {
   return { ...customer(10), priceTableName: null, resolvedPriceTable: null, creditLimit: null, monthlyCreditLimit: null, syncedAt: "2026-09-30T12:00:00.000Z", ...overrides };
 }
+
+describe("CustomerDetailScreen recurring orders section", () => {
+  const section = <Text>Pedidos recorrentes</Text>;
+  const pendingOf = (state: "queued" | "awaiting_erp" | "rejected" | "confirmed") => ({ clientRequestId: "x", state, rejectionReason: null });
+
+  it.each(["queued", "awaiting_erp", "rejected"] as const)("is hidden while the new customer is %s", async (state) => {
+    await render(<CustomerDetailScreen customer={customer(-3, { pending: pendingOf(state) })} customers={listOnly} onBack={jest.fn()} onNewOrder={jest.fn()} templatesSection={section} />);
+    expect(screen.queryByText("Pedidos recorrentes")).toBeNull();
+  });
+
+  it("is shown for a confirmed customer and for a normal one", async () => {
+    await render(<CustomerDetailScreen customer={customer(10, { pending: pendingOf("confirmed") })} customers={listOnly} onBack={jest.fn()} onNewOrder={jest.fn()} templatesSection={section} />);
+    expect(screen.getByText("Pedidos recorrentes")).toBeTruthy();
+  });
+});
 
 describe("CustomerDetailScreen", () => {
   it("shows only what a sparse customer really has: no empty sections, no invented history", async () => {

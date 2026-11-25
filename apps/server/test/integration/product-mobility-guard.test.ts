@@ -72,26 +72,25 @@ describe('product mobility (AD_MOBILIDADE)', () => {
     expect(await live(first.database)).toBe(total - 2);
   });
 
-  it('more than 90 percent hidden keeps the previous base, records the counts and the reason', async () => {
+  it('a mostly hidden snapshot is applied (only all-hidden is guarded), counts recorded', async () => {
     const all = datasetWith(() => 'S');
     const total = all.products.length;
     const { database, service } = await setup(all);
     await service().run('products');
 
     const mostlyHidden = datasetWith((index) => (index < 2 ? 'S' : 'N'));
-    const guarded = new MirrorSyncService({
+    const next = new MirrorSyncService({
       db: database.handle,
       gateway: new FakeGateway({ dataset: mostlyHidden }),
       logger: createLogger({ level: 'silent', service: 'worker' }),
       now: () => new Date(),
       readScope: async () => scope,
     });
-    const run = await guarded.run('products');
-    expect(run.stats?.deactivated).toBe(0);
-    expect(run.mobility).toEqual({ visible: 2, hidden: total - 2, keptPrevious: true });
-    expect(await live(database)).toBe(total);
+    const run = await next.run('products');
+    expect(run.mobility).toEqual({ visible: 2, hidden: total - 2, keptPrevious: false });
+    expect(await live(database)).toBe(2);
     const [state] = await database.handle.db.select().from(syncState).where(eq(syncState.entity, 'products'));
-    expect((state?.cursor as { lastRun: { mobility?: unknown } }).lastRun.mobility).toEqual({ visible: 2, hidden: total - 2, keptPrevious: true });
+    expect((state?.cursor as { lastRun: { mobility?: unknown } }).lastRun.mobility).toEqual({ visible: 2, hidden: total - 2, keptPrevious: false });
   });
 
   it('everything hidden keeps the previous base (a snapshot with no visible product is not an empty catalog)', async () => {

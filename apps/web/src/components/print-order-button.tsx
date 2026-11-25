@@ -32,18 +32,20 @@ export function PrintOrderButton({ orderId, label, order, disabled, size = "md",
     setBusy(true);
     try {
       const detail = order ?? (await queryClient.fetchQuery({ ...orderQueryOptions(api, orderId), staleTime: 0 }));
-      const tops = await queryClient
+      const sales = await queryClient
         .fetchQuery(orderEntryConfigurationQueryOptions(api))
-        .then((configuration) => configuration.sales.orderTops)
+        .then((configuration) => configuration.sales)
         .catch(() => undefined);
+      const tops = sales?.orderTops;
       printHtml(
         buildOrderHtml(detail, window.location.origin, {
           issuedAt: new Date().toISOString(),
+          ...(sales === undefined ? {} : { negotiationTypes: sales.negotiationTypes }),
           ...(tops === undefined ? {} : { topRules: { quoteTopCodes: tops.quoteTopCodes, quotationTopCode: tops.quotationTopCode } }),
         }),
       );
     } catch (error) {
-      const failure = describeApiError(error, "Não foi possível preparar o pedido para impressão");
+      const failure = describeApiError(error, "PDF não gerado");
       toast({ title: failure.title, description: failure.description, tone: "danger" });
     } finally {
       setBusy(false);

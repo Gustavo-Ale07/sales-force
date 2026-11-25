@@ -52,9 +52,9 @@ export interface AboveLimitEntry {
 export function classifyBulk(
   before: readonly EditorLine[],
   after: readonly EditorLine[],
-): { within: number; above: AboveLimitEntry[] } {
+): { within: number; withinNames: string[]; above: AboveLimitEntry[] } {
   const previous = new Map(before.map((line) => [line.key, line]));
-  let within = 0;
+  const withinNames: string[] = [];
   const above: AboveLimitEntry[] = [];
   for (const line of after) {
     const old = previous.get(line.key);
@@ -62,7 +62,7 @@ export function classifyBulk(
     const parsed = parseDiscountInput(line.discountText);
     if (!parsed.ok || parsed.value === "0") continue;
     if (lineExceedsLimit(line)) above.push({ name: line.description, limit: formatLimit(limitOf(line.maxDiscountPercent)!), typed: formatLimit(parsed.value) });
-    else within += 1;
+    else withinNames.push(line.description);
   }
-  return { within, above };
+  return { within: withinNames.length, withinNames, above };
 }

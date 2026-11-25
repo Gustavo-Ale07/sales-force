@@ -54,6 +54,40 @@ export interface OrderDocumentSource {
 
 export type OrderDocumentModel = OrderDocumentSource;
 
+/** Freight type texts of the "Condições" box; one wording for web and mobile (PAR-1). */
+export const documentFreightLabels = {
+  CIF: 'CIF (frete por conta de quem vende)',
+  FOB: 'FOB (frete por conta do cliente)',
+  SEM_FRETE: 'Sem frete',
+} as const;
+
+/**
+ * IPI rate of a line for the document column: only a known rate (`estimated` from the server, `rate` from a local reference)
+ * is shown; exempt, tariff, unavailable or absent give `null` (a dash), never zero.
+ */
+export function documentIpiPercent(ipi: { readonly status: string; readonly percentual?: string } | null | undefined): string | null {
+  if (ipi === null || ipi === undefined) return null;
+  return (ipi.status === 'estimated' || ipi.status === 'rate') && ipi.percentual !== undefined ? ipi.percentual : null;
+}
+
+/**
+ * Entries of the "Condições" box: negotiation type (label from the installation configuration; its code when the label is not
+ * known) and freight. Absent values are not listed; nothing is invented.
+ */
+export function orderDocumentConditions(input: {
+  readonly negotiationTypeCode: number | null;
+  readonly negotiationTypes?: readonly { readonly code: number; readonly label: string }[];
+  readonly freightLabel?: string | null;
+}): { readonly label: string; readonly value: string }[] {
+  const out: { label: string; value: string }[] = [];
+  if (input.negotiationTypeCode !== null) {
+    const found = input.negotiationTypes?.find((type) => type.code === input.negotiationTypeCode);
+    out.push({ label: 'Tipo de negociação', value: found?.label ?? `Código ${input.negotiationTypeCode}` });
+  }
+  if (input.freightLabel !== undefined && input.freightLabel !== null) out.push({ label: 'Frete', value: input.freightLabel });
+  return out;
+}
+
 export function toOrderDocument(source: OrderDocumentSource): OrderDocumentModel {
   return {
     ...(source.kind === undefined ? {} : { kind: source.kind }),

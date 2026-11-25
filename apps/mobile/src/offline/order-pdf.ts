@@ -1,5 +1,5 @@
 import type { DraftRecord } from "@salesforce/mobile-db";
-import { renderOrderHtml, toOrderDocument, type OrderDocumentModel } from "@salesforce/domain";
+import { documentFreightLabels, documentIpiPercent, orderDocumentConditions, renderOrderHtml, toOrderDocument, type OrderDocumentModel } from "@salesforce/domain";
 import { previewDraft, type EditorLine } from "../data/order-draft";
 import { isCustomerUnavailable, isProductBlocked, saleBadge } from "./sales-status";
 import { saleValue } from "./sales";
@@ -35,16 +35,28 @@ export class OrderPdfCustomerUnavailableError extends Error {
   }
 }
 
-export function orderDocumentOf(draft: DraftRecord, lines: readonly EditorLine[]): OrderDocumentModel {
+/** Installation data the document prints by label; absent = the code is printed instead. */
+export interface OrderPdfExtras {
+  readonly negotiationTypes?: readonly { readonly code: number; readonly label: string }[];
+}
+
+export function orderDocumentOf(draft: DraftRecord, lines: readonly EditorLine[], extras: OrderPdfExtras = {}): OrderDocumentModel {
   if (isCustomerUnavailable(draft)) throw new OrderPdfCustomerUnavailableError();
   const preview = previewDraft(lines);
-  const items = preview.lines.flatMap((entry) => (entry.item === null ? [] : [entry.item]));
+  const items = preview.lines.flatMap((entry, index) =>
+    entry.item === null ? [] : [{ ...entry.item, ipiPercent: documentIpiPercent(lines[index]?.ipi) }],
+  );
   const value = saleValue(draft, lines);
   return toOrderDocument({
     // The internal Force number is never printed (owner 2026-11-23): the only number on the document is the Sankhya one.
     erpNumber: erpNumberOfDraft(draft),
     customerCode: draft.customerCode,
     customerName: draft.customerName,
+    conditions: orderDocumentConditions({
+      negotiationTypeCode: draft.negotiationTypeCode,
+      ...(extras.negotiationTypes === undefined ? {} : { negotiationTypes: extras.negotiationTypes }),
+      freightLabel: draft.freightType === null ? null : documentFreightLabels[draft.freightType],
+    }),
     statusLabel: pdfStatusLabelOf(draft),
     createdAt: draft.createdAt,
     notes: draft.notes,
@@ -68,8 +80,8 @@ export function pdfFileNameOf(draft: Pick<DraftRecord, "erpNumber" | "erpStage" 
   return number === null ? "pedido" : `pedido-${number}`;
 }
 
-export function buildOrderPdfHtml(draft: DraftRecord, lines: readonly EditorLine[], logoSrc: string | null): string {
-  return renderOrderHtml(orderDocumentOf(draft, lines), logoSrc === null ? { brandName: 'PLAC' } : { logoSrc, brandName: 'PLAC' });
+export function buildOrderPdfHtml(draft: DraftRecord, lines: readonly EditorLine[], logoSrc: string | null, extras: OrderPdfExtras = {}): string {
+  return renderOrderHtml(orderDocumentOf(draft, lines, extras), logoSrc === null ? { brandName: 'PLAC' } : { logoSrc, brandName: 'PLAC' });
 }
 
 export type ShareOrderPdfResult = { readonly ok: true } | { readonly ok: false; readonly reason: "empty" | "customer_unavailable" | "failed" };
@@ -78,12 +90,13 @@ export async function shareOrderPdf(
   port: OrderPdfPort,
   draft: DraftRecord,
   lines: readonly EditorLine[],
+  extras: OrderPdfExtras = {},
 ): Promise<ShareOrderPdfResult> {
   if (lines.length === 0) return { ok: false, reason: "empty" };
   if (isCustomerUnavailable(draft)) return { ok: false, reason: "customer_unavailable" };
   try {
     const logoSrc = port.logoDataUri === undefined ? null : await port.logoDataUri().catch(() => null);
-    await port.sharePdf(buildOrderPdfHtml(draft, lines, logoSrc), pdfFileNameOf(draft));
+    await port.sharePdf(buildOrderPdfHtml(draft, lines, logoSrc, extras), pdfFileNameOf(draft));
     return { ok: true };
   } catch {
     return { ok: false, reason: "failed" };

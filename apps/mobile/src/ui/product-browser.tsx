@@ -4,7 +4,7 @@ import type { ConnectivityState } from "../connectivity/connectivity";
 import type { ProductFilters, ProductListItem, ProductPageRequest, ProductRepository } from "../data/ports";
 import { colors, control, radius, spacing } from "../theme";
 import { PagedListView } from "./paged-list-view";
-import { pricesOriginText, type PricesOrigin } from "../data/prices-origin";
+import type { PricesOrigin } from "../data/prices-origin";
 import type { ProductGroupTree } from "../data/group-cascade";
 import { EMPTY_GROUP_TREE, ProductFilterChips, ProductFiltersSheet, countActiveProductFilters } from "./product-filters";
 import { ProductDetailSheet } from "./product-detail-sheet";
@@ -85,7 +85,6 @@ export function ProductBrowser({ products, onUnauthenticated, connectivity, acti
           ))}
         </View>
       </View>
-      {origin !== null && <Text style={styles.origin} accessibilityLabel={pricesOriginText(origin)}>{pricesOriginText(origin)}</Text>}
       <ProductFilterChips filters={filters} tree={groups} onChange={setFilters} />
       <ProductFiltersSheet
         visible={filtersOpen}
@@ -145,7 +144,6 @@ export function ProductBrowser({ products, onUnauthenticated, connectivity, acti
 }
 
 const styles = StyleSheet.create({
-  origin: { fontSize: 13, color: colors.textMuted },
   toolbar: { gap: spacing.sm },
   toolbarRow: { flexDirection: "row", gap: spacing.sm, alignItems: "center", justifyContent: "space-between" },
   tool: { minHeight: control.height, minWidth: 72, paddingHorizontal: spacing.lg, borderRadius: radius.md, borderWidth: 1, borderColor: colors.navy, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },

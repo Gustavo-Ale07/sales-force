@@ -1,5 +1,5 @@
 import { callApi, type ApiClient } from "./api";
-import type { UpdateCustomerBody } from "./customer-form";
+import type { SellerChoice, UpdateCustomerBody } from "./customer-form";
 
 export type CustomerWriteState = "draft" | "awaiting_send" | "sent" | "needs_correction";
 
@@ -28,6 +28,8 @@ export interface CustomerRegistration {
 export interface CustomerWritePort {
   update(code: number, body: UpdateCustomerBody): Promise<UpdateCustomerResult>;
   registrations(): Promise<readonly CustomerRegistration[]>;
+  /** Active sellers the actor may link a new customer to (`GET /sellers?active=true`); used only by a user who is not a seller. */
+  activeSellers?(): Promise<readonly SellerChoice[]>;
 }
 
 export function createCustomerWritePort(api: ApiClient): CustomerWritePort {
@@ -35,6 +37,10 @@ export function createCustomerWritePort(api: ApiClient): CustomerWritePort {
     async update(code, body) {
       const response = await callApi(() => api.PATCH("/customers/{code}", { params: { path: { code } }, body }));
       return { state: response.state, stateLabel: response.stateLabel, reasonMessage: response.reasonMessage };
+    },
+    async activeSellers() {
+      const response = await callApi(() => api.GET("/sellers", { params: { query: { active: "true" } } }));
+      return response.items.filter((item) => item.active).map((item) => ({ code: item.code, name: item.name }));
     },
     async registrations() {
       const response = await callApi(() => api.GET("/customers/registrations", { params: { query: { limit: 50 } } }));

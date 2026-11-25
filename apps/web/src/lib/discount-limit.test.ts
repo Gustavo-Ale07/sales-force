@@ -21,16 +21,17 @@ describe("classifyBulk", () => {
     const result = classifyBulk(before, after);
     expect(result.above).toEqual([{ name: "Produto a", limit: "12", typed: "15" }]);
     expect(result.within).toBe(3);
+    expect(result.withinNames).toEqual(["Produto b", "Produto c", "Produto d"]);
   });
 
   it("ignores unchanged lines, lines without price and zero discounts", () => {
     const before = [line("a", "15", "12"), line("b", ""), line("c", "")];
     const after = [line("a", "15", "12"), line("b", "20", "12", false), line("c", "0", "12")];
-    expect(classifyBulk(before, after)).toEqual({ within: 0, above: [] });
+    expect(classifyBulk(before, after)).toEqual({ within: 0, withinNames: [], above: [] });
   });
 
   it("a limit exactly equal to the typed discount is within", () => {
     const result = classifyBulk([line("a", "")], [line("a", "12,0", "12")]);
-    expect(result).toEqual({ within: 1, above: [] });
+    expect(result).toEqual({ within: 1, withinNames: ["Produto a"], above: [] });
   });
 });

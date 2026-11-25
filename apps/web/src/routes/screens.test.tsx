@@ -70,7 +70,7 @@ describe("Início (dashboard)", () => {
         },
       },
     });
-    expect(await screen.findByText("Serviço indisponível")).toBeInTheDocument();
+    expect(await screen.findByText("Servidor indisponível")).toBeInTheDocument();
     expect(screen.getByText("req-dash-1")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Tentar de novo/ }));
     expect(await screen.findByText("1.250")).toBeInTheDocument();
@@ -128,7 +128,7 @@ describe("Carteira (customers)", () => {
 
   it("shows the filtered-empty state with a way to clear the filters", async () => {
     const { user, router } = renderApp("/clientes?search=zzz", { handlers: { "GET /customers": { body: customersPage([]) } } });
-    expect(await screen.findByText("Nenhum cliente com estes filtros.")).toBeInTheDocument();
+    expect(await screen.findByText("Nenhum cliente encontrado para “zzz”.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Limpar filtros" }));
     await waitFor(() => expect(router.state.location.search).toEqual({}));
   });
@@ -249,9 +249,11 @@ describe("Catálogo (products)", () => {
     expect(zeroRow).toHaveTextContent("Preço zero");
   });
 
-  it("explains where the prices come from", async () => {
+  it("shows no explanatory price-table line above the list", async () => {
     renderApp("/produtos", { handlers: { ...groups, "GET /products": { body: productsPage([product()]) } } });
-    expect(await screen.findByText("Origem dos preços")).toBeInTheDocument();
+    await screen.findByText("Balão látex 9 pol. vermelho");
+    expect(screen.queryByText("Origem dos preços")).toBeNull();
+    expect(screen.queryByText(/Preços da tabela/)).toBeNull();
   });
 
   it("asks for prices of the chosen customer via the customerCode parameter", async () => {
@@ -265,8 +267,10 @@ describe("Catálogo (products)", () => {
     renderApp("/produtos", {
       handlers: { ...groups, "GET /products": { body: productsPage([product({ image }), product({ code: 2002, description: "Vela lisa" })]) } },
     });
-    const img = await screen.findByRole("img", { name: "Balão látex 9 pol. vermelho" });
+    await screen.findByText("Vela lisa");
+    const img = document.querySelector('img[src*="products/2001/image"]');
     expect(img).toHaveAttribute("src", "/api/v1/products/2001/image?variant=thumb&v=h1");
+    expect(within(screen.getByText("Balão látex 9 pol. vermelho").closest("tr") as HTMLElement).queryByText("Vendável")).toBeNull();
     const row = screen.getByText("Vela lisa").closest("tr") as HTMLElement;
     expect(within(row).queryByRole("img")).toBeNull();
     expect(within(row).getByText("VL")).toBeInTheDocument();

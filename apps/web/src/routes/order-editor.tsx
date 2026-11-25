@@ -31,7 +31,6 @@ import {
   Textarea,
   formatQuantity,
   toast,
-  titleCase,
 } from "@salesforce/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useBlocker, useNavigate } from "@tanstack/react-router";
@@ -46,7 +45,7 @@ import { DeleteOrderDialog } from "../components/delete-order-dialog";
 import { SendProgressDialog } from "../components/send-progress-dialog";
 import { DuplicateAsOrderButton } from "../components/duplicate-as-order-button";
 import { DuplicateOrderButton } from "../components/duplicate-order-button";
-import { GroupDiscountDialog, MassDiscountDialog } from "../components/discount-dialogs";
+import { BulkDiscountDialog } from "../components/discount-dialogs";
 import { DiscountLimitDialog, type DiscountLimitPrompt } from "../components/discount-limit-dialog";
 import { classifyBulk, formatLimit, limitOf, lineExceedsLimit } from "../lib/discount-limit";
 import { NO_PRICE_TEXT, PriceCell } from "../components/price-cell";
@@ -96,13 +95,13 @@ type FreightType = NonNullable<OrderDetail["freightType"]>;
 
 
 export const SUBMIT_DISABLED_MESSAGE =
-  "Envio ao Sankhya desligado nesta instalação. O documento ficou registrado e nada foi enviado.";
+  "O envio ao Sankhya está desligado por enquanto. O pedido ficou salvo e nada foi enviado.";
 
 /** ORD-1: editable as draft and as rejected-by-approver; editing an order awaiting approval returns it to draft. */
 const EDITABLE_STATUSES: ReadonlySet<OrderDetail["status"]> = new Set(["draft", "approval_rejected", "awaiting_approval", "rejected"]);
 export const SUBMIT_BLOCKED_MESSAGE =
-  "O desconto ultrapassa o limite máximo da diretoria. Ele continua salvo, mas não pode ser enviado até reduzir o desconto.";
-export const SUBMIT_AWAITING_MESSAGE = "Pedido enviado para aprovação do desconto. Você será avisado ao abrir o pedido quando houver decisão.";
+  "O desconto passa do limite permitido. Reduza o desconto e confirme de novo.";
+export const SUBMIT_AWAITING_MESSAGE = "O desconto precisa da aprovação de um gestor. O pedido segue depois da aprovação.";
 
 const PRODUCT_SEARCH_ID = "order-product-search";
 const CART_VIEW_ID = "order-view-cart";
@@ -132,31 +131,31 @@ function describeSaveFailure(error: unknown): FailureView {
   if (error instanceof ApiRequestError) {
     if (error.code === "version_conflict") {
       return {
-        title: "O documento foi alterado em outro lugar",
-        messages: ["Recarregue para ver a versão atual. Suas alterações não salvas serão descartadas."],
+        title: "Pedido alterado em outro lugar",
+        messages: ["Recarregue para ver a versão atual. Suas alterações não salvas serão perdidas."],
         correlationId: error.correlationId,
         reloadable: true,
       };
     }
     if (error.code === "order_not_editable") {
       return {
-        title: "Este pedido não pode mais ser editado",
-        messages: ["Ele já não está em edição. Recarregue para ver a situação atual."],
+        title: "Pedido não editável",
+        messages: ["Ele já não pode ser editado. Recarregue para ver a situação."],
         correlationId: error.correlationId,
         reloadable: true,
       };
     }
     if (error.code === "idempotency_conflict") {
       return {
-        title: "Não foi possível salvar",
-        messages: ["Esta solicitação já foi registrada com outros dados. Tente salvar novamente."],
+        title: "Pedido antigo",
+        messages: ["Esta solicitação já foi registrada com outros dados. Refaça o pedido."],
         correlationId: error.correlationId,
         reloadable: false,
       };
     }
     if (error.issues.length > 0) {
       return {
-        title: "Corrija os itens antes de salvar",
+        title: "Corrija os itens",
         messages: error.issues.map(describeIssue),
         correlationId: error.correlationId,
         reloadable: false,
@@ -470,7 +469,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
         toast({ title: "Envio ao Sankhya desligado", description: `${reference} ficou registrado; nada foi enviado.`, tone: "warning" });
       } else if (sendError instanceof ApiRequestError && sendError.code === "discount_blocked") {
         setSubmitMessage(SUBMIT_BLOCKED_MESSAGE);
-        toast({ title: "Salvo, mas não enviado", description: "Desconto acima do limite da diretoria.", tone: "warning" });
+        toast({ title: "Salvo, mas não enviado", description: "O desconto passa do limite permitido.", tone: "warning" });
       } else if (sendError !== null) {
         setSubmitMessage(null);
         const described = describeApiError(sendError, "Não foi possível enviar ao Sankhya");
@@ -730,12 +729,12 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
   const addLine = (line: EditorLine) => setLines((current) => [...current, line]);
   const applyBulkDiscount = async (next: EditorLine[], applied: number, scope: string) => {
     const enriched = await withLimits(next);
-    const { within, above } = classifyBulk(lines, enriched);
+    const { withinNames, above } = classifyBulk(lines, enriched);
     if (aboveLimitAccepted.current || above.length === 0) {
       onDiscountApplied(enriched, applied, scope);
       return;
     }
-    askAboveLimit({ kind: "bulk", within, above }, () => onDiscountApplied(enriched, applied, scope), () => undefined);
+    askAboveLimit({ kind: "bulk", within: withinNames, above }, () => onDiscountApplied(enriched, applied, scope), () => undefined);
   };
 
   const removedBar =
@@ -824,7 +823,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
       {order?.status === "unknown" ? (
         <Alert tone="info" title="Conferindo envio">
           {order.erpNumber == null
-            ? "Estamos verificando o envio com o Sankhya. Isso se resolve sozinho em instantes."
+            ? "O envio ao Sankhya está sendo conferido. Não envie de novo."
             : "O pedido já está no Sankhya; falta só a leitura final. Isso se resolve sozinho em instantes."}
           <div className="mt-2">
             <Button type="button" variant="secondary" loading={verifyNow.isPending} onClick={() => verifyNow.mutate()}>
@@ -907,6 +906,23 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                 <CustomerPicker {...controlProps} selected={customer} onSelect={(picked) => requestCustomer(picked)} disabled={readOnly} />
               )}
             </FormField>
+            {topOptions.length > 0 ? (
+              <FormField label="Tipo de operação" required id="order-top" error={headerError("missing_top")}>
+                <Select
+                  size="md"
+                  disabled={readOnly}
+                  value={orderTopCode ?? ""}
+                  onChange={(event) => setTopChoice(event.target.value === "" ? undefined : Number(event.target.value))}
+                >
+                  {orderTopCode === null || !topOptions.includes(orderTopCode) ? <option value="">Padrão da instalação</option> : null}
+                  {topOptions.map((code) => (
+                    <option key={code} value={code}>
+                      {topLabel(code, orderTops)}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+            ) : null}
             <FormField
               label="Tipo de negociação"
               required
@@ -928,23 +944,19 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                 ))}
               </Select>
             </FormField>
-            {topOptions.length > 0 ? (
-              <FormField label="Tipo de operação (TOP)" required id="order-top" error={headerError("missing_top")}>
-                <Select
-                  size="md"
-                  disabled={readOnly}
-                  value={orderTopCode ?? ""}
-                  onChange={(event) => setTopChoice(event.target.value === "" ? undefined : Number(event.target.value))}
-                >
-                  {orderTopCode === null || !topOptions.includes(orderTopCode) ? <option value="">Padrão da instalação</option> : null}
-                  {topOptions.map((code) => (
-                    <option key={code} value={code}>
-                      {topLabel(code, orderTops)}
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
-            ) : null}
+            <FormField label="Frete" required id="order-freight" error={headerError("missing_freight_type")}>
+              <Select
+                size="md"
+                disabled={readOnly}
+                value={freightType ?? ""}
+                onChange={(event) => setFreightChoice(event.target.value === "" ? null : (event.target.value as FreightType))}
+              >
+                <option value="">Selecione…</option>
+                <option value="CIF">CIF</option>
+                <option value="FOB">FOB</option>
+                <option value="SEM_FRETE">Sem frete</option>
+              </Select>
+            </FormField>
             <FormField
               label="Transportadora"
               required
@@ -965,19 +977,6 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                     {carrier.name}
                   </option>
                 ))}
-              </Select>
-            </FormField>
-            <FormField label="Frete" required id="order-freight" error={headerError("missing_freight_type")}>
-              <Select
-                size="md"
-                disabled={readOnly}
-                value={freightType ?? ""}
-                onChange={(event) => setFreightChoice(event.target.value === "" ? null : (event.target.value as FreightType))}
-              >
-                <option value="">Selecione…</option>
-                <option value="CIF">CIF</option>
-                <option value="FOB">FOB</option>
-                <option value="SEM_FRETE">Sem frete</option>
               </Select>
             </FormField>
             <FormField label="Observações" className="md:col-span-2" hint="Até 2.000 caracteres.">
@@ -1016,9 +1015,9 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                   leftIcon={<Percent size={13} aria-hidden="true" />}
                   disabled={lines.length === 0}
                   title={lines.length === 0 ? "Adicione itens ao carrinho para aplicar desconto" : undefined}
-                  onClick={() => setGroupDiscountOpen(true)}
+                  onClick={() => setMassDiscountOpen(true)}
                 >
-                  Desconto por grupo
+                  Desconto em lote
                 </Button>
                 <Button
                   type="button"
@@ -1027,9 +1026,9 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                   leftIcon={<Percent size={13} aria-hidden="true" />}
                   disabled={lines.length === 0}
                   title={lines.length === 0 ? "Adicione itens ao carrinho para aplicar desconto" : undefined}
-                  onClick={() => setMassDiscountOpen(true)}
+                  onClick={() => setGroupDiscountOpen(true)}
                 >
-                  Desconto no pedido todo
+                  Desconto por grupo
                 </Button>
                 {lines.length > 0 ? (
                   <Button
@@ -1171,9 +1170,9 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                         <TableCell numeric card="hide">{index + 1}</TableCell>
                         <TableCell wrap card="title" className="max-sm:order-first">
                           <span className="flex items-center gap-2">
-                            <ProductImage image={line.image} description={line.description} name={titleCase(line.description)} />
+                            <ProductImage image={line.image} description={line.description} decorative />
                             <span className="min-w-0">
-                              <span className="font-medium">{titleCase(line.description)}</span>
+                              <span className="font-medium">{line.description}</span>
                               <span className="block text-fg-muted">Código {line.productCode}</span>
                             </span>
                           </span>
@@ -1290,7 +1289,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
               {preview.discounts.discountedLineCount > 0 ? (
                 <>
                   <div className="flex items-baseline gap-2">
-                    <dt className="text-fg-muted">Subtotal (tabela)</dt>
+                    <dt className="text-fg-muted">Subtotal da tabela</dt>
                     <dd className="m-0 font-medium" data-testid="order-list-total">
                       <Money value={preview.discounts.listTotal} />
                     </dd>
@@ -1304,13 +1303,13 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                 </>
               ) : null}
               <div className="flex items-baseline gap-2">
-                <dt className="text-fg-muted">{preview.totals.isPartial ? "Total parcial sem IPI" : "Total sem IPI"}</dt>
+                <dt className="text-fg-muted">Total sem IPI</dt>
                 <dd className="m-0 font-medium" data-testid="order-total">
                   <Money value={preview.totals.estimatedTotal} />
                 </dd>
               </div>
               <div className="flex items-baseline gap-2">
-                <dt className="text-fg-muted">IPI estimado</dt>
+                <dt className="text-fg-muted">IPI</dt>
                 <dd className="m-0 font-medium" data-testid="order-ipi">
                   <Money value={preview.ipi.ipiEstimated} />
                 </dd>
@@ -1324,31 +1323,29 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
             </dl>
             {preview.ipi.unavailableLineCount > 0 ? (
               <p className="m-0 mt-1 text-right text-xs text-fg-muted" data-testid="order-ipi-unavailable">
-                {preview.ipi.unavailableLineCount === 1 ? "1 item com IPI não disponível." : `${preview.ipi.unavailableLineCount} itens com IPI não disponível.`}
+                {`IPI não disponível em ${preview.ipi.unavailableLineCount === 1 ? "1 item" : `${preview.ipi.unavailableLineCount} itens`}.`}
               </p>
             ) : null}
             {preview.ipi.exemptLineCount > 0 ? (
               <p className="m-0 mt-1 text-right text-xs text-fg-muted" data-testid="order-ipi-exempt">
-                {preview.ipi.exemptLineCount === 1 ? "1 item com IPI isento/não informado." : `${preview.ipi.exemptLineCount} itens com IPI isento/não informado.`}
+                {`IPI isento/não informado em ${preview.ipi.exemptLineCount === 1 ? "1 item" : `${preview.ipi.exemptLineCount} itens`}.`}
               </p>
             ) : null}
             {preview.ipi.tariffLineCount > 0 ? (
               <p className="m-0 mt-1 text-right text-xs text-fg-muted" data-testid="order-ipi-tariff">
-                {preview.ipi.tariffLineCount === 1 ? "1 item com IPI por pauta — não estimado." : `${preview.ipi.tariffLineCount} itens com IPI por pauta — não estimado.`}
+                {`IPI por pauta — não calculado em ${preview.ipi.tariffLineCount === 1 ? "1 item" : `${preview.ipi.tariffLineCount} itens`}.`}
               </p>
             ) : null}
             {cartSummary.invalidLineCount > 0 ? (
               <p className="m-0 mt-1 text-right text-xs text-danger">
-                {cartSummary.invalidLineCount === 1
-                  ? "1 item com quantidade ou desconto inválido não entra na soma."
-                  : `${cartSummary.invalidLineCount} itens com quantidade ou desconto inválido não entram na soma.`}
+                Há quantidade ou desconto inválido no carrinho. Corrija em Produtos.
               </p>
             ) : null}
             {preview.totals.isPartial ? (
               <p className="m-0 mt-1 text-right text-xs text-fg-muted">
                 {preview.totals.unpricedLineCount === 1
-                  ? "1 item sem preço não entra na soma."
-                  : `${preview.totals.unpricedLineCount} itens sem preço não entram na soma.`}
+                  ? "Pedido parcial: 1 item sem preço não entra no total."
+                  : `Pedido parcial: ${preview.totals.unpricedLineCount} itens sem preço não entram no total.`}
               </p>
             ) : null}
           </CardBody>
@@ -1501,13 +1498,13 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
         />
       ) : null}
 
-      <MassDiscountDialog
+      <BulkDiscountDialog
         open={massDiscountOpen}
         onOpenChange={setMassDiscountOpen}
         lines={lines}
         onApply={(next, applied, text) => void applyBulkDiscount(next, applied, text === "" ? "sem desconto" : `com ${text}% de desconto`)}
       />
-      <GroupDiscountDialog
+      <BulkDiscountDialog groupsOnly
         open={groupDiscountOpen}
         onOpenChange={setGroupDiscountOpen}
         lines={lines}

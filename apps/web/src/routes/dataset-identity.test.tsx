@@ -116,16 +116,16 @@ describe("Identidade da base de dados nas gravações", () => {
     it("blocks save: shows a clear error and sends nothing", async () => {
       const { user, calls } = renderApp("/pedidos/novo?customer=1001", { handlers: editorHandlers(configWith(null)) });
       await fillAndSave(user);
-      expect(await screen.findByText("Base de dados não identificada")).toBeInTheDocument();
+      expect(await screen.findByText("Dados não confirmados")).toBeInTheDocument();
       expect(callsTo(calls, "POST", "/orders")).toHaveLength(0);
     });
 
     it("blocks repeat-last and template use: clear error, no request", async () => {
       const { user, calls } = renderApp("/clientes/1001", { handlers: customerPage(configWith(null)) });
       await user.click(await screen.findByRole("button", { name: "Repetir último pedido" }));
-      expect(await screen.findByText("Base de dados não identificada")).toBeInTheDocument();
+      expect(await screen.findByText("Dados não confirmados")).toBeInTheDocument();
       await user.click(screen.getByRole("button", { name: "Usar modelo Reposição mensal" }));
-      await waitFor(() => expect(screen.getAllByText("Base de dados não identificada").length).toBe(2));
+      await waitFor(() => expect(screen.getAllByText("Dados não confirmados").length).toBe(2));
       expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
     });
   });
@@ -138,7 +138,7 @@ describe("Identidade da base de dados nas gravações", () => {
         handlers: editorHandlers({ "POST /orders": mismatch }),
       });
       await fillAndSave(user);
-      expect(await screen.findByText("Os dados desta tela estão desatualizados")).toBeInTheDocument();
+      expect(await screen.findByText("Dados desatualizados")).toBeInTheDocument();
       expect(screen.getByText(/Recarregue a página/)).toBeInTheDocument();
       expect(screen.getByText("req-ds-1")).toBeInTheDocument();
       expect(callsTo(calls, "POST", "/orders")).toHaveLength(1);
@@ -149,14 +149,14 @@ describe("Identidade da base de dados nas gravações", () => {
         handlers: customerPage({ "POST /customers/:code/orders/repeat-last": mismatch }),
       });
       await user.click(await screen.findByRole("button", { name: "Repetir último pedido" }));
-      expect(await screen.findByText("Os dados desta tela estão desatualizados")).toBeInTheDocument();
+      expect(await screen.findByText("Dados desatualizados")).toBeInTheDocument();
       expect(callsTo(calls, "POST", "/customers/1001/orders/repeat-last")).toHaveLength(1);
     });
 
     it("template use: shows the reload message", async () => {
       const { user } = renderApp("/clientes/1001", { handlers: customerPage({ "POST /order-templates/:id/use": mismatch }) });
       await user.click(await screen.findByRole("button", { name: "Usar modelo Reposição mensal" }));
-      expect(await screen.findByText("Os dados desta tela estão desatualizados")).toBeInTheDocument();
+      expect(await screen.findByText("Dados desatualizados")).toBeInTheDocument();
     });
   });
 });

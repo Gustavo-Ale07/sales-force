@@ -26,8 +26,8 @@ function isJpeg(bytes: Uint8Array): boolean {
 
 /** Pre-send validation: a bad request leaves here, before any call. */
 export function assertUserPhotoRequest(request: UserPhotoWriteRequest): void {
-  if (!Number.isInteger(request.userCode) || request.userCode < 1) {
-    throw permanent('user_photo_invalid_user', 'The ERP user code is not a positive integer. Nothing was sent.');
+  if (!Number.isInteger(request.userCode) || request.userCode < 0) {
+    throw permanent('user_photo_invalid_user', 'The ERP user code is not a valid integer. Nothing was sent.');
   }
   if (!isJpeg(request.image)) throw permanent('user_photo_invalid_image', 'The photo is not a JPEG image. Nothing was sent.');
   if (request.image.byteLength > USER_PHOTO_MAX_BYTES) {

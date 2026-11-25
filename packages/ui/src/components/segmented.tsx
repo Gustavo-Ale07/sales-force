@@ -37,7 +37,7 @@ export function SegmentedControl<T extends string>({ value, onValueChange, optio
           value={option.value}
           title={option.description}
           className={cn(
-            "flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 truncate rounded-[6px] px-3 text-xs font-semibold text-fg-muted transition-[color,background-color,box-shadow] duration-[var(--sf-dur-fast)] ease-spring",
+            "flex h-8 min-w-0 flex-auto items-center justify-center gap-1.5 truncate rounded-[6px] px-3 text-xs font-semibold text-fg-muted transition-[color,background-color,box-shadow] duration-[var(--sf-dur-fast)] ease-spring",
             "hover:text-fg data-[state=checked]:bg-surface data-[state=checked]:text-fg data-[state=checked]:shadow-[0_1px_2px_rgba(29,29,27,0.14)]",
           )}
         >

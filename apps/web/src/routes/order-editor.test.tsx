@@ -76,7 +76,8 @@ describe("Novo pedido", () => {
     });
     const produtos = await screen.findByRole("button", { name: "Produtos" });
     if (produtos.getAttribute("aria-pressed") !== "true") await user.click(produtos);
-    const img = await screen.findByRole("img", { name: "Balão látex 9 pol. vermelho" });
+    await screen.findByText("Vela lisa");
+    const img = document.querySelector('img[src*="products/2001/image"]');
     expect(img).toHaveAttribute("src", "/api/v1/products/2001/image?variant=thumb&v=h2");
     const row = screen.getByText("Vela lisa").closest("tr") as HTMLElement;
     expect(within(row).queryByRole("img")).toBeNull();
@@ -96,9 +97,9 @@ describe("Novo pedido", () => {
     const row = screen.getByText("Vela sem preço").closest("tr") as HTMLElement;
     expect(row).toHaveTextContent("Sem preço");
     expect(row).not.toHaveTextContent(/0,00/);
-    expect(screen.getByText("Total parcial sem IPI")).toBeInTheDocument();
+    expect(screen.getByText("Total sem IPI")).toBeInTheDocument();
     expect(screen.getByText("Total parcial com IPI")).toBeInTheDocument();
-    expect(screen.getByText("1 item sem preço não entra na soma.")).toBeInTheDocument();
+    expect(screen.getByText("Pedido parcial: 1 item sem preço não entra no total.")).toBeInTheDocument();
     expect(screen.getByTestId("order-total")).toHaveTextContent("31,25");
   });
 
@@ -705,7 +706,7 @@ describe("Novo pedido", () => {
     });
     await addProduct(user, "Balão");
     await user.click(screen.getByRole("button", { name: "Confirmar pedido" }));
-    expect(await screen.findByText("Corrija os itens antes de salvar")).toBeInTheDocument();
+    expect(await screen.findByText("Corrija os itens")).toBeInTheDocument();
     expect(screen.getByText("Item 1: Produto indisponível para venda.")).toBeInTheDocument();
   });
 
@@ -1073,7 +1074,7 @@ describe("Rascunho existente", () => {
     await user.clear(quantity);
     await user.type(quantity, "3");
     await user.click(screen.getByRole("button", { name: "Confirmar pedido" }));
-    expect(await screen.findByText("O documento foi alterado em outro lugar")).toBeInTheDocument();
+    expect(await screen.findByText("Pedido alterado em outro lugar")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Recarregar" })).toBeInTheDocument();
   });
 
@@ -1131,7 +1132,7 @@ describe("Rascunho existente", () => {
       handlers: existing(failed, { "POST /orders/:id/submit": apiError(409, "conflict", "x", { details: { reason: "approval_required_before_resend" } }) }),
     });
     await user.click(await screen.findByRole("button", { name: "Reenviar" }));
-    expect(await screen.findByText("O pedido foi editado e o desconto precisa de aprovação antes de ser reenviado.")).toBeInTheDocument();
+    expect(await screen.findByText("O desconto deste pedido agora exige aprovação. Exclua o pedido e faça um novo.")).toBeInTheDocument();
     expect(screen.queryByText("Somente leitura")).not.toBeInTheDocument();
   });
 
@@ -1140,7 +1141,7 @@ describe("Rascunho existente", () => {
     const { user, calls } = renderApp(`/pedidos/${ORDER_ID}`, {
       handlers: existing(unknown, { "POST /orders/:id/verify-delivery": { body: unknown } }),
     });
-    expect(await screen.findByText("Estamos verificando o envio com o Sankhya. Isso se resolve sozinho em instantes.")).toBeInTheDocument();
+    expect(await screen.findByText("O envio ao Sankhya está sendo conferido. Não envie de novo.")).toBeInTheDocument();
     expect(screen.queryByText(/Confira no Sankhya/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reenviar" })).not.toBeInTheDocument();
     await user.click(await screen.findByRole("button", { name: "Verificar agora" }));

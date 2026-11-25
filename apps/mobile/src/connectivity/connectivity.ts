@@ -17,9 +17,14 @@ interface NetworkSnapshot {
   readonly isInternetReachable?: boolean;
 }
 
-/** `offline` as soon as the OS says there is no link or no internet; `online` only when both are confirmed. */
+/**
+ * `offline` only when the OS says there is no link at all; `online` only when link and internet are both confirmed.
+ * `isInternetReachable === false` with the link up is NOT offline: on Android it only means the OS validation probe
+ * (Google generate_204) failed, which happens on Wi-Fi networks that block it while the Force API answers fine. It is
+ * `unknown`; the real requests (sync) decide between "Sem internet" and "Servidor sem resposta".
+ */
 export function toConnectivityState(snapshot: NetworkSnapshot): ConnectivityState {
-  if (snapshot.isConnected === false || snapshot.isInternetReachable === false) return "offline";
+  if (snapshot.isConnected === false) return "offline";
   if (snapshot.isConnected === true && snapshot.isInternetReachable === true) return "online";
   return "unknown";
 }

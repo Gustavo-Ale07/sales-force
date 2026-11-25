@@ -1,4 +1,3 @@
-import { StatusDot, titleCase } from "@salesforce/ui";
 import type { ProductRow } from "../lib/price-types";
 import { PriceCell } from "./price-cell";
 import { ProductImage } from "./product-image";
@@ -22,19 +21,16 @@ export function ProductGrid({ items, onOpen }: { items: readonly ProductListItem
             <ProductImage
               image={product.image}
               description={product.description}
-              name={titleCase(product.description)}
               size={112}
               className="self-center"
+              decorative
             />
-            <span className="min-w-0 text-sm font-medium leading-snug text-fg [overflow-wrap:anywhere]">{titleCase(product.description)}</span>
+            <span className="min-w-0 text-sm font-medium leading-snug text-fg [overflow-wrap:anywhere]">{product.description}</span>
             <span className="text-xs text-fg-muted">
               Cód. {product.code}
               {product.reference ? ` · Ref. ${product.reference}` : ""}
             </span>
-            <span className="mt-auto flex flex-wrap items-center justify-between gap-x-2 gap-y-1 pt-1">
-              <StatusDot tone={product.sellable ? "success" : "neutral"} className="text-xs">
-                {product.sellable ? "Vendável" : "Não vendável"}
-              </StatusDot>
+            <span className="mt-auto flex flex-wrap items-center justify-end gap-x-2 gap-y-1 pt-1">
               <span className="text-sm font-semibold">
                 <PriceCell price={product.listPrice} />
               </span>

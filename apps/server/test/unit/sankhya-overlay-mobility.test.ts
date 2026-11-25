@@ -41,16 +41,30 @@ describe('AD_MOBILIDADE on TOPs and negotiation types (owner ruling 2026-11-13)'
     expect(kind(out, 'negotiationTypes')).toMatchObject({ hidden: 2, keptPrevious: false });
   });
 
-  it('more than 90 percent hidden keeps the previous negotiation types, warns and reports the counts', () => {
+  it('everything hidden keeps the previous negotiation types, warns and reports the counts', () => {
     const previous = previousSnapshot();
+    const total = PLAC_CONFIGURATION_FACTS.q5NegotiationTypes.ok ? PLAC_CONFIGURATION_FACTS.q5NegotiationTypes.rows.length : 0;
     const out = run((f) => {
-      f['q5NegotiationTypes'].rows.forEach((row: any, i: number) => {
-        row.mobile = i < 3;
+      f['q5NegotiationTypes'].rows.forEach((row: any) => {
+        row.mobile = false;
       });
     }, previous);
     expect((out.snapshot as any).sales.negotiationTypes).toEqual((previous as any).sales.negotiationTypes);
-    expect(kind(out, 'negotiationTypes')).toEqual({ kind: 'negotiationTypes', visible: 3, hidden: 32, keptPrevious: true });
+    expect(kind(out, 'negotiationTypes')).toEqual({ kind: 'negotiationTypes', visible: 0, hidden: total, keptPrevious: true });
     expect(out.warnings.some((w) => w.code === 'mobility_guard_negotiation_types' && /avise o TI/i.test(w.message))).toBe(true);
+  });
+
+  it('a small enabled set of TOPs (4 of 41) is applied, never held back by a percentage guard (owner 2026-11-25)', () => {
+    const previous = previousSnapshot();
+    const out = run((f) => {
+      const rows = f['q3EnabledTops'].rows as any[];
+      const template = rows[0];
+      const extra = Array.from({ length: 41 - rows.length }, (_, i) => ({ ...template, topCode: 9000 + i, mobile: false }));
+      f['q3EnabledTops'].rows = [...rows.map((row) => ({ ...row, mobile: row.topCode === 1001 })), ...extra];
+    }, previous);
+    expect(kind(out, 'tops')).toMatchObject({ visible: 1, keptPrevious: false });
+    expect((out.snapshot as any).sales.eligibleOrderTopCodes).toEqual([1001]);
+    expect(out.warnings.some((w) => w.code === 'mobility_guard_tops')).toBe(false);
   });
 
   it('everything hidden keeps the previous TOP lists', () => {
@@ -66,7 +80,17 @@ describe('AD_MOBILIDADE on TOPs and negotiation types (owner ruling 2026-11-13)'
     expect(out.warnings.some((w) => w.code === 'mobility_guard_tops')).toBe(true);
   });
 
-  it('exactly 90 percent hidden is accepted', () => {
+  it('the scope summary (server log) carries the full tally per criterion: S, N, blank', () => {
+    const out = run((f) => {
+      f['q5NegotiationTypes'].rows[0].mobile = false;
+      f['q5NegotiationTypes'].rows[1].mobile = null;
+    });
+    const total = PLAC_CONFIGURATION_FACTS.q5NegotiationTypes.ok ? PLAC_CONFIGURATION_FACTS.q5NegotiationTypes.rows.length : 0;
+    expect(out.scopeSummary.mobilityCriteria.negotiationTypes).toMatchObject({ total, mobilityN: 1, mobilityBlank: 1, keptPrevious: false });
+    expect(out.scopeSummary.mobilityCriteria.negotiationTypes.mobilityS).toBe(total - 2);
+  });
+
+  it('a large hidden share of negotiation types is applied (3 of 30)', () => {
     const out = run((f) => {
       f['q5NegotiationTypes'].rows = f['q5NegotiationTypes'].rows.slice(0, 30);
       f['q5NegotiationTypes'].rows.forEach((row: any, i: number) => {

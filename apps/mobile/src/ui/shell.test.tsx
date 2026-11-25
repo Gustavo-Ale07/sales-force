@@ -445,7 +445,8 @@ describe("Shell", () => {
     expect(screen.getAllByText("Vendedor").length).toBeGreaterThan(0);
     expect(screen.getByText("ana.vendas")).toBeTruthy();
     expect(screen.getByText("Versão")).toBeTruthy();
-    expect(screen.getByText("Alterações pendentes")).toBeTruthy();
+    expect(screen.getByText("Última sincronização")).toBeTruthy();
+    expect(screen.queryByText("Alterações pendentes")).toBeNull();
     syncNow.mockClear();
     await fireEvent.press(screen.getByRole("button", { name: "Sincronizar agora" }));
     expect(syncNow).toHaveBeenCalledWith("manual");

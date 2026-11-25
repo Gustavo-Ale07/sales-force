@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { customer, customerDetail, customersPage, orderEntryConfiguration } from "../test/fixtures";
-import { apiError, callsTo, renderApp, type Handlers } from "../test/harness";
+import { apiError, callsTo, renderApp, session, type Handlers } from "../test/harness";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -165,6 +165,43 @@ describe("Clientes: cadastro (D-AR)", () => {
     expect(body).toMatchObject({ document: "11222333000181", name: "Alfa Ltda", tradeName: null, icmsClassification: "R", stateRegistration: "ISENTO", phone: null, email: null, notes: null, addresses: [] });
     expect(body.clientRequestId).toMatch(UUID);
     expect(await screen.findByText("Aguardando envio")).toBeInTheDocument();
+  });
+
+  it("a CPF hides the state registration and Isento", async () => {
+    const { user } = renderApp("/clientes", { handlers: { ...list, "GET /order-entry/configuration": configWith({ clientCreationEnabled: true }) } });
+    await user.click(await screen.findByRole("button", { name: "Novo cliente" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByLabelText("Inscrição estadual")).toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText(/CPF\/CNPJ/), "52998224725");
+    expect(within(dialog).queryByLabelText("Inscrição estadual")).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("checkbox", { name: "Isento" })).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("Vendedor")).not.toBeInTheDocument();
+  });
+
+  it("a manager without a seller code must pick an active seller", async () => {
+    const body = session(true, "manager").body as { account: Record<string, unknown> };
+    const { user, calls } = renderApp("/clientes", {
+      handlers: {
+        ...list,
+        "GET /auth/session": { body: { ...body, account: { ...body.account, sellerCodes: [] } } },
+        "GET /order-entry/configuration": configWith({ clientCreationEnabled: true }),
+        "GET /sellers": { body: { items: [{ code: 7, name: "Ana", active: true }, { code: 8, name: "Beto", active: false }] } },
+        "POST /customers": { status: 202, body: { registrationId: "0190a000-0000-7000-8000-000000000002", status: "pending", state: "awaiting_send", customerCode: null, originKey: "force:x" } },
+      },
+    });
+    await user.click(await screen.findByRole("button", { name: "Novo cliente" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.type(within(dialog).getByLabelText(/CPF\/CNPJ/), "11222333000181");
+    await user.type(within(dialog).getByLabelText(/Razão social/), "Alfa Ltda");
+    await user.click(within(dialog).getByRole("checkbox", { name: "Isento" }));
+    await user.click(within(dialog).getByRole("button", { name: "Cadastrar" }));
+    expect(await within(dialog).findByText("Escolha o vendedor.")).toBeInTheDocument();
+    expect(callsTo(calls, "POST", "/customers")).toHaveLength(0);
+    expect(within(dialog).queryByRole("option", { name: "Beto" })).not.toBeInTheDocument();
+    await user.selectOptions(within(dialog).getByLabelText(/Vendedor/), "Ana");
+    await user.click(within(dialog).getByRole("button", { name: "Cadastrar" }));
+    await waitFor(() => expect(callsTo(calls, "POST", "/customers")).toHaveLength(1));
+    expect(callsTo(calls, "POST", "/customers")[0]?.body).toMatchObject({ sellerCode: 7 });
   });
 
   it("shows the duplicate document refusal", async () => {

@@ -82,15 +82,14 @@ describe("Foto de perfil", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Nova foto de perfil" })).not.toBeInTheDocument());
     const photos = await screen.findAllByTestId("avatar-photo");
     for (const photo of photos) expect(photo).toHaveAttribute("src", "/api/v1/me/photo?v=v2");
-    expect(await screen.findByText("Foto atualizada")).toBeInTheDocument();
   });
 
   it.each([
-    ["photo_type_not_allowed", "Use uma imagem JPEG, PNG ou WebP."],
-    ["photo_content_mismatch", "O arquivo não é uma imagem válida do tipo informado."],
-    ["photo_too_large", "A foto passa de 5 MB. Escolha uma imagem menor."],
-    ["photo_unreadable", "Não foi possível ler esta imagem. Tente outro arquivo."],
-    ["photo_too_small", "A foto é pequena demais: use pelo menos 64 x 64 pixels."],
+    ["photo_type_not_allowed", "Formato de imagem não aceito. Use JPEG, PNG ou WebP."],
+    ["photo_content_mismatch", "O arquivo não corresponde ao formato informado. Escolha outra imagem."],
+    ["photo_too_large", "A imagem é maior que 5 MB. Escolha uma menor."],
+    ["photo_unreadable", "Não foi possível ler a imagem. Escolha outra."],
+    ["photo_too_small", "A imagem é pequena demais. Use ao menos 64 × 64 pixels."],
     ["photo_crop_invalid", "O recorte escolhido é inválido. Tente de novo."],
   ])("maps the server code %s to a short message and keeps the old photo", async (code, message) => {
     open({ "PUT /me/photo": apiError(400, "validation_failed", "Foto inválida", { issues: [{ path: "dataBase64", code }] }) }, "v1");
@@ -102,8 +101,8 @@ describe("Foto de perfil", () => {
   });
 
   it.each([
-    [429, "rate_limited", "Aguarde alguns segundos antes de trocar a foto de novo."],
-    [503, "unavailable", "O armazenamento de fotos não está disponível nesta instalação."],
+    [429, "rate_limited", "Aguarde alguns segundos para tentar de novo."],
+    [503, "unavailable", "O armazenamento de fotos está indisponível agora. Tente mais tarde."],
   ])("maps HTTP %i to a short message", async (status, code, message) => {
     open({ "PUT /me/photo": apiError(status, code, "x") });
     await pick(file());
@@ -115,9 +114,9 @@ describe("Foto de perfil", () => {
   it("refuses a wrong type or a file over 5 MiB before any request", async () => {
     const { calls } = open();
     await pick(file("a.gif", "image/gif"));
-    expect(await screen.findByText("Use uma imagem JPEG, PNG ou WebP.")).toBeInTheDocument();
+    expect(await screen.findByText("Formato de imagem não aceito. Use JPEG, PNG ou WebP.")).toBeInTheDocument();
     await pick(file("grande.jpg", "image/jpeg", 5 * 1024 * 1024 + 1));
-    expect(await screen.findByText("A foto passa de 5 MB. Escolha uma imagem menor.")).toBeInTheDocument();
+    expect(await screen.findByText("A imagem é maior que 5 MB. Escolha uma menor.")).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(callsTo(calls, "PUT", "/me/photo")).toHaveLength(0);
   });
@@ -128,16 +127,16 @@ describe("Foto de perfil", () => {
     await pick(file());
     const dialog = await screen.findByRole("dialog", { name: "Nova foto de perfil" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Usar esta foto" }));
-    expect(await within(dialog).findByText("A foto é pequena demais: use pelo menos 64 x 64 pixels.")).toBeInTheDocument();
+    expect(await within(dialog).findByText("A imagem é pequena demais. Use ao menos 64 × 64 pixels.")).toBeInTheDocument();
     expect(callsTo(calls, "PUT", "/me/photo")).toHaveLength(0);
   });
 
   it("removes the photo after confirming and goes back to the initial", async () => {
     const { calls } = open({ "DELETE /me/photo": { status: 204 } }, "v1");
     fireEvent.click(await screen.findByRole("button", { name: "Remover foto" }));
-    const dialog = await screen.findByRole("dialog", { name: "Remover a foto de perfil?" });
+    const dialog = await screen.findByRole("dialog", { name: "Remover foto" });
     expect(callsTo(calls, "DELETE", "/me/photo")).toHaveLength(0);
-    fireEvent.click(within(dialog).getByRole("button", { name: "Remover foto" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Remover" }));
     await waitFor(() => expect(callsTo(calls, "DELETE", "/me/photo")).toHaveLength(1));
     await waitFor(() => expect(screen.queryByTestId("avatar-photo")).not.toBeInTheDocument());
     expect(screen.queryByRole("button", { name: "Remover foto" })).not.toBeInTheDocument();
@@ -155,10 +154,10 @@ describe("Foto de perfil", () => {
     const dialog = await screen.findByRole("dialog", { name: "Nova foto de perfil" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Usar esta foto" }));
     await waitFor(() => expect(callsTo(calls, "PUT", "/me/photo")).toHaveLength(1));
-    expect(await screen.findByText("Foto atualizada")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Nova foto de perfil" })).not.toBeInTheDocument());
     fireEvent.click(await screen.findByRole("button", { name: "Remover foto" }));
-    const confirm = await screen.findByRole("dialog", { name: "Remover a foto de perfil?" });
-    fireEvent.click(within(confirm).getByRole("button", { name: "Remover foto" }));
+    const confirm = await screen.findByRole("dialog", { name: "Remover foto" });
+    fireEvent.click(within(confirm).getByRole("button", { name: "Remover" }));
     await waitFor(() => expect(callsTo(calls, "DELETE", "/me/photo")).toHaveLength(1));
     expect(screen.queryByText("Sincronização")).toBeNull();
   });
@@ -169,7 +168,7 @@ describe("Foto de perfil", () => {
     await pick(file());
     const dialog = await screen.findByRole("dialog", { name: "Nova foto de perfil" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Usar esta foto" }));
-    await screen.findByText("Foto atualizada");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Nova foto de perfil" })).not.toBeInTheDocument());
     expect(local).not.toHaveBeenCalled();
   });
 });

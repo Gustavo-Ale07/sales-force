@@ -20,7 +20,10 @@ describe("Catálogo: modo grade de fotos", () => {
     const grid = screen.getByRole("list", { name: "Produtos em grade" });
     expect(screen.queryByRole("table")).toBeNull();
     expect(within(grid).getAllByRole("listitem")).toHaveLength(2);
-    expect(within(grid).getByRole("img", { name: "Balão látex 9 pol. vermelho" })).toHaveAttribute("src", "/api/v1/products/2001/image?variant=thumb&v=h1");
+    expect(grid.querySelector("img")).toHaveAttribute("src", "/api/v1/products/2001/image?variant=thumb&v=h1");
+    expect(grid.querySelector("img")).toHaveAttribute("alt", "");
+    expect(within(grid).getAllByText("Balão látex 9 pol. vermelho")).toHaveLength(1);
+    expect(within(grid).queryByText("Vendável")).toBeNull();
     expect(within(grid).getByText("Sem preço")).toBeInTheDocument();
     expect(document.querySelectorAll('img[src*="variant=full"]')).toHaveLength(0);
     expect(document.body.textContent).not.toMatch(/custo|margem|cost|margin/i);

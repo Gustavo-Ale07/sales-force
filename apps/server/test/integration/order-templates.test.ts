@@ -6,7 +6,7 @@ import {
   UseOrderTemplateResponseSchema,
 } from '@salesforce/contracts';
 import { auditLog, customerOrderTemplate, salesOrder } from '@salesforce/db';
-import { getDemoDataset } from '@salesforce/sankhya';
+import { DEMO_ACCOUNT_EMAILS, getDemoDataset } from '@salesforce/sankhya';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { restrictedKeys, startCommercialApp, type CommercialApp, type Json, type Who } from '../helpers/commercial-app.js';
@@ -406,6 +406,24 @@ describe('scope (P-21): out of scope is always 404, the same as a missing resour
     expect(row).toMatchObject({ version: 1, deletedAt: null });
     expect(await ctx.database.handle.db.select().from(customerOrderTemplate).where(eq(customerOrderTemplate.customerCode, customer2))).toHaveLength(1);
     expect(await ctx.database.handle.db.select().from(salesOrder).where(eq(salesOrder.customerCode, customer2))).toHaveLength(0);
+  });
+
+  it('a customer just registered through the Force and not yet mirrored has an EMPTY list, not an error (owner 2026-11-25)', async () => {
+    const code = 2000000123;
+    const id = randomUUID();
+    const insert = (account: string, requestId: string) =>
+      sql(
+        `insert into customer_registration (id, client_request_id, request_hash, created_by_account_id, origin_key, status, tax_id, name, seller_code, erp_customer_code)
+         values ($1, $2, 'h', $3, $4, 'confirmed', '52998224725', 'Novo Cliente', $5, $6)`,
+        [id, requestId, account, `force:${requestId}`, SELLER_1, code],
+      );
+    await insert(ctx.accounts.ids[DEMO_ACCOUNT_EMAILS.seller1] as string, randomUUID());
+    // (A confirmed registration cannot be deleted by retention rule; the row stays, with a code no other test uses.)
+    const own = await ctx.call('seller1', 'GET', `/customers/${code}/order-templates`);
+    expect(own.status).toBe(200);
+    expect(own.body.items).toEqual([]);
+    // Another seller outside the registration's scope still gets the identical 404.
+    expect((await ctx.call('seller2', 'GET', `/customers/${code}/order-templates`)).status).toBe(404);
   });
 
   it('an unknown customer is 404 exactly like a foreign one', async () => {

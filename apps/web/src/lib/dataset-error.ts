@@ -21,20 +21,18 @@ export function describeDatasetError(error: unknown): ErrorDescription | null {
   if (error instanceof DatasetUnavailableError) {
     return error.reason === "undeclared"
       ? {
-          title: "Base de dados não identificada",
-          description:
-            "O servidor não informou qual base de dados está em uso, por isso a operação foi bloqueada e nada foi gravado. Recarregue a página; se persistir, avise o suporte.",
+          title: "Dados não confirmados",
+          description: "Nada foi gravado. Recarregue a página; se continuar, avise o suporte.",
         }
       : {
-          title: "Configuração ainda não carregada",
-          description: "Não foi possível confirmar a base de dados desta tela, por isso nada foi gravado. Recarregue a página e tente novamente.",
+          title: "Dados não confirmados",
+          description: "Nada foi gravado. Recarregue a página e tente de novo.",
         };
   }
   if (typeof error === "object" && error !== null && (error as { code?: unknown }).code === DATASET_MISMATCH) {
     return {
-      title: "Os dados desta tela estão desatualizados",
-      description:
-        "A base de dados do servidor mudou desde que esta página foi carregada, e nada foi gravado. Recarregue a página para atualizar os dados e tente novamente.",
+      title: "Dados desatualizados",
+      description: "O servidor mudou desde que você abriu o pedido. Recarregue a página e abra o pedido de novo.",
       correlationId: (error as { correlationId?: string }).correlationId,
     };
   }

@@ -124,6 +124,11 @@ export function CustomersScreen({ customers, onUnauthenticated, connectivity, on
 
   const header = (
     <View style={styles.toolbar}>
+      {onCreate !== undefined && (
+        <Pressable style={styles.primaryAction} onPress={onCreate} accessibilityRole="button" accessibilityLabel="Novo cliente">
+          <Text style={styles.primaryActionText}>Novo cliente</Text>
+        </Pressable>
+      )}
       <View style={styles.toolbarRow}>
         <Pressable
           style={[styles.tool, activeFilters > 0 && styles.toolOn]}
@@ -133,11 +138,6 @@ export function CustomersScreen({ customers, onUnauthenticated, connectivity, on
         >
           <Text style={[styles.toolText, activeFilters > 0 && styles.toolTextOn]}>{activeFilters > 0 ? `Filtros (${activeFilters})` : "Filtros"}</Text>
         </Pressable>
-        {onCreate !== undefined && (
-          <Pressable style={styles.tool} onPress={onCreate} accessibilityRole="button" accessibilityLabel="Novo cliente">
-            <Text style={styles.toolText}>Novo cliente</Text>
-          </Pressable>
-        )}
         {canIndex && (
           <Pressable style={styles.tool} onPress={() => setIndexOpen(true)} accessibilityRole="button" accessibilityLabel="Índice alfabético">
             <Text style={styles.toolText}>A–Z</Text>
@@ -234,6 +234,8 @@ const styles = StyleSheet.create({
   jump: { minHeight: 44, justifyContent: "center" },
   jumpText: { color: colors.navy, fontSize: 13, fontWeight: "700" },
   toolOn: { backgroundColor: colors.navy },
+  primaryAction: { minHeight: 50, borderRadius: radius.md, backgroundColor: colors.red, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.lg },
+  primaryActionText: { color: colors.onNavy, fontWeight: "800", fontSize: 16 },
   toolText: { color: colors.navy, fontWeight: "700", fontSize: 14 },
   toolTextOn: { color: colors.onNavy },
 });

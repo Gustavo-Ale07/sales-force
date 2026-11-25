@@ -52,7 +52,7 @@ test.describe("Cenário 6 — escopo de carteira (vendedor x gerente)", () => {
     await page.goto(`/clientes/${OTHER_SELLER_CUSTOMER.code}`);
 
     await expect(page.getByText("Não encontrado", { exact: true })).toBeVisible();
-    await expect(page.getByText("O registro não existe ou está fora da sua carteira.")).toBeVisible();
+    await expect(page.getByText("Este registro não existe mais.")).toBeVisible();
     await expect(page.locator("body")).not.toContainText(OTHER_SELLER_CUSTOMER.name);
     await expect(page.getByRole("heading", { level: 1, name: OTHER_SELLER_CUSTOMER.name })).toHaveCount(0);
   });

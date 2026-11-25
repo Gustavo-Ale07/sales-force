@@ -22,6 +22,13 @@ describe('renderAccountPhoto', () => {
     expect([meta.format, meta.width, meta.height, out.sizePx, out.contentType]).toEqual(['webp', 512, 512, 512, 'image/webp']);
   });
 
+  it('flattens a transparent PNG on white (never black)', async () => {
+    const clear = await sharp({ create: { width: 300, height: 300, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).png().toBuffer();
+    const out = await renderAccountPhoto(clear, 'image/png');
+    const stats = await sharp(out.bytes).stats();
+    expect(stats.channels.slice(0, 3).every((c) => c.mean > 250)).toBe(true);
+  });
+
   it('reports typed errors for a mismatched declaration and a too small image', async () => {
     const png = await solid(200, 200).png().toBuffer();
     await expect(renderAccountPhoto(png, 'image/jpeg')).rejects.toSatisfy((e) => isAccountPhotoError(e) && e.code === 'content_mismatch');

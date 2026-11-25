@@ -145,6 +145,16 @@ describe('profile photo delivery to the ERP (fake gateway)', () => {
     expect((await w.outbox(id)).status).toBe('confirmed');
   });
 
+  it('ERP user code 0 (supervisor) is a valid target, not "no user"', async () => {
+    const w = await world({ externalUserId: '0' });
+    const { id } = await w.queue('a0');
+    await w.service.runDue();
+    const dbg = await w.outbox(id);
+    expect(dbg.status).toBe('confirmed');
+    expect(w.book.writes.map((x) => x.userCode)).toEqual([0]);
+    expect((await w.outbox(id)).status).toBe('confirmed');
+  });
+
   it('no linked ERP user: permanent rejection, nothing sent', async () => {
     const w = await world();
     const { id } = await w.queue('c3');

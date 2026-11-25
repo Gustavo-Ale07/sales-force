@@ -60,11 +60,17 @@ describe('prepareCustomerRegistration', () => {
       expect(out.ok && out.value.payload.stateRegistration).toBe('ISENTO');
     });
 
-    it('an individual has no IE field: sending one is refused', () => {
-      expect(prepareCustomerRegistration(body({ document: CPF, stateRegistration: '123' }), seller)).toMatchObject({
-        ok: false,
-        issues: [{ path: 'stateRegistration', code: 'state_registration_not_applicable' }],
-      });
+    it.each(['123', 'Isento', 'ISENTO', ' isento '])('an individual has no IE: "%s" is ignored, never an error (owner 2026-11-25)', (typed) => {
+      const out = prepareCustomerRegistration(body({ document: CPF, stateRegistration: typed }), seller);
+      expect(out.ok).toBe(true);
+      expect(out.ok && out.value.payload.stateRegistration).toBeNull();
+    });
+
+    it('the same individual with or without a typed IE has the same fingerprint', () => {
+      const a = prepareCustomerRegistration(body({ document: CPF, stateRegistration: 'Isento' }), seller);
+      const b = prepareCustomerRegistration(body({ document: CPF, stateRegistration: null }), seller);
+      if (!a.ok || !b.ok) throw new Error('expected ok');
+      expect(a.value.fingerprint).toBe(b.value.fingerprint);
     });
 
     it('an individual without IE is accepted and carries none', () => {
@@ -90,13 +96,22 @@ describe('prepareCustomerRegistration', () => {
   });
 
   describe('owner seller', () => {
-    it('a seller owns what they create, even when the body names another seller', () => {
-      expect(prepareCustomerRegistration(body({ sellerCode: 9 }), seller)).toMatchObject({ ok: false, issues: [{ code: 'seller_not_linked' }] });
+    it('a seller with one link owns what they create; a seller code in the body is ignored (owner 2026-11-25)', () => {
+      const out = prepareCustomerRegistration(body({ sellerCode: 9 }), seller);
+      expect(out.ok && out.value.payload.sellerCode).toBe(7);
+    });
+
+    it('a seller without a linked code is refused', () => {
+      expect(prepareCustomerRegistration(body({ sellerCode: 9 }), { role: 'seller', sellerCodes: [] })).toMatchObject({
+        ok: false,
+        issues: [{ code: 'seller_not_linked' }],
+      });
     });
 
     it('a seller with several links must name one of them', () => {
       const two = { role: 'seller', sellerCodes: [7, 8] } as const;
       expect(prepareCustomerRegistration(body(), two)).toMatchObject({ ok: false, issues: [{ code: 'seller_not_linked' }] });
+      expect(prepareCustomerRegistration(body({ sellerCode: 9 }), two)).toMatchObject({ ok: false, issues: [{ code: 'seller_not_linked' }] });
       const out = prepareCustomerRegistration(body({ sellerCode: 8 }), two);
       expect(out.ok && out.value.payload.sellerCode).toBe(8);
     });

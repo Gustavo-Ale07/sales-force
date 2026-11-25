@@ -173,6 +173,7 @@ async function render(upload: Uint8Array, type: PhotoUploadType, crop: PhotoCrop
     const { data } = await sharp(upright.data, { failOn: 'error' })
       .extract(region)
       .resize({ width: size, height: size, fit: 'cover' })
+      .flatten({ background: '#ffffff' })
       .webp({ quality: ACCOUNT_PHOTO_WEBP_QUALITY })
       .toBuffer({ resolveWithObject: true });
     if (data.length === 0 || data.length > ACCOUNT_PHOTO_MAX_OUTPUT_BYTES) throw new AccountPhotoError('unreadable', 'The rendition is out of bounds.');

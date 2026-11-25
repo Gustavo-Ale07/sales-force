@@ -78,8 +78,13 @@ describe('profile photo wire (NEEDS VALIDATION shape, VALIDATED column TSIUSU.FO
     expect(text).not.toContain(KEY);
   });
 
+  it('accepts user code 0 (the ERP supervisor user)', () => {
+    const text = buildUserPhotoRequestText(request({ userCode: 0 }));
+    expect(JSON.parse(text).requestBody.dataSet.dataRow.key).toEqual({ CODUSU: { $: '0' } });
+  });
+
   it.each([
-    ['user code zero', { userCode: 0 }, 'user_photo_invalid_user'],
+    ['a negative user code', { userCode: -1 }, 'user_photo_invalid_user'],
     ['user code not an integer', { userCode: 1.5 }, 'user_photo_invalid_user'],
     ['an image that is not a JPEG', { image: new Uint8Array([0x52, 0x49, 0x46, 0x46, 1, 2]) }, 'user_photo_invalid_image'],
     ['an image over the limit', { image: new Uint8Array([0xff, 0xd8, 0xff, ...new Array<number>(512 * 1024).fill(1)]) }, 'user_photo_too_large'],

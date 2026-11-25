@@ -33,7 +33,7 @@ export function ProductDetailSheet({ product, origin = null, onClose }: { produc
           <Field label="Uso" value={product.usageCode ?? "—"} />
           <Field label="Preço de lista" value={describeListPrice(product.listPrice)} />
           <Field label="Origem do preço" value={origin !== null ? priceOriginLabel(origin) : product.listPrice.state === "none" ? "—" : `Tabela ${product.listPrice.tableCode}`} />
-          <Field label="Venda" value={product.sellable ? "Disponível para venda" : "Indisponível para venda"} />
+          {!product.sellable && <Field label="Venda" value="Indisponível para venda" />}
         </ScrollView>
       )}
     </Sheet>

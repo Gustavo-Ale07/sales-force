@@ -1,18 +1,25 @@
 import type { ApiSchema } from "@salesforce/contracts/client";
 import { Alert, Button, Checkbox, Dialog, DialogClose, DialogContent, FormField, Input, Select, Textarea, toast } from "@salesforce/ui";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
+import { sellersQueryOptions } from "../lib/api-queries";
+import { useApi, useAppServices } from "../lib/app-context";
+import { sessionQueryOptions } from "../lib/auth-client";
 import {
   createProblems,
   describeCustomerWriteError,
   emptyCreateForm,
   hasCreateProblems,
-  ICMS_OPTIONS,
+  isNaturalPerson,
   LIMITS,
   type CreateForm,
-  type IcmsOption,
 } from "../lib/customer-form";
 import { createStateLabel, useCreateCustomer } from "../lib/use-customer-write";
+import { useIcmsOptions } from "../lib/use-icms-options";
+
+/** Profiles that may choose the owner seller of a new customer; everyone else is linked by the server. */
+const SELLER_PICKER_ROLES: readonly string[] = ["admin", "manager"];
 
 const FORM_ID = "customer-create-form";
 
@@ -35,9 +42,23 @@ export function CustomerCreateDialog({ open, onOpenChange, correction = null }: 
 function CreateBody({ onClose, correction }: { onClose: () => void; correction: ApiSchema<"CustomerRegistrationView"> | null }) {
   const create = useCreateCustomer(correction?.registrationId);
   const navigate = useNavigate();
-  const [form, setForm] = useState<CreateForm>(() => (correction ? { ...emptyCreateForm(), document: correction.document, name: correction.name } : emptyCreateForm()));
+  const { authClient } = useAppServices();
+  const api = useApi();
+  const session = useQuery(sessionQueryOptions(authClient));
+  const account = session.data;
+  // A seller (has an ERP seller code) owns what they create, no field; a management profile without one picks an active seller.
+  const needsSeller = account !== null && account !== undefined && account.sellerCodes.length === 0 && SELLER_PICKER_ROLES.includes(account.role);
+  const sellers = useQuery({ ...sellersQueryOptions(api), enabled: needsSeller });
+  const activeSellers = (sellers.data?.items ?? []).filter((seller) => seller.active);
+  const icmsOptions = useIcmsOptions();
+  const [form, setForm] = useState<CreateForm>(() =>
+    correction
+      ? { ...emptyCreateForm(), document: correction.document, name: correction.name, sellerCode: correction.sellerCode === null ? "" : String(correction.sellerCode) }
+      : emptyCreateForm(),
+  );
   const [showProblems, setShowProblems] = useState(false);
-  const problems = createProblems(form);
+  const problems = createProblems(form, needsSeller);
+  const naturalPerson = isNaturalPerson(form.document);
   const failure = create.isError ? describeCustomerWriteError(create.error, "Não foi possível cadastrar o cliente") : null;
   const set = (patch: Partial<CreateForm>) => setForm((current) => ({ ...current, ...patch }));
   const fieldError = (own: string | null, serverField: string) => failure?.fieldProblems[serverField] ?? (showProblems ? (own ?? undefined) : undefined);
@@ -65,7 +86,7 @@ function CreateBody({ onClose, correction }: { onClose: () => void; correction: 
             <Button variant="secondary">Cancelar</Button>
           </DialogClose>
           <Button type="submit" form={FORM_ID} variant="primary" loading={create.isPending} disabled={create.isPending}>
-            Cadastrar
+            {create.isPending ? "Salvando..." : "Cadastrar"}
           </Button>
         </>
       }
@@ -90,33 +111,51 @@ function CreateBody({ onClose, correction }: { onClose: () => void; correction: 
           <FormField label="CPF/CNPJ" required error={fieldError(problems.document, "document")}>
             <Input value={form.document} inputMode="numeric" autoComplete="off" onChange={(event) => set({ document: event.target.value })} />
           </FormField>
-          <FormField label="Classificação ICMS" required>
-            <Select value={form.icmsClassification} onChange={(event) => set({ icmsClassification: event.target.value as IcmsOption })}>
-              {ICMS_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </Select>
-          </FormField>
+          {icmsOptions.length > 0 ? (
+            <FormField label="Classificação ICMS" required>
+              <Select value={form.icmsClassification} onChange={(event) => set({ icmsClassification: event.target.value as CreateForm["icmsClassification"] })}>
+                {icmsOptions.map((option) => (
+                  <option key={option.code} value={option.code}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+          ) : null}
+          {needsSeller ? (
+            <FormField label="Vendedor" required error={fieldError(problems.sellerCode, "sellerCode")}>
+              <Select value={form.sellerCode} disabled={sellers.isPending} onChange={(event) => set({ sellerCode: event.target.value })}>
+                <option value="">{sellers.isPending ? "Carregando…" : "Selecione"}</option>
+                {activeSellers.map((seller) => (
+                  <option key={seller.code} value={String(seller.code)}>
+                    {seller.name}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+          ) : null}
           <FormField label="Razão social ou nome" required error={fieldError(problems.name, "name")}>
             <Input value={form.name} autoComplete="off" maxLength={LIMITS.name} onChange={(event) => set({ name: event.target.value })} />
           </FormField>
           <FormField label="Nome fantasia" error={fieldError(problems.tradeName, "tradeName")}>
             <Input value={form.tradeName} autoComplete="off" maxLength={LIMITS.tradeName} onChange={(event) => set({ tradeName: event.target.value })} />
           </FormField>
-          <FormField label="Inscrição estadual" error={fieldError(problems.stateRegistration, "stateRegistration")}>
-            <Input
-              value={form.exempt ? "" : form.stateRegistration}
-              disabled={form.exempt}
-              autoComplete="off"
-              maxLength={LIMITS.stateRegistration}
-              onChange={(event) => set({ stateRegistration: event.target.value })}
-            />
-          </FormField>
-          <div className="flex items-end pb-2">
-            <Checkbox label="Isento" checked={form.exempt} onCheckedChange={(checked) => set({ exempt: checked === true })} />
-          </div>
+          {naturalPerson ? null : (
+            <>
+              <FormField label="Inscrição estadual" error={fieldError(problems.stateRegistration, "stateRegistration")}>
+                <Input
+                  value={form.exempt ? "" : form.stateRegistration}
+                  disabled={form.exempt}
+                  autoComplete="off"
+                  maxLength={LIMITS.stateRegistration}
+                  onChange={(event) => set({ stateRegistration: event.target.value })}
+                />
+              </FormField>
+              <div className="flex items-end pb-2">
+                <Checkbox label="Isento" checked={form.exempt} onCheckedChange={(checked) => set({ exempt: checked === true })} />
+              </div>
+            </>
+          )}
           <FormField label="Telefone" error={fieldError(problems.phone, "phone")}>
             <Input value={form.phone} inputMode="tel" autoComplete="off" onChange={(event) => set({ phone: event.target.value })} />
           </FormField>

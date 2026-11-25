@@ -861,6 +861,14 @@ Source: the project owner (Gustavo), prompt of 2026-10-30 part 2 (`.claude/work/
 - **How to apply:** every batch, prompt and review runs a parity checklist covering order, discount, status, photo, customer and appearance: the same rule and the same user-visible result on both sides. Device-dependent mechanisms (offline base, "Salvo no aparelho", sync) get the suitable web equivalent (e.g. save to the server). An exception is allowed only for a declared technical limitation, stated in the batch report (example: product photo in the app needs a new APK until the owner authorizes it). Earlier "WEB ONLY" scopes (e.g. D-AM, D-AO) are read as a sequencing state, not as an accepted divergence: the missing side is a pending parity item.
 - **Does not change:** P-07/P-08 (offline-first mobile), P-20, P-21; it adds no new business rule, only the requirement that decided rules reach both clients.
 
+#### Owner rulings of 2026-11-25 (after the first device test)
+- **Status:** APPROVED 2026-11-25 (explicit owner instruction).
+- **MOB-GUARD (amends the 2026-11-13 anti-empty-catalog guard):** the mobility guard fires ONLY when the result would be zero items (products, TOPs, negotiation types); no percentage limit. The kept-base warning goes to the server log only, never to a screen. Sandbox: 4 of 200 TOPs with `AD_MOBILIDADE = S` (1000, 1001, 1051, 2209) is the expected state.
+- **CUST-SELLER:** a seller who creates a customer is linked automatically to their own ERP code (no field, client value ignored); a non-seller (manager/admin) must pick an active seller within their scope (`seller_required`, `seller_not_found`).
+- **CUST-IE:** for a natural person (CPF) the state registration is not asked, not shown and ignored by the server; "Isento" is not offered.
+- **SYNC-UI:** the sync panel (app) and page/dialog (site) show only a one-sentence situation, last synchronization, pending changes (when > 0) and the sync button/progress; diagnostics go to logs only.
+- **CAT-UI:** no "Sellable" badge and no reference-table line in the catalog; the product name is shown once, as stored in Sankhya.
+
 ## 4. Status of the specification's decisions (spec §4)
 
 The spec is a draft. Its decisions are binding only where an APPROVED entry above covers them.

@@ -16,6 +16,8 @@ import { BrandLogo, SplashView } from "./brand";
 import { CustomerDetailScreen } from "./customer-detail-screen";
 import type { CustomerRegistration } from "../data/customer-write";
 import { CustomerCreateScreen } from "./customer-create-screen";
+import { useIcmsOptions } from "../data/icms-options";
+import { useSellerChoices } from "./use-seller-choices";
 import { CustomerEditScreen } from "./customer-edit-screen";
 import { OrderTemplateFormScreen } from "./order-template-form-screen";
 import { OrderTemplatesSection } from "./order-templates-section";
@@ -106,6 +108,17 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   const photoUri = useProfilePhotoUri(photoService?.store, account?.id ?? "", account?.photoVersion, connectivityState !== "offline");
   const services = useMemo(() => (account !== null && offline !== undefined ? offline.forAccount(account) : null), [account, offline]);
   const repositories = services?.repositories ?? dependencies.repositories;
+  const icmsOptions = useIcmsOptions();
+  const customerWriter = dependencies.customerWrite;
+  const loadActiveSellers = useMemo(() => (customerWriter?.activeSellers === undefined ? undefined : () => customerWriter.activeSellers!()), [customerWriter]);
+  const customerRepository = repositories.customers;
+  const loadLocalSellers = useMemo(() => (customerRepository.sellers === undefined ? undefined : () => customerRepository.sellers!()), [customerRepository]);
+  const sellerChoices = useSellerChoices({
+    isSeller: (account?.sellerCodes.length ?? 0) > 0,
+    enabled: customerForm?.kind === "create",
+    ...(loadActiveSellers === undefined ? {} : { loadActive: loadActiveSellers }),
+    ...(loadLocalSellers === undefined ? {} : { loadLocal: loadLocalSellers }),
+  });
   const syncStatus = useSyncStatus(services?.sync ?? null, connectivityState, session.phase === "authenticated" && session.freshLogin === true);
   const clearResume = useCallback(() => setResumeLocalId(null), []);
   const clearStart = useCallback(() => setStartRequest(null), []);
@@ -470,6 +483,8 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
             )}
             {customerForm?.kind === "create" && pendingCustomers !== null && (
               <CustomerCreateScreen
+                icmsOptions={icmsOptions}
+                sellers={sellerChoices}
                 {...(customerForm.correction === undefined ? {} : { correction: customerForm.correction })}
                 onSave={async (request) => {
                   await pendingCustomers.create(request);

@@ -62,6 +62,25 @@ describe("Imprimir / PDF", () => {
     expect(printed[0]).not.toContain("44,4");
   });
 
+  it("detail: prints the IPI percent per item and the Condições box with negotiation type and freight", async () => {
+    const detail = orderDetail({
+      negotiationTypeCode: 4,
+      freightType: "CIF",
+      items: [
+        { ...orderItem(), ipi: { status: "estimated", amount: "1.38", percentual: "5.5" } },
+        { ...orderItem({ lineNo: 2, productCode: 2002 }), ipi: { status: "tariff" } },
+      ],
+    });
+    const { user } = renderApp(`/pedidos/${ORDER_ID}`, { handlers: { "GET /orders/:id": { body: detail } } });
+    await user.click(await screen.findByRole("button", { name: /Imprimir \/ PDF/ }, { timeout: 8000 }));
+    await waitFor(() => expect(printed).toHaveLength(1));
+    expect(printed[0]).toContain("IPI %");
+    expect(printed[0]).toContain('<td class="n">5,5%</td>');
+    expect(printed[0]).toContain("Condições");
+    expect(printed[0]).toContain("Tipo de negociação: <strong>30 dias</strong>");
+    expect(printed[0]).toContain("Frete: <strong>CIF");
+  });
+
   it("list: a failed read shows an actionable error and prints nothing", async () => {
     const { user } = renderApp("/pedidos", {
       handlers: {

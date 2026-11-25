@@ -17,7 +17,6 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  titleCase,
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Boxes, ChevronDown } from "lucide-react";
@@ -41,7 +40,7 @@ const PAGE_SIZE = 10;
 export function useProductLabel(code: number): string {
   const api = useApi();
   const product = useQuery({ ...productQueryOptions(api, code), staleTime: 5 * 60_000, retry: false });
-  return product.data ? `${code} – ${titleCase(product.data.description)}` : String(code);
+  return product.data ? `${code} – ${product.data.description}` : String(code);
 }
 
 export interface OrderProductFilterProps {
@@ -234,7 +233,7 @@ function ProductFilterContent({
                     </TableCell>
                     <TableCell numeric>{product.code}</TableCell>
                     <TableCell wrap>
-                      <span className="font-medium">{titleCase(product.description)}</span>
+                      <span className="font-medium">{product.description}</span>
                       {product.groupName ? <span className="block text-fg-muted">{product.groupName}</span> : null}
                     </TableCell>
                     <TableCell>{product.reference ?? ""}</TableCell>

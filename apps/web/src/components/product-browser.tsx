@@ -13,7 +13,6 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  titleCase,
 } from "@salesforce/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Minus, Plus } from "lucide-react";
@@ -232,9 +231,9 @@ export function ProductBrowser({ filters, onFiltersChange, customerCode, cartQua
                     <TableCell numeric>{product.code}</TableCell>
                     <TableCell wrap>
                       <span className="flex items-center gap-2">
-                        <ProductImage image={product.image} description={product.description} name={titleCase(product.description)} />
+                        <ProductImage image={product.image} description={product.description} decorative />
                         <span className="min-w-0">
-                          <span className="line-clamp-2 break-words font-medium">{titleCase(product.description)}</span>
+                          <span className="line-clamp-2 break-words font-medium">{product.description}</span>
                           {product.groupName ? <span className="block text-fg-muted">{product.groupName}</span> : null}
                         </span>
                       </span>

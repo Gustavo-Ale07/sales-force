@@ -76,7 +76,28 @@ export interface OverlayScopeSummary {
     readonly result: number;
     readonly codes: readonly number[];
   };
+  /** Full tally per criterion, server logs only (never sent to a client): S = shown, N / blank = hidden by AD_MOBILIDADE. */
+  readonly mobilityCriteria: {
+    readonly tops: MobilityCriteriaCount;
+    readonly negotiationTypes: MobilityCriteriaCount;
+  };
 }
+
+export interface MobilityCriteriaCount {
+  readonly total: number;
+  readonly mobilityS: number;
+  readonly mobilityN: number;
+  readonly mobilityBlank: number;
+  readonly keptPrevious: boolean;
+}
+
+const criteriaOf = (flags: readonly (boolean | null | undefined)[], keptPrevious: boolean): MobilityCriteriaCount => ({
+  total: flags.length,
+  mobilityS: flags.filter((flag) => flag === true).length,
+  mobilityN: flags.filter((flag) => flag === false).length,
+  mobilityBlank: flags.filter((flag) => flag === null || flag === undefined).length,
+  keptPrevious,
+});
 
 /** Owner ruling 2026-11-13: how many TOPs / negotiation types AD_MOBILIDADE shows and hides, and whether the anti-empty guard kept the previous values. */
 export interface OverlayMobilityCount {
@@ -233,7 +254,7 @@ export function overlayConfigurationFacts(input: {
     warn(
       'mobility_guard_tops',
       'sales.eligibleOrderTopCodes',
-      `AD_MOBILIDADE would leave ${topTally.visible} of ${topTally.visible + topTally.hidden} TOPs visible (${topGuard.reason === 'all_hidden' ? 'all hidden' : 'more than 90% hidden'}); the previous TOP lists were kept. Avise o TI: confira AD_MOBILIDADE nas TOPs.`,
+      `AD_MOBILIDADE would leave ${topTally.visible} of ${topTally.visible + topTally.hidden} TOPs visible (all hidden); the previous TOP lists were kept. Avise o TI: confira AD_MOBILIDADE nas TOPs.`,
     );
   } else if (defaultCompany === undefined || defaultCompany.defaultOrderTopCode === null) {
     warn('default_top_not_read', 'sales.orderTopCode', 'The default company has no default TOP in Sankhya; the base order TOP is kept.');
@@ -332,7 +353,7 @@ export function overlayConfigurationFacts(input: {
     warn(
       'mobility_guard_negotiation_types',
       'sales.negotiationTypes',
-      `AD_MOBILIDADE would leave ${negotiationTally.visible} of ${negotiationTally.visible + negotiationTally.hidden} negotiation types visible (${negotiationGuard.reason === 'all_hidden' ? 'all hidden' : 'more than 90% hidden'}); the previous list was kept. Avise o TI: confira AD_MOBILIDADE nos tipos de negociação.`,
+      `AD_MOBILIDADE would leave ${negotiationTally.visible} of ${negotiationTally.visible + negotiationTally.hidden} negotiation types visible (all hidden); the previous list was kept. Avise o TI: confira AD_MOBILIDADE nos tipos de negociação.`,
     );
   } else if (types.length === 0) {
     warn('no_negotiation_type', 'sales.negotiationTypes', 'No active negotiation type is enabled in Sankhya; the base list is kept.');
@@ -464,6 +485,10 @@ export function overlayConfigurationFacts(input: {
         codes: ((getPath(draft, 'sales.negotiationTypes') as { code: number }[] | undefined) ?? []).map((type) => type.code),
       },
       eligibleOrderTops: eligibleSummary,
+      mobilityCriteria: {
+        tops: criteriaOf(allTops.map((top) => top.mobile), topGuard.keepPrevious),
+        negotiationTypes: criteriaOf(allNegotiation.map((row) => row.mobile), negotiationGuard.keepPrevious),
+      },
     },
     informational: {
       productMobility: q8.map((row) => ({ mobile: row.mobile, count: row.count })),

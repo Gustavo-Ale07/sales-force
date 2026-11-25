@@ -135,11 +135,11 @@ describe("Cliente: Repetir último pedido", () => {
     });
     const click = async () => user.click(await screen.findByRole("button", { name: "Repetir último pedido" }));
     await click();
-    expect(await screen.findByText("Sem conexão com o servidor")).toBeInTheDocument();
+    expect(await screen.findByText("Sem conexão")).toBeInTheDocument();
     await click();
-    expect(await screen.findByText("Serviço indisponível")).toBeInTheDocument();
+    expect(await screen.findByText("Servidor indisponível")).toBeInTheDocument();
     await click();
-    expect(await screen.findByText("Muitas requisições")).toBeInTheDocument();
+    expect(await screen.findByText("Muitas tentativas")).toBeInTheDocument();
     await click();
     await waitFor(() => expect(router.state.location.pathname).toBe(`/pedidos/${ORDER_ID}`));
 

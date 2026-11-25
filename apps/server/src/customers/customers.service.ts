@@ -15,6 +15,7 @@ import { PolicyService } from '../iam/policy.service.js';
 import { businessDate } from '../integration/order-request.js';
 import { CLOCK, type Clock } from '../platform/tokens.js';
 import { isBlockedRaw, MirrorRepository, type CustomerRow } from '../mirror/mirror.repository.js';
+import { CustomerRegistrationRepository } from './customer-registration.repository.js';
 
 function toListItem(row: CustomerRow, overdue = false): CustomerListItem {
   return {
@@ -42,7 +43,16 @@ export class CustomersService {
     @Inject(PolicyService) private readonly policy: PolicyService,
     @Inject(MirrorRepository) private readonly mirror: MirrorRepository,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(CustomerRegistrationRepository) private readonly registrations: CustomerRegistrationRepository,
   ) {}
+
+  /**
+   * A customer the Force sent to the ERP (the registration carries its code) that the mirror has not read back yet:
+   * it is the asker's own or inside their scope, it has no recurring orders and is not an error.
+   */
+  async isRegisteredNotYetMirrored(user: CurrentUser, scope: CustomerScope, code: number): Promise<boolean> {
+    return this.registrations.existsVisibleWithCode({ code, accountId: user.accountId, sellerCodes: scope.kind === 'sellers' ? scope.sellerCodes : null });
+  }
 
   async list(user: CurrentUser, query: CustomersQuery): Promise<CustomersResponse> {
     const { scope, configuration } = await this.policy.accessContext(user);

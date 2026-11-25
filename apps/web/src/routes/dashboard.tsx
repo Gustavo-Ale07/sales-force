@@ -52,6 +52,7 @@ export function DashboardPage() {
         description={
           <span className="flex flex-col gap-0.5">
             {session.data ? <span>{`Olá, ${session.data.name}`}</span> : null}
+            {session.data ? <span>{session.data.roleLabel ?? session.data.role}</span> : null}
             <DemoBadge groups={groups} keys={["portfolio", "catalog", "orders", "credit", "positivation"]} />
           </span>
         }

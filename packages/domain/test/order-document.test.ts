@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  documentIpiPercent,
+  orderDocumentConditions,
   formatDocumentDate,
   formatDocumentMoney,
   formatDocumentPercent,
@@ -281,5 +283,36 @@ describe('D-W template (J4)', () => {
     const html = renderOrderHtml(full, options);
     for (const word of ['custo', 'margem', 'crédito', 'financeiro']) expect(html.toLowerCase()).not.toContain(word);
     expect(html.replace(/<style>[\s\S]*?<\/style>/, '<style/>')).toMatchSnapshot();
+  });
+});
+
+describe('IPI percent and conditions of the document', () => {
+  it('shows the line IPI rate only when it is known, a dash otherwise', () => {
+    expect(documentIpiPercent({ status: 'estimated', percentual: '5.5' })).toBe('5.5');
+    expect(documentIpiPercent({ status: 'rate', percentual: '10' })).toBe('10');
+    for (const status of ['exempt', 'tariff', 'unavailable']) expect(documentIpiPercent({ status })).toBeNull();
+    expect(documentIpiPercent(undefined)).toBeNull();
+    const html = renderOrderHtml(
+      toOrderDocument({ ...source, items: [{ ...source.items[0]!, ipiPercent: '5.5' }, { ...source.items[1]!, ipiPercent: documentIpiPercent({ status: 'tariff' }) }] }),
+      {},
+    );
+    expect(html).toContain('<th class="n">IPI %</th>');
+    expect(html).toContain('5,5%');
+  });
+
+  it('lists the negotiation type by label, then freight, in the Condições box', () => {
+    const conditions = orderDocumentConditions({ negotiationTypeCode: 4, negotiationTypes: [{ code: 4, label: 'À vista' }], freightLabel: 'CIF' });
+    expect(conditions).toEqual([
+      { label: 'Tipo de negociação', value: 'À vista' },
+      { label: 'Frete', value: 'CIF' },
+    ]);
+    const html = renderOrderHtml(toOrderDocument({ ...source, conditions }), {});
+    expect(html).toContain('Condições');
+    expect(html).toContain('Tipo de negociação: <strong>À vista</strong>');
+  });
+
+  it('falls back to the code when the label is unknown and omits what is absent', () => {
+    expect(orderDocumentConditions({ negotiationTypeCode: 9 })).toEqual([{ label: 'Tipo de negociação', value: 'Código 9' }]);
+    expect(orderDocumentConditions({ negotiationTypeCode: null })).toEqual([]);
   });
 });

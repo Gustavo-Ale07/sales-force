@@ -15,9 +15,20 @@ export const LIMITS = {
   notes: 4000,
 } as const;
 
-export const ICMS_OPTIONS = ["C", "I", "P", "R", "T", "X"] as const;
-export type IcmsOption = (typeof ICMS_OPTIONS)[number];
+export type IcmsOption = "C" | "I" | "P" | "R" | "T" | "X";
 export const DEFAULT_ICMS: IcmsOption = "R";
+
+/** One entry of the server's list of ICMS classifications: the NAME is what the seller sees, never only the letter. */
+export interface IcmsClassificationOption {
+  readonly code: IcmsOption;
+  readonly label: string;
+}
+
+/** An active seller a manager can link a new customer to. */
+export interface SellerChoice {
+  readonly code: number;
+  readonly name: string;
+}
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -108,6 +119,8 @@ export interface CreateForm {
   phone: string;
   email: string;
   notes: string;
+  /** Only chosen by a user who is not a seller (manager and equivalent); a seller's customer is linked to them by the server. */
+  sellerCode: number | null;
 }
 
 export const emptyCreateForm = (): CreateForm => ({
@@ -120,9 +133,11 @@ export const emptyCreateForm = (): CreateForm => ({
   phone: "",
   email: "",
   notes: "",
+  sellerCode: null,
 });
 
 export interface CreateProblems {
+  sellerCode: string | null;
   document: string | null;
   name: string | null;
   tradeName: string | null;
@@ -132,7 +147,8 @@ export interface CreateProblems {
   notes: string | null;
 }
 
-export function createProblems(form: CreateForm): CreateProblems {
+/** `sellerRequired`: the signed-in user is not a seller, so the form must carry the seller the customer is linked to. */
+export function createProblems(form: CreateForm, options: { readonly sellerRequired?: boolean } = {}): CreateProblems {
   const digits = normalizeTaxDocument(form.document);
   const kind = taxDocumentKind(digits);
   let document: string | null = null;
@@ -141,9 +157,10 @@ export function createProblems(form: CreateForm): CreateProblems {
   const ie = form.stateRegistration.trim();
   let stateRegistration: string | null = null;
   if (kind === "company" && !form.exempt && ie === "") stateRegistration = 'Informe a inscrição estadual ou marque "Isento".';
-  else if (kind === "individual" && (ie !== "" || form.exempt)) stateRegistration = "Pessoa física não tem inscrição estadual.";
-  else if (ie.length > LIMITS.stateRegistration) stateRegistration = `A inscrição estadual deve ter até ${LIMITS.stateRegistration} caracteres.`;
+  // A natural person has no state registration: the field and "Isento" are not shown, and whatever they held is ignored (never an error).
+  else if (kind !== "individual" && ie.length > LIMITS.stateRegistration) stateRegistration = `A inscrição estadual deve ter até ${LIMITS.stateRegistration} caracteres.`;
   return {
+    sellerCode: options.sellerRequired === true && form.sellerCode === null ? "Escolha o vendedor." : null,
     document,
     name: form.name.trim() === "" ? "Informe a razão social ou o nome." : form.name.trim().length > LIMITS.name ? `O nome deve ter até ${LIMITS.name} caracteres.` : null,
     tradeName: form.tradeName.trim().length > LIMITS.tradeName ? `O nome fantasia deve ter até ${LIMITS.tradeName} caracteres.` : null,
@@ -169,12 +186,15 @@ export interface CreateCustomerRequest {
   email: string | null;
   notes: string | null;
   addresses: [];
+  /** Manager and equivalent only: the seller that owns the customer. Absent for a seller (linked automatically). */
+  sellerCode?: number;
   /** The refused registration this one corrects ("Precisa de correção"); sent with the creation. */
   correctsRegistrationId?: string;
 }
 
-export function buildCreateRequest(form: CreateForm, correctsRegistrationId?: string): CreateCustomerRequest {
-  const ie = form.exempt ? "ISENTO" : form.stateRegistration.trim();
+export function buildCreateRequest(form: CreateForm, correctsRegistrationId?: string, options: { readonly sellerRequired?: boolean } = {}): CreateCustomerRequest {
+  const individual = taxDocumentKind(normalizeTaxDocument(form.document)) === "individual";
+  const ie = individual ? "" : form.exempt ? "ISENTO" : form.stateRegistration.trim();
   return {
     document: normalizeTaxDocument(form.document),
     name: form.name.trim(),
@@ -185,6 +205,7 @@ export function buildCreateRequest(form: CreateForm, correctsRegistrationId?: st
     email: form.email.trim() === "" ? null : form.email.trim(),
     notes: form.notes.trim() === "" ? null : form.notes.trim(),
     addresses: [],
+    ...(options.sellerRequired === true && form.sellerCode !== null ? { sellerCode: form.sellerCode } : {}),
     ...(correctsRegistrationId === undefined ? {} : { correctsRegistrationId }),
   };
 }

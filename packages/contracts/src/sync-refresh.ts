@@ -38,7 +38,7 @@ export const SyncRefreshStepSchema = named(
     lastSuccessAt: IsoTimestampSchema.nullable(),
     /**
      * Owner ruling 2026-11-13 (detail view only): how many items `AD_MOBILIDADE` shows (`S`) and hides, per kind, and whether the
-     * anti-empty guard kept the previous data (> 90 % or everything hidden). Counts of visibility, not of records read.
+     * anti-empty guard kept the previous data (only when everything is hidden; owner 2026-11-25). Counts of visibility, not of records read.
      */
     mobility: z
       .array(

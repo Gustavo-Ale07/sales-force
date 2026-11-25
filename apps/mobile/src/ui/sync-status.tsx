@@ -3,7 +3,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useInsets } from "./use-insets";
 import type { SyncStatus } from "@salesforce/mobile-db";
 import type { ConnectivityState } from "../connectivity/connectivity";
-import { describeConnection, describeSyncAge, describeSyncIndicator, describeSyncStatus, SYNC_INDICATOR_HEX, type SyncTone } from "../offline/sync-status-text";
+import { describeSyncIndicator, describeSyncStatus, SYNC_INDICATOR_HEX, type SyncTone } from "../offline/sync-status-text";
 import { colors, control, spacing } from "../theme";
 import { useAppModal } from "./app-modal";
 import { Icon } from "./icons";
@@ -86,33 +86,19 @@ function Row({ label, value, valueColor }: { label: string; value: string; value
   );
 }
 
-const MOBILITY_LABEL = { products: "Produtos", tops: "Tipos de operação", negotiationTypes: "Condições de pagamento" } as const;
-
-/** Status, last sync, pending count and the manual action. Shared by the header sheet and Perfil. */
-export function SyncPanel({ status, connectivity, onSyncNow, quarantinedCount = 0, onOpenQuarantine, now }: SyncViewProps) {
+/**
+ * Situation (one sentence), last sync, pending count (only when > 0) and the manual action. Shared by the header sheet and Perfil.
+ * Technical diagnostics (connection tally, mobility counts, failed steps) are not shown to the seller.
+ */
+export function SyncPanel({ status, connectivity, onSyncNow, quarantinedCount = 0, onOpenQuarantine }: SyncViewProps) {
   const { text, tone } = describeSyncStatus(status, connectivity);
-  const age = describeSyncAge(status.lastSyncedAt, now);
   const syncing = status.phase === "syncing";
   const offline = connectivity === "offline";
   return (
     <View style={styles.panel}>
-      <Row label="Situação" value={text} valueColor={TONE_COLOR[tone]} />
-      <Row label="Conexão" value={describeConnection(status, connectivity)} />
-      {syncing && status.progress != null && (
-        <Text style={styles.progress}>{status.progress.percent === null ? status.progress.label : `${status.progress.label} (${status.progress.percent}%)`}</Text>
-      )}
-      {!syncing && status.failure === "sankhya_unavailable" && (status.failedSteps?.length ?? 0) > 0 && (
-        <Text style={styles.hint}>{`Não atualizado: ${(status.failedSteps ?? []).join(", ")}`}</Text>
-      )}
-      {!syncing && (status.mobility ?? []).some((m) => m.keptPrevious) && (
-        <Text style={styles.errorNote}>{`Configuração de mobilidade incompleta (${(status.mobility ?? []).filter((m) => m.keptPrevious).map((m) => MOBILITY_LABEL[m.kind]).join(", ")}) — avise o TI; mantida a base anterior`}</Text>
-      )}
-      {!syncing && (status.mobility ?? []).filter((m) => !m.keptPrevious).map((m) => (
-        <Text key={m.kind} style={styles.progress}>{`${MOBILITY_LABEL[m.kind]}: ${m.visible} ${m.visible === 1 ? "visível" : "visíveis"}, ${m.hidden} ${m.hidden === 1 ? "oculto" : "ocultos"}`}</Text>
-      ))}
+      <Text style={[styles.situation, { color: TONE_COLOR[tone] }]}>{text}</Text>
       <Row label="Última sincronização" value={formatDateTime(status.lastSyncedAt)} />
-      {age !== null && <Row label="Dados atualizados" value={age.text} valueColor={age.stale ? colors.warning : colors.text} />}
-      <Row label="Alterações pendentes" value={String(status.pending)} />
+      {status.pending > 0 && <Row label="Alterações pendentes" value={String(status.pending)} />}
       {status.needsAttention > 0 && <Row label="Pedidos que precisam de atenção" value={String(status.needsAttention)} valueColor={colors.red} />}
       {(status.attention ?? []).map((item) => (
         <View key={item.localId} style={styles.attentionItem}>
@@ -129,8 +115,6 @@ export function SyncPanel({ status, connectivity, onSyncNow, quarantinedCount = 
           </Pressable>
         </View>
       )}
-      {status.phase === "error" && <Text style={styles.errorNote}>A última tentativa falhou. Suas alterações continuam salvas neste aparelho.</Text>}
-      {status.phase === "auth_required" && <Text style={styles.errorNote}>Sua sessão expirou. Saia e entre novamente para sincronizar.</Text>}
       <Pressable
         style={[styles.syncButton, (syncing || offline) && styles.syncButtonDisabled]}
         onPress={onSyncNow}
@@ -142,7 +126,6 @@ export function SyncPanel({ status, connectivity, onSyncNow, quarantinedCount = 
         {syncing && <SyncIcon tone="busy" syncing color={colors.onNavy} size={16} />}
         <Text style={styles.syncButtonText}>{syncing ? "Sincronizando…" : "Sincronizar agora"}</Text>
       </Pressable>
-      {offline && <Text style={styles.hint}>Sem conexão: a sincronização acontece quando a rede voltar.</Text>}
     </View>
   );
 }
@@ -223,7 +206,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", justifyContent: "space-between", gap: spacing.md, paddingVertical: spacing.xs },
   rowLabel: { fontSize: 14, color: colors.textMuted, flexShrink: 1, minWidth: 100 },
   rowValue: { fontSize: 14, fontWeight: "700", color: colors.text, flexShrink: 1, textAlign: "right" },
-  errorNote: { fontSize: 13, color: colors.text, backgroundColor: colors.errorBackground, borderRadius: 6, padding: spacing.sm },
+  situation: { fontSize: 15, fontWeight: "700" },
   syncButton: { backgroundColor: colors.navy, borderRadius: 8, minHeight: 48, alignItems: "center", justifyContent: "center", marginTop: spacing.sm, flexDirection: "row", gap: spacing.sm },
   syncButtonDisabled: { opacity: 0.5 },
   syncButtonText: { color: colors.onNavy, fontSize: 15, fontWeight: "700" },
@@ -231,8 +214,6 @@ const styles = StyleSheet.create({
   quarantineText: { fontSize: 13, color: colors.text },
   quarantineLink: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", minHeight: 44 },
   quarantineLinkText: { fontSize: 14, fontWeight: "700", color: colors.navy },
-  hint: { fontSize: 12, color: colors.textMuted, textAlign: "center" },
-  progress: { fontSize: 13, color: colors.textMuted },
   attentionItem: { gap: 2, borderRadius: 6, backgroundColor: colors.errorBackground, padding: spacing.sm },
   attentionCustomer: { fontSize: 14, fontWeight: "700", color: colors.text },
   attentionReason: { fontSize: 13, color: colors.text },

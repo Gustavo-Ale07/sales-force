@@ -244,8 +244,8 @@ export class MirrorSyncService {
     // The iteration finished without throwing: the snapshot is complete.
     const finishedAt = this.deps.now();
     const hasExcluded = Object.keys(excluded).length > 0;
-    // Anti-empty-catalog guard (owner ruling 2026-11-13): when AD_MOBILIDADE would hide more than 90 % of the products (or all),
-    // the previous base is kept: nothing is deactivated, the run is recorded with the counts and a warning.
+    // Anti-empty-catalog guard (owner ruling 2026-11-25, replaces the 90 % limit): only when AD_MOBILIDADE would leave ZERO products
+    // the previous base is kept: nothing is deactivated, the run is recorded with the counts and a warning (log only, never on screen).
     let mobility: MobilityRun | undefined;
     if (entity === 'products' && excluded['mobility'] !== undefined) {
       const tally = { visible: stats.read, hidden: excluded['mobility'] };

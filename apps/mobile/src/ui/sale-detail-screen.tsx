@@ -89,12 +89,17 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
   const [fetched, setFetched] = useState<{ readonly remoteId: string; readonly view: ApprovalView | null; readonly topCode: number | null } | null>(null);
   // The TOPs come from the configuration the device already holds, so the quotation label works offline.
   const [tops, setTops] = useState<OrderEntryConfiguration["sales"]["orderTops"] | null>(null);
+  const [negotiationTypes, setNegotiationTypes] = useState<OrderEntryConfiguration["sales"]["negotiationTypes"] | null>(null);
   useEffect(() => {
     if (orders?.getEntryConfiguration === undefined) return;
     let current = true;
     orders
       .getEntryConfiguration()
-      .then((config) => current && setTops(config.sales.orderTops))
+      .then((config) => {
+        if (!current) return;
+        setTops(config.sales.orderTops);
+        setNegotiationTypes(config.sales.negotiationTypes);
+      })
       .catch(() => undefined);
     return () => {
       current = false;
@@ -233,7 +238,7 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
   async function sharePdf() {
     if (orderPdf === undefined || sharing) return;
     setSharing(true);
-    const result = await shareOrderPdf(orderPdf, draft, lines);
+    const result = await shareOrderPdf(orderPdf, draft, lines, negotiationTypes === null ? undefined : { negotiationTypes });
     setSharing(false);
     if (!result.ok) {
       if (result.reason === "empty") modal.show({ variant: "error", title: "PDF não gerado", message: "Este pedido não tem itens." });
