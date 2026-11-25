@@ -41,6 +41,7 @@ Lotes (definidos pelo dono): 1 e 2 em andamento hoje; 3 e 4 NÃO iniciar; FORA =
 | "Precisa de correção" editável (site) | editável; com nº Sankhya fica só leitura (SNK-4) | | sim | M | não | 2ª rodada | feito | 41206cc, 0663f5f |
 | "Precisa de correção" editável (app) | | editável só sem nº Sankhya (SNK-4) | sim | P | não | 2ª rodada | feito | 481eb51, a595c94 |
 | Texto logo após confirmar o envio: "Enviado ao Sankhya" (decisão do dono 25/11) | feito (aviso e janela de envio) | pendente: ainda diz "Pedido enviado" / "Orçamento enviado" (`apps/mobile/src/ui/new-order-screen.tsx` ~l.1054, e testes `new-order-screen-confirm.test.tsx`) | não (a igualar no app) | P | não | 2ª rodada | site feito; app com o agente do app | ver commit |
+| Foto no perfil Operações: "Perfil" no menu do avatar e página `/perfil` só com a foto e a conta, sem sincronização (decisão do dono 25/11) | feito | a conferir com o agente do app (Operações é só web) | só site por natureza | P | não (a política do servidor já permite `/me/photo` a todo perfil) | 2ª rodada | feito | ver commit |
 | Ordenação da lista por NUNOTA (Pedido) | feito | feito | sim | P | sim | 2ª rodada | feito | 41206cc |
 | Lançamento múltiplo / importação | existe | falta | não (a igualar) | G | a conferir | 3 | não iniciado (não iniciar hoje) | |
 | Pedidos recorrentes | existe | falta | não (a igualar) | G | a conferir | 3 | não iniciado (não iniciar hoje) | |

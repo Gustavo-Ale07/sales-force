@@ -37,7 +37,7 @@ describe("Perfil Operações", () => {
     await waitFor(() => expect(router.state.location.pathname).toBe("/aguardando-liberacao"));
   });
 
-  it.each(["/pedidos", "/clientes", "/produtos", "/aprovacoes", "/integracao", "/configuracoes", "/perfil", "/pedidos/novo"])(
+  it.each(["/pedidos", "/clientes", "/produtos", "/aprovacoes", "/integracao", "/configuracoes", "/pedidos/novo"])(
     "redirects %s to the release queue",
     async (path) => {
       const { router } = renderApp(path, { handlers: handlers(), role: "operations" });
@@ -45,14 +45,25 @@ describe("Perfil Operações", () => {
     },
   );
 
-  it("calls only the session and the queue, and the user menu offers only logout (no profile, no refresh)", async () => {
+  it("calls only the session and the queue, and the user menu offers Perfil and logout (no refresh)", async () => {
     const { calls, user } = renderApp("/aguardando-liberacao", { handlers: handlers(), role: "operations" });
     await screen.findByRole("heading", { name: /Aguardando liberação/ });
     await openUserMenu(user);
     expect(await screen.findByRole("menuitem", { name: "Sair" })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Atualizar dados" })).toBeNull();
-    expect(screen.getByRole("menuitem", { name: "Sair" })).toBeInTheDocument();
-    expect(screen.queryByRole("menuitem", { name: "Perfil" })).toBeNull();
+    expect(screen.getByRole("menuitem", { name: "Perfil" })).toBeInTheDocument();
+    expect(calls.map((call) => call.path).filter((path) => !ALLOWED.includes(path))).toEqual([]);
+  });
+
+  it("opens Meu perfil from the menu: the photo controls, no sync block, no sync or seller requests", async () => {
+    const { calls, user, router } = renderApp("/aguardando-liberacao", { handlers: handlers(), role: "operations" });
+    await screen.findByRole("heading", { name: /Aguardando liberação/ });
+    await openUserMenu(user);
+    await user.click(await screen.findByRole("menuitem", { name: "Perfil" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/perfil"));
+    expect(await screen.findByRole("button", { name: "Trocar foto" })).toBeInTheDocument();
+    expect(screen.queryByText("Sincronização")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Sincronizar agora" })).toBeNull();
     expect(calls.map((call) => call.path).filter((path) => !ALLOWED.includes(path))).toEqual([]);
   });
 });

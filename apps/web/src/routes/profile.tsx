@@ -6,6 +6,7 @@ import { DOT_BG, useSyncState } from "../components/sync-indicator";
 import { RefreshDataDialog } from "../components/refresh-data-dialog";
 import { useAppServices } from "../lib/app-context";
 import { sessionQueryOptions } from "../lib/auth-client";
+import { isOperationsRole } from "../lib/operations-role";
 
 /**
  * "Perfil": read-only view of the signed-in account, from the session the server already returns
@@ -100,7 +101,7 @@ export function ProfilePage() {
         </CardBody>
       </Card>
 
-      <SyncBlock role={user.role} />
+      {isOperationsRole(user.role) ? null : <SyncBlock role={user.role} />}
       <Card>
         <CardHeader title="Sobre" />
         <CardBody>

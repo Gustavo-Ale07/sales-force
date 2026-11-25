@@ -10,7 +10,6 @@ import {
 import { useNavigate } from "@tanstack/react-router";
 import { LogOut, UserRound } from "lucide-react";
 import type { AuthUser } from "../lib/auth-client";
-import { isOperationsRole } from "../lib/operations-role";
 import { userPhotoSrc } from "../lib/profile-photo";
 
 
@@ -37,12 +36,10 @@ export function UserMenu({ user, onLogout }: UserMenuProps) {
           <span className="block truncate">{user.username}</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {isOperationsRole(user.role) ? null : (
-          <DropdownMenuItem onSelect={() => void navigate({ to: "/perfil" })}>
-            <UserRound size={16} strokeWidth={1.75} aria-hidden="true" />
-            Perfil
-          </DropdownMenuItem>
-        )}
+        <DropdownMenuItem onSelect={() => void navigate({ to: "/perfil" })}>
+          <UserRound size={16} strokeWidth={1.75} aria-hidden="true" />
+          Perfil
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onLogout}>
           <LogOut size={16} strokeWidth={1.75} aria-hidden="true" />

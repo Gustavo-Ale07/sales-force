@@ -143,6 +143,26 @@ describe("Foto de perfil", () => {
     expect(screen.queryByRole("button", { name: "Remover foto" })).not.toBeInTheDocument();
   });
 
+  it("Operações changes and removes its own photo on Meu perfil, with the same rules", async () => {
+    const operationsSession = (photoVersion: string | null) => ({
+      body: { authenticated: true, authMode: "dev", account: { ...account, role: "operations", photoVersion }, expiresAt: "2026-09-21T20:00:00.000Z" },
+    });
+    const { calls } = renderApp("/perfil", {
+      role: "operations",
+      handlers: { "GET /auth/session": operationsSession("v1"), "PUT /me/photo": { body: saved }, "DELETE /me/photo": { status: 204 } },
+    });
+    await pick(file());
+    const dialog = await screen.findByRole("dialog", { name: "Nova foto de perfil" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Usar esta foto" }));
+    await waitFor(() => expect(callsTo(calls, "PUT", "/me/photo")).toHaveLength(1));
+    expect(await screen.findByText("Foto atualizada")).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Remover foto" }));
+    const confirm = await screen.findByRole("dialog", { name: "Remover a foto de perfil?" });
+    fireEvent.click(within(confirm).getByRole("button", { name: "Remover foto" }));
+    await waitFor(() => expect(callsTo(calls, "DELETE", "/me/photo")).toHaveLength(1));
+    expect(screen.queryByText("Sincronização")).toBeNull();
+  });
+
   it("uses neither localStorage nor sessionStorage", async () => {
     const local = vi.spyOn(Storage.prototype, "setItem");
     open({ "PUT /me/photo": { body: saved } });

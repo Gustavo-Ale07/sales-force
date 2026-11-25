@@ -18,7 +18,7 @@ import { NotFound, RouteError, RoutePending } from "./components/route-states";
 import { useAppServices } from "./lib/app-context";
 import { sessionQueryOptions, type AuthClient } from "./lib/auth-client";
 import { parseCustomersSearch, parseOrdersSearch, parseProductsSearch, parseReleaseQueueSearch } from "./lib/route-search";
-import { isOperationsRole, OPERATIONS_HOME } from "./lib/operations-role";
+import { isOperationsRole, OPERATIONS_HOME, OPERATIONS_PROFILE } from "./lib/operations-role";
 import { safeRedirect } from "./lib/safe-redirect";
 import { asInt } from "./lib/search-params";
 import { LoginPage } from "./routes/login";
@@ -74,7 +74,7 @@ const appRoute = createRoute({
     // ROLE-1: the technical profile has no commercial area; it lands on the integration page. Convenience only:
     // the server denies every commercial route to it.
     if (isOperationsRole(user.role)) {
-      if (location.pathname !== OPERATIONS_HOME) throw redirect({ to: OPERATIONS_HOME });
+      if (location.pathname !== OPERATIONS_HOME && location.pathname !== OPERATIONS_PROFILE) throw redirect({ to: OPERATIONS_HOME });
       return;
     }
     const technicalPages = ["/integracao", "/configuracoes", "/perfil"];
