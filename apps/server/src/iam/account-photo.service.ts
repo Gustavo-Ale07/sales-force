@@ -4,7 +4,7 @@ import { PHOTO_UPLOAD_MAX_BYTES, type ProfilePhoto, type PutProfilePhotoRequest 
 import { matchesIfNoneMatch } from '../catalog/product-image.js';
 import { AppError } from '../http/app-error.js';
 import { isObjectStoreError, type ObjectStore } from '../media/object-store.js';
-import { isAccountPhotoError, renderAccountPhoto, toErpJpeg } from '../media/account-photo-renderer.js';
+import { flattenStoredRendition, isAccountPhotoError, renderAccountPhoto, toErpJpeg } from '../media/account-photo-renderer.js';
 import { errorLogFields, type Logger } from '../observability/logger.js';
 import { ACCOUNT_PHOTO_STORE, CLOCK, LOGGER, PROFILE_PHOTO_ERP_WRITE_ENABLED, type Clock } from '../platform/tokens.js';
 import { uuidv7 } from '../platform/ids.js';
@@ -171,6 +171,11 @@ export class AccountPhotoService {
       // The record exists but the object is gone: a storage defect, not "no photo".
       this.logger.error({ accountId: user.accountId }, 'account photo object is missing');
       throw new AppError('service_unavailable');
+    }
+    try {
+      bytes = await flattenStoredRendition(bytes);
+    } catch {
+      // an unreadable stored copy is served as stored; the avatar falls back on its own
     }
     return { kind: 'image', etag, bytes };
   }

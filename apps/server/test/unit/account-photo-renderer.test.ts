@@ -1,6 +1,6 @@
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
-import { isAccountPhotoError, renderAccountPhoto, sniffPhotoType, toErpJpeg } from '../../src/media/account-photo-renderer.js';
+import { flattenStoredRendition, isAccountPhotoError, renderAccountPhoto, sniffPhotoType, toErpJpeg } from '../../src/media/account-photo-renderer.js';
 
 const solid = (width: number, height: number) => sharp({ create: { width, height, channels: 3, background: { r: 10, g: 120, b: 200 } } });
 
@@ -27,6 +27,16 @@ describe('renderAccountPhoto', () => {
     const out = await renderAccountPhoto(clear, 'image/png');
     const stats = await sharp(out.bytes).stats();
     expect(stats.channels.slice(0, 3).every((c) => c.mean > 250)).toBe(true);
+  });
+
+  it('a stored rendition with transparency is served flattened on white (no black avatar); an opaque one is untouched', async () => {
+    const clear = await sharp({ create: { width: 64, height: 64, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).webp().toBuffer();
+    const flat = await flattenStoredRendition(new Uint8Array(clear));
+    const px = await sharp(flat).removeAlpha().raw().toBuffer();
+    expect(px[0]).toBeGreaterThan(240);
+    expect(px[1]).toBeGreaterThan(240);
+    const opaque = new Uint8Array(await solid(64, 64).webp().toBuffer());
+    expect(await flattenStoredRendition(opaque)).toBe(opaque);
   });
 
   it('the ERP copy is real JPEG bytes (FFD8FF header, never base64 text), white where the picture was transparent, colors kept', async () => {

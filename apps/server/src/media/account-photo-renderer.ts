@@ -125,6 +125,21 @@ export async function toErpJpeg(rendition: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(out.buffer, out.byteOffset, out.byteLength);
 }
 
+/**
+ * Renditions stored before the white flatten may carry transparent pixels, which show black in the avatar. Served copies are
+ * flattened on white when they have an alpha channel; an opaque rendition is returned untouched.
+ */
+export async function flattenStoredRendition(rendition: Uint8Array): Promise<Uint8Array> {
+  configureSharpOnce();
+  const probe = await sharp(rendition, { limitInputPixels: ACCOUNT_PHOTO_MAX_INPUT_PIXELS }).metadata();
+  if (probe.hasAlpha !== true) return rendition;
+  const out = await sharp(rendition, { limitInputPixels: ACCOUNT_PHOTO_MAX_INPUT_PIXELS })
+    .flatten({ background: '#ffffff' })
+    .webp({ quality: ACCOUNT_PHOTO_WEBP_QUALITY })
+    .toBuffer();
+  return new Uint8Array(out.buffer, out.byteOffset, out.byteLength);
+}
+
 export async function renderAccountPhoto(
   upload: Uint8Array,
   declared: PhotoUploadType,

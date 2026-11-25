@@ -8,10 +8,8 @@ import { USER_PHOTO_MAX_BYTES, type UserPhotoWriteRequest } from './profile-phot
  * NEEDS VALIDATION (to be corrected HERE, in one place, by the Sandbox write test; nothing below was observed):
  *   - the SERVICE (`CRUDServiceProvider.saveRecord`, entity `Usuario`) and the request/response SHAPE: same assumption as the
  *     partner write, from the public developer documentation; an alternative is `DatasetSP.save` on `TSIUSU`;
- *   - how a BLOB travels in the JSON. OBSERVED 2026-11-25 (owner SELECT): base64 text in `localFields.FOTO.$` was stored AS TEXT
- *     (the column held the base64 characters) and an uppercase HEX string was stored as text too. Variant 2 (now): binary path of the
- *     Sankhya community (sessionUpload.mge multipart upload, then saveRecord with `$file.session.key{...}`); NEEDS VALIDATION by SELECT
- *     (the column must start FFD8FF). Next: DatasetSP.save on TSIUSU;
+ *   - VALIDATED (owner SELECT, 2026-11-25, spike §9.66): the BLOB travels by the binary path (sessionUpload.mge multipart upload, then
+ *     saveRecord with `$file.session.key{...}`); base64 and hex text in the JSON were stored as text and are not used;
  *   - whether the API user may update `TSIUSU` at all, and any size limit of the column;
  *   - the text and code of a refusal.
  */
