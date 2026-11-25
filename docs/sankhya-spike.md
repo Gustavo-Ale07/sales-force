@@ -1164,3 +1164,21 @@ Source: the owner, 2026-11-25, stating a read-only look at production: every ord
 Rule adopted (domain `awaitedReleaseLevel`, `packages/domain/src/release-level.ts`): pending line = `EVENTO = 44` and `DHLIB` null; the order awaits the LOWEST `SEQCASCATA` still without `DHLIB`; clients show "Nível N". `REPROVADO = 'S'` is "Barrado" (stage, unchanged, 2026-11-24). An order with NO `TSILIB` line is "Ainda não confirmado no Sankhya" (normal state, not an error). It holds for any TOP, not only 1001. `TSILIM` and `erp.releaseQueue.sectorUsers` do NOT define the level. The Force writes no release.
 
 Read: the stage read (`readOrderStageFacts`) replaced its `SELECT DISTINCT NUCHAVE ... REPROVADO = 'S'` by one SELECT of every line of the note (`NUCHAVE, EVENTO, SEQCASCATA, DHLIB, REPROVADO`), all columns already named in 9.53/9.60/9.61; one query per batch as before. Access of the integration user to `SEQCASCATA` in the Sandbox remains NEEDS VALIDATION (9.61). Open for the owner: the meaning of level 0 on old orders (shown as "Nível 0"), and which sector holds level 3.
+
+### 9.64 Customer edit `updatePartner` (D-AP; owner approval 2026-11-25, Sandbox only) — implemented against the fake; wire NEEDS VALIDATION (roteiro T5)
+
+Source: owner approval of the port and of the T1-T9 script, Sandbox (`placfestas-teste`) only; production is never touched. No Sankhya contact was made for this entry (code, fake gateway and sanitized fixtures only).
+
+**What exists (code):** `SankhyaPartnerWritePort.updatePartner` and `readPartnerEditableFields` (`packages/sankhya/src/write/partner-contract.ts`), real adapter in `real/real-gateway.ts`, fake in `fake/fake-partner-book.ts`. Same closed switch as creation (`SANKHYA_CUSTOMER_WRITE_ENABLED`: staging + live + Sandbox host in the code allow-list). Only `phone`, `email`, `notes` are mapped; `contacts` and `addresses` are refused by name before any call.
+
+**Validated (by reading code and tests, not by Sankhya):** the request is built by `buildPartnerEditRequestText` (allow-list, column lengths checked locally, `LIMCRED`/`CODPARC`/Vidya columns never sent). The worker is SNK-4-safe for edits by REREAD: an edit is a state write, so before sending it reads `TELEFONE, EMAIL, OBSERVACOES`; when the ERP already holds the asked values nothing is written, after a lost answer the same reread decides, and after the write the columns are read again and must match (otherwise parked for a person).
+
+**NOT validated (NEEDS VALIDATION, answered only by running T5 in the Sandbox):**
+
+1. That `CRUDServiceProvider.saveRecord` on entity `Parceiro` with the key `CODPARC` UPDATES an existing partner (instead of failing or creating one) with this body. Origin: documentation, not tested.
+2. That the column `OBSERVACOES` exists on `TGFPAR` in the Sandbox with the length used locally (not in the spike report; a missing column surfaces as an ERP error, never a guess). `TELEFONE` and `EMAIL` have the same status as in creation (S5).
+3. Whether clearing a value (`null` sent as an empty string) is stored as NULL or as empty text; the reread treats an empty value as `null`.
+4. Whether the integration user may UPDATE `TGFPAR` columns and read `OBSERVACOES` by `DBExplorer.executeQuery`.
+5. Contacts and addresses: no mapping (S5.2); the Force refuses them with 409 `customer_edit_field_not_supported`.
+
+Roteiro and the SQL to prove each step: `docs/implementation/customer-sandbox-runbook.md`. Parity and consumption contract: `docs/implementation/customer-create-edit.md`.
