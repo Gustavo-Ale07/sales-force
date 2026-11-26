@@ -289,6 +289,8 @@ function whereMatches(row: ErpRow, where: string | undefined): boolean {
     if (isNotNull) return row[isNotNull[1] as string] !== null && row[isNotNull[1] as string] !== undefined;
     const eightDigits = /^REGEXP_LIKE\((\w+), '\^\[0-9\]\{8\}\$'\)$/.exec(term);
     if (eightDigits) return /^[0-9]{8}$/.test(String(row[eightDigits[1] as string] ?? ''));
+    // One row per CEP: the mock dataset already holds unique keys.
+    if (/^ROWID = \(SELECT MIN\(T2\.ROWID\) FROM TSICEP T2 WHERE T2\.CEP = TSICEP\.CEP\)$/.test(term)) return true;
     const positive = /^(\w+) > 0$/.exec(term);
     if (positive) return Number(row[positive[1] as string]) > 0;
     const inList = /^(\w+) IN \((.+)\)$/.exec(term);

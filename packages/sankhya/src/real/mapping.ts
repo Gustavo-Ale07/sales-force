@@ -846,7 +846,8 @@ export const POSTAL_CODE_SPEC: EntitySpec<PostalCodeEntry> = {
   select: ['CEP', 'CODCID', 'CODBAI', 'CODEND'],
   columns: ['CEP', 'CODCID', 'CODBAI', 'CODEND'],
   // CEP is VARCHAR2(8): 31 of 4152 Sandbox rows have 7 digits, which breaks text order versus the numeric key.
-  where: "REGEXP_LIKE(CEP, '^[0-9]{8}$')",
+  // The real PK is (CODCID, CODBAI, CODEND, CEP): 14 CEPs repeat in the Sandbox, so one row per CEP is read (the first by ROWID).
+  where: "REGEXP_LIKE(CEP, '^[0-9]{8}$') AND ROWID = (SELECT MIN(T2.ROWID) FROM TSICEP T2 WHERE T2.CEP = TSICEP.CEP)",
   orderBy: 'CEP',
   map: (row) => {
     const cep = row.integerOrNull('CEP');
