@@ -218,11 +218,13 @@ export class OrderErpStatusService {
     const now = this.deps.now();
     const since = new Date(now.getTime() - BILLING_MAX_AGE_DAYS * 24 * 3600_000);
     const candidates = await db.db
-      .select({ id: salesOrder.id, erpNumber: salesOrder.erpNumber, detail: salesOrder.erpStatusDetail, removedAt: salesOrder.erpRemovedAt, missingChecks: salesOrder.erpMissingChecks })
+      .select({ id: salesOrder.id, status: salesOrder.status, erpNumber: salesOrder.erpNumber, detail: salesOrder.erpStatusDetail, removedAt: salesOrder.erpRemovedAt, missingChecks: salesOrder.erpMissingChecks })
       .from(salesOrder)
       .where(
         and(
-          eq(salesOrder.status, 'sent'),
+          // A refused ('rejected') order that already carries an ERP number is followed too: if the note was later deleted in the
+          // ERP, it must leave the list like any other removed order (it never gets release or billing detail).
+          inArray(salesOrder.status, ['sent', 'rejected']),
           isNotNull(salesOrder.erpNumber),
           gte(salesOrder.createdAt, since),
           options.orderIds === undefined ? undefined : inArray(salesOrder.id, [...options.orderIds]),
@@ -302,6 +304,7 @@ export class OrderErpStatusService {
         });
         updated += 1;
       }
+      if (row.status !== 'sent') continue; // refused orders: presence only, no release/billing detail
       const stored = decodeReleaseDetail(row.detail);
       // A note the ERP cannot find keeps what was stored (a missing note is not "no release" and not a cancellation),
       // unless the cancellation tables hold it: then the stored release lines stay and the billing state is "cancelled".

@@ -21,7 +21,11 @@ export const ORDER_REFRESH_COOLDOWN_MS = 10_000;
 /** More ids than this in one on-demand burst are ignored: the next cycle covers them. */
 const MAX_REFRESH_IDS_PER_RUN = 50;
 
-export type OrderStatusPass = Pick<OrderErpStatusService, 'runOnce' | 'runReleaseOnce' | 'runStageOnce'>;
+/** Minimum time between two automatic origin-field reconciliations of unconfirmed orders. */
+export const ORIGIN_RECONCILE_EVERY_MS = 120_000;
+
+export type OrderStatusPass = Pick<OrderErpStatusService, 'runOnce' | 'runReleaseOnce' | 'runStageOnce'> &
+  Partial<Pick<OrderErpStatusService, 'reconcileByOriginOnce'>>;
 
 export interface OrderStatusCycleDeps {
   readonly db: DbHandle;
@@ -48,6 +52,7 @@ export class OrderStatusCycle {
   readonly #listener: PgListener;
   readonly #lastRefreshed = new Map<string, number>();
   #busy = false;
+  #lastReconcileAt = 0;
   #refreshQueue = new Set<string>();
   #refreshBusy = false;
 
@@ -87,7 +92,15 @@ export class OrderStatusCycle {
         const status = await this.deps.status.runOnce();
         const release = await this.deps.status.runReleaseOnce();
         const stage = await this.deps.status.runStageOnce();
-        return changed(status, release, stage);
+        // Orders the Force never saw answered (unknown / rejected without ERP number) are matched by the origin field only (SNK-4),
+        // at most once per ORIGIN_RECONCILE_EVERY_MS: the lookup is one ERP read per candidate.
+        const nowMs = (this.deps.now ?? (() => new Date()))().getTime();
+        let reconciled: OrderErpStatusRun = { checked: 0, updated: 0 };
+        if (this.deps.status.reconcileByOriginOnce !== undefined && nowMs - this.#lastReconcileAt >= ORIGIN_RECONCILE_EVERY_MS) {
+          this.#lastReconcileAt = nowMs;
+          reconciled = await this.deps.status.reconcileByOriginOnce();
+        }
+        return changed(status, release, stage, reconciled);
       });
       if (!outcome.acquired) return false;
       if (outcome.value) await this.#notifyOrders();

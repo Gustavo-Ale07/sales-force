@@ -120,6 +120,23 @@ describe('OrderStatusCycle', () => {
     expect(queries.filter((q) => q.sql.includes('pg_notify'))).toHaveLength(1);
   });
 
+  it('reconciles unconfirmed orders by origin at most once per interval and notifies when one is linked', async () => {
+    const { queries, db } = pool(true);
+    const reconcileByOriginOnce = vi.fn().mockResolvedValue(run(1));
+    const status = { runOnce: vi.fn().mockResolvedValue(run(0)), runReleaseOnce: vi.fn().mockResolvedValue(run(0)), runStageOnce: vi.fn().mockResolvedValue(run(0)), reconcileByOriginOnce };
+    let now = 5_000_000;
+    const cycle = new OrderStatusCycle({ db, status, logger, now: () => new Date(now) });
+    await cycle.runCycle();
+    expect(reconcileByOriginOnce).toHaveBeenCalledTimes(1);
+    expect(queries.filter((q) => q.sql.includes('pg_notify'))).toHaveLength(1);
+    now += 30_000;
+    await cycle.runCycle();
+    expect(reconcileByOriginOnce).toHaveBeenCalledTimes(1);
+    now += 120_000;
+    await cycle.runCycle();
+    expect(reconcileByOriginOnce).toHaveBeenCalledTimes(2);
+  });
+
   it('does nothing when another replica holds the advisory lock', async () => {
     const { db } = pool(false);
     const status = { runOnce: vi.fn(), runReleaseOnce: vi.fn(), runStageOnce: vi.fn() };
