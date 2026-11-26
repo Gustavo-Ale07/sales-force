@@ -3,7 +3,7 @@ import { MIRROR_SPECS } from '../../src/sync/mirror-entities.js';
 import { isEmptySnapshotBlocked } from '../../src/sync/mirror-writer.js';
 
 describe('empty_snapshot guard decision', () => {
-  const protectedEntities = ['customers', 'products', 'productGroups', 'priceTables', 'priceTableVersions', 'listPrices', 'sellers', 'directoryUsers'];
+  const protectedEntities = ['customers', 'products', 'productGroups', 'priceTables', 'priceTableVersions', 'listPrices', 'sellers', 'directoryUsers', 'cities', 'neighborhoods', 'streets', 'postalCodes'];
 
   it('keeps the guard for protected entities: empty read against live rows is blocked', () => {
     const names = new Set(Object.keys(MIRROR_SPECS));

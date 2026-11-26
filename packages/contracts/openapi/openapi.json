@@ -1998,6 +1998,181 @@
         }
       }
     },
+    "/cities": {
+      "get": {
+        "operationId": "listCities",
+        "tags": [
+          "catalog"
+        ],
+        "summary": "ERP cities (code, name, UF, IBGE) for the customer registration, ordered by UF and name",
+        "responses": {
+          "200": {
+            "description": "Cidades do cadastro do ERP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CitiesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/neighborhoods": {
+      "get": {
+        "operationId": "listNeighborhoods",
+        "tags": [
+          "catalog"
+        ],
+        "summary": "ERP neighborhoods (code, name) for the customer registration, ordered by name",
+        "responses": {
+          "200": {
+            "description": "Bairros do cadastro do ERP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeighborhoodsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/streets": {
+      "get": {
+        "operationId": "listStreets",
+        "tags": [
+          "catalog"
+        ],
+        "summary": "ERP streets (code, name, kind) for the customer registration, ordered by name",
+        "responses": {
+          "200": {
+            "description": "Logradouros do cadastro do ERP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreetsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/customers/postal-code/{cep}": {
+      "get": {
+        "operationId": "lookupPostalCode",
+        "tags": [
+          "customers"
+        ],
+        "summary": "Address of a postal code (CEP), matched against the ERP registry",
+        "description": "Looks the CEP up in ViaCEP and, when it does not answer, BrasilAPI (about 2 s each; only the 8 digits leave the server). Never an error for a CEP that is invalid, unknown or whose sources are down: answers 200 with `found: false`. When found, `cityCode` is set when the ERP city matches (IBGE + UF, else name without accents + UF) and `neighborhoodCode` / `streetCode` when the text matches an ERP row; otherwise only the text is returned. Same authorization as customer registration.",
+        "parameters": [
+          {
+            "name": "cep",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Endereço do CEP (ou found=false)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostalCodeLookup"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/products": {
       "get": {
         "operationId": "listProducts",
@@ -4830,6 +5005,51 @@
         ],
         "additionalProperties": false
       },
+      "CitiesResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/City"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "City": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "uf": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 2
+          },
+          "ibge": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "uf",
+          "ibge"
+        ],
+        "additionalProperties": false
+      },
       "ConfigurationProvenanceEntry": {
         "anyOf": [
           {
@@ -5781,19 +6001,61 @@
       "CustomerAddressInput": {
         "type": "object",
         "properties": {
+          "cityCode": {
+            "type": "integer",
+            "minimum": 1
+          },
           "streetCode": {
+            "default": 0,
             "type": "integer",
             "minimum": 0
           },
           "neighborhoodCode": {
+            "default": 0,
             "type": "integer",
             "minimum": 0
           },
+          "streetName": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60,
+                "pattern": "^[^\\p{Cc}\\p{Cf}\\u2028\\u2029\\u115f\\u1160\\u3164\\uffa0\\u2800]*$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "neighborhoodName": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60,
+                "pattern": "^[^\\p{Cc}\\p{Cf}\\u2028\\u2029\\u115f\\u1160\\u3164\\uffa0\\u2800]*$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "number": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 6,
-            "pattern": "^[^\\p{Cc}\\p{Cf}\\u2028\\u2029\\u115f\\u1160\\u3164\\uffa0\\u2800]*$"
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 6,
+                "pattern": "^[^\\p{Cc}\\p{Cf}\\u2028\\u2029\\u115f\\u1160\\u3164\\uffa0\\u2800]*$"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "complement": {
             "default": null,
@@ -5810,15 +6072,20 @@
             ]
           },
           "postalCode": {
-            "type": "string",
-            "pattern": "^\\d{8}$"
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{8}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
-          "streetCode",
-          "neighborhoodCode",
-          "number",
-          "postalCode"
+          "cityCode"
         ],
         "additionalProperties": false
       },
@@ -7339,6 +7606,38 @@
         "required": [
           "code",
           "label"
+        ],
+        "additionalProperties": false
+      },
+      "Neighborhood": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "NeighborhoodsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Neighborhood"
+            }
+          }
+        },
+        "required": [
+          "items"
         ],
         "additionalProperties": false
       },
@@ -9215,6 +9514,105 @@
           "all_visible"
         ]
       },
+      "PostalCodeLookup": {
+        "type": "object",
+        "properties": {
+          "found": {
+            "type": "boolean"
+          },
+          "postalCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "street": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "neighborhood": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "city": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "uf": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cityCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "neighborhoodCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "streetCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "erp",
+                  "viacep",
+                  "brasilapi"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "found",
+          "postalCode",
+          "street",
+          "neighborhood",
+          "city",
+          "uf",
+          "cityCode",
+          "neighborhoodCode",
+          "streetCode",
+          "source"
+        ],
+        "additionalProperties": false
+      },
       "PriceContext": {
         "type": "object",
         "properties": {
@@ -10493,6 +10891,45 @@
             "additionalProperties": false
           }
         ]
+      },
+      "Street": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "kind"
+        ],
+        "additionalProperties": false
+      },
+      "StreetsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Street"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
       },
       "SyncRefresh": {
         "type": "object",

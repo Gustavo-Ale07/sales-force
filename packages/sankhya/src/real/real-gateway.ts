@@ -1,5 +1,9 @@
 import type {
   Carrier,
+  City,
+  Neighborhood,
+  Street,
+  PostalCodeEntry,
   Customer,
   InstallationConfiguration,
   ListPrice,
@@ -47,6 +51,7 @@ import {
 } from '../gateway.js';
 import {
   PARTNER_WRITE_NOT_ENABLED_MESSAGE,
+  type EnsuredAddressEntry,
   type ErpPartnerRef,
   type PartnerCallOptions,
   type PartnerEditableFields,
@@ -60,7 +65,20 @@ import {
   buildPartnerEditRequestText,
   documentCandidates,
   parsePartnerSaveResponse,
-}from '../write/partner-wire.js';
+} from '../write/partner-wire.js';
+import {
+  NEIGHBORHOOD_LOOKUP_COLUMNS,
+  REGISTRY_SAVE_RECORD_PATH,
+  STREET_LOOKUP_COLUMNS,
+  buildNeighborhoodCreateText,
+  buildStreetCreateText,
+  erpDate,
+  neighborhoodLookupSql,
+  neighborhoodName,
+  parseRegistrySaveResponse,
+  streetLookupSql,
+  streetName,
+} from '../write/registry-wire.js';
 import { CUSTOMER_WRITE_DISABLED, type CustomerWriteSettings } from '../write/customer-write-config.js';
 import { PROFILE_PHOTO_WRITE_DISABLED, type ProfilePhotoWriteSettings } from '../write/profile-photo-config.js';
 import {
@@ -122,6 +140,11 @@ import {
   SELLER_SPEC,
   DIRECTORY_USER_SPEC,
   carrierSpec,
+  citySpec,
+  NEIGHBORHOOD_SPEC,
+  STATE_SPEC,
+  STREET_SPEC,
+  POSTAL_CODE_SPEC,
   IPI_RATE_SPEC,
   OPEN_TITLE_SPEC,
   salesHistoryCustomerProductSpec,
@@ -357,6 +380,27 @@ export class RealSankhyaGateway implements SankhyaGateway {
   }
   readDirectoryUsers(options?: ReadOptions) {
     return this.#paged(DIRECTORY_USER_SPEC, options);
+  }
+  readCities(options?: ReadOptions): Snapshot<City> {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const gateway = this;
+    return {
+      async *[Symbol.asyncIterator]() {
+        // The state table is tiny (29 rows): read in full first, then resolve each city's numeric state to its abbreviation.
+        const states = new Map<number, string>();
+        for await (const batch of gateway.#paged(STATE_SPEC, options)) for (const state of batch) states.set(state.code, state.uf);
+        yield* gateway.#paged(citySpec(states), options);
+      },
+    };
+  }
+  readNeighborhoods(options?: ReadOptions): Snapshot<Neighborhood> {
+    return this.#paged(NEIGHBORHOOD_SPEC, options);
+  }
+  readStreets(options?: ReadOptions): Snapshot<Street> {
+    return this.#paged(STREET_SPEC, options);
+  }
+  readPostalCodes(options?: ReadOptions): Snapshot<PostalCodeEntry> {
+    return this.#paged(POSTAL_CODE_SPEC, options);
   }
   readCarriers(options?: ReadOptions): Snapshot<Carrier> {
     // eslint-disable-next-line @typescript-eslint/no-this-alias
@@ -662,6 +706,60 @@ export class RealSankhyaGateway implements SankhyaGateway {
     const body = buildPartnerCreateRequestText(request); // validation errors leave here, before any call
     const response = await this.#write(PARTNER_SAVE_RECORD_PATH, body, options?.signal);
     return parsePartnerSaveResponse(response.status, response.body, parseRetryAfterMs(response.headers['retry-after']));
+  }
+
+  /**
+   * Address registry creation (owner instruction 2026-11-26: Sandbox only, TSIBAI/TSIEND only). Idempotent (SNK-4): the live lookup by
+   * name (no accents, no case) runs first and a hit is returned as is; the row is created only when absent. When the save answer
+   * carries no key, the row is read back by name, never guessed. NEEDS VALIDATION: entity names, and key generation
+   * (see `write/registry-wire.ts`); the end-to-end Sandbox registration test validates the real write.
+   * The guard `#assertCustomerWrite` limits every write to the customer-write switch of the Sandbox (SNK-3).
+   */
+  // Concurrency guarantee: customer delivery is one pg-boss queue worked with localConcurrency 1 and a sequential batch in the single
+  // Worker process (STACK-2), so two registrations never create the same name at once; the live lookup by normalized name before
+  // each save then makes a retry find, never duplicate, the row.
+  async ensureNeighborhood(text: string, options?: PartnerCallOptions): Promise<EnsuredAddressEntry> {
+    this.#assertCustomerWrite();
+    const name = neighborhoodName(text);
+    const lookup = async (): Promise<number | null> => {
+      const found = await this.#query(neighborhoodLookupSql(name), NEIGHBORHOOD_LOOKUP_COLUMNS, options?.signal);
+      const row = found.rows[0];
+      return row === undefined ? null : new RowReader('neighborhoods', NEIGHBORHOOD_LOOKUP_COLUMNS, row, 0).int('CODBAI');
+    };
+    const existing = await lookup();
+    if (existing !== null) return { code: existing, created: false };
+    const date = erpDate(new Date(this.#now()), this.#dbUtcOffsetMinutes);
+    const response = await this.#write(REGISTRY_SAVE_RECORD_PATH, buildNeighborhoodCreateText(name, date), options?.signal);
+    const key = parseRegistrySaveResponse('neighborhood', response.status, response.body, parseRetryAfterMs(response.headers['retry-after']));
+    return { code: key ?? (await this.#readBackOrFail(lookup, 'neighborhood')), created: true };
+  }
+
+  async ensureStreet(text: string, options?: PartnerCallOptions): Promise<EnsuredAddressEntry> {
+    this.#assertCustomerWrite();
+    const name = streetName(text);
+    const lookup = async (): Promise<number | null> => {
+      const found = await this.#query(streetLookupSql(name), STREET_LOOKUP_COLUMNS, options?.signal);
+      const row = found.rows[0];
+      return row === undefined ? null : new RowReader('streets', STREET_LOOKUP_COLUMNS, row, 0).int('CODEND');
+    };
+    const existing = await lookup();
+    if (existing !== null) return { code: existing, created: false };
+    const date = erpDate(new Date(this.#now()), this.#dbUtcOffsetMinutes);
+    const response = await this.#write(REGISTRY_SAVE_RECORD_PATH, buildStreetCreateText(name, date), options?.signal);
+    const key = parseRegistrySaveResponse('street', response.status, response.body, parseRetryAfterMs(response.headers['retry-after']));
+    return { code: key ?? (await this.#readBackOrFail(lookup, 'street')), created: true };
+  }
+
+  /** The save succeeded without a key: the row must exist by name; if it does not, the answer is ambiguous and is retried (re-checked first). */
+  async #readBackOrFail(lookup: () => Promise<number | null>, kind: string): Promise<number> {
+    const code = await lookup();
+    if (code === null) {
+      throw new SankhyaGatewayError('temporary', {
+        code: 'missing_registry_code',
+        message: `The ERP accepted the ${kind} but the row was not found by name; it is looked up again before any new write.`,
+      });
+    }
+    return code;
   }
 
   async findPartnerByOrigin(originField: string, originKey: string, options?: PartnerCallOptions): Promise<ErpPartnerRef | null> {

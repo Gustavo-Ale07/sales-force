@@ -10,6 +10,22 @@ import {
 } from '@salesforce/domain';
 import type { AppErrorIssue } from '../http/app-error.js';
 
+/**
+ * One address of the command. `cityCode` is an ERP city (validated against the mirror before the command is stored). Street and
+ * neighborhood: a mirrored code (0 = none) or, when the name matched nothing in the mirror, the text the worker creates in the
+ * Sankhya Sandbox (the server never sends both a code and a name for the same part).
+ */
+export interface CustomerUpsertAddress {
+  readonly cityCode: number;
+  readonly streetCode: number;
+  readonly neighborhoodCode: number;
+  readonly streetName: string | null;
+  readonly neighborhoodName: string | null;
+  readonly number: string | null;
+  readonly complement: string | null;
+  readonly postalCode: string | null;
+}
+
 /** The command the worker receives in `integration_outbox.payload` (operation `customer.upsert`). */
 export interface CustomerUpsertPayload {
   readonly version: 1;
@@ -24,13 +40,7 @@ export interface CustomerUpsertPayload {
   readonly phone: string | null;
   readonly email: string | null;
   readonly notes: string | null;
-  readonly addresses: ReadonlyArray<{
-    readonly streetCode: number;
-    readonly neighborhoodCode: number;
-    readonly number: string;
-    readonly complement: string | null;
-    readonly postalCode: string;
-  }>;
+  readonly addresses: ReadonlyArray<CustomerUpsertAddress>;
 }
 
 export interface PreparedCustomerRegistration {
@@ -100,8 +110,11 @@ export function prepareCustomerRegistration(body: CreateCustomerRequest, actor: 
     email: body.email,
     notes: body.notes,
     addresses: body.addresses.map((a) => ({
+      cityCode: a.cityCode,
       streetCode: a.streetCode,
       neighborhoodCode: a.neighborhoodCode,
+      streetName: a.streetCode > 0 ? null : a.streetName,
+      neighborhoodName: a.neighborhoodCode > 0 ? null : a.neighborhoodName,
       number: a.number,
       complement: a.complement,
       postalCode: a.postalCode,

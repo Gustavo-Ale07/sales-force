@@ -1,6 +1,10 @@
 import { ApiRequestError } from "./api";
 import {
+  addressProblems,
+  applyPostalCode,
   buildCreateRequest,
+  commercialProblems,
+  identificationProblems,
   buildUpdateBody,
   createProblems,
   describeCustomerWriteError,
@@ -36,11 +40,11 @@ describe("edit body", () => {
 });
 
 describe("create request", () => {
-  const base = { ...emptyCreateForm(), document: CNPJ, name: " Padaria ", stateRegistration: "123" };
+  const base = { ...emptyCreateForm(), document: CNPJ, name: " Padaria ", stateRegistration: "123", cityCode: 3550308, cityLabel: "São Paulo - SP" };
 
-  it("is strict: normalized document, trimmed text, no addresses", () => {
+  it("is strict: normalized document, trimmed text, one address with the city", () => {
     expect(hasCreateProblems(createProblems(base))).toBe(false);
-    expect(buildCreateRequest({ ...base, tradeName: "Padoca", phone: "(11) 3333-2222" })).toStrictEqual({
+    expect(buildCreateRequest({ ...base, tradeName: "Padoca", phone: "(11) 3333-2222", postalCode: "01310-100", number: "10", street: " Rua A ", neighborhood: "Centro" })).toStrictEqual({
       document: "11222333000181",
       name: "Padaria",
       tradeName: "Padoca",
@@ -49,13 +53,22 @@ describe("create request", () => {
       phone: "1133332222",
       email: null,
       notes: null,
-      addresses: [],
+      addresses: [
+        { cityCode: 3550308, streetCode: 0, streetName: "Rua A", neighborhoodCode: 0, neighborhoodName: "Centro", number: "10", complement: null, postalCode: "01310100" },
+      ],
     });
   });
 
-  it("rejects an invalid document and an empty one", () => {
-    expect(createProblems({ ...base, document: "111.111.111-11" }).document).toBe("CPF ou CNPJ inválido.");
-    expect(createProblems({ ...base, document: "" }).document).toBe("Informe o CPF ou CNPJ.");
+  it("a picked suggestion goes by code, free text by name, never both", () => {
+    const [address] = buildCreateRequest({ ...base, street: "Rua A", streetCode: 7, neighborhood: "Centro", neighborhoodCode: 3 }).addresses;
+    expect(address).toMatchObject({ streetCode: 7, streetName: null, neighborhoodCode: 3, neighborhoodName: null });
+  });
+
+  it("screen 1 blocks an invalid document of the chosen kind and an empty name", () => {
+    expect(identificationProblems({ ...base, document: "111.111.111-11", personKind: "individual" }).document).toBe("CPF inválido.");
+    expect(identificationProblems({ ...base, document: CNPJ, personKind: "individual" }).document).toBe("CPF inválido.");
+    expect(identificationProblems({ ...base, document: "" }).document).toBe("Informe o CNPJ.");
+    expect(identificationProblems({ ...base, name: " " }).name).toBe("Informe a razão social ou o nome.");
   });
 
   it("company needs the state registration or Isento (sent as ISENTO)", () => {
@@ -65,22 +78,48 @@ describe("create request", () => {
     expect(buildCreateRequest(exempt).stateRegistration).toBe("ISENTO");
   });
 
-  it("individual has no state registration: never an error, never sent", () => {
-    expect(createProblems({ ...base, document: CPF, stateRegistration: "1" }).stateRegistration).toBeNull();
-    expect(createProblems({ ...base, document: CPF, stateRegistration: "", exempt: true }).stateRegistration).toBeNull();
-    expect(buildCreateRequest({ ...base, document: CPF, stateRegistration: "1", exempt: true }).stateRegistration).toBeNull();
+  it("individual has no state registration or trade name: never an error, never sent", () => {
+    const person = { ...base, personKind: "individual" as const, document: CPF, stateRegistration: "1", exempt: true, tradeName: "X" };
+    expect(createProblems(person).stateRegistration).toBeNull();
+    const request = buildCreateRequest(person);
+    expect(request.stateRegistration).toBeNull();
+    expect(request.tradeName).toBeNull();
+  });
+
+  it("screen 2 requires only the city; filled optional fields are checked", () => {
+    expect(addressProblems(emptyCreateForm()).cityCode).toBe("Escolha a cidade.");
+    expect(addressProblems(base)).toStrictEqual({ postalCode: null, cityCode: null, neighborhood: null, street: null, number: null, complement: null, phone: null, email: null });
+    expect(addressProblems({ ...base, postalCode: "123" }).postalCode).toBe("O CEP deve ter 8 dígitos.");
+    expect(addressProblems({ ...base, street: "x".repeat(61) }).street).toBe("A rua deve ter até 60 caracteres.");
   });
 
   it("a seller's customer carries no seller; a non-seller must choose one and it is sent", () => {
     expect(createProblems(base).sellerCode).toBeNull();
     expect(buildCreateRequest(base)).not.toHaveProperty("sellerCode");
-    expect(createProblems(base, { sellerRequired: true }).sellerCode).toBe("Escolha o vendedor.");
+    expect(commercialProblems(base, { sellerRequired: true }).sellerCode).toBe("Escolha o vendedor.");
     const chosen = { ...base, sellerCode: 12 };
-    expect(createProblems(chosen, { sellerRequired: true }).sellerCode).toBeNull();
+    expect(commercialProblems(chosen, { sellerRequired: true }).sellerCode).toBeNull();
     expect(buildCreateRequest(chosen, { sellerRequired: true }).sellerCode).toBe(12);
     expect(buildCreateRequest(chosen)).not.toHaveProperty("sellerCode");
   });
 });
+
+describe("postal code", () => {
+  const found = { found: true, street: "Avenida Paulista", neighborhood: "Bela Vista", city: "São Paulo", uf: "SP", cityCode: 3550308, neighborhoodCode: 5, streetCode: 0 };
+
+  it("fills street, neighborhood and city; a zero code is free text", () => {
+    const next = applyPostalCode(emptyCreateForm(), found);
+    expect(next).toMatchObject({ street: "Avenida Paulista", streetCode: null, neighborhood: "Bela Vista", neighborhoodCode: 5, cityCode: 3550308, cityLabel: "São Paulo - SP" });
+  });
+
+  it("not found, offline or a city the ERP did not match changes nothing about the city", () => {
+    const form = emptyCreateForm();
+    expect(applyPostalCode(form, null)).toBe(form);
+    expect(applyPostalCode(form, { ...found, found: false })).toBe(form);
+    expect(applyPostalCode(form, { ...found, cityCode: null }).cityCode).toBeNull();
+  });
+});
+
 
 describe("server answers", () => {
   const conflict = (reason: string) => new ApiRequestError({ status: 409, message: "x", reason });

@@ -31,7 +31,7 @@ function request(overrides: Partial<PartnerWriteRequest> = {}): PartnerWriteRequ
     phone: '11999990000',
     email: 'contato@example.test',
     notes: null,
-    addresses: [{ streetCode: 10, neighborhoodCode: 20, number: '100', complement: null, postalCode: '01001000' }],
+    addresses: [{ cityCode: 5, streetCode: 10, neighborhoodCode: 20, number: '100', complement: null, postalCode: '01001000' }],
     ...overrides,
   };
 }

@@ -6,6 +6,7 @@ import type { ImageFileSystem } from "../images/image-fs";
 import type { ProductImageStore } from "../images/image-store";
 import { createAccountProductImages } from "../images/product-images";
 import { newClientRequestId } from "../lib/uuid";
+import { createAddressPort, type AddressPort } from "./address-port";
 import { createLocalOrdersPort, type LocalOrdersPort } from "./local-orders";
 import { createCustomerTransport } from "./customer-transport";
 import { createOfflineFirstRepositories } from "./offline-repositories";
@@ -21,6 +22,8 @@ export interface AccountServices {
   readonly localOrders: LocalOrdersPort;
   /** Customers created on this device and waiting for the ERP (F7). */
   readonly pendingCustomers: PendingCustomersPort;
+  /** Cities, neighborhoods, streets and postal codes of the new-customer form (offline-first). */
+  readonly addresses?: AddressPort;
   readonly sync: SyncManager;
   /** RT-1: opens the server's change-ping stream; returns the function that closes it. Absent when the build has no streaming fetch. */
   readonly openEvents?: (onTopic: (topic: SyncEventTopic) => void, onConnection: (connected: boolean) => void) => () => void;
@@ -125,6 +128,7 @@ export function createOfflineServices(deps: {
             void sync.refresh();
           },
         }),
+        addresses: createAddressPort({ db: deps.db, env, api: deps.api }),
         sync,
         ...(deps.imageFileSystem === undefined
           ? {}

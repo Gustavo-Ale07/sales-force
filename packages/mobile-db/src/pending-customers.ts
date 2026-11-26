@@ -40,6 +40,13 @@ export type PendingCustomerState = "queued" | "sending" | "awaiting_erp" | "conf
 export const MAX_DELIVERY_ATTEMPTS = 8;
 export const GAVE_UP_TEXT = "O servidor não aceitou este envio. Descarte e cadastre de novo.";
 export const NOT_CONFIRMED_TEXT = "Sem confirmação do Sankhya. Descarte e cadastre de novo.";
+/** A registration queued before the city became mandatory: refused on the device (the city is never guessed), without calling the server. */
+export const NO_CITY_TEXT = "Cadastro sem cidade. Descarte e cadastre de novo.";
+
+/** `true` when an address of the request has no usable city (shape of an older build). */
+export function lacksCity(request: PendingCustomerRequest): boolean {
+  return request.addresses.some((address) => typeof (address as { cityCode?: unknown }).cityCode !== "number" || address.cityCode < 1);
+}
 
 /** The body of `POST /customers` minus the idempotency key (kept in its own column). Same field names as the contract. */
 export interface PendingCustomerRequest {
@@ -52,11 +59,17 @@ export interface PendingCustomerRequest {
   readonly email: string | null;
   readonly notes: string | null;
   readonly addresses: readonly {
-    readonly streetCode: number;
-    readonly neighborhoodCode: number;
-    readonly number: string;
-    readonly complement: string | null;
-    readonly postalCode: string;
+    /** ERP city code; mandatory. A row queued by an older build has none and is refused at delivery (`NO_CITY_TEXT`). */
+    readonly cityCode: number;
+    /** 0 = none (then the free text, if any, is sent). */
+    readonly streetCode?: number;
+    readonly neighborhoodCode?: number;
+    readonly streetName?: string | null;
+    readonly neighborhoodName?: string | null;
+    readonly number?: string | null;
+    readonly complement?: string | null;
+    /** 8 digits, no mask. */
+    readonly postalCode?: string | null;
   }[];
   /** Manager/admin only. */
   readonly sellerCode?: number;
@@ -461,6 +474,11 @@ export async function pushPendingCustomers(
     }
     if (row.request === null) continue; // an erased (answered) row is never resent
     const request = row.request;
+    if (lacksCity(request)) {
+      await rejectRow(db, env, row.clientRequestId, NO_CITY_TEXT);
+      rejected += 1;
+      continue;
+    }
     attempted += 1;
     const attempts = row.attempts + 1;
     await db.execute("UPDATE pending_customer SET state = 'sending', attempts = ?, updated_at = ? WHERE client_request_id = ?", [attempts, isoNow(env), row.clientRequestId]);

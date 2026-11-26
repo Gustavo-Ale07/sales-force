@@ -169,8 +169,16 @@ export function validatePartnerRequest(request: PartnerWriteRequest): { document
     );
   }
   for (const address of request.addresses) {
-    positiveInt(address.streetCode, 'addresses.streetCode');
-    positiveInt(address.neighborhoodCode, 'addresses.neighborhoodCode');
+    // The city is mandatory (TGFPAR.CODCID is NOT NULL default 0: a 0 would be a registered customer with no city).
+    if (!Number.isInteger(address.cityCode) || address.cityCode < 1 || address.cityCode > 2_147_483_647) {
+      throw new PartnerFieldError('partner_required_field', 'addresses.cityCode', 'CODCID', 'The city is required (ERP column CODCID).');
+    }
+    // Street and neighborhood: 0 = none. Names must already be resolved into codes by the worker before this point.
+    for (const [field, code] of [['addresses.streetCode', address.streetCode], ['addresses.neighborhoodCode', address.neighborhoodCode]] as const) {
+      if (!Number.isInteger(code) || code < 0 || code > 2_147_483_647) {
+        throw new PartnerFieldError('partner_invalid_field', field, null, `The field '${field}' must be 0 (none) or a positive integer.`);
+      }
+    }
     if (address.postalCode !== null && !/^\d{8}$/.test(address.postalCode)) {
       throw new PartnerFieldError('partner_invalid_field', 'addresses.postalCode', 'CEP', 'The postal code must have 8 digits.');
     }
@@ -208,8 +216,9 @@ export function buildPartnerLocalFields(request: PartnerWriteRequest): Wire {
   if (request.notes !== null && request.notes !== '') fields['OBSERVACOES'] = value(request.notes);
   const address = request.addresses[0];
   if (address !== undefined) {
-    fields['CODEND'] = value(address.streetCode);
-    fields['CODBAI'] = value(address.neighborhoodCode);
+    fields['CODCID'] = value(address.cityCode);
+    if (address.streetCode > 0) fields['CODEND'] = value(address.streetCode);
+    if (address.neighborhoodCode > 0) fields['CODBAI'] = value(address.neighborhoodCode);
     if (address.number !== null && address.number !== '') fields['NUMEND'] = value(address.number);
     if (address.complement !== null && address.complement !== '') fields['COMPLEMENTO'] = value(address.complement);
     if (address.postalCode !== null) fields['CEP'] = value(address.postalCode);

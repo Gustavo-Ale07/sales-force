@@ -25,7 +25,7 @@ const ALL_PRIVS: Priv[] = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', '
 const S: Priv[] = ['SELECT'];
 const SIU: Priv[] = ['SELECT', 'INSERT', 'UPDATE'];
 const SIUD: Priv[] = ['SELECT', 'INSERT', 'UPDATE', 'DELETE'];
-const MIRROR = ['erp_seller', 'erp_directory_user', 'erp_carrier', 'erp_ipi_rate', 'erp_open_title', 'erp_customer', 'erp_product', 'erp_product_group', 'erp_price_table', 'erp_price_table_version', 'erp_list_price'];
+const MIRROR = ['erp_seller', 'erp_directory_user', 'erp_carrier', 'erp_city', 'erp_neighborhood', 'erp_street', 'erp_postal_code', 'erp_ipi_rate', 'erp_open_title', 'erp_customer', 'erp_product', 'erp_product_group', 'erp_price_table', 'erp_price_table_version', 'erp_list_price'];
 const SID: Priv[] = ['SELECT', 'INSERT', 'DELETE'];
 // Atomic snapshot-replacement mirrors (sales history): the worker deletes and re-inserts the whole window in one transaction.
 const REPLACED_MIRROR = ['erp_sales_history_monthly', 'erp_sales_history_customer_product'];

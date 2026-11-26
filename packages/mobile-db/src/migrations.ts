@@ -308,4 +308,36 @@ export const migrations: readonly Migration[] = [
          WHERE state = 'awaiting_erp'`,
     ],
   },
+  {
+    // Owner 2026-11-26: address lists of the new-customer form, read offline: ERP cities, neighborhoods and streets (replaced as a whole
+    // by each pull, never edited locally; `search` = lower-case text without accents) and the postal codes (CEP) already looked up on the
+    // server, kept to be reused without a connection. Expand-only: four new tables, nothing else touched. No cost or margin (P-20).
+    version: 18,
+    name: "cache_address_lists",
+    statements: [
+      `CREATE TABLE cache_city (
+        code   INTEGER PRIMARY KEY,
+        name   TEXT NOT NULL,
+        uf     TEXT NOT NULL,
+        ibge   TEXT,
+        search TEXT NOT NULL
+      ) STRICT`,
+      `CREATE TABLE cache_neighborhood (
+        code   INTEGER PRIMARY KEY,
+        name   TEXT NOT NULL,
+        search TEXT NOT NULL
+      ) STRICT`,
+      `CREATE TABLE cache_street (
+        code   INTEGER PRIMARY KEY,
+        name   TEXT NOT NULL,
+        kind   TEXT,
+        search TEXT NOT NULL
+      ) STRICT`,
+      `CREATE TABLE cache_postal_code (
+        cep       TEXT PRIMARY KEY,
+        data      TEXT NOT NULL,
+        cached_at TEXT NOT NULL
+      ) STRICT`,
+    ],
+  },
 ];

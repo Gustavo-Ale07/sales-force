@@ -1,3 +1,4 @@
+import { normalizeAddressName, splitStreetName } from '@salesforce/domain';
 import { SankhyaGatewayError } from '../errors.js';
 import type { ErpPartnerRef, PartnerEditableChanges, PartnerWriteRequest } from '../write/partner-contract.js';
 
@@ -8,7 +9,7 @@ export type FakePartnerOutcome =
   /** `upsert`/`update` only: the ERP did apply the write but the caller sees a failure (timeout after commit). */
   | { readonly kind: 'created_then_error'; readonly error: SankhyaGatewayError };
 
-export type FakePartnerOperation = 'upsert' | 'find' | 'read' | 'update';
+export type FakePartnerOperation = 'upsert' | 'find' | 'read' | 'update' | 'registry';
 
 export interface FakeStoredPartner {
   readonly code: number;
@@ -29,7 +30,7 @@ export interface FakePartnerCall {
 export class FakePartnerBook {
   readonly partners: FakeStoredPartner[] = [];
   readonly calls: FakePartnerCall[] = [];
-  readonly #scripts: Record<FakePartnerOperation, FakePartnerOutcome[]> = { upsert: [], find: [], read: [], update: [] };
+  readonly #scripts: Record<FakePartnerOperation, FakePartnerOutcome[]> = { upsert: [], find: [], read: [], update: [], registry: [] };
   #next: number;
 
   constructor(firstCode = 900_001) {
@@ -114,6 +115,52 @@ export class FakePartnerBook {
     if (matches.length > 1) throw ambiguous('ambiguous_document', matches.map((p) => p.code), 'document');
     const found = matches[0];
     return found === undefined ? null : { code: found.code, originKey: found.request.originKey, document: found.request.document };
+  }
+
+  /** In-memory address registry the worker can extend (Sandbox-only creation, SNK-3). Seeded once from the demo dataset. */
+  readonly neighborhoods: { code: number; name: string }[] = [];
+  readonly streets: { code: number; name: string; kind: string | null }[] = [];
+  readonly registryCreations: { kind: 'neighborhood' | 'street'; code: number; name: string }[] = [];
+  #registrySeeded = false;
+
+  seedRegistry(neighborhoods: readonly { code: number; name: string }[], streets: readonly { code: number; name: string; kind: string | null }[]): void {
+    if (this.#registrySeeded) return;
+    this.#registrySeeded = true;
+    this.neighborhoods.push(...neighborhoods.map((n) => ({ ...n })));
+    this.streets.push(...streets.map((s) => ({ ...s })));
+  }
+
+  /**
+   * Live lookup by normalized name first, create only when absent (idempotent, SNK-4). The fake keeps the same contract as the
+   * real adapter: a repeated call returns the existing code with `created: false`.
+   */
+  ensureNeighborhood(name: string): { code: number; created: boolean } {
+    this.calls.push({ operation: 'registry' });
+    const outcome = this.#take('registry');
+    if (outcome.kind === 'error') throw outcome.error;
+    const key = normalizeAddressName(name);
+    const found = this.neighborhoods.find((n) => normalizeAddressName(n.name) === key);
+    if (found !== undefined) return { code: found.code, created: false };
+    const code = this.neighborhoods.reduce((max, n) => Math.max(max, n.code), 0) + 1;
+    this.neighborhoods.push({ code, name: key });
+    this.registryCreations.push({ kind: 'neighborhood', code, name: key });
+    if (outcome.kind === 'created_then_error') throw outcome.error;
+    return { code, created: true };
+  }
+
+  ensureStreet(text: string): { code: number; created: boolean } {
+    this.calls.push({ operation: 'registry' });
+    const outcome = this.#take('registry');
+    if (outcome.kind === 'error') throw outcome.error;
+    const { kind, name } = splitStreetName(text);
+    const key = normalizeAddressName(name);
+    const found = this.streets.find((s) => normalizeAddressName(s.name) === key && (s.kind ?? null) === kind);
+    if (found !== undefined) return { code: found.code, created: false };
+    const code = this.streets.reduce((max, s) => Math.max(max, s.code), 0) + 1;
+    this.streets.push({ code, name: key, kind });
+    this.registryCreations.push({ kind: 'street', code, name: kind === null ? key : `${kind} ${key}` });
+    if (outcome.kind === 'created_then_error') throw outcome.error;
+    return { code, created: true };
   }
 
   read(code: number): FakeStoredPartner | null {

@@ -28,6 +28,10 @@ type Reader = (gateway: SankhyaGateway) => Snapshot<unknown>;
 const SNAPSHOT_READS: readonly { entity: Exclude<ReadEntity, 'configuration'>; read: Reader; key: (row: never) => readonly number[] }[] = [
   { entity: 'sellers', read: (g) => g.readSellers(), key: (r: { code: number }) => [r.code] },
   { entity: 'carriers', read: (g) => g.readCarriers(), key: (r: { code: number }) => [r.code] },
+  { entity: 'cities', read: (g) => g.readCities(), key: (r: { code: number }) => [r.code] },
+  { entity: 'neighborhoods', read: (g) => g.readNeighborhoods(), key: (r: { code: number }) => [r.code] },
+  { entity: 'streets', read: (g) => g.readStreets(), key: (r: { code: number }) => [r.code] },
+  { entity: 'postalCodes', read: (g) => g.readPostalCodes(), key: (r: { cep: number }) => [r.cep] },
   { entity: 'ipiRates', read: (g) => g.readIpiRates(), key: (r: { code: number }) => [r.code] },
   { entity: 'openTitles', read: (g) => g.readOpenTitles(), key: (r: { nufin: number }) => [r.nufin] },
   { entity: 'customers', read: (g) => g.readCustomers(), key: (r: { code: number }) => [r.code] },
@@ -135,6 +139,10 @@ export function runGatewayContract(label: string, subject: ContractSubject): voi
         'readPriceTableVersions',
         'readDirectoryUsers',
         'readCarriers',
+        'readCities',
+        'readNeighborhoods',
+        'readStreets',
+        'readPostalCodes',
         'readIpiRates',
         'readOpenTitles',
         'readSalesHistoryMonthly',
@@ -157,6 +165,9 @@ export function runGatewayContract(label: string, subject: ContractSubject): voi
         // D-AP: edit of an existing customer (phone, e-mail, notes) behind the same switch, Sandbox only.
         'updatePartner',
         'readPartnerEditableFields',
+        // Address registry creation (owner decision change 2026-11-26): same switch, Sandbox only; the real adapter refuses (NEEDS VALIDATION).
+        'ensureNeighborhood',
+        'ensureStreet',
         // Spike S1.8: the profile photo write (TSIUSU.FOTO), guarded by SANKHYA_PROFILE_PHOTO_WRITE_ENABLED in the worker.
         'writeUserPhoto',
       ]);

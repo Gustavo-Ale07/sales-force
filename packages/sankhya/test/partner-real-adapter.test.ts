@@ -41,7 +41,7 @@ function request(overrides: Partial<PartnerWriteRequest> = {}): PartnerWriteRequ
     phone: '11999990000',
     email: 'contato@example.test',
     notes: 'observacao de teste',
-    addresses: [{ streetCode: 10, neighborhoodCode: 20, number: '100', complement: 'sala 1', postalCode: '01001000' }],
+    addresses: [{ cityCode: 5, streetCode: 10, neighborhoodCode: 20, number: '100', complement: 'sala 1', postalCode: '01001000' }],
     ...overrides,
   };
 }
@@ -268,7 +268,7 @@ describe('real partner adapter: validation before any call', () => {
     for (const letter of ['C', 'I', 'P', 'R', 'T', 'X']) {
       expect(() => buildPartnerCreateRequestText(request({ icmsClassification: letter }))).not.toThrow();
     }
-    const address = { streetCode: 1, neighborhoodCode: 2, number: null, complement: null, postalCode: null };
+    const address = { cityCode: 5, streetCode: 1, neighborhoodCode: 2, number: null, complement: null, postalCode: null };
     expect(await refused({ addresses: [address, address] })).toMatchObject({ code: 'partner_multiple_addresses_unsupported' });
   });
 

@@ -1,112 +1,175 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import type { AddressPort } from "../offline/address-port";
 import { CustomerRejectedError } from "../offline/pending-customers";
 import { CustomerCreateScreen } from "./customer-create-screen";
 
 const CNPJ = "11.222.333/0001-81";
+const CPF = "529.982.247-25";
 
-async function setup(onSave = jest.fn(async () => undefined)) {
+const CITIES = [
+  { code: 3550308, name: "São Paulo", uf: "SP", ibge: "3550308" },
+  { code: 3304557, name: "Rio de Janeiro", uf: "RJ", ibge: "3304557" },
+];
+
+function fakeAddresses(overrides: Partial<AddressPort> = {}): AddressPort {
+  const fold = (text: string) => text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  return {
+    searchCities: async (query) => CITIES.filter((city) => fold(`${city.name} ${city.uf}`).includes(fold(query))),
+    searchNeighborhoods: async (query) => [{ code: 5, name: "Centro" }].filter((item) => fold(item.name).includes(fold(query))),
+    searchStreets: async (query) => [{ code: 9, name: "Paulista", kind: "Avenida" }].filter((item) => fold(item.name).includes(fold(query))),
+    lookupPostalCode: async () => null,
+    ...overrides,
+  };
+}
+
+async function setup(onSave = jest.fn(async () => undefined), extra: Partial<React.ComponentProps<typeof CustomerCreateScreen>> = {}) {
   const onClose = jest.fn();
-  await render(<CustomerCreateScreen onSave={onSave} onClose={onClose} />);
+  await render(<CustomerCreateScreen onSave={onSave} onClose={onClose} addresses={fakeAddresses()} {...extra} />);
   return { onSave, onClose };
 }
 
+/** Screen 1 as an individual (no state registration), then on to screen 2. */
+async function identifyPerson(document = CPF, name = "Maria") {
+  await fireEvent.press(await screen.findByLabelText("Pessoa Física"));
+  await fireEvent.changeText(screen.getByLabelText("CPF"), document);
+  await fireEvent.changeText(screen.getByLabelText("Nome"), name);
+  await fireEvent.press(screen.getByLabelText("Continuar"));
+}
+
+async function chooseCity(label = "Cidade São Paulo - SP", query = "sao") {
+  await fireEvent.changeText(await screen.findByLabelText("Pesquisar cidade"), query);
+  await fireEvent.press(await screen.findByLabelText(label));
+}
+
 describe("CustomerCreateScreen", () => {
-  it("shows the title and refuses an invalid document without saving", async () => {
+  it("shows the progress and, on screen 1, refuses an invalid document on the field", async () => {
     const { onSave } = await setup();
-    expect(await screen.findByText("Novo cliente")).toBeTruthy();
-    await fireEvent.changeText(screen.getByLabelText("CPF/CNPJ"), "111.111.111-11");
-    await fireEvent.changeText(screen.getByLabelText("Razão social ou nome"), "Padaria");
-    await fireEvent.press(screen.getByLabelText("Cadastrar"));
-    expect(await screen.findByText("CPF ou CNPJ inválido.")).toBeTruthy();
+    expect(await screen.findByLabelText("Etapa 1 de 3: Identificação")).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText("CNPJ"), "111.111.111-11");
+    await fireEvent.changeText(screen.getByLabelText("Razão social"), "Padaria");
+    await fireEvent.press(screen.getByLabelText("Continuar"));
+    expect(await screen.findByText("CNPJ inválido.")).toBeTruthy();
+    expect(screen.getByLabelText("Etapa 1 de 3: Identificação")).toBeTruthy();
     expect(onSave).not.toHaveBeenCalled();
   });
 
   it("a company needs the state registration or Isento", async () => {
-    const { onSave } = await setup();
-    await fireEvent.changeText(await screen.findByLabelText("CPF/CNPJ"), CNPJ);
-    await fireEvent.changeText(screen.getByLabelText("Razão social ou nome"), "Padaria");
-    await fireEvent.press(screen.getByLabelText("Cadastrar"));
+    await setup();
+    await fireEvent.changeText(await screen.findByLabelText("CNPJ"), CNPJ);
+    await fireEvent.changeText(screen.getByLabelText("Razão social"), "Padaria");
+    await fireEvent.press(screen.getByLabelText("Continuar"));
     expect(await screen.findByText('Informe a inscrição estadual ou marque "Isento".')).toBeTruthy();
-    expect(onSave).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByLabelText("Isento"));
+    await fireEvent.press(screen.getByLabelText("Continuar"));
+    expect(await screen.findByLabelText("Etapa 2 de 3: Endereço e contato")).toBeTruthy();
   });
 
-  it("an individual has no state registration field nor Isento, and no error about it", async () => {
-    const { onSave } = await setup();
-    await fireEvent.changeText(await screen.findByLabelText("CPF/CNPJ"), CNPJ);
-    await fireEvent.press(screen.getByLabelText("Isento"));
-    await fireEvent.changeText(screen.getByLabelText("CPF/CNPJ"), "529.982.247-25");
-    await fireEvent.changeText(screen.getByLabelText("Razão social ou nome"), "Maria");
+  it("an individual has no trade name, state registration or Isento", async () => {
+    await setup();
+    await fireEvent.press(await screen.findByLabelText("Pessoa Física"));
+    expect(screen.queryByLabelText("Nome fantasia")).toBeNull();
     expect(screen.queryByLabelText("Inscrição estadual")).toBeNull();
     expect(screen.queryByLabelText("Isento")).toBeNull();
-    await fireEvent.press(screen.getByLabelText("Cadastrar"));
-    await waitFor(() => expect(onSave).toHaveBeenCalled());
-    expect(screen.queryByText(/Pessoa física não tem/)).toBeNull();
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ stateRegistration: null }));
   });
 
-  it("with Isento checked on a company there is no state registration error", async () => {
+  it("screen 2 requires only the city, shown on the field", async () => {
     await setup();
-    await fireEvent.changeText(await screen.findByLabelText("CPF/CNPJ"), CNPJ);
-    await fireEvent.changeText(screen.getByLabelText("Razão social ou nome"), "Padaria");
-    await fireEvent.press(screen.getByLabelText("Isento"));
-    await fireEvent.press(screen.getByLabelText("Cadastrar"));
-    expect(screen.queryByText(/Pessoa física não tem/)).toBeNull();
+    await identifyPerson();
+    await fireEvent.press(await screen.findByLabelText("Continuar"));
+    expect(await screen.findByText("Escolha a cidade.")).toBeTruthy();
+    expect(screen.getByLabelText("Etapa 2 de 3: Endereço e contato")).toBeTruthy();
   });
 
-  it("saves a strict request (ICMS R by default, Isento as ISENTO, no addresses)", async () => {
+  it("the city search ignores accents and case and shows Nome - UF", async () => {
+    await setup();
+    await identifyPerson();
+    await fireEvent.changeText(await screen.findByLabelText("Pesquisar cidade"), "SAO PAULO");
+    expect(await screen.findByLabelText("Cidade São Paulo - SP")).toBeTruthy();
+    expect(screen.queryByLabelText("Cidade Rio de Janeiro - RJ")).toBeNull();
+  });
+
+  it("Voltar goes back one screen keeping what was typed; on the first it leaves", async () => {
+    const { onClose } = await setup();
+    await identifyPerson();
+    await fireEvent.press(await screen.findByLabelText("Voltar"));
+    expect((await screen.findByLabelText("Nome")).props.value).toBe("Maria");
+    await fireEvent.press(screen.getByLabelText("Voltar"));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("registers with the address of screen 2 (city, free text and a picked suggestion) and an automatic seller", async () => {
     const { onSave } = await setup();
-    await fireEvent.changeText(await screen.findByLabelText("CPF/CNPJ"), CNPJ);
-    await fireEvent.changeText(screen.getByLabelText("Razão social ou nome"), "Padaria");
-    await fireEvent.press(screen.getByLabelText("Isento"));
+    await identifyPerson();
+    await chooseCity();
+    await fireEvent(screen.getByLabelText("Rua"), "focus");
+    await fireEvent.changeText(screen.getByLabelText("Rua"), "Pauli");
+    await fireEvent.press(await screen.findByLabelText("Rua Avenida Paulista"));
+    await fireEvent.changeText(screen.getByLabelText("Bairro"), "Vila Nova");
+    await fireEvent.changeText(screen.getByLabelText("Número"), "10");
+    await fireEvent.press(screen.getByLabelText("Continuar"));
+    expect(await screen.findByLabelText("Etapa 3 de 3: Comercial")).toBeTruthy();
+    expect(screen.getByLabelText("Vendedor").props.editable).toBe(false);
     await fireEvent.press(screen.getByLabelText("Cadastrar"));
     await waitFor(() => expect(onSave).toHaveBeenCalled());
     expect(onSave).toHaveBeenCalledWith({
-      document: "11222333000181",
-      name: "Padaria",
+      document: "52998224725",
+      name: "Maria",
       tradeName: null,
       icmsClassification: "R",
-      stateRegistration: "ISENTO",
+      stateRegistration: null,
       phone: null,
       email: null,
       notes: null,
-      addresses: [],
+      addresses: [{ cityCode: 3550308, streetCode: 9, streetName: null, neighborhoodCode: 0, neighborhoodName: "Vila Nova", number: "10", complement: null, postalCode: null }],
     });
   });
 
-  const ICMS = [
-    { code: "C" as const, label: "Consumidor final" },
-    { code: "R" as const, label: "Revendedor" },
-  ];
+  it("a complete CEP fills street, neighborhood and city, all still editable", async () => {
+    const lookupPostalCode = jest.fn(async () => ({ found: true as const, postalCode: "01310100", street: "Avenida Paulista", neighborhood: "Bela Vista", city: "São Paulo", uf: "SP", cityCode: 3550308, neighborhoodCode: 0, streetCode: 0, source: "viacep" }));
+    await setup(undefined, { addresses: fakeAddresses({ lookupPostalCode }) });
+    await identifyPerson();
+    await fireEvent.changeText(await screen.findByLabelText("CEP"), "01310-100");
+    await waitFor(() => expect(screen.getByLabelText("Rua").props.value).toBe("Avenida Paulista"));
+    expect(lookupPostalCode).toHaveBeenCalledWith("01310100");
+    expect(screen.getByLabelText("Bairro").props.value).toBe("Bela Vista");
+    expect(screen.getByLabelText("Cidade escolhida: São Paulo - SP")).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText("Rua"), "Avenida Paulista, lado par");
+    expect(screen.getByLabelText("Rua").props.value).toBe("Avenida Paulista, lado par");
+  });
 
-  it("lists the ICMS classifications by NAME, Revendedor selected by default, and sends the chosen one", async () => {
+  it("offline or CEP not found: no text, no error, the city is still required", async () => {
+    await setup();
+    await identifyPerson();
+    await fireEvent.changeText(await screen.findByLabelText("CEP"), "01310-100");
+    await fireEvent.press(screen.getByLabelText("Continuar"));
+    expect(await screen.findByText("Escolha a cidade.")).toBeTruthy();
+    expect(screen.queryByText(/CEP não/)).toBeNull();
+  });
+
+  it("lists the ICMS classifications by NAME, Revendedor by default, and sends the chosen one", async () => {
     const onSave = jest.fn(async () => undefined);
-    await render(<CustomerCreateScreen onSave={onSave} onClose={jest.fn()} icmsOptions={ICMS} />);
+    const icms = [
+      { code: "C" as const, label: "Consumidor final" },
+      { code: "R" as const, label: "Revendedor" },
+    ];
+    await setup(onSave, { icmsOptions: icms });
     expect(screen.getByLabelText("Classificação Revendedor").props.accessibilityState.selected).toBe(true);
-    expect(screen.queryByText("C")).toBeNull();
     await fireEvent.press(screen.getByLabelText("Classificação Consumidor final"));
-    await fireEvent.changeText(await screen.findByLabelText("CPF/CNPJ"), "529.982.247-25");
-    await fireEvent.changeText(screen.getByLabelText("Razão social ou nome"), "Maria");
-    await fireEvent.press(screen.getByLabelText("Cadastrar"));
+    await identifyPerson();
+    await chooseCity();
+    await fireEvent.press(screen.getByLabelText("Continuar"));
+    await fireEvent.press(await screen.findByLabelText("Cadastrar"));
     await waitFor(() => expect(onSave).toHaveBeenCalled());
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ icmsClassification: "C", stateRegistration: null }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ icmsClassification: "C" }));
   });
 
-  it("without the server's list the selector is not shown and the default R is sent", async () => {
-    const { onSave } = await setup();
-    expect(screen.queryByText("Classificação ICMS *")).toBeNull();
-    await fireEvent.changeText(await screen.findByLabelText("CPF/CNPJ"), "529.982.247-25");
-    await fireEvent.changeText(screen.getByLabelText("Razão social ou nome"), "Maria");
-    await fireEvent.press(screen.getByLabelText("Cadastrar"));
-    await waitFor(() => expect(onSave).toHaveBeenCalled());
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ icmsClassification: "R" }));
-  });
-
-  it("a seller has no seller field; a non-seller must pick one and it is sent", async () => {
+  it("a non-seller must pick the seller on screen 3, and it is sent", async () => {
     const onSave = jest.fn(async () => undefined);
-    await render(<CustomerCreateScreen onSave={onSave} onClose={jest.fn()} sellers={[{ code: 7, name: "Ana" }, { code: 9, name: "Beto" }]} />);
-    await fireEvent.changeText(await screen.findByLabelText("CPF/CNPJ"), "529.982.247-25");
-    await fireEvent.changeText(screen.getByLabelText("Razão social ou nome"), "Maria");
-    await fireEvent.press(screen.getByLabelText("Cadastrar"));
+    await setup(onSave, { sellers: [{ code: 7, name: "Ana" }, { code: 9, name: "Beto" }] });
+    await identifyPerson();
+    await chooseCity();
+    await fireEvent.press(screen.getByLabelText("Continuar"));
+    await fireEvent.press(await screen.findByLabelText("Cadastrar"));
     expect(await screen.findByText("Escolha o vendedor.")).toBeTruthy();
     expect(onSave).not.toHaveBeenCalled();
     await fireEvent.press(screen.getByLabelText("Vendedor Beto"));
@@ -115,17 +178,18 @@ describe("CustomerCreateScreen", () => {
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ sellerCode: 9 }));
   });
 
-  it("no seller field for a seller", async () => {
-    await setup();
-    expect(screen.queryByText("Vendedor *")).toBeNull();
-  });
+  async function reachLastScreen() {
+    await identifyPerson();
+    await chooseCity();
+    await fireEvent.press(screen.getByLabelText("Continuar"));
+    await screen.findByLabelText("Etapa 3 de 3: Comercial");
+  }
 
   it("a local refusal (duplicate waiting on the device) is shown and the form stays", async () => {
     const error = new Error("Já existe um cadastro com este CPF/CNPJ aguardando o Sankhya neste aparelho.");
     error.name = "PendingCustomerError";
     await setup(jest.fn(async () => Promise.reject(error)));
-    await fireEvent.changeText(await screen.findByLabelText("CPF/CNPJ"), "529.982.247-25");
-    await fireEvent.changeText(screen.getByLabelText("Razão social ou nome"), "Maria");
+    await reachLastScreen();
     await fireEvent.press(screen.getByLabelText("Cadastrar"));
     expect(await screen.findByText(error.message)).toBeTruthy();
     expect(screen.getByLabelText("Cadastrar")).toBeTruthy();
@@ -135,43 +199,38 @@ describe("CustomerCreateScreen", () => {
     let release: () => void = () => undefined;
     const onSave = jest.fn(() => new Promise<undefined>((resolve) => { release = () => resolve(undefined); }));
     await setup(onSave);
-    await fireEvent.changeText(await screen.findByLabelText("CPF/CNPJ"), "529.982.247-25");
-    await fireEvent.changeText(screen.getByLabelText("Razão social ou nome"), "Maria");
+    await reachLastScreen();
     await fireEvent.press(screen.getByLabelText("Cadastrar"));
-    expect(await screen.findByText("Cadastrando...")).toBeTruthy();
+    expect(await screen.findByLabelText("Cadastrando...")).toBeTruthy();
     await fireEvent.press(screen.getByLabelText("Cadastrando..."));
     expect(onSave).toHaveBeenCalledTimes(1);
     release();
-    expect(await screen.findByText("Cadastrar")).toBeTruthy();
+    expect(await screen.findByLabelText("Cadastrar")).toBeTruthy();
   });
 
-  it("a 422 shows the server's text on the field, saves nothing and keeps the form", async () => {
+  it("a refusal on the document takes the seller to screen 1 with the server's text on the field", async () => {
     const refusal = new CustomerRejectedError("Recusado", { document: "Este CPF/CNPJ já está cadastrado." });
     await setup(jest.fn(async () => Promise.reject(refusal)));
-    await fireEvent.changeText(await screen.findByLabelText("CPF/CNPJ"), "529.982.247-25");
-    await fireEvent.changeText(screen.getByLabelText("Razão social ou nome"), "Maria");
+    await reachLastScreen();
     await fireEvent.press(screen.getByLabelText("Cadastrar"));
     expect(await screen.findByText("Este CPF/CNPJ já está cadastrado.")).toBeTruthy();
-    expect(screen.getByLabelText("CPF/CNPJ").props.value).toBe("529.982.247-25");
-    // Editing the field clears the server's text for it.
-    await fireEvent.changeText(screen.getByLabelText("CPF/CNPJ"), "111.444.777-35");
+    expect(screen.getByLabelText("Etapa 1 de 3: Identificação")).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText("CPF"), "111.444.777-35");
     expect(screen.queryByText("Este CPF/CNPJ já está cadastrado.")).toBeNull();
   });
 
-  it("a 422 on the seller shows on the seller field", async () => {
-    const refusal = new CustomerRejectedError("Recusado", { sellerCode: "Escolha o vendedor." });
-    const onSave = jest.fn(async () => Promise.reject(refusal));
-    await render(<CustomerCreateScreen onSave={onSave} onClose={jest.fn()} sellers={[{ code: 7, name: "Ana" }]} />);
-    await fireEvent.changeText(await screen.findByLabelText("CPF/CNPJ"), "529.982.247-25");
-    await fireEvent.changeText(screen.getByLabelText("Razão social ou nome"), "Maria");
-    await fireEvent.press(screen.getByLabelText("Vendedor Ana"));
+  it("a refusal on the city shows on the city field of screen 2", async () => {
+    const refusal = new CustomerRejectedError("Recusado", { cityCode: "Informe a cidade." });
+    await setup(jest.fn(async () => Promise.reject(refusal)));
+    await reachLastScreen();
     await fireEvent.press(screen.getByLabelText("Cadastrar"));
-    expect(await screen.findByText("Escolha o vendedor.")).toBeTruthy();
+    expect(await screen.findByText("Informe a cidade.")).toBeTruthy();
+    expect(screen.getByLabelText("Etapa 2 de 3: Endereço e contato")).toBeTruthy();
   });
 
-  it("Cancelar closes without saving", async () => {
+  it("the exit control closes without saving", async () => {
     const { onSave, onClose } = await setup();
-    await fireEvent.press(await screen.findByLabelText("Cancelar"));
+    await fireEvent.press(await screen.findByLabelText("Sair do cadastro"));
     expect(onClose).toHaveBeenCalled();
     expect(onSave).not.toHaveBeenCalled();
   });

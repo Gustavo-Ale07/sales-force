@@ -46,6 +46,49 @@ export const erpSeller = pgTable(
   ],
 );
 
+/** Cities of the ERP address registry (D-AR address): code, name, two-letter UF and the optional fiscal (IBGE) code. Code 0 ("none") is never mirrored. */
+export const erpCity = pgTable(
+  'erp_city',
+  {
+    code: integer('code').primaryKey(),
+    name: text('name').notNull(),
+    uf: text('uf').notNull(),
+    ibge: text('ibge'),
+    ...mirrorColumns(),
+  },
+  (t) => [
+    // Serves: the city picker (live cities ordered by name) and the registration check that a city code exists.
+    index('erp_city_name_idx').on(t.name).where(sql`${t.deletedAt} is null`),
+  ],
+);
+
+/** Neighborhoods of the ERP address registry. Not linked to a city in the source. Code 0 is never mirrored. */
+export const erpNeighborhood = pgTable('erp_neighborhood', {
+  code: integer('code').primaryKey(),
+  name: text('name').notNull(),
+  ...mirrorColumns(),
+});
+
+/** Streets (logradouros) of the ERP address registry; `kind` is the free-text street type. Code 0 is never mirrored. */
+export const erpStreet = pgTable('erp_street', {
+  code: integer('code').primaryKey(),
+  name: text('name').notNull(),
+  kind: text('kind'),
+  ...mirrorColumns(),
+});
+
+/**
+ * Postal codes (CEP) of the ERP registry (TSICEP) with the city, neighborhood and street each one points to (0 = none).
+ * `cep` is the 8-digit code as an integer (the mirror keys are integers); the lookup restores the leading zeros.
+ */
+export const erpPostalCode = pgTable('erp_postal_code', {
+  cep: integer('cep').primaryKey(),
+  cityCode: integer('city_code').notNull(),
+  neighborhoodCode: integer('neighborhood_code').notNull(),
+  streetCode: integer('street_code').notNull(),
+  ...mirrorColumns(),
+});
+
 /** Carriers (partners flagged as carrier in the ERP): code, display name and active flag only (D-C). */
 export const erpCarrier = pgTable('erp_carrier', {
   code: integer('code').primaryKey(),

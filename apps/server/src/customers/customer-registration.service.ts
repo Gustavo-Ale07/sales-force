@@ -7,6 +7,7 @@ import type { CurrentUser } from '../iam/current-user.js';
 import { PolicyService } from '../iam/policy.service.js';
 import { uuidv7 } from '../platform/ids.js';
 import { CLOCK, CUSTOMER_ENQUEUE_ENABLED, CUSTOMER_CONFIRM_WAIT, type Clock, type CustomerConfirmWait } from '../platform/tokens.js';
+import { resolveAddresses } from './customer-address-resolution.js';
 import { customerRefused } from './customer-refusal.js';
 import { prepareCustomerRegistration } from './customer-registration-request.js';
 import { reasonOfRegistration, refusalFields, sendStateOf, stateOfRegistration, type RegistrationOutboxFacts } from './customer-registration-view.js';
@@ -62,7 +63,8 @@ export class CustomerRegistrationService {
         prepared.issues,
       );
     }
-    const { payload, fingerprint } = prepared.value;
+    const { fingerprint } = prepared.value;
+    let payload = prepared.value.payload;
 
     // The owner must be a real, active seller of the ERP mirror: a typo or a made-up code never reaches the ERP.
     if (!(await this.registrations.activeSellerExists(payload.sellerCode))) {
@@ -72,6 +74,19 @@ export class CustomerRegistrationService {
 
     const existing = await this.registrations.findByRequest(user.accountId, body.clientRequestId);
     if (existing !== null) return { response: await this.replayOf(existing, fingerprint), httpStatus: 200 };
+
+    // P-08: the city and any chosen street/neighborhood code are validated against the ERP mirror; free names are matched by name.
+    // The fingerprint above stays that of the request as sent, so a replay of the same request is still the same request.
+    if (payload.addresses.length > 0) {
+      const resolution = await resolveAddresses(payload.addresses, this.registrations);
+      if (!resolution.ok) {
+        throw customerRefused(
+          Object.fromEntries(resolution.issues.map((issue) => [issue.path, issue.message ?? 'Valor inválido.'])),
+          resolution.issues,
+        );
+      }
+      payload = { ...payload, addresses: resolution.addresses };
+    }
 
     const at = this.clock();
     if ((await this.registrations.countSince(user.accountId, new Date(at.getTime() - HOUR_MS))) >= MAX_CUSTOMER_CREATIONS_PER_HOUR) {

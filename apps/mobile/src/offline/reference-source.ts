@@ -289,6 +289,10 @@ export function createReferenceSource(api: ApiClient, timing: RefreshTiming = {}
     fetchEntryConfiguration: () => guard(() => callApi(() => api.GET("/order-entry/configuration"))),
     // Same endpoint the online carrier picker uses; the pull treats a failure here as non-fatal.
     fetchCarriers: () => guard(async () => (await callApi(() => api.GET("/carriers"))).items),
+    // Address lists of the new-customer form: sorted by the server, best-effort in the pull (a failure keeps the previous list).
+    fetchCities: () => guard(async () => (await callApi(() => api.GET("/cities"))).items),
+    fetchNeighborhoods: () => guard(async () => (await callApi(() => api.GET("/neighborhoods"))).items),
+    fetchStreets: () => guard(async () => (await callApi(() => api.GET("/streets"))).items),
     fetchDatasetIdentity: () => guard(async () => datasetIdentityOf(await callApi(() => api.GET("/order-entry/configuration")))),
   };
 }

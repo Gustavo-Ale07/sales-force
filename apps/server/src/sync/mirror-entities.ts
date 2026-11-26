@@ -2,6 +2,10 @@ import {
   erpCustomer,
   erpDirectoryUser,
   erpCarrier,
+  erpCity,
+  erpNeighborhood,
+  erpStreet,
+  erpPostalCode,
   erpIpiRate,
   erpOpenTitle,
   erpListPrice,
@@ -14,7 +18,7 @@ import {
   erpSeller,
 } from '@salesforce/db';
 import { classifySalesHistoryTop } from '@salesforce/domain';
-import type { Carrier, Customer, OpenTitle, DirectoryUser, ListPrice, PriceTable, PriceTableVersion, Product, ProductGroup, Seller } from '@salesforce/domain';
+import type { Carrier, City, Neighborhood, Street, PostalCodeEntry, Customer, OpenTitle, DirectoryUser, ListPrice, PriceTable, PriceTableVersion, Product, ProductGroup, Seller } from '@salesforce/domain';
 import { salesHistoryReadConfig, type SalesHistorySyncConfig } from './sales-history-config.js';
 import {
   SankhyaGatewayError,
@@ -50,6 +54,11 @@ export const MIRROR_ENTITIES = [
   'productGroups',
   'salesHistoryMonthly',
   'salesHistoryCustomerProduct',
+  // ERP address registry for the customer registration (appended: never reorder, the lock key is the position).
+  'cities',
+  'neighborhoods',
+  'streets',
+  'postalCodes',
 ] as const satisfies readonly ReadEntity[];
 
 export type MirrorEntity = (typeof MIRROR_ENTITIES)[number];
@@ -369,6 +378,58 @@ const carriers: MirrorEntitySpec = {
     })),
 };
 
+/** City registry: the customer registration picks the city code from this mirror (an unknown code is refused, P-08). */
+const cities: MirrorEntitySpec = {
+  entity: 'cities',
+  requires: ['cities'],
+  table: erpCity,
+  keyProps: ['code'],
+  read: (context) =>
+    mapped<City>(context.gateway.readCities(readOptions(context)), (row) => ({
+      key: [keyColumn('cities', 'code', row.code)],
+      content: { name: row.name, uf: row.uf, ibge: row.ibge },
+    })),
+};
+
+/** Neighborhood registry (optional on the registration; code 0 = none). */
+const neighborhoods: MirrorEntitySpec = {
+  entity: 'neighborhoods',
+  requires: ['neighborhoods'],
+  table: erpNeighborhood,
+  keyProps: ['code'],
+  read: (context) =>
+    mapped<Neighborhood>(context.gateway.readNeighborhoods(readOptions(context)), (row) => ({
+      key: [keyColumn('neighborhoods', 'code', row.code)],
+      content: { name: row.name },
+    })),
+};
+
+/** Street registry (optional on the registration; code 0 = none). */
+const streets: MirrorEntitySpec = {
+  entity: 'streets',
+  requires: ['streets'],
+  table: erpStreet,
+  keyProps: ['code'],
+  read: (context) =>
+    mapped<Street>(context.gateway.readStreets(readOptions(context)), (row) => ({
+      key: [keyColumn('streets', 'code', row.code)],
+      content: { name: row.name, kind: row.kind },
+    })),
+};
+
+/** Postal codes (TSICEP): the CEP -> city/neighborhood/street links. The CEP (8 digits) is the integer key; 0 = no link. */
+const postalCodes: MirrorEntitySpec = {
+  entity: 'postalCodes',
+  requires: ['postalCodes'],
+  table: erpPostalCode,
+  keyProps: ['cep'],
+  read: (context) =>
+    mapped<PostalCodeEntry>(context.gateway.readPostalCodes(readOptions(context)), (row) => ({
+      key: [keyColumn('postalCodes', 'cep', row.cep)],
+      content: { cityCode: row.cityCode, neighborhoodCode: row.neighborhoodCode, streetCode: row.streetCode },
+    })),
+};
+
 /** IPI rates (TGFIPI): display estimate of the IPI only (D-D). A handful of rows, read in full on every run. */
 const ipiRates: MirrorEntitySpec = {
   entity: 'ipiRates',
@@ -560,4 +621,8 @@ export const MIRROR_SPECS: Readonly<Record<RowMirrorEntity, MirrorEntitySpec>> =
   ipiRates,
   openTitles,
   productGroups,
+  cities,
+  neighborhoods,
+  streets,
+  postalCodes,
 };

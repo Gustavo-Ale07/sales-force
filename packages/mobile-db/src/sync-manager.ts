@@ -1,3 +1,4 @@
+import { replaceCities, replaceNeighborhoods, replaceStreets } from "./address-cache";
 import type { SqlDatabase, SqlRow } from "./connection";
 import { DatasetIdentityError, confirmDataset, readCacheDataset, readExpectedDataset, sameDataset, writeCacheDataset, type DatasetIdentity } from "./dataset-identity";
 import { countOutbox, draftErpNumber, getDraft, listAttentionItems, listOutbox, type AttentionItem, type DraftRecord } from "./local-orders";
@@ -45,6 +46,10 @@ export interface ReferenceSource extends OrderStatusSource, ServerOrdersSource {
   fetchProductGroups?(): Promise<ProductGroupsFetch>;
   /** Table the server resolves the catalog (no customer) against, for the list's "origin of the prices". Best-effort like carriers. */
   fetchPricesOrigin?(): Promise<PriceOrigin>;
+  /** ERP address lists of the new-customer form (`GET /cities`, `/neighborhoods`, `/streets`). Best-effort like carriers: a failure keeps the previous list. */
+  fetchCities?(): Promise<readonly unknown[]>;
+  fetchNeighborhoods?(): Promise<readonly unknown[]>;
+  fetchStreets?(): Promise<readonly unknown[]>;
   /**
    * On-demand refresh (POST /sync/refresh, then follow it until done). The manager calls it BEFORE any download and downloads only
    * after it returns. Optional so a source without it just downloads. Throws `TransportError` when the server cannot be reached.
@@ -208,6 +213,18 @@ export async function pullReferenceData(
       pricesOrigin = null;
     }
   }
+  // Address lists (cities, neighborhoods, streets): silent and best-effort; on failure the previous list stays unless it is of another dataset.
+  const bestEffort = async (fetch: (() => Promise<readonly unknown[]>) | undefined): Promise<readonly unknown[] | null> => {
+    if (fetch === undefined) return null;
+    try {
+      return await fetch();
+    } catch {
+      return null;
+    }
+  };
+  const cities = await bestEffort(source.fetchCities?.bind(source));
+  const neighborhoods = await bestEffort(source.fetchNeighborhoods?.bind(source));
+  const streets = await bestEffort(source.fetchStreets?.bind(source));
   onStep({ id: "save", state: "running", count: null });
   const now = isoNow(env);
   await db.transaction(async (tx) => {
@@ -232,6 +249,14 @@ export async function pullReferenceData(
     await applyCustomerCreationSignal(tx, configuration, now);
     if (carriers !== null) await setMeta(tx, META_KEYS.carriers, JSON.stringify(carriers), now);
     else if (!sameDataset(previousDataset, before)) await deleteMeta(tx, META_KEYS.carriers);
+    const datasetChanged = !sameDataset(previousDataset, before);
+    if (cities !== null) await replaceCities(tx, cities);
+    else if (datasetChanged) await replaceCities(tx, []);
+    if (neighborhoods !== null) await replaceNeighborhoods(tx, neighborhoods);
+    else if (datasetChanged) await replaceNeighborhoods(tx, []);
+    if (streets !== null) await replaceStreets(tx, streets);
+    else if (datasetChanged) await replaceStreets(tx, []);
+    if (datasetChanged) await tx.execute("DELETE FROM cache_postal_code");
     await setMeta(tx, META_KEYS.cacheOwner, ownerAccountId, now);
   });
   // Mirror check (RT-1): what the device now holds must equal what the server returned; a difference is repaired by re-downloading

@@ -435,7 +435,7 @@ describe("customer creation signal comes from the configuration, at every sync",
   });
 
   it("a 409 customer_write_disabled still hides it until the next sync; the sync that says 'on' clears the notice and re-queues", async () => {
-    const record = await createPendingCustomer(db, env, { ownerAccountId: OWNER, request: { document: "123.456.789-09", name: "Padaria", tradeName: null, icmsClassification: "R", stateRegistration: null, phone: null, email: null, notes: null, addresses: [{ streetCode: 1, neighborhoodCode: 2, number: "10", complement: null, postalCode: "01001000" }] } });
+    const record = await createPendingCustomer(db, env, { ownerAccountId: OWNER, request: { document: "123.456.789-09", name: "Padaria", tradeName: null, icmsClassification: "R", stateRegistration: null, phone: null, email: null, notes: null, addresses: [{ cityCode: 3550308, streetCode: 1, neighborhoodCode: 2, number: "10", complement: null, postalCode: "01001000" }] } });
     await pushPendingCustomers(db, env, erpOff, OWNER, { currentDataset: REAL, respectBackoff: false });
     expect(await isCustomerCreationAvailable(db, env)).toBe(false);
     expect((await listPendingCustomers(db, OWNER, REAL))[0]?.lastError).toBe(CUSTOMER_CREATION_NOT_RELEASED);

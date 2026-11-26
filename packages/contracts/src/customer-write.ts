@@ -62,18 +62,31 @@ export const CustomerFieldSchemas = {
   notes: multilineText(4000),
   addressNumber: text(6),
   addressComplement: text(30),
+  /** Free street or neighborhood text (ERP NOMEEND/NOMEBAI are 60 characters). */
+  addressName: text(60),
   postalCode: z.string().regex(/^\d{8}$/, 'Expected 8 digits'),
 } as const;
 
-/** Street and neighborhood come from the ERP catalogues (V1 never creates them): codes only. */
+/**
+ * One address. The city is mandatory and always an ERP city code (`cityCode`). Street and neighborhood are optional: a code
+ * (0 or absent = none) picked from the ERP lists, or a free text (`streetName`, `neighborhoodName`) the server first tries to match
+ * against the ERP registry by name (without accents or case) and the worker creates in the Sankhya Sandbox otherwise.
+ *
+ * Old registrations still queued on a device (shape without `cityCode`): the server REFUSES them with a 400 `validation_failed` on
+ * `addresses.N.cityCode`, which the client shows as "informe a cidade"; the city is never guessed. A registration without any
+ * address is unaffected.
+ */
 export const CustomerAddressInputSchema = named(
   'CustomerAddressInput',
   z.strictObject({
-    streetCode: codeInt(),
-    neighborhoodCode: codeInt(),
-    number: CustomerFieldSchemas.addressNumber,
+    cityCode: z.number().int().min(1),
+    streetCode: codeInt().default(0),
+    neighborhoodCode: codeInt().default(0),
+    streetName: CustomerFieldSchemas.addressName.nullable().default(null),
+    neighborhoodName: CustomerFieldSchemas.addressName.nullable().default(null),
+    number: CustomerFieldSchemas.addressNumber.nullable().default(null),
     complement: CustomerFieldSchemas.addressComplement.nullable().default(null),
-    postalCode: CustomerFieldSchemas.postalCode,
+    postalCode: CustomerFieldSchemas.postalCode.nullable().default(null),
   }),
 );
 export type CustomerAddressInput = z.infer<typeof CustomerAddressInputSchema>;

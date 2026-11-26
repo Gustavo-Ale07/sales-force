@@ -83,6 +83,80 @@ describe('readProductGroups (TGFGRU)', () => {
   });
 });
 
+describe('address registry reads (TSICID / TSIUFS / TSIBAI / TSIEND)', () => {
+  const tables: ErpTables = {
+    TSIUFS: [
+      { CODUF: 1, UF: 'sp' },
+      { CODUF: 2, UF: 'RJ' },
+    ],
+    TSICID: [
+      { CODCID: 0, NOMECID: 'SEM', UF: 0, CODMUNFIS: 0 },
+      { CODCID: 10, NOMECID: 'Cidade A', UF: 1, CODMUNFIS: 3500001 },
+      { CODCID: 11, NOMECID: 'Cidade B', UF: 2, CODMUNFIS: 0 },
+      { CODCID: 12, NOMECID: 'Cidade C', UF: 99, CODMUNFIS: 5 },
+      { CODCID: 13, NOMECID: '  ', UF: 1, CODMUNFIS: 5 },
+    ],
+    TSIBAI: [
+      { CODBAI: 0, NOMEBAI: 'SEM' },
+      { CODBAI: 3, NOMEBAI: 'Centro' },
+    ],
+    TSIEND: [
+      { CODEND: 0, NOMEEND: 'SEM', TIPO: null },
+      { CODEND: 7, NOMEEND: 'das Flores', TIPO: 'RUA' },
+      { CODEND: 8, NOMEEND: 'Sem tipo', TIPO: ' ' },
+    ],
+    TSICEP: [
+      { CEP: '01310100', CODCID: 10, CODBAI: 3, CODEND: 7 },
+      { CEP: '20040020', CODCID: 11, CODBAI: 0, CODEND: 0 },
+      { CEP: 'ABCDEFGH', CODCID: 10, CODBAI: 0, CODEND: 0 },
+      { CEP: '99999999', CODCID: 0, CODBAI: 0, CODEND: 0 },
+    ],
+  };
+
+  it('resolves the numeric state to its abbreviation, drops the placeholder and discards a city with unknown state or blank name', async () => {
+    const { gateway, mock } = gatewayOver(tables);
+    const warnings: string[] = [];
+    const cities = await rows(gateway.readCities({ onWarning: (m) => warnings.push(m) }));
+    expect(cities).toEqual([
+      { code: 10, name: 'Cidade A', uf: 'SP', ibge: '3500001' },
+      { code: 11, name: 'Cidade B', uf: 'RJ', ibge: null },
+    ]);
+    expect(warnings).toHaveLength(2);
+    expect(warnings.join(' ')).not.toContain('Cidade C');
+    const sql = mock.queries().map((q) => q.sql ?? '').join('\n');
+    expect(sql).toContain('FROM TSICID');
+    expect(sql).toContain('FROM TSIUFS');
+  });
+
+  it('reads neighborhoods and streets without the placeholder code 0', async () => {
+    const { gateway } = gatewayOver(tables);
+    expect(await rows(gateway.readNeighborhoods())).toEqual([{ code: 3, name: 'Centro' }]);
+    expect(await rows(gateway.readStreets())).toEqual([
+      { code: 7, name: 'das Flores', kind: 'RUA' },
+      { code: 8, name: 'Sem tipo', kind: null },
+    ]);
+  });
+});
+
+describe('readPostalCodes (TSICEP)', () => {
+  const tables: ErpTables = {
+    TSICEP: [
+      { CEP: '01310100', CODCID: 10, CODBAI: 3, CODEND: 7 },
+      { CEP: '20040020', CODCID: 11, CODBAI: null, CODEND: 0 },
+      { CEP: 'ABCDEFGH', CODCID: 10, CODBAI: 0, CODEND: 0 },
+      { CEP: '99999999', CODCID: 0, CODBAI: 0, CODEND: 0 },
+    ],
+  };
+
+  it('keeps the 8-digit CEP as an integer key with its links; discards a malformed CEP and one without a city', async () => {
+    const { gateway } = gatewayOver(tables);
+    expect(await rows(gateway.readPostalCodes())).toEqual([
+      { cep: 1310100, cityCode: 10, neighborhoodCode: 3, streetCode: 7 },
+      { cep: 20040020, cityCode: 11, neighborhoodCode: 0, streetCode: 0 },
+    ]);
+  });
+});
+
 describe('readPriceTables (TGFNTA) scoped by installation configuration', () => {
   const tables: ErpTables = {
     TGFNTA: [

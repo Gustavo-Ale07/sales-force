@@ -497,6 +497,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/cities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** ERP cities (code, name, UF, IBGE) for the customer registration, ordered by UF and name */
+        get: operations["listCities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/neighborhoods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** ERP neighborhoods (code, name) for the customer registration, ordered by name */
+        get: operations["listNeighborhoods"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/streets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** ERP streets (code, name, kind) for the customer registration, ordered by name */
+        get: operations["listStreets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/customers/postal-code/{cep}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Address of a postal code (CEP), matched against the ERP registry
+         * @description Looks the CEP up in ViaCEP and, when it does not answer, BrasilAPI (about 2 s each; only the 8 digits leave the server). Never an error for a CEP that is invalid, unknown or whose sources are down: answers 200 with `found: false`. When found, `cityCode` is set when the ERP city matches (IBGE + UF, else name without accents + UF) and `neighborhoodCode` / `streetCode` when the text matches an ERP row; otherwise only the text is returned. Same authorization as customer registration.
+         */
+        get: operations["lookupPostalCode"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products": {
         parameters: {
             query?: never;
@@ -1007,6 +1078,15 @@ export interface components {
         CarriersResponse: {
             items: components["schemas"]["Carrier"][];
         };
+        CitiesResponse: {
+            items: components["schemas"]["City"][];
+        };
+        City: {
+            code: number;
+            name: string;
+            uf: string;
+            ibge: string | null;
+        };
         ConfigurationProvenanceEntry: {
             table: string;
             column: string;
@@ -1194,12 +1274,21 @@ export interface components {
             items: components["schemas"]["OrderTemplateItem"][];
         };
         CustomerAddressInput: {
+            cityCode: number;
+            /** @default 0 */
             streetCode: number;
+            /** @default 0 */
             neighborhoodCode: number;
-            number: string;
+            /** @default null */
+            streetName: string | null;
+            /** @default null */
+            neighborhoodName: string | null;
+            /** @default null */
+            number: string | null;
             /** @default null */
             complement: string | null;
-            postalCode: string;
+            /** @default null */
+            postalCode: string | null;
         };
         CustomerContactInput: {
             name: string;
@@ -1501,6 +1590,13 @@ export interface components {
             code: number;
             label: string;
             sellable?: boolean;
+        };
+        Neighborhood: {
+            code: number;
+            name: string;
+        };
+        NeighborhoodsResponse: {
+            items: components["schemas"]["Neighborhood"][];
         };
         /** @enum {string} */
         NoPriceReason: "no_resolved_table" | "no_effective_version" | "no_price_row";
@@ -1838,6 +1934,18 @@ export interface components {
         };
         /** @enum {string} */
         PortfolioOwnershipStrategy: "customer_seller_field" | "explicit_account_links" | "all_visible";
+        PostalCodeLookup: {
+            found: boolean;
+            postalCode: string | null;
+            street: string | null;
+            neighborhood: string | null;
+            city: string | null;
+            uf: string | null;
+            cityCode: number | null;
+            neighborhoodCode: number | null;
+            streetCode: number | null;
+            source: ("erp" | "viacep" | "brasilapi") | null;
+        };
         PriceContext: {
             customerCode: number | null;
             tableCode: number | null;
@@ -2077,6 +2185,14 @@ export interface components {
             finishedAt: components["schemas"]["IsoTimestamp"] | null;
             hasWarnings: boolean;
             reused: boolean;
+        };
+        Street: {
+            code: number;
+            name: string;
+            kind: string | null;
+        };
+        StreetsResponse: {
+            items: components["schemas"]["Street"][];
         };
         SyncRefresh: {
             /** Format: uuid */
@@ -3720,6 +3836,160 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CarriersResponse"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    listCities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cidades do cadastro do ERP */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CitiesResponse"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    listNeighborhoods: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bairros do cadastro do ERP */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NeighborhoodsResponse"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    listStreets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Logradouros do cadastro do ERP */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StreetsResponse"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    lookupPostalCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cep: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Endereço do CEP (ou found=false) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostalCodeLookup"];
                 };
             };
             /** @description Não autenticado */

@@ -18,33 +18,40 @@ export function WizardProgress({
   step,
   customerName,
   onExit,
+  custom,
+  exitLabel = "Sair do pedido",
 }: {
   readonly step: WizardStep;
+  /** Another flow (new customer) with its own step: overrides `step` (same bar, same "n de total"). */
+  readonly custom?: { readonly index: number; readonly total: number; readonly label: string } | undefined;
+  readonly exitLabel?: string;
   readonly customerName?: string | undefined;
   /** When given, shows an exit control (the caller confirms before leaving). */
   readonly onExit?: (() => void) | undefined;
 }) {
-  const index = WIZARD_STEPS.indexOf(step) + 1;
+  const index = custom?.index ?? WIZARD_STEPS.indexOf(step) + 1;
+  const total = custom?.total ?? WIZARD_STEPS.length;
+  const label = custom?.label ?? WIZARD_STEP_LABEL[step];
   return (
     <View style={styles.progress}>
       <View
         style={styles.progressText}
         accessibilityRole="progressbar"
-        accessibilityLabel={`Etapa ${index} de ${WIZARD_STEPS.length}: ${WIZARD_STEP_LABEL[step]}`}
-        accessibilityValue={{ min: 1, max: WIZARD_STEPS.length, now: index }}
+        accessibilityLabel={`Etapa ${index} de ${total}: ${label}`}
+        accessibilityValue={{ min: 1, max: total, now: index }}
       >
         <Text style={styles.progressTitle} numberOfLines={1}>
-          {WIZARD_STEP_LABEL[step]}
+          {label}
         </Text>
-        <Text style={styles.progressStep}>{`${index} de ${WIZARD_STEPS.length}`}</Text>
+        <Text style={styles.progressStep}>{`${index} de ${total}`}</Text>
       </View>
       {onExit !== undefined && (
-        <Pressable style={styles.exit} onPress={onExit} accessibilityRole="button" accessibilityLabel="Sair do pedido">
+        <Pressable style={styles.exit} onPress={onExit} accessibilityRole="button" accessibilityLabel={exitLabel}>
           <Icon name="close" size={20} color={colors.textMuted} />
         </Pressable>
       )}
       <View style={styles.track}>
-        <View style={[styles.fill, { width: `${(index / WIZARD_STEPS.length) * 100}%` }]} />
+        <View style={[styles.fill, { width: `${(index / total) * 100}%` }]} />
       </View>
       {customerName !== undefined && (
         <Text style={styles.progressAside} numberOfLines={1}>

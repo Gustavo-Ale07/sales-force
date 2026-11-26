@@ -1,5 +1,6 @@
-import { isValidCnpj, isValidCpf, normalizeTaxDocument, taxDocumentKind } from "@salesforce/domain";
+import { isValidCnpj, isValidCpf, normalizeTaxDocument } from "@salesforce/domain";
 import { ApiRequestError } from "./api";
+import type { PendingCustomerRequest } from "@salesforce/mobile-db";
 
 /**
  * Customer create/edit form rules (D-AP, D-AR), the same limits, labels and texts as the site (`apps/web/src/lib/customer-form.ts`, PAR-1).
@@ -109,30 +110,55 @@ export function buildUpdateBody(clientRequestId: string, form: EditForm): Update
 
 /* ---------- Create ---------- */
 
+export type PersonKind = "individual" | "company";
+
+export const ADDRESS_LIMITS = { number: 6, complement: 30, addressName: 60 } as const;
+
 export interface CreateForm {
+  personKind: PersonKind;
   document: string;
   name: string;
   tradeName: string;
   icmsClassification: IcmsOption;
   stateRegistration: string;
   exempt: boolean;
+  postalCode: string;
+  /** ERP city code; mandatory. Chosen in the picker or filled by the postal code. */
+  cityCode: number | null;
+  /** "Nome - UF" of the chosen city (display only). */
+  cityLabel: string;
+  neighborhood: string;
+  /** Set only while the text is a suggestion the seller picked (or the postal code matched); typing free text clears it. */
+  neighborhoodCode: number | null;
+  street: string;
+  streetCode: number | null;
+  number: string;
+  complement: string;
   phone: string;
   email: string;
-  notes: string;
   /** Only chosen by a user who is not a seller (manager and equivalent); a seller's customer is linked to them by the server. */
   sellerCode: number | null;
 }
 
 export const emptyCreateForm = (): CreateForm => ({
+  personKind: "company",
   document: "",
   name: "",
   tradeName: "",
   icmsClassification: DEFAULT_ICMS,
   stateRegistration: "",
   exempt: false,
+  postalCode: "",
+  cityCode: null,
+  cityLabel: "",
+  neighborhood: "",
+  neighborhoodCode: null,
+  street: "",
+  streetCode: null,
+  number: "",
+  complement: "",
   phone: "",
   email: "",
-  notes: "",
   sellerCode: null,
 });
 
@@ -142,40 +168,104 @@ export interface CreateProblems {
   name: string | null;
   tradeName: string | null;
   stateRegistration: string | null;
+  postalCode: string | null;
+  cityCode: string | null;
+  neighborhood: string | null;
+  street: string | null;
+  number: string | null;
+  complement: string | null;
   phone: string | null;
   email: string | null;
-  notes: string | null;
 }
 
-/** `sellerRequired`: the signed-in user is not a seller, so the form must carry the seller the customer is linked to. */
-export function createProblems(form: CreateForm, options: { readonly sellerRequired?: boolean } = {}): CreateProblems {
+const tooLong = (value: string, max: number, text: string): string | null => (value.trim().length > max ? `${text} deve ter até ${max} caracteres.` : null);
+
+/** Screen 1 (Identificação): only what the ERP requires blocks (valid document of the chosen kind, name); the rest is checked for size. */
+export function identificationProblems(form: CreateForm): Pick<CreateProblems, "document" | "name" | "tradeName" | "stateRegistration"> {
   const digits = normalizeTaxDocument(form.document);
-  const kind = taxDocumentKind(digits);
   let document: string | null = null;
-  if (digits === "") document = "Informe o CPF ou CNPJ.";
-  else if (kind === null || !(kind === "individual" ? isValidCpf(digits) : isValidCnpj(digits))) document = "CPF ou CNPJ inválido.";
-  const ie = form.stateRegistration.trim();
-  let stateRegistration: string | null = null;
-  if (kind === "company" && !form.exempt && ie === "") stateRegistration = 'Informe a inscrição estadual ou marque "Isento".';
-  // A natural person has no state registration: the field and "Isento" are not shown, and whatever they held is ignored (never an error).
-  else if (kind !== "individual" && ie.length > LIMITS.stateRegistration) stateRegistration = `A inscrição estadual deve ter até ${LIMITS.stateRegistration} caracteres.`;
+  if (digits === "") document = form.personKind === "individual" ? "Informe o CPF." : "Informe o CNPJ.";
+  else if (form.personKind === "individual" ? !isValidCpf(digits) : !isValidCnpj(digits)) document = form.personKind === "individual" ? "CPF inválido." : "CNPJ inválido.";
   return {
-    sellerCode: options.sellerRequired === true && form.sellerCode === null ? "Escolha o vendedor." : null,
     document,
-    name: form.name.trim() === "" ? "Informe a razão social ou o nome." : form.name.trim().length > LIMITS.name ? `O nome deve ter até ${LIMITS.name} caracteres.` : null,
-    tradeName: form.tradeName.trim().length > LIMITS.tradeName ? `O nome fantasia deve ter até ${LIMITS.tradeName} caracteres.` : null,
-    stateRegistration,
-    phone: phoneProblem(form.phone),
-    email: emailProblem(form.email),
-    notes: notesProblem(form.notes),
+    name: form.name.trim() === "" ? "Informe a razão social ou o nome." : tooLong(form.name, LIMITS.name, "O nome"),
+    tradeName: tooLong(form.tradeName, LIMITS.tradeName, "O nome fantasia"),
+    stateRegistration:
+      form.personKind === "company" && !form.exempt
+        ? form.stateRegistration.trim() === ""
+          ? 'Informe a inscrição estadual ou marque "Isento".'
+          : tooLong(form.stateRegistration, LIMITS.stateRegistration, "A inscrição estadual")
+        : null,
   };
 }
 
-export function hasCreateProblems(problems: CreateProblems): boolean {
+/** Screen 2 (Endereço e contato): only the city blocks; filled optional fields are checked for shape and size. */
+export function addressProblems(form: CreateForm): Pick<CreateProblems, "postalCode" | "cityCode" | "neighborhood" | "street" | "number" | "complement" | "phone" | "email"> {
+  const cep = digitsOf(form.postalCode);
+  return {
+    postalCode: form.postalCode.trim() !== "" && cep.length !== 8 ? "O CEP deve ter 8 dígitos." : null,
+    cityCode: form.cityCode === null ? "Escolha a cidade." : null,
+    neighborhood: tooLong(form.neighborhood, ADDRESS_LIMITS.addressName, "O bairro"),
+    street: tooLong(form.street, ADDRESS_LIMITS.addressName, "A rua"),
+    number: tooLong(form.number, ADDRESS_LIMITS.number, "O número"),
+    complement: tooLong(form.complement, ADDRESS_LIMITS.complement, "O complemento"),
+    phone: phoneProblem(form.phone),
+    email: emailProblem(form.email),
+  };
+}
+
+/** Screen 3 (Comercial): `sellerRequired` = the signed-in user is not a seller, so the form must carry the seller. */
+export function commercialProblems(form: CreateForm, options: { readonly sellerRequired?: boolean } = {}): Pick<CreateProblems, "sellerCode"> {
+  return { sellerCode: options.sellerRequired === true && form.sellerCode === null ? "Escolha o vendedor." : null };
+}
+
+export function createProblems(form: CreateForm, options: { readonly sellerRequired?: boolean } = {}): CreateProblems {
+  return { ...identificationProblems(form), ...addressProblems(form), ...commercialProblems(form, options) };
+}
+
+export function hasProblems(problems: Readonly<Record<string, string | null>>): boolean {
   return Object.values(problems).some((problem) => problem !== null);
 }
 
-/** The creation request (same shape as the pending customer the sync engine delivers); no addresses in this lote. */
+export function hasCreateProblems(problems: CreateProblems): boolean {
+  return hasProblems(problems as unknown as Record<string, string | null>);
+}
+
+/** What the server answered for a postal code (`GET /customers/postal-code/{cep}`), only the fields the form uses. */
+export interface PostalCodeAnswer {
+  readonly found: boolean;
+  readonly street: string | null;
+  readonly neighborhood: string | null;
+  readonly city: string | null;
+  readonly uf: string | null;
+  readonly cityCode: number | null;
+  readonly neighborhoodCode: number | null;
+  readonly streetCode: number | null;
+}
+
+/**
+ * Fills street, neighborhood and city from a found postal code; the seller can correct any of them by hand afterwards. A not-found
+ * answer changes nothing. A city the ERP did not match (`cityCode` null) is not filled: the city stays mandatory and is picked by hand.
+ */
+export function applyPostalCode(form: CreateForm, answer: PostalCodeAnswer | null): CreateForm {
+  if (answer === null || !answer.found) return form;
+  const next: CreateForm = { ...form };
+  if (answer.street !== null && answer.street.trim() !== "") {
+    next.street = answer.street.trim().slice(0, ADDRESS_LIMITS.addressName);
+    next.streetCode = answer.streetCode !== null && answer.streetCode > 0 ? answer.streetCode : null;
+  }
+  if (answer.neighborhood !== null && answer.neighborhood.trim() !== "") {
+    next.neighborhood = answer.neighborhood.trim().slice(0, ADDRESS_LIMITS.addressName);
+    next.neighborhoodCode = answer.neighborhoodCode !== null && answer.neighborhoodCode > 0 ? answer.neighborhoodCode : null;
+  }
+  if (answer.cityCode !== null && answer.cityCode > 0) {
+    next.cityCode = answer.cityCode;
+    next.cityLabel = answer.city === null ? "" : answer.uf === null ? answer.city : `${answer.city} - ${answer.uf}`;
+  }
+  return next;
+}
+
+/** The creation request (same shape as the pending customer the sync engine delivers). */
 export interface CreateCustomerRequest {
   document: string;
   name: string;
@@ -184,25 +274,31 @@ export interface CreateCustomerRequest {
   stateRegistration: string | null;
   phone: string | null;
   email: string | null;
-  notes: string | null;
-  addresses: [];
+  notes: null;
+  addresses: PendingCustomerRequest["addresses"][number][];
   /** Manager and equivalent only: the seller that owns the customer. Absent for a seller (linked automatically). */
   sellerCode?: number;
 }
 
+const orNull = (value: string): string | null => (value.trim() === "" ? null : value.trim());
+
 export function buildCreateRequest(form: CreateForm, options: { readonly sellerRequired?: boolean } = {}): CreateCustomerRequest {
-  const individual = taxDocumentKind(normalizeTaxDocument(form.document)) === "individual";
-  const ie = individual ? "" : form.exempt ? "ISENTO" : form.stateRegistration.trim();
+  const company = form.personKind === "company";
+  const ie = !company ? "" : form.exempt ? "ISENTO" : form.stateRegistration.trim();
+  const cep = digitsOf(form.postalCode);
+  // A suggestion the seller picked goes by its code; free text goes by name (the server matches or creates it). Never both.
+  const street = form.streetCode !== null ? { streetCode: form.streetCode, streetName: null } : { streetCode: 0, streetName: orNull(form.street) };
+  const neighborhood = form.neighborhoodCode !== null ? { neighborhoodCode: form.neighborhoodCode, neighborhoodName: null } : { neighborhoodCode: 0, neighborhoodName: orNull(form.neighborhood) };
   return {
     document: normalizeTaxDocument(form.document),
     name: form.name.trim(),
-    tradeName: form.tradeName.trim() === "" ? null : form.tradeName.trim(),
+    tradeName: company ? orNull(form.tradeName) : null,
     icmsClassification: form.icmsClassification,
     stateRegistration: ie === "" ? null : ie,
     phone: form.phone.trim() === "" ? null : digitsOf(form.phone),
-    email: form.email.trim() === "" ? null : form.email.trim(),
-    notes: form.notes.trim() === "" ? null : form.notes.trim(),
-    addresses: [],
+    email: orNull(form.email),
+    notes: null,
+    addresses: form.cityCode === null ? [] : [{ cityCode: form.cityCode, ...street, ...neighborhood, number: orNull(form.number), complement: orNull(form.complement), postalCode: cep.length === 8 ? cep : null }],
     ...(options.sellerRequired === true && form.sellerCode !== null ? { sellerCode: form.sellerCode } : {}),
   };
 }

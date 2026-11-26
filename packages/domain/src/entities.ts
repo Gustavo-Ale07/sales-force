@@ -39,6 +39,39 @@ export interface Carrier {
   readonly active: boolean;
 }
 
+/** A city of the ERP address registry. `uf` is the two-letter state abbreviation (resolved from the state table by the adapter). */
+export interface City {
+  readonly code: number;
+  readonly name: string;
+  readonly uf: string;
+  /** Fiscal municipality code (IBGE) when the source has it. */
+  readonly ibge: string | null;
+}
+
+/** A neighborhood (bairro) of the ERP address registry. Not linked to a city in the source. */
+export interface Neighborhood {
+  readonly code: number;
+  readonly name: string;
+}
+
+/** A street (logradouro) of the ERP address registry. `kind` is the free-text type of the street (rua, avenida...) when present. */
+export interface Street {
+  readonly code: number;
+  readonly name: string;
+  readonly kind: string | null;
+}
+
+/**
+ * One postal code (CEP) of the ERP registry (TSICEP): the city, neighborhood and street it points to. `cep` is the 8-digit code as an
+ * integer (leading zeros are restored with `padStart(8, '0')`); a link the ERP leaves empty is 0.
+ */
+export interface PostalCodeEntry {
+  readonly cep: number;
+  readonly cityCode: number;
+  readonly neighborhoodCode: number;
+  readonly streetCode: number;
+}
+
 export interface Customer {
   readonly code: number;
   readonly name: string;

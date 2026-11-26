@@ -131,6 +131,10 @@ describe('mapping', () => {
       carriers: dataset.carriers.filter((c) => c.active).length,
       ipiRates: dataset.ipiRates.length,
       openTitles: dataset.openTitles.length,
+      cities: dataset.cities.length,
+      neighborhoods: dataset.neighborhoods.length,
+      streets: dataset.streets.length,
+      postalCodes: dataset.postalCodes.length,
     };
     for (const entity of MIRROR_ENTITIES) {
       if (isSnapshotReplaceEntity(entity)) {
@@ -228,6 +232,10 @@ describe('mapping', () => {
       readSellers: (o) => gateway.readSellers(o),
       readDirectoryUsers: (o) => gateway.readDirectoryUsers(o),
       readCarriers: (o) => gateway.readCarriers(o),
+      readCities: (o) => gateway.readCities(o),
+      readNeighborhoods: (o) => gateway.readNeighborhoods(o),
+      readStreets: (o) => gateway.readStreets(o),
+      readPostalCodes: (o) => gateway.readPostalCodes(o),
       readIpiRates: (o) => gateway.readIpiRates(o),
       readOpenTitles: (o) => gateway.readOpenTitles(o),
       readSalesHistoryMonthly: (o) => gateway.readSalesHistoryMonthly(o),
@@ -326,6 +334,11 @@ describe('schedules, queues and locks', () => {
       // Sales history has no schedule until its TOPs are configured (CFG-3).
       salesHistoryMonthly: null,
       salesHistoryCustomerProduct: null,
+      // The address registry moves on its own slow default cycle.
+      cities: '20 */6 * * *',
+      neighborhoods: '20 */6 * * *',
+      streets: '20 */6 * * *',
+      postalCodes: '20 */6 * * *',
     });
     expect(Object.values(mirrorSchedulesFromSettings({ ...settings, SYNC_MIRROR_ENABLED: false })).every((cron) => cron === null)).toBe(
       true,

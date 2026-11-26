@@ -4,6 +4,9 @@ import {
   routes,
   type ProductDetail,
   type CarriersResponse,
+  type CitiesResponse,
+  type NeighborhoodsResponse,
+  type StreetsResponse,
   type PriceTablePricesResponse,
   type ProductGroupsResponse,
   type ProductsResponse,
@@ -31,6 +34,21 @@ export class CatalogController {
   @ApiRoute(routes.listCarriers)
   carriers(@CurrentUserParam() user: CurrentUser): Promise<CarriersResponse> {
     return this.catalog.listCarriers(user);
+  }
+
+  @ApiRoute(routes.listCities)
+  cities(@CurrentUserParam() user: CurrentUser): Promise<CitiesResponse> {
+    return this.catalog.listCities(user);
+  }
+
+  @ApiRoute(routes.listNeighborhoods)
+  neighborhoods(@CurrentUserParam() user: CurrentUser): Promise<NeighborhoodsResponse> {
+    return this.catalog.listNeighborhoods(user);
+  }
+
+  @ApiRoute(routes.listStreets)
+  streets(@CurrentUserParam() user: CurrentUser): Promise<StreetsResponse> {
+    return this.catalog.listStreets(user);
   }
 
   @ApiRoute(routes.listProducts)

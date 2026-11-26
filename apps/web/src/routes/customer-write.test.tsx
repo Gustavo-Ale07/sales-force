@@ -113,6 +113,25 @@ describe("Ficha do cliente: edição (D-AP)", () => {
 describe("Clientes: cadastro (D-AR)", () => {
   const list: Handlers = { "GET /customers/registrations": { body: { items: [] } }, "GET /customers": { body: customersPage([customer()]) }, "GET /customers/letters": { body: { letters: [] } } };
 
+  const registry: Handlers = {
+    "GET /cities": { body: { items: [{ code: 10, name: "Sao Paulo", uf: "SP", ibge: null }, { code: 11, name: "Campinas", uf: "SP", ibge: null }] } },
+    "GET /neighborhoods": { body: { items: [{ code: 4, name: "Bela Vista" }] } },
+    "GET /streets": { body: { items: [{ code: 5, name: "Avenida Paulista", kind: "AVENIDA" }] } },
+  };
+  type User = ReturnType<typeof renderApp>["user"];
+  const pickCity = async (user: User, dialog: HTMLElement) => {
+    await user.click(await within(dialog).findByLabelText(/Cidade/));
+    await user.click(await within(dialog).findByRole("option", { name: "Sao Paulo - SP" }));
+  };
+  /** Fills screen 1 (valid CNPJ + Isento), goes to screen 2, picks the city, goes to screen 3. */
+  const reachStep3 = async (user: User, dialog: HTMLElement) => {
+    await fillCnpj(user, dialog);
+    await user.click(within(dialog).getByRole("button", { name: "Continuar" }));
+    await pickCity(user, dialog);
+    await user.click(within(dialog).getByRole("button", { name: "Continuar" }));
+    await within(dialog).findByTestId("create-step-3");
+  };
+
   it("has no new-customer button unless creation is released", async () => {
     renderApp("/clientes", { handlers: { ...list, "GET /order-entry/configuration": configWith({ clientCreationEnabled: false }) } });
     await screen.findByText("Comercial Alfa Ltda");
@@ -123,17 +142,103 @@ describe("Clientes: cadastro (D-AR)", () => {
     const { user, calls } = renderApp("/clientes", { handlers: { ...list, "GET /order-entry/configuration": configWith({ clientCreationEnabled: true }) } });
     await user.click(await screen.findByRole("button", { name: "Novo cliente" }));
     const dialog = await screen.findByRole("dialog");
-    await user.type(within(dialog).getByLabelText(/CPF\/CNPJ/), "11222333000100");
+    await user.type(within(dialog).getByLabelText(/CNPJ/), "11222333000100");
     await user.type(within(dialog).getByLabelText(/Razão social/), "Alfa Ltda");
-    await user.click(within(dialog).getByRole("button", { name: "Cadastrar" }));
-    expect(await within(dialog).findByText("CPF ou CNPJ inválido.")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Continuar" }));
+    expect(await within(dialog).findByText("CNPJ inválido.")).toBeInTheDocument();
+    expect(within(dialog).getByTestId("create-step-1")).toBeInTheDocument();
     expect(callsTo(calls, "POST", "/customers")).toHaveLength(0);
+  });
+
+  it("walks the three screens: Voltar keeps what was typed and the progress follows", async () => {
+    const { user } = renderApp("/clientes", { handlers: { ...list, ...registry, "GET /order-entry/configuration": configWith({ clientCreationEnabled: true }) } });
+    await user.click(await screen.findByRole("button", { name: "Novo cliente" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(/1\. Identificação/).closest("li")).toHaveAttribute("aria-current", "step");
+    await fillCnpj(user, dialog);
+    await user.click(within(dialog).getByRole("button", { name: "Continuar" }));
+    expect(await within(dialog).findByTestId("create-step-2")).toBeInTheDocument();
+    expect(within(dialog).getByText(/2\. Endereço e contato/).closest("li")).toHaveAttribute("aria-current", "step");
+    await user.click(within(dialog).getByRole("button", { name: "Continuar" }));
+    expect(await within(dialog).findByText("Informe a cidade.")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Voltar" }));
+    expect(within(dialog).getByLabelText(/Razão social/)).toHaveValue("Alfa Ltda");
+  });
+
+  it("a CEP fills street, neighborhood and city, and the codes follow the registry", async () => {
+    const { user, calls } = renderApp("/clientes", {
+      handlers: {
+        ...list,
+        ...registry,
+        "GET /order-entry/configuration": configWith({ clientCreationEnabled: true }),
+        "GET /customers/postal-code/:cep": { body: { found: true, postalCode: "01310100", street: "Avenida Paulista", neighborhood: "Bela Vista", city: "São Paulo", uf: "SP", cityCode: 10, neighborhoodCode: 4, streetCode: null, source: "viacep" } },
+        "POST /customers": { status: 202, body: { registrationId: "0190a000-0000-7000-8000-000000000002", status: "pending", state: "awaiting_send", sendState: "pending", customerCode: null, originKey: "force:x" } },
+      },
+    });
+    await user.click(await screen.findByRole("button", { name: "Novo cliente" }));
+    const dialog = await screen.findByRole("dialog");
+    await fillCnpj(user, dialog);
+    await user.click(within(dialog).getByRole("button", { name: "Continuar" }));
+    await user.type(await within(dialog).findByLabelText("CEP"), "01310100");
+    await waitFor(() => expect(within(dialog).getByLabelText("Rua")).toHaveValue("Avenida Paulista"));
+    expect(within(dialog).getByLabelText("Bairro")).toHaveValue("Bela Vista");
+    expect(within(dialog).getByLabelText(/Cidade/)).toHaveValue("Sao Paulo - SP");
+    expect(callsTo(calls, "GET", "/customers/postal-code/01310100")).toHaveLength(1);
+    await user.type(within(dialog).getByLabelText("Número"), "1000");
+    await user.click(within(dialog).getByRole("button", { name: "Continuar" }));
+    await user.click(within(dialog).getByRole("button", { name: "Cadastrar" }));
+    await waitFor(() => expect(callsTo(calls, "POST", "/customers")).toHaveLength(1));
+    const body = callsTo(calls, "POST", "/customers")[0]?.body as { addresses: unknown[] };
+    expect(body.addresses).toEqual([
+      { cityCode: 10, streetCode: 5, neighborhoodCode: 4, streetName: null, neighborhoodName: null, number: "1000", complement: null, postalCode: "01310100" },
+    ]);
+  });
+
+  it("a CEP not found shows nothing and leaves the city mandatory", async () => {
+    const { user } = renderApp("/clientes", {
+      handlers: {
+        ...list,
+        ...registry,
+        "GET /order-entry/configuration": configWith({ clientCreationEnabled: true }),
+        "GET /customers/postal-code/:cep": { body: { found: false, postalCode: "99999999", street: null, neighborhood: null, city: null, uf: null, cityCode: null, neighborhoodCode: null, streetCode: null, source: null } },
+      },
+    });
+    await user.click(await screen.findByRole("button", { name: "Novo cliente" }));
+    const dialog = await screen.findByRole("dialog");
+    await fillCnpj(user, dialog);
+    await user.click(within(dialog).getByRole("button", { name: "Continuar" }));
+    await user.type(await within(dialog).findByLabelText("CEP"), "99999999");
+    await user.type(within(dialog).getByLabelText("Rua"), "Rua Livre");
+    await user.click(within(dialog).getByRole("button", { name: "Continuar" }));
+    expect(await within(dialog).findByText("Informe a cidade.")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Rua")).toHaveValue("Rua Livre");
+  });
+
+  it("a server refusal of the city returns to screen 2 on the city field", async () => {
+    const { user } = renderApp("/clientes", {
+      handlers: {
+        ...list,
+        ...registry,
+        "GET /order-entry/configuration": configWith({ clientCreationEnabled: true }),
+        "POST /customers": apiError(400, "validation_failed", "Dados inválidos", { issues: [{ path: "addresses.0.cityCode", code: "too_small", message: "Cidade inválida." }] }),
+      },
+    });
+    await user.click(await screen.findByRole("button", { name: "Novo cliente" }));
+    const dialog = await screen.findByRole("dialog");
+    await fillCnpj(user, dialog);
+    await user.click(within(dialog).getByRole("button", { name: "Continuar" }));
+    await pickCity(user, dialog);
+    await user.click(within(dialog).getByRole("button", { name: "Continuar" }));
+    await user.click(within(dialog).getByRole("button", { name: "Cadastrar" }));
+    expect(await within(dialog).findByText("Cidade inválida.")).toBeInTheDocument();
+    expect(within(dialog).getByTestId("create-step-2")).toBeInTheDocument();
   });
 
   it("creates with the shared field names, ICMS R by default and Isento", async () => {
     const { user, calls } = renderApp("/clientes", {
       handlers: {
         ...list,
+        ...registry,
         "GET /order-entry/configuration": configWith({ clientCreationEnabled: true }),
         "POST /customers": { status: 201, body: { registrationId: "0190a000-0000-7000-8000-000000000002", status: "confirmed", state: "sent", sendState: "sent", customerCode: 2002, originKey: "force:x" } },
         "GET /customers/:code": { body: customerDetail({ code: 2002, name: "Alfa Ltda" }) },
@@ -141,13 +246,26 @@ describe("Clientes: cadastro (D-AR)", () => {
     });
     await user.click(await screen.findByRole("button", { name: "Novo cliente" }));
     const dialog = await screen.findByRole("dialog");
-    await user.type(within(dialog).getByLabelText(/CPF\/CNPJ/), "11.222.333/0001-81");
+    await user.type(within(dialog).getByLabelText(/CNPJ/), "11.222.333/0001-81");
     await user.type(within(dialog).getByLabelText(/Razão social/), "Alfa Ltda");
     await user.click(within(dialog).getByRole("checkbox", { name: "Isento" }));
-    await user.click(within(dialog).getByRole("button", { name: "Cadastrar" }));
+    await user.click(within(dialog).getByRole("button", { name: "Continuar" }));
+    await pickCity(user, dialog);
+    await user.click(within(dialog).getByRole("button", { name: "Continuar" }));
+    await user.click(await within(dialog).findByRole("button", { name: "Cadastrar" }));
     await waitFor(() => expect(callsTo(calls, "POST", "/customers")).toHaveLength(1));
     const body = callsTo(calls, "POST", "/customers")[0]?.body as Record<string, unknown>;
-    expect(body).toMatchObject({ document: "11222333000181", name: "Alfa Ltda", tradeName: null, icmsClassification: "R", stateRegistration: "ISENTO", phone: null, email: null, notes: null, addresses: [] });
+    expect(body).toMatchObject({
+      document: "11222333000181",
+      name: "Alfa Ltda",
+      tradeName: null,
+      icmsClassification: "R",
+      stateRegistration: "ISENTO",
+      phone: null,
+      email: null,
+      notes: null,
+      addresses: [{ cityCode: 10, streetCode: 0, neighborhoodCode: 0, streetName: null, neighborhoodName: null, number: null, complement: null, postalCode: null }],
+    });
     expect(body.clientRequestId).toMatch(UUID);
     expect(await screen.findByText("Cliente 2002")).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -159,10 +277,21 @@ describe("Clientes: cadastro (D-AR)", () => {
     await user.click(await screen.findByRole("button", { name: "Novo cliente" }));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByLabelText("Inscrição estadual")).toBeInTheDocument();
-    await user.type(within(dialog).getByLabelText(/CPF\/CNPJ/), "52998224725");
+    expect(within(dialog).getByLabelText("Nome fantasia")).toBeInTheDocument();
+    await user.selectOptions(within(dialog).getByLabelText(/Tipo de pessoa/), "F");
+    await user.type(within(dialog).getByLabelText(/CPF/), "52998224725");
     expect(within(dialog).queryByLabelText("Inscrição estadual")).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("Nome fantasia")).not.toBeInTheDocument();
     expect(within(dialog).queryByRole("checkbox", { name: "Isento" })).not.toBeInTheDocument();
-    expect(within(dialog).queryByLabelText("Vendedor")).not.toBeInTheDocument();
+  });
+
+  it("a seller sees the seller locked on screen 3", async () => {
+    const { user } = renderApp("/clientes", { handlers: { ...list, ...registry, "GET /order-entry/configuration": configWith({ clientCreationEnabled: true }) } });
+    await user.click(await screen.findByRole("button", { name: "Novo cliente" }));
+    const dialog = await screen.findByRole("dialog");
+    await reachStep3(user, dialog);
+    expect(within(dialog).getByLabelText("Vendedor")).toBeDisabled();
+    expect(within(dialog).queryByRole("combobox")).not.toBeInTheDocument();
   });
 
   it("a manager without a seller code must pick an active seller", async () => {
@@ -170,6 +299,7 @@ describe("Clientes: cadastro (D-AR)", () => {
     const { user, calls } = renderApp("/clientes", {
       handlers: {
         ...list,
+        ...registry,
         "GET /auth/session": { body: { ...body, account: { ...body.account, sellerCodes: [] } } },
         "GET /order-entry/configuration": configWith({ clientCreationEnabled: true }),
         "GET /sellers": { body: { items: [{ code: 7, name: "Ana", active: true }, { code: 8, name: "Beto", active: false }] } },
@@ -179,9 +309,7 @@ describe("Clientes: cadastro (D-AR)", () => {
     });
     await user.click(await screen.findByRole("button", { name: "Novo cliente" }));
     const dialog = await screen.findByRole("dialog");
-    await user.type(within(dialog).getByLabelText(/CPF\/CNPJ/), "11222333000181");
-    await user.type(within(dialog).getByLabelText(/Razão social/), "Alfa Ltda");
-    await user.click(within(dialog).getByRole("checkbox", { name: "Isento" }));
+    await reachStep3(user, dialog);
     await user.click(within(dialog).getByRole("button", { name: "Cadastrar" }));
     expect(await within(dialog).findByText("Escolha o vendedor.")).toBeInTheDocument();
     expect(callsTo(calls, "POST", "/customers")).toHaveLength(0);
@@ -198,21 +326,20 @@ describe("Clientes: cadastro (D-AR)", () => {
     const { user } = renderApp("/clientes", {
       handlers: {
         ...list,
+        ...registry,
         "GET /order-entry/configuration": configWith({ clientCreationEnabled: true }),
         "POST /customers": apiError(409, "conflict", "dup", { details: { reason: "document_already_registered" } }),
       },
     });
     await user.click(await screen.findByRole("button", { name: "Novo cliente" }));
     const dialog = await screen.findByRole("dialog");
-    await user.type(within(dialog).getByLabelText(/CPF\/CNPJ/), "11222333000181");
-    await user.type(within(dialog).getByLabelText(/Razão social/), "Alfa Ltda");
-    await user.click(within(dialog).getByRole("checkbox", { name: "Isento" }));
+    await reachStep3(user, dialog);
     await user.click(within(dialog).getByRole("button", { name: "Cadastrar" }));
     expect(await within(dialog).findByText("Já existe um cliente com este CPF/CNPJ.")).toBeInTheDocument();
   });
 
   const fillCnpj = async (user: ReturnType<typeof renderApp>["user"], dialog: HTMLElement) => {
-    await user.type(within(dialog).getByLabelText(/CPF[/]CNPJ/), "11222333000181");
+    await user.type(within(dialog).getByLabelText(/CNPJ/), "11222333000181");
     await user.type(within(dialog).getByLabelText(/Razão social/), "Alfa Ltda");
     await user.click(within(dialog).getByRole("checkbox", { name: "Isento" }));
   };
@@ -221,17 +348,19 @@ describe("Clientes: cadastro (D-AR)", () => {
     const { user } = renderApp("/clientes", {
       handlers: {
         ...list,
+        ...registry,
         "GET /order-entry/configuration": configWith({ clientCreationEnabled: true }),
         "POST /customers": apiError(422, "customer_refused", "Cadastro recusado", { details: { fields: { document: "Já existe um cliente com este CPF/CNPJ no Sankhya." } } }),
       },
     });
     await user.click(await screen.findByRole("button", { name: "Novo cliente" }));
     const dialog = await screen.findByRole("dialog");
-    await fillCnpj(user, dialog);
+    await reachStep3(user, dialog);
     await user.click(within(dialog).getByRole("button", { name: "Cadastrar" }));
+    // The refusal names the document: the form goes back to screen 1 and shows it on that field.
     const text = await within(dialog).findByText("Já existe um cliente com este CPF/CNPJ no Sankhya.");
-    expect(within(dialog).getByLabelText(/CPF[/]CNPJ/)).toHaveAccessibleDescription(text.textContent ?? "");
-    expect(within(dialog).getByRole("button", { name: "Cadastrar" })).toBeEnabled();
+    expect(within(dialog).getByLabelText(/CNPJ/)).toHaveAccessibleDescription(text.textContent ?? "");
+    expect(within(dialog).getByRole("button", { name: "Continuar" })).toBeEnabled();
     expect(within(dialog).getByLabelText(/Razão social/)).toHaveValue("Alfa Ltda");
   });
 
@@ -239,13 +368,14 @@ describe("Clientes: cadastro (D-AR)", () => {
     const { user } = renderApp("/clientes", {
       handlers: {
         ...list,
+        ...registry,
         "GET /order-entry/configuration": configWith({ clientCreationEnabled: true }),
         "POST /customers": { status: 202, body: { registrationId: "0190a000-0000-7000-8000-000000000002", status: "pending", state: "awaiting_send", sendState: "pending", customerCode: null, originKey: "force:x" } },
       },
     });
     await user.click(await screen.findByRole("button", { name: "Novo cliente" }));
     const dialog = await screen.findByRole("dialog");
-    await fillCnpj(user, dialog);
+    await reachStep3(user, dialog);
     await user.click(within(dialog).getByRole("button", { name: "Cadastrar" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(screen.queryByText(/Cliente 2002/)).not.toBeInTheDocument();

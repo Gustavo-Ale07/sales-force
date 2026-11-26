@@ -9,6 +9,7 @@ import {
   type CustomerRegistrationsResponse,
   type CustomerRegistrationView,
   type CustomersResponse,
+  type PostalCodeLookup,
   type UpdateCustomerResponse,
 } from '@salesforce/contracts';
 import type { FastifyReply } from 'fastify';
@@ -18,6 +19,7 @@ import { CustomerRegistrationQueryService } from './customer-registration-query.
 import { CustomerRegistrationService } from './customer-registration.service.js';
 import { CustomerUpdateService } from './customer-update.service.js';
 import { CustomersService } from './customers.service.js';
+import { PostalCodeService } from './postal-code.service.js';
 
 @Controller(API_BASE_PATH)
 export class CustomersController {
@@ -26,6 +28,7 @@ export class CustomersController {
     @Inject(CustomerRegistrationService) private readonly registrations: CustomerRegistrationService,
     @Inject(CustomerRegistrationQueryService) private readonly registrationQueries: CustomerRegistrationQueryService,
     @Inject(CustomerUpdateService) private readonly updates: CustomerUpdateService,
+    @Inject(PostalCodeService) private readonly postalCodes: PostalCodeService,
   ) {}
 
   @ApiRoute(routes.listCustomers)
@@ -54,6 +57,14 @@ export class CustomersController {
     // 201 confirmed in time; 202 still waiting for the ERP; 200 replay of an earlier request.
     if (httpStatus !== 201) void reply.status(httpStatus);
     return response;
+  }
+
+  @ApiRoute(routes.lookupPostalCode)
+  lookupPostalCode(
+    @CurrentUserParam() user: CurrentUser,
+    @Contract() contract: RequestContract<typeof routes.lookupPostalCode>,
+  ): Promise<PostalCodeLookup> {
+    return this.postalCodes.lookup(user, contract.params.cep);
   }
 
   @ApiRoute(routes.updateCustomer)

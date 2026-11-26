@@ -125,6 +125,16 @@ export function erpTablesFromDataset(dataset: DemoDataset, dbUtcOffsetMinutes = 
       PAUTACONDIC: 'N',
       CSTIPISAI: 50,
     })),
+    TSIUFS: [...new Set(dataset.cities.map((c) => c.uf))].sort().map((uf, index) => ({ CODUF: index + 1, UF: uf })),
+    TSICID: dataset.cities.map((c) => ({
+      CODCID: c.code,
+      NOMECID: c.name,
+      UF: [...new Set(dataset.cities.map((x) => x.uf))].sort().indexOf(c.uf) + 1,
+      CODMUNFIS: c.ibge === null ? 0 : Number(c.ibge),
+    })),
+    TSIBAI: dataset.neighborhoods.map((n) => ({ CODBAI: n.code, NOMEBAI: n.name })),
+    TSIEND: dataset.streets.map((s) => ({ CODEND: s.code, NOMEEND: s.name, TIPO: s.kind })),
+    TSICEP: dataset.postalCodes.map((p) => ({ CEP: String(p.cep).padStart(8, '0'), CODCID: p.cityCode, CODBAI: p.neighborhoodCode, CODEND: p.streetCode })),
     TGFGRU: dataset.productGroups.map((g) => ({
       CODGRUPOPROD: g.code,
       DESCRGRUPOPROD: g.name,

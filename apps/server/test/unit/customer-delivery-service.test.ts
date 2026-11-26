@@ -149,6 +149,58 @@ describe('CustomerDeliveryService', () => {
     expect(partners.partners[0]?.request).toMatchObject({ originField: 'AD_FORCEORIGEM', originKey: ORIGIN, priceTableCode: 5, sellerCode: 7 });
   });
 
+  describe('address registry (owner decision change 2026-11-26: Sandbox creation of neighborhood and street)', () => {
+    const base = { cityCode: 5, streetCode: 0, neighborhoodCode: 0, streetName: null, neighborhoodName: null, number: '10', complement: null, postalCode: '01310100' };
+
+    it('creates the missing neighborhood and street first, then writes the partner with their codes', async () => {
+      const { service, store, partners } = build();
+      store.add({ ...COMMAND, addresses: [{ ...base, neighborhoodName: 'Bairro Inventado', streetName: 'Rua Inventada' }] });
+      await service.runDue();
+      expect(partners.registryCreations.map((c) => c.kind)).toEqual(['neighborhood', 'street']);
+      const written = partners.partners[0]?.request.addresses[0];
+      expect(written).toMatchObject({ cityCode: 5, neighborhoodCode: partners.registryCreations[0]?.code, streetCode: partners.registryCreations[1]?.code });
+      expect(store.rows[0]).toMatchObject({ status: 'confirmed' });
+    });
+
+    it('a resend after a lost answer finds the neighborhood instead of creating it again (SNK-4)', async () => {
+      const { service, store, partners, advance } = build();
+      partners.script('upsert', { kind: 'error', error: unavailable() });
+      store.add({ ...COMMAND, addresses: [{ ...base, neighborhoodName: 'Bairro Inventado' }] });
+      await service.runDue();
+      advance(24 * 3_600_000);
+      await service.runDue();
+      expect(partners.registryCreations.filter((c) => c.kind === 'neighborhood')).toHaveLength(1);
+      expect(partners.partners).toHaveLength(1);
+    });
+
+    it('sends codes as they are and creates nothing when the server already matched the mirror', async () => {
+      const { service, store, partners } = build();
+      store.add({ ...COMMAND, addresses: [{ ...base, streetCode: 7, neighborhoodCode: 3 }] });
+      await service.runDue();
+      expect(partners.registryCreations).toHaveLength(0);
+      expect(partners.partners[0]?.request.addresses[0]).toMatchObject({ streetCode: 7, neighborhoodCode: 3 });
+    });
+
+    it('a stored command from before the city became mandatory is refused with an actionable text, nothing is sent', async () => {
+      const { service, store, partners } = build();
+      const { cityCode: _city, ...withoutCity } = base;
+      void _city;
+      store.add({ ...COMMAND, addresses: [withoutCity] } as never);
+      await service.runDue();
+      expect(partners.calls).toHaveLength(0);
+      expect(store.rows[0]).toMatchObject({ status: 'rejected', rejectionCode: 'address_city_required' });
+    });
+
+    it('a registry creation refused by the ERP rejects the customer for good and writes no partner', async () => {
+      const { service, store, partners } = build();
+      partners.script('registry', { kind: 'error', error: new SankhyaGatewayError('validation', { code: 'address_registry_write_not_validated', message: 'not validated' }) });
+      store.add({ ...COMMAND, addresses: [{ ...base, neighborhoodName: 'Bairro Inventado' }] });
+      await service.runDue();
+      expect(partners.partners).toHaveLength(0);
+      expect(store.rows[0]).toMatchObject({ status: 'rejected' });
+    });
+  });
+
   it('never sends the credit limit, partner type, region or billing-slip type', async () => {
     const { service, store, partners } = build();
     store.add();
@@ -274,7 +326,7 @@ describe('CustomerDeliveryService', () => {
 
   /** M-2: the worker repeats the contract's limits, so a payload written by anything but the current API never reaches the ERP. */
   describe('the stored command keeps the size and shape limits of the contract (M-2)', () => {
-    const address = { streetCode: 1, neighborhoodCode: 2, number: '123456', complement: 'c'.repeat(30), postalCode: '01310100' };
+    const address = { cityCode: 5, streetCode: 1, neighborhoodCode: 2, number: '123456', complement: 'c'.repeat(30), postalCode: '01310100' };
     const atLimit = {
       ...COMMAND,
       name: 'N'.repeat(100),

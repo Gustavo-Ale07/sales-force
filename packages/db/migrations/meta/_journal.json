@@ -351,6 +351,20 @@
       "when": 1795628251779,
       "tag": "0049_order_erp_removed",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1795700673835,
+      "tag": "0050_erp_address_registry",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1795704205160,
+      "tag": "0051_erp_postal_code",
+      "breakpoints": true
     }
   ]
 }

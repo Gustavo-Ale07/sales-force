@@ -15,6 +15,8 @@ export const DEFAULT_MIRROR_CRONS = {
   openTitles: '*/30 * * * *',
   /** Sales history (read-only aggregates over a 12-month window, heavy ERP read): once a day, off-hours (PROPOSED). */
   salesHistory: '15 3 * * *',
+  /** Address registry (cities, neighborhoods, streets): changes rarely, read every 6 hours. */
+  addresses: '20 */6 * * *',
 } as const;
 
 export interface MirrorScheduleSettings {
@@ -50,9 +52,9 @@ export function mirrorSchedulesFromSettings(settings: MirrorScheduleSettings): M
     // Full mirror off: only the login directory may still run, and only sellers + directoryUsers (never customers, products or prices).
     if (settings.AUTH_DIRECTORY_SYNC_ENABLED === true) {
       const cron = settings.AUTH_DIRECTORY_SYNC_CRON ?? DEFAULT_MIRROR_CRONS.sellers;
-      return { sellers: cron, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: cron, carriers: null, ipiRates: null, openTitles: null, productGroups: null, salesHistoryMonthly: null, salesHistoryCustomerProduct: null };
+      return { sellers: cron, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: cron, carriers: null, ipiRates: null, openTitles: null, productGroups: null, salesHistoryMonthly: null, salesHistoryCustomerProduct: null, cities: null, neighborhoods: null, streets: null, postalCodes: null };
     }
-    return { sellers: null, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: null, carriers: null, ipiRates: null, openTitles: null, productGroups: null, salesHistoryMonthly: null, salesHistoryCustomerProduct: null };
+    return { sellers: null, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: null, carriers: null, ipiRates: null, openTitles: null, productGroups: null, salesHistoryMonthly: null, salesHistoryCustomerProduct: null, cities: null, neighborhoods: null, streets: null, postalCodes: null };
   }
   const salesHistoryCron = settings.SALES_HISTORY_CONFIGURED === true ? (settings.SYNC_CRON_SALES_HISTORY ?? DEFAULT_MIRROR_CRONS.salesHistory) : null;
   return {
@@ -76,5 +78,10 @@ export function mirrorSchedulesFromSettings(settings: MirrorScheduleSettings): M
     // Sales history: its own daily schedule, and only when the TOP configuration exists (the two tables move together).
     salesHistoryMonthly: salesHistoryCron,
     salesHistoryCustomerProduct: salesHistoryCron,
+    // The address registry (cities, neighborhoods, streets) changes rarely: its own slow default cycle.
+    cities: DEFAULT_MIRROR_CRONS.addresses,
+    neighborhoods: DEFAULT_MIRROR_CRONS.addresses,
+    streets: DEFAULT_MIRROR_CRONS.addresses,
+    postalCodes: DEFAULT_MIRROR_CRONS.addresses,
   };
 }

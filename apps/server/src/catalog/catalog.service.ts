@@ -3,6 +3,9 @@ import {
   MAX_PRODUCT_RESOLUTION_CANDIDATES,
   type ProductDetail,
   type CarriersResponse,
+  type CitiesResponse,
+  type NeighborhoodsResponse,
+  type StreetsResponse,
   type ProductGroupsResponse,
   type ProductImage,
   type ProductListItem,
@@ -87,6 +90,22 @@ export class CatalogService {
     // Same access gate as the rest of the catalog reads: the context resolves the actor and the active configuration.
     await this.policy.accessContext(user);
     return { items: await this.mirror.listCarriers() };
+  }
+
+  /** ERP address registry for the registration pickers (reference data, no personal data); same access gate as carriers. */
+  async listCities(user: CurrentUser): Promise<CitiesResponse> {
+    await this.policy.accessContext(user);
+    return { items: await this.mirror.listCities() };
+  }
+
+  async listNeighborhoods(user: CurrentUser): Promise<NeighborhoodsResponse> {
+    await this.policy.accessContext(user);
+    return { items: await this.mirror.listNeighborhoods() };
+  }
+
+  async listStreets(user: CurrentUser): Promise<StreetsResponse> {
+    await this.policy.accessContext(user);
+    return { items: await this.mirror.listStreets() };
   }
 
   private async bookFor(context: AccessContext, customerCode: number | undefined): Promise<PriceBook> {

@@ -14,6 +14,8 @@ export async function countUnsentLocalWork(db: SqlExecutor, ownerAccountId: stri
   return orders.pending + orders.sending + orders.needsAttention + customers;
 }
 
+const ADDRESS_TABLES = ["cache_city", "cache_neighborhood", "cache_street", "cache_postal_code"] as const;
+
 /**
  * Ordinary sign-out with nothing unsent: the reference cache (customers, products, price tables and its bookkeeping) is
  * dropped so the next account never sees it. Session identity rows, drafts and the outbox are untouched; callers check
@@ -25,6 +27,7 @@ export async function clearReferenceCache(db: SqlDatabase): Promise<void> {
     await tx.execute("DELETE FROM cache_product");
     await tx.execute("DELETE FROM cache_product_group");
     await tx.execute("DELETE FROM cache_table_price");
+    for (const table of ADDRESS_TABLES) await tx.execute(`DELETE FROM ${table}`);
     await tx.execute("DELETE FROM sync_metadata WHERE key LIKE 'cache.%'");
   });
 }
@@ -36,7 +39,7 @@ export async function clearReferenceCache(db: SqlDatabase): Promise<void> {
  */
 export async function wipeLocalDatabase(db: SqlDatabase): Promise<void> {
   await db.transaction(async (tx) => {
-    for (const table of ["outbox", "local_order_item", "local_order_draft", "pending_customer", "cache_customer", "cache_product", "cache_product_group", "cache_table_price", "sync_metadata"]) {
+    for (const table of ["outbox", "local_order_item", "local_order_draft", "pending_customer", "cache_customer", "cache_product", "cache_product_group", "cache_table_price", ...ADDRESS_TABLES, "sync_metadata"]) {
       await tx.execute(`DELETE FROM ${table}`);
     }
   });

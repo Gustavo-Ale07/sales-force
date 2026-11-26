@@ -65,7 +65,7 @@ const request = (over: Partial<PendingCustomerRequest> = {}): PendingCustomerReq
   phone: "11 99999-0000",
   email: null,
   notes: "obs",
-  addresses: [{ streetCode: 1, neighborhoodCode: 2, number: "10", complement: null, postalCode: "01001000" }],
+  addresses: [{ cityCode: 3550308, streetCode: 1, neighborhoodCode: 2, number: "10", complement: null, postalCode: "01001000" }],
   ...over,
 });
 

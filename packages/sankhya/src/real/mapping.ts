@@ -3,6 +3,10 @@ import type {
   DecimalString,
   DirectoryUser,
   Carrier,
+  City,
+  Neighborhood,
+  Street,
+  PostalCodeEntry,
   IpiRate,
   IsoTimestamp,
   OpenTitle,
@@ -260,6 +264,85 @@ export const DIRECTORY_USER_SPEC: EntitySpec<DirectoryUser> = {
     return { code: row.int('CODUSU'), sellerCode: sellerCode === null || sellerCode <= 0 ? null : sellerCode };
   },
   keyOf: (user) => [user.code],
+};
+
+/** A state of the ERP state table (TSIUFS): numeric code -> two-letter abbreviation. Internal to the city read. */
+export interface StateRow {
+  readonly code: number;
+  readonly uf: string;
+}
+
+/** TSIUFS (Sandbox 2026-11-26: 29 rows; CODUF numeric, UF char(2)). PK CODUF. Read in full to resolve the city state. */
+export const STATE_SPEC: EntitySpec<StateRow> = {
+  entity: 'cities',
+  table: 'TSIUFS',
+  select: ['CODUF', 'UF'],
+  columns: ['CODUF', 'UF'],
+  orderBy: 'CODUF',
+  map: (row) => ({ code: row.int('CODUF'), uf: row.text('UF').toUpperCase() }),
+  keyOf: (state) => [state.code],
+};
+
+/**
+ * TSICID (Sandbox 2026-11-26: 5577 rows). PK CODCID; `UF` is the numeric FK to TSIUFS.CODUF, resolved here to the two-letter
+ * abbreviation (a city whose state is unknown is discarded with a warning, never delivered with a guess). `CODCID = 0` is the
+ * "SEM" placeholder and is never mirrored. `CODMUNFIS` is the fiscal (IBGE) municipality code, kept only when it is not 0.
+ */
+export function citySpec(stateByCode: ReadonlyMap<number, string>): EntitySpec<City> {
+  return {
+    entity: 'cities',
+    table: 'TSICID',
+    select: ['CODCID', 'NOMECID', 'UF', 'CODMUNFIS'],
+    columns: ['CODCID', 'NOMECID', 'UF', 'CODMUNFIS'],
+    where: 'CODCID > 0',
+    orderBy: 'CODCID',
+    map: (row) => {
+      const code = row.int('CODCID');
+      const name = row.nullableText('NOMECID');
+      if (name === null) return discardRow('blank city name');
+      const stateCode = row.nullableInt('UF');
+      const uf = stateCode === null ? undefined : stateByCode.get(stateCode);
+      if (uf === undefined) return discardRow('city state is not in the state table');
+      const fiscal = row.rawScalar('CODMUNFIS');
+      const ibge = fiscal === null || String(fiscal).trim() === '0' ? null : String(fiscal).trim();
+      return { code, name, uf, ibge };
+    },
+    keyOf: (city) => [city.code],
+  };
+}
+
+/** TSIBAI (Sandbox 2026-11-26: 1449 rows). PK CODBAI. Not linked to a city in the ERP. `CODBAI = 0` ("SEM") is never mirrored. */
+export const NEIGHBORHOOD_SPEC: EntitySpec<Neighborhood> = {
+  entity: 'neighborhoods',
+  table: 'TSIBAI',
+  select: ['CODBAI', 'NOMEBAI'],
+  columns: ['CODBAI', 'NOMEBAI'],
+  where: 'CODBAI > 0',
+  orderBy: 'CODBAI',
+  map: (row) => {
+    const code = row.int('CODBAI');
+    const name = row.nullableText('NOMEBAI');
+    if (name === null) return discardRow('blank neighborhood name');
+    return { code, name };
+  },
+  keyOf: (neighborhood) => [neighborhood.code],
+};
+
+/** TSIEND (Sandbox 2026-11-26: 3846 rows). PK CODEND; `TIPO` is free text (rua, avenida...). `CODEND = 0` ("SEM") is never mirrored. */
+export const STREET_SPEC: EntitySpec<Street> = {
+  entity: 'streets',
+  table: 'TSIEND',
+  select: ['CODEND', 'NOMEEND', 'TIPO'],
+  columns: ['CODEND', 'NOMEEND', 'TIPO'],
+  where: 'CODEND > 0',
+  orderBy: 'CODEND',
+  map: (row) => {
+    const code = row.int('CODEND');
+    const name = row.nullableText('NOMEEND');
+    if (name === null) return discardRow('blank street name');
+    return { code, name, kind: row.nullableText('TIPO') };
+  },
+  keyOf: (street) => [street.code],
 };
 
 /**
@@ -752,3 +835,24 @@ export function productMediaChunkSql(productCode: number, offset: number, bytes:
 export function productMediaLengthSql(productCode: number): string {
   return `SELECT ${MEDIA_LEN} AS LEN FROM TGFPRO WHERE CODPROD = ${productCode}`;
 }
+
+/**
+ * TSICEP (Sandbox 2026-11-26: 4152 rows). PK CEP, 8 digits without hyphen; CODCID, CODBAI, CODEND link to the registry (0 = none).
+ * Only the links are read; the INTERVALO column is not used. A row whose CEP is not 8 digits, or with no city, is discarded.
+ */
+export const POSTAL_CODE_SPEC: EntitySpec<PostalCodeEntry> = {
+  entity: 'postalCodes',
+  table: 'TSICEP',
+  select: ['CEP', 'CODCID', 'CODBAI', 'CODEND'],
+  columns: ['CEP', 'CODCID', 'CODBAI', 'CODEND'],
+  where: 'CEP IS NOT NULL',
+  orderBy: 'CEP',
+  map: (row) => {
+    const cep = row.integerOrNull('CEP');
+    if (cep === null || cep < 1 || cep > 99_999_999) return discardRow('postal code is not 8 digits');
+    const cityCode = row.nullableInt('CODCID') ?? 0;
+    if (cityCode < 1) return discardRow('postal code without a city');
+    return { cep, cityCode, neighborhoodCode: Math.max(0, row.nullableInt('CODBAI') ?? 0), streetCode: Math.max(0, row.nullableInt('CODEND') ?? 0) };
+  },
+  keyOf: (entry) => [entry.cep],
+};

@@ -6,7 +6,7 @@ const base = {
   document: '11222333000181',
   name: 'Cliente de teste',
 };
-const address = { streetCode: 1, neighborhoodCode: 2, number: '10', complement: null, postalCode: '01310100' };
+const address = { cityCode: 5, streetCode: 1, neighborhoodCode: 2, number: '10', complement: null, postalCode: '01310100' };
 
 function messages(input: Record<string, unknown>): string[] {
   const result = CreateCustomerRequestSchema.safeParse({ ...base, ...input });

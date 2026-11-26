@@ -2,6 +2,10 @@ import type {
   Customer,
   DirectoryUser,
   Carrier,
+  City,
+  Neighborhood,
+  Street,
+  PostalCodeEntry,
   IpiRate,
   ListPrice,
   OpenTitle,
@@ -40,6 +44,12 @@ export interface DemoDataset {
   /** Synthetic ERP users: one per seller (codes 9001...), plus one user without a seller. */
   readonly directoryUsers: readonly DirectoryUser[];
   readonly carriers: readonly Carrier[];
+  /** Synthetic address registry (cities with their state abbreviation, neighborhoods, streets). Codes start at 1: 0 is the "none" placeholder. */
+  readonly cities: readonly City[];
+  readonly neighborhoods: readonly Neighborhood[];
+  readonly streets: readonly Street[];
+  /** Synthetic postal codes (CEP) linking to the codes above; the first one has no street. */
+  readonly postalCodes: readonly PostalCodeEntry[];
   /** Synthetic IPI rates: 3.25%, 9.75% and one by tariff (not estimated). */
   readonly ipiRates: readonly IpiRate[];
   /** Synthetic open receivable titles for some customers: one long overdue, one far in the future, one partly settled. */
@@ -151,6 +161,38 @@ function buildCarriers(): Carrier[] {
     { code: DEMO_CARRIER_FIRST_CODE, name: 'Transportes Alfa (demo)', active: true },
     { code: DEMO_CARRIER_FIRST_CODE + 1, name: 'Rodoviario Beta (demo)', active: true },
     { code: DEMO_CARRIER_FIRST_CODE + 2, name: 'Logistica Gama (demo, inativa)', active: false },
+  ];
+}
+
+/** Synthetic address registry (invented places, not a capture). */
+function buildCities(): City[] {
+  return [
+    { code: 1, name: 'Vila Alfa (demo)', uf: 'SP', ibge: '3500001' },
+    { code: 2, name: 'Porto Beta (demo)', uf: 'RJ', ibge: '3300002' },
+    { code: 3, name: 'Serra Gama (demo)', uf: 'MG', ibge: null },
+    { code: 4, name: 'Campo Delta (demo)', uf: 'PR', ibge: '4100004' },
+  ];
+}
+function buildNeighborhoods(): Neighborhood[] {
+  return [
+    { code: 1, name: 'Centro (demo)' },
+    { code: 2, name: 'Distrito Industrial (demo)' },
+    { code: 3, name: 'Jardim Demo' },
+  ];
+}
+function buildStreets(): Street[] {
+  return [
+    { code: 1, name: 'das Flores (demo)', kind: 'RUA' },
+    { code: 2, name: 'Brasil (demo)', kind: 'AVENIDA' },
+    { code: 3, name: 'Sem Tipo (demo)', kind: null },
+  ];
+}
+
+function buildPostalCodes(): PostalCodeEntry[] {
+  return [
+    { cep: 1000000, cityCode: 1, neighborhoodCode: 1, streetCode: 0 },
+    { cep: 1310100, cityCode: 1, neighborhoodCode: 2, streetCode: 2 },
+    { cep: 20040020, cityCode: 2, neighborhoodCode: 0, streetCode: 1 },
   ];
 }
 
@@ -472,6 +514,10 @@ export function generateDemoDataset(seed: number = DEMO_SEED): DemoDataset {
     sellerManagerLinks: links,
     directoryUsers: buildDirectoryUsers(sellers),
     carriers: buildCarriers(),
+    cities: buildCities(),
+    neighborhoods: buildNeighborhoods(),
+    streets: buildStreets(),
+    postalCodes: buildPostalCodes(),
     ipiRates: buildIpiRates(),
     openTitles: buildOpenTitles(customers),
     customers,

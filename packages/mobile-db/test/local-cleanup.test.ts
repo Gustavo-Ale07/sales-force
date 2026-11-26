@@ -49,7 +49,7 @@ const request: PendingCustomerRequest = {
   phone: null,
   email: null,
   notes: null,
-  addresses: [{ streetCode: 1, neighborhoodCode: 2, number: "10", complement: null, postalCode: "01001000" }],
+  addresses: [{ cityCode: 3550308, streetCode: 1, neighborhoodCode: 2, number: "10", complement: null, postalCode: "01001000" }],
 };
 
 let db: SqlDatabase;

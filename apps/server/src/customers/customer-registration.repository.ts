@@ -1,5 +1,15 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { customerRegistration, customerRegistrationRefusal, erpCustomer, erpSeller, integrationOutbox, type Database } from '@salesforce/db';
+import {
+  customerRegistration,
+  customerRegistrationRefusal,
+  erpCity,
+  erpCustomer,
+  erpNeighborhood,
+  erpSeller,
+  erpStreet,
+  integrationOutbox,
+  type Database,
+} from '@salesforce/db';
 import { and, desc, eq, gte, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import type { RegistrationOutboxFacts } from './customer-registration-view.js';
 import { isBlockedRaw } from '../mirror/mirror.repository.js';
@@ -103,6 +113,35 @@ export class CustomerRegistrationRepository {
   }
 
   /** The document already exists in the ERP mirror (any seller, any state: duplicates are decided globally). */
+  /** Whether a live mirrored city exists (the registration validates the chosen city against the ERP registry, P-08). */
+  async cityExists(code: number, db: Executor = this.db): Promise<boolean> {
+    const rows = await db.select({ code: erpCity.code }).from(erpCity).where(and(eq(erpCity.code, code), isNull(erpCity.deletedAt))).limit(1);
+    return rows.length > 0;
+  }
+
+  async neighborhoodExists(code: number, db: Executor = this.db): Promise<boolean> {
+    const rows = await db
+      .select({ code: erpNeighborhood.code })
+      .from(erpNeighborhood)
+      .where(and(eq(erpNeighborhood.code, code), isNull(erpNeighborhood.deletedAt)))
+      .limit(1);
+    return rows.length > 0;
+  }
+
+  async streetExists(code: number, db: Executor = this.db): Promise<boolean> {
+    const rows = await db.select({ code: erpStreet.code }).from(erpStreet).where(and(eq(erpStreet.code, code), isNull(erpStreet.deletedAt))).limit(1);
+    return rows.length > 0;
+  }
+
+  /** Live mirrored neighborhoods/streets, to match free text by name (loaded only when a request carries a name to resolve). */
+  async neighborhoodRegistry(db: Executor = this.db): Promise<{ code: number; name: string }[]> {
+    return db.select({ code: erpNeighborhood.code, name: erpNeighborhood.name }).from(erpNeighborhood).where(isNull(erpNeighborhood.deletedAt));
+  }
+
+  async streetRegistry(db: Executor = this.db): Promise<{ code: number; name: string; kind: string | null }[]> {
+    return db.select({ code: erpStreet.code, name: erpStreet.name, kind: erpStreet.kind }).from(erpStreet).where(isNull(erpStreet.deletedAt));
+  }
+
   async activeSellerExists(code: number, db: Executor = this.db): Promise<boolean> {
     const rows = await db
       .select({ code: erpSeller.code })

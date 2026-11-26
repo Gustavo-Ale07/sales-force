@@ -31,3 +31,4 @@ export * from './release-queue.js';
 export * from './release-level.js';
 export * from './erp-release.js';
 export * from './order-header.js';
+export * from './address.js';

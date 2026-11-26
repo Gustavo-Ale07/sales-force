@@ -13,10 +13,16 @@ import type { Customer } from '@salesforce/domain';
  * ERP defaults apply. The credit limit is NEVER written.
  */
 export interface PartnerAddress {
-  /** Existing street code chosen by search (V1: the Force does not create streets). */
+  /** ERP city code (TSICID.CODCID); required, > 0 (owner decision: the city is always chosen from the ERP registry). */
+  readonly cityCode: number;
+  /** Street code (TSIEND.CODEND), 0 = none. The worker resolves `streetName` into a code before the partner is written. */
   readonly streetCode: number;
-  /** Existing neighborhood code chosen by search. */
+  /** Neighborhood code (TSIBAI.CODBAI), 0 = none. The worker resolves `neighborhoodName` into a code before the partner is written. */
   readonly neighborhoodCode: number;
+  /** Free street text (type + name, e.g. "RUA DAS FLORES") when no code was matched; created in the Sandbox by the worker (SNK-3 only). */
+  readonly streetName?: string | null;
+  /** Free neighborhood text when no code was matched; created in the Sandbox by the worker (SNK-3 only). */
+  readonly neighborhoodName?: string | null;
   readonly number: string | null;
   readonly complement: string | null;
   /** Digits only. */
@@ -105,7 +111,24 @@ export interface SankhyaPartnerWritePort {
   updatePartner(request: PartnerUpdateRequest, options?: PartnerCallOptions): Promise<void>;
   /** The reread of an edit: phone, e-mail and notes as stored; `null` = no such partner. */
   readPartnerEditableFields(code: number, options?: PartnerCallOptions): Promise<PartnerEditableFields | null>;
+  /**
+   * Address registry creation (owner decision change 2026-11-26: neighborhood and street missing from the mirror are created in the
+   * Sankhya SANDBOX). Idempotent (SNK-4): the adapter first looks the name up live (accent/case-insensitive) and returns the existing
+   * code with `created: false`; only when absent does it create (serialized, the next free code). Refused outside SANKHYA_ENVIRONMENT=sandbox (SNK-3).
+   */
+  ensureNeighborhood(name: string, options?: PartnerCallOptions): Promise<EnsuredAddressEntry>;
+  /** Same contract for a street; the type (TIPO) is split from the name and stored in uppercase. */
+  ensureStreet(name: string, options?: PartnerCallOptions): Promise<EnsuredAddressEntry>;
 }
+
+export interface EnsuredAddressEntry {
+  readonly code: number;
+  /** `true` when this call created the registry row, `false` when it already existed. */
+  readonly created: boolean;
+}
+
+export const ADDRESS_REGISTRY_WRITE_NOT_VALIDATED_MESSAGE =
+  'Creating a neighborhood or street in the ERP is not validated against the Sandbox yet (primary-key generation and the neighborhood region code were never read). NEEDS VALIDATION (S5.2); nothing was sent.';
 
 export const PARTNER_WRITE_NOT_ENABLED_MESSAGE =
   'ERP customer writes are not enabled for this gateway: the Sandbox write test is pending. NEEDS VALIDATION (customer-write plan T3; SNK-4, SNK-6). ' +

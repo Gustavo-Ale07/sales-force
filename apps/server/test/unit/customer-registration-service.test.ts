@@ -47,6 +47,24 @@ class FakeRepo {
   activeSellerExists(code: number): Promise<boolean> {
     return Promise.resolve(this.sellers.has(code));
   }
+  cities = new Set<number>([10]);
+  neighborhoods = [{ code: 3, name: 'Centro' }];
+  streets = [{ code: 7, name: 'DAS FLORES', kind: 'RUA' }];
+  cityExists(code: number): Promise<boolean> {
+    return Promise.resolve(this.cities.has(code));
+  }
+  neighborhoodExists(code: number): Promise<boolean> {
+    return Promise.resolve(this.neighborhoods.some((n) => n.code === code));
+  }
+  streetExists(code: number): Promise<boolean> {
+    return Promise.resolve(this.streets.some((x) => x.code === code));
+  }
+  neighborhoodRegistry() {
+    return Promise.resolve(this.neighborhoods);
+  }
+  streetRegistry() {
+    return Promise.resolve(this.streets);
+  }
   recentCount = 0;
   /** Called after every `findById` so a test can play the worker. */
   onPoll: (row: CustomerRegistrationRow) => void = () => undefined;
@@ -117,6 +135,32 @@ function build(options: { enabled?: boolean; timeoutMs?: number; scope?: unknown
   );
   return { service, repo, audits };
 }
+
+describe('CustomerRegistrationService.create: address (P-08)', () => {
+  it('refuses an unknown city with a field message and stores nothing', async () => {
+    const { service, repo } = build();
+    await expect(service.create(user(), request({ addresses: [{ cityCode: 999 }] }))).rejects.toMatchObject({
+      code: 'customer_refused',
+      details: { fields: { 'addresses.0.cityCode': expect.stringContaining('Cidade') } },
+    });
+    expect(repo.rows).toHaveLength(0);
+    expect(repo.outbox).toHaveLength(0);
+  });
+
+  it('stores the command with the matched codes, and with the text only for what the mirror does not know', async () => {
+    const { service, repo } = build();
+    await service.create(user(), request({ addresses: [{ cityCode: 10, neighborhoodName: 'CENTRO', streetName: 'Rua Nova', number: '5', postalCode: '01310100' }] }));
+    expect(repo.outbox[0]?.payload['addresses']).toEqual([
+      { cityCode: 10, neighborhoodCode: 3, neighborhoodName: null, streetCode: 0, streetName: 'Rua Nova', number: '5', complement: null, postalCode: '01310100' },
+    ]);
+  });
+
+  it('a registration without address is unchanged (no city needed)', async () => {
+    const { service, repo } = build();
+    await service.create(user(), request());
+    expect(repo.outbox[0]?.payload['addresses']).toEqual([]);
+  });
+});
 
 describe('CustomerRegistrationService.create', () => {
   it('is closed by default: 409 customer_write_disabled and nothing is recorded', async () => {

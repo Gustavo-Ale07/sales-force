@@ -19,6 +19,9 @@ export const LIMITS = {
   phoneDigits: 13,
   email: 80,
   notes: 4000,
+  addressName: 60,
+  addressNumber: 6,
+  addressComplement: 30,
 } as const;
 
 /** One ICMS classification as the server names it: the select shows `label`, never only the code. */
@@ -97,7 +100,11 @@ export function buildUpdateBody(clientRequestId: string, form: EditForm): Update
 
 /* ---------- Create ---------- */
 
+export type PersonType = "F" | "J";
+
 export interface CreateForm {
+  /** Pessoa física (CPF) or jurídica (CNPJ): decides the document kind and whether trade name and state registration exist. */
+  personType: PersonType;
   document: string;
   name: string;
   tradeName: string;
@@ -109,9 +116,21 @@ export interface CreateForm {
   phone: string;
   email: string;
   notes: string;
+  /** Typed CEP (masked or not). */
+  postalCode: string;
+  /** ERP city code; null = not chosen (the city is mandatory). */
+  cityCode: number | null;
+  neighborhood: string;
+  /** Set only while `neighborhood` is exactly an ERP neighborhood (picked from the suggestions or found by the CEP). */
+  neighborhoodCode: number | null;
+  street: string;
+  streetCode: number | null;
+  number: string;
+  complement: string;
 }
 
 export const emptyCreateForm = (): CreateForm => ({
+  personType: "J",
   document: "",
   name: "",
   tradeName: "",
@@ -122,6 +141,14 @@ export const emptyCreateForm = (): CreateForm => ({
   phone: "",
   email: "",
   notes: "",
+  postalCode: "",
+  cityCode: null,
+  neighborhood: "",
+  neighborhoodCode: null,
+  street: "",
+  streetCode: null,
+  number: "",
+  complement: "",
 });
 
 export interface CreateProblems {
@@ -129,10 +156,28 @@ export interface CreateProblems {
   name: string | null;
   tradeName: string | null;
   stateRegistration: string | null;
+  cityCode: string | null;
+  neighborhood: string | null;
+  street: string | null;
+  number: string | null;
+  complement: string | null;
   sellerCode: string | null;
   phone: string | null;
   email: string | null;
   notes: string | null;
+}
+
+/** The three screens of the registration, in order; each lists the problem keys it owns. */
+export const CREATE_STEP_FIELDS: readonly (readonly (keyof CreateProblems)[])[] = [
+  ["document", "name", "tradeName", "stateRegistration"],
+  ["cityCode", "neighborhood", "street", "number", "complement", "phone", "email", "notes"],
+  ["sellerCode"],
+];
+
+/** Form field (a key of `CreateProblems`) -> index of the screen that shows it. */
+export function stepOfField(field: string): number {
+  const index = CREATE_STEP_FIELDS.findIndex((fields) => (fields as readonly string[]).includes(field));
+  return index < 0 ? 0 : index;
 }
 
 /** True when the typed document is a CPF (natural person): no state registration, no "Isento". */
@@ -140,22 +185,29 @@ export function isNaturalPerson(document: string): boolean {
   return taxDocumentKind(normalizeTaxDocument(document)) === "individual";
 }
 
+const tooLong = (value: string, max: number, label: string) => (value.trim().length > max ? `${label} deve ter até ${max} caracteres.` : null);
+
 /** `sellerRequired`: the signed-in user has no ERP seller code (manager and equivalent) and must pick the owner seller. */
 export function createProblems(form: CreateForm, sellerRequired = false): CreateProblems {
   const digits = normalizeTaxDocument(form.document);
-  const kind = taxDocumentKind(digits);
+  const natural = form.personType === "F";
   let document: string | null = null;
-  if (digits === "") document = "Informe o CPF ou CNPJ.";
-  else if (kind === null || !(kind === "individual" ? isValidCpf(digits) : isValidCnpj(digits))) document = "CPF ou CNPJ inválido.";
+  if (digits === "") document = natural ? "Informe o CPF." : "Informe o CNPJ.";
+  else if (natural ? !isValidCpf(digits) : !isValidCnpj(digits)) document = natural ? "CPF inválido." : "CNPJ inválido.";
   const ie = form.stateRegistration.trim();
   let stateRegistration: string | null = null;
-  if (kind === "company" && !form.exempt && ie === "") stateRegistration = 'Informe a inscrição estadual ou marque "Isento".';
-  else if (kind !== "individual" && !form.exempt && ie.length > LIMITS.stateRegistration) stateRegistration = `A inscrição estadual deve ter até ${LIMITS.stateRegistration} caracteres.`;
+  if (!natural && !form.exempt && ie === "") stateRegistration = 'Informe a inscrição estadual ou marque "Isento".';
+  else if (!natural && !form.exempt && ie.length > LIMITS.stateRegistration) stateRegistration = `A inscrição estadual deve ter até ${LIMITS.stateRegistration} caracteres.`;
   return {
     document,
     name: form.name.trim() === "" ? "Informe a razão social ou o nome." : form.name.trim().length > LIMITS.name ? `O nome deve ter até ${LIMITS.name} caracteres.` : null,
-    tradeName: form.tradeName.trim().length > LIMITS.tradeName ? `O nome fantasia deve ter até ${LIMITS.tradeName} caracteres.` : null,
+    tradeName: natural ? null : tooLong(form.tradeName, LIMITS.tradeName, "O nome fantasia"),
     stateRegistration,
+    cityCode: form.cityCode === null ? "Informe a cidade." : null,
+    neighborhood: tooLong(form.neighborhood, LIMITS.addressName, "O bairro"),
+    street: tooLong(form.street, LIMITS.addressName, "A rua"),
+    number: tooLong(form.number, LIMITS.addressNumber, "O número"),
+    complement: tooLong(form.complement, LIMITS.addressComplement, "O complemento"),
     sellerCode: sellerRequired && form.sellerCode === "" ? "Escolha o vendedor." : null,
     phone: phoneProblem(form.phone),
     email: emailProblem(form.email),
@@ -167,21 +219,58 @@ export function hasCreateProblems(problems: CreateProblems): boolean {
   return Object.values(problems).some((problem) => problem !== null);
 }
 
+/** Problems that stop the person on screen `step` (0-based): only that screen's fields count. */
+export function stepHasProblems(problems: CreateProblems, step: number): boolean {
+  return (CREATE_STEP_FIELDS[step] ?? []).some((field) => problems[field] !== null);
+}
+
+/** Lower case, no accents, trimmed: what suggestions and the city search compare. */
+export function normalizeName(text: string): string {
+  return text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLocaleLowerCase("pt-BR").trim();
+}
+
+/** The code of the registry row whose name equals `text` (accent/case-insensitive); null when the text is free. */
+export function matchCode(text: string, options: readonly { code: number; name: string }[]): number | null {
+  const needle = normalizeName(text);
+  if (needle === "") return null;
+  return options.find((option) => normalizeName(option.name) === needle)?.code ?? null;
+}
+
 export function buildCreateBody(clientRequestId: string, form: CreateForm): CreateCustomerBody {
-  // A natural person never carries a state registration, whatever was typed before the document changed.
-  const ie = isNaturalPerson(form.document) ? "" : form.exempt ? "ISENTO" : form.stateRegistration.trim();
+  // A natural person never carries a state registration nor a trade name, whatever was typed before the type changed.
+  const natural = form.personType === "F";
+  const ie = natural ? "" : form.exempt ? "ISENTO" : form.stateRegistration.trim();
+  const tradeName = natural ? "" : form.tradeName.trim();
+  const postalDigits = digitsOf(form.postalCode);
+  const street = form.street.trim();
+  const neighborhood = form.neighborhood.trim();
+  const addresses: CreateCustomerBody["addresses"] =
+    form.cityCode === null
+      ? []
+      : [
+          {
+            cityCode: form.cityCode,
+            streetCode: form.streetCode ?? 0,
+            neighborhoodCode: form.neighborhoodCode ?? 0,
+            streetName: form.streetCode === null && street !== "" ? street : null,
+            neighborhoodName: form.neighborhoodCode === null && neighborhood !== "" ? neighborhood : null,
+            number: form.number.trim() === "" ? null : form.number.trim(),
+            complement: form.complement.trim() === "" ? null : form.complement.trim(),
+            postalCode: postalDigits.length === 8 ? postalDigits : null,
+          },
+        ];
   return {
     clientRequestId,
     ...(form.sellerCode === "" ? {} : { sellerCode: Number(form.sellerCode) }),
     document: normalizeTaxDocument(form.document),
     name: form.name.trim(),
-    tradeName: form.tradeName.trim() === "" ? null : form.tradeName.trim(),
+    tradeName: tradeName === "" ? null : tradeName,
     icmsClassification: form.icmsClassification,
     stateRegistration: ie === "" ? null : ie,
     phone: form.phone.trim() === "" ? null : digitsOf(form.phone),
     email: form.email.trim() === "" ? null : form.email.trim(),
     notes: form.notes.trim() === "" ? null : form.notes.trim(),
-    addresses: [],
+    addresses,
   };
 }
 
@@ -211,14 +300,31 @@ const REASON_TEXT: Record<string, string> = {
 
 /** Server field names that differ from the form's. */
 const SERVER_FIELD_TO_FORM: Record<string, string> = { seller: "sellerCode" };
+const ADDRESS_FIELD_TO_FORM: Record<string, string> = {
+  cityCode: "cityCode",
+  streetCode: "street",
+  streetName: "street",
+  neighborhoodCode: "neighborhood",
+  neighborhoodName: "neighborhood",
+  number: "number",
+  complement: "complement",
+  postalCode: "postalCode",
+};
+
+/** `addresses.0.cityCode` -> the form field `cityCode`; any other path -> its first segment (renamed when the form differs). */
+export function formFieldOfServerPath(path: string): string {
+  const parts = path.split(".");
+  const head = parts[0] ?? path;
+  if (head === "addresses") return ADDRESS_FIELD_TO_FORM[parts[2] ?? ""] ?? "cityCode";
+  return SERVER_FIELD_TO_FORM[head] ?? head;
+}
 
 /** Field -> text map of a 422: `details.fields` (object) or, equivalently, the issue list. */
 function serverFieldProblems(error: unknown): Record<string, string> {
   const out: Record<string, string> = {};
   const put = (field: string, text: unknown) => {
     if (typeof text !== "string" || text === "") return;
-    const head = field.split(".")[0] ?? field;
-    out[SERVER_FIELD_TO_FORM[head] ?? head] = text;
+    out[formFieldOfServerPath(field)] = text;
   };
   const fields = (error as { details?: { fields?: unknown } }).details?.fields;
   if (fields && typeof fields === "object") for (const [field, text] of Object.entries(fields)) put(field, text);
@@ -253,7 +359,7 @@ export function describeCustomerWriteError(error: unknown, fallbackTitle: string
     const fieldProblems: Record<string, string> = {};
     const names: string[] = [];
     for (const issue of issues) {
-      const field = issue.path.split(".")[0] ?? issue.path;
+      const field = formFieldOfServerPath(issue.path);
       const label = FIELD_LABELS[field];
       if (issue.code === "unrecognized_keys") {
         names.push(label ?? field);

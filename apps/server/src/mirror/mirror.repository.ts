@@ -7,6 +7,10 @@ import {
   erpProduct,
   erpSeller,
   erpCarrier,
+  erpCity,
+  erpNeighborhood,
+  erpStreet,
+  erpPostalCode,
   erpIpiRate,
   erpOpenTitle,
   erpProductGroup,
@@ -686,6 +690,97 @@ export class MirrorRepository {
       .from(erpCarrier)
       .where(and(isNull(erpCarrier.deletedAt), eq(erpCarrier.active, true)))
       .orderBy(asc(erpCarrier.name), asc(erpCarrier.code));
+  }
+
+  /** ERP cities (not deleted), ordered by UF then name. Reference data for the customer registration picker. */
+  async listCities(): Promise<{ code: number; name: string; uf: string; ibge: string | null }[]> {
+    return this.db
+      .select({ code: erpCity.code, name: erpCity.name, uf: erpCity.uf, ibge: erpCity.ibge })
+      .from(erpCity)
+      .where(isNull(erpCity.deletedAt))
+      .orderBy(asc(erpCity.uf), asc(erpCity.name), asc(erpCity.code));
+  }
+
+  async listNeighborhoods(): Promise<{ code: number; name: string }[]> {
+    return this.db
+      .select({ code: erpNeighborhood.code, name: erpNeighborhood.name })
+      .from(erpNeighborhood)
+      .where(isNull(erpNeighborhood.deletedAt))
+      .orderBy(asc(erpNeighborhood.name), asc(erpNeighborhood.code));
+  }
+
+  async listStreets(): Promise<{ code: number; name: string; kind: string | null }[]> {
+    return this.db
+      .select({ code: erpStreet.code, name: erpStreet.name, kind: erpStreet.kind })
+      .from(erpStreet)
+      .where(isNull(erpStreet.deletedAt))
+      .orderBy(asc(erpStreet.name), asc(erpStreet.code));
+  }
+
+  /**
+   * The ERP's own answer for a CEP (TSICEP, mirrored): the city (name, UF) and, when the ERP links them, the neighborhood and
+   * street. Null when the CEP is not mirrored or its city is gone. `street` is "TYPE NAME" when the ERP stores a type.
+   */
+  async findPostalCode(cep: string): Promise<{
+    cityCode: number;
+    city: string;
+    uf: string;
+    neighborhoodCode: number | null;
+    neighborhood: string | null;
+    streetCode: number | null;
+    street: string | null;
+  } | null> {
+    const key = Number(cep);
+    if (!/^\d{8}$/.test(cep) || !fitsPgInt(key)) return null;
+    const [link] = await this.db
+      .select({ cityCode: erpPostalCode.cityCode, neighborhoodCode: erpPostalCode.neighborhoodCode, streetCode: erpPostalCode.streetCode })
+      .from(erpPostalCode)
+      .where(and(eq(erpPostalCode.cep, key), isNull(erpPostalCode.deletedAt)))
+      .limit(1);
+    if (link === undefined) return null;
+    const [city] = await this.db
+      .select({ name: erpCity.name, uf: erpCity.uf })
+      .from(erpCity)
+      .where(and(eq(erpCity.code, link.cityCode), isNull(erpCity.deletedAt)))
+      .limit(1);
+    if (city === undefined) return null;
+    const [neighborhood] =
+      link.neighborhoodCode > 0
+        ? await this.db
+            .select({ name: erpNeighborhood.name })
+            .from(erpNeighborhood)
+            .where(and(eq(erpNeighborhood.code, link.neighborhoodCode), isNull(erpNeighborhood.deletedAt)))
+            .limit(1)
+        : [];
+    const [street] =
+      link.streetCode > 0
+        ? await this.db
+            .select({ name: erpStreet.name, kind: erpStreet.kind })
+            .from(erpStreet)
+            .where(and(eq(erpStreet.code, link.streetCode), isNull(erpStreet.deletedAt)))
+            .limit(1)
+        : [];
+    return {
+      cityCode: link.cityCode,
+      city: city.name,
+      uf: city.uf,
+      neighborhoodCode: neighborhood === undefined ? null : link.neighborhoodCode,
+      neighborhood: neighborhood?.name ?? null,
+      streetCode: street === undefined ? null : link.streetCode,
+      street: street === undefined ? null : street.kind === null ? street.name : `${street.kind} ${street.name}`,
+    };
+  }
+
+  /** Whether the code is a live (not deleted) mirrored row of the address registry (validation of a registration, P-08). */
+  async addressCodeExists(table: 'city' | 'neighborhood' | 'street', code: number): Promise<boolean> {
+    if (!fitsPgInt(code)) return false;
+    const target = table === 'city' ? erpCity : table === 'neighborhood' ? erpNeighborhood : erpStreet;
+    const rows = await this.db
+      .select({ code: target.code })
+      .from(target)
+      .where(and(eq(target.code, code), isNull(target.deletedAt)))
+      .limit(1);
+    return rows.length > 0;
   }
 
   /** Whether the code is an active, not-deleted mirrored carrier (validation of the order carrier). */

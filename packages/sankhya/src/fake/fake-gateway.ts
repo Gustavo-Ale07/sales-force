@@ -2,6 +2,7 @@ import { normalizeTaxDocument, parseCustomerOriginKey, type Customer, type Insta
 import { SankhyaGatewayError } from '../errors.js';
 import { isValidOriginField } from '../write/order-write-config.js';
 import type {
+  EnsuredAddressEntry,
   ErpPartnerRef,
   PartnerCallOptions,
   PartnerEditableFields,
@@ -169,6 +170,18 @@ export class FakeGateway implements SankhyaGateway {
     const left = this.#dataset.carriers.length - rows.length;
     options?.onExcluded?.('carriers', { ...(left > 0 ? { active: left } : {}), 'flag:TRANSPORTADORA': 0 });
     return this.#snapshot('carriers', rows, options);
+  }
+  readCities(options?: ReadOptions) {
+    return this.#snapshot('cities', this.#dataset.cities, options);
+  }
+  readNeighborhoods(options?: ReadOptions) {
+    return this.#snapshot('neighborhoods', this.#dataset.neighborhoods, options);
+  }
+  readStreets(options?: ReadOptions) {
+    return this.#snapshot('streets', this.#dataset.streets, options);
+  }
+  readPostalCodes(options?: ReadOptions) {
+    return this.#snapshot('postalCodes', this.#dataset.postalCodes, options);
   }
   readIpiRates(options?: ReadOptions) {
     return this.#snapshot('ipiRates', this.#dataset.ipiRates, options);
@@ -379,6 +392,20 @@ export class FakeGateway implements SankhyaGateway {
     return this.#order(options, () => {
       const stored = this.#partners.read(code);
       return stored === null ? null : { phone: stored.request.phone, email: stored.request.email, notes: stored.request.notes };
+    });
+  }
+
+  ensureNeighborhood(name: string, options?: PartnerCallOptions): Promise<EnsuredAddressEntry> {
+    return this.#order(options, () => {
+      this.#partners.seedRegistry(this.#dataset.neighborhoods, this.#dataset.streets);
+      return this.#partners.ensureNeighborhood(name);
+    });
+  }
+
+  ensureStreet(name: string, options?: PartnerCallOptions): Promise<EnsuredAddressEntry> {
+    return this.#order(options, () => {
+      this.#partners.seedRegistry(this.#dataset.neighborhoods, this.#dataset.streets);
+      return this.#partners.ensureStreet(name);
     });
   }
 

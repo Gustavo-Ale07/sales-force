@@ -8,6 +8,7 @@ export * from './auth.js';
 export * from './access.js';
 export * from './sellers.js';
 export * from './catalog.js';
+export * from './address.js';
 export * from './customers.js';
 export * from './customer-write.js';
 export * from './orders.js';

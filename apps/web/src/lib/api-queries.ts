@@ -129,6 +129,31 @@ export function carriersQueryOptions(api: ApiClient) {
   });
 }
 
+/** ERP address registry for the customer registration: loaded once and kept (it changes rarely). */
+const REGISTRY_STALE_MS = 60 * 60_000;
+
+export function citiesQueryOptions(api: ApiClient) {
+  return queryOptions({ queryKey: ["address", "cities"] as const, queryFn: () => callApi(() => api.GET("/cities")), staleTime: REGISTRY_STALE_MS });
+}
+
+export function neighborhoodsQueryOptions(api: ApiClient) {
+  return queryOptions({ queryKey: ["address", "neighborhoods"] as const, queryFn: () => callApi(() => api.GET("/neighborhoods")), staleTime: REGISTRY_STALE_MS });
+}
+
+export function streetsQueryOptions(api: ApiClient) {
+  return queryOptions({ queryKey: ["address", "streets"] as const, queryFn: () => callApi(() => api.GET("/streets")), staleTime: REGISTRY_STALE_MS });
+}
+
+/** CEP already looked up stays cached for the session (memory only); a failure is not retried and is silent for the person. */
+export function postalCodeQueryOptions(api: ApiClient, cep: string) {
+  return queryOptions({
+    queryKey: ["address", "postal-code", cep] as const,
+    queryFn: () => callApi(() => api.GET("/customers/postal-code/{cep}", { params: { path: { cep } } })),
+    staleTime: Infinity,
+    retry: false,
+  });
+}
+
 export function dashboardQueryOptions(api: ApiClient) {
   return queryOptions({
     queryKey: queryKeys.dashboard,

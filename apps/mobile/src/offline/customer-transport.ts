@@ -13,6 +13,16 @@ export function toCustomerTransportError(error: unknown): TransportError {
   if (error instanceof ApiRequestError && error.status === 422) {
     return new TransportError("validation", error.message, 422, error.code, Object.keys(error.fields).length > 0 ? error.fields : { _: error.message });
   }
+  // 400 validation_failed: the issue paths name the field (`addresses.0.cityCode` -> `cityCode`), so the form shows the text on that field.
+  if (error instanceof ApiRequestError && error.status === 400 && error.issues.length > 0) {
+    const fields: Record<string, string> = {};
+    for (const issue of error.issues) {
+      const parts = issue.path.split(".");
+      const key = parts[0] === "addresses" ? parts.slice(2).join(".") || "addresses" : (parts[0] ?? "_");
+      fields[key] = key === "cityCode" ? "Informe a cidade." : (issue.message ?? "Valor inválido.");
+    }
+    return new TransportError("validation", Object.values(fields)[0] ?? error.message, 400, error.code, fields);
+  }
   if (error instanceof ApiRequestError && error.status === 409) {
     if (error.code === "idempotency_conflict") return new TransportError("idempotency_conflict", error.message, 409);
     if (error.reason === "document_already_registered" || error.reason === "customer_rejected") {
@@ -46,7 +56,17 @@ export function createCustomerTransport(api: ApiClient): CustomerRegistrationTra
       try {
         const response = await callApi(() =>
           api.POST("/customers", {
-            body: { clientRequestId, ...request, addresses: request.addresses.map((address) => ({ ...address })) },
+            body: { clientRequestId, ...request, addresses: request.addresses.map((address) => ({
+                streetCode: 0,
+                neighborhoodCode: 0,
+                streetName: null,
+                neighborhoodName: null,
+                number: null,
+                complement: null,
+                postalCode: null,
+                ...address,
+              })),
+            },
           }),
         );
         // 201 sent (real code) / 202 pending (still being delivered): the server's sendState decides.

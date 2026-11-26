@@ -1,6 +1,6 @@
 import { CustomerFieldSchemas, IcmsClassificationSchema, MAX_CUSTOMER_ADDRESSES } from '@salesforce/contracts';
 import type { Customer } from '@salesforce/domain';
-import { isSankhyaGatewayError, type SankhyaPartnerWritePort } from '@salesforce/sankhya';
+import { isSankhyaGatewayError, type PartnerAddress, type SankhyaPartnerWritePort } from '@salesforce/sankhya';
 import { z } from 'zod';
 import type { Logger } from '../observability/logger.js';
 import type { Clock } from '../platform/tokens.js';
@@ -28,11 +28,15 @@ export const CustomerUpsertCommandSchema = z.object({
   addresses: z
     .array(
       z.object({
-        streetCode: z.number().int(),
-        neighborhoodCode: z.number().int(),
-        number: CustomerFieldSchemas.addressNumber,
+        // Optional only because a command stored before the city became mandatory has none: it is REFUSED at delivery (never guessed).
+        cityCode: z.number().int().min(1).optional(),
+        streetCode: z.number().int().min(0),
+        neighborhoodCode: z.number().int().min(0),
+        streetName: CustomerFieldSchemas.addressName.nullable().default(null),
+        neighborhoodName: CustomerFieldSchemas.addressName.nullable().default(null),
+        number: CustomerFieldSchemas.addressNumber.nullable(),
         complement: CustomerFieldSchemas.addressComplement.nullable(),
-        postalCode: CustomerFieldSchemas.postalCode,
+        postalCode: CustomerFieldSchemas.postalCode.nullable(),
       }),
     )
     .max(MAX_CUSTOMER_ADDRESSES),
@@ -116,6 +120,12 @@ export class CustomerDeliveryService {
       return;
     }
 
+    // Owner rule for commands queued before the city became mandatory: refused with an actionable text, never delivered without a city.
+    if (command.addresses.some((address) => address.cityCode === undefined)) {
+      await this.reject(claimed, 'validation', 'address_city_required', 'O endereço não tem cidade. Informe a cidade e cadastre o cliente novamente.');
+      return;
+    }
+
     let phase: DeliveryPhase = 'verify';
     let erpCode: number | null = claimed.erpReference === null ? null : Number(claimed.erpReference);
     // A send may have happened when an earlier attempt got past the lookups.
@@ -133,6 +143,9 @@ export class CustomerDeliveryService {
           }
           phase = 'include';
           await this.deps.store.markSending(claimed.outboxId, this.deps.now());
+          // Outbox order (owner decision change 2026-11-26): create the neighborhood, then the street, then the partner. Each step
+          // looks the name up live first, so a resend after a lost answer finds the row instead of creating it twice (SNK-4).
+          const addresses = await this.resolveRegistry(command.addresses, callOptions);
           const written = await gateway.upsertPartner(
             {
               originField: settings.originField,
@@ -148,7 +161,7 @@ export class CustomerDeliveryService {
               phone: command.phone,
               email: command.email,
               notes: command.notes,
-              addresses: command.addresses,
+              addresses,
             },
             callOptions,
           );
@@ -172,6 +185,29 @@ export class CustomerDeliveryService {
       });
       await this.applyOutcome(claimed, erpCode, outcome, outcome.kind === 'reject' ? refusalReason(error) : errorMessage(error), phase);
     }
+  }
+
+  /** Creates (idempotently, Sandbox only) the neighborhood and street the mirror did not know; returns the addresses with codes only. */
+  private async resolveRegistry(addresses: CustomerUpsertCommand['addresses'], callOptions: { signal?: AbortSignal }): Promise<PartnerAddress[]> {
+    const out: PartnerAddress[] = [];
+    for (const address of addresses) {
+      let { neighborhoodCode, streetCode } = address;
+      if (neighborhoodCode === 0 && address.neighborhoodName !== null) {
+        neighborhoodCode = (await this.deps.gateway.ensureNeighborhood(address.neighborhoodName, callOptions)).code;
+      }
+      if (streetCode === 0 && address.streetName !== null) {
+        streetCode = (await this.deps.gateway.ensureStreet(address.streetName, callOptions)).code;
+      }
+      out.push({
+        cityCode: address.cityCode ?? 0,
+        streetCode,
+        neighborhoodCode,
+        number: address.number,
+        complement: address.complement,
+        postalCode: address.postalCode,
+      });
+    }
+    return out;
   }
 
   private async reject(claimed: ClaimedCustomerCommand, errorClass: string, errorCode: string, message: string): Promise<void> {

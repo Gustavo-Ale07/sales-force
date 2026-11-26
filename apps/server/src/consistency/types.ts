@@ -13,6 +13,10 @@ export const MIRROR_CONSISTENCY_TYPES = [
   'carriers',
   'ipiRates',
   'openTitles',
+  'cities',
+  'neighborhoods',
+  'streets',
+  'postalCodes',
 ] as const satisfies readonly MirrorEntity[];
 export type MirrorConsistencyType = (typeof MIRROR_CONSISTENCY_TYPES)[number];
 

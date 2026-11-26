@@ -13,6 +13,10 @@ import type {
   Customer,
   DirectoryUser,
   Carrier,
+  City,
+  Neighborhood,
+  Street,
+  PostalCodeEntry,
   IpiRate,
   OpenTitle,
 } from '@salesforce/domain';
@@ -35,6 +39,10 @@ export type ReadEntity =
   | 'sellers'
   | 'directoryUsers'
   | 'carriers'
+  | 'cities'
+  | 'neighborhoods'
+  | 'streets'
+  | 'postalCodes'
   | 'ipiRates'
   | 'openTitles'
   | 'salesHistoryMonthly'
@@ -51,6 +59,10 @@ export const READ_ENTITIES: readonly ReadEntity[] = [
   'sellers',
   'directoryUsers',
   'carriers',
+  'cities',
+  'neighborhoods',
+  'streets',
+  'postalCodes',
   'ipiRates',
   'openTitles',
   'salesHistoryMonthly',
@@ -130,6 +142,20 @@ export interface SankhyaReadPort {
   readDirectoryUsers(options?: ReadOptions): Snapshot<DirectoryUser>;
   /** Ordered by `Carrier.code`. Partners flagged as carriers: code, name and active flag only. */
   readCarriers(options?: ReadOptions): Snapshot<Carrier>;
+  /** Ordered by `City.code`. ERP address registry; the state is resolved to its two-letter abbreviation. */
+  readCities(options?: ReadOptions): Snapshot<City>;
+  /** Ordered by `Neighborhood.code`. */
+  readNeighborhoods(options?: ReadOptions): Snapshot<Neighborhood>;
+  /** Ordered by `Street.code`. */
+  readStreets(options?: ReadOptions): Snapshot<Street>;
+  /** Ordered by `PostalCodeEntry.cep`. TSICEP: the CEP to city/neighborhood/street links. */
+  readPostalCodes(options?: ReadOptions): Snapshot<PostalCodeEntry>;
+  /** Ordered by `Neighborhood.code`. */
+  readNeighborhoods(options?: ReadOptions): Snapshot<Neighborhood>;
+  /** Ordered by `Street.code`. */
+  readStreets(options?: ReadOptions): Snapshot<Street>;
+  /** Ordered by `PostalCodeEntry.cep`. TSICEP: the CEP to city/neighborhood/street links. */
+  readPostalCodes(options?: ReadOptions): Snapshot<PostalCodeEntry>;
   /** Ordered by `IpiRate.code`. IPI rates (TGFIPI) for the display estimate; read in full on every run. */
   readIpiRates(options?: ReadOptions): Snapshot<IpiRate>;
   /** Ordered by `OpenTitle.nufin`. Open receivable titles (read-only financial information, D-I); a complete snapshot every run. */

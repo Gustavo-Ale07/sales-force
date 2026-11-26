@@ -505,6 +505,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
               <CustomerCreateScreen
                 icmsOptions={icmsOptions}
                 sellers={sellerChoices}
+                {...(services?.addresses === undefined ? {} : { addresses: services.addresses })}
                 onSave={async (request) => {
                   const result = await pendingCustomers.submit(request, { online: connectivityState !== "offline" });
                   setCustomerForm(null);

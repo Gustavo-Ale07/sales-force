@@ -98,6 +98,10 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   listProducts: { roles: EVERY_ROLE },
   // Carriers (D-C): a read of the mirrored carrier list, open to every role that can create an order.
   listCarriers: { roles: EVERY_ROLE },
+  listCities: { roles: EVERY_ROLE },
+  listNeighborhoods: { roles: EVERY_ROLE },
+  listStreets: { roles: EVERY_ROLE },
+  lookupPostalCode: { roles: EVERY_ROLE },
   getProduct: { roles: EVERY_ROLE },
   // Same catalog read as getProduct (product visibility and seller scope are enforced by the handler).
   getProductImage: { roles: EVERY_ROLE },

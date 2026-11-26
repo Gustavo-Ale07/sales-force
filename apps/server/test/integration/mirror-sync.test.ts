@@ -19,7 +19,7 @@ import { recordWorkerHeartbeat } from '../../src/platform/worker-heartbeat.js';
 import { MIRROR_ENTITIES, isSnapshotReplaceEntity, mirrorQueueName, type MirrorEntity } from '../../src/sync/mirror-entities.js';
 import { MirrorSyncService } from '../../src/sync/mirror-sync.service.js';
 import type { SalesHistorySyncConfig } from '../../src/sync/sales-history-config.js';
-import { mirrorSchedulesFromSettings } from '../../src/sync/schedules.js';
+import { DEFAULT_MIRROR_CRONS, mirrorSchedulesFromSettings } from '../../src/sync/schedules.js';
 import { installQueues } from '../../src/worker/queue-installer.js';
 import { QUEUE_NAMES, QUEUE_REGISTRY, type QueueSpec } from '../../src/worker/queues.js';
 import { WorkerRuntime } from '../../src/worker/runtime.js';
@@ -35,6 +35,10 @@ const TABLES: Record<MirrorEntity, string> = {
   listPrices: 'erp_list_price',
   directoryUsers: 'erp_directory_user',
   carriers: 'erp_carrier',
+  cities: 'erp_city',
+  neighborhoods: 'erp_neighborhood',
+  streets: 'erp_street',
+  postalCodes: 'erp_postal_code',
   ipiRates: 'erp_ipi_rate',
   openTitles: 'erp_open_title',
   salesHistoryMonthly: 'erp_sales_history_monthly',
@@ -102,6 +106,10 @@ function datasetCopy(): { -readonly [K in keyof DemoDataset]: DemoDataset[K][num
     sellerManagerLinks: [...source.sellerManagerLinks],
     directoryUsers: [...source.directoryUsers],
     carriers: [...source.carriers],
+    cities: [...source.cities],
+    neighborhoods: [...source.neighborhoods],
+    streets: [...source.streets],
+    postalCodes: [...source.postalCodes],
     ipiRates: [...source.ipiRates],
     openTitles: [...source.openTitles],
     customers: [...source.customers],
@@ -495,7 +503,8 @@ describe('mirror jobs through pg-boss (retry / dead-letter)', () => {
     try {
       const registered = await runtime.boss.getSchedules();
       for (const entity of MIRROR_ENTITIES) {
-        expect(registered.find((schedule) => schedule.name === mirrorQueueName(entity))?.cron).toBe('0 3 * * *');
+        const expected = ['cities', 'neighborhoods', 'streets', 'postalCodes'].includes(entity) ? DEFAULT_MIRROR_CRONS.addresses : '0 3 * * *';
+        expect(registered.find((schedule) => schedule.name === mirrorQueueName(entity))?.cron).toBe(expected);
       }
 
       await runtime.boss.send(mirrorQueueName('sellers'), {});
