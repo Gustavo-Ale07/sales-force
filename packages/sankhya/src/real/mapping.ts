@@ -7,6 +7,9 @@ import type {
   Neighborhood,
   Street,
   PostalCodeEntry,
+  ForceConfig,
+  ForceDiscountLimit,
+  SellerGoal,
   IpiRate,
   IsoTimestamp,
   OpenTitle,
@@ -238,10 +241,15 @@ export class RowReader {
 export const SELLER_SPEC: EntitySpec<Seller> = {
   entity: 'sellers',
   table: 'TGFVEN',
-  select: ['CODVEND', 'APELIDO', 'ATIVO'],
-  columns: ['CODVEND', 'APELIDO', 'ATIVO'],
+  select: ['CODVEND', 'APELIDO', 'ATIVO', 'DESCMAX'],
+  columns: ['CODVEND', 'APELIDO', 'ATIVO', 'DESCMAX'],
   orderBy: 'CODVEND',
-  map: (row) => ({ code: row.int('CODVEND'), name: row.text('APELIDO'), active: row.flag('ATIVO') }),
+  map: (row) => ({
+    code: row.int('CODVEND'),
+    name: row.text('APELIDO'),
+    active: row.flag('ATIVO'),
+    ...maxDiscountField(row.nullableDecimal('DESCMAX')),
+  }),
   keyOf: (seller) => [seller.code],
 };
 
@@ -576,6 +584,11 @@ export function maxDiscountField(value: string | null): { maxDiscountPercent?: s
   return Number.isFinite(percent) && percent >= 0 && percent <= 100 ? { maxDiscountPercent: value } : {};
 }
 
+/** A product without a registered barcode carries no `barcode` property at all. */
+function barcodeField(value: string | null): { barcode?: string } {
+  return value === null ? {} : { barcode: value };
+}
+
 function positiveStep(value: string | null): string | null {
   return value !== null && Number(value) > 0 ? value : null;
 }
@@ -587,8 +600,10 @@ function positiveStep(value: string | null): string | null {
 export const PRODUCT_SPEC: EntitySpec<Product> = {
   entity: 'products',
   table: 'TGFPRO',
-  select: ['CODPROD', 'DESCRPROD', 'ATIVO', 'USOPROD', 'CODGRUPOPROD', 'CODVOL', 'MARCA', 'REFERENCIA', 'CODIPI', 'AGRUPMIN', 'DESCMAX'],
-  columns: ['CODPROD', 'DESCRPROD', 'ATIVO', 'USOPROD', 'CODGRUPOPROD', 'CODVOL', 'MARCA', 'REFERENCIA', 'CODIPI', 'AGRUPMIN', 'DESCMAX'],
+  // CODBARRA: one barcode per product from TGFBAR (Sandbox 2026-11-26: PK-less 1:N table, 17 rows, 13-digit EANs); the lowest
+  // code when a product has several, so the choice is deterministic. Absent = the product has none.
+  select: ['CODPROD', 'DESCRPROD', 'ATIVO', 'USOPROD', 'CODGRUPOPROD', 'CODVOL', 'MARCA', 'REFERENCIA', 'CODIPI', 'AGRUPMIN', 'DESCMAX', '(SELECT MIN(B.CODBARRA) FROM TGFBAR B WHERE B.CODPROD = TGFPRO.CODPROD) AS CODBARRA'],
+  columns: ['CODPROD', 'DESCRPROD', 'ATIVO', 'USOPROD', 'CODGRUPOPROD', 'CODVOL', 'MARCA', 'REFERENCIA', 'CODIPI', 'AGRUPMIN', 'DESCMAX', 'CODBARRA'],
   // `CODPROD = 0` is the ERP placeholder row ("<sem descrição>", Sandbox 2026-09-30): never mirrored.
   where: 'CODPROD > 0',
   orderBy: 'CODPROD',
@@ -606,6 +621,7 @@ export const PRODUCT_SPEC: EntitySpec<Product> = {
     ...stepField(positiveStep(row.nullableDecimal('AGRUPMIN'))),
     // DESCMAX (TGFPRO discount ceiling, percent): absent = no limit registered.
     ...maxDiscountField(row.nullableDecimal('DESCMAX')),
+    ...barcodeField(row.nullableText('CODBARRA')),
   }),
   keyOf: (product) => [product.code],
 };
@@ -857,4 +873,75 @@ export const POSTAL_CODE_SPEC: EntitySpec<PostalCodeEntry> = {
     return { cep, cityCode, neighborhoodCode: Math.max(0, row.nullableInt('CODBAI') ?? 0), streetCode: Math.max(0, row.nullableInt('CODEND') ?? 0) };
   },
   keyOf: (entry) => [entry.cep],
+};
+
+/**
+ * TGFMET, the native goal screen (Sandbox 2026-11-26: 47 rows, all CODVEND = 0, so no seller goal yet; no PK constraint). Only rows of a
+ * seller (CODVEND > 0) are read; DTREF is the month (always day 01 in the Sandbox). The goals of one seller and month are summed
+ * (PREVREC value, QTDPREV quantity; both nullable FLOAT), so the key is (seller, month) whatever the dimension columns hold.
+ */
+export const SELLER_GOAL_SPEC: EntitySpec<SellerGoal> = {
+  entity: 'sellerGoals',
+  table: 'TGFMET',
+  select: ['CODVEND', "TO_CHAR(TRUNC(DTREF, 'MM'), 'YYYY-MM') AS MES", 'NVL(SUM(PREVREC), 0) AS VLRMETA', 'NVL(SUM(QTDPREV), 0) AS QTDMETA'],
+  columns: ['CODVEND', 'MES', 'VLRMETA', 'QTDMETA'],
+  where: 'CODVEND > 0',
+  groupBy: "CODVEND, TO_CHAR(TRUNC(DTREF, 'MM'), 'YYYY-MM')",
+  orderBy: 'CODVEND, MES',
+  map: (row) => {
+    const mes = row.text('MES');
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes)) return row.reject('MES', 'is not a YYYY-MM month');
+    return { sellerCode: row.int('CODVEND'), month: mes, revenueTarget: row.decimal('VLRMETA'), quantityTarget: row.decimal('QTDMETA') };
+  },
+  keyOf: (goal) => [goal.sellerCode, monthKey(goal.month)],
+};
+
+/**
+ * AD_FORCECFG (Sandbox 2026-11-26: columns ID NUMBER(10) NOT NULL, DIASSEMSYNC NUMBER(10), CODTABPADRAO NUMBER(10); 0 rows).
+ * The manager registers it inside the ERP; the Force only reads it. A null field = not filled in (the default applies).
+ */
+export const FORCE_CONFIG_SPEC: EntitySpec<ForceConfig> = {
+  entity: 'forceConfig',
+  table: 'AD_FORCECFG',
+  select: ['ID', 'DIASSEMSYNC', 'CODTABPADRAO'],
+  columns: ['ID', 'DIASSEMSYNC', 'CODTABPADRAO'],
+  orderBy: 'ID',
+  map: (row) => ({
+    id: row.int('ID'),
+    daysWithoutSync: row.nullableInt('DIASSEMSYNC'),
+    defaultPriceTableCode: row.nullableInt('CODTABPADRAO'),
+  }),
+  keyOf: (config) => [config.id],
+};
+
+/**
+ * AD_FORCELIMDESC (Sandbox 2026-11-26: ID, SEQ NOT NULL; CODVEND, CODGRUPOPROD, CODPROD NUMBER(10); DESCMAX FLOAT; 0 rows).
+ * One discount rule per row. A row without a seller, without a percentage in 0..100, or with neither product nor group is discarded.
+ */
+export const FORCE_DISCOUNT_LIMIT_SPEC: EntitySpec<ForceDiscountLimit> = {
+  entity: 'forceDiscountLimits',
+  table: 'AD_FORCELIMDESC',
+  select: ['ID', 'SEQ', 'CODVEND', 'CODGRUPOPROD', 'CODPROD', 'DESCMAX'],
+  columns: ['ID', 'SEQ', 'CODVEND', 'CODGRUPOPROD', 'CODPROD', 'DESCMAX'],
+  orderBy: 'ID, SEQ',
+  map: (row) => {
+    const sellerCode = row.nullableInt('CODVEND');
+    if (sellerCode === null || sellerCode < 1) return discardRow('discount rule without a seller');
+    const productCode = row.nullableInt('CODPROD');
+    const groupCode = row.nullableInt('CODGRUPOPROD');
+    const hasProduct = productCode !== null && productCode > 0;
+    const hasGroup = groupCode !== null && groupCode > 0;
+    if (!hasProduct && !hasGroup) return discardRow('discount rule without product or group');
+    const percent = maxDiscountField(row.nullableDecimal('DESCMAX')).maxDiscountPercent;
+    if (percent === undefined) return discardRow('discount rule without a valid percentage');
+    return {
+      configId: row.int('ID'),
+      seq: row.int('SEQ'),
+      sellerCode,
+      groupCode: hasGroup ? groupCode : null,
+      productCode: hasProduct ? productCode : null,
+      percent,
+    };
+  },
+  keyOf: (limit) => [limit.configId, limit.seq],
 };

@@ -18,6 +18,31 @@ export interface Seller {
   readonly code: number;
   readonly name: string;
   readonly active: boolean;
+  /** ERP seller field: the seller's general discount ceiling (percent decimal text). Absent = none registered. */
+  readonly maxDiscountPercent?: DecimalString;
+}
+
+/**
+ * The installation parameters the manager registers INSIDE the ERP (AD_FORCECFG; first row only). The Force never stores or edits
+ * them. A null field = not filled in: the default applies (see `resolveForceConfig`).
+ */
+export interface ForceConfig {
+  readonly id: number;
+  readonly daysWithoutSync: number | null;
+  readonly defaultPriceTableCode: number | null;
+}
+
+/**
+ * One discount rule of a seller registered inside the ERP (AD_FORCELIMDESC). `productCode` filled = a product rule; only
+ * `groupCode` = a group rule; a row with neither (or without a seller) is not a rule the Force can apply.
+ */
+export interface ForceDiscountLimit {
+  readonly configId: number;
+  readonly seq: number;
+  readonly sellerCode: number | null;
+  readonly groupCode: number | null;
+  readonly productCode: number | null;
+  readonly percent: DecimalString;
 }
 
 /**
@@ -62,7 +87,7 @@ export interface Street {
 }
 
 /**
- * One postal code (CEP) of the ERP registry (TSICEP): the city, neighborhood and street it points to. `cep` is the 8-digit code as an
+ * One postal code (CEP) of the ERP registry: the city, neighborhood and street it points to. `cep` is the 8-digit code as an
  * integer (leading zeros are restored with `padStart(8, '0')`); a link the ERP leaves empty is 0.
  */
 export interface PostalCodeEntry {
@@ -132,6 +157,8 @@ export interface Product {
    * Not cost nor margin (P-20): it is a commercial policy value shown to every authorized profile.
    */
   readonly maxDiscountPercent?: string | null;
+  /** Barcode (EAN) of the product as registered in the ERP. undefined = not requested, null = none. Not restricted data. */
+  readonly barcode?: string | null;
 }
 
 export interface PriceTable {

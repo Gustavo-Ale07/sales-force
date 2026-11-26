@@ -239,6 +239,8 @@ export const UpdateCustomerRequestSchema = named(
     .strictObject({
       /** Idempotency key, unique per account. */
       clientRequestId: UuidSchema,
+      /** `contactVersion` the editor saw; when the ERP copy changed since, the answer is a 409 `customer_edit_conflict` carrying the current values. */
+      baseContactVersion: z.string().max(64).optional(),
       phone: CustomerFieldSchemas.phone.nullable().optional(),
       email: CustomerFieldSchemas.email.nullable().optional(),
       notes: CustomerFieldSchemas.notes.nullable().optional(),

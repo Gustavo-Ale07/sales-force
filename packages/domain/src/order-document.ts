@@ -1,4 +1,4 @@
-import { normalizeDecimalString } from './money.js';
+import { computeNetUnitPrice, normalizeDecimalString } from './money.js';
 
 /**
  * Order document (D-J): ONE HTML template with the installation brand, shared by web (print / PDF) and mobile (share PDF).
@@ -38,6 +38,8 @@ export interface OrderDocumentSource {
     readonly estimatedLineTotal: string | null;
     /** Estimated IPI rate in percent when known; absent/null = shown as a dash, never zero. */
     readonly ipiPercent?: string | null;
+    /** Product barcode (EAN) as registered in the ERP; absent/null = the cell stays empty. Not restricted data. */
+    readonly barcode?: string | null;
   }[];
   readonly totals: {
     readonly estimatedTotal: string;
@@ -122,6 +124,7 @@ export function toOrderDocument(source: OrderDocumentSource): OrderDocumentModel
       discountPercent: item.discountPercent,
       estimatedLineTotal: item.estimatedLineTotal,
       ...(item.ipiPercent === undefined ? {} : { ipiPercent: item.ipiPercent }),
+      ...(item.barcode === undefined || item.barcode === null ? {} : { barcode: item.barcode }),
     })),
     totals: {
       estimatedTotal: source.totals.estimatedTotal,
@@ -235,7 +238,7 @@ export interface OrderDocumentCompany {
 }
 
 const STYLE = `
-@page { size: A4; margin: 15mm; @bottom-right { content: "página " counter(page) " de " counter(pages); font-size: 8pt; color: #555; } }
+@page { size: A4 landscape; margin: 12mm; @bottom-right { content: "página " counter(page) " de " counter(pages); font-size: 8pt; color: #555; } }
 * { box-sizing: border-box; }
 body { margin: 0; font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; color: #1a1a1a; }
 header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid ${BRAND_BLUE}; padding-bottom: 8px; }
@@ -253,8 +256,9 @@ section { margin-top: 12px; }
 h2 { margin: 0 0 4px; font-size: 10.5pt; color: ${BRAND_BLUE}; text-transform: uppercase; letter-spacing: .5px; }
 table { width: 100%; border-collapse: collapse; }
 thead { display: table-header-group; }
-th { background: ${BRAND_BLUE}; color: #fff; text-align: left; padding: 5px 6px; font-size: 9pt; }
-td { padding: 5px 6px; border-bottom: 1px solid #ddd; vertical-align: top; }
+th { background: ${BRAND_BLUE}; color: #fff; text-align: left; padding: 5px 5px; font-size: 8.5pt; white-space: nowrap; }
+td { padding: 5px 5px; border-bottom: 1px solid #ddd; vertical-align: top; font-size: 9pt; white-space: nowrap; }
+td.d { white-space: normal; width: 100%; }
 th.n, td.n { text-align: right; white-space: nowrap; }
 tr { page-break-inside: avoid; }
 .total { margin-top: 10px; text-align: right; font-size: 13pt; font-weight: 800; color: ${BRAND_BLUE}; }
@@ -290,7 +294,9 @@ export function renderOrderHtml(model: OrderDocumentModel, options: OrderHtmlOpt
       const price = item.unitListPrice === null ? 'Sem preço' : formatDocumentMoney(item.unitListPrice);
       const total = item.estimatedLineTotal === null ? 'Sem preço' : formatDocumentMoney(item.estimatedLineTotal);
       const ipi = item.ipiPercent === undefined || item.ipiPercent === null ? DASH : formatDocumentPercent(item.ipiPercent);
-      return `<tr><td>${escapeHtml(item.lineNo)}</td><td>${escapeHtml(item.productCode)}</td><td>${escapeHtml(item.productDescription)}</td><td>${escapeHtml(item.unit)}</td><td class="n">${escapeHtml(formatDocumentQuantity(item.quantity))}</td><td class="n">${escapeHtml(price)}</td><td class="n">${escapeHtml(formatDocumentPercent(item.discountPercent))}</td><td class="n">${escapeHtml(ipi)}</td><td class="n">${escapeHtml(total)}</td></tr>`;
+      const netPrice = item.unitListPrice === null ? 'Sem preço' : formatDocumentMoney(computeNetUnitPrice(item.unitListPrice, item.discountPercent));
+      const barcode = item.barcode === undefined || item.barcode === null ? '' : escapeHtml(item.barcode);
+      return `<tr><td>${escapeHtml(item.lineNo)}</td><td>${escapeHtml(item.productCode)}</td><td>${barcode}</td><td class="d">${escapeHtml(item.productDescription)}</td><td>${escapeHtml(item.unit)}</td><td class="n">${escapeHtml(formatDocumentQuantity(item.quantity))}</td><td class="n">${escapeHtml(price)}</td><td class="n">${escapeHtml(formatDocumentPercent(item.discountPercent))}</td><td class="n">${escapeHtml(netPrice)}</td><td class="n">${escapeHtml(ipi)}</td><td class="n">${escapeHtml(total)}</td></tr>`;
     })
     .join('');
 
@@ -322,7 +328,7 @@ export function renderOrderHtml(model: OrderDocumentModel, options: OrderHtmlOpt
 <div><h2>Condições</h2>${conditions === '' ? DASH : conditions}</div>
 </section>
 <section><h2>Itens</h2>
-<table><thead><tr><th>Item</th><th>Código</th><th>Descrição</th><th>Un.</th><th class="n">Quantidade</th><th class="n">Preço unit.</th><th class="n">Desconto</th><th class="n">IPI %</th><th class="n">Total</th></tr></thead>
+<table><thead><tr><th>Item</th><th>Código</th><th>EAN</th><th>Descrição</th><th>Un.</th><th class="n">Quantidade</th><th class="n">Preço unit.</th><th class="n">Desconto</th><th class="n">Valor com desconto</th><th class="n">IPI %</th><th class="n">Total</th></tr></thead>
 <tbody>${rows}</tbody></table>
 <div class="total">Total: ${escapeHtml(formatDocumentMoney(model.totals.estimatedTotal))}</div>${partial}${ipiBlock}
 </section>

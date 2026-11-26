@@ -7,6 +7,6 @@ import { SalesHistoryService } from './sales-history.service.js';
 @Module({
   imports: [MirrorModule],
   providers: [SalesHistoryRepository, SalesHistoryService],
-  exports: [SalesHistoryService],
+  exports: [SalesHistoryService, SalesHistoryRepository],
 })
 export class SalesHistoryModule {}

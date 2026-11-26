@@ -14,6 +14,13 @@ export function replaceOrder(api: ApiClient, id: string, body: ReplaceOrderBody)
   return callApi(() => api.PUT("/orders/{id}", { params: { path: { id } }, body }));
 }
 
+export type ResolvePriceReviewBody = ApiSchema<"ResolvePriceReviewRequest">;
+
+/** P-09: accept or refuse each changed price; the server prices again and validates as a normal edit. */
+export function resolveOrderPriceReview(api: ApiClient, id: string, body: ResolvePriceReviewBody) {
+  return callApi(() => api.POST("/orders/{id}/price-review", { params: { path: { id } }, body }));
+}
+
 /** D-Y: physical deletion of a quote/order that never reached Sankhya (204, no body). */
 export function deleteOrder(api: ApiClient, id: string) {
   return callApi(() => api.DELETE("/orders/{id}", { params: { path: { id } } }));
@@ -32,6 +39,22 @@ export function submitOrder(api: ApiClient, id: string) {
 /** "Verificar agora": re-queues the ambiguous delivery on the same record; the worker asks Sankhya by origin first. */
 export function verifyOrderDelivery(api: ApiClient, id: string) {
   return callApi(() => api.POST("/orders/{id}/verify-delivery", { params: { path: { id } } }));
+}
+
+/** W-36: approve or revoke a device. The server re-checks the scope (admin: all; manager: the team). */
+export function decideDevice(api: ApiClient, id: string, decision: "approve" | "revoke") {
+  return callApi(() =>
+    decision === "approve"
+      ? api.POST("/devices/{id}/approve", { params: { path: { id } } })
+      : api.POST("/devices/{id}/revoke", { params: { path: { id } } }),
+  );
+}
+
+export type UpdateDeviceSettingsBody = { maxActiveDevices: number };
+
+/** Offline limit and approved devices per account (admin only). */
+export function updateDeviceSettings(api: ApiClient, body: UpdateDeviceSettingsBody) {
+  return callApi(() => api.PUT("/device-settings", { body }));
 }
 
 export type UpdateDiscountLimitsBody = ApiSchema<"UpdateDiscountLimitsRequest">;

@@ -169,8 +169,8 @@ export async function countLive(db: Queryable, spec: MirrorEntitySpec): Promise<
   return (result.rows[0] as { n: number } | undefined)?.n ?? 0;
 }
 
-/** Entities whose complete, healthy snapshot may legitimately be empty (owner ruling 2026-11-26): open receivable titles. */
-const MAY_BE_EMPTY: ReadonlySet<string> = new Set(['openTitles']);
+/** Entities whose complete, healthy snapshot may legitimately be empty (owner ruling 2026-11-26): open receivable titles; and the Force configuration tables the manager may not have filled in yet. */
+const MAY_BE_EMPTY: ReadonlySet<string> = new Set(['openTitles', 'forceConfig', 'forceDiscountLimits']);
 
 /** True when an empty read against live rows must be refused as a probable broken read (`empty_snapshot`). */
 export function isEmptySnapshotBlocked(entity: string, readCount: number, liveCount: number): boolean {

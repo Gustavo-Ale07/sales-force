@@ -1,3 +1,4 @@
+import type { DeviceRegistration } from "@salesforce/contracts";
 import { ApiRequestError, callApi, type ApiClient } from "../data/api";
 import type { AuthPort, LoginResult } from "./auth-port";
 
@@ -11,6 +12,7 @@ export function mapLoginFailure(error: ApiRequestError): Extract<LoginResult, { 
   if (error.status === 403 && error.code === "access_not_configured") return { ok: false, reason: "access_not_configured" };
   // The credentials were right but the profile (technical, operations) has no use of the app: the server says so only after proving them.
   if (error.status === 403 && error.code === "app_not_permitted") return { ok: false, reason: "app_not_permitted" };
+  if (error.status === 401 && error.code === "device_revoked") return { ok: false, reason: "device_revoked" };
   switch (error.status) {
     case 400:
     case 401:
@@ -23,7 +25,7 @@ export function mapLoginFailure(error: ApiRequestError): Extract<LoginResult, { 
 }
 
 /** `AuthPort` over the generated API client and the existing cookie session (interim transport, see `api.ts`). */
-export function createHttpAuth(api: ApiClient): AuthPort {
+export function createHttpAuth(api: ApiClient, identity?: () => Promise<DeviceRegistration>): AuthPort {
   return {
     async getSession() {
       try {
@@ -37,8 +39,10 @@ export function createHttpAuth(api: ApiClient): AuthPort {
 
     async login(credentials) {
       try {
-        const session = await callApi(() => api.POST("/auth/login", { body: { ...credentials, client: "app" } }));
-        return { ok: true, account: session.account };
+        // AUTH-2: the installation registers at login; a build without the device registry (tests) logs in without one.
+        const device = identity === undefined ? undefined : await identity();
+        const session = await callApi(() => api.POST("/auth/login", { body: { ...credentials, client: "app", ...(device === undefined ? {} : { device }) } }));
+        return { ok: true, account: session.account, ...(session.device === undefined ? {} : { device: session.device }) };
       } catch (error) {
         if (error instanceof ApiRequestError) return mapLoginFailure(error);
         throw error;

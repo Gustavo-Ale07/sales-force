@@ -34,6 +34,8 @@ import { Link } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 import { CustomerCreateDialog } from "../components/customer-create-dialog";
+import { ExportButton } from "../components/export-button";
+import { ImportDialog } from "../components/import-dialog";
 import { PendingCustomerRows, usePendingRegistrations } from "../components/customer-pending-rows";
 import { useCustomerWriteFlags } from "../lib/use-customer-write";
 import { MetricValueText, METRIC_VISUALS } from "../components/metric-value";
@@ -67,6 +69,7 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
   const api = useApi();
   const { canCreate } = useCustomerWriteFlags();
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
   const apiParams: CustomersParams = { ...params, page: params.page ?? 1, pageSize: params.pageSize ?? 25, sort: params.sort ?? "name" };
   const query = useQuery(customersQueryOptions(api, apiParams));
   const lettersQuery = useQuery(
@@ -101,14 +104,23 @@ export function CustomersPage({ params, onSearchChange, onOpenCustomer }: Custom
         title="Clientes"
         count={query.data ? query.data.total.toLocaleString("pt-BR") : undefined}
         actions={
-          canCreate ? (
-            <Button variant="primary" size="lg" leftIcon={<Plus size={16} aria-hidden="true" />} onClick={() => setCreating(true)}>
-              Novo cliente
-            </Button>
-          ) : undefined
+          <div className="flex flex-wrap items-center gap-2">
+            <ExportButton resource="customers" query={{ search: params.search, sellerCode: params.sellerCode }} />
+            {canCreate ? (
+              <Button variant="secondary" size="lg" onClick={() => setImporting(true)}>
+                Importar planilha
+              </Button>
+            ) : null}
+            {canCreate ? (
+              <Button variant="primary" size="lg" leftIcon={<Plus size={16} aria-hidden="true" />} onClick={() => setCreating(true)}>
+                Novo cliente
+              </Button>
+            ) : undefined}
+          </div>
         }
       />
       {canCreate ? <CustomerCreateDialog open={creating} onOpenChange={setCreating} /> : null}
+      {canCreate ? <ImportDialog open={importing} onOpenChange={setImporting} type="customers" /> : null}
 
       {portfolio && portfolio.metrics.length > 0 ? (
         <section aria-label={portfolio.label} className="max-sm:hidden">

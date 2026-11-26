@@ -17,6 +17,9 @@ import type {
   Neighborhood,
   Street,
   PostalCodeEntry,
+  ForceConfig,
+  ForceDiscountLimit,
+  SellerGoal,
   IpiRate,
   OpenTitle,
 } from '@salesforce/domain';
@@ -43,6 +46,9 @@ export type ReadEntity =
   | 'neighborhoods'
   | 'streets'
   | 'postalCodes'
+  | 'forceConfig'
+  | 'forceDiscountLimits'
+  | 'sellerGoals'
   | 'ipiRates'
   | 'openTitles'
   | 'salesHistoryMonthly'
@@ -63,6 +69,9 @@ export const READ_ENTITIES: readonly ReadEntity[] = [
   'neighborhoods',
   'streets',
   'postalCodes',
+  'forceConfig',
+  'forceDiscountLimits',
+  'sellerGoals',
   'ipiRates',
   'openTitles',
   'salesHistoryMonthly',
@@ -150,12 +159,24 @@ export interface SankhyaReadPort {
   readStreets(options?: ReadOptions): Snapshot<Street>;
   /** Ordered by `PostalCodeEntry.cep`. TSICEP: the CEP to city/neighborhood/street links. */
   readPostalCodes(options?: ReadOptions): Snapshot<PostalCodeEntry>;
+  /** Ordered by `ForceConfig.id`. AD_FORCECFG: installation parameters the manager registers inside the ERP. A missing table reads as empty. */
+  readForceConfig(options?: ReadOptions): Snapshot<ForceConfig>;
+  /** Ordered by `(configId, seq)`. AD_FORCELIMDESC: per-seller discount rules registered inside the ERP. A missing table reads as empty. */
+  readForceDiscountLimits(options?: ReadOptions): Snapshot<ForceDiscountLimit>;
+  /** Ordered by seller then month. TGFMET seller goals (CODVEND > 0), one row per seller and month; read in full on every run. */
+  readSellerGoals(options?: ReadOptions): Snapshot<SellerGoal>;
   /** Ordered by `Neighborhood.code`. */
   readNeighborhoods(options?: ReadOptions): Snapshot<Neighborhood>;
   /** Ordered by `Street.code`. */
   readStreets(options?: ReadOptions): Snapshot<Street>;
   /** Ordered by `PostalCodeEntry.cep`. TSICEP: the CEP to city/neighborhood/street links. */
   readPostalCodes(options?: ReadOptions): Snapshot<PostalCodeEntry>;
+  /** Ordered by `ForceConfig.id`. AD_FORCECFG: installation parameters the manager registers inside the ERP. A missing table reads as empty. */
+  readForceConfig(options?: ReadOptions): Snapshot<ForceConfig>;
+  /** Ordered by `(configId, seq)`. AD_FORCELIMDESC: per-seller discount rules registered inside the ERP. A missing table reads as empty. */
+  readForceDiscountLimits(options?: ReadOptions): Snapshot<ForceDiscountLimit>;
+  /** Ordered by seller then month. TGFMET seller goals (CODVEND > 0), one row per seller and month; read in full on every run. */
+  readSellerGoals(options?: ReadOptions): Snapshot<SellerGoal>;
   /** Ordered by `IpiRate.code`. IPI rates (TGFIPI) for the display estimate; read in full on every run. */
   readIpiRates(options?: ReadOptions): Snapshot<IpiRate>;
   /** Ordered by `OpenTitle.nufin`. Open receivable titles (read-only financial information, D-I); a complete snapshot every run. */

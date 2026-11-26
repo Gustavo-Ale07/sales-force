@@ -13,6 +13,11 @@ describe('empty_snapshot guard decision', () => {
     expect(isEmptySnapshotBlocked('customers', 0, 1)).toBe(true);
   });
 
+  it('lets the Force configuration tables go empty: the manager may remove every row in the ERP', () => {
+    expect(isEmptySnapshotBlocked('forceConfig', 0, 1)).toBe(false);
+    expect(isEmptySnapshotBlocked('forceDiscountLimits', 0, 40)).toBe(false);
+  });
+
   it('lets openTitles deactivate the last live row on an empty healthy snapshot', () => {
     expect(isEmptySnapshotBlocked('openTitles', 0, 1)).toBe(false);
     expect(isEmptySnapshotBlocked('openTitles', 0, 40)).toBe(false);

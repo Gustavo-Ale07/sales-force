@@ -255,6 +255,7 @@ Claude Code and agents never perform or prepare such an inspection without the r
 | Sentry | error events (scrubbed) | 0 | V-08 (region) |
 | HIBP range API | 5-character password hash prefix (not personal data) | 0 | PROPOSED (AUTH-1) |
 | GitHub, Expo/EAS | source code, build artifacts; no production data | 0 | — |
+| Expo push service (exp.host) | push token, notification title and body (customer name, order number; never cost, margin or price) | 1 | registered 2026-11-26 (P-22); international transfer pending R67 legal review |
 | CNPJ/CEP providers | company documents, postal codes | 1 | — |
 | Google Workspace | user email/calendar content | 2 | — |
 | Anthropic | minimized business data (P-14) | 3 | — |

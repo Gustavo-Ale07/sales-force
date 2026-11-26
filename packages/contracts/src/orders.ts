@@ -385,6 +385,8 @@ export const OrderItemDetailSchema = named(
     ipi: ItemIpiSchema.optional(),
     /** `null`/absent = no photo. Bytes are never inlined. */
     image: ProductImageSchema.nullable().optional(),
+    /** Barcode (EAN) of the product, printed on the order document; `null`/absent = none. Not restricted data. */
+    barcode: z.string().nullable().optional(),
   }),
 );
 export type OrderItemDetail = z.infer<typeof OrderItemDetailSchema>;

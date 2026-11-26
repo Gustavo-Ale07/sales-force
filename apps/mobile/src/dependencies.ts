@@ -1,10 +1,16 @@
+import { createPushPort, type PushPort } from "./push/push-registration";
+import { Platform } from "react-native";
 import { createHttpAuth } from "./auth/http-auth";
+import { createDevicePort, type DevicePort } from "./device/device-port";
+import { createSecureInstallIdStore } from "./device/secure-install-id";
 import type { AuthPort } from "./auth/auth-port";
 import { createDeviceConnectivity, type ConnectivityPort, type ConnectivityState } from "./connectivity/connectivity";
 import { createMobileApiClient } from "./data/api";
 import { createCustomerWritePort, type CustomerWritePort } from "./data/customer-write";
 import { createDashboardPort, type DashboardPort } from "./data/dashboard";
 import { createOrderTemplatesPort, type OrderTemplatesPort } from "./data/order-templates";
+import { createImportsPort, type ImportsPort } from "./data/imports";
+import { createExpoImportFile, type ImportFilePort } from "./offline/import-file-expo";
 import type { Repositories } from "./data/ports";
 import { createRemoteRepositories } from "./data/remote-repositories";
 import { createExpoImageFileSystem } from "./images/expo-image-fs";
@@ -35,6 +41,14 @@ export interface AppDependencies {
   readonly dashboard?: DashboardPort;
   /** The site's pedidos recorrentes (templates), online. Absent in test setups: the section is then hidden. */
   readonly orderTemplates?: OrderTemplatesPort;
+  /** Push registration (RF-NOT-1). Needs a build that includes expo-notifications; absent or unavailable = no push. */
+  readonly push?: PushPort;
+  /** Spreadsheet import (items of a quotation, customers in batch), online. Absent in test setups: the entry points are then hidden. */
+  readonly imports?: ImportsPort;
+  /** The device's file chooser for the import. Absent in test setups. */
+  readonly importFile?: ImportFilePort;
+  /** This installation's registry entry on the server (AUTH-2): approval state, last sync report, identity reset. Absent in test setups. */
+  readonly device?: DevicePort;
 }
 
 /** Production composition: online adapters over the API at `baseUrl` (already including the API base path). */
@@ -50,6 +64,7 @@ export function createAppDependencies(baseUrl: string, db: SqlDatabase): AppDepe
   connectivity.subscribe((state) => {
     internet = state;
   });
+  const device = createDevicePort(api, createSecureInstallIdStore(), () => ({ label: Platform.OS === "ios" ? "iPhone ou iPad" : "Android", platform: Platform.OS === "ios" ? "ios" : "android" }));
   const photoApi = createProfilePhotoApi(api);
   const profilePhoto = createProfilePhotoService({
     api: photoApi,
@@ -61,7 +76,11 @@ export function createAppDependencies(baseUrl: string, db: SqlDatabase): AppDepe
     customerWrite: createCustomerWritePort(api),
     dashboard: createDashboardPort(api),
     orderTemplates: createOrderTemplatesPort(api),
-    auth: createHttpAuth(api),
+    push: createPushPort(api),
+    imports: createImportsPort(api),
+    importFile: createExpoImportFile(),
+    device,
+    auth: createHttpAuth(api, () => device.registration()),
     repositories: remote,
     connectivity,
     orderPdf: createExpoOrderPdf(),

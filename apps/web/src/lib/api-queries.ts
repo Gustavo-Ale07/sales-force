@@ -24,11 +24,15 @@ export const queryKeys = {
   configuration: ["configuration"] as const,
   orderEntryConfiguration: ["order-entry-configuration"] as const,
   discountLimits: ["discount-limits"] as const,
+  myDiscountLimits: ["my-discount-limits"] as const,
+  devices: ["devices"] as const,
+  deviceSettings: ["device-settings"] as const,
   approvals: (page: number, pageSize: number) => ["approvals", "list", page, pageSize] as const,
   approvalsAll: ["approvals"] as const,
   releaseQueue: (params: ReleaseQueueParams) => ["release-queue", "list", params] as const,
   releaseQueueCount: ["release-queue", "count"] as const,
   dashboard: ["dashboard"] as const,
+  goals: ["goals"] as const,
   sellers: ["sellers"] as const,
   carriers: ["carriers"] as const,
   syncRefresh: (id: string) => ["sync-refresh", id] as const,
@@ -43,6 +47,7 @@ export const queryKeys = {
   product: (code: number, customerCode?: number) => ["products", "detail", code, customerCode ?? null] as const,
   orders: (params: OrdersParams) => ["orders", "list", params] as const,
   order: (id: string) => ["orders", "detail", id] as const,
+  orderPriceReview: (id: string) => ["orders", "price-review", id] as const,
   ordersAll: ["orders"] as const,
   orderTemplates: (customerCode: number) => ["order-templates", "list", customerCode] as const,
   orderTemplate: (id: string) => ["order-templates", "detail", id] as const,
@@ -81,6 +86,30 @@ export function discountLimitsQueryOptions(api: ApiClient) {
   return queryOptions({
     queryKey: queryKeys.discountLimits,
     queryFn: () => callApi(() => api.GET("/discount-limits")),
+  });
+}
+
+/** The caller's own rules (the order editor resolves the ceiling with them). */
+export function myDiscountLimitsQueryOptions(api: ApiClient) {
+  return queryOptions({
+    queryKey: queryKeys.myDiscountLimits,
+    queryFn: () => callApi(() => api.GET("/discount-limits/mine")),
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** W-36: devices the caller may manage (admin: all; manager: the team). The server scopes the list. */
+export function devicesQueryOptions(api: ApiClient) {
+  return queryOptions({
+    queryKey: queryKeys.devices,
+    queryFn: () => callApi(() => api.GET("/devices", { params: { query: {} } })),
+  });
+}
+
+export function deviceSettingsQueryOptions(api: ApiClient) {
+  return queryOptions({
+    queryKey: queryKeys.deviceSettings,
+    queryFn: () => callApi(() => api.GET("/device-settings")),
   });
 }
 
@@ -154,10 +183,26 @@ export function postalCodeQueryOptions(api: ApiClient, cep: string) {
   });
 }
 
+export function cnpjQueryOptions(api: ApiClient, cnpj: string) {
+  return queryOptions({
+    queryKey: ["customers", "cnpj", cnpj] as const,
+    queryFn: () => callApi(() => api.GET("/customers/cnpj/{cnpj}", { params: { path: { cnpj } } })),
+    staleTime: Infinity,
+    retry: false,
+  });
+}
+
 export function dashboardQueryOptions(api: ApiClient) {
   return queryOptions({
     queryKey: queryKeys.dashboard,
     queryFn: () => callApi(() => api.GET("/dashboard")),
+  });
+}
+
+export function goalsQueryOptions(api: ApiClient) {
+  return queryOptions({
+    queryKey: queryKeys.goals,
+    queryFn: () => callApi(() => api.GET("/goals")),
   });
 }
 
@@ -255,6 +300,15 @@ export function ordersQueryOptions(api: ApiClient, params: OrdersParams) {
     queryKey: queryKeys.orders(params),
     queryFn: () => callApi(() => api.GET("/orders", { params: { query: params } })),
     placeholderData: keepPreviousData,
+  });
+}
+
+/** P-09: lines of a draft whose table price changed (empty when nothing to review). */
+export function orderPriceReviewQueryOptions(api: ApiClient, id: string) {
+  return queryOptions({
+    queryKey: queryKeys.orderPriceReview(id),
+    queryFn: () => callApi(() => api.GET("/orders/{id}/price-review", { params: { path: { id } } })),
+    retry: false,
   });
 }
 

@@ -1,9 +1,9 @@
 import { canAdministerDiscountLimits, canDecideApprovals, canSeeIntegration, canUseCommercial } from "@salesforce/contracts";
 import { isOperationsRole, OPERATIONS_HOME } from "../lib/operations-role";
-import { Hourglass, House, Package, Percent, Plug, Settings, ShieldCheck, ShoppingCart, UserRound, Users, type LucideIcon } from "lucide-react";
+import { Bell, CalendarCheck, Hourglass, House, Package, Percent, Plug, Settings, ShieldCheck, ShoppingCart, Smartphone, Target, UserRound, Users, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
-  to: "/" | "/perfil" | "/clientes" | "/produtos" | "/pedidos" | "/integracao" | "/configuracoes" | "/limites-desconto" | "/aprovacoes" | "/aguardando-liberacao";
+  to: "/" | "/perfil" | "/clientes" | "/produtos" | "/pedidos" | "/integracao" | "/configuracoes" | "/limites-desconto" | "/aparelhos" | "/aprovacoes" | "/aguardando-liberacao" | "/tarefas" | "/notificacoes" | "/metas";
   label: string;
   icon: LucideIcon;
   /** Only for the roles that may see the integration (INTEGRATION_ROLES). */
@@ -14,6 +14,8 @@ export interface NavItem {
   approverOnly?: boolean;
   /** Only when the API lets the caller see at least one release-queue sector (the count endpoint answered). */
   releaseQueueOnly?: boolean;
+  /** Who manages devices (admin, manager), W-36. Independent of the ERP mode. */
+  devicesOnly?: boolean;
 }
 
 /**
@@ -28,9 +30,13 @@ const allNavItems: NavItem[] = [
   { to: "/pedidos", label: "Vendas", icon: ShoppingCart },
   { to: "/produtos", label: "Catálogo", icon: Package },
   { to: "/perfil", label: "Perfil", icon: UserRound },
+  { to: "/tarefas", label: "Tarefas", icon: CalendarCheck },
+  { to: "/notificacoes", label: "Notificações", icon: Bell },
+  { to: "/metas", label: "Metas", icon: Target },
   { to: "/aguardando-liberacao", label: "Aguardando liberação", icon: Hourglass, releaseQueueOnly: true },
   { to: "/aprovacoes", label: "Aprovações", icon: ShieldCheck, approverOnly: true },
   { to: "/limites-desconto", label: "Limites de desconto", icon: Percent, adminOnly: true },
+  { to: "/aparelhos", label: "Aparelhos", icon: Smartphone, devicesOnly: true },
   { to: "/integracao", label: "Integração", icon: Plug, integrationOnly: true },
   { to: "/configuracoes", label: "Configurações", icon: Settings, integrationOnly: true },
 ];
@@ -43,6 +49,7 @@ const allNavItems: NavItem[] = [
 export function navItemsFor(role: string | undefined, approvals = false, releaseQueue = false): NavItem[] {
   return allNavItems.filter((item) => {
     if (isOperationsRole(role)) return item.to === OPERATIONS_HOME;
+    if (item.devicesOnly) return role !== undefined && (role === "admin" || role === "manager");
     if (item.releaseQueueOnly) return releaseQueue && role !== undefined && canUseCommercial(role);
     // D-M: in `erp` mode the release belongs to Sankhya; the limits and approvals screens do not exist for the user.
     if ((item.approverOnly || item.adminOnly) && !approvals) return false;

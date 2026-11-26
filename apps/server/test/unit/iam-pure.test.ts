@@ -154,7 +154,7 @@ describe('central policy', () => {
       .filter(([, policy]) => policy.roles.includes('operations'))
       .map(([operationId]) => operationId)
       .sort();
-    expect(granted).toEqual(['deleteProfilePhoto', 'getProfilePhoto', 'getReleaseQueueCount', 'getSyncRefresh', 'listReleaseQueue', 'logout', 'putProfilePhoto', 'startSyncRefresh']);
+    expect(granted).toEqual(['deleteProfilePhoto', 'getMyDevice', 'getProfilePhoto', 'getReleaseQueueCount', 'getSyncRefresh', 'listReleaseQueue', 'logout', 'putProfilePhoto', 'reportDeviceSync', 'startSyncRefresh']);
   });
 
   it('a seller is never granted the release queue (owner ruling 2026-11-23)', () => {
@@ -173,7 +173,10 @@ describe('central policy', () => {
     // Every grant is a route of the registry (nothing invented), and none is a cost, margin or export operation.
     const known = new Set<string>(Object.values(routes).map((route) => route.operationId));
     for (const operationId of granted) expect(known.has(operationId), operationId).toBe(true);
-    expect(granted.filter((operationId) => /export|cost|margin|commission/i.test(operationId))).toEqual([]);
+    // The three spreadsheet exports exist for admin and manager only; any other cost, margin, commission or export grant fails.
+    const sensitive = granted.filter((operationId) => /export|cost|margin|commission/i.test(operationId));
+    expect(sensitive.sort()).toEqual(['exportCustomers', 'exportOrders', 'exportProducts']);
+    for (const operationId of sensitive) expect([...ROUTE_POLICY[operationId]!.roles].sort(), operationId).toEqual(['admin', 'manager']);
   });
 });
 

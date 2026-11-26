@@ -65,8 +65,8 @@ describe('edit request contract', () => {
     expect(UpdateCustomerRequestSchema.safeParse({ ...base, contacts }).success).toBe(false);
   });
 
-  it('the editable fields are exactly the contract keys other than the idempotency id', () => {
-    const keys = Object.keys((UpdateCustomerRequestSchema as unknown as { shape: Record<string, unknown> }).shape).filter((key) => key !== 'clientRequestId');
+  it('the editable fields are exactly the contract keys other than the idempotency id and the version token', () => {
+    const keys = Object.keys((UpdateCustomerRequestSchema as unknown as { shape: Record<string, unknown> }).shape).filter((key) => key !== 'clientRequestId' && key !== 'baseContactVersion');
     expect([...EDITABLE_CUSTOMER_FIELDS].sort()).toEqual(keys.sort());
   });
 

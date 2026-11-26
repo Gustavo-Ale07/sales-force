@@ -56,6 +56,8 @@ export interface EditorLine {
   readonly ipi?: IpiRef;
   /** Discount ceiling of the product (percent, decimal text) from the catalog; absent/`null` = no limit registered = never a warning. */
   readonly maxDiscountPercent?: string | null;
+  /** Barcode (EAN) from the catalog cache, only for the order PDF; not part of the edited order. */
+  readonly barcode?: string;
 }
 
 /**

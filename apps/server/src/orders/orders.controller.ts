@@ -4,6 +4,7 @@ import {
   routes,
   type CustomerOrderHabits,
   type OrderDetail,
+  type OrderPriceReview,
   type OrderRefreshAccepted,
   type OrdersResponse,
   type RepeatLastOrderResponse,
@@ -12,10 +13,14 @@ import type { FastifyReply } from 'fastify';
 import { ApiRoute, Contract, type RequestContract } from '../http/route.js';
 import { CurrentUserParam, type CurrentUser } from '../iam/current-user.js';
 import { OrdersService } from './orders.service.js';
+import { OrderPriceReviewService } from './price-review.service.js';
 
 @Controller(API_BASE_PATH)
 export class OrdersController {
-  constructor(@Inject(OrdersService) private readonly orders: OrdersService) {}
+  constructor(
+    @Inject(OrdersService) private readonly orders: OrdersService,
+    @Inject(OrderPriceReviewService) private readonly priceReviews: OrderPriceReviewService,
+  ) {}
 
   @ApiRoute(routes.listOrders)
   list(
@@ -52,6 +57,16 @@ export class OrdersController {
     @Contract() contract: RequestContract<typeof routes.refreshOrder>,
   ): Promise<OrderRefreshAccepted> {
     return this.orders.requestRefresh(user, contract.params.id);
+  }
+
+  @ApiRoute(routes.getOrderPriceReview)
+  priceReview(@CurrentUserParam() user: CurrentUser, @Contract() contract: RequestContract<typeof routes.getOrderPriceReview>): Promise<OrderPriceReview> {
+    return this.priceReviews.review(user, contract.params.id);
+  }
+
+  @ApiRoute(routes.resolveOrderPriceReview)
+  resolvePriceReview(@CurrentUserParam() user: CurrentUser, @Contract() contract: RequestContract<typeof routes.resolveOrderPriceReview>): Promise<OrderDetail> {
+    return this.priceReviews.resolve(user, contract.params.id, contract.body);
   }
 
   @ApiRoute(routes.replaceOrder)

@@ -47,6 +47,16 @@ const SYNC_REFRESH_ROLES: readonly AccountRole[] = [...COMMERCIAL_ROLES, 'techni
 export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   // Any authenticated account may end its own session.
   logout: { roles: ACCOUNT_ROLES },
+  // AUTH-2 / W-36: an app device reads its own status and reports its sync (every profile with the mobile channel; the channel rule
+  // keeps technical/operations out). Approval and revocation: admin, and the manager for the team (scoped in DeviceService).
+  getMyDevice: { roles: ACCOUNT_ROLES },
+  reportDeviceSync: { roles: ACCOUNT_ROLES },
+  listDevices: { roles: ['admin', 'manager'] },
+  approveDevice: { roles: ['admin', 'manager'] },
+  revokeDevice: { roles: ['admin', 'manager'] },
+  // RF-IAM-8: offline limit and devices per account, edited in Configuracoes: admin only.
+  getDeviceSettings: { roles: ['admin'] },
+  updateDeviceSettings: { roles: ['admin'] },
   // Own profile photo only (the routes name no account): every profile that can sign in, `technical` and `operations` included.
   putProfilePhoto: { roles: ACCOUNT_ROLES },
   deleteProfilePhoto: { roles: ACCOUNT_ROLES },
@@ -57,11 +67,21 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   // and anonymous callers get the coarse verdict. The least-privilege set (INTEGRATION_ROLES) is the rule.
   getConfiguration: { roles: INTEGRATION_ROLES },
   // W-39 (DISC-3): the discount limits are administration data: admin only (the director level is approved by the admin, Q6).
+  // Per-seller limits live in the ERP (read-only mirror): the seller reads only its own rules, for the offline editor.
+  getMyDiscountLimits: { roles: ['seller', 'manager', 'admin'] },
   getDiscountLimits: { roles: ['admin'] },
   updateDiscountLimits: { roles: ['admin'] },
   // D-AR: creating a customer in the Force: seller, manager and admin (never `technical`). Which seller owns the
   // customer is decided per request (prepareCustomerRegistration), not by this table.
   createCustomer: { roles: EVERY_ROLE },
+  // RF-IMP: every commercial profile imports (the external representative included, when that role exists).
+  getOrderImportTemplate: { roles: EVERY_ROLE },
+  previewImport: { roles: EVERY_ROLE },
+  confirmImport: { roles: EVERY_ROLE },
+  // RF-DSH-6: export is for the internal profiles only (explicit list, never EVERY_ROLE: a representative role must not inherit it).
+  exportCustomers: { roles: ['admin', 'manager'] },
+  exportOrders: { roles: ['admin', 'manager'] },
+  exportProducts: { roles: ['admin', 'manager'] },
   // D-AP/D-AQ: the register's own list and detail, and the edit of an existing customer. Row scope (own/portfolio) is decided by the services.
   listCustomerRegistrations: { roles: EVERY_ROLE },
   getCustomerRegistration: { roles: EVERY_ROLE },
@@ -85,6 +105,8 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   // drafts. The second half is not written down anywhere: it follows from the scope rule and stays
   // pending owner ruling R35/R36 (who may act on behalf of whom).
   getDashboard: { roles: EVERY_ROLE },
+  // RF-GOL-1/2: every profile reads goals; WHICH sellers it sees is the customer scope (own for a seller, the team for manager/admin).
+  getGoals: { roles: EVERY_ROLE },
   // Owner ruling 2026-11-13: the seller directory is for manager and admin only; a seller never sees other sellers.
   listSellers: { roles: ['manager', 'admin'] },
   listCustomers: { roles: EVERY_ROLE },
@@ -102,6 +124,7 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   listNeighborhoods: { roles: EVERY_ROLE },
   listStreets: { roles: EVERY_ROLE },
   lookupPostalCode: { roles: EVERY_ROLE },
+  lookupCnpj: { roles: EVERY_ROLE },
   getProduct: { roles: EVERY_ROLE },
   // Same catalog read as getProduct (product visibility and seller scope are enforced by the handler).
   getProductImage: { roles: EVERY_ROLE },
@@ -115,6 +138,8 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   createOrder: { roles: EVERY_ROLE },
   getOrder: { roles: EVERY_ROLE },
   replaceOrder: { roles: EVERY_ROLE },
+  getOrderPriceReview: { roles: EVERY_ROLE },
+  resolveOrderPriceReview: { roles: EVERY_ROLE },
   deleteOrder: { roles: EVERY_ROLE },
   submitOrder: { roles: EVERY_ROLE },
   verifyOrderDelivery: { roles: EVERY_ROLE },
@@ -146,6 +171,15 @@ export const ROUTE_POLICY: Readonly<Record<string, RoutePolicy>> = {
   replaceOrderTemplate: { roles: EVERY_ROLE },
   deleteOrderTemplate: { roles: EVERY_ROLE },
   useOrderTemplate: { roles: EVERY_ROLE },
+  // Tasks (RF-ACT) and notifications (RF-NOT): seller sees own, manager/admin see all (service rule); technical/operations never.
+  listTasks: { roles: ['seller', 'manager', 'admin'] },
+  createTask: { roles: ['seller', 'manager', 'admin'] },
+  completeTask: { roles: ['seller', 'manager', 'admin'] },
+  cancelTask: { roles: ['seller', 'manager', 'admin'] },
+  listNotifications: { roles: ['seller', 'manager', 'admin'] },
+  markNotificationsRead: { roles: ['seller', 'manager', 'admin'] },
+  registerPushDevice: { roles: ['seller', 'manager', 'admin'] },
+  unregisterPushDevice: { roles: ['seller', 'manager', 'admin'] },
 };
 
 export type PolicyDenial = 'channel_not_permitted' | 'no_policy' | 'role_not_permitted';

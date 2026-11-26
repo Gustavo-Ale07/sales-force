@@ -4,6 +4,9 @@ import type {
   Neighborhood,
   Street,
   PostalCodeEntry,
+  ForceConfig,
+  ForceDiscountLimit,
+  SellerGoal,
   Customer,
   InstallationConfiguration,
   ListPrice,
@@ -145,6 +148,9 @@ import {
   STATE_SPEC,
   STREET_SPEC,
   POSTAL_CODE_SPEC,
+  FORCE_CONFIG_SPEC,
+  FORCE_DISCOUNT_LIMIT_SPEC,
+  SELLER_GOAL_SPEC,
   IPI_RATE_SPEC,
   OPEN_TITLE_SPEC,
   salesHistoryCustomerProductSpec,
@@ -401,6 +407,37 @@ export class RealSankhyaGateway implements SankhyaGateway {
   }
   readPostalCodes(options?: ReadOptions): Snapshot<PostalCodeEntry> {
     return this.#paged(POSTAL_CODE_SPEC, options);
+  }
+  readForceConfig(options?: ReadOptions): Snapshot<ForceConfig> {
+    return this.#pagedOrEmptyWhenTableMissing(FORCE_CONFIG_SPEC, options);
+  }
+  readForceDiscountLimits(options?: ReadOptions): Snapshot<ForceDiscountLimit> {
+    return this.#pagedOrEmptyWhenTableMissing(FORCE_DISCOUNT_LIMIT_SPEC, options);
+  }
+  /**
+   * An AD_ table the manager has not created yet (ORA-00942) is an installation with nothing registered, not an error:
+   * the read is an empty snapshot. Only a missing table before any batch is tolerated; every other failure still surfaces.
+   */
+  #pagedOrEmptyWhenTableMissing<T>(spec: EntitySpec<T>, options?: ReadOptions): Snapshot<T> {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const gateway = this;
+    return {
+      async *[Symbol.asyncIterator]() {
+        let yielded = false;
+        try {
+          for await (const batch of gateway.#paged(spec, options)) {
+            yielded = true;
+            yield batch;
+          }
+        } catch (error) {
+          if (!yielded && error instanceof SankhyaGatewayError && error.code === 'sql_error' && error.message.includes('ORA-00942')) return;
+          throw error;
+        }
+      },
+    };
+  }
+  readSellerGoals(options?: ReadOptions): Snapshot<SellerGoal> {
+    return this.#paged(SELLER_GOAL_SPEC, options);
   }
   readCarriers(options?: ReadOptions): Snapshot<Carrier> {
     // eslint-disable-next-line @typescript-eslint/no-this-alias

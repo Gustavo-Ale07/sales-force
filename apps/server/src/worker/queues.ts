@@ -33,7 +33,12 @@ export const QUEUE_NAMES = {
   syncConfiguration: 'sync.configuration',
   /** "Atualizar dados" requested by a user (D-AB B3): reads the mirrored entities once, read-only. */
   syncRefreshOnDemand: 'sync.refresh.on-demand',
+  /** Notifications from events, task reminders and Expo push dispatch (RF-NOT). Always scheduled; idempotent. */
+  notificationsSweep: 'notifications.sweep',
 } as const;
+
+/** Every minute; reminders are due to the minute and the dedupe key makes overlapping runs harmless. */
+export const NOTIFICATION_SWEEP_CRON = '* * * * *';
 
 /** Every 15 minutes (CFG-8), and once at worker start. */
 export const CONFIGURATION_SYNC_CRON = '*/15 * * * *';
@@ -97,6 +102,10 @@ export const QUEUE_REGISTRY: readonly QueueSpec[] = [
   {
     name: QUEUE_NAMES.deadLetter,
     options: { retentionSeconds: 30 * 24 * 3600, deleteAfterSeconds: 30 * 24 * 3600 },
+  },
+  {
+    name: QUEUE_NAMES.notificationsSweep,
+    options: { policy: 'short', retryLimit: 0, expireInSeconds: 120, retentionSeconds: 3600, deleteAfterSeconds: 24 * 3600, deadLetter: QUEUE_NAMES.deadLetter },
   },
   {
     name: QUEUE_NAMES.syncHeartbeat,

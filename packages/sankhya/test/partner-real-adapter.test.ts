@@ -193,6 +193,13 @@ describe('real partner adapter: payload (D-AP / D-AQ / D-AR)', () => {
     });
   });
 
+  it('creation always sends TIPGERBOLCENT = I (owner order 2026-11-26), for both person types', () => {
+    expect(localFields(request())['TIPGERBOLCENT']).toEqual({ $: 'I' });
+    const individual = request({ personType: 'individual', document: CPF, stateRegistration: null, sellerCode: null, priceTableCode: null, addresses: [] });
+    expect(localFields(individual)['TIPGERBOLCENT']).toEqual({ $: 'I' });
+    expect(PARTNER_FORBIDDEN_COLUMNS).not.toContain('TIPGERBOLCENT');
+  });
+
   it('NEVER sends LIMCRED nor any other forbidden column, and never a Vidya origin column', () => {
     for (const req of [request(), request({ personType: 'individual', document: CPF, stateRegistration: null, sellerCode: null, priceTableCode: null, addresses: [] })]) {
       const text = buildPartnerCreateRequestText(req);
@@ -444,6 +451,7 @@ describe('partner edit request builder (D-AP; not on the port yet)', () => {
     expect(body.requestBody.dataSet.dataRow.key).toEqual({ CODPARC: { $: '5' } });
     expect(Object.keys(body.requestBody.dataSet.dataRow.localFields).sort()).toEqual(['EMAIL', 'OBSERVACOES', 'TELEFONE']);
     expect(JSON.stringify(body)).not.toContain('LIMCRED');
+    expect(JSON.stringify(body)).not.toContain('TIPGERBOLCENT');
   });
   it('contacts and addresses have no validated mapping: refused, not guessed; empty edit refused', () => {
     expect(() => edit({ contacts: [] })).toThrowError(expect.objectContaining({ code: 'partner_edit_unsupported' }));

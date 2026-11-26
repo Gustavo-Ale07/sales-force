@@ -34,11 +34,11 @@ describe("navItemsFor", () => {
   });
 
   it("keeps the flag default off and the other items per role unchanged", () => {
-    expect(navItemsFor("seller").map((item) => item.label)).toEqual(["Início", "Clientes", "Vendas", "Catálogo", "Perfil"]);
-    expect(navItemsFor("seller", false, true).map((item) => item.label)).toEqual(["Início", "Clientes", "Vendas", "Catálogo", "Perfil", "Aguardando liberação"]);
-    expect(navItemsFor("manager", true, true).map((item) => item.label)).toEqual(["Início", "Clientes", "Vendas", "Catálogo", "Perfil", "Aguardando liberação", "Aprovações"]);
+    expect(navItemsFor("seller").map((item) => item.label)).toEqual(["Início", "Clientes", "Vendas", "Catálogo", "Perfil", "Tarefas", "Notificações", "Metas"]);
+    expect(navItemsFor("seller", false, true).map((item) => item.label)).toEqual(["Início", "Clientes", "Vendas", "Catálogo", "Perfil", "Tarefas", "Notificações", "Metas", "Aguardando liberação"]);
+    expect(navItemsFor("manager", true, true).map((item) => item.label)).toEqual(["Início", "Clientes", "Vendas", "Catálogo", "Perfil", "Tarefas", "Notificações", "Metas", "Aguardando liberação", "Aprovações", "Aparelhos"]);
     expect(navItemsFor("admin", true, true).map((item) => item.label)).toEqual([
-      "Início", "Clientes", "Vendas", "Catálogo", "Perfil", "Aguardando liberação", "Aprovações", "Limites de desconto", "Integração", "Configurações",
+      "Início", "Clientes", "Vendas", "Catálogo", "Perfil", "Tarefas", "Notificações", "Metas", "Aguardando liberação", "Aprovações", "Limites de desconto", "Aparelhos", "Integração", "Configurações",
     ]);
     expect(navItemsFor("technical", true, true).map((item) => item.label)).toEqual(["Integração", "Configurações"]);
   });

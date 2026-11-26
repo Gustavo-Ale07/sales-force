@@ -123,10 +123,10 @@ describe("HomeScreen", () => {
     expect(screen.getByLabelText("R$ não enviados: indisponível")).toBeTruthy();
   });
 
-  it("offline asks nothing and says the counters come back with the internet", async () => {
+  it("offline asks nothing and shows no explanatory note", async () => {
     const load = jest.fn(async () => ({ customers: "1", products: "1", sellable: "1", openOrders: "1", unsentAmount: "1", portfolio: [] }));
     await renderHome({ dashboard: { load }, connectivity: "offline" });
     expect(load).not.toHaveBeenCalled();
-    expect(screen.getByText(/Sem conexão: os indicadores voltam/)).toBeTruthy();
+    expect(screen.queryByText(/Sem conexão: os indicadores voltam/)).toBeNull();
   });
 });

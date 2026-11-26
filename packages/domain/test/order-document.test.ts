@@ -223,10 +223,10 @@ describe('D-W template (J4)', () => {
   });
   const options = { issuedAt: '2026-11-04T17:05:00.000Z', sellerName: 'Maria Vendedora', brandName: 'PLAC' };
 
-  it('A4, 15 mm margins, 10.5 pt, page X of Y, repeated header, brand colours', () => {
+  it('A4 landscape, 12 mm margins, 10.5 pt, page X of Y, repeated header, brand colours', () => {
     const html = renderOrderHtml(full, options);
-    expect(html).toContain('size: A4');
-    expect(html).toContain('margin: 15mm');
+    expect(html).toContain('size: A4 landscape');
+    expect(html).toContain('margin: 12mm');
     expect(html).toContain('10.5pt');
     expect(html).toContain('página');
     expect(html).toContain('counter(page)');
@@ -284,6 +284,42 @@ describe('D-W template (J4)', () => {
     const html = renderOrderHtml(full, options);
     for (const word of ['custo', 'margem', 'crédito', 'financeiro']) expect(html.toLowerCase()).not.toContain(word);
     expect(html.replace(/<style>[\s\S]*?<\/style>/, '<style/>')).toMatchSnapshot();
+  });
+});
+
+describe('discounted unit value and barcode columns', () => {
+  const rows = (html: string): string[] => html.match(/<tr><td>[\s\S]*?<\/tr>/g) ?? [];
+
+  it('prints "Valor com desconto" right after "Desconto": unit price less the per-unit rounded discount; "Sem preço" without price', () => {
+    const html = renderOrderHtml(toOrderDocument(source));
+    expect(html).toContain('<th class="n">Desconto</th><th class="n">Valor com desconto</th><th class="n">IPI %</th>');
+    // 12.3456 - round(12.3456 x 10 / 100 = 1.23456 -> 1.23) = 11.1156
+    expect(rows(html)[0]).toContain('<td class="n">10%</td><td class="n">R$ 11,1156</td>');
+    expect(rows(html)[1]).toContain('<td class="n">Sem preço</td><td class="n">—</td><td class="n">Sem preço</td><td class="n">—</td>');
+  });
+
+  it('a zero discount repeats the list price and the order total is untouched', () => {
+    const html = renderOrderHtml(toOrderDocument({ ...source, items: [{ ...source.items[0]!, discountPercent: '0' }] }));
+    expect(rows(html)[0]).toContain('<td class="n">R$ 12,3456</td><td class="n">—</td><td class="n">R$ 12,3456</td>');
+    expect(html).toContain('Total: R$ 13.890,29');
+  });
+
+  it('prints the EAN in its own column after the code; a product without one leaves the cell empty', () => {
+    const withEan = renderOrderHtml(toOrderDocument({ ...source, items: [{ ...source.items[0]!, barcode: '7891234567895' }, source.items[1]!] }));
+    expect(withEan).toContain('<th>Código</th><th>EAN</th><th>Descrição</th>');
+    expect(rows(withEan)[0]).toContain('<td>10</td><td>7891234567895</td><td class="d">Cabo');
+    expect(rows(withEan)[1]).toContain('<td>11</td><td></td><td class="d">Tomada');
+  });
+
+  it('no barcode anywhere: the cell is empty and no explanatory text is added', () => {
+    const html = renderOrderHtml(toOrderDocument({ ...source, items: [{ ...source.items[0]!, barcode: null }] }));
+    expect(rows(html)[0]).toContain('<td>10</td><td></td><td class="d">');
+    expect(html).not.toMatch(/sem (EAN|código de barras)/i);
+  });
+
+  it('escapes the barcode', () => {
+    const html = renderOrderHtml(toOrderDocument({ ...source, items: [{ ...source.items[0]!, barcode: '<b>1' }] }));
+    expect(html).not.toContain('<b>1');
   });
 });
 

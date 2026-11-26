@@ -23,7 +23,7 @@ export interface OrderTemplatesSectionProps {
   /** "Novo modelo": opens the form. */
   readonly onCreate: () => void;
   /** A new order for this customer with the template's lines (nothing is sent: it is saved like any other order). */
-  readonly onUse: (lines: readonly EditorLine[], template: OrderTemplate) => void;
+  readonly onUse: (lines: readonly EditorLine[], template: OrderTemplate, quotation: boolean) => void;
 }
 
 /** "Skipped lines" as the text list a dialog shows: one line per product left out, with the reason. */
@@ -56,7 +56,7 @@ export function OrderTemplatesSection({ customerCode, templates, products, order
   }, [customerCode, templates, reloadKey, attempt]);
 
   const use = useCallback(
-    async (template: OrderTemplate) => {
+    async (template: OrderTemplate, quotation: boolean) => {
       setBusy(template.id);
       try {
         const [detail, config] = await Promise.all([templates.get(template.id), orders.getEntryConfiguration()]);
@@ -82,7 +82,7 @@ export function OrderTemplatesSection({ customerCode, templates, products, order
             detailsPlain: true,
           });
         }
-        onUse(built.lines, template);
+        onUse(built.lines, template, quotation);
       } catch (error) {
         modal.show({ variant: "error", title: "Não foi possível usar o modelo", message: describeTemplateError(error).message });
       } finally {
@@ -150,7 +150,10 @@ export function OrderTemplatesSection({ customerCode, templates, products, order
               <ActivityIndicator color={colors.navy} />
             ) : (
               <View style={styles.actions}>
-                <Pressable style={[styles.rowButton, styles.useButton]} disabled={busy !== null} onPress={() => void use(template)} accessibilityRole="button" accessibilityLabel={`Usar modelo ${template.name}`}>
+                <Pressable style={styles.rowButton} disabled={busy !== null} onPress={() => void use(template, true)} accessibilityRole="button" accessibilityLabel={`Criar orçamento do modelo ${template.name}`}>
+                  <Text style={styles.rowButtonText}>Orçamento</Text>
+                </Pressable>
+                <Pressable style={[styles.rowButton, styles.useButton]} disabled={busy !== null} onPress={() => void use(template, false)} accessibilityRole="button" accessibilityLabel={`Usar modelo ${template.name}`}>
                   <Text style={styles.useText}>Usar</Text>
                 </Pressable>
                 <Pressable style={styles.rowButton} disabled={busy !== null} onPress={() => void remove(template)} accessibilityRole="button" accessibilityLabel={`Apagar modelo ${template.name}`}>

@@ -89,7 +89,7 @@ export interface LocalOrdersPort {
   openQuarantined(localId: string): Promise<QuarantinedDraftDetail | null>;
   /** Local-only delete of a never-sent retained draft; throws `DraftDiscardError` otherwise. There is no resend/convert counterpart. */
   discardQuarantined(localId: string): Promise<void>;
-  acknowledgePriceReview(localId: string): Promise<void>;
+  acknowledgePriceReview(localId: string, refusedProductCodes?: readonly number[]): Promise<void>;
   resolveConflict(localId: string, resolution: ConflictResolution): Promise<void>;
   /** "Confirmar" / "Tentar de novo" for an order already saved: records the request; the sync delivers it (offline it waits). */
   requestSend(localId: string): Promise<void>;
@@ -165,6 +165,29 @@ export function linesFromDraftItems(items: readonly DraftItemRecord[]): EditorLi
   }));
 }
 
+/**
+ * Barcodes (EAN) of the lines' products from the catalog cache, for the order PDF. Best effort: a product that is not cached
+ * or has no barcode keeps its cell empty, and an unreadable cache never blocks opening the order.
+ */
+async function withBarcodes(db: SqlDatabase, lines: EditorLine[]): Promise<EditorLine[]> {
+  if (lines.length === 0) return lines;
+  try {
+    const codes = [...new Set(lines.map((line) => line.productCode))];
+    const rows = await db.query<{ code: number; barcode: string | null }>(
+      `SELECT code, json_extract(data, '$.barcode') AS barcode FROM cache_product WHERE code IN (${codes.map(() => "?").join(", ")})`,
+      codes,
+    );
+    const byCode = new Map<number, string>();
+    for (const row of rows) if (typeof row.barcode === "string" && row.barcode.trim() !== "") byCode.set(Number(row.code), row.barcode.trim());
+    return lines.map((line) => {
+      const barcode = byCode.get(line.productCode);
+      return barcode === undefined ? line : { ...line, barcode };
+    });
+  } catch {
+    return lines;
+  }
+}
+
 export function createLocalOrdersPort(deps: {
   readonly db: SqlDatabase;
   readonly env: OfflineEnv;
@@ -216,7 +239,7 @@ export function createLocalOrdersPort(deps: {
     async open(localId) {
       const draft = await getDraft(db, localId);
       if (draft === null || draft.ownerAccountId !== ownerAccountId) return null;
-      return { draft, lines: linesFromDraftItems(await getDraftItems(db, localId)) };
+      return { draft, lines: await withBarcodes(db, linesFromDraftItems(await getDraftItems(db, localId))) };
     },
     async discard(localId) {
       await discardLocalDraft(db, ownerAccountId, localId);
@@ -238,8 +261,8 @@ export function createLocalOrdersPort(deps: {
       await discardQuarantinedDraft(db, ownerAccountId, localId);
       onChanged();
     },
-    async acknowledgePriceReview(localId) {
-      await acknowledgePriceReview(db, env, localId);
+    async acknowledgePriceReview(localId, refusedProductCodes) {
+      await acknowledgePriceReview(db, env, localId, refusedProductCodes);
       onChanged();
     },
     async resolveConflict(localId, resolution) {

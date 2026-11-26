@@ -168,6 +168,16 @@ describe("pdfStatusLabelOf", () => {
   });
 });
 
+describe("EAN and discounted unit value in the PDF", () => {
+  it("prints the EAN of a line that has one, leaves the cell empty otherwise, and shows the net unit value", () => {
+    const html = buildOrderPdfHtml(draftRecord(), [line({ barcode: "7891234567895" }), line({ key: "k3", productCode: 2003, description: "Sem codigo" })], null);
+    expect(html).toContain("<th>EAN</th>");
+    expect(html).toContain("Valor com desconto");
+    expect(html).toContain("7891234567895");
+    expect(html.match(/7891234567895/g)).toHaveLength(1);
+  });
+});
+
 describe("shareOrderPdf", () => {
   it("hands the HTML to the port and reports success; works from local data only", async () => {
     const calls: string[] = [];

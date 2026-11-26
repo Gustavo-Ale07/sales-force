@@ -39,8 +39,12 @@ export async function clearReferenceCache(db: SqlDatabase): Promise<void> {
  */
 export async function wipeLocalDatabase(db: SqlDatabase): Promise<void> {
   await db.transaction(async (tx) => {
-    for (const table of ["outbox", "local_order_item", "local_order_draft", "pending_customer", "cache_customer", "cache_product", "cache_product_group", "cache_table_price", ...ADDRESS_TABLES, "sync_metadata"]) {
-      await tx.execute(`DELETE FROM ${table}`);
+    // Every table the schema has, read from SQLite itself, so a table added by a later migration (tasks, notifications, customer edits,
+    // push registration, ...) is never forgotten. The applied version lives in `PRAGMA user_version`, not in a table.
+    const tables = await tx.query<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'");
+    for (const { name } of tables) {
+      if (!/^[a-z_][a-z0-9_]*$/.test(name)) throw new Error("Nome de tabela local inesperado.");
+      await tx.execute(`DELETE FROM ${name}`);
     }
   });
 }

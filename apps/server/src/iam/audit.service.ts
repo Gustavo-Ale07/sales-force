@@ -34,10 +34,13 @@ export const AUDIT_ACTIONS = {
   directorySessionRevoked: 'auth.directory.session_revoked',
   /** The admin changed the discount limits (W-39, DISC-3): previous and new values, never free text. */
   discountLimitsChanged: 'config.discount_limits_changed',
+  /** A manager or admin created, changed or removed one per-seller discount rule (seller, level, code and percents only). */
   /** CFG-8: the worker stored a new configuration version read from Sankhya (versions, hashes, changed keys; no values). */
   configSankhyaSynced: 'config.sankhya_synced',
   orderCreated: 'order.created',
   orderReplaced: 'order.replaced',
+  /** P-09: the seller decided the changed prices of a draft. Counts only, never prices. */
+  orderPriceReviewed: 'order.price_reviewed',
   /** D-Y: the seller (or a manager) deleted a quote/order that never reached Sankhya. Identifiers and the total only. */
   orderDeleted: 'order.deleted',
   /** D-U (a): a quote that never reached Sankhya became an order in place (ids and TOPs only). */
@@ -71,6 +74,13 @@ export const AUDIT_ACTIONS = {
   orderTemplateDeleted: 'order_template.deleted',
   /** A template produced a new draft order (ids and counts only). */
   orderTemplateUsed: 'order_template.used',
+  /** RF-ACT-1: a task was created / completed / cancelled (ids and type only, never the title or description). */
+  taskCreated: 'task.created',
+  taskCompleted: 'task.completed',
+  taskCancelled: 'task.cancelled',
+  /** RF-NOT-1: a push device was registered or removed (ids and platform only, never the token). */
+  pushDeviceRegistered: 'push_device.registered',
+  pushDeviceRemoved: 'push_device.removed',
   /** "Repetir último pedido": a new draft order was produced from the customer's most recent order. */
   orderRepeatedFromLast: 'order.repeated_from_last',
   orderDuplicatedAsOrder: 'order.duplicated_as_order',
@@ -83,6 +93,8 @@ export const AUDIT_ACTIONS = {
   /** A decision was refused because the caller's role cannot decide the requested level (DISC-4). */
   orderApprovalDenied: 'order.approval_denied',
   orderSubmitDiscountBlocked: 'order.submit_discount_blocked',
+  /** A submitted order has lines above the seller's resolved discount limit (informational; counts only). */
+  orderSubmitDiscountAboveLimit: 'order.submit_discount_above_limit',
   /** A draft was refused on submission because its customer is no longer eligible (ids and reason only). */
   orderSubmitCustomerIneligible: 'order.submit_customer_ineligible',
   /** SNK-7: the order was queued for the ERP (outbox row created in the same transaction). */
@@ -103,6 +115,18 @@ export const AUDIT_ACTIONS = {
   orderErpRemoved: 'order.erp_removed',
   /** RT-1: a removed order's note came back in Sankhya: the order is visible again (ids and ERP number only). */
   orderErpRestored: 'order.erp_restored',
+  /** RF-IMP: a spreadsheet import ran (type, row counts, created and rejected counts; never file content or personal data). */
+  importCompleted: 'import.completed',
+  /** RF-DSH-6: a spreadsheet export was produced (resource, format and row count; never the content). */
+  dataExported: 'data.exported',
+  /** AUTH-2: an app installation registered for an account (device id, platform, initial status; never the install id). */
+  deviceRegistered: 'device.registered',
+  /** AUTH-2: an administrator or manager approved a device (device and owner ids). */
+  deviceApproved: 'device.approved',
+  /** AUTH-2: an administrator or manager revoked a device; the app wipes on its next request (device and owner ids, previous status). */
+  deviceRevoked: 'device.revoked',
+  /** RF-IAM-8: the offline limit or the devices-per-account limit changed (new and previous values). */
+  deviceSettingsChanged: 'device.settings_changed',
 } as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
 

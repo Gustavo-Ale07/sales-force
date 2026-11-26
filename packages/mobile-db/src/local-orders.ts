@@ -11,7 +11,7 @@ import {
   type IneligibleReason,
 } from "./dataset-identity";
 import { isoNow, type OfflineEnv } from "./offline-env";
-import { PENDING_CUSTOMER_MESSAGE, PendingCustomerOrderError, pendingCustomerBlockOf } from "./pending-customer-guard";
+import { PENDING_CUSTOMER_MESSAGE, PendingCustomerOrderError, pendingCustomerBlockOf, pendingCustomerOrderGate } from "./pending-customer-guard";
 
 /**
  * Local order drafts and the outbox commands that carry them to the server.
@@ -730,8 +730,12 @@ export class DraftNotEditableError extends Error {
  */
 export async function saveOrderDraft(db: SqlDatabase, env: OfflineEnv, input: SaveDraftInput): Promise<string> {
   return db.transaction(async (tx) => {
-    // A customer the ERP has not confirmed yet cannot receive an order (customer-write plan A2): nothing is saved.
-    if (pendingCustomerBlockOf(input.customerCode) !== null) throw new PendingCustomerOrderError();
+    // A customer created on this device and not yet confirmed MAY receive an order (owner 2026-11-26): it stays queued behind the
+    // customer and goes out with the real code. A local code that points to no usable pending customer saves nothing.
+    if (pendingCustomerBlockOf(input.customerCode) !== null) {
+      const gate = await pendingCustomerOrderGate(tx, input.ownerAccountId, input.customerCode);
+      if (gate.kind === "refused") throw new PendingCustomerOrderError(gate.message);
+    }
     const now = isoNow(env);
     let payload = buildPayload(input);
 

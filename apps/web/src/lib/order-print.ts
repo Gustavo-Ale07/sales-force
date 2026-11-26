@@ -36,7 +36,8 @@ export function buildOrderHtml(order: OrderDetail, origin: string, extras: Order
     statusLabel: orderDocumentStatusLabels[order.status],
     createdAt: order.createdAt,
     notes: order.notes,
-    items: order.items.map((item) => ({ ...item, ipiPercent: documentIpiPercent(item.ipi) })),
+    // `barcode` is additive on the contract (EAN from the ERP mirror); absent from older servers.
+    items: order.items.map((item) => ({ ...item, ipiPercent: documentIpiPercent(item.ipi), barcode: (item as { barcode?: string | null }).barcode ?? null })),
     totals: order.totals,
     ...(order.ipi === undefined ? {} : { ipi: order.ipi }),
   });

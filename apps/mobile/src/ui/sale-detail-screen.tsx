@@ -71,6 +71,7 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [missing, setMissing] = useState(false);
   const [reloads, setReloads] = useState(0);
+  const [refusedCodes, setRefusedCodes] = useState<readonly number[]>([]);
   const [sharing, setSharing] = useState(false);
   const offline = connectivity === "offline";
 
@@ -354,9 +355,18 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
                 <Text style={styles.alertLine}>{`${entry.description}: ${priceText(entry.cachedUnitPrice)}`}</Text>
                 <Icon name="arrow" color={colors.text} size={16} />
                 <Text style={styles.alertLine}>{priceText(entry.serverUnitPrice)}</Text>
+                <Pressable
+                  style={styles.secondary}
+                  onPress={() => setRefusedCodes((current) => (current.includes(entry.productCode) ? current.filter((code) => code !== entry.productCode) : [...current, entry.productCode]))}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: refusedCodes.includes(entry.productCode) }}
+                  accessibilityLabel={`${refusedCodes.includes(entry.productCode) ? "Manter" : "Recusar"} ${entry.description}`}
+                >
+                  <Text style={styles.secondaryText}>{refusedCodes.includes(entry.productCode) ? "Manter" : "Recusar"}</Text>
+                </Pressable>
               </View>
             ))}
-            <Pressable style={styles.primary} onPress={() => void act(() => localOrders.acknowledgePriceReview(draft.localId))} accessibilityRole="button" accessibilityLabel="Aceitar novos preços">
+            <Pressable style={styles.primary} onPress={() => void act(() => localOrders.acknowledgePriceReview(draft.localId, refusedCodes))} accessibilityRole="button" accessibilityLabel="Aceitar novos preços">
               <Text style={styles.primaryText}>Aceitar novos preços</Text>
             </Pressable>
           </View>

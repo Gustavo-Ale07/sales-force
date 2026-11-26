@@ -9,7 +9,9 @@ import {
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { Contract, ApiRoute, type RequestContract } from '../http/route.js';
 import { CLOCK, type Clock } from '../platform/tokens.js';
+import { AppError } from '../http/app-error.js';
 import { AccountPhotoService } from './account-photo.service.js';
+import { DeviceService } from './device.service.js';
 import { AuthService, type RequestMeta } from './auth.service.js';
 import type { AuthConfig } from './auth-config.js';
 import { readCookie, serializeClearedSessionCookie, serializeSessionCookie } from './cookies.js';
@@ -33,6 +35,7 @@ export class AuthController {
     @Inject(AUTH_CONFIG) private readonly config: AuthConfig,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(AccountPhotoService) private readonly photos: AccountPhotoService,
+    @Inject(DeviceService) private readonly devices: DeviceService,
   ) {}
 
   @ApiRoute(routes.login)
@@ -42,12 +45,16 @@ export class AuthController {
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<LoginResponse> {
     const client = contract.body.client;
-    const { token, user } = await this.auth.login(contract.body, { ...metaOf(request), ...(client === undefined ? {} : { client }) });
+    const { token, user } = await this.auth.login(contract.body, {
+      ...metaOf(request),
+      ...(client === undefined ? {} : { client }),
+      ...(client === 'app' && contract.body.device !== undefined ? { device: contract.body.device } : {}),
+    });
     void reply.header(
       'set-cookie',
       serializeSessionCookie(token, user.sessionExpiresAt, this.clock(), { secure: this.config.secureCookies }),
     );
-    return this.withPhoto(this.auth.toSessionBody(user));
+    return this.withDevice(await this.withPhoto(this.auth.toSessionBody(user)), user);
   }
 
   /** Always 200: `authenticated` says whether a live session exists (the SPA probes it on load). */
@@ -68,7 +75,15 @@ export class AuthController {
         serializeSessionCookie(token, resolved.user.sessionExpiresAt, this.clock(), { secure: this.config.secureCookies }),
       );
     }
-    return this.withPhoto(this.auth.toSessionBody(resolved.user));
+    // A revoked device learns it must wipe even on the boot probe (the session read is public, so it is not behind the guard).
+    if (resolved.user.deviceId != null && resolved.user.deviceStatus === 'revoked') throw new AppError('device_revoked');
+    return this.withDevice(await this.withPhoto(this.auth.toSessionBody(resolved.user)), resolved.user);
+  }
+
+  /** Additive: the app's device and the offline limit (app sessions only). */
+  private async withDevice(session: LoginResponse, user: CurrentUser): Promise<LoginResponse> {
+    if (user.deviceId == null || user.deviceStatus == null) return session;
+    return { ...session, device: await this.devices.sessionDevice(user.deviceId, user.deviceStatus) };
   }
 
   /** Additive: the version of the account's profile photo (cache key of GET /me/photo), null when there is none. */

@@ -17,6 +17,8 @@ export const DEFAULT_MIRROR_CRONS = {
   salesHistory: '15 3 * * *',
   /** Address registry (cities, neighborhoods, streets): changes rarely, read every 6 hours. */
   addresses: '20 */6 * * *',
+  /** Seller goals (TGFMET, a handful of rows, whole-snapshot replace): every 2 hours. */
+  goals: '40 */2 * * *',
 } as const;
 
 export interface MirrorScheduleSettings {
@@ -52,9 +54,9 @@ export function mirrorSchedulesFromSettings(settings: MirrorScheduleSettings): M
     // Full mirror off: only the login directory may still run, and only sellers + directoryUsers (never customers, products or prices).
     if (settings.AUTH_DIRECTORY_SYNC_ENABLED === true) {
       const cron = settings.AUTH_DIRECTORY_SYNC_CRON ?? DEFAULT_MIRROR_CRONS.sellers;
-      return { sellers: cron, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: cron, carriers: null, ipiRates: null, openTitles: null, productGroups: null, salesHistoryMonthly: null, salesHistoryCustomerProduct: null, cities: null, neighborhoods: null, streets: null, postalCodes: null };
+      return { sellers: cron, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: cron, carriers: null, ipiRates: null, openTitles: null, productGroups: null, salesHistoryMonthly: null, salesHistoryCustomerProduct: null, cities: null, neighborhoods: null, streets: null, postalCodes: null, sellerGoals: null, forceConfig: null, forceDiscountLimits: null };
     }
-    return { sellers: null, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: null, carriers: null, ipiRates: null, openTitles: null, productGroups: null, salesHistoryMonthly: null, salesHistoryCustomerProduct: null, cities: null, neighborhoods: null, streets: null, postalCodes: null };
+    return { sellers: null, customers: null, products: null, priceTables: null, priceTableVersions: null, listPrices: null, directoryUsers: null, carriers: null, ipiRates: null, openTitles: null, productGroups: null, salesHistoryMonthly: null, salesHistoryCustomerProduct: null, cities: null, neighborhoods: null, streets: null, postalCodes: null, sellerGoals: null, forceConfig: null, forceDiscountLimits: null };
   }
   const salesHistoryCron = settings.SALES_HISTORY_CONFIGURED === true ? (settings.SYNC_CRON_SALES_HISTORY ?? DEFAULT_MIRROR_CRONS.salesHistory) : null;
   return {
@@ -83,5 +85,10 @@ export function mirrorSchedulesFromSettings(settings: MirrorScheduleSettings): M
     neighborhoods: DEFAULT_MIRROR_CRONS.addresses,
     streets: DEFAULT_MIRROR_CRONS.addresses,
     postalCodes: DEFAULT_MIRROR_CRONS.addresses,
+    // Seller goals (small table, read-only mirror of the ERP goal screen): its own slow cycle.
+    sellerGoals: DEFAULT_MIRROR_CRONS.goals,
+    // Configuration and seller discount rules registered in the ERP: they move with the seller list (one knob), so a change reaches devices quickly.
+    forceConfig: settings.SYNC_CRON_SELLERS,
+    forceDiscountLimits: settings.SYNC_CRON_SELLERS,
   };
 }

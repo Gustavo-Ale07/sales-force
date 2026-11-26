@@ -55,6 +55,8 @@ export interface EditorLine {
   quantityStep?: string | null;
   /** Registered discount ceiling of the product (percent). `null` = no limit registered; `undefined` = not known yet (a saved line), looked up on demand. */
   maxDiscountPercent?: string | null;
+  /** The product's own ERP ceiling, kept when the seller's rules replace `maxDiscountPercent`. */
+  erpMaxDiscountPercent?: string | null;
 }
 
 export type QuantityProblem = "empty" | "quantity_step" | DecimalError;

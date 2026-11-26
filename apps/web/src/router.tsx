@@ -213,6 +213,10 @@ const settingsRoute = createRoute({
 });
 
 const LazyDiscountLimitsPage = lazyRouteComponent(() => import("./routes/discount-limits"), "DiscountLimitsPage");
+const LazyDevicesPage = lazyRouteComponent(() => import("./routes/devices"), "DevicesPage");
+const LazyTarefasPage = lazyRouteComponent(() => import("./routes/tarefas"), "TarefasPage");
+const LazyMetasPage = lazyRouteComponent(() => import("./routes/metas"), "MetasPage");
+const LazyNotificacoesPage = lazyRouteComponent(() => import("./routes/notificacoes"), "NotificacoesPage");
 const LazyApprovalsPage = lazyRouteComponent(() => import("./routes/approvals"), "ApprovalsPage");
 
 const discountLimitsRoute = createRoute({
@@ -229,6 +233,39 @@ const discountLimitsRoute = createRoute({
       <LazyDiscountLimitsPage />
     </ForceModeGate>
   ),
+});
+
+const devicesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/aparelhos",
+  staticData: { crumb: "Aparelhos" },
+  // Admin and manager; the server (listDevices) is what enforces it and scopes the list.
+  beforeLoad: async ({ context }) => {
+    const user = await context.queryClient.ensureQueryData(sessionQueryOptions(context.authClient));
+    if (!user || (user.role !== "admin" && user.role !== "manager")) throw redirect({ to: "/" });
+  },
+  component: LazyDevicesPage,
+});
+
+const tarefasRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/tarefas",
+  staticData: { crumb: "Tarefas" },
+  component: LazyTarefasPage,
+});
+
+const metasRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/metas",
+  staticData: { crumb: "Metas" },
+  component: LazyMetasPage,
+});
+
+const notificacoesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/notificacoes",
+  staticData: { crumb: "Notificações" },
+  component: LazyNotificacoesPage,
 });
 
 const approvalsRoute = createRoute({
@@ -281,7 +318,11 @@ const appChildren = [
   integrationRoute,
   settingsRoute,
   discountLimitsRoute,
+  devicesRoute,
   approvalsRoute,
+  tarefasRoute,
+  metasRoute,
+  notificacoesRoute,
 ];
 
 const routeTree = rootRoute.addChildren([

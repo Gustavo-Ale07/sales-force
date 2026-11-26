@@ -26,8 +26,18 @@ const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>
   getProfilePhoto: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'allow', operations: 'allow' },
   getConfiguration: { admin: 'allow', manager: 'deny', seller: 'deny', technical: 'allow', operations: 'deny' },
   // W-39 discount limits (DISC-3): admin only; manager, seller and technical are denied.
+  // AUTH-2 / W-36: an app device reads its own status; approval and revocation are admin and manager (the team scope is proved in devices.test.ts).
+  getMyDevice: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'allow', operations: 'allow' },
+  reportDeviceSync: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'allow', operations: 'allow' },
+  listDevices: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny', operations: 'deny' },
+  approveDevice: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny', operations: 'deny' },
+  revokeDevice: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny', operations: 'deny' },
+  getDeviceSettings: { admin: 'allow', manager: 'deny', seller: 'deny', technical: 'deny', operations: 'deny' },
+  updateDeviceSettings: { admin: 'allow', manager: 'deny', seller: 'deny', technical: 'deny', operations: 'deny' },
   getDiscountLimits: { admin: 'allow', manager: 'deny', seller: 'deny', technical: 'deny', operations: 'deny' },
   updateDiscountLimits: { admin: 'allow', manager: 'deny', seller: 'deny', technical: 'deny', operations: 'deny' },
+  // Per-seller limits: manager and admin manage; the seller reads only its own rules (offline sync).
+  getMyDiscountLimits: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   // Minimal order-entry slice: every role that can create an order needs it (unlike getConfiguration above).
   getOrderEntryConfiguration: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   // D-AB B3: any operational profile may ask for fresh data; the technical role has no commercial screens.
@@ -38,6 +48,7 @@ const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>
   // Commercial routes (Stage 3A). The three roles that exist may use them; the external
   // representative role does not exist yet (AUTH-3 PROPOSED) and gets no grant until the owner decides.
   getDashboard: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  getGoals: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   // Owner ruling 2026-11-13: the seller list is for manager and admin only (a seller never learns other sellers' names or codes).
   listSellers: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny', operations: 'deny' },
   listCustomers: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
@@ -51,6 +62,7 @@ const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>
   listNeighborhoods: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   listStreets: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   lookupPostalCode: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  lookupCnpj: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   listProducts: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   getProduct: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   getProductImage: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
@@ -60,8 +72,16 @@ const MATRIX: Readonly<Record<string, Readonly<Record<AccountRole, Expectation>>
   resolveProducts: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   listOrders: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   createOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  getOrderImportTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  previewImport: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  confirmImport: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  exportCustomers: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny', operations: 'deny' },
+  exportOrders: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny', operations: 'deny' },
+  exportProducts: { admin: 'allow', manager: 'allow', seller: 'deny', technical: 'deny', operations: 'deny' },
   getOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   replaceOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  getOrderPriceReview: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  resolveOrderPriceReview: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   deleteOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   submitOrder: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   verifyOrderDelivery: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
@@ -88,6 +108,14 @@ listCustomerRegistrations: { admin: 'allow', manager: 'allow', seller: 'allow', 
   replaceOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   deleteOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
   useOrderTemplate: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  listTasks: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  createTask: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  completeTask: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  cancelTask: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  listNotifications: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  markNotificationsRead: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  registerPushDevice: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
+  unregisterPushDevice: { admin: 'allow', manager: 'allow', seller: 'allow', technical: 'deny', operations: 'deny' },
 };
 
 /**

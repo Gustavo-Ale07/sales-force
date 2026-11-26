@@ -10,6 +10,7 @@ jest.mock("@salesforce/mobile-db", () => ({
   searchProducts: jest.fn(),
   customerPriceTableOf: jest.fn(),
   cachedPriceTableCodes: jest.fn(),
+  readSellerDiscountLimits: jest.fn(async () => null),
 }));
 
 const ready = isCacheReady as jest.MockedFunction<typeof isCacheReady>;

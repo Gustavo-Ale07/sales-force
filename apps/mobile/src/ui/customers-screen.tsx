@@ -57,6 +57,8 @@ export interface CustomersScreenProps {
   readonly onOpen?: (customer: CustomerListItem) => void;
   /** "Novo cliente": offered only while customer creation is released on this installation. Absent = no button. */
   readonly onCreate?: () => void;
+  /** "Importar itens" / "Importar clientes" (spreadsheet, online). Absent = no buttons. */
+  readonly onImport?: (kind: "order_items" | "customers") => void;
   /** Discards a refused (or seller-less) registration kept on this device, straight from its row. Absent = no button. */
   readonly onDiscardPending?: (customer: CustomerListItem) => void;
   /** The site's "Carteira de clientes" counters above the list, read online. Absent = no counters. */
@@ -70,7 +72,7 @@ const noopOpen = () => undefined;
  * alphabetical index when the repository can compute it locally. Whether this is "the seller's own portfolio" depends
  * on the installation configuration the app does not know, so the title never claims it.
  */
-export function CustomersScreen({ customers, onUnauthenticated, connectivity, onOpen = noopOpen, onCreate, onDiscardPending, dashboard }: CustomersScreenProps) {
+export function CustomersScreen({ customers, onUnauthenticated, connectivity, onOpen = noopOpen, onCreate, onImport, onDiscardPending, dashboard }: CustomersScreenProps) {
   const [portfolio, setPortfolio] = useState<DashboardIndicators["portfolio"]>([]);
   const online = connectivity !== "offline";
   useEffect(() => {
@@ -149,6 +151,16 @@ export function CustomersScreen({ customers, onUnauthenticated, connectivity, on
           <Pressable style={styles.tool} onPress={() => setIndexOpen(true)} accessibilityRole="button" accessibilityLabel="Índice alfabético">
             <Text style={styles.toolText}>A–Z</Text>
           </Pressable>
+        )}
+        {onImport !== undefined && online && (
+          <>
+            <Pressable style={styles.tool} onPress={() => onImport("order_items")} accessibilityRole="button" accessibilityLabel="Importar itens">
+              <Text style={styles.toolText}>Importar itens</Text>
+            </Pressable>
+            <Pressable style={styles.tool} onPress={() => onImport("customers")} accessibilityRole="button" accessibilityLabel="Importar clientes">
+              <Text style={styles.toolText}>Importar clientes</Text>
+            </Pressable>
+          </>
         )}
       </View>
       {portfolio.length > 0 && (
@@ -238,7 +250,7 @@ const styles = StyleSheet.create({
   toolbar: { gap: spacing.sm },
   indicators: { gap: 2 },
   indicator: { fontSize: 13, color: colors.textMuted, fontWeight: "600" },
-  toolbarRow: { flexDirection: "row", gap: spacing.sm },
+  toolbarRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   tool: { minHeight: control.height, minWidth: 72, paddingHorizontal: spacing.lg, borderRadius: radius.md, borderWidth: 1, borderColor: colors.navy, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
   jump: { minHeight: 44, justifyContent: "center" },
   jumpText: { color: colors.navy, fontSize: 13, fontWeight: "700" },

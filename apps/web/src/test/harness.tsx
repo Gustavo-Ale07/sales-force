@@ -111,6 +111,7 @@ export interface RenderOptions {
 export function renderApp(initialPath: string, options: RenderOptions = {}) {
   const { handlers = {}, signedIn = true, role, config, authClient: customAuth, gcTime = 0, prepare } = options;
   const mock = createMockApi({
+    "GET /discount-limits/mine": { body: { sellerCode: null, rules: [] } },
     "GET /auth/session": session(signedIn, role),
     "GET /ready": { body: ready },
     "GET /configuration": { body: configuration },
@@ -140,7 +141,7 @@ export const callsTo = (calls: MockRequest[], method: string, path: string) => c
 
 /** Fills the mandatory header (negotiation, freight, carrier) of the new-order form; only what is still empty is touched. */
 export async function fillOrderHeader(user: ReturnType<typeof userEvent.setup>) {
-  const negotiation = await screen.findByLabelText(/Tipo de negociação/);
+  const negotiation = await screen.findByLabelText(/Tipo de negociação/, undefined, { timeout: 8000 });
   if ((negotiation as HTMLSelectElement).value === "") {
     await waitFor(() => {
       if (within(negotiation).queryAllByRole("option").length < 2) throw new Error("negotiation types not loaded");

@@ -35,6 +35,7 @@ export async function installUpdate(onStatus: (text: string) => void): Promise<s
 /** The real expo-updates module; a missing native module behaves as disabled. */
 function loadUpdates(): UpdatesPort {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require("expo-updates") as UpdatesPort;
   } catch {
     return { isEnabled: false, checkForUpdateAsync: async () => ({ isAvailable: false }), fetchUpdateAsync: async () => ({}), reloadAsync: async () => undefined };

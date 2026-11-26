@@ -365,6 +365,69 @@
       "when": 1795704205160,
       "tag": "0051_erp_postal_code",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1795704206160,
+      "tag": "0052_cnpj_lookup_cache",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1795704207160,
+      "tag": "0053_device",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1795704208160,
+      "tag": "0054_device_setting",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1795704210160,
+      "tag": "0055_activity_task",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1795704211160,
+      "tag": "0056_notification_push_device",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1795704230160,
+      "tag": "0057_erp_product_barcode",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1795704240160,
+      "tag": "0058_erp_seller_goal",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1795704250160,
+      "tag": "0059_erp_seller_max_discount",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1795704260160,
+      "tag": "0060_erp_force_config",
+      "breakpoints": true
     }
   ]
 }

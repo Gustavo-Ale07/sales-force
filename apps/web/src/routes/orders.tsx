@@ -33,6 +33,8 @@ import { Link } from "@tanstack/react-router";
 import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { CustomerPicker } from "../components/customer-picker";
+import { ExportButton } from "../components/export-button";
+import { ImportDialog } from "../components/import-dialog";
 import { DeleteOrderDialog } from "../components/delete-order-dialog";
 import { OrderProductFilter, PRODUCT_MATCH_OPTIONS, useProductLabel, type ProductMatch } from "../components/order-product-filter";
 import { ErpStageChip, stageText } from "../components/order-stage";
@@ -183,6 +185,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
   // RT-1: the orders in view are re-read in Sankhya when the list opens and when the tab returns.
   useRefreshOrdersInView((query.data?.items ?? []).map((item) => item.id));
   const [deleting, setDeleting] = useState<{ id: string; label: string } | null>(null);
+  const [importing, setImporting] = useState(false);
   // K8: what the API applies now, not a cache until F5 — always revalidated on open and on tab focus.
   const submissionEnabled = useQuery({ ...orderEntryConfigurationQueryOptions(api), staleTime: 0, refetchOnWindowFocus: true }).data?.general.erpSubmissionEnabled;
 
@@ -218,11 +221,18 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
         count={query.data ? query.data.total.toLocaleString("pt-BR") : undefined}
         description={submissionEnabled === false ? "O envio ao Sankhya ainda não está habilitado nesta instalação." : undefined}
         actions={
-          <Button asChild variant="primary" leftIcon={<Plus size={16} strokeWidth={1.75} aria-hidden="true" />}>
-            <Link to="/pedidos/novo">Novo pedido</Link>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <ExportButton resource="orders" query={{ search: params.search, customerCode: params.customerCode }} />
+            <Button variant="secondary" onClick={() => setImporting(true)}>
+              Importar planilha
+            </Button>
+            <Button asChild variant="primary" leftIcon={<Plus size={16} strokeWidth={1.75} aria-hidden="true" />}>
+              <Link to="/pedidos/novo">Novo pedido</Link>
+            </Button>
+          </div>
         }
       />
+      <ImportDialog open={importing} onOpenChange={setImporting} type="order_items" />
 
       <FilterBar
         aria-label="Filtros de pedidos"

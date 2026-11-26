@@ -1,9 +1,15 @@
 import { getDraftItems, type ProductBlockReason } from "./local-orders";
-import { cachedPriceTableCodes, customerPriceTableOf } from "./reference-cache";
+import { META_KEYS, cachedPriceTableCodes, customerPriceTableOf, getMeta } from "./reference-cache";
 import type { SqlExecutor, SqlRow } from "./connection";
 
-/** A customer without a table is priced in this one (owner 2026-11-13). */
-const DEFAULT_PRICE_TABLE = 5;
+/** A customer without a table is priced in the table registered in the ERP (AD_FORCECFG, delivered with the device status); 5 until it is heard (owner 2026-11-13). */
+const FALLBACK_PRICE_TABLE = 5;
+
+async function defaultPriceTableOf(db: SqlExecutor): Promise<number> {
+  const raw = await getMeta(db, META_KEYS.deviceDefaultPriceTable);
+  const stored = raw === null ? Number.NaN : Number(raw);
+  return Number.isInteger(stored) && stored >= 0 ? stored : FALLBACK_PRICE_TABLE;
+}
 
 /**
  * Indicative check of a draft against the catalog on this device: a line whose product is not in the cache lost its mobility;
@@ -15,7 +21,7 @@ export async function productBlockOf(db: SqlExecutor, draftLocalId: string, cust
   if (count === 0) return null;
   const items = await getDraftItems(db, draftLocalId);
   const table = (await customerPriceTableOf(db, customerCode)) ?? null;
-  const tableCode = table ?? DEFAULT_PRICE_TABLE;
+  const tableCode = table ?? (await defaultPriceTableOf(db));
   const tableOnDevice = (await cachedPriceTableCodes(db)).includes(tableCode);
   let withoutPrice = false;
   for (const item of items) {

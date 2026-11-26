@@ -43,6 +43,7 @@ import { PolicyService, type AccessContext } from '../iam/policy.service.js';
 import { isBlockedRaw, MirrorRepository, type CustomerRow, type CustomerStateRow } from '../mirror/mirror.repository.js';
 import { assertDatasetMatches } from '../platform/dataset-guard.js';
 import { uuidv7 } from '../platform/ids.js';
+import { SellerDiscountLimitsService } from '../seller-discount-limits/seller-discount-limits.service.js';
 import { CLOCK, DATABASE_HANDLE, DATASET_IDENTITY, ORDER_ENQUEUE_ENABLED, type Clock } from '../platform/tokens.js';
 import { notifyOrderRefresh } from '../platform/pg-listener.js';
 import type { DbHandle } from '@salesforce/db';
@@ -170,6 +171,7 @@ export class OrdersService {
     @Inject(DATASET_IDENTITY) private readonly dataset: DatasetIdentity | null,
     @Inject(ORDER_ENQUEUE_ENABLED) private readonly enqueueEnabled: boolean,
     @Inject(InstallationConfigurationService) private readonly installation: InstallationConfigurationService,
+    @Inject(SellerDiscountLimitsService) private readonly sellerLimits: SellerDiscountLimitsService,
   ) {}
 
   /* ---------- reads ---------- */
@@ -767,6 +769,20 @@ export class OrdersService {
         details: { issues: blocks.map((block) => ({ path: block.code === 'product_without_price' ? `items[${block.lineNo - 1}].priceState` : `items[${block.lineNo - 1}].productCode`, code: block.code })) },
       });
     }
+    // Owner ruling 2026-11-26 (P-08, P-10): the per-seller limit (product > nearest group > general > DESCMAX) is resolved here by the
+    // same domain rule as the clients. The yes/no stays informational, as today (never a gate): a line above the limit is audited, and
+    // the approval itself is the discount authority's (P-10).
+    const exceeded = await this.sellerLimits.exceededLines(
+      order.sellerCode,
+      (await this.orders.itemsOf(order.id)).map((line) => ({ lineNo: line.lineNo, productCode: line.productCode, discountPercent: normalizeDecimalString(line.discountPercent) })),
+    );
+    if (exceeded.length > 0) {
+      await this.audit.record({
+        action: AUDIT_ACTIONS.orderSubmitDiscountAboveLimit,
+        actorAccountId: user.accountId,
+        detail: { ...this.auditDetail(order, 0), exceededLines: exceeded.length, acknowledged: order.discountAboveLimitAccepted },
+      });
+    }
     // Security review MEDIUM-2 (P-08): the TOP and the negotiation type stored on the draft are revalidated against the
     // CURRENT configuration; one that left the eligible set blocks sending and the draft is never changed.
     const headerIssues = headerEligibilityIssues(order, context.configuration);
@@ -1048,6 +1064,7 @@ export class OrdersService {
       order.erpNumber == null ? Promise.resolve(null) : this.orders.erpStageOf(order.id),
     ]);
     const ipiLookup = await this.mirror.ipiLookup(items.map((item) => item.productCode));
+    const barcodes = await this.mirror.productBarcodes(items.map((item) => item.productCode));
     // Same media source as the catalog; best effort (a failure degrades to no photos, the order still works).
     const images = await this.images.metadataFor([...new Set(items.map((item) => item.productCode))]);
     const state = states.get(order.customerCode);
@@ -1060,7 +1077,7 @@ export class OrdersService {
       customerBlockedRaw: state?.blockedRaw ?? null,
       customerSellerCode: state?.sellerCode ?? null,
       customerLive: state?.live ?? null,
-    }, images, toOrderApproval(approval), liberationEventLabels, ipiLookup, showExpedicao, lastDelivery, dryRun, convertedInto, erpStage);
+    }, images, toOrderApproval(approval), liberationEventLabels, ipiLookup, showExpedicao, lastDelivery, dryRun, convertedInto, erpStage, barcodes);
     // Owner ruling 2026-11-13: lines that would block sending right now (derived, never stored).
     const sendBlocks = await this.sendBlocksOf(order, configuration);
     return sendBlocks.length === 0 ? detail : { ...detail, sendBlocks };

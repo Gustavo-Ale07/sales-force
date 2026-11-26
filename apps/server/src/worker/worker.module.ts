@@ -14,6 +14,8 @@ import { ProductMediaSyncService, type MediaGateway, type ProductMediaSettings }
 import type { ObjectStore } from '../media/object-store.js';
 import { SharpThumbnailRenderer, type ThumbnailRenderer } from '../media/thumbnail-renderer.js';
 import { AuditService } from '../iam/audit.service.js';
+import { ExpoPushSender } from '../notifications/expo-push.sender.js';
+import { NotificationSweepService } from '../notifications/notification-sweep.service.js';
 import {
   OrderDeliveryService,
   type OrderDeliveryGateway,
@@ -183,6 +185,7 @@ export class WorkerModule {
                       }),
                     },
                   }),
+              notifications: { service: new NotificationSweepService({ db: db.db, sender: new ExpoPushSender(), now, logger }) },
               ...(profilePhotoDelivery === undefined
                 ? {}
                 : {

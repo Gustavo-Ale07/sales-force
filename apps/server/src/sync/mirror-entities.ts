@@ -6,6 +6,8 @@ import {
   erpNeighborhood,
   erpStreet,
   erpPostalCode,
+  erpForceConfig,
+  erpForceDiscountLimit,
   erpIpiRate,
   erpOpenTitle,
   erpListPrice,
@@ -15,10 +17,11 @@ import {
   erpProductGroup,
   erpSalesHistoryCustomerProduct,
   erpSalesHistoryMonthly,
+  erpSellerGoal,
   erpSeller,
 } from '@salesforce/db';
 import { classifySalesHistoryTop } from '@salesforce/domain';
-import type { Carrier, City, Neighborhood, Street, PostalCodeEntry, Customer, OpenTitle, DirectoryUser, ListPrice, PriceTable, PriceTableVersion, Product, ProductGroup, Seller } from '@salesforce/domain';
+import type { ForceConfig, ForceDiscountLimit, Carrier, City, Neighborhood, Street, PostalCodeEntry, Customer, OpenTitle, DirectoryUser, ListPrice, PriceTable, PriceTableVersion, Product, ProductGroup, Seller } from '@salesforce/domain';
 import { salesHistoryReadConfig, type SalesHistorySyncConfig } from './sales-history-config.js';
 import {
   SankhyaGatewayError,
@@ -59,6 +62,11 @@ export const MIRROR_ENTITIES = [
   'neighborhoods',
   'streets',
   'postalCodes',
+  // Seller goals (RF-GOL-1), appended: never reorder, the lock key is the position.
+  'sellerGoals',
+  // Installation parameters and seller discount rules registered inside the ERP (AD_FORCECFG / AD_FORCELIMDESC), appended: never reorder.
+  'forceConfig',
+  'forceDiscountLimits',
 ] as const satisfies readonly ReadEntity[];
 
 export type MirrorEntity = (typeof MIRROR_ENTITIES)[number];
@@ -67,7 +75,7 @@ export type MirrorEntity = (typeof MIRROR_ENTITIES)[number];
  * Entities mirrored as an ATOMIC SNAPSHOT REPLACEMENT instead of a hash-diff upsert (sales history): the whole window is read
  * into memory, then the table is emptied and refilled in ONE transaction. They have no content hash, soft delete or seen table.
  */
-export const SNAPSHOT_REPLACE_ENTITIES = ['salesHistoryMonthly', 'salesHistoryCustomerProduct'] as const satisfies readonly MirrorEntity[];
+export const SNAPSHOT_REPLACE_ENTITIES = ['salesHistoryMonthly', 'salesHistoryCustomerProduct', 'sellerGoals'] as const satisfies readonly MirrorEntity[];
 export type SnapshotReplaceEntity = (typeof SNAPSHOT_REPLACE_ENTITIES)[number];
 export type RowMirrorEntity = Exclude<MirrorEntity, SnapshotReplaceEntity>;
 
@@ -228,7 +236,7 @@ const sellers: MirrorEntitySpec = {
   read: (context) =>
     mapped<Seller>(context.gateway.readSellers(readOptions(context)), (row) => ({
       key: [keyColumn('sellers', 'code', row.code)],
-      content: { name: row.name, active: row.active },
+      content: { name: row.name, active: row.active, maxDiscountPercent: decimalColumn('sellers', 'maxDiscountPercent', row.maxDiscountPercent ?? null, 7, 4) },
     })),
 };
 
@@ -292,6 +300,7 @@ const products: MirrorEntitySpec = {
           ipiCode: row.ipiCode ?? null,
           quantityStep: row.quantityStep ?? null,
           maxDiscountPercent: row.maxDiscountPercent ?? null,
+          barcode: row.barcode ?? null,
           active: row.active,
         },
       }));
@@ -427,6 +436,37 @@ const postalCodes: MirrorEntitySpec = {
     mapped<PostalCodeEntry>(context.gateway.readPostalCodes(readOptions(context)), (row) => ({
       key: [keyColumn('postalCodes', 'cep', row.cep)],
       content: { cityCode: row.cityCode, neighborhoodCode: row.neighborhoodCode, streetCode: row.streetCode },
+    })),
+};
+
+/** AD_FORCECFG: installation parameters registered inside the ERP. Read-only mirror; an empty table is a valid snapshot. */
+const forceConfig: MirrorEntitySpec = {
+  entity: 'forceConfig',
+  requires: ['forceConfig'],
+  table: erpForceConfig,
+  keyProps: ['id'],
+  read: (context) =>
+    mapped<ForceConfig>(context.gateway.readForceConfig(readOptions(context)), (row) => ({
+      key: [keyColumn('forceConfig', 'id', row.id)],
+      content: { daysWithoutSync: row.daysWithoutSync, defaultPriceTableCode: row.defaultPriceTableCode },
+    })),
+};
+
+/** AD_FORCELIMDESC: seller discount rules registered inside the ERP, keyed by (config id, sequence). An empty table is valid. */
+const forceDiscountLimits: MirrorEntitySpec = {
+  entity: 'forceDiscountLimits',
+  requires: ['forceDiscountLimits'],
+  table: erpForceDiscountLimit,
+  keyProps: ['configId', 'seq'],
+  read: (context) =>
+    mapped<ForceDiscountLimit>(context.gateway.readForceDiscountLimits(readOptions(context)), (row) => ({
+      key: [keyColumn('forceDiscountLimits', 'configId', row.configId), keyColumn('forceDiscountLimits', 'seq', row.seq)],
+      content: {
+        sellerCode: row.sellerCode,
+        groupCode: row.groupCode,
+        productCode: row.productCode,
+        percent: decimalColumn('forceDiscountLimits', 'percent', row.percent, 7, 4),
+      },
     })),
 };
 
@@ -604,9 +644,23 @@ const salesHistoryCustomerProduct: SnapshotReplaceSpec = {
   },
 };
 
+const sellerGoals: SnapshotReplaceSpec = {
+  entity: 'sellerGoals',
+  requires: ['sellerGoals'],
+  table: erpSellerGoal,
+  read: (context) =>
+    mappedPlain(context.gateway.readSellerGoals(readOptions(context)), (row) => ({
+      sellerCode: keyColumn('sellerGoals', 'sellerCode', row.sellerCode),
+      month: monthStart('sellerGoals', row.month),
+      revenueTarget: requiredDecimal('sellerGoals', 'revenueTarget', row.revenueTarget, 14, 2),
+      quantityTarget: requiredDecimal('sellerGoals', 'quantityTarget', row.quantityTarget, 18, 6),
+    })),
+};
+
 export const SNAPSHOT_REPLACE_SPECS: Readonly<Record<SnapshotReplaceEntity, SnapshotReplaceSpec>> = {
   salesHistoryMonthly,
   salesHistoryCustomerProduct,
+  sellerGoals,
 };
 
 export const MIRROR_SPECS: Readonly<Record<RowMirrorEntity, MirrorEntitySpec>> = {
@@ -625,4 +679,6 @@ export const MIRROR_SPECS: Readonly<Record<RowMirrorEntity, MirrorEntitySpec>> =
   neighborhoods,
   streets,
   postalCodes,
+  forceConfig,
+  forceDiscountLimits,
 };

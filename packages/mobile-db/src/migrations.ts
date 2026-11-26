@@ -1,4 +1,5 @@
 import type { Migration } from "./migrator";
+import { taskMigrations } from "./tasks-migrations";
 
 /**
  * Production schema of the on-device database. Only what offline operation needs (never a copy of the server, and
@@ -340,4 +341,32 @@ export const migrations: readonly Migration[] = [
       ) STRICT`,
     ],
   },
+  {
+    // Owner 2026-11-26: offline edit of an existing customer (phone, e-mail, notes). One row per edit; sent after the customer creations and
+    // before the orders. `state`: queued | sending | conflict (the ERP copy changed meanwhile: both versions are kept for the seller) | rejected.
+    // Expand-only: one new table. No cost or margin (P-20).
+    version: 19,
+    name: "pending_customer_edit",
+    statements: [
+      `CREATE TABLE pending_customer_edit (
+        seq                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_request_id    TEXT NOT NULL UNIQUE,
+        owner_account_id     TEXT NOT NULL,
+        dataset_environment  TEXT NOT NULL,
+        dataset_id           TEXT NOT NULL,
+        customer_code        INTEGER NOT NULL,
+        customer_name        TEXT NOT NULL,
+        changes              TEXT NOT NULL,
+        base_contact_version TEXT,
+        state                TEXT NOT NULL,
+        server_version       TEXT,
+        last_error           TEXT,
+        attempts             INTEGER NOT NULL DEFAULT 0,
+        created_at           TEXT NOT NULL,
+        updated_at           TEXT NOT NULL
+      ) STRICT`,
+      `CREATE INDEX idx_pending_customer_edit_owner ON pending_customer_edit (owner_account_id, state, seq)`,
+    ],
+  },
+  ...taskMigrations,
 ];

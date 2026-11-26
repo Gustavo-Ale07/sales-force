@@ -4,6 +4,7 @@ import {
   routes,
   type CreateCustomerResponse,
   type CustomerDetail,
+  type CnpjLookup,
   type CustomerFinancial,
   type CustomerLettersResponse,
   type CustomerRegistrationsResponse,
@@ -15,6 +16,7 @@ import {
 import type { FastifyReply } from 'fastify';
 import { ApiRoute, Contract, type RequestContract } from '../http/route.js';
 import { CurrentUserParam, type CurrentUser } from '../iam/current-user.js';
+import { CnpjService } from './cnpj.service.js';
 import { CustomerRegistrationQueryService } from './customer-registration-query.service.js';
 import { CustomerRegistrationService } from './customer-registration.service.js';
 import { CustomerUpdateService } from './customer-update.service.js';
@@ -29,6 +31,7 @@ export class CustomersController {
     @Inject(CustomerRegistrationQueryService) private readonly registrationQueries: CustomerRegistrationQueryService,
     @Inject(CustomerUpdateService) private readonly updates: CustomerUpdateService,
     @Inject(PostalCodeService) private readonly postalCodes: PostalCodeService,
+    @Inject(CnpjService) private readonly cnpjs: CnpjService,
   ) {}
 
   @ApiRoute(routes.listCustomers)
@@ -65,6 +68,14 @@ export class CustomersController {
     @Contract() contract: RequestContract<typeof routes.lookupPostalCode>,
   ): Promise<PostalCodeLookup> {
     return this.postalCodes.lookup(user, contract.params.cep);
+  }
+
+  @ApiRoute(routes.lookupCnpj)
+  lookupCnpj(
+    @CurrentUserParam() user: CurrentUser,
+    @Contract() contract: RequestContract<typeof routes.lookupCnpj>,
+  ): Promise<CnpjLookup> {
+    return this.cnpjs.lookup(user, contract.params.cnpj);
   }
 
   @ApiRoute(routes.updateCustomer)

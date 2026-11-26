@@ -45,12 +45,13 @@
 --   erp_directory_user (ERP user code + seller code only),
 --   erp_carrier (carrier code, name, active flag),
 --   erp_city, erp_neighborhood, erp_street, erp_postal_code (ERP address registry for the customer registration picker and the CEP lookup),
+--   erp_force_config, erp_force_discount_limit (AD_FORCECFG / AD_FORCELIMDESC: parameters and seller discount rules registered inside the ERP, read-only mirror),
 --   erp_ipi_rate (IPI rate by ERP code, display estimate only),
 --   erp_open_title (open receivable titles, read-only financial information),
 --   erp_seller, erp_customer, erp_product, erp_product_group,
 --   erp_price_table, erp_price_table_version,
 --   erp_list_price                        S           S I U          worker mirror-writer upserts + soft delete (no DELETE). API is read-only (mirror.repository)
---   erp_sales_history_monthly,
+--   erp_sales_history_monthly, erp_seller_goal,
 --   erp_sales_history_customer_product    S           S I D          sales-history snapshots (stage D): the worker REPLACES the whole window in one transaction (DELETE + INSERT, no UPDATE). API is read-only (sales-history repository)
 --                                         + column UPDATE (synced_at) on erp_customer for force_api only: templates.repository takes
 --                                           SELECT ... FOR SHARE on the customer row, and PostgreSQL requires an UPDATE privilege for any
@@ -65,6 +66,12 @@
 --   customer_order_template_item          S I U D     -              templates.repository (items replaced)
 --   customer_registration                 S I         S D + U(cols)  api: INSERT of the registration request (hourly-limit count, idempotent replay and open-document lookup read it); worker: reads the status and closes it (confirmed/rejected/unknown) on delivery through a COLUMN grant UPDATE (status, erp_customer_code, rejection_code, updated_at) only; DELETE by the 30-day retention of rejected rows. The API never updates or deletes
 --   customer_registration_refusal         S I         S D            api: INSERT of a duplicate-document refusal and the hourly-limit count; carries no document data (account, reason, time). Worker: DELETE by the 24-hour purge (reads only to select by age), never inserts or updates
+--   cnpj_lookup_cache                     S I U       -              cnpj.service: cache of the public CNPJ lookup (no worker access)
+--   device                                S I U       -              device.repository: registration, approval, last-seen/last-sync
+--   device_setting                        S I U       -              device.repository: installation-wide device settings (offline max days)
+--   activity_task                         S I U       S U            tasks.repository (api); the notification sweep reads due tasks and flags the reminder sent (worker S U)
+--   notification                          S U         S I U          api marks as read; the notification sweep creates and pushes them (worker S I U)
+--   push_device                           S I U       S U            api registers the Expo token; the sweep disables dead tokens (worker S U)
 --   integration_outbox                    S I U D     S U            api: INSERT on submit (same transaction as order -> queued); DELETE with its order (D-Y, never-delivered orders only; the dry-run record goes by cascade);
 --                                                                      Row guard (migration 0039, trigger integration_outbox_customer_guard): rows of aggregate customer_registration are never deleted by any role and never updated by force_api (the grants stay table-wide because order rows share the table); updated_at is clamped and a status change restarts the 30-day clock; origin_id and aggregate binding are immutable once set.
 --                                                                       worker: claims and closes deliveries (SNK-7). The order gate trigger reads sales_order as the invoking role.
@@ -260,6 +267,12 @@ BEGIN
       ('customer_order_template',            'force_api',    'SELECT, INSERT, UPDATE'),
       ('customer_registration',              'force_api',    'SELECT, INSERT'),
       ('customer_registration_refusal',      'force_api',    'SELECT, INSERT'),
+      ('cnpj_lookup_cache',               'force_api',    'SELECT, INSERT, UPDATE'),
+      ('device',                          'force_api',    'SELECT, INSERT, UPDATE'),
+      ('device_setting',                  'force_api',    'SELECT, INSERT, UPDATE'),
+      ('activity_task',                   'force_api',    'SELECT, INSERT, UPDATE'),
+      ('notification',                    'force_api',    'SELECT, UPDATE'),
+      ('push_device',                     'force_api',    'SELECT, INSERT, UPDATE'),
       ('audit_log',                          'force_api',    'INSERT'),
       ('installation_configuration_version', 'force_api',    'SELECT'),
       ('sync_state',                         'force_api',    'SELECT'),
@@ -272,12 +285,15 @@ BEGIN
       ('erp_neighborhood',                   'force_api',    'SELECT'),
       ('erp_street',                         'force_api',    'SELECT'),
       ('erp_postal_code',                    'force_api',    'SELECT'),
+      ('erp_force_config',                   'force_api',    'SELECT'),
+      ('erp_force_discount_limit',           'force_api',    'SELECT'),
       ('erp_ipi_rate',                       'force_api',    'SELECT'),
       ('erp_open_title',                     'force_api',    'SELECT'),
       ('erp_customer',                       'force_api',    'SELECT'),
       ('erp_product',                        'force_api',    'SELECT'),
       ('erp_product_group',                  'force_api',    'SELECT'),
       ('erp_sales_history_monthly',          'force_api',    'SELECT'),
+      ('erp_seller_goal',                    'force_api',    'SELECT'),
       ('erp_sales_history_customer_product', 'force_api',    'SELECT'),
       ('erp_price_table',                    'force_api',    'SELECT'),
       ('erp_price_table_version',            'force_api',    'SELECT'),
@@ -302,16 +318,22 @@ BEGIN
       ('erp_neighborhood',                   'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_street',                         'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_postal_code',                    'force_worker', 'SELECT, INSERT, UPDATE'),
+      ('erp_force_config',                   'force_worker', 'SELECT, INSERT, UPDATE'),
+      ('erp_force_discount_limit',           'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_ipi_rate',                       'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_open_title',                     'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_customer',                       'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_product',                        'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_product_group',                  'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_sales_history_monthly',          'force_worker', 'SELECT, INSERT, DELETE'),
+      ('erp_seller_goal',                    'force_worker', 'SELECT, INSERT, DELETE'),
       ('erp_sales_history_customer_product', 'force_worker', 'SELECT, INSERT, DELETE'),
       ('erp_price_table',                    'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_price_table_version',            'force_worker', 'SELECT, INSERT, UPDATE'),
       ('erp_list_price',                     'force_worker', 'SELECT, INSERT, UPDATE'),
+      ('activity_task',                   'force_worker', 'SELECT, UPDATE'),
+      ('notification',                    'force_worker', 'SELECT, INSERT, UPDATE'),
+      ('push_device',                     'force_worker', 'SELECT, UPDATE'),
       ('product_media',                      'force_worker', 'SELECT, INSERT, UPDATE, DELETE')
     ) AS m(tbl, grantee, privs)
   LOOP

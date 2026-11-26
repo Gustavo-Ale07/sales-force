@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BackHandler, Pressable, ScrollView, Text, View } from "react-native";
+import { applyCnpjAnswer } from "../data/customer-cnpj";
 import { applyPostalCode, buildCreateRequest, commercialProblems, addressProblems, digitsOf, emptyCreateForm, hasProblems, identificationProblems, ADDRESS_LIMITS, type CreateForm, type CreateCustomerRequest, type IcmsClassificationOption, type SellerChoice } from "../data/customer-form";
 import type { AddressPort } from "../offline/address-port";
 import { CustomerRejectedError } from "../offline/pending-customers";
@@ -61,6 +62,7 @@ export function CustomerCreateScreen({ onSave, onClose, icmsOptions = [], seller
   const [failure, setFailure] = useState<string | null>(null);
   const busy = useRef(false);
   const lastCep = useRef("");
+  const lastCnpj = useRef("");
 
   const goBack = useCallback(() => {
     if (step === 0) onClose();
@@ -98,6 +100,21 @@ export function CustomerCreateScreen({ onSave, onClose, icmsOptions = [], seller
       current = false;
     };
   }, [form.postalCode, addresses]);
+
+  // A complete CNPJ fills the company data from the server (nothing happens offline or on failure; the form stays free).
+  useEffect(() => {
+    const cnpj = digitsOf(form.document);
+    if (form.personKind !== "company" || cnpj.length !== 14 || cnpj === lastCnpj.current || addresses.lookupCnpj === undefined) return;
+    lastCnpj.current = cnpj;
+    let current = true;
+    void addresses.lookupCnpj(cnpj).then((answer) => {
+      if (!current || answer === null) return;
+      setForm((now) => (digitsOf(now.document) === cnpj ? applyCnpjAnswer(now, answer) : now));
+    });
+    return () => {
+      current = false;
+    };
+  }, [form.document, form.personKind, addresses]);
 
   const stepProblems = (index: number): Record<string, string | null> =>
     index === 0 ? identificationProblems(form) : index === 1 ? addressProblems(form) : commercialProblems(form, { sellerRequired });

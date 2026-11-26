@@ -21,7 +21,7 @@ import {
 } from "./local-orders";
 import { DatasetUnavailableError, classifyEligibility, ineligibleMessage, readExpectedDataset, sameDataset, type DatasetIdentity, type IneligibleReason } from "./dataset-identity";
 import { isoNow, type OfflineEnv } from "./offline-env";
-import { pendingCustomerBlockOf } from "./pending-customer-guard";
+import { pendingCustomerBlockOf, pendingCustomerOrderGate } from "./pending-customer-guard";
 import { productBlockOf } from "./product-guard";
 import { customerBlockOf } from "./reference-cache";
 
@@ -86,6 +86,8 @@ export type TransportErrorKind =
   | "customer_ineligible"
   /** The server definitively refused to register a customer (`reason`: `document_already_registered`, `customer_rejected`). */
   | "registration_refused"
+  /** A customer edit made over a copy the ERP changed since (409 `customer_edit_conflict`); `fields` carries the current phone, email and contactVersion. */
+  | "edit_conflict"
   /** The server definitively refused to SEND the order to the ERP (`reason` = the catalog problem code: `customer_without_seller`, `erp_submission_disabled`, ...). */
   | "send_refused";
 
@@ -138,6 +140,7 @@ export function classifyFailure(kind: TransportErrorKind): FailureClass {
     case "auth":
       return "auth";
     case "version_conflict":
+    case "edit_conflict":
       return "conflict";
     case "validation":
     case "not_editable":
@@ -185,6 +188,8 @@ export function describeFailure(error: TransportError): string {
       return customerBlockMessage(error.reason);
     case "registration_refused":
       return "O servidor recusou o cadastro do cliente.";
+    case "edit_conflict":
+      return "Este cliente foi alterado no Sankhya. Escolha qual versão manter.";
     case "send_refused":
       return error.message !== "" ? error.message : "O servidor recusou o envio deste pedido.";
     case "validation":
@@ -506,6 +511,22 @@ async function holdForCustomer(db: SqlDatabase, env: OfflineEnv, draftLocalId: s
 }
 
 /**
+ * The customer of the order was refused or discarded: every unsent command ends `rejected` with the cause, and a confirmed order
+ * (send requested) shows "Precisa de correção". The order and its items stay; editing it (another customer) queues a new command.
+ */
+async function refuseForCustomer(db: SqlDatabase, env: OfflineEnv, draftLocalId: string, message: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    const now = isoNow(env);
+    await tx.execute("UPDATE outbox SET state = 'rejected', last_error = ?, next_attempt_at = NULL, updated_at = ? WHERE draft_local_id = ? AND state = 'pending'", [message, now, draftLocalId]);
+    await tx.execute(
+      "UPDATE local_order_draft SET send_state = 'refused', send_code = 'customer_refused', send_error = ?, send_next_attempt_at = NULL WHERE local_id = ? AND send_state = 'requested'",
+      [message, draftLocalId],
+    );
+    await refreshDraftStatus(tx, draftLocalId);
+  });
+}
+
+/**
  * Re-checks every draft marked as held for its customer against the CURRENT cache (run after each sync pull). A mark whose cause is
  * gone is cleared (the draft goes back to waiting; nothing is sent here); a mark whose cause changed gets the new text. Returns how
  * many drafts were released. Never changes attempts, keys or payloads.
@@ -521,7 +542,8 @@ export async function reevaluateHeldOrders(db: SqlDatabase, env: OfflineEnv, own
   for (const row of rows) {
     const draft = await getDraft(db, String(row.local_id));
     if (draft === null) continue;
-    const block = pendingCustomerBlockOf(draft.customerCode) ?? (await customerBlockOf(db, draft.customerCode)) ?? (await productBlockOf(db, draft.localId, draft.customerCode));
+    // A local (negative) customer code is decided by the push (wait behind the customer, or "Precisa de correção"), never by a mark.
+    const block = draft.customerCode < 0 ? null : (await customerBlockOf(db, draft.customerCode)) ?? (await productBlockOf(db, draft.localId, draft.customerCode));
     if (block !== null) {
       await holdForCustomer(db, env, draft.localId, block);
       continue;
@@ -609,7 +631,16 @@ export async function pushOutbox(
     // so it goes out by itself if the customer becomes available again. Nothing is converted, rewritten or deleted.
     // A customer the ERP has not confirmed yet (local code, or confirmed but not yet in the mirror) is held the same way.
     // The same hold covers a line whose product lost mobility or price (owner 2026-11-13): the lines are checked after the customer.
-    const customerBlock = pendingCustomerBlockOf(draft.customerCode) ?? (await customerBlockOf(db, draft.customerCode)) ?? (await productBlockOf(db, draft.localId, draft.customerCode));
+    // A customer created on this device that the ERP has not confirmed yet (local code): the order waits behind it, untouched, and goes
+    // out with the real code once the customer is confirmed (the confirmation re-points it). A refused or discarded customer sends the
+    // order to "Precisa de correção" with the translated cause and the way out. Nothing is lost; nothing negative reaches the server.
+    if (pendingCustomerBlockOf(draft.customerCode) !== null) {
+      heldDrafts.add(draft.localId);
+      const gate = await pendingCustomerOrderGate(db, ownerAccountId, draft.customerCode);
+      if (gate.kind === "refused") await refuseForCustomer(db, env, draft.localId, gate.message);
+      continue;
+    }
+    const customerBlock = (await customerBlockOf(db, draft.customerCode)) ?? (await productBlockOf(db, draft.localId, draft.customerCode));
     if (customerBlock !== null && draft.sendState === null) {
       // Only saved (not confirmed): the server copy simply waits; nothing is marked, nothing is shown. The reason shows on "Confirmar".
       heldDrafts.add(draft.localId);
@@ -807,16 +838,43 @@ export async function countSendRequests(
 /* ---------- seller actions on sync outcomes ---------- */
 
 /** The seller has seen the price differences: local price snapshots take the server values and the review is closed. */
-export async function acknowledgePriceReview(db: SqlDatabase, env: OfflineEnv, draftLocalId: string): Promise<void> {
+export class PriceReviewRefusalError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PriceReviewRefusalError";
+  }
+}
+
+/**
+ * P-09: accepts the new prices of the reviewed lines. `refusedProductCodes` (item-by-item review) leave the draft
+ * instead of taking the new price; a draft cannot be emptied by refusing every line.
+ */
+export async function acknowledgePriceReview(db: SqlDatabase, env: OfflineEnv, draftLocalId: string, refusedProductCodes: readonly number[] = []): Promise<void> {
   await db.transaction(async (tx) => {
     const draft = await getDraft(tx, draftLocalId);
     if (draft === null || draft.priceReview === null) return;
     const items = await getDraftItems(tx, draftLocalId);
+    const refused = new Set(refusedProductCodes);
+    if (refused.size > 0 && items.every((item) => refused.has(item.productCode))) {
+      throw new PriceReviewRefusalError("O pedido precisa ficar com ao menos um item.");
+    }
     const review = new Map(draft.priceReview.map((entry) => [entry.productCode, entry]));
     for (const item of items) {
+      if (refused.has(item.productCode)) continue;
       const entry = review.get(item.productCode);
       if (entry === undefined) continue;
       await tx.execute("UPDATE local_order_item SET price_json = ? WHERE draft_local_id = ? AND position = ?", [entry.serverPriceJson, draftLocalId, item.position]);
+    }
+    let next = 1;
+    for (const item of items) {
+      if (refused.has(item.productCode)) {
+        await tx.execute("DELETE FROM local_order_item WHERE draft_local_id = ? AND position = ?", [draftLocalId, item.position]);
+        continue;
+      }
+      if (item.position !== next) {
+        await tx.execute("UPDATE local_order_item SET position = ? WHERE draft_local_id = ? AND position = ?", [next, draftLocalId, item.position]);
+      }
+      next += 1;
     }
     await tx.execute("DELETE FROM outbox WHERE draft_local_id = ? AND state = 'needs_review' AND eligibility IN ('unchecked', 'eligible')", [draftLocalId]);
     await tx.execute("UPDATE local_order_draft SET price_review = NULL WHERE local_id = ?", [draftLocalId]);

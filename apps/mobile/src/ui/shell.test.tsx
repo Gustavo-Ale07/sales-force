@@ -45,7 +45,7 @@ function fakeOffline(
     unsentWork: async () => unsent,
     endSession,
     wipeAll: async () => undefined,
-    session: { load: async () => remembered, remember: async () => undefined, forget },
+    session: { load: async () => remembered, remember: async () => undefined, rememberOfflineMaxDays: async () => undefined, forget },
     forAccount: () => ({
       repositories,
       localOrders,
@@ -108,6 +108,8 @@ describe("Shell", () => {
     const stale = new Date(Date.now() - 30 * 86_400_000).toISOString();
     const { offline } = fakeOffline({ account, lastOnlineAt: stale });
     await render(<Shell dependencies={fakeDependencies({ auth: unreachable(), offline })} />);
+    expect(await screen.findByText("Conecte-se para continuar")).toBeTruthy();
+    fireEvent.press(screen.getByLabelText("Entrar"));
     expect(await screen.findByLabelText("Usuário")).toBeTruthy();
   });
 

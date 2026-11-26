@@ -23,6 +23,11 @@ export function isUnconfirmedCustomer(customer: Pick<CustomerListItem, "pending"
   return customer.pending !== undefined && customer.pending.state !== "confirmed";
 }
 
+/** A customer registered here that the ERP refused: the only unconfirmed customer that cannot take an order (owner 2026-11-26: the others queue the order behind the customer). */
+export function isRefusedCustomer(customer: Pick<CustomerListItem, "pending">): boolean {
+  return customer.pending !== undefined && customer.pending.state === "rejected";
+}
+
 /** The discreet pending-send indicator of a customer registered on this device; `null` for a customer that has its Sankhya code. */
 export function describePendingBadge(pending: CustomerListItem["pending"]): string | null {
   if (pending === undefined || pending.state === "confirmed") return null;

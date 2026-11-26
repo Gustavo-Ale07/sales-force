@@ -31,7 +31,7 @@ function controllable() {
     unsentWork: async () => 0,
     endSession: async () => ({ cleared: true, unsent: 0 }),
     wipeAll: async () => undefined,
-    session: { load: async () => ({ account, lastOnlineAt: new Date().toISOString() }), remember: async () => undefined, forget: async () => undefined },
+    session: { load: async () => ({ account, lastOnlineAt: new Date().toISOString() }), remember: async () => undefined, rememberOfflineMaxDays: async () => undefined, forget: async () => undefined },
     forAccount: () => ({
       repositories: fakeDependencies().repositories,
       localOrders: fakeLocalOrders(),

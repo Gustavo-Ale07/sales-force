@@ -1,3 +1,5 @@
+import { createNotificationsPort, createTasksPort, type NotificationsPort, type TasksPort } from "./tasks-service";
+import { createGoalsPort, type GoalsPort } from "./goals-service";
 import { clearReferenceCache, countUnsentLocalWork, createSyncManager, wipeLocalDatabase, type InternetState, type OfflineEnv, type SqlDatabase, type SyncManager } from "@salesforce/mobile-db";
 import type { Account } from "../auth/auth-port";
 import type { ApiClient } from "../data/api";
@@ -8,7 +10,7 @@ import { createAccountProductImages } from "../images/product-images";
 import { newClientRequestId } from "../lib/uuid";
 import { createAddressPort, type AddressPort } from "./address-port";
 import { createLocalOrdersPort, type LocalOrdersPort } from "./local-orders";
-import { createCustomerTransport } from "./customer-transport";
+import { createCustomerEditTransport, createCustomerTransport } from "./customer-transport";
 import { createOfflineFirstRepositories } from "./offline-repositories";
 import { createPendingCustomersPort, type PendingCustomersPort } from "./pending-customers";
 import { createReferenceSource } from "./reference-source";
@@ -25,6 +27,11 @@ export interface AccountServices {
   /** Cities, neighborhoods, streets and postal codes of the new-customer form (offline-first). */
   readonly addresses?: AddressPort;
   readonly sync: SyncManager;
+  /** Tasks (RF-ACT) and notification central (RF-NOT): created and read offline, synchronized with the same ids. */
+  readonly tasks?: TasksPort;
+  readonly notifications?: NotificationsPort;
+  /** M-24 and the Início panel (RF-GOL-1/2): goal, realized and positivation, kept on the device for offline use. */
+  readonly goals?: GoalsPort;
   /** RT-1: opens the server's change-ping stream; returns the function that closes it. Absent when the build has no streaming fetch. */
   readonly openEvents?: (onTopic: (topic: SyncEventTopic) => void, onConnection: (connected: boolean) => void) => () => void;
   /** Authenticated, bounded thumbnail files of this account (absent when the build has no image file system). */
@@ -63,6 +70,7 @@ export function createOfflineServices(deps: {
   const env: OfflineEnv = deps.env ?? { now: () => new Date(), newId: newClientRequestId };
   const transport = createOrderTransport(deps.api);
   const customerTransport = createCustomerTransport(deps.api);
+  const customerEditTransport = createCustomerEditTransport(deps.api);
   const source = createReferenceSource(deps.api);
   const managers = new Map<string, AccountServices>();
 
@@ -93,6 +101,7 @@ export function createOfflineServices(deps: {
         env,
         transport,
         customerTransport,
+        customerEditTransport,
         source,
         ownerAccountId: account.id,
         ...(deps.onUnexpectedError === undefined ? {} : { onUnexpectedError: deps.onUnexpectedError }),
@@ -129,6 +138,9 @@ export function createOfflineServices(deps: {
           },
         }),
         addresses: createAddressPort({ db: deps.db, env, api: deps.api }),
+        tasks: createTasksPort({ db: deps.db, env, api: deps.api, ownerAccountId: account.id }),
+        notifications: createNotificationsPort({ db: deps.db, env, api: deps.api, ownerAccountId: account.id }),
+        goals: createGoalsPort({ db: deps.db, api: deps.api, ownerAccountId: account.id }),
         sync,
         ...(deps.imageFileSystem === undefined
           ? {}

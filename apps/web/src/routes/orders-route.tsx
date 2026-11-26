@@ -6,6 +6,7 @@ import { TemplateSkippedNotice } from "../components/template-skipped-notice";
 import { parseOrdersSearch } from "../lib/route-search";
 import type { OrderNoticeState } from "../lib/order-templates";
 import { asInt } from "../lib/search-params";
+import { OrderPriceReviewDialog } from "../components/order-price-review-dialog";
 import { OrderEditorPage } from "./order-editor";
 import { OrdersPage } from "./orders";
 
@@ -55,19 +56,22 @@ export function OrderRoute() {
   if (!id) return <NotFound />;
   const skippedLines = orderNotice?.skippedLines;
   return (
-    <OrderEditorPage
-      orderId={id}
-      onCreated={() => undefined}
-      onClose={() => void navigate({ to: "/pedidos" })}
-      notice={
-        orderNotice && skippedLines && skippedLines.length > 0 && !dismissed ? (
-          <TemplateSkippedNotice
-            lines={skippedLines}
-            description={orderNoticeDescriptions[orderNotice.source]}
-            onDismiss={() => setDismissed(true)}
-          />
-        ) : undefined
-      }
-    />
+    <>
+      <OrderPriceReviewDialog orderId={id} />
+      <OrderEditorPage
+        orderId={id}
+        onCreated={() => undefined}
+        onClose={() => void navigate({ to: "/pedidos" })}
+        notice={
+          orderNotice && skippedLines && skippedLines.length > 0 && !dismissed ? (
+            <TemplateSkippedNotice
+              lines={skippedLines}
+              description={orderNoticeDescriptions[orderNotice.source]}
+              onDismiss={() => setDismissed(true)}
+            />
+          ) : undefined
+        }
+      />
+    </>
   );
 }

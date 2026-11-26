@@ -1,19 +1,20 @@
 import { Pressable, StyleSheet, Text } from "react-native";
 import type { CustomerListItem, CustomerRepository } from "../data/ports";
-import { hasNoSeller, isUnconfirmedCustomer, NO_SELLER_ORDER_MESSAGE, PENDING_CUSTOMER_ORDER_MESSAGE } from "../data/pending-status";
+import { hasNoSeller, isRefusedCustomer, isUnconfirmedCustomer, NO_SELLER_ORDER_MESSAGE, PENDING_CUSTOMER_ORDER_MESSAGE } from "../data/pending-status";
 import { colors, spacing } from "../theme";
 import { describeCustomerStatus } from "./customers-screen";
 import { PagedListView } from "./paged-list-view";
 
 function PickRow({ customer, onSelect, allowUnavailable }: { customer: CustomerListItem; onSelect: (customer: CustomerListItem) => void; allowUnavailable: boolean }) {
   const status = describeCustomerStatus(customer);
-  // A customer the ERP has not confirmed can never start an order, even where blocked/inactive ones are allowed.
+  // A customer the ERP refused can never start an order; one still waiting takes the order queued behind it.
   const unconfirmed = isUnconfirmedCustomer(customer);
   // The badge of a customer created here is not a block reason; only blocked/inactive are.
   const unavailable = customer.blocked || !customer.active;
   // A customer without a seller cannot start an order (owner 2026-11-13); filtering past orders may still reach it.
   const noSeller = hasNoSeller(customer);
-  const disabled = unconfirmed || ((unavailable || noSeller) && !allowUnavailable);
+  const refused = isRefusedCustomer(customer);
+  const disabled = refused || ((unavailable || noSeller) && !allowUnavailable);
   return (
     <Pressable
       style={({ pressed }) => [styles.row, disabled && styles.rowDisabled, pressed && !disabled && styles.rowPressed]}
@@ -33,7 +34,7 @@ function PickRow({ customer, onSelect, allowUnavailable }: { customer: CustomerL
       {noSeller && <Text style={styles.status}>Sem vendedor</Text>}
       {noSeller && !allowUnavailable && <Text style={styles.status}>{NO_SELLER_ORDER_MESSAGE}</Text>}
       {status !== null && <Text style={styles.status}>{status}</Text>}
-      {unconfirmed && <Text style={styles.status}>{PENDING_CUSTOMER_ORDER_MESSAGE}</Text>}
+      {refused && <Text style={styles.status}>{PENDING_CUSTOMER_ORDER_MESSAGE}</Text>}
     </Pressable>
   );
 }

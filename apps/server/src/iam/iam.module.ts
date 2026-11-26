@@ -1,6 +1,7 @@
 import { Global, Module, type DynamicModule, type Provider } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigurationModule } from '../configuration/configuration.module.js';
+import { MirrorModule } from '../mirror/mirror.module.js';
 import { AccessGuard } from './access.guard.js';
 import { AccountPhotoController } from './account-photo.controller.js';
 import { AccountPhotoRepository } from './account-photo.repository.js';
@@ -9,6 +10,9 @@ import { AccountRepository } from './account.repository.js';
 import { AccountService } from './account.service.js';
 import { AuditService } from './audit.service.js';
 import { AuthController } from './auth.controller.js';
+import { DeviceController } from './device.controller.js';
+import { DeviceRepository } from './device.repository.js';
+import { DeviceService } from './device.service.js';
 import { AuthService } from './auth.service.js';
 import { assertSafeAuthConfig, type AuthConfig } from './auth-config.js';
 import { DrizzleExternalAccountLinks } from './drizzle-external-account-links.js';
@@ -45,8 +49,8 @@ export class IamModule {
         : [];
     return {
       module: IamModule,
-      imports: [ConfigurationModule],
-      controllers: [AuthController, AccountPhotoController],
+      imports: [ConfigurationModule, MirrorModule],
+      controllers: [AuthController, AccountPhotoController, DeviceController],
       providers: [
         { provide: AUTH_CONFIG, useValue: config },
         { provide: PASSWORD_HASHER, useValue: new Argon2idPasswordHasher(config.passwordHash) },
@@ -54,6 +58,8 @@ export class IamModule {
         AccountPhotoRepository,
         AccountPhotoService,
         SessionRepository,
+        DeviceRepository,
+        DeviceService,
         ThrottleRepository,
         AuditService,
         AuthService,
@@ -63,7 +69,7 @@ export class IamModule {
         // Global default-deny guard: every handler of the process passes through it.
         { provide: APP_GUARD, useClass: AccessGuard },
       ],
-      exports: [AuthService, AccountService, PolicyService, AuditService],
+      exports: [AuthService, AccountService, PolicyService, AuditService, DeviceService],
     };
   }
 }

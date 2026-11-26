@@ -121,33 +121,34 @@ export function OrderTemplatesCard({ customerCode }: OrderTemplatesCardProps) {
   // on success and on every definitive answer (409, 404, other 4xx): the next click is then a genuinely new attempt.
   const requestIds = useRef(new Map<string, string>());
   const use = useMutation({
-    mutationFn: (template: OrderTemplate) => {
+    mutationFn: ({ template, asQuotation }: { template: OrderTemplate; asQuotation: boolean }) => {
       // Unknown dataset blocks the action before a request id is even reserved.
       const expectedDataset = requireDataset(loadedDataset);
-      let clientRequestId = requestIds.current.get(template.id);
+      const key = asQuotation ? `${template.id}:quotation` : template.id;
+      let clientRequestId = requestIds.current.get(key);
       if (!clientRequestId) {
         clientRequestId = newUuid();
-        requestIds.current.set(template.id, clientRequestId);
+        requestIds.current.set(key, clientRequestId);
       }
-      return createOrderFromTemplate(api, template.id, { clientRequestId, expectedDataset });
+      return createOrderFromTemplate(api, template.id, { clientRequestId, expectedDataset, ...(asQuotation ? { asQuotation: true } : {}) });
     },
-    onError: (error, template) => {
+    onError: (error, { template, asQuotation }) => {
       const status = errorStatus(error);
       const unknownOutcome = status === undefined || status === 0 || status >= 500 || status === 429;
-      if (!unknownOutcome) requestIds.current.delete(template.id);
+      if (!unknownOutcome) requestIds.current.delete(asQuotation ? `${template.id}:quotation` : template.id);
       // The template changed or is gone: the list on screen is stale.
       if (status === 404 || describeTemplateError(error, "", "use").reason === "version_conflict") {
         void queryClient.invalidateQueries({ queryKey: queryKeys.orderTemplates(customerCode) });
       }
     },
-    onSuccess: async (result, template) => {
-      requestIds.current.delete(template.id);
+    onSuccess: async (result, { template, asQuotation }) => {
+      requestIds.current.delete(asQuotation ? `${template.id}:quotation` : template.id);
       queryClient.setQueryData(queryKeys.order(result.order.id), result.order);
       // Refreshing other screens must not delay opening the new draft.
       void queryClient.invalidateQueries({ queryKey: queryKeys.ordersAll });
       void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
       if (result.skippedLines.length === 0) {
-        toast({ title: "Pedido preenchido a partir do modelo", description: template.name, tone: "success" });
+        toast({ title: asQuotation ? "Orçamento preenchido a partir do modelo" : "Pedido preenchido a partir do modelo", description: template.name, tone: "success" });
       }
       await navigate({
         to: "/pedidos/$id",
@@ -223,11 +224,21 @@ export function OrderTemplatesCard({ customerCode }: OrderTemplatesCardProps) {
                       variant="primary"
                       leftIcon={<Play size={12} aria-hidden="true" />}
                       aria-label={`Usar modelo ${template.name}`}
-                      loading={use.isPending && use.variables?.id === template.id}
+                      loading={use.isPending && use.variables?.template.id === template.id}
                       disabled={use.isPending}
-                      onClick={() => use.mutate(template)}
+                      onClick={() => use.mutate({ template, asQuotation: false })}
                     >
                       Usar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      aria-label={`Criar orçamento do modelo ${template.name}`}
+                      loading={use.isPending && use.variables?.template.id === template.id && use.variables.asQuotation}
+                      disabled={use.isPending}
+                      onClick={() => use.mutate({ template, asQuotation: true })}
+                    >
+                      Orçamento
                     </Button>
                     <Button
                       size="sm"

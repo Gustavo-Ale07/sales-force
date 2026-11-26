@@ -25,6 +25,7 @@ import { ApiRequestError } from "../data/api";
 import { PriceTableNotDownloadedError } from "../data/errors";
 import { toPendingListItem } from "./pending-customers";
 import { datasetIdentityOf } from "./reference-source";
+import { sellerLimitApplier } from "./seller-discount-limit";
 import type { Carrier, CustomerListItem, OrderEntryConfiguration, ProductListItem, Repositories } from "../data/ports";
 
 /**
@@ -88,7 +89,8 @@ export function createOfflineFirstRepositories(deps: {
         const table = customerCode === undefined ? null : ((await customerPriceTableOf(db, customerCode)) ?? null);
         if (table !== null && !(await cachedPriceTableCodes(db)).includes(table)) throw new PriceTableNotDownloadedError();
         const page = await searchProducts<ProductListItem>(db, table !== null ? { ...local, priceTableCode: table } : local);
-        return { items: page.items, page: page.page, pageSize: page.pageSize, total: page.total };
+        const withLimit = await sellerLimitApplier(db);
+        return { items: page.items.map(withLimit), page: page.page, pageSize: page.pageSize, total: page.total };
       },
       async pricesOrigin(customerCode) {
         if (!(await cacheReady())) return null;
@@ -110,7 +112,7 @@ export function createOfflineFirstRepositories(deps: {
       async get(code) {
         if (await cacheReady()) {
           const cached = await getCachedProduct<ProductListItem>(db, code);
-          if (cached !== null) return cached;
+          if (cached !== null) return (await sellerLimitApplier(db))(cached);
         }
         return remote.products.get(code);
       },

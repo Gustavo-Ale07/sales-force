@@ -10,6 +10,7 @@ import {
   isUnknownOutcome,
   LIMITS,
   type EditForm,
+  type UpdateCustomerBody,
 } from "../data/customer-form";
 import type { CustomerWritePort, UpdateCustomerResult } from "../data/customer-write";
 import { newClientRequestId } from "../lib/uuid";
@@ -19,6 +20,8 @@ export interface CustomerEditScreenProps {
   readonly customerName: string;
   readonly code: number;
   readonly writer: CustomerWritePort;
+  /** Stores the edit in the local queue (sent by the next sync); used while offline. */
+  readonly queueOffline?: (body: UpdateCustomerBody) => Promise<void>;
   readonly connectivity?: ConnectivityState;
   readonly onClose: () => void;
   /** Id source, injectable for tests. */
@@ -29,7 +32,7 @@ export interface CustomerEditScreenProps {
  * Edit of phone, e-mail and notes (D-AP). Online only: the app has no local edit queue yet, so offline says so and sends nothing.
  * Only the filled fields are sent. The request id is kept after a lost answer and replaced once the answer is final or the form changes.
  */
-export function CustomerEditScreen({ customerName, code, writer, connectivity, onClose, newId = newClientRequestId }: CustomerEditScreenProps) {
+export function CustomerEditScreen({ customerName, code, writer, queueOffline, connectivity, onClose, newId = newClientRequestId }: CustomerEditScreenProps) {
   const [form, setForm] = useState<EditForm>(emptyEditForm);
   const [showProblems, setShowProblems] = useState(false);
   const [sending, setSending] = useState(false);
@@ -59,7 +62,19 @@ export function CustomerEditScreen({ customerName, code, writer, connectivity, o
     setFailure(null);
     if (hasEditProblems(problems)) return;
     if (connectivity === "offline") {
-      setFailure({ message: "Sem conexão com o servidor. Nada foi alterado.", fields: {} });
+      if (queueOffline === undefined) {
+        setFailure({ message: "Sem conexão com o servidor. Nada foi alterado.", fields: {} });
+        return;
+      }
+      setSending(true);
+      try {
+        await queueOffline(buildUpdateBody(newId(), form));
+        onClose();
+      } catch (error) {
+        setFailure({ message: error instanceof Error ? error.message : "Não foi possível guardar a alteração.", fields: {} });
+      } finally {
+        setSending(false);
+      }
       return;
     }
     requestId.current ??= newId();

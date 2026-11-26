@@ -7,8 +7,12 @@ import type { CustomerListItem } from "../data/ports";
 import { lineFromProduct, type EditorLine } from "../data/order-draft";
 import { ProductImageProvider } from "../images/product-image-context";
 import { evaluateOfflineAccess } from "../offline/session";
+import { onDeviceRevoked } from "../device/revocation";
+import { useDeviceGate } from "../device/use-device-gate";
+import { DeviceNoticeScreen } from "./device-notice-screen";
 import { useSyncStatus } from "../offline/use-sync";
 import { colors, HEADER_HEIGHT, spacing } from "../theme";
+import { Icon } from "./icons";
 import { AppModalProvider } from "./app-modal";
 import { ErrorActionsContext, useErrorPopup } from "./use-error-popup";
 import { BottomNav, type MainTab } from "./bottom-nav";
@@ -18,7 +22,9 @@ import { CustomerCreateScreen } from "./customer-create-screen";
 import { useIcmsOptions } from "../data/icms-options";
 import { useSellerChoices } from "./use-seller-choices";
 import { CustomerEditScreen } from "./customer-edit-screen";
+import { CustomerEditConflictWatcher } from "./customer-edit-conflict";
 import { OrderTemplateFormScreen } from "./order-template-form-screen";
+import { ImportScreen } from "./import-screen";
 import { OrderTemplatesSection } from "./order-templates-section";
 import { CustomersScreen } from "./customers-screen";
 import { SalesScreen } from "./sales-screen";
@@ -32,6 +38,9 @@ import { installUpdate, updateAvailable } from "../update/device-update";
 import { ProfileScreen } from "./profile-screen";
 import { Avatar, useProfilePhotoUri } from "./avatar";
 import { QuarantineScreen } from "./quarantine-screen";
+import { GoalsScreen } from "./goals-screen";
+import { TasksScreen } from "./tasks-screen";
+import { NotificationsScreen } from "./notifications-screen";
 import { HeaderSyncStatus } from "./sync-status";
 import { SyncProgressOverlay } from "./sync-progress-overlay";
 import { useInsets } from "./use-insets";
@@ -76,6 +85,8 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   const insets = useInsets();
   const keyboardVisible = useKeyboardVisible();
   const [session, setSession] = useState<Session>({ phase: "checking" });
+  /** M-18 / M-19: a full-screen notice shown instead of the login form until the seller acts. */
+  const [notice, setNotice] = useState<"locked" | "revoked" | null>(null);
   const [tab, setTab] = useState<MainTab>("home");
   const [visited, setVisited] = useState<ReadonlySet<MainTab>>(() => new Set<MainTab>(["home"]));
   const [salesView, setSalesView] = useState<SalesView>("orders");
@@ -93,19 +104,22 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   const orderControl = useRef<NewOrderControl | null>(null);
   const [resumeLocalId, setResumeLocalId] = useState<string | null>(null);
   const [quarantineOpen, setQuarantineOpen] = useState(false);
+  const [panel, setPanel] = useState<"tasks" | "notifications" | "goals" | null>(null);
   const [quarantinedCount, setQuarantinedCount] = useState(0);
   const [quarantineTick, setQuarantineTick] = useState(0);
   const [customerDetail, setCustomerDetail] = useState<CustomerListItem | null>(null);
   /** The customer form open over the Clientes tab; one at a time. */
-  const [customerForm, setCustomerForm] = useState<{ kind: "create" } | { kind: "edit"; customer: CustomerListItem } | { kind: "template"; customer: CustomerListItem } | null>(null);
+  const [customerForm, setCustomerForm] = useState<{ kind: "create" } | { kind: "edit"; customer: CustomerListItem } | { kind: "template"; customer: CustomerListItem } | { kind: "import"; importKind: "order_items" | "customers" } | null>(null);
   const [customerFlags, setCustomerFlags] = useState({ create: false, edit: false });
-  const [startRequest, setStartRequest] = useState<{ nonce: number; customer: Pick<CustomerListItem, "code" | "name">; lines?: readonly EditorLine[] } | null>(null);
+  const [startRequest, setStartRequest] = useState<{ nonce: number; customer: Pick<CustomerListItem, "code" | "name">; lines?: readonly EditorLine[]; quotation?: boolean } | null>(null);
   const connectivityState = useConnectivity(connectivity);
   const account = session.phase === "authenticated" ? session.account : null;
   // One set of services per signed-in account: cache-backed reads, local drafts and the sync manager.
   const photoService = dependencies.profilePhoto;
   const photoUri = useProfilePhotoUri(photoService?.store, account?.id ?? "", account?.photoVersion, connectivityState !== "offline");
-  const services = useMemo(() => (account !== null && offline !== undefined ? offline.forAccount(account) : null), [account, offline]);
+  // AUTH-2: a device still pending approval holds no business data and does not synchronize.
+  const deviceGate = useDeviceGate({ device: dependencies.device, session: offline?.session, active: session.phase === "authenticated" && !session.offlineEntry });
+  const services = useMemo(() => (account !== null && offline !== undefined && deviceGate !== "pending" ? offline.forAccount(account) : null), [account, offline, deviceGate]);
   const repositories = services?.repositories ?? dependencies.repositories;
   const icmsOptions = useIcmsOptions();
   const customerWriter = dependencies.customerWrite;
@@ -121,6 +135,30 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   // RT-1: opening the orders list or one order's detail asks the server to re-read the open orders (cap and cooldown in the engine).
   const ordersAreaKey = tab === "sales" && salesView === "orders" ? `orders:${saleDetailOpen}` : undefined;
   const syncStatus = useSyncStatus(services?.sync ?? null, connectivityState, session.phase === "authenticated" && session.freshLogin === true, services?.openEvents, ordersAreaKey);
+  // The server's record of this device's last synchronization (shown on the site's Aparelhos screen).
+  const lastSyncedAt = syncStatus.lastSyncedAt;
+  useEffect(() => {
+    if (lastSyncedAt === null || dependencies.device === undefined) return;
+    void dependencies.device.reportSync(new Date(lastSyncedAt)).catch(() => undefined);
+  }, [lastSyncedAt, dependencies.device]);
+  // M-19: the server told this installation it was revoked. Wipe everything local (database, cached images, photo, identity) and say so.
+  useEffect(
+    () =>
+      onDeviceRevoked(() => {
+        void (async () => {
+          await offline?.wipeAll().catch(() => undefined);
+          await services?.productImages?.purge().catch(() => undefined);
+          await photoService?.store.purge().catch(() => undefined);
+          await dependencies.device?.resetIdentity().catch(() => undefined);
+          setQuarantineOpen(false);
+          setCustomerDetail(null);
+          setCustomerForm(null);
+          setNotice("revoked");
+          setSession({ phase: "anonymous" });
+        })();
+      }),
+    [offline, services, photoService, dependencies.device],
+  );
   const clearResume = useCallback(() => setResumeLocalId(null), []);
   const clearStart = useCallback(() => setStartRequest(null), []);
   // Retained (quarantined) orders: re-counted whenever the sync counters move or the seller changes them.
@@ -148,6 +186,18 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
       current = false;
     };
   }, [pendingCustomers, syncStatus.phase, syncStatus.pending, syncStatus.needsAttention]);
+  // Tasks and notifications: read the server lists and send what was done offline whenever the device is online with a session.
+  useEffect(() => {
+    if (services === null || connectivityState === "offline") return;
+    void services.tasks?.sync().catch(() => undefined);
+    void services.notifications?.refresh().catch(() => undefined);
+  }, [services, connectivityState, syncStatus.phase]);
+  const push = dependencies.push;
+  useEffect(() => {
+    if (services === null || push === undefined || connectivityState === "offline") return;
+    void push.register();
+  }, [services, push, connectivityState]);
+  useEffect(() => (push === undefined ? undefined : push.onOpen((target) => setPanel(target.refType === "task" ? "tasks" : "notifications"))), [push]);
   const closeQuarantine = useCallback(() => setQuarantineOpen(false), []);
   const quarantineChanged = useCallback(() => setQuarantineTick((n) => n + 1), []);
   const syncNow = useCallback(() => {
@@ -203,7 +253,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   const syncOverlayOn = syncStatus.phase === "syncing" && (syncStatus.steps ?? null) !== null;
   const backState = useRef<Omit<BackState, "now">>({ overlay: "none", tab, wizardOpen: false, saleDetailOpen: false, customerDetailOpen: false, exitArmedAt: null });
   backState.current = {
-    overlay: syncOverlayOn ? "sync" : quarantineOpen ? "quarantine" : "none",
+    overlay: syncOverlayOn ? "sync" : quarantineOpen ? "quarantine" : panel !== null ? "panel" : "none",
     tab,
     wizardOpen: salesView === "newOrder",
     saleDetailOpen,
@@ -221,6 +271,9 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
           break;
         case "close_quarantine":
           setQuarantineOpen(false);
+          break;
+        case "close_panel":
+          setPanel(null);
           break;
         case "wizard_back":
           orderControl.current?.back();
@@ -282,6 +335,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
         } catch {
           // an unreadable remembered session is the same as none
         }
+        if (active && !access.allowed && access.reason === "expired") setNotice("locked");
         if (active) setSession(access.allowed ? { phase: "authenticated", account: access.session.account, offlineEntry: true } : { phase: "anonymous" });
       });
     return () => {
@@ -305,6 +359,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
    * a sign-out; the downloaded cache is cleared only when nothing is unsent (owner 2026-11-13).
    */
   async function signOut() {
+    await dependencies.push?.unregister();
     try {
       await auth.logout();
     } catch (error) {
@@ -341,6 +396,10 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
   }
 
   if (session.phase === "checking") return <SplashView />;
+
+  if (session.phase === "anonymous" && notice !== null) return <DeviceNoticeScreen kind={notice} onAction={() => setNotice(null)} />;
+
+  if (session.phase === "authenticated" && deviceGate === "pending") return <DeviceNoticeScreen kind="pending" onAction={() => void signOut()} />;
 
   if (session.phase === "anonymous") {
     return (
@@ -406,6 +465,16 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
         <BrandLogo height={24} />
         <View style={styles.headerSpacer} />
         {services !== null && <HeaderSyncStatus {...syncView} />}
+        {services?.tasks !== undefined && (
+          <Pressable onPress={() => setPanel("tasks")} accessibilityRole="button" accessibilityLabel="Abrir tarefas" hitSlop={8} testID="header-tasks">
+            <Icon name="check" color={colors.onNavy} size={22} />
+          </Pressable>
+        )}
+        {services?.notifications !== undefined && (
+          <Pressable onPress={() => setPanel("notifications")} accessibilityRole="button" accessibilityLabel="Abrir notificações" hitSlop={8} testID="header-notifications">
+            <Icon name="alert" color={colors.onNavy} size={22} />
+          </Pressable>
+        )}
         <Pressable onPress={() => selectTab("profile")} accessibilityRole="button" accessibilityLabel="Abrir perfil" hitSlop={8} testID="header-avatar">
           <Avatar name={session.account.displayName} size={32} uri={photoUri} onNavy />
         </Pressable>
@@ -434,6 +503,8 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
                 selectTab("sales");
               }}
               {...(dependencies.dashboard !== undefined ? { dashboard: dependencies.dashboard } : {})}
+              {...(services?.goals !== undefined ? { goals: services.goals, onOpenGoals: () => setPanel("goals") } : {})}
+              {...(services?.tasks !== undefined ? { tasks: services.tasks } : {})}
               {...(services === null ? {} : { onSyncNow: syncNow })}
             />
           </Pane>
@@ -447,6 +518,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
                 onOpen={setCustomerDetail}
                 {...(dependencies.dashboard !== undefined ? { dashboard: dependencies.dashboard } : {})}
                 {...(customerFlags.create && pendingCustomers !== null ? { onCreate: () => setCustomerForm({ kind: "create" }) } : {})}
+                {...(dependencies.imports !== undefined && dependencies.importFile !== undefined ? { onImport: (importKind: "order_items" | "customers") => setCustomerForm({ kind: "import", importKind }) } : {})}
                 {...(pendingCustomers !== null
                   ? {
                       onDiscardPending: (picked: CustomerListItem) => {
@@ -489,8 +561,8 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
                           products={repositories.products}
                           orders={repositories.orders}
                           onCreate={() => setCustomerForm({ kind: "template", customer: customerDetail })}
-                          onUse={(lines) => {
-                            setStartRequest({ nonce: Date.now(), customer: { code: customerDetail.code, name: customerDetail.name }, lines });
+                          onUse={(lines, _template, quotation) => {
+                            setStartRequest({ nonce: Date.now(), customer: { code: customerDetail.code, name: customerDetail.name }, lines, ...(quotation ? { quotation: true } : {}) });
                             setCustomerDetail(null);
                             setSalesView("newOrder");
                             selectTab("sales");
@@ -543,11 +615,34 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
                 onClose={() => setCustomerForm(null)}
               />
             )}
+            {customerForm?.kind === "import" && dependencies.imports !== undefined && dependencies.importFile !== undefined && (
+              <ImportScreen
+                kind={customerForm.importKind}
+                imports={dependencies.imports}
+                files={dependencies.importFile}
+                customers={repositories.customers}
+                online={connectivityState !== "offline"}
+                onUnauthenticated={expire}
+                onClose={() => {
+                  setCustomerForm(null);
+                  setEpochs((current) => ({ ...current, customers: current.customers + 1 }));
+                }}
+              />
+            )}
+            <CustomerEditConflictWatcher port={pendingCustomers} tick={`${syncStatus.phase}:${syncStatus.pending}:${syncStatus.needsAttention}`} />
             {customerForm?.kind === "edit" && dependencies.customerWrite !== undefined && (
               <CustomerEditScreen
                 customerName={customerForm.customer.name}
                 code={customerForm.customer.code}
                 writer={dependencies.customerWrite}
+                {...(pendingCustomers?.queueEdit !== undefined
+                  ? {
+                      queueOffline: (body) => {
+                        const { clientRequestId: _id, ...changes } = body;
+                        return pendingCustomers.queueEdit!(customerForm.customer.code, customerForm.customer.name, changes, (customerForm.customer as { contactVersion?: string }).contactVersion ?? null);
+                      },
+                    }
+                  : {})}
                 connectivity={connectivityState}
                 onClose={() => setCustomerForm(null)}
               />
@@ -581,6 +676,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
                     })}
                 startRequest={startRequest}
                 onStartConsumed={clearStart}
+                {...(dependencies.orderTemplates !== undefined ? { templates: dependencies.orderTemplates } : {})}
               />
             </View>
             )}
@@ -625,6 +721,24 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
           {quarantineOpen && services !== null && (
             <View style={styles.overlay}>
               <QuarantineScreen localOrders={services.localOrders} onBack={closeQuarantine} onChanged={quarantineChanged} />
+            </View>
+          )}
+          {panel === "goals" && services?.goals !== undefined && (
+            <View style={styles.overlay}>
+              <GoalsScreen goals={services.goals} onBack={() => setPanel(null)} />
+            </View>
+          )}
+          {(panel === "tasks" || panel === "notifications") && services?.tasks !== undefined && services.notifications !== undefined && (
+            <View style={styles.overlay}>
+              {panel === "tasks" ? (
+                <TasksScreen tasks={services.tasks} onBack={() => setPanel(null)} />
+              ) : (
+                <NotificationsScreen
+                  notifications={services.notifications}
+                  onBack={() => setPanel(null)}
+                  onOpenTarget={(target) => setPanel(target.refType === "task" ? "tasks" : null)}
+                />
+              )}
             </View>
           )}
         </View>

@@ -57,9 +57,11 @@ export const CustomerListItemSchema = named(
      * the financial area and overdue titles; absent/false otherwise. Information only: it never blocks a sale.
      */
     overdue: z.boolean().optional(),
+    /** Fingerprint of the mirrored phone and e-mail: the app sends it back as `baseContactVersion` to detect an edit made over a stale copy. */
+    contactVersion: z.string().optional(),
   }),
 );
-export type CustomerListItem = z.infer<typeof CustomerListItemSchema>;
+export type CustomerListItem= z.infer<typeof CustomerListItemSchema>;
 
 export const CustomersResponseSchema = paginated('CustomersResponse', CustomerListItemSchema);
 export type CustomersResponse = z.infer<typeof CustomersResponseSchema>;

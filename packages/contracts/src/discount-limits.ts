@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { IsoTimestampSchema, named } from './primitives.js';
+import { IsoTimestampSchema, codeInt, named } from './primitives.js';
 
 /** A limit as the admin screen handles it: a percentage with up to two decimals, 0 to 99.99 (inclusive, Q7). */
 const LimitSchema = z.string().regex(/^\d{1,2}(\.\d{1,2})?$/);
@@ -33,3 +33,29 @@ export const UpdateDiscountLimitsRequestSchema = named(
   z.strictObject({ expectedRevision: z.string().min(1), limits: DiscountLimitsSchema }),
 );
 export type UpdateDiscountLimitsRequest = z.infer<typeof UpdateDiscountLimitsRequestSchema>;
+
+/* ---------- per-seller limits registered inside the ERP and mirrored read-only: general, group (any depth), product ---------- */
+
+/** An ERP percentage: 0 to 100, up to four decimals. */
+const ErpPercentSchema = z.string().regex(/^(100(\.0+)?|\d{1,2}(\.\d{1,4})?)$/);
+
+export const SellerDiscountKindSchema = named('SellerDiscountKind', z.enum(['general', 'group', 'product']));
+export type SellerDiscountKind = z.infer<typeof SellerDiscountKindSchema>;
+
+/** A rule as the client resolves it: `code` is the group or product code, `null` for the general rule. */
+export const SellerDiscountRuleSchema = named(
+  'SellerDiscountRule',
+  z.object({
+    kind: SellerDiscountKindSchema,
+    code: codeInt().nullable(),
+    percent: ErpPercentSchema,
+  }),
+);
+export type SellerDiscountRuleDto = z.infer<typeof SellerDiscountRuleSchema>;
+
+/** `GET /discount-limits/mine`: ONLY the caller's own seller rules (offline sync of the seller); never other sellers'. */
+export const MyDiscountLimitsResponseSchema = named(
+  'MyDiscountLimitsResponse',
+  z.object({ sellerCode: codeInt().nullable(), rules: z.array(SellerDiscountRuleSchema) }),
+);
+export type MyDiscountLimitsResponse = z.infer<typeof MyDiscountLimitsResponseSchema>;

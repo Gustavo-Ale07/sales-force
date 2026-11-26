@@ -3,7 +3,10 @@ import { StatusBar, StyleSheet, Text, View } from "react-native";
 import * as SplashScreen from "expo-splash-screen";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { apiConfig } from "./src/config";
-import { openAppDatabase } from "./src/db/app-database";
+import { deleteDatabaseFile } from "@salesforce/mobile-db/expo";
+import { APP_DATABASE_NAME, openAppDatabase } from "./src/db/app-database";
+import { createSecureInstallIdStore } from "./src/device/secure-install-id";
+import { DeviceNoticeScreen } from "./src/ui/device-notice-screen";
 import { createAppDependencies, type AppDependencies } from "./src/dependencies";
 import { S7DiagnosticsScreen } from "./src/dev/s7-diagnostics-screen";
 import { colors, spacing } from "./src/theme";
@@ -33,7 +36,27 @@ void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 /** Spike S7 (V-09): build-time flag, never set in a real build. Inlined by Expo at bundle time. */
 const S7_DIAGNOSTICS = process.env.EXPO_PUBLIC_S7_DIAGNOSTICS === "1";
 
-type Boot = { readonly phase: "opening" } | { readonly phase: "ready"; readonly dependencies: AppDependencies } | { readonly phase: "failed" };
+type Boot = { readonly phase: "opening" } | { readonly phase: "ready"; readonly dependencies: AppDependencies } | { readonly phase: "failed" } | { readonly phase: "key_lost" };
+
+/** The secure-store key is gone while the database file remains: the data cannot be opened (`KeyMissingError`, packages/mobile-db). */
+function isKeyLost(error: unknown): boolean {
+  return error instanceof Error && error.name === "KeyMissingError";
+}
+
+/** Chave local perdida: the only way forward is to delete the unreadable data (never a silent overwrite); the server resends it at sign-in. */
+function KeyLostScreen({ onReset }: { onReset: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <DeviceNoticeScreen
+      kind="key_lost"
+      busy={busy}
+      onAction={() => {
+        setBusy(true);
+        void onReset().finally(() => setBusy(false));
+      }}
+    />
+  );
+}
 
 function DatabaseError() {
   return (
@@ -47,8 +70,9 @@ function DatabaseError() {
 }
 
 /** The encrypted database opens before anything else and never falls back to plaintext or to online-only (MOB-6). */
-function useBoot(): Boot {
+function useBoot(): { readonly boot: Boot; readonly resetLocalData: () => Promise<void> } {
   const [boot, setBoot] = useState<Boot>({ phase: "opening" });
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (!apiConfig.ok || S7_DIAGNOSTICS) return undefined;
     const baseUrl = apiConfig.baseUrl;
@@ -57,18 +81,24 @@ function useBoot(): Boot {
       .then((opened) => {
         if (active) setBoot({ phase: "ready", dependencies: createAppDependencies(baseUrl, opened.database) });
       })
-      .catch(() => {
-        if (active) setBoot({ phase: "failed" });
+      .catch((error: unknown) => {
+        if (active) setBoot({ phase: isKeyLost(error) ? "key_lost" : "failed" });
       });
     return () => {
       active = false;
     };
-  }, []);
-  return boot;
+  }, [attempt]);
+  const resetLocalData = async () => {
+    await deleteDatabaseFile(APP_DATABASE_NAME);
+    await createSecureInstallIdStore().reset().catch(() => undefined);
+    setBoot({ phase: "opening" });
+    setAttempt((current) => current + 1);
+  };
+  return { boot, resetLocalData };
 }
 
 export default function App() {
-  const boot = useBoot();
+  const { boot, resetLocalData } = useBoot();
   // Screens own their insets (header, bottom navigation, login); only the plain status screens need the wrapper.
   const safe = (content: React.ReactNode) => (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
@@ -87,6 +117,8 @@ export default function App() {
           <UpdateGate {...(startupUpdateCheck ? { check: startupUpdateCheck } : {})} install={installUpdate}>
             <Shell dependencies={boot.dependencies} />
           </UpdateGate>
+        ) : boot.phase === "key_lost" ? (
+          <KeyLostScreen onReset={resetLocalData} />
         ) : boot.phase === "failed" ? (
           safe(<DatabaseError />)
         ) : (

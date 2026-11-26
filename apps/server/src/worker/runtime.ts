@@ -26,6 +26,8 @@ import type { ConfigurationSyncService } from '../sync/configuration-sync.servic
 import { ConfigurationSyncJob } from './jobs/configuration-sync.job.js';
 import type { SyncRefreshRunner } from '../sync/sync-refresh-runner.service.js';
 import { SyncRefreshJob } from './jobs/sync-refresh.job.js';
+import { NotificationSweepJob } from './jobs/notification-sweep.job.js';
+import type { NotificationSweepService } from '../notifications/notification-sweep.service.js';
 import { CustomerDeliveryJob, CustomerPayloadPurgeJob, CustomerRefusalPurgeJob } from './jobs/customer-delivery.job.js';
 import type { CustomerPayloadRetention, CustomerRefusalRetention } from '../integration/customer-payload-retention.js';
 import type { CustomerDeliveryService } from '../integration/customer-delivery.service.js';
@@ -37,6 +39,7 @@ export const SYNC_REFRESH_POLL_MS = 2_000;
 import {
   CONFIGURATION_SYNC_CRON,
   CUSTOMER_DELIVERY_CRON,
+  NOTIFICATION_SWEEP_CRON,
   CUSTOMER_DELIVERY_TRIGGER_MS,
   PROFILE_PHOTO_DELIVERY_TRIGGER_MS,
   ORDER_DELIVERY_CRON,
@@ -132,6 +135,8 @@ export interface WorkerRuntimeDeps {
    * `sync_refresh`; this runtime polls it and enqueues `sync.refresh.on-demand`.
    */
   readonly syncRefresh?: { readonly runner: SyncRefreshRunner; readonly pollMs?: number };
+  /** RF-NOT: notification generation, task reminders and push. Absent = no handler and the schedule is dropped. */
+  readonly notifications?: { readonly service: NotificationSweepService };
 }
 
 /**
@@ -229,8 +234,11 @@ export class WorkerRuntime {
         syncRefresh === undefined || !queues.some((spec) => spec.name === QUEUE_NAMES.syncRefreshOnDemand)
           ? []
           : [new SyncRefreshJob(syncRefresh.runner)];
+      const { notifications } = this.deps;
+      const notificationHandlers = notifications === undefined ? [] : [new NotificationSweepJob(notifications.service)];
       const handlers: readonly JobHandler<unknown>[] = [
         heartbeat,
+        ...notificationHandlers,
         ...refreshHandlers,
         ...mirrorHandlers,
         ...mediaHandlers,
@@ -307,6 +315,14 @@ export class WorkerRuntime {
         // Disabled (the default): drop a schedule stored by an earlier configuration.
         if (customerDelivery === undefined) await boss.unschedule(QUEUE_NAMES.integrationCustomerDeliver);
         else await boss.schedule(QUEUE_NAMES.integrationCustomerDeliver, CUSTOMER_DELIVERY_CRON, {});
+      }
+      if (queues.some((spec) => spec.name === QUEUE_NAMES.notificationsSweep)) {
+        if (notifications === undefined) await boss.unschedule(QUEUE_NAMES.notificationsSweep);
+        else await boss.schedule(QUEUE_NAMES.notificationsSweep, NOTIFICATION_SWEEP_CRON, {});
+      }
+      if (queues.some((spec) => spec.name === QUEUE_NAMES.notificationsSweep)) {
+        if (notifications === undefined) await boss.unschedule(QUEUE_NAMES.notificationsSweep);
+        else await boss.schedule(QUEUE_NAMES.notificationsSweep, NOTIFICATION_SWEEP_CRON, {});
       }
       if (queues.some((spec) => spec.name === QUEUE_NAMES.integrationCustomerPayloadPurge)) {
         if (customerPayloadRetention === undefined) await boss.unschedule(QUEUE_NAMES.integrationCustomerPayloadPurge);

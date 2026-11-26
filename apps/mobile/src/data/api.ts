@@ -1,4 +1,5 @@
 import { createApiClient, type ApiClient } from "@salesforce/contracts/client";
+import { notifyDeviceRevoked } from "../device/revocation";
 
 export type { ApiClient };
 
@@ -39,6 +40,8 @@ export class ApiRequestError extends Error {
   readonly skippedLines: readonly { lineNo: number; productCode: number; reason: string }[];
   /** A 422 `customer_refused`: request field -> the server's text (`details.fields`; `_` belongs to no field). */
   readonly fields: Readonly<Record<string, string>>;
+  /** The raw `details` of the envelope (a 409 `customer_edit_conflict` carries the current contact data here). */
+  readonly details: Readonly<Record<string, unknown>>;
 
   constructor(init: {
     status: number;
@@ -50,6 +53,7 @@ export class ApiRequestError extends Error {
     reason?: string;
     skippedLines?: readonly { lineNo: number; productCode: number; reason: string }[];
     fields?: Readonly<Record<string, string>>;
+    details?: Readonly<Record<string, unknown>>;
   }) {
     super(init.message);
     this.name = "ApiRequestError";
@@ -61,6 +65,7 @@ export class ApiRequestError extends Error {
     this.reason = init.reason;
     this.skippedLines = init.skippedLines ?? [];
     this.fields = init.fields ?? {};
+    this.details = init.details ?? {};
   }
 
   /** Network failure, timeout or a proxy answering without the API envelope. */
@@ -113,9 +118,12 @@ export async function callApi<T>(call: () => Promise<ClientResult<T>>): Promise<
     });
     const rawFields = record(details?.fields);
     const fields = Object.fromEntries(Object.entries(rawFields ?? {}).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
+    // AUTH-1/AUTH-2: a revoked installation is told on every request; the shell wipes the local database on this signal.
+    if (result.response.status === 401 && envelope?.code === "device_revoked") notifyDeviceRevoked();
     throw new ApiRequestError({
       status: result.response.status,
       fields,
+      details: details ?? {},
       reason: typeof details?.reason === "string" ? details.reason : undefined,
       skippedLines,
       code: typeof envelope?.code === "string" ? envelope.code : undefined,

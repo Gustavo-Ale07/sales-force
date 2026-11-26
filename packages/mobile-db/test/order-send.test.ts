@@ -233,7 +233,7 @@ describe("migrations v10 (order_send_request) and v11 (order_erp_stage)", () => 
     expect(columnsBefore).not.toContain("send_state");
 
     const report = await runMigrations(old, migrations);
-    expect(report).toEqual({ from: 9, to: 18, applied: [10, 11, 12, 13, 14, 15, 16, 17, 18] });
+    expect(report).toEqual({ from: 9, to: 22, applied: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22] });
 
     const columnsAfter = await columnsOf(old, "local_order_draft");
     expect(columnsAfter).toEqual(expect.arrayContaining([...columnsBefore, "send_state", "send_code", "send_error", "send_attempts", "send_next_attempt_at", "send_requested_at", "erp_stage", "erp_stage_json", "erp_number", "discount_over_limit_accepted"]));
@@ -243,7 +243,7 @@ describe("migrations v10 (order_send_request) and v11 (order_erp_stage)", () => 
     for (const [key, value] of Object.entries((before as Record<string, unknown>[])[0] as Record<string, unknown>)) expect(row?.[key]).toEqual(value);
     expect(await old.query("SELECT * FROM local_order_item")).toEqual((itemsBefore as Record<string, unknown>[]).map((r) => ({ ...r, max_discount_percent: null })));
     expect(await old.query("SELECT * FROM outbox")).toEqual(outboxBefore);
-    expect((await old.query<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")).map((r) => r.name).sort()).toEqual([...tablesBefore, "cache_product_group", "cache_city", "cache_neighborhood", "cache_street", "cache_postal_code"].sort());
+    expect((await old.query<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")).map((r) => r.name).sort()).toEqual([...tablesBefore, "cache_product_group", "cache_city", "cache_neighborhood", "cache_street", "cache_postal_code", "pending_customer_edit", "local_task", "local_notification", "push_registration"].sort());
     // defaults for the pre-existing row
     expect(await getDraft(old, id)).toMatchObject({ sendState: null, sendCode: null, sendError: null, sendAttempts: 0, sendNextAttemptAt: null, sendRequestedAt: null, erpStage: null, erpNumber: null });
     // the old draft is still editable and a send request can be recorded on it
@@ -251,8 +251,8 @@ describe("migrations v10 (order_send_request) and v11 (order_erp_stage)", () => 
     expect((await getDraft(old, id))?.sendState).toBe("requested");
   });
 
-  it("is idempotent and the schema version ends at 18", async () => {
-    expect(await readSchemaVersion(db)).toBe(18);
+  it("is idempotent and the schema version ends at 22", async () => {
+    expect(await readSchemaVersion(db)).toBe(22);
     expect((await runMigrations(db, migrations)).applied).toEqual([]);
   });
 

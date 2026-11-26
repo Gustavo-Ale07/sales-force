@@ -46,7 +46,9 @@ function flag(value: boolean): 'S' | 'N' {
 /** Inverse mapping of the adapter: the ERP rows that would produce the given Sales Force dataset. */
 export function erpTablesFromDataset(dataset: DemoDataset, dbUtcOffsetMinutes = -180): ErpTables {
   return {
-    TGFVEN: dataset.sellers.map((s) => ({ CODVEND: s.code, APELIDO: s.name, ATIVO: flag(s.active) })),
+    TGFVEN: dataset.sellers.map((s) => ({ CODVEND: s.code, APELIDO: s.name, ATIVO: flag(s.active), DESCMAX: s.maxDiscountPercent === undefined ? null : Number(s.maxDiscountPercent) })),
+    AD_FORCECFG: (dataset.forceConfig ?? []).map((c) => ({ ID: c.id, DIASSEMSYNC: c.daysWithoutSync, CODTABPADRAO: c.defaultPriceTableCode })),
+    AD_FORCELIMDESC: (dataset.forceDiscountLimits ?? []).map((l) => ({ ID: l.configId, SEQ: l.seq, CODVEND: l.sellerCode, CODGRUPOPROD: l.groupCode, CODPROD: l.productCode, DESCMAX: Number(l.percent) })),
     TGFPAR: [
       ...dataset.customers.map((c) => ({
         CODPARC: c.code,
@@ -98,6 +100,7 @@ export function erpTablesFromDataset(dataset: DemoDataset, dbUtcOffsetMinutes = 
       CODIPI: p.ipiCode ?? null,
       AGRUPMIN: p.quantityStep ?? null,
       DESCMAX: p.maxDiscountPercent ?? null,
+      CODBARRA: p.barcode ?? null,
     })),
     TGFFIN: [
       ...dataset.openTitles.map((t) => ({
@@ -135,6 +138,7 @@ export function erpTablesFromDataset(dataset: DemoDataset, dbUtcOffsetMinutes = 
     TSIBAI: dataset.neighborhoods.map((n) => ({ CODBAI: n.code, NOMEBAI: n.name })),
     TSIEND: dataset.streets.map((s) => ({ CODEND: s.code, NOMEEND: s.name, TIPO: s.kind })),
     TSICEP: dataset.postalCodes.map((p) => ({ CEP: String(p.cep).padStart(8, '0'), CODCID: p.cityCode, CODBAI: p.neighborhoodCode, CODEND: p.streetCode })),
+    TGFMET: dataset.sellerGoals.map((g) => ({ CODVEND: g.sellerCode, DTREF: `${g.month}-01`, PREVREC: Number(g.revenueTarget), QTDPREV: Number(g.quantityTarget) })),
     TGFGRU: dataset.productGroups.map((g) => ({
       CODGRUPOPROD: g.code,
       DESCRGRUPOPROD: g.name,
@@ -181,6 +185,29 @@ export function erpSalesTables(notes: readonly DemoSalesNote[]): ErpTables {
 const MICRO = 1_000_000;
 const micro = (value: unknown): bigint => BigInt(Math.round(Number(value ?? 0) * MICRO));
 const fromMicro = (units: bigint): number => Number(units) / MICRO;
+
+/** Interprets ONLY the TGFMET seller-goal aggregate (CODVEND > 0, one row per seller and month, sums of PREVREC / QTDPREV). */
+function answerSellerGoals(sql: string, tables: ErpTables): HttpResponse | null {
+  if (!sql.includes(' FROM TGFMET ')) return null;
+  if (!sql.includes('CODVEND > 0')) throw new Error(`mock cannot interpret SQL: ${sql}`);
+  const groups = new Map<string, { seller: number; month: string; value: bigint; quantity: bigint }>();
+  for (const row of tables['TGFMET'] ?? []) {
+    const seller = Number(row['CODVEND'] ?? 0);
+    if (!(seller > 0)) continue;
+    const month = String(row['DTREF']).slice(0, 7);
+    const id = `${seller}|${month}`;
+    const g = groups.get(id) ?? { seller, month, value: 0n, quantity: 0n };
+    g.value += micro(row['PREVREC']);
+    g.quantity += micro(row['QTDPREV']);
+    groups.set(id, g);
+  }
+  const ordered = [...groups.values()].sort((a, b) => a.seller - b.seller || a.month.localeCompare(b.month));
+  if (sql.startsWith('SELECT COUNT(*) AS TOTAL FROM (SELECT 1 AS X FROM ')) return ok(['TOTAL'], [[ordered.length]]);
+  const paging = /OFFSET (\d+) ROWS FETCH NEXT (\d+) ROWS ONLY$/.exec(sql);
+  if (paging === null) throw new Error(`mock cannot interpret SQL: ${sql}`);
+  const page = ordered.slice(Number(paging[1]), Number(paging[1]) + Number(paging[2]));
+  return ok(['CODVEND', 'MES', 'VLRMETA', 'QTDMETA'], page.map((g) => [g.seller, g.month, fromMicro(g.value), fromMicro(g.quantity)]));
+}
 
 /**
  * Interprets ONLY the two sales-history aggregate shapes (GROUP BY) the adapter emits: it parses the filter out of the SQL text
@@ -309,6 +336,8 @@ function parseSelectItem(item: string): { alias: string; column: string } {
   const expression = aliased ? (aliased[1] as string) : item.trim();
   const alias = aliased ? (aliased[2] as string) : item.trim();
   const inner = /^TO_CHAR\((\w+),/.exec(expression);
+  // A correlated sub-select column (TGFBAR barcode) is served from the mock row under its alias.
+  if (expression.startsWith('(SELECT ')) return { alias, column: alias };
   return { alias, column: inner ? (inner[1] as string) : expression };
 }
 
@@ -431,6 +460,8 @@ export class MockSankhya {
   }
 
   #answer(sql: string): HttpResponse {
+    const goals = answerSellerGoals(sql, this.tables);
+    if (goals !== null) return goals;
     const aggregate = answerSalesHistory(sql, this.tables);
     if (aggregate !== null) return aggregate;
     const signatures = MEDIA_SIGNATURES_RE.exec(sql);

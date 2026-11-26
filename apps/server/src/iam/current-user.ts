@@ -21,6 +21,9 @@ export interface CurrentUser {
   readonly sessionId: string;
   readonly sessionExpiresAt: Date;
   readonly channel: Channel;
+  /** The registered app device behind the session (AUTH-2); absent for the site and for sessions that predate the registry. */
+  readonly deviceId?: string | null;
+  readonly deviceStatus?: 'pending' | 'approved' | 'revoked' | null;
 }
 
 const CURRENT_USER_PROPERTY = 'sfCurrentUser';

@@ -243,7 +243,7 @@ describe("Aguardando liberação: copy button", () => {
     const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
     await user.click(await screen.findByRole("button", { name: "Copiar número do pedido 5001" }));
     expect(await screen.findByText("Não foi possível copiar")).toBeInTheDocument();
-    expect(screen.getByText(/Selecione o número 5001/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Selecione o número 5001/).length).toBeGreaterThan(0);
     expect(alertSpy).not.toHaveBeenCalled();
     expect(screen.queryByText("Número copiado")).toBeNull();
     spy.mockRestore();

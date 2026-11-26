@@ -27,6 +27,18 @@
       "name": "dashboard"
     },
     {
+      "name": "devices"
+    },
+    {
+      "name": "goals"
+    },
+    {
+      "name": "imports"
+    },
+    {
+      "name": "notifications"
+    },
+    {
       "name": "order-templates"
     },
     {
@@ -40,6 +52,9 @@
     },
     {
       "name": "sync"
+    },
+    {
+      "name": "tasks"
     }
   ],
   "security": [
@@ -495,6 +510,48 @@
         }
       }
     },
+    "/discount-limits/mine": {
+      "get": {
+        "operationId": "getMyDiscountLimits",
+        "tags": [
+          "configuration"
+        ],
+        "summary": "The caller's own seller discount rules (offline sync)",
+        "description": "Only the rules of the seller linked to the caller; a manager or admin has none. Never another seller's rules.",
+        "responses": {
+          "200": {
+            "description": "Regras de desconto do vendedor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyDiscountLimitsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/discount-limits": {
       "get": {
         "operationId": "getDiscountLimits",
@@ -617,6 +674,400 @@
         }
       }
     },
+    "/devices/me": {
+      "get": {
+        "operationId": "getMyDevice",
+        "tags": [
+          "devices"
+        ],
+        "summary": "Status of the calling device (M-02, M-19)",
+        "description": "null device = the session was not opened from a registered app installation. A pending device may call this route and logout only; a revoked one gets 401 device_revoked (the app wipes its local database).",
+        "responses": {
+          "200": {
+            "description": "Aparelho da sessão",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyDeviceResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/devices/me/sync": {
+      "post": {
+        "operationId": "reportDeviceSync",
+        "tags": [
+          "devices"
+        ],
+        "summary": "The app reports a completed synchronization (informational)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceSyncReport"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Registrado"
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/devices": {
+      "get": {
+        "operationId": "listDevices",
+        "tags": [
+          "devices"
+        ],
+        "summary": "Mobile devices (W-36): admin all, manager the team only",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/DeviceStatus"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Aparelhos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevicesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/devices/{id}/approve": {
+      "post": {
+        "operationId": "approveDevice",
+        "tags": [
+          "devices"
+        ],
+        "summary": "Approve a pending device (audited)",
+        "description": "404 outside the caller scope; 409 conflict when the account already has the maximum number of approved devices or the device is not pending.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Aparelho aprovado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflito de estado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/devices/{id}/revoke": {
+      "post": {
+        "operationId": "revokeDevice",
+        "tags": [
+          "devices"
+        ],
+        "summary": "Revoke a device (audited): its next request tells the app to wipe",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Aparelho revogado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflito de estado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device-settings": {
+      "get": {
+        "operationId": "getDeviceSettings",
+        "tags": [
+          "devices"
+        ],
+        "summary": "Offline limit and devices per account (Configuracoes, admin only)",
+        "responses": {
+          "200": {
+            "description": "Configuração de aparelhos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceSettings"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateDeviceSettings",
+        "tags": [
+          "devices"
+        ],
+        "summary": "Replace the device settings (admin only, audited)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDeviceSettingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Configuração salva",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/order-entry/configuration": {
       "get": {
         "operationId": "getOrderEntryConfiguration",
@@ -683,6 +1134,47 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DashboardResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/goals": {
+      "get": {
+        "operationId": "getGoals",
+        "tags": [
+          "goals"
+        ],
+        "summary": "Monthly goal, realized and positivation within the actor scope",
+        "responses": {
+          "200": {
+            "description": "Metas e positivação do mês",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalsResponse"
                 }
               }
             }
@@ -2173,6 +2665,68 @@
         }
       }
     },
+    "/customers/cnpj/{cnpj}": {
+      "get": {
+        "operationId": "lookupCnpj",
+        "tags": [
+          "customers"
+        ],
+        "summary": "Company data of a CNPJ (public registry), to prefill the legal-entity registration",
+        "description": "Server-side only: BrasilAPI and, when it does not answer, publica.cnpj.ws (about 3 s each; only the 14 digits leave the server). Answers are kept for 30 days. Never an error for a CNPJ that is invalid, unknown or whose sources are down: answers 200 with `found: false`. Same authorization as customer registration; limited per account (429 `rate_limited`).",
+        "parameters": [
+          {
+            "name": "cnpj",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dados do CNPJ (ou found=false)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CnpjLookup"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Muitas tentativas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/products": {
       "get": {
         "operationId": "listProducts",
@@ -3171,6 +3725,172 @@
         "responses": {
           "204": {
             "description": "Orçamento ou pedido excluído"
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflito de estado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{id}/price-review": {
+      "get": {
+        "operationId": "getOrderPriceReview",
+        "tags": [
+          "orders"
+        ],
+        "summary": "Lines of a draft whose table price changed (P-09)",
+        "description": "Compares each line with the price of the table today. Empty `lines` = nothing to review. Same scope as the order.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Linhas com preço alterado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderPriceReview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "resolveOrderPriceReview",
+        "tags": [
+          "orders"
+        ],
+        "summary": "Accept or refuse each changed price (P-09)",
+        "description": "One decision for every line the review lists. Accept = the line takes the table price; refuse = the line leaves the order. The server prices again and validates as a normal edit. 409 version_conflict when `expectedVersion` is stale; 409 order_not_editable when the order is not a draft; 400 validation_failed when a decision is missing or the order would be left empty.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolvePriceReviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Pedido atualizado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderDetail"
+                }
+              }
+            }
           },
           "400": {
             "description": "Requisição inválida (validation_failed)",
@@ -4696,6 +5416,1140 @@
           }
         }
       }
+    },
+    "/tasks": {
+      "get": {
+        "operationId": "listTasks",
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Tasks of the caller (manager and admin: every task)",
+        "description": "A seller sees only the tasks assigned to them; manager and admin see all tasks. Ordered by due date. The linked customer name is returned only when the customer is inside the caller scope.",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "completed",
+                "cancelled"
+              ]
+            }
+          },
+          {
+            "name": "customerCode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tarefas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TasksResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createTask",
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Create a task (idempotent on id)",
+        "description": "The task id is generated by the client and is the idempotency key: 201 when created, 200 with the same task on a replay of the same payload, 409 idempotency_conflict when the id was used with another payload. The assignee is the caller. A customer outside the caller scope is 404.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTaskRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reenvio idempotente: tarefa original",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Tarefa criada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflito de estado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{id}/complete": {
+      "post": {
+        "operationId": "completeTask",
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Complete a task (idempotent)",
+        "description": "Completing a completed task answers the same task. 409 conflict when the task was cancelled. A task of another seller is 404 for a seller.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteTaskRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tarefa concluída",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflito de estado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{id}/cancel": {
+      "post": {
+        "operationId": "cancelTask",
+        "tags": [
+          "tasks"
+        ],
+        "summary": "Cancel a task (idempotent)",
+        "description": "409 conflict when the task was already completed.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tarefa cancelada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflito de estado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications": {
+      "get": {
+        "operationId": "listNotifications",
+        "tags": [
+          "notifications"
+        ],
+        "summary": "Notifications of the caller, newest first",
+        "description": "Only the caller own notifications, with the unread count.",
+        "parameters": [
+          {
+            "name": "unreadOnly",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notificações",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications/read": {
+      "post": {
+        "operationId": "markNotificationsRead",
+        "tags": [
+          "notifications"
+        ],
+        "summary": "Mark notifications as read",
+        "description": "Omitted `ids` marks every notification of the caller. Ids of other accounts are ignored.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkNotificationsReadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contagem de não lidas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnreadCountResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/push-devices": {
+      "put": {
+        "operationId": "registerPushDevice",
+        "tags": [
+          "notifications"
+        ],
+        "summary": "Register the Expo push token of the device for the caller",
+        "description": "Idempotent. A token already registered moves to the caller account. Mobile only.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterPushDeviceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Aparelho registrado"
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/push-devices/remove": {
+      "post": {
+        "operationId": "unregisterPushDevice",
+        "tags": [
+          "notifications"
+        ],
+        "summary": "Stop push notifications on this device",
+        "description": "Idempotent: 204 whether or not the token was registered for the caller.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnregisterPushDeviceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Aparelho removido"
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/imports/templates/order-items": {
+      "get": {
+        "operationId": "getOrderImportTemplate",
+        "tags": [
+          "imports"
+        ],
+        "summary": "Spreadsheet template (.xlsx) to send to a customer: sellable products and a Quantidade column (binary)",
+        "description": "One sheet with the sellable products of the catalog (code, description, unit, reference) and an empty Quantidade column. Never a price, cost or margin. Same profiles as order entry.",
+        "responses": {
+          "200": {
+            "description": "Modelo .xlsx",
+            "headers": {
+              "Content-Disposition": {
+                "description": "attachment",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/imports/preview": {
+      "post": {
+        "operationId": "previewImport",
+        "tags": [
+          "imports"
+        ],
+        "summary": "Read a spreadsheet and show what an import would do (writes nothing)",
+        "description": "Body: the .xlsx or .csv file base64-encoded (up to 20 MiB decoded, 50,000 rows). Type, size, signature and row count are checked BEFORE the file is parsed: 400 validation_failed with issue import_file_type_not_allowed, import_file_too_large, import_file_unreadable, import_too_many_rows or import_empty. Formulas are never evaluated (the cached cell value is read) and macros never run. Without a mapping the server suggests one by header name. order_items needs customerCode (404 outside the seller scope). Unrecognised rows are listed with the reason and never block the rest. The file content is never logged.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportPreviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Pré-visualização",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportPreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/imports/confirm": {
+      "post": {
+        "operationId": "confirmImport",
+        "tags": [
+          "imports"
+        ],
+        "summary": "Run an import: a quotation from the recognised lines, or customers through the registration path",
+        "description": "order_items creates ONE quotation (quotation TOP) with the recognised lines, prices computed server-side (409 dataset_mismatch like POST /orders; 409 import_nothing_to_import when no row is recognised). customers records each valid row through the same path as POST /customers (document, CPF/CNPJ validity, duplicate, CEP, seller scope, hourly budget), at most 30 rows per confirm; rejected rows come back with the reason. Idempotent on clientRequestId: a replay does not create anything twice. 200 with the outcome.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportConfirmRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado da importação",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso não encontrado (ou fora do escopo do usuário)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflito de estado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Muitas tentativas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/exports/customers": {
+      "get": {
+        "operationId": "exportCustomers",
+        "tags": [
+          "imports"
+        ],
+        "summary": "Customers (scoped) as CSV or XLSX (internal profiles only)",
+        "description": "Internal profiles with the export grant only; the external representative has no grant (403). Rows follow the same scope as GET /customers. Up to 50,000 rows. Audited on every call (who, what, how many rows, format; never the content).",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": "xlsx",
+              "$ref": "#/components/schemas/ExportFormat"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "sellerCode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Planilha",
+            "headers": {
+              "Content-Disposition": {
+                "description": "attachment",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/exports/orders": {
+      "get": {
+        "operationId": "exportOrders",
+        "tags": [
+          "imports"
+        ],
+        "summary": "Orders and quotations (scoped) as CSV or XLSX (internal profiles only)",
+        "description": "Same grant and audit as the customer export; rows follow the scope of GET /orders. Totals are estimates from list prices; never cost or margin.",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": "xlsx",
+              "$ref": "#/components/schemas/ExportFormat"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "customerCode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Planilha",
+            "headers": {
+              "Content-Disposition": {
+                "description": "attachment",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/exports/products": {
+      "get": {
+        "operationId": "exportProducts",
+        "tags": [
+          "imports"
+        ],
+        "summary": "Catalog products as CSV or XLSX (internal profiles only)",
+        "description": "Same grant and audit as the customer export. Code, description, unit, group, reference and status only: never price, cost or margin.",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": "xlsx",
+              "$ref": "#/components/schemas/ExportFormat"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "group",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Planilha",
+            "headers": {
+              "Content-Disposition": {
+                "description": "attachment",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "no-store",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida (validation_failed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sem permissão para este recurso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4963,6 +6817,9 @@
           },
           "expiresAt": {
             "$ref": "#/components/schemas/IsoTimestamp"
+          },
+          "device": {
+            "$ref": "#/components/schemas/SessionDevice"
           }
         },
         "required": [
@@ -5048,6 +6905,126 @@
           "uf",
           "ibge"
         ],
+        "additionalProperties": false
+      },
+      "CnpjLookup": {
+        "type": "object",
+        "properties": {
+          "found": {
+            "type": "boolean"
+          },
+          "cnpj": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "legalName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tradeName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "postalCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "street": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "complement": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "neighborhood": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "city": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "uf": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "brasilapi",
+                  "cnpjws"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "found",
+          "cnpj",
+          "legalName",
+          "tradeName",
+          "postalCode",
+          "street",
+          "number",
+          "complement",
+          "neighborhood",
+          "city",
+          "uf",
+          "phone",
+          "email",
+          "source"
+        ],
+        "additionalProperties": false
+      },
+      "CompleteTaskRequest": {
+        "type": "object",
+        "properties": {
+          "completedAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          }
+        },
         "additionalProperties": false
       },
       "ConfigurationProvenanceEntry": {
@@ -5998,6 +7975,77 @@
         ],
         "additionalProperties": false
       },
+      "CreateTaskRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "call",
+              "visit",
+              "email",
+              "whatsapp",
+              "meeting",
+              "other"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "description": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dueAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          },
+          "reminderLeadMinutes": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "customerCode": {
+            "default": null,
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "title",
+          "dueAt"
+        ],
+        "additionalProperties": false
+      },
       "CustomerAddressInput": {
         "type": "object",
         "properties": {
@@ -6202,6 +8250,9 @@
           },
           "overdue": {
             "type": "boolean"
+          },
+          "contactVersion": {
+            "type": "string"
           },
           "priceTableName": {
             "type": [
@@ -6525,6 +8576,9 @@
           },
           "overdue": {
             "type": "boolean"
+          },
+          "contactVersion": {
+            "type": "string"
           }
         },
         "required": [
@@ -6860,6 +8914,172 @@
         "maxLength": 40,
         "pattern": "^\\d+(\\.\\d+)?$"
       },
+      "DevicePlatform": {
+        "type": "string",
+        "enum": [
+          "android",
+          "ios"
+        ]
+      },
+      "DeviceRegistration": {
+        "type": "object",
+        "properties": {
+          "installId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9-]{8,64}$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "platform": {
+            "$ref": "#/components/schemas/DevicePlatform"
+          }
+        },
+        "required": [
+          "installId",
+          "label",
+          "platform"
+        ],
+        "additionalProperties": false
+      },
+      "DeviceSettings": {
+        "type": "object",
+        "properties": {
+          "offlineMaxDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60
+          },
+          "maxActiveDevices": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          }
+        },
+        "required": [
+          "offlineMaxDays",
+          "maxActiveDevices"
+        ],
+        "additionalProperties": false
+      },
+      "DeviceStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "approved",
+          "revoked"
+        ]
+      },
+      "DeviceSyncReport": {
+        "type": "object",
+        "properties": {
+          "syncedAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          }
+        },
+        "required": [
+          "syncedAt"
+        ],
+        "additionalProperties": false
+      },
+      "DeviceView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "accountId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "accountName": {
+            "type": "string"
+          },
+          "accountUsername": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "platform": {
+            "$ref": "#/components/schemas/DevicePlatform"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DeviceStatus"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          },
+          "lastSeenAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          },
+          "lastSyncAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IsoTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decidedAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IsoTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decidedByName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "canManage": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "accountId",
+          "accountName",
+          "accountUsername",
+          "label",
+          "platform",
+          "status",
+          "createdAt",
+          "lastSeenAt",
+          "lastSyncAt",
+          "decidedAt",
+          "decidedByName",
+          "canManage"
+        ],
+        "additionalProperties": false
+      },
+      "DevicesResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeviceView"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
       "DiscountAuthorityMode": {
         "type": "string",
         "enum": [
@@ -6972,6 +9192,9 @@
           "invalid_credentials",
           "access_not_configured",
           "app_not_permitted",
+          "device_pending",
+          "device_required",
+          "device_revoked",
           "forbidden",
           "not_found",
           "conflict",
@@ -7023,6 +9246,13 @@
         ],
         "additionalProperties": false
       },
+      "ExportFormat": {
+        "type": "string",
+        "enum": [
+          "csv",
+          "xlsx"
+        ]
+      },
       "FallbackStrategy": {
         "type": "string",
         "enum": [
@@ -7065,6 +9295,113 @@
           "unknown"
         ]
       },
+      "GoalFigure": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "realized": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "percent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "target",
+          "realized",
+          "percent"
+        ],
+        "additionalProperties": false
+      },
+      "GoalsResponse": {
+        "type": "object",
+        "properties": {
+          "month": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}$"
+          },
+          "goalsSyncedAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IsoTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "salesSyncedAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IsoTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "total": {
+            "type": "object",
+            "properties": {
+              "revenue": {
+                "$ref": "#/components/schemas/GoalFigure"
+              },
+              "quantity": {
+                "$ref": "#/components/schemas/GoalFigure"
+              },
+              "positivation": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PositivationFigure"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "revenue",
+              "quantity",
+              "positivation"
+            ],
+            "additionalProperties": false
+          },
+          "bySeller": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SellerGoalRow"
+            }
+          }
+        },
+        "required": [
+          "month",
+          "goalsSyncedAt",
+          "salesSyncedAt",
+          "total",
+          "bySeller"
+        ],
+        "additionalProperties": false
+      },
       "HealthResponse": {
         "type": "object",
         "properties": {
@@ -7087,6 +9424,311 @@
           "R",
           "T",
           "X"
+        ]
+      },
+      "ImportConfirmRequest": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/ImportType"
+          },
+          "fileName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "contentBase64": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 27962035
+          },
+          "customerCode": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "mapping": {
+            "$ref": "#/components/schemas/ImportMapping"
+          },
+          "clientRequestId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "expectedDataset": {
+            "$ref": "#/components/schemas/DatasetIdentity"
+          }
+        },
+        "required": [
+          "type",
+          "fileName",
+          "contentBase64",
+          "clientRequestId"
+        ],
+        "additionalProperties": false
+      },
+      "ImportField": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "required"
+        ],
+        "additionalProperties": false
+      },
+      "ImportMapping": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "additionalProperties": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "ImportPreview": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/ImportType"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportField"
+            }
+          },
+          "headers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mapping": {
+            "$ref": "#/components/schemas/ImportMapping"
+          },
+          "missingRequired": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "totalRows": {
+            "type": "integer"
+          },
+          "recognized": {
+            "type": "integer"
+          },
+          "rejected": {
+            "type": "integer"
+          },
+          "skippedBlank": {
+            "type": "integer"
+          },
+          "sample": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportPreviewRow"
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportRowIssue"
+            }
+          },
+          "errorsTruncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "type",
+          "fields",
+          "headers",
+          "mapping",
+          "missingRequired",
+          "totalRows",
+          "recognized",
+          "rejected",
+          "skippedBlank",
+          "sample",
+          "errors",
+          "errorsTruncated"
+        ],
+        "additionalProperties": false
+      },
+      "ImportPreviewRequest": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/ImportType"
+          },
+          "fileName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "contentBase64": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 27962035
+          },
+          "customerCode": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "mapping": {
+            "$ref": "#/components/schemas/ImportMapping"
+          }
+        },
+        "required": [
+          "type",
+          "fileName",
+          "contentBase64"
+        ],
+        "additionalProperties": false
+      },
+      "ImportPreviewRow": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "quantity": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "row",
+          "ok",
+          "label",
+          "quantity",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "ImportResult": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/ImportType"
+          },
+          "created": {
+            "type": "integer"
+          },
+          "rejected": {
+            "type": "integer"
+          },
+          "pending": {
+            "type": "integer"
+          },
+          "skippedBlank": {
+            "type": "integer"
+          },
+          "orderId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "draftNumber": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportRowIssue"
+            }
+          },
+          "errorsTruncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "type",
+          "created",
+          "rejected",
+          "pending",
+          "skippedBlank",
+          "orderId",
+          "draftNumber",
+          "errors",
+          "errorsTruncated"
+        ],
+        "additionalProperties": false
+      },
+      "ImportRowIssue": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "row",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "ImportType": {
+        "type": "string",
+        "enum": [
+          "order_items",
+          "customers"
         ]
       },
       "IntegrationSummary": {
@@ -7405,12 +10047,31 @@
               "web",
               "app"
             ]
+          },
+          "device": {
+            "$ref": "#/components/schemas/DeviceRegistration"
           }
         },
         "required": [
           "username",
           "password"
         ],
+        "additionalProperties": false
+      },
+      "MarkNotificationsReadRequest": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "minItems": 1,
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        },
         "additionalProperties": false
       },
       "Metric": {
@@ -7587,6 +10248,52 @@
           "validated"
         ]
       },
+      "MyDeviceResponse": {
+        "type": "object",
+        "properties": {
+          "device": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SessionDevice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "device"
+        ],
+        "additionalProperties": false
+      },
+      "MyDiscountLimitsResponse": {
+        "type": "object",
+        "properties": {
+          "sellerCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SellerDiscountRule"
+            }
+          }
+        },
+        "required": [
+          "sellerCode",
+          "rules"
+        ],
+        "additionalProperties": false
+      },
       "NegotiationType": {
         "type": "object",
         "properties": {
@@ -7648,6 +10355,85 @@
           "no_effective_version",
           "no_price_row"
         ]
+      },
+      "Notification": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "order",
+              "customer",
+              "task"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "refType": {
+            "type": "string",
+            "enum": [
+              "order",
+              "customer_registration",
+              "task"
+            ]
+          },
+          "refId": {
+            "type": "string"
+          },
+          "readAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IsoTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          }
+        },
+        "required": [
+          "id",
+          "category",
+          "title",
+          "body",
+          "refType",
+          "refId",
+          "readAt",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "NotificationsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Notification"
+            }
+          },
+          "unreadCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "items",
+          "unreadCount"
+        ],
+        "additionalProperties": false
       },
       "OrderApproval": {
         "type": "object",
@@ -8612,6 +11398,12 @@
                 "type": "null"
               }
             ]
+          },
+          "barcode": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -9184,6 +11976,32 @@
         ],
         "additionalProperties": false
       },
+      "OrderPriceReview": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PriceReviewLine"
+            }
+          }
+        },
+        "required": [
+          "orderId",
+          "version",
+          "lines"
+        ],
+        "additionalProperties": false
+      },
       "OrderProductMatch": {
         "type": "string",
         "enum": [
@@ -9514,6 +12332,31 @@
           "all_visible"
         ]
       },
+      "PositivationFigure": {
+        "type": "object",
+        "properties": {
+          "positivated": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "percent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "positivated",
+          "total",
+          "percent"
+        ],
+        "additionalProperties": false
+      },
       "PostalCodeLookup": {
         "type": "object",
         "properties": {
@@ -9662,6 +12505,65 @@
         ],
         "additionalProperties": false
       },
+      "PriceReviewDecision": {
+        "type": "string",
+        "enum": [
+          "accept",
+          "refuse"
+        ]
+      },
+      "PriceReviewLine": {
+        "type": "object",
+        "properties": {
+          "lineNo": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "productCode": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "productDescription": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "quantity": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "previousUnitPrice": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "currentUnitPrice": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DecimalString"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "lineNo",
+          "productCode",
+          "productDescription",
+          "unit",
+          "quantity",
+          "previousUnitPrice",
+          "currentUnitPrice"
+        ],
+        "additionalProperties": false
+      },
       "PriceTablePrice": {
         "type": "object",
         "properties": {
@@ -9785,6 +12687,12 @@
             ]
           },
           "maxDiscountPercent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "barcode": {
             "type": [
               "string",
               "null"
@@ -9985,6 +12893,12 @@
             ]
           },
           "maxDiscountPercent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "barcode": {
             "type": [
               "string",
               "null"
@@ -10227,6 +13141,27 @@
           "status",
           "checks",
           "integration"
+        ],
+        "additionalProperties": false
+      },
+      "RegisterPushDeviceRequest": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "pattern": "^Expo(nent)?PushToken\\[[A-Za-z0-9_-]{8,}\\]$"
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "android",
+              "ios"
+            ]
+          }
+        },
+        "required": [
+          "token",
+          "platform"
         ],
         "additionalProperties": false
       },
@@ -10661,6 +13596,46 @@
         ],
         "additionalProperties": false
       },
+      "ResolvePriceReviewRequest": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "expectedDataset": {
+            "$ref": "#/components/schemas/DatasetIdentity"
+          },
+          "decisions": {
+            "minItems": 1,
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "lineNo": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "decision": {
+                  "$ref": "#/components/schemas/PriceReviewDecision"
+                }
+              },
+              "required": [
+                "lineNo",
+                "decision"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "expectedDataset",
+          "decisions"
+        ],
+        "additionalProperties": false
+      },
       "ResolveProductsRequest": {
         "type": "object",
         "properties": {
@@ -10726,6 +13701,82 @@
         ],
         "additionalProperties": false
       },
+      "SellerDiscountKind": {
+        "type": "string",
+        "enum": [
+          "general",
+          "group",
+          "product"
+        ]
+      },
+      "SellerDiscountRule": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/SellerDiscountKind"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "percent": {
+            "type": "string",
+            "pattern": "^(100(\\.0+)?|\\d{1,2}(\\.\\d{1,4})?)$"
+          }
+        },
+        "required": [
+          "kind",
+          "code",
+          "percent"
+        ],
+        "additionalProperties": false
+      },
+      "SellerGoalRow": {
+        "type": "object",
+        "properties": {
+          "sellerCode": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sellerName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "revenue": {
+            "$ref": "#/components/schemas/GoalFigure"
+          },
+          "quantity": {
+            "$ref": "#/components/schemas/GoalFigure"
+          },
+          "positivation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PositivationFigure"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "sellerCode",
+          "sellerName",
+          "revenue",
+          "quantity",
+          "positivation"
+        ],
+        "additionalProperties": false
+      },
       "SellersResponse": {
         "type": "object",
         "properties": {
@@ -10738,6 +13789,34 @@
         },
         "required": [
           "items"
+        ],
+        "additionalProperties": false
+      },
+      "SessionDevice": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DeviceStatus"
+          },
+          "offlineMaxDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60
+          },
+          "defaultPriceTableCode": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "offlineMaxDays"
         ],
         "additionalProperties": false
       },
@@ -11279,6 +14358,134 @@
         ],
         "additionalProperties": false
       },
+      "Task": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "call",
+              "visit",
+              "email",
+              "whatsapp",
+              "meeting",
+              "other"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dueAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          },
+          "reminderLeadMinutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "customerCode": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "customerName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "completed",
+              "cancelled"
+            ]
+          },
+          "completedAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IsoTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "assigneeAccountId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "assigneeName": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/IsoTimestamp"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "title",
+          "description",
+          "dueAt",
+          "reminderLeadMinutes",
+          "customerCode",
+          "customerName",
+          "status",
+          "completedAt",
+          "assigneeAccountId",
+          "assigneeName",
+          "version",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "TasksResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Task"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
       "TemplateLineSkipReason": {
         "type": "string",
         "enum": [
@@ -11290,6 +14497,33 @@
           "product_not_sellable"
         ]
       },
+      "UnreadCountResponse": {
+        "type": "object",
+        "properties": {
+          "unreadCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "unreadCount"
+        ],
+        "additionalProperties": false
+      },
+      "UnregisterPushDeviceRequest": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "additionalProperties": false
+      },
       "UpdateCustomerRequest": {
         "type": "object",
         "properties": {
@@ -11297,6 +14531,10 @@
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "baseContactVersion": {
+            "type": "string",
+            "maxLength": 64
           },
           "phone": {
             "anyOf": [
@@ -11408,6 +14646,20 @@
         ],
         "additionalProperties": false
       },
+      "UpdateDeviceSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "maxActiveDevices": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          }
+        },
+        "required": [
+          "maxActiveDevices"
+        ],
+        "additionalProperties": false
+      },
       "UpdateDiscountLimitsRequest": {
         "type": "object",
         "properties": {
@@ -11435,6 +14687,9 @@
           },
           "expectedDataset": {
             "$ref": "#/components/schemas/DatasetIdentity"
+          },
+          "asQuotation": {
+            "type": "boolean"
           }
         },
         "required": [

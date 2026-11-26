@@ -149,6 +149,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/discount-limits/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The caller's own seller discount rules (offline sync)
+         * @description Only the rules of the seller linked to the caller; a manager or admin has none. Never another seller's rules.
+         */
+        get: operations["getMyDiscountLimits"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/discount-limits": {
         parameters: {
             query?: never;
@@ -166,6 +186,115 @@ export interface paths {
          * @description Stores a new immutable configuration snapshot. Ascending (seller <= manager <= director), inclusive, 0 to 99.99. Optimistic on expectedRevision.
          */
         put: operations["updateDiscountLimits"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Status of the calling device (M-02, M-19)
+         * @description null device = the session was not opened from a registered app installation. A pending device may call this route and logout only; a revoked one gets 401 device_revoked (the app wipes its local database).
+         */
+        get: operations["getMyDevice"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/me/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The app reports a completed synchronization (informational) */
+        post: operations["reportDeviceSync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Mobile devices (W-36): admin all, manager the team only */
+        get: operations["listDevices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve a pending device (audited)
+         * @description 404 outside the caller scope; 409 conflict when the account already has the maximum number of approved devices or the device is not pending.
+         */
+        post: operations["approveDevice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke a device (audited): its next request tells the app to wipe */
+        post: operations["revokeDevice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/device-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Offline limit and devices per account (Configuracoes, admin only) */
+        get: operations["getDeviceSettings"];
+        /** Replace the device settings (admin only, audited) */
+        put: operations["updateDeviceSettings"];
         post?: never;
         delete?: never;
         options?: never;
@@ -202,6 +331,23 @@ export interface paths {
         };
         /** Dashboard KPIs within the actor scope */
         get: operations["getDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/goals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Monthly goal, realized and positivation within the actor scope */
+        get: operations["getGoals"];
         put?: never;
         post?: never;
         delete?: never;
@@ -568,6 +714,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/customers/cnpj/{cnpj}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Company data of a CNPJ (public registry), to prefill the legal-entity registration
+         * @description Server-side only: BrasilAPI and, when it does not answer, publica.cnpj.ws (about 3 s each; only the 14 digits leave the server). Answers are kept for 30 days. Never an error for a CNPJ that is invalid, unknown or whose sources are down: answers 200 with `found: false`. Same authorization as customer registration; limited per account (429 `rate_limited`).
+         */
+        get: operations["lookupCnpj"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products": {
         parameters: {
             query?: never;
@@ -706,6 +872,30 @@ export interface paths {
          * @description Physical deletion with its items and delivery records. 409 when the order has an ERP number or a delivery is queued or in progress. Recorded in the audit trail.
          */
         delete: operations["deleteOrder"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orders/{id}/price-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lines of a draft whose table price changed (P-09)
+         * @description Compares each line with the price of the table today. Empty `lines` = nothing to review. Same scope as the order.
+         */
+        get: operations["getOrderPriceReview"];
+        put?: never;
+        /**
+         * Accept or refuse each changed price (P-09)
+         * @description One decision for every line the review lists. Accept = the line takes the table price; refuse = the line leaves the order. The server prices again and validates as a normal edit. 409 version_conflict when `expectedVersion` is stale; 409 order_not_editable when the order is not a draft; 400 validation_failed when a decision is missing or the order would be left empty.
+         */
+        post: operations["resolveOrderPriceReview"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1003,6 +1193,270 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tasks of the caller (manager and admin: every task)
+         * @description A seller sees only the tasks assigned to them; manager and admin see all tasks. Ordered by due date. The linked customer name is returned only when the customer is inside the caller scope.
+         */
+        get: operations["listTasks"];
+        put?: never;
+        /**
+         * Create a task (idempotent on id)
+         * @description The task id is generated by the client and is the idempotency key: 201 when created, 200 with the same task on a replay of the same payload, 409 idempotency_conflict when the id was used with another payload. The assignee is the caller. A customer outside the caller scope is 404.
+         */
+        post: operations["createTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tasks/{id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete a task (idempotent)
+         * @description Completing a completed task answers the same task. 409 conflict when the task was cancelled. A task of another seller is 404 for a seller.
+         */
+        post: operations["completeTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tasks/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a task (idempotent)
+         * @description 409 conflict when the task was already completed.
+         */
+        post: operations["cancelTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Notifications of the caller, newest first
+         * @description Only the caller own notifications, with the unread count.
+         */
+        get: operations["listNotifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark notifications as read
+         * @description Omitted `ids` marks every notification of the caller. Ids of other accounts are ignored.
+         */
+        post: operations["markNotificationsRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/push-devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Register the Expo push token of the device for the caller
+         * @description Idempotent. A token already registered moves to the caller account. Mobile only.
+         */
+        put: operations["registerPushDevice"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/push-devices/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop push notifications on this device
+         * @description Idempotent: 204 whether or not the token was registered for the caller.
+         */
+        post: operations["unregisterPushDevice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/imports/templates/order-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Spreadsheet template (.xlsx) to send to a customer: sellable products and a Quantidade column (binary)
+         * @description One sheet with the sellable products of the catalog (code, description, unit, reference) and an empty Quantidade column. Never a price, cost or margin. Same profiles as order entry.
+         */
+        get: operations["getOrderImportTemplate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/imports/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read a spreadsheet and show what an import would do (writes nothing)
+         * @description Body: the .xlsx or .csv file base64-encoded (up to 20 MiB decoded, 50,000 rows). Type, size, signature and row count are checked BEFORE the file is parsed: 400 validation_failed with issue import_file_type_not_allowed, import_file_too_large, import_file_unreadable, import_too_many_rows or import_empty. Formulas are never evaluated (the cached cell value is read) and macros never run. Without a mapping the server suggests one by header name. order_items needs customerCode (404 outside the seller scope). Unrecognised rows are listed with the reason and never block the rest. The file content is never logged.
+         */
+        post: operations["previewImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/imports/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run an import: a quotation from the recognised lines, or customers through the registration path
+         * @description order_items creates ONE quotation (quotation TOP) with the recognised lines, prices computed server-side (409 dataset_mismatch like POST /orders; 409 import_nothing_to_import when no row is recognised). customers records each valid row through the same path as POST /customers (document, CPF/CNPJ validity, duplicate, CEP, seller scope, hourly budget), at most 30 rows per confirm; rejected rows come back with the reason. Idempotent on clientRequestId: a replay does not create anything twice. 200 with the outcome.
+         */
+        post: operations["confirmImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exports/customers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Customers (scoped) as CSV or XLSX (internal profiles only)
+         * @description Internal profiles with the export grant only; the external representative has no grant (403). Rows follow the same scope as GET /customers. Up to 50,000 rows. Audited on every call (who, what, how many rows, format; never the content).
+         */
+        get: operations["exportCustomers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exports/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Orders and quotations (scoped) as CSV or XLSX (internal profiles only)
+         * @description Same grant and audit as the customer export; rows follow the scope of GET /orders. Totals are estimates from list prices; never cost or margin.
+         */
+        get: operations["exportOrders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exports/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Catalog products as CSV or XLSX (internal profiles only)
+         * @description Same grant and audit as the customer export. Code, description, unit, group, reference and status only: never price, cost or margin.
+         */
+        get: operations["exportProducts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1070,6 +1524,7 @@ export interface components {
             authMode: components["schemas"]["AuthMode"];
             account: components["schemas"]["Account"];
             expiresAt: components["schemas"]["IsoTimestamp"];
+            device?: components["schemas"]["SessionDevice"];
         };
         Carrier: {
             code: number;
@@ -1086,6 +1541,25 @@ export interface components {
             name: string;
             uf: string;
             ibge: string | null;
+        };
+        CnpjLookup: {
+            found: boolean;
+            cnpj: string | null;
+            legalName: string | null;
+            tradeName: string | null;
+            postalCode: string | null;
+            street: string | null;
+            number: string | null;
+            complement: string | null;
+            neighborhood: string | null;
+            city: string | null;
+            uf: string | null;
+            phone: string | null;
+            email: string | null;
+            source: ("brasilapi" | "cnpjws") | null;
+        };
+        CompleteTaskRequest: {
+            completedAt?: components["schemas"]["IsoTimestamp"];
         };
         ConfigurationProvenanceEntry: {
             table: string;
@@ -1273,6 +1747,20 @@ export interface components {
             name: string;
             items: components["schemas"]["OrderTemplateItem"][];
         };
+        CreateTaskRequest: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            type: "call" | "visit" | "email" | "whatsapp" | "meeting" | "other";
+            title: string;
+            /** @default null */
+            description: string | null;
+            dueAt: components["schemas"]["IsoTimestamp"];
+            /** @default null */
+            reminderLeadMinutes: number | null;
+            /** @default null */
+            customerCode: number | null;
+        };
         CustomerAddressInput: {
             cityCode: number;
             /** @default 0 */
@@ -1310,6 +1798,7 @@ export interface components {
             sellerName: string | null;
             priceTableCode: number | null;
             overdue?: boolean;
+            contactVersion?: string;
             priceTableName: string | null;
             resolvedPriceTable: {
                 code: number;
@@ -1362,6 +1851,7 @@ export interface components {
             sellerName: string | null;
             priceTableCode: number | null;
             overdue?: boolean;
+            contactVersion?: string;
         };
         CustomerOrderHabits: {
             orderCount: number;
@@ -1425,6 +1915,42 @@ export interface components {
         };
         DecimalString: string;
         /** @enum {string} */
+        DevicePlatform: "android" | "ios";
+        DeviceRegistration: {
+            installId: string;
+            label: string;
+            platform: components["schemas"]["DevicePlatform"];
+        };
+        DeviceSettings: {
+            offlineMaxDays: number;
+            maxActiveDevices: number;
+        };
+        /** @enum {string} */
+        DeviceStatus: "pending" | "approved" | "revoked";
+        DeviceSyncReport: {
+            syncedAt: components["schemas"]["IsoTimestamp"];
+        };
+        DeviceView: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            accountId: string;
+            accountName: string;
+            accountUsername: string;
+            label: string;
+            platform: components["schemas"]["DevicePlatform"];
+            status: components["schemas"]["DeviceStatus"];
+            createdAt: components["schemas"]["IsoTimestamp"];
+            lastSeenAt: components["schemas"]["IsoTimestamp"];
+            lastSyncAt: components["schemas"]["IsoTimestamp"] | null;
+            decidedAt: components["schemas"]["IsoTimestamp"] | null;
+            decidedByName: string | null;
+            canManage: boolean;
+        };
+        DevicesResponse: {
+            items: components["schemas"]["DeviceView"][];
+        };
+        /** @enum {string} */
         DiscountAuthorityMode: "erp" | "force";
         /** @enum {string} */
         DiscountAuthorityStatus: "not_evaluated" | "within_authority" | "needs_manager" | "needs_director" | "blocked";
@@ -1451,7 +1977,7 @@ export interface components {
             details?: components["schemas"]["ErrorDetails"];
         };
         /** @enum {string} */
-        ErrorCode: "validation_failed" | "customer_refused" | "unauthenticated" | "invalid_credentials" | "access_not_configured" | "app_not_permitted" | "forbidden" | "not_found" | "conflict" | "version_conflict" | "idempotency_conflict" | "order_not_editable" | "installation_not_enabled" | "erp_submission_disabled" | "discount_blocked" | "approval_not_pending" | "dataset_mismatch" | "no_seller_scope" | "customer_without_seller" | "customer_ineligible" | "link_reconciliation_required" | "rate_limited" | "service_unavailable" | "internal_error";
+        ErrorCode: "validation_failed" | "customer_refused" | "unauthenticated" | "invalid_credentials" | "access_not_configured" | "app_not_permitted" | "device_pending" | "device_required" | "device_revoked" | "forbidden" | "not_found" | "conflict" | "version_conflict" | "idempotency_conflict" | "order_not_editable" | "installation_not_enabled" | "erp_submission_disabled" | "discount_blocked" | "approval_not_pending" | "dataset_mismatch" | "no_seller_scope" | "customer_without_seller" | "customer_ineligible" | "link_reconciliation_required" | "rate_limited" | "service_unavailable" | "internal_error";
         ErrorDetails: {
             issues?: components["schemas"]["ErrorIssue"][];
         } & {
@@ -1463,6 +1989,8 @@ export interface components {
             message?: string;
         };
         /** @enum {string} */
+        ExportFormat: "csv" | "xlsx";
+        /** @enum {string} */
         FallbackStrategy: "none" | "fixed_table";
         FeatureFlags: {
             [key: string]: boolean;
@@ -1473,12 +2001,91 @@ export interface components {
         FreightType: "CIF" | "FOB" | "SEM_FRETE";
         /** @enum {string} */
         GatewayMode: "fake" | "live" | "unknown";
+        GoalFigure: {
+            target: components["schemas"]["DecimalString"] | null;
+            realized: components["schemas"]["DecimalString"] | null;
+            percent: string | null;
+        };
+        GoalsResponse: {
+            month: string;
+            goalsSyncedAt: components["schemas"]["IsoTimestamp"] | null;
+            salesSyncedAt: components["schemas"]["IsoTimestamp"] | null;
+            total: {
+                revenue: components["schemas"]["GoalFigure"];
+                quantity: components["schemas"]["GoalFigure"];
+                positivation: components["schemas"]["PositivationFigure"] | null;
+            };
+            bySeller: components["schemas"]["SellerGoalRow"][];
+        };
         HealthResponse: {
             /** @constant */
             status: "ok";
         };
         /** @enum {string} */
         IcmsClassification: "C" | "I" | "P" | "R" | "T" | "X";
+        ImportConfirmRequest: {
+            type: components["schemas"]["ImportType"];
+            fileName: string;
+            contentBase64: string;
+            customerCode?: number;
+            mapping?: components["schemas"]["ImportMapping"];
+            /** Format: uuid */
+            clientRequestId: string;
+            expectedDataset?: components["schemas"]["DatasetIdentity"];
+        };
+        ImportField: {
+            id: string;
+            label: string;
+            required: boolean;
+        };
+        ImportMapping: {
+            [key: string]: string | null;
+        };
+        ImportPreview: {
+            type: components["schemas"]["ImportType"];
+            fields: components["schemas"]["ImportField"][];
+            headers: string[];
+            mapping: components["schemas"]["ImportMapping"];
+            missingRequired: string[];
+            totalRows: number;
+            recognized: number;
+            rejected: number;
+            skippedBlank: number;
+            sample: components["schemas"]["ImportPreviewRow"][];
+            errors: components["schemas"]["ImportRowIssue"][];
+            errorsTruncated: boolean;
+        };
+        ImportPreviewRequest: {
+            type: components["schemas"]["ImportType"];
+            fileName: string;
+            contentBase64: string;
+            customerCode?: number;
+            mapping?: components["schemas"]["ImportMapping"];
+        };
+        ImportPreviewRow: {
+            row: number;
+            ok: boolean;
+            label: string | null;
+            quantity: string | null;
+            reason: string | null;
+        };
+        ImportResult: {
+            type: components["schemas"]["ImportType"];
+            created: number;
+            rejected: number;
+            pending: number;
+            skippedBlank: number;
+            orderId: string | null;
+            draftNumber: number | null;
+            errors: components["schemas"]["ImportRowIssue"][];
+            errorsTruncated: boolean;
+        };
+        ImportRowIssue: {
+            row: number;
+            reason: string;
+        };
+        /** @enum {string} */
+        ImportType: "order_items" | "customers";
         IntegrationSummary: {
             /** @enum {string} */
             state: "ok" | "degraded" | "not_configured";
@@ -1548,6 +2155,10 @@ export interface components {
             password: string;
             /** @enum {string} */
             client?: "web" | "app";
+            device?: components["schemas"]["DeviceRegistration"];
+        };
+        MarkNotificationsReadRequest: {
+            ids?: string[];
         };
         Metric: {
             key: string;
@@ -1586,6 +2197,13 @@ export interface components {
         MobilityFilterMode: "disabled" | "enforced";
         /** @enum {string} */
         MobilityFilterValidation: "pending_validation" | "validated";
+        MyDeviceResponse: {
+            device: components["schemas"]["SessionDevice"] | null;
+        };
+        MyDiscountLimitsResponse: {
+            sellerCode: number | null;
+            rules: components["schemas"]["SellerDiscountRule"][];
+        };
         NegotiationType: {
             code: number;
             label: string;
@@ -1600,6 +2218,23 @@ export interface components {
         };
         /** @enum {string} */
         NoPriceReason: "no_resolved_table" | "no_effective_version" | "no_price_row";
+        Notification: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            category: "order" | "customer" | "task";
+            title: string;
+            body: string;
+            /** @enum {string} */
+            refType: "order" | "customer_registration" | "task";
+            refId: string;
+            readAt: components["schemas"]["IsoTimestamp"] | null;
+            createdAt: components["schemas"]["IsoTimestamp"];
+        };
+        NotificationsResponse: {
+            items: components["schemas"]["Notification"][];
+            unreadCount: number;
+        };
         OrderApproval: {
             requestedLevel: components["schemas"]["ApprovalLevel"];
             requestedAt: components["schemas"]["IsoTimestamp"];
@@ -1765,6 +2400,7 @@ export interface components {
             estimatedLineTotal: components["schemas"]["DecimalString"] | null;
             ipi?: components["schemas"]["ItemIpi"];
             image?: components["schemas"]["ProductImage"] | null;
+            barcode?: string | null;
         };
         OrderItemInput: {
             productCode: number;
@@ -1860,6 +2496,12 @@ export interface components {
             createdAt: components["schemas"]["IsoTimestamp"];
             updatedAt: components["schemas"]["IsoTimestamp"];
         };
+        OrderPriceReview: {
+            /** Format: uuid */
+            orderId: string;
+            version: number;
+            lines: components["schemas"]["PriceReviewLine"][];
+        };
         /** @enum {string} */
         OrderProductMatch: "any" | "all";
         OrderRefreshAccepted: {
@@ -1934,6 +2576,11 @@ export interface components {
         };
         /** @enum {string} */
         PortfolioOwnershipStrategy: "customer_seller_field" | "explicit_account_links" | "all_visible";
+        PositivationFigure: {
+            positivated: number;
+            total: number;
+            percent: string | null;
+        };
         PostalCodeLookup: {
             found: boolean;
             postalCode: string | null;
@@ -1952,6 +2599,17 @@ export interface components {
             tableName: string | null;
             /** @enum {string} */
             source: "customer" | "fallback" | "catalog_reference" | "none";
+        };
+        /** @enum {string} */
+        PriceReviewDecision: "accept" | "refuse";
+        PriceReviewLine: {
+            lineNo: number;
+            productCode: number;
+            productDescription: string;
+            unit: string;
+            quantity: components["schemas"]["DecimalString"];
+            previousUnitPrice: components["schemas"]["DecimalString"] | null;
+            currentUnitPrice: components["schemas"]["DecimalString"] | null;
         };
         PriceTablePrice: {
             productCode: number;
@@ -1979,6 +2637,7 @@ export interface components {
             groupName: string | null;
             quantityStep?: string | null;
             maxDiscountPercent?: string | null;
+            barcode?: string | null;
             usageCode: string | null;
             listPrice: components["schemas"]["ListPriceContext"];
             image?: components["schemas"]["ProductImage"] | null;
@@ -2017,6 +2676,7 @@ export interface components {
             groupName: string | null;
             quantityStep?: string | null;
             maxDiscountPercent?: string | null;
+            barcode?: string | null;
             usageCode?: string | null;
             listPrice: components["schemas"]["ListPriceContext"];
             image?: components["schemas"]["ProductImage"] | null;
@@ -2066,6 +2726,11 @@ export interface components {
                 };
             };
             integration: components["schemas"]["IntegrationSummary"];
+        };
+        RegisterPushDeviceRequest: {
+            token: string;
+            /** @enum {string} */
+            platform: "android" | "ios";
         };
         RejectApprovalRequest: {
             comment: string;
@@ -2142,6 +2807,14 @@ export interface components {
             name: string;
             items: components["schemas"]["OrderTemplateItem"][];
         };
+        ResolvePriceReviewRequest: {
+            expectedVersion: number;
+            expectedDataset: components["schemas"]["DatasetIdentity"];
+            decisions: {
+                lineNo: number;
+                decision: components["schemas"]["PriceReviewDecision"];
+            }[];
+        };
         ResolveProductsRequest: {
             customerCode?: number;
             identifiers: string[];
@@ -2155,8 +2828,29 @@ export interface components {
             name: string;
             active: boolean;
         };
+        /** @enum {string} */
+        SellerDiscountKind: "general" | "group" | "product";
+        SellerDiscountRule: {
+            kind: components["schemas"]["SellerDiscountKind"];
+            code: number | null;
+            percent: string;
+        };
+        SellerGoalRow: {
+            sellerCode: number;
+            sellerName: string | null;
+            revenue: components["schemas"]["GoalFigure"];
+            quantity: components["schemas"]["GoalFigure"];
+            positivation: components["schemas"]["PositivationFigure"] | null;
+        };
         SellersResponse: {
             items: components["schemas"]["Seller"][];
+        };
+        SessionDevice: {
+            /** Format: uuid */
+            id: string;
+            status: components["schemas"]["DeviceStatus"];
+            offlineMaxDays: number;
+            defaultPriceTableCode?: number;
         };
         SessionResponse: components["schemas"]["AuthenticatedSession"] | components["schemas"]["AnonymousSession"];
         SetCustomerRegistrationSellerRequest: {
@@ -2252,11 +2946,42 @@ export interface components {
             dataAsOf: components["schemas"]["IsoTimestamp"] | null;
             referenceVersion: string | null;
         };
+        Task: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            type: "call" | "visit" | "email" | "whatsapp" | "meeting" | "other";
+            title: string;
+            description: string | null;
+            dueAt: components["schemas"]["IsoTimestamp"];
+            reminderLeadMinutes: number | null;
+            customerCode: number | null;
+            customerName: string | null;
+            /** @enum {string} */
+            status: "pending" | "completed" | "cancelled";
+            completedAt: components["schemas"]["IsoTimestamp"] | null;
+            /** Format: uuid */
+            assigneeAccountId: string;
+            assigneeName: string;
+            version: number;
+            createdAt: components["schemas"]["IsoTimestamp"];
+            updatedAt: components["schemas"]["IsoTimestamp"];
+        };
+        TasksResponse: {
+            items: components["schemas"]["Task"][];
+        };
         /** @enum {string} */
         TemplateLineSkipReason: "product_removed" | "product_inactive" | "no_price" | "zero_price" | "product_hidden" | "product_not_sellable";
+        UnreadCountResponse: {
+            unreadCount: number;
+        };
+        UnregisterPushDeviceRequest: {
+            token: string;
+        };
         UpdateCustomerRequest: {
             /** Format: uuid */
             clientRequestId: string;
+            baseContactVersion?: string;
             phone?: string | null;
             email?: string | null;
             notes?: string | null;
@@ -2274,6 +2999,9 @@ export interface components {
             reasonMessage: string | null;
             updatedAt: components["schemas"]["IsoTimestamp"];
         };
+        UpdateDeviceSettingsRequest: {
+            maxActiveDevices: number;
+        };
         UpdateDiscountLimitsRequest: {
             expectedRevision: string;
             limits: components["schemas"]["DiscountLimits"];
@@ -2282,6 +3010,7 @@ export interface components {
             /** Format: uuid */
             clientRequestId: string;
             expectedDataset: components["schemas"]["DatasetIdentity"];
+            asQuotation?: boolean;
         };
         UseOrderTemplateResponse: {
             order: components["schemas"]["OrderDetail"];
@@ -2693,6 +3422,44 @@ export interface operations {
             };
         };
     };
+    getMyDiscountLimits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Regras de desconto do vendedor */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyDiscountLimitsResponse"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     getDiscountLimits: {
         parameters: {
             query?: never;
@@ -2800,6 +3567,338 @@ export interface operations {
             };
         };
     };
+    getMyDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Aparelho da sessão */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyDeviceResponse"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    reportDeviceSync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceSyncReport"];
+            };
+        };
+        responses: {
+            /** @description Registrado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    listDevices: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["DeviceStatus"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Aparelhos */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DevicesResponse"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    approveDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Aparelho aprovado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceView"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflito de estado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    revokeDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Aparelho revogado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceView"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflito de estado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    getDeviceSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Configuração de aparelhos */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceSettings"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    updateDeviceSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDeviceSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Configuração salva */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceSettings"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     getOrderEntryConfiguration: {
         parameters: {
             query?: never;
@@ -2863,6 +3962,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DashboardResponse"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    getGoals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Metas e positivação do mês */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalsResponse"];
                 };
             };
             /** @description Não autenticado */
@@ -4012,6 +5149,55 @@ export interface operations {
             };
         };
     };
+    lookupCnpj: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cnpj: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Dados do CNPJ (ou found=false) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CnpjLookup"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Muitas tentativas */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     listProducts: {
         parameters: {
             query?: {
@@ -4629,6 +5815,135 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflito de estado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    getOrderPriceReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Linhas com preço alterado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderPriceReview"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    resolveOrderPriceReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolvePriceReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Pedido atualizado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderDetail"];
+                };
             };
             /** @description Requisição inválida (validation_failed) */
             400: {
@@ -5784,6 +7099,820 @@ export interface operations {
             };
             /** @description Conflito de estado */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    listTasks: {
+        parameters: {
+            query?: {
+                status?: "pending" | "completed" | "cancelled";
+                customerCode?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tarefas */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TasksResponse"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    createTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTaskRequest"];
+            };
+        };
+        responses: {
+            /** @description Reenvio idempotente: tarefa original */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Tarefa criada */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflito de estado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    completeTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteTaskRequest"];
+            };
+        };
+        responses: {
+            /** @description Tarefa concluída */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflito de estado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    cancelTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tarefa cancelada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflito de estado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    listNotifications: {
+        parameters: {
+            query?: {
+                unreadOnly?: "true" | "false";
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Notificações */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationsResponse"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    markNotificationsRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarkNotificationsReadRequest"];
+            };
+        };
+        responses: {
+            /** @description Contagem de não lidas */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnreadCountResponse"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    registerPushDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterPushDeviceRequest"];
+            };
+        };
+        responses: {
+            /** @description Aparelho registrado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    unregisterPushDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnregisterPushDeviceRequest"];
+            };
+        };
+        responses: {
+            /** @description Aparelho removido */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    getOrderImportTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Modelo .xlsx */
+            200: {
+                headers: {
+                    /** @description attachment */
+                    "Content-Disposition"?: string;
+                    /** @description no-store */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    previewImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Pré-visualização */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportPreview"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    confirmImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Resultado da importação */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResult"];
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Recurso não encontrado (ou fora do escopo do usuário) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Conflito de estado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Muitas tentativas */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    exportCustomers: {
+        parameters: {
+            query?: {
+                format?: components["schemas"]["ExportFormat"];
+                search?: string;
+                sellerCode?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Planilha */
+            200: {
+                headers: {
+                    /** @description attachment */
+                    "Content-Disposition"?: string;
+                    /** @description no-store */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    exportOrders: {
+        parameters: {
+            query?: {
+                format?: components["schemas"]["ExportFormat"];
+                search?: string;
+                customerCode?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Planilha */
+            200: {
+                headers: {
+                    /** @description attachment */
+                    "Content-Disposition"?: string;
+                    /** @description no-store */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    exportProducts: {
+        parameters: {
+            query?: {
+                format?: components["schemas"]["ExportFormat"];
+                search?: string;
+                group?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Planilha */
+            200: {
+                headers: {
+                    /** @description attachment */
+                    "Content-Disposition"?: string;
+                    /** @description no-store */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
+                };
+            };
+            /** @description Requisição inválida (validation_failed) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Não autenticado */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sem permissão para este recurso */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

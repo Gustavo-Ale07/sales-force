@@ -250,6 +250,13 @@ export class TemplatesService {
     const context = await this.policy.accessContext(user);
     const template = await this.loadVisible(context.scope, id);
     const customer = await this.customers.requireVisible(context.scope, template.customerCode);
+    const quotationTop = context.configuration.sales.quotationTopCode;
+    if (body.asQuotation === true && quotationTop === null) {
+      throw new AppError('conflict', {
+        message: 'A instalação não tem um tipo de operação de orçamento configurado.',
+        details: { reason: 'quotation_top_not_configured' },
+      });
+    }
     const items = await this.templates.itemsOf(id);
 
     const { usable, skipped } = await this.builder.classifyTemplateLines(
@@ -275,6 +282,7 @@ export class TemplatesService {
         clientRequestId: body.clientRequestId,
         expectedDataset: body.expectedDataset,
         customerCode: customer.code,
+        ...(body.asQuotation === true ? { topCode: quotationTop } : {}),
         negotiationTypeCode: null,
         notes: null,
         items: usable.map((line) => ({ productCode: line.productCode, quantity: line.quantity })),

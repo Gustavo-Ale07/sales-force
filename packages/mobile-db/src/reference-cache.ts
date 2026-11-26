@@ -17,6 +17,8 @@ export interface CustomerLike {
   readonly sellerCode?: number | null;
   readonly sellerName?: string | null;
   readonly priceTableCode?: number | null;
+  /** Hash of the phone and e-mail the ERP had when this was pulled: the base of an offline edit. */
+  readonly contactVersion?: string;
 }
 
 /**
@@ -420,6 +422,24 @@ export async function clearProductGroups(tx: SqlExecutor): Promise<void> {
   await deleteMeta(tx, META_KEYS.productGroupsHasUngrouped);
 }
 
+/** The signed-in seller's own discount rules as `GET /discount-limits/mine` delivers them. `percent` is a decimal string. */
+export interface SellerDiscountLimits {
+  readonly sellerCode: number | null;
+  readonly rules: readonly { readonly kind: "general" | "group" | "product"; readonly code: number | null; readonly percent: string }[];
+}
+
+/** The seller's cached discount rules; `null` when the device never received them (the product ceiling alone applies). */
+export async function readSellerDiscountLimits(tx: SqlExecutor): Promise<SellerDiscountLimits | null> {
+  const raw = await getMeta(tx, META_KEYS.sellerDiscountLimits);
+  if (raw === null) return null;
+  try {
+    const parsed = JSON.parse(raw) as SellerDiscountLimits;
+    return Array.isArray(parsed.rules) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The cached group tree, or `null` when the device never received one (callers fall back to the flat list). */
 export async function listProductGroupTree(tx: SqlExecutor): Promise<ProductGroupsFetch | null> {
   const flag = await getMeta(tx, META_KEYS.productGroupsHierarchical);
@@ -491,6 +511,8 @@ export const META_KEYS = {
   pricesOriginReference: "cache.prices_origin.reference",
   /** JSON map `{tableCode: name}` of the price tables on the device. */
   priceTableNames: "cache.prices_origin.table_names",
+  /** JSON `SellerDiscountLimits` of the signed-in seller (own rules only), refreshed with every pull. */
+  sellerDiscountLimits: "cache.seller_discount_limits",
   productGroupsHierarchical: "cache.product_groups.hierarchical",
   productGroupsHasUngrouped: "cache.product_groups.has_ungrouped",
   cacheOwner: "cache.owner_account_id",
@@ -500,6 +522,10 @@ export const META_KEYS = {
   expectedDatasetId: "session.expected_dataset_id",
   account: "session.last_account",
   lastAuthAt: "session.last_online_at",
+  /** Days this device may stay without contact with the server (AUTH-2, set in Configuracoes of the site); read by the offline lock. */
+  deviceOfflineMaxDays: "session.device_offline_max_days",
+  /** Price table of a customer without one, from the ERP (AD_FORCECFG) through the device status. */
+  deviceDefaultPriceTable: "session.device_default_price_table",
 } as const;
 
 const BLOCKED_SQL = "COALESCE(json_extract(data, '$.blocked'), 0) = 1";

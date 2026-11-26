@@ -13,6 +13,7 @@ import {
   type SqlDatabase,
 } from "@salesforce/mobile-db";
 import { callApi, type ApiClient } from "../data/api";
+import type { CnpjAnswer } from "../data/customer-cnpj";
 
 /** Address helpers of the new-customer form. Searches are local (the lists come with the sync); the CEP lookup uses the server and the local cache. */
 export interface AddressPort {
@@ -24,11 +25,22 @@ export interface AddressPort {
    * not find it, answers from the local memory, otherwise `null` (the form then simply stays free: no text, no error). Never throws.
    */
   lookupPostalCode(cep: string): Promise<CachedPostalCode | null>;
+  /** The company data of a 14-digit CNPJ, asked of the server only (never from the device); `null` when offline, unknown or on any failure. Never throws. */
+  lookupCnpj?(cnpj: string): Promise<CnpjAnswer | null>;
 }
 
 export function createAddressPort(deps: { readonly db: SqlDatabase; readonly env: OfflineEnv; readonly api: ApiClient }): AddressPort {
   const { db, env, api } = deps;
   return {
+    async lookupCnpj(cnpj) {
+      if (!/^d{14}$/.test(cnpj)) return null;
+      try {
+        const answer = await callApi(() => api.GET("/customers/cnpj/{cnpj}", { params: { path: { cnpj } } }));
+        return answer.found ? answer : null;
+      } catch {
+        return null;
+      }
+    },
     searchCities: (query) => searchCities(db, query),
     searchNeighborhoods: (query) => searchNeighborhoods(db, query),
     searchStreets: (query) => searchStreets(db, query),

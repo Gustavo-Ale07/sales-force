@@ -363,7 +363,7 @@ describe("SalesScreen — detail and actions", () => {
     expect(screen.getByText("Copo: R$ 1,50")).toBeTruthy();
     expect(screen.getByText("R$ 2,00")).toBeTruthy();
     await fireEvent.press(screen.getByRole("button", { name: "Aceitar novos preços" }));
-    expect(acknowledge).toHaveBeenCalledWith("d");
+    expect(acknowledge).toHaveBeenCalledWith("d", []);
   });
 
   it("an order that vanished from the device says so instead of crashing", async () => {

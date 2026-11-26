@@ -38,6 +38,8 @@ export const erpSeller = pgTable(
     active: boolean('active').notNull(),
     /** Raw source seller-type code (not reliable to identify sellers, F-37). */
     typeCode: text('type_code'),
+    /** TGFVEN.DESCMAX: the seller's general discount ceiling in percent; null = none registered in the ERP. */
+    maxDiscountPercent: numeric('max_discount_percent', { precision: 7, scale: 4 }),
     ...mirrorColumns(),
   },
   (t) => [
@@ -88,6 +90,41 @@ export const erpPostalCode = pgTable('erp_postal_code', {
   streetCode: integer('street_code').notNull(),
   ...mirrorColumns(),
 });
+
+/**
+ * AD_FORCECFG: installation parameters the manager registers INSIDE the ERP (days without sync, default price table). The Force
+ * only mirrors them, read-only; null = not filled in (the domain default applies). No cost or margin (P-20).
+ */
+export const erpForceConfig = pgTable('erp_force_config', {
+  id: integer('id').primaryKey(),
+  daysWithoutSync: integer('days_without_sync'),
+  defaultPriceTableCode: integer('default_price_table_code'),
+  ...mirrorColumns(),
+});
+
+/**
+ * AD_FORCELIMDESC: per-seller discount rules registered inside the ERP (product row or group row; a seller's general ceiling is
+ * TGFVEN.DESCMAX, mirrored on erp_seller). Read-only mirror keyed by (config_id, seq). Not a foreign key: the mirrors load independently.
+ */
+export const erpForceDiscountLimit = pgTable(
+  'erp_force_discount_limit',
+  {
+    configId: integer('config_id').notNull(),
+    seq: integer('seq').notNull(),
+    sellerCode: integer('seller_code').notNull(),
+    groupCode: integer('group_code'),
+    productCode: integer('product_code'),
+    percent: numeric('percent', { precision: 7, scale: 4 }).notNull(),
+    ...mirrorColumns(),
+  },
+  (t) => [
+    primaryKey({ name: 'erp_force_discount_limit_pk', columns: [t.configId, t.seq] }),
+    check('erp_force_discount_limit_target_chk', sql`${t.productCode} is not null or ${t.groupCode} is not null`),
+    check('erp_force_discount_limit_percent_chk', sql`${t.percent} >= 0 and ${t.percent} <= 100`),
+    // Serves: the seller's own rules (sync bundle and order revalidation), live rows only.
+    index('erp_force_discount_limit_seller_idx').on(t.sellerCode).where(sql`${t.deletedAt} is null`),
+  ],
+);
 
 /** Carriers (partners flagged as carrier in the ERP): code, display name and active flag only (D-C). */
 export const erpCarrier = pgTable('erp_carrier', {
@@ -167,6 +204,24 @@ export const erpOpenTitle = pgTable(
  * content hash and no soft delete. Not a foreign key to customer/seller: the mirrors load independently. No cost or margin column
  * (P-20); not part of the mobile sync.
  */
+// Read-only mirror of the ERP seller goals (RF-GOL-1): one row per seller and month, replaced as a whole snapshot. No cost, margin or commission (P-20).
+export const erpSellerGoal = pgTable(
+  'erp_seller_goal',
+  {
+    sellerCode: integer('seller_code').notNull(),
+    month: date('month', { mode: 'string' }).notNull(),
+    revenueTarget: numeric('revenue_target', { precision: 14, scale: 2 }).notNull(),
+    quantityTarget: numeric('quantity_target', { precision: 18, scale: 6 }).notNull(),
+    syncedAt: timestamp('synced_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    primaryKey({ name: 'erp_seller_goal_pk', columns: [t.sellerCode, t.month] }),
+    check('erp_seller_goal_values_chk', sql`${t.revenueTarget} >= 0 and ${t.quantityTarget} >= 0 and extract(day from ${t.month}) = 1`),
+    // Serves: the month read of every goals request (month, then seller scope).
+    index('erp_seller_goal_month_idx').on(t.month),
+  ],
+);
+
 export const erpSalesHistoryMonthly = pgTable(
   'erp_sales_history_monthly',
   {
@@ -312,6 +367,8 @@ export const erpProduct = pgTable(
     quantityStep: numeric('quantity_step', { precision: 14, scale: 4 }),
     /** Discount ceiling in percent (TGFPRO.DESCMAX). NULL = no limit registered in the ERP. Not cost/margin. */
     maxDiscountPercent: numeric('max_discount_percent', { precision: 7, scale: 4 }),
+    /** Barcode (EAN) from TGFBAR. NULL = none registered. Not restricted data. */
+    barcode: text('barcode'),
     active: boolean('active').notNull(),
     ...mirrorColumns(),
   },

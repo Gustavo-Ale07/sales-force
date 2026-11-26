@@ -4,6 +4,7 @@ import { DatasetIdentityError, confirmDataset, readCacheDataset, readExpectedDat
 import { countOutbox, draftErpNumber, getDraft, listAttentionItems, listOutbox, type AttentionItem, type DraftRecord } from "./local-orders";
 import { verifyAndRepairMirror, type ExpectedMirror } from "./mirror-check";
 import { isoNow, type OfflineEnv } from "./offline-env";
+import { pushCustomerEdits, recoverInterruptedCustomerEdits, type CustomerEditTransport } from "./customer-edits";
 import { mergeServerOrders, type ServerOrdersSource } from "./server-orders";
 import { refreshOneOrderErpStatus, refreshOrderErpStatuses, type OrderStatusSource } from "./order-erp-status";
 import { countSendRequests, pushOutbox, pushSendRequests, recoverInterrupted, reevaluateHeldOrders, TransportError, type OrderTransport, type PushOptions, type PushStop } from "./order-sync";
@@ -15,7 +16,7 @@ import {
   settleConfirmedCustomers,
   type CustomerRegistrationTransport,
 } from "./pending-customers";
-import { META_KEYS, cachedPriceTableCodes, clearProductGroups, countPriceRows, deleteMeta, getMeta, replaceCustomers, replacePriceTableNames, replacePriceTables, replaceProductGroups, replaceProducts, setMeta, type CustomerLike, type PriceOrigin, type PriceTableSnapshot, type ProductGroupsFetch, type ProductLike } from "./reference-cache";
+import { META_KEYS, cachedPriceTableCodes, clearProductGroups, countPriceRows, deleteMeta, getMeta, replaceCustomers, replacePriceTableNames, replacePriceTables, replaceProductGroups, replaceProducts, setMeta, type CustomerLike, type PriceOrigin, type PriceTableSnapshot, type ProductGroupsFetch, type ProductLike, type SellerDiscountLimits } from "./reference-cache";
 
 /**
  * Where the reference data comes from. The server stays authoritative and delivers only what the actor's scope
@@ -44,6 +45,8 @@ export interface ReferenceSource extends OrderStatusSource, ServerOrdersSource {
   fetchCarriers?(): Promise<readonly unknown[]>;
   /** Group hierarchy (Grupo > Subgrupo > Linha). Optional and best-effort like carriers: a failure keeps the previous tree. */
   fetchProductGroups?(): Promise<ProductGroupsFetch>;
+  /** The seller's own discount rules (`GET /discount-limits/mine`). Optional and best-effort: a failure keeps the previous rules. */
+  fetchDiscountLimits?(): Promise<SellerDiscountLimits>;
   /** Table the server resolves the catalog (no customer) against, for the list's "origin of the prices". Best-effort like carriers. */
   fetchPricesOrigin?(): Promise<PriceOrigin>;
   /** ERP address lists of the new-customer form (`GET /cities`, `/neighborhoods`, `/streets`). Best-effort like carriers: a failure keeps the previous list. */
@@ -205,6 +208,14 @@ export async function pullReferenceData(
       productGroups = null;
     }
   }
+  let discountLimits: SellerDiscountLimits | null = null;
+  if (source.fetchDiscountLimits !== undefined) {
+    try {
+      discountLimits = await source.fetchDiscountLimits();
+    } catch {
+      discountLimits = null;
+    }
+  }
   let pricesOrigin: PriceOrigin | null = null;
   if (source.fetchPricesOrigin !== undefined) {
     try {
@@ -236,6 +247,9 @@ export async function pullReferenceData(
     await replaceProducts(tx, products);
     if (productGroups !== null) await replaceProductGroups(tx, productGroups, now);
     else if (!sameDataset(previousDataset, before)) await clearProductGroups(tx);
+    // Another account or dataset never keeps the previous seller's rules when they cannot be refreshed.
+    if (discountLimits !== null) await setMeta(tx, META_KEYS.sellerDiscountLimits, JSON.stringify(discountLimits), now);
+    else if (!sameOwnerAndDataset) await deleteMeta(tx, META_KEYS.sellerDiscountLimits);
     // Tables whose read FAILED keep their previous prices (same account and dataset only); the rest not read are dropped.
     const keepTables = sameOwnerAndDataset ? (await cachedPriceTableCodes(tx)).filter((code) => failedTables.includes(code) && !priceTables.some((t) => t.tableCode === code)) : [];
     await replacePriceTables(tx, priceTables.filter((t) => used.has(t.tableCode)), { keepTables });
@@ -379,6 +393,8 @@ export interface SyncManagerDeps {
   readonly transport: OrderTransport;
   /** Delivery of customers created in the app (F7). Absent = none are sent (they stay queued on the device). */
   readonly customerTransport?: CustomerRegistrationTransport;
+  /** Delivers the offline edits of existing customers; sent after the customer creations and before the orders. */
+  readonly customerEditTransport?: CustomerEditTransport;
   readonly source: ReferenceSource;
   readonly ownerAccountId: string;
   /** Called with unexpected (non-transport) errors, for logging. */
@@ -638,6 +654,7 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
     try {
       await recoverInterrupted(deps.db, deps.env);
       await recoverInterruptedCustomers(deps.db, deps.env);
+      await recoverInterruptedCustomerEdits(deps.db, deps.env);
       // Confirm the dataset with the server before anything is sent (only when there is something to send or to pull).
       let confirmed = true;
       if (pull || (await counters()).pending > 0 || (await backgroundPending()) > 0) {
@@ -676,6 +693,12 @@ export function createSyncManager(deps: SyncManagerDeps): SyncManager {
         // A refused customer is not a sync error: it shows as "needs attention" through the counters.
         if (sentCustomers.stoppedBy === "offline" || sentCustomers.stoppedBy === "auth") customerStop = sentCustomers.stoppedBy;
         sentCount += sentCustomers.confirmed;
+      }
+      // Then the edits of existing customers (still before any order). A conflict or refusal is a state the seller sees, not a failed run.
+      if (confirmed && customerStop === null && deps.customerEditTransport !== undefined) {
+        const sentEdits = await pushCustomerEdits(deps.db, deps.env, deps.customerEditTransport, deps.ownerAccountId, { currentDataset: pushOptions.currentDataset ?? null });
+        if (sentEdits.stoppedBy === "offline" || sentEdits.stoppedBy === "auth") customerStop = sentEdits.stoppedBy;
+        sentCount += sentEdits.sent;
       }
       const outboxPushed: { attempted: number; accepted: number; failed: number; stoppedBy: PushStop } =
         customerStop !== null

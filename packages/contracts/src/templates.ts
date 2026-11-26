@@ -94,7 +94,15 @@ export type ReplaceOrderTemplateRequest = z.infer<typeof ReplaceOrderTemplateReq
 /** `POST /order-templates/{id}/use`. One `clientRequestId` per user action (it becomes the draft's own request id). */
 export const UseOrderTemplateRequestSchema = named(
   'UseOrderTemplateRequest',
-  z.strictObject({ clientRequestId: UuidSchema, expectedDataset: expectedDatasetField }),
+  z.strictObject({
+    clientRequestId: UuidSchema,
+    expectedDataset: expectedDatasetField,
+    /**
+     * `true` creates a QUOTATION (the installation's quotation TOP) instead of an order, with the lines priced now. 409
+     * `quotation_top_not_configured` when the installation has no quotation TOP. Omitted = an order (default TOP).
+     */
+    asQuotation: z.boolean().optional(),
+  }),
 );
 export type UseOrderTemplateRequest = z.infer<typeof UseOrderTemplateRequestSchema>;
 

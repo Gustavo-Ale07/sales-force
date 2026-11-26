@@ -126,6 +126,9 @@ describe('capabilities and NotImplemented paths', () => {
       neighborhoods: 'supported',
       streets: 'supported',
       postalCodes: 'supported',
+      forceConfig: 'supported',
+      forceDiscountLimits: 'supported',
+      sellerGoals: 'supported',
       ipiRates: 'supported',
       openTitles: 'supported',
       salesHistoryMonthly: 'supported',
@@ -302,7 +305,7 @@ describe('completeness and fail-closed validation', () => {
 
   it('rejects duplicated or out-of-order rows between pages', async () => {
     const { gateway, mock } = setup({ pageSize: 2 });
-    mock.forced.push(ok(['CODVEND', 'APELIDO', 'ATIVO'], [[1, 'A', 'S'], [2, 'B', 'S']]), ok(['CODVEND', 'APELIDO', 'ATIVO'], [[2, 'B', 'S'], [3, 'C', 'S']]));
+    mock.forced.push(ok(['CODVEND', 'APELIDO', 'ATIVO', 'DESCMAX'], [[1, 'A', 'S', null], [2, 'B', 'S', null]]), ok(['CODVEND', 'APELIDO', 'ATIVO', 'DESCMAX'], [[2, 'B', 'S', null], [3, 'C', 'S', null]]));
     const failure = (await collect(gateway.readSellers()).catch((e: unknown) => e)) as SankhyaGatewayError;
     expect(failure.code).toBe('snapshot_inconsistent');
     expect(failure.kind).toBe('temporary');
@@ -310,7 +313,7 @@ describe('completeness and fail-closed validation', () => {
 
   it('an unfinished iteration may already have yielded batches: consumers must stage', async () => {
     const { gateway, mock } = setup({ pageSize: 2 });
-    mock.forced.push(ok(['CODVEND', 'APELIDO', 'ATIVO'], [[1, 'A', 'S'], [2, 'B', 'S']]), httpStatus(503));
+    mock.forced.push(ok(['CODVEND', 'APELIDO', 'ATIVO', 'DESCMAX'], [[1, 'A', 'S', null], [2, 'B', 'S', null]]), httpStatus(503));
     const yielded: number[] = [];
     const failure = await (async () => {
       for await (const batch of gateway.readSellers()) yielded.push(batch.length);
@@ -340,21 +343,21 @@ describe('completeness and fail-closed validation', () => {
 
   it('a truncated result (burstLimit) is rejected instead of accepted as complete', async () => {
     const { gateway, mock } = setup();
-    mock.forced.push(ok(['CODVEND', 'APELIDO', 'ATIVO'], [[1, 'A', 'S']], true));
+    mock.forced.push(ok(['CODVEND', 'APELIDO', 'ATIVO', 'DESCMAX'], [[1, 'A', 'S', null]], true));
     const failure = (await collect(gateway.readSellers()).catch((e: unknown) => e)) as SankhyaGatewayError;
     expect(failure).toMatchObject({ kind: 'validation', code: 'burst_limit', retryable: false });
   });
 
   it('a differently shaped result fails closed', async () => {
     const { gateway, mock } = setup();
-    mock.forced.push(ok(['CODVEND', 'NOME', 'ATIVO'], [[1, 'A', 'S']]));
+    mock.forced.push(ok(['CODVEND', 'NOME', 'ATIVO'], [[1, 'A', 'S', null]]));
     const failure = (await collect(gateway.readSellers()).catch((e: unknown) => e)) as SankhyaGatewayError;
     expect(failure).toMatchObject({ kind: 'validation', code: 'invalid_gateway_response' });
   });
 
   it('a malformed row is a validation error naming the column, never the value', async () => {
     const { gateway, mock } = setup();
-    mock.forced.push(ok(['CODVEND', 'APELIDO', 'ATIVO'], [[1, 'Nome Sintetico Sensivel', 'Talvez']]));
+    mock.forced.push(ok(['CODVEND', 'APELIDO', 'ATIVO', 'DESCMAX'], [[1, 'Nome Sintetico Sensivel', 'Talvez', null]]));
     const failure = (await collect(gateway.readSellers()).catch((e: unknown) => e)) as SankhyaGatewayError;
     expect(failure).toMatchObject({ kind: 'validation', code: 'invalid_row', retryable: false });
     expect(failure.message).toContain('ATIVO');

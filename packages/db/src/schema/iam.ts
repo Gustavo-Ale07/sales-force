@@ -1,11 +1,13 @@
 // Module: iam — accounts, sessions, seller links and audit log (dev-safe auth, slice 1 §6).
 import { sql } from 'drizzle-orm';
 import {
+  type AnyPgColumn,
   check,
   index,
   integer,
   jsonb,
   pgTable,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -65,14 +67,69 @@ export const session = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    /** The mobile device the session was opened from (null for the site and for sessions that predate the device registry). */
+    deviceId: uuid('device_id').references((): AnyPgColumn => device.id, { onDelete: 'set null' }),
   },
   (t) => [
+    // Serves: revoke the sessions of a device; join to its status on every request.
+    index('session_device_id_idx').on(t.deviceId),
     // Serves: every authenticated request (lookup by token hash).
     uniqueIndex('session_token_hash_uq').on(t.tokenHash),
     // Serves: revoke all sessions of an account; list active sessions.
     index('session_account_id_idx').on(t.accountId),
     // Serves: periodic purge of expired sessions.
     index('session_expires_at_idx').on(t.expiresAt),
+  ],
+);
+
+export const deviceStatuses = ['pending', 'approved', 'revoked'] as const;
+export const devicePlatforms = ['android', 'ios'] as const;
+
+/** Mobile device registry (AUTH-2, RF-IAM-7). One row per app installation of an account; its status gates every request of its sessions. */
+export const device = pgTable(
+  'device',
+  {
+    id: uuid('id').primaryKey(),
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => account.id, { onDelete: 'cascade' }),
+    /** Random id the app keeps in its secure store; identifies the installation. Not a secret and never a hardware id. */
+    installId: text('install_id').notNull(),
+    label: text('label').notNull(),
+    platform: text('platform').notNull(),
+    status: text('status').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Last successful synchronization reported by the device (informational; the lock is enforced on the device). */
+    lastSyncAt: timestamp('last_sync_at', { withTimezone: true }),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    decidedBy: uuid('decided_by').references(() => account.id),
+  },
+  (t) => [
+    check('device_platform_chk', sql`${t.platform} in (${inList(devicePlatforms)})`),
+    check('device_status_chk', sql`${t.status} in (${inList(deviceStatuses)})`),
+    check('device_install_id_chk', sql`${t.installId} ~ '^[A-Za-z0-9-]{8,64}$'`),
+    // Serves: registration lookup at login (one row per account and installation).
+    uniqueIndex('device_account_install_uq').on(t.accountId, t.installId),
+    // Serves: the administration list by status, newest first.
+    index('device_status_created_idx').on(t.status, t.createdAt),
+  ],
+);
+
+/** Installation-wide device settings (single row), edited in Configuracoes of the site. */
+export const deviceSetting = pgTable(
+  'device_setting',
+  {
+    id: smallint('id').primaryKey().default(1),
+    offlineMaxDays: integer('offline_max_days').notNull().default(7),
+    maxActiveDevices: integer('max_active_devices').notNull().default(1),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedBy: uuid('updated_by').references(() => account.id),
+  },
+  (t) => [
+    check('device_setting_singleton_chk', sql`${t.id} = 1`),
+    check('device_setting_offline_max_days_chk', sql`${t.offlineMaxDays} between 1 and 60`),
+    check('device_setting_max_active_devices_chk', sql`${t.maxActiveDevices} between 1 and 5`),
   ],
 );
 

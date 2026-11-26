@@ -71,6 +71,16 @@ export class PostalCodeService {
     // Same gate as the registration endpoints: a seller without a valid link, or a profile that may not register, is refused.
     await this.policy.accessContext(user);
     this.throttle(user.accountId);
+    return this.resolveCep(rawCep);
+  }
+
+  /** Spreadsheet import: the same lookup without the per-call budget (the import is capped at 30 rows and checks the access gate once). */
+  async lookupForImport(user: CurrentUser, rawCep: string): Promise<PostalCodeLookup> {
+    await this.policy.accessContext(user);
+    return this.resolveCep(rawCep);
+  }
+
+  private async resolveCep(rawCep: string): Promise<PostalCodeLookup> {
     const cep = rawCep.replace(/[\s.-]/g, '');
     if (!/^\d{8}$/.test(cep) || /^0{8}$/.test(cep)) return NOT_FOUND;
 

@@ -5,9 +5,19 @@ import type { Account } from "../auth/auth-port";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import type { DashboardIndicators, DashboardPort } from "../data/dashboard";
 import type { Repositories } from "../data/ports";
+import type { GoalsPort, GoalsSnapshot } from "../offline/goals-service";
 import type { LocalOrdersPort } from "../offline/local-orders";
+import type { TasksPort } from "../offline/tasks-service";
 import { colors, fontSize, radius, spacing } from "../theme";
 import { roleLabel } from "./account-labels";
+import { moneyText, percentText, positivationText } from "./goals-screen";
+import { formatTaskDateTime } from "./task-dates";
+
+/** Pending (open) local tasks due on the device's current day, late ones included. */
+export function tasksDueToday(items: readonly { status: string; dueAt: string }[], now: Date): number {
+  const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime();
+  return items.filter((task) => task.status === "pending" && new Date(task.dueAt).getTime() < endOfDay).length;
+}
 
 export interface HomeScreenProps {
   readonly account: Account;
@@ -23,6 +33,12 @@ export interface HomeScreenProps {
   readonly onSyncNow?: () => void;
   /** The site's Início counters (`GET /dashboard`), read online. Absent = the section is not shown. */
   readonly dashboard?: DashboardPort;
+  /** DSH-5: goal x realized and positivation of the month, with the last value kept on the device. Absent = the panel is not shown. */
+  readonly goals?: GoalsPort;
+  /** Local tasks, for "tarefas do dia". Absent = that figure is not shown. */
+  readonly tasks?: TasksPort;
+  /** Opens M-24. */
+  readonly onOpenGoals?: () => void;
 }
 
 interface Summary {
@@ -86,8 +102,10 @@ function ActionRow({
 
 
 /** Home: real shortcuts and counters from the data already on this device. No sales metrics until there is a source for them. */
-export function HomeScreen({ account, active, repositories, localOrders, syncStatus, connectivity, onNewOrder, onSyncNow, dashboard }: HomeScreenProps) {
+export function HomeScreen({ account, active, repositories, localOrders, syncStatus, connectivity, onNewOrder, onSyncNow, dashboard, goals, tasks, onOpenGoals }: HomeScreenProps) {
   const [summary, setSummary] = useState<Summary>(EMPTY_SUMMARY);
+  const [goalsSnapshot, setGoalsSnapshot] = useState<GoalsSnapshot | null>(null);
+  const [tasksToday, setTasksToday] = useState<number | null>(null);
   const [indicators, setIndicators] = useState<DashboardIndicators | null>(null);
   const online = connectivity !== "offline";
 
@@ -104,6 +122,43 @@ export function HomeScreen({ account, active, repositories, localOrders, syncSta
       current = false;
     };
   }, [active, online, dashboard, syncStatus.lastSyncedAt]);
+
+  // DSH-5: the stored value first (works offline), then the server's when there is a connection.
+  useEffect(() => {
+    if (!active || goals === undefined) return;
+    let current = true;
+    void goals
+      .cached()
+      .then((found) => {
+        if (current && found !== null) setGoalsSnapshot(found);
+      })
+      .catch(() => undefined);
+    if (online) {
+      void goals
+        .load()
+        .then((found) => {
+          if (current && found !== null) setGoalsSnapshot(found);
+        })
+        .catch(() => undefined);
+    }
+    return () => {
+      current = false;
+    };
+  }, [active, online, goals, syncStatus.lastSyncedAt]);
+
+  useEffect(() => {
+    if (!active || tasks === undefined) return;
+    let current = true;
+    void tasks
+      .list()
+      .then((items) => {
+        if (current) setTasksToday(tasksDueToday(items, new Date()));
+      })
+      .catch(() => undefined);
+    return () => {
+      current = false;
+    };
+  }, [active, tasks, syncStatus.dataRevision, syncStatus.lastSyncedAt]);
 
   useEffect(() => {
     if (!active) return;
@@ -161,7 +216,24 @@ export function HomeScreen({ account, active, repositories, localOrders, syncSta
             <TextTile label="Pedidos em aberto" value={indicators?.openOrders ?? null} />
             <TextTile label="R$ não enviados" value={indicators?.unsentAmount ?? null} />
           </View>
-          {!online && <Text style={styles.tileLabel}>Sem conexão: os indicadores voltam quando houver internet.</Text>}
+        </View>
+      )}
+
+      {goals !== undefined && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Resumo do mês</Text>
+          <Pressable onPress={onOpenGoals} disabled={onOpenGoals === undefined} accessibilityRole="button" accessibilityLabel="Abrir metas">
+            <View style={styles.grid}>
+              <TextTile label="Meta do mês" value={goalsSnapshot === null ? null : moneyText(goalsSnapshot.data.total.revenue.target)} />
+              <TextTile label="Realizado" value={goalsSnapshot === null ? null : moneyText(goalsSnapshot.data.total.revenue.realized)} />
+              <TextTile label="Atingido" value={goalsSnapshot === null ? null : percentText(goalsSnapshot.data.total.revenue.percent)} />
+              <TextTile label="Positivação" value={goalsSnapshot === null ? null : positivationText(goalsSnapshot.data.total.positivation)} />
+              <TextTile label="Pedidos pendentes" value={String(syncStatus.pending)} />
+              <TextTile label="Pedidos com erro" value={String(syncStatus.needsAttention)} />
+              {tasks !== undefined && <TextTile label="Tarefas do dia" value={tasksToday === null ? null : String(tasksToday)} />}
+            </View>
+          </Pressable>
+          {goalsSnapshot !== null && <Text style={styles.tileLabel}>{formatTaskDateTime(goalsSnapshot.fetchedAt)}</Text>}
         </View>
       )}
 

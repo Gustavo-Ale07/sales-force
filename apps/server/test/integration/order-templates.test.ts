@@ -719,3 +719,16 @@ describe('audit', () => {
     expect(usedRow?.detail).toMatchObject({ templateId: template.id, customerCode: customer1, usedCount: 1, skippedCount: 0 });
   });
 });
+
+describe('use as quotation (asQuotation)', () => {
+  it('creates a quotation (quotation TOP) with the lines priced now; without the flag it stays an order', async () => {
+    await reset();
+    const template = await makeTemplate();
+    const quote = await ctx.call('seller1', 'POST', `/order-templates/${template.id}/use`, { clientRequestId: randomUUID(), asQuotation: true });
+    expect(quote.status).toBe(201);
+    const order = await ctx.call('seller1', 'POST', `/order-templates/${template.id}/use`, { clientRequestId: randomUUID() });
+    expect(order.status).toBe(201);
+    expect(quote.body.order.topCode).not.toBe(order.body.order.topCode);
+    expect(quote.body.order.items.every((line: Json) => line.unitListPrice !== null && line.unitListPrice !== undefined)).toBe(true);
+  });
+});

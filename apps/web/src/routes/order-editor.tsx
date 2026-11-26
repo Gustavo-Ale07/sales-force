@@ -47,7 +47,7 @@ import { DuplicateAsOrderButton } from "../components/duplicate-as-order-button"
 import { DuplicateOrderButton } from "../components/duplicate-order-button";
 import { BulkDiscountDialog } from "../components/discount-dialogs";
 import { DiscountLimitDialog, type DiscountLimitPrompt } from "../components/discount-limit-dialog";
-import { classifyBulk, formatLimit, limitOf, lineExceedsLimit } from "../lib/discount-limit";
+import { classifyBulk, formatLimit, limitOf, lineExceedsLimit, sellerLimitContext, withSellerLimit } from "../lib/discount-limit";
 import { NO_PRICE_TEXT, PriceCell } from "../components/price-cell";
 import { INITIAL_PRODUCT_FILTERS, ProductBrowser, type ProductFilters } from "../components/product-browser";
 import { PrintOrderButton } from "../components/print-order-button";
@@ -57,7 +57,7 @@ import { ApiRequestError } from "../lib/api";
 import { ERP_SUBMISSION_DISABLED, convertQuote, createOrder, replaceOrder, submitOrder, verifyOrderDelivery } from "../lib/api-mutations";
 import { errorStatus } from "../lib/http-error";
 import { useRefreshOrdersInView } from "../lib/realtime";
-import { carriersQueryOptions,orderEntryConfigurationQueryOptions, customerQueryOptions, orderQueryOptions, productQueryOptions, queryKeys } from "../lib/api-queries";
+import { carriersQueryOptions, myDiscountLimitsQueryOptions, productGroupsQueryOptions, orderEntryConfigurationQueryOptions, customerQueryOptions, orderQueryOptions, productQueryOptions, queryKeys } from "../lib/api-queries";
 import { useApi } from "../lib/app-context";
 import { useLoadedDataset, requireDataset } from "../lib/dataset";
 import { approvalsEnabled } from "../lib/discount-authority";
@@ -261,6 +261,21 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
   const [lines, setLines] = useState<EditorLine[]>(() =>
     order ? order.items.map((item, index) => lineFromOrderItem(item, `saved-${index}`)) : [],
   );
+  // The seller's own discount rules (offline-capable on the app; here fetched): the shared domain resolver replaces the DESCMAX-only ceiling.
+  const myLimits = useQuery(myDiscountLimitsQueryOptions(api));
+  const limitGroups = useQuery(productGroupsQueryOptions(api));
+  const myRules = myLimits.data?.rules;
+  const limitContext = useMemo(
+    () => sellerLimitContext(myRules ?? [], limitGroups.data?.items ?? []),
+    [myRules, limitGroups.data],
+  );
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- re-derives each line's ceiling when the limit context changes
+    setLines((current) => {
+      const next = current.map((line) => withSellerLimit(line, limitContext));
+      return next.some((line, index) => line !== current[index]) ? next : current;
+    });
+  }, [limitContext, lines]);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [submitNotice, setSubmitNotice] = useState<string | null>(null);
   const [sendFailure, setSendFailure] = useState<ReturnType<typeof describeApiError> | null>(null);
@@ -694,18 +709,23 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
     const unknown = list.filter((line) => line.maxDiscountPercent === undefined && line.price.state !== "none");
     if (unknown.length === 0) return list;
     const found = new Map<number, string | null>();
+    const groupOf = new Map<number, { code: number | null; name: string | null }>();
     await Promise.all(
       unknown.map(async (line) => {
         try {
           const detail = await queryClient.fetchQuery({ ...productQueryOptions(api, line.productCode), staleTime: 5 * 60_000, retry: false });
           found.set(line.productCode, detail.maxDiscountPercent ?? null);
+          groupOf.set(line.productCode, { code: detail.groupCode ?? null, name: detail.groupName ?? null });
         } catch {
           // No limit known: no warning.
         }
       }),
     );
     if (found.size === 0) return list;
-    const apply = (line: EditorLine) => (line.maxDiscountPercent === undefined && found.has(line.productCode) ? { ...line, maxDiscountPercent: found.get(line.productCode) } : line);
+    const apply = (line: EditorLine) =>
+      line.maxDiscountPercent === undefined && found.has(line.productCode)
+        ? withSellerLimit({ ...line, group: line.group ?? groupOf.get(line.productCode), maxDiscountPercent: found.get(line.productCode) }, limitContext)
+        : line;
     setLines((current) => current.map(apply));
     return list.map(apply);
   };
@@ -1060,7 +1080,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
                       toast({ title: "Produto já está no pedido", description: product.description, tone: "warning" });
                       return;
                     }
-                    const added = { ...lineFromProduct(product, nextKey()), quantityText, discountText };
+                    const added = withSellerLimit({ ...lineFromProduct(product, nextKey()), quantityText, discountText }, limitContext);
                     if (!aboveLimitAccepted.current && !limitPromptOpen.current && lineExceedsLimit(added)) {
                       askAboveLimit({ kind: "item" }, () => addLine(added), () => undefined);
                       return;

@@ -571,6 +571,29 @@ describe("offline price (P-09)", () => {
     expect(JSON.parse((await getDraftItems(db, id))[0]?.priceJson ?? "{}").unitPrice).toBe("12.50");
     expect(await listOutbox(db, id)).toEqual([]);
   });
+
+  it("refusing a line removes it, renumbers the rest and adopts the other price", async () => {
+    const id = await saveOrderDraft(db, env, input([item(1, "2", "10.00"), item(2, "1", "5.00"), item(3, "1", "7.00")]));
+    server.serverPrices.set(1, "12.50");
+    server.serverPrices.set(2, "6.00");
+    await push();
+    await acknowledgePriceReview(db, env, id, [1]);
+    const items = await getDraftItems(db, id);
+    expect(items.map((x) => [x.position, x.productCode])).toEqual([
+      [1, 2],
+      [2, 3],
+    ]);
+    expect(JSON.parse(items[0]?.priceJson ?? "{}").unitPrice).toBe("6.00");
+    expect((await getDraft(db, id))?.priceReview).toBeNull();
+  });
+
+  it("refusing every line is rejected and changes nothing", async () => {
+    const id = await saveOrderDraft(db, env, input([item(1, "2", "10.00")]));
+    server.serverPrices.set(1, "12.50");
+    await push();
+    await expect(acknowledgePriceReview(db, env, id, [1])).rejects.toThrow("ao menos um item");
+    expect(await getDraftItems(db, id)).toHaveLength(1);
+  });
 });
 
 describe("discard", () => {

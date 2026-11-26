@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { contactVersionOf } from './contact-version.js';
 import type {
   CustomerDetail,
   CustomerFinancial,
@@ -29,6 +30,7 @@ function toListItem(row: CustomerRow, overdue = false): CustomerListItem {
     sellerName: row.sellerName,
     priceTableCode: row.priceTableCode,
     ...(overdue ? { overdue: true } : {}),
+    ...(row.phone !== undefined || row.email !== undefined ? { contactVersion: contactVersionOf(row.phone, row.email) } : {}),
   };
 }
 

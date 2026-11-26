@@ -6,6 +6,9 @@ import type {
   Neighborhood,
   Street,
   PostalCodeEntry,
+  ForceConfig,
+  ForceDiscountLimit,
+  SellerGoal,
   IpiRate,
   ListPrice,
   OpenTitle,
@@ -50,6 +53,10 @@ export interface DemoDataset {
   readonly streets: readonly Street[];
   /** Synthetic postal codes (CEP) linking to the codes above; the first one has no street. */
   readonly postalCodes: readonly PostalCodeEntry[];
+  /** AD_FORCECFG / AD_FORCELIMDESC as registered in the ERP; the default dataset registers nothing (empty). */
+  readonly forceConfig: readonly ForceConfig[];
+  readonly forceDiscountLimits: readonly ForceDiscountLimit[];
+  readonly sellerGoals: readonly SellerGoal[];
   /** Synthetic IPI rates: 3.25%, 9.75% and one by tariff (not estimated). */
   readonly ipiRates: readonly IpiRate[];
   /** Synthetic open receivable titles for some customers: one long overdue, one far in the future, one partly settled. */
@@ -194,6 +201,12 @@ function buildPostalCodes(): PostalCodeEntry[] {
     { cep: 1310100, cityCode: 1, neighborhoodCode: 2, streetCode: 2 },
     { cep: 20040020, cityCode: 2, neighborhoodCode: 0, streetCode: 1 },
   ];
+}
+
+function buildSellerGoals(sellers: readonly Seller[]): SellerGoal[] {
+  return sellers.flatMap((seller) =>
+    ['2026-11', '2026-12'].map((month) => ({ sellerCode: seller.code, month, revenueTarget: '50000.00', quantityTarget: '120' })),
+  );
 }
 
 // ---- customers ----------------------------------------------------------------------------------
@@ -518,6 +531,9 @@ export function generateDemoDataset(seed: number = DEMO_SEED): DemoDataset {
     neighborhoods: buildNeighborhoods(),
     streets: buildStreets(),
     postalCodes: buildPostalCodes(),
+    forceConfig: [],
+    forceDiscountLimits: [],
+    sellerGoals: buildSellerGoals(sellers),
     ipiRates: buildIpiRates(),
     openTitles: buildOpenTitles(customers),
     customers,

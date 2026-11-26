@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
-import { integrationOutbox, type Database } from '@salesforce/db';
+import { erpCustomer, integrationOutbox, type Database } from '@salesforce/db';
+import { contactVersionOf } from './contact-version.js';
 import type { UpdateCustomerRequest, UpdateCustomerResponse } from '@salesforce/contracts';
 import { and, eq, sql } from 'drizzle-orm';
 import { AppError } from '../http/app-error.js';
@@ -65,7 +66,7 @@ export class CustomerUpdateService {
     // Outside the scope the customer does not exist (404), whatever the body says.
     await this.customers.requireVisible(scope, code);
 
-    const { clientRequestId, ...changes } = body;
+    const { clientRequestId, baseContactVersion, ...changes } = body;
     const changed = EDITABLE_CUSTOMER_FIELDS.filter((field) => changes[field] !== undefined);
     const unsupported = changed.filter((field) => !(DELIVERABLE_CUSTOMER_FIELDS as readonly string[]).includes(field));
     if (unsupported.length > 0) {
@@ -86,6 +87,14 @@ export class CustomerUpdateService {
 
     const existing = await this.findByOrigin(originId);
     if (existing !== null) return this.replay(existing, user, fingerprint);
+    // An app edit may have been made offline against an older record: the version it started from is mandatory, so the conflict check cannot be skipped.
+    if (user.channel === 'mobile' && baseContactVersion === undefined) {
+      throw new AppError('validation_failed', {
+        message: 'Atualize o cliente antes de salvar a alteração.',
+        details: { reason: 'base_contact_version_required' },
+      });
+    }
+    if (baseContactVersion !== undefined) await this.requireSameContactVersion(code, baseContactVersion);
 
     const at = this.clock();
     const updateId = uuidv7(at.getTime());
@@ -132,6 +141,22 @@ export class CustomerUpdateService {
     // CUST-RT: wait a bounded time for the worker's delivery (the API never calls the ERP): 200 sent, 422 refused, 202 still pending.
     const settled = await this.awaitDelivery(originId);
     return settled === null ? result : this.replay(settled, user, fingerprint, true);
+  }
+
+  /**
+   * The edit was made over a copy of the customer the seller saw offline. When the ERP copy of phone or e-mail changed since, nothing is
+   * recorded: the 409 carries the current values so the app can show both versions and let the seller choose (the choice is a new edit
+   * on the current version). Contact data of a customer already inside the seller's scope: nothing outside it is revealed.
+   */
+  private async requireSameContactVersion(code: number, base: string): Promise<void> {
+    const [row] = await this.db.select({ phone: erpCustomer.phone, email: erpCustomer.email }).from(erpCustomer).where(eq(erpCustomer.code, code)).limit(1);
+    if (row === undefined) return;
+    const current = contactVersionOf(row.phone, row.email);
+    if (current === base) return;
+    throw new AppError('conflict', {
+      message: 'Este cliente foi alterado no Sankhya depois que você começou a editar. Escolha qual versão manter.',
+      details: { reason: 'customer_edit_conflict', contactVersion: current, current: { phone: row.phone, email: row.email } },
+    });
   }
 
   private async awaitDelivery(originId: string): Promise<UpdateOutboxFacts | null> {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FakeGateway, RealSankhyaGateway, SankhyaGatewayError, Secret, getDemoDataset } from '../src/index.js';
 import { assertSafeScope, selectEffectiveVersions } from '../src/read-scope.js';
 import { collect } from './support/gateway-contract.js';
+import { sqlError } from './support/mock-sankhya.js';
 import {
   MockSankhya,
   ROOT_GROUP_SENTINEL,
@@ -154,6 +155,91 @@ describe('readPostalCodes (TSICEP)', () => {
       { cep: 1310100, cityCode: 10, neighborhoodCode: 3, streetCode: 7 },
       { cep: 20040020, cityCode: 11, neighborhoodCode: 0, streetCode: 0 },
     ]);
+  });
+});
+
+describe('Force configuration tables (AD_FORCECFG / AD_FORCELIMDESC) and TGFVEN.DESCMAX', () => {
+  it('reads the config row; a null field stays null (the default is applied by the domain)', async () => {
+    const { gateway, mock } = gatewayOver({
+      AD_FORCECFG: [
+        { ID: 1, DIASSEMSYNC: 3, CODTABPADRAO: null },
+      ],
+    });
+    expect(await rows(gateway.readForceConfig())).toEqual([{ id: 1, daysWithoutSync: 3, defaultPriceTableCode: null }]);
+    expect(mock.queries().map((q) => q.sql ?? '').join(' ')).toContain('FROM AD_FORCECFG');
+  });
+
+  it('reads discount rules keyed by (ID, SEQ); discards a row without seller, without product and group, or with a bad percentage', async () => {
+    const { gateway } = gatewayOver({
+      AD_FORCELIMDESC: [
+        { ID: 1, SEQ: 1, CODVEND: 7, CODGRUPOPROD: null, CODPROD: 500, DESCMAX: 3.5 },
+        { ID: 1, SEQ: 2, CODVEND: 7, CODGRUPOPROD: 11, CODPROD: null, DESCMAX: 5 },
+        { ID: 1, SEQ: 3, CODVEND: null, CODGRUPOPROD: 11, CODPROD: null, DESCMAX: 5 },
+        { ID: 1, SEQ: 4, CODVEND: 7, CODGRUPOPROD: null, CODPROD: null, DESCMAX: 5 },
+        { ID: 1, SEQ: 5, CODVEND: 7, CODGRUPOPROD: 12, CODPROD: null, DESCMAX: 150 },
+        { ID: 1, SEQ: 6, CODVEND: 7, CODGRUPOPROD: 12, CODPROD: 0, DESCMAX: null },
+      ],
+    });
+    expect(await rows(gateway.readForceDiscountLimits())).toEqual([
+      { configId: 1, seq: 1, sellerCode: 7, groupCode: null, productCode: 500, percent: '3.5' },
+      { configId: 1, seq: 2, sellerCode: 7, groupCode: 11, productCode: null, percent: '5' },
+    ]);
+  });
+
+  it('empty tables read as empty snapshots', async () => {
+    const { gateway } = gatewayOver({ AD_FORCECFG: [], AD_FORCELIMDESC: [] });
+    expect(await rows(gateway.readForceConfig())).toEqual([]);
+    expect(await rows(gateway.readForceDiscountLimits())).toEqual([]);
+  });
+
+  it('a missing table (ORA-00942) reads as empty; another SQL error still fails', async () => {
+    const missing = gatewayOver({});
+    missing.mock.forced.push(sqlError());
+    expect(await rows(missing.gateway.readForceConfig())).toEqual([]);
+    const other = gatewayOver({});
+    other.mock.forced.push(sqlError('ORA-00904: invalid identifier'));
+    await expect(rows(other.gateway.readForceDiscountLimits())).rejects.toBeInstanceOf(SankhyaGatewayError);
+  });
+
+  it('TGFVEN.DESCMAX becomes the seller maxDiscountPercent; blank or out of range is left out', async () => {
+    const { gateway } = gatewayOver({
+      TGFVEN: [
+        { CODVEND: 1, APELIDO: 'A', ATIVO: 'S', DESCMAX: 8 },
+        { CODVEND: 2, APELIDO: 'B', ATIVO: 'S', DESCMAX: null },
+        { CODVEND: 3, APELIDO: 'C', ATIVO: 'S', DESCMAX: 400 },
+      ],
+    });
+    const sellers = await rows(gateway.readSellers());
+    expect(sellers.map((x) => x.maxDiscountPercent)).toEqual(['8', undefined, undefined]);
+  });
+});
+
+describe('readSellerGoals (TGFMET)', () => {
+  const tables: ErpTables = {
+    TGFMET: [
+      { CODVEND: 0, DTREF: '2026-11-01', PREVREC: 999, QTDPREV: 99 },
+      { CODVEND: 7, DTREF: '2026-11-01', PREVREC: 1000.5, QTDPREV: 10 },
+      { CODVEND: 7, DTREF: '2026-11-01', PREVREC: 500, QTDPREV: 5.5 },
+      { CODVEND: 7, DTREF: '2026-12-01', PREVREC: 0, QTDPREV: 20 },
+      { CODVEND: 3, DTREF: '2026-11-01', PREVREC: 2000, QTDPREV: 0 },
+    ],
+  };
+
+  it('ignores CODVEND = 0 rows and sums the goals of one seller and month, ordered by seller then month', async () => {
+    const { gateway, mock } = gatewayOver(tables);
+    expect(await rows(gateway.readSellerGoals())).toEqual([
+      { sellerCode: 3, month: '2026-11', revenueTarget: '2000', quantityTarget: '0' },
+      { sellerCode: 7, month: '2026-11', revenueTarget: '1500.5', quantityTarget: '15.5' },
+      { sellerCode: 7, month: '2026-12', revenueTarget: '0', quantityTarget: '20' },
+    ]);
+    const sql = mock.queries().map((q) => q.sql ?? '').join('\n');
+    expect(sql).toContain('FROM TGFMET');
+    expect(sql).toContain('CODVEND > 0');
+  });
+
+  it('a table with only seller-less rows reads empty', async () => {
+    const { gateway } = gatewayOver({ TGFMET: [{ CODVEND: 0, DTREF: '2026-11-01', PREVREC: 0, QTDPREV: 110 }] });
+    expect(await rows(gateway.readSellerGoals())).toEqual([]);
   });
 });
 
@@ -315,6 +401,17 @@ describe('readProducts scope (sellable usage, active, optional mobility field)',
     const text = mock.queries().map((q) => q.sql ?? '').join('\n');
     expect(text).toContain('DESCMAX');
     expect(text).not.toContain('DESCMAXFLEX');
+  });
+
+  it('maps the TGFBAR barcode (CODBARRA) to barcode; null or blank = absent', async () => {
+    const withBar = (code: number, bar: unknown) => ({ CODPROD: code, DESCRPROD: `P${code}`, ATIVO: 'S', USOPROD: 'V', CODGRUPOPROD: 10, CODBARRA: bar, ...base });
+    const { gateway, mock } = gatewayOver({ TGFPRO: [withBar(1, '7891234567895'), withBar(2, null), withBar(3, '  ')] });
+    const result = await rows(gateway.readProducts({ scope: { products: { usageValues: ['V'] } } }));
+    const byCode = new Map(result.map((p) => [p.code, p]));
+    expect(byCode.get(1)?.barcode).toBe('7891234567895');
+    expect(byCode.get(2)).not.toHaveProperty('barcode');
+    expect(byCode.get(3)).not.toHaveProperty('barcode');
+    expect(mock.queries().map((q) => q.sql ?? '').join('\n')).toContain('TGFBAR');
   });
 
   it('an empty usage list selects nothing', async () => {

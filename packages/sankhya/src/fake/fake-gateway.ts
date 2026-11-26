@@ -183,6 +183,15 @@ export class FakeGateway implements SankhyaGateway {
   readPostalCodes(options?: ReadOptions) {
     return this.#snapshot('postalCodes', this.#dataset.postalCodes, options);
   }
+  readForceConfig(options?: ReadOptions) {
+    return this.#snapshot('forceConfig', this.#dataset.forceConfig ?? [], options);
+  }
+  readForceDiscountLimits(options?: ReadOptions) {
+    return this.#snapshot('forceDiscountLimits', this.#dataset.forceDiscountLimits ?? [], options);
+  }
+  readSellerGoals(options?: ReadOptions) {
+    return this.#snapshot('sellerGoals', this.#dataset.sellerGoals, options);
+  }
   readIpiRates(options?: ReadOptions) {
     return this.#snapshot('ipiRates', this.#dataset.ipiRates, options);
   }

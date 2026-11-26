@@ -54,6 +54,9 @@ export const PARTNER_FORBIDDEN_COLUMNS: readonly string[] = [
   'CODPARC',
 ];
 
+/** Fixed value of TGFPAR.TIPGERBOLCENT written only when a partner is created. */
+export const PARTNER_BOLETO_CENTRALS_ON_CREATE = 'I';
+
 /** A request field refused before any call. `field` is the Sales Force field, `column` the Sankhya column. */
 export class PartnerFieldError extends SankhyaGatewayError {
   readonly field: string;
@@ -206,6 +209,9 @@ export function buildPartnerLocalFields(request: PartnerWriteRequest): Wire {
     ATIVO: value('S'),
     CLIENTE: value('S'),
     BLOQUEAR: value('N'),
+    // Owner order 2026-11-26: boleto generation in the centrals = 'I' (Imprimir), fixed, create only (never in the edit wire).
+    // TGFPAR.TIPGERBOLCENT CHAR(1) nullable, values in the Sandbox: NULL / I / A (validated by SELECT 2026-11-26).
+    TIPGERBOLCENT: value(PARTNER_BOLETO_CENTRALS_ON_CREATE),
     [request.originField]: value(request.originKey),
   };
   if (stateRegistration !== null) fields['IDENTINSCESTAD'] = value(stateRegistration);

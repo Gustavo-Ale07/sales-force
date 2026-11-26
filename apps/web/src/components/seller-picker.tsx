@@ -19,6 +19,7 @@ export function SellerPicker({ sellers, value, onChange, className, ...props }: 
   return (
     // The Combobox resets its own text on blur/Escape without telling us: mirror that so the list is whole again.
     <div
+      role="presentation"
       className="relative w-full min-w-0"
       onBlur={() => setQuery("")}
       onKeyDown={(event) => {

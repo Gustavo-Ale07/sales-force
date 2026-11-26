@@ -14,10 +14,12 @@ import {
   erpIpiRate,
   erpOpenTitle,
   erpProductGroup,
+  erpForceConfig,
+  erpForceDiscountLimit,
   type Database,
 } from '@salesforce/db';
 import { subtreeOf, visibleGroups, type GroupNode, type GroupRow } from './product-groups.js';
-import type { CustomerScope, IpiRate, OpenTitle, PriceTableVersion } from '@salesforce/domain';
+import type { ForceConfig, ForceDiscountLimit, CustomerScope, IpiRate, OpenTitle, PriceTableVersion } from '@salesforce/domain';
 import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, not, or, sql, type SQL } from 'drizzle-orm';
 import { DATABASE } from '../platform/tokens.js';
 import { containsText, digitsOf, eqInt, fitsPgInt, inSellerCodes, offsetOf } from '../platform/sql.js';
@@ -47,6 +49,8 @@ export interface CustomerRow {
   readonly name: string;
   readonly tradeName: string | null;
   readonly taxId: string | null;
+  readonly phone?: string | null;
+  readonly email?: string | null;
   readonly active: boolean;
   readonly blockedRaw: string | null;
   readonly sellerCode: number | null;
@@ -106,6 +110,8 @@ export interface ProductRow {
   readonly quantityStep: string | null;
   /** Discount ceiling in percent (DESCMAX), numeric text as stored; null = no limit registered. */
   readonly maxDiscountPercent: string | null;
+  /** Barcode (EAN) from TGFBAR; null = none. */
+  readonly barcode: string | null;
   readonly active: boolean;
 }
 
@@ -194,6 +200,8 @@ export class MirrorRepository {
         name: erpCustomer.name,
         tradeName: erpCustomer.tradeName,
         taxId: erpCustomer.taxId,
+        phone: erpCustomer.phone,
+        email: erpCustomer.email,
         active: erpCustomer.active,
         blockedRaw: erpCustomer.blockedRaw,
         sellerCode: erpCustomer.sellerCode,
@@ -408,6 +416,15 @@ export class MirrorRepository {
     return new Map(rows.map((row) => [row.code, row]));
   }
 
+  /** The portfolio inside the scope (eligible customers with an owning seller): code and seller only, for goals/positivation. */
+  async portfolioCustomers(scope: CustomerScope): Promise<{ customerCode: number; sellerCode: number }[]> {
+    const rows = await this.db
+      .select({ customerCode: erpCustomer.code, sellerCode: erpCustomer.sellerCode })
+      .from(erpCustomer)
+      .where(and(...this.liveCustomer(), scopeCondition(scope)));
+    return rows.flatMap((row) => (row.sellerCode === null ? [] : [{ customerCode: row.customerCode, sellerCode: row.sellerCode }]));
+  }
+
   async countCustomers(scope: CustomerScope): Promise<CustomerCounts> {
     const [row] = await this.db
       .select({
@@ -482,6 +499,7 @@ export class MirrorRepository {
       usageCode: erpProduct.usageCode,
       quantityStep: erpProduct.quantityStep,
       maxDiscountPercent: erpProduct.maxDiscountPercent,
+      barcode: erpProduct.barcode,
       active: erpProduct.active,
     };
   }
@@ -658,6 +676,71 @@ export class MirrorRepository {
       .select(this.productSelectFields())
       .from(erpProduct)
       .where(and(isNull(erpProduct.deletedAt), inArray(erpProduct.code, usable)));
+  }
+
+  /** AD_FORCECFG mirror (live rows). The caller resolves defaults with resolveForceConfig. */
+  async forceConfigRows(): Promise<ForceConfig[]> {
+    const rows = await this.db
+      .select({ id: erpForceConfig.id, daysWithoutSync: erpForceConfig.daysWithoutSync, defaultPriceTableCode: erpForceConfig.defaultPriceTableCode })
+      .from(erpForceConfig)
+      .where(isNull(erpForceConfig.deletedAt))
+      .orderBy(asc(erpForceConfig.id));
+    return rows.map((r) => ({ id: r.id, daysWithoutSync: r.daysWithoutSync ?? null, defaultPriceTableCode: r.defaultPriceTableCode ?? null }));
+  }
+
+  /** ONE seller's ERP discount facts: TGFVEN.DESCMAX plus the AD_FORCELIMDESC rows of that seller only (scope is the query). */
+  async sellerDiscountSource(sellerCode: number): Promise<{ generalPercent: string | null; rows: ForceDiscountLimit[] }> {
+    if (!fitsPgInt(sellerCode)) return { generalPercent: null, rows: [] };
+    const [seller] = await this.db
+      .select({ percent: erpSeller.maxDiscountPercent })
+      .from(erpSeller)
+      .where(and(eq(erpSeller.code, sellerCode), isNull(erpSeller.deletedAt)))
+      .limit(1);
+    const rows = await this.db
+      .select({
+        configId: erpForceDiscountLimit.configId,
+        seq: erpForceDiscountLimit.seq,
+        sellerCode: erpForceDiscountLimit.sellerCode,
+        groupCode: erpForceDiscountLimit.groupCode,
+        productCode: erpForceDiscountLimit.productCode,
+        percent: erpForceDiscountLimit.percent,
+      })
+      .from(erpForceDiscountLimit)
+      .where(and(eq(erpForceDiscountLimit.sellerCode, sellerCode), isNull(erpForceDiscountLimit.deletedAt)))
+      .orderBy(asc(erpForceDiscountLimit.configId), asc(erpForceDiscountLimit.seq));
+    return { generalPercent: seller?.percent ?? null, rows };
+  }
+
+  /** Parent of every live product group (TGFGRU hierarchy, `null` at the top): the input of the discount-limit resolver. */
+  async groupParentMap(): Promise<Map<number, number | null>> {
+    const rows = await this.loadGroups();
+    return new Map(rows.map((row) => [row.code, row.parentCode ?? null]));
+  }
+
+  /** Group and DESCMAX of the given products (the facts the per-seller discount limit resolves against). */
+  async productDiscountFacts(productCodes: readonly number[]): Promise<Map<number, { groupCode: number | null; maxDiscountPercent: string | null }>> {
+    const usable = [...new Set(productCodes.filter(fitsPgInt))];
+    const facts = new Map<number, { groupCode: number | null; maxDiscountPercent: string | null }>();
+    if (usable.length === 0) return facts;
+    const rows = await this.db
+      .select({ code: erpProduct.code, groupCode: erpProduct.groupCode, maxDiscountPercent: erpProduct.maxDiscountPercent })
+      .from(erpProduct)
+      .where(and(inArray(erpProduct.code, usable), isNull(erpProduct.deletedAt)));
+    for (const row of rows) facts.set(row.code, { groupCode: row.groupCode ?? null, maxDiscountPercent: row.maxDiscountPercent ?? null });
+    return facts;
+  }
+
+  /** Barcodes (EAN) of the products, for the order document. Products without one are absent. */
+  async productBarcodes(productCodes: readonly number[]): Promise<Map<number, string>> {
+    const usable = [...new Set(productCodes.filter(fitsPgInt))];
+    const barcodes = new Map<number, string>();
+    if (usable.length === 0) return barcodes;
+    const rows = await this.db
+      .select({ code: erpProduct.code, barcode: erpProduct.barcode })
+      .from(erpProduct)
+      .where(and(inArray(erpProduct.code, usable), isNull(erpProduct.deletedAt)));
+    for (const row of rows) if (row.barcode !== null) barcodes.set(row.code, row.barcode);
+    return barcodes;
   }
 
   /** IPI codes of the products and the mirrored rates (display estimate, D-D). Products without a code are absent. */

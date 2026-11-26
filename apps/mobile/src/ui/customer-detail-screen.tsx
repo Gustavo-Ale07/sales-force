@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import type { SellerChoice } from "../data/customer-form";
 import type { CustomerDetail, CustomerFinancial, CustomerListItem, CustomerRepository } from "../data/ports";
-import { hasNoSeller, isUnconfirmedCustomer, NO_SELLER_ORDER_MESSAGE, PENDING_CREDIT_NOTE, PENDING_CUSTOMER_ORDER_MESSAGE } from "../data/pending-status";
+import { hasNoSeller, isRefusedCustomer, isUnconfirmedCustomer, NO_SELLER_ORDER_MESSAGE, PENDING_CREDIT_NOTE, PENDING_CUSTOMER_ORDER_MESSAGE } from "../data/pending-status";
 import { formatDocument, titleCase } from "../data/display-format";
 import { colors, fontSize, radius, spacing } from "../theme";
 import type { LocalOrdersPort } from "../offline/local-orders";
@@ -92,7 +92,7 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
   // Waiting, queued or refused: no real code, no orders. A customer the ERP confirmed already has its real code and takes orders.
   const isPending = isUnconfirmedCustomer(customer);
   const noSeller = hasNoSeller(customer);
-  const cannotOrder = isPending || noSeller;
+  const cannotOrder = isRefusedCustomer(customer) || noSeller;
 
   useEffect(() => {
     // A customer not confirmed yet does not exist on the server: nothing to ask for.
@@ -243,7 +243,7 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
       </ScrollView>
 
       <View style={styles.footer}>
-        {isPending && <Text style={styles.status}>{PENDING_CUSTOMER_ORDER_MESSAGE}</Text>}
+        {isRefusedCustomer(customer) && <Text style={styles.status}>{PENDING_CUSTOMER_ORDER_MESSAGE}</Text>}
         {noSeller && <Text style={styles.status}>{NO_SELLER_ORDER_MESSAGE}</Text>}
         <Pressable
           style={[styles.cta, cannotOrder && styles.ctaDisabled]}

@@ -552,7 +552,7 @@ describe("confirmation replaces the pending customer", () => {
   });
 });
 
-describe("orders are blocked for a customer the ERP has not confirmed", () => {
+describe("orders for a customer the ERP has not confirmed wait behind it", () => {
   const draftInput = (customerCode: number) => ({
     ownerAccountId: OWNER,
     customerCode,
@@ -563,10 +563,10 @@ describe("orders are blocked for a customer the ERP has not confirmed", () => {
     items: [{ productCode: 1, description: "P", unit: "UN", quantity: "1", discountPercent: "0", priceJson: JSON.stringify({ state: "priced", unitPrice: "1.00" }), groupCode: null, groupName: null }],
   });
 
-  it("refuses to save a draft for a pending (negative-code) customer, with the exact text", async () => {
+  it("saves a draft for a pending (negative-code) customer (owner 2026-11-26); a local code with no pending customer saves nothing", async () => {
     const record = await create();
-    await expect(saveOrderDraft(db, env, draftInput(record.localCode))).rejects.toBeInstanceOf(PendingCustomerOrderError);
-    await expect(saveOrderDraft(db, env, draftInput(record.localCode))).rejects.toThrow("Este cliente ainda não tem código do Sankhya.");
+    await expect(saveOrderDraft(db, env, draftInput(record.localCode))).resolves.toBeTypeOf("string");
+    await expect(saveOrderDraft(db, env, draftInput(-999))).rejects.toBeInstanceOf(PendingCustomerOrderError);
     expect(PENDING_CUSTOMER_MESSAGE).toBe("Este cliente ainda não tem código do Sankhya.");
   });
 
@@ -586,7 +586,7 @@ describe("orders are blocked for a customer the ERP has not confirmed", () => {
     expect(orders.requests).toEqual([]);
   });
 
-  it("a draft that already carries a pending code is never sent: held with the same text, zero attempts", async () => {
+  it("a draft that already carries a pending code is never sent: kept untouched behind the customer, zero attempts, no mark", async () => {
     const record = await create();
     await db.execute(
       `INSERT INTO local_order_draft (local_id, owner_account_id, client_request_id, customer_code, customer_name, status, created_at, updated_at, dataset_environment, dataset_id, eligibility, send_state)
@@ -602,7 +602,7 @@ describe("orders are blocked for a customer the ERP has not confirmed", () => {
     const result = await pushOutbox(db, env, orders, OWNER, { respectBackoff: false, currentDataset: REAL });
     expect(result).toMatchObject({ attempted: 0, stoppedBy: "idle" });
     expect(orders.requests).toEqual([]);
-    expect((await listOutbox(db, "d1"))[0]).toMatchObject({ state: "pending", attempts: 0, lastError: PENDING_CUSTOMER_MESSAGE });
+    expect((await listOutbox(db, "d1"))[0]).toMatchObject({ state: "pending", attempts: 0, lastError: null });
   });
 
   it("an ordinary customer is unaffected", async () => {

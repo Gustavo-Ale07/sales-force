@@ -48,6 +48,7 @@ import { useApi } from "../lib/app-context";
 import { priceContextSourceLabels } from "../lib/labels";
 import type { ProductsSearch } from "../lib/route-search";
 import { compact } from "../lib/search-params";
+import { ExportButton } from "../components/export-button";
 import { useSearchBox } from "../lib/use-search-box";
 
 
@@ -144,7 +145,11 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
 
   return (
     <>
-      <PageHeader title="Catálogo" count={query.data ? query.data.total.toLocaleString("pt-BR") : undefined} />
+      <PageHeader
+        title="Catálogo"
+        count={query.data ? query.data.total.toLocaleString("pt-BR") : undefined}
+        actions={<ExportButton resource="products" query={{ search: params.search, group: params.group }} />}
+      />
 
       <FilterBar
         aria-label="Filtros do catálogo"

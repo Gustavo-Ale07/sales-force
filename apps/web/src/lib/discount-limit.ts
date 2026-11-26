@@ -1,3 +1,4 @@
+import { indexSellerDiscountRules, resolveSellerDiscountLimit, type SellerDiscountRuleIndex } from "@salesforce/domain";
 import { parseDiscountInput, type EditorLine } from "./order-draft";
 
 /**
@@ -65,4 +66,27 @@ export function classifyBulk(
     else withinNames.push(line.description);
   }
   return { within: withinNames.length, withinNames, above };
+}
+
+/** The seller's rules and the group tree, as the shared domain resolver needs them (same code the server and the app run). */
+export interface SellerLimitContext {
+  rules: SellerDiscountRuleIndex;
+  parentOf: (code: number) => number | null;
+}
+
+export function sellerLimitContext(
+  rules: readonly { kind: "general" | "group" | "product"; code: number | null; percent: string }[],
+  groups: readonly { code: number; parentCode: number | null }[],
+): SellerLimitContext | null {
+  if (rules.length === 0) return null;
+  const parents = new Map(groups.map((group) => [group.code, group.parentCode] as const));
+  return { rules: indexSellerDiscountRules(rules), parentOf: (code) => parents.get(code) ?? null };
+}
+
+/** Replaces the line ceiling by the resolved one (product > nearest group > general > ERP ceiling). Lines whose ceiling is not known yet stay as they are. */
+export function withSellerLimit(line: EditorLine, context: SellerLimitContext | null): EditorLine {
+  if (context === null || line.maxDiscountPercent === undefined) return line;
+  const erp = line.erpMaxDiscountPercent !== undefined ? line.erpMaxDiscountPercent : line.maxDiscountPercent;
+  const resolved = resolveSellerDiscountLimit({ productCode: line.productCode, groupCode: line.group?.code ?? null, erpMaxPercent: erp, rules: context.rules, parentOf: context.parentOf }).limit;
+  return resolved === line.maxDiscountPercent && line.erpMaxDiscountPercent === erp ? line : { ...line, erpMaxDiscountPercent: erp, maxDiscountPercent: resolved };
 }

@@ -13,7 +13,7 @@ export function normalizeAddressName(value: string): string {
     .trim();
 }
 
-/** TSIBAI.NOMEBAI / TSIEND.NOMEEND are varchar(60). */
+/** The ERP neighborhood and street names are varchar(60). */
 export const REGISTRY_NAME_LIMIT = 60;
 /** Characters a registry name may carry once normalized (they reach SQL text: anything else is refused, never escaped-and-hoped). */
 const REGISTRY_SAFE_NAME = /^[A-Z0-9 .,\-/ºª()&]+$/;

@@ -44,6 +44,9 @@ export const CUSTOMER_CONFIRM_WAIT = Symbol('CUSTOMER_CONFIRM_WAIT');
 /** `readonly PostalCodeSource[]`: external CEP sources in lookup order (ViaCEP, then BrasilAPI); tests replace it with fakes. */
 export const POSTAL_CODE_SOURCES = Symbol('POSTAL_CODE_SOURCES');
 
+/** `readonly CnpjSource[]`: external CNPJ sources in lookup order (BrasilAPI, then publica.cnpj.ws); tests replace it with fakes. */
+export const CNPJ_SOURCES = Symbol('CNPJ_SOURCES');
+
 /** `ProductImageSource` (default: no images). */
 export const PRODUCT_IMAGE_SOURCE = Symbol('PRODUCT_IMAGE_SOURCE');
 /** `ProductImageSettings` (timeout, cache age, size caps). */

@@ -61,7 +61,7 @@ export function orderDocumentOf(draft: DraftRecord, lines: readonly EditorLine[]
   if (isCustomerUnavailable(draft)) throw new OrderPdfCustomerUnavailableError();
   const preview = previewDraft(lines);
   const items = preview.lines.flatMap((entry, index) =>
-    entry.item === null ? [] : [{ ...entry.item, ipiPercent: documentIpiPercent(lines[index]?.ipi) }],
+    entry.item === null ? [] : [{ ...entry.item, ipiPercent: documentIpiPercent(lines[index]?.ipi), barcode: lines[index]?.barcode ?? null }],
   );
   const value = saleValue(draft, lines);
   return toOrderDocument({

@@ -265,8 +265,12 @@ export function toOrderDetail(
   dryRun: { at: Date; payloadHash: string } | null = null,
   convertedInto: { id: string; draftNumber: number; erpNumber: number | null } | null = null,
   erpStage: SalesOrderErpStageRow | null = null,
+  barcodes: ReadonlyMap<number, string> = new Map(),
 ): OrderDetail {
-  const baseItems = items.map((item) => toItemDto(item, images.get(item.productCode)));
+  const baseItems = items.map((item) => {
+    const barcode = barcodes.get(item.productCode);
+    return { ...toItemDto(item, images.get(item.productCode)), ...(barcode === undefined ? {} : { barcode }) };
+  });
   const totals = computeOrderTotals(baseItems);
   // D-D: estimated IPI from the NET line total; display only, never part of validation or the ERP payload.
   const ipi = computeOrderIpi(

@@ -3,7 +3,8 @@ import { customerStateLabel } from "@salesforce/domain";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useMemo, useState, type FormEvent } from "react";
-import { citiesQueryOptions, neighborhoodsQueryOptions, postalCodeQueryOptions, sellersQueryOptions, streetsQueryOptions } from "../lib/api-queries";
+import { applyCnpjLookup } from "../lib/customer-cnpj";
+import { citiesQueryOptions, cnpjQueryOptions, neighborhoodsQueryOptions, postalCodeQueryOptions, sellersQueryOptions, streetsQueryOptions } from "../lib/api-queries";
 import { useApi, useAppServices } from "../lib/app-context";
 import { sessionQueryOptions } from "../lib/auth-client";
 import {
@@ -109,6 +110,15 @@ function CreateBody({ onClose }: { onClose: () => void }) {
   const showAlert = failure !== null && (Object.keys(failure.fieldProblems).length === 0 || Object.keys(failure.fieldProblems).some((field) => !visibleFields.includes(field)));
   const set = (patch: Partial<CreateForm>) => setForm((current) => ({ ...current, ...patch }));
   const fieldError = (own: string | null, serverField: string) => failure?.fieldProblems[serverField] ?? (showProblems ? (own ?? undefined) : undefined);
+
+  // CNPJ (legal entity): a valid 14-digit document is looked up once by the server; the answer fills only the empty fields. A failed lookup leaves the form free.
+  const cnpjDigits = digitsOf(form.document);
+  const cnpj = useQuery({ ...cnpjQueryOptions(api, cnpjDigits), enabled: !natural && cnpjDigits.length === 14 });
+  const [appliedCnpj, setAppliedCnpj] = useState<string | null>(null);
+  if (cnpj.data && appliedCnpj !== cnpjDigits) {
+    setAppliedCnpj(cnpjDigits);
+    setForm((current) => applyCnpjLookup(current, cnpj.data));
+  }
 
   // CEP: at 8 digits the server looks it up once (cached for the session) and fills the address; every filled field stays editable.
   const cepDigits = digitsOf(form.postalCode);

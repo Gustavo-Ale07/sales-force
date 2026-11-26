@@ -6,7 +6,7 @@ export const EXIT_WINDOW_MS = 2000;
 /** What is on screen that can take the Back press, in the order it is asked (top of the stack first). */
 export interface BackState {
   /** A full-screen layer above the tabs: the sync progress screen or the retained-orders screen. */
-  readonly overlay: "none" | "sync" | "quarantine";
+  readonly overlay: "none" | "sync" | "quarantine" | "panel";
   readonly tab: MainTab;
   /** The order wizard is open on the Vendas tab (any step, including its final screen). */
   readonly wizardOpen: boolean;
@@ -23,6 +23,7 @@ export type BackAction =
   /** Safe to ignore: the sync screen cannot be left with Back (its own "Cancelar sincronização" button is the way). */
   | { readonly type: "ignore" }
   | { readonly type: "close_quarantine" }
+  | { readonly type: "close_panel" }
   /** The wizard goes back one step; on its first step it leaves, asking "Descartar o pedido?" once when there is unsaved content (an empty order leaves with no question). */
   | { readonly type: "wizard_back" }
   | { readonly type: "close_customer_detail" }
@@ -38,6 +39,7 @@ export type BackAction =
 export function resolveBack(state: BackState): BackAction {
   if (state.overlay === "sync") return { type: "ignore" };
   if (state.overlay === "quarantine") return { type: "close_quarantine" };
+  if (state.overlay === "panel") return { type: "close_panel" };
   if (state.tab === "sales" && state.wizardOpen) return { type: "wizard_back" };
   if (state.tab === "customers" && state.customerDetailOpen) return { type: "close_customer_detail" };
   if (state.tab === "sales" && state.saleDetailOpen) return { type: "close_sale_detail" };

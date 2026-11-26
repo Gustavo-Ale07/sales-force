@@ -3,6 +3,8 @@ import { DatasetChangedError, DatasetUnavailableError, type ConfirmOutcome, type
 import { ORDER_HEADER_ISSUE_LABEL, orderHeaderIssues, type OrderHeaderIssueCode } from "@salesforce/domain";
 import { datasetIdentityOf } from "../offline/reference-source";
 import { ActivityIndicator, AppState, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import type { OrderTemplatesPort } from "../data/order-templates";
+import { describeTemplateError, templateItemsOf } from "../data/order-templates";
 import { ApiRequestError } from "../data/api";
 import { codeOfHeldMessage } from "../data/error-catalog";
 import { describeDataError, type DataErrorInfo } from "../data/errors";
@@ -68,7 +70,7 @@ export interface NewOrderScreenProps {
   readonly onResumeConsumed?: () => void;
   /** "Novo pedido" from a customer sheet: start (or continue) an order for this customer. Handled once per `nonce`. */
   /** With `lines` (a duplicated sale) the cart opens pre-filled as a brand-new order; an order in progress is never replaced silently. */
-  readonly startRequest?: { readonly nonce: number; readonly customer: PickedCustomer; readonly lines?: readonly EditorLine[] } | null;
+  readonly startRequest?: { readonly nonce: number; readonly customer: PickedCustomer; readonly lines?: readonly EditorLine[]; readonly quotation?: boolean } | null;
   readonly onStartConsumed?: () => void;
   /** Leaves the wizard back to the sales list. The order in progress stays on this screen (it is only hidden), so nothing is lost. */
   readonly onExit?: () => void;
@@ -80,6 +82,8 @@ export interface NewOrderScreenProps {
   readonly onGoHome?: () => void;
   /** The order's number or stage was refreshed while the screen was open or as it was left: the list reloads. */
   readonly onOrderUpdated?: () => void;
+  /** "Salvar como recorrente": saves the cart (product + quantity) as the customer's recurring model. Online only. */
+  readonly templates?: OrderTemplatesPort;
 }
 
 /** What the shell can ask of the wizard. */
@@ -115,6 +119,7 @@ export function NewOrderScreen({
   onViewOrder,
   onGoHome,
   onOrderUpdated,
+  templates,
 }: NewOrderScreenProps) {
   const [step, setStep] = useState<Step>("customer");
   /** Step 3 shows either the catalog or the cart as its own view (never both, never a permanent panel). */
@@ -240,6 +245,9 @@ export function NewOrderScreen({
   const startNonce = startRequest?.nonce ?? null;
   const startCustomer = startRequest?.customer ?? null;
   const startLines = startRequest?.lines;
+  const startQuotation = startRequest?.quotation === true;
+  /** A recurring model used as a quotation: the quotation TOP is chosen as soon as the installation configuration is loaded. */
+  const [wantQuotation, setWantQuotation] = useState(false);
   useEffect(() => {
     if (startNonce === null || startCustomer === null) return;
     onStartConsumed?.();
@@ -253,6 +261,7 @@ export function NewOrderScreen({
         return;
       }
       setLines(startLines.map((line) => ({ ...line, key: nextKey() })));
+      setWantQuotation(startQuotation);
       goToStep("summary");
     };
     // Nothing at risk: an empty cart, or an order already saved (its success screen is showing).
@@ -410,6 +419,14 @@ export function NewOrderScreen({
       }
     }
   }, [repositories.orders, onUnauthenticated, errors]);
+
+  useEffect(() => {
+    if (!wantQuotation || config.status !== "ready") return;
+    const quotationTop = config.value.sales.orderTops.quotationTopCode;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot request consumed once the configuration is ready
+    setWantQuotation(false);
+    if (quotationTop !== null && quotationTop !== undefined) setChoice((current) => ({ ...current, top: quotationTop }));
+  }, [wantQuotation, config]);
 
   const savedTopCode = localDraft?.topCode ?? editingOrder?.topCode ?? null;
   const topCode = choice.top !== undefined ? choice.top : savedTopCode;
@@ -944,6 +961,29 @@ export function NewOrderScreen({
    * few seconds for the number. Transient failure: it stays queued and is resent by itself. Definitive refusal: popup with the fix, the
    * order stays editable and is NOT resent.
    */
+  async function saveAsRecurring() {
+    if (templates === undefined || customer === null) return;
+    const items = templateItemsOf(lines);
+    if (items === null) {
+      modal.show({ variant: "error", title: "Falta algo", message: "Confira as quantidades dos itens." });
+      return;
+    }
+    try {
+      const config = await repositories.orders.getEntryConfiguration();
+      const expectedDataset = datasetIdentityOf(config);
+      if (expectedDataset === null) {
+        modal.show({ variant: "error", title: "Não foi possível salvar", message: "Sincronize e tente de novo." });
+        return;
+      }
+      const stamp = new Date().toLocaleDateString("pt-BR");
+      const name = `${customer.name.slice(0, 60)} ${stamp}`;
+      await templates.create(customer.code, { clientRequestId: newClientRequestId(), expectedDataset, name, items });
+      modal.show({ variant: "info", title: "Pedido recorrente salvo", message: name, buttons: [{ label: "Ok", role: "primary" }] });
+    } catch (error) {
+      modal.show({ variant: "error", title: "Não foi possível salvar", message: describeTemplateError(error).message });
+    }
+  }
+
   async function confirmOrder() {
     if (customer === null || confirmingRef.current || localOrders === undefined) return;
     confirmingRef.current = true;
@@ -1365,6 +1405,11 @@ export function NewOrderScreen({
       {step === "products" && renderProductsStep()}
       {step === "summary" && renderSummaryStep()}
 
+      {step === "summary" && templates !== undefined && customer !== null && lines.length > 0 && (
+        <Pressable style={styles.recurringButton} onPress={() => void saveAsRecurring()} accessibilityRole="button" accessibilityLabel="Salvar como recorrente">
+          <Text style={styles.recurringText}>Salvar como recorrente</Text>
+        </Pressable>
+      )}
       {step === "summary" ? (
         localOrders !== undefined ? (
           <WizardFooter
@@ -1432,6 +1477,8 @@ export function NewOrderScreen({
 }
 
 const styles = StyleSheet.create({
+  recurringButton: { alignSelf: "center", paddingVertical: 10, paddingHorizontal: 16 },
+  recurringText: { fontWeight: "700", fontSize: 14, textDecorationLine: "underline" },
   flex: { flex: 1 },
   scrollContent: { padding: spacing.md, gap: spacing.sm, paddingBottom: spacing.xl },
   stepError: { fontSize: 13, fontWeight: "600", color: colors.text, backgroundColor: colors.errorBackground, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },

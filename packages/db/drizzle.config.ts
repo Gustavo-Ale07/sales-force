@@ -13,6 +13,9 @@ export default defineConfig({
     './src/schema/customer-registration.ts',
     './src/schema/templates.ts',
     './src/schema/media.ts',
+    './src/schema/cnpj-cache.ts',
+    './src/schema/tasks.ts',
+    './src/schema/notifications.ts',
   ],
   out: './migrations',
 });

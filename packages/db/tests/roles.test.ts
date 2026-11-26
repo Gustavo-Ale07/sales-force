@@ -25,10 +25,10 @@ const ALL_PRIVS: Priv[] = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', '
 const S: Priv[] = ['SELECT'];
 const SIU: Priv[] = ['SELECT', 'INSERT', 'UPDATE'];
 const SIUD: Priv[] = ['SELECT', 'INSERT', 'UPDATE', 'DELETE'];
-const MIRROR = ['erp_seller', 'erp_directory_user', 'erp_carrier', 'erp_city', 'erp_neighborhood', 'erp_street', 'erp_postal_code', 'erp_ipi_rate', 'erp_open_title', 'erp_customer', 'erp_product', 'erp_product_group', 'erp_price_table', 'erp_price_table_version', 'erp_list_price'];
+const MIRROR = ['erp_seller', 'erp_directory_user', 'erp_carrier', 'erp_city', 'erp_neighborhood', 'erp_street', 'erp_postal_code', 'erp_force_config', 'erp_force_discount_limit', 'erp_ipi_rate', 'erp_open_title', 'erp_customer', 'erp_product', 'erp_product_group', 'erp_price_table', 'erp_price_table_version', 'erp_list_price'];
 const SID: Priv[] = ['SELECT', 'INSERT', 'DELETE'];
 // Atomic snapshot-replacement mirrors (sales history): the worker deletes and re-inserts the whole window in one transaction.
-const REPLACED_MIRROR = ['erp_sales_history_monthly', 'erp_sales_history_customer_product'];
+const REPLACED_MIRROR = ['erp_sales_history_monthly', 'erp_seller_goal', 'erp_sales_history_customer_product'];
 
 /** The matrix documented in db-roles.sql. A table absent here must have no api/worker privilege at all. */
 const EXPECTED: Record<string, { api: Priv[]; worker: Priv[] }> = {
@@ -59,6 +59,12 @@ const EXPECTED: Record<string, { api: Priv[]; worker: Priv[] }> = {
   integration_outbox: { api: SIUD, worker: ['SELECT', 'UPDATE'] },
   integration_order_dry_run: { api: [], worker: ['SELECT', 'INSERT', 'DELETE'] },
   product_media: { api: S, worker: SIUD },
+  cnpj_lookup_cache: { api: ['SELECT', 'INSERT', 'UPDATE'], worker: [] },
+  device: { api: ['SELECT', 'INSERT', 'UPDATE'], worker: [] },
+  device_setting: { api: ['SELECT', 'INSERT', 'UPDATE'], worker: [] },
+  activity_task: { api: ['SELECT', 'INSERT', 'UPDATE'], worker: ['SELECT', 'UPDATE'] },
+  notification: { api: ['SELECT', 'UPDATE'], worker: ['SELECT', 'INSERT', 'UPDATE'] },
+  push_device: { api: ['SELECT', 'INSERT', 'UPDATE'], worker: ['SELECT', 'UPDATE'] },
   schema_migration: { api: S, worker: [] },
   ...Object.fromEntries(MIRROR.map((t) => [t, { api: S, worker: SIU }])),
   ...Object.fromEntries(REPLACED_MIRROR.map((t) => [t, { api: S, worker: SID }])),

@@ -1,5 +1,11 @@
 import {
   assignPendingCustomerSeller,
+  discardCustomerEdit,
+  enqueueCustomerEdit,
+  listCustomerEdits,
+  resolveCustomerEditConflict,
+  type CustomerEditChanges,
+  type CustomerEditRecord,
   createPendingCustomer,
   discardPendingCustomer,
   isCustomerCreationAvailable,
@@ -47,6 +53,12 @@ export interface PendingCustomersPort {
   discard(clientRequestId: string): Promise<void>;
   /** A manager/admin picks the seller of a customer held without one; it is sent again right away. */
   assignSeller(clientRequestId: string, sellerCode: number): Promise<void>;
+  /** Offline edit of an existing customer: stored here and sent by the next sync, before any order. */
+  queueEdit?(customerCode: number, customerName: string, changes: CustomerEditChanges, baseContactVersion: string | null): Promise<void>;
+  /** Edits the ERP could not take as they are: a conflict (both versions kept) or a refusal. */
+  editsNeedingAttention?(): Promise<CustomerEditRecord[]>;
+  resolveEditConflict?(clientRequestId: string, choice: "mine" | "theirs"): Promise<void>;
+  discardEdit?(clientRequestId: string): Promise<void>;
 }
 
 export function createPendingCustomersPort(deps: {
@@ -86,6 +98,22 @@ export function createPendingCustomersPort(deps: {
     },
     async assignSeller(clientRequestId, sellerCode) {
       await assignPendingCustomerSeller(db, env, ownerAccountId, clientRequestId, sellerCode);
+      onChanged();
+    },
+    async queueEdit(customerCode, customerName, changes, baseContactVersion) {
+      await enqueueCustomerEdit(db, env, { ownerAccountId, customerCode, customerName, changes, baseContactVersion });
+      onChanged();
+    },
+    async editsNeedingAttention() {
+      const all = await listCustomerEdits(db, ownerAccountId, await readExpectedDataset(db));
+      return all.filter((edit) => edit.state === "conflict" || edit.state === "rejected");
+    },
+    async resolveEditConflict(clientRequestId, choice) {
+      await resolveCustomerEditConflict(db, env, ownerAccountId, clientRequestId, choice);
+      onChanged();
+    },
+    async discardEdit(clientRequestId) {
+      await discardCustomerEdit(db, ownerAccountId, clientRequestId);
       onChanged();
     },
   };

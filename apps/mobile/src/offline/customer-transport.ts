@@ -1,4 +1,4 @@
-import { TransportError, type CustomerLike, type CustomerRegistrationTransport } from "@salesforce/mobile-db";
+import { TransportError, type CustomerEditTransport, type CustomerLike, type CustomerRegistrationTransport } from "@salesforce/mobile-db";
 import { ApiRequestError, callApi, type ApiClient } from "../data/api";
 import type { CustomerDetail } from "../data/ports";
 import { toTransportError } from "./transport";
@@ -81,6 +81,45 @@ export function createCustomerTransport(api: ApiClient): CustomerRegistrationTra
         return toCustomerLike(await callApi(() => api.GET("/customers/{code}", { params: { path: { code } } })));
       } catch (error) {
         throw toTransportError(error);
+      }
+    },
+  };
+}
+
+/** Maps a failed `PATCH /customers/{code}`: the edit conflict keeps the ERP's current values; a 422 is a refusal; the rest is the common mapping. */
+export function toCustomerEditTransportError(error: unknown): TransportError {
+  if (error instanceof ApiRequestError && error.status === 409 && error.reason === "customer_edit_conflict") {
+    const current = error.details.current;
+    const values = typeof current === "object" && current !== null ? (current as Record<string, unknown>) : {};
+    return new TransportError("edit_conflict", error.message, 409, error.reason, {
+      phone: typeof values.phone === "string" ? values.phone : "",
+      email: typeof values.email === "string" ? values.email : "",
+      contactVersion: typeof error.details.contactVersion === "string" ? error.details.contactVersion : "",
+    });
+  }
+  if (error instanceof ApiRequestError && error.status === 422) return new TransportError("validation", error.message, 422, error.code);
+  if (error instanceof ApiRequestError && error.status === 409) {
+    if (error.code === "idempotency_conflict") return new TransportError("idempotency_conflict", error.message, 409);
+    // Edit switched off or a field the ERP mapping does not carry yet: the installation is not ready, the edit stays queued.
+    if (error.reason === "customer_edit_disabled") return new TransportError("server", error.message, 409, error.reason);
+    return new TransportError("validation", error.message, 409, error.reason);
+  }
+  return toTransportError(error);
+}
+
+/** `CustomerEditTransport` over the generated client; the request id is the idempotency key of every attempt. */
+export function createCustomerEditTransport(api: ApiClient): CustomerEditTransport {
+  return {
+    async updateCustomer(clientRequestId, customerCode, changes, baseContactVersion) {
+      try {
+        await callApi(() =>
+          api.PATCH("/customers/{code}", {
+            params: { path: { code: customerCode } },
+            body: { clientRequestId, ...(baseContactVersion === null ? {} : { baseContactVersion }), ...changes },
+          }),
+        );
+      } catch (error) {
+        throw toCustomerEditTransportError(error);
       }
     },
   };

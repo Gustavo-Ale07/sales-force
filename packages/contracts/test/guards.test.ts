@@ -34,7 +34,12 @@ export function findForbiddenKeys(node: unknown, location = '#', found: Finding[
   return found;
 }
 
-const ALLOWED = [{ location: '#/components/schemas/LoginRequest/properties', key: 'password' }];
+// The Expo push token (RF-NOT) is a delivery address the device itself supplies, not a credential: request-only, never echoed back.
+const ALLOWED = [
+  { location: '#/components/schemas/LoginRequest/properties', key: 'password' },
+  { location: '#/components/schemas/RegisterPushDeviceRequest/properties', key: 'token' },
+  { location: '#/components/schemas/UnregisterPushDeviceRequest/properties', key: 'token' },
+];
 
 describe('sensitive-field guard (P-20, P-22)', () => {
   const doc = buildOpenApiDocument();

@@ -286,6 +286,8 @@ export function createReferenceSource(api: ApiClient, timing: RefreshTiming = {}
         return { source: priceContext.source, tableCode: priceContext.tableCode, tableName: priceContext.tableName };
       }),
     fetchProductGroups: () => guard(() => callApi(() => api.GET("/product-groups"))),
+    // The seller's OWN discount rules only (the server never returns another seller's); best-effort in the pull.
+    fetchDiscountLimits: () => guard(() => callApi(() => api.GET("/discount-limits/mine"))),
     fetchEntryConfiguration: () => guard(() => callApi(() => api.GET("/order-entry/configuration"))),
     // Same endpoint the online carrier picker uses; the pull treats a failure here as non-fatal.
     fetchCarriers: () => guard(async () => (await callApi(() => api.GET("/carriers"))).items),

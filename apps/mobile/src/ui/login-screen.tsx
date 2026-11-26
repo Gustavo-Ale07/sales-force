@@ -17,6 +17,8 @@ export function describeLoginFailure(failure: LoginFailure): string {
   switch (failure.reason) {
     case "invalid_credentials":
       return "Usuário ou senha inválidos.";
+    case "device_revoked":
+      return "Este aparelho foi revogado. Peça a um administrador ou gerente para liberar o acesso.";
     case "access_not_configured":
       return "Usuário autenticado, mas o acesso ao Force ainda não está configurado.";
     case "app_not_permitted":
