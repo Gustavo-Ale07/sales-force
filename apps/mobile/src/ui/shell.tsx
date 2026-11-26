@@ -474,6 +474,7 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
                       onAssignSeller: async (sellerCode: number) => {
                         await pendingCustomers.assignSeller(customerDetail.pending!.clientRequestId, sellerCode);
                         setCustomerDetail((current) => (current === null || current.pending === undefined ? current : { ...current, sellerCode, pending: { ...current.pending, needsSeller: false } }));
+                        setEpochs((current) => ({ ...current, customers: current.customers + 1 }));
                       },
                     }
                   : {})}

@@ -12,6 +12,7 @@ import { BackLink } from "./back-link";
 import { describeCustomerStatus } from "./customers-screen";
 import { SaleBadgeView, describeSaleValue } from "./sale-parts";
 import { describeSaleMeta } from "./sales-screen";
+import { SellerPicker } from "./seller-picker";
 
 /** "1234.5" -> "R$ 1.234,50" without depending on Intl (not guaranteed on every Hermes build). */
 function formatMoney(decimal: string): string {
@@ -151,7 +152,7 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
       <View style={styles.bar}>
         <BackLink label="Clientes" onPress={onBack} accessibilityLabel="Voltar para Clientes" />
       </View>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Text style={styles.name} accessibilityRole="header">{titleCase(customer.name)}</Text>
           {hasTradeName && <Text style={styles.trade}>{titleCase(customer.tradeName)}</Text>}
@@ -167,6 +168,10 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
           <Field label="Vendedor preferencial" value={customer.sellerName ?? "—"} />
           {detail !== null && <Field label="Última sincronização" value={formatDateTime(detail.syncedAt)} />}
         </Section>
+
+        {customer.pending?.needsSeller === true && sellers !== undefined && onAssignSeller !== undefined && (
+          <SellerPicker sellers={sellers} selectedCode={null} onSelect={(code) => void onAssignSeller(code).catch(() => undefined)} />
+        )}
 
         {isPending && (
           <Section title="Financeiro">
@@ -240,18 +245,6 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
       <View style={styles.footer}>
         {isPending && <Text style={styles.status}>{PENDING_CUSTOMER_ORDER_MESSAGE}</Text>}
         {noSeller && <Text style={styles.status}>{NO_SELLER_ORDER_MESSAGE}</Text>}
-        {customer.pending?.needsSeller === true && sellers !== undefined && onAssignSeller !== undefined && (
-          <View style={styles.sellerPick}>
-            <Text style={styles.status}>Vendedor</Text>
-            <View style={styles.sellerChips}>
-              {sellers.map((seller) => (
-                <Pressable key={seller.code} style={styles.sellerChip} onPress={() => void onAssignSeller(seller.code).catch(() => undefined)} accessibilityRole="button" accessibilityLabel={`Vendedor ${seller.name}`}>
-                  <Text style={styles.sellerChipText}>{seller.name}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        )}
         <Pressable
           style={[styles.cta, cannotOrder && styles.ctaDisabled]}
           onPress={() => !cannotOrder && onNewOrder(customer)}
@@ -279,10 +272,6 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  sellerPick: { gap: spacing.sm },
-  sellerChips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  sellerChip: { minHeight: 44, justifyContent: "center", paddingHorizontal: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
-  sellerChipText: { fontSize: 14, fontWeight: "600", color: colors.navy },
   bar: { backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border, paddingHorizontal: spacing.sm },
   back: { minHeight: 48, justifyContent: "center", paddingHorizontal: spacing.md, alignSelf: "flex-start" },
   backText: { fontSize: 16, fontWeight: "700", color: colors.navy },

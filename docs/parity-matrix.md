@@ -154,4 +154,6 @@ Corrigido nos dois lados: versão do site (versão do pacote e SHA curto do buil
 
 Exclusivas do app: pedido offline, "Salvo no aparelho", fila local (com "Recusado" e "Descartar" no cadastro de cliente), atualização do APK, "Verificar atualização" com OTA (conferir, baixar e reiniciar). Exclusivas do site: aprovação de desconto, "Aguardando liberação", Integração, Configurações, tabela com ordenação, abas da ficha.
 
+Seletor de vendedor (26/11): mesmo campo "Vendedor", com caixa de pesquisa e lupa (sem acento nem caixa, ordem alfabética), no site e no app, na linha pendente do cliente e no formulário "Novo cliente"; vendedor logado segue automático. No site a fila de liberação mantém o filtro "Vendedor" como Select (é filtro, não escolha).
+
 Abertas (decisão do dono): ordenação da lista de clientes, produtos e pedidos no app; seletor de cliente no Catálogo do app; "Máx. X%" na lista de produtos; abas "Análise do cliente" e "Engajamento" do site (placeholders); "Vencido" por linha na lista de clientes do app; filtro de entrega e Transportadora no app; layout do Início (cabeçalhos e atalho de sincronizar) e cores dos indicadores; visualização padrão do catálogo (tabela no site, grade no app).

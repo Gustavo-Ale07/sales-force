@@ -186,7 +186,9 @@ describe("Clientes: cadastro (D-AR)", () => {
     expect(await within(dialog).findByText("Escolha o vendedor.")).toBeInTheDocument();
     expect(callsTo(calls, "POST", "/customers")).toHaveLength(0);
     expect(within(dialog).queryByRole("option", { name: "Beto" })).not.toBeInTheDocument();
-    await user.selectOptions(within(dialog).getByLabelText(/Vendedor/), "Ana");
+    await user.click(within(dialog).getByLabelText(/Vendedor/));
+    expect(within(dialog).queryByRole("option", { name: "Beto" })).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole("option", { name: "Ana" }));
     await user.click(within(dialog).getByRole("button", { name: "Cadastrar" }));
     await waitFor(() => expect(callsTo(calls, "POST", "/customers")).toHaveLength(1));
     expect(callsTo(calls, "POST", "/customers")[0]?.body).toMatchObject({ sellerCode: 7 });
@@ -279,7 +281,8 @@ describe("Clientes: cadastro (D-AR)", () => {
       },
     });
     const row = await screen.findByTestId("pending-customer");
-    await user.selectOptions(await within(row).findByRole("combobox", { name: /Vendedor de/ }), "Ana");
+    await user.type(await within(row).findByRole("combobox", { name: /Vendedor de/ }), "an");
+    await user.click(await screen.findByRole("option", { name: "Ana" }));
     await waitFor(() => expect(callsTo(calls, "PUT", "/customers/registrations/0190a000-0000-7000-8000-0000000000aa/seller")).toHaveLength(1));
     expect(callsTo(calls, "PUT", "/customers/registrations/0190a000-0000-7000-8000-0000000000aa/seller")[0]?.body).toEqual({ sellerCode: 7 });
   });

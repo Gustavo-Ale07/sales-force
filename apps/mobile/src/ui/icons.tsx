@@ -1,6 +1,6 @@
 import { StyleSheet, View } from "react-native";
 
-export type IconName = "home" | "customers" | "sales" | "catalog" | "profile" | "products" | "cart" | "check" | "close" | "select" | "plus" | "arrow" | "back" | "alert" | "filter" | "cloud";
+export type IconName = "home" | "customers" | "sales" | "catalog" | "profile" | "products" | "cart" | "check" | "close" | "select" | "plus" | "arrow" | "back" | "alert" | "filter" | "cloud" | "search";
 
 /** Small line icons drawn with plain views: no icon font or SVG dependency. All fit a 24 x 24 box. */
 export function Icon({ name, color, size = 24 }: { name: IconName; color: string; size?: number }) {
@@ -114,6 +114,13 @@ export function Icon({ name, color, size = 24 }: { name: IconName; color: string
           <View style={[styles.filterBar, { backgroundColor: color, width: 6 }]} />
         </View>
       );
+    case "search":
+      return (
+        <View style={[box, styles.center]} accessibilityElementsHidden>
+          <View style={[styles.lensRing, stroke]} />
+          <View style={[styles.lensHandle, { backgroundColor: color }]} />
+        </View>
+      );
     case "cloud":
       return (
         <View style={[box, styles.center]} accessibilityElementsHidden>
@@ -136,6 +143,8 @@ export function Icon({ name, color, size = 24 }: { name: IconName; color: string
 const styles = StyleSheet.create({
   center: { alignItems: "center", justifyContent: "center" },
   filterBar: { height: 2, borderRadius: 1, marginVertical: 2 },
+  lensRing: { position: "absolute", top: 2, left: 2, width: 15, height: 15, borderRadius: 8 },
+  lensHandle: { position: "absolute", bottom: 3, right: 3, width: 8, height: 2, borderRadius: 1, transform: [{ rotate: "45deg" }] },
   cloudBody: { width: 20, height: 11, borderRadius: 6, marginTop: 6 },
   cloudPuff: { position: "absolute", top: 3, left: 6, width: 10, height: 10, borderRadius: 5, borderBottomColor: "transparent" },
   crate: { width: 18, height: 16, borderRadius: 3, justifyContent: "center" },

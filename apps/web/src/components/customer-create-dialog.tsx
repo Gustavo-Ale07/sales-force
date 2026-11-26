@@ -17,6 +17,7 @@ import {
 } from "../lib/customer-form";
 import { useCreateCustomer } from "../lib/use-customer-write";
 import { useIcmsOptions } from "../lib/use-icms-options";
+import { SellerPicker } from "./seller-picker";
 
 /** Profiles that may choose the owner seller of a new customer; everyone else is linked by the server. */
 const SELLER_PICKER_ROLES: readonly string[] = ["admin", "manager"];
@@ -116,14 +117,13 @@ function CreateBody({ onClose }: { onClose: () => void }) {
           ) : null}
           {needsSeller ? (
             <FormField label="Vendedor" required error={fieldError(problems.sellerCode, "sellerCode")}>
-              <Select value={form.sellerCode} disabled={sellers.isPending} onChange={(event) => set({ sellerCode: event.target.value })}>
-                <option value="">{sellers.isPending ? "Carregando…" : "Selecione"}</option>
-                {activeSellers.map((seller) => (
-                  <option key={seller.code} value={String(seller.code)}>
-                    {seller.name}
-                  </option>
-                ))}
-              </Select>
+              <SellerPicker
+                sellers={activeSellers}
+                value={form.sellerCode === "" ? null : Number(form.sellerCode)}
+                loading={sellers.isPending}
+                disabled={sellers.isPending}
+                onChange={(code) => set({ sellerCode: code === null ? "" : String(code) })}
+              />
             </FormField>
           ) : null}
           <FormField label="Razão social ou nome" required error={fieldError(problems.name, "name")}>

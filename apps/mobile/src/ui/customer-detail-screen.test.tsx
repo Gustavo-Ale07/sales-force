@@ -26,6 +26,25 @@ describe("CustomerDetailScreen recurring orders section", () => {
   });
 });
 
+describe("CustomerDetailScreen seller picker", () => {
+  const held = customer(-3, { pending: { clientRequestId: "x", state: "queued", needsSeller: true } });
+  const choices = [{ code: 2, name: "Bruno" }, { code: 1, name: "Ana" }];
+
+  it("lets the manager search and pick the seller of a held registration", async () => {
+    const onAssignSeller = jest.fn(async () => undefined);
+    await render(<CustomerDetailScreen customer={held} customers={listOnly} onBack={jest.fn()} onNewOrder={jest.fn()} sellers={choices} onAssignSeller={onAssignSeller} />);
+    await fireEvent.changeText(screen.getByLabelText("Pesquisar vendedor"), "BRU");
+    expect(screen.queryByRole("radio", { name: "Vendedor Ana" })).toBeNull();
+    await fireEvent.press(screen.getByRole("radio", { name: "Vendedor Bruno" }));
+    expect(onAssignSeller).toHaveBeenCalledWith(2);
+  });
+
+  it("offers no picker when the registration is not held for a seller", async () => {
+    await render(<CustomerDetailScreen customer={customer(-3, { pending: { clientRequestId: "x", state: "queued", needsSeller: false } })} customers={listOnly} onBack={jest.fn()} onNewOrder={jest.fn()} sellers={choices} onAssignSeller={jest.fn()} />);
+    expect(screen.queryByLabelText("Pesquisar vendedor")).toBeNull();
+  });
+});
+
 describe("CustomerDetailScreen", () => {
   it("shows only what a sparse customer really has: no empty sections, no invented history", async () => {
     await render(<CustomerDetailScreen customer={customer(10, { name: "Padaria Central", sellerCode: null, priceTableCode: null })} customers={listOnly} onBack={jest.fn()} onNewOrder={jest.fn()} />);

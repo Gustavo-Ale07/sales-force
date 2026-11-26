@@ -3,8 +3,8 @@ import { BackHandler, Pressable, ScrollView, Text, View } from "react-native";
 import { normalizeTaxDocument, taxDocumentKind } from "@salesforce/domain";
 import { buildCreateRequest, createProblems, emptyCreateForm, hasCreateProblems, type CreateForm, type CreateCustomerRequest, type IcmsClassificationOption, type SellerChoice } from "../data/customer-form";
 import { CustomerRejectedError } from "../offline/pending-customers";
-import { colors } from "../theme";
 import { Banner, CheckRow, FormButton, FormField, FormFrame, formStyles } from "./customer-form-parts";
+import { SellerPicker } from "./seller-picker";
 
 export interface CustomerCreateScreenProps {
   /**
@@ -115,20 +115,7 @@ export function CustomerCreateScreen({ onSave, onClose, icmsOptions = [], seller
           </View>
         )}
         {sellerRequired && (
-          <View style={{ gap: 2 }}>
-            <Text style={{ fontSize: 12, color: "#4a5268" }}>Vendedor *</Text>
-            <View style={formStyles.chips}>
-              {sellers.map((seller) => {
-                const on = form.sellerCode === seller.code;
-                return (
-                  <Pressable key={seller.code} style={[formStyles.chip, on && formStyles.chipOn]} onPress={() => change({ sellerCode: seller.code })} accessibilityRole="radio" accessibilityLabel={`Vendedor ${seller.name}`} accessibilityState={{ selected: on }}>
-                    <Text style={[formStyles.chipText, on && formStyles.chipTextOn]}>{seller.name}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            {fieldError("sellerCode", problems.sellerCode) !== null && <Text style={{ fontSize: 12, color: colors.red, fontWeight: "600" }}>{fieldError("sellerCode", problems.sellerCode)}</Text>}
-          </View>
+          <SellerPicker sellers={sellers} selectedCode={form.sellerCode}onSelect={(sellerCode) => change({ sellerCode })} error={fieldError("sellerCode", problems.sellerCode)} />
         )}
         <FormField label="Razão social ou nome" required value={form.name} onChangeText={(name) => change({ name })} error={fieldError("name", problems.name)} />
         <FormField label="Nome fantasia" value={form.tradeName} onChangeText={(tradeName) => change({ tradeName })} error={fieldError("tradeName", problems.tradeName)} />

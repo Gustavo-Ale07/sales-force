@@ -1,6 +1,6 @@
 import type { ApiSchema } from "@salesforce/contracts/client";
 import { customerStateLabel } from "@salesforce/domain";
-import { Avatar, Button, Select, StatusBadge, TableCell, TableRow, formatDocument, titleCase, toast } from "@salesforce/ui";
+import { Avatar, Button, StatusBadge, TableCell, TableRow, formatDocument, titleCase, toast } from "@salesforce/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { customerRegistrationsQueryOptions, queryKeys, sellersQueryOptions } from "../lib/api-queries";
@@ -8,6 +8,7 @@ import { setRegistrationSeller } from "../lib/api-mutations";
 import { useApi, useAppServices } from "../lib/app-context";
 import { sessionQueryOptions } from "../lib/auth-client";
 import { describeCustomerWriteError } from "../lib/customer-form";
+import { SellerPicker } from "./seller-picker";
 
 type Registration = ApiSchema<"CustomerRegistrationView">;
 
@@ -56,22 +57,16 @@ export function PendingCustomerRows({ items }: { items: readonly Registration[] 
               {item.sellerCode !== null ? (
                 (sellerName ?? <span className="text-fg-faint">—</span>)
               ) : manages ? (
-                <Select
+                <SellerPicker
                   size="sm"
                   aria-label={`Vendedor de ${titleCase(item.name)}`}
-                  value=""
+                  sellers={activeSellers}
+                  value={null}
                   disabled={sellers.isPending || setSeller.isPending}
-                  onChange={(event) => {
-                    if (event.target.value !== "") setSeller.mutate({ registrationId: item.registrationId, sellerCode: Number(event.target.value) });
+                  onChange={(code) => {
+                    if (code !== null) setSeller.mutate({ registrationId: item.registrationId, sellerCode: code });
                   }}
-                >
-                  <option value="">Sem vendedor</option>
-                  {activeSellers.map((seller) => (
-                    <option key={seller.code} value={String(seller.code)}>
-                      {seller.name}
-                    </option>
-                  ))}
-                </Select>
+                />
               ) : (
                 <StatusBadge tone="warning">Sem vendedor</StatusBadge>
               )}
