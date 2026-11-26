@@ -845,7 +845,8 @@ export const POSTAL_CODE_SPEC: EntitySpec<PostalCodeEntry> = {
   table: 'TSICEP',
   select: ['CEP', 'CODCID', 'CODBAI', 'CODEND'],
   columns: ['CEP', 'CODCID', 'CODBAI', 'CODEND'],
-  where: 'CEP IS NOT NULL',
+  // CEP is VARCHAR2(8): 31 of 4152 Sandbox rows have 7 digits, which breaks text order versus the numeric key.
+  where: "REGEXP_LIKE(CEP, '^[0-9]{8}$')",
   orderBy: 'CEP',
   map: (row) => {
     const cep = row.integerOrNull('CEP');

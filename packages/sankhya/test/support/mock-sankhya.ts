@@ -287,6 +287,8 @@ function whereMatches(row: ErpRow, where: string | undefined): boolean {
     if (isNull) return row[isNull[1] as string] === null || row[isNull[1] as string] === undefined;
     const isNotNull = /^(\w+) IS NOT NULL$/.exec(term);
     if (isNotNull) return row[isNotNull[1] as string] !== null && row[isNotNull[1] as string] !== undefined;
+    const eightDigits = /^REGEXP_LIKE\((\w+), '\^\[0-9\]\{8\}\$'\)$/.exec(term);
+    if (eightDigits) return /^[0-9]{8}$/.test(String(row[eightDigits[1] as string] ?? ''));
     const positive = /^(\w+) > 0$/.exec(term);
     if (positive) return Number(row[positive[1] as string]) > 0;
     const inList = /^(\w+) IN \((.+)\)$/.exec(term);
