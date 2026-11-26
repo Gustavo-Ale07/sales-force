@@ -5,7 +5,8 @@
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const API_URL = 'https://force.sistemasplac.com.br';
 const env = {
@@ -26,7 +27,7 @@ function run(args) {
   // No Windows o npx exige shell: argumentos com espaco precisam de aspas, senao a mensagem vira varios argumentos.
   const win = process.platform === 'win32';
   const argv = win ? args.map((a) => (/[\s()+&|<>^]/.test(a) ? `"${a.replace(/"/g, '')}"` : a)) : args;
-  const result = spawnSync('npx', argv, { env, stdio: 'inherit', shell: win });
+  const result = spawnSync('npx', argv, { env, stdio: 'inherit', shell: win, cwd: join(dirname(fileURLToPath(import.meta.url)), '..') });
   if (result.status !== 0) {
     console.error(`Falhou: npx ${args.join(' ')}`);
     process.exit(result.status ?? 1);
