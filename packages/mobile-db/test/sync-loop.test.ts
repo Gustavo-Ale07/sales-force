@@ -253,7 +253,8 @@ describe("simulated clock (fake timers)", () => {
     await runApp(24 * 3_600_000, server);
     expect(server.posts).toBe(1);
     expect(manager.getStatus()).toMatchObject({ pending: 0, needsAttention: 1 });
-  });
+    // 24 h of 60 s ticks = 1440 real syncs against SQLite (~4.4 s alone, over the 5 s default when the suite runs in parallel): explicit budget, same assertions.
+  }, 60_000);
 
   it("a transient error retries with a growing backoff, bounded by the 15 minute cap", async () => {
     class Flaky extends RefusingServer {

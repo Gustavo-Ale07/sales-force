@@ -107,7 +107,7 @@ function CustomerOrders({ customerCode }: { customerCode: number }) {
                       <OrderStatusBadge order={order} variant="dot" />
                     </TableCell>
                     <TableCell numeric>
-                      <Money value={order.estimatedTotal} />
+                      <Money value={order.grandTotalEstimated ?? order.estimatedTotal} />
                     </TableCell>
                     <TableCell>
                       <DateText value={order.updatedAt} withTime />

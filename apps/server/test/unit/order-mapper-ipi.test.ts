@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { toOrderDetail } from '../../src/orders/order.mapper.js';
+import { listGrandTotal, toOrderDetail } from '../../src/orders/order.mapper.js';
 
 function item(lineNo: number, productCode: number, total: string) {
   return {
@@ -41,6 +41,20 @@ const codes = new Map([
   [77, 8],
   [88, 99], // code without a mirrored rate
 ]);
+
+describe('order list total with estimated IPI (D-D)', () => {
+  it('list total equals the detail grandTotalEstimated', () => {
+    const items = [item(1, 4158, '100.00'), item(2, 13, '16.43')];
+    const detail = toOrderDetail(order, items, customer, new Map(), null, {}, { codes, rates });
+    expect(listGrandTotal(items, { codes, rates })).toBe(detail.ipi?.grandTotalEstimated);
+    expect(listGrandTotal(items, { codes, rates })).toBe('121.28');
+  });
+
+  it('2501 case: 1831.70 net at 3.25% is 1891.23; no rate leaves the net total', () => {
+    expect(listGrandTotal([item(1, 4158, '1831.70')], { codes, rates })).toBe('1891.23');
+    expect(listGrandTotal([item(1, 9, '10.00')], { codes, rates })).toBe('10.00');
+  });
+});
 
 describe('order detail estimated IPI (D-D)', () => {
   it('estimates per line from the net total and sums the order', () => {

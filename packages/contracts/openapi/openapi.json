@@ -7479,6 +7479,9 @@
           "estimatedTotal": {
             "$ref": "#/components/schemas/DecimalString"
           },
+          "grandTotalEstimated": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
           "itemCount": {
             "type": "integer",
             "minimum": 0
@@ -8473,6 +8476,9 @@
             "type": "boolean"
           },
           "estimatedTotal": {
+            "$ref": "#/components/schemas/DecimalString"
+          },
+          "grandTotalEstimated": {
             "$ref": "#/components/schemas/DecimalString"
           },
           "itemCount": {

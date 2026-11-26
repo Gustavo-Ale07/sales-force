@@ -169,13 +169,21 @@ export async function countLive(db: Queryable, spec: MirrorEntitySpec): Promise<
   return (result.rows[0] as { n: number } | undefined)?.n ?? 0;
 }
 
+/** Entities whose complete, healthy snapshot may legitimately be empty (owner ruling 2026-11-26): open receivable titles. */
+const MAY_BE_EMPTY: ReadonlySet<string> = new Set(['openTitles']);
+
+/** True when an empty read against live rows must be refused as a probable broken read (`empty_snapshot`). */
+export function isEmptySnapshotBlocked(entity: string, readCount: number, liveCount: number): boolean {
+  return readCount === 0 && liveCount > 0 && !MAY_BE_EMPTY.has(entity);
+}
+
 /**
  * Soft-deactivates the live rows whose key the COMPLETE source snapshot no longer contains. Call it
  * only after the whole snapshot was read without error (a partial read proves nothing, spike §9.33
  * item 3). Sets `deleted_at`; the row stays, and reappears (reactivated) if the source delivers it again.
  *
  * Fails closed on an empty snapshot while the mirror holds live rows: that pattern is far more likely
- * a broken read than the removal of every record (nothing is deactivated in that case).
+ * a broken read than the removal of every record (nothing is deactivated in that case). Exception: openTitles.
  */
 export async function deactivateMissing(
   db: Queryable,
@@ -188,7 +196,7 @@ export async function deactivateMissing(
    */
   snapshotStartedAt?: Date,
 ): Promise<number> {
-  if (readCount === 0 && (await countLive(db, spec)) > 0) {
+  if (readCount === 0 && isEmptySnapshotBlocked(spec.entity, readCount, await countLive(db, spec))) {
     throw new SankhyaGatewayError('validation', {
       code: 'empty_snapshot',
       message: `${spec.entity}: the source returned no rows while the mirror holds live rows. Nothing was deactivated; check the source before repeating the run.`,

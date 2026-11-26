@@ -193,7 +193,17 @@ function looksTechnical(text: string): boolean {
   return TECHNICAL_TEXT.some((pattern) => pattern.test(text));
 }
 
-export function toOrderListItem(row: OrderListRow): OrderListItem {
+/** D-D: total with estimated IPI for the list; the same calculation as the detail's `ipi.grandTotalEstimated`. Display only. */
+export function listGrandTotal(items: readonly { productCode: number; estimatedLineTotal: string | null }[], ipiLookup: IpiLookup): string {
+  const net = computeOrderTotals(items.map((item) => ({ estimatedLineTotal: item.estimatedLineTotal }) as never)).estimatedTotal;
+  return computeOrderIpi(
+    items.map((item) => ({ lineNetTotal: item.estimatedLineTotal, ipiCode: ipiLookup.codes.get(item.productCode) ?? null })),
+    net,
+    ipiLookup.rates,
+  ).grandTotalEstimated;
+}
+
+export function toOrderListItem(row: OrderListRow, grandTotalEstimated?: string): OrderListItem {
   const { order } = row;
   return {
     id: order.id,
@@ -207,6 +217,7 @@ export function toOrderListItem(row: OrderListRow): OrderListItem {
     freightType: freightTypeOf(order.freightType),
     discountAboveLimitAccepted: order.discountAboveLimitAccepted,
     estimatedTotal: order.estimatedTotal,
+    ...(grandTotalEstimated === undefined ? {} : { grandTotalEstimated }),
     itemCount: row.itemCount,
     itemPreview: [...row.itemPreview],
     isPartial: row.unpricedCount > 0,

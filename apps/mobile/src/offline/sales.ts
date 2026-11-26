@@ -97,10 +97,13 @@ export interface SalesSummary {
 
 /** Pure: the value of an order from its stored lines. A synced order shows the estimate the Force backend returned. */
 export function saleValue(draft: Pick<DraftRecord, "status" | "estimatedTotal">, lines: readonly EditorLine[]): SalesValue {
-  if (draft.status === "synced" && draft.estimatedTotal !== null) return { amount: draft.estimatedTotal, partial: false };
+  // D-D: the list, the detail and the PDF show the same number, net total plus estimated IPI (display only).
+  if (draft.status === "synced" && draft.estimatedTotal !== null) {
+    return { amount: lines.length === 0 ? draft.estimatedTotal : previewDraft(lines).ipi.grandTotalEstimated, partial: false };
+  }
   if (lines.length === 0) return { amount: null, partial: true };
-  const totals = previewDraft(lines).totals;
-  return { amount: totals.unpricedLineCount === lines.length ? null : totals.estimatedTotal, partial: totals.isPartial };
+  const preview = previewDraft(lines);
+  return { amount: preview.totals.unpricedLineCount === lines.length ? null : preview.ipi.grandTotalEstimated, partial: preview.totals.isPartial };
 }
 
 async function valueOf(db: SqlDatabase, draft: DraftRecord): Promise<SalesValue> {

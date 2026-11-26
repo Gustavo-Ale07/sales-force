@@ -62,7 +62,7 @@ export function orderDocumentOf(draft: DraftRecord, lines: readonly EditorLine[]
     notes: draft.notes,
     items,
     totals: {
-      estimatedTotal: value.amount ?? preview.totals.estimatedTotal,
+      estimatedTotal: preview.totals.estimatedTotal,
       isPartial: value.partial,
       unpricedLineCount: preview.totals.unpricedLineCount,
     },

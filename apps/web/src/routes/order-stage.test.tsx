@@ -247,6 +247,19 @@ describe("Situação no Sankhya: lista de pedidos", () => {
   });
   const rowOf = (text: string) => screen.getByText(text).closest("tr") as HTMLElement;
 
+  it("D-D: the list total is the estimate with IPI, same number as the detail", async () => {
+    renderApp("/pedidos", {
+      handlers: {
+        "GET /orders": { body: ordersPage([orderListItem({ draftNumber: 12, status: "sent", erpNumber: 5001, estimatedTotal: "1831.70", grandTotalEstimated: "1891.23" })]) },
+        "GET /customers": { body: customersPage([customer()]) },
+      },
+    });
+    await screen.findByText("Pedido nº 5001");
+    const row = rowOf("Pedido nº 5001");
+    expect(row.textContent).toMatch(/1\.891,23/);
+    expect(row.textContent).not.toMatch(/1\.831,70/);
+  });
+
   it("the list shows the level text next to the stage only for the order that has it", async () => {
     renderApp("/pedidos", {
       handlers: {

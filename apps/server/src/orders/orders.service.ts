@@ -51,8 +51,8 @@ import { assertEligibleForErpSubmission } from './erp-eligibility.guard.js';
 import { deleteOrderDeliveries, enqueueOrderDelivery, requestDeliveryVerification, requeueRejectedDelivery } from './order-erp-delivery.js';
 import { orderFingerprint } from './order-fingerprint.js';
 import { InstallationConfigurationService } from '../configuration/configuration.service.js';
-import { erpDeliveryOf, freightTypeOf, toOrderApproval, toOrderDetail, toOrderListItem } from './order.mapper.js';
-import { OrdersRepository, type Executor, type OrderCounts, type OrderRow } from './orders.repository.js';
+import { erpDeliveryOf, freightTypeOf, listGrandTotal, toOrderApproval, toOrderDetail, toOrderListItem } from './order.mapper.js';
+import { OrdersRepository, type Executor, type OrderCounts, type OrderListRow, type OrderRow } from './orders.repository.js';
 
 type ValidDraft = Extract<DraftOutcome, { ok: true }>;
 
@@ -202,7 +202,7 @@ export class OrdersService {
       { page: query.page, pageSize: query.pageSize },
     );
     const removedIds = query.ids === undefined ? [] : await this.orders.removedIdsOf(scope, query.ids);
-    return { items: rows.map(toOrderListItem), page: query.page, pageSize: query.pageSize, total, removedIds };
+    return { items: await this.listItemsOf(rows), page: query.page, pageSize: query.pageSize, total, removedIds };
   }
 
   async get(user: CurrentUser, id: string): Promise<OrderDetail> {
@@ -236,7 +236,15 @@ export class OrdersService {
       this.orders.countByStatus(scope),
       this.orders.list({ scope, sort: '-updatedAt' }, { page: 1, pageSize: 5 }),
     ]);
-    return { counts, recent: recent.rows.map(toOrderListItem) };
+    return { counts, recent: await this.listItemsOf(recent.rows) };
+  }
+
+  /** List items with the D-D total (net + estimated IPI), from lines and rates fetched in batch (no per-order queries). */
+  private async listItemsOf(rows: readonly OrderListRow[]): Promise<ReturnType<typeof toOrderListItem>[]> {
+    const lines = await this.orders.lineTotalsOf(rows.map((row) => row.order.id));
+    const codes = [...new Set([...lines.values()].flatMap((list) => list.map((line) => line.productCode)))];
+    const lookup = codes.length === 0 ? { codes: new Map<number, number>(), rates: new Map() } : await this.mirror.ipiLookup(codes);
+    return rows.map((row) => toOrderListItem(row, listGrandTotal(lines.get(row.order.id) ?? [], lookup)));
   }
 
   /* ---------- create (idempotent) ---------- */

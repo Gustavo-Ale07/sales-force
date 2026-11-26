@@ -209,6 +209,8 @@ export const OrderListItemSchema = named(
     discountAboveLimitAccepted: z.boolean().optional(),
     /** Estimate from list prices; the final value is calculated by the ERP. */
     estimatedTotal: DecimalStringSchema,
+    /** Net estimate plus the estimated IPI (D-D), the same number as the detail's `ipi.grandTotalEstimated`. Display only. */
+    grandTotalEstimated: DecimalStringSchema.optional(),
     itemCount: z.number().int().min(0),
     /**
      * Descriptions of up to 3 lines, for a glance at the list. When the list is filtered by product, the

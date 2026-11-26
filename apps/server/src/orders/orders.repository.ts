@@ -168,6 +168,22 @@ export class OrdersRepository {
     return executor.select().from(salesOrderItem).where(eq(salesOrderItem.orderId, orderId)).orderBy(asc(salesOrderItem.lineNo));
   }
 
+  /** Line totals of several orders in one query (list IPI total, D-D). */
+  async lineTotalsOf(orderIds: readonly string[]): Promise<Map<string, { productCode: number; estimatedLineTotal: string | null }[]>> {
+    const byOrder = new Map<string, { productCode: number; estimatedLineTotal: string | null }[]>();
+    if (orderIds.length === 0) return byOrder;
+    const rows = await this.db
+      .select({ orderId: salesOrderItem.orderId, productCode: salesOrderItem.productCode, estimatedLineTotal: salesOrderItem.estimatedLineTotal })
+      .from(salesOrderItem)
+      .where(inArray(salesOrderItem.orderId, [...orderIds]));
+    for (const row of rows) {
+      const list = byOrder.get(row.orderId) ?? [];
+      list.push({ productCode: row.productCode, estimatedLineTotal: row.estimatedLineTotal });
+      byOrder.set(row.orderId, list);
+    }
+    return byOrder;
+  }
+
   /**
    * The customer's most recent order recorded in Sales Force ("Repetir último pedido",
    * Phase C) — never Sankhya/ERP order history, which is not mirrored here. `draftNumber` is a global

@@ -1,6 +1,7 @@
 import { CUSTOMER_BLOCK_MESSAGES, CUSTOMER_UNAVAILABLE_MESSAGE, LEGACY_CUSTOMER_UNAVAILABLE_MESSAGE, PRODUCT_BLOCK_MESSAGES, type DraftRecord } from "@salesforce/mobile-db";
 import { draftRecord } from "../test-doubles";
 import type { EditorLine } from "../data/order-draft";
+import { saleValue } from "./sales";
 import { buildOrderPdfHtml, orderDocumentOf, OrderPdfCustomerUnavailableError, pdfStatusLabelOf, shareOrderPdf, type OrderPdfPort } from "./order-pdf";
 
 const line = (over: Partial<EditorLine> = {}): EditorLine => ({
@@ -28,6 +29,16 @@ describe("orderDocumentOf", () => {
     expect(model.totals.isPartial).toBe(true);
     expect(model.totals.unpricedLineCount).toBe(1);
     expect(model.statusLabel).not.toMatch(/ERP/);
+  });
+
+  it("D-D: list value, detail value and PDF grand total are the same number (net plus estimated IPI)", () => {
+    const synced = draftRecord({ status: "synced", estimatedTotal: "100.00" });
+    const lines = [line({ quantityText: "10", discountText: "", ipi: { status: "rate", percentual: "3.25" } })];
+    const value = saleValue(synced, lines);
+    const model = orderDocumentOf(synced, lines);
+    expect(value.amount).toBe("103.25");
+    expect(model.ipi?.grandTotalEstimated).toBe("103.25");
+    expect(model.totals.estimatedTotal).toBe("100.00");
   });
 
   it("prints the IPI percent per item and the Condições box (negotiation type, freight)", () => {

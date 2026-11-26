@@ -1528,6 +1528,7 @@ export interface components {
             freightType: components["schemas"]["FreightType"] | null;
             discountAboveLimitAccepted?: boolean;
             estimatedTotal: components["schemas"]["DecimalString"];
+            grandTotalEstimated?: components["schemas"]["DecimalString"];
             itemCount: number;
             isPartial: boolean;
             erpNumber: number | null;
@@ -1699,6 +1700,7 @@ export interface components {
             freightType: components["schemas"]["FreightType"] | null;
             discountAboveLimitAccepted?: boolean;
             estimatedTotal: components["schemas"]["DecimalString"];
+            grandTotalEstimated?: components["schemas"]["DecimalString"];
             itemCount: number;
             itemPreview: string[];
             isPartial: boolean;
