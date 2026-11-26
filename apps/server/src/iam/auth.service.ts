@@ -489,7 +489,11 @@ export class AuthService implements OnModuleInit {
   ): Promise<{ id: string; status: 'pending' | 'approved' | 'revoked' } | null> {
     if (meta.client !== 'app' || this.devices === undefined) return null;
     // The channel is declared by the client, but only the app channel opens a session for a seller (AUTH-6): an app login without a device fails closed.
-    if (meta.device === undefined) throw new AppError('device_required');
+    if (meta.device === undefined) {
+      // TEMPORARY (owner, 2026-11-26): staging/Sandbox only, until the new APK is published. Fails closed everywhere else and when the flag is removed.
+      if (process.env.SF_ALLOW_LEGACY_APP_LOGIN === 'true' && process.env.SF_ERP_ENVIRONMENT === 'sandbox') return null;
+      throw new AppError('device_required');
+    }
     const device = await this.devices.registerAtLogin({ accountId: found.id, role: found.role }, meta.device);
     if (device.status === 'revoked') throw new AppError('device_revoked');
     return device;
