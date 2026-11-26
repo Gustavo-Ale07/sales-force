@@ -262,14 +262,14 @@ describe("pending customer blocks Novo pedido", () => {
     const onAssignSeller = jest.fn(async () => undefined);
     const item = toPendingListItem(record({ needsSeller: true }));
     await render(<CustomerDetailScreen customer={item} customers={{ list: async () => pageOf([item], 1) }} onBack={noop} onNewOrder={noop} sellers={[{ code: 12, name: "Ana" }]} onAssignSeller={onAssignSeller} />);
-    await fireEvent.press(screen.getByRole("button", { name: "Vendedor Ana" }));
+    await fireEvent.press(screen.getByRole("radio", { name: "Vendedor Ana" }));
     expect(onAssignSeller).toHaveBeenCalledWith(12);
   });
 
   it("a seller is never offered the selector", async () => {
     const item = toPendingListItem(record({ needsSeller: true }));
     await render(<CustomerDetailScreen customer={item} customers={{ list: async () => pageOf([item], 1) }} onBack={noop} onNewOrder={noop} />);
-    expect(screen.queryByRole("button", { name: /^Vendedor / })).toBeNull();
+    expect(screen.queryByRole("radio", { name: /^Vendedor / })).toBeNull();
   });
 });
 
