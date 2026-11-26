@@ -86,6 +86,7 @@ export function ProductBrowser({ products, onUnauthenticated, connectivity, acti
         </View>
       </View>
       <ProductFilterChips filters={filters} tree={groups} onChange={setFilters} />
+      {origin?.source === "none" && <Text style={styles.noOrigin}>Nenhuma tabela de preço se aplica a esta consulta; os produtos aparecem como “Sem preço”.</Text>}
       <ProductFiltersSheet
         visible={filtersOpen}
         filters={filters}
@@ -156,4 +157,5 @@ const styles = StyleSheet.create({
   toggleText: { color: colors.navy, fontWeight: "700", fontSize: 14 },
   toggleTextOn: { color: colors.onNavy },
   cell: { flex: 1, maxWidth: "50%" },
+  noOrigin: { fontSize: 13, color: colors.warning },
 });

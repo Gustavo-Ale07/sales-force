@@ -1,4 +1,5 @@
 import type { ApiSchema } from "@salesforce/contracts/client";
+import { customerStateLabel } from "@salesforce/domain";
 import { Avatar, Button, Select, StatusBadge, TableCell, TableRow, formatDocument, titleCase, toast } from "@salesforce/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
@@ -49,7 +50,7 @@ export function PendingCustomerRows({ items }: { items: readonly Registration[] 
             </TableCell>
             <TableCell label="Documento">{formatDocument(item.document)}</TableCell>
             <TableCell label="Situação">
-              <StatusBadge tone="warning">Envio pendente</StatusBadge>
+              <StatusBadge tone="warning">{customerStateLabel("awaiting_send")}</StatusBadge>
             </TableCell>
             <TableCell label="Vendedor">
               {item.sellerCode !== null ? (

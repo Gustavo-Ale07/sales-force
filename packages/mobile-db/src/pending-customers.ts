@@ -30,7 +30,16 @@ const EDIT_ON_META = "customers.edit_enabled";
  * - No credit limit, price table or status is ever stored here: the seller does not send them (P-20 / plan A1).
  */
 
-export type PendingCustomerState = "queued" | "sending" | "awaiting_erp" | "confirmed";
+export type PendingCustomerState = "queued" | "sending" | "awaiting_erp" | "confirmed" | "rejected";
+
+/**
+ * Every queued customer ends in one of three states: confirmed (the row goes), refused (`rejected`, with a short reason on the row itself,
+ * never resent, never counted as waiting) or discarded by the seller. A row that the server keeps not answering for this many non-network
+ * attempts is refused too, so no item stays in the queue forever and none keeps the global "pending" warning on.
+ */
+export const MAX_DELIVERY_ATTEMPTS = 8;
+export const GAVE_UP_TEXT = "O servidor não aceitou este envio. Descarte e cadastre de novo.";
+export const NOT_CONFIRMED_TEXT = "Sem confirmação do Sankhya. Descarte e cadastre de novo.";
 
 /** The body of `POST /customers` minus the idempotency key (kept in its own column). Same field names as the contract. */
 export interface PendingCustomerRequest {
@@ -76,6 +85,8 @@ export interface PendingCustomerRecord {
   readonly needsSeller: boolean;
   /** Seller-facing text of the last transient problem; never a technical error. */
   readonly lastError: string | null;
+  /** Short reason of a refusal (`state === "rejected"`); `null` otherwise. */
+  readonly rejectionReason: string | null;
   readonly attempts: number;
   readonly nextAttemptAt: string | null;
   readonly createdAt: string;
@@ -161,6 +172,7 @@ export function toPendingCustomer(row: SqlRow): PendingCustomerRecord {
     customerCode: row.customer_code === null || row.customer_code === undefined ? null : Number(row.customer_code),
     needsSeller: Number(row.needs_seller ?? 0) === 1,
     lastError: nullableString(row.last_error),
+    rejectionReason: nullableString(row.rejection_reason),
     attempts: Number(row.attempts),
     nextAttemptAt: nullableString(row.next_attempt_at),
     createdAt: String(row.created_at),
@@ -281,7 +293,7 @@ export async function listPendingCustomers(
 }
 
 export interface PendingCustomerCounts {
-  /** Waiting to be delivered or confirmed (queued, sending, awaiting_erp, waiting for a seller). */
+  /** Really waiting to be delivered or confirmed (queued, sending, awaiting_erp). Refused rows and rows held for a seller are NOT counted. */
   readonly pending: number;
   /** Rows of another dataset: never sent, but never silently forgotten. */
   readonly needsAttention: number;
@@ -289,7 +301,7 @@ export interface PendingCustomerCounts {
 
 export async function countPendingCustomers(db: SqlExecutor, ownerAccountId: string, dataset: DatasetIdentity | null): Promise<PendingCustomerCounts> {
   const rows = await db.query<SqlRow>(
-    "SELECT dataset_environment, dataset_id, count(*) AS n FROM pending_customer WHERE owner_account_id = ? AND state <> 'confirmed' GROUP BY dataset_environment, dataset_id",
+    "SELECT dataset_environment, dataset_id, count(*) AS n FROM pending_customer WHERE owner_account_id = ? AND state IN ('queued', 'sending', 'awaiting_erp') AND needs_seller = 0 GROUP BY dataset_environment, dataset_id",
     [ownerAccountId],
   );
   const counts = { pending: 0, needsAttention: 0 };
@@ -398,6 +410,18 @@ async function settleFromServer(db: SqlDatabase, env: OfflineEnv, transport: Cus
   return "settled";
 }
 
+/**
+ * Ends a row as refused: the reason stays on the row, what the seller typed is erased (only the name stays, to recognise the line) and the
+ * document is released so the same customer can be registered again.
+ */
+async function rejectRow(db: SqlExecutor, env: OfflineEnv, clientRequestId: string, reason: string): Promise<void> {
+  await db.execute(
+    `UPDATE pending_customer SET state = 'rejected', rejection_reason = ?, last_error = NULL, next_attempt_at = NULL, needs_seller = 0, updated_at = ?,
+       document = '', search_text = lower(name), payload = 'null' WHERE client_request_id = ?`,
+    [reason, isoNow(env), clientRequestId],
+  );
+}
+
 async function noteCreationAnswer(db: SqlExecutor, env: OfflineEnv, disabled: boolean): Promise<void> {
   if (disabled) await setMeta(db, CREATION_OFF_META, "0", isoNow(env));
   else if ((await getMeta(db, CREATION_OFF_META)) !== null) await deleteMeta(db, CREATION_OFF_META);
@@ -450,7 +474,13 @@ export async function pushPendingCustomers(
         const done = await settleFromServer(db, env, transport, row, remote.customerCode);
         if (done === "offline") return { attempted, confirmed, rejected, stoppedBy: "offline" };
       } else {
-        // pending / unknown (or "confirmed" without a code): the ERP has not answered yet. Ask again with the same key later.
+        // pending / unknown (or "confirmed" without a code): the ERP has not answered yet. Ask again with the same key later,
+        // but not forever: a registration the ERP never confirms (old flow) ends as refused, with the reason on the row.
+        if (attempts >= MAX_DELIVERY_ATTEMPTS) {
+          await rejectRow(db, env, row.clientRequestId, NOT_CONFIRMED_TEXT);
+          rejected += 1;
+          continue;
+        }
         const next = new Date(env.now().getTime() + backoffDelayMs(attempts)).toISOString();
         await db.execute(
           "UPDATE pending_customer SET state = 'awaiting_erp', registration_id = ?, last_error = NULL, next_attempt_at = ?, updated_at = ? WHERE client_request_id = ?",
@@ -465,15 +495,24 @@ export async function pushPendingCustomers(
       if (failure === "transient" || failure === "auth") {
         // Kept in the queue with the same key. An auth failure says nothing about the data: no backoff.
         const next = failure === "auth" ? null : new Date(env.now().getTime() + backoffDelayMs(attempts)).toISOString();
-        await db.execute("UPDATE pending_customer SET state = ?, last_error = ?, next_attempt_at = ?, updated_at = ? WHERE client_request_id = ?", [
+        // No connection, an expired session or "not released yet" say nothing about the data: they do not count towards giving up.
+        const notReleased = error.kind === "server" && error.reason === "customer_write_disabled";
+        const counts = error.kind !== "network" && failure !== "auth" && !notReleased;
+        if (counts && attempts >= MAX_DELIVERY_ATTEMPTS) {
+          await rejectRow(db, env, row.clientRequestId, GAVE_UP_TEXT);
+          rejected += 1;
+          continue;
+        }
+        await db.execute("UPDATE pending_customer SET state = ?, attempts = ?, last_error = ?, next_attempt_at = ?, updated_at = ? WHERE client_request_id = ?", [
           resting,
+          counts ? attempts : row.attempts,
           text,
           next,
           isoNow(env),
           row.clientRequestId,
         ]);
         if (error.kind === "network") return { attempted, confirmed, rejected, stoppedBy: "offline" };
-        if (error.kind === "server" && error.reason === "customer_write_disabled") {
+        if (notReleased) {
           // The write path is off on this installation: every other queued customer would get the same answer.
           await noteCreationAnswer(db, env, true);
           return { attempted, confirmed, rejected, stoppedBy: "not_released" };
@@ -481,8 +520,9 @@ export async function pushPendingCustomers(
         if (failure === "auth") return { attempted, confirmed, rejected, stoppedBy: "auth" };
         continue;
       }
-      // Permanent (the server refused it, e.g. a repeated document): nothing is kept halfway, the row is dropped and counted.
-      await db.execute("DELETE FROM pending_customer WHERE client_request_id = ?", [row.clientRequestId]);
+      // Permanent (the server refused it, e.g. a repeated document): the row stays, refused, with the short reason; it never blocks the
+      // others, is never resent and never counts as waiting. The seller discards it.
+      await rejectRow(db, env, row.clientRequestId, text);
       rejected += 1;
     }
   }
@@ -500,14 +540,15 @@ export async function retryPendingCustomer(db: SqlDatabase, env: OfflineEnv, own
 }
 
 /**
- * Local-only removal, allowed only for a customer never sent (no attempt yet). Anything else may exist in the ERP and cannot be
- * dropped here without leaving an orphan.
+ * Local-only removal. Allowed for a refused row, a row held for a seller (never sent) and a customer never sent (no attempt yet).
+ * A row still in flight may exist in the ERP and cannot be dropped here without leaving an orphan (it ends as refused by itself).
  */
 export async function discardPendingCustomer(db: SqlDatabase, ownerAccountId: string, clientRequestId: string): Promise<void> {
   const row = await getPendingCustomer(db, ownerAccountId, clientRequestId);
   if (row === null) return;
   const neverSent = row.state === "queued" && row.attempts === 0 && row.registrationId === null;
-  if (!neverSent) throw new PendingCustomerError("Este cadastro já foi enviado ao servidor e não pode ser descartado aqui.");
+  const ended = row.state === "rejected" || (row.needsSeller && row.state === "queued");
+  if (!neverSent && !ended) throw new PendingCustomerError("Este cadastro já foi enviado ao servidor e não pode ser descartado aqui.");
   await db.execute("DELETE FROM pending_customer WHERE client_request_id = ? AND owner_account_id = ?", [clientRequestId, ownerAccountId]);
 }
 

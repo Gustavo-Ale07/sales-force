@@ -6,8 +6,8 @@ import { useInsets } from "./use-insets";
 
 const PRICE_TABLE_OPTIONS: ReadonlyArray<{ value: boolean | undefined; label: string }> = [
   { value: undefined, label: "Todos" },
-  { value: true, label: "Com tabela" },
-  { value: false, label: "Sem tabela" },
+  { value: true, label: "Com tabela de preço" },
+  { value: false, label: "Sem tabela de preço" },
 ];
 
 export function countActiveFilters(filters: CustomerFilters): number {

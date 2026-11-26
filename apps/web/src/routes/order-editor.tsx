@@ -1356,7 +1356,7 @@ function OrderEditor({ order, initialCustomer, onCreated, onClose, onSent, notic
         <div className="sticky bottom-0 z-20 -mx-3 flex flex-wrap items-center justify-end gap-2 border-t border-line bg-surface px-3 py-2 shadow-[0_-2px_6px_rgba(0,0,0,0.06)] md:-mx-6 md:px-6">
           <p className="m-0 min-w-0 flex-1 text-sm text-fg-muted sm:mr-auto sm:flex-none">
             Total: <strong className="text-base text-ok">
-              <Money value={preview.totals.estimatedTotal} />
+              <Money value={preview.ipi.grandTotalEstimated} />
             </strong>
           </p>
           {!readOnly && sendBlocked ? (

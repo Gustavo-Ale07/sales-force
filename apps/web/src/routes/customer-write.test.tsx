@@ -260,7 +260,7 @@ describe("Clientes: cadastro (D-AR)", () => {
       handlers: { ...list, "GET /order-entry/configuration": configWith({ clientCreationEnabled: true }), "GET /customers/registrations": { body: { items: [registration({}), registration({ registrationId: "0190a000-0000-7000-8000-0000000000ab", sendState: "sent", customerCode: 2002, name: "GAMA SA" })] } } },
     });
     const row = await screen.findByTestId("pending-customer");
-    expect(within(row).getByText("Envio pendente")).toBeInTheDocument();
+    expect(within(row).getByText("Aguardando envio")).toBeInTheDocument();
     expect(within(row).getByRole("button", { name: /Novo pedido para Beta Sa/i })).toBeDisabled();
     expect(screen.queryByText("Gama Sa")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Novo pedido para Comercial Alfa/ })).toBeInTheDocument();

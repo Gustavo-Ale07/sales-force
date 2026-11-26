@@ -132,17 +132,39 @@ describe("pdfStatusLabelOf", () => {
   });
 
   it("a product-blocked order prints the plain local state, not the seal", () => {
-    expect(pdfStatusLabelOf({ status: "sync_error", remoteId: null, lastError: PRODUCT_BLOCK_MESSAGES.product_without_price })).toBe("Erro");
+    expect(pdfStatusLabelOf({ status: "sync_error", remoteId: null, lastError: PRODUCT_BLOCK_MESSAGES.product_without_price })).toBe("Não enviado");
   });
 
-  it("normal states keep their seller wording", () => {
-    expect(pdfStatusLabelOf({ status: "local_only", remoteId: null, lastError: null })).toBe("Salvo no aparelho");
-    expect(pdfStatusLabelOf({ status: "synced", remoteId: "r1", lastError: null })).toBe("Salvo no aparelho");
+  it("PAR-1: the seal is the one the site prints for the same order (no device-only wording)", () => {
+    expect(pdfStatusLabelOf({ status: "local_only", remoteId: null, lastError: null })).toBe("Não enviado");
+    expect(pdfStatusLabelOf({ status: "synced", remoteId: "r1", lastError: null })).toBe("Não enviado");
+    expect(pdfStatusLabelOf({ status: "conflict", remoteId: "r1", lastError: null })).toBe("Não enviado");
+    const sent = (sendCode: string) => pdfStatusLabelOf({ status: "synced", remoteId: "r1", lastError: null, sendState: "submitted", sendCode });
+    expect(sent("sent")).toBe("Enviado ao Sankhya");
+    expect(sent("queued")).toBe("Enviado ao Sankhya");
+    expect(sent("unknown")).toBe("Conferindo envio");
+    expect(sent("awaiting_approval")).toBe("Aguardando aprovação");
+    expect(sent("approval_rejected")).toBe("Desconto reprovado");
+    expect(sent("approved")).toBe("Desconto aprovado");
+    expect(sent("rejected")).toBe("Precisa de correção");
+    expect(pdfStatusLabelOf({ status: "pending_sync", remoteId: null, lastError: null, sendState: "requested" })).toBe("Aguardando envio");
+    expect(pdfStatusLabelOf({ status: "synced", remoteId: "r1", lastError: null, sendState: "refused" })).toBe("Precisa de correção");
+  });
+
+  it("a Sankhya stage never replaces the seal (the site prints the Force status only)", () => {
+    const label = pdfStatusLabelOf({ status: "synced", remoteId: "r1", lastError: null, sendState: "submitted", sendCode: "sent" });
+    expect(label).toBe("Enviado ao Sankhya");
+  });
+
+  it("prints a quotation as ORÇAMENTO and the issue moment, like the site", () => {
+    const html = buildOrderPdfHtml(draftRecord({}), [line()], null, { kind: "quote", issuedAt: "2026-11-26T15:00:00.000Z" });
+    expect(html).toContain("ORÇAMENTO");
+    expect(html).toContain("Emitido pelo Sales Force em");
   });
 
   it("the document of a product-blocked order is built with that plain label", () => {
     const draft = draftRecord({ status: "sync_error", lastError: PRODUCT_BLOCK_MESSAGES.product_inactive, remoteDraftNumber: 3 });
-    expect(orderDocumentOf(draft, [line()]).statusLabel).toBe("Erro");
+    expect(orderDocumentOf(draft, [line()]).statusLabel).toBe("Não enviado");
   });
 });
 

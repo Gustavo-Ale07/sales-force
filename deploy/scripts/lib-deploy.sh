@@ -99,7 +99,7 @@ sf_compose() {
   [ "$SF_DB_MODE" = "self-hosted" ] && profile=(--profile self-hosted-db)
   (
     cd "$SF_REPO_DIR" || exit 1
-    SERVER_IMAGE="$SF_SERVER_IMAGE_NAME:$SF_TARGET_SHORT" WEB_IMAGE="$SF_WEB_IMAGE_NAME:$SF_TARGET_SHORT" \
+    SERVER_IMAGE="$SF_SERVER_IMAGE_NAME:$SF_TARGET_SHORT" WEB_IMAGE="$SF_WEB_IMAGE_NAME:$SF_TARGET_SHORT" WEB_BUILD_SHA="${SF_TARGET_SHORT:0:7}" \
       docker compose -p "$SF_COMPOSE_PROJECT" --env-file "$SF_COMPOSE_ENV" "${files[@]}" "${profile[@]}" "$@"
   )
 }

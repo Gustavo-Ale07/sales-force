@@ -14,7 +14,7 @@ describe("CustomersScreen", () => {
     expect(await screen.findByText("Padaria Central")).toBeTruthy();
     expect(screen.getByPlaceholderText("Buscar por nome, código ou documento")).toBeTruthy();
     expect(screen.getByText("250 clientes")).toBeTruthy();
-    expect(screen.getByText(/Código 10 · 12345678000190/)).toBeTruthy();
+    expect(screen.getByText("Código 10 · 12.345.678/0001-90")).toBeTruthy();
   });
 
   it("marks a customer without a seller with the 'Sem vendedor' seal (and only that one)", async () => {
@@ -34,6 +34,27 @@ describe("CustomersScreen", () => {
     await render(<CustomersScreen customers={customers} onUnauthenticated={noop} />);
     await screen.findByText("Novo");
     expect(screen.queryByText("Sem vendedor")).toBeNull();
+  });
+
+  it("a refused registration shows its reason on the row and is discarded straight from it; a waiting one has no discard", async () => {
+    const onDiscardPending = jest.fn();
+    const customers: CustomerRepository = {
+      list: async () =>
+        pageOf(
+          [
+            customer(-1, { name: "Padaria Z", sellerCode: null, pending: { clientRequestId: "r1", state: "rejected", rejectionReason: "Já existe um cliente com este CPF/CNPJ.", needsSeller: false } } as never),
+            customer(-2, { name: "Aguardando", sellerCode: null, pending: { clientRequestId: "r2", state: "queued", needsSeller: false } } as never),
+          ],
+          2,
+        ),
+    };
+    await render(<CustomersScreen customers={customers} onUnauthenticated={noop} onDiscardPending={onDiscardPending} />);
+    await screen.findByText("Padaria Z");
+    expect(screen.getByText("Recusado")).toBeTruthy();
+    expect(screen.getByText("Já existe um cliente com este CPF/CNPJ.")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /^Descartar/ })).toHaveLength(1);
+    fireEvent.press(screen.getByRole("button", { name: /^Descartar/ }));
+    expect(onDiscardPending).toHaveBeenCalledWith(expect.objectContaining({ code: -1 }));
   });
 
   it("says the data comes from this device when offline", async () => {
@@ -114,7 +135,7 @@ describe("CustomersScreen", () => {
       await render(<CustomersScreen customers={repo(requests)} onUnauthenticated={noop} />);
       await screen.findByText("Açúcar");
       await fireEvent.press(screen.getByRole("button", { name: "Filtros" }));
-      await fireEvent.press(screen.getByRole("radio", { name: "Sem tabela" }));
+      await fireEvent.press(screen.getByRole("radio", { name: "Sem tabela de preço" }));
       await fireEvent.press(screen.getByRole("radio", { name: "Ana" }));
       await fireEvent.press(screen.getByRole("button", { name: "Aplicar filtros" }));
       await screen.findByRole("button", { name: "Remover filtro Vendedor: Ana" });
@@ -145,7 +166,7 @@ describe("CustomersScreen", () => {
       await render(<CustomersScreen customers={customers} onUnauthenticated={noop} />);
       await screen.findByText("Açúcar");
       await fireEvent.press(screen.getByRole("button", { name: "Filtros" }));
-      await fireEvent.press(screen.getByRole("radio", { name: "Sem tabela" }));
+      await fireEvent.press(screen.getByRole("radio", { name: "Sem tabela de preço" }));
       await fireEvent.press(screen.getByRole("button", { name: "Aplicar filtros" }));
       expect(await screen.findByText("Nenhum cliente com estes filtros.")).toBeTruthy();
     });
@@ -155,7 +176,7 @@ describe("CustomersScreen", () => {
       await render(<CustomersScreen customers={customers} onUnauthenticated={noop} />);
       await screen.findByText("Açúcar");
       await fireEvent.press(screen.getByRole("button", { name: "Filtros" }));
-      await fireEvent.press(screen.getByRole("radio", { name: "Sem tabela" }));
+      await fireEvent.press(screen.getByRole("radio", { name: "Sem tabela de preço" }));
       await fireEvent.press(screen.getByRole("button", { name: "Aplicar filtros" }));
       await fireEvent.changeText(screen.getByPlaceholderText(/Buscar/), "zzz");
       expect(await screen.findByText("Nenhum cliente encontrado para “zzz” com estes filtros.")).toBeTruthy();

@@ -3,7 +3,8 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { ConnectivityState } from "../connectivity/connectivity";
 import type { DashboardIndicators, DashboardPort } from "../data/dashboard";
 import type { CustomerFilters, CustomerLetter, CustomerListItem, CustomerPageRequest, CustomerRepository, CustomerSellerOption } from "../data/ports";
-import { describePendingBadge, hasNoSeller, isUnconfirmedCustomer } from "../data/pending-status";
+import { formatDocument, titleCase } from "../data/display-format";
+import { canDiscardPending, describePendingBadge, hasNoSeller, isUnconfirmedCustomer } from "../data/pending-status";
 import { colors, control, radius, spacing } from "../theme";
 import { CustomerFiltersSheet, CustomerIndexSheet, FilterChips, countActiveFilters } from "./customer-filters";
 import { PagedListView } from "./paged-list-view";
@@ -16,25 +17,35 @@ export function describeCustomerStatus(customer: Pick<CustomerListItem, "active"
   return null;
 }
 
-function CustomerRow({ customer, onOpen }: { customer: CustomerListItem; onOpen: (customer: CustomerListItem) => void }) {
+function CustomerRow({ customer, onOpen, onDiscard }: { customer: CustomerListItem; onOpen: (customer: CustomerListItem) => void; onDiscard?: (customer: CustomerListItem) => void }) {
   const status = describeCustomerStatus(customer);
   const noSeller = hasNoSeller(customer);
+  const refusal = customer.pending?.state === "rejected" ? (customer.pending.rejectionReason ?? "Cadastro recusado.") : null;
+  const discardable = onDiscard !== undefined && canDiscardPending(customer.pending);
   return (
+    <View style={styles.rowWrap}>
     <Pressable
       style={styles.row}
       onPress={() => onOpen(customer)}
       accessibilityRole="button"
-      accessibilityLabel={`${customer.name}${isUnconfirmedCustomer(customer) ? "" : `, código ${customer.code}`}${status !== null ? `, ${status}` : ""}${noSeller ? ", Sem vendedor" : ""}. Abrir ficha`}
+      accessibilityLabel={`${titleCase(customer.name)}${isUnconfirmedCustomer(customer) ? "" : `, código ${customer.code}`}${status !== null ? `, ${status}` : ""}${noSeller ? ", Sem vendedor" : ""}. Abrir ficha`}
     >
       <View style={styles.nameLine}>
-        <Text style={styles.name} numberOfLines={2}>{customer.name}</Text>
-        {status !== null && <Text style={styles.status}>{status}</Text>}
+        <Text style={styles.name} numberOfLines={2}>{titleCase(customer.name)}</Text>
+        {status !== null && <Text style={[styles.status, customer.blocked && customer.pending === undefined && styles.statusBlocked]}>{status}</Text>}
       </View>
-      {customer.tradeName !== null && customer.tradeName !== customer.name && <Text style={styles.meta} numberOfLines={1}>{customer.tradeName}</Text>}
-      <Text style={styles.meta} numberOfLines={1}>{isUnconfirmedCustomer(customer) ? (customer.document ?? "") : `Código ${customer.code}${customer.document !== null ? ` · ${customer.document}` : ""}`}</Text>
+      {customer.tradeName !== null && customer.tradeName !== customer.name && <Text style={styles.meta} numberOfLines={1}>{titleCase(customer.tradeName)}</Text>}
+      <Text style={styles.meta} numberOfLines={1}>{isUnconfirmedCustomer(customer) ? (customer.document !== null ? formatDocument(customer.document) : "") : `Código ${customer.code}${customer.document !== null ? ` · ${formatDocument(customer.document)}` : ""}`}</Text>
       {noSeller && <Text style={styles.noSeller}>Sem vendedor</Text>}
+      {refusal !== null && <Text style={styles.refusal}>{refusal}</Text>}
       {customer.sellerName !== null && <Text style={styles.seller} numberOfLines={1}>{`Vendedor: ${customer.sellerName}`}</Text>}
     </Pressable>
+    {discardable && (
+      <Pressable style={styles.discard} onPress={() => onDiscard(customer)} accessibilityRole="button" accessibilityLabel={`Descartar ${titleCase(customer.name)}`}>
+        <Text style={styles.discardText}>Descartar</Text>
+      </Pressable>
+    )}
+    </View>
   );
 }
 
@@ -46,6 +57,8 @@ export interface CustomersScreenProps {
   readonly onOpen?: (customer: CustomerListItem) => void;
   /** "Novo cliente": offered only while customer creation is released on this installation. Absent = no button. */
   readonly onCreate?: () => void;
+  /** Discards a refused (or seller-less) registration kept on this device, straight from its row. Absent = no button. */
+  readonly onDiscardPending?: (customer: CustomerListItem) => void;
   /** The site's "Carteira de clientes" counters above the list, read online. Absent = no counters. */
   readonly dashboard?: DashboardPort;
 }
@@ -57,7 +70,7 @@ const noopOpen = () => undefined;
  * alphabetical index when the repository can compute it locally. Whether this is "the seller's own portfolio" depends
  * on the installation configuration the app does not know, so the title never claims it.
  */
-export function CustomersScreen({ customers, onUnauthenticated, connectivity, onOpen = noopOpen, onCreate, dashboard }: CustomersScreenProps) {
+export function CustomersScreen({ customers, onUnauthenticated, connectivity, onOpen = noopOpen, onCreate, onDiscardPending, dashboard }: CustomersScreenProps) {
   const [portfolio, setPortfolio] = useState<DashboardIndicators["portfolio"]>([]);
   const online = connectivity !== "offline";
   useEffect(() => {
@@ -181,7 +194,7 @@ export function CustomersScreen({ customers, onUnauthenticated, connectivity, on
       onSearchChange={onSearchChange}
       header={header}
       keyOf={(customer) => String(customer.code)}
-      renderItem={(customer) => <CustomerRow customer={customer} onOpen={onOpen} />}
+      renderItem={(customer) => <CustomerRow customer={customer} onOpen={onOpen} {...(onDiscardPending !== undefined ? { onDiscard: onDiscardPending } : {})} />}
       title="Clientes"
       describeCount={(total, searching) => {
         const shown = startAt > 0 && letterTotal > 0 ? letterTotal : total;
@@ -211,12 +224,17 @@ const styles = StyleSheet.create({
     gap: 1,
     minHeight: 56,
   },
+  rowWrap: { marginBottom: spacing.xs + 2 },
+  refusal: { fontSize: 12, fontWeight: "700", color: colors.red },
+  discard: { minHeight: 44, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.red, borderRadius: radius.md, marginTop: spacing.xs, backgroundColor: colors.surface },
+  discardText: { color: colors.red, fontWeight: "700", fontSize: 14 },
   nameLine: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: spacing.sm },
   name: { flex: 1, fontSize: 16, fontWeight: "700", color: colors.text },
   meta: { fontSize: 13, color: colors.textMuted },
   noSeller: { fontSize: 12, fontWeight: "700", color: colors.warning },
   seller: { fontSize: 12, color: colors.textMuted, opacity: 0.85 },
   status: { fontSize: 12, fontWeight: "700", color: colors.warning },
+  statusBlocked: { color: colors.red },
   toolbar: { gap: spacing.sm },
   indicators: { gap: 2 },
   indicator: { fontSize: 13, color: colors.textMuted, fontWeight: "600" },

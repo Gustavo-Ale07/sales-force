@@ -224,15 +224,17 @@ export function CartView({ lines, preview, onQuantityChange, onDiscountChange, o
 export function OrderTotals({ preview }: { readonly preview: DraftPreview }) {
   return (
   <View style={styles.summary}>
-    <View style={styles.summaryRow}>
-      <Text style={styles.summaryLabel}>Subtotal da tabela</Text>
-      <Text style={styles.summaryValue}>{money(preview.discounts.listTotal)}</Text>
-    </View>
-    {preview.discounts.discountTotal !== "0" && preview.discounts.discountTotal !== "0.00" && (
-      <View style={styles.summaryRow}>
-        <Text style={styles.summaryLabel}>Descontos</Text>
-        <Text style={[styles.summaryValue, styles.summaryDiscountValue]}>{`− ${money(preview.discounts.discountTotal)}`}</Text>
-      </View>
+    {preview.discounts.discountedLineCount > 0 && (
+      <>
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>Subtotal da tabela</Text>
+          <Text style={styles.summaryValue}>{money(preview.discounts.listTotal)}</Text>
+        </View>
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>Descontos</Text>
+          <Text style={[styles.summaryValue, styles.summaryDiscountValue]}>{`− ${money(preview.discounts.discountTotal)}`}</Text>
+        </View>
+      </>
     )}
     <View style={styles.summaryRow}>
       <Text style={styles.summaryLabel}>Total sem IPI</Text>

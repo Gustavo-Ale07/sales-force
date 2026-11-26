@@ -25,5 +25,11 @@ export function isUnconfirmedCustomer(customer: Pick<CustomerListItem, "pending"
 
 /** The discreet pending-send indicator of a customer registered on this device; `null` for a customer that has its Sankhya code. */
 export function describePendingBadge(pending: CustomerListItem["pending"]): string | null {
-  return pending === undefined || pending.state === "confirmed" ? null : customerStateLabel("awaiting_send");
+  if (pending === undefined || pending.state === "confirmed") return null;
+  return pending.state === "rejected" ? "Recusado" : customerStateLabel("awaiting_send");
+}
+
+/** A line of the pending list the seller can discard from the row: refused, or held for a seller that cannot be chosen. */
+export function canDiscardPending(pending: CustomerListItem["pending"]): boolean {
+  return pending !== undefined && (pending.state === "rejected" || pending.needsSeller);
 }

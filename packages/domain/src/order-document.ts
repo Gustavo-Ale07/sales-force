@@ -54,6 +54,18 @@ export interface OrderDocumentSource {
 
 export type OrderDocumentModel = OrderDocumentSource;
 
+/** Status seal printed on the order document, by Force order status; one wording for web and mobile (PAR-1). */
+export const documentStatusLabels = {
+  draft: 'Não enviado',
+  awaiting_approval: 'Aguardando aprovação',
+  approved: 'Desconto aprovado',
+  approval_rejected: 'Desconto reprovado',
+  queued: 'Aguardando envio',
+  sent: 'Enviado ao Sankhya',
+  rejected: 'Precisa de correção',
+  unknown: 'Conferindo envio',
+} as const;
+
 /** Freight type texts of the "Condições" box; one wording for web and mobile (PAR-1). */
 export const documentFreightLabels = {
   CIF: 'CIF (frete por conta de quem vende)',

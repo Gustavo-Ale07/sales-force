@@ -1,19 +1,10 @@
 import type { ApiSchema } from "@salesforce/contracts/client";
-import { documentFreightLabels, documentIpiPercent, documentKindOf, orderDocumentConditions, renderOrderHtml, toOrderDocument, type DocumentTopRules, type OrderDocumentCompany } from "@salesforce/domain";
+import { documentFreightLabels, documentStatusLabels, documentIpiPercent, documentKindOf, orderDocumentConditions, renderOrderHtml, toOrderDocument, type DocumentTopRules, type OrderDocumentCompany } from "@salesforce/domain";
 
 type OrderDetail = ApiSchema<"OrderDetail">;
 
 /** State texts of the printed order. User text says "Sankhya", not "ERP" (D-L). */
-export const orderDocumentStatusLabels: Record<ApiSchema<"OrderStatus">, string> = {
-  draft: "Não enviado",
-  awaiting_approval: "Aguardando aprovação",
-  approved: "Desconto aprovado",
-  approval_rejected: "Desconto reprovado",
-  queued: "Aguardando envio",
-  sent: "Enviado ao Sankhya",
-  rejected: "Precisa de correção",
-  unknown: "Conferindo envio",
-};
+export const orderDocumentStatusLabels: Record<ApiSchema<"OrderStatus">, string> = documentStatusLabels;
 
 export const freightTypeLabels: Record<NonNullable<OrderDetail["freightType"]>, string> = documentFreightLabels;
 

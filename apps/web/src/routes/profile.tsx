@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ProfilePhotoControls } from "../components/profile-photo-controls";
 import { QueryError } from "../components/query-error";
 import { useSyncState } from "../components/sync-indicator";
+import { APP_VERSION_LABEL } from "../lib/app-version";
 import { formatLastSync, type SyncDotColor } from "../lib/sync-indicator";
 import { RefreshDataDialog } from "../components/refresh-data-dialog";
 import { useAppServices } from "../lib/app-context";
@@ -19,7 +20,7 @@ const SITUATION_TEXT: Record<SyncDotColor, string> = { green: "text-[#17693d]", 
 
 /** "Sincronização" block (same colour table as the header dot) with the "sync now" button. */
 function SyncBlock({ role }: { role: string }) {
-  const { view, situation, online, dataAsOf, pendingCount, dialogOpen, setDialogOpen } = useSyncState(role);
+  const { view, situation, online, dataAsOf, pendingCount, attentionCount, dialogOpen, setDialogOpen } = useSyncState(role);
   return (
     <Card>
       <CardHeader title="Sincronização" />
@@ -28,6 +29,7 @@ function SyncBlock({ role }: { role: string }) {
         <KeyValueList>
           <KeyValue label="Última sincronização">{formatLastSync(dataAsOf)}</KeyValue>
           {pendingCount > 0 ? <KeyValue label="Alterações pendentes">{pendingCount}</KeyValue> : null}
+          {attentionCount > 0 ? <KeyValue label="Pedidos que precisam de atenção">{attentionCount}</KeyValue> : null}
         </KeyValueList>
         <div className="mt-3">
           <Button type="button" variant="secondary" disabled={view.spinning || !online} onClick={() => setDialogOpen(true)}>
@@ -104,7 +106,7 @@ export function ProfilePage() {
         <CardBody>
           <KeyValueList>
             <KeyValue label="Aplicativo">Force</KeyValue>
-            <KeyValue label="Versão">{__APP_VERSION__}</KeyValue>
+            <KeyValue label="Versão">{APP_VERSION_LABEL}</KeyValue>
             {config.authMode === "dev" ? <KeyValue label="Ambiente">DEV</KeyValue> : null}
           </KeyValueList>
         </CardBody>

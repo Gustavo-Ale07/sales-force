@@ -54,4 +54,12 @@ describe("Catálogo: modo grade de fotos", () => {
     await user.click(screen.getByRole("radio", { name: /Grade/ }));
     expect(screen.getByText("Nenhum produto disponível")).toBeInTheDocument();
   });
+
+  it("names the search in the empty state and lists Grade before Lista", async () => {
+    renderApp("/produtos?search=zzz", { handlers: { ...groups, "GET /products": { body: productsPage([]) } } });
+    expect(await screen.findByText("Nenhum produto encontrado para “zzz”.")).toBeInTheDocument();
+    const radios = screen.getAllByRole("radio").map((radio) => radio.textContent);
+    expect(radios).toEqual(["Grade", "Lista"]);
+    expect(screen.getByRole("combobox", { name: "Subgrupo" })).toBeInTheDocument();
+  });
 });

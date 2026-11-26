@@ -30,6 +30,20 @@ export interface CascadeLevel {
 export const NO_GROUP_VALUE = "0";
 const LEVEL_LABELS = ["Grupo", "Subgrupo", "Linha"] as const;
 
+/** Path of a group code (ancestors first, by parent code); `[]` when the code is unknown to the tree. `0` is "Sem grupo". */
+export function pathOfGroup(items: readonly GroupNode[], code: number | undefined): GroupPath {
+  if (code === undefined) return [];
+  if (code === 0) return [NO_GROUP_VALUE];
+  const path: string[] = [];
+  let current = items.find((item) => item.code === code);
+  while (current !== undefined && path.length < LEVEL_LABELS.length) {
+    path.unshift(String(current.code));
+    const parent: number | null = current.parentCode;
+    current = parent === null ? undefined : items.find((item) => item.code === parent);
+  }
+  return path;
+}
+
 /**
  * Levels to render. Grupo and Subgrupo are always shown (Subgrupo is off until a group with children is chosen); Linha appears
  * only when the chosen subgrupo has children. A flat answer (`hierarchical: false`, hierarchy not mirrored yet) is Grupo alone.

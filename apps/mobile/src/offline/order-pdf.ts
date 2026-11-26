@@ -1,7 +1,7 @@
 import type { DraftRecord } from "@salesforce/mobile-db";
-import { documentFreightLabels, documentIpiPercent, orderDocumentConditions, renderOrderHtml, toOrderDocument, type OrderDocumentModel } from "@salesforce/domain";
+import { documentFreightLabels, documentStatusLabels, documentIpiPercent, orderDocumentConditions, renderOrderHtml, toOrderDocument, type OrderDocumentModel } from "@salesforce/domain";
 import { previewDraft, type EditorLine } from "../data/order-draft";
-import { isCustomerUnavailable, isProductBlocked, saleBadge } from "./sales-status";
+import { isCustomerUnavailable, isProductBlocked, sendPhaseOf } from "./sales-status";
 import { saleValue } from "./sales";
 import { erpNumberOfDraft } from "./order-number";
 
@@ -18,13 +18,26 @@ export interface OrderPdfPort {
   readonly logoDataUri?: () => Promise<string | null>;
 }
 
+/** Force order status behind each send phase of the app, to print the same seal as the site (`documentStatusLabels`). */
+const PHASE_STATUS = {
+  waiting: "queued",
+  refused: "rejected",
+  rejected: "rejected",
+  in_sankhya: "sent",
+  verifying: "unknown",
+  awaiting_approval: "awaiting_approval",
+  approval_rejected: "approval_rejected",
+  approved: "approved",
+} as const;
+
 /**
- * The badge printed on the PDF. A draft held because its customer or a product is unavailable is an internal review state of the
- * app: the document never carries that seal ("Cliente indisponível", "Produto indisponível"), it prints the plain local state.
+ * The seal printed on the PDF, the same words as the site for the same order (PAR-1): the Force status only, never a Sankhya stage
+ * and never a device-only state ("Salvo no aparelho", "Erro", held seals) - those print as "Não enviado".
  */
-export function pdfStatusLabelOf(draft: Pick<DraftRecord, "status" | "remoteId" | "lastError">): string {
-  if (isCustomerUnavailable(draft) || isProductBlocked(draft)) return saleBadge({ status: draft.status, remoteId: draft.remoteId, lastError: null }).label;
-  return saleBadge({ status: draft.status, remoteId: draft.remoteId, lastError: draft.lastError }).label;
+export function pdfStatusLabelOf(draft: Pick<DraftRecord, "status" | "remoteId"> & Partial<Pick<DraftRecord, "lastError" | "sendState" | "sendCode">>): string {
+  if (isCustomerUnavailable(draft) || isProductBlocked(draft)) return documentStatusLabels.draft;
+  const phase = draft.status === "synced" || draft.sendState === "requested" ? sendPhaseOf(draft) : null;
+  return documentStatusLabels[phase === null ? "draft" : PHASE_STATUS[phase]];
 }
 
 /** An order held because its customer is unavailable has no document: the seal is an internal state, so nothing is printed. */
@@ -38,6 +51,10 @@ export class OrderPdfCustomerUnavailableError extends Error {
 /** Installation data the document prints by label; absent = the code is printed instead. */
 export interface OrderPdfExtras {
   readonly negotiationTypes?: readonly { readonly code: number; readonly label: string }[];
+  /** Quotation or order (the TOP rules of the installation); absent = order. */
+  readonly kind?: "order" | "quote";
+  /** Moment of issue printed under the document, like the site; the caller's clock. */
+  readonly issuedAt?: string;
 }
 
 export function orderDocumentOf(draft: DraftRecord, lines: readonly EditorLine[], extras: OrderPdfExtras = {}): OrderDocumentModel {
@@ -48,6 +65,7 @@ export function orderDocumentOf(draft: DraftRecord, lines: readonly EditorLine[]
   );
   const value = saleValue(draft, lines);
   return toOrderDocument({
+    ...(extras.kind === undefined ? {} : { kind: extras.kind }),
     // The internal Force number is never printed (owner 2026-11-23): the only number on the document is the Sankhya one.
     erpNumber: erpNumberOfDraft(draft),
     customerCode: draft.customerCode,
@@ -81,7 +99,7 @@ export function pdfFileNameOf(draft: Pick<DraftRecord, "erpNumber" | "erpStage" 
 }
 
 export function buildOrderPdfHtml(draft: DraftRecord, lines: readonly EditorLine[], logoSrc: string | null, extras: OrderPdfExtras = {}): string {
-  return renderOrderHtml(orderDocumentOf(draft, lines, extras), logoSrc === null ? { brandName: 'PLAC' } : { logoSrc, brandName: 'PLAC' });
+  return renderOrderHtml(orderDocumentOf(draft, lines, extras), { ...(logoSrc === null ? {} : { logoSrc }), brandName: 'PLAC', ...(extras.issuedAt === undefined ? {} : { issuedAt: extras.issuedAt }) });
 }
 
 export type ShareOrderPdfResult = { readonly ok: true } | { readonly ok: false; readonly reason: "empty" | "customer_unavailable" | "failed" };
@@ -96,7 +114,7 @@ export async function shareOrderPdf(
   if (isCustomerUnavailable(draft)) return { ok: false, reason: "customer_unavailable" };
   try {
     const logoSrc = port.logoDataUri === undefined ? null : await port.logoDataUri().catch(() => null);
-    await port.sharePdf(buildOrderPdfHtml(draft, lines, logoSrc, extras), pdfFileNameOf(draft));
+    await port.sharePdf(buildOrderPdfHtml(draft, lines, logoSrc, { issuedAt: new Date().toISOString(), ...extras }), pdfFileNameOf(draft));
     return { ok: true };
   } catch {
     return { ok: false, reason: "failed" };

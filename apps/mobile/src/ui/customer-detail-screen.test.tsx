@@ -29,11 +29,11 @@ describe("CustomerDetailScreen recurring orders section", () => {
 describe("CustomerDetailScreen", () => {
   it("shows only what a sparse customer really has: no empty sections, no invented history", async () => {
     await render(<CustomerDetailScreen customer={customer(10, { name: "Padaria Central", sellerCode: null, priceTableCode: null })} customers={listOnly} onBack={jest.fn()} onNewOrder={jest.fn()} />);
-    expect(screen.getByText("Padaria Central")).toBeTruthy();
+    expect(screen.getAllByText("Padaria Central").length).toBeGreaterThan(0);
     expect(screen.getByText("Dados principais")).toBeTruthy();
-    expect(screen.queryByText("Comercial")).toBeNull();
+    expect(screen.getByLabelText("Tabela de preço do cadastro: Sem tabela")).toBeTruthy();
     expect(screen.queryByText("Financeiro")).toBeNull();
-    expect(screen.queryByText("Documento")).toBeNull();
+    expect(screen.queryByLabelText("Documento")).toBeNull();
     expect(screen.queryByRole("button", { name: /Ligar|E-mail|WhatsApp/ })).toBeNull();
   });
 
@@ -41,10 +41,10 @@ describe("CustomerDetailScreen", () => {
     const full = customer(10, { name: "Padaria Central", tradeName: "Padoca", document: "12345678000190", sellerCode: 7, sellerName: "Ana", priceTableCode: 3 });
     const customers: CustomerRepository = { ...listOnly, get: async () => detailOf({ ...full, priceTableName: "Atacado", creditLimit: "12500.5" }) };
     await render(<CustomerDetailScreen customer={full} customers={customers} connectivity="online" onBack={jest.fn()} onNewOrder={jest.fn()} />);
-    expect(screen.getByText("Padoca")).toBeTruthy();
-    expect(screen.getByLabelText("Documento: 12345678000190")).toBeTruthy();
-    expect(screen.getByLabelText("Vendedor: Ana")).toBeTruthy();
-    expect(await screen.findByLabelText("Tabela de preço: Atacado (3)")).toBeTruthy();
+    expect(screen.getAllByText("Padoca").length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("CNPJ/CPF: 12.345.678/0001-90")).toBeTruthy();
+    expect(screen.getByLabelText("Vendedor preferencial: Ana")).toBeTruthy();
+    expect(await screen.findByLabelText("Tabela de preço do cadastro: 3 — Atacado")).toBeTruthy();
     expect(screen.getByLabelText("Limite de crédito: R$ 12.500,50")).toBeTruthy();
   });
 
@@ -53,8 +53,8 @@ describe("CustomerDetailScreen", () => {
     await render(
       <CustomerDetailScreen customer={customer(10, { name: "Mercado Sul", priceTableCode: 3 })} customers={{ ...listOnly, get }} connectivity="offline" onBack={jest.fn()} onNewOrder={jest.fn()} />,
     );
-    expect(screen.getByText("Mercado Sul")).toBeTruthy();
-    expect(screen.getByLabelText("Tabela de preço: 3")).toBeTruthy();
+    expect(screen.getAllByText("Mercado Sul").length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Tabela de preço do cadastro: 3")).toBeTruthy();
     expect(screen.getByText("Sem conexão: dados salvos neste aparelho.")).toBeTruthy();
     expect(get).not.toHaveBeenCalled();
   });
@@ -64,7 +64,7 @@ describe("CustomerDetailScreen", () => {
       throw networkError();
     });
     await render(<CustomerDetailScreen customer={customer(10, { name: "Mercado Sul" })} customers={{ ...listOnly, get }} onBack={jest.fn()} onNewOrder={jest.fn()} />);
-    expect(screen.getByText("Mercado Sul")).toBeTruthy();
+    expect(screen.getAllByText("Mercado Sul").length).toBeGreaterThan(0);
     expect(screen.queryByText("Financeiro")).toBeNull();
   });
 
@@ -120,7 +120,7 @@ describe("CustomerDetailScreen: financeiro, pedidos do cliente e repetir último
     const customers: CustomerRepository = { ...listOnly, financial: async () => financial };
     await render(<CustomerDetailScreen customer={customer(10)} customers={customers} connectivity="online" onBack={jest.fn()} onNewOrder={jest.fn()} />);
     expect(await screen.findByLabelText("Em aberto: 2 títulos · R$ 300,50")).toBeTruthy();
-    expect(screen.getByLabelText("Vencido: 1 título · R$ 100,00")).toBeTruthy();
+    expect(screen.getByLabelText("Vencido: 1 título · R$ 100,00 · mais antigo venceu em 01/10/2026")).toBeTruthy();
     expect(screen.getByLabelText("Limite de crédito: R$ 5.000,00")).toBeTruthy();
     expect(screen.getByLabelText("Bloqueio: Sem bloqueio")).toBeTruthy();
     expect(screen.getByLabelText("Título com vencimento em 01/10/2026, vencido, saldo R$ 100,00")).toBeTruthy();

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  documentStatusLabels,
   documentIpiPercent,
   orderDocumentConditions,
   formatDocumentDate,
@@ -314,5 +315,13 @@ describe('IPI percent and conditions of the document', () => {
   it('falls back to the code when the label is unknown and omits what is absent', () => {
     expect(orderDocumentConditions({ negotiationTypeCode: 9 })).toEqual([{ label: 'Tipo de negociação', value: 'Código 9' }]);
     expect(orderDocumentConditions({ negotiationTypeCode: null })).toEqual([]);
+  });
+});
+
+describe("documentStatusLabels (PAR-1: seal shared by site and app)", () => {
+  it("has the seller wording for every Force status and never says ERP", () => {
+    expect(documentStatusLabels.draft).toBe("Não enviado");
+    expect(documentStatusLabels.sent).toBe("Enviado ao Sankhya");
+    expect(Object.values(documentStatusLabels).join(" ")).not.toMatch(/ERP/);
   });
 });

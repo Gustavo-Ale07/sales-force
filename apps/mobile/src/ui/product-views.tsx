@@ -138,7 +138,7 @@ function CardImpl({ product, quantity, actions, onOpen }: ViewProps) {
     <Pressable style={styles.card} onPress={onOpen === undefined ? undefined : () => onOpen(product)} accessible={actions === undefined} accessibilityLabel={actions === undefined ? describe(product, quantity) : undefined}>
       <ProductThumb product={product} size="card" />
       <Text style={styles.cardName} numberOfLines={2}>{product.description}</Text>
-      <Text style={styles.meta} numberOfLines={1}>{`Cód. ${product.code} · ${product.unit}`}</Text>
+      <Text style={styles.meta} numberOfLines={1}>{`Cód. ${product.code}${product.reference ? ` · Ref. ${product.reference}` : ""} · ${product.unit}`}</Text>
       <Text style={styles.group} numberOfLines={1}>{product.groupName ?? " "}</Text>
       <Text style={[styles.price, noPrice && styles.noPrice]}>{priceLabel(product)}</Text>
       {actions !== undefined && (
@@ -157,7 +157,7 @@ function RowImpl({ product, quantity, actions, onOpen }: ViewProps) {
       <ProductThumb product={product} size="row" />
       <View style={styles.rowInfo}>
         <Text style={styles.rowName} numberOfLines={2}>{product.description}</Text>
-        <Text style={styles.meta} numberOfLines={1}>{`Código ${product.code} · ${product.unit}${product.groupName !== null ? ` · ${product.groupName}` : ""}`}</Text>
+        <Text style={styles.meta} numberOfLines={1}>{`Código ${product.code}${product.reference ? ` · Ref. ${product.reference}` : ""} · ${product.unit}${product.groupName !== null ? ` · ${product.groupName}` : ""}${product.active ? "" : " · Inativo"}`}</Text>
         <Text style={[styles.price, noPrice && styles.noPrice]}>{priceLabel(product)}</Text>
       </View>
       {actions !== undefined && (

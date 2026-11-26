@@ -39,13 +39,17 @@ function useCacheSignals() {
     let failed = false;
     let retrying = false;
     let pending = 0;
+    let rejected = 0;
     for (const query of cache.getAll()) {
       if (query.state.status === "error" && query.state.data === undefined) failed = true;
       if (query.state.fetchStatus === "fetching" && query.state.fetchFailureCount > 0) retrying = true;
       if (query.queryKey[0] === "orders" && query.queryKey[1] === "list") {
         const items = (query.state.data as { items?: Array<{ status?: string }> } | undefined)?.items ?? [];
         for (const item of items) {
-          if (item.status === "rejected") needsCorrection = true;
+          if (item.status === "rejected") {
+            needsCorrection = true;
+            rejected += 1;
+          }
           if (item.status === "queued") {
             awaitingSend = true;
             pending += 1;
@@ -53,10 +57,11 @@ function useCacheSignals() {
         }
       }
     }
-    return `${needsCorrection ? 1 : 0}${awaitingSend ? 1 : 0}${failed ? 1 : 0}${retrying ? 1 : 0}:${pending}`;
+    return `${needsCorrection ? 1 : 0}${awaitingSend ? 1 : 0}${failed ? 1 : 0}${retrying ? 1 : 0}:${rejected}:${pending}`;
   }, [cache]);
   const key = useSyncExternalStore((notify) => cache.subscribe(notify), snapshot, snapshot);
-  return { needsCorrection: key[0] === "1", awaitingSend: key[1] === "1", failed: key[2] === "1", retrying: key[3] === "1", pending: Number(key.slice(5)) };
+  const [attention = "0", pending = "0"] = key.slice(5).split(":");
+  return { needsCorrection: key[0] === "1", awaitingSend: key[1] === "1", failed: key[2] === "1", retrying: key[3] === "1", attention: Number(attention), pending: Number(pending) };
 }
 
 function Arrows({ color }: { color: string }) {
@@ -99,10 +104,11 @@ export function useSyncState(role: string) {
     syncing: view.spinning,
     failed: refresh.failed || signals.failed,
     needsCorrection: signals.needsCorrection,
+    attention: signals.attention,
     pending: signals.pending,
     dataAsOf,
   });
-  return { view, situation, online, dataAsOf, pendingCount: signals.pending, dialogOpen, setDialogOpen };
+  return { view, situation, online, dataAsOf, pendingCount: signals.pending, attentionCount: signals.attention, dialogOpen, setDialogOpen };
 }
 
 /** Header dot: colour = state (green ok, yellow instability, red error); click = sync now. White arrows spin while updating. */

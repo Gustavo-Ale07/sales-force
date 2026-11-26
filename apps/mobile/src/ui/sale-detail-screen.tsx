@@ -26,6 +26,7 @@ import { BackLink } from "./back-link";
 import { Icon } from "./icons";
 import { codeOfHeldMessage } from "../data/error-catalog";
 import { activeStageView, isCustomerUnavailable, isProductBlocked, saleActions, saleActionableExplanation } from "../offline/sales-status";
+import { OrderTotals } from "./cart-view";
 import { ErpStageCard } from "./erp-stage-card";
 import { useAppModal } from "./app-modal";
 import { useErrorPopup } from "./use-error-popup";
@@ -52,6 +53,8 @@ interface Loaded {
   readonly draft: DraftRecord;
   readonly lines: readonly EditorLine[];
 }
+
+const FREIGHT_TEXT = { CIF: "CIF", FOB: "FOB", SEM_FRETE: "Sem frete" } as const;
 
 function priceText(value: string | null): string {
   return value === null ? "Sem preço" : (formatBrl(value) ?? value);
@@ -234,11 +237,12 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
   const actions = saleActions(draft);
   const preview = previewDraft(lines);
   const value = saleValue(draft, lines);
+  const isQuotationView = (tops !== null && isQuotationTop(effectiveTop, tops)) || isQuotationDraft(draft);
 
   async function sharePdf() {
     if (orderPdf === undefined || sharing) return;
     setSharing(true);
-    const result = await shareOrderPdf(orderPdf, draft, lines, negotiationTypes === null ? undefined : { negotiationTypes });
+    const result = await shareOrderPdf(orderPdf, draft, lines, { kind: isQuotationView ? "quote" : "order", ...(negotiationTypes === null ? {} : { negotiationTypes }) });
     setSharing(false);
     if (!result.ok) {
       if (result.reason === "empty") modal.show({ variant: "error", title: "PDF não gerado", message: "Este pedido não tem itens." });
@@ -247,6 +251,7 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
     }
   }
 
+  const negotiationLabel = negotiationTypes?.find((type) => type.code === draft.negotiationTypeCode)?.label;
   const release = releaseViewOf(draft.serverSnapshot);
   const canDuplicateAsOrder = draft.status === "synced" && draft.remoteId !== null && tops !== null && isQuotationTop(effectiveTop, tops);
 
@@ -306,7 +311,7 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
           <Text style={styles.meta}>{`Cliente ${draft.customerCode}`}</Text>
           <View style={styles.statusLine}>
             <SaleBadgeView status={draft.status} remoteId={draft.remoteId} lastError={draft.lastError} sendState={draft.sendState} sendCode={draft.sendCode} erpStage={draft.erpStage} />
-            <Text style={styles.meta}>{orderIdentity(erpNumberOfDraft(draft), (tops !== null && isQuotationTop(effectiveTop, tops)) || isQuotationDraft(draft))}</Text>
+            <Text style={styles.meta}>{orderIdentity(erpNumberOfDraft(draft), isQuotationView)}</Text>
           </View>
           {stage !== null ? <ErpStageCard stage={stage} /> : saleActionableExplanation(draft) !== null && <Text style={styles.explanation}>{saleActionableExplanation(draft)}</Text>}
           {release !== null && (
@@ -325,7 +330,8 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
               {`Operação: ${tops === null ? `TOP ${effectiveTop}` : topLabel(effectiveTop, tops)}`}
             </Text>
           )}
-          {draft.negotiationTypeCode !== null && <Text style={styles.meta}>{`Negociação (código): ${draft.negotiationTypeCode}`}</Text>}
+          {draft.negotiationTypeCode !== null && <Text style={styles.meta}>{negotiationLabel === undefined ? `Negociação (código): ${draft.negotiationTypeCode}` : `Negociação: ${negotiationLabel}`}</Text>}
+          {draft.freightType !== null && <Text style={styles.meta}>{`Frete: ${FREIGHT_TEXT[draft.freightType]}`}</Text>}
           {draft.notes !== null && draft.notes !== "" && <Text style={styles.notes}>{`Observações: ${draft.notes}`}</Text>}
         </View>
 
@@ -399,11 +405,14 @@ export function SaleDetailScreen({ localId, localOrders, connectivity, orders, o
               </View>
             );
           })}
-          <View style={styles.totalLine}>
-            <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValue}>{describeSaleValue(value)}</Text>
-          </View>
-          {value.partial && value.amount !== null && <Text style={styles.partial}>Há itens sem preço: o valor é parcial.</Text>}
+          {lines.length > 0 ? (
+            <OrderTotals preview={preview} />
+          ) : (
+            <View style={styles.totalLine}>
+              <Text style={styles.totalLabel}>Total</Text>
+              <Text style={styles.totalValue}>{describeSaleValue(value)}</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.actions}>
@@ -489,7 +498,6 @@ const styles = StyleSheet.create({
   totalLine: { flexDirection: "row", justifyContent: "space-between", borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.sm },
   totalLabel: { fontSize: 15, fontWeight: "700", color: colors.text },
   totalValue: { fontSize: 16, fontWeight: "800", color: colors.navy },
-  partial: { fontSize: 12, color: colors.warning },
   alert: { backgroundColor: colors.errorBackground, borderRadius: 8, padding: spacing.md, gap: spacing.sm },
   alertTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
   alertLine: { fontSize: 13, color: colors.text },

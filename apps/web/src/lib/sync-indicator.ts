@@ -42,6 +42,8 @@ export interface SyncSituationInput {
   syncing: boolean;
   failed: boolean;
   needsCorrection: boolean;
+  /** How many orders need correction (1 when only the flag is known). */
+  attention?: number;
   /** Orders waiting to be sent. */
   pending: number;
   /** Time of the last data read (ISO), when known. */
@@ -53,7 +55,10 @@ export function syncSituation(input: SyncSituationInput): { text: string; color:
   if (input.syncing) return { text: "Sincronizando…", color: "yellow" };
   if (input.failed) return { text: "Erro ao sincronizar", color: "red" };
   if (!input.online) return { text: "Sem internet — alterações salvas neste aparelho", color: "yellow" };
-  if (input.needsCorrection) return { text: "Há pedido que precisa de atenção", color: "red" };
+  if (input.needsCorrection) {
+    const count = Math.max(1, input.attention ?? 1);
+    return { text: `${count === 1 ? "1 pedido precisa" : `${count} pedidos precisam`} de atenção`, color: "red" };
+  }
   if (input.pending > 0) return { text: `Alterações pendentes (${input.pending})`, color: "yellow" };
   const at = input.dataAsOf ? new Date(input.dataAsOf) : null;
   if (at === null || Number.isNaN(at.getTime())) return { text: "Sincronizado", color: "green" };

@@ -191,8 +191,8 @@ describe("SalesScreen — detail and actions", () => {
     expect(screen.getByText("Itens (2)")).toBeTruthy();
     expect(screen.getByText("Copo 200 ml")).toBeTruthy();
     expect(screen.getByText("Prato fundo")).toBeTruthy();
-    expect(screen.getByText("Há itens sem preço: o valor é parcial.")).toBeTruthy();
-    expect(screen.getByText("Total")).toBeTruthy();
+    expect(screen.getByText(/Pedido parcial: 1 item sem preço/)).toBeTruthy();
+    expect(screen.getByText(/Total (parcial )?com IPI/)).toBeTruthy();
     expect(screen.queryByText(/estimado/i)).toBeNull();
   });
 
@@ -301,7 +301,7 @@ describe("SalesScreen — detail and actions", () => {
     await openSale(/Eva Empório/);
     expect(screen.queryByRole("button", { name: "Excluir pedido" })).toBeNull();
     expect(screen.getByText(/não podem ser excluídos por aqui/)).toBeTruthy();
-    expect(screen.getByText("Total")).toBeTruthy();
+    expect(screen.getByText(/Total (parcial )?com IPI/)).toBeTruthy();
   });
 
   it("a pending change on a synced order is an unsent edit and cannot be deleted", async () => {

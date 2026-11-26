@@ -4,6 +4,7 @@ import { customer, draftRecord, fakeLocalOrders, fakeOrders, fakeProducts, order
 import { NewOrderScreen, type NewOrderControl, type NewOrderScreenProps } from "./new-order-screen";
 import type { LocalOrdersPort } from "../offline/local-orders";
 import { withModal } from "../test-render";
+import { runBeforeReloadHooks } from "../update/ota-update";
 import { fillMandatoryHeader } from "./fill-mandatory-header";
 
 async function pressAndSettle(element: unknown, delayMs = 100) {
@@ -152,6 +153,19 @@ describe("leaving a new order that was not saved", () => {
     await pressAndSettle(screen.getByRole("button", { name: "Próximo" }));
     expect(ctx.save).toHaveBeenCalled();
     for (const call of ctx.save.mock.calls) expect(call[0]?.recovery).toBe(true);
+  });
+});
+
+describe("before an OTA restart", () => {
+  it("the unsaved order is written to the recovery record (and only that)", async () => {
+    const ctx = setup();
+    await withOneItem(ctx);
+    ctx.save.mockClear();
+    await act(async () => {
+      await runBeforeReloadHooks();
+    });
+    expect(ctx.save).toHaveBeenCalledTimes(1);
+    expect(ctx.save.mock.calls[0]?.[0]?.recovery).toBe(true);
   });
 });
 

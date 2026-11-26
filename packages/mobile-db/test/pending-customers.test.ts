@@ -30,6 +30,9 @@ import {
   type CustomerLike,
   type CustomerRegistrationTransport,
   CUSTOMER_CREATION_NOT_RELEASED,
+  GAVE_UP_TEXT,
+  MAX_DELIVERY_ATTEMPTS,
+  NOT_CONFIRMED_TEXT,
   isCustomerCreationAvailable,
   isCustomerEditAvailable,
   applyCustomerCreationSignal,
@@ -147,7 +150,7 @@ describe("creating a customer without signal", () => {
     await expect(create(request({ document: "12345678909" }))).rejects.toBeInstanceOf(PendingCustomerError);
     erp.script = [fail("registration_refused", "document_already_registered")];
     await push();
-    expect(await getPendingCustomer(db, OWNER, first.clientRequestId)).toBeNull();
+    expect(await getPendingCustomer(db, OWNER, first.clientRequestId)).toMatchObject({ state: "rejected", request: null, document: "" });
     await expect(create()).resolves.toMatchObject({ state: "queued" });
   });
 
@@ -170,9 +173,9 @@ describe("delivery with the same key", () => {
     const record = await create();
     erp.script = [fail("network"), fail("server"), waitingReg()];
     expect(await push()).toMatchObject({ attempted: 1, stoppedBy: "offline" });
-    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toMatchObject({ state: "queued", attempts: 1 });
+    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toMatchObject({ state: "queued", attempts: 0 }); // no connection is not an attempt
     await push(); // 5xx
-    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toMatchObject({ state: "queued", attempts: 2 });
+    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toMatchObject({ state: "queued", attempts: 1 });
     await push();
     expect(new Set(erp.calls.map((c) => c.key))).toEqual(new Set([record.clientRequestId]));
     expect(erp.calls).toHaveLength(3);
@@ -235,20 +238,74 @@ describe("delivery with the same key", () => {
 });
 
 describe("refusals", () => {
-  it.each(["document_already_registered", "customer_rejected"])("409 %s on a queued customer -> dropped (nothing kept halfway), counted, never resent", async (reason) => {
+  it.each(["document_already_registered", "customer_rejected"])("409 %s on a queued customer -> kept as refused with a short reason, counted, never resent, not counted as waiting", async (reason) => {
     const record = await create();
     erp.script = [fail("registration_refused", reason)];
     expect(await push()).toMatchObject({ rejected: 1 });
-    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toBeNull();
+    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toMatchObject({ state: "rejected", rejectionReason: expect.any(String), request: null });
     await push();
     expect(erp.calls).toHaveLength(1);
     expect(await countPendingCustomers(db, OWNER, REAL)).toEqual({ pending: 0, needsAttention: 0 });
   });
 
-  it("422 validation on a queued customer -> dropped", async () => {
+  it("422 validation on a queued customer -> refused with the server's text on the row", async () => {
     const record = await create();
     erp.script = [fail("validation", undefined, "CPF/CNPJ inválido.")];
     await push();
+    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toMatchObject({ state: "rejected", rejectionReason: "CPF/CNPJ inválido." });
+  });
+
+  it("a refused row never blocks the ones behind it, and discarding it is allowed", async () => {
+    const first = await create();
+    const second = await create(request({ document: "98765432100", name: "Outra" }));
+    erp.script = [fail("registration_refused", "customer_rejected"), confirmedReg(4321)];
+    expect(await push()).toMatchObject({ attempted: 2, confirmed: 1, rejected: 1 });
+    expect(erp.calls.map((c) => c.key)).toEqual([first.clientRequestId, second.clientRequestId]);
+    expect(await countPendingCustomers(db, OWNER, REAL)).toEqual({ pending: 0, needsAttention: 0 });
+    await discardPendingCustomer(db, OWNER, first.clientRequestId);
+    expect(await getPendingCustomer(db, OWNER, first.clientRequestId)).toBeNull();
+  });
+
+  it("a row the server never settles ends as refused after the attempt limit (no network attempt counts), instead of waiting forever", async () => {
+    const record = await create();
+    erp.script = [fail("network")];
+    for (let i = 0; i < MAX_DELIVERY_ATTEMPTS + 2; i += 1) await push();
+    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toMatchObject({ state: "queued", attempts: 0 });
+    erp.script = [fail("server")];
+    for (let i = 0; i < MAX_DELIVERY_ATTEMPTS; i += 1) await push();
+    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toMatchObject({ state: "rejected", rejectionReason: GAVE_UP_TEXT });
+    expect(await countPendingCustomers(db, OWNER, REAL)).toEqual({ pending: 0, needsAttention: 0 });
+  });
+
+  it("old flow: a registration the ERP keeps answering 'pending' ends as refused", async () => {
+    const record = await create();
+    erp.script = [waitingReg()];
+    for (let i = 0; i < MAX_DELIVERY_ATTEMPTS; i += 1) await push();
+    expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toMatchObject({ state: "rejected", rejectionReason: NOT_CONFIRMED_TEXT });
+  });
+
+  it("migration v17: rows of the old flow (awaiting the Sankhya confirmation) become refused, others are untouched", async () => {
+    const old = openNodeDatabase();
+    await runMigrations(old, migrations.filter((m) => m.version <= 16));
+    await confirm(old);
+    for (const [id, state, reg] of [["old", "awaiting_erp", "reg-old"], ["new", "queued", null]] as const) {
+      await old.execute(
+        `INSERT INTO pending_customer (client_request_id, owner_account_id, name, search_text, document, payload, state, registration_id, dataset_environment, dataset_id, created_at, updated_at)
+         VALUES (?, ?, 'Nome', 'nome', '12345678909', ?, ?, ?, ?, ?, 'a', 'a')`,
+        [id, OWNER, JSON.stringify(request()), state, reg, REAL.environment, REAL.datasetId],
+      );
+    }
+    await runMigrations(old, migrations);
+    expect(await getPendingCustomer(old, OWNER, "old")).toMatchObject({ state: "rejected", request: null, rejectionReason: expect.stringContaining("Descarte") });
+    expect(await getPendingCustomer(old, OWNER, "new")).toMatchObject({ state: "queued" });
+    expect(await countPendingCustomers(old, OWNER, REAL)).toEqual({ pending: 1, needsAttention: 0 });
+  });
+
+  it("a row held for a seller is not 'waiting' and can be discarded", async () => {
+    const record = await create();
+    await db.execute("UPDATE pending_customer SET needs_seller = 1 WHERE client_request_id = ?", [record.clientRequestId]);
+    expect(await countPendingCustomers(db, OWNER, REAL)).toEqual({ pending: 0, needsAttention: 0 });
+    await discardPendingCustomer(db, OWNER, record.clientRequestId);
     expect(await getPendingCustomer(db, OWNER, record.clientRequestId)).toBeNull();
   });
 
@@ -468,6 +525,17 @@ describe("confirmation replaces the pending customer", () => {
     expect(status.phase).toBe("idle");
     expect(await listPendingCustomers(db, OWNER, REAL)).toEqual([]);
     expect(pendingCustomerBlockOf(4321)).toBeNull();
+  });
+
+  it("the global status counts only what really waits: a refused row and an old-flow row stay out of 'pending' and 'needsAttention'", async () => {
+    const refused = await create();
+    const old = await create(request({ document: "98765432100", name: "Antigo" }));
+    await db.execute("UPDATE pending_customer SET state = 'rejected', rejection_reason = 'x', payload = 'null' WHERE client_request_id = ?", [refused.clientRequestId]);
+    await db.execute("UPDATE pending_customer SET state = 'rejected', rejection_reason = 'y', payload = 'null' WHERE client_request_id = ?", [old.clientRequestId]);
+    const source: ReferenceSource = { fetchCustomers: async () => [], fetchProducts: async () => [], fetchEntryConfiguration: async () => null, fetchDatasetIdentity: async () => REAL };
+    const status = await createSyncManager({ db, env, transport: new Orders(), customerTransport: erp, source, ownerAccountId: OWNER }).sync("manual");
+    expect(status).toMatchObject({ pending: 0, needsAttention: 0 });
+    expect(erp.calls).toHaveLength(0);
   });
 
   it("the sync manager reports offline when the customer push hits a dead network, and counts it as pending", async () => {

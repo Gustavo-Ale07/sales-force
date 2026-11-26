@@ -438,7 +438,7 @@ export function OrdersPage({ params, onSearchChange, onOpenOrder }: OrdersPagePr
                     </TableCell>
                     <TableCell numeric card="hide">{formatCount(order.itemCount)}</TableCell>
                     <TableCell numeric label="Total">
-                      <Money value={order.grandTotalEstimated ?? order.estimatedTotal} />
+                      <Money value={order.grandTotalEstimated ?? order.estimatedTotal} fallback="Sem valor" />
                       {order.isPartial ? <span className="ml-1 text-fg-muted">Valor parcial</span> : null}
                     </TableCell>
                     <TableCell card="hide">

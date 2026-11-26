@@ -58,6 +58,7 @@ describe("badge text", () => {
   ] as const)("%s", (state, _unused, text) => {
     expect(describePendingBadge({ clientRequestId: "r", state, needsSeller: false })).toBe(text);
   });
+  it("a refused registration says so", () => expect(describePendingBadge({ clientRequestId: "r", state: "rejected", needsSeller: false })).toBe("Recusado"));
   it("is absent once the Sankhya code arrived", () => expect(describePendingBadge({ clientRequestId: "r", state: "confirmed", needsSeller: false })).toBeNull());
   it("is absent for a normal customer", () => expect(describePendingBadge(undefined)).toBeNull());
 });

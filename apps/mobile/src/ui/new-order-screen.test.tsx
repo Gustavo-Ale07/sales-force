@@ -80,7 +80,7 @@ describe("NewOrderScreen", () => {
     expect(screen.getByText("Copo 200 ml")).toBeTruthy();
     // The line subtotal never shows for a zero discount (see cart-view.tsx); the line total, the order
     // summary's "Total de itens" and its "Total estimado" all coincide at "R$ 10,00" with one undiscounted line.
-    expect(screen.getAllByText("R$ 10,00")).toHaveLength(5);
+    expect(screen.getAllByText("R$ 10,00")).toHaveLength(4);
     // Card: unit price with R$ and unit, "%" beside the discount field, stepper, subtotal in R$.
     expect(screen.getByText("R$ 10,00 por UN")).toBeTruthy();
     expect(screen.getAllByText("%").length).toBeGreaterThanOrEqual(2);
@@ -123,7 +123,7 @@ describe("NewOrderScreen", () => {
     await pressAndSettle(screen.getByRole("tab", { name: "Carrinho (1)" }));
     expect(screen.getByDisplayValue("2")).toBeTruthy();
     // The line total (now "Subtotal R$ 20,00", so not an exact match), "Total de itens" and "Total estimado" all coincide at "R$ 20,00" with one undiscounted line.
-    expect(screen.getAllByText("R$ 20,00")).toHaveLength(5);
+    expect(screen.getAllByText("R$ 20,00")).toHaveLength(4);
   });
 
   it("removes a line from the cart", async () => {

@@ -447,6 +447,18 @@ function ShellBody({ dependencies }: { dependencies: AppDependencies }) {
                 onOpen={setCustomerDetail}
                 {...(dependencies.dashboard !== undefined ? { dashboard: dependencies.dashboard } : {})}
                 {...(customerFlags.create && pendingCustomers !== null ? { onCreate: () => setCustomerForm({ kind: "create" }) } : {})}
+                {...(pendingCustomers !== null
+                  ? {
+                      onDiscardPending: (picked: CustomerListItem) => {
+                        const key = picked.pending?.clientRequestId;
+                        if (key === undefined) return;
+                        void pendingCustomers
+                          .discard(key)
+                          .catch(() => undefined)
+                          .finally(() => setEpochs((current) => ({ ...current, customers: current.customers + 1 })));
+                      },
+                    }
+                  : {})}
               />
             </View>
             {customerDetail !== null && customerForm === null && (

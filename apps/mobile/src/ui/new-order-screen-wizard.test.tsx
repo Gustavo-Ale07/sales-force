@@ -72,7 +72,7 @@ describe("NewOrderScreen as a 4-step wizard", () => {
     expect(screen.getByText("Copo 200 ml")).toBeTruthy();
     // Per item: quantity × price; totals block: table subtotal, total without IPI, estimated IPI, total with IPI.
     expect(screen.getByText("1 UN × R$ 10,00")).toBeTruthy();
-    for (const label of ["Subtotal da tabela", "Total sem IPI", "IPI", /Total (parcial )?com IPI/]) {
+    for (const label of ["Total sem IPI", "IPI", /Total (parcial )?com IPI/]) {
       expect(screen.getByText(label)).toBeTruthy();
     }
     expect(screen.queryByText(/^Desconto /)).toBeNull();

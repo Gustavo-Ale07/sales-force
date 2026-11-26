@@ -10,7 +10,9 @@ export type CustomerListItem = ApiSchema<"CustomerListItem"> & {
    */
   readonly pending?: {
     readonly clientRequestId: string;
-    readonly state: "queued" | "sending" | "awaiting_erp" | "confirmed";
+    readonly state: "queued" | "sending" | "awaiting_erp" | "confirmed" | "rejected";
+    /** Short reason of a refusal (`state === "rejected"`), shown on the row. */
+    readonly rejectionReason?: string | null;
     /** Saved without a seller (manager/admin): the ficha asks for one, then it is sent. */
     readonly needsSeller: boolean;
   };

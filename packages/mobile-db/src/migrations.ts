@@ -295,4 +295,17 @@ export const migrations: readonly Migration[] = [
          WHERE state = 'rejected'`,
     ],
   },
+  {
+    // Owner 2026-11-26: a customer registration ends confirmed, refused (reason on the row, `rejected`) or discarded; nothing waits forever.
+    // Rows of the old flow (the server answered 202 and the device kept waiting for the Sankhya confirmation: `awaiting_erp`) are not
+    // resent under a new key (SNK-4: the old registration may exist): they end as refused with the reason on the row, for the seller to
+    // discard. Data-only; no schema change; the typed data is erased like any refused row.
+    version: 17,
+    name: "pending_customer_old_flow_refused",
+    statements: [
+      `UPDATE pending_customer SET state = 'rejected', rejection_reason = 'Cadastro antigo sem confirmação do Sankhya. Descarte e cadastre de novo.',
+         last_error = NULL, next_attempt_at = NULL, needs_seller = 0, document = '', search_text = lower(name), payload = 'null'
+         WHERE state = 'awaiting_erp'`,
+    ],
+  },
 ];

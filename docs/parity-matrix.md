@@ -147,3 +147,11 @@ Não contam como divergência. Se o dono decidir uma regra ligada a esses itens,
 - Fila "Aguardando liberação" (no app: Lote 3, a decidir).
 - Busca global: NÃO ENTREGUE no app (Lote 3, 25/11). No site é uma paleta de atalho (Ctrl+K) que só leva às páginas e à ação "Novo pedido", sem buscar dados; no app as mesmas páginas já estão na barra de abas e "Novo pedido" no Início e na ficha, então copiar a paleta não acrescenta função. Uma busca de clientes e produtos numa tela só seria função nova nos dois lados (PAR-1) e fica para decisão do dono.
 - /downloads.
+
+## Auditoria de paridade (26/11)
+
+Corrigido nos dois lados: versão do site (versão do pacote e SHA curto do build, como o app); texto do cadastro de cliente salvo; nome e documento formatados, rótulos de filtro, cor de Bloqueado e ficha do cliente no app; filtro Grupo > Subgrupo > Linha, título e Situação do produto, vazio da busca e ordem Grade|Lista no site; Ref. e Inativo no app; selo, ORÇAMENTO, data e totais com IPI no PDF e no detalhe do app; total do rodapé do editor no site; "N pedidos precisam de atenção" e a linha de pedidos com atenção no Perfil do site.
+
+Exclusivas do app: pedido offline, "Salvo no aparelho", fila local (com "Recusado" e "Descartar" no cadastro de cliente), atualização do APK, "Verificar atualização" com OTA (conferir, baixar e reiniciar). Exclusivas do site: aprovação de desconto, "Aguardando liberação", Integração, Configurações, tabela com ordenação, abas da ficha.
+
+Abertas (decisão do dono): ordenação da lista de clientes, produtos e pedidos no app; seletor de cliente no Catálogo do app; "Máx. X%" na lista de produtos; abas "Análise do cliente" e "Engajamento" do site (placeholders); "Vencido" por linha na lista de clientes do app; filtro de entrega e Transportadora no app; layout do Início (cabeçalhos e atalho de sincronizar) e cores dos indicadores; visualização padrão do catálogo (tabela no site, grade no app).

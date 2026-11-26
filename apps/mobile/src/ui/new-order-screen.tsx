@@ -41,6 +41,7 @@ import { mergeNewLines } from "../data/template-form";
 import { BulkEntryScreen } from "./bulk-entry-screen";
 import { ProductPicker } from "./product-picker";
 import type { ProductOrderActions } from "./product-views";
+import { registerBeforeReload } from "../update/ota-update";
 
 function blockedItemsMessage(count: number): string {
   const subject = count === 1 ? "1 item sem preço não pode ser salvo" : `${count} itens sem preço não podem ser salvos`;
@@ -784,6 +785,8 @@ export function NewOrderScreen({
     });
     return () => subscription.remove();
   }, []);
+  // Before an OTA restart the editor's in-memory order goes to the same recovery record (the app stays "active" then, so no AppState event fires).
+  useEffect(() => registerBeforeReload(() => autoSaveRef.current()), []);
 
   /**
    * "Salvar e sair": keeps the order on this device (never asks Sankhya, never writes a send request) and leaves. Nothing is written
@@ -1097,7 +1100,7 @@ export function NewOrderScreen({
       <View style={styles.center}>
         <Text style={styles.successTitle}>{editingOrder !== null ? "Alterações salvas" : `${kindTitle} salvo`}</Text>
         <Text style={styles.successMeta}>{savedOrder.customerName}</Text>
-        <Text style={styles.successTotal}>{formatBrl(savedOrder.estimatedTotal) ?? "—"}</Text>
+        <Text style={styles.successTotal}>{formatBrl(savedOrder.ipi?.grandTotalEstimated ?? savedOrder.estimatedTotal) ?? "—"}</Text>
         {savedOrder.isPartial && <Text style={styles.partialNotice}>Total parcial: há itens sem preço neste pedido.</Text>}
         <View style={styles.actions}>
           <Pressable style={styles.primaryButton} onPress={resetOrder} accessibilityRole="button" accessibilityLabel="Novo pedido">

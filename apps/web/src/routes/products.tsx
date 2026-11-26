@@ -1,7 +1,6 @@
 import type { ApiSchema } from "@salesforce/contracts/client";
 import {
   Alert,
-  Badge,
   Card,
   Drawer,
   DrawerContent,
@@ -16,7 +15,6 @@ import {
   SearchInput,
   SegmentedControl,
   StatusDot,
-  Select,
   SkeletonLines,
   SortableHead,
   Table,
@@ -33,6 +31,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { LayoutGrid, List } from "lucide-react";
 import { useState } from "react";
+import { GroupCascadeFilter, groupFilterValue, pathOfGroup } from "../components/group-cascade-filter";
 import { CustomerPicker } from "../components/customer-picker";
 import { PriceCell } from "../components/price-cell";
 import { ProductGrid } from "../components/product-grid";
@@ -48,7 +47,7 @@ import {
 import { useApi } from "../lib/app-context";
 import { priceContextSourceLabels } from "../lib/labels";
 import type { ProductsSearch } from "../lib/route-search";
-import { asInt, compact } from "../lib/search-params";
+import { compact } from "../lib/search-params";
 import { useSearchBox } from "../lib/use-search-box";
 
 
@@ -80,10 +79,8 @@ function ProductDetailPanel({ code, customerCode }: { code: number; customerCode
   return (
     <div className="flex flex-col gap-3">
       <ProductImage image={product.image} description={product.description} variant="full" className="self-center" />
-      <div className="flex flex-wrap items-center gap-1.5">
-        <Badge tone={product.active ? "success" : "neutral"}>{product.active ? "Ativo" : "Inativo"}</Badge>
-      </div>
       <KeyValueList>
+        <KeyValue label="Situação">{product.active ? "Ativo" : "Inativo"}</KeyValue>
         <KeyValue label="Código">{product.code}</KeyValue>
         <KeyValue label="Unidade">{product.unit}</KeyValue>
         <KeyValue label="Marca">{product.brand ?? "—"}</KeyValue>
@@ -126,9 +123,11 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
     enabled: params.customerCode !== undefined,
   });
 
+  const openDetail = useQuery({ ...productQueryOptions(api, openProduct ?? 0, params.customerCode), enabled: openProduct !== undefined });
   const change = (patch: Partial<ProductsSearch>) => onSearchChange(compact({ ...params, page: undefined, ...patch }));
   const [searchText, setSearchText] = useSearchBox(params.search, (search) => change({ search }));
 
+  const groupPath = pathOfGroup(groups.data?.items ?? [], params.group);
   const groupName = groups.data?.items.find((g) => g.code === params.group)?.name;
   const hasFilters =
     params.search !== undefined ||
@@ -136,6 +135,12 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
     params.customerCode !== undefined;
   const clearAll = () => onSearchChange(compact({ sort: params.sort, pageSize: params.pageSize }));
   const context = query.data?.priceContext;
+  const filtersBeyondSearch = params.group !== undefined || params.customerCode !== undefined;
+  const emptyTitle = params.search
+    ? `Nenhum produto encontrado para “${params.search}”${filtersBeyondSearch ? " com estes filtros" : ""}.`
+    : hasFilters
+      ? "Nenhum produto com estes filtros."
+      : "Nenhum produto disponível";
 
   return (
     <>
@@ -169,16 +174,9 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
             onSelect={(customer) => change({ customerCode: customer?.code })}
           />
         </div>
-        <FilterField label="Grupo" className="lg:col-span-4">
-          <Select size="md" value={params.group ?? ""} onChange={(e) => change({ group: asInt(e.target.value, 0) })}>
-            <option value="">Todos</option>
-            {groups.data?.items.map((group) => (
-              <option key={group.code} value={group.code}>
-                {group.name}
-              </option>
-            ))}
-          </Select>
-        </FilterField>
+        <div className="flex min-w-0 flex-wrap items-end gap-2 lg:col-span-12">
+          <GroupCascadeFilter path={groupPath} onChange={(next) => change({ group: groupFilterValue(next) })} />
+        </div>
       </FilterBar>
 
       {hasFilters ? (
@@ -207,8 +205,8 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
           onValueChange={setView}
           className="w-auto"
           options={[
-            { value: "list", label: <span className="inline-flex items-center gap-1.5"><List size={14} aria-hidden="true" />Lista</span>},
             { value: "grid", label: <span className="inline-flex items-center gap-1.5"><LayoutGrid size={14} aria-hidden="true" />Grade</span>},
+            { value: "list", label: <span className="inline-flex items-center gap-1.5"><List size={14} aria-hidden="true" />Lista</span>},
           ]}
         />
       </div>
@@ -224,7 +222,8 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
           ) : query.data.items.length === 0 ? (
             <EmptyState
               compact
-              title={hasFilters ? "Nenhum produto com estes filtros." : "Nenhum produto disponível"}
+              title={emptyTitle}
+              description={params.search ? "Confira a descrição ou o código." : undefined}
             />
           ) : (
             <ProductGrid items={query.data.items} onOpen={(code) => onSearchChange(compact({ ...params, product: code }))} />
@@ -260,7 +259,8 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
               <TableMessageRow colSpan={COLUMNS}>
                 <EmptyState
                   compact
-                  title={hasFilters ? "Nenhum produto com estes filtros." : "Nenhum produto disponível"}
+                  title={emptyTitle}
+              description={params.search ? "Confira a descrição ou o código." : undefined}
                 />
               </TableMessageRow>
             ) : (
@@ -300,7 +300,7 @@ export function ProductsPage({ params, onSearchChange }: ProductsPageProps) {
       </Card>
 
       <Drawer open={openProduct !== undefined} onOpenChange={(open) => !open && onSearchChange(compact({ ...params, product: undefined }))}>
-        <DrawerContent title={`Produto ${openProduct ?? ""}`.trim()} description="Detalhes do produto e origem do preço">
+        <DrawerContent title={openDetail.data?.description ?? `Produto ${openProduct ?? ""}`.trim()} description="Detalhes do produto e origem do preço">
           <div className="p-4">
             {openProduct !== undefined ? <ProductDetailPanel code={openProduct} customerCode={params.customerCode} /> : null}
           </div>

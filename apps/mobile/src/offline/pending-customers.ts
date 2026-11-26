@@ -111,6 +111,7 @@ export function toPendingListItem(record: PendingCustomerRecord): CustomerListIt
     pending: {
       clientRequestId: record.clientRequestId,
       state: record.state,
+      ...(record.rejectionReason === null ? {} : { rejectionReason: record.rejectionReason }),
       needsSeller: record.needsSeller,
     },
   };

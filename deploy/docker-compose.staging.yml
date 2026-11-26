@@ -273,6 +273,8 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.web
+      args:
+        BUILD_SHA: ${WEB_BUILD_SHA:-}
     restart: unless-stopped
     logging: *logging
     <<: *hardening

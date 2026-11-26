@@ -17,6 +17,9 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     pnpm fetch --frozen-lockfile
 COPY . .
+# Short commit shown in Perfil > Sobre; empty when not passed (the image has no git).
+ARG BUILD_SHA=""
+ENV BUILD_SHA=${BUILD_SHA}
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     pnpm install --offline --frozen-lockfile --filter "@salesforce/web..."
 # Builds the workspace dependencies first (contracts, domain), then the web app (tsc + vite build).

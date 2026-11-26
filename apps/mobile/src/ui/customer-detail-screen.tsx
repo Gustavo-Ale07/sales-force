@@ -4,6 +4,7 @@ import type { ConnectivityState } from "../connectivity/connectivity";
 import type { SellerChoice } from "../data/customer-form";
 import type { CustomerDetail, CustomerFinancial, CustomerListItem, CustomerRepository } from "../data/ports";
 import { hasNoSeller, isUnconfirmedCustomer, NO_SELLER_ORDER_MESSAGE, PENDING_CREDIT_NOTE, PENDING_CUSTOMER_ORDER_MESSAGE } from "../data/pending-status";
+import { formatDocument, titleCase } from "../data/display-format";
 import { colors, fontSize, radius, spacing } from "../theme";
 import type { LocalOrdersPort } from "../offline/local-orders";
 import { EMPTY_SALES_FILTERS, type SalesRow } from "../offline/sales";
@@ -23,6 +24,14 @@ function formatMoney(decimal: string): string {
 function formatDueDate(iso: string): string {
   const [year = "", month = "", day = ""] = iso.slice(0, 10).split("-");
   return `${day}/${month}/${year}`;
+}
+
+/** "2026-11-30T14:05:00Z" -> "30/11/2026 14:05" in the device time zone. */
+function formatDateTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return formatDueDate(iso);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 const CUSTOMER_ORDERS_SHOWN = 10;
@@ -76,6 +85,7 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
   const [financial, setFinancial] = useState<CustomerFinancial | null>(null);
   const [orders, setOrders] = useState<readonly SalesRow[]>([]);
+  const [ordersLoaded, setOrdersLoaded] = useState(false);
   const online = connectivity !== "offline";
   const status = describeCustomerStatus(customer);
   // Waiting, queued or refused: no real code, no orders. A customer the ERP confirmed already has its real code and takes orders.
@@ -121,6 +131,7 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
         if (!current) return;
         const rows = pages.flatMap((page) => page.items).sort((a, b) => b.draft.updatedAt.localeCompare(a.draft.updatedAt));
         setOrders(rows.slice(0, CUSTOMER_ORDERS_SHOWN));
+        setOrdersLoaded(true);
       })
       .catch(() => undefined);
     return () => {
@@ -132,12 +143,8 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
   const lastRecorded = orders.find((row) => row.draft.status === "synced" && row.draft.remoteId !== null);
 
   const hasTradeName = customer.tradeName !== null && customer.tradeName !== customer.name;
-  const priceTable =
-    customer.priceTableCode === null
-      ? null
-      : detail?.priceTableName != null
-        ? `${detail.priceTableName} (${customer.priceTableCode})`
-        : String(customer.priceTableCode);
+  const priceTable = customer.priceTableCode === null ? "Sem tabela" : `${customer.priceTableCode}${detail?.priceTableName ? ` — ${detail.priceTableName}` : ""}`;
+  const resolved = detail?.resolvedPriceTable;
 
   return (
     <View style={styles.container}>
@@ -146,15 +153,19 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.name} accessibilityRole="header">{customer.name}</Text>
-          {hasTradeName && <Text style={styles.trade}>{customer.tradeName}</Text>}
-          <Text style={styles.meta}>{isPending ? (customer.document ?? "") : `Código ${customer.code}${customer.document !== null ? ` · ${customer.document}` : ""}`}</Text>
-          {status !== null && <Text style={styles.status}>{status}</Text>}
+          <Text style={styles.name} accessibilityRole="header">{titleCase(customer.name)}</Text>
+          {hasTradeName && <Text style={styles.trade}>{titleCase(customer.tradeName)}</Text>}
+          <Text style={styles.meta}>{isPending ? (customer.document !== null ? formatDocument(customer.document) : "") : `Código ${customer.code}${customer.document !== null ? ` · ${formatDocument(customer.document)}` : ""}`}</Text>
+          {status !== null ? <Text style={[styles.status, customer.blocked && !isPending && styles.statusBlocked]}>{status}</Text> : <Text style={styles.statusActive}>Ativo</Text>}
         </View>
 
         <Section title="Dados principais">
           {!isPending && <Field label="Código" value={String(customer.code)} />}
-          {customer.document !== null && <Field label="Documento" value={customer.document} />}
+          <Field label="Razão social" value={titleCase(customer.name)} />
+          <Field label="Nome fantasia" value={customer.tradeName ? titleCase(customer.tradeName) : "—"} />
+          <Field label="CNPJ/CPF" value={formatDocument(customer.document)} />
+          <Field label="Vendedor preferencial" value={customer.sellerName ?? "—"} />
+          {detail !== null && <Field label="Última sincronização" value={formatDateTime(detail.syncedAt)} />}
         </Section>
 
         {isPending && (
@@ -163,10 +174,15 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
           </Section>
         )}
 
-        {(customer.sellerCode !== null || priceTable !== null) && (
-          <Section title="Comercial">
-            {customer.sellerCode !== null && <Field label="Vendedor" value={customer.sellerName ?? `Código ${customer.sellerCode}`} />}
-            {priceTable !== null && <Field label="Tabela de preço" value={priceTable} />}
+        {!isPending && (
+          <Section title="Tabela de preço">
+            <Field label="Tabela de preço do cadastro" value={priceTable} />
+            {detail !== null && (
+              <Field
+                label="Tabela usada nos pedidos"
+                value={resolved == null ? "Sem tabela resolvida (produtos aparecem como “Sem preço”)" : `Tabela ${resolved.code} (${resolved.source === "customer" ? "do cliente" : "alternativa da instalação"})`}
+              />
+            )}
           </Section>
         )}
 
@@ -178,13 +194,13 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
             {financial.summary.overdueCount !== null && financial.summary.overdueAmount !== null && (
               <Field
                 label="Vencido"
-                value={financial.summary.overdueCount === 0 ? "Nenhum título vencido" : `${financial.summary.overdueCount} ${financial.summary.overdueCount === 1 ? "título" : "títulos"} · ${formatMoney(financial.summary.overdueAmount)}`}
+                value={financial.summary.overdueCount === 0 ? "Nenhum título vencido" : `${financial.summary.overdueCount} ${financial.summary.overdueCount === 1 ? "título" : "títulos"} · ${formatMoney(financial.summary.overdueAmount)}${financial.summary.oldestOverdueDueDate ? ` · mais antigo venceu em ${formatDueDate(financial.summary.oldestOverdueDueDate)}` : ""}`}
               />
             )}
             <Field label="Bloqueio" value={financial.blocked ? `Bloqueado${financial.blockReason ? ` — ${financial.blockReason}` : ""}` : "Sem bloqueio"} />
             <Text style={styles.sectionTitle} accessibilityRole="header">Títulos em aberto</Text>
             {financial.titles.length === 0 ? (
-              <Text style={styles.note}>Nenhum título em aberto.</Text>
+              <Text style={styles.note}>Nenhum título em aberto</Text>
             ) : (
               financial.titles.map((title) => (
                 <View key={title.nufin} style={styles.field} accessible accessibilityLabel={`Título com vencimento em ${formatDueDate(title.dueDate)}${title.overdue ? ", vencido" : ""}, saldo ${formatMoney(title.balance)}`}>
@@ -193,12 +209,13 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
                 </View>
               ))
             )}
-            <Text style={styles.note}>{`Informação do Sankhya em ${formatDueDate(financial.checkedAt)}. Somente consulta.`}</Text>
+            <Text style={styles.note}>{`Informação do Sankhya em ${formatDateTime(financial.checkedAt)}. Somente consulta: não bloqueia vendas.`}</Text>
           </Section>
         )}
 
-        {orders.length > 0 && (
+        {localOrders !== undefined && !isPending && ordersLoaded && (
           <Section title="Pedidos do cliente">
+            {orders.length === 0 && <Text style={styles.note}>Nenhum pedido para este cliente</Text>}
             {orders.map((row) => (
               <View key={row.draft.localId} style={styles.field} accessible accessibilityLabel={`Pedido de ${describeSaleMeta(row.draft)}`}>
                 <Text style={styles.fieldValue}>{describeSaleValue(row.value)}</Text>
@@ -235,16 +252,6 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
             </View>
           </View>
         )}
-        {onRepeatLast !== undefined && lastRecorded !== undefined && !cannotOrder && (
-          <Pressable style={styles.ctaSecondary} onPress={() => onRepeatLast(lastRecorded.draft.localId)} accessibilityRole="button" accessibilityLabel="Repetir último pedido">
-            <Text style={styles.ctaSecondaryText}>Repetir último pedido</Text>
-          </Pressable>
-        )}
-        {onEdit !== undefined && !isPending && (
-          <Pressable style={styles.ctaSecondary} onPress={() => onEdit(customer)} accessibilityRole="button" accessibilityLabel="Editar cliente">
-            <Text style={styles.ctaSecondaryText}>Editar cliente</Text>
-          </Pressable>
-        )}
         <Pressable
           style={[styles.cta, cannotOrder && styles.ctaDisabled]}
           onPress={() => !cannotOrder && onNewOrder(customer)}
@@ -255,6 +262,16 @@ export function CustomerDetailScreen({ customer, customers, connectivity, onBack
         >
           <Text style={styles.ctaText}>Novo pedido</Text>
         </Pressable>
+        {onRepeatLast !== undefined && lastRecorded !== undefined && !cannotOrder && (
+          <Pressable style={styles.ctaSecondary} onPress={() => onRepeatLast(lastRecorded.draft.localId)} accessibilityRole="button" accessibilityLabel="Repetir último pedido">
+            <Text style={styles.ctaSecondaryText}>Repetir último pedido</Text>
+          </Pressable>
+        )}
+        {onEdit !== undefined && !isPending && (
+          <Pressable style={styles.ctaSecondary} onPress={() => onEdit(customer)} accessibilityRole="button" accessibilityLabel="Editar cliente">
+            <Text style={styles.ctaSecondaryText}>Editar cliente</Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );
@@ -275,6 +292,8 @@ const styles = StyleSheet.create({
   trade: { fontSize: 15, color: colors.text },
   meta: { fontSize: 14, color: colors.textMuted },
   status: { fontSize: 13, fontWeight: "700", color: colors.warning, marginTop: spacing.xs },
+  statusBlocked: { color: colors.red },
+  statusActive: { fontSize: 13, fontWeight: "700", color: colors.ok, marginTop: spacing.xs },
   section: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: spacing.sm },
   sectionTitle: { fontSize: 14, fontWeight: "800", color: colors.navy },
   field: { gap: 1 },

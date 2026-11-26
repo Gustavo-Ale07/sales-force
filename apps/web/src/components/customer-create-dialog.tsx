@@ -1,4 +1,5 @@
 import { Alert, Button, Checkbox, Dialog, DialogClose, DialogContent, FormField, Input, Select, Textarea, toast } from "@salesforce/ui";
+import { customerStateLabel } from "@salesforce/domain";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
@@ -65,7 +66,7 @@ function CreateBody({ onClose }: { onClose: () => void }) {
     if (hasCreateProblems(problems) || create.isPending) return;
     create.mutate(form, {
       onSuccess: (saved) => {
-        toast({ title: saved.customerCode === null ? "Envio pendente" : "Cliente cadastrado", description: saved.customerCode === null ? undefined : `Cliente ${saved.customerCode}`, tone: "success" });
+        toast({ title: saved.customerCode === null ? customerStateLabel("awaiting_send") : "Cliente cadastrado", description: saved.customerCode === null ? undefined : `Cliente ${saved.customerCode}`, tone: "success" });
         onClose();
         if (saved.customerCode !== null) void navigate({ to: "/clientes/$code", params: { code: String(saved.customerCode) } });
       },
